@@ -1,0 +1,963 @@
+﻿"title-titre-eng","title-titre-fra","referenceNumber-numeroReference","amendmentNumber-numeroModification","solicitationNumber-numeroSollicitation","contractNumber-numeroContrat","publicationDate-datePublication","contractAwardDate-dateAttributionContrat","amendmentDate-dateModification","contractStartDate-contratDateDebut","contractEndDate-dateFinContrat","contractAmount-montantContrat","totalContractValue-valeurTotaleContrat","contractCurrency-contratMonnaie","awardStatus-attributionStatut-eng","awardStatus-attributionStatut-fra","instrumentType-typeInstrument-eng","instrumentType-typeInstrument-fra","amendmentType-typeModification-eng","amendmentType-typeModification-fra","gsin-nibs","gsinDescription-nibsDescription-eng","gsinDescription-nibsDescription-fra","unspsc","unspscDescription-eng","unspscDescription-fra","procurementCategory-categorieApprovisionnement","noticeType-avisType-eng","noticeType-avisType-fra","procurementMethod-methodeApprovisionnement-eng","procurementMethod-methodeApprovisionnement-fra","selectionCriteria-criteresSelection-eng","selectionCriteria-criteresSelection-fra","limitedTenderingReason-raisonAppelOffresLimite-eng","limitedTenderingReason-raisonAppelOffresLimite-fra","tradeAgreements-accordsCommerciaux-eng","tradeAgreements-accordsCommerciaux-fra","regionsOfDelivery-regionsLivraison-eng","regionsOfDelivery-regionsLivraison-fra","supplierLegalName-nomLegalFournisseur-eng","supplierAddressLine-ligneAdresseFournisseur-eng","supplierAddressCity-fournisseurAdresseVille-eng","supplierAddressProvince-fournisseurAdresseProvince-eng","supplierAddressPostalCode-fournisseurAdresseCodePostal","supplierAddressCountry-fournisseurAdressePays-eng","supplierLegalName-nomLegalFournisseur-fra","supplierAddressLine-ligneAdresseFournisseur-fra","supplierAddressCity-fournisseurAdresseVille-fra","supplierAddressProvince-fournisseurAdresseProvince-fra","supplierAddressCountry-fournisseurAdressePays-fra","contractingEntityName-nomEntitContractante-eng","contractingEntityAddressLine-ligneAdresseEntiteContractante-eng","contractingEntityAddressCity-entiteContractanteAdresseVille-eng","contractingEntityAddressProvince-entiteContractanteAdresseProvince-eng","contractingEntityAddressPostalCode-entiteContractanteAdresseCodePostal","contractingEntityAddressCountry-entiteContractanteAdressePays-eng","contractingEntityName-nomEntitContractante-fra","contractingEntityAddressLine-ligneAdresseEntiteContractante-fra","contractingEntityAddressCity-entiteContractanteAdresseVille-fra","contractingEntityAddressProvince-entiteContractanteAdresseProvince-fra","contractingEntityAddressCountry-entiteContractanteAdressePays-fra","endUserEntitiesName-nomEntitesUtilisateurFinal-eng","endUserEntitiesAddress-adresseEntitesUtilisateurFinal-eng","endUserEntitiesName-nomEntitesUtilisateurFinal-fra","endUserEntitiesAddress-adresseEntitesUtilisateurFinal-fra","contactInfoName-informationsContactNom","contactInfoEmail-informationsContactCourriel","contactInfoPhone-contactInfoTelephone","contactInfoFax","contactInfoAddressLine-contactInfoAdresseLigne-eng","contactInfoCity-contacterInfoVille-eng","contactInfoProvince-contacterInfoProvince-eng","contactInfoPostalcode","contactInfoCountry-contactInfoPays-eng","contactInfoAddressLine-contactInfoAdresseLigne-fra","contactInfoCity-contacterInfoVille-fra","contactInfoProvince-contacterInfoProvince-fra","contactInfoCountry-contactInfoPays-fra","awardDescription-descriptionAttribution-eng","awardDescription-descriptionAttribution-fra"
+"INHIBITOR, CORROSION, LIQUID COOLING SYSTEM","INHIBITEUR, ANTICORROSION, SYSTÈME DE REFROIDISSEMENT LIQUIDE","cb-306-44517517","001","W8482-264813/A","W8482-264813/001/MP9","2026-04-24","2026-04-24","2026-07-30","2026-04-24","2026-07-30","0.00","0.00","","Expired","Expiré","","","","","","","","*12160000","*Additives","*Additifs","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","","","*Please refer to Tender Description or Tender Documents","*Veuillez consulter la description ou les documents de l'appel d'offres","*Nova Scotia
+*British Columbia","*Nouvelle-Écosse
+*Colombie-Britannique","Simex Defence Inc","216 Brunswick Boulevard","Pointe-Claire","Quebec","H9R 1A6","Canada","Simex Defence Inc","216 Boulevard Brunswick","Pointe-Claire","Québec","Canada","Department of National Defence (DND)","101 Colonel By Drive","Ottawa","Ontario","K1A 0K2","Canada","Ministère de la Défense nationale (MDN)","101 Promenade Colonel By","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Line Item:	001	INHIBITOR,CORROSION,LIQUID COOLING SYSTEM							
+GSIN:	6850	Quantity:	200	UoI:	EA	to be delivered to:	CFB Halifax Hazmat
+							
+Line Item:	002	INHIBITOR,CORROSION,LIQUID COOLING SYSTEM								
+GSIN:	6850	Quantity:	200	UoI:	EA	to be delivered to:	CFB Esquimalt Hazmat
+","Article:	001	INHIBITEUR, ANTICORROSION, SYSTÈME DE REFROIDISSEMENT LIQUIDE								
+NIBS:	6850	Quantite:	200	UoD:	CH	à livrer à:	BFC Halifax Hazmat
+							
+Article:	002	INHIBITEUR, ANTICORROSION, SYSTÈME DE REFROIDISSEMENT LIQUIDE									
+NIBS:	6850	Quantite:	200	UoD:	CH	à livrer à:	BFC Esquimalt Hazmat
+"
+"LP Air Dryer Parts","Pièces de sécheur d'air LP ","cb-251-40998731","000","W8482-264520/A","W8482-264520/004/MP9","2026-05-08","2026-05-07","","2026-05-07","2027-09-20","0.00","0.00","","Active","Actif","","","","","","","","*12160000
+*26101100
+*31111600
+*31160000
+*41110000
+*46171600","*Additives
+*Electric alternating current AC motors
+*Impact extrusions
+*Hardware
+*Measuring and observing and testing instruments
+*Surveillance and detection equipment","*Additifs
+*Moteurs électriques à courant alternatif (CA)
+*Filages par choc
+*Matériel
+*Instruments d'essai, d'examen et de mesure
+*Équipements de surveillance et de détection","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","","","*Please refer to Tender Description or Tender Documents","*Veuillez consulter la description ou les documents de l'appel d'offres","*Nova Scotia
+*Canada
+*British Columbia","*Nouvelle-Écosse
+*Canada
+*Colombie-Britannique","Simex Defence Inc.","216 Brunswick Blvd.","Pointe-Claire","QC","H9R 1A6","Canada","Simex Defence Inc.","216 Brunswick Blvd.","Pointe-Claire","QC","Canada","Department of National Defence (DND)","101 Colonel By Drive","Ottawa","ON","K1A 0K2","Canada","Ministère de la Défense nationale (MDN)","101 Promenade Colonel By","Ottawa","ON","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","101 Colonel By Drive ","Ottawa","ON","K1A 0K2","Canada","101 Promenade Colonel By","Ottawa","ON","","NOTICE OF PROPOSED PROCUREMENT							
+
+Line Item:	009	 MOTOR,TIMING					
+Part Number:	7460007	NCAGE:	3AH86	""	PNEUMATIC PRODUCTS CANADA""			
+GSIN:	6105	Quantity:	30	UoI:	EA	to be delivered to:	CFB Halifax
+							
+Line Item:	010	 MOTOR,TIMING					
+Part Number:	7460007	NCAGE:	3AH86	""	PNEUMATIC PRODUCTS CANADA""			
+GSIN:	6105	Quantity:	20	UoI;	EA	to be delivered to:	CFB Esquimalt
+							
+Line Item:	011	REPAIR KIT,VALVE					
+Part Number:	3243337	NCAGE:	3AH86	PNEUMATIC PRODUCTS CANADA			
+GSIN:	4820	Quantity:	30	UoI:	EA	to be delivered to:	CFB Halifax
+							
+Line Item:	012	REPAIR KIT,VALVE					
+Part Number:	3243337	NCAGE:	3AH86	PNEUMATIC PRODUCTS CANADA			
+GSIN:	4820	Quantity:	30	UoI:	EA	to be delivered to:	CFB Esquimalt
+		
+Line Item:	015	VALVE,SOLENOID					
+Part Number:	EF8342G020AC120/60D	NCAGE:	1R2X5	ASCO POWER TECHNOLOGIES, L..P.			
+GSIN:	4810	Quantity:	10	UoI:	EA	to be delivered to:	CFB Halifax
+							
+Line Item:	016	VALVE,SOLENOID					
+Part Number:	EF8342G020AC120/60D	NCAGE:	1R2X5	ASCO POWER TECHNOLOGIES, L..P.			
+GSIN:	4810	Quantity:	8	UoI:	EA	to be delivered to:	CFB Esquimalt
+	","AVIS DE PROJET DE MARCHÉ							
+
+Article:	009	MOTEUR, DISTRIBUTION					
+NUMÉRO DE RÉFÉRENCE:	7460007	code EEPO:	3AH86	""	PNEUMATIC PRODUCTS CANADA""			
+NIBS:	6105	Quantite:	30	UoD:	CH	à livrer à:	CFB Halifax
+							
+Article:	010	MOTEUR, DISTRIBUTION					
+NUMÉRO DE RÉFÉRENCE:	7460007	code EEPO:	3AH86	""	PNEUMATIC PRODUCTS CANADA""			
+NIBS:	6105	Quantite:	20	UoD:	CH	à livrer à:	CFB Esquimalt
+							
+Article:	011	KIT DE RÉPARATION, SOUPAPE					
+NUMÉRO DE RÉFÉRENCE:	3243337	code EEPO:	3AH86	PNEUMATIC PRODUCTS CANADA			
+NIBS:	4820	Quantite:	30	UoD:	CH	à livrer à:	CFB Halifax
+							
+Article:	012	KIT DE RÉPARATION, SOUPAPE					
+NUMÉRO DE RÉFÉRENCE:	3243337	code EEPO:	3AH86	PNEUMATIC PRODUCTS CANADA			
+NIBS:	4820	Quantite:	30	UoD:	CH	à livrer à:	CFB Esquimalt
+							
+Article:	015	SOUPAPE, ÉLECTROVANNE					
+NUMÉRO DE RÉFÉRENCE:	EF8342G020AC120/60D	code EEPO:	1R2X5	ASCO POWER TECHNOLOGIES, L..P.			
+NIBS:	4810	Quantite:	10	UoD:	CH	à livrer à:	CFB Halifax
+							
+Article:	016	SOUPAPE, ÉLECTROVANNE					
+NUMÉRO DE RÉFÉRENCE:	EF8342G020AC120/60D	code EEPO:	1R2X5	ASCO POWER TECHNOLOGIES, L..P.			
+NIBS:	4810	Quantite:	8	UoD:	CH	à livrer à:	CFB Esquimalt
+
+"
+"Multiple Victoria-Class Spares - COVER,SHIPPING AND STORAGE CONTAINER / SHIPPING AND STORAGE CONTAINER,MISCELLAN / LIFTING FRAME ASSEMBLY / TRUNNION CLAMP AND SKID","Plusieurs Pièces de Rechange de Classe Victoria - COUVERCLE,CONTENEUR DE TRANSPORT / CONTENEUR DE TRANSPORT/STOCKAGE,EQUIPEME / ENSEMBLE DE CHÂSSIS DE LEVAGE / BRIDE DE FIXATION ET PATIN","cb-340-30746670","000","W8482-264466/A","W8482-264466/001/DMarP5","2026-07-09","2026-06-16","","2026-07-02","2027-03-30","0.00","0.00","","Active","Actif","","","","","","","","*24101600
+*24110000
+*24112800
+*31160000","*Lifting equipment and accessories
+*Containers and storage
+*Freight containers
+*Hardware","*Équipements et accessoires de levage
+*Contenants et moyens de stockage
+*Conteneur
+*Matériel","*GD","","","Competitive - Traditional","Concurrentielle - Traditionnelle","","","","","*Canada-Panama Free Trade Agreement
+*Canada-Colombia Free Trade Agreement
+*Canada-Honduras Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)","*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Chili (ALECC)","*British Columbia
+*Nova Scotia","*Colombie-Britannique
+*Nouvelle-Écosse","Simex Defence Inc.","216 Brunswick Blvd.","Pointe-Claire","Quebec","H9R 1A6","Canada","Simex Defence Inc.","216 Brunswick Blvd.","Pointe-Claire","Quebec","Canada","Department of National Defence (DND)","101 Colonel By Drive","Ottawa","Ontario","K1A 0K2","Canada","Ministère de la Défense nationale (MDN)","101 promenade du Colonel By","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Item 3, GSIN: 8145, NSN: 8145-99-541-8098, SHIPPING AND STORAGE CONTAINER,MISCELLAN 
+Part No.: 723103 (including 723105, 723195, 723233), NCAGE: U4524 
+Quantity: 1 , Unit of Issue: EA, to be delivered to CFB Esquimalt.
+
+Item 4, GSIN: 8145, NSN: 8145-99-541-8098, SHIPPING AND STORAGE CONTAINER,MISCELLAN 
+Part No.: 723103 (including 723105, 723195, 723233), NCAGE: U4524 
+Quantity: 1 , Unit of Issue: EA, to be delivered to CFB Halifax.","Article 3, NIBS : 8145, NNO : 8145-99-541-8098, CONTENEUR DE TRANSPORT/STOCKAGE,EQUIPEME
+No de pièce : 723103, EEPO : U4524 
+Quantité : 1, Unité de distribution : CH, à livrer à BFC Esquimalt.
+
+Article 4, NIBS : 8145, NNO : 8145-99-541-8098, CONTENEUR DE TRANSPORT/STOCKAGE,EQUIPEME
+No de pièce : 723103 (incluant 723105, 723195, 723233), EEPO : U4524 
+Quantité : 1, Unité de distribution : CH, à livrer à BFC Halifax."
+"Material Handling Equipment","Équipment  de manutention des matériels ","cb-512-87381709","000","W8486-270875/A ","W8486-270875/001/SV","2026-10-21","2026-10-20","","2026-10-01","2026-12-31","0.00","3829.15","CAD","Active","Actif","","","","","","","","*22100000","*Heavy construction machinery and equipment","*Engins et accessoires de construction lourde","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*Edmonton
+*Montréal","*Edmonton
+*Montréal","SIMEX Defence Inc.","216 Brunswick Blvd","Pointe-Claire","Quebec","H9R 1A6","Canada","SIMEX Defence Inc.","216 Brunswick Blvd","Pointe-Claire","Quebec","Canada","Department of National Defence (DND)","101 Colonel By Dr","Ottawa","Ontario","K1A 0K2","Canada","Ministère de la Défense nationale (MDN)","101, promenade du Colonel-By","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","101 Colonel By Dr","Ottawa","Ontario","K1A 0K2","Canada","101, promenade du Colonel-By","Ottawa","Ontario","","Item 2, GSIN: 2930, NSN: 2930-20-0017573, CAP, FILLER OPENING
+Part No.: T-16
+NSCM/CAGE: L1268
+Quantity: 3
+Unit of Issue: EA
+To be delivered to 7 CFSD Edmonton, Alberta 
+
+Item 3, GSIN: 2930, NSN: 2930-20-0017573, CAP,FILLER OPENING
+Part No.: T-16
+NSCM/CAGE: L1268
+Quantity: 3
+Unit of Issue: EA
+To be delivered to 25 CFSD Montreal, Quebec  
+
+Item 19, GSIN: 2990, NSN: 2990-20-0134777, RADIATOR,HEATER,COOLANT,ENGINE
+Part No.: CA-LK6000-B
+NSCM/CAGE: L1268
+Quantity: 1
+Unit of Issue: EA
+To be delivered to 25 CFSD Montreal, Quebec","Article 2, NIBS : 2930, NNO : 2930-20-0017573, BOUCHON,ORIFICE DE REMPLISSAGE
+No de la pièce : T-16
+COF/CAGE :  L1268
+Quantité : 3
+Unité de distribution : chaque
+À être livré à 7 DAFC Edmonton, Alberta
+
+Article 3, NIBS : 2930, NNO : 2930-20-0017573, BOUCHON,ORIFICE DE REMPLISSAGE
+No de la pièce : T-16
+COF/CAGE :  L1268
+Quantité : 3
+Unité de distribution : chaque
+À être livré à 25 DAFC Montréal, Québec
+
+Article 19, NIBS : 2990, NNO : 2990-20-0134777, RADIATEUR,RECHAUFFEUR DE FLUIDE DE REFRO
+No de la pièce : CA-LK6000-B
+COF/CAGE : L1268
+Quantité : 1
+Unité de distribution : chaque
+À être livré à 25 DAFC Montréal, Québec"
+"Kitchen spare parts","Pièces de rechange pour cuisine","cb-617-35031912","001","W8486-260495/A","W8486-260495/001/CS","2026-08-21","2026-08-21","2026-09-18","2026-06-30","2027-03-31","-17476.20","1052445.72","CAD","Active","Actif","","","","","","","","*24111808
+*31410000
+*39112000
+*39112600
+*40101834
+*49120000
+*49121509
+*52151600","*Fuel storage tanks
+*Seals
+*Portable and Temporary Lighting and accessories
+*Non electrical lighting devices
+*Burners
+*Camping and outdoor equipment and accessories
+*Camping or outdoor stoves
+*Domestic kitchen tools and utensils","*Réservoirs de stockage de combustible
+*Dispositifs d'étanchéité
+*Éclairages portables et temporaire et accessoires
+*Appareils d'éclairage non électrique
+*Brûleurs
+*Équipements et accessoires de camping et de plein air
+*Réchauds de camping
+*Ustensiles et outils de cuisine ménagers","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","","","*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-Honduras Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Colombia Free Trade Agreement
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*North American Free Trade Agreement (NAFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)","*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Colombie
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de libre-échange Canada-Chili (ALECC)","*Edmonton
+*Montréal","*Edmonton
+*Montréal","SIMEX DEFENCE INC","216 Brunswick Blvd","Pointe-Claire","Quebec","H9R 1A6","Canada","SIMEX DEFENCE INC","216 Brunswick Blvd","Pointe-Claire","Quebec","Canada","Department of National Defence (DND)","101 Colonel By Drive","Ottawa","Ontario","K1A 0K2","Canada","Ministère de la Défense nationale (MDN)","101 Colonel By Drive","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","101 Colonel By Drive","Ottawa","Ontario","K1A 0K2","Canada","101 Colonel By Drive","Ottawa","Ontario","","The Department of National Defence has a requirement for the items detailed below.  The delivery is requested at:
+
+Department of National Defence
+25 CFSD Montreal
+6363 Notre Dame St. E.
+Montreal, Quebec
+H1N 1V9
+
+Department of National Defence
+7 CF Supply Depot
+195 Ave & 82nd St., Bldg. 236
+Edmonton, Alberta
+T5J 4J5
+
+by or before 31 March 2027
+
+Item 1, GSIN: 5340, NSN: 20-004-8314 Catch Friction
+Part No.:   TC-210-SS, NCAGE: 76EG0
+Quantity: 4000 Unit of Issue: EA to be delivered to CFSD Montreal
+
+Item 2, GSIN: 5340, NSN: 20-004-8314 Catch Friction 
+Part No.:   TC-210-SS, NCAGE: 76EG0
+Quantity: 3000 Unit of Issue: EA to be delivered to CFSD Edmonton
+
+Item 3, GSIN: 5330, NSN: 21-914-7064 Seal, Non-Metallic
+Part No.:   AACCG/GY, NCAGE: 3AG65
+Quantity: 150 Unit of Issue: EA to be delivered to CFSD Montreal
+
+Item 4 GSIN: 5330, NSN: 21-914-7064 Seal, Non-Metallic
+Part No.:   AACCG/GY, NCAGE: 3AG65
+Quantity: 100 Unit of Issue: EA to be delivered to CFSD Edmonton
+
+Item 5, GSIN: 5340, NSN: 20-004-8312 Strike, Catch
+Part No.:   T-211-SS, NCAGE: 3AG65
+Quantity: 500 Unit of Issue: EA to be delivered to CFSD Montreal
+
+Item 6, GSIN: 5340, NSN: 20-004-8312 Strike, Catch
+Part No.:   T-211-SS, NCAGE: 3AG65
+Quantity: 500 Unit of Issue: EA to be delivered to CFSD Edmonton
+
+Item 7, GSIN: 4530, NSN: 21-108-0370 Generator Gasoline Burner
+Part No.:   3000005108, NCAGE: 08397
+Quantity: 250 Unit of Issue: EA to be delivered to CFSD Montreal
+
+Item 8, GSIN: 4530, NSN: 21-108-0370 Generator Gasoline Burner
+Part No.:   3000005108, NCAGE: 08397
+Quantity: 50 Unit of Issue: EA to be delivered to CFSD Edmonton
+
+Item 9, GSIN: 7310, NSN: 21-896-0225 Tank, Fuel, Portable Stove
+Part No.:   431M1651, NCAGE: 08397
+Quantity: 150 Unit of Issue: EA to be delivered to CFSD Montreal
+
+Item 12, GSIN: 7340, NSN: 21-108-4573 Knife and Fork Combination
+Part No.:   9190022-1, NCAGE: 35907
+Quantity: 7000 Unit of Issue: EA to be delivered to CFSD Montreal
+
+Item 13, GSIN: 7340, NSN: 21-108-4573 Knife and Fork Combination
+Part No.:   9190022-1, NCAGE: 35907
+Quantity: 7000 Unit of Issue: EA to be delivered to CFSD Edmonton
+
+Item 14, GSIN: 6260, NSN: 21-908-7987 Lantern, White gas Naphtha
+Part No.:   M290A700C, NCAGE: 08397
+Quantity: 350 Unit of Issue: EA to be delivered to CFSD Montreal
+
+Item 15, GSIN: 6260, NSN: 21-908-7987 Lantern, White gas Naphtha
+Part No.:   M290A700C, NCAGE: 08397
+Quantity: 100 Unit of Issue: EA to be delivered to CFSD Edmonton
+
+Item 16, GSIN: 7310, NSN: 21-899-3982 Stove Gasoline Burner
+Part No.:   M425F710C, NCAGE: 08397
+Quantity: 700 Unit of Issue: EA to be delivered to CFSD Montreal
+
+Item 17, GSIN: 7310, NSN: 21-899-3982 Stove Gasoline Burner
+Part No.:   M425F710C, NCAGE: 08397
+Quantity: 300 Unit of Issue: EA to be delivered to CFSD Edmonton
+
+Item 18, GSIN: 7310, NSN: 01-444-6845 Stove Gasoline Burner
+Part No.:   M550B497C, NCAGE: 80309
+Quantity: 420 Unit of Issue: EA to be delivered to CFSD Montreal
+
+
+Offerors proposing an Equivalent or a Substitute Product must indicate the brand name and model and/or Part Number and the NCAGE they are offering.
+
+The Crown retains the rights to negotiate with suppliers on any procurement.
+
+Documents may be submitted in either official language of Canada.
+","Le ministère de la Défense nationale désire se procurer les articles suivants. 
+
+La livraison est demandée à : 
+
+Ministère de la défense nationale
+25 DAFC Montréal
+6363, rue Notre Dame Est
+Montréal, Qc
+H1N 1V9
+Canada
+
+Ministère de la défense nationale
+7 DAFC Supply Depot
+195 Ave & 82nd St., Bldg. 236
+Edmonton, Alberta
+T5J 4J5
+Canada
+
+au plus tard 31 Mars 2027
+
+Article 1, NIBS:5340, NNO: 20-004-8314 LOQUETEAU,A FRICTION
+No de pièce.: TC-210-SS, NCAGE: 76EG0
+Quantité: 4000 Unité de distribution: EA à livrer à DAFC Montréal
+
+Article 2, NIBS:5340, NNO: 20-004-8314 LOQUETEAU,A FRICTION FLEXIBLE,EQUIPE
+No de pièce.: TC-210-SS, NCAGE: 76EG0
+Quantité: 3000 Unité de distribution: EA à livrer à DAFC Edmonton
+
+Article 3, NIBS:5330, NNO: 21-914-7064,  JOINT,NON METALLIQUE,SECTION SPECIALE
+No de pièce.: AACCG/GY, NCAGE: 3AG65
+Quantité: 150 Unité de distribution: EA à livrer à DAFC Montréal
+
+Article 4, NIBS:5330, NNO: 21-914-7064,  JOINT,NON METALLIQUE,SECTION SPECIALE
+FLEXIBLE,EQUIPE
+No de pièce.: AACCG/GY, NCAGE: 3AG65
+Quantité: 100 Unité de distribution: EA à livrer à DAFC Edmonton
+
+Article 5, NIBS:5340, NNO: 20-004-8312 GACHE/PLAQUE D'ACCROCHAGE
+No de pièce.: T-211-SS,, NCAGE: 37935
+Quantité: 500 Unité de distribution: EA à livrer à DAFC Montréal
+
+
+Article 6, NIBS:5340, NNO: 20-004-8312 GACHE/PLAQUE D'ACCROCHAGE
+No de pièce.: T-211-SS,, NCAGE: 37935
+Quantité: 500 Unité de distribution: EA à livrer à DAFC Edmonton
+
+Article 7, NIBS: 4530, NNO: 21-108-0370 GÉNÉRATEUR, BRÛLEUR À ESSENCE
+No de pièce.: 3000005108, NCAGE: 08397
+Quantité: 250 Unité de distribution: EA à livrer à DAFC Montréal
+
+Article 8, NIBS: 4530, NNO: 21-108-0370 GÉNÉRATEUR, BRÛLEUR À ESSENCE
+No de pièce.: 3000005108, NCAGE: 08397
+Quantité: 50 Unité de distribution: EA à livrer à DAFC Edmonton
+
+Article 9, NIBS:7310, NNO: 21-896-0225 Réservoir, carburant, réchaud portatif
+No de pièce.: 431M1651, NCAGE: 08397
+Quantité: 150 Unité de distribution: EA à livrer à DAFC Montréal
+
+Article 12, NIBS:7340, NNO: 21-108-4573 Combinaison couteau et fourchette
+No de pièce.: 9190022-1, NCAGE: 35907
+Quantité: 7000 Unité de distribution: EA à livrer à DAFC Montréal
+
+Article 13, NIBS:7340, NNO: 21-108-4573 Combinaison couteau et fourchette
+No de pièce.: 9190022-1, NCAGE: 35907
+Quantité: 7000 Unité de distribution: EA à livrer à DAFC Edmonton
+
+Article 14, NIBS:6260, NNO: 21-908-7987 Lanterne, naphte à essence blanche
+No de pièce.: M290A700C, NCAGE: 08397
+Quantité: 350 Unité de distribution: EA à livrer à DAFC  Montréal
+
+Article 15, NIBS:6260, NNO: 21-908-7987 Lanterne, naphte à essence blanche
+No de pièce.: M290A700C, NCAGE: 08397
+Quantité: 100 Unité de distribution: EA à livrer à DAFC Edmonton
+
+Article 16, NIBS:7310, NNO: 21-899-3982 brûleur à essence de cuisinière
+No de pièce.: M425F710C, NCAGE: 08397 
+Quantité: 700 Unité de distribution: EA à livrer à DAFC Montréal
+
+Article 17, NIBS:7310, NNO: 21-899-3982 brûleur à essence de cuisinière
+No de pièce.: M425F710C, NCAGE: 08397 
+Quantité: 300 Unité de distribution: EA à livrer à DAFC Edmonton
+
+Article 18, NIBS:7310, NNO: 01-444-6845 brûleur à essence de cuisinière
+No de pièce.: M550B497C, NCAGE: 80309
+Quantité: 420 Unité de distribution: EA à livrer à DAFC Montréal
+
+
+Les soumissionnaires qui proposent un produit équivalent ou un produit de remplacement doivent indiquer le nom de la marque et le modèle, et/ou le numéro de pièce et le NCAGE du produit proposé.
+
+La Couronne se réserve le droit de négocier avec les fournisseurs pour tout marché d’approvisionnement.
+
+Les documents peuvent être présentés dans l’une ou l’autre des langues officielles du Canada.
+"
+"Cyber Security Procurement Vehicle (CSPV) - List of Qualified Respondents 2026","Mécanisme d’approvisionnement en matière de cybersécurité (MAMC) - Liste de répondants qualifiés ","cb-811-70742970","000","N/A","N/A","2026-04-09","2026-04-09","","2026-04-09","2099-04-09","0.00","0.00","CAD","Active","Actif","","","","","","","","*43233200
+*43233203
+*43233206
+*46151600
+*81111801
+*81112208","*Security and protection software
+*Network security or virtual private network VPN management software
+*Cloud-based protection or security software
+*Security and control equipment
+*Computer or network or internet security
+*Security and protection software maintenance","*Logiciels de sécurité et de protection
+*Logiciels de gestion de sécurité réseau ou de réseau virtuel privé RVP
+*Logiciel de protection ou de sécurité infonuagique
+*Équipements de sécurité et de contrôle
+*sécurité d'informatique, réseau ou Internet
+*Maintenance de logiciels de sécurité et de protection","*GD","","","Non-competitive","Non concurrentielle","","","","","*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canadian Free Trade Agreement (CFTA)
+*North American Free Trade Agreement (NAFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Colombia Free Trade Agreement
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Colombie
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange Canada-Panama
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","*Unspecified","*Non spécifiée","N/A","99 Metcalfe St","Ottawa","ON","K1P 6L7","Canada","N/A","99 Rue Metcalfe","Ottawa","ON","Canada","Shared Services Canada (SSC)","99 Rue Metcalfe St.","Ottawa","ON","K1P 6L7","Canada","Services partagés Canada (SPC)","99 Rue Metcalfe St.","Ottawa","ON","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","99 Metcalfe St. 5th Floor","Ottawa","ON","K1P 6L7","Canada","99 Metcalfe St. 5th Floor","Ottawa","ON","","Canada wishes to thank all Respondents who submitted responses to the Invitation to Qualify (ITQ) for the Cyber Security Procurement Vehicle (CSPV) procurement process. The following list of Respondents have successfully met the mandatory and point-rated requirements set out in the ITQ and have therefore been deemed Qualified Respondents (QRs) and have been included in the CSPV’s Secure Supplier Ecosystem (SSE):
+
+10138029 Canada inc
+10947482 CANADA INC. 
+2021945 Ontario Inc.
+2KEYS CORPORATION
+3Tenets Consulting Inc.
+45 Drives Ltd. 
+ACCENTURE INC
+ACCESS 2 NETWORKS INC.
+Accuras Inc.
+ADGA GROUP CONSULTANTS INC.
+ADVANCED CHIPPEWA TECHNOLOGIES INC.
+Advanced Systems Management Inc.
+AIE IO CONSULTING INC.
+Akamai Technologies 
+Algosec Inc.
+AMMOLITE STRATEGIES INC.
+Apption Corporation
+Arista Networks, Inc.
+BDO Canada LLP
+Arctiq Canada Inc (formerly Benchmark Corp)
+BLACKBERRY LIMITED
+Bloombase Canada Inc.
+BLUINK LTD.
+BRYCA Solutions Inc, High Tech Genesis Inc., in Joint Venture 
+BULLETPROOF SOLUTIONS ULC
+C3SA CYBERNETIC SECURITY
+CALIAN LTD.
+Canadian Bank Note Company, Limited
+CANADIAN INTERNET REGISTRATION AUTH
+Carahsoft Technology Corp.
+CAS Cyber Security Canada Inc.
+CDW Canada Inc
+CGI INFORMATION SYSTEMS AND
+CHANNEL MANAGEMENT INTERNATIONAL
+Charter Telecom Inc.
+Check Point Software Technologies
+Ciptor-IT SAFE CANADA INC.
+CISCO SYSTEMS CANADA CO.
+CITRIX SYSTEMS, INC.
+CLICK NETWORKS INC.
+CLICK SPIRIT INC.
+Cloud Shift Inc.
+COMPUCOM CANADA CO.
+COMPUGEN INC.
+COMPUTACENTER Canada Inc.
+Cord 3 Innovations
+Corsa Technology Inc.
+CrowdStrike
+Crypto4A Technologies INC
+CryptoMill Technologies Ltd.
+CYBER DEFENSE QCD CORPORATION
+CybernetIQ
+CyberNiNer Corporation
+CYPHERCOR INC.
+DarkTrace Holdings Ltd.
+Data Centre Intelligence Inc.
+DECISIVE GROUP INC.
+DELL CANADA INC.
+DELOITTE LLP
+DLS TECHNOLOGY CORPORATION
+DOLOMITE NETWORKS CORPORATION
+ECLIPSYS SOLUTIONS INC.
+EMISOFT LIMITED
+en toute confiance inc.
+ENTRUST LIMITED
+Equifax Canada inc.
+Ernst & Young
+ESI TECHNOLOGIES DE L'INFORMATION I
+ESIT Canada Enterprise Services Co (DXC Technology)
+Exabeam
+Experis Canada Inc.
+F5 NETWORKS INC
+Field Effect Software Inc.
+FIREMON CANADA INC.
+Forecight Cyber Intelligence, Inc.
+ForeScout Technologies, Inc
+Fortinet Inc.
+Foxwise Technologies Inc.
+FUJITSU CONSULTING (CANADA)
+GENERAL DYNAMICS LAND SYSTEMS -
+GLASSHOUSE SYSTEMS INC.
+Gryphn Corporation
+HEWLETT PACKARD ENTERPRISE CANADA C
+IBM CANADA LTD.
+Identos Inc.
+iFathom Corporation
+illumio Inc
+INFORMATION SYSTEMS ARCHITECTS INC.
+Inmind Technologies Inc.
+INSA CORP.
+Integra Networks 
+IPSS INC.
+JML Systems & Solutions Inc.
+Juniper Networks
+JVN DATA SECURITY INC
+KDM Analytics Inc.
+KEYDATA ASSOCIATES INC.
+KINECTRICS INC.
+KPMG LLP
+KYNDRYL CANADA LIMITED
+LAYER 8 SOLUTIONS INC.
+Les Solutions Victrix
+Les technologies Indigo Canada
+Levio Conseils Inc.
+LORICA SYBERSECURITY INC.
+MAGNARI INC.
+MAGNET FORENSICS INC.
+Mariner Innovations
+Mattawa IT Solutions Inc.
+Maverin Inc.
+MBS Tech Services Inc.
+MDOS CONSULTING INC.
+MICRO FOCUS SOFTWARE SOLUTIONS
+MICROSOFT CANADA INC.
+Minose Solutions Ltd.
+MNP LLP
+MUSARUBRA CANADA ULC
+Netagen Communication
+NetApp Canada Ltd.
+Netskope
+Net-Wall Internet Security Inc. 
+NEWROCKET CANADA CORPORATION
+New Value Solutions Group Inc. 
+Northern Micro Inc. (a Converge Company)
+Northwest Protection Services Ltd.
+Nvidia Development Corp.
+OKIOK Data Ltee.
+Okta Software Canada, Inc.
+ONE IDENTITY CANADA INC.
+ONX ENTERPRISE SOLUTIONS LTD.
+OPTIV CANADA FEDERAL
+ORACLE CANADA ULC
+OXARO Inc. (Raymond Chabot Grant Thornton)
+Palo Alto Networks
+Parabellyx Corporation
+Paragon Micro IT Solutions Group Canada ULC
+PRICEWATERHOUSECOOPERS LLP
+ProofPoint, Inc.
+PURELOGIC IT SOLUTIONS INC
+RADWARE, INC
+Raytheon Canada Limited
+RedRiver Solutions Inc.
+RedSeal, Inc.
+RHEA INC.
+RSA Security Canada ULC
+Safebreach Inc.
+SAP Canada
+Sapper Labs Group
+SHI Canada ULC
+SIMEIO SOLUTIONS CANADA INC
+Softchoice Corporation
+SOLANA NETWORKS INC.
+SonicWall Technology Systems Canada Inc.
+Sphyrna Security Incorporated
+STONEWORKS TECNOLOGIES INC
+Sub-Rosa Solutions
+Sunphinx Inc.
+SYMANTEC CORPORATION
+SYNERSOLUTIONS TECHNOLOGIES INC
+Tanium Canada Technology
+Teel Technologies Inc. 
+Telecom Computer Inc
+TELUS COMMUNICATIONS COMPANY
+Tenable, Inc.
+TERIDA SYSTEMS LTD
+Terrahub Technologies Inc. (dba Credivera)
+TESTFORCE SYSTEMS INC.
+THALES CANADA INC
+THE BELL TELEPHONE COMPANY OF
+THE HERJAVEC GROUP INC. (Cyderes)
+TPG Aurora Technology Consulting
+TRM Technologies Inc.
+Ubi Technology Inc.
+Uncharted Software Inc. 
+Valencia IIP Advisors Limited
+Versatil BPI Inc.
+Wipro Solutions Canada Ltd.
+WNCS Inc in joint venture with MDOS Consulting Inc.
+Xerox Canada Inc. 
+Zayo Canada Inc. 
+ZSCALER, INC.
+Zycom Technology Inc. (ITI Canada inc)
+
+Respondents who did not successfully qualify at this ITQ phase, will not be able to participate in any Cyber Security Procurement Vehicle (CSPV) procurement activities.
+ 
+A refresh of the CSPV is expected to be released in Summer 2026.
+
+","Le Canada souhaite remercier tous les répondants qui ont soumis une réponse à l’Invitation à se qualifier (ISQ) dans le cadre du processus d’approvisionnement du Mécanisme d’approvisionnement en matière de cybersécurité (MAMC). La liste suivante des répondants a satisfait aux exigences obligatoires et cotées par points énoncées dans l’ISQ et a donc été jugée comme répondants qualifiés (RQ), et a été incluse dans l’Écosystème sécurisé de fournisseurs (ESF) du MAMC :
+
+10138029 Canada inc
+10947482 CANADA INC. 
+2021945 Ontario Inc.
+2KEYS CORPORATION
+3Tenets Consulting Inc.
+45 Drives Ltd. 
+ACCENTURE INC
+ACCESS 2 NETWORKS INC.
+Accuras Inc.
+ADGA GROUP CONSULTANTS INC.
+ADVANCED CHIPPEWA TECHNOLOGIES INC.
+Advanced Systems Management Inc.
+AIE IO CONSULTING INC.
+Akamai Technologies 
+Algosec Inc.
+AMMOLITE STRATEGIES INC.
+Apption Corporation
+Arista Networks, Inc.
+BDO Canada LLP
+Arctiq Canada Inc (formerly Benchmark Corp)
+BLACKBERRY LIMITED
+Bloombase Canada Inc.
+BLUINK LTD.
+BRYCA Solutions Inc, High Tech Genesis Inc., in Joint Venture 
+BULLETPROOF SOLUTIONS ULC
+C3SA CYBERNETIC SECURITY
+CALIAN LTD.
+Canadian Bank Note Company, Limited
+CANADIAN INTERNET REGISTRATION AUTH
+Carahsoft Technology Corp.
+CAS Cyber Security Canada Inc.
+CDW Canada Inc
+CGI INFORMATION SYSTEMS AND
+CHANNEL MANAGEMENT INTERNATIONAL
+Charter Telecom Inc.
+Check Point Software Technologies
+Ciptor-IT SAFE CANADA INC.
+CISCO SYSTEMS CANADA CO.
+CITRIX SYSTEMS, INC.
+CLICK NETWORKS INC.
+CLICK SPIRIT INC.
+Cloud Shift Inc.
+COMPUCOM CANADA CO.
+COMPUGEN INC.
+COMPUTACENTER Canada Inc.
+Cord 3 Innovations
+Corsa Technology Inc.
+CrowdStrike
+Crypto4A Technologies INC
+CryptoMill Technologies Ltd.
+CYBER DEFENSE QCD CORPORATION
+CybernetIQ
+CyberNiNer Corporation
+CYPHERCOR INC.
+DarkTrace Holdings Ltd.
+Data Centre Intelligence Inc.
+DECISIVE GROUP INC.
+DELL CANADA INC.
+DELOITTE LLP
+DLS TECHNOLOGY CORPORATION
+DOLOMITE NETWORKS CORPORATION
+ECLIPSYS SOLUTIONS INC.
+EMISOFT LIMITED
+en toute confiance inc.
+ENTRUST LIMITED
+Equifax Canada inc.
+Ernst & Young
+ESI TECHNOLOGIES DE L'INFORMATION I
+ESIT Canada Enterprise Services Co (DXC Technology)
+Exabeam
+Experis Canada Inc.
+F5 NETWORKS INC
+Field Effect Software Inc.
+FIREMON CANADA INC.
+Forecight Cyber Intelligence, Inc.
+ForeScout Technologies, Inc
+Fortinet Inc.
+Foxwise Technologies Inc.
+FUJITSU CONSULTING (CANADA)
+GENERAL DYNAMICS LAND SYSTEMS -
+GLASSHOUSE SYSTEMS INC.
+Gryphn Corporation
+HEWLETT PACKARD ENTERPRISE CANADA C
+IBM CANADA LTD.
+Identos Inc.
+iFathom Corporation
+illumio Inc
+INFORMATION SYSTEMS ARCHITECTS INC.
+Inmind Technologies Inc.
+INSA CORP.
+Integra Networks 
+IPSS INC.
+JML Systems & Solutions Inc.
+Juniper Networks
+JVN DATA SECURITY INC
+KDM Analytics Inc.
+KEYDATA ASSOCIATES INC.
+KINECTRICS INC.
+KPMG LLP
+KYNDRYL CANADA LIMITED
+LAYER 8 SOLUTIONS INC.
+Les Solutions Victrix
+Les technologies Indigo Canada
+Levio Conseils Inc.
+LORICA SYBERSECURITY INC.
+MAGNARI INC.
+MAGNET FORENSICS INC.
+Mariner Innovations
+Mattawa IT Solutions Inc.
+Maverin Inc.
+MBS Tech Services Inc.
+MDOS CONSULTING INC.
+MICRO FOCUS SOFTWARE SOLUTIONS
+MICROSOFT CANADA INC.
+Minose Solutions Ltd.
+MNP LLP
+MUSARUBRA CANADA ULC
+Netagen Communication
+NetApp Canada Ltd.
+Netskope
+Net-Wall Internet Security Inc. 
+NEWROCKET CANADA CORPORATION
+New Value Solutions Group Inc. 
+Northern Micro Inc. (a Converge Company)
+Northwest Protection Services Ltd.
+Nvidia Development Corp.
+OKIOK Data Ltee.
+Okta Software Canada, Inc.
+ONE IDENTITY CANADA INC.
+ONX ENTERPRISE SOLUTIONS LTD.
+OPTIV CANADA FEDERAL
+ORACLE CANADA ULC
+OXARO Inc. (Raymond Chabot Grant Thornton)
+Palo Alto Networks
+Parabellyx Corporation
+Paragon Micro IT Solutions Group Canada ULC
+PRICEWATERHOUSECOOPERS LLP
+ProofPoint, Inc.
+PURELOGIC IT SOLUTIONS INC
+RADWARE, INC
+Raytheon Canada Limited
+RedRiver Solutions Inc.
+RedSeal, Inc.
+RHEA INC.
+RSA Security Canada ULC
+Safebreach Inc.
+SAP Canada
+Sapper Labs Group
+SHI Canada ULC
+SIMEIO SOLUTIONS CANADA INC
+Softchoice Corporation
+SOLANA NETWORKS INC.
+SonicWall Technology Systems Canada Inc.
+Sphyrna Security Incorporated
+STONEWORKS TECNOLOGIES INC
+Sub-Rosa Solutions
+Sunphinx Inc.
+SYMANTEC CORPORATION
+SYNERSOLUTIONS TECHNOLOGIES INC
+Tanium Canada Technology
+Teel Technologies Inc. 
+Telecom Computer Inc
+TELUS COMMUNICATIONS COMPANY
+Tenable, Inc.
+TERIDA SYSTEMS LTD
+Terrahub Technologies Inc. (dba Credivera)
+TESTFORCE SYSTEMS INC.
+THALES CANADA INC
+THE BELL TELEPHONE COMPANY OF
+THE HERJAVEC GROUP INC. (Cyderes)
+TPG Aurora Technology Consulting
+TRM Technologies Inc.
+Ubi Technology Inc.
+Uncharted Software Inc. 
+Valencia IIP Advisors Limited
+Versatil BPI Inc.
+Wipro Solutions Canada Ltd.
+WNCS Inc in joint venture with MDOS Consulting Inc.
+Xerox Canada Inc. 
+Zayo Canada Inc. 
+ZSCALER, INC.
+Zycom Technology Inc. (ITI Canada inc)
+
+Les répondants qui n’ont pas réussi à se qualifier à cette étape de l’ISQ ne pourront pas participer aux activités d’approvisionnement du Mécanisme d’approvisionnement en matière de cybersécurité.   (MAMC).
+
+Une mise à jour du MAMC devrait être publiée à l’été 2026.
+"
+"Integrating Sphere - Question and Answer #4","Sphère d’intégration - Question et Réponses No. 4","cb-537-68386900","000","26-58044 - Q&A #4","1045860","2026-09-01","2026-08-25","","2026-08-25","2027-12-18","0.00","105000.00","USD","Active","Actif","","","","","","","","*23151700","*Optical industry machinery and equipment and supplies","*Machines, équipements et fournitures pour l'industrie de l'optique","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Variations or combinations of the above methods","Variations ou combinaisons des méthodes susmentionnées","","","*Canadian Free Trade Agreement (CFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Panama Free Trade Agreement","*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Panama","*Canada","*Canada","Labsphere Inc.","231 Shaker St","North Sutton","New Hampshire","03260","United States of America","Labsphere Inc.","231 rue Shaker","North Sutton","New Hampshire","États-Unis","National Research Council of Canada (NRC)","1200 Montreal Road","Ottawa","Ontario","K1A 0R6","Canada","Conseil national de recherches du Canada (CNRC)","1200 Chemin Montréal","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","1200 Montreal Road","Ottawa","Ontario","K1A 0R6","Canada","1200 Chemin Montréal","Ottawa","Ontario","","The objective of this project is to obtain 2 identical integrating spheres with all supporting components necessary to make traceable spectroradiometric measurements within the visible-near Infrared (VISNIR) to shortwave infrared (SWIR) spectrum. The equipment will be able to provide an absolute uniformity spectral radiance output that is traceable to a national metrology standard such as NRC’s Metrology standard or NIST in the U.S.. Further, due to the nature of the potential use of the sensors – day/night/cloud/full sun, the system requires the ability to easily vary the output to suit expected conditions.","L’objectif de ce projet est d’obtenir 2 sphères d’intégration identiques avec tous les composants de support requis pour effectuer des mesures spectroradiométriques traçables dans le spectre du visible et le proche infrarouge (VISNIR) à l’infrarouge de courte longueur d’onde (IRCL). L’équipement sera en mesure de fournir une sortie de radiance spectrale d’une uniformité absolue traçable par rapport à une norme de métrologie nationale telle que la norme de métrologie du CNRC ou le NIST aux États-Unis. De plus, en raison de la nature de l’utilisation potentielle des capteurs — jour/nuit/nuages/plein soleil), le système doit être capable de faire varier facilement la sortie pour s’adapter aux conditions prévues."
+"26-116 - VMware Subscriptions","26-116 - VMware Subscriptions","MX-444062504466","001","26-116","","2026-06-16","2026-06-16","","2026-06-23","2029-06-22","3708602.50","0.00","CAD","Cancelled","Annulé","","","","","","","","","","","*GD","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canadian Free Trade Agreement (CFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord de libre-échange canadien (ALEC)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","ThinkOn Inc","56 Aberfoyle Crescent, Suite 420","Toronto","Ontario","M8X 2W4","Canada","ThinkOn Inc","56 Aberfoyle Crescent, Suite 420","Toronto","Ontario","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Intention to award based on the lowest cost compliant as per 26-116 RFQ.","Intention to award based on the lowest cost compliant as per 26-116 RFQ."
+"Total View Maintenance and Support","Total View Maintenance and Support","SSC-26-00038578:A:1","000","BPM025789/33539","K000038578","2026-04-10","2026-03-18","","","","32011.98","","CAD","Active","Actif","","","","","*N7030","*ADP Software","*Logiciel TAI","","","","*GD","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*None","*Aucun","","","CATTAN TECHNOLOGIES INC.","4793 4793 MASSEY LANE","GLOUCESTER","Ontario","K1J 8W8","CANADA","CATTAN TECHNOLOGIES INC.","4793 4793 MASSEY LANE","GLOUCESTER","Ontario","CANADA","Shared Services Canada","90 Metcalfe Street","Ottawa","Ontario","K0A 0C3","Canada","Services partagés Canada","90, rue Metcalfe","Ottawa","Ontario","Canada","Shared Services Canada","90 Metcalfe Street,Ottawa,Ontario,K0A 0C3,Canada","Services partagés Canada","90, rue Metcalfe,Ottawa,Ontario,K0A 0C3,Canada","Contact, Test","contact@example.invalid","000-000-0000","","John.Robert2@ssc-spc.gc.ca<br>613-327-5637<br>613-327-5637<br>400 Cooper Street Ottawa<br>Ontario<br>K2P 2N1<br>CANADA","","","","","John.Robert2@ssc-spc.gc.ca<br>613-327-5637<br>613-327-5637<br>400 Cooper Street Ontario<br>K2P 2N1<br>CANADA","","","","Notice of Proposed ProcurementShared Services Canada (SSC) has a requirement for the procurement of TotalView  maintenance on behalf of Shared Services Canada in Ottawa, Ontario, as outlined in the attached Request for Quotations.&nbsp;Policy on Reciprocal Procurement: This solicitation of bids is open only to Canadian suppliers.A bid must comply with all requirements of the bid solicitation to be declared responsive. The responsive bid with the lowest evaluated price will be recommended for award of a contract. The Bidder must submit pricing in accordance with Annex A – List of Deliverables and Pricing. The Crown retains the right to negotiate with suppliers on any procurement.Please refer to the Request for Quotations document for the complete details regarding this requirement including the mandatory criteria, evaluation criteria and basis of selection. Documents may be submitted in either official language of Canada.IMPORTANT NOTICE TO SUPPLIERS RE BID SUBMISSION REQUIREMENTSDue to the impacts from the COVID-19 pandemic, suppliers are required to submit bids electronically using the Contracting Authority’s email. Fax and hard copy (submitted in person or via mail/courier) bids will not be accepted, except in exceptional circumstances, for the subject bid solicitation.","Avis de projet de march&#233;Services partag&#233;s Canada (SPC) a une exigence pour l&#39;acquisition de&nbsp; support for&nbsp;TotalView  au nom des Services partag&#233;s Canada, &#224; Vars, en Ontario, comme indiqu&#233; dans la Demande de soumissions ci-jointe.&nbsp;Politique sur l’approvisionnement r&#233;ciproque : Le pr&#233;sent appel d’offres est ouvert uniquement aux fournisseurs canadiens.Une soumission doit respecter toutes les exigences de la demande de soumissions pour &#234;tre d&#233;clar&#233;e recevable. La soumission recevable avec le prix &#233;valu&#233; le plus bas sera recommand&#233;e pour l’attribution d’un contrat. Le soumissionnaire doit soumettre des prix conform&#233;ment &#224; l’annexe A – Liste des produits livrables et des prix. La Couronne se r&#233;serve le droit de n&#233;gocier avec des fournisseurs pour tout approvisionnement.Veuillez consulter le document de demande de prix pour les d&#233;tails concernant ce besoin, y compris les crit&#232;res obligatoires, les crit&#232;res d’&#233;valuation et m&#233;thode de s&#233;lection. Les documents peuvent &#234;tre pr&#233;sent&#233;s dans l’une ou l’autre des langues officielles du Canada.AVIS IMPORTANT AUX FOURNISSEURS CONCERNANT LES EXIGENCES EN MATI&#200;RE DE PR&#201;SENTATION DES SOUMISSIONSEn raison de l’incidence de la pand&#233;mie COVID-19, les fournisseurs sont tenus de pr&#233;senter des soumissions par voie &#233;lectronique au moyen du courriel de l&#39;autorit&#233; contractante. Par t&#233;l&#233;copieur et copie papier (remis en personne ou par la poste ou par messager), les soumissions ne seront pas accept&#233;es, sauf dans des circonstances exceptionnelles, pour la demande de soumissions."
+"Annual Off-Road Fleet Emission Data for Canada","Données annuelles sur les émissions des flottes hors route au Canada","cb-333-31651142","000","5000088906","3000809465","2026-05-15","2026-04-24","","2026-05-08","2027-03-31","0.00","22602.00","USD","Active","Actif","","","","","","","","*25173700
+*77102002","*Exhaust and emission controls
+*Emission reporting compliance service","*Contrôle de l'échappement et des émissions
+*Service de conformité en matière de déclaration des émissions","*SRV","Advance Contract Award Notice","Préavis d’attribution du contrat","Advance contract award notice","Préavis d'attribution du contrat","Not applicable","Sans objet","","","*Canada-Panama Free Trade Agreement
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*North American Free Trade Agreement (NAFTA)
+*Canada-Colombia Free Trade Agreement
+*Canada-Chile Free Trade Agreement (CCFTA)","*Accord de libre-échange Canada-Panama
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Chili (ALECC)","*Canada","*Canada","Power Systems Research","1365 Corporate Center Curve","Eagan","Minnesota","55121","USA","Power Systems Research","1365 Corporate Center Curve","Eagan","Minnesota","USA","Department of the Environment (ECCC )","510-234 Donald Street","Winnipeg","Manitoba","R3C 1M8","Canada","Ministère de l’Environnement (ECCC)","510-234 rue Donald","Winnipeg","Manitoba","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","510-234 Donald Street","Winnipeg","Manitoba","R3C 1M8","Canada","510-234 rue Donald","Winnipeg","Manitoba","","The Department of Environment and Climate Change Canada (ECCC) has a requirement for the supply of an annual off-road fleet dataset to supplement previously acquired datasets of similar scope in Microsoft Excel format.  ECCC determines the off-road equipment products to be included in the dataset with the results disaggregated by key attributes including but not limited to engine cycle, engine fuel, engine power range, product, equipment type, engine specifications, and emission control technologies in-service population.  The dataset must include all available engine fuels and engine power ranges, and the country of sale must be limited to Canada and provide within 60 days of contract award.  
+
+The scope of the data includes the following applications and products:
+	
+	a.	Agricultural
+	b.	Construction
+	c.	Industrial
+	d.	Lawn and Garden
+	e.	Marine Propulsion
+	f.	Power Generation
+	g.	Recreational Products Segments
+
+Definitions:
+
+	-	Model year – The calendar year that the equipment was first put into service.
+	-	Off-road – Vehicles and equipment that are either self-propelled or portable and are not commonly used on public roads.
+
+The dataset provided must include the following data fields:
+
+	a. 	Calendar Year		
+	b.	Engine Cycle		
+	c.	Segment		
+	d.	Application		
+	e.	Product		
+	f.	Engine Fuel		
+	g.	Engine Power Rating Range
+	h.	Average Engine Power Rating
+	i.	Engine Type
+	j. 	Emissions Certification Level
+	k.	Emissions Certifying Agency
+	l.	Emissions Solution Strategy
+
+The dataset must be delivered within 60 days of contract award and span the period of calendar years 2020 through 2025 (inclusive)*, with the individual years that the fleet was placed into in-service for each Model year 1986 through 2025 (inclusive)*, with all equipment manufactured prior to 1986 grouped under a “1985 and Prior” Model year category.
+
+* Subsequent Calendar year and Model year to be included in the dataset for each Option Period exercised (2027 dataset for Option Period 1; 2028 dataset for Option Period 2; 2029 dataset for Option Period 3; 2030 dataset for Option Period 4).
+","Le ministère de l'Environnement et du Changement climatique Canada (ECCC) a besoin d'un ensemble de données annuel sur les parcs de véhicules hors route afin de compléter les ensembles de données de portée similaire déjà acquis au format Microsoft Excel.  ECCC détermine les équipements hors route à inclure dans l'ensemble de données sur les populations en service, ventilés selon des attributs clés, notamment le cycle du moteur, le carburant du moteur, la plage de puissance du moteur, le produit, le type d'équipement, les spécifications du moteur et les technologies de contrôle des émissions.  L'ensemble de données doit inclure tous les carburants et toutes les plages de puissance disponibles pour les moteurs, et le pays de vente doit être limité au Canada. Il doit être fourni dans les 60 jours suivant l'attribution du contrat.  
+
+La portée des données comprend tous les produits hors route des segments suivants :
+
+	a.	Agriculture
+	b.	Construction
+	c.	Industrie
+	d.	Pelouses et jardins
+	e.	Propulsion marine
+	f.	Production d'électricité
+	g.	Produits récréatifs
+
+Définitions:
+
+	-	Année-modèle : Année civile de la première mise en service de l’équipement.
+	-	Hors route : Véhicules et équipements automoteurs ou portables qui ne sont généralement pas utilisés sur la voie publique.
+
+L'ensemble de données fourni doit inclure les champs suivants :
+
+	a.	Année civile		
+	b.	Cycle moteur
+	c.	Segment		
+	d.	Application		
+	e.	Produit		        
+	f.	Carburant moteur	
+	g.	Plage de puissance du moteur
+	h.	Puissance nominale moyenne du moteur
+	i.	Type de moteur
+	j. 	Niveau de certification des émissions
+	k.	Agence de certification des émissions
+	l.	Stratégie de solution en matière d'émissions
+
+L'ensemble de données doit être fourni dans les 60 jours suivant l'attribution du contrat et couvrir la période allant de l'année civile 2020 à l'année civile 2025 (incluses)*, avec les années individuelles au cours desquelles la flotte a été mise en service pour chaque année modèle de 1986 à 2025 (incluses)*, tous les équipements fabriqués avant 1986 étant regroupés dans la catégorie « 1985 et antérieur ».
+
+* L'année civile et l'année modèle suivantes doivent être incluses dans l'ensemble de données pour chaque période d'option exercée (ensemble de données 2027 pour la période d'option 1 ; ensemble de données 2028 pour la période d'option 2 ; ensemble de données 2029 pour la période d'option 3 ; ensemble de données 2030 pour la période d'option 4).
+"
+"Enterprise portfolio and resource management","Enterprise portfolio and resource management","MX-444132009954","000","PE20260216","","2026-08-17","2026-05-26","","2026-05-26","2029-07-31","1870740.02","0.00","CAD","Active","Actif","","","","","","","","","","","*GD
+*SRV","","","Non-competitive","Non concurrentielle","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","Planview","12301 Research Blvd., Research Park Plaza V, Suite 101","Austin","Texas","78759","United States","Planview","12301 Research Blvd., Research Park Plaza V, Suite 101","Austin","Texas","United States","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Enterprise portfolio and resource management tool","Enterprise portfolio and resource management tool"
+"Spare parts for Construction Engineering Equipment","Pièces de rechange pour équipements de génie civil","cb-397-14536562","000","W8486-270850/A","W8486-270850/004/SV","2026-09-22","2026-09-22","","2026-08-18","2027-03-31","0.00","8830.08","CAD","Active","Actif","","","","","","","","*22100000
+*24100000","*Heavy construction machinery and equipment
+*Material handling machinery and equipment","*Engins et accessoires de construction lourde
+*Machines et équipements pour la manutention","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*Montréal","*Montréal","Maven Engineering Corp.","15946 Derwood Road","Rockville","Maryland","20855","USA","Maven Engineering Corp.","15946 Derwood Road","Rockville","Maryland","USA","Department of National Defence (DND)","101 Colonel By Drive","Ottawa","Ontario","K1A 0K2","Canada","Ministère de la Défense nationale (MDN)","101, promenade du Colonel By","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","101 Colonel By Drive","Ottawa","Ontario","K1A 0K2","Canada","101, promenade du Colonel By","Ottawa","Ontario","","Item 1, GSIN: 2930, NSN: 2930-01-2908365, CORE,RADIATOR
+Part No.: 2W5537
+NSCM/CAGE: 11083
+Quantity: 8
+Unit of Issue: EA 
+To be delivered to 25 CFSD Montreal, Quebec  
+","Article 1, NIBS : 2930, NNO : 2930-01-2908365, FAISCEAU,RADIATEUR
+No de la pièce : 2W5537
+COF/CAGE : 11083
+Quantité : 8
+Unité de distribution : chaque
+À être livré à 25 DAFC Montréal, Québec
+ 
+"
+"Outplacement Career Transition Services","Services de soutien à la transition de carrière","MX-444148990616","000","26-004","","2026-09-02","2026-09-01","","2026-09-01","2031-08-31","500000.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canadian Free Trade Agreement (CFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord de libre-échange canadien (ALEC)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","Lee Hecht Harrison Knightsbridge Corp.","250 Yonge Street, Suite 2800","Toronto","Ontario","M5B 2L7","Canada","Lee Hecht Harrison Knightsbridge Corp.","250 Yonge Street, Suite 2800","Toronto","Ontario","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Provision of bilingual Outplacement Career Transition Services to eligible EDC employees on an as-required basis, including career transition support, coaching, career planning, job search assistance, and related services.","Prestation de services bilingues de transition de carri&egrave;re et de reclassement (outplacement) aux employ&eacute;s admissibles d&rsquo;EDC, selon les besoins, y compris du soutien &agrave; la transition de carri&egrave;re, du coaching, de la planification de carri&egrave;re, de l&rsquo;aide &agrave; la recherche d&rsquo;emploi et des services connexes."
+"Pre-employment and Exit Interview Services","Services de vérification préalable à l’emploi et d’entrevue de départ","MX-243100540487","000","26-005","","2026-10-16","2026-09-14","","2026-10-01","2027-09-30","68000.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canadian Free Trade Agreement (CFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord de libre-échange canadien (ALEC)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","TRITON Canada Inc.","2235 Sheppard Ave East, Suite 1503","Toronto","Ontario","M2J 5B5","Canada","TRITON Canada Inc.","2235 Sheppard Ave East, Suite 1503","Toronto","Ontario","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Award of one-year agreement for Pre-employment and Exit Interview Services&nbsp;&nbsp;","Attribution d&rsquo;une entente d&rsquo;un an pour des services d&rsquo;entrevues pr&eacute;emploi et de d&eacute;part"
+"Culture and Employee Experience Evolution Support RFP","Soutien à l’évolution de l’expérience du personnel DP","MX-243100604603","000","PS26-CU-003","","2026-10-22","2026-09-01","","2026-09-01","2027-08-31","1665000.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV
+*GD","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canadian Free Trade Agreement (CFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord de libre-échange canadien (ALEC)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","Habanero Consulting Inc.","510-1111 Melville Street","Vancouver","British Columbia","V6E 3V6","Canada","Habanero Consulting Inc.","510-1111 Melville Street","Vancouver","Colombie Britannique","Canada","Farm Credit Canada (FCC)","1800 Hamilton Street","Regina","Saskatchewan","S4P 4L3","Canada","Farm Credit Canada (FCC)","1800 Hamilton Street","Regina","Saskatchewan","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Culture and Employee Experience Evolution Support&nbsp;","Soutien &agrave; l&rsquo;&eacute;volution de l&rsquo;exp&eacute;rience du personnel"
+"FARM AND AGRI- BUSINESS ADVISORY SERVICES","SERVICES CONSULTATIFS POUR LES ENTREPRISES AGRICOLES ET LES AGROENTREPRISES","MX-243100608603","000","PS24-CU-018","","2026-10-22","2025-07-31","","2025-08-01","2028-07-31","1150000.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canadian Free Trade Agreement (CFTA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange canadien (ALEC)","","","Maverick Ag Ltd.","601 2nd Avenue North","Saskatoon","Saskatchewan","S7K 2C7","Canada","Maverick Ag Ltd.","601 2nd Avenue North","Saskatoon","Saskatchewan","Canada","Farm Credit Canada (FCC)","1800 Hamilton Street","Regina","Saskatchewan","S4P 4L3","Canada","Farm Credit Canada (FCC)","1800 Hamilton Street","Regina","Saskatchewan","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Farm and Agri-Business Advisory Services","Services consultatifs pour les entreprises agricoles et les"
+"Research services contract for executives and leadership team","Contrat de services de recherches pour dirigeants et équipe de direction","MX-243100560104","000","EXCPT0002056_CNTR0029351","","2026-10-19","2026-09-29","","2026-10-01","2029-09-30","1918011.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Non-competitive","Non concurrentielle","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canadian Free Trade Agreement (CFTA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange canadien (ALEC)","","","GARTNER CANADA, CO","40 King Street West, 36th Floor, Suite 3601","Toronto","Ontario","M5H 1H1","Canada","GARTNER CANADA, CO","40 King Street West, 36th Floor, Suite 3601","Toronto","Ontario","Canada","Business Development Bank of Canada","5, Place Ville-Marie","Montréal","Quebec","H3B 5E7","Canada","Business Development Bank of Canada","5, Place Ville-Marie","Montréal","Québec","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","BDC published a public call for interest on MERX concerning BDC&#39;s needs for different databases, and no supplier expressed interest in proposing a database offering services similar to Gartner.","BDC a publi&eacute; un appel d&#39;int&eacute;r&ecirc;t public sur MERX concernant les besoins de BDC pour diff&eacute;rentes banques de donn&eacute;es et aucun fournisseur n&#39;a manifest&eacute; son int&eacute;r&ecirc;t pour proposer une base de donn&eacute;es offrant les services similaires &agrave; Gartner."
+"RFQ 26-124 – Commvault Storage Infrastructure","RFQ 26-124 – Commvault Storage Infrastructure","MX-444105866041","000","RFQ 26-124","","2026-07-23","2026-07-23","","2026-07-31","2029-07-30","274701.52","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV
+*GD","","","Competitive - Traditional","Concurrentielle - Traditionnelle","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","Northern Micro","3155 Swansea Cr.","Ottawa","Ontario","K1G 3J3","Canada","Northern Micro","3155 Swansea Cr.","Ottawa","Ontario","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Awarded by the lowest total landed cost of compliant quotations.","Awarded by the lowest total landed cost of compliant quotations."
+"World‑Check contract renewal for 30 months","World‑Check contract renewal for 30 months","MX-444073012754","000","CNTR0029123","","2026-06-25","2026-06-25","","2026-07-01","2028-12-31","1346700.00","0.00","CAD","Active","Actif","","","","","","","","","","","*GD","","","Non-competitive","Non concurrentielle","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canadian Free Trade Agreement (CFTA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange canadien (ALEC)","","","London Stock Exchange Group (LSEG) previous Refinitiv Canada Holdings ltée.","1250 Blvd. René-Lévesque. Suite 2200","Montreal","Quebec","H3B 4W8","Canada","London Stock Exchange Group (LSEG) previous Refinitiv Canada Holdings ltée.","1250 Blvd. René-Lévesque. Suite 2200","Montreal","Quebec","Canada","Business Development Bank of Canada","5, Place Ville-Marie","Montréal","Quebec","H3B 5E7","Canada","Business Development Bank of Canada","5, Place Ville-Marie","Montréal","Quebec","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","BDC awarded a&nbsp;30 months contract (EXCPT0001977) for World Check solution in order to ensure uninterrupted service continuity during the preparation phase for a return to market.","BDC awarded a&nbsp;30 months contract (EXCPT0001977) for World Check solution in order to ensure uninterrupted service continuity during the preparation phase for a return to market."
+"Acquisition of a Board Management IT Solution and related services","Acquisition d’une solution informatique de gestion du Conseil d’Administration","MX-444107256846","000","PRCP0003262","","2026-07-24","2026-07-21","","2026-07-21","2035-07-20","813579.00","0.00","CAD","Active","Actif","","","","","","","","","","","*GD
+*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canadian Free Trade Agreement (CFTA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange canadien (ALEC)","","","DiliTrust Canada","2045, Stanley Street, Suite 1500","Montréal","Quebec","H3A 2V4","Canada","DiliTrust Canada","2045, Stanley Street, Suite 1500","Montréal","Québec","Canada","Business Development Bank of Canada","5, Place Ville-Marie","Montréal","Quebec","H3B 5E7","Canada","Business Development Bank of Canada","5, Place Ville-Marie","Montréal","Québec","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","The contract is for a Board Management IT Solution and related services.&nbsp;The contract will have a duration of five (5) years, including the option to renew the contract for two (2) periods of (24) months each.","Le contrat est pour une Solution informatique de gestion du conseil d&rsquo;administration et des services connexes.&nbsp;Le contrat sera d&rsquo;une dur&eacute;e de cinq (5) ans, incluant l&#39;option de renouveler le contrat&nbsp;pour deux (2) p&eacute;riodes de vingt-quatre (24) mois chacune."
+"Property search to obtain municipal taxes account","Recherche de propriété afin d'obtenir le compte de taxes municipales","MX-444190360219","000","PRCP0003849","","2026-10-08","2026-10-08","","2026-10-08","2027-10-31","760000.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Non-competitive","Non concurrentielle","","","","","*Canadian Free Trade Agreement (CFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord de libre-échange canadien (ALEC)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","Collateral Management Solutions (CMS)","20 Queen Street West, 28th floor","Toronto","Ontario","M5H3R3","Canada","Collateral Management Solutions (CMS)","20 Queen Street West, 28th floor","Toronto","Ontario","Canada","Business Development Bank of Canada","5, Place Ville-Marie","Montréal","Quebec","H3B 5E7","Canada","Business Development Bank of Canada","5, Place Ville-Marie","Montréal","Québec","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","&nbsp;This award is solely intended to increase the authorized contract value to meet actual and forecasted business requirements through October 31, 2027. It does not introduce any new services, extend the contract term, or materially change the current scope of services.","Cette attribution vise uniquement &agrave; augmenter la valeur autoris&eacute;e du contrat afin de r&eacute;pondre aux besoins r&eacute;els et pr&eacute;vus jusqu&rsquo;au 31 octobre 2027. Elle n&rsquo;introduit aucun nouveau service, ne prolonge pas la dur&eacute;e du contrat et n&rsquo;entra&icirc;ne aucun changement important &agrave; la port&eacute;e actuelle des services."
+"FCC Project Finance Strategic Consulting RFP","Demande de propositions de FAC – Conseils stratégiques en financement de projets","MX-444096765809","000","PS26-DW-101","","2026-07-15","2026-06-24","","2026-07-01","2027-06-30","750000.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","PricewaterhouseCoopers LLP - MAIN PwC NATIONAL ACCT","99 Bank Street, Suite 710","Ottawa","Ontario","K1P 1E4","Canada","PricewaterhouseCoopers LLP - MAIN PwC NATIONAL ACCT","99 Bank Street, Suite 710","Ottawa","Ontario","Canada","Farm Credit Canada (FCC)","1800 Hamilton Street","Regina","Saskatchewan","S4P 4L3","Canada","Farm Credit Canada (FCC)","1800 Hamilton Street","Regina","Saskatchewan","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","The&nbsp;objective&nbsp;of this engagement is to support FCC in assessing whether and how Project Finance should become part of FCC&rsquo;s long-term strategic toolkit, through a phased, pilot-based approach. The consultant will support the execution of selected pilot transactions and conduct a diagnostic of FCC&rsquo;s current capabilities and relevant industry practices,&nbsp;in order to&nbsp;inform FCC&rsquo;s strategic position, governance and risk management requirements, and recommendations on the potential development of a Project Finance channel.&nbsp;","L&rsquo;objectif de ce mandat consiste &agrave; aider FAC &agrave; d&eacute;terminer dans quelle mesure et de quelle mani&egrave;re le financement de projets devrait &ecirc;tre int&eacute;gr&eacute; &agrave; la bo&icirc;te &agrave; outils strat&eacute;gique &agrave; long terme de FAC, dans le cadre d&rsquo;une approche par &eacute;tapes, fond&eacute;e sur des projets pilotes. La soci&eacute;t&eacute; de conseil soutiendra l&rsquo;ex&eacute;cution des transactions pilotes s&eacute;lectionn&eacute;es et r&eacute;alisera un diagnostic des capacit&eacute;s actuelles de FAC ainsi que des pratiques pertinentes de l&rsquo;industrie, afin d&rsquo;&eacute;clairer la position strat&eacute;gique de FAC, ses besoins en mati&egrave;re de gouvernance et de gestion des risques, et de formuler des recommandations sur le d&eacute;veloppement potentiel d&rsquo;un mode de prestation de financement de projets."
+"LinkedIn Recruiter","LinkedIn Recruiter","MX-443970219202","000","787-PE202512787","","2026-04-15","2026-03-10","","2026-03-10","2029-03-09","761473.35","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Advance contract award notice","Préavis d'attribution du contrat","","","","","*Canadian Free Trade Agreement (CFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord de libre-échange canadien (ALEC)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","Linkedin Ireland Unlimited Company","Wilton Plaza, Wilton Place","Dublin","","","Ireland","Linkedin Ireland Unlimited Company","Wilton Plaza, Wilton Place","Dublin","","Ireland","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","License subscription for LinkedIn Recruiter","License subscription for LinkedIn Recruiter"
+"Training Design and Development Services","Services de conception et de développement de la formation","MX-444004155611","000","RFSA 25-028","","2026-05-06","2026-04-21","","2026-05-01","2031-04-30","1.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","DELVIO Ltd.","116 Chemin de la Sabliere","Mont-Tremblant","Quebec","J8E 1N6","Canada","DELVIO Ltd.","116 Chemin de la Sabliere","Mont-Tremblant","Québec","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Supply Arrangement for Training Design and Development Services","Arrangement en mati&egrave;re d&rsquo;approvisionnement pour des services de conception et de d&eacute;veloppement de formation"
+"Training Design and Development Services","Services de conception et de développement de la formation","MX-444004155612","000","RFSA 25-028","","2026-05-06","2026-04-21","","2026-05-01","2031-04-30","1.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","eLM Academic Consultants","PO Box 129","Braeside","Ontario","K0A 1G0","Canada","eLM Academic Consultants","PO Box 129","Braeside","Ontario","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Supply Arrangement for Training Design and Development Services","Arrangement en mati&egrave;re d&rsquo;approvisionnement pour des services de conception et de d&eacute;veloppement de formation"
+"Training Design and Development Services","Services de conception et de développement de la formation","MX-444004155613","000","RFSA 25-028","","2026-05-06","2026-04-21","","2026-05-01","2031-04-30","1.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","GP Strategies Canada ULC","1075 Bay Street, Suite 500","Toronto","Ontario","M5S 2B1","Canada","GP Strategies Canada ULC","1075 Bay Street, Suite 500","Toronto","Ontario","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Supply Arrangement for Training Design and Development Services","Arrangement en mati&egrave;re d&rsquo;approvisionnement pour des services de conception et de d&eacute;veloppement de formation"
+"Training Design and Development Services","Services de conception et de développement de la formation","MX-444004155614","000","RFSA 25-028","","2026-05-06","2026-04-21","","2026-05-01","2031-04-30","1.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","Limestone Learning Inc.","809-1641 Lonsdale Avenue","North Vancouver","British Columbia","V7M 2J5","Canada","Limestone Learning Inc.","809-1641 Lonsdale Avenue","North Vancouver","Colombie Britannique","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Supply Arrangement for Training Design and Development Services","Arrangement en mati&egrave;re d&rsquo;approvisionnement pour des services de conception et de d&eacute;veloppement de formation"
+"Training Design and Development Services","Services de conception et de développement de la formation","MX-444004155615","000","RFSA 25-028","","2026-05-06","2026-04-21","","2026-05-01","2031-04-30","1.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","pardeux e-learning/gamification","6000 Boul. de Rome, Suite 410","Brossard","Quebec","J4Y 0B6","Canada","pardeux e-learning/gamification","6000 Boul. de Rome, Suite 410","Brossard","Québec","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Supply Arrangement for Training Design and Development Services","Arrangement en mati&egrave;re d&rsquo;approvisionnement pour des services de conception et de d&eacute;veloppement de formation"
+"Training Design and Development Services","Services de conception et de développement de la formation","cb-000-00000001","000","RFSA 25-028","","2026-05-06","2026-04-21","","2026-05-01","2031-04-30","1.00","0.00","CAD","Active","Actif","","","","","","","","","","","*SRV","","","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","Ana Ferreira","1 Example Street","Ottawa","Quebec","K1A 0A1","Canada","Ana Ferreira","1 Example Street","Brossard","Québec","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","K1A 1K3","Canada","Export Development Canada - EDC","150 Slater","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","Supply Arrangement for Training Design and Development Services","Arrangement en mati&egrave;re d&rsquo;approvisionnement pour des services de conception et de d&eacute;veloppement de formation"

@@ -1,4 +1,6 @@
-"""SQLite helpers: open, apply the shared schema, upsert employers, log runs."""
+"""SQLite helpers: open, apply the shared schema, meta values, log runs.
+
+Organizations are written through organizations.upsert."""
 
 from __future__ import annotations
 
@@ -7,7 +9,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config
-from .normalize import employer_id, norm_name, split_trade_name
 
 
 def now_iso() -> str:
@@ -32,32 +33,12 @@ def connect(path: str | Path | None = None, *, memory: bool = False) -> sqlite3.
     return conn
 
 
-# Columns added to existing tables after the first release, each with the
-# statement that backfills it. add_missing_columns adds every column the schema
-# has and an older database lacks; this list is for the ones that also need a
-# value for the rows already there.
-ADDED_COLUMNS: list[tuple[str, str, str, str | None]] = [
-    ("employers", "street_source", "TEXT",
-     "UPDATE employers SET street_source = 'jobbank' WHERE street IS NOT NULL AND street_source IS NULL"),
-]
-
-
 def apply_schema(conn: sqlite3.Connection, schema_path: Path | None = None) -> None:
     sql = (schema_path or config.SCHEMA_PATH).read_text(encoding="utf-8")
     # Columns first: an index in the schema may name a column that a database
     # from an earlier version lacks, and the script would stop there.
-    added = add_missing_columns(conn, sql)
+    add_missing_columns(conn, sql)
     conn.executescript(sql)
-    for table, column, decl, backfill in ADDED_COLUMNS:
-        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
-        if column not in have:
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
-            added.append(f"{table}.{column}")
-        # Backfilled once, on the run that added the column (a fresh database
-        # gets it from the schema, with no rows to fill).
-        if backfill and f"{table}.{column}" in added:
-            conn.execute(backfill)
-            conn.commit()
 
 
 def add_missing_columns(conn: sqlite3.Connection, sql: str) -> list[str]:
@@ -121,62 +102,8 @@ def hours_since(conn: sqlite3.Connection, key: str, *, now: str | None = None) -
     return (current - then).total_seconds() / 3600.0
 
 
-def upsert_employer(
-    conn: sqlite3.Connection,
-    raw_name: str,
-    province: str | None,
-    *,
-    source: str,
-    city: str | None = None,
-    postal_code: str | None = None,
-    street: str | None = None,
-    now: str | None = None,
-) -> str:
-    """Create or refresh the merged employer row and return its id.
-
-    The identity is the legal part of the name (normalize.split_trade_name);
-    the raw spelling and any operating name after "dba" or "o/a" are both
-    recorded as names seen. Location fields only fill blanks; status and
-    counts are recomputed by status.recompute, so this function never touches
-    them.
-    """
-    raw = raw_name.strip()
-    norm = norm_name(raw)
-    eid = employer_id(norm, province)
-    stamp = now or now_iso()
-    conn.execute(
-        """
-        INSERT INTO employers (id, display_name, norm_name, province, city, postal_code, street, street_source, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          city = COALESCE(employers.city, excluded.city),
-          postal_code = COALESCE(employers.postal_code, excluded.postal_code),
-          street_source = CASE WHEN employers.street IS NULL THEN excluded.street_source ELSE employers.street_source END,
-          street = COALESCE(employers.street, excluded.street)
-        """,
-        (eid, raw, norm, province, city, postal_code, street, source if street else None, stamp),
-    )
-    record_names(conn, eid, source, raw, split_trade_name(raw)[1])
-    return eid
-
-
-def record_names(conn: sqlite3.Connection, eid: str, source: str, *names: str | None) -> int:
-    """Add names seen for an employer, ignoring blanks and repeats; returns rows added."""
-    added = 0
-    for name in names:
-        text = (name or "").strip()
-        if text:
-            cur = conn.execute(
-                "INSERT OR IGNORE INTO employer_names (employer_id, raw_name, source) VALUES (?, ?, ?)",
-                (eid, text, source),
-            )
-            added += cur.rowcount
-    return added
-
-
-# A stage's notices share one log row, joined by " | "; five government
-# notices with their full titles and links fit, with room for a stage's
-# other notices.
+# A stage's notices share one log row, joined by " | ", up to this many
+# characters.
 NOTICE_MAX_CHARS = 3000
 
 
@@ -193,10 +120,10 @@ def log_run(
 ) -> None:
     """One row of the run log. ok=False is a failed stage (the run status is not
     ok, a retry trigger runs the refresh again, and it is an item needing
-    attention). notice is information a retry would not change (a reference
-    list that changed, a list not yet readable, a government notice first
-    listed): status.json's notices, LAST_RUN.md and the daily check's email,
-    never an item needing attention; the run stays ok."""
+    attention). notice is information a retry would not change (a buyer
+    spelling the seed does not cover yet, a file not published yet, a stage
+    not built): status.json's notices, LAST_RUN.md and the daily check's
+    email, never an item needing attention; the run stays ok."""
     conn.execute(
         "INSERT INTO sources_log (run_at, source, detail, rows_in, rows_new, excluded, ok, notice) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

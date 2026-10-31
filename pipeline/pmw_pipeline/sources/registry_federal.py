@@ -7,14 +7,14 @@ Two CSV files cover corporations under the Canada Business Corporations Act:
 active, and inactive or dissolved. Each row carries the corporate name, the
 status, the anniversary date (the date of incorporation or continuance), the
 registered office's city, province and postal code, and the business number
-when the corporation has one. The grants stage (sources/grants.py) reaches
-that number through a match's corporation number and joins disclosures that
-carry it to the employer.
+when the corporation has one.
 
 The files are cached for a week and loaded into a pipeline-local table, so no
-per-employer requests are made. Employers are matched on the normalized name;
-the grade is exact when the province or postal code also agrees, probable
-otherwise, and nothing is stored when names differ at all.
+per-organization requests are made. Organizations are matched on the
+normalized name; the grade is exact when the corporation's province or postal
+code agrees with any address seen on the organization's records
+(organization_places), probable otherwise, and nothing is stored when names
+differ at all.
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ import hashlib
 import io
 import logging
 import sqlite3
-from collections import defaultdict
 
 from ..db import get_meta, log_run, now_iso, set_meta
 from ..http import FetchError, PoliteClient
@@ -118,51 +117,54 @@ def renormalize(conn: sqlite3.Connection) -> int:
 
 
 def match(conn: sqlite3.Connection, *, now: str | None = None) -> int:
-    """Join employers to corporations on the normalized name; keep the best per employer."""
+    """Join organizations to corporations on the normalized name; keep the best per organization."""
     stamp = now or now_iso()
     if conn.execute("SELECT 1 FROM federal_corporations LIMIT 1").fetchone() is None:
         return 0  # nothing loaded yet: no lookup happened, so no check is recorded
     best: dict[str, tuple] = {}
     for r in conn.execute(
         """
-        SELECT e.id AS employer_id, e.province AS e_prov, e.postal_code AS e_postal,
-               f.number, f.legal_name, f.status, f.registered_on, f.province AS f_prov, f.postal_code AS f_postal
-        FROM employers e JOIN federal_corporations f ON f.norm_name = e.norm_name
-        WHERE e.norm_name != ''
+        SELECT o.id AS organization_id, f.number, f.legal_name, f.status, f.registered_on,
+               EXISTS (SELECT 1 FROM organization_places p WHERE p.organization_id = o.id AND (
+                 (f.postal_code IS NOT NULL AND p.postal_code = f.postal_code)
+                 OR (f.province IS NOT NULL AND p.province = f.province))) AS agrees
+        FROM organizations o JOIN federal_corporations f ON f.norm_name = o.norm_name
+        WHERE o.norm_name != ''
         """
     ):
-        grade = "exact" if (
-            (r["e_postal"] and r["e_postal"] == r["f_postal"]) or (r["e_prov"] and r["e_prov"] == r["f_prov"])
-        ) else "probable"
+        grade = "exact" if r["agrees"] else "probable"
         rank = (0 if grade == "exact" else 1, STATUS_RANK.get(r["status"] or "", 3), -(int((r["registered_on"] or "0")[:4]) or 0))
-        current = best.get(r["employer_id"])
+        current = best.get(r["organization_id"])
         if current is None or rank < current[0]:
-            best[r["employer_id"]] = (rank, r["number"], r["legal_name"], r["status"], r["registered_on"], grade)
+            best[r["organization_id"]] = (rank, r["number"], r["legal_name"], r["status"], r["registered_on"], grade)
     conn.executemany(
         """
-        INSERT INTO registry_matches (employer_id, registry, registry_id, legal_name, entity_type, status,
+        INSERT INTO registry_matches (organization_id, registry, registry_id, legal_name, entity_type, status,
           registered_on, grade, checked_at)
         VALUES (?, ?, ?, ?, 'CBCA', ?, ?, ?, ?)
-        ON CONFLICT(employer_id, registry, registry_id) DO UPDATE SET
+        ON CONFLICT(organization_id, registry, registry_id) DO UPDATE SET
           legal_name = excluded.legal_name, status = excluded.status, registered_on = excluded.registered_on,
           grade = excluded.grade, checked_at = excluded.checked_at
         """,
-        [(eid, REGISTRY, v[1], v[2], v[3], v[4], v[5], stamp) for eid, v in best.items()],
+        [(oid, REGISTRY, v[1], v[2], v[3], v[4], v[5], stamp) for oid, v in best.items()],
     )
     # SQLite needs the WHERE to disambiguate an upsert after INSERT ... SELECT.
     conn.execute(
-        "INSERT INTO registry_checks (employer_id, registry, checked_at) SELECT id, ?, ? FROM employers WHERE true "
-        "ON CONFLICT(employer_id, registry) DO UPDATE SET checked_at = excluded.checked_at",
+        "INSERT INTO registry_checks (organization_id, registry, checked_at) SELECT id, ?, ? FROM organizations "
+        "WHERE true ON CONFLICT(organization_id, registry) DO UPDATE SET checked_at = excluded.checked_at",
         (REGISTRY, stamp),
     )
     conn.commit()
     return len(best)
 
 
-def run(conn: sqlite3.Connection, client: PoliteClient, *, now: str | None = None) -> int:
-    loaded = load_extract(conn, client)
+def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | None = None,
+        download: bool = True) -> int:
+    """The registry stage. Without download (a samples run) the corporations already loaded are matched."""
+    loaded = load_extract(conn, client) if download and client is not None else 0
     total = conn.execute("SELECT COUNT(*) FROM federal_corporations").fetchone()[0]
     matched = match(conn, now=now) if total else 0
-    log_run(conn, "registry_federal", detail=f"corporations={total} loaded_now={loaded} matched={matched}",
-            rows_in=total, rows_new=matched)
+    notice = None if download else "Corporations Canada extract not downloaded (samples run)"
+    log_run(conn, "registry", detail=f"{REGISTRY}: corporations={total} loaded_now={loaded} matched={matched}",
+            rows_in=total, rows_new=matched, notice=notice)
     return matched

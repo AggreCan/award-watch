@@ -1,6 +1,7 @@
 import hashlib
 
-from pmw_pipeline.db import get_meta, set_meta, upsert_employer
+from pmw_pipeline import organizations
+from pmw_pipeline.db import get_meta, set_meta
 from pmw_pipeline.sources import registry_federal
 
 HEADER = (
@@ -29,19 +30,23 @@ def test_parse_extract_fields():
 def test_load_and_match(conn, fake_client):
     mapping = {registry_federal.URLS[0]: ACTIVE.encode("utf-8"), registry_federal.URLS[1]: INACTIVE.encode("utf-8")}
     client = fake_client(mapping)
-    ont = upsert_employer(conn, "Mindangler Capital Inc", "ON", source="jobbank", now="2026-10-12T00:00:00Z")
-    pink = upsert_employer(conn, "PinkCloud Services", "BC", source="jobbank", postal_code="V0N 1H0", now="2026-10-12T00:00:00Z")
-    numbered = upsert_employer(conn, "7286139 Canada Ltd.", "AB", source="esdc_positive", now="2026-10-12T00:00:00Z")
-    upsert_employer(conn, "No Such Company", "NS", source="jobbank", now="2026-10-12T00:00:00Z")
+    stamp = "2026-10-12T00:00:00Z"
+    ont = organizations.upsert(conn, "Mindangler Capital Inc", source="awards", province="ON", now=stamp)
+    pink = organizations.upsert(conn, "PinkCloud Services", source="awards", province="BC", postal_code="V0N 1H0",
+                                now=stamp)
+    numbered = organizations.upsert(conn, "7286139 Canada Ltd.", source="history", province="AB", now=stamp)
+    organizations.upsert(conn, "No Such Company", source="awards", province="NS", now=stamp)
 
     assert registry_federal.run(conn, client, now="2026-10-12T00:00:00Z") == 3
     assert conn.execute("SELECT COUNT(*) FROM federal_corporations").fetchone()[0] == 4
-    rows = {r["employer_id"]: r for r in conn.execute("SELECT * FROM registry_matches WHERE registry = 'corporations_canada'")}
+    rows = {r["organization_id"]: r for r in conn.execute("SELECT * FROM registry_matches WHERE registry = 'corporations_canada'")}
     assert rows[ont]["grade"] == "exact" and rows[ont]["registered_on"] == "2013-10-10" and rows[ont]["entity_type"] == "CBCA"
-    # Two corporations share the name; the one in the employer's province wins.
+    # Two corporations share the name; the one in a province the organization's records name wins.
     assert rows[pink]["registry_id"] == "9000001" and rows[pink]["grade"] == "exact"
     assert rows[numbered]["grade"] == "probable" and rows[numbered]["status"] == "Inactive"
     assert conn.execute("SELECT COUNT(*) FROM registry_checks WHERE registry = 'corporations_canada'").fetchone()[0] == 4
+    log = conn.execute("SELECT source, detail, ok FROM sources_log ORDER BY id DESC").fetchone()
+    assert log["source"] == "registry" and log["detail"].startswith("corporations_canada:") and log["ok"] == 1
 
     # Unchanged files are not reloaded.
     calls_before = len(client.fake_session.calls)
@@ -66,3 +71,25 @@ def test_the_business_number_is_kept_and_a_file_read_by_the_older_parser_is_read
     assert conn.execute("SELECT business_number FROM federal_corporations WHERE number = '8660115'").fetchone()[0] == "835752437"
     assert get_meta(conn, key).endswith(":v2")
     assert registry_federal.load_extract(conn, fake_client(mapping)) == 0
+
+
+def test_any_place_on_the_records_can_make_the_grade_exact(conn, fake_client):
+    mapping = {registry_federal.URLS[0]: ACTIVE.encode("utf-8"), registry_federal.URLS[1]: INACTIVE.encode("utf-8")}
+    # Mostly seen in Ontario, once at the Squamish address the corporation is registered at.
+    for _ in range(3):
+        pink = organizations.upsert(conn, "PinkCloud Services Ltd.", source="awards", province="ON")
+    organizations.upsert(conn, "PINKCLOUD SERVICES LTD", source="history", city="Squamish", postal_code="V8B 0A1")
+    # Seen only abroad: the name agrees, nothing else does.
+    abroad = organizations.upsert(conn, "Mindangler Capital Inc.", source="awards", country="US", province="Texas")
+    registry_federal.run(conn, fake_client(mapping), now="2026-10-12T00:00:00Z")
+    rows = {r["organization_id"]: r for r in conn.execute("SELECT * FROM registry_matches")}
+    assert rows[pink]["registry_id"] == "9000001" and rows[pink]["grade"] == "exact"
+    assert rows[abroad]["grade"] == "probable"
+
+
+def test_a_samples_run_matches_without_downloading(conn, fake_client):
+    client = fake_client({})
+    registry_federal.run(conn, client, download=False, now="2026-10-12T00:00:00Z")
+    assert client.fake_session.calls == []
+    notice = conn.execute("SELECT notice FROM sources_log WHERE source = 'registry'").fetchone()[0]
+    assert "not downloaded" in notice

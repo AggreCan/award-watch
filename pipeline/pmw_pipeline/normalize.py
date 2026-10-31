@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 import unicodedata
 from datetime import date, datetime
 
 # Bump whenever norm_name or split_trade_name changes what a name normalizes
-# to. Employer ids are a hash of the normalized name, so the pipeline compares
-# this with meta.normalize_version and re-derives every id once (migrate.py).
-NORMALIZE_VERSION = 2
+# to. Organization ids are a hash of the normalized name, so a change re-keys
+# every organization; the re-keying step (migrate.py) is not adapted yet.
+# 3: the company forms used abroad joined LEGAL_SUFFIXES and CASED_FORMS_RE.
+NORMALIZE_VERSION = 3
 
 # Trailing tokens that distinguish a legal form, not a business. Stripped
 # repeatedly from the end so "x services ltd" and "x services limited
@@ -20,11 +22,31 @@ LEGAL_SUFFIXES = {
     "ltd", "ltee", "limited", "limitee", "inc", "incorporated", "incorporee",
     "corp", "corporation", "ulc", "llp", "llc", "lp", "co", "company", "cie",
     "compagnie", "senc", "sencrl", "sec", "enr", "enrg", "partnership", "plc",
+    # The company forms abroad that federal supplier names carry and that are
+    # not words in their own right ("Heinz Walz GmbH", "X Sdn Bhd").
+    "asa", "gmbh", "sas", "sarl", "srl", "oyj", "pty", "pte", "kft", "sdn", "bhd", "ltda",
 }
+# The forms abroad that are also ordinary words or abbreviations ("Nordik
+# Spa", "Prairie Ag", "known as"): stripped only when written the way the
+# form is written, in capitals or in its own case, before the name is
+# casefolded ("Kongsberg Defence and Aerospace AS", "Fincantieri SpA",
+# "ICEYE Oy").
+CASED_FORMS_RE = re.compile(
+    r"(?:^|(?<=\s))(?:AS|ASA|AB|AG|SA|NV|BV|SPA|SpA|S\.p\.A|SL|KK|OY|Oy|OYJ|Oyj)\.?\s*$"
+)
+
+
+def strip_cased_forms(text: str) -> str:
+    """Remove the cased company forms from the end of a raw name, repeatedly."""
+    while True:
+        m = CASED_FORMS_RE.search(text)
+        if not m:
+            return text
+        text = text[: m.start()].rstrip(" ,;:-/\\")
 
 # Jurisdiction words in numbered company names ("0704250 B.C. Ltd.",
 # "101184720 SK Ltd", "1174724 Ont. Inc.", "9123-4567 Québec inc."), mapped to
-# one spelling so the same number in the same province is one employer.
+# one spelling so the same number in the same province is one organization.
 NUMBERED_JURISDICTIONS: dict[tuple[str, ...], str] = {
     ("bc",): "bc", ("british", "columbia"): "bc",
     ("alberta",): "alberta", ("alta",): "alberta", ("ab",): "alberta",
@@ -120,6 +142,13 @@ PROVINCE_NAMES: dict[str, str] = {
     "SK": "Saskatchewan", "YT": "Yukon",
 }
 
+# The first letter of a Canadian postal code names the province (X serves
+# both the Northwest Territories and Nunavut; NT is given).
+POSTAL_PROVINCE = {
+    "A": "NL", "B": "NS", "C": "PE", "E": "NB", "G": "QC", "H": "QC", "J": "QC", "K": "ON", "L": "ON",
+    "M": "ON", "N": "ON", "P": "ON", "R": "MB", "S": "SK", "T": "AB", "V": "BC", "X": "NT", "Y": "YT",
+}
+
 POSTAL_RE = re.compile(
     r"\b([ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z])\s*(\d[ABCEGHJ-NPRSTV-Z]\d)\b", re.I
 )
@@ -159,6 +188,8 @@ def has_legal_form(text: str | None) -> bool:
     """True when a name ends in a legal form (Ltd., Inc., Ltée, S.E.N.C.)."""
     if not text:
         return False
+    if CASED_FORMS_RE.search(text.strip()):
+        return True
     text = ABBREV_RE.sub(_join_abbreviation, fold_accents(text.casefold()))
     tokens = re.sub(r"[^\w\s]", " ", text).split()
     return bool(tokens) and tokens[-1] in LEGAL_SUFFIXES
@@ -255,7 +286,7 @@ def norm_legal(text: str | None) -> str:
     """Normalize a name taken as a legal name as it stands, with no trade-name split."""
     if not text:
         return ""
-    text = unicodedata.normalize("NFC", text).casefold()
+    text = strip_cased_forms(unicodedata.normalize("NFC", text).strip()).casefold()
     text = ABBREV_RE.sub(_join_abbreviation, text)
     text = APOSTROPHE_RE.sub("", text)
     text = fold_accents(text)
@@ -285,9 +316,26 @@ def norm_name(raw: str | None) -> str:
     return norm_legal(legal)
 
 
-def employer_id(norm: str, province: str | None) -> str:
-    digest = hashlib.sha1(f"{norm}|{province or ''}".encode("utf-8")).hexdigest()
-    return f"emp-{digest[:10]}"
+def org_id(norm: str) -> str:
+    """'org-' and ten hex digits of the normalized name's SHA-1.
+
+    The province is not part of the identity: a federal supplier appears with
+    many addresses, and one profile is what a reader wants.
+    """
+    return "org-" + hashlib.sha1(norm.encode("utf-8")).hexdigest()[:10]
+
+
+def squash(raw: object) -> str:
+    """Runs of white space made one, ends trimmed; '' for None."""
+    return re.sub(r"\s+", " ", str(raw or "")).strip()
+
+
+def slugify(text: str | None) -> str:
+    """'Saint-Hyacinthe' and 'St Hyacinthe' -> 'st-hyacinthe'; 'Montréal' -> 'montreal'."""
+    folded = fold_accents(text or "").lower().replace("'", "").replace("’", "")
+    tokens = [t for t in re.split(r"[^a-z0-9]+", folded) if t]
+    tokens = ["st" if t == "saint" else "ste" if t == "sainte" else t for t in tokens]
+    return "-".join(tokens)[:80].strip("-")
 
 
 def province_code(raw: str | None) -> str | None:
@@ -506,3 +554,178 @@ def iso_date(value: object) -> str | None:
     if m:
         return m.group(1)
     return parse_jobbank_date(text)
+
+
+# ---------------------------------------------------------------------------
+# CanadaBuys and proactive-publication fields
+# ---------------------------------------------------------------------------
+
+def star_list(raw: object) -> list[str]:
+    """'*Canada\n*Ontario (except NCR)' -> ['Canada', 'Ontario (except NCR)'].
+
+    CanadaBuys writes a list as items each prefixed with '*', one per line. A
+    line without the prefix continues the item before it; a value with no
+    prefix at all is one item. Blank items are dropped.
+    """
+    text = str(raw or "").replace("\r\n", "\n").replace("\r", "\n")
+    items: list[str] = []
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("*"):
+            items.append(squash(stripped[1:]))
+        elif stripped:
+            if items:
+                items[-1] = squash(f"{items[-1]} {stripped}")
+            else:
+                items.append(squash(stripped))
+    return [item for item in items if item]
+
+
+# "Ontario (except NCR)" and "Québec (sauf RCN)" are the province less the
+# capital region; for a list of provinces that is the province.
+_EXCEPT_NCR_RE = re.compile(r"\s*\((?:except|sauf)\s+(?:ncr|rcn)\)\s*$")
+_NCR = {"national capital region (ncr)", "national capital region", "region de la capitale nationale (rcn)",
+        "region de la capitale nationale"}
+_REGION_PROVINCES: dict[str, str] = {
+    **{fold_accents(name): code for name, code in PROVINCES.items()},
+    "nunavut territory": "NU", "territoire du nunavut": "NU", "territoire du yukon": "YT",
+}
+
+
+def region_provinces(regions: list[str]) -> list[str]:
+    """Two-letter provinces named by a list of delivery regions, sorted and without repeats.
+
+    Province names in English or French give their code; the National
+    Capital Region gives ON and QC; "Canada", a city, a country and a blank
+    give nothing (the raw list is kept beside the codes).
+    """
+    out: set[str] = set()
+    for raw in regions or []:
+        key = fold_accents(squash(str(raw or "").lstrip("*")).casefold())
+        if not key:
+            continue
+        if key in _NCR:
+            out.update(("ON", "QC"))
+            continue
+        code = _REGION_PROVINCES.get(_EXCEPT_NCR_RE.sub("", key))
+        if code:
+            out.add(code)
+    return sorted(out)
+
+
+def competitive(method_en: object) -> int | None:
+    """1 competitive, 0 non-competitive, None unstated, from a CanadaBuys procurement method.
+
+    "Non-competitive" and "Advance contract award notice" are non-competitive;
+    every "Competitive - ..." is competitive. The French forms read the same.
+    """
+    text = fold_accents(squash(method_en).casefold())
+    if not text:
+        return None
+    if text.startswith(("non-competitive", "non competitive", "non-concurrentiel", "non concurrentiel",
+                        "advance contract award", "preavis d")):
+        return 0
+    if text.startswith(("competitive", "concurrentiel")):
+        return 1
+    return None
+
+
+def competitive_code(solicitation_procedure: object) -> int | None:
+    """The same for a published contract's solicitation procedure code (TBS guide).
+
+    TN (non-competitive) and AC (advance contract award notice) are
+    non-competitive; OB (open bidding), TC (traditional competitive) and ST
+    (selective tendering) are competitive; anything else is unstated.
+    """
+    code = squash(solicitation_procedure).upper()
+    if code in ("TN", "AC"):
+        return 0
+    if code in ("OB", "TC", "ST"):
+        return 1
+    return None
+
+
+_TENDER_STATUS = {
+    "open": "open", "ouvert": "open", "ouverte": "open",
+    "expired": "expired", "expire": "expired", "expiree": "expired", "closed": "expired", "ferme": "expired",
+    "cancelled": "cancelled", "canceled": "cancelled", "annule": "cancelled", "annulee": "cancelled",
+    "awarded": "awarded", "attribue": "awarded", "attribuee": "awarded", "adjuge": "awarded",
+}
+_AWARD_STATUS = {
+    "active": "active", "actif": "active", "expired": "expired", "expire": "expired", "expiree": "expired",
+    "cancelled": "cancelled", "canceled": "cancelled", "annule": "cancelled", "annulee": "cancelled",
+}
+
+
+def tender_status(raw: object) -> str:
+    """open | expired | cancelled | awarded | unknown, from a tender notice's status in either language."""
+    return _TENDER_STATUS.get(fold_accents(squash(raw).casefold()), "unknown")
+
+
+def award_status(raw: object) -> str:
+    """active | expired | cancelled | unknown, from an award or contract status in either language."""
+    return _AWARD_STATUS.get(fold_accents(squash(raw).casefold()), "unknown")
+
+
+_COUNTRY_CA = {"ca", "can", "canada"}
+_COUNTRY_US = {"us", "usa", "unitedstates", "unitedstatesofamerica"}
+
+
+def country_code(raw: object) -> str | None:
+    """ISO alpha-2 from a supplier country as the files write it.
+
+    'CA', 'Canada', 'CANADA ' -> 'CA'; 'US', 'USA', 'United States', 'U.S.A.'
+    -> 'US'; a value that is already a two-letter code (or one followed by a
+    subdivision, 'GB-ENG') keeps its two letters; any other name is None.
+    """
+    text = squash(raw)
+    if not text:
+        return None
+    key = re.sub(r"[.\s]", "", text.casefold())
+    if key in _COUNTRY_CA:
+        return "CA"
+    if key in _COUNTRY_US:
+        return "US"
+    m = re.fullmatch(r"([A-Za-z]{2})(?:-[A-Za-z0-9]{1,3})?", text)
+    return m.group(1).upper() if m else None
+
+
+def money(raw: object) -> float | None:
+    """'$1,234.50' -> 1234.5; '(100.00)' -> -100.0; None for a blank, text or a non-finite value."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        value = float(raw)
+    else:
+        text = re.sub(r"[\s$,\u00a0]", "", str(raw))
+        if not text:
+            return None
+        negative = text.startswith("(") and text.endswith(")")
+        if negative:
+            text = text[1:-1]
+        try:
+            value = float(text)
+        except ValueError:
+            return None
+        if negative:
+            value = -value
+    return value if math.isfinite(value) else None
+
+
+_DATETIME_RE = re.compile(
+    r"^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?)?$"
+)
+
+
+def iso_datetime(raw: object) -> str | None:
+    """'2026-11-16T14:00:00' as published: the date, 'T', the time with or without seconds.
+
+    No zone is added or converted (CanadaBuys gives a closing time local to the
+    buyer with no zone); a space before the time becomes 'T'; a date alone
+    stays a date. Anything else is None.
+    """
+    m = _DATETIME_RE.match(squash(raw))
+    if not m:
+        return None
+    day, time, zone = m.groups()
+    return f"{day}T{time}{zone or ''}" if time else day

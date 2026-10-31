@@ -6,7 +6,17 @@ import pytest
 import requests
 
 from conftest import FakeResponse
+from pmw_pipeline import config
 from pmw_pipeline.http import MAX_RETRY_AFTER_S, FetchError, PoliteClient, retry_after_seconds
+
+# A host that stops taking connections from an address: the one the
+# fail-fast tests below configure.
+BLOCKING = "blocking.example"
+
+
+@pytest.fixture
+def fail_fast(monkeypatch):
+    monkeypatch.setattr(config, "CONNECT_FAIL_FAST", {BLOCKING: 2})
 
 
 class Clock:
@@ -61,7 +71,7 @@ def test_429_waits_as_long_as_the_host_asks(tmp_path):
         [FakeResponse(429, headers={"Retry-After": "90"}), FakeResponse(503, headers={"retry-after": "30"}), b"ok"],
         cache_dir=tmp_path,
     )
-    assert client.get("https://www.jobbank.gc.ca/a") == b"ok"
+    assert client.get("https://open.example/a") == b"ok"
     # Backoff alone would have waited 2 and 4 seconds.
     assert 90.0 in clock.sleeps and 30.0 in clock.sleeps
 
@@ -71,7 +81,7 @@ def test_a_pause_longer_than_the_cap_is_not_retried_early(tmp_path):
         [FakeResponse(429, headers={"Retry-After": str(int(MAX_RETRY_AFTER_S) + 1)})], cache_dir=tmp_path,
     )
     with pytest.raises(FetchError, match="Retry-After"):
-        client.get("https://www.jobbank.gc.ca/a")
+        client.get("https://open.example/a")
     assert session.calls == 1
 
 
@@ -86,7 +96,7 @@ def test_503_without_retry_after_backs_off_then_gives_up(tmp_path):
 def test_410_is_a_data_fact_raised_once(tmp_path):
     client, session, _ = client_for([FakeResponse(410)], cache_dir=tmp_path)
     with pytest.raises(FetchError, match="HTTP 410"):
-        client.get("https://www.jobbank.gc.ca/jobsearch/jobposting/1")
+        client.get("https://open.example/gone.csv")
     assert session.calls == 1
 
 
@@ -166,27 +176,27 @@ class Capturing(Scripted):
         return super().get(url, headers=headers, timeout=timeout, stream=stream)
 
 
-def test_refused_connections_end_a_job_bank_run_within_two_requests(tmp_path):
+def test_refused_connections_end_a_run_on_a_fail_fast_host_within_two_requests(tmp_path, fail_fast):
     from pmw_pipeline.http import AbortRun
 
     refused = requests.exceptions.ConnectTimeout("timed out")
     client, session, clock = client_for([refused] * 6, cache_dir=tmp_path, max_attempts=4, max_consecutive_failures=5)
     with pytest.raises(FetchError, match="after 2 attempts"):
-        client.get("https://www.jobbank.gc.ca/jobsearch/jobposting/1")
+        client.get(f"https://{BLOCKING}/1")
     with pytest.raises(AbortRun, match="stopped accepting connections"):
-        client.get("https://www.jobbank.gc.ca/jobsearch/jobposting/2")
+        client.get(f"https://{BLOCKING}/2")
     # Two tries each, not four: a blocked address learns it in two requests.
     assert session.calls == 4
 
 
-def test_an_answer_resets_the_refused_connection_count(tmp_path):
+def test_an_answer_resets_the_refused_connection_count(tmp_path, fail_fast):
     refused = requests.exceptions.ConnectionError("refused")
     client, session, clock = client_for([refused, refused, b"ok", refused, refused], cache_dir=tmp_path, max_attempts=4)
     with pytest.raises(FetchError):
-        client.get("https://www.jobbank.gc.ca/a")
-    assert client.get("https://www.jobbank.gc.ca/b") == b"ok"
+        client.get(f"https://{BLOCKING}/a")
+    assert client.get(f"https://{BLOCKING}/b") == b"ok"
     with pytest.raises(FetchError):  # one failed request after an answer, not two in a row
-        client.get("https://www.jobbank.gc.ca/c")
+        client.get(f"https://{BLOCKING}/c")
 
 
 def test_other_hosts_keep_their_full_retries_on_connection_errors(tmp_path):
@@ -197,11 +207,11 @@ def test_other_hosts_keep_their_full_retries_on_connection_errors(tmp_path):
     assert session.calls == 4
 
 
-def test_a_read_timeout_is_not_a_refused_connection(tmp_path):
+def test_a_read_timeout_is_not_a_refused_connection(tmp_path, fail_fast):
     slow = requests.exceptions.ReadTimeout("slow")
     client, session, clock = client_for([slow] * 4, cache_dir=tmp_path, max_attempts=4)
     with pytest.raises(FetchError, match="after 4 attempts"):
-        client.get("https://www.jobbank.gc.ca/a")
+        client.get(f"https://{BLOCKING}/a")
 
 
 def test_the_connect_timeout_is_capped_and_the_read_timeout_kept(tmp_path):

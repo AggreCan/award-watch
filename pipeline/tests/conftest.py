@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from pmw_pipeline import config
 from pmw_pipeline.db import connect
 from pmw_pipeline.http import PoliteClient
 
@@ -32,6 +33,14 @@ class FakeSession:
         if isinstance(value, FakeResponse):
             return value
         return FakeResponse(200, value)
+
+
+@pytest.fixture(autouse=True)
+def out_dir(tmp_path, monkeypatch):
+    # Nothing a test runs writes into the repository's data/out (the review
+    # lists of withheld names go there in a real run).
+    monkeypatch.setattr(config, "OUT_DIR", tmp_path / "out")
+    return tmp_path / "out"
 
 
 @pytest.fixture

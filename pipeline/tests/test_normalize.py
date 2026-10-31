@@ -1,9 +1,11 @@
+import hashlib
+
 import pytest
 
 from pmw_pipeline.normalize import (
-    employer_id, fold_accents, has_legal_form, is_numbered_company, norm_legal, norm_name, parse_address,
+    fold_accents, has_legal_form, is_numbered_company, norm_legal, norm_name, parse_address,
     parse_jobbank_date, parse_noc, parse_salary_text, parse_street, period_end_date, period_from_text,
-    period_quarters, period_start_date, province_code, split_trade_name,
+    org_id, period_quarters, period_start_date, province_code, split_trade_name,
 )
 
 
@@ -214,11 +216,12 @@ def test_parse_street():
     assert parse_street("") is None
 
 
-def test_employer_id_is_stable_and_province_sensitive():
-    a = employer_id("jealous fruits", "BC")
-    assert a == employer_id("jealous fruits", "BC")
-    assert a.startswith("emp-") and len(a) == 14
-    assert a != employer_id("jealous fruits", "ON")
+def test_org_id_is_stable_and_has_no_province():
+    a = org_id("jealous fruits")
+    assert a == org_id(norm_name("Jealous Fruits Ltd."))
+    assert a == "org-" + hashlib.sha1(b"jealous fruits").hexdigest()[:10]
+    assert a.startswith("org-") and len(a) == 14
+    assert a != org_id("jealous fruit")
 
 
 def test_province_code():

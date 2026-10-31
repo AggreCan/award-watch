@@ -1,37 +1,36 @@
 import pytest
 
-from pmw_pipeline.exclusions import is_private_household, looks_like_person
+from pmw_pipeline.exclusions import BUSINESS_TOKENS, looks_like_person, name_words
 
 
-@pytest.mark.parametrize("employer, title", [
-    ("Luigi Gallo", "home support worker"),
-    ("Nidhi Dua", "child caregiver - private home"),
-    ("Jia Ji Liu", "home child care provider"),
-    ("Manoj K. Talwar", "family caregiver"),
-    ("Jane Smith", "cook"),
-    ("Mary Ann Jones", "cleaner"),
-    ("Bright Horizons Daycare", "nanny"),
+@pytest.mark.parametrize("name", [
+    "Luigi Gallo",
+    "Nidhi Dua",
+    "Jia Ji Liu",
+    "Manoj K. Talwar",
+    "Jane Smith",
+    "Mary Ann Jones",
 ])
-def test_dropped(employer, title):
-    assert is_private_household(employer, title) is True
+def test_two_or_three_plain_words_look_like_a_person(name):
+    assert looks_like_person(name) is True
 
 
-@pytest.mark.parametrize("employer, title", [
-    ("Amazing Prices", "retail store supervisor"),
-    ("Bolivar Farms", "Christmas tree shearer"),
-    ("HananTransport", "class 1 truck driver"),
-    ("Harveys/Swiss Chalet", "cook"),
-    ("Arseno", "custom upholsterer"),
-    ("IV CROWNS GROUP CORP.", "cleaner"),
-    ("Les Pavillons LaSalle", "cook"),
-    ("PinkCloud Cleaning & Home Services", "cleaning service manager"),
-    ("Restaurant St-Hubert Sept-Îles", "cook"),
-    ("Tremel Greenhouses", "greenhouse worker"),
-    ("S & S Orchards Ltd", "fruit farm worker"),
-    ("Edsa Mini Mart", "assistant store manager"),
+@pytest.mark.parametrize("name", [
+    "Amazing Prices",
+    "Bolivar Farms",
+    "HananTransport",
+    "Harveys/Swiss Chalet",
+    "Arseno",
+    "IV CROWNS GROUP CORP.",
+    "Les Pavillons LaSalle",
+    "PinkCloud Cleaning & Home Services",
+    "Restaurant St-Hubert Sept-Îles",
+    "Tremel Greenhouses",
+    "S & S Orchards Ltd",
+    "Edsa Mini Mart",
 ])
-def test_kept(employer, title):
-    assert is_private_household(employer, title) is False
+def test_a_business_marker_or_shape_does_not(name):
+    assert looks_like_person(name) is False
 
 
 def test_looks_like_person_edge_cases():
@@ -39,3 +38,8 @@ def test_looks_like_person_edge_cases():
     assert looks_like_person(None) is False
     assert looks_like_person("A B C D") is False
     assert looks_like_person("15243921 CANADA INC.") is False
+
+
+def test_name_words_keep_apostrophes_dots_and_hyphens_inside_a_word():
+    assert name_words("Marie-Claude O'Neil, J.R.") == ["Marie-Claude", "O'Neil", "J.R"]
+    assert "inc" in BUSINESS_TOKENS and "ltée" in BUSINESS_TOKENS

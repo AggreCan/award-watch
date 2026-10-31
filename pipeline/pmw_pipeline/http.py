@@ -1,9 +1,9 @@
 """Polite HTTP client shared by every source.
 
-Why a custom client: Job Bank publishes a crawl delay of five seconds in its
-robots.txt, the open-data files should be fetched once and revalidated rather
-than re-downloaded, and a run must stop rather than keep hitting a host that
-is failing.
+Why a custom client: the open-data files should be fetched once and
+revalidated rather than re-downloaded, the big ones streamed to disk, every
+host given a pause between requests, and a run must stop rather than keep
+hitting a host that is failing.
 """
 
 from __future__ import annotations
@@ -116,6 +116,15 @@ def intermediate_context(pem: str) -> ssl.SSLContext:
     context = ssl.create_default_context(cafile=requests.certs.where())
     context.load_verify_locations(cadata=pem)
     return context
+
+
+@dataclass
+class Download:
+    """A file download_if_changed wrote, with the validators it arrived with."""
+
+    size: int
+    etag: str | None
+    last_modified: str | None
 
 
 @dataclass
@@ -249,53 +258,36 @@ class PoliteClient:
     def download(self, url: str, dest: Path, *, timeout: float = 600) -> int:
         """Stream a large file to dest with the same spacing, retries and breaker as get().
 
-        Why: the grants disclosure is 2.3 GB, which get() would hold in
+        Why: the grants disclosure is 2.4 GB, which get() would hold in
         memory. Nothing is cached (the file is read once and deleted), the
         body goes to dest + '.part' and is renamed only when complete, and the
         byte count is returned.
         """
-        host = urlsplit(url).hostname or ""
-        dest = Path(dest)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        part = dest.with_name(dest.name + ".part")
-        body_limit = max(MIN_BODY_SECONDS, 4 * timeout)
-        attempt = 0
-        while True:
-            attempt += 1
-            self._wait_for_host(host)
-            started = self._clock()
-            try:
-                resp = self.session.get(url, headers={"User-Agent": self.user_agent},
-                                        timeout=(min(CONNECT_TIMEOUT_S, timeout), timeout), stream=True)
-            except requests.RequestException as exc:
-                self._mark(host)
-                self._retry_or_fail(url, attempt, repr(exc), host=host,
-                                    connect=isinstance(exc, requests.ConnectionError), transient=_transient(exc))
-                continue
-            self._mark(host)
-            self._connect_failures.pop(host, None)
-            self.requests_made += 1
-            if resp.status_code >= 500 or resp.status_code == 429:
-                wait = retry_after_seconds(_header(resp, "Retry-After"))
-                _close(resp)
-                self._retry_or_fail(url, attempt, f"HTTP {resp.status_code}", wait, status=resp.status_code,
-                                    transient=True)
-                continue
-            if resp.status_code >= 400:
-                _close(resp)
-                raise FetchError(f"HTTP {resp.status_code} for {url}", status=resp.status_code)
-            try:
-                size = self._write_body(resp, part, started, body_limit)
-            except (requests.RequestException, _SlowBody, OSError) as exc:
-                _close(resp)
-                part.unlink(missing_ok=True)
-                self._mark(host)
-                self._retry_or_fail(url, attempt, repr(exc), transient=_transient(exc))
-                continue
-            self._mark(host)
-            self._consecutive_failures = 0
-            part.replace(dest)
-            return size
+        result = self._download(url, dest, timeout=timeout, headers={})
+        assert result is not None  # no validators were sent, so no 304 can come back
+        return result.size
+
+    def download_if_changed(
+        self,
+        url: str,
+        dest: Path,
+        *,
+        etag: str | None = None,
+        last_modified: str | None = None,
+        timeout: float = 600,
+    ) -> Download | None:
+        """download(), sent as a conditional request with the validators of the last copy read.
+
+        None when the host answers 304 Not Modified, and nothing is written.
+        The caller keeps the validators (the file itself is deleted after the
+        load), so an unchanged file costs one short request.
+        """
+        headers: dict[str, str] = {}
+        if etag:
+            headers["If-None-Match"] = etag
+        if last_modified:
+            headers["If-Modified-Since"] = last_modified
+        return self._download(url, dest, timeout=timeout, headers=headers)
 
     def get_text(self, url: str, **kwargs: Any) -> str:
         return decode_text(self.get(url, **kwargs))
@@ -328,6 +320,55 @@ class PoliteClient:
         self.session.mount(f"https://{host}/", ContextAdapter(intermediate_context(pem)))
 
     # -- internals ----------------------------------------------------------
+
+    def _download(self, url: str, dest: Path, *, timeout: float, headers: dict[str, str]) -> Download | None:
+        host = urlsplit(url).hostname or ""
+        dest = Path(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        part = dest.with_name(dest.name + ".part")
+        body_limit = max(MIN_BODY_SECONDS, 4 * timeout)
+        req_headers = {"User-Agent": self.user_agent, **headers}
+        attempt = 0
+        while True:
+            attempt += 1
+            self._wait_for_host(host)
+            started = self._clock()
+            try:
+                resp = self.session.get(url, headers=req_headers,
+                                        timeout=(min(CONNECT_TIMEOUT_S, timeout), timeout), stream=True)
+            except requests.RequestException as exc:
+                self._mark(host)
+                self._retry_or_fail(url, attempt, repr(exc), host=host,
+                                    connect=isinstance(exc, requests.ConnectionError), transient=_transient(exc))
+                continue
+            self._mark(host)
+            self._connect_failures.pop(host, None)
+            self.requests_made += 1
+            if resp.status_code == 304 and headers:
+                _close(resp)
+                self._consecutive_failures = 0
+                return None
+            if resp.status_code >= 500 or resp.status_code == 429:
+                wait = retry_after_seconds(_header(resp, "Retry-After"))
+                _close(resp)
+                self._retry_or_fail(url, attempt, f"HTTP {resp.status_code}", wait, status=resp.status_code,
+                                    transient=True)
+                continue
+            if resp.status_code >= 400:
+                _close(resp)
+                raise FetchError(f"HTTP {resp.status_code} for {url}", status=resp.status_code)
+            try:
+                size = self._write_body(resp, part, started, body_limit)
+            except (requests.RequestException, _SlowBody, OSError) as exc:
+                _close(resp)
+                part.unlink(missing_ok=True)
+                self._mark(host)
+                self._retry_or_fail(url, attempt, repr(exc), transient=_transient(exc))
+                continue
+            self._mark(host)
+            self._consecutive_failures = 0
+            part.replace(dest)
+            return Download(size=size, etag=_header(resp, "ETag"), last_modified=_header(resp, "Last-Modified"))
 
     def _wait_for_host(self, host: str) -> None:
         delay = self.delays.get(host, self.default_delay)

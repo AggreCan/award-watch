@@ -1,0 +1,1464 @@
+﻿"title-titre-eng","title-titre-fra","referenceNumber-numeroReference","amendmentNumber-numeroModification","solicitationNumber-numeroSollicitation","publicationDate-datePublication","tenderClosingDate-appelOffresDateCloture","amendmentDate-dateModification","expectedContractStartDate-dateDebutContratPrevue","expectedContractEndDate-dateFinContratPrevue","tenderStatus-appelOffresStatut-eng","tenderStatus-appelOffresStatut-fra","gsin-nibs","gsinDescription-nibsDescription-eng","gsinDescription-nibsDescription-fra","unspsc","unspscDescription-eng","unspscDescription-fra","procurementCategory-categorieApprovisionnement","noticeType-avisType-eng","noticeType-avisType-fra","procurementMethod-methodeApprovisionnement-eng","procurementMethod-methodeApprovisionnement-fra","selectionCriteria-criteresSelection-eng","selectionCriteria-criteresSelection-fra","limitedTenderingReason-raisonAppelOffresLimite-eng","limitedTenderingReason-raisonAppelOffresLimite-fra","tradeAgreements-accordsCommerciaux-eng","tradeAgreements-accordsCommerciaux-fra","regionsOfOpportunity-regionAppelOffres-eng","regionsOfOpportunity-regionAppelOffres-fra","regionsOfDelivery-regionsLivraison-eng","regionsOfDelivery-regionsLivraison-fra","contractingEntityName-nomEntitContractante-eng","contractingEntityAddressLine-ligneAdresseEntiteContractante-eng","contractingEntityAddressCity-entiteContractanteAdresseVille-eng","contractingEntityAddressProvince-entiteContractanteAdresseProvince-eng","contractingEntityAddressPostalCode-entiteContractanteAdresseCodePostal","contractingEntityAddressCountry-entiteContractanteAdressePays-eng","contractingEntityName-nomEntitContractante-fra","contractingEntityAddressLine-ligneAdresseEntiteContractante-fra","contractingEntityAddressCity-entiteContractanteAdresseVille-fra","contractingEntityAddressProvince-entiteContractanteAdresseProvince-fra","contractingEntityAddressCountry-entiteContractanteAdressePays-fra","endUserEntitiesName-nomEntitesUtilisateurFinal-eng","endUserEntitiesAddress-adresseEntitesUtilisateurFinal-eng","endUserEntitiesName-nomEntitesUtilisateurFinal-fra","endUserEntitiesAddress-adresseEntitesUtilisateurFinal-fra","contactInfoName-informationsContactNom","contactInfoEmail-informationsContactCourriel","contactInfoPhone-contactInfoTelephone","contactInfoFax","contactInfoAddressLine-contactInfoAdresseLigne-eng","contactInfoCity-contacterInfoVille-eng","contactInfoProvince-contacterInfoProvince-eng","contactInfoPostalcode","contactInfoCountry-contactInfoPays-eng","contactInfoAddressLine-contactInfoAdresseLigne-fra","contactInfoCity-contacterInfoVille-fra","contactInfoProvince-contacterInfoProvince-fra","contactInfoCountry-contactInfoPays-fra","noticeURL-URLavis-eng","noticeURL-URLavis-fra","attachment-piecesJointes-eng","attachment-piecesJointes-fra","tenderDescription-descriptionAppelOffres-eng","tenderDescription-descriptionAppelOffres-fra"
+"Tier 2 TBIPS - Digital Transformation User Experience (UX)","Palier 2- SPICT - Transformation numérique – Expérience utilisateur (UX)","cb-418-22395949","000","30008545","2026-10-30","2026-11-26T14:00:00","","","","Open","Ouvert","","","","*80101507
+*80172103","*Information technology consultation services
+*Change management communication and advisory service","*Services de conseils en informatique
+*Service de consultation et de communication en gestion du changement","*SRV","Request for Proposal","Demande de propositions","Competitive - Selective tendering","Concurrentielle - Appel d'offres sélectif","Highest Combined Rating of Technical Merit and Price","Cote combinée la plus élevée pour le mérite technique et le prix","","","*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Panama Free Trade Agreement
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Colombia Free Trade Agreement
+*Canadian Free Trade Agreement (CFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*North American Free Trade Agreement (NAFTA)","*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange canadien (ALEC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange nord-américain (ALENA)","*Canada","*Canada","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","Department of Fisheries and Oceans (DFO)","200 Kent Street / 200 rue Kent","Ottawa","Ontario","K1A 0E6","Canada","Ministère des Pêches et des Océans (MPO)","200 Kent Street / 200 rue Kent","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","200 Kent Street / 200 rue Kent","Ottawa","Ontario","K1A 0E6","Canada","200 Kent Street / 200 rue Kent","Ottawa","Ontario","Canada","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111694/30008545_npp.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111694/30008545_apm_.pdf","Fisheries and Oceans (DFO) has a requirement to obtain User Experience (UX) Professional Services on an “as-and-when requested” basis to support DFO, Chief Digital Officer Sector (CDOS) digital transformation to user-centered products and services with a goal to increase client satisfaction with the accessibility of DFO’s programs and services. As a sector, CDOS includes several service and program lines, each of which have unique target clients, offerings, services and outcomes. The Department aims to design and deliver programs and services that are accessible to all, including persons living with disabilities.","Pêches et Océans Canada (MPO) a besoin de services professionnels en expérience utilisateur (EU), sur une base « au fur et à mesure des besoins », afin d’appuyer la transformation numérique du Secteur du dirigeant principal du numérique (SDPN) du MPO vers des produits et des services axés sur les utilisateurs, dans le but d’accroître la satisfaction de la clientèle à l’égard de l’accessibilité des programmes et des services du MPO.
+
+En tant que secteur, le SDPN comprend plusieurs secteurs d’activité liés aux services et aux programmes, chacun ayant des clientèles cibles, des offres, des services et des résultats qui lui sont propres.
+
+Le Ministère vise à concevoir et à offrir des programmes et des services accessibles à tous, y compris aux personnes en
+situation de handicap."
+"IT Professional Services to Enhance and Deliver the Canada Disability Benefit Digital Solution","Services professionnels en TI pour l'amélioration et la mise en œuvre de la solution numérique de la Prestation canadienne pour les personnes handicapées","cb-438-11905524","000","100031926","2026-10-30","2026-11-20T14:00:00","","","","Open","Ouvert","","","","*81160000","*Information Technology Service Delivery","*Services de technologie informatique","*SRV","Request for Proposal","Demande de propositions","Competitive - Traditional","Concurrentielle - Traditionnelle","Variations or combinations of the above methods","Variations ou combinaisons des méthodes susmentionnées","","","*Please refer to Tender Description or Tender Documents","*Veuillez consulter la description ou les documents de l'appel d'offres","*Remote Offsite","*À distance hors site","*Remote Offsite
+*Canada","*À distance hors site
+*Canada","Department of Employment and Social Development (ESDC)","140 Promenade du Portage","Gatineau","Quebec","K1A0J9","Canada","Ministère de l’Emploi et du Développement social (EDSC)","140, promenade du Portage","Gatineau","Québec","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111719/100031926_tbips_npp_en.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111719/100031926_spict_npp_fr.pdf","This procurement seeks to secure specialized and advance IT Professional Services TBIPS Consultants, who have skill sets not available internally. Employment and Social Development Canada’s (ESDC) Innovation, Information & Technology Branch (IITB), requires specialized IT professional services to enhance and deliver the Canada Disability Benefit (CDB) digital solution. Application Architects, Software Developers, and Security Engineers will design, develop, integrate, test, and secure new program functionalities, APIs, and backend systems using an Agile delivery approach. Through accessibility-focused design, rigorous testing, and secure system integration, this work will streamline benefit applications, improve the accuracy and timeliness of payments, and strengthen service delivery. As a result, Canadians with disabilities will benefit from a more accessible, efficient, and reliable process for accessing financial supports.","Le présent processus d’approvisionnement vise à obtenir des services spécialisés en technologies de l’information par l’entremise des SPICT afin de combler des besoins nécessitant une expertise avancée qui n’est pas disponible à l’interne. La Direction générale de l’innovation, de l’information et de la technologie (DGIIT) d’Emploi et Développement social Canada (EDSC) a besoin de services professionnels spécialisés en TI pour améliorer et mettre en oeuvre la solution numérique de la Prestation canadienne pour les personnes handicapées (PCPH). Les architectes d’applications, les développeurs de logiciels et les ingénieurs en sécurité concevront, développeront, intégreront, mettront à l’essai et sécuriseront de nouvelles fonctionnalités du programme, des API et des systèmes dorsaux en utilisant une approche de livraison agile. Grâce à une conception axée sur l’accessibilité, à des tests rigoureux et à une intégration sécurisée des systèmes, ce travail permettra de simplifier les demandes de prestations, d’améliorer l’exactitude et la rapidité des paiements et de renforcer la prestation des services. Par conséquent, les Canadiens handicapés bénéficieront d’un processus plus accessible, plus efficace et plus fiable pour accéder aux mesures de soutien financier."
+"Business Process Re-Engineer for the RCMP","Conseiller en ré-organisation pour la GRC","cb-504-3988252","000","202603790","2026-10-30","2026-11-16T14:00:00","","2026-12-01","2029-10-31","Open","Ouvert","","","","*81110000","*Computer services","*Services informatiques","*SRV","Request for Proposal","Demande de propositions","Competitive - Traditional","Concurrentielle - Traditionnelle","Highest Combined Rating of Technical Merit and Price","Cote combinée la plus élevée pour le mérite technique et le prix","","","*Please refer to Tender Description or Tender Documents","*Veuillez consulter la description ou les documents de l'appel d'offres","*World","*Monde","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","Royal Canadian Mounted Police (RCMP)","73 Leikin drive","Ottawa","Ontario","K1A 0R2","Canada","Gendarmerie royale du Canada (GRC)","73 Promenade Leikin","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","K1A 0R2","","","","","","","","","","This requirement is for: The Royal Canadian Mounted Police
+This requirement is open only to those TBIPS Supply Arrangement Holders under EN578-170432 who qualified under Tier 1, under the National Capital region, level of expertise and for the following category: 
+
+Level 3 - Business Process Re-Engineer 
+
+The requirement is intended to result in the award of one (1) contract.
+The following SA Holders have been invited to submit a proposal:
+1.	10947482 Canada Inc.	
+2.	Access Corporate Technologies Inc.	
+3.	Adirondack Information Management Inc.	
+4.	ALITHYA CANADA INC	
+5.	CGI Information Systems and Management Consultants Inc.	
+6.	Cofomo Inc.	
+7.	I4C INFORMATION TECHNOLOGY CONSULTING INC	
+8.	MAKWA Resourcing Inc.	
+9.	Myticas Consulting Inc.	
+10.	NATTIQ INC.	
+11.	Onaki Création S.E.N.C., IBISKA TELECOM INC., in Joint Venture	
+12.	Prologic Systems Ltd. and Maplesoft Consulting Inc. in JV
+13.	QMR Staffing Solutions Incorporated	
+14.	Steel River Group Ltd. Tundra Technical Solutions Inc. in Joint Venture	
+15.	Turtle Technologies Inc.
+
+Description of the Requirement:
+
+The Royal Canadian Mounted Police requires the Services of a Level 3 Business Process Re-Engineer to assess the potential future RCMP HR-to-PAY solution landscape, including NextGen (HR-to-PAY), MyGCHR, and other HR-to-PAY solutions.
+
+Security: 
+There are security requirements associated with this requirement.  Please note that SA Holders do not need to have the required clearance to submit a bid.  For additional information, consult Part 6 - Security, Financial and Other Requirements, and Part 7 – Resulting Contract Clauses. For more information on personnel and organization security screening or security clauses, Bidders should refer to the Contract Security Program of Public Works and Government Services Canada (http://www.tpsgc-pwgsc.gc.ca/esc-src/introduction-eng.html) website. 
+
+Level of Security Requirement: 
+
+Security Requirement:			SRCL106192 and security guide
+Minimum Resource Security Required: 		RCMP Enhanced Reliability
+
+
+
+
+
+
+
+
+Applicable Trade Agreements: 
+
+The requirement is subject to the provisions of the World Trade Organization Agreement on Government Procurement (WTO-AGP), the Canada-Chile Free Trade Agreement (CCFTA), the Canada-Peru Free Trade Agreement (CPFTA), the Canada-Colombia Free Trade Agreement (CColFTA), the Canada-Panama Free Trade Agreement (CPanFTA), the Canada-Honduras Free-Trade Agreement, the Canada-European Union Comprehensive Economic and Trade Agreement (CETA), the Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP), the Canadian Free Trade Agreement (CFTA), the Canada-Ukraine Free Trade Agreement (CUFTA), the Agreement on Trade Continuity between Canada and the United Kingdom of Great Britain and Northern Ireland and the Canada-Korea Free Trade Agreement (CKFTA)
+
+Proposed period of contract:
+
+The proposed period of contract shall be from date or contract to December 1, 2029.
+
+Estimated Level of Effort:
+
+The estimated level of effort of the contract will be for 227days annually.
+
+Contracting Authority Information:
+
+File Number:  202603790
+
+Stacy Seme
+Senior Contracting Officer
+Royal Canadian Mounted Police
+E-mail address: stacy.seme@rcmp-grc.gc.ca
+
+
+Inquiries:
+
+Inquiries regarding this Request for Proposal (RFP) requirement must be submitted to the Contracting Authority named above.  RFP documents will be e-mailed directly by the Contracting Authority to the Qualified Supply Arrangement Holders who are being invited to bid on this requirement. BIDDERS ARE ADVISED THAT “CANADABUYS.CANADA.CA” ” IS NOT RESPONSIBLE FOR THE DISTRIBUTION OF SOLICITATION DOCUMENTS.  The Crown retains the right to negotiate with any supplier on any procurement. Documents may be submitted in either official language.
+
+Debriefings:
+
+Bidders may request a debriefing on the results of the bid solicitation process. Bidders should make the request to the Contracting Authority within 15 working days from receipt of the results of the bid solicitation process. The debriefing may be in writing, by telephone or in person.
+
+NOTE: Task-Based Informatics Professional Services (TBIPS) Method of Supply is refreshed on a quarterly basis.  If you wish to find out how you can be a “Qualified SA Holder”, please contact parcnmdai.apncrimos@tpsgc-pwgsc.gc.ca 
+","Cette exigence concerne: La Gendarmerie Royale du Canada
+Ce besoin est ouvert uniquement aux titulaires d'arrangements en matière d'approvisionnement pour les SPICT EN578-170432 qui se sont qualifiés sous Palier 1, sous la région de la capitale nationale, le niveau d'expertise et pour la ou les catégories suivantes : Niveau 3 – Conseiller en ré-organisation
+Ce besoin vise à donner lieu à l'attribution d’un (1) contrat.
+Les fournisseurs suivant ont été inviter à soumettre une proposition : 
+1.	10947482 Canada Inc.	
+2.	Access Corporate Technologies Inc.	
+3.	Adirondack Information Management Inc.	
+4.	ALITHYA CANADA INC	
+5.	CGI Information Systems and Management Consultants Inc.	
+6.	Cofomo Inc.	
+7.	I4C INFORMATION TECHNOLOGY CONSULTING INC	
+8.	MAKWA Resourcing Inc.	
+9.	Myticas Consulting Inc.	
+10.	NATTIQ INC.	
+11.	Onaki Création S.E.N.C., IBISKA TELECOM INC., in Joint Venture	
+12.	Prologic Systems Ltd. and Maplesoft Consulting Inc. in JV
+13.	QMR Staffing Solutions Incorporated	
+14.	Steel River Group Ltd. Tundra Technical Solutions Inc. in Joint Venture	
+15.	Turtle Technologies Inc.
+Description des travaux :
+La Gendarmerie royale du Canada a besoin de services d’expertise-conseil en restructuration des processus opérationnels – niveau 3, qui sont nécessaires pour évaluer la future solution potentielle des RH à la paye de la GRC, ce qui comprend le système de prochaine génération (RH à la paye), MesRHGC et d’autres solutions des RH à la paye.
+
+Sécurité:
+
+Ce besoin comporte des exigences relatives à la sécurité.  Veuillez noter que les titulaires d'AMA n'ont pas besoin d'avoir l'autorisation requise pour soumettre une offre.  Pour de plus amples renseignements, consulter la Partie 6, Exigences relatives à la sécurité, exigences financières et autres exigences, et la Partie 7, Clauses du contrat subséquent. Pour de plus amples renseignements sur les enquêtes de sécurité sur le personnel et les organismes, les soumissionnaires devraient consulter le site Web du Programme de sécurité des contrats de Travaux publics et Services gouvernementaux Canada (http://www.tpsgc-pwgsc.gc.ca/esc-src/introduction-fra.html).
+
+Niveau d'exigence de sécurité :
+
+Exigences relatives à la sécurité :					LVERS106192 et guide de sécurité s’applique
+Niveau minimum d'attestation de sécurité requis pour la ou les ressources :	Fiabilité Approfondie de la GRC
+
+
+
+Commentaires particuliers :
+
+Accords commerciaux applicables :
+Le besoin est assujetti aux dispositions de l’Accord sur les marchés publics de l’Organisation mondiale du commerce (AMP-OMC); de l’Accord de libre-échange Canada-Chili (ALECC); de l’Accord de libre-échange Canada-Pérou (ALECP); de l’Accord de libre-échange Canada-Colombie (ALÉCCo); de l’Accord de libre-échange Canada-Panama (ALÉCPa); de l’Accord de libre-échange Canada-Honduras (ALÉCH); de l’Accord économique et commercial global entre le Canada et l’Union européenne (AECG); de l’Accord de partenariat transpacifique global et progressiste (PTPGP); de l’Accord de libre-échange canadien (ALEC); de l’Accord de libre-échange Canada-Ukraine (ALECU); de l’Accord de continuité commerciale entre le Canada et le Royaume-Uni de Grande-Bretagne et d’Irlande du Nord; et de l’Accord de libre-échange Canada-Corée (ALECC).
+
+Durée du contrat proposée :
+La durée du contrat proposée sera de la date d’attribution du contrat au 1er Décembre 2029.
+
+Niveau d'effort estimé :
+Le niveau d'effort estimé du contrat sera de 227 jours annuellement.
+
+Informations sur l'autorité contractante :
+
+Numéro de dossier : 202603790
+Stacy Seme
+Agente supérieure des acquisitions
+Gendarmerie Royale du Canada
+stacy.seme@rcmp-grc.gc.ca
+	
+Demandes de renseignements :
+Les demandes de renseignements concernant le besoin de cette DDP doivent être transmises à l’autorité contractante  identifiée ci-dessus.  L’autorité contractante enverra les documents de la DDP directement par courriel aux détenteurs d’AMA qualifiés invités à soumissionner le besoin. LES SOUMISSIONNAIRES SONT PRIÉS DE NOTER QUE LA DISTRIBUTION DES DOCUMENTS DE L’INVITATION À SOUMISSIONNER NE RELÈVE PAS DU SITE ACHATSCANADA.CANADA.CA.  L’État se réserve le droit de négocier avec tout fournisseur dans le cadre de tout marché. Les documents peuvent être présentés dans l'une ou l'autre des langues officielles.
+Compte rendu
+Les soumissionnaires peuvent demander un compte rendu des résultats du processus de demande de soumissions. Les soumissionnaires devraient en faire la demande à l'autorité contractante dans les 15 jours ouvrables suivant la réception des résultats du processus de demande de soumissions. Le compte rendu peut être fourni par écrit, par téléphone ou en personne.
+
+REMARQUE : La méthode d’approvisionnement des services professionnels en informatique centrés sur les tâches (SPICT) est mise à sur une base trimestrielle. Si vous désirez savoir comment vous pouvez devenir un « titulaire d’AMA qualifié », veuillez communiquer avec parcnmdai.apncrimos@tpsgc-pwgsc.gc.ca
+"
+"Demolition Kit, Bangalore Torpedo M1A2","Trousse de démolition, torpille Bangalore M1A2","cb-613-77108420","000","W8703-270117/A","2026-10-30","2026-12-01T14:00:00","","2027-01-01","2028-11-01","Open","Ouvert","","","","*46101600","*Ammunition","*Munitions","*GD","Request for Proposal","Demande de propositions","Competitive - Traditional","Concurrentielle - Traditionnelle","Lowest Price","Prix le plus bas","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*World","*Monde","*Dundurn
+*Saskatchewan","*Dundurn
+*Saskatchewan","Department of National Defence (DND)","101 promenade Colonel By","Ottawa","ON","K2A3J9","CANADA","Ministère de la Défense nationale (MDN)","101 promenade Colonel By","Ottawa","ON","CANADA","","","","","Contact, Test","contact@example.invalid","000-000-0000","","101 Colonel By Drive","Ottawa","ON","K1A0K2","CANADA","101 Colonel By Drive","Ottawa","ON","CANADA","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111717/w8703-270117-rfp-demo-kit%2C-bangalore-torpedo-en.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111717/w8703-270117-ddp-trousse-demo%2C-torpille-bangalore-fr.pdf","NOTICE OF PROPOSED PROCUREMENT
+Canada has a requirement for the items detailed below:
+GSIN: N1375 – Demolition Materials
+UNSPSC: 46101600 –Ammunition
+Description: Demolition Kit, Bangalore Torpedo M1A2
+A requirement exists to resupply Canada with the Demolition Kit, Bangalore Torpedo M1A2. The Demolition Kit, Bangalore Torpedo M1A2 is required as a specialized explosive charge used by combat engineers to breach barbed wire obstacles/entanglements and to clear a path through anti-personnel mines, without requiring personnel to approach the obstacle directly under fire. The system consists of several cylindrical sections of tubes/pipes that can be connected end-to end to create a linear explosive charge of desired length. A blunt, rounded nose sleeve is attached to the leading end of the assembly, allowing the torpedo to be pushed or shoved through obstacles, such as concertina wire or across rough terrain, without snagging. The Demolition Kit, Bangalore Torpedo M1A2 is primed with a blasting cap. When detonated, the pipe itself contributes to the effect: the metal casing fractures into high-velocity fragments that shred the surrounding wire, while the explosive blast clears a path for infantry to advance.
+Firm Quantity: 264 units - Delivery to Canadian Forces Ammunition Depot (CFAD) Dundurn, Dundurn, Saskatchewan on or before 01 November 2028. 
+264 units - Delivery to Canadian Forces Ammunition Depot (CFAD) Angus, Angus, Ontario on or before 01 November 2028.
+Unfunded Optional Quantity: 132 units - Delivery to Canadian Forces Ammunition Depot (CFAD) Dundurn, Dundurn, Saskatchewan between 01 September 2031 and 01 November 2031.
+132 units - Delivery to Canadian Forces Ammunition Depot (CFAD) Angus, Angus, Ontario between 01 September 2031 and 30 November 2031.
+Unit of Issue: Each, per kit
+1. Security Requirements
+There are no security requirements associated with this procurement.
+2. Controlled Goods
+This procurement is subject to the Controlled Goods Program.
+3. The Crown retains the right to negotiate with suppliers on any procurement.
+4. Documents may be submitted in either official language of Canada.
+
+5. Barring any other conditions or international sanctions, Canadian Suppliers, Suppliers of an Applicable Trading Partner and Suppliers of a Non-Trading Partner, are eligible for this solicitation of offers.","AVIS DE PROJET DE MARCHÉ
+
+Le Canada a besoin des articles détaillés ci-dessous.
+
+NIBS : N1375 – Explosifs de démolition
+UNSPSC : 46101600 – Munitions
+Description: Trousse de démolition, torpille Bangalore M1A2
+Il existe un besoin de réapprovisionner le Canada avec la trousse de démolition, torpille Bangalore M1A2. La trousse de démolition, torpille Bangalore M1A2 est requise en tant que charge explosive spécialisée utilisée par les sapeurs de combat pour percer des enchevêtrements/obstacles de fil barbelé et pour dégager un passage à travers des mines antipersonnel sans que le personnel doive s’approcher de l’obstacle directement sous le feu ennemi. Le système se compose de plusieurs sections cylindriques de tubes/tuyaux qui peuvent être raccordées bout à bout pour créer une charge explosive linéaire de la longueur souhaitée. Un manchon de nez arrondi et obtus est fixé à l’extrémité avant de l’ensemble, ce qui permet à la torpille d’être poussée ou déplacée à travers des obstacles, comme du fil concertina, ou sur un terrain accidenté sans s’accrocher. La trousse de démolition, torpille Bangalore M1A2 est munie d’un détonateur. Lorsqu’il est détoné, le tuyau lui même contribue à l’effet : le boîtier de métal se fracture en fragments à grande vitesse qui déchiquettent le fil environnant, alors que l’explosion ouvre un chemin permettant à l’infanterie d’avancer.
+
+Ferme Quantité: 264 unités - Livraison au Dépôt de munitions des Forces canadiennes (DMFC) de Dundurn, en Saskatchewan, au plus tard le 01 novembre 2028.
+264 unités - Livraison au Dépôt de munitions des Forces canadiennes (DMFC) de Angus, Angus, Ontario, au plus tard le 01 novembre 2028.
+Quantité optionnelle non financée: 132 unités - Livraison au Dépôt de munitions des Forces canadiennes (DMFC) de Dundurn, en Saskatchewan, entre le 1er septembre 2031 et le 1er novembre 2031
+132 unités - Livraison au Dépôt de munitions des Forces canadiennes (DMFC) de Angus, Angus, Ontario, entre le 1er septembre 2031 et le 1er novembre 2031
+Unité de distribution : Chacun, par trousse
+1. Exigences relatives à la sécurité.
+Il n'y a aucune exigence de sécurité associée à ce marché.
+2. Marchandises contrôlées
+Cette exigence est assujettie au Programme des marchandises contrôlées.
+3. L'État se réserve le droit de négocier les conditions de tout marché avec les fournisseurs.
+4. Les documents peuvent être présentés dans l'une ou l'autre des langues officielles du Canada.
+
+5. Sauf conditions particulières ou sanctions internationales, les fournisseurs canadiens, les fournisseurs d’un partenaire commercial applicable et les fournisseurs d’un partenaire non commercial, tels que définis dans les définitions de l’appel d’offres figurant à l’annexe, sont admissibles à cet appel d’offres."
+"Snow Removal Services – Parrtown CCC","Services de déneigement – CCC de Parrtown","cb-653-41609590","000","21201-27-5551031","2026-10-30","2026-11-16T14:00:00","","2026-12-01","2027-04-30","Open","Ouvert","","","","*72102903","*Snow removal services","*Entretien ou réparations ou services pour places de parking ou routes","*SRV","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","","","*Canada-Korea Free Trade Agreement (CKFTA)
+*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange Canada-Corée
+*Accord de libre-échange canadien (ALEC)","*Canada","*Canada","*Saint John","*Saint John","Correctional Service of Canada (CSC)","340 Laurier Avenue","Ottawa ","Ontario","K1A 0P9","Canada","Service correctionnel du Canada (SCC)","340, avenue Laurier Ouest","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","340 Laurier Avenue","Ottawa ","Ontario","K1A 0P9","Canada","340, avenue Laurier Ouest","Ottawa ","Ontario","Canada","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111639/21201-27-5551031---rfp.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111639/21201-27-5551031---ddp.pdf","This requirement is for: The Correctional Service of Canada, has a requirement for snow plowing services at the Parrtown Community Correctional Center (CCC) location in Saint John, NB. 
+
+Trade agreement:	 Canadian Free Trade Agreement (CFTA), Canada Korea Trade Agreement (CKTA).
+
+Policy on Prioritizing Canadian Suppliers and Canadian Content in Strategic Federal Procurements.
+The Policy on Prioritizing Canadian Suppliers and Canadian Content in Strategic Federal Procurements applies to this bid solicitation. This solicitation is open only to Canadian suppliers.
+
+Policy on Reciprocal Procurement: This solicitation is open only to Canadian suppliers and to Suppliers of an applicable trading partner.
+
+Competitive Procurement Strategy: Lowest priced compliant bid
+
+Set-aside under the Procurement Strategy for Indigenous Business: 
+This procurement is open to both Indigenous and non-Indigenous businesses. All interested suppliers may participate. However, suppliers are to note that this requirement is subject to a preference for Indigenous suppliers and will be set-aside under the federal government Procurement Strategy for Indigenous Business (PSIB) if Canada receives two or more responsive bids from Indigenous businesses who meet the requirements of the PSIB.
+
+Indigenous businesses that have not already registered in the Indigenous Services Canada (ISC) Indigenous Business Directory should do so. Additional information on the Indigenous Business Directory is available at the following link:
+
+	https://www.sac-isc.gc.ca/eng/1100100033057/1610797769658#c3.
+
+Comprehensive Land Claim Agreement: This procurement is not subject to a Comprehensive Land Claims Agreement.
+
+Security Requirements: This contract does not include security requirements.
+
+Nature of Requirements: The following is a summary of the statement of work for this requirement. 
+
+The Correctional Service Canada has a requirement for the provision of all labour, materials, equipment, tools, supervision, transportation, and incidentals necessary to perform snow clearing, snow removal, sanding, salting, and ice control services for the Parrtown Community Correctional Center (CCC) parking facility and associated areas. 
+
+Objectives: The Contractor shall be responsible for monitoring weather conditions and conducting regular site inspections to ensure snow removal and ice control activities are performed proactively and in a timely manner to prevent hazardous snow and ice conditions.
+
+Any conditions for participation of suppliers not specified in solicitation documentation: none.
+
+Estimated quantity of commodity: see solicitation document statement of work and basis of payment.
+
+Duration of Contract and Time Frame for Delivery:  Period of the Contract: The Work is to be performed during the period of Contract Award to April 30, 2027, with the option to renew for four (4) additional one-year periods.
+
+File Number: 21201-27-5551031
+
+Contracting Authority: Karen DesMeules 
+Telephone number: 506-478-6988
+Facsimile number: N/A
+E-mail: Karen.Desmeules@csc-scc.gc.ca 
+
+NOTE TO BIDDERS: Bidders can obtain the complete statement of work and evaluation criteria by downloading the solicitation document and associated documents from the Canada buys / tender opportunities website.
+
+The Crown reserves the right to negotiate with suppliers on any procurement.
+
+Documents may be submitted in either official language of Canada (English or French).
+
+After contract award, bidders may request a debriefing on the results of the bid solicitation process. Bidders should make the request to the Contracting Authority within fifteen (15) working days of receipt of the results of the bid solicitation process. The debriefing may be in writing, by telephone or in person.
+
+Procurement Assistance Canada (PAC) offers seminars to businesses interested in learning how to sell goods and services to the Government of Canada. The seminars are FREE.
+
+Topics include:
+? Understand the federal procurement process;
+? Learn about searching for opportunities;
+? Find out how to bid on opportunities;
+? Discover how to prepare to sell to the government.
+
+The full schedule of seminars can be found on the Procurement Assistance Canada website, under find an event (Procurement Assistance Canada: Find an event - Canada.ca).
+","Ce besoin vise : Le Service correctionnel du Canada (SCC) a besoin de services de déneigement pour le Centre correctionnel communautaire (CCC) de St. John’s, à Terre-Neuve-et-Labrador.
+
+Accord commercial :	 Accord de libre-échange canadien (ALEC), Accord de libre-échange Canada–Chili, Accord de libre-échange Canada–Colombie, Accord de libre-échange Canada–Panama, Accord de libre-échange Canada–Honduras, Accord de libre-échange Canada–Corée (ALECC).
+
+Politique sur la priorisation des fournisseurs canadiens et du contenu canadien dans les approvisionnements stratégiques fédéraux
+La Politique sur la priorisation des fournisseurs canadiens et du contenu canadien dans les approvisionnements stratégiques fédéraux. Seuls les Fournisseurs canadiens sont admissibles à cette demande de proposition.
+
+Politique sur l’Approvisionnement réciproque
+Seuls les Fournisseurs canadiens et les Fournisseurs d’un partenaire commercial concerné sont admissibles à cette demande de proposition.
+
+Stratégie de marché concurrentiel : soumission recevable ayant le prix le plus bas.
+
+Réservé en vertu de la Stratégie d’approvisionnement auprès des entreprises autochtones : 
+Ce marché est ouvert aux entreprises autochtones et non autochtones. Tous les fournisseurs intéressés peuvent participer. Cependant, les fournisseurs doivent noter que, pour cet approvisionnement, la préférence sera accordée aux fournisseurs autochtones et leur sera réservé en vertu de la Stratégie d’approvisionnement auprès des entreprises autochtones (SAEA) si le gouvernement du Canada reçoit deux soumissions recevables ou plus d’entreprises autochtones qui répondent aux exigences de la SAEA.
+
+Les entreprises autochtones qui ne sont pas déjà inscrites au Répertoire des entreprises autochtones de Services aux Autochtones Canada (SAC) sont encouragées à le faire. De plus amples renseignements sur le Répertoire des entreprises autochtones sont accessibles en cliquant sur le lien suivant :
+
+https://www.sac-isc.gc.ca/fra/1100100033057/1610797769658#c3.
+
+
+Entente sur les revendications territoriales globales : 
+Cet approvisionnement n’est pas assujetti à une entente sur les revendications territoriales globales. 
+
+Exigences de sécurité : 
+Cette offre à commandes ne comporte pas d’exigences relatives à la sécurité.
+
+Nature des besoins : 
+
+Voici un résumé de l’énoncé des travaux pour ce besoin. 
+
+Le Service correctionnel du Canada requiert la fourniture de toute la main-d’œuvre, des matériaux, de l’équipement, des outils, de la supervision, du transport et des fournitures accessoires nécessaires pour effectuer le déneigement, l’enlèvement de la neige, l’épandage de sable, l’épandage de sel et les services de contrôle du verglas pour le stationnement et les zones connexes du Centre correctionnel communautaire (CCC) de St. John’s.
+ 
+Objectif : L’entrepreneur sera responsable de surveiller les conditions météorologiques et d’effectuer des inspections régulières des lieux afin de s’assurer que les activités de déneigement et de contrôle de la glace sont réalisées de manière proactive et en temps opportun, de façon à prévenir les conditions dangereuses causées par l’accumulation de neige et de glace.
+
+Conditions pour la participation des fournisseurs non indiquées dans les documents d’invitation à soumissionner : aucune
+
+Quantité estimative de marchandises : consulter l’énoncé des travaux et la base de paiement du document d’invitation.
+
+Durée de l’offre à commandes et délai de livraison : 
+Période de l’offre à commandes : Les travaux seront effectués pendant la période du 1e décembre 2026 au 30 avril 2027 avec une possibilité de quatre (4) périodes optionnelles supplémentaires d’un an.
+
+Numéro de dossier : 21201-27-5551031
+
+Autorité contractante : Karen DesMeules 
+Numéro de téléphone : 506-478-6988
+Courriel : Karen.Desmeules@csc-scc.gc.ca 
+
+NOTE AUX SOUMISSIONNAIRES : Les soumissionnaires peuvent obtenir l’énoncé complet des travaux et les critères d’évaluation en téléchargeant le document d’invitation à soumissionner et les documents connexes à partir du site Web :  Achats Canada / occasions de marché  
+
+L’État se réserve le droit de négocier tout approvisionnement avec les fournisseurs. 
+
+Les documents peuvent être soumis dans l’une ou l’autre des langues officielles du Canada (français ou anglais).
+
+Après l’attribution du contrat, les soumissionnaires peuvent demander un compte rendu des résultats du processus de demande de soumissions. Les soumissionnaires devraient en faire la demande à l’autorité contractante dans les quinze (15) jours ouvrables suivant la réception des résultats du processus de demande de soumissions. Le compte rendu peut être fourni par écrit, par téléphone ou en personne. 
+
+Soutien en approvisionnement Canada (SAC) offre des séminaires aux entreprises qui aimeraient en apprendre davantage sur la façon de vendre des biens et services au gouvernement du Canada. Ces séminaires sont GRATUITS.
+
+Les sujets abordés comprennent :
+? Comprendre le processus d'approvisionnement fédéral;
+? Apprendre comment trouver des opportunités; 
+? Savoir comment soumissionner des marchés;
+? Découvrir comment se préparer à vendre au gouvernement.
+
+Le calendrier complet des événements est disponible sur le site de Soutien en approvisionnement Canada sous la rubrique trouver un événement (Soutien en approvisionnement Canada : Trouver un événement - Canada.ca)
+"
+"TBIPS - Level 3 Business Analyst ","TBIPS – Analyste des activités opérationnelles de niveau 3","cb-694-71129009","000","W2294-26-AA005","2026-10-30","2026-11-20T12:00:00","","2026-12-07","2028-03-31","Open","Ouvert","","","","*80101500","*Business and corporate management consultation services","*Services de conseils en gestion des entreprises","*SRV","RFP against Supply Arrangement","Demande de proposition découlant d’un arrangement en matière d’approvisionnement","Competitive - Selective tendering","Concurrentielle - Appel d'offres sélectif","Highest Combined Rating of Technical Merit and Price","Cote combinée la plus élevée pour le mérite technique et le prix","","","*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canadian Free Trade Agreement (CFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Colombia Free Trade Agreement
+*Canada-Chile Free Trade Agreement (CCFTA)","*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange canadien (ALEC)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Chili (ALECC)","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","Department of National Defence (DND)","60 Moodie Dr","Ottawa","Ontario","K1A 0K2","Canada","Ministère de la Défense nationale (MDN)","60 Moodie Dr","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","",""," ","","","","-"," ","-","-","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111623/w2294-26-aa005---npp.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111623/w2294-26-aa005---npp.pdf","The Department of National Defence (DND) has a requirement for two (2) Level 3 Business Analysts to support Director of Digital Human Resources Systems Integration (DDHRSI) in establishing and operating a centralized intake, triage, and delivery enablement function. This function will support the rapid assessment and routing of innovation requests, the development of clear, actionable requirements and delivery artefacts, and the alignment of all activities with the Military Personnel Management System’s (MPMS) objectives, Enterprise Resource Planning (ERP) direction, and enterprise architecture.","Le ministère de la Défense nationale (MDN) a un besoin de deux (2) analystes des activités opérationnelles de niveau 3 afin de soutenir la Direction de l’intégration des systèmes numériques des ressources humaines (DISNRH) dans la mise en place et l’exploitation d’une fonction centralisée de réception, de triage et de facilitation de la prestation. Cette fonction appuiera l’évaluation rapide et l’acheminement des demandes d’innovation, l’élaboration d’exigences claires et exploitables ainsi que des artefacts de prestation, et veillera à l’harmonisation de toutes les activités avec les objectifs du Système de gestion du personnel militaire (SGPM), l’orientation en matière de planification des ressources de l’entreprise (PRE) et l’architecture d’entreprise."
+"BCH2026-11 - Request for Proposals - 1495 Heron Road - Structural Engineering","BCH2026-11 - Demande de Propositions - 1495 Chemin Heron - Génie Structures","cb-713-39227575","000","BCH2026-11 ","2026-10-30","2026-11-30T14:00:00","","","","Open","Ouvert","","","","*81101505","*Structural engineering","*Construction civile","*SRV","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Highest Combined Rating of Technical Merit and Price","Cote combinée la plus élevée pour le mérite technique et le prix","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*Ottawa","*Ottawa","*Ottawa","*Ottawa","Canada Lands Company Limited (CLC)","1 University Ave, Suite 1700","Toronto","Ontario","M5J 2P1","Canada","Société immobilière du Canada Limitée (SIC)","1 University Ave, Suite 1700","Toronto","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","1 University Ave, Suite 1700","Toronto","Ontario","M5J 2P1","Canada","1 University Ave, Suite 1700","Toronto","Ontario","Canada","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111738/bch2026-11-heron-structural-engineering-rfp-v1.0.pdf,https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111738/bch2026-11-heron-structural-engineering-rfp-schedule-10%2C-exhibit-1-en-v1.0%2867309913.1.xlsx","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111738/bch2026-11-heron-genie-structures-ddp-annexe-10%2C-appendice-1-fr-v1.0%2867309914.1.xlsx,https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111738/bch2026-11-heron-genie-structures-ddp-v1.0.pdf","This Request for Proposals (RFP) is issued to obtain professional structural engineering for the property located at 1495 Heron Road, Ottawa, Ontario.","Cette demande de propositions (RFP) est émise pour obtenir des services professionnels génie structures  au 1495, chemin Heron, Ottawa, Ontario."
+"Solenoid Procurement","Approvisionnement en solénoïdes","cb-746-37313616","000","W0107-275654","2026-10-30","2026-11-05T14:00:00","","2026-10-29","2027-03-31","Open","Ouvert","","","","*31270000","*Machine made parts","*Pièces fabriquées à la machine","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","","","*Canada
+*Ontario (except NCR)
+*Petawawa","*Canada
+*Ontario (sauf RCN)
+*Petawawa","Department of National Defence (DND)","255 Montgomery Road","Petawawa","Ontario","K8H 2X3","Canada","Ministère de la Défense nationale (MDN)","255 Montgomery Road","Petawawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","-","-","-","-","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/110451/solenoid-procuement_rfp_en_final.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/110451/solenoid-procuement_rfp_fr_finale.pdf","Canada is seeking offers from Offerors to Produce and ship factory-new solenoids in accordance with Drawing (OEM Part Number: Snap-tite Inc. V2W3X-85) specifications to DFTS Petawawa.","Le Canada est à la recherche d’offrants pour produire et expédier de nouveaux solénoïdes conformément aux spécifications V2W3X-85 du dessin (numéro de pièce du FEO : Snap-tite Inc.) du SCTD de Petawawa."
+"Senior Learning Advisor in Support of the Logistics Vehicle Modernization (LVM) Project","Conseiller principal en apprentissage, en support du Projet de Modernisation des véhicules logistiques (MLV).","cb-748-18476391","000","W847L-270174","2026-10-30","2026-11-16T14:00:00","","2026-11-30","2028-11-29","Open","Ouvert","","","","*86141501","*Educational advisory services","*Services consultatifs pour l'enseignement","*SRV","RFP against Supply Arrangement","Demande de proposition découlant d’un arrangement en matière d’approvisionnement","Competitive - Selective tendering","Concurrentielle - Appel d'offres sélectif","Lowest Price","Prix le plus bas","","","*Canada-Chile Free Trade Agreement (CCFTA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Colombia Free Trade Agreement
+*Canada-Panama Free Trade Agreement
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)","*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange Canada-Corée
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Panama
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","*Canada
+*National Capital Region (NCR)","*Canada
+*Région de la capitale nationale (RCN)","Department of National Defence (DND)","101 Colonel By Drive","Ottawa","Ontario","K1A0K2","Canada","Ministère de la Défense nationale (MDN)","101 Colonel By Drive","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","101 Colonel By Drive","Ottawa","Ontario","K1A0K2","Canada","101 Colonel By Drive","Ottawa","Ontario","Canada","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111681/w847l-270174---task-based-npp-senior-learning-advisor-%28en.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111681/w847l-270174---task-based-npp-senior-learning-advisor-%28fr.pdf","The Department of National Defence has a requirement for the services of one (1) Senior Learning Advisor on an as and when requested basis to support Logistics Vehicle Modernization (LVM) Project.","Le ministère de la Défense nationale a un besoin pour les services d’un (1) Conseiller principal en apprentissage, sur demande, en support du Projet de Modernisation des véhicules logistiques (MLV)."
+"Wheel Chocks / Cale de Roue","Wheel Chocks / Cale de Roue","cb-796-70078432","000","W847L-270183","2026-10-30","2026-11-24T14:00:00","","2026-12-15","2027-02-26","Open","Ouvert","","","","*25172100","*Vehicle safety and security systems and components","*Systèmes et composants de sécurité pour véhicules","*GD","Request for Proposal","Demande de propositions","Competitive - Traditional","Concurrentielle - Traditionnelle","Lowest Price","Prix le plus bas","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*Canada","*Canada","*Montréal","*Montréal","Department of National Defence (DND)","101 Colonel by Drive","Ottawa","Ontario","K1A 0K2","Canada","Ministère de la Défense nationale (MDN)","101 Colonel by Drive","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","101 Colonel by Drive","Ottawa","Ontario","K1A 0K2","Canada","101 Colonel by Drive","Ottawa","Ontario","Canada","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111635/w847l-270183_eng.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111635/w847l-270183_fr.pdf","The Department of National Defence has a requirement for the items detailed below.  The delivery is requested at Canadian Forces Supply Depot (25 CFSD) 6363 Notre Dame St E.Montreal, QC. H1N 3V9, Canada.
+
+Item 001, GSIN: N2540, NSN: 01-7078788, Chock, Wheel-Track
+Part No.: ESC-12593, NCAGE: 5FYD0, Equipment Supply Co.
+Quantity: 380, Unit of Issue: EA, to be delivered to 25 CFSD, Montreal .
+
+Bidders proposing an Equivalent or a Substitute Product must indicate the brand name and model and/or Part Number and the NCAGE they are offering along with the Part Number and NCAGE of the manufacturer.
+
+Bidders must submit prices in Canadian dollars. Bids submitted in foreign currency will be rejected.
+
+The requirement does not offer exchange rate fluctuation risk mitigation. Requests for exchange rate fluctuation risk mitigation will not be considered. All bids including such provision will render the bid non-responsive.
+
+The requirement is subject to a preference for Canadian goods and/or services.
+
+The Crown retains the rights to negotiate with suppliers on any procurement.
+
+Documents may be submitted in either official language of Canada.
+
+
+
+NOTE : Solicitation RFP W847L-270177 was cancelled due to change of requirements.
+","AVIS DE PROJET DE MARCHÉ
+Le ministère de la Défense nationale désire se procurer les articles suivants. La livraison est demandée à Canadian Forces Supply Depot (25 CFSD) 6363
+Notre Dame St E.Montreal, QC. H1N 3V9, Canada 
+
+Article 1, NIBS : 2540, NNO : 01-7078788, Cale de Roue
+No de pièce : ESC-12593, code EEPO 5FYD0 : Equipment Supply Co
+Quantité : 380, Unité de distribution : CH, à livrer à 25 CFSD, Montreal.
+
+Article 2, NIBS : 2540, NNO : 21-9084123, ENSEMBLE DE CHAÎNES POUR PNEU
+No de pièce :03501, code EEPO : 0122N, PEWAG AUSTRIA GMBH
+Quantité : 760, Unité de distribution : CH, à livrer à 25 CFSD, Montreal.
+
+Les soumissionnaires qui proposent un produit équivalent ou un produit de remplacement doivent indiquer le nom de la marque et le modèle, et/ou le numéro de pièce et le code EEPO du produit proposé ainsi que le numéro de pièce et le NCAGE du fabricant.
+
+Les soumissionnaires doivent proposer des prix en dollars canadiens. Les offres soumises en devise étrangère seront rejetés.
+
+Le besoin ne prévoit pas offrir d’atténuer les risques liés à la fluctuation du taux de change. Aucune demande d’atténuation des risques liés à la fluctuation du taux de change ne sera prise en considération. Toute soumission incluant une telle disposition sera déclarée non recevable.
+
+Pour ce besoin, une préférence est accordée aux produits et(ou) aux services canadiens.
+
+La Couronne se réserve le droit de négocier avec les fournisseurs pour tout marché d’approvisionnement.
+
+Les documents peuvent être présentés dans l’une ou l’autre des langues officielles du Canada.
+
+
+REMARQUE : L’appel d’offres W847L-270177 a été annulé en raison d’une modification des besoins.
+"
+"Masonry Conservation S-77 Sections A and B","Conservation de la maçonnerie S-77 sections A et B","cb-806-6332445","000","26-58147","2026-10-30","2026-12-09T14:00:00","","","","Open","Ouvert","","","","*72151900","*Masonry and stonework services","*Services de maçonnerie et d'ouvrages en pierres","*CNST","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Variations or combinations of the above methods","Variations ou combinaisons des méthodes susmentionnées","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*Canada","*Canada","*Canada","*Canada","National Research Council of Canada (NRC)","1200 Montreal Rd, M58","Ottawa","ON","K1A 0R6","Canada","Conseil national de recherches du Canada (CNRC)","1200 Rue Montreal, M58","Ottawa","ON","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","100 Sussex Drive, Building S-77","Ottawa","ON"," K1N 1J1","Canada","100, promenade Sussex, Édifice S-77","Ottawa","ON","Canada","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111734/26-58147_annex-ai_specsdrawings_masonry-conservation-s-77-sections-a-and-b_en.pdf,https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111734/26-58147_npp_masonry-conservation-s-77-sections-a-and-b_en.pdf,https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111734/26-58147_itt_masonry-conservation-s-77-sections-a-and-b_en.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111734/26-58147_annex-ai_specsdrawings_masonry-conservation-s-77-sections-a-and-b_fr.pdf,https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111734/26-58147_npp_masonry-conservation-s-77-sections-a-and-b_fr.pdf,https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111734/26-58147_itt_masonry-conservation-s-77-sections-a-and-b_fr.pdf","The National Research Council Canada (NRC) requires intervention to restore the building envelope while respecting heritage conservation requirements and prevent further deterioration of the façade, at National Research Council of Canada, at 100 Sussex Drive, Building S-77, Ottawa, ON, K1N 1J1.","Le Conseil national de recherches du Canada (CNRC) doit effectuer des travaux de restauration de l’enveloppe du bâtiment afin de respecter les exigences de conservation du patrimoine et de prévenir toute détérioration supplémentaire de la façade, au Conseil national de recherches du Canada, situé au 100, promenade Sussex, édifice S-77, Ottawa (Ontario) K1N 1J1."
+"Requirement of multiple Lap and Polish Tools","EXIGENCE DE MULTIPLES OUTILS DE RODAGE ET DE POLISSAGE","cb-85-75674174","000","26-58197","2026-10-30","2026-11-16T14:00:00","","","","Open","Ouvert","","","","*41100000
+*41101700
+*41101800
+*41101900
+*41120000","*Laboratory and scientific equipment
+*Laboratory boring and grinding and cutting and crushing and pressing equipment
+*Laboratory electron and solid state physics equipment
+*Laboratory ionic equipment
+*Laboratory supplies and fixtures","*Équipements scientifiques et de laboratoire
+*Équipements de laboratoire pour le perçage, le meulage, le découpage, le concassage et le pressage
+*Équipements de laboratoire de physique des électrons et de l'état solide
+*Équipements de laboratoire destinés à l'étude des ions
+*Fournitures et matériels de laboratoire","*GD","Advance Contract Award Notice","Préavis d’attribution du contrat","Advance contract award notice","Préavis d'attribution du contrat","Not applicable","Sans objet","","","*Canada-Ukraine Free Trade Agreement (CUFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*North American Free Trade Agreement (NAFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Colombia Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Panama Free Trade Agreement
+*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange Canada-Honduras
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Corée
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange canadien (ALEC)","*Canada","*Canada","*United States of America
+*Caribbean
+*Asia
+*Africa
+*Central America
+*Canada
+*South America
+*Mexico
+*Europe","*États-Unis d’Amérique
+*Caraïbes
+*Asie
+*Afrique
+*Amérique centrale
+*Canada
+*Amérique du Sud
+*Mexique
+*Europe","National Research Council of Canada (NRC)","BLDG. M-58, 1200 Montreal Road","Ottawa","ON","K1A 0R6","Canada","Conseil national de recherches du Canada (CNRC)","BLDG. M-58, 1200 Montreal Road","Ottawa","ON","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","BLDG. M-58, 1200 Montreal Road","Ottawa","ON","K1A 0R6","Canada","BLDG. M-58, 1200 Montreal Road","Ottawa","ON","Canada","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111702/acan-26-58197_en-logitech.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111702/acan-26-58197_fr-logitech.pdf","The National Research Council Canada (NRC) has a requirement for multiple lapping and polishing tools to support the CPFC’s modernization to 4” wafer processing capability. Lapping and polishing equipment are mission critical for a photonics foundry producing waveguides, modulators, lasers, filters, or integrated photonic circuits. These tools ensure substrate flatness, surface quality, and thickness uniformity, all of which directly affect optical performance, coupling efficiency, and device yield. The CPFC has a requirement to update its aging lapping and polishing tools degrade as they currently contribute to manufacturing risks to yield, optical performance, process stability, and throughput. Replacing aging tools is essential to maintain foundry grade capability, support customer programs, and prevent production interruptions as the CPFC progresses to 4” wafer processing capability. The CPFC requires the procurement of: 
+o	Three (3) Modular Wafer Bonding System
+o	One (1) LP70 multi-station lapping and polishing system
+o	One (1) PP6GT Precision Polishing Jig with Vacuum adaptor
+o	One (1) CG10 Contact Measurement Gauge
+o	One (1) Solvent Vapour Cleaner
+NRC is investing in semiconductor fabrication infrastructure and related research capabilities to strengthen Canada’s compound semiconductor innovation and commercialization pipeline. As part of this initiative, the Canadian Photonics Fabrication Centre (CPFC) is transitioning to a 4” wafer processing photonics foundry which includes the modernization of its aging lapping and polishing equipment. These upgrades will enable CPFC to deliver photonic devices with tightly controlled variability in critical parameters (roughness, thickness, flatness, etc) and tightened tolerance specifications (facet polishing, high-flatness bonding surfaces) while decreasing maintenance costs and downtime.
+","Le Conseil national de recherches du Canada (CNRC) doit se procurer des outils de rodage et de polissage afin de soutenir la modernisation du Centre de fabrication pour la photonique du Canada (CFPC) en vue d’acquérir une capacité de traitement des plaquettes de 4 pouces. Les équipements de rodage et de polissage sont essentiels à la mission d’une fonderie photonique produisant des guides d’ondes, des modulateurs, des lasers, des filtres ou des circuits photoniques intégrés. Ces outils garantissent la planéité du substrat, la qualité de la surface et l’uniformité de l’épaisseur, autant de facteurs qui influent directement sur les performances optiques, l’efficacité de couplage et le rendement des dispositifs. Le CFPC doit mettre à niveau ses outils de rodage et de polissage vieillissants, puisque ceux-ci contribuent actuellement aux risques de fabrication en matière de rendement, de performance optique, de stabilité des processus et de débit. Le remplacement des outils vieillissants est essentiel pour maintenir une capacité de qualité fonderie, appuyer les programmes de la clientèle et prévenir les interruptions de production à mesure que le CFPC évolue vers une capacité de traitement de plaquettes de 4 pouces. Le CFPC requiert l’achat de :
+o	Trois (3) systèmes modulaires de collage de plaquettes
+o	Un (1) système de rodage et de polissage à stations multiples LP70
+o	Un (1) gabarit de polissage de précision PP6GT avec adaptateur sous vide
+o	Une (1) jauge de mesure par contact CG10
+o	Un (1) système de nettoyage aux vapeurs de solvant
+En vue de renforcer la filière canadienne de l’innovation et de la commercialisation dans le domaine des composés semi-conducteurs, le CNRC investit actuellement dans les infrastructures de fabrication de semi-conducteurs ainsi que dans les capacités de recherche connexes. Dans le cadre de cette initiative, le Centre de fabrication pour la photonique du Canada (CFPC) effectue une transition pour devenir une fonderie photonique de traitement de plaquettes de 4 pouces, ce qui implique notamment la modernisation de ses équipements de rodage et de polissage vieillissants. Ces améliorations permettront au CFPC de fournir des dispositifs photoniques présentant une variabilité rigoureusement contrôlée de leurs paramètres critiques (rugosité, épaisseur, planéité, etc.) et des spécifications de tolérance plus strictes (polissage des facettes, surfaces de collage à haute planéité), tout en réduisant les coûts de maintenance et les temps d’arrêt.
+"
+"NPP – S6057491 - THS SA – Three (3) Computer Application Support. Temporary Help Services against the Supply Arrangement for the National Capital Region (NCR).","APM – S6057491 - AMA SAT – Trois (3) Informatique, soutien aux applications. Les services d'aide temporaire dans le cadre de l’arrangement en matière d'approvisionnement pour la région de la capitale nationale(RCN).","cb-935-21285129","000","S6057491","2026-10-30","2026-11-23T13:00:00","","2026-11-23","2027-11-12","Open","Ouvert","","","","*80111600","*Temporary personnel services","*Services de personnels temporaires","*SRV","RFP against Supply Arrangement","Demande de proposition découlant d’un arrangement en matière d’approvisionnement","Competitive - Selective tendering","Concurrentielle - Appel d'offres sélectif","Lowest Price","Prix le plus bas","","","*Canadian Free Trade Agreement (CFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)","*Accord de libre-échange canadien (ALEC)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","Department of National Defence (DND)","60 Moodie Drive","Ottawa","ON","K2H8G1","Canada","Ministère de la Défense nationale (MDN)","60 Moodie Drive","Ottawa","ON","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","","","","Temporary Help Services Requirement
+This requirement is for: Department of National Defense (DND)
+
+This requirement is open only to those supply arrangement holders under EN578-172870 who qualified under the following streams and categories: Stream 5 – Computer Services Categories – 5.1 Computer Application Suppport
+
+The following SA Holders have been invited to submit a proposal: 
+
+9468269 Canada Corp. 
+CLOSEREACH LTD.,OTUS STRATEGIC FINANCIAL BUSINESS PLANNING INC.,Injoint Venture 
+David Seguin Consulting Inc. 
+DLS Technology Corporation 
+Donna Cona Inc. 
+Dublin Bay Ltd. 
+EXPERIS CANADA INC. 
+Fokis Services Inc. 
+Jaywol Inc. 
+Norconex Inc. 
+OLAV CONSULTING CORP., MOSHWA ABORIGINAL INFORMATION TECHNOLOGY CORPORATION, IN JOINT VENTURE 
+Prologic Systems Ltd. 
+Tech4soft Inc. 
+The ALRM Group Inc. 
+The Halifax Computer Consulting Group Inc. 
+
+
+Description of the Requirement:
+Department of National Defense (DND) has a requirement for Temporary Help Services and has issued a Request for Proposal to suppliers generated from CPSS who are qualified under the streams and categories listed above.
+
+Level of Security Requirement:
+Resource(s) Minimum Security Level Required is/are: Reliability
+","Besoin en services d’aide temporaire
+La présente exigence est pour : Ministère de la Défense Nationale
+
+Cette exigence est seulement réservée aux détenteurs d’arrangement en matière d’approvisionnement numéro EN578-172870 qualifiés sous les volets et catégories suivants: Volet 5 – Catégories de services informatiques - 5.1 Informatique, soutien aux applications
+
+Les détenteurs suivants d'arrangement en matière d'approvisionnement ont été invités à soumettre une proposition : 
+9468269 Canada Corp. 
+CLOSEREACH LTD.,OTUS STRATEGIC FINANCIAL BUSINESS PLANNING INC.,Injoint Venture 
+David Seguin Consulting Inc. 
+DLS Technology Corporation 
+Donna Cona Inc. 
+Dublin Bay Ltd. 
+EXPERIS CANADA INC. 
+Fokis Services Inc. 
+Jaywol Inc. 
+Norconex Inc. 
+OLAV CONSULTING CORP., MOSHWA ABORIGINAL INFORMATION TECHNOLOGY CORPORATION, IN JOINT VENTURE 
+Prologic Systems Ltd. 
+Tech4soft Inc. 
+The ALRM Group Inc. 
+The Halifax Computer Consulting Group Inc. 
+
+
+Description de l’exigence :
+Ministère de la Défense Nationale a besoin des services d’aide temporaire et a émis une demande de proposition aux fournisseurs générés par le SSPC et qualifiés sous les volets et catégories listés ci-haut.
+
+Niveau de sécurité requis :
+Niveau de sécurité minimum requis pour la ou les ressource(s): Cote de fiabilitè"
+"Kelowna Accommodations ","Hébergements à Kelowna","cb-958-30929630","000","W3999-270009","2026-10-30","2026-11-25T12:00:00","","2027-01-04","2027-12-17","Open","Ouvert","","","","*95122100","*Accommodation buildings and structures","*Structures et bâtiments de logement","*SRV","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","","","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canadian Free Trade Agreement (CFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Panama Free Trade Agreement
+*Canada-Colombia Free Trade Agreement
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange canadien (ALEC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Colombie
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange Canada-Corée
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)","*Kelowna","*Kelowna","*Canada","*Canada","Department of National Defence (DND)","PO BOX 17000 STN FORCES","Winnipeg","Manitoba","R3J 3Y5","Canada","Ministère de la Défense nationale (MDN)","PO BOX 17000 STN FORCES","Winnipeg","Manitoba","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","PO BOX 17000 STN FORCES","Winnipeg","Manitoba","R3J 3Y5","Canada","PO BOX 17000 STN FORCES","Winnipeg","Manitoba","Canada","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/110264/w3999-270009-rfp-kelowna-accom-w-cover-%28e.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/110264/w3999-270009-rfp-kelowna-accom-w-cover-%28f.pdf","Title: Accommodations – Kelowna, British Columbia
+
+Department: Department of National Defence (DND)
+
+Procurement Type: Solicitation of Offers
+
+The Canadian Armed Forces (CAF) requires accommodations in Kelowna, BC for up to 15 military personnel.
+
+Contract Term: January 04, 2027 – December 17, 2027
+
+Number of Contracts: Single
+
+Basis of Selection: Lowest evaluated price meeting mandatory technical criteria.
+
+None – no security clearance required.
+
+Submission Method: Open Bidding on Canada Buys.
+
+Closing Date/Time: As indicated on page 1 of solicitation (Offerors must check).
+Offer Sections:
+- Section I: Technical Offer
+- Section II: Financial Offer
+- Section III: Offer Submission Form & Offeror Declaration Form
+
+Validity Period: 60 days minimum from closing.
+
+Must have legal capacity to contract.
+
+Must comply with Canada’s Code of Conduct for Procurement.
+
+Must meet obligations under the Ineligibility and Suspension Policy.
+
+Must disclose integrity information and conflicts of interest.
+
+Insurance requirements must be met.
+
+Basis of Payment: Fixed price (CAD).
+Applicable taxes extra.
+
+Canada will not provide exchange rate risk protection.
+
+Procurement Authority:
+
+Name: Adam Bidzinski
+Title: Intermediate Materiel Acquisition and Support Officer
+Directorate: 1 CAD Procurement
+Department: Department of National Defence
+Tel: (204) 833-2500 ext 4795
+Email: adam.bidzinski@forces.gc.ca
+Documents may be submitted in either official language of Canada.
+","Titre : Hébergement – Kelowna (Colombie-Britannique) 
+
+Ministère : Ministère de la Défense nationale (MDN) 
+
+Type d'approvisionnement : Appel d'offres Les Forces armées canadiennes (FAC) ont besoin d’un hébergement à Kelowna (C.-B.) pour un maximum de 15 militaires. 
+
+Durée du contrat : Du 4 janvier 2027 au 17 décembre 2027 
+
+Nombre de contrats : Un seul 
+
+Critères de sélection : Le prix le plus bas évalué répondant aux critères techniques obligatoires. 
+
+Aucune cote de sécurité requise. 
+
+Méthode de soumission : Appel d’offres ouvert sur le portail Achats Canada. 
+Date et heure de clôture : Voir page 1 de l'appel d'offres (les soumissionnaires doivent vérifier). Sections de l'offre : - Section I : Offre technique - Section II : Offre financière - Section III : Formulaire de soumission et déclaration du soumissionnaire Période de validité : Minimum de 60 jours à compter de la date de clôture.
+
+Le soumissionnaire doit avoir la capacité juridique de contracter.
+Le soumissionnaire doit se conformer au Code de conduite du Canada en matière d’approvisionnement.
+Doit respecter les obligations prévues par la Politique d’inadmissibilité et de suspension. 
+Doit divulguer tout renseignement relatif à son intégrité et tout conflit d’intérêts. 
+
+Les exigences en matière d'assurance doivent être respectées.
+
+Base de paiement : Prix fixe (CAD). 
+Taxes applicables en sus.
+
+Le Canada n'offre aucune protection contre le risque de change.
+
+Autorité responsable de l’approvisionnement :
+Nom : Adam Bidzinski 
+Titre : Agent intermédiaire d’acquisition et de soutien du matériel 
+Direction : Approvisionnement 1 CAD 
+Ministère : Ministère de la Défense nationale 
+Tél. : (204) 833-2500, poste 4795 
+Courriel : adam.bidzinski@forces.gc.ca 
+Les documents peuvent être soumis dans l’une ou l’autre des langues officielles du Canada.
+"
+"Pure Storage FlashArray X50R3 – 3 Yr - Maintenance and Support -DND","Pure Storage FlashArray X50R3 – 3 ans – Maintenance et   support –   DND -","SSC-26-00035339:T","000","BPM026801/35339","","2026-11-09T14:00:00","","","","Open","Ouvert","*N7030","*ADP Software","*Logiciel TAI","","","","*GD","Request for Proposal","Demande de propositions","Competitive - Limited tendering","Concurrentielle - Appel d'offres limité","","","","","*Canadian Free Trade Agreement (CFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)","*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Chili (ALECC)","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","Shared Services Canada","90 Metcalfe Street","Ottawa","Ontario","K0A 0C3","Canada","Services partagés Canada","90, rue Metcalfe","Ottawa","Ontario","Canada","Shared Services Canada","90 Metcalfe Street,Ottawa,Ontario,K0A 0C3,Canada","Services partagés Canada","90, rue Metcalfe,Ottawa,Ontario,K0A 0C3,Canada","Contact, Test","contact@example.invalid","000-000-0000","","400 Cooper Street Ottawa, Ontario","Ontario","Ontario","K2P 2H8","CANADA","400 Cooper Street Ontario<br>K2P 2H8<br>CANADA","","","","","","https://sscp2pspc.ssc-spc.gc.ca/page.aspx/en/fil/download_public/359FE376-8B8E-4262-8BA7-FF84512C5F6C","https://sscp2pspc.ssc-spc.gc.ca/page.aspx/fr/fil/download_public/0D10B482-2F93-4069-9837-66B75FD13EEA","Services
+SSC Pure Storage FlashArray X50R3 – 3 Yr - Maintenance and Support -DND- Amendment 000","Services
+SSC Pure Storage FlashArray X50R3 – 3 Yr - Maintenance and Support -DND- Amendment 000"
+"Purchase and Install two server racks in five sheds in southern Manitoba  or equivalent, for the ROYAL CANADIReq. 2026-07-30","Achat et Installation de deux baies de serveurs dans cinq abris situés dans le sud du Manitoba, ou matériel équivalent, pour","SSC-26-00035342:T","000","BPM026860/35342","","2026-11-09T14:00:00","","","","Open","Ouvert","*N5895","*Miscellaneous Communications Equipment","*Équipements divers de télécommunications","","","","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","","","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","*Manitoba","*Manitoba","Shared Services Canada","90 Metcalfe Street","Ottawa","Ontario","K0A 0C3","Canada","Services partagés Canada","90, rue Metcalfe","Ottawa","Ontario","Canada","Shared Services Canada","90 Metcalfe Street,Ottawa,Ontario,K0A 0C3,Canada","Services partagés Canada","90, rue Metcalfe,Ottawa,Ontario,K0A 0C3,Canada","Contact, Test","contact@example.invalid","000-000-0000","","400 Cooper Street Ottawa, Ontario","Ontario","Ontario","K2P 2H8","CANADA","400 Cooper Street Ontario<br>K2P 2H8<br>CANADA","","","","","","https://sscp2pspc.ssc-spc.gc.ca/page.aspx/en/fil/download_public/31543C0A-AB85-412A-BC9F-FBB13AD2E35E,https://sscp2pspc.ssc-spc.gc.ca/page.aspx/en/fil/download_public/2FD9EBBE-D404-477B-8EE9-F12B02B61EDB,https://sscp2pspc.ssc-spc.gc.ca/page.aspx/en/fil/download_public/3C4578D7-34E0-465C-9FE1-F978484273E0","https://sscp2pspc.ssc-spc.gc.ca/page.aspx/fr/fil/download_public/A446E2B8-BFA7-4677-A16B-B85AAF79E39B,https://sscp2pspc.ssc-spc.gc.ca/page.aspx/fr/fil/download_public/B86E110A-BC0A-4F58-A0CA-AD243144E747,https://sscp2pspc.ssc-spc.gc.ca/page.aspx/fr/fil/download_public/368BB06E-D767-4E3C-B36C-8E8399E73807","GOODS
+SSC Purchase and Install two server racks in five sheds in southern Manitoba  or equivalent, for the ROYAL CANADIReq. 2026-07-30- Amendment 000","BIENS
+SSC Purchase and Install two server racks in five sheds in southern Manitoba  or equivalent, for the ROYAL CANADIReq. 2026-07-30- Amendment 000"
+"Pacific Science Enterprise Center (PSEC) - Power Distribution Upgrade","Centre d'entreprise scientifique du Pacifique (CESP) – Mise à niveau de la distribution électrique","cb-106-83883729","000","30008413","2026-10-30","2026-11-16T14:00:00","","2026-12-18","2027-03-19","Open","Ouvert","","","","*72102200
+*72120000","*Electrical services
+*Nonresidential building construction services","*Services électriques
+*Services de construction de bâtiments non résidentiels","*CNST","Invitation to Qualify","Invitation à se qualifier","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*British Columbia","*Colombie-Britannique","*British Columbia
+*Canada
+*Vancouver","*Colombie-Britannique
+*Canada
+*Vancouver","Department of Fisheries and Oceans (DFO)","200 Kent Street","Ottawa","ON","K1A 0E6","Canada","Ministère des Pêches et des Océans (MPO)","200 rue Kent","Ottawa","ON","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111714/30008413---rfq-%28en_final.pdf","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111714/30008413---rfq-%28fr_final.pdf","Fisheries and Oceans Canada (DFO) requires the supply, installation, testing, and commissioning of new underground electrical distribution and communications infrastructure, including associated civil works required to provide expanded site electrical services and support future infrastructure requirements at the Pacific Science Enterprise Center in West Vancouver.
+
+The Contractor must provide all labor, materials, equipment, supervision, and coordination required to complete the work, including but not limited to:
+
+•	Excavation, trenching, shoring (as required), backfill, compaction, and restoration of disturbed surfaces, including asphalt, concrete, gravel, landscaping, and other site finishes.
+
+•	Supply and installation of new underground electrical and communications conduit systems, including empty conduits for future services to multiple buildings and site locations.
+
+•	Supply and installation of new electrical distribution cabling, including pulling, termination, identification, testing, and connection of conductors.
+
+•	Supply and installation of electrical and communications access vaults, pull boxes, and associated structures at locations indicated on the contract drawings.
+
+•	Supply and installation of new outdoor electrical kiosk(s), distribution equipment, panels, breakers, and associated electrical infrastructure.
+
+•	Provision of complete electrical infrastructure for new Electric Vehicle Supply Equipment (EVSE), including feeders, conduit, wiring, protection, concrete bases, bollards and associated civil/electrical works as indicated. EVSE charging units may be supplied by either the Owner or the Contractor, depending on the option selected at contract award. The Contractor shall be responsible for the complete installation, integration, testing, and commissioning of the EVSE system as identified in the contract documents regardless of the equipment supply arrangement.
+
+•	Coordination with existing underground utilities and electrical systems, including locating existing services and maintaining facility operations throughout construction.
+
+•	Completion of all required inspections, testing, commissioning, documentation, and as-built drawings for the completed installation.
+
+
+Location of Work:
+Pacific Science Enterprise Centre 
+4160 Marine Dr, West Vancouver, BC  V7V 1H2  
+
+Familiarization with site:
+A mandatory site visit will be coordinated with qualified bidders during Phase 2 of the tender process.
+
+Timeline:
+All work including clean-up and demobilization must be completed by March 19, 2027.
+","Pêches et Océans Canada (MPO) a besoin de la fourniture, de l'installation, de la mise à l'essai et de la mise en service d'une nouvelle infrastructure souterraine de distribution électrique et de communication, y compris les travaux de génie civil connexes nécessaires pour fournir des services électriques élargis sur le site et répondre aux besoins futurs en matière d'infrastructure au Centre d'entreprise scientifique du Pacifique à West Vancouver.
+
+L'entrepreneur doit fournir l'ensemble de la main-d'œuvre, des matériaux, de l'équipement, de la supervision et de la coordination nécessaires à la réalisation des travaux, y compris, mais sans s'y limiter :
+
+•	Excavation, creusement de tranchées, étayage (au besoin), remblayage, compactage et restauration des surfaces perturbées, y compris l'asphalte, le béton, le gravier, l'aménagement paysager et d'autres finitions de chantier.
+
+•	Fourniture et installation de nouveaux systèmes de conduits électriques et de communication souterrains, y compris des conduits vides pour les services futurs vers plusieurs bâtiments et sites.
+
+•	Fourniture et installation de nouveaux câbles de distribution électrique, y compris le tirage, la terminaison, l'identification, la mise à l'essai et le raccordement des conducteurs.
+
+•	Fourniture et installation de voûtes d'accès électrique et de communication, de boîtes de tirage et de structures connexes aux endroits indiqués sur les dessins du contrat.
+
+•	Fourniture et installation de nouveaux kiosques électriques extérieurs, d'équipements de distribution, de panneaux, de disjoncteurs et de l'infrastructure électrique associée.
+
+•	Fourniture d'une infrastructure électrique complète pour le nouvel équipement d'alimentation des véhicules électriques (EAVE), y compris les lignes d'alimentation, les conduits, le câblage, la protection, les bases en béton, les bornes et les travaux de génie civil/électrique connexes, comme indiqué. Les bornes de recharge peuvent être fournies par le propriétaire ou l'entrepreneur, selon l'option choisie lors de l'attribution du contrat. L'entrepreneur est responsable de l'installation, de l'intégration, de la mise à l'essai et de la mise en service complètes du système de EAVE tel qu'il est indiqué dans les documents contractuels, indépendamment de l'arrangement en matière d'approvisionnement en équipement.
+
+•	Coordination avec les services publics souterrains et les systèmes électriques existants, y compris la localisation des services existants et le maintien des opérations de l'installation tout au long de la construction.
+
+•	Achèvement de toutes les inspections, de tous les essais, de toutes les mises en service, de tous les documents et de tous les dessins conformes à l'exécution requis pour l'installation terminée.
+
+
+Lieu de travail:
+Centre d'entreprise scientifique du Pacifique 
+4160, promenade Marine, Vancouver Ouest (Colombie-Britannique)  V7V 1H2  
+
+Familiarisation avec le site:
+Une visite obligatoire des lieux sera coordonnée avec les soumissionnaires qualifiés au cours de la phase 2 du processus d'appel d'offres.
+
+Chronologie:
+Tous les travaux, y compris le nettoyage et la démobilisation, doivent être terminés d'ici le 19 mars 2027.
+"
+"BCH2026-10 - Request for Proposals - 1495 Heron Road - Mechanical and Electrical Engineer Services","BCH2026-10 Demande de Propositions - 1495 Chemin Heron - Services d'ingénierie mécanique et électrique","cb-167-8734223","000","BCH2026-10","2026-10-30","2026-11-30T14:00:00","","","","Open","Ouvert","","","","*81101600
+*81101701","*Mechanical engineering
+*Electrical engineering services","*Construction mécanique
+*Ingénierie électrique","*SRV","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Highest Combined Rating of Technical Merit and Price","Cote combinée la plus élevée pour le mérite technique et le prix","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*Canada","*Canada","*Ottawa
+*Canada
+*National Capital Region (NCR)","*Ottawa
+*Canada
+*Région de la capitale nationale (RCN)","Canada Lands Company Limited (CLC)","1 University Ave, Suite 1700 ","Toronto","Ontario","M5J 2P1","Canada","Société immobilière du Canada Limitée (SIC)","1 University Ave, Suite 1700 ","Toronto","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","1 University Ave","Toronto","Ontario","M5J1S8","Canada","1 University Ave","Toronto","Ontario","Canada","","","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111744/bch2026-10-request-for-proposals---1495-heron-road---mechanical-and-electrical-engineer-services.pdf,https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111744/bch2026-10-heron-me-engineering-rfp-schedule-10%2C-exhibit-1-en-v1.0.xlsx","https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111744/bch2026-10-demande-de-propositions---1495-chemin-heron---services-dingenierie-mecanique-et-electrique.pdf,https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/111744/bch2026-10-heron-genie-me-ddp-annexe-10%2C-appendice-1-fr-v1.0.xlsx","This Request for Proposals (RFP) is issued to obtain professional mechanical and electrical engineering services for the property located at 1495 Heron Road, Ottawa, Ontario.","Cette demande de propositions (RFP) est émise pour obtenir des services professionnels Services d'ingénierie mécanique et électrique pour la propriété située au 1495, chemin Heron, Ottawa, Ontario."
+"ETS-Lindgren EMSENSE 40 Electric Field Probe System","ETS-Lindgren EMSENSE 40 Electric Field Probe System","cb-215-65758115","000","W8703-270128/A      ","2026-10-30","2026-11-17T14:00:00","","2026-12-21","2027-02-28","Open","Ouvert","","","","*32130000
+*81101700","*Electronic hardware and component parts and accessories
+*Electrical and electronic engineering","*Matériel électronique, accessoires et composants
+*Electronique et électrotechnique","*GD","RFP against Supply Arrangement","Demande de proposition découlant d’un arrangement en matière d’approvisionnement","Competitive - Selective tendering","Concurrentielle - Appel d'offres sélectif","Lowest Price","Prix le plus bas","","","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*Canada","*Canada","*Gatineau","*Gatineau","Department of National Defence (DND)","101 COLONEL BY DRIVE","OTTAWA","ON","K1A 0K2","CANADA","Ministère de la Défense nationale (MDN)","101 COLONEL BY DRIVE","OTTAWA","ON","CANADA","","","","","Contact, Test","contact@example.invalid","000-000-0000","","101 COLONEL BY DRIVE","OTTAWA","ON","K1A 0K2","CANADA","101 COLONEL BY DRIVE","OTTAWA","ON","CANADA","","","","","As a requirement of the Supply Arrangement (SA) this notice is published on CanadaBuys for a period of 15 calendar days. Only pre-qualified Suppliers have been invited to bid. Suppliers that do not already hold a Supply Arrangement in series E60HN-16ELEC with PSPC cannot submit a bid.
+
+The Department of National Defence requires the supply and delivery of the following items under solicitation W8703-270128/A:
+
+Quantity 2 ETS-Lindgren EMSENSE 40 Probe
+P/N: 7007-203
+MMR: 1738260:18234
+
+AND
+
+Quantity 2 ETS-Lindgren Laser Power Card
+P/N: 7007-200
+MMR: 1702423:18234
+
+AND
+
+Quantity 2 ETS-Lindgren Fiber Cable
+P/N: 1702414
+MMR: N/A
+
+
+OR EQUIVALENT
+
+Requested delivery date for all the above-mentioned goods is to be no later than February 28,2027. 
+
+Trade Agreements
+
+CFTA Canadian Free Trade Agreement 
+                                                                             
+If you wish to find out how you can become a qualified SA Holder for future requirements and/or to obtain additional information regarding this SA program, please contact PSPC at jeremy.racine@tpsgc-pwgsc.gc.ca
+
+","
+Afin de satisfaire à l'exigence de l'arrangement en matière d'approvisionnement, cet avis est publié sur AchatsCanada pour une période de 15 jours civils. Seuls les fournisseurs préqualifiés ont été invités à soumissionner. Les fournisseurs qui ne sont pas déjà titulaire d'un arrangement en matière d'approvisionnement dans la série E60HN-16ELEC avec SPAC ne peuvent présenter une soumission.
+
+Le ministère de la Défense nationale a besoin de la fourniture et de la livraison des articles suivants dans le cadre de l'appel d'offres W8703-270128/A
+
+Quantité 2 ETS-Lindgren EMSENSE 40 Probe
+N/P: 7007-203
+FMA: 1738260:18234
+
+Et
+
+Quantité 2 ETS-Lindgren Laser Power Card
+N/P: 7007-200
+FMA: 1702423:18234
+
+Et
+
+Quantité 2 ETS-Lindgren Fiber Cable
+N/P: 1702414
+FMA: N/A
+
+
+La date de livraison demandée pour l'ensemble des biens susmentionnés est au plus tard 28 février
+,2027.
+
+Trade Agreements
+
+CFTA – Accord de libre-échange canadien (ALEC)
+
+Si vous souhaitez savoir comment devenir un titulaire d'un arrangement en matière d'approvisionnement qualifié pour des besoins futurs et/ou obtenir des renseignements supplémentaires au sujet du programme d'arrangement en matière d'approvisionnement, veuillez communiquer avec SPAC à l'adresse suivante : jeremy.racine@tpsgc-pwgsc.gc.ca
+
+"
+"Open license for lidar data and data analysis ","Licence ouverte sur des données lidar et analyses des données","cb-29-37893161","001","NRCan-5000098113","2026-10-30","2026-11-16T14:00:00","2026-10-30","2026-11-18","2027-03-31","Open","Ouvert","","","","*81151600","*Cartography","*Cartographie","*SRV","Advance Contract Award Notice","Préavis d’attribution du contrat","Advance contract award notice","Préavis d'attribution du contrat","","","","","*Canada-Korea Free Trade Agreement (CKFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Colombia Free Trade Agreement
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*North American Free Trade Agreement (NAFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Panama Free Trade Agreement
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange Canada-Corée
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Colombie
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange nord-américain (ALENA)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange canadien (ALEC)","","","","","Department of Natural Resources (NRCan)","580 Booth Street","Ottawa","Ontario","K1A 0E4","Canada","Ministère des Ressources naturelles (RNCan)","580 Booth Street","Ottawa","Ontario","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","","","","1.	Advance Contract Award Notice (ACAN):
+
+An ACAN is a public notice indicating to the supplier community that a department or agency intends to award a contract for goods, services or construction to a pre-identified supplier, thereby allowing other suppliers to signal their interest in bidding, by submitting a statement of capabilities. If no supplier submits a statement of capabilities that meets the requirements set out in the ACAN, on or before the closing date stated in the ACAN, the contracting officer may then proceed with the award to the pre-identified supplier.
+
+2.	Definition of the requirement:
+
+The Department of Natural Resources Canada (NRCan) requires an open license on existing high-density leaf-off lidar data from Fall 2024 covering the cities of Calgary, Edmonton, Winnipeg and Halifax, for a total area of interest (AOI) size of ~6,150 km2.
+The contractor must carry out additional processing and analysis tasks to prepare the data and deliver them according to the specifications below:
+
+Requirements:
+
+•	Lidar data acquisition time:	2024 or more recent, and leaf-off period
+•	Aggregate Nominal Pulse Density (ANPD):	= 20 pulses/m2
+•	Non-Vegetated Vertical Root Mean Square Error (RMSEZ):	= 10 cm
+•	Minimum Swath Overlap:	= 50 %
+•	Horizontal Datum:	NAD83(CSRS) epoch 2010 (v8)
+•	Vertical Datum:	CGVD 2013
+•	Geoid Model: 	CGG2013
+•	Map Projection:	The delivered lidar tiles must be clipped and projected according to their corresponding Universal transverse Mercator (UTM) zone
+•	Pulse Returns:	Multiple
+•	Minimal Classification: 	1 – Processed but unclassified and 2 – Ground
+•	Intensity Value:	Required
+•	Data Forma:	LAS 1.4 R-15 compressed in LAZ. Point data record format 6
+
+3.	Criteria for assessment of the Statement of Capabilities (Minimum Essential Requirements):
+
+Any interested supplier must demonstrate by way of a statement of capabilities that it meets the following requirements:
+
+•	The supplier must be the copyright holder and rights manager for the lidar data covering the areas of interest indicated for each city and must be able to grant all licensing rights for the use of such data. 
+•	The supplier’s proposed open license for the lidar data must be compatible with the Open Government License – Canada: https://open.canada.ca/en/open-government-licence-canada. 
+•	The lidar data covering the specified areas must meet the specifications described in the previous section. 
+•	The lidar data must cover at least 90% of the municipal boundaries of the four major cities targeted by this project. 
+
+4.	Applicability of the trade agreement(s) to the procurement:
+
+This procurement is subject to the following trade agreement(s):
+
+•	Canadian Free Trade Agreement (CFTA)
+•	World Trade Organization - Agreement on Government Procurement (WTO-AGP)
+•	Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+•	Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+•	Canada-Chile Free Trade Agreement (CCFTA)
+•	Canada-Colombia Free Trade Agreement
+•	Canada-Honduras Free Trade Agreement
+•	Canada-Korea Free Trade Agreement
+•	Canada-Panama Free Trade Agreement
+•	Canada-Peru Free Trade Agreement (CPFTA)
+•	Canada-Ukraine Free Trade Agreement (CUFTA)
+•	Canada-United Kingdom Trade Continuity Agreement
+
+5.	Justification for the Pre-Identified Supplier:
+
+The supplier mentioned in section 9 below is the only known supplier that meets the mandatory criteria set out in section 3 above.
+
+Should Canada receive a statement of capabilities from a supplier that contains sufficient information to indicate that it meets the requirements set forth in this ACAN (i.e.: documentary evidence demonstrating compliance), a competitive process will be triggered with a technical and financial evaluation methodology of the bids proposed by the potential bidders.
+
+6.	Government Contracts Regulations Exception(s):
+
+The following exception to the Government Contracts Regulations is invoked for this procurement under subsection:
+
+Subsection 6(d) - only one person is capable of performing the work.
+The identified supplier in section 9 is the only one able to meet all of the criteria identified in paragraph 3 above
+
+7.	Period of the proposed contract:
+
+The contract period will be from awarded contract to March 31, 2027.
+
+8.	Cost estimate of the proposed contract:
+
+The estimated value of the contract is $ 332,100.00 CAD (Excluding applicable taxes).
+
+9.	Name and address of the pre-identified supplier:
+
+Airborne Imaging / Forsite 
+2700 61 Avenue SE 
+Calgary, Alberta, 
+T2C 4V3 
+Canada
+
+10.	Suppliers' right to submit a statement of capabilities:
+
+Suppliers who consider themselves fully qualified and available to provide the goods, services or construction services described in the ACAN may submit a statement of capabilities in writing to the contact person identified in this notice on or before the closing date of this notice. The statement of capabilities must clearly demonstrate how the supplier meets the advertised requirements.
+
+11.	Closing date for a submission of a statement of capabilities:
+
+The closing date and time for accepting statements of capabilities is November 16, 2026, at 2:00 p.m. - Eastern Standard Time (EST).
+","1.	Préavis d'adjudication de contrat (PAC):
+
+Un PAC est un avis public informant la collectivité des fournisseurs qu'un ministère ou organisme a l'intention d'attribuer un contrat pour des biens, des services ou des travaux de construction à un fournisseur sélectionné à l'avance, ce qui permet aux autres fournisseurs de signaler leur intérêt à soumissionner en présentant un énoncé des capacités. Si aucun fournisseur ne présente un énoncé des capacités qui satisfait aux exigences établies dans le PAC, au plus tard à la date de clôture indiquée dans le PAC, l'agent de négociation des contrats peut procéder à l'attribution du contrat au fournisseur sélectionné à l'avance.
+
+2.	Définition des besoins:
+
+Le ministère de Ressources Naturelles Canada (RNCan) requiert une licence ouverte pour des données lidars existants à haute densité, acquises en automne 2024 en période de défoliaison sans feuilles, couvrant les villes de Calgary, Edmonton, Winnipeg et Halifax, pour une zone d’intérêt (ZI) totale d’environ 6 150 km².
+
+Le fournisseur doit effectuer des travaux supplémentaires de traitement et d’analyse afin de préparer les données et de les livrer conformément aux spécifications ci-dessous :
+
+Exigences:
+
+•	Date d’acquisition des données lidar:	2024 ou plus récent, et période sans feuilles
+•	Densité nominale globale des impulsions (DNGI):	= 20 impulsions/m2
+•	Exactitude altimétrique en zone dépourvue de végétation (EAZDV) – EQMZ:     = 10 cm
+•	Chevauchement minimal interfauché:	= 50 %
+•	Plan de référence planimétrique:	NAD83(SCRS) époque 2010 (v8)
+•	Plan de référence altimétrique: 	CGVD 2013
+•	Modèle du géoïde:	CGG2013
+•	Projection cartographique:     Les tuiles lidar livrées doivent être projetées et découpées en fonction de leur zone UTM (Transverse universelle de Mercator) correspondante.
+•	Retours d’impulsion:	Multiples
+•	Classification minimale:	1 – Traité mais non classifié et 2 – Sol
+•	Valeur d’intensité:	Requise
+•	Format de données: 	LAS 1.4 R15 (compressé en LAZ), Point data record format 6
+
+3.	Critères d'évaluation de l'énoncé des capacités (Exigences essentielles minimales):
+
+Tout fournisseur intéressé doit démontrer au moyen d'un énoncé des capacités qu'il satisfait aux exigences suivantes : 
+
+•	Le fournisseur doit être le titulaire des droits d’auteur et le gestionnaire des droits relatifs aux données lidar couvrant les zones d’intérêt indiquées pour chaque ville, et doit être en mesure d’accorder tous les droits de licence nécessaires à l’utilisation de ces données.
+•	La licence ouverte proposée par le fournisseur pour les données lidar doit être compatible avec la Licence du gouvernement ouvert – Canada : https://open.canada.ca/fr/licence-du-gouvernement-ouvert-canada.
+•	Les données lidar couvrant les zones précisées doivent satisfaire aux spécifications décrites dans la section précédente.
+•	Les données lidar doivent couvrir au moins 90 % des limites municipales des quatre grandes villes visées par ce projet.
+
+4.	Applicabilité des accords commerciaux à l'achat:
+
+Le présent achat est assujetti à l'accord commercial (aux accords commerciaux) suivant(s) :
+
+•	Accord de libre-échange canadien (ALEC)
+•	Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+•	Accord économique et commercial global entre le Canada et l’Union européenne (AECG)
+•	Accord de Partenariat transpacifique global et progressiste (PTPGP)
+•	Accord de continuité commerciale Canada-Royaume-Uni
+•	Accord de libre-échange entre le Canada-Chili
+•	Accord de libre-échange Canada-Colombie
+•	Accord de libre-échange Canada-Honduras
+•	Accord de libre-échange Canada-Corée
+•	Accord de libre-échange Canada-Panama
+•	Accord de libre-échange Canada-Pérou
+•	Accord de libre-échange Canada-Ukraine
+
+5.	Justification du recours à un fournisseur sélectionné à l'avance:
+
+Le fournisseur mentionné à l’article 9 ci-après, à notre connaissance, il est le seul fournisseur qui répond
+aux critères obligatoires énoncés à l’article 3 ci-dessus.
+
+Si le Canada devait recevoir un énoncé des capacités d’un fournisseur qui contient suffisamment de renseignements pour indiquer qu’il satisfait aux exigences énoncées dans ce PAC (càd : éléments de preuve documentaires attestant de la conformité), un processus concurrentiel sera déclenché avec une méthodologie d’évaluation technique et financière des offres proposées par les soumissionnaires potentiels.
+
+6.	Exception(s) au Règlement sur les marchés de l'État:
+
+L'exception suivante au Règlement sur les marchés de l'État est invoquée pour cet achat :
+ 
+Paragraphe 6 d) - une seule personne est capable d'exécuter le marché.
+
+Le fournisseur mentionné à l’article 9 ci-après est le seul fournisseur qui répond aux critères obligatoires
+énoncés à l’article 3 ci-dessus
+
+7.	Période du contrat proposé ou date de livraison:
+
+La période du contrat sera de la date d’octroi du contrat au 31 mars 2027.
+
+8.	Coût estimatif du contrat proposé:
+
+La valeur estimée du contrat est de 332 100$ (taxes non-incluses).
+
+9.	Nom et adresse du fournisseur sélectionné à l'avance:
+
+Airborne Imaging / Forsite 20700
+61 Avenue SE 
+Calgary, Alberta 
+T2C 4V3 
+Canada
+
+10.	Droit des fournisseurs de présenter un énoncé des capacités:
+
+Les fournisseurs qui estiment être pleinement qualifiés et prêts à fournir les biens, les services ou des services de construction décrits dans ce PAC peuvent présenter par écrit un énoncé des capacités à la personne-ressource dont le nom figure dans cet avis d'ici la date de clôture, laquelle est aussi précisée dans cet avis. L'énoncé de capacités doit clairement démontrer que le fournisseur satisfait aux exigences publiées.
+ 
+11.	Date de clôture pour la présentation des énoncés des capacités:
+
+La date et l'heure de clôture pour l'acceptation d'énoncés des capacités sont le 16 novembre 2026 à 14 h
+Heure normale de l’EST (HNE).
+"
+"Weak magnetic anomaly detection for defence and security","Détection des anomalies magnétiques faibles dans les domaines de la défense et de la sécurité","cb-3-34869181","002","EN578-24ISC4/92","2026-10-30","2026-11-27T14:00:00","2026-10-30","","","Open","Ouvert","","","","*81141900","*Manufacturing technology research and development services","*Services de recherche et développement en technologies de fabrication","*SRV","Request for Proposal","Demande de propositions","Competitive - Selective tendering","Concurrentielle - Appel d'offres sélectif","Variations or combinations of the above methods","Variations ou combinaisons des méthodes susmentionnées","","","*None","*Aucun","*Canada","*Canada","*Canada","*Canada","Department of Public Works and Government Services (PSPC)","200 Prom. du Portage","Gatineau","QC","J8X 4B7","Canada","Ministère des Travaux publics et des Services gouvernementaux (SPAC)","200 Prom. du Portage","Gatineau","QC","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","200 Prom. du Portage","Gatineau","QC","J8X 4B7","Canada","200 Prom. du Portage","Gatineau","QC","Canada","","","","","*Please note that the ISC website will be available on October 30, 2026*
+
+This Challenge Notice is issued under the Innovative Solutions Canada Program (ISC) Call for Proposals 004 (EN578-24ISC4). For general ISC information, Offerors can visit the ISC website at: https://ised-isde.canada.ca/site/innovative-solutions-canada/en
+
+Please refer to the Solicitation Documents Innovative Solutions Canada Program Call for Proposals – 004 - Tender Notice | CanadaBuys https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-331-17030872 which contains the process for submitting a proposal.
+
+Steps to apply:
+Step 1: Read this challenge.
+Step 2: Read the Call for Proposals : https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-331-17030872
+Step 3: Propose your solution here : https://ised-isde.canada.ca/site/innovative-solutions-canada/en/weak-magnetic-anomaly-detection-defence-and-security?auHash=1sFpxB6DzXI5S5IfIex1eysacfiS2cUIMVE1Eeit0EQ
+
+ISED is seeking a novel magnetometer (either quantum or classical or a combination thereof) that provides advantage over existing capabilities either in sensitivity, specificity, or Size, Weight, Power and Cost (SWaP-C), and multi-domain employability.
+
+Challenge sponsor:
+Innovation, Sciences et Développement économique Canada (ISDE) 
+
+Funding mechanism:
+Contract
+
+Opening date:
+October 30, 2026
+
+Closing date:
+November 27, 2026 14:00 Eastern time
+
+Challenge
+Problem statement
+Canada has a requirement for magnetic anomaly detection for defence and security. Traditional magnetometers, such as fluxgate sensors, have been used for decades to measure the strength and direction of magnetic fields. A fluxgate magnetometer is a relatively simple classical device: it consists of a coil of wire wrapped around a core material and detects changes in magnetic flux passing through the sensor. While reliable, these classical sensors face inherent limitations in size, sensitivity, accuracy, and long term stability. Quantum magnetometers, by contrast, leverage the principles of quantum mechanics and promise the ability to achieve superior performance. They offer enhanced sensitivity, improved accuracy and stability, and in some cases even reduced size and weight compared to their classical counterparts.
+There is a lack of suitably mature quantum sensors in the commercial space. The government of Canada has identified a need to develop a device or system consisting of hardware and software and a quantum sensor or a mix of classical and quantum sensors capable of sensing nanotesla (nT) or even femtotesla (fT) magnetic signals that can be used for a myriad of commercial, medical, and defence applications. In scanning the research underway, there appears to be interest in various means for the sensing of magnetic fields, including but not limited to Superconducting Quantum Interference Devices (SQUID), Superconducting Quantum Interference Filter (SQIF), and (Nitrogen Vacancy (NV) diamond. In addition to this we are led to believe that Rydberg atoms, typically framed for electric field detection can be reconfigured and/or adapted for magnetic field detection as well. We are also aware of another technology termed Spin-Exchange Relaxation-Free (SERF) which is very sensitive, but so sensitive as to be problematic to employ. This investigation seeks to explore nT and even fT sensitivities.
+
+Desired outcomes and considerations
+Essential (mandatory) outcomes
+The proposed solution must: 
+1.	Essential range and direction finding considerations 
+Demonstrate sensing capabilities of magnetic anomalies in close proximity where distance (d) is greater than or equal to (=) 2 meters (m) with a relative error less than 10%. The device must provide azimuth to +/- 5 degrees, and an inclination of +/- 5 degrees.
+2.	Sensitivity 
+Produce a prototype capable of a minimum of 500 picotesla (pT) sensitivity with a target of 10 fT. 
+3.	Specificity
+The device must be able to separate a target signal from background noise.  A sensitive magnetometer will detect a plethora of magnetic fields in a given cluttered environment, but the user will be interested in the absence or presence of a target signal. The device must detect and identify three specific Steel 1018 ferromagnetic targets at a minimum distance of 10 meter through free space. It must achieve a 95% true positive rate (TPR) for both detecting the presence of a target and classifying which specific target is present.
+4.	Rough characterization 
+Demonstrate ability to characterize the nature of the source in rough order of magnitude – i.e. point source vs larger objects +/- 5 centimeters (cm).
+5.	Latency 
+Readout less than or equal to (=) 200 milliseconds (ms) meaning sensing, ranging, azimuth, and inclination reading allowing dynamic device sensor use for object or enclosure survey. This 200 ms is the total time from sensing to displaying the result to the human user.  This time includes physical sensing, processing to the point the user is provided useful data. 
+6.	Sense through barrier capability
+Ability for device to sense through paramagnetic barrier materials such as walls (including but not limited to wood, gypsum board, plaster, insulation material) with some barriers inundated with clutter from other materials such as steel studs, nails, screws, pipes and other ferromagnetic materials.
+7.	Prototype description
+All parts/components fully integrated in one system of systems, including but not limited to power, API/software, hardware (sensor, cooler – if applicable).
+8.	Power
+Power consumption must be 50 W or less. Integrated replaceable power supply offering at least eight (8) hours of cordless and continued operation at temperatures ranging between 16°C and 40°C at a relative humidity between 30 and 60%.
+9.	Human factors
+Must be lightweight and compact/portable (e.g.; hand-carried, “shoulderable”, body worn).  
+10.	Size and weight
+Volumetric dimensions =117,232 cm^3 (77 x 52.5 x 29 cm); maximum weight = 15Kg.
+11.	Environmental considerations
+The initial device must be designed at least for indoor use at temperatures ranging between 16°C to 30°C with relative humidity between 30-60% 
+12.	Per unit cost
+Must show that a finished device can be made under $60,000 CAD. 
+
+Additional Outcomes 
+The proposed solution should:  
+1.	Desirable range 
+It is desirable to have a device that has greater standoff range in excess of 2m. The accuracy in ranging the MA would ideally be less than 1% relative error. Maximum sensing distance is desirable. The device should provide an azimuth to +/- 1 degree, and an inclination of +/- 1 degree.
+2.	Rough characterization
+The device provides a rough but human interpretable shape of the object, that allows the object to be characterized or even identified. 
+3.	Sensitivity 
+Produce a prototype capable of surpassing 10 fT sensitivity.
+4.	Specificity 
+Ability to characterize and identify magnetic anomalies (objects with a known magnetic signature). 
+5.	Quiet 
+Device should be silent (vibration/audible signature).
+6.	Desired Configuration 
+Device does not emit acoustic, electromagnetic (EM), and/or heat signature. Can run in both low and high humidity in temperature extremes from -20 to +40C, under conditions of vibration, and through cluttered barriers (e.g.; barrier material convoluted with wiring, and magnetic structural material)
+7.	Target Scale 
+Desirable to be used against both large (room sized) and small (hardware or package sized) enclosures or objects.
+8.	Static vs oscillating field detection 
+Ability to differentiate between static and oscillating magnetic fields.
+9.	Characterization of magnetic anomalies/sources 
+Ability to characterize and identify magnetic anomalies. Ability to discern shape and size +/- 1 cm.
+10.	Human factor / accessibility considerations 
+Device should be suitably adapted as to be easy to train on, easy to use (intuitive), and be in a shape or form factor that is amenable for the operator to use in both open and confined settings. The device should be man portable. Human factor considerations will be rated by a panel of experts and multi-criteria analysis. ( Multi-criteria analysis is a type of option rating technique where by each option is scored against different criteria.  For example, one of the best known techniques is Simple Multi-attribute Rating Technique.  Whereas essential outcomes are high level mandatory requirements that must be achieved, a scoring system could be devised to rate different prototypes based on criteria found in the additional outcomes.)  
+11.	Environmental considerations  
+Produce a more robust device for outdoor land use capable of -40-40 °C, over a wide range of Canadian climate conditions is desired. This includes extremes in humidity, hot, cold, and use in wet or dusty conditions.
+
+Background and context
+Magnetometry and magnetic sensors play an important role in the detection and measurement of magnetic fields around us. Applications for use exist in many industries and interest areas are not limited to natural resource discovery (including critical minerals), monitoring of the environment, healthcare, defence, and security.
+
+For natural resource discovery magnetic sensors are used to help sense and identify mineral deposits including copper, nickel, iron, and gold. Indeed, the same technology has promise in the search for rare earth minerals which are essential to commercial, academic, and security uses.
+
+Magnetic sensors also play an important role in environmental monitoring. They can be used to track ocean currents, detect geologic activity, and observe other natural processes. By measuring subtle variations in magnetic fields and related proxy signals, magnetometers provide valuable insights into changes in the Earth’s climate.
+
+In healthcare, many imaging technologies—most notably magnetic resonance imaging—depend on generating and detecting subtle perturbations in magnetic flux. Researchers are now exploring the use of nitrogen vacancy diamonds integrated into existing MRI systems, with the goal of achieving higher sensitivity and improved image resolution. 
+
+Maximum contract value and travel
+Phase 2
+·	Maximum funding: $2,000,000.00 CAD
+·	Project duration: Up to 24 months
+·	Estimated number of contracts: 1
+
+This disclosure is made in good faith and does not commit Canada to award any contracts for the total approximate funding. Final decisions on the number of Phase 2 awards will be made by Canada based on factors such as evaluation results, departmental priorities, and availability of funds. The Government of Canada reserves the right to make partial awards and to negotiate project scope changes.
+
+Note: Selected companies are eligible to receive one contract per phase per challenge.
+
+Travel
+Travel to Ottawa about 4 times during the contract period
+
+Kick-off meeting
+All communication will take place by telephone or videoconference.
+
+Progress review meeting(s)
+Any progress review meetings will be conducted by telephone or videoconference.
+
+Final review meeting
+All communication will take place by telephone or videoconference.
+","*Prière de noter que le site web SIC sera disponible le 30 octobre 2026*
+
+Le présent avis du défi est publié en vertu de l’appel de propositions (004) du programme Solutions innovatrices Canada (SIC) (EN578-20ISC4). Pour obtenir des renseignements généraux sur le SIC, les soumissionnaires peuvent visiter le site Web du SIC à cet effet. https://ised-isde.canada.ca/site/solutions-innovatrices-canada/fr
+
+Veuillez consulter les documents de l’appel de propositions qui contiennent le processus de soumission d’une proposition. Programme Solutions innovatrices Canada Appel de propositions – 004 - Avis d’appel d’offres | AchatsCanada https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/cb-331-17030872
+
+Étapes à suivre :
+Étape 1 : lisez ce défi
+Étape 2 : lisez l’appel de propositions : https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/cb-331-17030872
+Étape 3 : proposez votre solution ici : https://ised-isde.canada.ca/site/solutions-innovatrices-canada/fr/detection-anomalies-magnetiques-faibles-dans-domaines-defense-securite?auHash=1sFpxB6DzXI5S5IfIex1eysacfiS2cUIMVE1Eeit0EQ
+
+ISDE est à la recherche d’un magnétomètre novateur (quantique, classique ou une combinaison des deux) offrant des avantages par rapport aux capacités existantes, que ce soit en termes de sensibilité, de spécificité, de taille, de poids, de puissance et de coût, ou encore d’employabilité dans plusieurs domaines.
+
+Promoteur du défi :
+Innovation, Science et Développement Économique Canada (ISDE)
+
+Mécanisme de financement :
+Contrat
+
+Date d’ouverture :
+30 octobre, 2026
+
+Date de clôture :
+27 novembre, 2026, 14 h (heure de l’Est)
+
+Défi
+Énoncé du problème
+Le Canada a un besoin à combler en matière de détection d’anomalies magnétiques dans les domaines de la défense et de la sécurité. Les magnétomètres traditionnels, tels que les capteurs à porte de flux, sont utilisés depuis des décennies pour mesurer l’intensité et la direction des champs magnétiques. Un magnétomètre à porte de flux est un dispositif classique relativement simple : il consiste en une bobine de fil enroulée autour du matériau du noyau qui détecte les variations du flux magnétique traversant le capteur. Bien que fiables, ces capteurs classiques présentent des limites inhérentes en termes de taille, de sensibilité, de précision et de stabilité à long terme. Les magnétomètres quantiques, en revanche, exploitent les principes de la mécanique quantique et promettent la capacité d’obtenir un rendement supérieur. Ils offrent une sensibilité accrue, une précision et une stabilité améliorées et même, dans certains cas, une taille et un poids réduits par rapport à leurs homologues classiques.
+
+Toutefois, il manque actuellement de capteurs quantiques suffisamment aboutis dans l’espace commercial. Le gouvernement du Canada a déterminé qu’il était nécessaire de mettre au point un dispositif ou un système composé de matériel et de logiciels ainsi qu’un capteur quantique ou une combinaison de capteurs classiques et quantiques qui seraient capables de détecter des signaux magnétiques de l’ordre du nanotesla (nT), voire du femtotesla (fT), pouvant être utilisés dans de nombreuses applications dans les domaines commercial, médical et de la défense. À la lumière des travaux de recherche en cours, il semble exister un intérêt pour diverses technologies de détection des champs magnétiques comme les dispositifs supraconducteurs à interférence quantique (SQUID), les filtres supraconducteurs à interférence quantique (SQIF) et les diamants à centres azote-lacune (centre-NV). De plus, nous sommes portés à croire que les atomes de Rydberg, généralement conçus pour la détection des champs électriques, peuvent également être reconfigurés et/ou adaptés pour la détection des champs magnétiques. Nous connaissons également une autre technologie, SERF (Spin-Exchange Relaxation-Free), dont la sensibilité est très élevée, mais à tel point que son utilisation pose problème. Nous souhaitons obtenir des sensibilités de l’ordre du  nT, voire du fT.
+
+Résultats souhaités et éléments à considérer
+Résultats essentiels (obligatoires)
+La solution proposée doit : 
+1.	Considérations essentielles relatives à la portée et à la détermination de la direction
+Démontrer la capacité de détecter des anomalies magnétiques à proximité immédiate lorsque la distance (d) est supérieure ou égale à (=) 2 mètres (m) avec une erreur relative inférieure à 10 %. Le dispositif doit pouvoir déterminer l’azimut à ± 5° près et l’inclinaison à ± 5° près.
+2.	Sensibilité
+Produire un prototype offrant une sensibilité minimale de 500 picotesla (pT) avec un objectif de 10 fT. 
+3.	Spécificité
+Le dispositif doit être capable de distinguer un signal cible du bruit de fond. Un magnétomètre sensible détectera une multitude de champs magnétiques dans un environnement encombré de sources d’interférence, mais l’utilisateur s’intéressera à la présence ou à l’absence du signal cible. Le dispositif doit détecter et identifier trois cibles ferromagnétiques particulières en acier 1018 à une distance minimale de 10 mètres dans l’espace libre. Il doit atteindre un taux de vrais positifs de 95 % tant pour la détection de la présence d’une cible que pour la classification de la cible précise qui est présente.
+4.	Caractérisation sommaire
+Démontrer la capacité de caractériser sommairement la nature de la source selon son ordre de grandeur, par exemple distinguer une source ponctuelle d’un objet de plus grande dimension, avec une précision de ± 5 centimètres (cm).
+5.	Latence
+Le temps d’affichage des résultats doit être inférieur ou égal à (=) 200 millisecondes (ms), ce qui comprend la détection, l’estimation de la distance ainsi que les mesures d’azimut et d’inclinaison, afin de permettre l’utilisation dynamique du capteur pour l’inspection d’objets ou d’espaces fermés. Ces 200 ms correspondent au temps total écoulé entre la détection et l’affichage du résultat à l’utilisateur. Ce délai comprend la détection physique du signal ainsi que le traitement des données jusqu’au moment où des données utiles sont fournies à l’utilisateur. 
+6.	Capacité de détection à travers les obstacles
+Le dispositif doit être capable de détecter des cibles à travers des matériaux constituant des barrières paramagnétiques, tels que des murs (incluant entre autres le bois, les panneaux de gypse, le plâtre et les matériaux isolants), même lorsque certaines de ces barrières contiennent de nombreuses sources d’interférence, notamment des montants en acier, des clous, des vis, des tuyaux et d’autres matériaux ferromagnétiques.
+7.	Description du prototype
+Toutes les pièces et toutes les composantes doivent être entièrement intégrées au sein d’un système de systèmes unique, y compris notamment l’alimentation, l’API ou le logiciel, ainsi que le matériel (capteur et dispositif de refroidissement, s’il y a lieu).
+8.	Puissance
+La consommation électrique doit être de 50 W ou moins. Le dispositif doit être doté d’une source d’alimentation intégrée et remplaçable offrant au moins huit (8) heures de fonctionnement continu sans raccordement au réseau électrique, à des températures comprises entre 16 °C et 40 °C et à une humidité relative comprise entre 30 % et 60 %.
+9.	Facteurs humains
+Le dispositif doit être léger, compact et portable (p. ex., transportable à la main, porté à l’épaule ou porté sur le corps).  
+10.	Taille et poids
+Volume maximal : =117 232 cm3 (77 x 52,5 x 29 cm)
+Poids maximal : = 15 kg
+11.	Considérations environnementales
+Le dispositif initial doit être conçu pour fonctionner au minimum dans un environnement intérieur, à des températures variant de 16 °C à 30 °C et à une humidité relative de 30 % à 60 %. 
+12.	Coût unitaire
+Doit démontrer qu’un dispositif fini peut être fabriqué pour moins de 60 000 $ CA. 
+
+Résultats supplémentaires 
+La solution proposée devrait : 
+1.	Portée souhaitable
+Il est souhaitable d’avoir un dispositif qui a une plus grande portée de distance de plus de 2 m. La précision de la portée de l’anomalie magnétique serait idéalement inférieure à 1 % d’erreur relative. Une distance de détection maximale est souhaitable. Le dispositif doit pouvoir déterminer l’azimut à ± 1° près et l’inclinaison à ± 1° près.
+2.	Caractérisation sommaire
+Le dispositif doit fournir une représentation sommaire, mais interprétable par l’utilisateur, de la forme de l’objet, qui permet de le caractériser, voire de d’identifier. 
+3.	Sensibilité
+Produire un prototype capable de dépasser la sensibilité à 10 fT.
+4.	Spécificité
+Capacité de caractériser et de repérer les anomalies magnétiques (objets dont la signature magnétique est connue). 
+5.	Silencieux
+Le dispositif doit être silencieux (vibration/signature audible).
+6.	Configuration souhaitée
+Le dispositif ne doit émettre aucune signature acoustique, électromagnétique (EM) ni thermique. Il doit pouvoir fonctionner dans des environnements à faible ou à forte humidité, à des températures extrêmes allant de  20 à +40 °C, en présence de vibrations et à travers des barrières comportant de nombreuses sources d’interférence (p. ex., des matériaux de barrière contenant du câblage et des matériaux structuraux magnétiques).
+7.	Échelle des cibles
+Il est souhaitable que le dispositif puisse être utilisé aussi bien dans le cas d’espaces fermés ou d’objets de grande taille (de la taille d’une pièce) que dans le cas d’espaces fermés ou d’objets de petite taille (de la taille de matériel ou d’un boîtier).
+8.	Détection de champ statiques et oscillants
+Capacité de différencier les champs magnétiques statiques des champs magnétiques oscillants.
+9.	Caractérisation des anomalies/sources magnétiques
+Capacité de caractériser et d’identifier les anomalies magnétiques. Capacité de déterminer la forme et les dimensions avec une précision de ± 1 cm.
+10.	Considérations relatives aux facteurs humains et à l’accessibilité
+Le dispositif doit être adapté de manière à être facile à utiliser (intuitif) et présenter un format ou une configuration qui permet à l’utilisateur de l’utiliser aussi bien dans des espaces ouverts que dans des espaces confinés. Il doit pouvoir être transporté par une personne. Les considérations relatives aux facteurs humains seront évaluées par un groupe d’experts au moyen d’une analyse multicritères. (  L'analyse multicritère est une technique d'évaluation des options consistant à attribuer une note à chaque option en fonction de différents critères. Par exemple, l'une des techniques les plus connues est la méthode d'évaluation multicritère simple (SMART). Alors que les résultats essentiels constituent des exigences impératives de haut niveau devant être atteintes, un système de notation peut être élaboré pour évaluer différents prototypes selon des critères issus des résultats supplémentaires.)
+11.	Considérations environnementales
+Produire un dispositif plus robuste destiné à une utilisation terrestre à l’extérieur, capable de fonctionner à une température de  40 °C dans un large éventail de conditions climatiques canadiennes. Cela comprend les conditions extrêmes d’humidité, de chaleur ou de froid, ainsi qu’une utilisation dans des environnements humides ou poussiéreux.
+ 
+Historique et contexte
+La magnétométrie et les capteurs magnétiques jouent un rôle important dans la détection et la mesure des champs magnétiques qui nous entourent. Les applications utilisées existent dans de nombreuses industries et les domaines d’intérêt ne se limitent pas à la découverte de ressources naturelles (y compris les minéraux critiques), à la surveillance de l’environnement, aux soins de santé, à la défense et à la sécurité.
+
+Pour la découverte de ressources naturelles, des capteurs magnétiques sont utilisés pour détecter et identifier les gisements minéraux tels que le cuivre, le nickel, le fer et l’or. En effet, la même technologie est prometteuse dans la recherche de minéraux de terres rares qui sont essentiels à des utilisations commerciales, universitaires et de sécurité.
+
+Les capteurs magnétiques jouent également un rôle important dans la surveillance de l’environnement. Ils peuvent être utilisés pour suivre les courants océaniques, détecter l’activité géologique et observer d’autres processus naturels. En mesurant les variations subtiles des champs magnétiques et des signaux indirects associés, les magnétomètres fournissent des informations précieuses sur les changements climatiques de la Terre.
+
+Dans le domaine de la santé, de nombreuses technologies d’imagerie, notamment l’imagerie par résonance magnétique, dépendent de la génération et de la détection de perturbations subtiles du flux magnétique. Les chercheurs étudien t actuellement l’utilisation de diamants à centres azote lacune (centre-NV) dans des systèmes d’imagerie par résonance magnétique (IRM) existants afin d’en accroître la sensibilité et d’améliorer la résolution des images.
+ 
+Valeur maximum du contrat et déplacements
+Phase 2
+·	Financement maximal : 2 000 000,00 $ CA
+·	Durée du projet : Jusqu’à 24 mois
+·	Nombre estimatif de subventions : 1
+
+La présente divulgation est effectuée de bonne foi et n’engage pas le Canada à accorder des subventions correspondant au montant total approximatif du financement prévu. Les décisions finales concernant le nombre d’attributions à la phase 2 seront prises par le Canada en fonction de divers facteurs, notamment les résultats de l’évaluation, les priorités ministérielles et la disponibilité des fonds. Le gouvernement du Canada se réserve le droit d’accorder des financements partiels et de négocier des modifications à la portée des projets.
+Remarque : Les entreprises sélectionnées sont admissibles à recevoir une seule subvention par phase et par défi.
+
+Déplacements 
+Déplacement à Ottawa environ 4 fois durant le projet. 
+
+Réunion de lancement
+Toutes les communications se feront par téléphone ou vidéoconférence.
+
+Réunions d’examen de l’avancement des travaux
+Les réunions d’examen de l’avancement des travaux se dérouleront par téléphone ou par vidéoconférence.
+
+Réunion d’examen final
+Toutes les communications se feront par téléphone ou vidéoconférence.
+"
+"Artificial Intelligence (AI) decision-making process visibility, traceability and compliance governance","Visibilité, traçabilité et gouvernance du processus décisionnel en matière d’intelligence artificielle (IA)","cb-189-51083224","001","EN578-24ISC4/100","2026-10-30","2026-12-22T14:00:00","2026-10-30","","","Open","Ouvert","","","","*81141900","*Manufacturing technology research and development services","*Services de recherche et développement en technologies de fabrication","*SRV","Request for Proposal","Demande de propositions","Competitive - Selective tendering","Concurrentielle - Appel d'offres sélectif","Variations or combinations of the above methods","Variations ou combinaisons des méthodes susmentionnées","","","*None","*Aucun","*Canada","*Canada","*Canada","*Canada","Department of Public Works and Government Services (PSPC)","200 Prom. du Portage","Gatineau","QC","J8X 4B7","Canada","Ministère des Travaux publics et des Services gouvernementaux (SPAC)","200 Prom. du Portage","Gatineau","QC","Canada","","","","","Contact, Test","contact@example.invalid","000-000-0000","","200, promenade du Portage","Gatineau","Quebec","J8X 4B7","Canada","200, promenade du Portage","Gatineau","Quebec","Canada","","","","","*Please note that the ISC website will be available on October 30th, 2026 as of 10:30am ET.
+
+This Challenge Notice is issued under the Innovative Solutions Canada Program (ISC) Call for Proposals 004 (EN578-24ISC4). For general ISC information, Offerors can visit the ISC website at: https://ised-isde.canada.ca/site/innovative-solutions-canada/en.
+
+Please refer to the Solicitation Documents Innovative Solutions Canada Program Call for Proposals – 004 - Tender Notice | CanadaBuys https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-331-17030872 which contains the process for submitting a proposal.
+
+Steps to apply:
+Step 1: Read this challenge.
+Step 2: Read the Call for Proposals : https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-331-17030872
+Step 3: Propose your solution here : https://ised-isde.canada.ca/site/innovative-solutions-canada/en/artificial-intelligence-ai-decision-making-process-visibility-traceability-and-compliance-governance
+
+Challenge title: Artificial Intelligence (AI) decision-making process visibility, traceability and compliance governance
+Challenge sponsor: Shared Services Canada (SSC) 
+
+Funding Mechanism: Contract
+MAXIMUM CONTRACT VALUE:
+Multiple contracts could result from this Challenge.
+
+Phase 2: 
+• The maximum funding available for any Phase 2 contract resulting from this Challenge is : $2,000,000.00 CAD excluding applicable taxes, shipping, travel and living expenses, as required.
+• The maximum duration for any Phase 2 contracts resulting from this Challenge is up to 20 months (excluding submission of the final report).
+• Estimated number of Phase 2 contracts: 1
+
+This disclosure is made in good faith and does not commit Canada to award any contract for the total approximate funding. Final decisions on the number of Phase 1 and Phase 2 (amend as applicable) awards will be made by Canada on the basis of factors such as evaluation results, departmental priorities and availability of funds. Canada reserves the right to make partial awards and to negotiate project scope changes.
+Note: Selected companies are eligible to receive one contract per phase per challenge.
+
+Travel: No travel required. 
+Kick-off Meeting: All communication will take place by telephone or videoconference.
+Progress Review Meeting(s): Any progress review meetings will be conducted by telephone or videoconference.
+Final Review Meeting: All communication will take place by telephone or videoconference.
+
+Problem Statement:
+
+Challenge Statement Summary
+The Government of Canada (GoC) is committed to the responsible use of Artificial Intelligence (AI) compliant with its AI Strategy and Guiding Principles, see references noted in this challenge notice.
+The widespread adoption of AI technologies has created opportunities to enhance decision-making and improve service delivery within the GoC. In fostering the responsible usage of AI, the GoC has established an adoption strategy and guiding principles. To support adherence and implementation, the GoC is interested in testing solutions that provide visibility into AI decision-making processes, enhance the traceability of AI outputs, and ensure that AI models comply with Canadian laws and international standards and best practices.
+Despite the availability of AI governance solutions from Canadian companies and international providers, existing offerings typically require significant manual effort. This effort is particularly evident in interpreting evolving AI governance requirements, applying them to specific AI systems, updating controls and assessments, and identifying their ecosystem-wide impacts. 
+The challenge seeks innovation to advance capabilities for identifying and incorporating evolving governance requirements, determining their potential impact on registered AI systems, associated controls, assessments, and evidence, and supporting timely reassessment, all while maintaining explainability, traceability, auditability, and human oversight.
+
+Details:
+
+Essential (mandatory) Outcomes
+The proposed solution must:
+
+1.	Support the continuous alignment of registered AI systems with relevant Canadian regulations, policies, directives, and other governance requirements and  be able to identify potentially affected systems and indicate when a reassessment is required.
+
+2.	Demonstrate interoperability with enterprise systems, Artificial Intelligence (AI) and Machine Learning (ML) platforms and governance solutions and the solution can be integrated with minimal customization.
+2A. Demonstrate the ability to exchange governance information with enterprise systems and AI/ML lifecycle tools through standards-based Application Programming Interfaces (APIs), connectors and interoperable data exchange mechanisms. Governance information may include AI system metadata, risk assessments, compliance findings, audit evidence, monitoring results, approvals and decision records. As an example: This governance information includes but is not limited to, information about the AI system, ownership, intent, deployment status, funding state, client information, system objectives, assessments, algorithmic impact assessment, control requirements (playbooks).
+2B. Demonstrate how governance information can be collected, aggregated and maintained across multiple systems through APIs, connectors and data exchange mechanisms.
+2C. Leverage open standards and documented interfaces to reduce dependency on proprietary technologies enabling interoperability across diverse enterprise environments.
+
+3.	Demonstrate how administrative, support and access to governance information and data can be restricted, monitored and controlled in accordance with the GoC requirements.
+3A. Enable organizations to define and manage data residency requirements, retention, access and deletion of policies and information without vendor intervention.
+
+4.	Enable assessment and reassessment of registered AI systems applicable AI governance requirements, policies, standards, directives while supporting reassessment when governance requirements, assessment frameworks are added modified, replaced or retired. The solution must demonstrate the ability to translate AI governance requirements into traceable controls assess whether applicable controls have been satisfied and identify non-conformities.
+4A. Enable authorized users to add, modify, version, replace or retire governance requirements and assessment frameworks to individual AI systems or groups. Demonstrate compliance assessment at minimum against the Policy on Service and Digital,  Directive on Automated Decision-Making, Algorithmic Impact Assessment, AI Strategy and AI ethics and responsibilities. 
+4B. Demonstrate the ability to add, modify, version, replace and retire governance requirements, controls and assessment criteria, and assign them to individual AI systems or groups of AI systems. while supporting the application of different assessment criteria to different AI systems based on their intended use, risk profile or governance requirements Offerors are encouraged to prove extensibility to additional internationally recognized governance frameworks and standards, including the National Institute of Standards and Technology (NIST), International Organization for Standardization (ISO) and the EU Act.
+4C. Generate human-readable explanations of assessment and reassessment results. Each finding must identify the applicable requirement, evidence considered, assessment result and confidence score or a certainty measure. user.
+4D. Collect, link, and retain assurance artefacts including control mapping, assessment records, evidence references, approvals, exceptions, attestations, remediation actions and audit histories. The system must identify whether each artifact was provided by an authorised individual [Role-Based Access Control (RBAC)].
+4E. Provide measurable results and clearly distinguish between results when performing a compliance assessments to determine whether compliance is met, partially met, not met, not applicable and unable to determine.
+
+5.	Allow for authorised reviewers to validate reject, modify or annotate findings and retain and audit log history for decisions.
+
+6.	Support the assessment and reassessment of risks associated with data, models and AI-generated outputs and incorporate the resulting information into governance assessments and assurance activities.
+6A. Support assessment of data related risks and quality measures relevant to the registered AI system including the establishment of baseline measures and thresholds to maintain a traceable record of issues. 
+6B. Enable organizations to define, evaluate and reassess risk, performance and quality measures appropriate to a registered AI system. including configurable measures, thresholds, and evaluation criteria to maintain a traceable record of assessment outcomes.
+6C. Support the evaluation and monitoring of AI-generated outputs against criteria appropriate to the system’s intended use and identified risks including accuracy, quality, fairness, consistency, safety, and alignment with defined operational requirements. 
+
+
+Additional Outcomes
+The proposed solution should:
+
+1.  Support deployment in on-premises, private cloud, and Canadian-hosted cloud environments without requiring significant architectural modification.
+
+2. 	Provide bilingual functionality, including user interfaces, documentation, reporting, and governance workflows, in both English an French.                                                                                                                                                   
+
+3. 	Support multiple organizations, departments, or domains within a shared platform while enabling independent governance policies, controls, reporting, and oversight for each tenant.
+
+4. Generate governance reports, alerts, and notifications and integrate with enterprise collaboration, communication, and ticketing/case management systems.
+
+Background and context
+As Shared Services Canada (SSC) expands the use of AI solutions, including generative and Agentic AI, there is a growing need for a consistent, centralized, and scalable approach to AI governance. Current governance activities may rely on separate processes, manual tracking, and fragmented documentation, which can limit real-time visibility into AI system inventories, risk posture, compliance status, policy alignment, and decision-making evidence.","*Prière de noter que le site web SIC sera disponible le 30 octobre 2026 à 10:30 HNE.
+
+Le présent avis du défi est publié en vertu de l’appel de propositions (004) du programme Solutions innovatrices Canada (SIC) (EN578-20ISC4). Pour obtenir des renseignements généraux sur le SIC, les soumissionnaires peuvent visiter le site Web du SIC à cet effet. http://www.ic.gc.ca/eic/site/101.nsf/fra/accueil
+Veuillez consulter les documents de l’appel de propositions qui contiennent le processus de soumission d’une proposition.  Programme Solutions innovatrices Canada Appel de propositions – 004 - Avis d’appel d’offres | AchatsCanada https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/cb-331-17030872
+
+Étapes à suivre :
+Étape 1 : lisez ce défi
+Étape 2 : lisez l’appel de propositions : https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/cb-331-17030872
+Étape 3 : proposez votre solution ici : https://ised-isde.canada.ca/site/solutions-innovatrices-canada/fr/visibilite-tracabilite-gouvernance-processus-decisionnel-matiere-dintelligence-artificielle-ia 
+
+Titre du défi : Visibilité, traçabilité et gouvernance du processus décisionnel en matière d’intelligence artificielle (IA)
+PROMOTEUR DU DÉFI : Services partagés Canada (SPC) 
+
+Mécanisme de financement : contrat
+VALEUR MAXIMALE DU MARCHÉ :
+De multiples contrats pourraient résulter de ce défi.
+
+Phase 2:
+• Le financement maximal disponible pour tout contrat de la phase 2 résultant de ce défi est de 2 000 000 $ CA, à l’exclusion des taxes applicables et des frais d’expédition, de déplacement et de subsistance, s’il y a lieu.
+• La durée maximale de tout contrat de la phase 2 résultant de ce défi est de 20 mois (à l’exclusion de la présentation du rapport définitif).
+• Estimation du nombre de contrats de la phase 2 : 1
+
+Le fait de divulguer l'estimation du financement disponible n'engage aucunement le Canada à payer cette somme. Les décisions finales sur le nombre de bourses des Phases 2 seront prises par le Canada en fonction de facteurs tels que les résultats de l'évaluation, les priorités ministérielles et la disponibilité des fonds.
+Note : Les entreprises sélectionnées peuvent recevoir un contrat par phase, par défi.  
+
+Déplacements : Aucun déplacement requis. 
+Réunion de lancement : Les communications se feront par téléphone ou par vidéoconférence.
+Réunions d’étape : Toute réunion d’examen de l’avancement des travaux sera menée par téléphone ou par vidéoconférence.
+Réunion d’examen final : Les communications se feront par téléphone ou par vidéoconférence.
+
+Énoncé du problème
+
+Résumé de l’énoncé du défi
+Le Gouvernement du Canada (GC) s’engage à utiliser l’intelligence artificielle (IA) de manière responsable, conformément à sa stratégie et à ses principes directeurs en matière d’IA, voir les références indiquées dans le présent avis de défi.
+L’adoption généralisée des technologies d’IA a créé des occasions d’améliorer la prise de décisions et la prestation de services au sein du gouvernement du Canada. Pour favoriser l’utilisation responsable de l’IA, le gouvernement du Canada a établi une stratégie d’adoption et des principes directeurs. Pour soutenir l’adhésion et la mise en œuvre, le gouvernement du Canada souhaite mettre à l’essai des solutions qui offrent une visibilité sur les processus décisionnels de l’IA, améliorent la traçabilité des résultats de l’IA et garantissent que les modèles d’IA sont conformes aux lois canadiennes et aux normes et pratiques exemplaires internationales.
+Malgré la disponibilité de solutions de gouvernance de l’IA auprès d’entreprises canadiennes et de fournisseurs internationaux, les offres existantes nécessitent généralement un effort manuel important. Cet effort est particulièrement évident dans l’interprétation des exigences évolutives en matière de gouvernance de l’IA, leur application à des systèmes d’IA spécifiques, la mise à jour des contrôles et des évaluations, et la détermination de leurs répercussions sur l’ensemble de l’écosystème.
+Le défi vise à innover pour faire progresser les capacités de détermination et d’intégration des exigences évolutives en matière de gouvernance, de détermination de leur incidence potentielle sur les systèmes d’IA enregistrés, les contrôles, les évaluations et les preuves associés, et de soutenir une réévaluation en temps opportun, tout en maintenant le caractère explicable, la traçabilité, la vérifiabilité et la surveillance humaine.
+
+Détails
+
+Résultats essentiels
+La solution proposée doit :
+
+1.	Soutenir l’harmonisation continue des systèmes d’IA enregistrés avec les règlements, politiques, directives et autres exigences de gouvernance canadiens pertinents et être en mesure de déterminer les systèmes potentiellement touchés et d’indiquer quand une réévaluation est nécessaire.
+
+2.	Démontrer l’interopérabilité avec les systèmes d’entreprise, les plateformes d’intelligence artificielle (IA)/Apprentissage automatique (AA) et les solutions de gouvernance et la solution peut être intégrée avec une personnalisation minimale.
+2A. Démontrer la capacité d’échanger des informations sur la gouvernance avec les systèmes d’entreprise et les outils de cycle de vie de l’IA/AA au moyen d’une interface de programmation d’application (API) basées sur des normes, de connecteurs et de mécanismes d’échange de données interopérables. Les renseignements sur la gouvernance peuvent comprendre les métadonnées des systèmes d’IA, les évaluations des risques, les constatations de conformité, les éléments probants de vérification, les résultats de la surveillance, les approbations et les comptes rendus de décisions. Par exemple : Ces renseignements sur la gouvernance comprennent, sans s’y limiter, des renseignements sur le système d’IA, la propriété, l’intention, l’état du déploiement, l’état du financement, les renseignements sur les clients, les objectifs du système, les évaluations, l’évaluation de l’incidence algorithmique, les exigences en matière de contrôle (guides).
+2B. Démontrer comment l’information sur la gouvernance peut être recueillie, agrégée et maintenue dans plusieurs systèmes au moyen d’API, de connecteurs et de mécanismes d’échange de données.
+2C. Tirer parti des normes ouvertes et des interfaces documentées pour réduire la dépendance à l’égard des technologies propriétaires permettant l’interopérabilité dans divers environnements d’entreprise.
+
+3.	Démontrer comment l’administration, le soutien et l’accès à l’information et aux données de gouvernance peuvent être restreints, surveillés et contrôlés conformément aux exigences du gouvernement du Canada.
+3A. Permettre aux organisations de définir et de gérer les exigences en matière de résidence des données, de conservation, d’accès et de suppression des politiques et des informations sans intervention du fournisseur.
+
+4.	Permettre l’évaluation et la réévaluation des exigences, politiques, normes et directives applicables en matière de gouvernance de l’IA des systèmes d’IA enregistrés tout en soutenant la réévaluation lorsque les exigences de gouvernance et les cadres d’évaluation sont ajoutés, modifiés, remplacés ou retirés. La solution doit démontrer la capacité de traduire les exigences de gouvernance de l’IA en contrôles traçables, d’évaluer si les contrôles applicables ont été respectés et de relever les non-conformités.
+4A.  Permettre aux utilisateurs autorisés d’ajouter, de modifier, de modifier, de remplacer, ou de retirer des exigences de gouvernance et des cadres d’évaluation pour des systèmes ou des groupes d’IA individuels. Démontrer au moins une évaluation de la conformité par rapport à la Politique sur les services et le numérique, à la Directive sur la prise de décisions automatisée, à l’évaluation de l’incidence algorithmique, à la stratégie en matière d’IA et à l’éthique et aux responsabilités en matière d’IA.
+4B. Démontrer la capacité d’ajouter, de modifier, de remplacer, de remplacer et de retirer des exigences de gouvernance, des contrôles et des critères d’évaluation, et de les attribuer à des systèmes d’IA individuels ou à des groupes de systèmes d’IA. tout en soutenant l’application de critères d’évaluation différents à différents systèmes d’IA en fonction de leur utilisation prévue, de leur profil de risque ou des exigences de gouvernance. Les offrants sont encouragés à prouver leur extensibilité à d’autres cadres et normes de gouvernance reconnus à l’échelle internationale, y compris l’ nstitut national des normes et de la technologie (NIST), l’Organisation internationale de normalisation (ISO) (en anglais seulement) et la Loi de l’UE (en anglais seulement).
+4C. Générer des explications lisibles par l’homme des résultats des évaluations et des réévaluations. Chaque constatation doit indiquer l’exigence applicable, les éléments probants pris en compte, le résultat de l’évaluation et la cote de confiance ou une mesure de certitude. utilisateur.
+4D. Recueillir, relier et conserver les artefacts d’assurance, y compris la cartographie des contrôles, les dossiers d’évaluation, les références aux preuves, les approbations, les exceptions, les attestations, les mesures correctives et les historiques d’audit. Le système doit déterminer si chaque artefact a été fourni par une personne autorisée [contrôle d’accès basé sur les rôles (RBAC)].
+4E. Fournir des résultats mesurables et faire une distinction claire entre les résultats lors de l’exécution d’évaluations de la conformité afin de déterminer si la conformité est respectée, partiellement atteinte, non atteinte, sans objet et impossible à déterminer.
+
+5.	Permettre aux examinateurs autorisés de valider, rejeter, modifier ou annoter les résultats et de conserver et de vérifier l’historique des décisions.
+
+6.	Soutenir l’évaluation et la réévaluation des risques associés aux données, aux modèles et aux extrants générés par l’IA et intégrer les informations qui en résultent dans les évaluations de la gouvernance et les activités d’assurance.
+6A. Soutenir l’évaluation des risques liés aux données et des mesures de qualité pertinentes pour le système d’IA enregistré, y compris l’établissement de mesures de base et de seuils pour tenir un registre traçable des problèmes.
+6B. Permettre aux organisations de définir, d’évaluer et de réévaluer les mesures de risque, de rendement et de qualité appropriées à un système d’IA enregistré. y compris des mesures, des seuils et des critères d’évaluation configurables pour maintenir un dossier traçable des résultats de l’évaluation.
+
+Résultats supplémentaires
+La solution proposée devrait :
+
+1. 	Prendre en charge le déploiement dans des environnements sur site, en nuage privé et en nuage hébergé au Canada sans nécessiter de modifications architecturales importantes.
+
+2.	 Fournir des fonctionnalités bilingues, y compris des interfaces utilisateur, de la documentation, des rapports et des flux de travail de gouvernance, en anglais et en français.
+
+3.	 Soutenir plusieurs organisations, départements ou domaines au sein d’une plateforme partagée tout en permettant des politiques de gouvernance, des contrôles, des rapports et une surveillance indépendants pour chaque locataire.
+
+4.	 Générez des rapports de gouvernance, des alertes et des notifications et intégrez-les aux systèmes de collaboration, de communication et de gestion des tickets/cas d’entreprise.
+
+Historique et contexte
+À mesure que Services partagés Canada (SPC) élargit l’utilisation des solutions d’IA, y compris l’IA générative et agentique, il y a un besoin croissant d’une approche cohérente, centralisée et évolutive de la gouvernance de l’IA. Les activités de gouvernance actuelles peuvent reposer sur des processus distincts, un suivi manuel et une documentation fragmentée, ce qui peut limiter la visibilité en temps réel des inventaires des systèmes d’IA, de la posture de risque, de l’état de conformité, de l’harmonisation des politiques et des preuves décisionnelles."
+"PR22657 47064-266992 FTIR Spectrometer and FT-Raman Spectrometer Module","PR22657 47064-266992 Spectromètre IR-TF et module de spectromètre FT-Raman","WS5530498558-Doc5957736745","000","WS5530498558","2026-10-30","2026-11-17T14:00:00","2026-10-30","2026-06-01","2027-04-30","Open","Ouvert","","","","*41100000","*Laboratory and scientific equipment","*Équipements scientifiques et de laboratoire","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*North American Free Trade Agreement (NAFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Colombia Free Trade Agreement
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)","*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)","","","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","Department of Public Works and Government Services (PSPC)","11 Laurier St, Phase III, Place du Portage","Gatineau","Quebec","K1A 0S5","Canada"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11, rue Laurier, Phase III, Place du Portage","Gatineau","Québec","Canada","Canada Border Services Agency - (Administered Activities) (CBSA)","191 Laurier Ave W,Ottawa,Ontario,K1P6M7,Canada"," Agence des services frontaliers du Canada - (Activités administrées) (ASFC)","191, avenue Laurier Ouest,Ottawa,Ontario,K1P6M7,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","https://portal.us.bn.cloud.ariba.com/dashboard/public/appext/comsapsbncdiscoveryui#/RfxEvent/preview/1110030063?anId=ANONYMOUS","https://portal.us.bn.cloud.ariba.com/dashboard/public/appext/comsapsbncdiscoveryui#/RfxEvent/preview/1110030063?anId=ANONYMOUS","","","",""
+"F7049-260131 - CCGS Tully - Oil Purifiers","F7049-260131 - NGCC Tully - Purificateurs d’huile","WS5764451697-Doc5959158322","000","WS5764451697","2026-10-30","2026-11-20T14:00:00","2026-10-30","","","Open","Ouvert","","","","*25111900","*Marine craft systems and subassemblies","*Systèmes et sous-ensembles pour embarcations","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Highest Combined Rating of Technical Merit and Price","Cote combinée la plus élevée pour le mérite technique et le prix","None","Aucune","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","","","*British Columbia","*Colombie-Britannique","Department of Public Works and Government Services (PSPC)","11 Laurier St, Phase III, Place du Portage","Gatineau","Quebec","K1A 0S5","Canada"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11, rue Laurier, Phase III, Place du Portage","Gatineau","Québec","Canada","Canadian Coast Guard (CCG)","200 Kent St. Station 13E228,Ottawa,Ontario,K1A0E6,Canada"," Garde côtière canadienne (GCC)","200, rue Kent, Station 13E228,Ottawa,Ontario,K1A0E6,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","https://portal.us.bn.cloud.ariba.com/dashboard/public/appext/comsapsbncdiscoveryui#/RfxEvent/preview/1110030095?anId=ANONYMOUS","https://portal.us.bn.cloud.ariba.com/dashboard/public/appext/comsapsbncdiscoveryui#/RfxEvent/preview/1110030095?anId=ANONYMOUS","","","The Canadian Coast Guard has a requirement for two Fuel Oil purifiers and one Lube Oil Purifier to be supplied and installed on the CCGS John P. Tully. The purifiers must be delivered to Sidney, BC by October 31st, 2027. The Contract is for 3 years from Contract award and will include options to buy additional purifiers over this period. A contract will be awarded to the offer with the highest combined rating of technical merit and price received through SAP Ariba.","La Garde côtière canadienne a besoin de se faire fournir et installer deux purificateurs de mazout et un purificateur d’huile de lubrification à bord du NGCC John P. Tully. Les purificateurs doivent être livrés à Sidney (Colombie-Britannique) au plus tard le 31 octobre 2027. Le contrat sera d’une durée de trois ans à compter de son attribution et comprendra des options permettant l’achat de purificateurs supplémentaires pendant cette période. Un contrat sera attribué à l’offrant ayant obtenu la cote combinée la plus élevée relativement au mérite technique et au prix, dans le cadre du processus mené par l’entremise de SAP Ariba."
+"F7049-260142 - CCGS Tully - Reverse Osmosis Water Maker","F7049-260142 - NGCC Tully - Dessalinisateur à osmose inverse","WS5765574021-Doc5959265471","000","WS5765574021","2026-10-30","2026-11-20T14:00:00","2026-10-30","","","Open","Ouvert","","","","*40161609","*Water purification system","*Système de purification d'eau","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Highest Combined Rating of Technical Merit and Price","Cote combinée la plus élevée pour le mérite technique et le prix","None","Aucune","*Canada-Colombia Free Trade Agreement
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Panama Free Trade Agreement
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Korea Free Trade Agreement (CKFTA)","*Accord de libre-échange Canada-Colombie
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Panama
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange Canada-Honduras
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Corée","","","*British Columbia","*Colombie-Britannique","Department of Public Works and Government Services (PSPC)","11 Laurier St, Phase III, Place du Portage","Gatineau","Quebec","K1A 0S5","Canada"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11, rue Laurier, Phase III, Place du Portage","Gatineau","Québec","Canada","Canadian Coast Guard (CCG)","200 Kent St. Station 13E228,Ottawa,Ontario,K1A0E6,Canada"," Garde côtière canadienne (GCC)","200, rue Kent, Station 13E228,Ottawa,Ontario,K1A0E6,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","https://portal.us.bn.cloud.ariba.com/dashboard/public/appext/comsapsbncdiscoveryui#/RfxEvent/preview/1110030096?anId=ANONYMOUS","https://portal.us.bn.cloud.ariba.com/dashboard/public/appext/comsapsbncdiscoveryui#/RfxEvent/preview/1110030096?anId=ANONYMOUS","","","The Canadian Coast Guard has a requirement for two reverse osmosis water maker to be supplied and installed on the CCGS John P. Tully. The water makers must be delivered to Sidney, BC by October 31st, 2027. The Contract is for 3 years from Contract award and will include options to buy additional water makers over this period. A contract will be awarded to the offer with the highest combined rating of technical merit and price received through SAP Ariba.","La Garde côtière canadienne a besoin de se faire fournir et installer deux dessalinisateur à osmose inverse à bord du NGCC John P. Tully. Les dessalinisateur doivent être livrés à Sidney (Colombie-Britannique) au plus tard le 31 octobre 2027. Le contrat sera d’une durée de trois ans à compter de son attribution et comprendra des options permettant l’achat de dessalinisateurs supplémentaires pendant cette période. Un contrat sera attribué à l’offrant ayant obtenu la cote combinée la plus élevée relativement au mérite technique et au prix, dans le cadre du processus mené par l’entremise de SAP Ariba."

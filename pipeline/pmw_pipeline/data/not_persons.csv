@@ -1,0 +1,22 @@
+# Names the person test (sources/matching.is_person_name) reads as a private
+# individual's although they are a firm's. One name per line; each is
+# normalized (normalize.norm_name) when read, so any spelling of the name
+# works and the normalized form is the clearest to write. The stages list what
+# the test withheld in data/out/review/<stage>-persons.txt; a firm found there
+# belongs here.
+# Firms the test withheld in the 2026-27 award and contract-history files:
+per vices
+gc proc
+blueprint ade
+titan aex
+m d charlton compnay
+jeppesen foreflight
+canac marquis grenier
+smartspace gta
+profitness gp
+modest tree
+ifs assyst
+kepler communicatons
+words your way
+espresso communikcation
+jd power

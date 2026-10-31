@@ -1,26 +1,15 @@
-"""Decide which Job Bank postings must never be stored.
+"""The words that mark a name as a business, and the plain two-or-three-word person test.
 
-Private households hire caregivers and home support workers under the
-employer's own name. Those postings are public on Job Bank, but publishing a
-person's name and home area as an "employer" is not what this project is for.
-ESDC's lists say they leave personal names out, yet some households get
-through; household.py keeps those out on the same reasoning, sharing the
-tokens below. The rule errs toward dropping: a borderline business lost from
-the pending list costs little, a named individual costs a lot.
+household.reads_as_person, which every source applies through
+sources/matching.is_person_name, builds its business words from
+BUSINESS_TOKENS and reads name words with name_words. looks_like_person is an
+older, simpler test (two or three words, no business marker), kept for a
+caller that needs only that.
 """
 
 from __future__ import annotations
 
 import re
-
-HOUSEHOLD_TITLE_RE = re.compile(
-    r"caregiver|care giver|child\s*care|childcare|nanny|nannies|babysit|"
-    r"home\s*support|home\s*care|homecare|housekeep|domestic|live-?in|"
-    r"personal support worker|home attendant|attendant for persons|companion|"
-    r"au pair|private home|private household|elder(?:ly)? care|senior care|"
-    r"home child",
-    re.I,
-)
 
 # Any of these words marks a name as a business. Lower case, compared by token.
 BUSINESS_TOKENS = {
@@ -91,10 +80,3 @@ def looks_like_person(name: str | None) -> bool:
         return False
     # Initials such as "J. Smith" or "J.R. Smith" read as a person.
     return True
-
-
-def is_private_household(employer_raw: str | None, title: str | None) -> bool:
-    """True when the posting must be dropped before storage."""
-    if title and HOUSEHOLD_TITLE_RE.search(title):
-        return True
-    return looks_like_person(employer_raw)

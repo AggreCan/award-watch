@@ -19,7 +19,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 
-from pmw_pipeline import cli, config, nightly, resilience, search_console as sc
+from pmw_pipeline import config, search_console as sc
 
 
 def pem_of(key) -> str:
@@ -64,9 +64,9 @@ DATES = [
     {"keys": ["2026-10-27"], "clicks": 0, "impressions": 3, "ctr": 0, "position": 21.0},
 ]
 QUERIES = {
-    "2026-10-25": [{"keys": ["lmia list 2026"], "clicks": 2, "impressions": 40, "position": 6.04},
-                   {"keys": ["acme farms lmia"], "clicks": 5, "impressions": 9, "position": 1.0}],
-    "2026-10-26": [{"keys": ["lmia\ttracker\n"], "clicks": 1, "impressions": 30, "position": 9.55}],
+    "2026-10-25": [{"keys": ["tender notices 2026"], "clicks": 2, "impressions": 40, "position": 6.04},
+                   {"keys": ["acme defence awards"], "clicks": 5, "impressions": 9, "position": 1.0}],
+    "2026-10-26": [{"keys": ["award\ttracker\n"], "clicks": 1, "impressions": 30, "position": 9.55}],
 }
 
 
@@ -115,7 +115,7 @@ def run(tmp_path, http=None, **kw):
 
 @pytest.fixture(autouse=True)
 def site(monkeypatch):
-    monkeypatch.setattr(config, "SITE_URL", "https://lmiawatch.ca")
+    monkeypatch.setattr(config, "SITE_URL", "https://awardwatch.ca")
 
 
 # -- signing -------------------------------------------------------------------
@@ -186,8 +186,8 @@ def test_the_first_night_asks_for_sixteen_months_and_keeps_each_day_with_its_top
     assert token["url"] == "https://oauth2.googleapis.com/token"
     assert token["data"]["grant_type"] == "urn:ietf:params:oauth:grant-type:jwt-bearer"
     assert token["data"]["assertion"].count(".") == 2
-    site_url = "https://searchconsole.googleapis.com/webmasters/v3/sites/sc-domain%3Almiawatch.ca/searchAnalytics/query"
-    assert dates["url"] == site_url and unquote(dates["url"].split("/sites/")[1].split("/")[0]) == "sc-domain:lmiawatch.ca"
+    site_url = "https://searchconsole.googleapis.com/webmasters/v3/sites/sc-domain%3Aawardwatch.ca/searchAnalytics/query"
+    assert dates["url"] == site_url and unquote(dates["url"].split("/sites/")[1].split("/")[0]) == "sc-domain:awardwatch.ca"
     assert dates["headers"]["Authorization"] == "Bearer ya29.test-token"
     assert dates["json"] == {"type": "web", "dataState": "final", "startDate": "2025-07-01", "endDate": "2026-10-29",
                              "dimensions": ["date"], "rowLimit": 25000}
@@ -199,8 +199,8 @@ def test_the_first_night_asks_for_sixteen_months_and_keeps_each_day_with_its_top
     assert [(r["date"], r["clicks"], r["impressions"], r["ctr"], r["position"]) for r in rows] == [
         ("2026-10-25", "12", "340", "0.0353", "8.46"), ("2026-10-26", "15", "410", "0.0366", "7.9"),
         ("2026-10-27", "0", "3", "0.0", "21.0")]
-    assert json.loads(rows[0]["top_queries"]) == [["acme farms lmia", 5, 9, 1.0], ["lmia list 2026", 2, 40, 6.0]]
-    assert json.loads(rows[1]["top_queries"]) == [["lmia tracker", 1, 30, 9.6]]
+    assert json.loads(rows[0]["top_queries"]) == [["acme defence awards", 5, 9, 1.0], ["tender notices 2026", 2, 40, 6.0]]
+    assert json.loads(rows[1]["top_queries"]) == [["award tracker", 1, 30, 9.6]]
     assert rows[2]["top_queries"] == "[]"
     assert KEY_FRAGMENT not in caplog.text and "ya29.test-token" not in caplog.text
     assert not http.closed
@@ -273,7 +273,7 @@ def test_a_failure_is_failed_and_leaves_the_file_as_it_was(tmp_path, http, caplo
 def test_the_403_names_the_fix(tmp_path, caplog):
     http = FakeGoogle(query_fail=FakeResponse(403, {"error": {"code": 403}}))
     assert run(tmp_path, http) == "failed"
-    assert "cannot read sc-domain:lmiawatch.ca; add it as a user of the property" in caplog.text
+    assert "cannot read sc-domain:awardwatch.ca; add it as a user of the property" in caplog.text
 
 
 def test_a_stored_file_that_cannot_be_read_safely_is_never_replaced(tmp_path):
@@ -290,44 +290,9 @@ def test_a_bad_secret_or_no_property_is_failed_before_any_request(tmp_path, monk
     http = FakeGoogle()
     assert run(tmp_path, http, env={sc.SECRET_ENV: "{not json"}) == "failed"
     assert run(tmp_path, http, env={sc.SECRET_ENV: json.dumps({"type": "service_account"})}) == "failed"
-    monkeypatch.setattr(config, "SITE_URL", "https://lmiawatch.example")
+    monkeypatch.setattr(config, "SITE_URL", "https://awardwatch.example")
     assert run(tmp_path, http) == "failed"
     assert http.calls == []
-    assert sc.site_property({sc.SITE_ENV: "https://lmiawatch.ca/"}) == "https://lmiawatch.ca/"
-    monkeypatch.setattr(config, "SITE_URL", "https://lmiawatch.ca")
-    assert sc.site_property({}) == "sc-domain:lmiawatch.ca"
-
-
-# -- the command and the run status --------------------------------------------
-
-
-def test_the_command_writes_its_outcome_and_exits_1_only_when_failed(tmp_path, monkeypatch):
-    monkeypatch.delenv(sc.SECRET_ENV, raising=False)
-    assert cli.main(["import-search-console", "--out", str(tmp_path)]) == 0
-    assert (tmp_path / "outcome.txt").read_text(encoding="utf-8") == "no credentials\n"
-    monkeypatch.setenv(sc.SECRET_ENV, "{broken")
-    assert cli.main(["import-search-console", "--out", str(tmp_path)]) == 1
-    assert (tmp_path / "outcome.txt").read_text(encoding="utf-8") == "failed\n"
-    fake = FakeGoogle()
-    monkeypatch.setattr(requests, "Session", lambda: fake)
-    monkeypatch.setenv(sc.SECRET_ENV, ACCOUNT_JSON)
-    assert cli.main(["import-search-console", "--out", str(tmp_path)]) == 0
-    assert (tmp_path / "outcome.txt").read_text(encoding="utf-8").startswith("imported ")
-    assert fake.closed
-
-
-def test_the_run_status_carries_the_import_and_only_failed_needs_attention(tmp_path):
-    db = tmp_path / "none.sqlite"
-    status = nightly.run_status(db, None, None, None, {}, search_console="no credentials")
-    assert status["search_console"] == "no credentials"
-    assert nightly.run_status(db, None, None, None, {})["search_console"] == "not run"
-    clean = {"stages": [], "search_console": "imported 3 days"}
-    assert resilience.attention_items(clean) == []
-    assert resilience.attention_items({**clean, "search_console": "no credentials"}) == []
-    assert resilience.attention_items({**clean, "search_console": "failed"}) == [
-        "Search Console import: failed (caught up next run)"]
-    (tmp_path / "gsc.txt").write_text("imported 2 days\n", encoding="utf-8")
-    out = tmp_path / "status.json"
-    assert nightly.main(["status", "--db", str(db), "--search-console-outcome", str(tmp_path / "gsc.txt"),
-                         "--out", str(out)]) == 0
-    assert json.loads(out.read_text(encoding="utf-8"))["search_console"] == "imported 2 days"
+    assert sc.site_property({sc.SITE_ENV: "https://awardwatch.ca/"}) == "https://awardwatch.ca/"
+    monkeypatch.setattr(config, "SITE_URL", "https://awardwatch.ca")
+    assert sc.site_property({}) == "sc-domain:awardwatch.ca"

@@ -11,7 +11,7 @@ as `views/search_console.csv` in R2.
 The secret is the JSON key of a Google service account that has been added
 as a user of the Search Console property (docs/search-engines.md section 6
 says how). The property defaults to the domain property of the site's host
-(`sc-domain:lmiawatch.ca`); the variable GSC_SITE overrides it. Without the
+(`sc-domain:awardwatch.ca`); the variable GSC_SITE overrides it. Without the
 secret nothing is asked and the outcome is "no credentials".
 
 Signing: the API takes an OAuth access token, which Google exchanges for a

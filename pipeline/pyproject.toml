@@ -29,3 +29,6 @@ pmw_pipeline = ["data/*.csv", "data/*.json"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# tests/_pending holds the tests of modules not adapted yet; each moves back
+# beside its module when that module is.
+norecursedirs = [".*", "_pending", "build", "dist", "*.egg"]

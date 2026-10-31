@@ -26,15 +26,15 @@ def make(mapping, tmp_path, **kw):
 
 def test_spacing_per_host(tmp_path):
     client, session, clock = make({
-        "https://www.jobbank.gc.ca/a": b"a", "https://www.jobbank.gc.ca/b": b"b", "https://other.example/c": b"c",
-    }, tmp_path)
-    client.get("https://www.jobbank.gc.ca/a")
+        "https://slow.example/a": b"a", "https://slow.example/b": b"b", "https://other.example/c": b"c",
+    }, tmp_path, delays={"slow.example": 8.0})
+    client.get("https://slow.example/a")
     client.get("https://other.example/c")
-    client.get("https://www.jobbank.gc.ca/b")
+    client.get("https://slow.example/b")
     assert client.requests_made == 3
-    # The second Job Bank request waited the full crawl delay; the other host did not.
+    # The second request to the slow host waited its full delay; the other host did not.
     assert max(clock.sleeps) == pytest.approx(8.0)
-    assert client.user_agent.startswith("LMIAWatch/")
+    assert client.user_agent.startswith("AwardWatch/")
     assert all(h["User-Agent"] == client.user_agent for _, h in session.calls)
 
 

@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS sources_log (
   detail TEXT,
   rows_in INTEGER,
   rows_new INTEGER,
-  excluded INTEGER,                              -- rows of private individuals dropped (count only, never names)
+  excluded INTEGER,                              -- rows naming a private individual, withheld or dropped (count only, never names)
   ok INTEGER NOT NULL,
   notice TEXT                                    -- an item needing attention that is not a failure
 );
@@ -269,6 +269,9 @@ CREATE TABLE IF NOT EXISTS awards (
   supplier_postal TEXT,
   supplier_country TEXT,                         -- ISO alpha-2
   organization_id TEXT REFERENCES organizations(id),
+  supplier_withheld INTEGER NOT NULL DEFAULT 0,  -- 1: the supplier reads as a private individual; its name, street,
+                                                 -- city, postal code and organization are withheld (NULL) and only
+                                                 -- the count is logged; the record itself is kept
   buyer_id TEXT REFERENCES buyers(id),
   buyer_raw_en TEXT,
   buyer_raw_fr TEXT,
@@ -311,6 +314,8 @@ CREATE TABLE IF NOT EXISTS contract_history (
   procurement_number TEXT,
   solicitation TEXT,
   contract_number TEXT,
+  title_en TEXT,
+  title_fr TEXT,
   n_records INTEGER,
   published TEXT,
   awarded TEXT,
@@ -353,7 +358,12 @@ CREATE TABLE IF NOT EXISTS contract_history (
   supplier_postal TEXT,
   supplier_country TEXT,
   organization_id TEXT REFERENCES organizations(id),
+  supplier_withheld INTEGER NOT NULL DEFAULT 0,  -- 1: the supplier reads as a private individual; its name, street,
+                                                 -- city, postal code and organization are withheld (NULL) and only
+                                                 -- the count is logged; the record itself is kept
   buyer_id TEXT REFERENCES buyers(id),           -- the contracting entity (PSPC)
+  buyer_raw_en TEXT,                             -- its spelling as published
+  buyer_raw_fr TEXT,
   client_id TEXT REFERENCES buyers(id),          -- the end-user department
   client_raw_en TEXT,
   client_raw_fr TEXT,

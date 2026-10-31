@@ -1,0 +1,30 @@
+# Curated buyer seed, read by sources/buyers.py on every buyers stage.
+# One row per raw spelling a source uses for an institution:
+#   raw_name    the spelling exactly as the source writes it (blank: the row only defines the buyer)
+#   source      the source that writes it: canadabuys | lobbying
+#   buyer_id    the open.canada.ca organization name when the institution has one, else a slug of its English name
+#   name_en     English name, used when CKAN does not describe the buyer
+#   name_fr     French name, same
+#   acronym_en  English acronym, same
+#   acronym_fr  French acronym, same
+# A seed row wins over any other resolution of its spelling. Names and acronyms
+# only fill what CKAN leaves blank. Add a row for each spelling the buyers
+# notices list ("buyer <slug> made for ...") that belongs to another buyer.
+raw_name,source,buyer_id,name_en,name_fr,acronym_en,acronym_fr
+Department of Public Works and Government Services (PSPC),canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+Ministère des Travaux publics et des Services gouvernementaux (SPAC),canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+Department of National Defence (DND),canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Ministère de la Défense nationale (MDN),canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Shared Services Canada,canadabuys,ssc-spc,Shared Services Canada,Services partagés Canada,SSC,SPC
+Services partagés Canada,canadabuys,ssc-spc,Shared Services Canada,Services partagés Canada,SSC,SPC
+Business Development Bank of Canada,canadabuys,business-development-bank-of-canada,Business Development Bank of Canada,Banque de développement du Canada,BDC,BDC
+Export Development Canada - EDC,canadabuys,export-development-canada,Export Development Canada,Exportation et développement Canada,EDC,EDC
+Farm Credit Canada (FCC),canadabuys,farm-credit-canada,Farm Credit Canada,Financement agricole Canada,FCC,FAC
+Canada Post Corporation,canadabuys,canada-post-corporation,Canada Post Corporation,Société canadienne des postes,CPC,SCP
+Marine Atlantic,canadabuys,marine-atlantic,Marine Atlantic,Marine Atlantique,,
+Bank of Canada,canadabuys,bank-of-canada,Bank of Canada,Banque du Canada,,
+Telefilm Canada,canadabuys,telefilm-canada,Telefilm Canada,Téléfilm Canada,,
+Téléfilm Canada,canadabuys,telefilm-canada,Telefilm Canada,Téléfilm Canada,,
+Old Port of Montreal Corporation Inc.,canadabuys,old-port-of-montreal-corporation,Old Port of Montreal Corporation,Société du Vieux-Port de Montréal,,
+Société du Vieux Port de Montréal Inc.,canadabuys,old-port-of-montreal-corporation,Old Port of Montreal Corporation,Société du Vieux-Port de Montréal,,
+Parc Downsview Park Inc,canadabuys,parc-downsview-park,Parc Downsview Park,Parc Downsview Park,,

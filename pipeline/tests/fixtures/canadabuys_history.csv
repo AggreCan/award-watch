@@ -1,0 +1,614 @@
+﻿"title-titre-eng","title-titre-fra","referenceNumber-numeroReference","amendmentNumber-numeroModification","procurementNumber-numeroApprovisionnement","solicitationNumber-numeroSollicitation","contractNumber-numeroContrat","numberOfRecords-nombreEnregistrements","publicationDate-datePublication","contractAwardDate-dateAttributionContrat","amendmentDate-dateModification","contractStartDate-contratDateDebut","contractEndDate-dateFinContrat","contractAmount-montantContrat","totalContractValue-valeurTotaleContrat","contractCurrency-contratMonnaie","contractStatus-statutContrat-eng","contractStatus-statutContrat-fra","instrumentType-typeInstrument-eng","instrumentType-typeInstrument-fra","amendmentType-typeModification-eng","amendmentType-typeModification-fra","gsin-nibs","gsinDescription-nibsDescription-eng","gsinDescription-nibsDescription-fra","unspsc","unspscDescription-eng","unspscDescription-fra","procurementCategory-categorieApprovisionnement","noticeType-avisType-eng","noticeType-avisType-fra","procurementMethod-methodeApprovisionnement-eng","procurementMethod-methodeApprovisionnement-fra","selectionCriteria-criteresSelection-eng","selectionCriteria-criteresSelection-fra","limitedTenderingReason-raisonAppelOffresLimite-eng","limitedTenderingReason-raisonAppelOffresLimite-fra","tradeAgreements-accordsCommerciaux-eng","tradeAgreements-accordsCommerciaux-fra","regionsOfDelivery-regionsLivraison-eng","regionsOfDelivery-regionsLivraison-fra","supplierLegalName-nomLegalFournisseur-eng","supplierLegalName-nomLegalFournisseur-fra","supplierStandardizedName-nomNormaliseFournisseur-eng","supplierStandardizedName-nomNormaliseFournisseur-fra","supplierOperatingName-nomCommercialFournisseur-eng","supplierOperatingName-nomCommercialFournisseur-fra","supplierEmployeeCount-fournisseurNombreEmployes-eng","supplierEmployeeCount-fournisseurNombreEmployes-fra","supplierAddressLine-ligneAdresseFournisseur-eng","supplierAddressLine-ligneAdresseFournisseur-fra","supplierAddressCity-fournisseurAdresseVille-eng","supplierAddressCity-fournisseurAdresseVille-fra","supplierAddressProvince-fournisseurAdresseProvince-eng","supplierAddressProvince-fournisseurAdresseProvince-fra","supplierAddressPostalCode-fournisseurAdresseCodePostal","supplierAddressCountry-fournisseurAdressePays-eng","supplierAddressCountry-fournisseurAdressePays-fra","contractingEntityName-nomEntitContractante-eng","contractingEntityName-nomEntitContractante-fra","contractingEntityAddressLine-ligneAdresseEntiteContractante-eng","contractingEntityAddressLine-ligneAdresseEntiteContractante-fra","contractingEntityAddressCity-entiteContractanteAdresseVille-eng","contractingEntityAddressCity-entiteContractanteAdresseVille-fra","contractingEntityAddressProvince-entiteContractanteAdresseProvince-eng","contractingEntityAddressProvince-entiteContractanteAdresseProvince-fra","contractingEntityAddressPostalCode-entiteContractanteAdresseCodePostal","contractingEntityAddressCountry-entiteContractanteAdressePays-eng","contractingEntityAddressCountry-entiteContractanteAdressePays-fra","endUserEntitiesName-nomEntitesUtilisateurFinal-eng","endUserEntitiesName-nomEntitesUtilisateurFinal-fra","endUserEntitiesOfficeName-bureauNomEntitesUtilisateurFinal-eng","endUserEntitiesOfficeName-bureauNomEntitesUtilisateurFinal-fra","endUserEntitiesAddress-adresseEntitesUtilisateurFinal-eng","endUserEntitiesAddress-adresseEntitesUtilisateurFinal-fra","contactInfoName-informationsContactNom","contactInfoEmail-informationsContactCourriel","contactInfoPhone-contactInfoTelephone","contactInfoFax","contactInfoAddressLine-contactInfoAdresseLigne-eng","contactInfoAddressLine-contactInfoAdresseLigne-fra","contactInfoCity-contacterInfoVille-eng","contactInfoCity-contacterInfoVille-fra","contactInfoProvince-contacterInfoProvince-eng","contactInfoProvince-contacterInfoProvince-fra","contactInfoPostalcode","contactInfoCountry-contactInfoPays-eng","contactInfoCountry-contactInfoPays-fra","percentageOfGoodsByCountry-pourcentageDeBiensParPays","tenderDescription-descriptionAppelOffres-eng","tenderDescription-descriptionAppelOffres-fra"
+"W0134-26R016 - Aviator’s Breathing Oxygen and Liquid Nitrogen with Storage Tank Rental","W0134-26R016 - Oxygène respirable d’aviation et azote liquide y compris location de réservoirs de stockage","CW2446091","000","WS5614688388","WS5614688388","CW2446091","3","2026-06-26","2026-06-03","","2026-06-03","2029-06-02","0.00","0.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*12141903
+*12141904
+*24111802
+*24111816","*Nitrogen N
+*Oxygen O
+*Air or gas tanks or cylinders
+*Liquified gas tank or cylinder","*Nitrogène N
+*Oxygène O
+*Bouteilles ou réservoirs d'air ou de gaz
+*Cylindre ou réservoir à gaz liquéfié","*SRV","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-Honduras Free Trade Agreement
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Colombia Free Trade Agreement
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-Peru Free Trade Agreement (CPFTA)","*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Colombie
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Pérou (ALECP)","*Cold Lake","*Cold Lake","AIR LIQUIDE CANADA INC","AIR LIQUIDE CANADA INC","","","","","","","1250 René-Lévesque Blvd W","1250 René-Lévesque Blvd W","MONTREAL","MONTREAL","Quebec","Quebec","H3B 5E6","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of National Defence (DND)"," Ministère de la Défense nationale (MDN)","","","101 Colonel By Dr,Ottawa,Ontario,K1A0K2,Canada","101, promenade Colonel By,Ottawa,Ontario,K1A0K2,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"W0134-26R016 - Aviator’s Breathing Oxygen and Liquid Nitrogen with Storage Tank Rental RISO","W0134-26R016 - Oxygène respirable d’aviation et azote liquide y compris location de réservoirs de stockage OCIR","CW2446091","001","WS5614688388","WS5614688388","CW2446091","3","2026-07-07","2026-06-03","2026-07-07","2026-06-03","2029-06-02","","0.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Amendment","Modification","","","","*12141903
+*12141904
+*24111802
+*24111816","*Nitrogen N
+*Oxygen O
+*Air or gas tanks or cylinders
+*Liquified gas tank or cylinder","*Nitrogène N
+*Oxygène O
+*Bouteilles ou réservoirs d'air ou de gaz
+*Cylindre ou réservoir à gaz liquéfié","*SRV","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-Colombia Free Trade Agreement
+*Canada-Honduras Free Trade Agreement
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)","*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange Canada-Panama
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)","*Cold Lake","*Cold Lake","AIR LIQUIDE CANADA INC","AIR LIQUIDE CANADA INC","","","","","","","1250 René-Lévesque Blvd W","1250 René-Lévesque Blvd W","MONTREAL","MONTREAL","Quebec","Quebec","H3B 5E6","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of National Defence (DND)"," Ministère de la Défense nationale (MDN)","","","101 Colonel By Dr,Ottawa,Ontario,K1A0K2,Canada","101, promenade Colonel By,Ottawa,Ontario,K1A0K2,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"W0134-26R016 - Aviator’s Breathing Oxygen and Liquid Nitrogen with Storage Tank Rental RISO","W0134-26R016 - Oxygène respirable d’aviation et azote liquide y compris location de réservoirs de stockage OCIR","CW2446091","002","WS5614688388","WS5614688388","CW2446091","3","2026-08-14","2026-06-03","2026-08-04","2026-06-03","2029-06-02","","0.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Amendment","Modification","","","","*12141903
+*12141904
+*24111802
+*24111816","*Nitrogen N
+*Oxygen O
+*Air or gas tanks or cylinders
+*Liquified gas tank or cylinder","*Nitrogène N
+*Oxygène O
+*Bouteilles ou réservoirs d'air ou de gaz
+*Cylindre ou réservoir à gaz liquéfié","*SRV","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-Colombia Free Trade Agreement
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Chile Free Trade Agreement (CCFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Panama Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)","*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Ukraine (ALECU)","*Cold Lake","*Cold Lake","AIR LIQUIDE CANADA INC","AIR LIQUIDE CANADA INC","","","","","","","1250 René-Lévesque Blvd W","1250 René-Lévesque Blvd W","MONTREAL","MONTREAL","Quebec","Quebec","H3B 5E6","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of National Defence (DND)"," Ministère de la Défense nationale (MDN)","","","101 Colonel By Dr,Ottawa,Ontario,K1A0K2,Canada","101, promenade Colonel By,Ottawa,Ontario,K1A0K2,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"F3065-265003 - CCGS PIERRE RADISSON, DRY DOCK SPRING 2026 - CW","F3065-265003 - NGCC PIERRE RADISSON, CALE SÈCHE PRINTEMPS 2026 - EC","CW2439364","000","WS5549503298","WS5549503298","CW2439364","4","2026-04-10","2026-04-09","","2026-04-09","2027-03-31","9112299.10","10193356.83","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*25111500
+*25111510
+*25111514
+*25111603
+*78182000","*Commercial marine craft
+*Salvage ships
+*Icebreaker
+*Rescue ships or boats
+*Water transport vessel maintenance and repair services","*Navires commerciaux
+*Navires de sauvetage
+*Brise-glace
+*Navires ou bateaux de sauvetage
+*Services de maintenance et de réparation de navires","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*New Brunswick
+*Prince Edward Island
+*Newfoundland and Labrador
+*Ontario (except NCR)
+*Nova Scotia
+*Quebec (except NCR)","*Nouveau-Brunswick
+*Île-du-Prince-Édouard
+*Terre-Neuve-et-Labrador
+*Ontario (sauf RCN)
+*Nouvelle-Écosse
+*Québec (sauf RCN)","VERREAULT NAVIGATION inc.","VERREAULT NAVIGATION inc.","Groupe Océan Inc.","Groupe Océan Inc.","","","180","180","108 rue du Collège","108 rue du Collège","Les Méchins","Les Méchins","Québec","Québec","G0J 1T0","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Canadian Coast Guard (CCG) / Department of National Defence (DND)"," Garde côtière canadienne (GCC) /  Ministère de la Défense nationale (MDN)"," / "," / ","200 Kent St. Station 13E228,Ottawa,Ontario,K1A0E6,Canada / 101 Colonel By Dr,Ottawa,Ontario,K1A0K2,Canada","200, rue Kent, Station 13E228,Ottawa,Ontario,K1A0E6,Canada / 101, promenade Colonel By,Ottawa,Ontario,K1A0K2,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","F3065-265003 - CCGS PIERRE RADISSON, DRY DOCK SPRING 2026 - CW","F3065-265003 - NGCC PIERRE RADISSON, CALE SÈCHE PRINTEMPS 2026 - EC"
+"SA TRANSLATION - Syntagme inc.","AMA Traduction - Syntagme inc.","EN966-140305/099/ZF","008","EN966-140305","EN966-140305","EN966-140305/099/ZF","8","2026-07-09","2026-06-18","2026-06-18","2026-06-18","2026-07-10","0.00","0.00","CAD","Active","Actif","Supply Arrangement","Arrangement en matière d’approvisionnement","Termination","Résiliation","","","","*82110000","*Writing and translations","*Ecrits et traductions","*SRV","Request for Supply Arrangement","Demande pour un arrangement en matière d’approvisionnement","","","Variations or combinations of the above methods","Variations ou combinaisons des méthodes susmentionnées","","","*None","*Aucun","*Canada","*Canada","Syntagme inc.","Syntagme inc.","Syntagme inc.","Syntagme inc.","Le Groupe Syntagme inc.","Le Groupe Syntagme inc.","12","12","1290 av Van Horne 
+Suite 310","1290 av Van Horne 
+Suite 310","Outremont","Outremont","Québec","Québec","H2V 4S2","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","","","11 Laurier St, Phase III, Place du Portage,Gatineau,Quebec,K1A 0S5,Canada","11, rue Laurier, Phase III, Place du Portage,Gatineau,Québec,K1A 0S5,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","Translation Services SA","AMA Services de traduction"
+"PR24626 5A427-265082 ESRI CANADA - ARCGIS ONLINE","PR24626 5A427-265082 ESRI CANADA - ARCGIS EN LIGNE","CW2457764","000","WS5761136132","WS5761136132","CW2457764","1","2026-07-20","2026-07-16","","2026-07-16","2027-07-15","80149.10","80149.10","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*43230000","*Software","*Logiciels","*SRV","Directed Contract","Contrat prescrit","Non-competitive","Non concurrentielle","Not applicable","Sans objet","Exclusive Rights","Droits exclusifs","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*Canada","*Canada","Esri Canada Limited","Esri Canada Limited","","","","","600","600","900-12 Concorde Pl","900-12 Concorde Pl","Toronto","Toronto","Ontario","Ontario","M3C 3R8","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of Indigenous Services (ISC)"," Ministère des Services aux Autochtones (SAC)","","",",,,,",",,,,","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","PR24626 5A427-265082 ESRI CANADA - ARCGIS ONLINE","PR24626 5A427-265082 ESRI CANADA - ARCGIS EN LIGNE"
+"PR24103 HT201-265011 ESRI ArcGIS Online Pro Plus User Annual","PR24103 HT201-265011 ESRI ArcGIS Online Pro Plus Utilisateur annuel","CW2455867","000","WS5735170132","WS5735170132","CW2455867","1","2026-07-31","2026-06-26","","2026-04-01","2027-03-31","27352.55","27352.55","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*43230000","*Software","*Logiciels","*SRV","Directed Contract","Contrat prescrit","Non-competitive","Non concurrentielle","Not applicable","Sans objet","Exclusive Rights","Droits exclusifs","*None","*Aucun","*Canada","*Canada","Esri Canada Limited","Esri Canada Limited","","","","","600","600","900-12 Concorde Pl","900-12 Concorde Pl","Toronto","Toronto","Ontario","Ontario","M3C 3R8","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of Health (HC)"," Ministère de la Santé (SC)","","","Address Locator 0900C2,Ottawa,Ontario,K1A0K9,Canada","Localisateur d'adresse 0900C2,Ottawa,Ontario,K1A0K9,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","PR24103 HT201-265011 ESRI ArcGIS Online Pro Plus User Annual","PR24103 HT201-265011 ESRI ArcGIS Online Pro Plus Utilisateur annuel"
+"23240-261180 Supply and Storage of Graphite","23240-261180 Approvisionnement et gestion du stockage de graphite","CW2451599","000","WS5672955639","WS5672955639","CW2451599","1","2026-05-15","2026-05-13","","2026-05-13","2036-05-13","469896667.16","469896667.16","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*11100000","*Minerals and ores and metals","*Minéraux, minerais et métaux","*GD","Directed Contract","Contrat prescrit","Non-competitive","Non concurrentielle","Not applicable","Sans objet","Exclusive Rights","Droits exclusifs","*None","*Aucun","*Quebec (except NCR)","*Québec (sauf RCN)","NMG Matawinie Inc.","NMG Matawinie Inc.","","","","","1","1","481 rue Brassard","481 rue Brassard","Saint-Michel-des-Saints","Saint-Michel-des-Saints","Québec","Québec","J0K 3B0","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of Natural Resources  (NRCan)"," Ministère des Ressources naturelles (RNCan)","","","580 Booth Street,Ottawa,Ontario,K1A0E4,Canada","580, rue Booth,Ottawa,Ontario,K1A0E4,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"23240-261180-002 Marketing of Graphite","23240-261180-002 Commercialisation de graphite","CW2451677","000","WS5672955639","WS5672955639","CW2451677","1","2026-05-15","2026-05-13","","2026-05-13","2036-05-13","19144292.09","19144292.09","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*11100000","*Minerals and ores and metals","*Minéraux, minerais et métaux","*GD","Directed Contract","Contrat prescrit","Non-competitive","Non concurrentielle","Not applicable","Sans objet","Exclusive Rights","Droits exclusifs","*None","*Aucun","*Quebec (except NCR)","*Québec (sauf RCN)","NMG Matawinie Inc.","NMG Matawinie Inc.","","","","","1","1","481 rue Brassard","481 rue Brassard","Saint-Michel-des-Saints","Saint-Michel-des-Saints","Québec","Québec","J0K 3B0","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of Natural Resources  (NRCan)"," Ministère des Ressources naturelles (RNCan)","","","580 Booth Street,Ottawa,Ontario,K1A0E4,Canada","580, rue Booth,Ottawa,Ontario,K1A0E4,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"PR24452_5P115-260061_Road Salt for Terra Nova National Park","Le sel de déglacement  pour le parc national Terra-Nova","CW2458925","000","WS5755823236","WS5755823236","CW2458925","1","2026-08-12","2026-08-11","","2026-08-11","2027-03-31","397049.00","397049.00","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*11101700","*Minerals","*Métaux communs","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-Honduras Free Trade Agreement
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Colombia Free Trade Agreement
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)","*Accord de libre-échange Canada-Honduras
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)","*Canada","*Canada","Avalon Coal Salt and Oil Limited","Avalon Coal Salt and Oil Limited","","","","","","","69 George Mercer Drive 
+PO Box 309","69 George Mercer Drive 
+PO Box 309","Bay Roberts","Bay Roberts","Newfoundland and Labrador","Newfoundland and Labrador","A0A 1G0","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Parks Canada Agency (PC)"," Agence Parcs Canada (PC)","","","30 Victoria Street,Gatineau,Quebec,J8X 0B3,Canada","30, rue Victoria,Gatineau,Quebec,J8X 0B3,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","Parks Canada Agency has a requirement for the supply, delivery and unloading (including stockpiling inside storage facilities) of sodium chloride for use as a road deicer for Terra Nova National Park.","L’Agence Parcs Canada a l'exigence d'approvisionnement, la livraison et le déchargement (y compris l’empilage dans des installations d’entreposage) du chlorure de sodium servant au déglaçage routier du parc national Terra-Nova."
+"5P132-250371- Winter Road Sand","5P132-250371-Sable pour les routes en hiver","CW2462486","000","WS5745738386","WS5745738386","CW2462486","1","2026-07-29","2026-07-29","","2026-08-14","2027-08-31","22701.00","22701.00","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*11111700","*Sand","*Sables","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*New Brunswick","*Nouveau-Brunswick","D&S Butland Ltd","D&S Butland Ltd","","","","","","","P.O. Box 1022","P.O. Box 1022","Alma","Alma","New Brunswick","New Brunswick","E4H 1B4","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Parks Canada Agency (PC)"," Agence Parcs Canada (PC)","","","30 Victoria Street,Gatineau,Quebec,J8X 0B3,Canada","30, rue Victoria,Gatineau,Quebec,J8X 0B3,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"CW2474138_5P203-260092 - Provision of Firewood – Forillon National Park","CW2474138_ 5P203-260092 _Fourniture de bois de chauffage - Parc National Forillon","CW2474138","000","WS5780350374","WS5780350374","CW2474138","1","2026-10-23","2026-10-22","","2027-05-01","2029-04-30","43276.59","43276.59","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*11121603","*Logs","*Bille ou grume","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-Colombia Free Trade Agreement
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Panama Free Trade Agreement","*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Panama","*Gaspé","*Gaspé","Entreprise Forestière Méthot Inc","Entreprise Forestière Méthot Inc","","","","","1","1","614 Montée de Corte-Real","614 Montée de Corte-Real","Gaspé","Gaspé","Québec","Québec","G4X 6S4","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Parks Canada Agency (PC)"," Agence Parcs Canada (PC)","","","30 Victoria Street,Gatineau,Quebec,J8X 0B3,Canada","30, rue Victoria,Gatineau,Quebec,J8X 0B3,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","CW2474138_5P203-260092 - Provision of Firewood – Forillon National Park","CW2474138_ 5P203-260092 _Fourniture de bois de chauffage - Parc National Forillon"
+"5P119-250293 P.E.I Firewood","5P119-250293 Î.-P.-É Bois De Chauffage","CW2450616","000","WS5585308454","WS5585308454","CW2450616","1","2026-04-27","2026-04-16","","2026-05-01","2027-04-30","0.00","0.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*11121603
+*11121604
+*11121610","*Logs
+*Soft timber
+*Hardwoods","*Bille ou grume
+*Bois de résineux
+*Bois dur - bois franc","*GD","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Not applicable","Sans objet","No response to bid solicitation","Aucune réponse à une invitation à soumissionner","*Canada-Chile Free Trade Agreement (CCFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Honduras Free Trade Agreement
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Colombia Free Trade Agreement
+*Canada-Panama Free Trade Agreement
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Peru Free Trade Agreement (CPFTA)","*Accord de libre-échange Canada-Chili (ALECC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Honduras
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Pérou (ALECP)","*Canada
+*Prince Edward Island","*Canada
+*Île-du-Prince-Édouard","Fiready Inc","Fiready Inc","","","","","23","23","23 Rue du Reservoir","23 Rue du Reservoir","Clair","Clair","New Brunswick","New Brunswick","E7A 2K6","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Parks Canada Agency (PC)"," Agence Parcs Canada (PC)","","","30 Victoria Street,Gatineau,Quebec,J8X 0B3,Canada","30, rue Victoria,Gatineau,Quebec,J8X 0B3,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","Parks Canada Requires supply, delivery and unloading of firewood to two locations in the Prince Edward Island National Park as or when requested starting May 1 2026. There will be an option to extend for additional periods.","Parcs Canada a besoin de la fourniture, de la livraison et du déchargement de bois de chauffage à deux endroits dans le parc national de l’Île-du-Prince-Édouard, au fur et à mesure des besoins, à partir du 1er mai 2026. Il y aura une option de prolongation pour des périodes supplémentaires."
+"5P114-250241 N.L Firewood","5P114-250241 T-N-L Bois De Chauffage","CW2449872","000","WS5607304466","WS5607304466","CW2449872","1","2026-04-23","2026-04-20","","2026-05-01","2027-04-30","0.00","0.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*11121603
+*11121604
+*11121610","*Logs
+*Soft timber
+*Hardwoods","*Bille ou grume
+*Bois de résineux
+*Bois dur - bois franc","*GD","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-Colombia Free Trade Agreement
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Honduras Free Trade Agreement
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*North American Free Trade Agreement (NAFTA)
+*Canada-Panama Free Trade Agreement","*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange canadien (ALEC)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Honduras
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de libre-échange Canada-Panama","*Canada","*Canada","B & S TRUCKING LTD.","B & S TRUCKING LTD.","","","","","","","SUITE 3, 20 WELLON DRIVE","SUITE 3, 20 WELLON DRIVE","DEER LAKE","DEER LAKE","Newfoundland and Labrador","Newfoundland and Labrador","A8A 2G5","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Parks Canada Agency (PC)"," Agence Parcs Canada (PC)","","","30 Victoria Street,Gatineau,Quebec,J8X 0B3,Canada","30, rue Victoria,Gatineau,Quebec,J8X 0B3,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","Parks Canada Requires supply, delivery and unloading of firewood to Gros Morne National Park as or when requested starting May 1 2026.","Parcs Canada a besoin de la fourniture, de la livraison et du déchargement de bois de chauffage au parc national du Gros-Morne au fur et à mesure des besoins à compter du 1er mai 2026."
+"5P132-260056 Fundy National Park Fire Wood","5P132-260056 Bois De Chauffage Du Parc National Fundy","CW2464324","000","WS5676646483","WS5676646483","CW2464324","1","2026-09-02","2026-08-28","","2026-09-01","2027-08-31","0.00","0.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*11121603
+*11121610","*Logs
+*Hardwoods","*Bille ou grume
+*Bois dur - bois franc","*GD","Request for Standing Offer","Demande d’offre à commandes","Non-competitive","Non concurrentielle","Lowest Price","Prix le plus bas","No response to bid solicitation","Aucune réponse à une invitation à soumissionner","*Canadian Free Trade Agreement (CFTA)
+*Canada-Colombia Free Trade Agreement
+*Canada-Honduras Free Trade Agreement
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-Peru Free Trade Agreement (CPFTA)","*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Honduras
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Pérou (ALECP)","*New Brunswick
+*Canada","*Nouveau-Brunswick
+*Canada","WALLY WOOD FIREWOOD LTD.","WALLY WOOD FIREWOOD LTD.","","","","","10","10","282 parlee brook rd","282 parlee brook rd","parlee brook","parlee brook","New Brunswick","New Brunswick","E4E 4Z1","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Parks Canada Agency (PC)"," Agence Parcs Canada (PC)","","","30 Victoria Street,Gatineau,Quebec,J8X 0B3,Canada","30, rue Victoria,Gatineau,Quebec,J8X 0B3,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","The response time deadline is 14:00 EST
+Parks Canada requires supply and delivery of firewood to Fundy National Park in New Brunswick. It will be a standing offer for 1 year with an option to extend for 2 1-year periods.
+This solicitation of offers is open only to Canadian suppliers and to Suppliers of an applicable trading partner.
+Offerors may request a debriefing on the results of the solicitation of offers process.
+Reference the solicitation for further details.","L'heure limite de réponse est fixée à 14h00 HNE
+Parcs Canada a besoin de la fourniture et de la livraison de bois de chauffage au parc national Fundy, au Nouveau-Brunswick. Il s’agira d’une offre à commandes d’un an avec une option de prolongation de deux périodes d’un an.
+Le présent appel d’offres est ouvert uniquement aux fournisseurs canadiens et aux fournisseurs d’un partenaire commercial applicable.
+Les soumissionnaires peuvent demander un compte rendu des résultats du processus d’appel d’offres.
+Pour plus de détails, veuillez-vous référer à l'appel d'offres."
+"SO - 21C31-255912 - Fleece Fabric","OC - 21C31-255912 - Tissu polaire","CW2450151","000","WS5370452219","WS5370452219","CW2450151","1","2026-04-21","2026-04-13","","2026-04-13","2027-04-12","0.00","0.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*11160000","*Fabrics and leather materials","*Tissus et cuirs","*GD","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*Quebec (except NCR)","*Québec (sauf RCN)","Fine Cotton Factory, inc.","Fine Cotton Factory, inc.","","","","","","","110 Belfield Road","110 Belfield Road","Etobicoke","Etobicoke","Ontario","Ontario","M9W 1G1","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Correctional Service of Canada (CSC)"," Service correctionnel du Canada (SCC)","","","340 Laurier Ave W,Ottawa,Ontario,K1P0P9,Canada","340, avenue Laurier Ouest,Ottawa,Ontario,K1P0P9,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","Fleece Fabric","Tissu polaire"
+"Contract - Cloth, Wool Barathea and Cloth, Wool, Doeskin","Contrat - Tissu barathéa de laine et tissu suédine de laine","CW2457107","000","WS5689282210","WS5689282210","CW2457107","1","2026-07-07","2026-06-17","","2026-07-07","2030-06-17","106072.00","106072.00","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*11161600","*Wool fabrics","*Tissus de laine","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","A W Hainsworth and Sons Ltd","A W Hainsworth and Sons Ltd","","","","","160","160","Spring Valley Mills 
+Stanningley","Spring Valley Mills 
+Stanningley","Pudsey","Pudsey","Leeds","Leeds","LS28 6DW","GB","GB","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Royal Canadian Mounted Police (RCMP)"," Gendarmerie royale du Canada (GRC)","","","73 Leikin Dr,Ottawa,Ontario,K1AOR2,Canada","73, promenade Leikin,Ottawa,Ontario,K1AOR2,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"SO Sub Agreement 21C31-255707-B White Thermal Fabric","OC Accord-accessoire 21C31-255707-B Tissu Thermal Blanc","CW2457729","000","WS5396268168","WS5396268168","CW2457729","2","2026-07-03","2026-06-24","","2026-06-26","2027-06-25","0.00","0.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*11161700
+*11161800","*Cotton fabrics
+*Synthetic fabrics","*Tissus de coton
+*Tissus synthétiques","*GD","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canadian Free Trade Agreement (CFTA)","*Accord de libre-échange canadien (ALEC)","*Abbotsford
+*Drummondville","*Abbotsford
+*Drummondville","LES SOUS-VETEMENTS U.M. INC.","LES SOUS-VETEMENTS U.M. INC.","","","","","46","46","9200 BOUL. ST. LAURENT","9200 BOUL. ST. LAURENT","MONTREAL","MONTREAL","Quebec","Quebec","H2N 1M9","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Correctional Service of Canada (CSC)"," Service correctionnel du Canada (SCC)","","","340 Laurier Ave W,Ottawa,Ontario,K1P0P9,Canada","340, avenue Laurier Ouest,Ottawa,Ontario,K1P0P9,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"W8486-250159_002_BK Submarine Smoke Illumination Marker Contract Quantities","W8486-250159_002_BK Quantité contractuelle des marqueurs lumineux fumigènes sous-marins","CW2400183","000","WS5108613936","WS5108613936","CW2400183","1","2026-09-18","2026-09-11","","2026-09-11","2028-12-01","5365866.00","5365866.00","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*12131600","*Pyrotechnics","*Produits pyrotechniques","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*North American Free Trade Agreement (NAFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Colombia Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Panama Free Trade Agreement
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Panama
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)","*Nova Scotia
+*Québec
+*Canada","*Nouvelle-Écosse
+*Québec
+*Canada","HFI Pyrotechnics Inc.","HFI Pyrotechnics Inc.","","","","","135","135","3322 Hands Road RR 4","3322 Hands Road RR 4","Prescott","Prescott","Ontario","Ontario","K0E 1T0","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of National Defence (DND)"," Ministère de la Défense nationale (MDN)","","","101 Colonel By Dr,Ottawa,Ontario,K1A0K2,Canada","101, promenade Colonel By,Ottawa,Ontario,K1A0K2,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","W8486-250159 Submarine Smoke Illumination Marker Contract Quantities","W8486-250159 Quantité contractuelle des marqueurs lumineux fumigènes sous-marins"
+"SUB - RISO K3E33-240032 - Helium for the aerological programs","OCIR - K3E33-240032 Hélium pour les programmes aérologiques","CW2458518","000","WS5572755694","WS5572755694","CW2458518","1","2026-06-29","2026-06-25","","2026-06-25","2028-03-31","0.00","0.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*12142005","*Helium gas He","*Gaz hélium He","*GD","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Colombia Free Trade Agreement
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Honduras
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange Canada-Pérou (ALECP)","*British Columbia","*Colombie-Britannique","Messer Canada Inc.","Messer Canada Inc.","","","","","","","5555 des Grandes-Prairies","5555 des Grandes-Prairies","St-Léonard","St-Léonard","Québec","Québec","H1R 1B4","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of the Environment (ECCC )"," Ministère de l’Environnement (ECCC)","","","200 Boulevard Sacré-Coeur,Gatineau,Quebec,J8X4C6,Canada","200, boulevard Sacré-Coeur,Gatineau,Quebec,J8X4C6,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","Canada is seeking offers from Offerors to provide compressed helium gas (99.998% purity or higher) to Environment and Climate Change Canada (ECCC) for the following locations: Whitehorse, YT, Fort Nelson, BC, Port Hardy, BC, Prince George, BC, Vernon, BC","Le Canada sollicite des offres d’offrants pour fournir de l’hélium comprimé (pureté de 99,998% ou plus) à Environnement et Changement climatique Canada (ECCC) pour les emplacements suivants : Whitehorse (Yukon), Fort Nelson (Colombie-Britannique), Port Hardy (Colombie-Britannique), Prince George (Colombie-Britannique), Vernon (Colombie-Britannique)"
+"K3E32-260873 - Helium Bulk Packs (RISO)","K3E32-260873 - Emballages en vrac d’hélium (OCIR)","CW2452246","000","WS5526313903","WS5526313903","CW2452246","1","2026-05-13","2026-05-11","","2026-05-11","2029-03-31","0.00","0.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*12142005","*Helium gas He","*Gaz hélium He","*GD","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-Chile Free Trade Agreement (CCFTA)
+*Canada-Honduras Free Trade Agreement
+*Canadian Free Trade Agreement (CFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Colombia Free Trade Agreement
+*Canada-Panama Free Trade Agreement
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)","*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange canadien (ALEC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Panama
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)","*Alberta
+*Manitoba","*Alberta
+*Manitoba","Messer Canada inc.","Messer Canada inc.","Messer","Messer","","","850","850","5860 Chedworth Way","5860 Chedworth Way","Mississauga","Mississauga","Ontario","Ontario","L5R 0A2","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of the Environment (ECCC )"," Ministère de l’Environnement (ECCC)","","","200 Boulevard Sacré-Coeur,Gatineau,Quebec,J8X4C6,Canada","200, boulevard Sacré-Coeur,Gatineau,Quebec,J8X4C6,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"CW 39903-251039 Supply of Carbon Dioxide (CO2)","CW 39903-251039 Supply of Carbon Dioxide (CO2) [DP Approvisionnement en dioxide de carbone (CO2)","CW2408789","000","WS5250164057","WS5250164057","CW2408789","1","2026-04-23","2026-04-22","","2026-04-22","2027-03-31","1575000.00","1575000.00","CAD","Active","Actif","Task Authorization Based Contract","Contrat reposant sur des autorisations de tâches","Original","Original","","","","*12142104","*Carbon dioxide gas CO2","*Gaz carbonique CO2","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)","*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)","*Regina
+*British Columbia
+*Manitoba
+*Alberta
+*Saskatchewan","*Regina
+*Colombie-Britannique
+*Manitoba
+*Alberta
+*Saskatchewan","Ferus Inc","Ferus Inc","","","Ferus Inc","Ferus Inc","40","40","201, 438-11 Ave SE","201, 438-11 Ave SE","Calgary","Calgary","Alberta","Alberta","T2G 0Y4","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Canadian Food Inspection Agency (CFIA)"," Agence canadienne d’inspection des aliments (ACIA)","","","1400 Merivale Road,Ottawa,Ontario,K1A 0Y9,Canada","1400, chemin Merivale,Ottawa,Ontario,K1A 0Y9,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"W7702-266459 SYNTHESIS OF MOLECULES OF INTEREST","W7702-266459 SYNTHÈSE DE MOLÉCULES D’INTÉRÊT","CW2457866","000","WS5762399690","WS5762399690","CW2457866","1","2026-08-18","2026-08-14","","2026-08-14","2027-03-31","525000.00","525000.00","CAD","Active","Actif","Task Authorization Based Contract","Contrat reposant sur des autorisations de tâches","Original","Original","","","","*12350000
+*12360000
+*81000000","*Compounds and mixtures
+*Pharmaceutical drug precursors
+*Engineering and Research and Technology Based Services","*Composés et mélanges
+*Précurseurs de médicaments pharmaceutiques
+*Services d'ingénierie et de recherche et services technologiques","*SRV","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","","","*Canada-Chile Free Trade Agreement (CCFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Colombia Free Trade Agreement
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Panama Free Trade Agreement
+*Canada-Honduras Free Trade Agreement
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)","*Accord de libre-échange Canada-Chili (ALECC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Honduras
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange Canada-Ukraine (ALECU)","*Alberta","*Alberta","SV CHEMBIOTECH INC","SV CHEMBIOTECH INC","","","","","60","60","849, 112B Street 
+NW 9Ave","849, 112B Street 
+NW 9Ave","Edmonton","Edmonton","Alberta","Alberta","T6J 6W2","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Defence Research and Development Canada (DRDC)"," Recherche et développement pour la défense Canada (RDDC)","","","400 Cumberland Street,Ottawa,Ontario,K1N 1J8,Canada","400, rue Cumberland,Ottawa,Ontario,K1N 1J8,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","",""
+"K8A21-260731 - Specialized Test-Grade Fuel for Emissions Testing of Vehicles and Engines","K8A21-260731 - Carburants Spécialisés de Qualité Essai pour Évaluer les Émissions de Véhicules et de Moteurs","CW2433926","000","WS5492141675","WS5492141675","CW2433926","1","2026-04-21","2026-04-21","","2026-04-21","2027-05-31","187302.01","187302.01","CAD","Active","Actif","Contract","Contrat","Original","Original","","","","*15000000","*Fuels and Fuel Additives and Lubricants and Anti corrosive Materials","*Combustibles, additifs de combustibles, lubrifiants et agents anti-corrosion","*GD","Request for Proposal","Demande de propositions","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","No response to bid solicitation","Aucune réponse à une invitation à soumissionner","*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canadian Free Trade Agreement (CFTA)
+*Canada-Colombia Free Trade Agreement
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Panama Free Trade Agreement
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Korea Free Trade Agreement (CKFTA)","*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Colombie
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Corée","*National Capital Region (NCR)","*Région de la capitale nationale (RCN)","Gage Products Company","Gage Products Company","","","","","","","821 Wanda","821 Wanda","Ferndale","Ferndale","Michigan","Michigan","48220","US","US","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Department of the Environment (ECCC )"," Ministère de l’Environnement (ECCC)","","","200 Boulevard Sacré-Coeur,Gatineau,Quebec,J8X4C6,Canada","200, boulevard Sacré-Coeur,Gatineau,Quebec,J8X4C6,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","Contract for specialized test-grade fuel used for emissions testing of vehicles and engines in accordance with precise specifications as specified in the regulations listed under the Canadian Environmental Protection Act, 1999, as applicable.  Delivery to Environment and Climate Change Canada (ECCC) Transportation Emissions & Electrification Laboratory Facility in Ottawa.","Contrat pour carburants spécialisés de qualité essai, qui serviront à évaluer les émissions de véhicules et de moteurs conformément aux spécifications précises, comme l’énoncent les règlements pris en vertu de la Loi canadienne sur la protection de l’environnement (1999) (LCPE).  Livraison à Environnement et Changement Climatique Canada (ECCC), Laboratoire des ?émissions et de l’électrification des transports, en Ottawa."
+"E60HL-260050-010-HL NMSO Into-plane Aviation Fuel 2026-2028","E60HL-260050-010-HL OCPN Carburant d’aviation mise à bord 2026-2028","CW2453568","000","WS5548295643","WS5548295643","CW2453568","1","2026-06-05","2026-05-20","","2026-06-01","2028-05-31","282889.80","282889.80","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*15101504","*Aviation fuel","*Carburants d'aviation","*GD","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canadian Free Trade Agreement (CFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Colombia Free Trade Agreement
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Panama Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*North American Free Trade Agreement (NAFTA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)","*Accord de libre-échange canadien (ALEC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)","*Alberta
+*Northwest Territories
+*Manitoba
+*Yukon
+*British Columbia
+*New Brunswick
+*Newfoundland and Labrador
+*National Capital Region (NCR)
+*Ontario (except NCR)
+*Nova Scotia
+*Prince Edward Island
+*Quebec (except NCR)
+*Saskatchewan","*Alberta
+*Territoires du Nord-Ouest
+*Manitoba
+*Yukon
+*Colombie-Britannique
+*Nouveau-Brunswick
+*Terre-Neuve-et-Labrador
+*Région de la capitale nationale (RCN)
+*Ontario (sauf RCN)
+*Nouvelle-Écosse
+*Île-du-Prince-Édouard
+*Québec (sauf RCN)
+*Saskatchewan","FLIGHT FUELS LIMITED PARTNERSHIP","FLIGHT FUELS LIMITED PARTNERSHIP","","","Flight Fuels LP","Flight Fuels LP","26","26","#1 52111 Range Road 270","#1 52111 Range Road 270","Parkland County","Parkland County","Alberta","Alberta","T7X 3L7","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Royal Canadian Mounted Police (RCMP) / Department of Transport (TC) / National Research Council of Canada (NRC) / Department of National Defence (DND) / Department of Public Works and Government Services (PSPC)"," Ministère des Transports (TC) /  Conseil national de recherches du Canada (CNRC) /  Ministère de la Défense nationale (MDN) /  Gendarmerie royale du Canada (GRC) /  Ministère des Travaux publics et des Services gouvernementaux (SPAC)"," /  /  /  / "," /  /  /  / ","73 Leikin Dr,Ottawa,Ontario,K1AOR2,Canada / 330 Sparks Street,Ottawa,Ontario,K1A0N8,Canada / 100 Sussex Dr,Ottawa,Ontario,K1A0R6,Canada / 101 Colonel By Dr,Ottawa,Ontario,K1A0K2,Canada / 11 Laurier St, Phase III, Place du Portage,Gatineau,Quebec,K1A 0S5,Canada","330, rue Sparks,Ottawa,Ontario,K1A0N8,Canada / 100, promenade Sussex,Ottawa,Ontario,K1A0R6,Canada / 101, promenade Colonel By,Ottawa,Ontario,K1A0K2,Canada / 73, promenade Leikin,Ottawa,Ontario,K1AOR2,Canada / 11, rue Laurier, Phase III, Place du Portage,Gatineau,Québec,K1A 0S5,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","National Master Standing Offers for aviation fuels (Into-Plane) in accordance with Canadian General Standards Board standards or ASTM International Standard, as applicable. Delivery to various locations in Canada or ASTM International Standard, on an as-and when-requested basis, from June 1, 2026 up to and including May 31, 2028","Offres à commandes principales et nationales pour des carburants aviation (à bord) conformément aux normes de l'Office des normes générales du Canada ou de la norme de ASTM International Standard, selon le cas.   Le produit doit être livré à divers emplacements au Canada, selon la demande, du 1er juin 2026 au 31 mai 2028 inclusivement."
+"E60HL-260050-011-HL NMSO Into-plane Aviation Fuel 2026-2028","E60HL-260050-011-HL OCPN Carburant d’aviation mise à bord 2026-2028","CW2453583","000","WS5548295643","WS5548295643","CW2453583","1","2026-06-05","2026-05-26","","2026-06-01","2028-05-31","5303475.00","5303475.00","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*15101504","*Aviation fuel","*Carburants d'aviation","*GD","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canadian Free Trade Agreement (CFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Colombia Free Trade Agreement
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-Panama Free Trade Agreement
+*North American Free Trade Agreement (NAFTA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Peru Free Trade Agreement (CPFTA)","*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Colombie
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Corée
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Pérou (ALECP)","*New Brunswick
+*Northwest Territories
+*British Columbia
+*Alberta
+*Newfoundland and Labrador
+*Ontario (except NCR)
+*Manitoba
+*Saskatchewan
+*Nova Scotia
+*National Capital Region (NCR)
+*Quebec (except NCR)
+*Prince Edward Island
+*Yukon","*Nouveau-Brunswick
+*Territoires du Nord-Ouest
+*Colombie-Britannique
+*Alberta
+*Terre-Neuve-et-Labrador
+*Ontario (sauf RCN)
+*Manitoba
+*Saskatchewan
+*Nouvelle-Écosse
+*Région de la capitale nationale (RCN)
+*Québec (sauf RCN)
+*Île-du-Prince-Édouard
+*Yukon","ARCTIC PETROLEUM SERVICES LTD","ARCTIC PETROLEUM SERVICES LTD","","","","","15","15","Suite 1 52111 Range Road 270","Suite 1 52111 Range Road 270","Spruce Grove","Spruce Grove","Alberta","Alberta","T7X 3L7","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","National Research Council of Canada (NRC) / Royal Canadian Mounted Police (RCMP) / Department of National Defence (DND) / Department of Public Works and Government Services (PSPC) / Department of Transport (TC)"," Ministère des Transports (TC) /  Conseil national de recherches du Canada (CNRC) /  Gendarmerie royale du Canada (GRC) /  Ministère de la Défense nationale (MDN) /  Ministère des Travaux publics et des Services gouvernementaux (SPAC)"," /  /  /  / "," /  /  /  / ","100 Sussex Dr,Ottawa,Ontario,K1A0R6,Canada / 73 Leikin Dr,Ottawa,Ontario,K1AOR2,Canada / 101 Colonel By Dr,Ottawa,Ontario,K1A0K2,Canada / 11 Laurier St, Phase III, Place du Portage,Gatineau,Quebec,K1A 0S5,Canada / 330 Sparks Street,Ottawa,Ontario,K1A0N8,Canada","330, rue Sparks,Ottawa,Ontario,K1A0N8,Canada / 100, promenade Sussex,Ottawa,Ontario,K1A0R6,Canada / 73, promenade Leikin,Ottawa,Ontario,K1AOR2,Canada / 101, promenade Colonel By,Ottawa,Ontario,K1A0K2,Canada / 11, rue Laurier, Phase III, Place du Portage,Gatineau,Québec,K1A 0S5,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","National Master Standing Offers for aviation fuels (Into-Plane) in accordance with Canadian General Standards Board standards or ASTM International Standard, as applicable. Delivery to various locations in Canada or ASTM International Standard, on an as-and when-requested basis, from June 1, 2026 up to and including May 31, 2028","Offres à commandes principales et nationales pour des carburants aviation (à bord) conformément aux normes de l'Office des normes générales du Canada ou de la norme de ASTM International Standard, selon le cas.   Le produit doit être livré à divers emplacements au Canada, selon la demande, du 1er juin 2026 au 31 mai 2028 inclusivement."
+"E60HL-260050-007-HL NMSO Into-plane Aviation Fuel 2026-2028","E60HL-260050-007-HL OCPN Carburant d’aviation mise à bord 2026-2028","CW2453588","000","WS5548295643","WS5548295643","CW2453588","2","2026-06-05","2026-05-26","","2026-06-01","2028-05-31","24203256.09","23097945.84","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*15101504","*Aviation fuel","*Carburants d'aviation","*GD","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canadian Free Trade Agreement (CFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Colombia Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Panama Free Trade Agreement
+*North American Free Trade Agreement (NAFTA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)","*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)","*Alberta
+*British Columbia
+*Ontario (except NCR)
+*New Brunswick
+*Northwest Territories
+*Manitoba
+*Saskatchewan
+*Nova Scotia
+*National Capital Region (NCR)
+*Quebec (except NCR)
+*Newfoundland and Labrador
+*Yukon
+*Prince Edward Island","*Alberta
+*Colombie-Britannique
+*Ontario (sauf RCN)
+*Nouveau-Brunswick
+*Territoires du Nord-Ouest
+*Manitoba
+*Saskatchewan
+*Nouvelle-Écosse
+*Région de la capitale nationale (RCN)
+*Québec (sauf RCN)
+*Terre-Neuve-et-Labrador
+*Yukon
+*Île-du-Prince-Édouard","AVJET HOLDING INC.","AVJET HOLDING INC.","","","","","","","900 LEMIRE BOULEVARD","900 LEMIRE BOULEVARD","DRUMMONDVILLE","DRUMMONDVILLE","Québec","Québec","J2C 7W8","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Royal Canadian Mounted Police (RCMP) / Department of Public Works and Government Services (PSPC) / National Research Council of Canada (NRC) / Department of National Defence (DND) / Department of Transport (TC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC) /  Conseil national de recherches du Canada (CNRC) /  Ministère de la Défense nationale (MDN) /  Ministère des Transports (TC) /  Gendarmerie royale du Canada (GRC)"," /  /  /  / "," /  /  /  / ","73 Leikin Dr,Ottawa,Ontario,K1AOR2,Canada / 11 Laurier St, Phase III, Place du Portage,Gatineau,Quebec,K1A 0S5,Canada / 100 Sussex Dr,Ottawa,Ontario,K1A0R6,Canada / 101 Colonel By Dr,Ottawa,Ontario,K1A0K2,Canada / 330 Sparks Street,Ottawa,Ontario,K1A0N8,Canada","11, rue Laurier, Phase III, Place du Portage,Gatineau,Québec,K1A 0S5,Canada / 100, promenade Sussex,Ottawa,Ontario,K1A0R6,Canada / 101, promenade Colonel By,Ottawa,Ontario,K1A0K2,Canada / 330, rue Sparks,Ottawa,Ontario,K1A0N8,Canada / 73, promenade Leikin,Ottawa,Ontario,K1AOR2,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","National Master Standing Offers for aviation fuels (Into-Plane) in accordance with Canadian General Standards Board standards or ASTM International Standard, as applicable. Delivery to various locations in Canada or ASTM International Standard, on an as-and when-requested basis, from June 1, 2026 up to and including May 31, 2028","Offres à commandes principales et nationales pour des carburants aviation (à bord) conformément aux normes de l'Office des normes générales du Canada ou de la norme de ASTM International Standard, selon le cas.   Le produit doit être livré à divers emplacements au Canada, selon la demande, du 1er juin 2026 au 31 mai 2028 inclusivement."
+"E60HL-260050-007-HL NMSO Into-plane Aviation Fuel 2026-2028","E60HL-260050-007-HL OCPN Carburant d’aviation mise à bord 2026-2028","CW0000001","000","WS5548295643","WS5548295643","CW2453588","2","2026-06-05","2026-05-26","","2026-06-01","2028-05-31","24203256.09","23097945.84","CAD","Active","Actif","Standing Offer","Offre à commandes","Original","Original","","","","*15101504","*Aviation fuel","*Carburants d'aviation","*GD","Request for Standing Offer","Demande d’offre à commandes","Competitive - Open bidding","Concurrentielle - Invitation ouverte à soumissionner","Lowest Price","Prix le plus bas","None","Aucune","*Canadian Free Trade Agreement (CFTA)
+*Canada-Chile Free Trade Agreement (CCFTA)
+*World Trade Organization Agreement on Government Procurement (WTO GPA)
+*Canada-Colombia Free Trade Agreement
+*Canada-Korea Free Trade Agreement (CKFTA)
+*Canada-Honduras Free Trade Agreement
+*Canada-Ukraine Free Trade Agreement (CUFTA)
+*Canada-European Union Comprehensive Economic and Trade Agreement (CETA)
+*Canada-Panama Free Trade Agreement
+*North American Free Trade Agreement (NAFTA)
+*Canada-UK Trade Continuity Agreement (Canada-UK TCA)
+*Canada-Peru Free Trade Agreement (CPFTA)
+*Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)","*Accord de libre-échange canadien (ALEC)
+*Accord de libre-échange Canada-Chili (ALECC)
+*Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)
+*Accord de libre-échange Canada-Colombie
+*Accord de libre-échange Canada-Corée
+*Accord de libre-échange Canada-Honduras
+*Accord de libre-échange Canada-Ukraine (ALECU)
+*Accord économique et commercial global (AECG) entre le Canada et l’Union européenne (UE)
+*Accord de libre-échange Canada-Panama
+*Accord de libre-échange nord-américain (ALENA)
+*Accord de continuité commerciale Canada–Royaume-Uni (ACC Canada-Royaume-Uni)
+*Accord de libre-échange Canada-Pérou (ALECP)
+*Accord de Partenariat transpacifique global et progressiste (PTPGP)","*Alberta
+*British Columbia
+*Ontario (except NCR)
+*New Brunswick
+*Northwest Territories
+*Manitoba
+*Saskatchewan
+*Nova Scotia
+*National Capital Region (NCR)
+*Quebec (except NCR)
+*Newfoundland and Labrador
+*Yukon
+*Prince Edward Island","*Alberta
+*Colombie-Britannique
+*Ontario (sauf RCN)
+*Nouveau-Brunswick
+*Territoires du Nord-Ouest
+*Manitoba
+*Saskatchewan
+*Nouvelle-Écosse
+*Région de la capitale nationale (RCN)
+*Québec (sauf RCN)
+*Terre-Neuve-et-Labrador
+*Yukon
+*Île-du-Prince-Édouard","Owen Mercer","Owen Mercer","","","","","","","1 Example Street","1 Example Street","DRUMMONDVILLE","DRUMMONDVILLE","Québec","Québec","J2C 7W8","CA","CA","Department of Public Works and Government Services (PSPC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC)","11 Laurier St, Phase III, Place du Portage","11, rue Laurier, Phase III, Place du Portage","Gatineau","Gatineau","Quebec","Québec","K1A 0S5","Canada","Canada","Royal Canadian Mounted Police (RCMP) / Department of Public Works and Government Services (PSPC) / National Research Council of Canada (NRC) / Department of National Defence (DND) / Department of Transport (TC)"," Ministère des Travaux publics et des Services gouvernementaux (SPAC) /  Conseil national de recherches du Canada (CNRC) /  Ministère de la Défense nationale (MDN) /  Ministère des Transports (TC) /  Gendarmerie royale du Canada (GRC)"," /  /  /  / "," /  /  /  / ","73 Leikin Dr,Ottawa,Ontario,K1AOR2,Canada / 11 Laurier St, Phase III, Place du Portage,Gatineau,Quebec,K1A 0S5,Canada / 100 Sussex Dr,Ottawa,Ontario,K1A0R6,Canada / 101 Colonel By Dr,Ottawa,Ontario,K1A0K2,Canada / 330 Sparks Street,Ottawa,Ontario,K1A0N8,Canada","11, rue Laurier, Phase III, Place du Portage,Gatineau,Québec,K1A 0S5,Canada / 100, promenade Sussex,Ottawa,Ontario,K1A0R6,Canada / 101, promenade Colonel By,Ottawa,Ontario,K1A0K2,Canada / 330, rue Sparks,Ottawa,Ontario,K1A0N8,Canada / 73, promenade Leikin,Ottawa,Ontario,K1AOR2,Canada","Contact, Test","contact@example.invalid","000-000-0000","","","","","","","","","","","","National Master Standing Offers for aviation fuels (Into-Plane) in accordance with Canadian General Standards Board standards or ASTM International Standard, as applicable. Delivery to various locations in Canada or ASTM International Standard, on an as-and when-requested basis, from June 1, 2026 up to and including May 31, 2028","Offres à commandes principales et nationales pour des carburants aviation (à bord) conformément aux normes de l'Office des normes générales du Canada ou de la norme de ASTM International Standard, selon le cas.   Le produit doit être livré à divers emplacements au Canada, selon la demande, du 1er juin 2026 au 31 mai 2028 inclusivement."
