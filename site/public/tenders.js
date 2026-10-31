@@ -138,7 +138,7 @@
         if (!day || day < TODAY || day > until) return false;
       }
       if (words.length) {
-        var text = fold((r.title_en || "") + " " + (r.title_fr || "") + " " + r.reference);
+        var text = fold((r.title_en || "") + " " + (r.title_fr || "") + " " + r.reference + " " + (r.reference_published || ""));
         for (var i = 0; i < words.length; i++) if (text.indexOf(words[i]) < 0) return false;
       }
       return true;
@@ -174,11 +174,13 @@
   function row(r) {
     var tr = el("tr");
     var notice = cell(tr, "col.notice");
-    var a = el("a", null, pick(r.title_en, r.title_fr) || r.reference);
+    // The reference as published, when the export made the site's own URL-safe.
+    var shown = typeof r.reference_published === "string" && r.reference_published ? r.reference_published : r.reference;
+    var a = el("a", null, pick(r.title_en, r.title_fr) || shown);
     a.href = "/tenders/" + encodeURIComponent(r.reference.toLowerCase());
     notice.appendChild(a);
     notice.appendChild(el("br"));
-    notice.appendChild(el("span", "mono id muted", r.reference));
+    notice.appendChild(el("span", "mono id muted", shown));
     (r.segments || []).forEach(function (code) {
       notice.appendChild(document.createTextNode(" "));
       var chip = el("a", "chip", code);

@@ -1,0 +1,188 @@
+{
+ "award:23240-220799-001-im": {
+  "amended": null,
+  "amendment": 0,
+  "amendment_type_en": null,
+  "amendment_type_fr": null,
+  "amendments": [
+   {
+    "amended": null,
+    "amendment": 0,
+    "amendment_type_en": null,
+    "amendment_type_fr": null,
+    "amount": 250000,
+    "status": "active",
+    "total_value": 250000
+   }
+  ],
+  "amount": 250000,
+  "awarded": "2026-09-15",
+  "buyer_en": "Public Services and Procurement Canada",
+  "buyer_fr": "Services publics et Approvisionnement Canada",
+  "buyer_id": "pwgsc-tpsgc",
+  "category": [
+   "SRV"
+  ],
+  "codes": [
+   {
+    "code": "82111800",
+    "desc_en": "Editorial and support services",
+    "desc_fr": "Services de rédaction et de soutien"
+   }
+  ],
+  "competitive": 1,
+  "contract_number": "23240-220799/001/IM",
+  "currency": "CAD",
+  "description_en": null,
+  "description_fr": null,
+  "end": "2029-09-30",
+  "end_users_en": [
+   "Department of Fisheries and Oceans (DFO)"
+  ],
+  "end_users_fr": [
+   "Ministère des Pêches et des Océans (MPO)"
+  ],
+  "first_seen": "2026-09-16",
+  "gsin": null,
+  "gsin_desc_en": null,
+  "gsin_desc_fr": null,
+  "instrument_type_en": "Standing Offer",
+  "instrument_type_fr": "Offre à commandes",
+  "kind": "award",
+  "last_seen": "2026-10-31",
+  "limited_reason_en": null,
+  "limited_reason_fr": null,
+  "method_en": "Competitive - Open bidding",
+  "method_fr": "Concurrentielle - Appel d'offres ouvert",
+  "notice_type_en": "Request for Proposal",
+  "notice_type_fr": "Demande de propositions",
+  "organization_id": null,
+  "provinces": [
+   "ON"
+  ],
+  "published": "2026-09-16",
+  "reference": "23240-220799-001-im",
+  "reference_published": "23240-220799/001/IM",
+  "regions_delivery_en": [
+   "Ontario"
+  ],
+  "regions_delivery_fr": [
+   "Ontario"
+  ],
+  "selection_en": null,
+  "selection_fr": null,
+  "solicitation": "EN578-250099",
+  "source_file": "2026-2027-awardNotice-avisAttribution.csv",
+  "start": "2026-10-01",
+  "status": "active",
+  "supplier": "Coastal Fuel Supply Ltd.",
+  "supplier_city": "Nanaimo",
+  "supplier_country": "CA",
+  "supplier_province": "BC",
+  "tender_reference": "en578-123456-a-1",
+  "title_en": "Marine fuel, call-up 1",
+  "title_fr": "Carburant marin, commande subséquente 1",
+  "total_value": 250000,
+  "trade_agreements_en": [],
+  "trade_agreements_fr": [],
+  "value": 250000
+ },
+ "history:23240-220799-001-im": {
+  "amended": "2026-01-10",
+  "amendment": 2,
+  "amendment_type_en": "Amendment",
+  "amendment_type_fr": "Modification",
+  "amendments": [
+   {
+    "amended": null,
+    "amendment": 0,
+    "amendment_type_en": "Original",
+    "amendment_type_fr": "Original",
+    "amount": 900000,
+    "status": "active",
+    "total_value": 900000
+   },
+   {
+    "amended": "2025-11-02",
+    "amendment": 1,
+    "amendment_type_en": "Amendment",
+    "amendment_type_fr": "Modification",
+    "amount": 150000,
+    "status": "active",
+    "total_value": 1050000
+   },
+   {
+    "amended": "2026-01-10",
+    "amendment": 2,
+    "amendment_type_en": "Amendment",
+    "amendment_type_fr": "Modification",
+    "amount": 150000,
+    "status": "active",
+    "total_value": 1200000
+   }
+  ],
+  "amount": 150000,
+  "awarded": "2025-06-01",
+  "buyer_en": "Public Services and Procurement Canada",
+  "buyer_fr": "Services publics et Approvisionnement Canada",
+  "buyer_id": "pwgsc-tpsgc",
+  "category": [
+   "SRV"
+  ],
+  "client_en": "Fisheries and Oceans Canada",
+  "client_fr": "Pêches et Océans Canada",
+  "client_id": "dfo-mpo",
+  "codes": [],
+  "competitive": 0,
+  "contract_number": "W8472-000633",
+  "currency": "CAD",
+  "description_en": null,
+  "description_fr": null,
+  "end": "2026-03-31",
+  "first_seen": "2025-07-01",
+  "gsin": null,
+  "gsin_desc_en": null,
+  "gsin_desc_fr": null,
+  "instrument_type_en": "Contract",
+  "instrument_type_fr": "Contrat",
+  "kind": "history",
+  "last_seen": "2026-10-01",
+  "limited_reason_en": "Only one firm is capable of performing the contract",
+  "limited_reason_fr": "Une seule entreprise est capable d'exécuter le marché",
+  "method_en": "Non-competitive",
+  "method_fr": "Non concurrentielle",
+  "notice_type_en": null,
+  "notice_type_fr": null,
+  "organization_id": null,
+  "procurement_number": "PW-25-00012345",
+  "provinces": [
+   "BC"
+  ],
+  "published": "2025-06-05",
+  "reference": "23240-220799-001-im",
+  "reference_published": "23240-220799/001/IM",
+  "regions_delivery_en": [
+   "British Columbia"
+  ],
+  "regions_delivery_fr": [
+   "Colombie-Britannique"
+  ],
+  "selection_en": null,
+  "selection_fr": null,
+  "solicitation": null,
+  "source_file": "contractHistoryComplete-contratsOctroyesComplet.csv",
+  "start": "2025-06-15",
+  "status": "active",
+  "supplier": "Coastal Fuel Supply Ltd.",
+  "supplier_city": "Victoria",
+  "supplier_country": "CA",
+  "supplier_operating": null,
+  "supplier_province": "BC",
+  "title_en": "Marine fuel, call-up 1",
+  "title_fr": "Carburant marin, commande subséquente 1",
+  "total_value": 1200000,
+  "trade_agreements_en": [],
+  "trade_agreements_fr": [],
+  "value": 1200000
+ }
+}

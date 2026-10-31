@@ -1,0 +1,89 @@
+{
+ "en578-123456-a-1": {
+  "amended": null,
+  "amendment": 0,
+  "amendments": [
+   {
+    "amended": null,
+    "amendment": 0,
+    "closing": "2026-11-26T14:00:00",
+    "first_seen": "2026-10-31",
+    "published": "2026-10-31",
+    "status": "open",
+    "title_en": "Standing offer for marine fuel, west coast",
+    "title_fr": "Offre à commandes de carburant marin, côte ouest"
+   }
+  ],
+  "buyer_en": "Fisheries and Oceans Canada",
+  "buyer_fr": "Pêches et Océans Canada",
+  "buyer_id": "dfo-mpo",
+  "category": [
+   "SRV"
+  ],
+  "closing": "2026-11-26T14:00:00",
+  "codes": [
+   {
+    "code": "72101500",
+    "desc_en": "Building maintenance services",
+    "desc_fr": "Services d'entretien de bâtiments"
+   }
+  ],
+  "description_en": null,
+  "description_fr": null,
+  "end_expected": null,
+  "end_users_en": null,
+  "end_users_fr": null,
+  "first_seen": "2026-10-31",
+  "gsin": null,
+  "gsin_desc_en": null,
+  "gsin_desc_fr": null,
+  "last_seen": "2026-10-31",
+  "limited_reason_en": null,
+  "limited_reason_fr": null,
+  "method_en": "Competitive - Selective tendering",
+  "method_fr": "Concurrentielle - Appel d'offres sélectif",
+  "notice_type_en": "Request for Proposal",
+  "notice_type_fr": "Demande de propositions",
+  "provinces": [
+   "BC"
+  ],
+  "published": "2026-10-31",
+  "reference": "en578-123456-a-1",
+  "reference_published": "EN578-123456/A:1",
+  "regions_delivery_en": [
+   "British Columbia"
+  ],
+  "regions_delivery_fr": [
+   "Colombie-Britannique"
+  ],
+  "regions_opportunity_en": [
+   "Canada"
+  ],
+  "regions_opportunity_fr": [
+   "Canada"
+  ],
+  "related_awards": [
+   {
+    "awarded": "2026-07-04",
+    "currency": "CAD",
+    "organization": "Coastal Fuel Supply Ltd.",
+    "organization_id": null,
+    "reference": "23240-220799-001-im",
+    "reference_published": "23240-220799/001/IM",
+    "title_en": "Marine fuel, call-up 1",
+    "title_fr": "Carburant marin, commande subséquente 1",
+    "value": 120000
+   }
+  ],
+  "selection_en": null,
+  "selection_fr": null,
+  "solicitation": "F5211-260002",
+  "source_file": "newTenderNotice-nouvelAvisAppelOffres.csv",
+  "start_expected": null,
+  "status": "open",
+  "title_en": "Standing offer for marine fuel, west coast",
+  "title_fr": "Offre à commandes de carburant marin, côte ouest",
+  "trade_agreements_en": [],
+  "trade_agreements_fr": []
+ }
+}

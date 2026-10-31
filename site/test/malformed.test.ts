@@ -17,6 +17,8 @@ const READERS: Record<string, string[]> = {
   "tenders/new/2026-10-31.json": ["/tenders/new"],
   "tenders/20a.json": ["/tenders/cb-100-10000001", "/api/tenders/cb-100-10000001"],
   "contracts/637.json": ["/awards/cb-400-40000004", "/history/w8472-000633"],
+  "tenders/f3d.json": ["/tenders/en578-123456-a-1", "/api/tenders/en578-123456-a-1"],
+  "contracts/557.json": ["/awards/23240-220799-001-im", "/history/23240-220799-001-im"],
   "awards/recent.json": ["/awards"],
   "awards/2026/index.json": ["/awards/2026", "/awards/2026?page=2"],
   "awards/2026/1.json": ["/awards/2026"],

@@ -156,10 +156,11 @@ export function growthPct(lang: Lang, growth: number): string {
   return t(lang, "pct", { n: `${sign}${n}` });
 }
 
-// A published contract's reference is "owner_org:reference"; the search
+// The reference a reader knows the row by: an award or history row's as
+// published; a published contract's is "owner_org:reference" and the search
 // takes the reference alone.
-export function contractReference(r: Pick<ExpiringRow, "kind" | "reference">): string {
-  if (r.kind !== "contract") return r.reference;
+export function contractReference(r: Pick<ExpiringRow, "kind" | "reference" | "reference_published">): string {
+  if (r.kind !== "contract") return r.reference_published ?? r.reference;
   const at = r.reference.indexOf(":");
   return at >= 0 ? r.reference.slice(at + 1) : r.reference;
 }
@@ -167,8 +168,8 @@ export function contractReference(r: Pick<ExpiringRow, "kind" | "reference">): s
 // The government's own record of a row: the CanadaBuys notice for an award;
 // the contract history dataset for a PSPC record, which has no page of its
 // own on CanadaBuys; the contracts search for a published contract.
-export function expiringRecordUrl(r: Pick<ExpiringRow, "kind" | "reference">, lang: Lang): string {
-  if (r.kind === "award") return awardNoticeUrl(r.reference, lang);
+export function expiringRecordUrl(r: Pick<ExpiringRow, "kind" | "reference" | "reference_published">, lang: Lang): string {
+  if (r.kind === "award") return awardNoticeUrl(r.reference_published ?? r.reference, lang);
   if (r.kind === "history") return datasetUrl("history", lang);
   return contractSearchUrl(contractReference(r));
 }

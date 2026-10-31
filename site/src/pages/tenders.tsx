@@ -74,7 +74,7 @@ export function fold(s: string): string {
 }
 
 // The rows that pass every filter, in the order asked for. The text filter
-// reads the title in both languages and the reference.
+// reads the title in both languages and the reference, as published too.
 export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, today: string): TenderRow[] {
   const words = fold(q.q).split(/\s+/).filter(Boolean);
   const until = q.closing ? addDays(today, Number(q.closing)) : "";
@@ -90,7 +90,7 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, today:
       if (!day || day < today || day > until) return false;
     }
     if (words.length) {
-      const text = fold(`${r.title_en ?? ""} ${r.title_fr ?? ""} ${r.reference}`);
+      const text = fold(`${r.title_en ?? ""} ${r.title_fr ?? ""} ${r.reference} ${r.reference_published ?? ""}`);
       if (!words.every((w) => text.includes(w))) return false;
     }
     return true;

@@ -35,6 +35,10 @@ export function competitiveOf(v: Competitive | undefined): boolean | null {
 // One open (or newly published) notice, list fields only.
 export interface TenderRow {
   reference: string;
+  // The reference as published, when it holds a character a URL path cannot
+  // ("/" or ":"); `reference` is then its URL-safe form. Shown on pages and
+  // used for the CanadaBuys links; `reference` stays the site's own key.
+  reference_published?: string;
   amendment: number;
   title_en: string | null;
   title_fr: string | null;
@@ -60,6 +64,7 @@ export interface TenderRow {
 // contracting entity is always Public Services and Procurement Canada.
 export interface AwardRow {
   reference: string;
+  reference_published?: string;
   title_en: string | null;
   title_fr: string | null;
   organization_id: string | null;
@@ -217,6 +222,7 @@ export interface TenderVersion {
 
 export interface RelatedAward {
   reference: string;
+  reference_published?: string;
   title_en: string | null;
   title_fr: string | null;
   organization_id: string | null;
@@ -230,6 +236,7 @@ export interface RelatedAward {
 // contact fields are never exported; the page links to CanadaBuys for them.
 export interface TenderDetail {
   reference: string;
+  reference_published?: string;
   amendment: number;
   solicitation: string | null;
   title_en: string | null;
@@ -289,6 +296,7 @@ export interface ContractVersion {
 export interface ContractDetail {
   kind: "award" | "history";
   reference: string;
+  reference_published?: string;
   amendment: number;
   solicitation: string | null;
   contract_number: string | null;
@@ -485,8 +493,11 @@ export type ExpiringKind = (typeof EXPIRING_KINDS)[number];
 export interface ExpiringRow {
   kind: ExpiringKind;
   // As published; for a published contract "owner_org:reference", since its
-  // reference is unique within one department only.
+  // reference is unique within one department only. An award or history
+  // reference holding "/" or ":" is in its URL-safe form, with the published
+  // one in reference_published.
   reference: string;
+  reference_published?: string;
   title_en: string | null;
   title_fr: string | null;
   // Both null, with supplier_withheld true, when the supplier reads as a person.
@@ -697,15 +708,25 @@ export const isCompetitive = (v: unknown): v is Competitive => v === null || isB
 const isOrgIdOrNull = (v: unknown): boolean => v === null || (isStr(v) && ORG_ID_RE.test(v));
 const isBuyerIdOrNull = (v: unknown): boolean => v === null || (isStr(v) && BUYER_ID_RE.test(v));
 const isRef = (v: unknown): v is string => isStr(v) && REFERENCE_RE.test(v);
+// The reference as published: any text the page prints (it is escaped), but not empty or long.
+const isPublishedRef = (v: unknown): v is string => isStr(v) && v.length >= 1 && v.length <= 200;
+
+// The reference a reader knows the record by: as published when the export
+// had to make it URL-safe, else the reference itself.
+export function publishedReference(r: { reference: string; reference_published?: string }): string {
+  return r.reference_published ?? r.reference;
+}
 const isMoneySource = (v: unknown): v is MoneySource => (MONEY_SOURCES as readonly unknown[]).includes(v);
 
-export const isTenderRow = (r: unknown): r is TenderRow => isObj(r) && isRef(r.reference) && isNum(r.amendment) &&
+export const isTenderRow = (r: unknown): r is TenderRow => isObj(r) && isRef(r.reference) &&
+  optional(r.reference_published, isPublishedRef) && isNum(r.amendment) &&
   isStrOrNull(r.title_en) && isStrOrNull(r.title_fr) && isBuyerIdOrNull(r.buyer_id) && isStrOrNull(r.buyer_en) &&
   isStrOrNull(r.buyer_fr) && isStrOrNull(r.published) && isStrOrNull(r.closing) && isStrList(r.category) &&
   isStrOrNull(r.notice_type_en) && isStrOrNull(r.notice_type_fr) && isStrOrNull(r.method_en) && isStrOrNull(r.method_fr) &&
   isStrList(r.segments) && isStrList(r.provinces) && isStr(r.first_seen) && optional(r.status, isStr);
 
-export const isAwardRow = (r: unknown): r is AwardRow => isObj(r) && isRef(r.reference) && isStrOrNull(r.title_en) &&
+export const isAwardRow = (r: unknown): r is AwardRow => isObj(r) && isRef(r.reference) &&
+  optional(r.reference_published, isPublishedRef) && isStrOrNull(r.title_en) &&
   isStrOrNull(r.title_fr) && isOrgIdOrNull(r.organization_id) && isStrOrNull(r.organization) && isBuyerIdOrNull(r.buyer_id) &&
   isStrOrNull(r.buyer_en) && isStrOrNull(r.buyer_fr) && isStrOrNull(r.awarded) && isNumOrNull(r.value) &&
   isStrOrNull(r.currency) && isCompetitive(r.competitive) && isStrOrNull(r.instrument_en) && isStrOrNull(r.instrument_fr) &&
@@ -786,7 +807,8 @@ const isTenderVersion = (v: unknown): boolean => isObj(v) && isNum(v.amendment) 
   isStrOrNull(v.amended) && isStrOrNull(v.closing) && isStrOrNull(v.status) && isStrOrNull(v.title_en) &&
   isStrOrNull(v.title_fr) && isStr(v.first_seen);
 
-const isRelatedAward = (v: unknown): boolean => isObj(v) && isRef(v.reference) && isStrOrNull(v.title_en) &&
+const isRelatedAward = (v: unknown): boolean => isObj(v) && isRef(v.reference) &&
+  optional(v.reference_published, isPublishedRef) && isStrOrNull(v.title_en) &&
   isStrOrNull(v.title_fr) && isOrgIdOrNull(v.organization_id) && isStrOrNull(v.organization) && isStrOrNull(v.awarded) &&
   isNumOrNull(v.value) && isStrOrNull(v.currency);
 
@@ -794,6 +816,7 @@ const BI_TEXT = ["title", "notice_type", "method", "selection", "limited_reason"
 const BI_LISTS = ["trade_agreements", "regions_delivery"] as const;
 
 const isTenderDetail = (v: unknown, reference: string): v is TenderDetail => isObj(v) && isRef(v.reference) &&
+  optional(v.reference_published, isPublishedRef) &&
   v.reference.toLowerCase() === reference && isNum(v.amendment) && isStrOrNull(v.solicitation) &&
   BI_TEXT.every((k) => isStrOrNull(v[`${k}_en`]) && isStrOrNull(v[`${k}_fr`])) &&
   BI_LISTS.every((k) => isStrListOrNull(v[`${k}_en`]) && isStrListOrNull(v[`${k}_fr`])) &&
@@ -824,7 +847,8 @@ const isContractVersion = (v: unknown): boolean => isObj(v) && isNum(v.amendment
   isStrOrNull(v.amendment_type_fr);
 
 const isContractDetail = (v: unknown, kind: "award" | "history", reference: string): v is ContractDetail => isObj(v) &&
-  v.kind === kind && isRef(v.reference) && v.reference.toLowerCase() === reference && isNum(v.amendment) &&
+  v.kind === kind && isRef(v.reference) && v.reference.toLowerCase() === reference &&
+  optional(v.reference_published, isPublishedRef) && isNum(v.amendment) &&
   isStrOrNull(v.solicitation) && isStrOrNull(v.contract_number) && optional(v.procurement_number, isStrOrNull) &&
   BI_TEXT.every((k) => isStrOrNull(v[`${k}_en`]) && isStrOrNull(v[`${k}_fr`])) &&
   BI_LISTS.every((k) => isStrListOrNull(v[`${k}_en`]) && isStrListOrNull(v[`${k}_fr`])) &&
@@ -1034,6 +1058,7 @@ const isDay = (v: unknown): v is string => isStr(v) && /^\d{4}-\d{2}-\d{2}/.test
 // query, so any short string reads.
 export const isExpiringRow = (r: unknown): r is ExpiringRow => isObj(r) && isExpiringKind(r.kind) &&
   (r.kind === "contract" ? isStr(r.reference) && r.reference.length > 0 && r.reference.length <= 200 : isRef(r.reference)) &&
+  optional(r.reference_published, isPublishedRef) &&
   isStrOrNull(r.title_en) && isStrOrNull(r.title_fr) && isOrgIdOrNull(r.organization_id) && isStrOrNull(r.organization) &&
   optional(r.supplier_withheld, isBool) && isBuyerIdOrNull(r.buyer_id) && isStrOrNull(r.buyer_en) && isStrOrNull(r.buyer_fr) &&
   isStrOrNull(r.start) && isDay(r.end) && isCount(r.days_left) && isNumOrNull(r.value) && isStrOrNull(r.currency) &&

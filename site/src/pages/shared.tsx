@@ -3,7 +3,7 @@
 // government's own record of each row.
 
 import type { FC } from "hono/jsx";
-import type { AwardRow, OrgTotal, TenderRow } from "../data";
+import { type AwardRow, type OrgTotal, type TenderRow, publishedReference } from "../data";
 import { buyerPath } from "../crosslinks";
 import { fmtInt, fmtMoney, pick, provinceName, segmentLabel, t, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, StatusBadge, tenderState } from "../layout";
@@ -12,16 +12,23 @@ import { CompetitiveFlag, StatusBadge, tenderState } from "../layout";
 
 // CanadaBuys serves each notice in English and, on its French host
 // (AchatsCanada), in French; a lower-cased reference works on both, and each
-// page links the notice in its own language.
+// page links the notice in its own language. Callers pass the reference as
+// published (publishedReference), not the site's URL-safe form; a "/" in it
+// stays a path separator, as CanadaBuys writes it, and anything else that
+// cannot sit in a path is escaped.
+function noticePath(reference: string): string {
+  return encodeURIComponent(reference.toLowerCase()).replace(/%2F/gi, "/");
+}
+
 export function tenderNoticeUrl(reference: string, lang: Lang = "en"): string {
-  const ref = encodeURIComponent(reference.toLowerCase());
+  const ref = noticePath(reference);
   return lang === "fr"
     ? `https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/${ref}`
     : `https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/${ref}`;
 }
 
 export function awardNoticeUrl(reference: string, lang: Lang = "en"): string {
-  const ref = encodeURIComponent(reference.toLowerCase());
+  const ref = noticePath(reference);
   return lang === "fr"
     ? `https://achatscanada.canada.ca/fr/occasions-de-marche/avis-d-attribution/${ref}`
     : `https://canadabuys.canada.ca/en/tender-opportunities/award-notice/${ref}`;
@@ -122,9 +129,9 @@ export const TenderTable: FC<{ lang: Lang; rows: readonly TenderRow[]; today: st
         {rows.map((r) => (
           <tr>
             <td data-label={t(lang, "col.notice")}>
-              <a href={`/tenders/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? r.reference}</a>
+              <a href={`/tenders/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? publishedReference(r)}</a>
               <br />
-              <span class="mono id muted">{r.reference}</span> <SegmentChips lang={lang} codes={r.segments} />
+              <span class="mono id muted">{publishedReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} />
             </td>
             <td data-label={t(lang, "col.buyer")}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
             <td data-label={t(lang, "col.closing")} class="mono">
@@ -163,9 +170,9 @@ export const AwardTable: FC<{ lang: Lang; rows: readonly AwardRow[]; href?: stri
           <tr>
             <td data-label={t(lang, "col.awarded")} class="mono">{r.awarded ?? ""}</td>
             <td data-label={t(lang, "col.contract")}>
-              <a href={`${href}/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? r.reference}</a>
+              <a href={`${href}/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? publishedReference(r)}</a>
               <br />
-              <span class="mono id muted">{r.reference}</span>
+              <span class="mono id muted">{publishedReference(r)}</span>
               {r.status === "cancelled" ? <> <StatusBadge lang={lang} status="cancelled" /></> : null}
             </td>
             {organization ? (

@@ -9,7 +9,7 @@ import type { Context } from "hono";
 import type { Buyer, Category, ContractDetail, Profile, TenderDetail } from "./data";
 import type { AppEnv } from "./env";
 import { fmtInt, frTypography, pick, provinceName, segmentLabel, t, type Key, type Lang } from "./i18n";
-import { assetResponse } from "./data";
+import { assetResponse, publishedReference } from "./data";
 
 // Canonical URLs name the apex domain whichever host served the request, so
 // www and apex never compete in an index. robots.txt, llms.txt and the
@@ -426,10 +426,10 @@ export function respondFormSeo(profile: Profile, lang: Lang): Seo {
 }
 
 export function tenderSeo(d: TenderDetail, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
-  const title = pick(lang, d.title_en, d.title_fr) ?? d.reference;
+  const title = pick(lang, d.title_en, d.title_fr) ?? publishedReference(d);
   const buyer = pick(lang, d.buyer_en, d.buyer_fr);
   const description = t(lang, "tender.description", {
-    reference: d.reference,
+    reference: publishedReference(d),
     buyer: buyer ?? t(lang, "common.na"),
     closing: d.closing ? d.closing.slice(0, 10) : t(lang, "common.na"),
   });
@@ -443,9 +443,9 @@ export function tenderSeo(d: TenderDetail, lang: Lang, crumbs: { name: string; p
 }
 
 export function contractSeo(d: ContractDetail, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
-  const title = pick(lang, d.title_en, d.title_fr) ?? d.reference;
+  const title = pick(lang, d.title_en, d.title_fr) ?? publishedReference(d);
   const description = t(lang, d.kind === "award" ? "contract.description_award" : "contract.description_history", {
-    reference: d.reference,
+    reference: publishedReference(d),
     supplier: d.supplier ?? t(lang, "common.na"),
     buyer: pick(lang, d.buyer_en, d.buyer_fr) ?? t(lang, "common.na"),
     date: d.awarded ?? t(lang, "common.na"),

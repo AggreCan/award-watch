@@ -14,6 +14,7 @@ import buyers from "./fixtures/buyers-index.json";
 import categories from "./fixtures/categories-index.json";
 import category82 from "./fixtures/category-82.json";
 import contracts from "./fixtures/contracts-637.json";
+import contractsConverted from "./fixtures/contracts-557.json";
 import expiring3mPage1 from "./fixtures/expiring-3m-1.json";
 import expiring3m from "./fixtures/expiring-3m-index.json";
 import expiringIndex from "./fixtures/expiring-index.json";
@@ -30,6 +31,7 @@ import sitemapPart from "./fixtures/sitemap-1.xml?raw";
 import sitemapIndex from "./fixtures/sitemap-index.xml?raw";
 import stats from "./fixtures/stats.json";
 import tenderShard from "./fixtures/tenders-20a.json";
+import tenderConverted from "./fixtures/tenders-f3d.json";
 import newDay from "./fixtures/tenders-new-2026-10-31.json";
 import openTenders from "./fixtures/tenders-open.json";
 import openFirst from "./fixtures/tenders-open-first.json";
@@ -57,6 +59,11 @@ export const FILES: Record<string, unknown> = {
   "tenders/new/2026-10-31.json": newDay,
   "tenders/20a.json": tenderShard,
   "contracts/637.json": contracts,
+  // References written URL-safe by the export, with the published form beside
+  // them: tender en578-123456-a-1 (EN578-123456/A:1) and award and history
+  // 23240-220799-001-im (23240-220799/001/IM).
+  "tenders/f3d.json": tenderConverted,
+  "contracts/557.json": contractsConverted,
   "awards/recent.json": awardsRecent,
   // A year in pages of 500 rows; the fixture's pages are small, two of them.
   "awards/2026/index.json": awards2026,

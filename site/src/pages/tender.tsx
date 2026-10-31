@@ -6,7 +6,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
-import { REFERENCE_RE, loadStats, loadTender, type TenderDetail } from "../data";
+import { REFERENCE_RE, loadStats, loadTender, publishedReference, type TenderDetail } from "../data";
 import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, segmentLabel, t, tn, type Key, type Lang } from "../i18n";
 import { Breadcrumb, Layout, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, tenderState, todayOf } from "../layout";
@@ -46,8 +46,9 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   if (!d) return notFoundPage(c, stats.data_as_of, "tender.not_found", "/tenders", "tender.back");
 
   const today = todayOf(stats.data_as_of);
-  const title = pick(lang, d.title_en, d.title_fr) ?? d.reference;
-  const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: d.reference }];
+  const shownRef = publishedReference(d);
+  const title = pick(lang, d.title_en, d.title_fr) ?? shownRef;
+  const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: shownRef }];
   const description = pick(lang, d.description_en, d.description_fr);
   const versions = [...d.amendments].sort((a, b) => b.amendment - a.amendment);
 
@@ -58,11 +59,11 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       <h1>{title}</h1>
       <p class="record-meta">
         <StatusBadge lang={lang} status={tenderState(d.status, d.closing, today)} />{" "}
-        <span class="mono id">{d.reference}</span>
+        <span class="mono id">{shownRef}</span>
         {d.amendment > 0 ? <span class="muted"> {t(lang, "tender.amendment_n", { n: d.amendment })}</span> : null}
       </p>
       <p class="links">
-        <a href={tenderNoticeUrl(d.reference, lang)} class="btn btn-primary" rel="noopener">{t(lang, "tender.on_canadabuys")}</a>
+        <a href={tenderNoticeUrl(shownRef, lang)} class="btn btn-primary" rel="noopener">{t(lang, "tender.on_canadabuys")}</a>
       </p>
       <p class="muted small">{t(lang, "tender.contact_note")}</p>
 
@@ -186,7 +187,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
                   <tr>
                     <td data-label={t(lang, "col.awarded")} class="mono">{a.awarded ?? ""}</td>
                     <td data-label={t(lang, "col.contract")}>
-                      <a href={`/awards/${a.reference.toLowerCase()}`}>{pick(lang, a.title_en, a.title_fr) ?? a.reference}</a>
+                      <a href={`/awards/${a.reference.toLowerCase()}`}>{pick(lang, a.title_en, a.title_fr) ?? publishedReference(a)}</a>
                     </td>
                     <td data-label={t(lang, "col.organization")}>
                       {a.organization_id ? <a href={`/organizations/${a.organization_id}`}>{a.organization ?? a.organization_id}</a> : a.organization ?? ""}

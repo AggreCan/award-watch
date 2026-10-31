@@ -7,7 +7,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
-import { REFERENCE_RE, loadContract, loadStats, type ContractDetail } from "../data";
+import { REFERENCE_RE, loadContract, loadStats, publishedReference, type ContractDetail } from "../data";
 import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, provinceName, segmentLabel, statusLabel, t, type Key, type Lang } from "../i18n";
 import { Breadcrumb, CompetitiveFlag, Layout, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
@@ -42,10 +42,11 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
     return notFoundPage(c, stats.data_as_of, kind === "award" ? "contract.award_not_found" : "contract.history_not_found",
       kind === "award" ? "/awards" : "/", kind === "award" ? "awards.back" : "common.back_home");
   }
-  const title = pick(lang, d.title_en, d.title_fr) ?? d.reference;
+  const shownRef = publishedReference(d);
+  const title = pick(lang, d.title_en, d.title_fr) ?? shownRef;
   const crumbs = kind === "award"
-    ? [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "awards.title"), path: "/awards" }, { name: d.reference }]
-    : [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "contract.title_history") }, { name: d.reference }];
+    ? [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "awards.title"), path: "/awards" }, { name: shownRef }]
+    : [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "contract.title_history") }, { name: shownRef }];
   const supplierPlace = [d.supplier_city, d.supplier_province ? provinceName(lang, d.supplier_province) : null,
     d.supplier_country && d.supplier_country !== "CA" ? d.supplier_country : null].filter(Boolean).join(", ");
   const versions = [...d.amendments].sort((a, b) => b.amendment - a.amendment);
@@ -59,12 +60,12 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
       <p class="eyebrow">{t(lang, titleKey)}</p>
       <h1>{title}</h1>
       <p class="record-meta">
-        <StatusBadge lang={lang} status={d.status} /> <span class="mono id">{d.reference}</span>{" "}
+        <StatusBadge lang={lang} status={d.status} /> <span class="mono id">{shownRef}</span>{" "}
         <CompetitiveFlag lang={lang} value={d.competitive} />
       </p>
       <p class="links">
         {kind === "award" ? (
-          <a href={awardNoticeUrl(d.reference, lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.on_canadabuys")}</a>
+          <a href={awardNoticeUrl(shownRef, lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.on_canadabuys")}</a>
         ) : (
           <a href={datasetUrl("history", lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.history_dataset")}</a>
         )}
