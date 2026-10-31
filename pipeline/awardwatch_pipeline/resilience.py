@@ -40,7 +40,7 @@ from urllib.parse import quote, urlencode, urlsplit
 
 from . import config
 
-log = logging.getLogger("pmw_pipeline.resilience")
+log = logging.getLogger("awardwatch_pipeline.resilience")
 
 API = "https://api.cloudflare.com/client/v4"
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")

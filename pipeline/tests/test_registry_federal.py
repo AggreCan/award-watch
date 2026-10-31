@@ -1,8 +1,8 @@
 import hashlib
 
-from pmw_pipeline import organizations
-from pmw_pipeline.db import get_meta, set_meta
-from pmw_pipeline.sources import registry_federal
+from awardwatch_pipeline import organizations
+from awardwatch_pipeline.db import get_meta, set_meta
+from awardwatch_pipeline.sources import registry_federal
 
 HEADER = (
     "﻿Corporation number,Business number (BN),Corporate name - form 1,Corporate name - form 2,Governing legislation,"

@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 
-from pmw_pipeline import config, export_static, status
-from pmw_pipeline.db import upsert_employer
+from awardwatch_pipeline import config, export_static, status
+from awardwatch_pipeline.db import upsert_employer
 
 NS = {"sm": export_static.SITEMAP_NS}
 BASE = "https://lmiawatch.ca"

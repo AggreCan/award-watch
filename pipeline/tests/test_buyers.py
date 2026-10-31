@@ -5,9 +5,9 @@ import json
 import pytest
 
 from conftest import FakeResponse
-from pmw_pipeline import config
-from pmw_pipeline.db import get_meta
-from pmw_pipeline.sources import buyers
+from awardwatch_pipeline import config
+from awardwatch_pipeline.db import get_meta
+from awardwatch_pipeline.sources import buyers
 
 NOW = "2026-10-31T00:00:00Z"
 

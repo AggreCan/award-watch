@@ -20,7 +20,7 @@ to a buyer, in this order:
    organization, listed in the stage's notices so the seed can be extended.
 
 Every spelling is recorded in buyer_names with the buyer it resolved to, so
-the mapping can be reviewed. The curated seed pmw_pipeline/data/buyers.csv
+the mapping can be reviewed. The curated seed awardwatch_pipeline/data/buyers.csv
 covers the spellings that do not line up (no acronym, or a Crown corporation
 that is not a CKAN organization). A spelling resolved by rule 4 before CKAN
 was loaded, or before the seed covered it, is resolved again on the next

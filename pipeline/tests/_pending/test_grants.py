@@ -12,9 +12,9 @@ import io
 import pytest
 
 from conftest import FakeResponse
-from pmw_pipeline.db import get_meta, upsert_employer
-from pmw_pipeline.normalize import norm_name
-from pmw_pipeline.sources import grants, registry_federal
+from awardwatch_pipeline.db import get_meta, upsert_employer
+from awardwatch_pipeline.normalize import norm_name
+from awardwatch_pipeline.sources import grants, registry_federal
 
 NOW = "2026-10-22T00:00:00Z"
 FIXTURE = "grants_trim.csv"

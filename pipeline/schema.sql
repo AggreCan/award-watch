@@ -1,5 +1,5 @@
 -- Public Money Watch: the one schema both halves use.
--- The pipeline owns data/pmw.sqlite and applies this file on every connect
+-- The pipeline owns data/awardwatch.sqlite and applies this file on every connect
 -- (db.apply_schema adds columns an older database lacks). The site's own D1
 -- database holds only the tables under "Visitor submissions", applied there
 -- by hand at setup. Change this file in the same commit as the code on both
@@ -125,7 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_federal_norm ON federal_corporations(norm_name);
 -- institution; the id is the open.canada.ca organization name (dnd-mdn) when
 -- the institution has one, else a slug of its English name. Every raw
 -- spelling a source uses maps to one buyer through buyer_names
--- (sources/buyers.py; the curated seed is pmw_pipeline/data/buyers.csv).
+-- (sources/buyers.py; the curated seed is awardwatch_pipeline/data/buyers.csv).
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS buyers (
   id TEXT PRIMARY KEY,

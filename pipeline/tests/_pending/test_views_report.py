@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 
-from pmw_pipeline import cli, nightly, resilience, search_console as sc, views_report as vrep, views_rollup as vr
+from awardwatch_pipeline import cli, nightly, resilience, search_console as sc, views_report as vrep, views_rollup as vr
 
 
 def summary_row(day: str, **values) -> dict:

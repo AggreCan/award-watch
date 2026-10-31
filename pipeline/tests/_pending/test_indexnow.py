@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from pmw_pipeline import config, indexnow, nightly, resilience, status
-from pmw_pipeline.db import connect, upsert_employer
+from awardwatch_pipeline import config, indexnow, nightly, resilience, status
+from awardwatch_pipeline.db import connect, upsert_employer
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = "https://lmiawatch.example"
@@ -275,7 +275,7 @@ def test_the_submission_never_raises():
 
 @pytest.fixture
 def night(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     conn = connect(db)
     employer(conn, "Old Farms Ltd", BEFORE)
     changed = [employer(conn, f"New Farms {i} Ltd", START) for i in range(3)]
@@ -382,7 +382,7 @@ def test_the_workflow_runs_it_after_the_smoke_test_and_records_it():
     assert "continue-on-error: true" in block and "timeout-minutes: 10" in block
     assert "secrets." not in block
     assert "since=$(cat data/out/run_started.txt" in block
-    assert ('python -m pmw_pipeline.nightly indexnow --db data/pmw.sqlite --since "$since" \\\n'
+    assert ('python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --since "$since" \\\n'
             '            --site-url "${PMW_SITE_URL:-https://lmiawatch.ca}"\n') in block
     assert ("--views-outcome data/out/views/last_outcome.txt \\\n"
             "            --indexnow-outcome data/out/indexnow/last_outcome.txt \\\n") in text

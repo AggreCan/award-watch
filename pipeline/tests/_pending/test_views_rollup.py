@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 import requests
 
-from pmw_pipeline import cli, config, nightly, views_rollup as vr
+from awardwatch_pipeline import cli, config, nightly, views_rollup as vr
 
 ACCOUNT = "0123456789abcdef0123456789abcdef"
 TOKEN = "analytics-token-value"

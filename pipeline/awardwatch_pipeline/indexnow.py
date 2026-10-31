@@ -3,7 +3,7 @@
 Bing and the other engines that share IndexNow (Google does not take it)
 otherwise find a changed page only when they crawl it again, and with about
 160,000 employer pages a crawl takes weeks to come round. After each nightly
-deploy the workflow runs `python -m pmw_pipeline.nightly indexnow`, which
+deploy the workflow runs `python -m awardwatch_pipeline.nightly indexnow`, which
 sends the pages that changed during the run to api.indexnow.org, the shared
 endpoint that passes them on to every participating engine.
 
@@ -39,7 +39,7 @@ from urllib.parse import urlsplit
 
 from . import config
 
-log = logging.getLogger("pmw_pipeline.indexnow")
+log = logging.getLogger("awardwatch_pipeline.indexnow")
 
 # 32 lowercase hex characters, generated once. site/public/<key>.txt holds
 # exactly this text (tests/test_indexnow.py checks the two agree). Changing it

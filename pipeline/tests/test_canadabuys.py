@@ -11,10 +11,10 @@ from datetime import date, datetime, timezone
 import pytest
 
 from conftest import FakeResponse
-from pmw_pipeline import config, organizations
-from pmw_pipeline.db import get_meta, set_meta
-from pmw_pipeline.normalize import org_id
-from pmw_pipeline.sources import buyers, canadabuys
+from awardwatch_pipeline import config, organizations
+from awardwatch_pipeline.db import get_meta, set_meta
+from awardwatch_pipeline.normalize import org_id
+from awardwatch_pipeline.sources import buyers, canadabuys
 
 csv.field_size_limit(2**31 - 1)
 DAY1 = "2026-10-30T01:00:00Z"

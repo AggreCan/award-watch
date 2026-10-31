@@ -1,6 +1,6 @@
 import pytest
 
-from pmw_pipeline.exclusions import BUSINESS_TOKENS, looks_like_person, name_words
+from awardwatch_pipeline.exclusions import BUSINESS_TOKENS, looks_like_person, name_words
 
 
 @pytest.mark.parametrize("name", [

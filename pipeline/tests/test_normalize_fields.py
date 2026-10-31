@@ -3,13 +3,13 @@ test as it reads supplier names."""
 
 import pytest
 
-from pmw_pipeline.normalize import (
+from awardwatch_pipeline.normalize import (
     has_legal_form, norm_name,
     award_status, competitive, competitive_code, country_code, iso_datetime, money, org_id, region_provinces,
     slugify, squash, star_list, tender_status,
 )
-from pmw_pipeline.sources import matching
-from pmw_pipeline.sources.matching import is_person_name, is_placeholder
+from awardwatch_pipeline.sources import matching
+from awardwatch_pipeline.sources.matching import is_person_name, is_placeholder
 
 
 def test_star_list():

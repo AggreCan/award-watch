@@ -3,9 +3,9 @@
 import re
 import unicodedata
 
-from pmw_pipeline import migrate
-from pmw_pipeline.db import get_meta, set_meta
-from pmw_pipeline.normalize import NORMALIZE_VERSION, employer_id, norm_name
+from awardwatch_pipeline import migrate
+from awardwatch_pipeline.db import get_meta, set_meta
+from awardwatch_pipeline.normalize import NORMALIZE_VERSION, employer_id, norm_name
 
 T0 = "2026-10-01T00:00:00Z"
 NOW = "2026-10-17T00:00:00Z"

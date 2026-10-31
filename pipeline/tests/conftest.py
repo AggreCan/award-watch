@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from pmw_pipeline import config
-from pmw_pipeline.db import connect
-from pmw_pipeline.http import PoliteClient
+from awardwatch_pipeline import config
+from awardwatch_pipeline.db import connect
+from awardwatch_pipeline.http import PoliteClient
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 

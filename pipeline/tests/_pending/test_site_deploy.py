@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from pmw_pipeline import nightly, resilience
+from awardwatch_pipeline import nightly, resilience
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "deploy-site.yml"
@@ -229,8 +229,8 @@ FORBIDDEN = [
     ("r2 object delete", re.compile(r"r2\s+object\s+delete")),
     ("r2 bucket", re.compile(r"r2\s+bucket")),
     ("a d1 command", re.compile(r"(?<![\w-])d1\s")),
-    ("the pipeline's main command line", re.compile(r"pmw_pipeline\.cli|python3?\s+-m\s+pmw_pipeline(?![.\w])")),
-    ("a nightly command that writes state", re.compile(r"pmw_pipeline\.nightly\s+(pack|status|attention|gate|restore|verify|checks)\b")),
+    ("the pipeline's main command line", re.compile(r"awardwatch_pipeline\.cli|python3?\s+-m\s+awardwatch_pipeline(?![.\w])")),
+    ("a nightly command that writes state", re.compile(r"awardwatch_pipeline\.nightly\s+(pack|status|attention|gate|restore|verify|checks)\b")),
     ("git push", re.compile(r"git\s+push")),
     ("git commit", re.compile(r"git\s+commit")),
     ("any git command", re.compile(r"(?<![\w/-])git\s")),
@@ -242,7 +242,7 @@ FORBIDDEN = [
     ("an npm command other than npm ci", re.compile(r"(?<![\w-])npm\s+(?!ci\s*$)")),
     ("a pip command other than the pipeline install", re.compile(r"(?<![\w-])pip3?\s+(?!install -e \./pipeline\s*$)")),
     ("python other than the allowed nightly commands",
-     re.compile(r"(?<![\w-])python3?\s+(?!-m pmw_pipeline\.nightly (?:live-version|smoke|site-bundle-check)\s)")),
+     re.compile(r"(?<![\w-])python3?\s+(?!-m awardwatch_pipeline\.nightly (?:live-version|smoke|site-bundle-check)\s)")),
     ("node", re.compile(r"(?<![\w-])node\s")),
     ("the gh command", re.compile(r"(?<![\w-])gh\s")),
     ("LAST_RUN.md", re.compile(r"LAST_RUN")),
@@ -322,7 +322,7 @@ def workflow_problems(text, nightly_text=None):
             for call in calls:
                 if not any(form.match(call) for form in ALLOWED_WRANGLER.values()):
                     problems.append(f"a Wrangler command outside the allowed forms: {call.strip()}")
-        for sub in re.findall(r"pmw_pipeline\.nightly\s+(\S+)", line):
+        for sub in re.findall(r"awardwatch_pipeline\.nightly\s+(\S+)", line):
             if sub not in ALLOWED_NIGHTLY:
                 problems.append(f"nightly command {sub} is not allowed")
     if sum(1 for line in lines if line.strip() == WRANGLER_ENV) != 1:
@@ -342,7 +342,7 @@ def test_the_workflow_uses_every_allowed_wrangler_form_and_the_three_helpers():
     found = {name for call in calls for name, form in ALLOWED_WRANGLER.items() if form.match(call)}
     assert found == set(ALLOWED_WRANGLER)
     assert len(calls) == 5  # get, status before, deploy, rollback, status after
-    subs = set(re.findall(r"pmw_pipeline\.nightly\s+(\S+)", WORKFLOW.read_text(encoding="utf-8")))
+    subs = set(re.findall(r"awardwatch_pipeline\.nightly\s+(\S+)", WORKFLOW.read_text(encoding="utf-8")))
     assert subs == ALLOWED_NIGHTLY
 
 
@@ -377,9 +377,9 @@ PLANTED = [
     ("deploy flags", '            if "$WRANGLER" deploy; then exit 0; fi', '            if "$WRANGLER" deploy --assets ../other; then exit 0; fi'),
     ("the nightly's token", TOKEN_LINE, "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}"),
     ("a state-writing nightly command", "--out \"$WORK/version_before.txt\"",
-     "--out \"$WORK/version_before.txt\"; python -m pmw_pipeline.nightly status --db x --out y"),
+     "--out \"$WORK/version_before.txt\"; python -m awardwatch_pipeline.nightly status --db x --out y"),
     ("the pipeline run", "        run: pip install -e ./pipeline",
-     "        run: pip install -e ./pipeline && python -m pmw_pipeline run --db data/pmw.sqlite"),
+     "        run: pip install -e ./pipeline && python -m awardwatch_pipeline run --db data/awardwatch.sqlite"),
     ("a commit", "          test -s \"$WORK/stats.before.json\"", "          git commit -am x && git push"),
     ("a direct API call", "          test -s \"$WORK/stats.before.json\"",
      "          curl -X PUT https://api.cloudflare.com/client/v4/accounts/x/r2/buckets/pmw-data/objects/x"),

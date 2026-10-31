@@ -65,10 +65,10 @@ from . import config, indexnow, resilience
 from .sources import notices as gov_notices
 from .sources import registers as designated
 
-log = logging.getLogger("pmw_pipeline.nightly")
+log = logging.getLogger("awardwatch_pipeline.nightly")
 
-BACKUP = "pmw.sqlite.gz"
-PREVIOUS = "pmw.sqlite.prev.gz"
+BACKUP = "awardwatch.sqlite.gz"
+PREVIOUS = "awardwatch.sqlite.prev.gz"
 MISSING_TEXT = "specified key does not exist"
 
 # How far a count may fall between the restored backup and tonight's database
@@ -652,7 +652,7 @@ def _weekly_source(bucket: str) -> resilience.R2Rest | None:
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    parser = argparse.ArgumentParser(prog="pmw_pipeline.nightly")
+    parser = argparse.ArgumentParser(prog="awardwatch_pipeline.nightly")
     sub = parser.add_subparsers(dest="command", required=True)
     r = sub.add_parser("restore")
     r.add_argument("--dir", required=True, help="folder holding the downloads and their .exit and .log files")

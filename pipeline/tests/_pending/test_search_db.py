@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from pmw_pipeline import cli, config, export_static, nightly, search_db
-from pmw_pipeline.db import connect, get_meta, set_meta, upsert_employer
+from awardwatch_pipeline import cli, config, export_static, nightly, search_db
+from awardwatch_pipeline.db import connect, get_meta, set_meta, upsert_employer
 
 NOW = "2026-10-12T00:00:00Z"
 SCHEMA = config.SEARCH_SCHEMA_PATH
@@ -533,7 +533,7 @@ def test_an_empty_ledger_resets_at_most_weekly_but_always_sends_every_row(conn, 
 
 
 def _file_db(tmp_path) -> Path:
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     c = connect(db)
     seed(c)
     c.close()

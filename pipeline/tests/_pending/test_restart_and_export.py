@@ -6,9 +6,9 @@ import sqlite3
 
 import pytest
 
-from pmw_pipeline import export, export_static
-from pmw_pipeline.db import add_missing_columns, connect, upsert_employer
-from pmw_pipeline import config
+from awardwatch_pipeline import export, export_static
+from awardwatch_pipeline.db import add_missing_columns, connect, upsert_employer
+from awardwatch_pipeline import config
 
 NOW = "2026-10-17T00:00:00Z"
 NEWER_TABLES = ["wage_tables", "jobbank_wages", "lfs_unemployment", "fsa_regions", "donations"]

@@ -2,8 +2,8 @@ import json
 import xml.etree.ElementTree as ET
 from datetime import date
 
-from pmw_pipeline import config, export_static, feeds, status
-from pmw_pipeline.db import upsert_employer
+from awardwatch_pipeline import config, export_static, feeds, status
+from awardwatch_pipeline.db import upsert_employer
 
 A = "{http://www.w3.org/2005/Atom}"
 BASE = "https://lmiawatch.ca"

@@ -7,10 +7,10 @@ import json
 
 import pytest
 
-from pmw_pipeline import cli, export_static
-from pmw_pipeline.db import upsert_employer
-from pmw_pipeline.normalize import business_number
-from pmw_pipeline.sources import matching
+from awardwatch_pipeline import cli, export_static
+from awardwatch_pipeline.db import upsert_employer
+from awardwatch_pipeline.normalize import business_number
+from awardwatch_pipeline.sources import matching
 
 NOW = "2026-10-22T00:00:00Z"
 

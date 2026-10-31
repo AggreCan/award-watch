@@ -1,7 +1,7 @@
 """The run command: every stage in order, one log row each, stubs as notices, no request on a samples run."""
 
-from pmw_pipeline import cli
-from pmw_pipeline.normalize import org_id
+from awardwatch_pipeline import cli
+from awardwatch_pipeline.normalize import org_id
 
 SAMPLE_NAMES = {
     "canadabuys_tenders_new.csv": "newTenderNotice.csv",

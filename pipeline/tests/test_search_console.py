@@ -19,7 +19,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 
-from pmw_pipeline import config, search_console as sc
+from awardwatch_pipeline import config, search_console as sc
 
 
 def pem_of(key) -> str:

@@ -1,9 +1,9 @@
 import json
 from urllib.parse import urlencode
 
-from pmw_pipeline import config
-from pmw_pipeline.db import upsert_employer
-from pmw_pipeline.sources import registry_bc
+from awardwatch_pipeline import config
+from awardwatch_pipeline.db import upsert_employer
+from awardwatch_pipeline.sources import registry_bc
 
 NOW = "2026-10-17T00:00:00Z"
 

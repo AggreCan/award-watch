@@ -7,7 +7,7 @@ from pathlib import Path
 
 from . import __version__
 
-# pipeline/pmw_pipeline/config.py -> repo root is two levels up from the package
+# pipeline/awardwatch_pipeline/config.py -> repo root is two levels up from the package
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"

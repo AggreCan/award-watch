@@ -2,7 +2,7 @@ import hashlib
 
 import pytest
 
-from pmw_pipeline.normalize import (
+from awardwatch_pipeline.normalize import (
     fold_accents, has_legal_form, is_numbered_company, norm_legal, norm_name, parse_address,
     parse_jobbank_date, parse_noc, parse_salary_text, parse_street, period_end_date, period_from_text,
     org_id, period_quarters, period_start_date, province_code, split_trade_name,
@@ -293,14 +293,14 @@ def test_period_parsing():
 
 
 def test_to_int_treats_non_finite_text_as_no_value():
-    from pmw_pipeline.normalize import to_int
+    from awardwatch_pipeline.normalize import to_int
 
     assert to_int("1,200") == 1200 and to_int("12.7") == 12
     assert to_int("Infinity") is None and to_int("-inf") is None and to_int("nan") is None
 
 
 def test_parse_noc_refuses_a_six_digit_number():
-    from pmw_pipeline.normalize import parse_noc
+    from awardwatch_pipeline.normalize import parse_noc
 
     assert parse_noc("632001-Cooks") == (None, "632001-Cooks")
     assert parse_noc("63200-Cooks") == ("63200", "Cooks")

@@ -1,7 +1,7 @@
 import json
 
-from pmw_pipeline import export_static, status
-from pmw_pipeline.db import upsert_employer
+from awardwatch_pipeline import export_static, status
+from awardwatch_pipeline.db import upsert_employer
 
 NOW = "2026-10-12T00:00:00Z"
 
@@ -283,7 +283,7 @@ def test_search_counts_cover_exactly_the_search_rows(conn, tmp_path):
     # The period whose list rows date=last_quarter keeps, as stats.json names it.
     assert doc["latest_period"] == load(out, "stats.json")["esdc_latest_period"] == "2026Q1"
 
-    from pmw_pipeline.search_db import search_rows
+    from awardwatch_pipeline.search_db import search_rows
     rows = list(search_rows(conn))
     assert doc["total"] == len(rows) == 5
     expected: dict[tuple, int] = {}

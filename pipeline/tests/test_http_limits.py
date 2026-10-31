@@ -6,8 +6,8 @@ import pytest
 import requests
 
 from conftest import FakeResponse
-from pmw_pipeline import config
-from pmw_pipeline.http import MAX_RETRY_AFTER_S, FetchError, PoliteClient, retry_after_seconds
+from awardwatch_pipeline import config
+from awardwatch_pipeline.http import MAX_RETRY_AFTER_S, FetchError, PoliteClient, retry_after_seconds
 
 # A host that stops taking connections from an address: the one the
 # fail-fast tests below configure.
@@ -177,7 +177,7 @@ class Capturing(Scripted):
 
 
 def test_refused_connections_end_a_run_on_a_fail_fast_host_within_two_requests(tmp_path, fail_fast):
-    from pmw_pipeline.http import AbortRun
+    from awardwatch_pipeline.http import AbortRun
 
     refused = requests.exceptions.ConnectTimeout("timed out")
     client, session, clock = client_for([refused] * 6, cache_dir=tmp_path, max_attempts=4, max_consecutive_failures=5)

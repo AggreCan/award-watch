@@ -2,7 +2,7 @@
 --
 -- A database of its own, apart from the forms database (`public-money-watch`, from
 -- schema.sql), so a rebuild here can never touch what readers submitted.
--- Written only by the nightly sync (pipeline/pmw_pipeline/search_db.py),
+-- Written only by the nightly sync (pipeline/awardwatch_pipeline/search_db.py),
 -- which applies this file before every sync: every statement is IF NOT
 -- EXISTS (or DROP INDEX IF EXISTS for a name an earlier version used), so
 -- it changes nothing on a database that has it. A new index reaches an

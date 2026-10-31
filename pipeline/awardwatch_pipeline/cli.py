@@ -1,4 +1,4 @@
-"""Command line: `python -m pmw_pipeline run`, the nightly refresh, one stage after another.
+"""Command line: `python -m awardwatch_pipeline run`, the nightly refresh, one stage after another.
 
 The stages run in CLAUDE.md's order. Each records one sources_log row (the
 module writes it on success, _stage on a failure) and never stops the stages
@@ -20,13 +20,13 @@ from .db import connect, log_run
 from .http import PoliteClient
 from .sources import buyers, canadabuys, registry_federal
 
-log = logging.getLogger("pmw_pipeline")
+log = logging.getLogger("awardwatch_pipeline")
 STAGES = ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry",
           "organizations", "indicators", "export"]
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="pmw_pipeline")
+    parser = argparse.ArgumentParser(prog="awardwatch_pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="collect, merge, compute and export")
     for stage in STAGES:

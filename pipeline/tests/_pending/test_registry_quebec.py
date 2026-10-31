@@ -1,8 +1,8 @@
 import io
 import zipfile
 
-from pmw_pipeline.db import get_meta, upsert_employer
-from pmw_pipeline.sources import registry_quebec
+from awardwatch_pipeline.db import get_meta, upsert_employer
+from awardwatch_pipeline.sources import registry_quebec
 
 # Column subsets of the publisher's files; the parser reads columns by name.
 ENTREPRISE = (

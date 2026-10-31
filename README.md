@@ -10,7 +10,7 @@ only way its data changes.
 
 ## Layout
 ```
-pipeline/   Python: download, load, match, compute, export (owns data/pmw.sqlite)
+pipeline/   Python: download, load, match, compute, export (owns data/awardwatch.sqlite)
 site/       Cloudflare Worker: pages + JSON API over the pipeline's static JSON
 pipeline/schema.sql   the one schema both halves use
 brand/      the mark and the lockup
@@ -26,7 +26,7 @@ downloads.
 ## Quick start
 ```
 cd pipeline && pip install -e .[dev] && pytest
-python -m pmw_pipeline run --db ../data/pmw.sqlite
+python -m awardwatch_pipeline run --db ../data/awardwatch.sqlite
 
 cd ../site && npm install && npm run data:local && npm run dev
 ```

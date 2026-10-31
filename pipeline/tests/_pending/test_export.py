@@ -1,5 +1,5 @@
-from pmw_pipeline import export, status
-from pmw_pipeline.db import apply_schema, upsert_employer
+from awardwatch_pipeline import export, status
+from awardwatch_pipeline.db import apply_schema, upsert_employer
 
 NOW = "2026-10-12T00:00:00Z"
 

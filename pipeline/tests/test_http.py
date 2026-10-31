@@ -1,7 +1,7 @@
 import pytest
 
 from conftest import FakeResponse, FakeSession
-from pmw_pipeline.http import AbortRun, FetchError, PoliteClient
+from awardwatch_pipeline.http import AbortRun, FetchError, PoliteClient
 
 
 class Clock:

@@ -11,7 +11,7 @@ import json
 
 import requests
 
-from pmw_pipeline import cli, nightly, resilience, search_console as sc
+from awardwatch_pipeline import cli, nightly, resilience, search_console as sc
 from test_search_console import ACCOUNT_JSON, FakeGoogle
 
 

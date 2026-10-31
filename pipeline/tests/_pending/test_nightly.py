@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from pmw_pipeline import nightly
-from pmw_pipeline.db import connect, log_run, upsert_employer
+from awardwatch_pipeline import nightly
+from awardwatch_pipeline.db import connect, log_run, upsert_employer
 
 NOW = "2026-10-18T00:00:00Z"
 
@@ -41,7 +41,7 @@ def gz_of(path) -> bytes:
     return gzip.compress(path.read_bytes())
 
 
-MISSING = 'Downloading "pmw.sqlite.gz"\n✘ [ERROR] The specified key does not exist.\n'
+MISSING = 'Downloading "awardwatch.sqlite.gz"\n✘ [ERROR] The specified key does not exist.\n'
 
 
 # -- restore ------------------------------------------------------------------
@@ -51,16 +51,16 @@ def test_first_run_starts_empty_only_when_no_backup_exists(tmp_path):
     folder = tmp_path / "restore"
     download(folder, nightly.BACKUP, body=b"", exit_code=1, log=MISSING)
     download(folder, nightly.PREVIOUS, exit_code=1, log=MISSING)
-    ok, source, message, counts = nightly.restore(folder, tmp_path / "pmw.sqlite")
+    ok, source, message, counts = nightly.restore(folder, tmp_path / "awardwatch.sqlite")
     assert (ok, source) == (True, "none") and "first run" in message
-    assert not (tmp_path / "pmw.sqlite").exists()
+    assert not (tmp_path / "awardwatch.sqlite").exists()
 
 
 def test_an_outage_stops_the_run_instead_of_starting_empty(tmp_path):
     folder = tmp_path / "restore"
     download(folder, nightly.BACKUP, exit_code=1, log="✘ [ERROR] A request to the Cloudflare API failed. (503)")
     download(folder, nightly.PREVIOUS, exit_code=1, log=MISSING)
-    ok, source, message, _ = nightly.restore(folder, tmp_path / "pmw.sqlite")
+    ok, source, message, _ = nightly.restore(folder, tmp_path / "awardwatch.sqlite")
     assert not ok and "download failed" in message and "503" in message
 
 
@@ -70,7 +70,7 @@ def test_a_good_backup_is_restored_with_its_counts(tmp_path):
     folder = tmp_path / "restore"
     download(folder, nightly.BACKUP, body=gz_of(src))
     download(folder, nightly.PREVIOUS, exit_code=1, log=MISSING)
-    ok, source, _, counts = nightly.restore(folder, tmp_path / "pmw.sqlite")
+    ok, source, _, counts = nightly.restore(folder, tmp_path / "awardwatch.sqlite")
     assert (ok, source) == (True, "backup")
     assert counts["employers"] == 3 and counts["jobbank_postings"] == 2
 
@@ -84,7 +84,7 @@ def test_a_damaged_backup_falls_back_to_the_previous_one(tmp_path, damage):
     folder = tmp_path / "restore"
     download(folder, nightly.BACKUP, body=bad)
     download(folder, nightly.PREVIOUS, body=good)
-    ok, source, _, _ = nightly.restore(folder, tmp_path / "pmw.sqlite")
+    ok, source, _, _ = nightly.restore(folder, tmp_path / "awardwatch.sqlite")
     assert (ok, source) == (True, "previous")
 
 
@@ -92,9 +92,9 @@ def test_both_backups_damaged_stops_the_run(tmp_path):
     folder = tmp_path / "restore"
     download(folder, nightly.BACKUP, body=b"\x1f\x8b broken")
     download(folder, nightly.PREVIOUS, body=b"\x1f\x8b broken")
-    ok, _, message, _ = nightly.restore(folder, tmp_path / "pmw.sqlite")
+    ok, _, message, _ = nightly.restore(folder, tmp_path / "awardwatch.sqlite")
     assert not ok and "gzip" in message
-    assert not (tmp_path / "pmw.sqlite").exists()
+    assert not (tmp_path / "awardwatch.sqlite").exists()
 
 
 def test_restore_command_writes_its_record_and_exit_code(tmp_path):
@@ -102,7 +102,7 @@ def test_restore_command_writes_its_record_and_exit_code(tmp_path):
     download(folder, nightly.BACKUP, exit_code=1, log="network unreachable")
     download(folder, nightly.PREVIOUS, exit_code=1, log=MISSING)
     out = tmp_path / "restore.json"
-    assert nightly.main(["restore", "--dir", str(folder), "--db", str(tmp_path / "pmw.sqlite"), "--out", str(out)]) == 1
+    assert nightly.main(["restore", "--dir", str(folder), "--db", str(tmp_path / "awardwatch.sqlite"), "--out", str(out)]) == 1
     assert json.loads(out.read_text())["source"] == "none"
 
 
@@ -124,7 +124,7 @@ def write_export(static, employers=3, mtime=None):
 
 
 def test_a_sound_database_and_export_pass(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     write_export(tmp_path / "static")
     result = nightly.verify(db, tmp_path / "static", time.time() - 60, {"employers": 3, "jobbank_postings": 2})
@@ -132,7 +132,7 @@ def test_a_sound_database_and_export_pass(tmp_path):
 
 
 def test_a_database_that_lost_rows_is_not_saved(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     make_db(db, employers=3, postings=1)
     problems, _ = nightly.check_db(db, {"employers": 3, "jobbank_postings": 2})
     assert problems == ["jobbank_postings fell from 2 to 1 rows"]
@@ -173,7 +173,7 @@ def test_a_truncated_file_or_too_many_files_is_not_deployed(tmp_path, monkeypatc
 
 
 def test_verify_command_writes_outputs_for_the_workflow(tmp_path, monkeypatch):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     write_export(tmp_path / "static")
     started = tmp_path / "run_started.txt"
@@ -196,7 +196,7 @@ def test_verify_command_writes_outputs_for_the_workflow(tmp_path, monkeypatch):
 
 
 def test_status_lists_the_run_rows_failed_steps_and_checks(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     conn = connect(db)
     log_run(conn, "esdc", detail="positive=0 negative=0")
@@ -225,7 +225,7 @@ def test_status_is_written_even_when_nothing_ran(tmp_path):
 
 
 def test_status_carries_the_bluesky_post_and_zenodo_deposit_beside_the_x_post(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, "posted", {"deploy": "success"},
                                 bluesky="failed", zenodo="deposited")
@@ -250,7 +250,7 @@ def test_status_carries_the_bluesky_post_and_zenodo_deposit_beside_the_x_post(tm
 
 
 def test_a_clean_night_reports_ok(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     conn = connect(db)
     log_run(conn, "export", detail="static {}")
@@ -309,7 +309,7 @@ def test_the_schema_names_twenty_secondary_indexes_and_no_unique_one():
 
 
 def test_pack_drops_the_secondary_indexes_and_a_restored_copy_gets_them_back(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     seed_for_pack(db)
     # A write the job's time limit cut off before a checkpoint: committed, but
     # only in the write-ahead log beside the file.
@@ -326,15 +326,15 @@ def test_pack_drops_the_secondary_indexes_and_a_restored_copy_gets_them_back(tmp
         alone = counts_of(gunzip_to(tmp_path / "alone.gz", tmp_path / "alone.sqlite"))
         assert alone["employers"] == before["employers"] - 1
 
-        out = tmp_path / "out" / "pmw.sqlite.gz"
+        out = tmp_path / "out" / "awardwatch.sqlite.gz"
         ok, message, sizes = nightly.pack(db, out)
     finally:
         writer.close()
     assert ok, message
-    assert "20 secondary indexes" in message and "pmw.sqlite.gz" in message
+    assert "20 secondary indexes" in message and "awardwatch.sqlite.gz" in message
     assert sizes["copy"] < sizes["db"] + sizes["wal"] and 0 < sizes["gz"] < sizes["copy"]
     # Only the gzip is left behind; the working copy is gone.
-    assert sorted(p.name for p in out.parent.iterdir()) == ["pmw.sqlite.gz"]
+    assert sorted(p.name for p in out.parent.iterdir()) == ["awardwatch.sqlite.gz"]
 
     restored = gunzip_to(out, tmp_path / "restored.sqlite")
     packed_secondary, packed_automatic = indexes_of(restored)
@@ -350,20 +350,20 @@ def test_pack_drops_the_secondary_indexes_and_a_restored_copy_gets_them_back(tmp
 
 
 def test_pack_refuses_a_file_above_the_upload_cap(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     seed_for_pack(db, employers=30)
-    out = tmp_path / "pmw.sqlite.gz"
+    out = tmp_path / "awardwatch.sqlite.gz"
     out.write_bytes(b"last night's file")
     ok, message, sizes = nightly.pack(db, out, max_mib=0.001)
     assert not ok and "above the 0.001 MiB" in message and "R2 keeps the previous backup" in message
     # Nothing is left for the upload to send.
-    assert not out.exists() and list(tmp_path.glob("pmw.sqlite.gz*")) == []
+    assert not out.exists() and list(tmp_path.glob("awardwatch.sqlite.gz*")) == []
     assert nightly.main(["pack", "--db", str(db), "--out", str(out), "--max-mib", "0.001"]) == 1
     assert nightly.main(["pack", "--db", str(db), "--out", str(out)]) == 0 and out.exists()
 
 
 def test_pack_stops_on_a_missing_damaged_or_failing_database(tmp_path, monkeypatch):
-    out = tmp_path / "out" / "pmw.sqlite.gz"
+    out = tmp_path / "out" / "awardwatch.sqlite.gz"
     ok, message, _ = nightly.pack(tmp_path / "nope.sqlite", out)
     assert not ok and "missing or empty" in message
     # The pack never creates a database where there was none.
@@ -376,7 +376,7 @@ def test_pack_stops_on_a_missing_damaged_or_failing_database(tmp_path, monkeypat
     assert nightly.main(["pack", "--db", str(bad), "--out", str(out)]) == 1
 
     # Anything but "ok" from the copy's check stops the pack.
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     seed_for_pack(db, employers=10)
     real = sqlite3.connect
 
@@ -406,7 +406,7 @@ def test_restore_accepts_a_packed_backup(tmp_path):
     folder = tmp_path / "restore"
     download(folder, nightly.BACKUP, body=packed.read_bytes())
     download(folder, nightly.PREVIOUS, exit_code=1, log=MISSING)
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     ok, source, _, counts = nightly.restore(folder, db)
     assert (ok, source) == (True, "backup")
     assert counts["employers"] == 5 and counts["jobbank_postings"] == 4

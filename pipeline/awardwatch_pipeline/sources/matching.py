@@ -224,7 +224,7 @@ class PersonDrops:
         header = [
             f"# {what}: names the person test read as private individuals, run of {stamp}.",
             f"# {self.rows} rows, {len(self.seen)} names; the first {len(self.names)} are listed. Their records were",
-            "# stored with the name withheld. A firm listed here belongs in pmw_pipeline/data/not_persons.csv",
+            "# stored with the name withheld. A firm listed here belongs in awardwatch_pipeline/data/not_persons.csv",
             "# (its normalized name). This file is for the operator: no step exports, logs or uploads it.",
         ]
         path.write_text("\n".join(header + self.names) + "\n", encoding="utf-8")

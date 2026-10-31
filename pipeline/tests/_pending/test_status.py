@@ -1,5 +1,5 @@
-from pmw_pipeline import status
-from pmw_pipeline.db import get_meta, upsert_employer
+from awardwatch_pipeline import status
+from awardwatch_pipeline.db import get_meta, upsert_employer
 
 NOW = "2026-10-12T00:00:00Z"
 
@@ -91,9 +91,9 @@ def test_rollups_and_meta(conn):
 
 
 def test_the_run_status_summarizes_the_international_candidates_and_the_lists(tmp_path):
-    from pmw_pipeline import nightly
-    from pmw_pipeline.db import connect, log_run, set_meta
-    db = tmp_path / "pmw.sqlite"
+    from awardwatch_pipeline import nightly
+    from awardwatch_pipeline.db import connect, log_run, set_meta
+    db = tmp_path / "awardwatch.sqlite"
     conn = connect(db)
     set_meta(conn, "intl_last_run", "2026-10-26T00:10:00Z")
     set_meta(conn, "intl_baseline", "2026-10-26")

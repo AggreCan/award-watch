@@ -6,8 +6,8 @@ records are inserted directly so every rule has one row that exercises it.
 
 import pytest
 
-from pmw_pipeline import organizations
-from pmw_pipeline.normalize import business_number, norm_name, org_id
+from awardwatch_pipeline import organizations
+from awardwatch_pipeline.normalize import business_number, norm_name, org_id
 
 T1, T2, T3 = "2026-10-31T00:00:00Z", "2026-11-01T00:00:00Z", "2026-11-02T00:00:00Z"
 

@@ -5,7 +5,7 @@ Every name here is invented.
 
 import pytest
 
-from pmw_pipeline.household import reads_as_person
+from awardwatch_pipeline.household import reads_as_person
 
 
 @pytest.mark.parametrize("name", [
@@ -63,7 +63,7 @@ def test_names_that_are_not_names():
 
 
 def test_the_business_words_can_be_narrowed():
-    from pmw_pipeline.household import BUSINESS_WORDS
+    from awardwatch_pipeline.household import BUSINESS_WORDS
 
     assert reads_as_person("Okafor Law") is False
     assert reads_as_person("Okafor Law", business_words=BUSINESS_WORDS - {"law"}) is True

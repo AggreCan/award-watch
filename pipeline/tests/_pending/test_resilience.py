@@ -11,8 +11,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 import pytest
 
-from pmw_pipeline import nightly, resilience
-from pmw_pipeline.db import connect, log_run, upsert_employer
+from awardwatch_pipeline import nightly, resilience
+from awardwatch_pipeline.db import connect, log_run, upsert_employer
 
 TODAY = date(2026, 10, 22)
 NOW = datetime(2026, 10, 22, 0, 50, tzinfo=timezone.utc)
@@ -115,7 +115,7 @@ def test_gate_command_writes_its_output_and_never_fails(tmp_path, monkeypatch):
 
 
 def test_a_status_written_by_a_clean_run_lets_the_gate_skip(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     connect(db).close()
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, "posted",
                                 {"restore": "success", "pipeline": "success", "deploy": "success"}, now=NOW,
@@ -278,7 +278,7 @@ def test_smoke_command_writes_the_verdict(tmp_path, monkeypatch):
 # -- weekly snapshot restore --------------------------------------------------
 
 OBJECTS = f"/client/v4/accounts/{ACCOUNT}/r2/buckets/pmw-data/objects"
-MISSING = 'Downloading "pmw.sqlite.gz"\n[ERROR] The specified key does not exist.\n'
+MISSING = 'Downloading "awardwatch.sqlite.gz"\n[ERROR] The specified key does not exist.\n'
 
 
 class FakeR2:
@@ -359,7 +359,7 @@ def test_both_nightly_backups_missing_restores_the_newest_weekly_snapshot(tmp_pa
         # Under the prefix but not a snapshot the save step writes.
         "backups/weekly/db-slot-4.sqlite.gz.old": (b"x", "2026-10-20T00:00:00Z"),
     }, page_size=1)
-    ok, record = nightly.restore_record(folder, tmp_path / "pmw.sqlite", r2(fake))
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(fake))
     assert ok and record["source"] == "weekly"
     assert record["weekly_key"] == "backups/weekly/db-slot-4.sqlite.gz"
     assert record["weekly_uploaded"] == "2026-10-18T00:51:30+00:00"
@@ -374,9 +374,9 @@ def test_both_nightly_backups_damaged_restores_the_weekly_snapshot(tmp_path):
     download(folder, nightly.BACKUP, body=b"\x1f\x8b broken")
     download(folder, nightly.PREVIOUS, body=b"<html>oops</html>")
     fake = FakeR2({"backups/weekly/db-slot-4.sqlite.gz": (snapshot_bytes(tmp_path, 3), "2026-10-18T00:51:30Z")})
-    ok, source, message, counts = nightly.restore(folder, tmp_path / "pmw.sqlite", r2(fake))
+    ok, source, message, counts = nightly.restore(folder, tmp_path / "awardwatch.sqlite", r2(fake))
     assert (ok, source, counts["employers"]) == (True, "weekly", 3)
-    assert "pmw.sqlite.gz: not a complete gzip file" in message
+    assert "awardwatch.sqlite.gz: not a complete gzip file" in message
 
 
 def test_a_nightly_backup_that_could_not_be_downloaded_never_falls_back_to_a_weekly_one(tmp_path):
@@ -384,7 +384,7 @@ def test_a_nightly_backup_that_could_not_be_downloaded_never_falls_back_to_a_wee
     download(folder, nightly.BACKUP, exit_code=1, log="[ERROR] A request to the Cloudflare API failed. (503)")
     download(folder, nightly.PREVIOUS, exit_code=1, log=MISSING)
     fake = FakeR2({"backups/weekly/db-slot-4.sqlite.gz": (snapshot_bytes(tmp_path, 3), "2026-10-18T00:51:30Z")})
-    ok, record = nightly.restore_record(folder, tmp_path / "pmw.sqlite", r2(fake))
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(fake))
     assert not ok and "503" in record["message"]
     assert fake.calls == []
 
@@ -396,7 +396,7 @@ def test_a_good_nightly_backup_never_asks_for_the_weekly_ones(tmp_path):
     download(folder, nightly.BACKUP, body=gzip.compress(src.read_bytes()))
     download(folder, nightly.PREVIOUS, exit_code=1, log=MISSING)
     fake = FakeR2({})
-    ok, record = nightly.restore_record(folder, tmp_path / "pmw.sqlite", r2(fake))
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(fake))
     assert ok and record["source"] == "backup" and fake.calls == []
 
 
@@ -404,16 +404,16 @@ def test_nothing_anywhere_is_still_a_first_run(tmp_path):
     folder = tmp_path / "restore"
     both_missing(folder)
     fake = FakeR2({"backups/weekly/d1-latest.sql.gz": (b"x", "2026-10-18T00:51:30Z")})
-    ok, record = nightly.restore_record(folder, tmp_path / "pmw.sqlite", r2(fake))
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(fake))
     assert ok and record["source"] == "none" and "first run" in record["message"]
-    assert not (tmp_path / "pmw.sqlite").exists()
+    assert not (tmp_path / "awardwatch.sqlite").exists()
 
 
 def test_damaged_nightly_backups_and_no_snapshot_stop_the_run(tmp_path):
     folder = tmp_path / "restore"
     download(folder, nightly.BACKUP, body=b"\x1f\x8b broken")
     download(folder, nightly.PREVIOUS, exit_code=1, log=MISSING)
-    ok, record = nightly.restore_record(folder, tmp_path / "pmw.sqlite", r2(FakeR2({})))
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(FakeR2({})))
     assert not ok and "weekly snapshots: none in R2" in record["message"]
 
 
@@ -421,7 +421,7 @@ def test_a_listing_that_fails_stops_the_run_and_names_no_token(tmp_path):
     folder = tmp_path / "restore"
     both_missing(folder)
     refusal = Resp(403, json_data={"success": False, "errors": [{"code": 10000, "message": f"Authentication error {DEPLOY_TOKEN}"}]})
-    ok, record = nightly.restore_record(folder, tmp_path / "pmw.sqlite", r2(FakeR2({}, list_answer=refusal)))
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(FakeR2({}, list_answer=refusal)))
     assert not ok and record["source"] == "none"
     assert "weekly snapshots: the listing answered HTTP 403 (10000 Authentication error [token])" in record["message"]
     assert DEPLOY_TOKEN not in json.dumps(record)
@@ -432,11 +432,11 @@ def test_a_listing_of_an_unexpected_shape_never_reads_as_a_first_run(tmp_path):
     both_missing(folder)
     undated = Resp(200, json_data={"success": True, "result": [{"key": "backups/weekly/db-slot-4.sqlite.gz", "size": 9}],
                                    "result_info": {"is_truncated": False}})
-    ok, record = nightly.restore_record(folder, tmp_path / "pmw.sqlite", r2(FakeR2({}, list_answer=undated)))
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(FakeR2({}, list_answer=undated)))
     assert not ok and "without an upload time" in record["message"]
     for odd in ({"success": True, "result": {"buckets": []}}, {"success": False, "result": []}, None):
         answer = Resp(200, json_data=odd) if odd is not None else Resp(200, "<html>")
-        ok, record = nightly.restore_record(folder, tmp_path / "pmw.sqlite", r2(FakeR2({}, list_answer=answer)))
+        ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(FakeR2({}, list_answer=answer)))
         assert not ok and "weekly snapshots: the listing answered without" in record["message"]
 
 
@@ -444,9 +444,9 @@ def test_a_damaged_weekly_snapshot_stops_the_run(tmp_path):
     folder = tmp_path / "restore"
     both_missing(folder)
     fake = FakeR2({"backups/weekly/db-slot-4.sqlite.gz": (gzip.compress(b"not sqlite" * 500), "2026-10-18T00:51:30Z")})
-    ok, record = nightly.restore_record(folder, tmp_path / "pmw.sqlite", r2(fake))
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(fake))
     assert not ok and "backups/weekly/db-slot-4.sqlite.gz:" in record["message"]
-    assert not (tmp_path / "pmw.sqlite").exists()
+    assert not (tmp_path / "awardwatch.sqlite").exists()
 
 
 def test_restore_command_reads_the_weekly_snapshots_with_the_runs_token(tmp_path, monkeypatch, caplog):
@@ -458,15 +458,15 @@ def test_restore_command_reads_the_weekly_snapshots_with_the_runs_token(tmp_path
     monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", ACCOUNT)
     out = tmp_path / "restore.json"
     with caplog.at_level(logging.INFO):
-        assert nightly.main(["restore", "--dir", str(folder), "--db", str(tmp_path / "pmw.sqlite"), "--out", str(out),
+        assert nightly.main(["restore", "--dir", str(folder), "--db", str(tmp_path / "awardwatch.sqlite"), "--out", str(out),
                              "--bucket", "pmw-data"]) == 0
     record = json.loads(out.read_text())
     assert (record["source"], record["weekly_uploaded"]) == ("weekly", "2026-10-18T00:51:30+00:00")
     assert DEPLOY_TOKEN not in caplog.text and DEPLOY_TOKEN not in out.read_text()
     # Without the token (a dev machine) the decision is the one from before.
     monkeypatch.delenv("CLOUDFLARE_API_TOKEN")
-    (tmp_path / "pmw.sqlite").unlink()
-    assert nightly.main(["restore", "--dir", str(folder), "--db", str(tmp_path / "pmw.sqlite"), "--out", str(out)]) == 0
+    (tmp_path / "awardwatch.sqlite").unlink()
+    assert nightly.main(["restore", "--dir", str(folder), "--db", str(tmp_path / "awardwatch.sqlite"), "--out", str(out)]) == 0
     assert json.loads(out.read_text())["source"] == "none"
 
 
@@ -593,7 +593,7 @@ def test_the_domain_comes_from_the_site_address():
 
 
 def test_status_records_the_resilience_outcomes(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     steps = {"restore": "success", "pipeline": "success", "deploy": "success"}
     checks = {"due": True, "items": ["The domain lmiawatch.ca expires 2026-11-25 (24 days); auto-renew is off"]}
@@ -620,7 +620,7 @@ def test_status_records_the_resilience_outcomes(tmp_path):
 
 
 def test_status_command_reads_the_new_files(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     deploy = tmp_path / "deploy"
     deploy.mkdir()
@@ -781,7 +781,7 @@ def test_the_notices_command_writes_the_section_for_last_run(tmp_path, capsys):
 def test_the_workflow_keeps_notices_out_of_the_attention_step_and_records_them():
     text = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / "nightly.yml").read_text(encoding="utf-8")
     record = text.split("- name: Record the run so the schedule stays enabled", 1)[1].split("\n      - ", 1)[0]
-    assert ("python -m pmw_pipeline.nightly notices --status data/out/status.json > data/out/notices.md "
+    assert ("python -m awardwatch_pipeline.nightly notices --status data/out/status.json > data/out/notices.md "
             "2>/dev/null || true") in record
     assert "cat data/out/notices.md >> LAST_RUN.md" in record
     attention = text.split("- name: Items needing attention", 1)[1].split("\n      - ", 1)[0]
@@ -789,7 +789,7 @@ def test_the_workflow_keeps_notices_out_of_the_attention_step_and_records_them()
 
 
 def test_a_clean_night_with_the_new_fields_has_no_items(tmp_path):
-    db = tmp_path / "pmw.sqlite"
+    db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     conn = connect(db)
     log_run(conn, "export", detail="static {}")

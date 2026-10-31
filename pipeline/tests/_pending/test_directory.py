@@ -5,8 +5,8 @@ offices outside Canada, and the related lists worked out by hand."""
 
 import json
 
-from pmw_pipeline import directory, export_static, places, status
-from pmw_pipeline.db import upsert_employer
+from awardwatch_pipeline import directory, export_static, places, status
+from awardwatch_pipeline.db import upsert_employer
 
 NOW = "2026-10-29T00:00:00Z"
 
