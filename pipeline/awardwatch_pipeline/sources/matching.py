@@ -109,6 +109,23 @@ PERSON_MAX_WORDS = 3
 CONNECTOR_RE = re.compile(r"&|\band\b|\bet\b", re.I)
 NOT_PERSONS_PATH = config.PACKAGE_DATA / "not_persons.csv"
 GIVEN_NAMES_PATH = config.PACKAGE_DATA / "given_names.txt"
+# Raised whenever is_person_name reads a name differently (its rules, the
+# given-name list, not_persons.csv), so that the next run reads every file
+# again and recomputes which rows are withheld (refresh_person_test).
+PERSON_TEST_VERSION = 4
+PERSON_TEST_KEY = "person_test_version"
+# The meta keys that let a loader skip a file: checksums, the validators of
+# its conditional request, and the weekly check. A refused lobbying download
+# keeps its hold (lobbying:refused_*): a new person test is no reason to ask again.
+SKIP_KEY_PATTERNS = (
+    "canadabuys:%:sha256", "canadabuys:%:etag", "canadabuys:%:last_modified", "canadabuys:%:read_at",
+    *(f"{stage}:{item}" for stage in ("contracts", "grants", "lobbying")
+      for item in ("sha256", "etag", "last_modified", "read_at", "rejected", "rejected_sha256")),
+    "contracts_loaded_at", "grants_loaded_at", "lobbying_loaded_at",
+)
+# The CanadaBuys stages whose legacy file is to be read again (canadabuys.plan
+# reads a legacy file only on a first load otherwise).
+REREAD_LEGACY_KEY = "canadabuys:reread_legacy"
 # What sources write for "no name" or for no one supplier. Treated as a blank:
 # never a business, never a person, never in a review list.
 PLACEHOLDER_RE = re.compile(r"^\s*(?:n\s*/?\s*a|none|null|unknown|nil|-+|\.+)(?:\s*:\s*(?:n\s*/?\s*a|none))?\s*$",
@@ -158,6 +175,27 @@ def is_placeholder(name: object) -> bool:
     if text.strip() and not re.search(r"[^\W_]", text):
         return True  # punctuation only
     return " ".join(re.findall(r"[a-z0-9]+", fold_accents(text).casefold())) in PLACEHOLDER_PHRASES
+
+
+def refresh_person_test(conn: sqlite3.Connection) -> bool:
+    """At the start of a run: when the person test changed, make every loader read its files again.
+
+    The rows withheld under the previous test hold no name to test again, so
+    the files are the only way to recompute them. Clears the keys that let a
+    loader skip a file (SKIP_KEY_PATTERNS), marks the CanadaBuys legacy files
+    for one more read, and stores PERSON_TEST_VERSION. True when it did so.
+    """
+    stored = conn.execute("SELECT value FROM meta WHERE key = ?", (PERSON_TEST_KEY,)).fetchone()
+    if stored is not None and stored[0] == str(PERSON_TEST_VERSION):
+        return False
+    for pattern in SKIP_KEY_PATTERNS:
+        conn.execute("DELETE FROM meta WHERE key LIKE ?", (pattern,))
+    conn.executemany(
+        "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        [(REREAD_LEGACY_KEY, "awards,history"), (PERSON_TEST_KEY, str(PERSON_TEST_VERSION))],
+    )
+    conn.commit()
+    return True
 
 
 def given_name_key(word: object) -> str:

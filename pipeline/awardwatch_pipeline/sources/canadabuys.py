@@ -251,7 +251,10 @@ def plan(conn: sqlite3.Connection, stage: str, now: datetime) -> list[SourceFile
     files = files_for(stage, now.date())
     first_load = conn.execute(f"SELECT 1 FROM {TABLES[stage]} LIMIT 1").fetchone() is None
     out: list[SourceFile] = []
-    if first_load and "legacy" in files:
+    # Read on the first load, and again once after the person test changed
+    # (matching.refresh_person_test), so its withheld rows are recomputed.
+    reread = stage in (get_meta(conn, matching.REREAD_LEGACY_KEY) or "").split(",")
+    if (first_load or reread) and "legacy" in files:
         out.append(files["legacy"])
     if first_load or complete_due(conn, files["complete"].name, now):
         out.append(files["complete"])
@@ -799,6 +802,9 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, stage: str, *, no
         set_meta(conn, _meta_key(f.name, "sha256"), digest)
         set_meta(conn, _meta_key(f.name, "read_at"), stamp)
         _record_validators(conn, f.name, etag, last_modified)
+        if f.kind == "legacy":
+            pending = [s for s in (get_meta(conn, matching.REREAD_LEGACY_KEY) or "").split(",") if s and s != stage]
+            set_meta(conn, matching.REREAD_LEGACY_KEY, ",".join(pending))
         conn.commit()
 
     if stage == "tenders" and open_refs is not None:

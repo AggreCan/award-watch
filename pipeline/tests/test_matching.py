@@ -99,3 +99,36 @@ def test_the_review_list_says_what_was_withheld(tmp_path):
     assert notice.startswith("1 rows (1 names) read as private individuals, recipient withheld; ")
     default = drops.write(tmp_path / "y.txt", what="Test", stamp="2026-10-31T00:00:00Z")
     assert "supplier withheld" in default
+
+
+def test_a_new_person_test_makes_every_loader_read_its_files_again(conn):
+    from datetime import datetime, timezone
+
+    from awardwatch_pipeline import config
+    from awardwatch_pipeline.db import get_meta, set_meta
+    from awardwatch_pipeline.sources import canadabuys
+
+    skip_keys = [f"canadabuys:{config.AWARDS_FY_FILE.format(fy='2026-2027')}:{item}"
+                 for item in ("sha256", "etag", "last_modified", "read_at")]
+    skip_keys += [f"{stage}:{item}" for stage in ("contracts", "grants", "lobbying")
+                  for item in ("sha256", "etag", "last_modified", "rejected")]
+    skip_keys += ["contracts_loaded_at", "grants_loaded_at", "lobbying_loaded_at"]
+    for key in skip_keys:
+        set_meta(conn, key, "x")
+    set_meta(conn, "lobbying:refused_until", "2026-11-08")  # a refusal is still honoured
+    set_meta(conn, matching.PERSON_TEST_KEY, str(matching.PERSON_TEST_VERSION - 1))
+    conn.execute("INSERT INTO awards (reference, amendment, source_file, first_seen, last_seen) "
+                 "VALUES ('r', 0, 'f', '2026-10-24', '2026-10-24')")
+    conn.commit()
+    night = datetime(2026, 11, 1, 1, tzinfo=timezone.utc)
+
+    assert matching.refresh_person_test(conn) is True
+    assert [k for k in skip_keys if get_meta(conn, k) is not None] == []
+    assert get_meta(conn, "lobbying:refused_until") == "2026-11-08"
+    assert get_meta(conn, matching.PERSON_TEST_KEY) == str(matching.PERSON_TEST_VERSION)
+    # The legacy file, read only on a first load otherwise, is planned again, and so is the complete file.
+    assert [f.kind for f in canadabuys.plan(conn, "awards", night)] == ["legacy", "complete", "fy"]
+    # Once the version is stored, nothing more is cleared.
+    set_meta(conn, "contracts:sha256", "y")
+    assert matching.refresh_person_test(conn) is False
+    assert get_meta(conn, "contracts:sha256") == "y"

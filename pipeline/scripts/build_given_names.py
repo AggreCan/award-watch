@@ -19,6 +19,12 @@ Sources and thresholds (births summed over every year a file covers):
   for a year once five babies got it). Added when the SSA file was refused,
   so that the given names of English-speaking Canada are on the list; a low
   threshold because it stands in for a far larger file.
+* British Columbia, most popular baby names, boys and girls (Open Government
+  Licence - British Columbia, catalogue.data.gov.bc.ca): 5.
+* Alberta, frequency and ranking of baby names by year and gender, 1980-2020
+  and 2021-2025 (Open Government Licence - Alberta, open.alberta.ca): 5.
+  The two workbooks are read with the standard library (no spreadsheet
+  package is a dependency of the pipeline).
 
 No birth register holds the short forms people go by in business ("Doug",
 "Rob", "Bill"); SHORT_FORMS adds the common English ones by hand, since a
@@ -29,7 +35,9 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import sys
+import xml.etree.ElementTree as ET
 import zipfile
 from collections import Counter
 from collections.abc import Callable
@@ -84,6 +92,70 @@ def _ontario(data: bytes) -> Counter[str]:
     return counts
 
 
+def _british_columbia(data: bytes) -> Counter[str]:
+    """NAME, one column per year, TOTAL: the total, else the sum of the years."""
+    counts: Counter[str] = Counter()
+    reader = csv.reader(io.StringIO(data.decode("utf-8-sig")))
+    header = [h.strip().upper() for h in next(reader)]
+    total = header.index("TOTAL") if "TOTAL" in header else None
+    for row in reader:
+        if not row or not row[0].strip():
+            continue
+        if total is not None and total < len(row) and row[total].strip().isdigit():
+            counts[row[0]] += int(row[total])
+        else:
+            counts[row[0]] += sum(int(c) for c in row[1:] if c.strip().isdigit())
+    return counts
+
+
+_XLSX = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+
+
+def _xlsx_rows(data: bytes) -> list[dict[str, str]]:
+    """The first sheet's rows as {column letter: text}."""
+    rows: list[dict[str, str]] = []
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        strings: list[str] = []
+        if "xl/sharedStrings.xml" in zf.namelist():
+            strings = ["".join(t.text or "" for t in si.iter(_XLSX + "t"))
+                       for si in ET.parse(zf.open("xl/sharedStrings.xml")).getroot().iter(_XLSX + "si")]
+        for _event, el in ET.iterparse(zf.open("xl/worksheets/sheet1.xml")):
+            if el.tag != _XLSX + "row":
+                continue
+            row: dict[str, str] = {}
+            for cell in el.iter(_XLSX + "c"):
+                value = cell.find(_XLSX + "v")
+                text = "" if value is None else (value.text or "")
+                if cell.get("t") == "s" and text:
+                    text = strings[int(text)]
+                elif cell.get("t") == "inlineStr":
+                    text = "".join(t.text or "" for t in cell.iter(_XLSX + "t"))
+                row[re.sub(r"\d", "", cell.get("r") or "")] = text
+            rows.append(row)
+            el.clear()
+    return rows
+
+
+def _alberta(data: bytes) -> Counter[str]:
+    """One row per name, year and gender under a header row naming "First Name" and "Frequency"."""
+    counts: Counter[str] = Counter()
+    name_col = freq_col = None
+    for row in _xlsx_rows(data):
+        if name_col is None:
+            for col, text in row.items():
+                if text.strip().casefold() == "first name":
+                    name_col = col
+                elif text.strip().casefold() == "frequency":
+                    freq_col = col
+            continue
+        freq = (row.get(freq_col or "") or "").strip()
+        if freq.isdigit():
+            counts[row.get(name_col, "")] += int(freq)
+    if name_col is None or freq_col is None:
+        raise ValueError("no First Name and Frequency header in the workbook")
+    return counts
+
+
 SOURCES: list[tuple[str, str, list[str], Callable[[bytes], Counter[str]], int]] = [
     ("US Social Security Administration, national baby names, public domain", "ssa",
      ["https://www.ssa.gov/oact/babynames/names.zip"], _ssa, 300),
@@ -100,6 +172,17 @@ SOURCES: list[tuple[str, str, list[str], Callable[[bytes], Counter[str]], int]] 
       "5d8b8ece-fa01-43c5-955b-4b642b28c559/download/baby_names_-_male.csv",
       "https://data.ontario.ca/dataset/4d339626-98f9-49fe-aede-d64f03fa914f/resource/"
       "acc72e92-3100-4a04-8f5f-4fad9cd77cc5/download/baby_names_-_female_.csv"], _ontario, 5),
+    ("British Columbia, most popular baby names (boys and girls, 1924-2023), Open Government Licence - "
+     "British Columbia, catalogue.data.gov.bc.ca", "british_columbia",
+     ["https://www2.gov.bc.ca/assets/gov/birth-adoption-death-marriage-and-divorce/statistics-reports/"
+      "bc-popular-boys-names.csv",
+      "https://www2.gov.bc.ca/assets/download/3DF4D54C10364F7F979B182E624C10E5"], _british_columbia, 5),
+    ("Alberta, frequency and ranking of baby names by year and gender (1980-2025), Open Government Licence - "
+     "Alberta, open.alberta.ca", "alberta",
+     ["https://open.alberta.ca/dataset/11245675-b047-49fc-8bd1-cc2ce8314a6d/resource/"
+      "e8aac308-c754-484c-b446-0c57ed0e8d37/download/baby-names-frequency_1980_2020.xlsx",
+      "https://open.alberta.ca/dataset/11245675-b047-49fc-8bd1-cc2ce8314a6d/resource/"
+      "754e4f4b-7324-4a65-908b-20da73661331/download/baby-names-frequency_2025.xlsx"], _alberta, 5),
 ]
 
 SHORT_FORMS = """

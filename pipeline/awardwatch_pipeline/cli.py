@@ -20,7 +20,8 @@ from .db import connect, log_run
 from .http import PoliteClient
 from .sources import buyers, canadabuys, registry_federal
 from . import indicators
-from .sources import contracts, grants, lobbying
+from . import export, export_static, migrate
+from .sources import contracts, grants, lobbying, matching
 
 log = logging.getLogger("awardwatch_pipeline")
 STAGES = ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry",
@@ -63,6 +64,22 @@ def _not_built(conn: sqlite3.Connection, stage: str) -> str:
     return "not built"
 
 
+class ExportIncomplete(RuntimeError):
+    """The static export was written but the CSV downloads were not (export_csv has the reason)."""
+
+
+def _export(conn: sqlite3.Connection) -> dict[str, int]:
+    """The export stage: the CSV downloads, then the static JSON (feeds and
+    sitemaps inside it), which writes the stage's log row. A CSV failure is
+    recorded as export_csv and does not hold back the files the site serves;
+    it is raised after them, so the stage still reads as failed."""
+    csv_ok = _stage(conn, "export_csv", lambda: export.export_csv(conn))
+    counts = export_static.export_static(conn)
+    if not csv_ok:
+        raise ExportIncomplete("the static files were written; the CSV downloads failed (see export_csv)")
+    return counts
+
+
 def stage_runners(conn: sqlite3.Connection, client: PoliteClient | None,
                   samples: Path | None) -> dict[str, Callable[[], Any]]:
     """What each stage runs. A stage that is built replaces its _not_built line."""
@@ -79,7 +96,7 @@ def stage_runners(conn: sqlite3.Connection, client: PoliteClient | None,
         "registry": lambda: registry_federal.run(conn, client, download=not offline),
         "organizations": lambda: organizations.run(conn),
         "indicators": lambda: indicators.run(conn),
-        "export": lambda: _not_built(conn, "export"),
+        "export": lambda: _export(conn),
     }
 
 
@@ -90,7 +107,13 @@ def run(conn: sqlite3.Connection, selected: list[str], *, samples: Path | None =
     if client is None and samples is None:
         client = PoliteClient()
     runners = stage_runners(conn, client, samples)
-    ok = True
+    # Before any stage writes an id: a change to the name rules moves every
+    # record to its new id first (a no-op on a current database).
+    ok = _stage(conn, "migrate", lambda: migrate.ensure_current(conn))
+    # A changed person test: every loader reads its files again, so which rows
+    # are withheld is recomputed (a no-op when the version is current).
+    if matching.refresh_person_test(conn):
+        log.info("person test version %s: every file is read again", matching.PERSON_TEST_VERSION)
     for stage in stages:
         ok &= _stage(conn, stage, runners[stage])
     return 0 if ok else 1
