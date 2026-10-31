@@ -1,0 +1,68 @@
+# LMIA Watch. Every page is open to search engines, in English and in French
+# (?lang=fr). The payment webhook, the JSON API and the response form are not
+# pages to index.
+#
+# Crawling the 160,000 profile pages gains nothing the nightly bulk files do
+# not hold: see /llms.txt for the files, their licences and the Zenodo deposit.
+# The bulk files under /downloads/ may be fetched (ten a minute per address).
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+Allow: /
+Disallow: /hooks/
+Disallow: /api/
+Disallow: /employers/*/respond
+# A search with filters or a page cursor, a correction form opened from a
+# profile (?employer=) and a map opened on a postal area (?fsa=) each name the
+# plain page as their canonical URL, so crawlers need not walk the query
+# forms. The plain pages and their French versions (?lang=fr) stay open.
+Disallow: /search?
+Allow: /search?lang=fr$
+Disallow: /corrections?
+Allow: /corrections?lang=fr$
+Disallow: /map?
+Allow: /map?lang=fr$
+Crawl-delay: 5
+
+# Bing honours Crawl-delay, and five seconds would cap it at about 17,000
+# pages a day against 160,000 employer pages. A crawler reads only the group
+# that names it, so Bingbot's group repeats the rules without the delay.
+User-agent: bingbot
+Allow: /
+Disallow: /hooks/
+Disallow: /api/
+Disallow: /employers/*/respond
+Disallow: /search?
+Allow: /search?lang=fr$
+Disallow: /corrections?
+Allow: /corrections?lang=fr$
+Disallow: /map?
+Allow: /map?lang=fr$
+
+# Crawlers that gather pages for AI training or large-scale scraping are not
+# needed to find the records (the data is downloadable on the Data page) and
+# at their pace they use up the daily request allowance that readers depend
+# on. Assistants fetching a single page for a person are not listed here.
+User-agent: ShapBot
+User-agent: ClaudeBot
+User-agent: anthropic-ai
+User-agent: GPTBot
+User-agent: Google-Extended
+User-agent: CCBot
+User-agent: Bytespider
+User-agent: Amazonbot
+User-agent: Applebot-Extended
+User-agent: meta-externalagent
+User-agent: FacebookBot
+User-agent: cohere-ai
+User-agent: Diffbot
+User-agent: ImagesiftBot
+User-agent: omgili
+User-agent: PetalBot
+User-agent: DataForSeoBot
+User-agent: AhrefsBot
+User-agent: SemrushBot
+User-agent: MJ12bot
+User-agent: DotBot
+Disallow: /
+
+Sitemap: https://lmiawatch.ca/sitemap.xml

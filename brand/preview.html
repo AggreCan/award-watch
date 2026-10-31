@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Public Money Watch: mark options</title>
+<style>
+  body { margin: 0; font: 15px/1.5 system-ui, "Segoe UI", sans-serif; color: #111; background: #fff; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 12px; max-width: 70ch; }
+  .wrap { padding: 28px 32px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid #ddd; margin: 0 0 28px; }
+  .cell { padding: 20px 24px; }
+  .cell.dark { background: #15171a; color: #f3f3f3; }
+  .cell.light { background: #fff; color: #111; }
+  .sizes { display: flex; align-items: flex-end; gap: 22px; margin: 8px 0 14px; }
+  .sizes svg { display: block; }
+  .sizes span { display: block; font-size: 11px; opacity: .6; text-align: center; margin-top: 4px; }
+  .lockup { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; letter-spacing: -0.01em; }
+  .lockup svg { width: 28px; height: 28px; }
+  .tab { display: inline-block; padding: 7px 8px 7px 10px; background: #e9eaec; color: #111; border-radius: 6px 6px 0 0; font-size: 12px; margin-top: 10px; }
+  .tab svg { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; }
+  .dark .tab { background: #2b2e33; color: #eee; }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; opacity: .6; margin: 0 0 6px; }
+  .notes { color: #444; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Public Money Watch: three mark options</h1>
+<p>Each mark is one path on a 32-unit box drawn on a 2-unit grid, filled with <code>currentColor</code>, so the same file serves the header, the favicon and the dark scheme with no second drawing. Judge them at the 16 px tab size first, since that is where a mark fails.</p>
+
+<script>
+const MARKS = {
+  transfer: ["Transfer", "A filled block (the treasury) and an outlined block (the recipient), an arrow between: public money moving to a named organization.",
+    "M2 11h10v10H2z M13 15h5v2h-5z M17 12l5 4-5 4z M22 11h8v10h-8z M24 13v6h4v-6z"],
+  receipt: ["Receipt", "A printed slip with three line items and a total, the amounts in the right column and a torn foot: the record of what was paid.",
+    "M8 2h16v24l-2 2-2-2-2 2-2-2-2 2-2-2-2 2-2-2z M11 7v2h6v-2z M19 7v2h2v-2z M11 12v2h6v-2z M19 12v2h2v-2z M11 17v2h6v-2z M19 17v2h2v-2z M15 22v2h6v-2z"],
+  share: ["Share", "A disc with one quarter pulled out: the share of the total that went to one organization. The only round mark of the three.",
+    "M16 16V4a12 12 0 1 1-12 12z M14 14V2A12 12 0 0 0 2 14z"],
+};
+function svg(path, size) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="${size}" height="${size}"><path fill="currentColor" d="${path}"/></svg>`;
+}
+function cell(theme, name, path) {
+  const sizes = [16, 24, 32, 48, 96].map(s => `<div>${svg(path, s)}<span>${s}</span></div>`).join("");
+  return `<div class="cell ${theme}">
+    <div class="label">${theme} scheme</div>
+    <div class="sizes">${sizes}</div>
+    <div class="lockup">${svg(path, 28)}<span>Public Money Watch</span></div><br>
+    <span class="tab">${svg(path, 16)}Public Money Watch</span>
+  </div>`;
+}
+for (const [key, [name, note, path]] of Object.entries(MARKS)) {
+  document.write(`<h2 style="font-size:17px;margin:0 0 2px">${name} <span style="font-weight:400;color:#666">(mark-${key}.svg)</span></h2><p class="notes">${note}</p>`);
+  document.write(`<div class="row">${cell("light", name, path)}${cell("dark", name, path)}</div>`);
+}
+</script>
+</div>
+</body>
+</html>
