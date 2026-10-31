@@ -156,7 +156,7 @@ tile.addRoundedRect(QRectF(0, 0, 64, 64), 12, 12)
 fa, fl, fr = fit([a_path, w_left, w_right], (5, 14, 59, 50))
 (HERE / "favicon.svg").write_text(svg_doc([tile, fa, fl, fr], ["#ffffff", INK, INK, ACCENT], (64, 64)), encoding="utf-8")
 gl, gr = fit([w_left, w_right], (8, 8, 56, 56))
-(HERE / "favicon-w.svg").write_text(svg_doc([tile, gl, gr], ["#ffffff", INK, INK, ACCENT], (64, 64)), encoding="utf-8")
+(HERE / "favicon-w.svg").write_text(svg_doc([tile, gl, gr], ["#ffffff", INK, ACCENT], (64, 64)), encoding="utf-8")
 
 # ---- the wordmark: "award watch" with the check built into its own aw -----------------
 text = "award watch"
