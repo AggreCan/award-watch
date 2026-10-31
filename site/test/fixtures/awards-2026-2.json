@@ -1,0 +1,25 @@
+[
+ {
+  "awarded": "2026-02-03",
+  "buyer_en": "Public Services and Procurement Canada",
+  "buyer_fr": "Services publics et Approvisionnement Canada",
+  "buyer_id": "pwgsc-tpsgc",
+  "competitive": null,
+  "currency": "CAD",
+  "instrument_en": "Contract",
+  "instrument_fr": "Contrat",
+  "organization": "Unmatched Interpretation Co.",
+  "organization_id": null,
+  "provinces": [
+   "QC"
+  ],
+  "reference": "cb-600-60000006",
+  "segments": [
+   "82"
+  ],
+  "status": "expired",
+  "title_en": "Interpretation services, regional consultations",
+  "title_fr": "Services d'interprétation, consultations régionales",
+  "value": 9800
+ }
+]

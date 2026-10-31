@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
 import type { TenderRow } from "../src/data";
 import { filterTenders, readTenderQuery, tenderQueryString } from "../src/pages/tenders";
-import { assetsWithout, emptyAssets, testEnv } from "./assets";
+import { assetsWithout, emptyAssets, fakeAssets, makeFakeAssets, testEnv } from "./assets";
+import openFirst from "./fixtures/tenders-open-first.json";
 import openTenders from "./fixtures/tenders-open.json";
 
 let address = 0;
@@ -18,11 +19,12 @@ const EM_DASH = String.fromCharCode(0x2014);
 // [path, English phrase, French phrase, file whose absence makes it 503]
 const PAGES: [string, string, string, string][] = [
   ["/", "Federal Tenders, Contracts and Grants, by Organization", "Appels d’offres, contrats et subventions du fédéral, par organisation", "stats.json"],
-  ["/tenders", "<h1>Open Tender Notices</h1>", "<h1>Avis d’appel d’offres ouverts</h1>", "tenders/open.json"],
+  ["/tenders", "<h1>Open Tender Notices</h1>", "<h1>Avis d’appel d’offres ouverts</h1>", "tenders/open-first.json"],
   ["/tenders/new", "<h1>New Tender Notices</h1>", "<h1>Nouveaux avis d’appel d’offres</h1>", "stats.json"],
   ["/tenders/cb-100-10000001", "<h1>Translation services for regional offices</h1>", "<h1>Services de traduction pour les bureaux régionaux</h1>", "stats.json"],
   ["/awards", "<h1>Contract Award Notices</h1>", "<h1>Avis d’attribution de contrats</h1>", "awards/recent.json"],
-  ["/awards/2026", "<h1>Award Notices in 2026</h1>", "<h1>Avis d’attribution en 2026</h1>", "awards/2026.json"],
+  ["/awards/2026", "<h1>Award Notices in 2026</h1>", "<h1>Avis d’attribution en 2026</h1>", "awards/2026/index.json"],
+  ["/awards/2026?page=2", "Interpretation services, regional consultations", "interprétation, consultations régionales", "awards/2026/2.json"],
   ["/awards/cb-400-40000004", "<h1>Translation standing offer, official languages</h1>", "<h1>Offre à commandes de traduction, langues officielles</h1>", "stats.json"],
   ["/history/w8472-000633", "<h1>Vessel refit, mid-shore patrol</h1>", "<h1>Radoub de navire, patrouille semi-hauturière</h1>", "stats.json"],
   ["/organizations", "<h1>Organizations</h1>", "<h1>Organisations</h1>", "directory/index.json"],
@@ -146,11 +148,13 @@ describe("tender notices", () => {
       expect(html, path).not.toContain("contracting.officer@example.invalid");
       expect(html, path).not.toContain("Example Contracting Officer");
       expect(html, path).not.toContain("000-000-0000");
-      expect(html, path).toContain('href="https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-100-10000001"');
     }
+    expect(await text("/tenders/cb-100-10000001")).toContain('href="https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-100-10000001"');
+    expect(await text("/tenders/cb-100-10000001?lang=fr")).toContain('href="https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/cb-100-10000001"');
     const award = await text("/awards/cb-400-40000004");
     expect(award).not.toContain("awards.officer@example.invalid");
     expect(award).toContain('href="https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cb-400-40000004"');
+    expect(await text("/awards/cb-400-40000004?lang=fr")).toContain('href="https://achatscanada.canada.ca/fr/occasions-de-marche/avis-d-attribution/cb-400-40000004"');
   });
 
   it("shows a notice's fields, codes, amendments and related awards", async () => {
@@ -167,6 +171,40 @@ describe("tender notices", () => {
     expect(one).toContain('<span class="badge badge-closing">Closing soon</span>');
     expect(one).toContain("2026-11-03 14:00");
     expect(one).toContain("2 versions on record.");
+  });
+
+  it("renders from the first file and never parses the full list", async () => {
+    const asked: string[] = [];
+    const counting = {
+      fetch: async (input: Request) => {
+        asked.push(new URL(input.url).pathname);
+        return fakeAssets.fetch(input);
+      },
+    } as unknown as Fetcher;
+    for (const path of ["/tenders", "/tenders?segment=82", "/tenders?page=2&sort=published", "/tenders?lang=fr"]) {
+      expect((await get(path, testEnv(counting))).status, path).toBe(200);
+    }
+    expect(asked).toContain("/data/tenders/open-first.json");
+    expect(asked).not.toContain("/data/tenders/open.json");
+  });
+
+  it("leaves a filtered or later view to the script when the first file holds only part of the list", async () => {
+    const partial = { ...openFirst, total: 900 };
+    const env = testEnv(makeFakeAssets({}, { "tenders/open-first.json": partial }));
+    const plain = await (await get("/tenders", env)).text();
+    expect(plain).toContain("900 notices open on CanadaBuys at the data date");
+    expect(plain).toContain("<p id=\"tender-count\" aria-live=\"polite\">900 notices</p>");
+    expect(plain).toContain("Page 1 of 18");
+    expect(plain).toContain('<a href="/tenders?page=2" class="btn" rel="next">Next</a>');
+    for (const path of ["/tenders?segment=82", "/tenders?page=2", "/tenders?sort=published"]) {
+      const html = await (await get(path, env)).text();
+      expect(html, path).toContain("These filters apply once the full list of open notices has loaded in your browser.");
+      expect(html, path).toContain('<noscript><p>Filtering the full list needs JavaScript; <a href="/tenders">the unfiltered list</a> shows the open notices by closing date.</p></noscript>');
+      expect(html, path).not.toContain("cb-100-10000001");
+      expect(html, path).toContain('<meta name="robots" content="noindex"/>');
+    }
+    // The form still shows the link's values, so the script and the reader start from them.
+    expect(await (await get("/tenders?segment=82", env)).text()).toContain('<option value="82" selected="">');
   });
 
   it("lists the open notices, the first 50 by closing date, with the filters the rows carry", async () => {
@@ -258,9 +296,34 @@ describe("award notices and contract history", () => {
     expect(html).toContain('<a class="mono" href="/awards/2012">2012</a>');
     expect(html).toContain('<span class="badge badge-cancelled">Cancelled</span>');
     const year = await text("/awards/2026");
-    expect(year).toContain("2 award notices dated 2026. 1 of them is cancelled.");
+    expect(year).toContain("3 award notices dated 2026.");
     expect(year).toContain('<a href="/downloads/awards-2026.csv">Download every award notice dated 2026 (CSV)</a>');
     expect(year).toContain('<span aria-current="page" class="mono">2026</span>');
+    expect(year).toContain("cb-400-40000004");
+    expect(year).not.toContain("cb-600-60000006");
+    expect(year).toContain("Page 1 of 2");
+    expect(year).toContain('<a href="/awards/2026?page=2" class="btn" rel="next">Next</a>');
+    expect(year).toContain('<link rel="next" href="https://awardwatch.ca/awards/2026?page=2"/>');
+    const second = await text("/awards/2026?page=2");
+    expect(second).toContain("Interpretation services, regional consultations");
+    expect(second).toContain("Unmatched Interpretation Co.");
+    expect(second).not.toContain("cb-400-40000004");
+    expect(second).toContain('<a href="/awards/2026" class="btn" rel="prev">Previous</a>');
+    expect(second).toContain('<meta name="robots" content="noindex"/>');
+    for (const path of ["/awards/2026?page=3", "/awards/2026?page=x", "/awards/2026?page=0"]) {
+      const res = await get(path);
+      expect(res.status, path).toBe(404);
+      expect(await res.text(), path).toContain('<a href="/awards/2026">Back to the first page of the year</a>');
+    }
+    // A year with no award notice yet says so.
+    const empty = testEnv(makeFakeAssets({}, { "awards/2026/index.json": { year: 2026, pages: 0, rows: 0 } }));
+    const none = await get("/awards/2026", empty);
+    expect(none.status).toBe(200);
+    expect(await none.text()).toContain("No award notices to show.");
+    // The index must name its own year and count at least one row per page.
+    for (const bad of [{ year: 2025, pages: 1, rows: 3 }, { year: 2026, pages: 2, rows: 1 }, { year: 2026, pages: "2", rows: 3 }]) {
+      expect((await get("/awards/2026", testEnv(makeFakeAssets({}, { "awards/2026/index.json": bad })))).status, JSON.stringify(bad)).toBe(503);
+    }
   });
 });
 

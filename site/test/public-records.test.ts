@@ -114,6 +114,8 @@ describe("record links", () => {
   it("are built the way each publisher's own pages are", () => {
     expect(tenderNoticeUrl("CB-100-10000001")).toBe("https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-100-10000001");
     expect(awardNoticeUrl("cb-400-40000004")).toBe("https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cb-400-40000004");
+    expect(tenderNoticeUrl("CB-100-10000001", "fr")).toBe("https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/cb-100-10000001");
+    expect(awardNoticeUrl("cb-400-40000004", "fr")).toBe("https://achatscanada.canada.ca/fr/occasions-de-marche/avis-d-attribution/cb-400-40000004");
     expect(grantUrl("dfo-mpo", "GC 1")).toBe("https://search.open.canada.ca/grants/record/dfo-mpo%2CGC%201%2Ccurrent");
     expect(contractSearchUrl("C-1&x")).toBe("https://search.open.canada.ca/contracts/?search_text=C-1%26x");
     expect(lobbyUrl("5 1")).toBe("https://lobbycanada.gc.ca/app/secure/ocl/lrs/do/cmmLgPblcVw?comlogId=5%201");

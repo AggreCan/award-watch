@@ -62,6 +62,7 @@ const FRENCH_PAGES = [
   "/tenders/cb-200-20005019?lang=fr",
   "/awards?lang=fr",
   "/awards/2026?lang=fr",
+  "/awards/2026?lang=fr&page=2",
   "/awards/cb-400-40000004?lang=fr",
   "/history/w8472-000633?lang=fr",
   "/organizations?lang=fr",

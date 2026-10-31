@@ -297,6 +297,15 @@ const STRINGS = {
     en: "The full list could not be loaded; the rows shown are the server's.",
     fr: "La liste complète n'a pas pu être chargée; les lignes affichées sont celles du serveur.",
   },
+  "tenders.waiting": {
+    en: "These filters apply once the full list of open notices has loaded in your browser.",
+    fr: "Ces filtres s'appliquent une fois la liste complète des avis ouverts chargée dans votre navigateur.",
+  },
+  "tenders.noscript": {
+    en: "Filtering the full list needs JavaScript; {link} shows the open notices by closing date.",
+    fr: "Le filtrage de la liste complète nécessite JavaScript; {link} présente les avis ouverts par date de clôture.",
+  },
+  "tenders.noscript_link": { en: "the unfiltered list", fr: "la liste non filtrée" },
   "tenders.new_title": { en: "New Tender Notices", fr: "Nouveaux avis d'appel d'offres" },
   "tenders.new_lead": {
     en: "The notices first seen on each of the last {days} days. Pick a day to see its notices.",
@@ -388,8 +397,8 @@ const STRINGS = {
   "awards.back": { en: "Back to the award notices", fr: "Retour aux avis d'attribution" },
   "awards.year_count_one": { en: "{n} award notice dated {year}.", fr: "{n} avis d'attribution daté de {year}." },
   "awards.year_count_many": { en: "{n} award notices dated {year}.", fr: "{n} avis d'attribution datés de {year}." },
-  "awards.cancelled_one": { en: "{n} of them is cancelled.", fr: "{n} d'entre eux est annulé." },
-  "awards.cancelled_many": { en: "{n} of them are cancelled.", fr: "{n} d'entre eux sont annulés." },
+  "awards.page_not_found": { en: "Page Not Found", fr: "Page introuvable" },
+  "awards.back_year": { en: "Back to the first page of the year", fr: "Retour à la première page de l'année" },
   "awards.download": { en: "Download every award notice dated {year} (CSV)", fr: "Télécharger tous les avis d'attribution datés de {year} (CSV)" },
 
   // -- one award notice or contract history record ------------------------------------

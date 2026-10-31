@@ -10,15 +10,21 @@ import { CompetitiveFlag, StatusBadge, tenderState } from "../layout";
 
 // -- links to the record ---------------------------------------------------------
 
-// CanadaBuys serves its notice pages in English at these paths (checked
-// 2026-10-31, a lower-cased reference works); the French host's path is not
-// confirmed yet, so French pages link the English notice too.
-export function tenderNoticeUrl(reference: string): string {
-  return `https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/${encodeURIComponent(reference.toLowerCase())}`;
+// CanadaBuys serves each notice in English and, on its French host
+// (AchatsCanada), in French; a lower-cased reference works on both, and each
+// page links the notice in its own language.
+export function tenderNoticeUrl(reference: string, lang: Lang = "en"): string {
+  const ref = encodeURIComponent(reference.toLowerCase());
+  return lang === "fr"
+    ? `https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/${ref}`
+    : `https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/${ref}`;
 }
 
-export function awardNoticeUrl(reference: string): string {
-  return `https://canadabuys.canada.ca/en/tender-opportunities/award-notice/${encodeURIComponent(reference.toLowerCase())}`;
+export function awardNoticeUrl(reference: string, lang: Lang = "en"): string {
+  const ref = encodeURIComponent(reference.toLowerCase());
+  return lang === "fr"
+    ? `https://achatscanada.canada.ca/fr/occasions-de-marche/avis-d-attribution/${ref}`
+    : `https://canadabuys.canada.ca/en/tender-opportunities/award-notice/${ref}`;
 }
 
 // The open-data datasets behind each source, in the page's language.

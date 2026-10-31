@@ -13,12 +13,14 @@ const BODIES = ["{", "null", "[]", "{}", '"text"', "[1,2,3]", '{"rows":5,"buyers
 // The pages each file feeds (and the API routes that pass it through or read it).
 const READERS: Record<string, string[]> = {
   "stats.json": ["/", "/tenders", "/awards", "/data", "/support", "/cite", "/api/stats"],
-  "tenders/open.json": ["/tenders", "/tenders?segment=82&q=x"],
+  "tenders/open-first.json": ["/tenders", "/tenders?segment=82&q=x", "/tenders?page=2"],
   "tenders/new/2026-10-31.json": ["/tenders/new"],
   "tenders/20a.json": ["/tenders/cb-100-10000001", "/api/tenders/cb-100-10000001"],
   "contracts/637.json": ["/awards/cb-400-40000004", "/history/w8472-000633"],
   "awards/recent.json": ["/awards"],
-  "awards/2026.json": ["/awards/2026"],
+  "awards/2026/index.json": ["/awards/2026", "/awards/2026?page=2"],
+  "awards/2026/1.json": ["/awards/2026"],
+  "awards/2026/2.json": ["/awards/2026?page=2"],
   "profiles/a00.json": ["/organizations/org-a000000001", "/organizations/org-a000000001/respond", "/api/organizations/org-a000000001"],
   "aliases/a00.json": ["/organizations/org-a00000000f"],
   "directory/index.json": ["/organizations", "/organizations/org-a000000001"],
@@ -35,7 +37,9 @@ const READERS: Record<string, string[]> = {
 
 describe("malformed data files", () => {
   it("covers every fixture file", () => {
-    expect(Object.keys(READERS).sort()).toEqual(Object.keys(FILES).filter((f) => f !== "directory/yt/index.json").sort());
+    // The full open list is read by the browser alone; no route parses it.
+    const unread = ["directory/yt/index.json", "tenders/open.json"];
+    expect(Object.keys(READERS).sort()).toEqual(Object.keys(FILES).filter((f) => !unread.includes(f)).sort());
   });
 
   for (const [file, paths] of Object.entries(READERS)) {

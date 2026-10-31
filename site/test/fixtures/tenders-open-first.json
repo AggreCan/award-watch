@@ -1,0 +1,178 @@
+{
+ "facets": {
+  "buyer": [
+   {
+    "en": "Fisheries and Oceans Canada",
+    "fr": "Pêches et Océans Canada",
+    "n": 1,
+    "value": "dfo-mpo"
+   },
+   {
+    "en": "Department of National Defence",
+    "fr": "Ministère de la Défense nationale",
+    "n": 1,
+    "value": "dnd-mdn"
+   },
+   {
+    "en": "Public Services and Procurement Canada",
+    "fr": "Services publics et Approvisionnement Canada",
+    "n": 1,
+    "value": "pwgsc-tpsgc"
+   }
+  ],
+  "category": [
+   {
+    "n": 1,
+    "value": "GD"
+   },
+   {
+    "n": 2,
+    "value": "SRV"
+   }
+  ],
+  "method": [
+   {
+    "en": "Competitive - Open bidding",
+    "fr": "Concurrentielle - Appel d'offres ouvert",
+    "n": 1,
+    "value": "Competitive - Open bidding"
+   },
+   {
+    "en": "Competitive - Selective tendering",
+    "fr": "Concurrentielle - Appel d'offres sélectif",
+    "n": 1,
+    "value": "Competitive - Selective tendering"
+   },
+   {
+    "en": "Competitive - Traditional",
+    "fr": "Concurrentielle - Traditionnelle",
+    "n": 1,
+    "value": "Competitive - Traditional"
+   }
+  ],
+  "notice_type": [
+   {
+    "en": "Invitation to Qualify",
+    "fr": "Invitation à se qualifier",
+    "n": 1,
+    "value": "Invitation to Qualify"
+   },
+   {
+    "en": "Request for Proposal",
+    "fr": "Demande de propositions",
+    "n": 2,
+    "value": "Request for Proposal"
+   }
+  ],
+  "province": [
+   {
+    "n": 1,
+    "value": "BC"
+   },
+   {
+    "n": 1,
+    "value": "ON"
+   },
+   {
+    "n": 1,
+    "value": "QC"
+   }
+  ],
+  "segment": [
+   {
+    "n": 1,
+    "value": "43"
+   },
+   {
+    "n": 1,
+    "value": "72"
+   },
+   {
+    "n": 1,
+    "value": "78"
+   },
+   {
+    "n": 1,
+    "value": "82"
+   }
+  ]
+ },
+ "rows": [
+  {
+   "amendment": 1,
+   "buyer_en": "Public Services and Procurement Canada",
+   "buyer_fr": "Services publics et Approvisionnement Canada",
+   "buyer_id": "pwgsc-tpsgc",
+   "category": [
+    "SRV"
+   ],
+   "closing": "2026-11-04T14:00:00",
+   "first_seen": "2026-10-30",
+   "method_en": "Competitive - Open bidding",
+   "method_fr": "Concurrentielle - Appel d'offres ouvert",
+   "notice_type_en": "Request for Proposal",
+   "notice_type_fr": "Demande de propositions",
+   "provinces": [
+    "ON",
+    "QC"
+   ],
+   "published": "2026-10-30",
+   "reference": "cb-100-10000001",
+   "segments": [
+    "82"
+   ],
+   "title_en": "Translation services for regional offices",
+   "title_fr": "Services de traduction pour les bureaux régionaux"
+  },
+  {
+   "amendment": 0,
+   "buyer_en": "Fisheries and Oceans Canada",
+   "buyer_fr": "Pêches et Océans Canada",
+   "buyer_id": "dfo-mpo",
+   "category": [
+    "SRV"
+   ],
+   "closing": "2026-11-26T14:00:00",
+   "first_seen": "2026-10-31",
+   "method_en": "Competitive - Selective tendering",
+   "method_fr": "Concurrentielle - Appel d'offres sélectif",
+   "notice_type_en": "Request for Proposal",
+   "notice_type_fr": "Demande de propositions",
+   "provinces": [
+    "BC"
+   ],
+   "published": "2026-10-31",
+   "reference": "cb-200-20005019",
+   "segments": [
+    "72",
+    "78"
+   ],
+   "title_en": "Hull inspection and repair, coastal patrol vessels",
+   "title_fr": "Inspection et réparation de coques, navires de patrouille côtière"
+  },
+  {
+   "amendment": 0,
+   "buyer_en": "Department of National Defence",
+   "buyer_fr": "Ministère de la Défense nationale",
+   "buyer_id": "dnd-mdn",
+   "category": [
+    "GD"
+   ],
+   "closing": "2026-12-15T13:00:00",
+   "first_seen": "2026-10-20",
+   "method_en": "Competitive - Traditional",
+   "method_fr": "Concurrentielle - Traditionnelle",
+   "notice_type_en": "Invitation to Qualify",
+   "notice_type_fr": "Invitation à se qualifier",
+   "provinces": [],
+   "published": "2026-10-20",
+   "reference": "cb-300-30000003",
+   "segments": [
+    "43"
+   ],
+   "title_en": "Ruggedized laptops",
+   "title_fr": "Ordinateurs portatifs renforcés"
+  }
+ ],
+ "total": 3
+}

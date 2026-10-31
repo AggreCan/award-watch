@@ -1,20 +1,25 @@
-// /tenders: every open notice, filtered and sorted. The server renders the
-// view the URL asks for (the first 50 rows by closing date when it asks for
-// nothing), so a filtered view is a link that works without JavaScript; the
-// form is a plain GET form. public/tenders.js then fetches the same file
-// once and answers every later change in memory, writing the state back
-// into the URL. The filter rules are written twice (here and in the script)
-// and the tests hold them to the same answers.
+// /tenders: every open notice, filtered and sorted. The server renders from
+// tenders/open-first.json, a small file holding the first 50 notices by
+// closing date, the number open and the facet counts, so a request never
+// parses the full list. public/tenders.js fetches the full list
+// (tenders/open.json) once and answers every filter, sort and page in
+// memory, writing the state back into the URL so a view can be shared.
+//
+// A link to a filtered, sorted or later view is rendered by the script once
+// the list has loaded; the server shows the form set to the link's values and
+// says so. When the first file holds every open notice (a short list), the
+// server answers any view itself, with the same rules as the script
+// (filterTenders below; the tests hold both to the same answers).
 //
 // /tenders/new: the notices first seen on one day, from tenders/new/<day>.json,
 // the newest day by default and any of the last 30 on request.
 
 import type { Context } from "hono";
 import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENTS } from "../constants";
-import { BUYER_ID_RE, DAY_RE, loadNewTenders, loadOpenTenders, loadStats, type TenderRow } from "../data";
+import { BUYER_ID_RE, DAY_RE, type FacetCount, type OpenFirst, loadNewTenders, loadOpenFirst, loadStats, type TenderRow } from "../data";
 import type { AppEnv } from "../env";
 import {
-  categoryLabel, clientStrings, fmtInt, numberLocale, pick, provinceName, segmentLabel, t, tn, type Key, type Lang,
+  categoryLabel, clientStrings, fmtInt, numberLocale, pick, provinceName, segmentLabel, t, tj, tn, type Key, type Lang,
 } from "../i18n";
 import { Breadcrumb, ClientData, Layout, addDays, noDataPage, page, todayOf } from "../layout";
 import { pageSeo } from "../seo";
@@ -117,28 +122,21 @@ export function tenderQueryString(q: TenderQuery, pageNo = q.page): string {
 
 type Option = { value: string; label: string; n: number };
 
-// Each select lists the values the open notices carry, with their counts, so
-// no choice leads to an empty list.
-function options(rows: readonly TenderRow[], lang: Lang) {
-  const count = (values: (r: TenderRow) => (string | null)[], label: (v: string, r: TenderRow) => string) => {
-    const seen = new Map<string, Option>();
-    for (const r of rows) {
-      for (const v of new Set(values(r))) {
-        if (!v) continue;
-        const o = seen.get(v);
-        if (o) o.n += 1;
-        else seen.set(v, { value: v, label: label(v, r), n: 1 });
-      }
-    }
-    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label, numberLocale(lang)));
-  };
+// Each select lists the values the open notices carry (the export counts them
+// over the whole list), so no choice leads to an empty list.
+function options(facets: OpenFirst["facets"], lang: Lang) {
+  const list = (counts: readonly FacetCount[], label: (f: FacetCount) => string, byValue = false) =>
+    counts
+      .map((f) => ({ value: f.value, label: label(f), n: f.n }))
+      .sort((a, b) => (byValue ? a.value.localeCompare(b.value) : a.label.localeCompare(b.label, numberLocale(lang))));
+  const named = (f: FacetCount) => pick(lang, f.en, f.fr) ?? f.value;
   return {
-    category: count((r) => r.category, (v) => categoryLabel(lang, v)),
-    segment: count((r) => r.segments, (v) => `${v} ${segmentLabel(lang, v)}`).sort((a, b) => a.value.localeCompare(b.value)),
-    province: count((r) => r.provinces, (v) => provinceName(lang, v)),
-    buyer: count((r) => [r.buyer_id], (_v, r) => pick(lang, r.buyer_en, r.buyer_fr) ?? r.buyer_id ?? ""),
-    type: count((r) => [r.notice_type_en], (_v, r) => pick(lang, r.notice_type_en, r.notice_type_fr) ?? ""),
-    method: count((r) => [r.method_en], (_v, r) => pick(lang, r.method_en, r.method_fr) ?? ""),
+    category: list(facets.category, (f) => categoryLabel(lang, f.value)),
+    segment: list(facets.segment, (f) => `${f.value} ${segmentLabel(lang, f.value)}`, true),
+    province: list(facets.province, (f) => provinceName(lang, f.value)),
+    buyer: list(facets.buyer, named),
+    type: list(facets.notice_type, named),
+    method: list(facets.method, named),
   };
 }
 
@@ -166,20 +164,25 @@ const Select = ({ name, label, any, opts, value, lang }: {
 export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
-  const rows = stats ? await loadOpenTenders(c.env) : null;
-  if (!stats || !rows) return noDataPage(c, "tenders.title");
+  const first = stats ? await loadOpenFirst(c.env) : null;
+  if (!stats || !first) return noDataPage(c, "tenders.title");
   const today = todayOf(stats.data_as_of);
   const q = readTenderQuery(new URL(c.req.url));
-  const matched = filterTenders(rows, q, today);
-  const pages = Math.max(1, Math.ceil(matched.length / TENDER_PAGE_SIZE));
+  const filtered = tenderQueryString({ ...q, page: 1 }) !== "";
+  const complete = first.rows.length >= first.total;
+  // The first file answers the plain list, and any view when it holds every
+  // open notice; any other view waits for the script and the full list.
+  const waiting = (filtered || q.page > 1) && !complete;
+  const matched = waiting ? [] : filterTenders(first.rows, q, today);
+  const count = filtered ? matched.length : first.total;
+  const pages = Math.max(1, Math.ceil(count / TENDER_PAGE_SIZE));
   const pageNo = Math.min(q.page, pages);
   const shown = matched.slice((pageNo - 1) * TENDER_PAGE_SIZE, pageNo * TENDER_PAGE_SIZE);
-  const opts = options(rows, lang);
-  const filtered = tenderQueryString({ ...q, page: 1 }) !== "";
+  const opts = options(first.facets, lang);
   // The canonical page is the unfiltered list; a filtered view is a view of it.
-  const seo = pageSeo("tenders", lang, filtered ? { noindex: true } : {});
-  const prev = pageNo > 1 ? `/tenders${tenderQueryString(q, pageNo - 1)}` : null;
-  const next = pageNo < pages ? `/tenders${tenderQueryString(q, pageNo + 1)}` : null;
+  const seo = pageSeo("tenders", lang, filtered || q.page > 1 ? { noindex: true } : {});
+  const prev = !waiting && pageNo > 1 ? `/tenders${tenderQueryString(q, pageNo - 1)}` : null;
+  const next = !waiting && pageNo < pages ? `/tenders${tenderQueryString(q, pageNo + 1)}` : null;
   const labels = {
     segments: Object.fromEntries(opts.segment.map((o) => [o.value, segmentLabel(lang, o.value)])),
     provinces: Object.fromEntries([...PROVINCES, "XX", "UN"].map((p) => [p, provinceName(lang, p)])),
@@ -190,7 +193,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
     <Layout lang={lang} title={t(lang, "tenders.title")} dataAsOf={stats.data_as_of} active="/tenders" seo={seo}
       head={<FeedLinks lang={lang} />}>
       <h1>{t(lang, "tenders.title")}</h1>
-      <p class="lead">{t(lang, "tenders.lead", { n: fmtInt(rows.length, lang) })}</p>
+      <p class="lead">{t(lang, "tenders.lead", { n: fmtInt(first.total, lang) })}</p>
       <p class="muted small">{t(lang, "tenders.contact_note")}</p>
       <div class="list-layout">
         <form method="get" action="/tenders" class="filters stack" id="tender-filters">
@@ -226,13 +229,24 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
         </form>
         <div class="results" id="tender-results" data-today={today} data-page-size={String(TENDER_PAGE_SIZE)}>
           <p id="tender-count" aria-live="polite">
-            {tn(lang, "tenders.count_one", "tenders.count_many", matched.length, { n: fmtInt(matched.length, lang) })}
+            {waiting ? "" : tn(lang, "tenders.count_one", "tenders.count_many", count, { n: fmtInt(count, lang) })}
           </p>
           <div id="tender-table">
-            {shown.length ? <TenderTable lang={lang} rows={shown} today={today} /> : <p class="muted">{t(lang, "tenders.none_match")}</p>}
+            {waiting ? (
+              <>
+                <p class="muted">{t(lang, "tenders.waiting")}</p>
+                <noscript>
+                  <p>{tj(lang, "tenders.noscript", { link: <a href="/tenders">{t(lang, "tenders.noscript_link")}</a> })}</p>
+                </noscript>
+              </>
+            ) : shown.length ? (
+              <TenderTable lang={lang} rows={shown} today={today} />
+            ) : (
+              <p class="muted">{t(lang, "tenders.none_match")}</p>
+            )}
           </div>
           <nav aria-label={t(lang, "common.pagination")} class="pagination" id="tender-pager">
-            <span class="muted">{t(lang, "tenders.page_of", { page: fmtInt(pageNo, lang), pages: fmtInt(pages, lang) })}</span>
+            <span class="muted">{waiting ? "" : t(lang, "tenders.page_of", { page: fmtInt(pageNo, lang), pages: fmtInt(pages, lang) })}</span>
             <span class="pages">
               {prev ? <a href={prev} class="btn" rel="prev">{t(lang, "tenders.prev")}</a> : null}
               {next ? <a href={next} class="btn" rel="next">{t(lang, "tenders.next")}</a> : null}

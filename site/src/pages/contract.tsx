@@ -64,7 +64,7 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
       </p>
       <p class="links">
         {kind === "award" ? (
-          <a href={awardNoticeUrl(d.reference)} class="btn btn-primary" rel="noopener">{t(lang, "contract.on_canadabuys")}</a>
+          <a href={awardNoticeUrl(d.reference, lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.on_canadabuys")}</a>
         ) : (
           <a href={datasetUrl("history", lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.history_dataset")}</a>
         )}

@@ -88,9 +88,16 @@ describe("missing and corrupt data files", () => {
   });
 
   it("a list file with an unreadable row reads as not published; a shard entry that does not read is a 404", async () => {
-    const open = JSON.parse(JSON.stringify((await (await fakeAssets.fetch(new Request("https://a/data/tenders/open.json"))).json())));
-    open[1].segments = "72";
-    expect((await req("/tenders", { ASSETS: assetsWith({ "tenders/open.json": JSON.stringify(open) }) })).status).toBe(503);
+    const first = JSON.parse(JSON.stringify((await (await fakeAssets.fetch(new Request("https://a/data/tenders/open-first.json"))).json())));
+    first.rows[1].segments = "72";
+    expect((await req("/tenders", { ASSETS: assetsWith({ "tenders/open-first.json": JSON.stringify(first) }) })).status).toBe(503);
+    const facets = JSON.parse(JSON.stringify(first));
+    facets.rows[1].segments = ["72"];
+    facets.facets.buyer = [{ value: "dfo-mpo" }];
+    expect((await req("/tenders", { ASSETS: assetsWith({ "tenders/open-first.json": JSON.stringify(facets) }) })).status).toBe(503);
+    const year = assetsWith({ "awards/2026/1.json": '[{"reference":5}]' });
+    expect((await req("/awards/2026", { ASSETS: year })).status).toBe(503);
+    expect((await req("/awards/2026?page=2", { ASSETS: year })).status).toBe(200);
     const shard = JSON.parse(JSON.stringify((await (await fakeAssets.fetch(new Request("https://a/data/tenders/20a.json"))).json())));
     shard["cb-100-10000001"].amendments = null;
     const broken = assetsWith({ "tenders/20a.json": JSON.stringify(shard) });

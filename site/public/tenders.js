@@ -1,15 +1,16 @@
 /* Open tender notices (/tenders).
 
-   Interaction model: the server renders the view the URL asks for, from the
-   same file, so a linked or bookmarked filter works with scripts off and the
-   form stays a plain GET form. This script fetches /data/tenders/open.json
-   once and then answers every filter, sort and page change in memory, typed
-   text after a short pause, writing the state back into the URL so the view
-   can be shared. The filter rules match filterTenders() in
-   src/pages/tenders.tsx; the tests hold the server to them.
+   Interaction model: the server renders the first 50 notices by closing date
+   from a small file (tenders/open-first.json), with the form set to the URL's
+   values. This script fetches the full list, /data/tenders/open.json, once,
+   renders the view the URL asks for, and then answers every filter, sort and
+   page change in memory, typed text after a short pause, writing the state
+   back into the URL so the view can be shared. The filter rules match
+   filterTenders() in src/pages/tenders.tsx, which the server uses when its
+   small file holds every open notice; the tests hold that function to them.
 
-   When the file cannot be fetched the server's rows stay, a sentence says
-   why, and the form keeps working as a plain form.
+   When the full list cannot be fetched the server's rows stay, a sentence
+   says why, and the form keeps working as a plain form.
 
    Everything rendered from data uses textContent. Every word the script
    draws comes from the page's <script type="application/json" id="i18n">
@@ -282,6 +283,9 @@
       });
       render(false);
     });
+    // A linked view (a filter, a sort, a later page) is drawn now that the
+    // whole list is here; the plain view comes out the same as the server's.
+    render(false);
   }
 
   var note = el("p", "muted small", tx("tenders.loading"));

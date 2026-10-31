@@ -62,7 +62,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         {d.amendment > 0 ? <span class="muted"> {t(lang, "tender.amendment_n", { n: d.amendment })}</span> : null}
       </p>
       <p class="links">
-        <a href={tenderNoticeUrl(d.reference)} class="btn btn-primary" rel="noopener">{t(lang, "tender.on_canadabuys")}</a>
+        <a href={tenderNoticeUrl(d.reference, lang)} class="btn btn-primary" rel="noopener">{t(lang, "tender.on_canadabuys")}</a>
       </p>
       <p class="muted small">{t(lang, "tender.contact_note")}</p>
 

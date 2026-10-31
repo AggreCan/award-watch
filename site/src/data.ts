@@ -155,6 +155,37 @@ export interface Citation {
   published: string | null;
 }
 
+// A facet of the open notices: a value and how many open notices carry it.
+// Buyers, notice types and methods carry their name in both languages; the
+// value of a notice type or method is its English text, as the filters use it.
+export interface FacetCount {
+  value: string;
+  n: number;
+  en?: string | null;
+  fr?: string | null;
+}
+
+export const FACETS = ["category", "segment", "province", "buyer", "notice_type", "method"] as const;
+export type FacetName = (typeof FACETS)[number];
+
+// tenders/open-first.json: the first 50 open notices by closing date, the
+// number of open notices, and the facet counts over all of them. The /tenders
+// page renders from it; the full list (tenders/open.json) is read by the
+// browser alone, so the Worker never parses it.
+export interface OpenFirst {
+  total: number;
+  rows: TenderRow[];
+  facets: Record<FacetName, FacetCount[]>;
+}
+
+// awards/<year>/index.json: how many pages of award rows the year has (500 to
+// a page, newest award date first) and how many rows in all.
+export interface AwardYear {
+  year: number;
+  pages: number;
+  rows: number;
+}
+
 export interface Stats {
   data_as_of: string | null;
   counts: Partial<Record<
@@ -660,9 +691,14 @@ export async function loadStats(env: Env): Promise<Stats | null> {
 
 // -- tenders ------------------------------------------------------------------------
 
-export async function loadOpenTenders(env: Env): Promise<TenderRow[] | null> {
-  const rows = await loadJson<unknown>(env, "tenders/open.json");
-  return checkOnce(rows, "open", (v) => isListOf(v, isTenderRow)) ? (rows as TenderRow[]) : null;
+const isFacetCount = (v: unknown): v is FacetCount => isObj(v) && isStr(v.value) && isCount(v.n) &&
+  optional(v.en, isStrOrNull) && optional(v.fr, isStrOrNull);
+
+export async function loadOpenFirst(env: Env): Promise<OpenFirst | null> {
+  const v = await loadJson<unknown>(env, "tenders/open-first.json");
+  const ok = isObj(v) && isCount(v.total) && isListOf(v.rows, isTenderRow) && v.rows.length <= v.total &&
+    isObj(v.facets) && FACETS.every((f) => isListOf((v.facets as Record<string, unknown>)[f], isFacetCount));
+  return ok ? (v as unknown as OpenFirst) : null;
 }
 
 export async function loadNewTenders(env: Env, day: string): Promise<TenderRow[] | null> {
@@ -741,11 +777,29 @@ export async function loadContract(env: Env, kind: "award" | "history", referenc
   return isContractDetail(entry, kind, key) ? entry : null;
 }
 
-// awards/recent.json (the 500 newest) or awards/<year>.json.
-export async function loadAwards(env: Env, which: number | "recent"): Promise<AwardRow[] | null> {
-  if (which !== "recent" && !(Number.isInteger(which) && which >= 1900 && which <= 2999)) return null;
-  const rows = await loadJson<unknown>(env, `awards/${which}.json`);
-  return checkOnce(rows, `awards`, (v) => isListOf(v, isAwardRow)) ? (rows as AwardRow[]) : null;
+// awards/recent.json: the 500 newest award notices.
+export async function loadRecentAwards(env: Env): Promise<AwardRow[] | null> {
+  const rows = await loadJson<unknown>(env, "awards/recent.json");
+  return checkOnce(rows, "awards", (v) => isListOf(v, isAwardRow)) ? (rows as AwardRow[]) : null;
+}
+
+const isYear = (y: unknown): y is number => isNum(y) && Number.isInteger(y) && y >= 1900 && y <= 2999;
+
+// A year of award notices is paged so no request parses more than one page
+// of 500 rows; the index says how many pages there are.
+export async function loadAwardYear(env: Env, year: number): Promise<AwardYear | null> {
+  if (!isYear(year)) return null;
+  const v = await loadJson<unknown>(env, `awards/${year}/index.json`);
+  return isObj(v) && v.year === year && isCount(v.pages) && isCount(v.rows) && v.rows >= v.pages ? (v as unknown as AwardYear) : null;
+}
+
+// One page of a year: the rows as a list, or an object holding them as
+// "rows" (either form reads).
+export async function loadAwardPage(env: Env, year: number, n: number): Promise<AwardRow[] | null> {
+  if (!isYear(year) || !Number.isInteger(n) || n < 1 || n > 100_000) return null;
+  const v = await loadJson<unknown>(env, `awards/${year}/${n}.json`);
+  const rows = isObj(v) ? v.rows : v;
+  return checkOnce(rows, "awards", (r) => isListOf(r, isAwardRow)) ? (rows as AwardRow[]) : null;
 }
 
 // -- organization profiles ----------------------------------------------------------

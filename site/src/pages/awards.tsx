@@ -1,10 +1,12 @@
-// /awards: the newest award notices (awards/recent.json); /awards/:year: one
-// calendar year of award notices by award date (awards/<year>.json). Both
-// page through the rows already in the file, 100 to a page, newest first.
+// /awards: the newest award notices (awards/recent.json), 100 to a page.
+// /awards/:year: one calendar year of award notices by award date, read one
+// page at a time (awards/<year>/<n>.json, 500 rows each, newest first), with
+// awards/<year>/index.json for the page count, so no request parses a whole
+// year.
 
 import type { Context } from "hono";
 import { FIRST_AWARD_YEAR } from "../constants";
-import { YEAR_RE, loadAwards, loadStats, type AwardRow } from "../data";
+import { YEAR_RE, loadAwardPage, loadAwardYear, loadRecentAwards, loadStats, type AwardRow } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, t, tn } from "../i18n";
 import { Breadcrumb, Layout, noDataPage, notFoundPage, page, todayOf } from "../layout";
@@ -14,9 +16,13 @@ import { AwardTable, SourceLine } from "./shared";
 
 export const AWARD_PAGE_SIZE = 100;
 
-function pageOf(c: Context<AppEnv>): number {
-  const n = Number(c.req.query("page") ?? "1");
-  return Number.isInteger(n) && n >= 1 && n <= 10_000 ? n : 1;
+// The page a ?page= query asks for: 1 when there is none, null when it is not
+// a page number.
+function pageOf(c: Context<AppEnv>): number | null {
+  const raw = c.req.query("page");
+  if (raw === undefined) return 1;
+  const n = Number(raw);
+  return /^[0-9]{1,6}$/.test(raw) && n >= 1 ? n : null;
 }
 
 // Newest award date first; the reference breaks ties so the order never
@@ -64,11 +70,11 @@ function pager(base: string, n: number, pages: number, lang: "en" | "fr") {
 export async function awardsPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
-  const rows = stats ? await loadAwards(c.env, "recent") : null;
+  const rows = stats ? await loadRecentAwards(c.env) : null;
   if (!stats || !rows) return noDataPage(c, "awards.title");
   const sorted = newestFirst(rows);
   const pages = Math.max(1, Math.ceil(sorted.length / AWARD_PAGE_SIZE));
-  const n = Math.min(pageOf(c), pages);
+  const n = Math.min(pageOf(c) ?? 1, pages);
   const shown = sorted.slice((n - 1) * AWARD_PAGE_SIZE, n * AWARD_PAGE_SIZE);
   return page(
     c,
@@ -92,28 +98,27 @@ export async function awardsYearPage(c: Context<AppEnv>, raw: string): Promise<R
   const years = awardYears(stats.data_as_of);
   const year = YEAR_RE.test(raw) ? Number(raw) : NaN;
   if (!years.includes(year)) return notFoundPage(c, stats.data_as_of, "awards.year_not_found", "/awards", "awards.back");
-  const rows = await loadAwards(c.env, year);
-  if (!rows) return noDataPage(c, "awards.title");
-  const sorted = newestFirst(rows);
-  const pages = Math.max(1, Math.ceil(sorted.length / AWARD_PAGE_SIZE));
-  const n = Math.min(pageOf(c), pages);
-  const shown = sorted.slice((n - 1) * AWARD_PAGE_SIZE, n * AWARD_PAGE_SIZE);
-  const title = t(lang, "awards.year_title", { year });
+  const idx = await loadAwardYear(c.env, year);
+  if (!idx) return noDataPage(c, "awards.title");
   const path = `/awards/${year}`;
+  const n = pageOf(c);
+  if (n === null || (n > 1 && n > idx.pages)) return notFoundPage(c, stats.data_as_of, "awards.page_not_found", path, "awards.back_year");
+  const rows = idx.pages === 0 ? [] : await loadAwardPage(c.env, year, n);
+  if (!rows) return noDataPage(c, "awards.title");
+  const shown = newestFirst(rows);
+  const pages = Math.max(1, idx.pages);
+  const title = t(lang, "awards.year_title", { year });
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "awards.title"), path: "/awards" }, { name: String(year) }];
-  const cancelled = rows.filter((r) => r.status === "cancelled").length;
   const prev = n > 1 ? canonicalUrl(n === 2 ? path : `${path}?page=${n - 1}`, lang) : null;
+  const next = n < pages ? canonicalUrl(`${path}?page=${n + 1}`, lang) : null;
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/awards"
-      seo={sectionSeo(path, title, t(lang, "awards.year_description", { year, n: fmtInt(rows.length, lang) }), crumbs, c.req.query("page") !== undefined)}
-      head={prev ? <link rel="prev" href={prev} /> : null}>
+      seo={sectionSeo(path, title, t(lang, "awards.year_description", { year, n: fmtInt(idx.rows, lang) }), crumbs, c.req.query("page") !== undefined)}
+      head={<>{prev ? <link rel="prev" href={prev} /> : null}{next ? <link rel="next" href={next} /> : null}</>}>
       <Breadcrumb lang={lang} crumbs={crumbs} />
       <h1>{title}</h1>
-      <p class="lead">
-        {tn(lang, "awards.year_count_one", "awards.year_count_many", rows.length, { n: fmtInt(rows.length, lang), year })}
-        {cancelled ? ` ${tn(lang, "awards.cancelled_one", "awards.cancelled_many", cancelled, { n: fmtInt(cancelled, lang) })}` : ""}
-      </p>
+      <p class="lead">{tn(lang, "awards.year_count_one", "awards.year_count_many", idx.rows, { n: fmtInt(idx.rows, lang), year })}</p>
       <p class="muted small">{t(lang, "awards.value_note")}</p>
       <p>
         <a href={`/downloads/awards-${year}.csv`}>{t(lang, "awards.download", { year })}</a>

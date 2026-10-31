@@ -5,7 +5,9 @@ import { env } from "cloudflare:test";
 import llms from "../public/llms.txt?raw";
 import robots from "../public/robots.txt?raw";
 import aliases from "./fixtures/aliases-a00.json";
-import awards2026 from "./fixtures/awards-2026.json";
+import awards2026Page1 from "./fixtures/awards-2026-1.json";
+import awards2026Page2 from "./fixtures/awards-2026-2.json";
+import awards2026 from "./fixtures/awards-2026-index.json";
 import awardsRecent from "./fixtures/awards-recent.json";
 import buyer from "./fixtures/buyer-pwgsc-tpsgc.json";
 import buyers from "./fixtures/buyers-index.json";
@@ -27,6 +29,7 @@ import stats from "./fixtures/stats.json";
 import tenderShard from "./fixtures/tenders-20a.json";
 import newDay from "./fixtures/tenders-new-2026-10-31.json";
 import openTenders from "./fixtures/tenders-open.json";
+import openFirst from "./fixtures/tenders-open-first.json";
 
 // Served as written rather than as JSON: the sitemaps and a feed under
 // /data/, and the crawler files at the root.
@@ -45,12 +48,17 @@ const TEXT_FILES: Record<string, [string, string]> = {
 // characters 5 to 7 (profiles/a00).
 export const FILES: Record<string, unknown> = {
   "stats.json": stats,
+  // The full list is the browser's (public/tenders.js); the page renders from the first file.
   "tenders/open.json": openTenders,
+  "tenders/open-first.json": openFirst,
   "tenders/new/2026-10-31.json": newDay,
   "tenders/20a.json": tenderShard,
   "contracts/637.json": contracts,
   "awards/recent.json": awardsRecent,
-  "awards/2026.json": awards2026,
+  // A year in pages of 500 rows; the fixture's pages are small, two of them.
+  "awards/2026/index.json": awards2026,
+  "awards/2026/1.json": awards2026Page1,
+  "awards/2026/2.json": awards2026Page2,
   "profiles/a00.json": profiles,
   "aliases/a00.json": aliases,
   "directory/index.json": directory,
