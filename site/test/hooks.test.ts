@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { parseNotice, tokensMatch } from "../src/hooks";
 import { app } from "../src/index";
 import { COSTS_TODAY_CENTS } from "../src/support";
@@ -44,6 +44,18 @@ const post = (doc: unknown, extra: Record<string, unknown> = {}, raw?: string) =
   );
 
 const rows = async () => (await env.DB.prepare("SELECT * FROM donations ORDER BY id").all<Record<string, unknown>>()).results;
+
+// The donations ledger is not in pipeline/schema.sql yet: donations stay
+// closed until it is added there (the webhook answers 503 without a token, and
+// the support page reads a missing table as no donations). The table is made
+// here, in the shape hooks.ts writes, so the webhook keeps its tests until then.
+beforeAll(async () => {
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS donations (id INTEGER PRIMARY KEY AUTOINCREMENT, transaction_id TEXT NOT NULL UNIQUE, " +
+      "received_at TEXT NOT NULL, kind TEXT NOT NULL, amount_cents INTEGER NOT NULL, currency TEXT NOT NULL, " +
+      "recurring INTEGER NOT NULL DEFAULT 0, first_payment INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)",
+  ).run();
+});
 
 describe("donation webhook", () => {
   it("is closed until the secret exists", async () => {

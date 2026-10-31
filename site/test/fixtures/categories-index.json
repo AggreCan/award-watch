@@ -1,0 +1,35 @@
+{
+ "segments": [
+  {
+   "awards_n": 1,
+   "awards_total": 250000,
+   "awards_year_n": 1,
+   "awards_year_total": 250000,
+   "code": "82",
+   "open_tenders": 1,
+   "title_en": "Editorial and Design and Graphic and Fine Art Services",
+   "title_fr": "Services de rédaction, de design, de graphisme et de beaux-arts"
+  },
+  {
+   "awards_n": 1,
+   "awards_total": 0,
+   "awards_year_n": 1,
+   "awards_year_total": 0,
+   "code": "72",
+   "open_tenders": 1,
+   "title_en": "Building and Facility Construction and Maintenance Services",
+   "title_fr": "Services de construction et d'entretien de bâtiments et d'installations"
+  },
+  {
+   "awards_n": 0,
+   "awards_total": null,
+   "awards_year_n": 0,
+   "awards_year_total": null,
+   "code": "43",
+   "open_tenders": 1,
+   "title_en": "Information Technology Broadcasting and Telecommunications",
+   "title_fr": "Technologies de l'information, radiodiffusion et télécommunications"
+  }
+ ],
+ "year": 2026
+}

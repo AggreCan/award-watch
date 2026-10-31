@@ -33,11 +33,11 @@ function keeper() {
 describe("request buckets", () => {
   it("sorts paths into the right cap", () => {
     expect(bucketFor("GET", "/api/stats")).toBe("api");
-    expect(bucketFor("GET", "/downloads/employers.csv")).toBe("download");
+    expect(bucketFor("GET", "/downloads/organizations.csv")).toBe("download");
     expect(bucketFor("POST", "/corrections")).toBe("form");
-    expect(bucketFor("POST", "/employers/emp-a000000001/respond")).toBe("form");
+    expect(bucketFor("POST", "/organizations/org-a000000001/respond")).toBe("form");
     expect(bucketFor("GET", "/corrections")).toBe("page");
-    expect(bucketFor("GET", "/employers/emp-a000000001")).toBe("page");
+    expect(bucketFor("GET", "/organizations/org-a000000001")).toBe("page");
     expect(bucketFor("POST", "/hooks/kofi")).toBe("page");
     expect(bucketFor("GET", FEED)).toBe("feed");
     expect(bucketFor("GET", "/data/feeds/index.json")).toBe("feed");
@@ -101,7 +101,7 @@ describe("per-address limits", () => {
 
   it("caps form posts tightly and leaves the form page alone", async () => {
     if (!limiters.FORM_LIMIT) return;
-    const body = new URLSearchParams({ record_ref: "emp-a000000002", request: "The street address on this profile is out of date." }).toString();
+    const body = new URLSearchParams({ page: "/organizations/org-a000000002", text: "The city on this profile is out of date." }).toString();
     const headers = { "content-type": "application/x-www-form-urlencoded" };
     let statuses: number[] = [];
     for (let i = 0; i < 7; i++) {

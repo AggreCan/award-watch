@@ -1,38 +1,37 @@
-# LMIA Watch
+# Award Watch
 
-> Public records of Canada's Labour Market Impact Assessments (LMIAs): which
-> employers applied to hire temporary foreign workers, where, and which were
-> approved or refused, with the Job Bank postings that carry an LMIA flag.
-> Updated nightly from Employment and Social Development Canada and Job Bank.
-> In English and French (?lang=fr). https://lmiawatch.ca
+> Where federal money goes, organized by the organizations that receive it:
+> the tender notices open on CanadaBuys and the award notices that follow,
+> PSPC's contract history, every contract over $10,000 and every grant and
+> contribution agreement federal departments publish, and the lobbying
+> communications those organizations report. Updated nightly from the
+> Government of Canada's open data. In English and French (?lang=fr).
+> https://awardwatch.ca
 
-## Bulk data: read these instead of crawling 160,000 profile pages
+## Bulk data: read these instead of crawling the profile and notice pages
 
-Everything the profile pages show is in these files, refreshed every night.
-They hold more than the pages do and cost far less to read.
+Everything the pages show comes from these files and the government's own
+open-data files, refreshed every night.
 
-- https://lmiawatch.ca/downloads/employers.csv: one row per employer with a profile
-- https://lmiawatch.ca/downloads/approved_quarterly.csv: every positive LMIA row from ESDC's quarterly lists since 2014
-- https://lmiawatch.ca/downloads/refused_quarterly.csv: every negative LMIA row
-- https://lmiawatch.ca/downloads/pending_observations.csv: every nightly observation of a Job Bank posting with an LMIA flag
-- https://lmiawatch.ca/downloads/indicators.csv: the indicator rows the profiles show
-- https://lmiawatch.ca/downloads/esdc_resources.csv: the ESDC files each row came from
-- https://lmiawatch.ca/data: what each file holds, its licence, and the ESDC source files mirrored unchanged
-- https://lmiawatch.ca/cite: the Zenodo deposit (one version per ESDC quarter, with a DOI) and citation formats
+- https://awardwatch.ca/downloads/open-tenders.csv: every open tender notice, list fields
+- https://awardwatch.ca/downloads/awards-YYYY.csv: the award notices of one calendar year of award
+- https://awardwatch.ca/downloads/history-YYYY.csv: PSPC contract history of one calendar year of award
+- https://awardwatch.ca/downloads/organizations.csv: one row per organization, with counts and totals per source
+- https://awardwatch.ca/downloads/buyers.csv: one row per federal buyer, with counts and totals per source
+- https://awardwatch.ca/data: the source files the site reads, when each was last read, and the licence
 
-Downloads are limited to ten per minute per address. The JSON API is not open
-to outside callers; use the files.
+Downloads are limited to ten per minute per address.
 
 ## Pages worth reading
 
-- https://lmiawatch.ca/methodology: how records are matched, graded and limited
-- https://lmiawatch.ca/international: Job Bank postings open to international candidates, graded for the Express Entry job-offer path, and the designated-employer lists
-- https://lmiawatch.ca/notices: government notices that touch these programs
-- https://lmiawatch.ca/corrections: how to report an error
+- https://awardwatch.ca/methodology: how organizations and buyers are merged and how money is counted, source by source
+- https://awardwatch.ca/tenders: the open tender notices
+- https://awardwatch.ca/organizations: every organization A to Z by province
+- https://awardwatch.ca/corrections: how to report an error
 
 ## Terms
 
-The records are reproduced under the Open Government Licence (Canada) and the
-provincial licences named on https://lmiawatch.ca/data. Figures the site
-computes are adapted from those sources. A record is a record, never a finding
-about an employer.
+The records are reproduced under the Open Government Licence, Canada. Figures
+the site computes are derived from those records, each source counted on its
+own and never added to another. A record is a record, never a finding about
+an organization.

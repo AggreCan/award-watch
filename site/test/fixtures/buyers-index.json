@@ -1,0 +1,58 @@
+{
+ "buyers": [
+  {
+   "acronym_en": "PSPC",
+   "acronym_fr": "SPAC",
+   "id": "pwgsc-tpsgc",
+   "kind": "department",
+   "n_awards": 1,
+   "n_contracts": 0,
+   "n_grants": 0,
+   "n_history": 1,
+   "n_open_tenders": 1,
+   "n_tenders": 4,
+   "name_en": "Public Services and Procurement Canada",
+   "name_fr": "Services publics et Approvisionnement Canada",
+   "total_awards": 250000,
+   "total_contracts": null,
+   "total_grants": null,
+   "total_history": 1200000
+  },
+  {
+   "acronym_en": "DFO",
+   "acronym_fr": "MPO",
+   "id": "dfo-mpo",
+   "kind": "department",
+   "n_awards": 1,
+   "n_contracts": 101,
+   "n_grants": 1,
+   "n_history": 0,
+   "n_open_tenders": 1,
+   "n_tenders": 2,
+   "name_en": "Fisheries and Oceans Canada",
+   "name_fr": "Pêches et Océans Canada",
+   "total_awards": 0,
+   "total_contracts": 1875000.25,
+   "total_grants": 75000,
+   "total_history": null
+  },
+  {
+   "acronym_en": "DND",
+   "acronym_fr": "MDN",
+   "id": "dnd-mdn",
+   "kind": "department",
+   "n_awards": 0,
+   "n_contracts": 0,
+   "n_grants": 0,
+   "n_history": 0,
+   "n_open_tenders": 1,
+   "n_tenders": 1,
+   "name_en": "National Defence",
+   "name_fr": "Défense nationale",
+   "total_awards": null,
+   "total_contracts": null,
+   "total_grants": null,
+   "total_history": null
+  }
+ ]
+}

@@ -1,0 +1,157 @@
+{
+ "closing_soon": [
+  {
+   "amendment": 1,
+   "buyer_en": "Public Services and Procurement Canada",
+   "buyer_fr": "Services publics et Approvisionnement Canada",
+   "buyer_id": "pwgsc-tpsgc",
+   "category": [
+    "SRV"
+   ],
+   "closing": "2026-11-04T14:00:00",
+   "first_seen": "2026-10-30",
+   "method_en": "Competitive - Open bidding",
+   "method_fr": "Concurrentielle - Appel d'offres ouvert",
+   "notice_type_en": "Request for Proposal",
+   "notice_type_fr": "Demande de propositions",
+   "provinces": [
+    "ON",
+    "QC"
+   ],
+   "published": "2026-10-30",
+   "reference": "cb-100-10000001",
+   "segments": [
+    "82"
+   ],
+   "title_en": "Translation services for regional offices",
+   "title_fr": "Services de traduction pour les bureaux régionaux"
+  }
+ ],
+ "counts": {
+  "awards": 5883,
+  "buyers": 3,
+  "contracts": 101,
+  "grants": 1,
+  "history": 1,
+  "lobbying": 1,
+  "organizations": 2,
+  "tenders_new_today": 1,
+  "tenders_open": 3
+ },
+ "data_as_of": "2026-10-31",
+ "new_tenders": [
+  {
+   "amendment": 0,
+   "buyer_en": "Fisheries and Oceans Canada",
+   "buyer_fr": "Pêches et Océans Canada",
+   "buyer_id": "dfo-mpo",
+   "category": [
+    "SRV"
+   ],
+   "closing": "2026-11-26T14:00:00",
+   "first_seen": "2026-10-31",
+   "method_en": "Competitive - Selective tendering",
+   "method_fr": "Concurrentielle - Appel d'offres sélectif",
+   "notice_type_en": "Request for Proposal",
+   "notice_type_fr": "Demande de propositions",
+   "provinces": [
+    "BC"
+   ],
+   "published": "2026-10-31",
+   "reference": "cb-200-20005019",
+   "segments": [
+    "72",
+    "78"
+   ],
+   "title_en": "Hull inspection and repair, coastal patrol vessels",
+   "title_fr": "Inspection et réparation de coques, navires de patrouille côtière"
+  }
+ ],
+ "recent_awards": [
+  {
+   "awarded": "2026-09-15",
+   "buyer_en": "Public Services and Procurement Canada",
+   "buyer_fr": "Services publics et Approvisionnement Canada",
+   "buyer_id": "pwgsc-tpsgc",
+   "competitive": 1,
+   "currency": "CAD",
+   "instrument_en": "Standing Offer",
+   "instrument_fr": "Offre à commandes",
+   "organization": "Exemplar Translation Services Inc.",
+   "organization_id": "org-a000000001",
+   "provinces": [
+    "ON"
+   ],
+   "reference": "cb-400-40000004",
+   "segments": [
+    "82"
+   ],
+   "status": "active",
+   "title_en": "Translation standing offer, official languages",
+   "title_fr": "Offre à commandes de traduction, langues officielles",
+   "value": 250000
+  },
+  {
+   "awarded": "2026-08-02",
+   "buyer_en": "Fisheries and Oceans Canada",
+   "buyer_fr": "Pêches et Océans Canada",
+   "buyer_id": "dfo-mpo",
+   "competitive": 0,
+   "currency": "CAD",
+   "instrument_en": "Contract",
+   "instrument_fr": "Contrat",
+   "organization": "Sample Harbour Marine Ltd.",
+   "organization_id": "org-a000000002",
+   "provinces": [
+    "BC"
+   ],
+   "reference": "cb-500-50000005",
+   "segments": [
+    "72"
+   ],
+   "status": "cancelled",
+   "title_en": "Dock repairs, small craft harbour",
+   "title_fr": "Réparation de quais, port pour petits bateaux",
+   "value": 48500.5
+  }
+ ],
+ "runs": [
+  {
+   "detail": "open=3 new=1",
+   "ok": 1,
+   "rows_new": 1,
+   "run_at": "2026-10-31T00:41:12Z",
+   "source": "tenders"
+  },
+  {
+   "detail": "refused",
+   "ok": 0,
+   "rows_new": null,
+   "run_at": "2026-10-31T00:44:03Z",
+   "source": "lobbying"
+  }
+ ],
+ "sources": [
+  {
+   "file": "openTenderNotice-ouvertAvisAppelOffres.csv",
+   "last_modified": "2026-10-30T02:05:00Z",
+   "last_read": "2026-10-31T00:40:00Z",
+   "source": "tenders"
+  },
+  {
+   "file": "2026-2027-awardNotice-avisAttribution.csv",
+   "last_modified": "2026-10-30T02:10:00Z",
+   "last_read": "2026-10-31T00:42:00Z",
+   "source": "awards"
+  }
+ ],
+ "top_organizations_year": [
+  {
+   "id": "org-a000000001",
+   "n": 1,
+   "name": "Exemplar Translation Services Inc.",
+   "province": "ON",
+   "total": 250000
+  }
+ ]
+}

@@ -1,0 +1,64 @@
+{
+ "as_of": "2026-10-31",
+ "feeds": [
+  {
+   "entries": 3,
+   "event": "tenders",
+   "key": "canada",
+   "path": "feeds/canada/tenders.xml",
+   "scope": "canada",
+   "updated": "2026-10-31"
+  },
+  {
+   "entries": 2,
+   "event": "awards",
+   "key": "canada",
+   "path": "feeds/canada/awards.xml",
+   "scope": "canada",
+   "updated": "2026-10-31"
+  },
+  {
+   "entries": 1,
+   "event": "tenders",
+   "key": "82",
+   "path": "feeds/segment/82/tenders.xml",
+   "scope": "segment",
+   "updated": "2026-10-30"
+  },
+  {
+   "entries": 1,
+   "event": "awards",
+   "key": "82",
+   "path": "feeds/segment/82/awards.xml",
+   "scope": "segment",
+   "updated": "2026-09-16"
+  },
+  {
+   "entries": 1,
+   "event": "tenders",
+   "key": "BC",
+   "path": "feeds/prov/bc/tenders.xml",
+   "scope": "prov",
+   "updated": "2026-10-31"
+  },
+  {
+   "entries": 1,
+   "event": "tenders",
+   "key": "dfo-mpo",
+   "name_en": "Fisheries and Oceans Canada",
+   "name_fr": "Pêches et Océans Canada",
+   "path": "feeds/buyer/dfo-mpo/tenders.xml",
+   "scope": "buyer",
+   "updated": "2026-10-31"
+  },
+  {
+   "entries": 1,
+   "event": "tenders",
+   "key": "x",
+   "path": "feeds/x/tenders.xml",
+   "scope": "elsewhere",
+   "updated": "2026-10-31"
+  }
+ ],
+ "max_entries": 50
+}

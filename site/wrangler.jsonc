@@ -1,20 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "public-money-watch",
+  "name": "award-watch",
   "main": "src/index.tsx",
   "compatibility_date": "2025-12-01",
   // Never publish under the account's workers.dev subdomain; the site lives on its own domain.
   "workers_dev": false,
-  "routes": [
-    { "pattern": "lmiawatch.ca", "custom_domain": true },
-    { "pattern": "www.lmiawatch.ca", "custom_domain": true }
-  ],
+  // The custom domains go here once the zone is on the account:
+  // "routes": [
+  //   { "pattern": "awardwatch.ca", "custom_domain": true },
+  //   { "pattern": "www.awardwatch.ca", "custom_domain": true }
+  // ],
   // Per-address request caps, enforced inside the Worker (see src/limits.ts).
   // Static files under /data/ and /fonts/ never reach the Worker and are not
   // counted, apart from the Atom feeds (see "assets" below), which have a cap
-  // of their own: one feed service polls many feeds from one address. The
-  // edge rule in the dashboard (docs/traffic-limits.md) is the first line;
-  // these are the second, and they protect D1 and the downloads.
+  // of their own: one feed service polls many feeds from one address. An edge
+  // rule in the dashboard is the first line; these are the second, and they
+  // protect D1 and the downloads.
   "ratelimits": [
     { "name": "PAGE_LIMIT", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } },
     { "name": "API_LIMIT", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } },
@@ -24,17 +25,16 @@
   ],
   // The daily check (src/watchdog.ts): 06:00 UTC, after the nightly run has had
   // its window. It emails the operator through the email binding when the data,
-  // the backup, a stage, a daily post, the Zenodo deposit, the search sync, the
-  // audience roll-up or a rolled-back deploy needs attention. ALERT_EMAIL is a secret;
-  // the destination must be verified in the zone's Email Routing.
+  // the backup, a stage, the audience roll-up or a rolled-back deploy needs
+  // attention. ALERT_EMAIL is a secret; the destination must be verified in the
+  // zone's Email Routing.
   "triggers": { "crons": ["0 6 * * *"] },
   // Aggregate counts of the responses the Worker serves (src/views.ts): route,
   // language, edge country, referring host, status, bot or human, device
   // class, and for a human a daily visitor code hashed under the secret
   // VIEWS_SALT_KEY (`npx wrangler secret put VIEWS_SALT_KEY`); never an
   // address, user agent or cookie. The dataset is created by the first write.
-  // Read it with the SQL API (docs/search-engines.md).
-  "analytics_engine_datasets": [{ "binding": "VIEWS", "dataset": "pmw_views" }],
+  "analytics_engine_datasets": [{ "binding": "VIEWS", "dataset": "awardwatch_views" }],
   "send_email": [{ "name": "ALERTS" }],
   "assets": {
     "directory": "./public",
@@ -47,38 +47,28 @@
   },
   "d1_databases": [
     {
+      // The forms database: organization_responses and corrections only
+      // (the "Visitor submissions" tables of pipeline/schema.sql).
       "binding": "DB",
-      "database_name": "public-money-watch",
-      // Replace with the id printed by `wrangler d1 create public-money-watch` on the project account.
-      "database_id": "2da1bc11-f9ae-431e-bef3-ce66b60f5bbd"
-    },
-    {
-      // The hosted search database (pipeline/search_schema.sql), written only
-      // by the nightly sync (docs/hosted-search.md). Kept apart from the forms
-      // database above so a full reload can never touch what readers sent.
-      // Read by GET /api/search (src/search_db.ts) and by the search page's
-      // first view (src/pages/search.tsx), which falls back to the static
-      // files without it.
-      "binding": "SEARCH",
-      "database_name": "pmw-search",
-      "database_id": "a23fbf8b-de52-4182-91d3-cd4e8efd989a"
+      "database_name": "award-watch",
+      // Replace with the id printed by `wrangler d1 create award-watch` on the project account.
+      "database_id": "00000000-0000-0000-0000-000000000000"
     }
   ],
   "r2_buckets": [
     {
       "binding": "DATA",
-      "bucket_name": "pmw-data"
+      "bucket_name": "awardwatch-data"
     }
   ],
-  // Support page. Set DONATE_URL to the payment page's https address to show the
-  // donate button; empty keeps donations closed. DONATE_LABEL and
-  // DONATE_LABEL_FR override the button text on English and French pages
-  // (empty uses the default).
+  // ALERT_FROM is the daily check's sender on the zone. RUN_LOG_URL and
+  // SITE_URL are the two addresses its email links to; the run log's address
+  // is set by the operator once the repository exists (empty leaves the line
+  // out). Donations stay closed until DONATE_URL is added (see src/env.ts).
   "vars": {
-    "ALERT_FROM": "alerts@lmiawatch.ca",
-    "DONATE_URL": "https://ko-fi.com/lmiawatch",
-    "DONATE_LABEL": "Support on Ko-fi",
-    "DONATE_LABEL_FR": "Soutenir sur Ko-fi"
+    "ALERT_FROM": "alerts@awardwatch.ca",
+    "RUN_LOG_URL": "",
+    "SITE_URL": "https://awardwatch.ca"
   },
   "observability": {
     "enabled": true

@@ -22,8 +22,6 @@ const get = (path: string, headers: Record<string, string> = {}, env: object = t
 // Located by class: the nav's aria-label is translated on French pages.
 const mainNav = (html: string) => html.match(/<nav aria-label="[^"]*" class="main-nav"[\s\S]*?<\/nav>/)?.[0] ?? "";
 const count = (html: string, s: string) => html.split(s).length - 1;
-const SEARCH_SENTENCE =
-  "Search covers every record since 2014 on the site, with no download: ESDC&#39;s lists and the Job Bank postings that carry an LMIA flag.";
 
 describe("support page", () => {
   it("renders every section and the tax receipt statement", async () => {
@@ -56,16 +54,13 @@ describe("support page", () => {
 
   it("reads what the site holds from the stats file", async () => {
     const html = await (await get("/support")).text();
-    expect(html).toContain("Every ESDC quarterly list since 2014 is loaded, through 2026 Q1.");
-    expect(html).toContain("(166,497 employers)");
-    expect(html).toContain(SEARCH_SENTENCE);
-    expect(html).not.toContain("in the browser");
-    expect(html).not.toContain("are in the <a");
+    expect(html).toContain("<li>3 open tender notices, refreshed nightly.</li>");
+    expect(html).toContain("<li>5,883 award notices since 2012.</li>");
+    expect(html).toContain("<li>101 published contracts over $10,000.</li>");
+    expect(html).toContain("<li>2 organization profiles.</li>");
     expect(html).toContain("One refresh a day, at midnight UTC.</li>");
     expect(html).toContain("about 10,000,000 page views a month are included, with no daily ceiling.");
-    // The limit of hosted search replaces the old one about browser downloads.
-    expect(html).toContain("<li>Search shows 50 records a page, and a total above 10,000 is shown as &quot;10,000 or more&quot;.</li>");
-    expect(html).not.toContain("No server-side search");
+    expect(html).toContain("planning estimates until the site&#39;s first invoices");
   });
 
   it("renders without the data files", async () => {
@@ -73,20 +68,20 @@ describe("support page", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Data as of n/a");
-    expect(html).toContain(SEARCH_SENTENCE);
+    expect(html).not.toContain("open tender notices, refreshed nightly");
+    expect(html).toContain("One refresh a day, at midnight UTC.</li>");
   });
 
-  it("shows hosted search in place, at no cost beyond the Workers Paid plan, in both languages", async () => {
+  it("lists hosted search as the next tier, at no cost beyond the Workers Paid plan, in both languages", async () => {
     const row = (html: string) => html.match(/<tr data-tier="hosted_search">[\s\S]*?<\/tr>/)?.[0] ?? "";
     const en = row(await (await get("/support")).text());
     expect(en).toContain('<td class="mono num">$0.00</td>');
-    expect(en).toContain("The full history since 2014 is searchable on the site with no download.");
-    expect(en).toContain("D1&#39;s included storage, reads and writes cover it, so it adds nothing to the monthly cost.");
-    expect(en).toContain('<td class="tier-status">In place, paid by the operator</td>');
-    const fr = row((await (await get("/support", { cookie: "lang=fr" })).text()).replace(/[  ]/g, " "));
+    expect(en).toContain("Search across tenders, awards and organizations on the site with no download.");
+    expect(en).toContain('<td class="tier-status">Not yet funded</td>');
+    const fr = row((await (await get("/support", { cookie: "lang=fr" })).text()).replace(/[\u00a0\u202f]/g, " "));
     expect(fr).toContain('<td class="mono num">0,00 $</td>');
-    expect(fr).toContain("L’historique complet depuis 2014 est consultable sur le site sans téléchargement.");
-    expect(fr).toContain('<td class="tier-status">En place, payé par l’exploitant</td>');
+    expect(fr).toContain("Recherche dans les appels d’offres, les attributions et les organisations sur le site, sans téléchargement.");
+    expect(fr).toContain('<td class="tier-status">Pas encore financé</td>');
   });
 
   it("states monthly cost against monthly support; with no support the plan in place reads In place and the rest Not yet funded", async () => {
@@ -119,12 +114,12 @@ describe("support page", () => {
   });
 
   it("shows one outbound button when DONATE_URL is set", async () => {
-    const env = { ...testEnv(), DONATE_URL: "https://donate.example/lmia", DONATE_LABEL: "Give monthly" };
+    const env = { ...testEnv(), DONATE_URL: "https://donate.example/aw", DONATE_LABEL: "Give monthly" };
     const html = await (await get("/support", {}, env)).text();
-    expect(html).toContain('<a class="btn btn-primary" href="https://donate.example/lmia" rel="noopener">Give monthly</a>');
+    expect(html).toContain('<a class="btn btn-primary" href="https://donate.example/aw" rel="noopener">Give monthly</a>');
     expect(html).not.toContain("Donations are not open yet.");
 
-    const defaultLabel = await (await get("/support", {}, { ...testEnv(), DONATE_URL: "https://donate.example/lmia", DONATE_LABEL: "" })).text();
+    const defaultLabel = await (await get("/support", {}, { ...testEnv(), DONATE_URL: "https://donate.example/aw", DONATE_LABEL: "" })).text();
     expect(defaultLabel).toContain(`rel="noopener">${DEFAULT_DONATE_LABEL}</a>`);
   });
 
@@ -136,19 +131,12 @@ describe("support page", () => {
     expect(html).toContain('style="width:94.1%"');
   });
 
-  it("is in the main navigation after About, in both languages, and in the footer", async () => {
+  it("is linked from the footer in both languages, not from the main navigation", async () => {
     const html = await (await get("/")).text();
-    const nav = mainNav(html);
-    expect(nav).toContain(">Donate</a>");
-    expect(nav.indexOf(">About</a>")).toBeGreaterThan(-1);
-    expect(nav.indexOf(">About</a>")).toBeLessThan(nav.indexOf(">Donate</a>"));
-    expect(html).toContain('<a href="/support">Support the Site</a>');
-
-    const fr = mainNav(await (await get("/", { cookie: "lang=fr" })).text());
-    expect(fr).toContain(">Faire un don</a>");
-
-    const own = mainNav(await (await get("/support")).text());
-    expect(own).toContain('href="/support" class="active"');
+    expect(mainNav(html)).not.toContain('href="/support"');
+    expect(html).toContain('<a href="/support">Support the site</a>');
+    const fr = await (await get("/", { cookie: "lang=fr" })).text();
+    expect(fr).toContain('<a href="/support">Soutenir le site</a>');
   });
 });
 
@@ -202,10 +190,10 @@ describe("tier coverage", () => {
     expect(real[2].cumulativeCents).toBe(real[1].cumulativeCents);
     const support = real[2].cumulativeCents + Math.floor(real[3].costCents / 2);
     const rows = tierCoverage(support, TIERS);
-    expect(rows.map((r) => r.status)).toEqual(["Funded", "Funded", "Funded", "Partly funded", "Partly funded"]);
-    // Below the plan's cumulative cost, the tiers in place read In place, not Partly funded.
+    expect(rows.map((r) => r.status)).toEqual(["Funded", "Funded", "Funded", "Partly funded"]);
+    // Below the plan's cumulative cost, the tier in place reads In place, not Partly funded.
     expect(tierCoverage(real[0].cumulativeCents, TIERS).map((r) => r.status)).toEqual(
-      ["Funded", "In place", "In place", "Partly funded", "Partly funded"],
+      ["Funded", "In place", "Partly funded", "Partly funded"],
     );
     expect(rows[3].width).toBeLessThan(100);
   });
@@ -218,12 +206,12 @@ describe("tier coverage", () => {
   });
 
   it("keeps the tiers in order and the target equal to their cumulative cost", () => {
-    expect(TIERS.map((t) => t.id)).toEqual(["baseline", "workers_paid", "hosted_search", "storage", "x_verification"]);
+    expect(TIERS.map((t) => t.id)).toEqual(["baseline", "workers_paid", "hosted_search", "storage"]);
     const rows = tierCoverage(0);
     expect(rows[rows.length - 1].cumulativeCents).toBe(TARGET_CENTS_PER_MONTH);
-    // Today's costs are the baseline plus the tiers already in place: the
-    // Workers Paid plan and hosted search, which runs inside it.
-    expect(TIERS.filter((t) => t.inPlace).map((t) => t.id)).toEqual(["workers_paid", "hosted_search"]);
+    // Today's costs are the baseline plus the tier already in place, the
+    // Workers Paid plan; hosted search is the next slice.
+    expect(TIERS.filter((t) => t.inPlace).map((t) => t.id)).toEqual(["workers_paid"]);
     expect(rows.filter((r, i) => i === 0 || r.inPlace).reduce((s, r) => s + r.costCents, 0)).toBe(COSTS_TODAY_CENTS);
     expect(TARGET_CENTS_PER_MONTH).toBe(TIERS.reduce((s, t) => s + toCents(t.monthlyCost), 0));
   });

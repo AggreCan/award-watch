@@ -1,0 +1,54 @@
+{
+ "code": "82",
+ "open_tenders": [
+  {
+   "amendment": 1,
+   "buyer_en": "Public Services and Procurement Canada",
+   "buyer_fr": "Services publics et Approvisionnement Canada",
+   "buyer_id": "pwgsc-tpsgc",
+   "category": [
+    "SRV"
+   ],
+   "closing": "2026-11-04T14:00:00",
+   "first_seen": "2026-10-30",
+   "method_en": "Competitive - Open bidding",
+   "method_fr": "Concurrentielle - Appel d'offres ouvert",
+   "notice_type_en": "Request for Proposal",
+   "notice_type_fr": "Demande de propositions",
+   "provinces": [
+    "ON",
+    "QC"
+   ],
+   "published": "2026-10-30",
+   "reference": "cb-100-10000001",
+   "segments": [
+    "82"
+   ],
+   "title_en": "Translation services for regional offices",
+   "title_fr": "Services de traduction pour les bureaux régionaux"
+  }
+ ],
+ "title_en": "Editorial and Design and Graphic and Fine Art Services",
+ "title_fr": "Services de rédaction, de design, de graphisme et de beaux-arts",
+ "top_organizations": [
+  {
+   "id": "org-a000000001",
+   "n": 1,
+   "name": "Exemplar Translation Services Inc.",
+   "province": "ON",
+   "total": 250000
+  }
+ ],
+ "years": [
+  {
+   "n": 1,
+   "total": 250000,
+   "year": 2026
+  },
+  {
+   "n": 3,
+   "total": 61000,
+   "year": 2024
+  }
+ ]
+}

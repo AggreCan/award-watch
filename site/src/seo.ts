@@ -1,65 +1,45 @@
 // Search-engine metadata: the title and description a result list shows, the
-// canonical URL and language alternates, the social-card tags, structured data
-// (JSON-LD), and the two crawler files. layout.tsx renders a page's Seo object
+// canonical URL and language alternates, the social tags, structured data
+// (JSON-LD), and the crawler files. layout.tsx renders a page's Seo object
 // into its head; the page files build it with the helpers below. Words the
-// pages already show (province names, breadcrumb words, page names) come from
-// the dictionary in i18n.ts; the result-list titles and descriptions live here.
+// pages already show come from the dictionary in i18n.ts; the result-list
+// titles and descriptions of the fixed pages live here.
 
 import type { Context } from "hono";
-import { provincePath } from "./crosslinks";
-import { assetResponse, lmiaGap, type Profile } from "./data";
+import type { Buyer, Category, ContractDetail, Profile, TenderDetail } from "./data";
 import type { AppEnv } from "./env";
-import { fmtInt, frTypography, provinceName, t, type Key, type Lang } from "./i18n";
-import { ESDC_HISTORY_START_YEAR } from "./support";
+import { fmtInt, frTypography, pick, provinceName, segmentLabel, t, type Key, type Lang } from "./i18n";
+import { assetResponse } from "./data";
 
 // Canonical URLs name the apex domain whichever host served the request, so
-// www and apex never compete in an index.
-export const SITE_ORIGIN = "https://lmiawatch.ca";
-export const SITE_NAME = "LMIA Watch";
-export const X_ACCOUNT_URL = "https://x.com/LMIAwatch";
-export const X_HANDLE = "@LMIAwatch";
-export const BLUESKY_ACCOUNT_URL = "https://bsky.app/profile/lmiawatch.ca";
+// www and apex never compete in an index. robots.txt, llms.txt and the
+// pipeline's sitemaps name the same origin; change them together.
+export const SITE_ORIGIN = "https://awardwatch.ca";
+export const SITE_NAME = "Award Watch";
 // A result list cuts a description near 160 characters; stay under it.
 export const DESCRIPTION_MAX = 159;
 
 // French sets a narrow no-break space before a colon, as the dictionary does.
 const FR_COLON = `${String.fromCharCode(0x202f)}: `;
 
-export interface SocialImage {
-  path: string;
-  width: number;
-  height: number;
-  alt: (lang: Lang) => string;
-}
-
-// Drawn by scripts/make-social-images.py from the site mark.
-export const SOCIAL_CARD: SocialImage = {
-  path: "/social-card.png",
-  width: 1200,
-  height: 630,
-  alt: (lang) => `${SITE_NAME}${lang === "fr" ? FR_COLON : ": "}${t(lang, "site.tagline")}`,
-};
-export const SOCIAL_SQUARE: SocialImage = { path: "/social-square.png", width: 400, height: 400, alt: () => SITE_NAME };
-
 export interface Seo {
   // The page's path with no query string. Filters, paging and the language
   // query all collapse onto it (French views add ?lang=fr, see canonicalUrl).
   path: string;
   description: string;
-  // The whole <title>; without it the layout writes "<page title> | LMIA Watch".
+  // The whole <title>; without it the layout writes "<page title> | Award Watch".
   title?: string;
   // og:title and twitter:title; defaults to the page title.
   socialTitle?: string;
-  // The large card goes on site pages (summary_large_image); profiles carry
-  // the square mark (summary), so the employer's name leads the preview.
-  image?: SocialImage;
   jsonLd?: object[];
   noindex?: boolean;
 }
 
 type Both = Record<Lang, string>;
 
-export type PageKey = "home" | "search" | "map" | "methodology" | "data" | "support" | "cite" | "corrections";
+export type PageKey =
+  | "home" | "tenders" | "tenders_new" | "awards" | "organizations" | "buyers" | "categories" | "rankings" | "feeds"
+  | "watchlist" | "methodology" | "data" | "support" | "cite" | "corrections";
 
 // `name` is the result-list name, either written here or, where the page's own
 // heading already reads well in a result list, its dictionary key.
@@ -68,68 +48,124 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/",
     name: "site.name",
     title: {
-      en: "LMIA Watch: Who Is Applying to Hire Temporary Foreign Workers",
-      fr: "LMIA Watch : qui demande des travailleurs étrangers temporaires",
+      en: "Award Watch: Federal Tenders, Contracts and Grants by Organization",
+      fr: "Award Watch : appels d'offres, contrats et subventions fédéraux par organisation",
     },
     description: {
-      en: "Which Canadian employers are applying to hire temporary foreign workers through an LMIA, where, and which were approved or refused. Updated nightly.",
-      fr: "Quels employeurs canadiens demandent une EIMT pour embaucher des travailleurs étrangers temporaires, où, et quelles demandes sont approuvées ou refusées.",
-    },
-  },
-  search: {
-    path: "/search",
-    name: { en: "Search LMIA Employer Records", fr: "Rechercher les dossiers EIMT des employeurs" },
-    description: {
-      en: "Search ESDC's lists of approved and refused LMIAs since 2014 and Job Bank's LMIA postings by employer, city or occupation.",
-      fr: "Recherchez les EIMT approuvées et refusées des listes d’EDSC depuis 2014 et les offres EIMT du Guichet-Emplois, par employeur, ville ou profession.",
+      en: "Open federal tenders, contracts awarded and grants paid, organized by the organizations that receive them. From the government's open data, updated nightly.",
+      fr: "Appels d'offres fédéraux ouverts, contrats attribués et subventions versées, par organisation. Données ouvertes du gouvernement, mises à jour chaque nuit.",
     },
   },
-  map: {
-    path: "/map",
-    name: { en: "Map of LMIA Records by Postal Area", fr: "Carte des dossiers EIMT par secteur postal" },
+  tenders: {
+    path: "/tenders",
+    name: { en: "Open Federal Tender Notices", fr: "Avis d'appel d'offres fédéraux ouverts" },
     description: {
-      en: "LMIA records across Canada grouped by postal area: pending Job Bank postings and the approved and refused LMIAs in ESDC's latest quarterly lists.",
-      fr: "Les dossiers EIMT au Canada regroupés par secteur postal : offres en attente au Guichet-Emplois et EIMT approuvées ou refusées des dernières listes d’EDSC.",
+      en: "Every open tender notice on CanadaBuys, filtered by category, region, buyer and closing date, each linked to its notice.",
+      fr: "Tous les avis d'appel d'offres ouverts sur AchatsCanada, filtrés par catégorie, région, acheteur et date de clôture, chacun lié à son avis.",
+    },
+  },
+  tenders_new: {
+    path: "/tenders/new",
+    name: { en: "New Federal Tender Notices by Day", fr: "Nouveaux avis d'appel d'offres fédéraux par jour" },
+    description: {
+      en: "The tender notices CanadaBuys published each day over the last 30 days, newest first.",
+      fr: "Les avis d'appel d'offres publiés chaque jour sur AchatsCanada au cours des 30 derniers jours, du plus récent au plus ancien.",
+    },
+  },
+  awards: {
+    path: "/awards",
+    name: { en: "Federal Contract Award Notices", fr: "Avis d'attribution de contrats fédéraux" },
+    description: {
+      en: "The newest contract award notices on CanadaBuys: supplier, buyer, value and procurement method, each linked to the notice.",
+      fr: "Les plus récents avis d'attribution de contrats sur AchatsCanada : fournisseur, acheteur, valeur et méthode d'approvisionnement, chacun lié à l'avis.",
+    },
+  },
+  organizations: {
+    path: "/organizations",
+    name: { en: "Organizations Receiving Federal Money", fr: "Organisations qui reçoivent des fonds fédéraux" },
+    description: {
+      en: "Every supplier, grant recipient and lobbying client on record, A to Z by province, each with a profile of its public records.",
+      fr: "Tous les fournisseurs, bénéficiaires de subventions et clients de lobbying au dossier, de A à Z par province, chacun avec le profil de ses dossiers publics.",
+    },
+  },
+  buyers: {
+    path: "/buyers",
+    name: { en: "Federal Buyers: Departments, Agencies and Crown Corporations", fr: "Acheteurs fédéraux : ministères, organismes et sociétés d'État" },
+    description: {
+      en: "Each federal institution's open tenders, contract awards, published contracts and grants, source by source.",
+      fr: "Les appels d'offres ouverts, les attributions de contrats, les contrats publiés et les subventions de chaque institution fédérale, source par source.",
+    },
+  },
+  categories: {
+    path: "/categories",
+    name: { en: "Federal Procurement by Category", fr: "Approvisionnement fédéral par catégorie" },
+    description: {
+      en: "The 57 UNSPSC segments: open tenders, contract awards this year and the organizations that received them.",
+      fr: "Les 57 segments de l'UNSPSC : appels d'offres ouverts, attributions de contrats de l'année et organisations qui les ont reçues.",
+    },
+  },
+  rankings: {
+    path: "/rankings",
+    name: { en: "Rankings: Organizations by Federal Contracts and Grants", fr: "Classements : organisations par contrats et subventions fédéraux" },
+    description: {
+      en: "The organizations with the most contract awards, published contracts and grants, by value and by count, each source ranked on its own.",
+      fr: "Les organisations qui comptent le plus d'attributions, de contrats publiés et de subventions, en valeur et en nombre, chaque source classée séparément.",
+    },
+  },
+  feeds: {
+    path: "/feeds",
+    name: "feeds.title",
+    description: {
+      en: "Atom feeds of new tender notices and contract awards: all of Canada, by category, by province and by buyer.",
+      fr: "Fils Atom des nouveaux avis d'appel d'offres et d'attribution : tout le Canada, par catégorie, par province et par acheteur.",
+    },
+  },
+  watchlist: {
+    path: "/watchlist",
+    name: "watch.title",
+    description: {
+      en: "Follow organizations from this browser and see which have new records since your last visit. Nothing is sent to the site.",
+      fr: "Suivez des organisations à partir de ce navigateur et voyez lesquelles ont de nouveaux dossiers depuis votre dernière visite. Rien n'est transmis au site.",
     },
   },
   methodology: {
     path: "/methodology",
-    name: { en: "Methodology: Sources, Status and Indicators", fr: "Méthodologie : sources, statuts et indicateurs" },
+    name: { en: "Methodology: Sources, Identity and Counting", fr: "Méthodologie : sources, identité et calculs" },
     description: {
-      en: "How LMIA Watch reads Job Bank and ESDC records, assigns pending, approved, refused and lapsed status, matches employers and defines each indicator.",
-      fr: "Comment LMIA Watch lit les dossiers du Guichet-Emplois et d’EDSC, attribue les statuts, apparie les employeurs et définit chaque indicateur.",
+      en: "How the site reads each federal source, merges organizations and buyers, totals money source by source, and what it does not claim.",
+      fr: "Comment le site lit chaque source fédérale, fusionne organisations et acheteurs, totalise les montants source par source, et ce qu'il n'affirme pas.",
     },
   },
   data: {
     path: "/data",
-    name: { en: "LMIA Data Downloads, API and Licence", fr: "Données EIMT : téléchargements, API et licence" },
+    name: { en: "Data: Sources, Downloads, API and Licence", fr: "Données : sources, téléchargements, API et licence" },
     description: {
-      en: `Every ESDC LMIA employer list since ${ESDC_HISTORY_START_YEAR}, nightly Job Bank observations and merged employers as CSV, a read-only JSON API, and each file's licence.`,
-      fr: `Les listes EIMT d’EDSC depuis ${ESDC_HISTORY_START_YEAR}, les relevés du Guichet-Emplois et les employeurs fusionnés en CSV, une API JSON et la licence de chaque fichier.`,
+      en: "The open-data files the site reads, when each was last read, the CSV downloads, the read-only JSON API and the licence.",
+      fr: "Les fichiers de données ouvertes que lit le site, leur dernière lecture, les téléchargements CSV, l'API JSON en lecture seule et la licence.",
     },
   },
   support: {
     path: "/support",
     name: "support.title",
     description: {
-      en: "What LMIA Watch costs to run each month, how it is funded, and where a donation goes. The site is free, carries no advertising and sells nothing.",
-      fr: "Ce que coûte LMIA Watch chaque mois, comment le site est financé et où va un don. Le site est gratuit, sans publicité, et ne vend rien.",
+      en: "What the site costs to run each month and how it is funded. The site is free, carries no advertising and sells nothing.",
+      fr: "Ce que coûte le site chaque mois et comment il est financé. Le site est gratuit, sans publicité, et ne vend rien.",
     },
   },
   cite: {
     path: "/cite",
     name: "cite.title",
     description: {
-      en: "How to cite LMIA Watch and its data in APA, MLA, Chicago, Harvard, BibTeX or RIS, with the data date that each citation should name.",
-      fr: "Comment citer LMIA Watch et ses données selon APA, MLA, Chicago, Harvard, BibTeX ou RIS, avec la date des données à indiquer.",
+      en: "How to cite the site and its data in APA, MLA, Chicago, Harvard, BibTeX or RIS, with the data date each citation should name.",
+      fr: "Comment citer le site et ses données selon APA, MLA, Chicago, Harvard, BibTeX ou RIS, avec la date des données à indiquer.",
     },
   },
   corrections: {
     path: "/corrections",
-    name: "employer.correct",
+    name: "form.correct_title",
     description: {
-      en: "Report a wrong employer match, a stale record or a misfiring indicator. Changes appear in the profile's corrections log after review.",
-      fr: "Signalez un mauvais appariement, un dossier périmé ou un indicateur erroné. Les changements figurent au journal des corrections du profil après examen.",
+      en: "Report a wrong organization match, a buyer mapped to the wrong institution or a record shown wrongly. Changes are logged on the page after review.",
+      fr: "Signalez un mauvais appariement d'organisation, un acheteur mal associé ou un dossier mal affiché. Les changements sont consignés sur la page après examen.",
     },
   },
 };
@@ -159,7 +195,6 @@ export function pageSeo(key: PageKey, lang: Lang, extra: Partial<Seo> = {}): Seo
     title,
     socialTitle: p.title ? title : name,
     description: local(lang, p.description),
-    image: SOCIAL_CARD,
     ...extra,
   };
 }
@@ -196,17 +231,7 @@ export function homeJsonLd(lang: Lang): object {
   return {
     "@context": "https://schema.org",
     "@graph": [
-      {
-        ...PUBLISHER,
-        "@id": org,
-        logo: {
-          "@type": "ImageObject",
-          url: absoluteUrl(SOCIAL_SQUARE.path),
-          width: SOCIAL_SQUARE.width,
-          height: SOCIAL_SQUARE.height,
-        },
-        sameAs: [X_ACCOUNT_URL, BLUESKY_ACCOUNT_URL],
-      },
+      { ...PUBLISHER, "@id": org },
       {
         "@type": "WebSite",
         "@id": `${SITE_ORIGIN}/#website`,
@@ -215,11 +240,6 @@ export function homeJsonLd(lang: Lang): object {
         description: local(lang, PAGES.home.description),
         inLanguage: ["en-CA", "fr-CA"],
         publisher: { "@id": org },
-        potentialAction: {
-          "@type": "SearchAction",
-          target: { "@type": "EntryPoint", urlTemplate: `${SITE_ORIGIN}/search?q={search_term_string}` },
-          "query-input": "required name=search_term_string",
-        },
       },
     ],
   };
@@ -229,59 +249,36 @@ export const OGL_URL: Both = {
   en: "https://open.canada.ca/en/open-government-licence-canada",
   fr: "https://ouvert.canada.ca/fr/licence-du-gouvernement-ouvert-canada",
 };
-// Job Bank and IRCC material is under these terms, which the site cannot relicense.
-export const CANADA_TERMS_URL: Both = {
-  en: "https://www.canada.ca/en/transparency/terms.html",
-  fr: "https://www.canada.ca/fr/transparence/avis.html",
-};
-// A download's licence group: the OGL, canada.ca's terms, or one that mixes
-// sources column by column (the Data page's licence table says which).
-export type DownloadLicence = "ogl" | "canada" | "mixed";
-const LICENCE_URL: Record<Exclude<DownloadLicence, "mixed">, Both> = { ogl: OGL_URL, canada: CANADA_TERMS_URL };
+
 const SOURCE_DATASETS = [
-  "https://open.canada.ca/data/en/dataset/90fed587-1364-4f33-a9ee-208181dc0b97",
-  "https://open.canada.ca/data/en/dataset/f82f66f2-a22b-4511-bccf-e1d74db39ae5",
-  "https://www.jobbank.gc.ca/",
-  "https://www.canada.ca/en/immigration-refugees-citizenship/services/work-canada/employers-non-compliant.html",
+  "https://open.canada.ca/data/en/dataset/6abd20d4-7a1c-4b38-baa2-9525d0bb2fd2",
+  "https://open.canada.ca/data/en/dataset/a1acb126-9ce8-40a9-b889-5da2b1dd20cb",
+  "https://open.canada.ca/data/en/dataset/4fe645a1-ffcd-40c1-9385-2c771be956a4",
+  "https://open.canada.ca/data/en/dataset/d8f85d91-7dec-4fd1-8055-483b77225d8b",
+  "https://open.canada.ca/data/en/dataset/432527ab-7aac-45b5-81d6-7597107a7013",
+  "https://open.canada.ca/data/en/dataset/a34eb330-7136-4f5e-9f5f-3ba41df58b06",
 ];
 const DATASET_NAME: Both = {
-  en: "LMIA Watch: Labour Market Impact Assessment Employer Records",
-  fr: "LMIA Watch : dossiers des employeurs visés par une étude d’impact sur le marché du travail",
+  en: "Award Watch: Federal Tenders, Contracts, Grants and Lobbying by Organization",
+  fr: "Award Watch : appels d'offres, contrats, subventions et lobbying fédéraux par organisation",
 };
 const DATASET_DESCRIPTION: Both = {
   en:
-    `Every ESDC quarterly positive and negative LMIA employer list since ${ESDC_HISTORY_START_YEAR}, nightly ` +
-    'observations of Job Bank postings flagged "LMIA requested" or "Approved LMIA", and IRCC\'s list of ' +
-    "non-compliant employers, merged by employer under a stable employer ID. Each row keeps the Job Bank posting " +
-    "ID or the ESDC resource ID it came from. Regenerated nightly and after each quarterly ESDC release.",
+    "Open and past CanadaBuys tender notices, award notices and PSPC contract history, the proactive publication of " +
+    "contracts over $10,000 and of grants and contributions, and lobbying communication reports, merged by organization " +
+    "under a stable ID. Each row keeps the publisher's reference number and the file it was read from. Regenerated nightly.",
   fr:
-    `Toutes les listes trimestrielles positives et négatives d’EDSC sur les EIMT depuis ${ESDC_HISTORY_START_YEAR}, ` +
-    "les relevés quotidiens des offres du Guichet-Emplois portant la mention « EIMT demandée » ou « EIMT approuvée », " +
-    "et la liste des employeurs non conformes d’IRCC, fusionnés par employeur sous un identifiant stable. Chaque ligne " +
-    "garde le numéro de l’offre du Guichet-Emplois ou l’identifiant de ressource d’EDSC d’où elle vient. Régénéré " +
-    "chaque nuit et après chaque publication trimestrielle d’EDSC.",
+    "Les avis d'appel d'offres et d'attribution d'AchatsCanada et l'historique des contrats de SPAC, la divulgation " +
+    "proactive des contrats de plus de 10 000 $ et des subventions et contributions, et les rapports de communication " +
+    "de lobbying, fusionnés par organisation sous un identifiant stable. Chaque ligne garde le numéro de référence de " +
+    "l'éditeur et le fichier d'où elle vient. Régénéré chaque nuit.",
 };
 const DATASET_KEYWORDS: Record<Lang, string[]> = {
-  en: ["LMIA", "Labour Market Impact Assessment", "Temporary Foreign Worker Program", "temporary foreign workers", "Job Bank", "ESDC", "IRCC", "Canada"],
-  fr: ["EIMT", "étude d’impact sur le marché du travail", "Programme des travailleurs étrangers temporaires", "travailleurs étrangers temporaires", "Guichet-Emplois", "EDSC", "IRCC", "Canada"],
-};
-const CREDIT: Both = {
-  en: "Contains information licensed under the Open Government Licence, Canada, and Job Bank and IRCC material reproduced under the Government of Canada terms of use (canada.ca).",
-  fr: "Contient des informations visées par la Licence du gouvernement ouvert, Canada, et du contenu du Guichet-Emplois et d’IRCC reproduit selon les conditions d’utilisation du gouvernement du Canada (canada.ca).",
-};
-// For a file that mixes sources, which has no single licence to declare.
-const MIXED_NOTE: Both = {
-  en: "The licence differs by column; see the licence table on the Data page.",
-  fr: "La licence varie selon la colonne; voir le tableau des licences de la page Données.",
+  en: ["federal procurement", "tenders", "contracts", "grants and contributions", "lobbying", "CanadaBuys", "proactive disclosure", "Canada"],
+  fr: ["approvisionnement fédéral", "appels d'offres", "contrats", "subventions et contributions", "lobbying", "AchatsCanada", "divulgation proactive", "Canada"],
 };
 
-// `contents` is each file's description in the page's language. The files do
-// not share one licence, so the dataset-wide `license` (a property Google's
-// Dataset guidance asks for) is the page's own licence table, which states
-// the terms file by file; each distribution carries its own licence too.
-export function datasetJsonLd(
-  downloads: { file: string; contents: string; licence: DownloadLicence }[], dataAsOf: string | null, lang: Lang,
-): object {
+export function datasetJsonLd(downloads: { file: string; contents: string }[], dataAsOf: string | null, lang: Lang): object {
   return {
     "@context": "https://schema.org",
     "@type": "Dataset",
@@ -289,56 +286,67 @@ export function datasetJsonLd(
     name: local(lang, DATASET_NAME),
     description: local(lang, DATASET_DESCRIPTION),
     url: absoluteUrl("/data"),
-    keywords: DATASET_KEYWORDS[lang],
-    license: `${absoluteUrl("/data")}#licence`,
-    usageInfo: `${absoluteUrl("/data")}#licence`,
+    keywords: DATASET_KEYWORDS[lang].map((k) => (lang === "fr" ? frTypography(k) : k)),
+    license: OGL_URL[lang],
     isAccessibleForFree: true,
-    creditText: local(lang, CREDIT),
+    creditText: t(lang, "data.credit"),
     creator: PUBLISHER,
     publisher: PUBLISHER,
     inLanguage: lang,
     spatialCoverage: { "@type": "Place", name: "Canada" },
-    temporalCoverage: `${ESDC_HISTORY_START_YEAR}/..`,
+    temporalCoverage: "2009/..",
     ...(dataAsOf ? { dateModified: dataAsOf } : {}),
     isBasedOn: SOURCE_DATASETS,
     distribution: downloads.map((d) => ({
       "@type": "DataDownload",
       name: d.file,
-      description: d.licence === "mixed" ? `${d.contents}. ${local(lang, MIXED_NOTE)}` : d.contents,
+      description: d.contents,
       encodingFormat: "text/csv",
       contentUrl: absoluteUrl(`/downloads/${d.file}`),
-      ...(d.licence === "mixed" ? {} : { license: LICENCE_URL[d.licence][lang] }),
+      license: OGL_URL[lang],
     })),
   };
 }
 
-// Mirrors the visible trail on the profile (Home / province / Employer), in the
-// dictionary's words. The province crumb links to the province's place page.
-// Without one (no province, or a head office outside Canada) the page shows
-// that crumb as plain text and the list leaves it out, since every crumb but
-// the last needs a URL. The last crumb is the word "Employer", as on the page.
-export function profileBreadcrumbJsonLd(province: string | null, lang: Lang): object {
-  const provPath = provincePath(province);
-  const crumbs: { name: string; item?: string }[] = [
-    { name: t(lang, "common.home"), item: `${SITE_ORIGIN}/` },
-    ...(province && provPath ? [{ name: provinceName(lang, province), item: absoluteUrl(provPath) }] : []),
-    { name: t(lang, "employer.title") },
-  ];
+// The visible trail of a page, as structured data. Every crumb but the last
+// needs a URL, so a crumb without one (shown as plain text) is left out.
+export function breadcrumbJsonLd(crumbs: { name: string; path?: string }[]): object {
+  const items = crumbs.filter((c, i) => c.path || i === crumbs.length - 1);
   return {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: crumbs.map((c, i) => ({ "@type": "ListItem", position: i + 1, ...c })),
+    itemListElement: items.map((c, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: c.name,
+      ...(c.path && i < items.length - 1 ? { item: absoluteUrl(c.path) } : {}),
+    })),
   };
 }
 
-function count(n: number, lang: Lang): string {
-  return fmtInt(n, lang);
+// Cuts at a word boundary and marks the cut with an ellipsis.
+export function clip(text: string, max = DESCRIPTION_MAX): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).replace(/[\s,.;:]+$/, "")}…`;
+}
+
+export function sectionSeo(path: string, title: string, description: string, crumbs: { name: string; path?: string }[], noindex = false): Seo {
+  return {
+    path,
+    title: pageTitle(title),
+    socialTitle: title,
+    description: clip(description),
+    jsonLd: [breadcrumbJsonLd(crumbs)],
+    noindex,
+  };
 }
 
 function plural(n: number, one: string, many: string, lang: Lang): string {
   // English takes the singular for 1 only; French for 0 and 1, as tn() does.
   const singular = lang === "fr" ? Math.abs(n) < 2 : n === 1;
-  return `${count(n, lang)} ${singular ? one : many}`;
+  return `${fmtInt(n, lang)} ${singular ? one : many}`;
 }
 
 function joinList(parts: string[], lang: Lang): string {
@@ -346,115 +354,112 @@ function joinList(parts: string[], lang: Lang): string {
   return `${parts.slice(0, -1).join(", ")} ${lang === "fr" ? "et" : "and"} ${parts[parts.length - 1]}`;
 }
 
-function place(city: string | null, province: string | null, lang: Lang): string {
-  // Mid-sentence, the dictionary's "Head office outside Canada" takes a small letter.
-  const outside = provinceName(lang, "XX");
-  const prov = province === "XX" ? outside.charAt(0).toLowerCase() + outside.slice(1) : province;
-  return [city, prov].filter(Boolean).join(", ");
-}
+const FACT_WORDS: Record<"awards" | "history" | "contracts" | "grants" | "lobbying", Record<Lang, [string, string]>> = {
+  awards: { en: ["award notice", "award notices"], fr: ["avis d'attribution", "avis d'attribution"] },
+  history: { en: ["PSPC contract", "PSPC contracts"], fr: ["contrat de SPAC", "contrats de SPAC"] },
+  contracts: { en: ["published contract", "published contracts"], fr: ["contrat publié", "contrats publiés"] },
+  grants: { en: ["grant or contribution", "grants and contributions"], fr: ["subvention ou contribution", "subventions et contributions"] },
+  lobbying: { en: ["lobbying communication", "lobbying communications"], fr: ["communication de lobbying", "communications de lobbying"] },
+};
 
-// Cuts at a word boundary and marks the cut with an ellipsis.
-function clip(text: string, max: number): string {
-  if (text.length <= max) return text;
-  const cut = text.slice(0, max - 1);
-  const space = cut.lastIndexOf(" ");
-  return `${(space > max / 2 ? cut.slice(0, space) : cut).replace(/[\s,.;:]+$/, "")}…`;
-}
-
-// One fact per count on the profile's summary card, with and without the
-// positions, which are the first detail to go when space runs short.
-function profileFacts(profile: Profile, lang: Lang): { full: string; short: string }[] {
-  const e = profile.employer;
-  const fr = lang === "fr";
-  const facts: { full: string; short: string }[] = [];
-  const add = (full: string, short = full) => facts.push({ full, short });
-  const positions = (n: number) => (fr ? plural(n, "poste", "postes", lang) : plural(n, "position", "positions", lang));
-  if (e.pending_count > 0) {
-    add(fr
-      ? plural(e.pending_count, "offre en attente au Guichet-Emplois", "offres en attente au Guichet-Emplois", lang)
-      : plural(e.pending_count, "pending Job Bank posting", "pending Job Bank postings", lang));
-  }
-  // The LMIA counts read as the page's summary card does: rows from files
-  // without an LMIA count add one each, and the figure is then a floor.
-  const gapApproved = lmiaGap(profile.esdc, "positive");
-  const gapRefused = lmiaGap(profile.esdc, "negative");
-  const atLeast = (gap: number, text: string) => (gap > 0 ? `${fr ? "au moins" : "at least"} ${text}` : text);
-  const approved = e.approved_lmias + gapApproved;
-  if (approved > 0) {
-    const n = atLeast(gapApproved, fr
-      ? plural(approved, "EIMT approuvée", "EIMT approuvées", lang)
-      : plural(approved, "approved LMIA", "approved LMIAs", lang));
-    add(`${n} (${positions(e.approved_positions)})`, n);
-  }
-  const refused = e.refused_lmias + gapRefused;
-  if (refused > 0) {
-    const n = atLeast(gapRefused, fr
-      ? plural(refused, "EIMT refusée", "EIMT refusées", lang)
-      : plural(refused, "refused LMIA", "refused LMIAs", lang));
-    add(`${n} (${positions(e.refused_positions)})`, n);
-  }
-  if (e.finding_count > 0) {
-    add(fr
-      ? plural(e.finding_count, "constat de non-conformité d’IRCC", "constats de non-conformité d’IRCC", lang)
-      : plural(e.finding_count, "IRCC non-compliance finding", "IRCC non-compliance findings", lang));
-  }
-  if (facts.length === 0) {
-    const records = profile.postings.length + profile.esdc.length;
-    add(fr
-      ? plural(records, "dossier EIMT public", "dossiers EIMT publics", lang)
-      : plural(records, "public LMIA record", "public LMIA records", lang));
-  }
-  return facts;
-}
-
-// "Jealous Fruits Ltd., Kelowna, BC: 19 approved LMIAs (760 positions). LMIA
-// records from Job Bank and ESDC, each linked to its source." The counts are
-// the profile's own summary, so the snippet and the page agree. When space
-// runs short the closing sentence goes first, then the position counts, then
-// the place, and only then is the name clipped. The employer's name is used
-// exactly as recorded, never retouched by the French typography.
-export function profileDescription(profile: Profile, lang: Lang): string {
-  const e = profile.employer;
-  const facts = profileFacts(profile, lang);
+// "Example Systems Inc., Ottawa, ON: 12 award notices and 3 published
+// contracts. Records from CanadaBuys and open.canada.ca, each linked to its
+// source." When space runs short the closing sentence goes first, then the
+// place, and only then is the name clipped. The name is used exactly as
+// recorded, never retouched by the French typography.
+export function organizationDescription(profile: Profile, lang: Lang): string {
+  const o = profile.organization;
+  const counts = { awards: o.n_awards, history: o.n_history, contracts: o.n_contracts, grants: o.n_grants, lobbying: o.n_lobbying };
+  const facts = (Object.keys(FACT_WORDS) as (keyof typeof FACT_WORDS)[])
+    .filter((k) => counts[k] > 0)
+    .map((k) => {
+      const [one, many] = FACT_WORDS[k][lang];
+      return plural(counts[k], lang === "fr" ? frTypography(one) : one, lang === "fr" ? frTypography(many) : many, lang);
+    });
   const sep = lang === "fr" ? FR_COLON : ": ";
-  const full = `${sep}${joinList(facts.map((f) => f.full), lang)}.`;
-  const short = `${sep}${joinList(facts.map((f) => f.short), lang)}.`;
-  const tail = lang === "fr"
-    ? " Dossiers du Guichet-Emplois et d’EDSC, chacun lié à sa source."
-    : " LMIA records from Job Bank and ESDC, each linked to its source.";
-  const where = place(e.city, e.province, lang);
-  const head = where ? `${e.display_name}, ${where}` : e.display_name;
-  const candidates = [head + full + tail, head + full, head + short + tail, head + short, e.display_name + short];
-  const fit = candidates.find((s) => s.length <= DESCRIPTION_MAX);
+  const body = facts.length ? `${sep}${joinList(facts, lang)}.` : `${sep}${t(lang, "org.no_records_short")}.`;
+  const tail = ` ${t(lang, "org.description_tail")}`;
+  const where = [o.city, o.province ? provinceName(lang, o.province) : null].filter(Boolean).join(", ");
+  const head = where ? `${o.display_name}, ${where}` : o.display_name;
+  const fit = [head + body + tail, head + body, o.display_name + body].find((s) => s.length <= DESCRIPTION_MAX);
   if (fit) return fit;
-  const room = DESCRIPTION_MAX - short.length;
-  return room >= 20 ? clip(e.display_name, room) + short : clip(e.display_name + short, DESCRIPTION_MAX);
+  const room = DESCRIPTION_MAX - body.length;
+  return room >= 20 ? clip(o.display_name, room) + body : clip(o.display_name + body, DESCRIPTION_MAX);
 }
 
-export function profileSeo(profile: Profile, lang: Lang): Seo {
-  const e = profile.employer;
+export function organizationSeo(profile: Profile, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
+  const o = profile.organization;
   return {
-    path: `/employers/${e.id}`,
-    description: profileDescription(profile, lang),
-    socialTitle: e.display_name,
-    image: SOCIAL_SQUARE,
-    jsonLd: [profileBreadcrumbJsonLd(e.province, lang)],
+    path: `/organizations/${o.id}`,
+    description: organizationDescription(profile, lang),
+    socialTitle: o.display_name,
+    jsonLd: [breadcrumbJsonLd(crumbs)],
   };
 }
 
-// The response form exists once per employer and repeats the same copy, so it
-// stays out of the index; the profile it belongs to is the page to find.
+// The response form exists once per organization and repeats the same copy,
+// so it stays out of the index; the profile it belongs to is the page to find.
 export function respondFormSeo(profile: Profile, lang: Lang): Seo {
-  const name = profile.employer.display_name;
   return {
-    path: `/employers/${profile.employer.id}/respond`,
-    description: clip(
-      lang === "fr"
-        ? `Publier la réponse de l’employeur sur le profil de ${name}, avec la date de réception.`
-        : `Post the employer's statement on the profile of ${name}, unedited and dated.`,
-      DESCRIPTION_MAX,
-    ),
+    path: `/organizations/${profile.organization.id}/respond`,
+    description: clip(t(lang, "form.respond_description", { name: profile.organization.display_name })),
     noindex: true,
+  };
+}
+
+export function tenderSeo(d: TenderDetail, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
+  const title = pick(lang, d.title_en, d.title_fr) ?? d.reference;
+  const buyer = pick(lang, d.buyer_en, d.buyer_fr);
+  const description = t(lang, "tender.description", {
+    reference: d.reference,
+    buyer: buyer ?? t(lang, "common.na"),
+    closing: d.closing ? d.closing.slice(0, 10) : t(lang, "common.na"),
+  });
+  return {
+    path: `/tenders/${d.reference.toLowerCase()}`,
+    title: pageTitle(clip(title, 90)),
+    socialTitle: title,
+    description: clip(description),
+    jsonLd: [breadcrumbJsonLd(crumbs)],
+  };
+}
+
+export function contractSeo(d: ContractDetail, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
+  const title = pick(lang, d.title_en, d.title_fr) ?? d.reference;
+  const description = t(lang, d.kind === "award" ? "contract.description_award" : "contract.description_history", {
+    reference: d.reference,
+    supplier: d.supplier ?? t(lang, "common.na"),
+    buyer: pick(lang, d.buyer_en, d.buyer_fr) ?? t(lang, "common.na"),
+    date: d.awarded ?? t(lang, "common.na"),
+  });
+  return {
+    path: `/${d.kind === "award" ? "awards" : "history"}/${d.reference.toLowerCase()}`,
+    title: pageTitle(clip(title, 90)),
+    socialTitle: title,
+    description: clip(description),
+    jsonLd: [breadcrumbJsonLd(crumbs)],
+  };
+}
+
+export function buyerSeo(b: Buyer, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
+  const name = pick(lang, b.buyer.name_en, b.buyer.name_fr) ?? b.buyer.id;
+  return {
+    path: `/buyers/${b.buyer.id}`,
+    title: pageTitle(name),
+    socialTitle: name,
+    description: clip(t(lang, "buyer.description", { name })),
+    jsonLd: [breadcrumbJsonLd(crumbs)],
+  };
+}
+
+export function categorySeo(cat: Category, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
+  const name = segmentLabel(lang, cat.code);
+  return {
+    path: `/categories/${cat.code}`,
+    title: pageTitle(name),
+    socialTitle: name,
+    description: clip(t(lang, "category.description", { name, code: cat.code, n: fmtInt(cat.open_tenders.length, lang) })),
+    jsonLd: [breadcrumbJsonLd(crumbs)],
   };
 }
 
@@ -464,8 +469,8 @@ const XML_HEADERS = { "Content-Type": "application/xml; charset=utf-8", "Cache-C
 
 // The pipeline writes the sitemap index and its parts under data/sitemaps/.
 // They are served from the site root (/sitemap.xml, /sitemap-<n>.xml) because a
-// sitemap may only list URLs at or below its own directory, and the profiles
-// live at /employers/. The Worker streams the file without parsing it.
+// sitemap may only list URLs at or below its own directory. The Worker streams
+// the file without parsing it.
 export async function sitemapFile(c: Context<AppEnv>): Promise<Response> {
   const m = /^sitemap(?:-([0-9]{1,4}))?\.xml$/.exec(c.req.param("file") ?? "");
   const res = m ? await assetResponse(c.env, `sitemaps/${m[1] ? `sitemap-${m[1]}` : "index"}.xml`) : null;
@@ -473,23 +478,18 @@ export async function sitemapFile(c: Context<AppEnv>): Promise<Response> {
   return new Response(res.body, { headers: XML_HEADERS });
 }
 
-// public/robots.txt is served by the assets layer before the Worker runs. This
-// route answers when a request reaches the Worker anyway (a run-worker-first
-// configuration, the test runtime), from the same file.
-// public/llms.txt tells AI crawlers and agents where the bulk files are, so
-// they need not walk the profiles; served the same way as robots.txt.
-export async function llmsTxt(c: Context<AppEnv>): Promise<Response> {
-  const res = c.env.ASSETS ? await c.env.ASSETS.fetch(new Request("https://assets.invalid/llms.txt")) : null;
+async function textFile(c: Context<AppEnv>, name: string): Promise<Response> {
+  const res = c.env.ASSETS ? await c.env.ASSETS.fetch(new Request(`https://assets.invalid/${name}`)) : null;
   if (!res || !res.ok) return c.notFound();
   return new Response(res.body, {
     headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" },
   });
 }
 
-export async function robotsTxt(c: Context<AppEnv>): Promise<Response> {
-  const res = c.env.ASSETS ? await c.env.ASSETS.fetch(new Request("https://assets.invalid/robots.txt")) : null;
-  if (!res || !res.ok) return c.notFound();
-  return new Response(res.body, {
-    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" },
-  });
-}
+// public/robots.txt and public/llms.txt are served by the assets layer before
+// the Worker runs. These routes answer when a request reaches the Worker
+// anyway (a run-worker-first configuration, the test runtime), from the same
+// files. llms.txt tells AI crawlers and agents where the bulk files are, so
+// they need not walk the profiles.
+export const llmsTxt = (c: Context<AppEnv>) => textFile(c, "llms.txt");
+export const robotsTxt = (c: Context<AppEnv>) => textFile(c, "robots.txt");

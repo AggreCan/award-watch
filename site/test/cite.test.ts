@@ -6,7 +6,7 @@ import stats from "./fixtures/stats.json";
 
 const EM_DASH = String.fromCharCode(0x2014);
 const CITATION = {
-  title: "LMIA Watch: ESDC positive and negative LMIA employer lists, derived files",
+  title: "Award Watch: federal procurement records, derived files",
   concept_doi: "10.5281/zenodo.1000001",
   doi: "10.5281/zenodo.1000005",
   version: "2026Q1",
@@ -20,20 +20,21 @@ function withStats(extra: object): Fetcher {
     fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (new URL(url).pathname === "/data/stats.json") {
-        return new Response(JSON.stringify({ ...stats, ...extra }), { headers: { "content-type": "application/json" } });
+        return new Response(JSON.stringify({ ...stats, data_as_of: "2026-10-12", ...extra }), { headers: { "content-type": "application/json" } });
       }
       return fakeAssets.fetch(input as RequestInfo, init);
     },
   } as unknown as Fetcher;
 }
 const withCitation = (citation: unknown) => withStats({ citation });
+const dated = withStats({});
 
 const get = async (path: string, assets: Fetcher) => (await app.request(path, {}, testEnv(assets))).text();
 
 describe("how to cite", () => {
   it("stays hidden until a DOI exists", async () => {
     for (const path of ["/data", "/methodology", "/data?lang=fr"]) {
-      expect(await get(path, fakeAssets), path).not.toContain('id="cite"');
+      expect(await get(path, dated), path).not.toContain('id="cite"');
       expect(await get(path, withCitation(null)), path).not.toContain('id="cite"');
     }
     expect(await get("/data", withCitation({ ...CITATION, concept_doi: "javascript:alert(1)" }))).not.toContain('id="cite"');
@@ -43,7 +44,7 @@ describe("how to cite", () => {
     for (const path of ["/data", "/methodology"]) {
       const html = await get(path, withCitation(CITATION));
       expect(html, path).toContain('<h2 id="cite">How to Cite</h2>');
-      expect(html).toContain("LMIA Watch (2026). <cite>LMIA Watch: ESDC positive and negative LMIA employer lists, derived files</cite> (Version 2026Q1) [Data set]. Zenodo.");
+      expect(html).toContain("Award Watch (2026). <cite>Award Watch: federal procurement records, derived files</cite> (Version 2026Q1) [Data set]. Zenodo.");
       expect(html).toContain('<a href="https://doi.org/10.5281/zenodo.1000005">https://doi.org/10.5281/zenodo.1000005</a>');
       expect(html).toContain('<a href="https://doi.org/10.5281/zenodo.1000001">https://doi.org/10.5281/zenodo.1000001</a>');
       expect(html).not.toContain(EM_DASH);
@@ -51,7 +52,7 @@ describe("how to cite", () => {
   });
 
   it("speaks French on French pages", async () => {
-    const html = (await get("/data?lang=fr", withCitation(CITATION))).replace(/[  ]/g, " ");
+    const html = (await get("/data?lang=fr", withCitation(CITATION))).replace(/[\u00a0\u202f]/g, " ");
     expect(html).toContain('<h2 id="cite">Comment citer</h2>');
     expect(html).toContain("(version 2026Q1) [Jeu de données]. Zenodo.");
     expect(html).toContain("utilisez le DOI de concept");
@@ -76,24 +77,19 @@ describe("how to cite", () => {
 
 describe("statements on the Data and Support pages", () => {
   it("says the site counts pages in aggregate, in both languages", async () => {
-    const en = await get("/data", fakeAssets);
+    const en = await get("/data", dated);
     expect(en).toContain("The site counts the pages it serves in aggregate");
     expect(en).toContain("keeps no IP address.");
     // The visitor code in plain words: what is hashed, that it rotates daily, that no address is kept.
     expect(en).toContain("a visitor code: the IP address and the browser&#39;s identification are hashed (SHA-256) with a key that changes every day (UTC)");
     expect(en).toContain("The address and the browser&#39;s identification are then dropped.");
     expect(en).toContain("The same browser gets a different code the next day");
-    const fr = (await get("/data?lang=fr", fakeAssets)).replace(/[  ]/g, " ");
+    const fr = (await get("/data?lang=fr", dated)).replace(/[\u00a0\u202f]/g, " ");
     expect(fr).toContain("Le site compte de façon agrégée les pages qu’il sert");
     expect(fr).toContain("l’adresse IP et l’identification du navigateur sont hachées (SHA-256) avec une clé qui change chaque jour (UTC)");
     expect(fr).toContain("L’adresse et l’identification du navigateur sont ensuite écartées.");
     expect(fr).toContain("Le même navigateur reçoit un code différent le lendemain");
     expect(fr).toContain("ne conserve aucune adresse IP.");
-  });
-
-  it("notes that the Bluesky post is free", async () => {
-    expect(await get("/support", fakeAssets)).toContain("The same daily post on Bluesky is free to send");
-    expect(await get("/support?lang=fr", fakeAssets)).toContain("La même publication quotidienne sur Bluesky est gratuite");
   });
 });
 
@@ -102,14 +98,14 @@ describe("statements on the Data and Support pages", () => {
 const decode = (s: string) =>
   s.replace(/<[^>]+>/g, "").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 const blocks = (html: string) =>
-  [...html.matchAll(/<pre class="cite-block">([\s\S]*?)<\/pre>/g)].map((m) => decode(m[1]).replace(/[  ]/g, " "));
+  [...html.matchAll(/<pre class="cite-block">([\s\S]*?)<\/pre>/g)].map((m) => decode(m[1]).replace(/[\u00a0\u202f]/g, " "));
 // The fixture's data date is 2026-10-12; the date of access is today's (UTC).
 const today = () => new Date().toISOString().slice(0, 10);
 
 describe("the /cite page", () => {
   it("answers in both languages, linked from the footer between Corrections and Support", async () => {
     for (const [path, word] of [["/cite", "Cite"], ["/cite?lang=fr", "Citer"], ["/", "Cite"], ["/data?lang=fr", "Citer"]]) {
-      const res = await app.request(path, {}, testEnv(fakeAssets));
+      const res = await app.request(path, {}, testEnv(dated));
       expect(res.status, path).toBe(200);
       const html = await res.text();
       const footer = html.slice(html.indexOf('<footer class="site-footer">'));
@@ -123,26 +119,26 @@ describe("the /cite page", () => {
   });
 
   it("gives the website in six styles, each naming the data date", async () => {
-    const html = await get("/cite", fakeAssets);
+    const html = await get("/cite", dated);
     expect(html).toContain("<h1>How to Cite</h1>");
     expect(html).toContain("2026-10-12 in the citations below");
     expect(html).toContain('<h3 id="cite-apa">APA (7th edition)</h3>');
     expect(html).toContain(
-      "LMIA Watch. (2026). <i>LMIA Watch: Public records of Labour Market Impact Assessments</i> (Data as of October 12, 2026). Retrieved ",
+      "Award Watch. (2026). <i>Award Watch: Federal tenders, awards, contracts and grants by organization</i> (Data as of October 12, 2026). Retrieved ",
     );
     expect(html).toContain('<script src="/cite.js" defer=""></script>');
     const [apa, mla, chicago, harvard, bib, ris, ...rest] = blocks(html);
     expect(rest).toEqual([]);
-    expect(apa).toMatch(/Retrieved [A-Z][a-z]+ \d{1,2}, \d{4}, from https:\/\/lmiawatch\.ca$/);
-    expect(mla).toMatch(/^LMIA Watch: Public Records of Labour Market Impact Assessments\. Data as of 12 Oct\. 2026, lmiawatch\.ca\. Accessed \d{1,2} [A-Z][a-z]+\.? \d{4}\.$/);
-    expect(chicago).toMatch(/^LMIA Watch\. 2026\. LMIA Watch: Public Records of Labour Market Impact Assessments\. Data as of October 12, 2026\. Accessed .+\. https:\/\/lmiawatch\.ca\.$/);
-    expect(harvard).toMatch(/^LMIA Watch \(2026\) LMIA Watch: public records of Labour Market Impact Assessments\. Data as of 12 October 2026\. Available at: https:\/\/lmiawatch\.ca \(Accessed: .+\)\.$/);
+    expect(apa).toMatch(/Retrieved [A-Z][a-z]+ \d{1,2}, \d{4}, from https:\/\/awardwatch\.ca$/);
+    expect(mla).toMatch(/^Award Watch: Federal Tenders, Awards, Contracts and Grants by Organization\. Data as of 12 Oct\. 2026, awardwatch\.ca\. Accessed \d{1,2} [A-Z][a-z]+\.? \d{4}\.$/);
+    expect(chicago).toMatch(/^Award Watch\. 2026\. Award Watch: Federal Tenders, Awards, Contracts and Grants by Organization\. Data as of October 12, 2026\. Accessed .+\. https:\/\/awardwatch\.ca\.$/);
+    expect(harvard).toMatch(/^Award Watch \(2026\) Award Watch: federal tenders, awards, contracts and grants by organization\. Data as of 12 October 2026\. Available at: https:\/\/awardwatch\.ca \(Accessed: .+\)\.$/);
     expect(bib).toBe([
-      "@misc{lmiawatch2026,",
-      "  author       = {{LMIA Watch}},",
-      "  title        = {{LMIA Watch: public records of Labour Market Impact Assessments}},",
+      "@misc{awardwatch2026,",
+      "  author       = {{Award Watch}},",
+      "  title        = {{Award Watch: federal tenders, awards, contracts and grants by organization}},",
       "  year         = {2026},",
-      "  howpublished = {\\url{https://lmiawatch.ca}},",
+      "  howpublished = {\\url{https://awardwatch.ca}},",
       "  note         = {Data as of 2026-10-12},",
       `  urldate      = {${today()}},`,
       "}",
@@ -150,11 +146,11 @@ describe("the /cite page", () => {
     expect(ris.startsWith("TY  - ELEC\n")).toBe(true);
     expect(ris).toBe([
       "TY  - ELEC",
-      "TI  - LMIA Watch: public records of Labour Market Impact Assessments",
-      "AU  - LMIA Watch",
+      "TI  - Award Watch: federal tenders, awards, contracts and grants by organization",
+      "AU  - Award Watch",
       "PY  - 2026",
       "DA  - 2026/10/12",
-      "UR  - https://lmiawatch.ca",
+      "UR  - https://awardwatch.ca",
       `Y2  - ${today().replace(/-/g, "/")}`,
       "N1  - Data as of 2026-10-12",
       "ER  - ",
@@ -165,17 +161,17 @@ describe("the /cite page", () => {
   });
 
   it("speaks French on the French page", async () => {
-    const html = (await get("/cite?lang=fr", fakeAssets)).replace(/[  ]/g, " ");
+    const html = (await get("/cite?lang=fr", dated)).replace(/[\u00a0\u202f]/g, " ");
     expect(html).toContain("<h1>Comment citer</h1>");
     expect(html).toContain('<h2 id="website">Le site Web</h2>');
     expect(html).toContain("(Données au 12 octobre 2026). Consulté le ");
-    expect(html).toContain("<i>LMIA Watch : dossiers publics des études d’impact sur le marché du travail</i>");
+    expect(html).toContain("<i>Award Watch : appels d’offres, attributions, contrats et subventions du fédéral par organisation</i>");
     const [apa, mla, , harvard, bib, ris] = blocks(html);
-    expect(apa).toMatch(/Consulté le .+ à https:\/\/lmiawatch\.ca$/);
-    expect(mla).toContain("Données au 12 oct. 2026, lmiawatch.ca. Consulté le ");
-    expect(harvard).toContain("Disponible à l’adresse : https://lmiawatch.ca (consulté le ");
+    expect(apa).toMatch(/Consulté le .+ à https:\/\/awardwatch\.ca$/);
+    expect(mla).toContain("Données au 12 oct. 2026, awardwatch.ca. Consulté le ");
+    expect(harvard).toContain("Disponible à l’adresse : https://awardwatch.ca (consulté le ");
     // The machine formats carry plain spaces and straight apostrophes.
-    expect(bib).toContain("title        = {{LMIA Watch : dossiers publics des études d'impact sur le marché du travail}},");
+    expect(bib).toContain("title        = {{Award Watch : appels d'offres, attributions, contrats et subventions du fédéral par organisation}},");
     expect(bib).toContain("note         = {Données au 2026-10-12},");
     expect(ris).toContain("N1  - Données au 2026-10-12");
     expect(html).not.toContain("Retrieved");
@@ -191,9 +187,9 @@ describe("the /cite page", () => {
     const found = blocks(html);
     expect(found).toHaveLength(8);
     expect(found[6]).toBe([
-      "@dataset{lmiawatch2026data,",
-      "  author    = {{LMIA Watch}},",
-      "  title     = {{LMIA Watch: ESDC positive and negative LMIA employer lists, derived files}},",
+      "@dataset{awardwatch2026data,",
+      "  author    = {{Award Watch}},",
+      "  title     = {{Award Watch: federal procurement records, derived files}},",
       "  year      = {2026},",
       "  version   = {2026Q1},",
       "  publisher = {Zenodo},",
@@ -203,8 +199,8 @@ describe("the /cite page", () => {
     ].join("\n"));
     expect(found[7]).toBe([
       "TY  - DATA",
-      "TI  - LMIA Watch: ESDC positive and negative LMIA employer lists, derived files",
-      "AU  - LMIA Watch",
+      "TI  - Award Watch: federal procurement records, derived files",
+      "AU  - Award Watch",
       "PY  - 2026",
       "ET  - 2026Q1",
       "PB  - Zenodo",

@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
 import type { AppEnv } from "./env";
-import { DOWNLOADS } from "./pages/data";
+import { DOWNLOADS, YEARLY_DOWNLOAD } from "./pages/data";
 
 // Aggregate counts of what the Worker serves, written to Workers Analytics
 // Engine (the VIEWS binding in wrangler.jsonc): one data point per response,
@@ -42,41 +42,45 @@ import { DOWNLOADS } from "./pages/data";
 // its included requests (100,000 a day on the free plan, 10 million a month
 // on the paid one), so one point per response cannot exceed them. Data
 // points are kept for three months; the nightly run keeps a daily roll-up in
-// R2 (pipeline/pmw_pipeline/views_rollup.py).
+// R2 (pipeline/awardwatch_pipeline/views_rollup.py).
 
 export type Kind = "page" | "api" | "download" | "form" | "hook" | "file" | "feed" | "other";
 
 const PAGES = new Set([
-  "/", "/search", "/map", "/methodology", "/data", "/support", "/cite", "/corrections",
-  "/feeds", "/watchlist", "/releases", "/rankings", "/trends", "/program", "/occupations", "/places",
-  "/international", "/notices",
+  "/", "/tenders", "/tenders/new", "/awards", "/organizations", "/buyers", "/categories", "/rankings",
+  "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections",
 ]);
-const API_FIXED = new Set(["/api/stats", "/api/pending", "/api/clusters", "/api/search", "/api/search/facets"]);
+const API_FIXED = new Set(["/api/stats"]);
 const DOWNLOAD_FILES = new Set(DOWNLOADS.map((d) => d.file));
 // The feed files feeds.py writes: feeds/<scope folders>/<event>.xml.
 const FEED_PATH = /^\/data\/(feeds\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\.xml)$/;
 
 export function routeTemplate(method: string, path: string): { route: string; kind: Kind } {
   if (PAGES.has(path)) return { route: path, kind: method === "POST" ? "form" : "page" };
-  if (/^\/employers\/[^/]+$/.test(path)) return { route: "/employers/:id", kind: "page" };
-  if (/^\/employers\/[^/]+\/respond$/.test(path)) return { route: "/employers/:id/respond", kind: method === "POST" ? "form" : "page" };
-  if (/^\/releases\/[^/]+$/.test(path)) return { route: "/releases/:slug", kind: "page" };
+  if (/^\/tenders\/[^/]+$/.test(path)) return { route: "/tenders/:reference", kind: "page" };
+  if (/^\/awards\/[0-9]{4}$/.test(path)) return { route: "/awards/:year", kind: "page" };
+  if (/^\/awards\/[^/]+$/.test(path)) return { route: "/awards/:reference", kind: "page" };
+  if (/^\/history\/[^/]+$/.test(path)) return { route: "/history/:reference", kind: "page" };
+  if (/^\/organizations\/directory\/[^/]+$/.test(path)) return { route: "/organizations/directory/:code", kind: "page" };
+  if (/^\/organizations\/directory\/[^/]+\/[^/]+$/.test(path)) return { route: "/organizations/directory/:code/:page", kind: "page" };
+  if (/^\/organizations\/[^/]+$/.test(path)) return { route: "/organizations/:id", kind: "page" };
+  if (/^\/organizations\/[^/]+\/respond$/.test(path)) return { route: "/organizations/:id/respond", kind: method === "POST" ? "form" : "page" };
+  if (/^\/buyers\/[^/]+$/.test(path)) return { route: "/buyers/:id", kind: "page" };
+  if (/^\/categories\/[^/]+$/.test(path)) return { route: "/categories/:nn", kind: "page" };
   if (/^\/rankings\/[^/]+$/.test(path)) return { route: "/rankings/:year", kind: "page" };
-  if (/^\/trends\/[^/]+$/.test(path)) return { route: "/trends/:view", kind: "page" };
-  if (/^\/occupations\/[^/]+$/.test(path)) return { route: "/occupations/:noc", kind: "page" };
-  if (/^\/places\/[^/]+$/.test(path)) return { route: "/places/:prov", kind: "page" };
-  if (/^\/places\/[^/]+\/employers$/.test(path)) return { route: "/places/:prov/employers", kind: "page" };
-  if (/^\/places\/[^/]+\/employers\/[^/]+$/.test(path)) return { route: "/places/:prov/employers/:page", kind: "page" };
-  if (/^\/places\/[^/]+\/[^/]+$/.test(path)) return { route: "/places/:prov/:slug", kind: "page" };
   if (path.startsWith("/api/")) {
     if (API_FIXED.has(path)) return { route: path, kind: "api" };
-    if (/^\/api\/employers\/[^/]+$/.test(path)) return { route: "/api/employers/:id", kind: "api" };
-    if (/^\/api\/area\/[^/]+$/.test(path)) return { route: "/api/area/:fsa", kind: "api" };
+    if (/^\/api\/organizations\/[^/]+$/.test(path)) return { route: "/api/organizations/:id", kind: "api" };
+    if (/^\/api\/tenders\/[^/]+$/.test(path)) return { route: "/api/tenders/:reference", kind: "api" };
+    if (/^\/api\/buyers\/[^/]+$/.test(path)) return { route: "/api/buyers/:id", kind: "api" };
+    if (/^\/api\/categories\/[^/]+$/.test(path)) return { route: "/api/categories/:nn", kind: "api" };
     return { route: "/api/other", kind: "api" };
   }
   if (path.startsWith("/downloads/")) {
     const file = path.slice("/downloads/".length);
     if (DOWNLOAD_FILES.has(file)) return { route: path, kind: "download" };
+    const yearly = YEARLY_DOWNLOAD.exec(file);
+    if (yearly) return { route: `/downloads/${yearly[1]}-:year.csv`, kind: "download" };
     if (/^mirror\/[A-Za-z0-9._-]+$/.test(file)) return { route: "/downloads/mirror/:file", kind: "download" };
     return { route: "/downloads/other", kind: "download" };
   }
@@ -131,11 +135,11 @@ export type Device = "desktop" | "mobile" | "tablet" | "";
 
 // Words that crawlers, link previews, monitors and scripts put in their user
 // agents. "bot" is not matched inside "Cubot", a phone maker whose model names
-// appear in ordinary Android user agents. "lmiawatch" is the site's own
-// client (the nightly smoke test and key check).
+// appear in ordinary Android user agents. "awardwatch" is the site's
+// own client (the nightly smoke test and key check).
 const BOT_UA = new RegExp(
   [
-    "(?<!cu)bot", "crawl", "spider", "slurp", "fetch", "python-requests", "curl", "wget", "headless", "lmiawatch",
+    "(?<!cu)bot", "crawl", "spider", "slurp", "fetch", "python-requests", "curl", "wget", "headless", "awardwatch",
     "http-client", "okhttp", "axios", "libwww", "scrapy", "httpx", "aiohttp", "java/", "facebookexternalhit",
     "embedly", "whatsapp", "preview", "lighthouse", "pingdom", "uptime", "monitor", "archiver", "validator",
     "googleother", "google-", "feed", "rss", "phantomjs", "selenium", "puppeteer", "playwright",

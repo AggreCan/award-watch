@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 import { defineConfig } from "vitest/config";
 
-// The schemas and seed are read here, on the Node side, and handed to the
+// The schema and seed are read here, on the Node side, and handed to the
 // Workers runtime as plain text bindings; the setup file applies them to the
-// local D1 databases (forms and search) before the tests run.
+// local forms database before the tests run.
 export default defineConfig({
   plugins: [
     cloudflareTest({
@@ -13,7 +13,6 @@ export default defineConfig({
         bindings: {
           SCHEMA_SQL: readFileSync("../pipeline/schema.sql", "utf8"),
           SEED_SQL: readFileSync("./seed/dev_seed.sql", "utf8"),
-          SEARCH_SCHEMA_SQL: readFileSync("../pipeline/search_schema.sql", "utf8"),
         },
       },
     }),

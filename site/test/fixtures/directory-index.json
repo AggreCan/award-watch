@@ -1,0 +1,24 @@
+{
+ "directories": [
+  {
+   "code": "on",
+   "organizations": 1,
+   "pages": 1
+  },
+  {
+   "code": "bc",
+   "organizations": 1,
+   "pages": 1
+  },
+  {
+   "code": "yt",
+   "organizations": 0,
+   "pages": 0
+  },
+  {
+   "code": "xx",
+   "organizations": 0,
+   "pages": 0
+  }
+ ]
+}

@@ -147,37 +147,33 @@ describe("loadJson keeps parsed files by ETag", () => {
 });
 
 describe("the loaders built on it copy before they change a file", () => {
-  it("loadStats drops a bad optional count from a copy and leaves the kept file whole", async () => {
-    const body = JSON.stringify({ ...stats, counts: { ...stats.counts, grant_employers: "many" } });
+  it("loadStats drops a bad count and an unreadable list from a copy and leaves the kept file whole", async () => {
+    const body = JSON.stringify({ ...stats, counts: { ...stats.counts, grants: "many" }, closing_soon: [{ reference: 5 }] });
     const b = counting({ "stats.json": { body, etag: '"s1"' } });
     const s = await loadStats(b.env);
-    expect(s?.counts.grant_employers).toBeUndefined();
-    expect(s?.counts.pending).toBe(stats.counts.pending);
+    expect(s?.counts.grants).toBeUndefined();
+    expect(s?.counts.awards).toBe(stats.counts.awards);
+    expect(s?.closing_soon).toEqual([]);
+    expect(s?.new_tenders).toEqual(stats.new_tenders);
     const raw = await loadJson<any>(b.env, "stats.json");
-    expect(raw.counts.grant_employers).toBe("many");
+    expect(raw.counts.grants).toBe("many");
+    expect(raw.closing_soon).toHaveLength(1);
     expect(b.reads["stats.json"]).toBe(1);
   });
 
-  it("loadStats returns the kept file itself when every count reads", async () => {
+  it("loadStats returns the kept file itself when every count and list reads", async () => {
     const b = counting({ "stats.json": { body: JSON.stringify(stats), etag: '"s1"' } });
     const first = await loadStats(b.env);
     expect(await loadStats(b.env)).toBe(first);
     expect(Object.isFrozen(first)).toBe(true);
   });
 
-  it("loadProfile fills the lists an older shard lacks on a copy", async () => {
+  it("loadProfile hands back the shard's own entry, frozen", async () => {
     const e = { ASSETS: fakeAssets } as unknown as Env;
-    // A shard entry written before the public records: no grants, alberta or us_carrier.
-    const older = await loadProfile(e, "emp-a000000002");
-    expect(older?.grants).toEqual([]);
-    expect(older?.alberta).toEqual([]);
-    expect(older?.us_carrier).toEqual([]);
-    expect(older?.grants_total).toBe(0);
     const shard = await loadJson<any>(e, "profiles/a00.json");
-    expect(shard["emp-a000000002"].grants).toBeUndefined();
-    const p = await loadProfile(e, "emp-a000000001");
-    expect(p?.grants_total).toBe(3);
-    expect(p?.employer).toBe(shard["emp-a000000001"].employer);
+    const p = await loadProfile(e, "org-a000000001");
+    expect(p).toBe(shard["org-a000000001"]);
+    expect(Object.isFrozen(p?.contracts)).toBe(true);
   });
 
   it("pages share the kept stats.json across requests", async () => {

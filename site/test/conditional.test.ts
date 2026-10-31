@@ -37,7 +37,7 @@ describe("If-None-Match", () => {
 
 describe("conditional pages", () => {
   it("answers a page's own ETag with an empty 304", async () => {
-    const first = await get("/employers/emp-a000000005");
+    const first = await get("/organizations/org-a000000001");
     expect(first.status).toBe(200);
     const etag = first.headers.get("etag") ?? "";
     expect(etag).toMatch(/^W\/"[0-9a-f]{40}"$/);
@@ -46,7 +46,7 @@ describe("conditional pages", () => {
     expect(first.headers.get("content-type")).toContain("text/html");
 
     for (const header of [etag, etag.slice(2), `"other", ${etag}`, "*"]) {
-      const again = await get("/employers/emp-a000000005", { "if-none-match": header });
+      const again = await get("/organizations/org-a000000001", { "if-none-match": header });
       expect(again.status, header).toBe(304);
       expect(await again.text(), header).toBe("");
       expect(again.headers.get("etag")).toBe(etag);
@@ -65,20 +65,20 @@ describe("conditional pages", () => {
   });
 
   it("gives the English and French renderings of one URL different tags", async () => {
-    const en = await get("/employers/emp-a000000005");
-    const fr = await get("/employers/emp-a000000005", { cookie: "lang=fr" });
+    const en = await get("/organizations/org-a000000001");
+    const fr = await get("/organizations/org-a000000001", { cookie: "lang=fr" });
     const enTag = en.headers.get("etag");
     const frTag = fr.headers.get("etag");
     expect(enTag).toBeTruthy();
     expect(frTag).toBeTruthy();
     expect(frTag).not.toBe(enTag);
     // A browser holding the English page that switched to French gets the French page, not a 304.
-    const switched = await get("/employers/emp-a000000005", { cookie: "lang=fr", "if-none-match": enTag! });
+    const switched = await get("/organizations/org-a000000001", { cookie: "lang=fr", "if-none-match": enTag! });
     expect(switched.status).toBe(200);
-    expect(await switched.text()).toContain("Employeur");
+    expect(await switched.text()).toContain("Avis d’attribution");
     // The language cookie a ?lang= visit sets rides on the 304 as well.
-    const queryTag = (await get("/employers/emp-a000000005?lang=fr")).headers.get("etag")!;
-    const query = await get("/employers/emp-a000000005?lang=fr", { "if-none-match": queryTag });
+    const queryTag = (await get("/organizations/org-a000000001?lang=fr")).headers.get("etag")!;
+    const query = await get("/organizations/org-a000000001?lang=fr", { "if-none-match": queryTag });
     expect(query.status).toBe(304);
     expect(query.headers.get("set-cookie")).toContain("lang=fr");
   });
@@ -98,14 +98,14 @@ describe("conditional pages", () => {
     const missing = await get("/nowhere");
     expect(missing.status).toBe(404);
     expect(missing.headers.get("etag")).toBeNull();
-    const unknown = await get("/employers/emp-ffffffffff", { "if-none-match": "*" });
+    const unknown = await get("/organizations/org-ffffffffff", { "if-none-match": "*" });
     expect(unknown.status).toBe(404);
     expect(unknown.headers.get("etag")).toBeNull();
 
     const post = await request("/corrections", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", "if-none-match": "*" },
-      body: new URLSearchParams({ record_ref: "emp-a000000002", request: "The street address on this profile is out of date." }).toString(),
+      body: new URLSearchParams({ page: "/organizations/org-a000000002", text: "The city on this profile is out of date." }).toString(),
     });
     expect(post.status).toBe(200);
     expect(post.headers.get("content-type")).toContain("text/html");

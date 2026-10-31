@@ -46,7 +46,7 @@ export const HowToCite: FC<{ lang: Lang; citation: Citation | null | undefined; 
       <p>{t(lang, "cite.text")}</p>
       <p style="overflow-wrap:anywhere">
         {tj(lang, "cite.reference", {
-          author: "LMIA Watch",
+          author: SITE_NAME,
           year: year || (lang === "fr" ? "s.d." : "n.d."),
           title: <cite>{c.title}</cite>,
           version: c.version ?? "",
@@ -152,7 +152,7 @@ export function websiteCitations(lang: Lang, dataAsOf: string, accessed: string)
     // The double braces keep the author whole (not "Watch, L.") and the title's capitals as written.
     {
       style: "bibtex",
-      body: bibtex("misc", `lmiawatch${year}`, [
+      body: bibtex("misc", `awardwatch${year}`, [
         ["author", `{${author}}`],
         ["title", `{${tex(title)}}`],
         ["year", year],
@@ -179,7 +179,7 @@ export function websiteCitations(lang: Lang, dataAsOf: string, accessed: string)
 export function datasetBibtex(c: Citation): string {
   const doi = citationDoi(c);
   const year = citationYear(c);
-  return bibtex("dataset", `lmiawatch${/^\d{4}$/.test(year) ? year : ""}data`, [
+  return bibtex("dataset", `awardwatch${/^\d{4}$/.test(year) ? year : ""}data`, [
     ["author", `{${SITE_NAME}}`],
     ["title", `{${tex(plain(c.title))}}`],
     ["year", tex(year)],

@@ -42,10 +42,9 @@ export async function applySql(db: D1Database, sql: string): Promise<void> {
 }
 
 beforeAll(async () => {
-  const e = env as unknown as { DB: D1Database; SEARCH: D1Database; SCHEMA_SQL: string; SEED_SQL: string; SEARCH_SCHEMA_SQL: string };
+  const e = env as unknown as { DB: D1Database; SCHEMA_SQL: string; SEED_SQL: string };
+  // The whole schema, as the local development database gets it: the forms
+  // tables are the ones the site writes, the rest are never read here.
   await applySql(e.DB, e.SCHEMA_SQL);
   await applySql(e.DB, e.SEED_SQL);
-  // The search database with its real indexes, full-text index and triggers;
-  // test/search_api.test.ts fills it.
-  await applySql(e.SEARCH, e.SEARCH_SCHEMA_SQL);
 });

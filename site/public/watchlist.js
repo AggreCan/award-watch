@@ -1,16 +1,15 @@
-/* Watchlist: the Watch button on an employer profile and the /watchlist page.
+/* Watchlist: the Watch button on an organization profile and the /watchlist page.
 
-   The list is a set of employer IDs kept in this browser's localStorage and
-   nowhere else; nothing about it is sent to the site. The page reads each
-   watched employer from the same profile shard the profile page uses
+   The list is a set of organization IDs kept in this browser's localStorage
+   and nowhere else; nothing about it is sent to the site. The page reads each
+   watched organization from the same profile shard the profile page uses
    (/data/profiles/<id characters 5 to 7>.json, a static file), so it shows
    nothing the profile does not show.
 
    What changed since the last visit is found by comparing counts: each load
-   stores a small snapshot per employer (postings, Approved LMIA flags, list
-   rows on each list, findings, status). A visit ends after an hour without
-   opening the page; until then a reload keeps the same baseline, so the marks
-   do not vanish on refresh.
+   stores a small snapshot per organization (its rows in each of the five
+   sources). A visit ends after an hour without opening the page; until then
+   a reload keeps the same baseline, so the marks do not vanish on refresh.
 
    Every storage call sits in try/catch, as in theme.js: a private window or
    blocked storage leaves the button hidden and the page says why. Every word
@@ -22,8 +21,8 @@
   var VISIT_KEY = "watchlist-visit";
   var VISIT_GAP_MS = 60 * 60 * 1000;
   var CONCURRENCY = 4;
-  var CODE_PREFIX = "lw1.";
-  var ID_RE = /^emp-[0-9a-f]{10}$/;
+  var CODE_PREFIX = "aw1.";
+  var ID_RE = /^org-[0-9a-f]{10}$/;
 
   // -- storage ---------------------------------------------------------------
 
@@ -60,12 +59,12 @@
 
   var toggle = document.getElementById("watch-toggle");
   if (toggle) {
-    var employer = toggle.getAttribute("data-employer") || "";
+    var organization = toggle.getAttribute("data-organization") || "";
     var maxOnProfile = Number(toggle.getAttribute("data-max")) || 100;
-    if (ID_RE.test(employer) && storageOk()) {
+    if (ID_RE.test(organization) && storageOk()) {
       var paint = function () {
         var list = readList();
-        var on = list.indexOf(employer) >= 0;
+        var on = list.indexOf(organization) >= 0;
         var full = !on && list.length >= maxOnProfile;
         toggle.setAttribute("aria-pressed", on ? "true" : "false");
         toggle.textContent = toggle.getAttribute(on ? "data-label-on" : full ? "data-label-full" : "data-label-off") || "";
@@ -74,9 +73,9 @@
       };
       toggle.addEventListener("click", function () {
         var list = readList();
-        var at = list.indexOf(employer);
+        var at = list.indexOf(organization);
         if (at >= 0) list.splice(at, 1);
-        else if (list.length < maxOnProfile) list.unshift(employer);
+        else if (list.length < maxOnProfile) list.unshift(organization);
         writeList(list);
         paint();
       });
@@ -133,15 +132,11 @@
     var pad = function (v) { return (v < 10 ? "0" : "") + v; };
     return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
   }
-  function statusLabel(status) {
-    var key = "status." + status;
-    return STRINGS[key] != null ? tx(key) : tx("status.none");
-  }
 
   // -- export and import codes -----------------------------------------------
-  // lw1. then base64url of five bytes per ID (its ten hex digits) and a
+  // aw1. then base64url of five bytes per ID (its ten hex digits) and a
   // checksum byte, so a list of ten is about seventy characters. Import also
-  // takes any text holding employer IDs, such as pasted profile links.
+  // takes any text holding organization IDs, such as pasted profile links.
 
   function encode(list) {
     var bytes = [];
@@ -156,10 +151,10 @@
     return CODE_PREFIX + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   }
   function decode(text) {
-    var found = (text || "").toLowerCase().match(/emp-[0-9a-f]{10}/g);
+    var found = (text || "").toLowerCase().match(/org-[0-9a-f]{10}/g);
     if (found) return clean(found);
     var compact = (text || "").replace(/\s+/g, "");
-    var m = /lw1\.([A-Za-z0-9_-]+)/.exec(compact);
+    var m = /aw1\.([A-Za-z0-9_-]+)/.exec(compact);
     if (!m) return [];
     var b64 = m[1].replace(/-/g, "+").replace(/_/g, "/");
     while (b64.length % 4) b64 += "=";
@@ -173,41 +168,41 @@
     for (var j = 0; j < bin.length - 1; j += 5) {
       var hex = "";
       for (var k = j; k < j + 5; k++) hex += (bin.charCodeAt(k) < 16 ? "0" : "") + bin.charCodeAt(k).toString(16);
-      ids.push("emp-" + hex);
+      ids.push("org-" + hex);
     }
     return clean(ids);
   }
 
   // -- snapshots and marks ----------------------------------------------------
 
-  function snapshot(p) {
-    var approvedFlags = 0, positive = 0, negative = 0;
-    p.postings.forEach(function (x) { if (x && x.approved_seen_at) approvedFlags += 1; });
-    p.esdc.forEach(function (x) { if (x && x.list === "positive") positive += 1; else negative += 1; });
-    return { p: p.postings.length, a: approvedFlags, y: positive, n: negative, f: p.findings.length, s: p.employer.current_status };
-  }
-  var MARKS = [
-    ["p", "watch.new_postings_one", "watch.new_postings_many"],
-    ["a", "watch.new_approved_one", "watch.new_approved_many"],
-    ["y", "watch.new_positive_one", "watch.new_positive_many"],
-    ["n", "watch.new_negative_one", "watch.new_negative_many"],
-    ["f", "watch.new_findings_one", "watch.new_findings_many"],
+  // The organization's row count in each source; the profile's own totals,
+  // so a list that the export cuts to its newest rows still counts in full.
+  var SOURCES = [
+    ["a", "n_awards", "watch.new_awards_one", "watch.new_awards_many"],
+    ["h", "n_history", "watch.new_history_one", "watch.new_history_many"],
+    ["c", "n_contracts", "watch.new_contracts_one", "watch.new_contracts_many"],
+    ["g", "n_grants", "watch.new_grants_one", "watch.new_grants_many"],
+    ["l", "n_lobbying", "watch.new_lobbying_one", "watch.new_lobbying_many"],
   ];
+  function snapshot(p) {
+    var snap = {};
+    SOURCES.forEach(function (s) { snap[s[0]] = Number(p.organization[s[1]]) || 0; });
+    return snap;
+  }
   function marks(now, before) {
     var out = [];
-    MARKS.forEach(function (m) {
+    SOURCES.forEach(function (m) {
       var diff = (now[m[0]] || 0) - (before[m[0]] || 0);
-      if (diff > 0) out.push(txn(m[1], m[2], diff, { n: num(diff) }));
+      if (diff > 0) out.push(txn(m[2], m[3], diff, { n: num(diff) }));
     });
-    if (before.s && now.s !== before.s) out.push(tx("watch.status_was", { status: statusLabel(before.s) }));
     return out;
   }
 
   // -- loading ----------------------------------------------------------------
 
   function validProfile(p) {
-    return p && typeof p === "object" && p.employer && typeof p.employer === "object" &&
-      Array.isArray(p.postings) && Array.isArray(p.esdc) && Array.isArray(p.findings);
+    return p && typeof p === "object" && p.organization && typeof p.organization === "object" &&
+      typeof p.organization.display_name === "string";
   }
   // Each shard is fetched once, a few at a time. The result per ID is a
   // profile, "missing" (the shard has no such ID) or "failed" (no answer).
@@ -280,10 +275,6 @@
     return td;
   }
 
-  function positionsText(n) {
-    return " " + txn("employer.positions_paren_one", "employer.positions_paren_many", n, { n: num(n) });
-  }
-
   // A cell whose content is one element: on a phone each row restacks as a
   // grid, where every child of a cell would take a grid slot of its own.
   function boxed(tr, label, cls) {
@@ -293,26 +284,19 @@
   }
 
   function profileRow(id, p, found) {
-    var e = p.employer;
+    var o = p.organization;
     var tr = el("tr");
-    var name = e.display_name || id;
-    var who = boxed(tr, "col.employer");
+    var name = o.display_name || id;
+    var who = boxed(tr, "col.organization");
     var link = el("a", null, name);
-    link.href = "/employers/" + id;
+    link.href = "/organizations/" + id;
     who.appendChild(link);
-    var place = [e.city, e.province].filter(Boolean).join(", ");
+    var place = [o.city, o.province].filter(Boolean).join(", ");
     if (place) { who.appendChild(document.createElement("br")); who.appendChild(el("span", "muted small", place)); }
-    var st = cell(tr, "col.status");
-    st.appendChild(el("span", "badge badge-" + (STRINGS["status." + e.current_status] != null ? e.current_status : "none"), statusLabel(e.current_status)));
-    cell(tr, "employer.pending_postings", "mono num").textContent = num(e.pending_count);
-    var ap = boxed(tr, "employer.approved_lmias", "mono num");
-    ap.textContent = num(e.approved_lmias);
-    ap.appendChild(el("span", "muted", positionsText(e.approved_positions || 0)));
-    var rf = boxed(tr, "employer.refused_lmias", "mono num");
-    rf.textContent = num(e.refused_lmias);
-    rf.appendChild(el("span", "muted", positionsText(e.refused_positions || 0)));
-    cell(tr, "employer.findings_count", "mono num").textContent = num(e.finding_count);
-    cell(tr, "watch.col_latest", "mono").textContent = e.last_seen || "";
+    ["awards", "history", "contracts", "grants", "lobbying"].forEach(function (s) {
+      cell(tr, "source." + s, "mono num").textContent = num(o["n_" + s]);
+    });
+    cell(tr, "watch.col_latest", "mono").textContent = o.last_seen || "";
     if (found.first) {
       // No earlier visit to compare with: nothing to mark yet. The cell stays
       // empty, so a phone's restacked row leaves it out.
@@ -334,7 +318,7 @@
 
   function problemRow(id, message) {
     var tr = el("tr");
-    cell(tr, "col.employer").appendChild(el("span", "mono id", id));
+    cell(tr, "col.organization").appendChild(el("span", "mono id", id));
     var td = cell(tr, "watch.col_new", "muted");
     td.colSpan = 7;
     td.textContent = message;
@@ -378,9 +362,9 @@
         snap[id] = now2;
         var found = { first: !base, added: !!base && !base[id], marks: base && base[id] ? marks(now2, base[id]) : [] };
         var changed = found.added || found.marks.length > 0;
-        rows.push({ order: order, rank: changed ? 0 : 1, name: (r.employer.display_name || id).toLowerCase(), tr: profileRow(id, r, found) });
+        rows.push({ order: order, rank: changed ? 0 : 1, name: (r.organization.display_name || id).toLowerCase(), tr: profileRow(id, r, found) });
       });
-      // Changed employers first, then the rest by name; problems last, in list order.
+      // Changed organizations first, then the rest by name; problems last, in list order.
       rows.sort(function (a, b) {
         if (a.rank !== b.rank) return a.rank - b.rank;
         if (a.rank === 2) return a.order - b.order;

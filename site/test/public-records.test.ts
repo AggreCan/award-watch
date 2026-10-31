@@ -1,182 +1,121 @@
-// The public records on a profile (federal funding, the Alberta employer
-// record, the US carrier record): rendered in both languages with how each was
-// matched, checked field by field like the rest of the profile, and credited
-// on the Data and Methodology pages. Values in the fixture are invented.
+// The organization profile's record sections: each of the five sources in
+// its own section, with its newest rows, its own totals and a link to the
+// government's record of each row; the figures by year with the
+// non-competitive share and what it is a share of; the published responses
+// and corrections from the forms database.
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
-import { fmtMoney, grantUrl, matchText, saferUrl } from "../src/pages/employer";
-import { fakeAssets, testEnv } from "./assets";
-import profiles from "./fixtures/profiles-a00.json";
+import { awardNoticeUrl, contractSearchUrl, grantUrl, lobbyUrl, tenderNoticeUrl } from "../src/pages/shared";
+import { testEnv } from "./assets";
 
-const ID = "emp-a000000001";
-const EM_DASH = String.fromCharCode(0x2014);
-const nbsp = (s: string) => s.replace(/[  ]/g, " ");
+const html = async (path: string) => (await app.request(path, {}, testEnv())).text();
+const nbsp = (s: string) => s.replace(/[\u00a0\u202f]/g, " ");
+const section = (page: string, id: string) => {
+  const start = page.indexOf(`<h2 id="${id}">`);
+  return page.slice(start, page.indexOf("<h2 id=", start + 1));
+};
 
-let address = 1;
-const get = (path: string, assets: Fetcher = fakeAssets) =>
-  app.request(path, { headers: { "cf-connecting-ip": `198.51.100.${address++ % 250}` } }, testEnv(assets));
-
-function shardWith(edit: (p: any) => void): Fetcher {
-  const shard = JSON.parse(JSON.stringify(profiles));
-  edit(shard[ID]);
-  return {
-    fetch: async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      if (new URL(url).pathname === "/data/profiles/a00.json") return new Response(JSON.stringify(shard));
-      return fakeAssets.fetch(input as Request);
-    },
-  } as unknown as Fetcher;
-}
-
-describe("public records on the employer page", () => {
-  it("shows federal funding newest first, each with its match and record link, and counts the rest", async () => {
-    const res = await get(`/employers/${ID}`);
-    expect(res.status).toBe(200);
-    const html = await res.text();
-    const grants = html.slice(html.indexOf('<section id="grants">'), html.indexOf("</section>", html.indexOf('<section id="grants">')));
-    expect(grants).toContain("<h2>Federal Funding Received</h2>");
-    expect(grants).toContain("matched to this employer by the business number of its federal corporation or by name and postal area");
-    expect(grants).toContain("A match is not an identity");
-    expect(grants.indexOf("2025-05-01")).toBeLessThan(grants.indexOf("2023-09-14"));
-    expect(grants).toContain("Canada Summer Jobs");
-    expect(grants).toContain("Employment and Social Development Canada");
-    expect(grants).toContain("$48,500");
-    expect(grants).toContain("Exact match (name and postal area)");
-    expect(grants).toContain("Probable match (name and province)");
-    expect(grants).toContain('href="https://search.open.canada.ca/grants/record/pacifican%2CPAC%202023%20117%2Ccurrent"');
-    expect(grants).toContain("1 older matched agreement is not listed here.");
-    expect(grants).toContain('href="https://open.canada.ca/data/en/dataset/432527ab-7aac-45b5-81d6-7597107a7013"');
-    expect(html).not.toContain(EM_DASH);
+describe("organization profile", () => {
+  it("names the organization, its other spellings, its places, its registry match and its record span", async () => {
+    const page = await html("/organizations/org-a000000001");
+    expect(page).toContain("<h1>Exemplar Translation Services Inc.</h1>");
+    expect(page).toContain('<p class="lead">Ottawa, Ontario</p>');
+    expect(page).toContain("Also recorded as: EXEMPLAR TRANSLATION SERVICES INC");
+    expect(page).toContain("Records from 2024-03-04 to 2026-09-15. Business number 000000001.");
+    expect(page).toContain("Gatineau, Quebec");
+    expect(page).toContain("Records under this name at 2 addresses.");
+    expect(page).toContain("EXEMPLAR TRANSLATION SERVICES INC. <span class=\"mono\">0000001</span>, Active, registered 2009-05-01");
+    expect(page).toContain("Exact name match");
+    // One address: no note about shared names.
+    expect(await html("/organizations/org-a000000002")).not.toContain("Records under this name at");
   });
 
-  it("shows the Alberta record and the US carrier record near the registry card", async () => {
-    const html = await (await get(`/employers/${ID}`)).text();
-    const cards = html.slice(html.indexOf('id="public-records"'), html.indexOf("<h2>Indicators</h2>"));
-    expect(html.indexOf('id="public-records"')).toBeGreaterThan(html.indexOf("<h2>Registry</h2>"));
-    expect(cards).toContain("<h2>Alberta Employer Record</h2>");
-    expect(cards).toContain("This is Alberta&#39;s record of the employer as a workers&#39; compensation account, matched by name and city.");
-    expect(cards).toContain("PINKCLOUD CLEANING &amp; HOME SERVICES LTD.");
-    expect(cards).toContain("2024 (on file since 2020)");
-    expect(cards).toContain("48.53 (full-time equivalents)");
-    expect(cards).toContain("1 (2.06 per 100 person-years)");
-    expect(cards).toContain("2 (4.12 per 100 person-years)");
-    expect(cards).toContain("Not given in this release");
-    expect(cards).toContain("Exact match (name and city)");
-    expect(cards).toContain('href="https://open.alberta.ca/opendata/employer-records"');
-    expect(cards).toContain("<h2>US Carrier Record</h2>");
-    expect(cards).toContain("PINKCLOUD CLEANING &amp; HOME SERVICES LTD, doing business as PINKCLOUD HAULING");
-    expect(cards).toContain("Satisfactory, rated 2019-06-11");
-    expect(cards).toContain("2026-04-21 (latest census update)");
-    expect(cards).toContain("Exact match (name and postal code)");
-    expect(cards).toContain(`href="${saferUrl(3000001).replace(/&/g, "&amp;")}"`);
+  it("shows one tile per source, in short form, and says the sources are never added", async () => {
+    const page = await html("/organizations/org-a000000001");
+    expect(page).toContain('<span class="tile-label">Published contracts</span><span class="tile-value">$1.9M</span><span class="tile-note">101 records</span>');
+    expect(page).toContain('<span class="tile-label">Award notices</span><span class="tile-value">$250,000</span><span class="tile-note">1 record</span>');
+    expect(page).toContain("the figures are never added together.");
+    expect(page).not.toMatch(/Total across|Grand total/);
   });
 
-  it("says the same in French", async () => {
-    const html = nbsp(await (await get(`/employers/${ID}?lang=fr`)).text());
-    expect(html).toContain("<h2>Financement fédéral reçu</h2>");
-    expect(html).toContain("Une correspondance n’est pas une identité");
-    expect(html).toContain("Emplois d&#39;été Canada");
-    // A program with no French name shows the English one.
-    expect(html).toContain("Business Scale-up and Productivity");
-    expect(html).toContain("Développement économique Canada pour le Pacifique");
-    expect(html).toContain("48 500 $");
-    expect(html).toContain("Correspondance exacte (nom et secteur postal)");
-    expect(html).toContain("1 accord jumelé plus ancien n’est pas affiché ici.");
-    expect(html).toContain("<h2>Dossier d’employeur de l’Alberta</h2>");
-    expect(html).toContain("Il s’agit du dossier que tient l’Alberta sur l’employeur en tant que compte d’indemnisation des accidents du travail, jumelé par le nom et la ville.");
-    expect(html).toContain("48,53 (équivalents temps plein)");
-    expect(html).toContain("1 (2,06 par 100 années-personnes)");
-    expect(html).toContain("<h2>Dossier de transporteur aux États-Unis</h2>");
-    expect(html).toContain("Satisfaisante, cote du 2019-06-11");
-    expect(html).not.toContain("Federal Funding Received");
-    expect(html).not.toContain(EM_DASH);
+  it("gives the figures by year with the non-competitive share and what it is a share of", async () => {
+    const page = await html("/organizations/org-a000000001");
+    const years = section(page, "years");
+    expect(years).toContain('<td data-label="Non-competitive, by count" class="mono num">3 of 60 (5%)</td>');
+    expect(years).toContain('<td data-label="Non-competitive, by value" class="mono num">$54,000 of $1,100,000 (5%)</td>');
+    expect(years).toContain('<td data-label="Non-competitive, by count" class="mono num">0 of 41 (0%)</td>');
+    expect(years).toContain('class="chart-stack"');
+    const grants = section(await html("/organizations/org-a000000002"), "years");
+    expect(grants).toContain('<td data-label="Non-competitive, by count" class="mono num">Not applicable</td>');
   });
 
-  it("leaves the sections out of a profile without records, and of a shard written before the sources", async () => {
-    for (const id of ["emp-a000000005", "emp-a000000002"]) {
-      const res = await get(`/employers/${id}`);
-      expect(res.status, id).toBe(200);
-      const html = await res.text();
-      expect(html).not.toContain("Federal Funding Received");
-      expect(html).not.toContain('id="public-records"');
-    }
-    const api = (await (await get("/api/employers/emp-a000000002")).json()) as Record<string, unknown>;
-    expect([api.grants, api.grants_total, api.alberta, api.us_carrier]).toEqual([[], 0, [], []]);
+  it("lists the newest rows of each source with a link to the record, and where the rest are", async () => {
+    const page = await html("/organizations/org-a000000001");
+    const awards = section(page, "awards");
+    expect(awards).toContain('<a href="/awards/cb-400-40000004">Translation standing offer, official languages</a>');
+    expect(awards).toContain('<a href="/buyers/pwgsc-tpsgc">Public Services and Procurement Canada</a>');
+    expect(awards).toContain('<span class="flag flag-yes" title="The source records the contract as awarded through a competition');
+    const contracts = section(page, "contracts");
+    expect(contracts.match(/<tr>/g)?.length).toBe(101);
+    expect(contracts).toContain(`<a href="${contractSearchUrl("C-2026-000")}" class="mono" rel="nofollow noopener">C-2026-000</a>`);
+    expect(contracts).toContain("Value as last reported: $36,001");
+    expect(contracts).toContain('<span class="flag flag-unstated" title="The source leaves the procurement method blank for this record.">Method not stated</span>');
+    expect(contracts).toContain('Showing the newest 100 of 101 rows; the other one is in <a href="https://open.canada.ca/data/en/dataset/d8f85d91-7dec-4fd1-8055-483b77225d8b">the publisher&#39;s file</a>.');
+    expect(contracts).toContain("1 row in another currency is shown with its currency and left out of the totals.");
+    const lobbying = section(page, "lobbying");
+    expect(lobbying).toContain("Example Officeholder, Assistant Deputy Minister, Public Services and Procurement Canada (PSPC)");
+    expect(lobbying).toContain(`<a href="${lobbyUrl("500001")}" class="mono" rel="nofollow noopener">500001</a>`);
+    expect(section(page, "history")).toContain("No PSPC contract history record names this organization.");
+    expect(section(page, "grants")).toContain("No grant or contribution agreement names this organization.");
+
+    const two = await html("/organizations/org-a000000002");
+    const history = section(two, "history");
+    expect(history).toContain('<a href="/history/w8472-000633">Vessel refit, mid-shore patrol</a>');
+    expect(history).toContain("<th>Client department</th>");
+    expect(history).toContain('<span class="flag flag-no" title="The source&#39;s own term for a contract awarded without a competition');
+    const grants = section(two, "grants");
+    expect(grants).toContain(`<a href="${grantUrl("dfo-mpo", "GC-2025-0099")}" class="mono" rel="nofollow noopener">GC-2025-0099</a>`);
+    expect(grants).toContain("Small Craft Harbours");
+    expect(grants).toContain(">Contribution</td>");
+    // A cancelled notice is marked as such where it is listed.
+    expect(section(two, "awards")).toContain('<span class="badge badge-cancelled">Cancelled</span>');
   });
 
-  it("treats a profile with an unreadable record as missing; null where the export writes it is fine", async () => {
-    const bad: [string, (p: any) => void][] = [
-      ["grant value text", (p) => { p.grants[0].agreement_value = "48500"; }],
-      ["grant ref null", (p) => { p.grants[0].ref_number = null; }],
-      ["grant grade removed", (p) => { delete p.grants[0].grade; }],
-      ["grants not a list", (p) => { p.grants = {}; }],
-      ["grants_total text", (p) => { p.grants_total = "3"; }],
-      ["alberta year null", (p) => { p.alberta[0].year = null; }],
-      ["alberta claims text", (p) => { p.alberta[0].lost_time_claims = "1"; }],
-      ["carrier dot text", (p) => { p.us_carrier[0].dot_number = "3000001"; }],
-      ["carrier element null", (p) => { p.us_carrier = [null]; }],
-    ];
-    for (const [label, edit] of bad) {
-      for (const path of [`/employers/${ID}`, `/api/employers/${ID}`]) {
-        expect((await get(path, shardWith(edit))).status, `${path} ${label}`).toBe(404);
-      }
-    }
-    const nulls = shardWith((p) => {
-      Object.assign(p.grants[0], { department_en: null, department_fr: null, program_en: null, program_fr: null, agreement_value: null, start_date: null, end_date: null, agreement_type: null });
-      Object.assign(p.alberta[0], { first_year: null, city: null, industry: null, person_years: null, lost_time_claims: null, lost_time_rate: null, disabling_injuries: null, disabling_rate: null, fatalities: null, cor_year: 2023, trade_name: null });
-      Object.assign(p.us_carrier[0], { dba_name: null, city: null, province: null, postal_code: null, status: null, power_units: null, drivers: null, safety_rating: null, safety_rating_date: null, record_date: null });
-      p.grants_total = 1;
-    });
-    const res = await get(`/employers/${ID}`, nulls);
-    expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain("Held in 2023");
-    expect(html).toContain("Not rated");
-    expect(html).toContain("esdc-edsc");
-    // A count below the agreements listed is read as the agreements listed.
-    expect(html).not.toContain("older matched agreement");
+  it("lists the main buyers per source", async () => {
+    const buyers = section(await html("/organizations/org-a000000001"), "buyers");
+    expect(buyers).toContain('<a href="/buyers/dfo-mpo">Fisheries and Oceans Canada</a>');
+    expect(buyers).toContain('<td data-label="Value" class="mono num">$1,875,000</td>');
   });
 
-  it("formats and links as the source does", () => {
-    expect(grantUrl({ owner_org: "aafc-aac", ref_number: "235-2018-2019-Q3-00005" }))
-      .toBe("https://search.open.canada.ca/grants/record/aafc-aac%2C235-2018-2019-Q3-00005%2Ccurrent");
-    expect(fmtMoney(1461108, "en")).toBe("$1,461,108");
-    expect(nbsp(fmtMoney(1461108, "fr"))).toBe("1 461 108 $");
-    expect(fmtMoney(null, "en")).toBe("n/a");
-    expect(matchText("en", "probable", "business_number")).toBe("Probable match (business number of its federal corporation)");
-    expect(matchText("en", "exact", "unknown_basis")).toBe("Exact match");
+  it("shows only the published responses and corrections, with their dates", async () => {
+    const one = await html("/organizations/org-a000000001");
+    expect(section(one, "responses")).toContain("The 2026 standing offer covers translation services for three departments");
+    expect(section(one, "responses")).toContain("Received 2026-10-20");
+    expect(one).not.toContain("A second statement that is still under review.");
+    expect(one).not.toContain("office@example.invalid");
+    expect(section(one, "corrections")).toContain("No corrections to this profile so far.");
+    const two = await html("/organizations/org-a000000002");
+    expect(section(two, "corrections")).toContain("The city shown was the old head office");
+    expect(section(two, "responses")).toContain("The organization has not published a response.");
+  });
+
+  it("reads in French", async () => {
+    const page = nbsp(await html("/organizations/org-a000000002?lang=fr"));
+    expect(page).toContain("Historique des contrats de SPAC");
+    expect(page).toContain("Ports pour petits bateaux");
+    expect(page).toContain("Pêches et Océans Canada");
+    expect(page).toContain("Non concurrentiel");
+    expect(page).toContain("1 sur 1 (100 %)");
+    expect(page).toContain("Sans objet");
   });
 });
 
-describe("the sources are credited", () => {
-  const licence = (html: string) => html.slice(html.indexOf('<h2 id="licence">'), html.indexOf('<h2 id="changelog">'));
-
-  it("on the Data page, with a licence row and a link each", async () => {
-    const lic = licence(await (await get("/data")).text());
-    expect(lic).toContain("Federal grants and contributions on profiles and in the API");
-    expect(lic).toContain("Alberta workers&#39; compensation figures on profiles and in the API");
-    expect(lic).toContain('<a href="https://open.alberta.ca/licence">Open Government Licence, Alberta</a>: reuse, commercial or not, with attribution. Contains information licensed under the Open Government Licence, Alberta.');
-    expect(lic).toContain("US carrier records on profiles and in the API");
-    expect(lic).toContain("A work of the United States government, in the public domain.");
-    expect(lic).toContain('<a href="https://open.canada.ca/data/en/dataset/432527ab-7aac-45b5-81d6-7597107a7013">disclosure of federal grants and contributions</a>');
-    expect(lic).toContain('<a href="https://open.alberta.ca/opendata/employer-records">Alberta Employer Records</a>');
-    expect(lic).toContain('<a href="https://data.transportation.gov/d/az4n-8mr2">US FMCSA Company Census</a>');
-    expect(lic).toContain("None of them feeds the indicators.");
-    const fr = nbsp(licence(await (await get("/data?lang=fr")).text()));
-    expect(fr).toContain("Subventions et contributions fédérales dans les profils et l’API");
-    expect(fr).toContain("Œuvre du gouvernement des États-Unis, dans le domaine public.");
-    expect(fr).toContain("Aucun n’entre dans les indicateurs.");
-  });
-
-  it("on the Methodology page, with a source row each and the matching rule", async () => {
-    const html = await (await get("/methodology")).text();
-    expect(html).toContain("Proactive Disclosure of Grants and Contributions (federal departments, open.canada.ca)");
-    expect(html).toContain("Alberta Employer Records (Alberta Jobs, Economy, Trade and Immigration, open.alberta.ca)");
-    expect(html).toContain("US FMCSA Company Census (data.transportation.gov)");
-    // Grants, Alberta, FMCSA, and the designated-employer lists.
-    expect(html.split("Shown on profiles only; not used by the indicators").length - 1).toBe(4);
-    expect(html).toContain("A name alone never matches");
-    const fr = nbsp(await (await get("/methodology?lang=fr")).text());
-    expect(fr).toContain("Un nom seul ne suffit jamais");
+describe("record links", () => {
+  it("are built the way each publisher's own pages are", () => {
+    expect(tenderNoticeUrl("CB-100-10000001")).toBe("https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-100-10000001");
+    expect(awardNoticeUrl("cb-400-40000004")).toBe("https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cb-400-40000004");
+    expect(grantUrl("dfo-mpo", "GC 1")).toBe("https://search.open.canada.ca/grants/record/dfo-mpo%2CGC%201%2Ccurrent");
+    expect(contractSearchUrl("C-1&x")).toBe("https://search.open.canada.ca/contracts/?search_text=C-1%26x");
+    expect(lobbyUrl("5 1")).toBe("https://lobbycanada.gc.ca/app/secure/ocl/lrs/do/cmmLgPblcVw?comlogId=5%201");
   });
 });

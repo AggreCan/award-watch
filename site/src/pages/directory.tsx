@@ -1,69 +1,65 @@
-// The employer directory: for each province and territory, an A to Z list of
-// every employer with a profile there, 200 to a page, at /places/<pp>/employers
-// (page 1) and /places/<pp>/employers/<n>; /places/other/employers lists the
-// employers with a head office outside Canada or no province. A profile's
-// other inbound links are its sitemap entry and the related lists of a few
-// other profiles, so this is the link every profile can count on.
+// /organizations: the directory's front page, one entry per province and
+// territory plus addresses outside Canada (xx) and records with no usable
+// address (un). /organizations/directory/:code[/:n]: that directory A to Z,
+// 200 to a page. Until hosted search ships, this is how a reader finds an
+// organization that no tender, award, buyer or ranking page lists.
 //
-// A page reads two small files the nightly export writes
-// (pipeline/pmw_pipeline/directory.py): the directory's index (counts, each
-// page's first and last name, the page on which each initial starts) and the
-// page's own rows. directory/index.json sums every directory for the links on
-// the place pages.
+// A page reads two small files the export writes: the directory's index
+// (counts, each page's first and last name, the page on which each initial
+// starts) and the page's own rows.
 
 import type { Context } from "hono";
-import { EMPLOYER_ID_RE, loadJson, loadStats } from "../data";
-import { DIRECTORY_CODES, OTHER, directoryPath } from "../crosslinks";
+import { DIRECTORY_CODES } from "../constants";
+import { directoryPath, loadDirectories } from "../crosslinks";
+import { loadDirectoryPage, loadDirectoryPart, loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, provinceName, t, type Lang } from "../i18n";
-import { Layout, noDataPage, page } from "../layout";
-import { canonicalUrl } from "../seo";
-import { isListOf, isNum, isObj, isStr, isStrOrNull, optional } from "../valid";
-import { lowerRedirect, notFound, sectionSeo, tuple } from "./places";
+import { fmtInt, t, tn } from "../i18n";
+import { Breadcrumb, Layout, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
+import { canonicalUrl, pageSeo, sectionSeo } from "../seo";
+import { directoryName } from "./organization";
 
-// -- files --------------------------------------------------------------------------
-
-export interface DirectoryRow { id: string; name: string; city: string | null; records: number; prov?: string | null }
-
-interface DirectoryIndex {
-  code: string; employers: number; pages: number; page_size: number;
-  ranges: [string, string][]; letters: [string, number][]; updated: string | null;
-}
-
-const isCount = (v: unknown): v is number => isNum(v) && Number.isInteger(v) && v >= 0;
-
-// A row is rendered as a link to the profile, so its id must be an employer id.
-const isRow = (v: unknown): v is DirectoryRow => isObj(v) && isStr(v.id) && EMPLOYER_ID_RE.test(v.id) && isStr(v.name) &&
-  isStrOrNull(v.city) && isCount(v.records) && optional(v.prov, isStrOrNull);
-
-function isIndex(v: unknown, code: string): v is DirectoryIndex {
-  if (!isObj(v) || v.code !== code || !isCount(v.employers) || !isCount(v.pages) || !isCount(v.page_size) || !isStrOrNull(v.updated)) return false;
-  const pages = v.pages;
-  return isListOf(v.ranges, (r) => tuple(r, isStr, isStr)) && v.ranges.length === pages &&
-    isListOf(v.letters, (l) => tuple(l, isStr, (n) => isCount(n) && n >= 1 && n <= pages));
-}
-
-const isPage = (v: unknown, code: string, n: number): v is { rows: DirectoryRow[] } =>
-  isObj(v) && v.code === code && v.page === n && isListOf(v.rows, isRow) && v.rows.length > 0;
-
-// -- the page -------------------------------------------------------------------------
-
-function where(lang: Lang, code: string): string {
-  return code === OTHER ? t(lang, "directory.other_name") : provinceName(lang, code.toUpperCase());
-}
-
-export function directoryHeading(lang: Lang, code: string): string {
-  return code === OTHER ? t(lang, "directory.heading_other") : t(lang, "directory.heading", { province: where(lang, code) });
-}
-
-function rowPlace(lang: Lang, code: string, row: DirectoryRow): string {
-  if (code !== OTHER) return row.city ?? "";
-  const prov = row.prov === "XX" ? provinceName(lang, "XX") : t(lang, "directory.no_province");
-  return [row.city, prov].filter(Boolean).join(", ");
+export async function organizationsIndex(c: Context<AppEnv>): Promise<Response> {
+  const lang = c.get("lang");
+  const stats = await loadStats(c.env);
+  const directories = stats ? await loadDirectories(c.env) : null;
+  if (!stats || !directories) return noDataPage(c, "directory.index_title");
+  const listed = DIRECTORY_CODES.map((code) => directories.get(code)).filter((d) => d !== undefined);
+  const total = listed.reduce((sum, d) => sum + d.organizations, 0);
+  return page(
+    c,
+    <Layout lang={lang} title={t(lang, "directory.index_title")} dataAsOf={stats.data_as_of} active="/organizations" seo={pageSeo("organizations", lang)}>
+      <h1>{t(lang, "directory.index_title")}</h1>
+      <p class="lead">{t(lang, "directory.index_lead", { n: fmtInt(total, lang) })}</p>
+      <p class="muted small">{t(lang, "directory.index_note")}</p>
+      <div class="table-wrap bordered narrow">
+        <table class="restack">
+          <thead>
+            <tr>
+              <th>{t(lang, "directory.col_place")}</th>
+              <th class="num">{t(lang, "directory.col_organizations")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {listed.map((d) => (
+              <tr>
+                <td data-label={t(lang, "directory.col_place")}>
+                  {d.pages > 0 ? <a href={directoryPath(d.code)}>{directoryName(lang, d.code)}</a> : directoryName(lang, d.code)}
+                </td>
+                <td data-label={t(lang, "directory.col_organizations")} class="mono num">{fmtInt(d.organizations, lang)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="top-gap">
+        <a href="/rankings">{t(lang, "directory.to_rankings")}</a> · <a href="/buyers">{t(lang, "directory.to_buyers")}</a>
+      </p>
+    </Layout>,
+  );
 }
 
 export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
-  const raw = c.req.param("prov") ?? "";
+  const raw = c.req.param("code") ?? "";
   const rawPage = c.req.param("page");
   const code = raw.toLowerCase();
   if (!DIRECTORY_CODES.includes(code)) return c.notFound();
@@ -76,54 +72,39 @@ export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
 
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
-  if (!stats) return noDataPage(c, "directory.crumb");
-  const idx = await loadJson<unknown>(c.env, `directory/${code}/index.json`);
-  if (!isIndex(idx, code)) return noDataPage(c, "directory.crumb");
+  if (!stats) return noDataPage(c, "directory.index_title");
+  const idx = await loadDirectoryPart(c.env, code);
+  if (!idx) return noDataPage(c, "directory.index_title");
   const fmt = (v: number) => fmtInt(v, lang);
-  const heading = directoryHeading(lang, code);
-  const placeName = where(lang, code);
-  const provHref = code === OTHER ? null : `/places/${code}`;
-  const places = t(lang, "places.index_title");
-  const lead = code === OTHER
-    ? t(lang, "directory.lead_other", { n: fmt(idx.employers), size: fmt(idx.page_size) })
-    : t(lang, "directory.lead", { province: placeName, n: fmt(idx.employers), size: fmt(idx.page_size) });
+  const place = directoryName(lang, code);
+  const heading = t(lang, "directory.heading", { place });
+  const crumbsBase = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "nav.organizations"), path: "/organizations" }];
 
-  // A province with no employer yet: the page says so and stays out of the index.
+  // A directory with nobody in it yet: the page says so and stays out of the index.
   if (idx.pages === 0) {
-    if (n !== 1) return notFound(c, lang, stats.data_as_of, "directory.not_found", directoryPath(code), "directory.back");
-    const none = code === OTHER ? t(lang, "directory.none_other") : t(lang, "directory.none", { province: placeName });
-    const crumbs = [
-      { name: t(lang, "common.home"), path: "/" }, { name: places, path: "/places" },
-      ...(provHref ? [{ name: placeName, path: provHref }] : []), { name: t(lang, "directory.crumb") },
-    ];
+    if (n !== 1) return notFoundPage(c, stats.data_as_of, "directory.not_found", directoryPath(code), "directory.back");
+    const none = t(lang, "directory.none", { place });
     return page(
       c,
-      <Layout lang={lang} title={heading} dataAsOf={stats.data_as_of} seo={sectionSeo(directoryPath(code), heading, none, crumbs, true)}>
-        <nav aria-label={t(lang, "employer.breadcrumb")} class="breadcrumb">
-          <a href="/">{t(lang, "common.home")}</a> / <a href="/places">{places}</a> /{" "}
-          {provHref ? <><a href={provHref}>{placeName}</a> / </> : null}{t(lang, "directory.crumb")}
-        </nav>
+      <Layout lang={lang} title={heading} dataAsOf={stats.data_as_of} active="/organizations"
+        seo={sectionSeo(directoryPath(code), heading, none, [...crumbsBase, { name: place }], true)}>
+        <Breadcrumb lang={lang} crumbs={[...crumbsBase, { name: place }]} />
         <h1>{heading}</h1>
         <p class="lead">{none}</p>
       </Layout>,
     );
   }
-  if (n > idx.pages) return notFound(c, lang, stats.data_as_of, "directory.not_found", directoryPath(code), "directory.back");
-  const file = await loadJson<unknown>(c.env, `directory/${code}/${n}.json`);
-  if (!isPage(file, code, n)) return noDataPage(c, "directory.crumb");
+  if (n > idx.pages) return notFoundPage(c, stats.data_as_of, "directory.not_found", directoryPath(code), "directory.back");
+  const file = await loadDirectoryPage(c.env, code, n);
+  if (!file) return noDataPage(c, "directory.index_title");
 
-  const rows = file.rows;
   const [first, last] = idx.ranges[n - 1];
-  const title = t(lang, "directory.title", { heading, n: fmt(n), pages: fmt(idx.pages) });
+  const title = idx.pages > 1 ? t(lang, "directory.title_paged", { heading, n: fmt(n), pages: fmt(idx.pages) }) : heading;
   const path = directoryPath(code, n);
-  const description = code === OTHER
-    ? t(lang, "directory.description_other", { n: fmt(n), pages: fmt(idx.pages), first, last })
-    : t(lang, "directory.description", { province: placeName, n: fmt(n), pages: fmt(idx.pages), first, last });
+  const description = t(lang, "directory.description", { place, first, last });
   const crumbs = [
-    { name: t(lang, "common.home"), path: "/" },
-    { name: places, path: "/places" },
-    ...(provHref ? [{ name: placeName, path: provHref }] : []),
-    ...(n === 1 ? [{ name: t(lang, "directory.crumb") }] : [{ name: t(lang, "directory.crumb"), path: directoryPath(code) }, { name: t(lang, "search.page", { page: fmt(n) }) }]),
+    ...crumbsBase,
+    ...(n === 1 ? [{ name: place }] : [{ name: place, path: directoryPath(code) }, { name: t(lang, "common.page_n", { n: fmt(n) }) }]),
   ];
   const prev = n > 1 ? directoryPath(code, n - 1) : null;
   const next = n < idx.pages ? directoryPath(code, n + 1) : null;
@@ -135,18 +116,15 @@ export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
       {next ? <link rel="next" href={canonicalUrl(next, lang)} /> : null}
     </>
   );
-  const cityHead = code === OTHER ? t(lang, "col.location") : t(lang, "employer.city");
 
   return page(
     c,
-    <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} seo={sectionSeo(path, title, description, crumbs, false)} head={head}>
-      <nav aria-label={t(lang, "employer.breadcrumb")} class="breadcrumb">
-        <a href="/">{t(lang, "common.home")}</a> / <a href="/places">{places}</a> /{" "}
-        {provHref ? <><a href={provHref}>{placeName}</a> / </> : null}
-        {n === 1 ? t(lang, "directory.crumb") : <><a href={directoryPath(code)}>{t(lang, "directory.crumb")}</a> / {t(lang, "search.page", { page: fmt(n) })}</>}
-      </nav>
+    <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/organizations" seo={sectionSeo(path, title, description, crumbs)} head={head}>
+      <Breadcrumb lang={lang} crumbs={crumbs} />
       <h1>{title}</h1>
-      <p class="lead">{lead}</p>
+      <p class="lead">
+        {tn(lang, "directory.lead_one", "directory.lead_many", idx.organizations, { n: fmt(idx.organizations), place, size: fmt(idx.page_size) })}
+      </p>
       <p class="muted small">{t(lang, "directory.records_note")}</p>
       <nav aria-label={t(lang, "directory.letters")}>
         <ul class="quick-links">
@@ -160,27 +138,29 @@ export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
         <table class="restack">
           <thead>
             <tr>
-              <th>{t(lang, "col.employer")}</th>
-              <th>{cityHead}</th>
-              <th class="num">{t(lang, "places.col_records")}</th>
+              <th>{t(lang, "col.organization")}</th>
+              <th>{t(lang, "col.city")}</th>
+              <th class="num">{t(lang, "col.records")}</th>
+              <th>{t(lang, "directory.col_last_seen")}</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {file.rows.map((r) => (
               <tr>
-                <td data-label={t(lang, "col.employer")}><a href={`/employers/${r.id}`}>{r.name}</a></td>
-                <td data-label={cityHead}>{rowPlace(lang, code, r) || <span class="muted">{t(lang, "common.na")}</span>}</td>
-                <td data-label={t(lang, "places.col_records")} class="mono num">{fmt(r.records)}</td>
+                <td data-label={t(lang, "col.organization")}><a href={`/organizations/${r.id}`}>{r.name}</a></td>
+                <td data-label={t(lang, "col.city")}>{r.city ?? <span class="muted">{t(lang, "common.na")}</span>}</td>
+                <td data-label={t(lang, "col.records")} class="mono num">{fmt(r.n_records)}</td>
+                <td data-label={t(lang, "directory.col_last_seen")} class="mono">{r.last_seen ?? ""}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <nav aria-label={t(lang, "search.pagination")} class="pagination">
-        <span class="muted">{t(lang, "search.page_of", { page: fmt(n), pages: fmt(idx.pages) })}</span>
+      <nav aria-label={t(lang, "common.pagination")} class="pagination">
+        <span class="muted">{t(lang, "tenders.page_of", { page: fmt(n), pages: fmt(idx.pages) })}</span>
         <span class="pages">
-          {prev ? <a href={prev} class="btn" rel="prev">{t(lang, "search.prev")}</a> : null}
-          {next ? <a href={next} class="btn" rel="next">{t(lang, "search.next")}</a> : null}
+          {prev ? <a href={prev} class="btn" rel="prev">{t(lang, "tenders.prev")}</a> : null}
+          {next ? <a href={next} class="btn" rel="next">{t(lang, "tenders.next")}</a> : null}
         </span>
       </nav>
       {idx.pages > 1 ? (

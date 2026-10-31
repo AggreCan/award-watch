@@ -1,84 +1,150 @@
 // The site's data is a set of JSON files the pipeline writes and the deploy
-// ships as static assets under /data/. The Worker reads them through the
-// assets binding; nothing here touches a database.
+// ships as static assets under /data/ (CLAUDE.md "Static export layout").
+// The Worker reads them through the assets binding; nothing here touches a
+// database. Every loader checks the fields its pages render and answers
+// null for a file that is missing, unreadable or the wrong shape, so a page
+// says "not published" or "not found", never a server error.
 
+import { DIRECTORY_CODES, MONEY_SOURCES, SEGMENTS, SOURCES, type MoneySource, type SourceKey } from "./constants";
 import type { Env } from "./env";
-import { isListOf, isNum, isNumOrNull, isObj, isStr, isStrOrNull, optional } from "./valid";
+import { isBool, isListOf, isNum, isNumOrNull, isObj, isStr, isStrOrNull, optional } from "./valid";
 
-export interface SearchRow {
-  kind: "posting" | "esdc";
-  ref: number;
-  employer_id: string;
-  employer: string;
-  job: string | null;
-  noc: string | null;
-  street: string | null;
-  city: string | null;
-  prov: string | null;
-  postal: string | null;
-  wage_min: number | null;
-  wage_max: number | null;
-  unit: string | null;
-  date: string | null;
-  period: string | null;
-  positions: number | null;
-  status: string;
-  stream: string | null;
-  source: string;
-  sort_date: string;
-  // Home page only: the day the "LMIA requested" flag was first seen (recent_pending rows).
-  flagged?: string;
-  ind: string[];
+// -- ids in URLs ------------------------------------------------------------------
+
+export const ORG_ID_RE = /^org-[0-9a-f]{10}$/;
+export const BUYER_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// Tender and award references as published: cb-418-22395949, PW-$$XL-123...
+// arrive with the dollar signs stripped by the pipeline; anything else is
+// not a reference and never reaches a file name.
+export const REFERENCE_RE = /^[A-Za-z0-9._-]{1,80}$/;
+export const SEGMENT_RE = /^[0-9]{2}$/;
+export const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const YEAR_RE = /^\d{4}$/;
+
+// -- row shapes -----------------------------------------------------------------------
+
+// 1 or true competitive, 0 or false non-competitive, null when the source does
+// not say (CLAUDE.md "Counting money"). The schema stores the integer; either
+// form reads the same.
+export type Competitive = boolean | 0 | 1 | null;
+
+export function competitiveOf(v: Competitive | undefined): boolean | null {
+  return v === true || v === 1 ? true : v === false || v === 0 ? false : null;
 }
 
-export interface Stats {
-  data_as_of: string | null;
-  jobbank_last_run: string | null;
-  esdc_latest_period: string;
-  esdc_latest_published: string | null;
-  rules_version: string | null;
-  // The start of the map's longer period (the name is older than hosted
-  // search, which covers every year).
-  search_from_period: string;
-  counts: {
-    pending: number;
-    approved_records: number;
-    approved_positions: number;
-    refused_records: number;
-    findings: number;
-    employers: number;
-    // The public records matched to employers; absent from files written
-    // before them.
-    grant_employers?: number;
-    grant_agreements?: number;
-    alberta_employers?: number;
-    carrier_employers?: number;
-    // Pending postings with a NOC 2021 code, the total behind pending_by_noc.
-    pending_with_noc?: number;
-    // Postings open to international candidates (live, without an LMIA
-    // request, graded A) and employers matched to a designated-employer list.
-    intl_live?: number;
-    intl_no_lmia?: number;
-    intl_grade_a?: number;
-    designated_employers?: number;
-  };
-  by_stream: { k: string; n: number }[];
-  by_province: { k: string; n: number }[];
-  recent_pending: SearchRow[];
-  // The codes with the most pending postings; absent from files written
-  // before it, and checked by the home page, its only reader.
-  pending_by_noc?: { k: string; n: number; title: { en: string; fr: string } }[];
-  recent_approved: SearchRow[];
-  top_approvals: { employer_id: string; employer: string; city: string | null; prov: string | null; stream: string | null; positions: number }[];
-  resources: { dataset: string; period: string; published: string | null; rows_loaded: number; loaded_at: string }[];
-  runs: { run_at: string; source: string; detail: string | null; rows_new: number | null; ok: number }[];
-  // The Zenodo record of the OGL files; absent or null until one is published.
-  citation?: Citation | null;
-  // The designated-employer lists with their terms (the Data page's sources);
-  // checked by that page, its only reader.
-  registers?: unknown;
-  // IRCC's high-wage list in use (its version date); checked by the methodology page, its only reader.
-  high_wage?: unknown;
+// One open (or newly published) notice, list fields only.
+export interface TenderRow {
+  reference: string;
+  amendment: number;
+  title_en: string | null;
+  title_fr: string | null;
+  buyer_id: string | null;
+  buyer_en: string | null;
+  buyer_fr: string | null;
+  published: string | null;
+  closing: string | null; // ISO date and time as published, local to the buyer, no zone
+  category: string[];
+  notice_type_en: string | null;
+  notice_type_fr: string | null;
+  method_en: string | null;
+  method_fr: string | null;
+  segments: string[];
+  provinces: string[];
+  first_seen: string;
+  // Present on rows of tenders/new/<day>.json, where a notice may already be closed.
+  status?: string;
+}
+
+// One award notice or contract history row as a list row. On contract
+// history rows the buyer is the client department (the end user); the
+// contracting entity is always Public Services and Procurement Canada.
+export interface AwardRow {
+  reference: string;
+  title_en: string | null;
+  title_fr: string | null;
+  organization_id: string | null;
+  organization: string | null;
+  buyer_id: string | null;
+  buyer_en: string | null;
+  buyer_fr: string | null;
+  awarded: string | null;
+  value: number | null; // by the counting rules: total value on the newest amendment, else its amount
+  currency: string | null;
+  competitive: Competitive;
+  instrument_en: string | null;
+  instrument_fr: string | null;
+  segments: string[];
+  provinces: string[];
+  status?: string;
+}
+
+// One row of the proactive publication of contracts over $10,000.
+export interface ContractRow {
+  owner_org: string;
+  reference: string;
+  procurement_id: string | null;
+  buyer_id: string | null;
+  buyer_en: string | null;
+  buyer_fr: string | null;
+  contract_date: string | null;
+  value: number | null; // the row's own value by the counting rules
+  // The largest contract_value among the rows sharing this procurement_id,
+  // when there are several; shown beside the row, never added.
+  value_last_reported?: number | null;
+  description_en: string | null;
+  description_fr: string | null;
+  competitive: Competitive;
+  solicitation_procedure: string | null;
+  instrument_type: string | null;
+  reporting_period: string | null;
+}
+
+// One grant or contribution agreement, at its highest amendment.
+export interface GrantRow {
+  owner_org: string;
+  reference: string;
+  amendment: number;
+  buyer_id: string | null;
+  buyer_en: string | null;
+  buyer_fr: string | null;
+  agreement_type: string | null; // G grant, C contribution, O other
+  program_en: string | null;
+  program_fr: string | null;
+  title_en: string | null;
+  title_fr: string | null;
+  value: number | null;
+  start: string | null;
+  end: string | null;
+}
+
+// One communication report from the Registry of Lobbyists. Designated public
+// office holders are named in their public role, as the registry publishes them.
+export interface LobbyRow {
+  comm_number: string;
+  comm_date: string | null;
+  registrant: string | null;
+  subject_matters: string[];
+  institutions: string[];
+  dpoh: { name: string; title: string | null; institution: string | null }[];
+}
+
+// An organization's total in one source (rankings, buyer and category pages).
+export interface OrgTotal {
+  id: string;
+  name: string;
+  n: number;
+  total: number | null;
+  province?: string | null;
+}
+
+export interface YearFigure {
+  year: number;
+  source: MoneySource;
+  n: number;
+  total: number | null;
+  // Null for grants, which have no competitive flag.
+  n_non_competitive: number | null;
+  total_non_competitive: number | null;
 }
 
 export interface Citation {
@@ -89,126 +155,285 @@ export interface Citation {
   published: string | null;
 }
 
+export interface Stats {
+  data_as_of: string | null;
+  counts: Partial<Record<
+    "organizations" | "buyers" | "tenders_open" | "tenders_new_today" | "awards" | "history" | "contracts" | "grants" | "lobbying",
+    number
+  >>;
+  new_tenders: TenderRow[];
+  closing_soon: TenderRow[];
+  recent_awards: AwardRow[];
+  top_organizations_year: OrgTotal[];
+  runs: { run_at: string; source: string; detail: string | null; rows_new: number | null; ok: number | boolean }[];
+  sources: { source: string; file: string; last_read: string | null; last_modified: string | null }[];
+  // A Zenodo record of the open files, when one is published; absent until then.
+  citation?: Citation | null;
+}
+
+export interface CodeRow { code: string; desc_en: string | null; desc_fr: string | null }
+
+export interface TenderVersion {
+  amendment: number;
+  published: string | null;
+  amended: string | null;
+  closing: string | null;
+  status: string | null;
+  title_en: string | null;
+  title_fr: string | null;
+  first_seen: string;
+}
+
+export interface RelatedAward {
+  reference: string;
+  title_en: string | null;
+  title_fr: string | null;
+  organization_id: string | null;
+  organization: string | null;
+  awarded: string | null;
+  value: number | null;
+  currency: string | null;
+}
+
+// A notice as it stands (its newest amendment), every exported column. The
+// contact fields are never exported; the page links to CanadaBuys for them.
+export interface TenderDetail {
+  reference: string;
+  amendment: number;
+  solicitation: string | null;
+  title_en: string | null;
+  title_fr: string | null;
+  published: string | null;
+  closing: string | null;
+  amended: string | null;
+  start_expected: string | null;
+  end_expected: string | null;
+  status: string;
+  gsin: string | null;
+  gsin_desc_en: string | null;
+  gsin_desc_fr: string | null;
+  category: string[];
+  notice_type_en: string | null;
+  notice_type_fr: string | null;
+  method_en: string | null;
+  method_fr: string | null;
+  selection_en: string | null;
+  selection_fr: string | null;
+  limited_reason_en: string | null;
+  limited_reason_fr: string | null;
+  trade_agreements_en: string[] | null;
+  trade_agreements_fr: string[] | null;
+  regions_opportunity_en: string[] | null;
+  regions_opportunity_fr: string[] | null;
+  regions_delivery_en: string[] | null;
+  regions_delivery_fr: string[] | null;
+  provinces: string[];
+  buyer_id: string | null;
+  buyer_en: string | null;
+  buyer_fr: string | null;
+  end_users_en: string[] | null;
+  end_users_fr: string[] | null;
+  description_en: string | null;
+  description_fr: string | null;
+  source_file: string;
+  first_seen: string;
+  last_seen: string;
+  codes: CodeRow[];
+  amendments: TenderVersion[];
+  related_awards: RelatedAward[];
+}
+
+export interface ContractVersion {
+  amendment: number;
+  amended: string | null;
+  amount: number | null;
+  total_value: number | null;
+  status: string | null;
+  amendment_type_en: string | null;
+  amendment_type_fr: string | null;
+}
+
+// An award notice ("award:<reference>") or a contract history record
+// ("history:<reference>"), at its newest amendment.
+export interface ContractDetail {
+  kind: "award" | "history";
+  reference: string;
+  amendment: number;
+  solicitation: string | null;
+  contract_number: string | null;
+  procurement_number?: string | null;
+  title_en: string | null;
+  title_fr: string | null;
+  published: string | null;
+  awarded: string | null;
+  amended: string | null;
+  start: string | null;
+  end: string | null;
+  amount: number | null;
+  total_value: number | null;
+  value: number | null; // by the counting rules
+  currency: string | null;
+  status: string;
+  instrument_type_en: string | null;
+  instrument_type_fr: string | null;
+  amendment_type_en: string | null;
+  amendment_type_fr: string | null;
+  gsin: string | null;
+  gsin_desc_en: string | null;
+  gsin_desc_fr: string | null;
+  category: string[];
+  notice_type_en: string | null;
+  notice_type_fr: string | null;
+  method_en: string | null;
+  method_fr: string | null;
+  competitive: Competitive;
+  selection_en: string | null;
+  selection_fr: string | null;
+  limited_reason_en: string | null;
+  limited_reason_fr: string | null;
+  trade_agreements_en: string[] | null;
+  trade_agreements_fr: string[] | null;
+  regions_delivery_en: string[] | null;
+  regions_delivery_fr: string[] | null;
+  provinces: string[];
+  organization_id: string | null;
+  supplier: string | null;
+  supplier_operating?: string | null;
+  supplier_city: string | null;
+  supplier_province: string | null;
+  supplier_country: string | null;
+  buyer_id: string | null;
+  buyer_en: string | null;
+  buyer_fr: string | null;
+  // Contract history: the client department the contract was awarded for.
+  client_id?: string | null;
+  client_en?: string | null;
+  client_fr?: string | null;
+  end_users_en?: string[] | null;
+  end_users_fr?: string[] | null;
+  description_en: string | null;
+  description_fr: string | null;
+  source_file: string;
+  first_seen: string;
+  last_seen: string;
+  codes: CodeRow[];
+  amendments: ContractVersion[];
+  // The tender notice with the same solicitation number, when there is one.
+  tender_reference?: string | null;
+}
+
+export interface OrganizationRow {
+  id: string;
+  display_name: string;
+  country: string | null;
+  province: string | null;
+  city: string | null;
+  business_number: string | null;
+  first_seen: string | null;
+  last_seen: string | null;
+  n_awards: number;
+  n_history: number;
+  n_contracts: number;
+  n_grants: number;
+  n_lobbying: number;
+  total_awards: number | null;
+  total_history: number | null;
+  total_contracts: number | null;
+  total_grants: number | null;
+}
+
 export interface Profile {
-  employer: {
-    id: string; display_name: string; province: string | null; city: string | null; postal_code: string | null;
-    street: string | null; street_source?: string | null; current_status: string; status_changed_at: string | null;
-    first_seen: string | null;
-    last_seen: string | null; pending_count: number; approved_lmias: number; approved_positions: number;
-    refused_lmias: number; refused_positions: number; finding_count: number; indicator_count: number;
-    registry_grade: string; updated_at: string;
-  };
-  names: { name: string; source: string }[];
-  postings: {
-    posting_id: number; employer_raw: string; title: string | null; noc_code: string | null; street: string | null;
-    city: string | null; province: string | null; postal_code: string | null; wage_min: number | null;
-    wage_max: number | null; wage_unit: string | null; vacancies: number | null; date_posted: string | null;
-    valid_through: string | null; first_seen: string; last_seen: string; flag_current: string;
-    approved_seen_at: string | null; url: string;
-  }[];
-  esdc: {
-    id: number; list: string; period: string; employer_raw: string; province: string | null; stream: string | null;
-    city: string | null; postal_code: string | null; noc_code: string | null; noc_title: string | null;
-    incorporate_status: string | null; lmias: number | null; positions: number | null; resource_id: string;
-    published: string | null;
-  }[];
+  organization: OrganizationRow;
+  names: { name: string; source: string; n: number }[];
+  places: { country: string | null; province: string | null; city: string | null; n: number }[];
+  // The number of distinct places behind the ten listed; absent means the list is whole.
+  places_total_rows?: number;
   registry: {
     registry: string; registry_id: string; legal_name: string | null; entity_type: string | null; status: string | null;
     registered_on: string | null; grade: string; checked_at: string;
   }[];
-  indicators: { indicator: string; state: string; basis: string; rule_version: string; computed_at: string }[];
-  findings: {
-    operating_name: string | null; legal_name: string | null; address: string | null; reasons: string | null;
-    decision_date: string | null; penalty: string | null; status: string | null;
-  }[];
-  // Public records matched to the employer by name and place (or by business
-  // number), shown as records. A shard written before these sources existed
-  // has none of the keys; loadProfile fills them in empty.
+  years: YearFigure[];
+  awards: AwardRow[];
+  awards_total_rows: number;
+  history: AwardRow[];
+  history_total_rows: number;
+  contracts: ContractRow[];
+  contracts_total_rows: number;
   grants: GrantRow[];
-  grants_total: number;
-  alberta: AlbertaRow[];
-  us_carrier: CarrierRow[];
-  // Job Bank postings open to international candidates, with the site's grade
-  // (signals, not records of job offers), and listings on designated-employer
-  // lists matched by name and place. The export writes each only when there
-  // is something; loadProfile fills them in empty.
-  intl: IntlPostingRow[];
-  designated: DesignatedRow[];
-  // Up to five other employers in the same city, then with the same most
-  // common occupation code in the province, nearest in record count
-  // (pipeline/pmw_pipeline/directory.py). Written only when there are any;
-  // loadProfile fills in an empty list.
-  related: RelatedRow[];
+  grants_total_rows: number;
+  lobbying: LobbyRow[];
+  lobbying_total_rows: number;
+  buyers: { source: MoneySource; buyer_id: string; buyer_en: string | null; buyer_fr: string | null; n: number; total: number | null }[];
+  // Rows left out of the totals because their currency is not CAD, per source.
+  non_cad?: Partial<Record<MoneySource, number>>;
 }
 
-// A related employer: its id and name, and its city when that is not the profile's.
-export interface RelatedRow { id: string; name: string; city?: string }
+export interface DirectorySummary { code: string; organizations: number; pages: number }
+export interface DirectoryIndex { directories: DirectorySummary[] }
+export interface DirectoryPart {
+  code: string; organizations: number; pages: number; page_size: number;
+  ranges: [string, string][]; letters: [string, number][]; updated: string | null;
+}
+export interface DirectoryRow { id: string; name: string; city: string | null; n_records: number; last_seen: string | null }
+export interface DirectoryPage { code: string; page: number; rows: DirectoryRow[] }
 
-// One posting open to international candidates; grade null with an LMIA requested or before its page is read.
-export interface IntlPostingRow {
-  id: number; title: string | null; noc: string | null; city: string | null; prov: string | null; date: string;
-  live: boolean; lmia: string; grade: "A" | "B" | "C" | null; reasons: string[]; url: string;
+export interface BuyerSummary {
+  id: string;
+  name_en: string;
+  name_fr: string | null;
+  acronym_en: string | null;
+  acronym_fr: string | null;
+  kind: string | null;
+  n_tenders: number;
+  n_open_tenders?: number;
+  n_awards: number;
+  n_history: number;
+  n_contracts: number;
+  n_grants: number;
+  total_awards: number | null;
+  total_history?: number | null;
+  total_contracts: number | null;
+  total_grants: number | null;
+}
+export interface BuyerIndex { buyers: BuyerSummary[] }
+export interface BuyerYear extends YearFigure { n_organizations: number | null }
+export interface Buyer {
+  buyer: BuyerSummary & { ckan_org: string | null; department_number: string | null };
+  years: BuyerYear[];
+  top_organizations: Partial<Record<MoneySource, OrgTotal[]>>;
+  open_tenders: number;
+  recent_awards: AwardRow[];
 }
 
-// One listing on a designated-employer list (Atlantic Immigration Program, community pilots).
-export interface DesignatedRow {
-  list: string; program: string; jurisdiction: string; community: string | null; name: string; location: string | null;
-  designated_on: string | null; first_seen: string; last_seen: string; current: boolean; url: string; grade: string;
-  basis: string;
-  // Present when the row is current only through the list's copy loaded by hand.
-  snapshot?: { list_date: string; loaded_on: string };
+export interface CategorySummary {
+  code: string;
+  title_en: string;
+  title_fr: string;
+  open_tenders: number;
+  awards_year_n: number;
+  awards_year_total: number | null;
+  awards_n: number;
+  awards_total: number | null;
+}
+export interface CategoryIndex { year: number; segments: CategorySummary[] }
+export interface Category {
+  code: string;
+  title_en: string;
+  title_fr: string;
+  open_tenders: TenderRow[];
+  top_organizations: OrgTotal[];
+  years: { year: number; n: number; total: number | null }[];
 }
 
-// One federal grant or contribution agreement, at its latest amendment.
-export interface GrantRow {
-  ref_number: string; amendment_number: number; owner_org: string; department_en: string | null;
-  department_fr: string | null; program_en: string | null; program_fr: string | null; agreement_type: string | null;
-  agreement_value: number | null; start_date: string | null; end_date: string | null; grade: string; basis: string;
+export interface BuyerRank { id: string; name_en: string; name_fr: string | null; n: number; total: number | null }
+export interface Rankings {
+  year: number | null; // null for rankings/all.json
+  years: number[];
+  sources: Partial<Record<SourceKey, { by_value: OrgTotal[]; by_count: OrgTotal[] }>>;
+  buyers: Partial<Record<MoneySource, BuyerRank[]>>;
 }
 
-// The latest year of one Alberta workers' compensation account.
-export interface AlbertaRow {
-  emp_key: string; year: number; first_year: number | null; employer_name: string; trade_name: string | null;
-  city: string | null; industry: string | null; person_years: number | null; lost_time_claims: number | null;
-  lost_time_rate: number | null; disabling_injuries: number | null; disabling_rate: number | null;
-  fatalities: number | null; cor_year: number | null; grade: string; basis: string;
-}
-
-// One US carrier census record.
-export interface CarrierRow {
-  dot_number: number; legal_name: string; dba_name: string | null; city: string | null; province: string | null;
-  postal_code: string | null; status: string | null; power_units: number | null; drivers: number | null;
-  safety_rating: string | null; safety_rating_date: string | null; record_date: string | null; grade: string;
-  basis: string;
-}
-
-export interface Facets {
-  default: { total: number; status: Record<string, number>; prov: Record<string, number>; status_prov: Record<string, number> };
-  long: {
-    total: number; status: Record<string, number>; prov: Record<string, number>;
-    prov_year: Record<string, number>; status_prov: Record<string, number>;
-  };
-  files: Record<string, { rows: number; bytes: number }>;
-  first_rows: number;
-}
-
-export interface Cluster {
-  fsa: string; prov: string; lat: number; lon: number; pending: number; approved: number; refused: number;
-}
-
-export interface Area extends Omit<Cluster, "pending" | "approved" | "refused"> {
-  total: number;
-  rows: SearchRow[];
-}
-
-export const EMPLOYER_ID_RE = /^emp-[0-9a-f]{10}$/;
-
-const POSITIVE_DATASET = "90fed587-1364-4f33-a9ee-208181dc0b97";
-const NEGATIVE_DATASET = "f82f66f2-a22b-4511-bccf-e1d74db39ae5";
-
-export function esdcSource(list: string, resourceId: string): string {
-  return `https://open.canada.ca/data/en/dataset/${list === "positive" ? POSITIVE_DATASET : NEGATIVE_DATASET}/resource/${resourceId}`;
-}
+// -- reading files ---------------------------------------------------------------------
 
 export async function assetResponse(env: Env, path: string): Promise<Response | null> {
   if (!env.ASSETS) return null;
@@ -229,15 +454,13 @@ export async function assetResponse(env: Env, path: string): Promise<Response | 
 // never served and no expiry time is needed. A response without an ETag is
 // parsed and not kept.
 //
-// Memory: the largest file a page parses is a profile shard of about 250 KB,
-// and parsed JSON measured about 1.35 times its text in V8, so 64 entries of
-// that size are about 16 MB of text and 22 MB of heap. Entries are capped at
-// 2 MB of text and the whole cache at 24 MB of text (about 32 MB of heap),
-// well inside the isolate's 128 MB whatever the files become; 64 entries of
-// 2 MB with no total cap would be 128 MB of text, more than the isolate
-// holds. A file past the entry cap still loads; it is parsed on every read.
-// Sizes are the text's length, known for every response (the assets binding
-// in the test runtime sends no Content-Length).
+// Memory: a detail shard is a few hundred KB, and parsed JSON measured about
+// 1.35 times its text in V8. Entries are capped at 2 MB of text and the
+// whole cache at 24 MB of text (about 32 MB of heap), well inside the
+// isolate's 128 MB whatever the files become. A file past the entry cap
+// still loads; it is parsed on every read. Sizes are the text's length,
+// known for every response (the assets binding in the test runtime sends no
+// Content-Length).
 const CACHE_MAX_ENTRIES = 64;
 const CACHE_MAX_ENTRY_CHARS = 2 * 1024 * 1024;
 const CACHE_MAX_TOTAL_CHARS = 24 * 1024 * 1024;
@@ -322,232 +545,350 @@ export async function loadJson<T>(env: Env, path: string): Promise<T | null> {
   return value as T;
 }
 
-const OPTIONAL_COUNTS = [
-  "grant_employers", "grant_agreements", "alberta_employers", "carrier_employers", "pending_with_noc",
-  "intl_live", "intl_no_lmia", "intl_grade_a", "designated_employers",
-] as const;
+// A kept file is the same frozen object on every hit, so a long list that
+// passed its check once (the open notices, about a thousand rows) is not
+// checked again on each request while it stays cached.
+const checked = new WeakMap<object, Set<string>>();
 
-// The pages read these fields without further checks, so a file without them
-// is treated like a missing one.
-export async function loadStats(env: Env): Promise<Stats | null> {
-  const stats = await loadJson<Stats>(env, "stats.json");
-  if (!isObj(stats) || !isObj(stats.counts)) return null;
-  // Optional counts: a value that is not a number reads as absent, so it
-  // hides the home page's tile or chart instead of failing every page. The
-  // loaded file is shared and frozen, so they are dropped from a copy.
-  const bad = OPTIONAL_COUNTS.filter((k) => !optional(stats.counts[k], isNum));
-  if (bad.length === 0) return stats;
-  const counts: Record<string, unknown> = { ...stats.counts };
-  for (const k of bad) delete counts[k];
-  return { ...stats, counts } as Stats;
+function checkOnce(value: unknown, name: string, check: (v: unknown) => boolean): boolean {
+  if (typeof value !== "object" || value === null) return check(value);
+  const done = checked.get(value);
+  if (done?.has(name)) return true;
+  if (!check(value)) return false;
+  if (done) done.add(name);
+  else checked.set(value, new Set([name]));
+  return true;
 }
 
-// The search page's fallback reads the default scope's total and its status
-// and province counts, the home page its status-by-province counts; the file
-// is also published as is (/api/search/facets), so its whole shape, the long
-// scope's block included, is checked. A file that fails reads as missing: the
-// search page's fallback then counts from its first rows, the home page
-// leaves out the pending-by-province bars.
-const isCounts = (v: unknown): boolean => isObj(v) && Object.values(v).every(isNum);
+// -- shards ----------------------------------------------------------------------------
 
-export async function loadFacets(env: Env): Promise<Facets | null> {
-  const facets = await loadJson<Facets>(env, "search/facets.json");
-  if (!isObj(facets) || !isObj(facets.default) || !isObj(facets.long)) return null;
-  const d = facets.default;
-  return isNum(d.total) && isCounts(d.status) && isCounts(d.prov) && isCounts(d.status_prov) && isNum(facets.long.total)
-    ? facets
+// The detail shards are keyed by the first three hex digits of the SHA-1 of
+// the reference. References are matched case-insensitively (they sit in URLs
+// in lower case), so the pipeline hashes the lower-cased reference and so
+// does this; a reference hashed as published would land in another shard
+// whenever it carries a capital.
+export async function referenceShard(reference: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(reference.toLowerCase()));
+  return [...new Uint8Array(digest).slice(0, 2)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 3);
+}
+
+// The entry under key, or under the same key in another case: the pipeline
+// keys entries by the reference as published or lower-cased, and either reads.
+function entryFor(shard: Record<string, unknown>, key: string): unknown {
+  if (Object.hasOwn(shard, key)) return shard[key];
+  const want = key.toLowerCase();
+  for (const k of Object.keys(shard)) if (k.toLowerCase() === want) return shard[k];
+  return undefined;
+}
+
+// -- checks ------------------------------------------------------------------------
+
+const isStrList = (v: unknown): v is string[] => isListOf(v, isStr);
+// A bilingual list column (trade agreements, regions, end users) that may be empty.
+const isStrListOrNull = (v: unknown): boolean => v === null || v === undefined || isStrList(v);
+const isCount = (v: unknown): v is number => isNum(v) && Number.isInteger(v) && v >= 0;
+export const isCompetitive = (v: unknown): v is Competitive => v === null || isBool(v) || v === 0 || v === 1;
+const isOrgIdOrNull = (v: unknown): boolean => v === null || (isStr(v) && ORG_ID_RE.test(v));
+const isBuyerIdOrNull = (v: unknown): boolean => v === null || (isStr(v) && BUYER_ID_RE.test(v));
+const isRef = (v: unknown): v is string => isStr(v) && REFERENCE_RE.test(v);
+const isMoneySource = (v: unknown): v is MoneySource => (MONEY_SOURCES as readonly unknown[]).includes(v);
+
+export const isTenderRow = (r: unknown): r is TenderRow => isObj(r) && isRef(r.reference) && isNum(r.amendment) &&
+  isStrOrNull(r.title_en) && isStrOrNull(r.title_fr) && isBuyerIdOrNull(r.buyer_id) && isStrOrNull(r.buyer_en) &&
+  isStrOrNull(r.buyer_fr) && isStrOrNull(r.published) && isStrOrNull(r.closing) && isStrList(r.category) &&
+  isStrOrNull(r.notice_type_en) && isStrOrNull(r.notice_type_fr) && isStrOrNull(r.method_en) && isStrOrNull(r.method_fr) &&
+  isStrList(r.segments) && isStrList(r.provinces) && isStr(r.first_seen) && optional(r.status, isStr);
+
+export const isAwardRow = (r: unknown): r is AwardRow => isObj(r) && isRef(r.reference) && isStrOrNull(r.title_en) &&
+  isStrOrNull(r.title_fr) && isOrgIdOrNull(r.organization_id) && isStrOrNull(r.organization) && isBuyerIdOrNull(r.buyer_id) &&
+  isStrOrNull(r.buyer_en) && isStrOrNull(r.buyer_fr) && isStrOrNull(r.awarded) && isNumOrNull(r.value) &&
+  isStrOrNull(r.currency) && isCompetitive(r.competitive) && isStrOrNull(r.instrument_en) && isStrOrNull(r.instrument_fr) &&
+  isStrList(r.segments) && isStrList(r.provinces) && optional(r.status, isStr);
+
+const isContractRow = (r: unknown): r is ContractRow => isObj(r) && isStr(r.owner_org) && isStr(r.reference) &&
+  isStrOrNull(r.procurement_id) && isBuyerIdOrNull(r.buyer_id) && isStrOrNull(r.buyer_en) && isStrOrNull(r.buyer_fr) &&
+  isStrOrNull(r.contract_date) && isNumOrNull(r.value) && optional(r.value_last_reported, isNumOrNull) &&
+  isStrOrNull(r.description_en) && isStrOrNull(r.description_fr) && isCompetitive(r.competitive) &&
+  isStrOrNull(r.solicitation_procedure) && isStrOrNull(r.instrument_type) && isStrOrNull(r.reporting_period);
+
+const isGrantRow = (r: unknown): r is GrantRow => isObj(r) && isStr(r.owner_org) && isStr(r.reference) && isNum(r.amendment) &&
+  isBuyerIdOrNull(r.buyer_id) && isStrOrNull(r.buyer_en) && isStrOrNull(r.buyer_fr) && isStrOrNull(r.agreement_type) &&
+  isStrOrNull(r.program_en) && isStrOrNull(r.program_fr) && isStrOrNull(r.title_en) && isStrOrNull(r.title_fr) &&
+  isNumOrNull(r.value) && isStrOrNull(r.start) && isStrOrNull(r.end);
+
+const isLobbyRow = (r: unknown): r is LobbyRow => isObj(r) && isStr(r.comm_number) && isStrOrNull(r.comm_date) &&
+  isStrOrNull(r.registrant) && isStrList(r.subject_matters) && isStrList(r.institutions) &&
+  isListOf(r.dpoh, (d) => isObj(d) && isStr(d.name) && isStrOrNull(d.title) && isStrOrNull(d.institution));
+
+// Rendered as a link to the profile, so the id must be an organization id.
+export const isOrgTotal = (r: unknown): r is OrgTotal => isObj(r) && isStr(r.id) && ORG_ID_RE.test(r.id) && isStr(r.name) &&
+  isCount(r.n) && isNumOrNull(r.total) && optional(r.province, isStrOrNull);
+
+const isYearFigure = (r: unknown): r is YearFigure => isObj(r) && isNum(r.year) && Number.isInteger(r.year) &&
+  isMoneySource(r.source) && isCount(r.n) && isNumOrNull(r.total) && isNumOrNull(r.n_non_competitive) &&
+  isNumOrNull(r.total_non_competitive);
+
+const isCodeRow = (r: unknown): r is CodeRow => isObj(r) && isStr(r.code) && isStrOrNull(r.desc_en) && isStrOrNull(r.desc_fr);
+
+// -- stats.json ------------------------------------------------------------------
+
+const STAT_LISTS: [keyof Stats, (v: unknown) => boolean][] = [
+  ["new_tenders", isTenderRow],
+  ["closing_soon", isTenderRow],
+  ["recent_awards", isAwardRow],
+  ["top_organizations_year", isOrgTotal],
+  ["runs", (r) => isObj(r) && isStr(r.run_at) && isStr(r.source) && isStrOrNull(r.detail) && isNumOrNull(r.rows_new) && (isNum(r.ok) || isBool(r.ok))],
+  ["sources", (r) => isObj(r) && isStr(r.source) && isStr(r.file) && isStrOrNull(r.last_read) && isStrOrNull(r.last_modified)],
+];
+
+// Every page reads the data date from here, so the file is required only to
+// be an object with a counts object; a count that is not a number reads as
+// absent and a list that does not read as empty, each hiding its own part of
+// the home page instead of taking every page down. The loaded file is shared
+// and frozen, so the repairs go on a copy.
+export async function loadStats(env: Env): Promise<Stats | null> {
+  const stats = await loadJson<Record<string, unknown>>(env, "stats.json");
+  if (!isObj(stats) || !isObj(stats.counts) || !isStrOrNull(stats.data_as_of)) return null;
+  const counts = stats.counts as Record<string, unknown>;
+  const badCounts = Object.keys(counts).filter((k) => !isNum(counts[k]));
+  const badLists = STAT_LISTS.filter(([k, each]) => !checkOnce(stats[k], `stats.${k}`, (v) => isListOf(v, each))).map(([k]) => k);
+  if (badCounts.length === 0 && badLists.length === 0) return stats as unknown as Stats;
+  const fixed: Record<string, unknown> = { ...stats, counts: Object.fromEntries(Object.entries(counts).filter(([, v]) => isNum(v))) };
+  for (const k of badLists) fixed[k] = [];
+  return fixed as unknown as Stats;
+}
+
+// -- tenders ------------------------------------------------------------------------
+
+export async function loadOpenTenders(env: Env): Promise<TenderRow[] | null> {
+  const rows = await loadJson<unknown>(env, "tenders/open.json");
+  return checkOnce(rows, "open", (v) => isListOf(v, isTenderRow)) ? (rows as TenderRow[]) : null;
+}
+
+export async function loadNewTenders(env: Env, day: string): Promise<TenderRow[] | null> {
+  if (!DAY_RE.test(day)) return null;
+  const rows = await loadJson<unknown>(env, `tenders/new/${day}.json`);
+  return isListOf(rows, isTenderRow) ? rows : null;
+}
+
+const isTenderVersion = (v: unknown): boolean => isObj(v) && isNum(v.amendment) && isStrOrNull(v.published) &&
+  isStrOrNull(v.amended) && isStrOrNull(v.closing) && isStrOrNull(v.status) && isStrOrNull(v.title_en) &&
+  isStrOrNull(v.title_fr) && isStr(v.first_seen);
+
+const isRelatedAward = (v: unknown): boolean => isObj(v) && isRef(v.reference) && isStrOrNull(v.title_en) &&
+  isStrOrNull(v.title_fr) && isOrgIdOrNull(v.organization_id) && isStrOrNull(v.organization) && isStrOrNull(v.awarded) &&
+  isNumOrNull(v.value) && isStrOrNull(v.currency);
+
+const BI_TEXT = ["title", "notice_type", "method", "selection", "limited_reason", "description"] as const;
+const BI_LISTS = ["trade_agreements", "regions_delivery"] as const;
+
+const isTenderDetail = (v: unknown, reference: string): v is TenderDetail => isObj(v) && isRef(v.reference) &&
+  v.reference.toLowerCase() === reference && isNum(v.amendment) && isStrOrNull(v.solicitation) &&
+  BI_TEXT.every((k) => isStrOrNull(v[`${k}_en`]) && isStrOrNull(v[`${k}_fr`])) &&
+  BI_LISTS.every((k) => isStrListOrNull(v[`${k}_en`]) && isStrListOrNull(v[`${k}_fr`])) &&
+  isStrListOrNull(v.regions_opportunity_en) && isStrListOrNull(v.regions_opportunity_fr) &&
+  isStrListOrNull(v.end_users_en) && isStrListOrNull(v.end_users_fr) &&
+  isStrOrNull(v.published) && isStrOrNull(v.closing) && isStrOrNull(v.amended) && isStrOrNull(v.start_expected) &&
+  isStrOrNull(v.end_expected) && isStr(v.status) && isStrOrNull(v.gsin) && isStrOrNull(v.gsin_desc_en) &&
+  isStrOrNull(v.gsin_desc_fr) && isStrList(v.category) && isStrList(v.provinces) && isBuyerIdOrNull(v.buyer_id) &&
+  isStrOrNull(v.buyer_en) && isStrOrNull(v.buyer_fr) && isStr(v.source_file) && isStr(v.first_seen) && isStr(v.last_seen) &&
+  isListOf(v.codes, isCodeRow) && isListOf(v.amendments, isTenderVersion) && isListOf(v.related_awards, isRelatedAward);
+
+// One notice from its shard. The reference is lower-cased for the shard and
+// matched in any case inside it; null for a reference that is not one, a
+// missing shard, or an entry that does not read.
+export async function loadTender(env: Env, reference: string): Promise<TenderDetail | null> {
+  if (!REFERENCE_RE.test(reference)) return null;
+  const key = reference.toLowerCase();
+  const shard = await loadJson<unknown>(env, `tenders/${await referenceShard(key)}.json`);
+  if (!isObj(shard)) return null;
+  const entry = entryFor(shard, key);
+  return isTenderDetail(entry, key) ? entry : null;
+}
+
+// -- award notices and contract history -------------------------------------------
+
+const isContractVersion = (v: unknown): boolean => isObj(v) && isNum(v.amendment) && isStrOrNull(v.amended) &&
+  isNumOrNull(v.amount) && isNumOrNull(v.total_value) && isStrOrNull(v.status) && isStrOrNull(v.amendment_type_en) &&
+  isStrOrNull(v.amendment_type_fr);
+
+const isContractDetail = (v: unknown, kind: "award" | "history", reference: string): v is ContractDetail => isObj(v) &&
+  v.kind === kind && isRef(v.reference) && v.reference.toLowerCase() === reference && isNum(v.amendment) &&
+  isStrOrNull(v.solicitation) && isStrOrNull(v.contract_number) && optional(v.procurement_number, isStrOrNull) &&
+  BI_TEXT.every((k) => isStrOrNull(v[`${k}_en`]) && isStrOrNull(v[`${k}_fr`])) &&
+  BI_LISTS.every((k) => isStrListOrNull(v[`${k}_en`]) && isStrListOrNull(v[`${k}_fr`])) &&
+  isStrListOrNull(v.end_users_en) && isStrListOrNull(v.end_users_fr) &&
+  isStrOrNull(v.published) && isStrOrNull(v.awarded) && isStrOrNull(v.amended) && isStrOrNull(v.start) && isStrOrNull(v.end) &&
+  isNumOrNull(v.amount) && isNumOrNull(v.total_value) && isNumOrNull(v.value) && isStrOrNull(v.currency) && isStr(v.status) &&
+  isStrOrNull(v.instrument_type_en) && isStrOrNull(v.instrument_type_fr) && isStrOrNull(v.amendment_type_en) &&
+  isStrOrNull(v.amendment_type_fr) && isStrOrNull(v.gsin) && isStrOrNull(v.gsin_desc_en) && isStrOrNull(v.gsin_desc_fr) &&
+  isStrList(v.category) && isCompetitive(v.competitive) && isStrList(v.provinces) && isOrgIdOrNull(v.organization_id) &&
+  isStrOrNull(v.supplier) && optional(v.supplier_operating, isStrOrNull) && isStrOrNull(v.supplier_city) &&
+  isStrOrNull(v.supplier_province) && isStrOrNull(v.supplier_country) && isBuyerIdOrNull(v.buyer_id) &&
+  isStrOrNull(v.buyer_en) && isStrOrNull(v.buyer_fr) && optional(v.client_id, isBuyerIdOrNull) &&
+  optional(v.client_en, isStrOrNull) && optional(v.client_fr, isStrOrNull) && isStr(v.source_file) &&
+  isStr(v.first_seen) && isStr(v.last_seen) && isListOf(v.codes, isCodeRow) && isListOf(v.amendments, isContractVersion) &&
+  optional(v.tender_reference, (x) => x === null || isRef(x));
+
+// Award notices and contract history rows share one set of shards, keyed
+// "award:<reference>" and "history:<reference>".
+export async function loadContract(env: Env, kind: "award" | "history", reference: string): Promise<ContractDetail | null> {
+  if (!REFERENCE_RE.test(reference)) return null;
+  const key = reference.toLowerCase();
+  const shard = await loadJson<unknown>(env, `contracts/${await referenceShard(key)}.json`);
+  if (!isObj(shard)) return null;
+  const entry = entryFor(shard, `${kind}:${key}`);
+  return isContractDetail(entry, kind, key) ? entry : null;
+}
+
+// awards/recent.json (the 500 newest) or awards/<year>.json.
+export async function loadAwards(env: Env, which: number | "recent"): Promise<AwardRow[] | null> {
+  if (which !== "recent" && !(Number.isInteger(which) && which >= 1900 && which <= 2999)) return null;
+  const rows = await loadJson<unknown>(env, `awards/${which}.json`);
+  return checkOnce(rows, `awards`, (v) => isListOf(v, isAwardRow)) ? (rows as AwardRow[]) : null;
+}
+
+// -- organization profiles ----------------------------------------------------------
+
+const ORG_COUNTS = ["n_awards", "n_history", "n_contracts", "n_grants", "n_lobbying"] as const;
+const ORG_TOTALS = ["total_awards", "total_history", "total_contracts", "total_grants"] as const;
+
+const isOrganizationRow = (v: unknown, id: string): v is OrganizationRow => isObj(v) && v.id === id &&
+  isStr(v.display_name) && isStrOrNull(v.country) && isStrOrNull(v.province) && isStrOrNull(v.city) &&
+  isStrOrNull(v.business_number) && isStrOrNull(v.first_seen) && isStrOrNull(v.last_seen) &&
+  ORG_COUNTS.every((k) => isCount(v[k])) && ORG_TOTALS.every((k) => isNumOrNull(v[k]));
+
+const PROFILE_LISTS: Record<SourceKey, (v: unknown) => boolean> = {
+  awards: isAwardRow,
+  history: isAwardRow,
+  contracts: isContractRow,
+  grants: isGrantRow,
+  lobbying: isLobbyRow,
+};
+
+const isProfile = (p: unknown, id: string): p is Profile => isObj(p) && isOrganizationRow(p.organization, id) &&
+  isListOf(p.names, (n) => isObj(n) && isStr(n.name) && isStr(n.source) && isCount(n.n)) &&
+  isListOf(p.places, (n) => isObj(n) && isStrOrNull(n.country) && isStrOrNull(n.province) && isStrOrNull(n.city) && isCount(n.n)) &&
+  optional(p.places_total_rows, isCount) &&
+  isListOf(p.registry, (r) => isObj(r) && isStr(r.registry) && isStr(r.registry_id) && isStrOrNull(r.legal_name) &&
+    isStrOrNull(r.entity_type) && isStrOrNull(r.status) && isStrOrNull(r.registered_on) && isStr(r.grade)) &&
+  isListOf(p.years, isYearFigure) &&
+  SOURCES.every((s) => isListOf(p[s], PROFILE_LISTS[s]) && isCount(p[`${s}_total_rows`])) &&
+  isListOf(p.buyers, (b) => isObj(b) && isMoneySource(b.source) && isStr(b.buyer_id) && BUYER_ID_RE.test(b.buyer_id) &&
+    isStrOrNull(b.buyer_en) && isStrOrNull(b.buyer_fr) && isCount(b.n) && isNumOrNull(b.total)) &&
+  optional(p.non_cad, (v) => isObj(v) && Object.entries(v).every(([k, n]) => isMoneySource(k) && isCount(n)));
+
+export async function loadProfile(env: Env, id: string): Promise<Profile | null> {
+  if (!ORG_ID_RE.test(id)) return null;
+  const shard = await loadJson<unknown>(env, `profiles/${id.slice(4, 7)}.json`);
+  const profile: unknown = isObj(shard) ? shard[id] : null;
+  return isProfile(profile, id) ? profile : null;
+}
+
+// The id that took a retired organization id's records (ids move when the
+// name rules change), from a shard keyed like the profiles by the old id. A
+// missing or unreadable shard, or an entry that is not an organization id,
+// reads as no alias. The value goes into a Location header, so it must be an
+// id; an entry pointing at itself would redirect forever, so it counts as none.
+export async function loadAlias(env: Env, id: string): Promise<string | null> {
+  if (!ORG_ID_RE.test(id)) return null;
+  const shard = await loadJson<Record<string, unknown>>(env, `aliases/${id.slice(4, 7)}.json`);
+  const live: unknown = isObj(shard) ? shard[id] : null;
+  return typeof live === "string" && ORG_ID_RE.test(live) && live !== id ? live : null;
+}
+
+// -- directory -------------------------------------------------------------------------
+
+export async function loadDirectory(env: Env): Promise<DirectoryIndex | null> {
+  const doc = await loadJson<unknown>(env, "directory/index.json");
+  if (!isObj(doc) || !isListOf(doc.directories, (d) => isObj(d) && isStr(d.code) && DIRECTORY_CODES.includes(d.code) &&
+    isCount(d.organizations) && isCount(d.pages))) return null;
+  return doc as unknown as DirectoryIndex;
+}
+
+const tuple = (v: unknown, ...checks: ((x: unknown) => boolean)[]): boolean =>
+  Array.isArray(v) && v.length === checks.length && checks.every((check, i) => check(v[i]));
+
+export async function loadDirectoryPart(env: Env, code: string): Promise<DirectoryPart | null> {
+  if (!DIRECTORY_CODES.includes(code)) return null;
+  const v = await loadJson<unknown>(env, `directory/${code}/index.json`);
+  if (!isObj(v) || v.code !== code || !isCount(v.organizations) || !isCount(v.pages) || !isCount(v.page_size) ||
+    !isStrOrNull(v.updated)) return null;
+  const pages = v.pages;
+  const ok = isListOf(v.ranges, (r) => tuple(r, isStr, isStr)) && v.ranges.length === pages &&
+    isListOf(v.letters, (l) => tuple(l, isStr, (n) => isCount(n) && n >= 1 && n <= pages));
+  return ok ? (v as unknown as DirectoryPart) : null;
+}
+
+const isDirectoryRow = (v: unknown): v is DirectoryRow => isObj(v) && isStr(v.id) && ORG_ID_RE.test(v.id) && isStr(v.name) &&
+  isStrOrNull(v.city) && isCount(v.n_records) && isStrOrNull(v.last_seen);
+
+export async function loadDirectoryPage(env: Env, code: string, n: number): Promise<DirectoryPage | null> {
+  if (!DIRECTORY_CODES.includes(code) || !Number.isInteger(n) || n < 1) return null;
+  const v = await loadJson<unknown>(env, `directory/${code}/${n}.json`);
+  return isObj(v) && v.code === code && v.page === n && isListOf(v.rows, isDirectoryRow) && v.rows.length > 0
+    ? (v as unknown as DirectoryPage)
     : null;
 }
 
-// The hosted search database's rows counted by status, province, stream, year
-// and triggered indicators (export_static.write_search_counts). Each value
-// is listed once per dimension; a cell is the index of its value in each of
-// the five lists, then its row count.
-export interface SearchCounts {
-  data_as_of: string | null;
-  // The latest ESDC period (meta esdc_latest_period, '2026Q1'), whose list
-  // rows date=last_quarter keeps; null before any list is loaded.
-  latest_period: string | null;
-  total: number;
-  dims: ["status", "prov", "stream", "year", "ind"];
-  values: {
-    status: string[];
-    prov: (string | null)[];
-    stream: (string | null)[];
-    year: (number | null)[];
-    ind: string[];
-  };
-  cells: number[][];
+// -- buyers -----------------------------------------------------------------------------
+
+const isBuyerSummary = (v: unknown): v is BuyerSummary => isObj(v) && isStr(v.id) && BUYER_ID_RE.test(v.id) &&
+  isStr(v.name_en) && isStrOrNull(v.name_fr) && isStrOrNull(v.acronym_en) && isStrOrNull(v.acronym_fr) &&
+  isStrOrNull(v.kind) && isCount(v.n_tenders) && optional(v.n_open_tenders, isCount) && isCount(v.n_awards) &&
+  isCount(v.n_history) && isCount(v.n_contracts) && isCount(v.n_grants) && isNumOrNull(v.total_awards) &&
+  optional(v.total_history, isNumOrNull) && isNumOrNull(v.total_contracts) && isNumOrNull(v.total_grants);
+
+export async function loadBuyers(env: Env): Promise<BuyerIndex | null> {
+  const doc = await loadJson<unknown>(env, "buyers/index.json");
+  return isObj(doc) && checkOnce(doc.buyers, "buyers", (v) => isListOf(v, isBuyerSummary)) ? (doc as unknown as BuyerIndex) : null;
 }
 
-const COUNT_DIMS = ["status", "prov", "stream", "year", "ind"] as const;
-// Far above the about 3,000 cells the data makes, and small enough that a
-// damaged file cannot cost a request much to check.
-const MAX_COUNT_CELLS = 100_000;
-const isCount = (v: unknown): v is number => isNum(v) && Number.isInteger(v) && v >= 0;
-
-// The search API sums these cells for its totals, so a file that fails any
-// check reads as missing and the API counts in D1 instead (and finds the
-// latest period there): every field has its type, the latest period is a
-// period as ESDC's lists name it (a year "2015", a quarter "2026Q1" or a
-// run of quarters "2017Q1-Q2"), every cell points at listed values, and the
-// cells add up to the total.
-const PERIOD_RE = /^\d{4}(Q[1-4](-Q[1-4])?)?$/;
-
-export async function loadSearchCounts(env: Env): Promise<SearchCounts | null> {
-  const doc = await loadJson<SearchCounts>(env, "search/counts.json");
-  if (!isObj(doc) || !isCount(doc.total) || !isStrOrNull(doc.data_as_of)) return null;
-  if (!(doc.latest_period === null || (isStr(doc.latest_period) && PERIOD_RE.test(doc.latest_period)))) return null;
-  if (!Array.isArray(doc.dims) || doc.dims.join(",") !== COUNT_DIMS.join(",")) return null;
-  const v = doc.values;
-  if (!isObj(v) || !isListOf(v.status, isStr) || !isListOf(v.prov, isStrOrNull) || !isListOf(v.stream, isStrOrNull) ||
-    !isListOf(v.year, (y) => y === null || (isNum(y) && Number.isInteger(y))) || !isListOf(v.ind, isStr)) return null;
-  if (!Array.isArray(doc.cells) || doc.cells.length > MAX_COUNT_CELLS) return null;
-  const sizes = COUNT_DIMS.map((d) => (v[d] as unknown[]).length);
-  let sum = 0;
-  for (const cell of doc.cells as unknown[]) {
-    if (!Array.isArray(cell) || cell.length !== 6 || !cell.every(isCount)) return null;
-    if (!sizes.every((n, i) => cell[i] < n) || cell[5] < 1) return null;
-    sum += cell[5];
-  }
-  return sum === doc.total ? doc : null;
+export async function loadBuyer(env: Env, id: string): Promise<Buyer | null> {
+  if (!BUYER_ID_RE.test(id) || id.length > 80) return null;
+  const v = await loadJson<unknown>(env, `buyers/${id}.json`);
+  if (!isObj(v) || !isBuyerSummary(v.buyer) || v.buyer.id !== id) return null;
+  const b = v.buyer as unknown as Record<string, unknown>;
+  const ok = isStrOrNull(b.ckan_org) && isStrOrNull(b.department_number) &&
+    isListOf(v.years, (y) => isYearFigure(y) && isNumOrNull((y as unknown as Record<string, unknown>).n_organizations)) &&
+    isObj(v.top_organizations) &&
+    Object.entries(v.top_organizations).every(([k, rows]) => isMoneySource(k) && isListOf(rows, isOrgTotal)) &&
+    isCount(v.open_tenders) && isListOf(v.recent_awards, isAwardRow);
+  return ok ? (v as unknown as Buyer) : null;
 }
 
-// Each field a server-rendered search row shows (SearchRowView), with null
-// wherever the export writes it: a posting's missing details, the wage, unit
-// and date of a list row, the period of a posting.
-const isSearchRow = (r: unknown): boolean => isObj(r) && (r.kind === "posting" || r.kind === "esdc") && isNum(r.ref) &&
-  isStr(r.employer_id) && isStr(r.employer) && isStrOrNull(r.job) && isStrOrNull(r.noc) && isStrOrNull(r.street) &&
-  isStrOrNull(r.city) && isStrOrNull(r.prov) && isStrOrNull(r.postal) && isNumOrNull(r.wage_min) && isNumOrNull(r.wage_max) &&
-  isStrOrNull(r.unit) && isStrOrNull(r.date) && isStrOrNull(r.period) && isNumOrNull(r.positions) && isStr(r.status) &&
-  isStr(r.source) && isListOf(r.ind, isStr);
+// -- categories (UNSPSC segments) -----------------------------------------------------
 
-// The newest rows of the default scope: small enough to parse on the server
-// (about 150 KB raw for 500 rows) so a plain visit renders without JavaScript.
-// A file with an unreadable row reads as missing, and the page leaves the rows
-// to the script.
-export async function loadFirst(env: Env): Promise<SearchRow[] | null> {
-  const rows = await loadJson<SearchRow[]>(env, "search/first.json");
-  return isListOf(rows, isSearchRow) ? rows : null;
+const isCategorySummary = (v: unknown): v is CategorySummary => isObj(v) && isStr(v.code) && v.code in SEGMENTS &&
+  isStr(v.title_en) && isStr(v.title_fr) && isCount(v.open_tenders) && isCount(v.awards_year_n) &&
+  isNumOrNull(v.awards_year_total) && isCount(v.awards_n) && isNumOrNull(v.awards_total);
+
+export async function loadCategories(env: Env): Promise<CategoryIndex | null> {
+  const v = await loadJson<unknown>(env, "categories/index.json");
+  return isObj(v) && isNum(v.year) && isListOf(v.segments, isCategorySummary) ? (v as unknown as CategoryIndex) : null;
 }
 
-// A profile is checked as the employer page, its description and the response
-// form render it: a field the page formats, slices or compares must have that
-// type, and null is allowed wherever the export can write it (the nullable
-// columns of the tables behind each list, and a list row's publication date
-// when its resource is not recorded). The page links to and names itself by
-// employer.id, so that must be the id asked for. A profile that fails reads
-// as missing: a 404, after the alias lookup.
-const EMPLOYER_COUNTS = ["pending_count", "approved_lmias", "approved_positions", "refused_lmias", "refused_positions", "finding_count"] as const;
-const isEmployer = (v: unknown, id: string): boolean => isObj(v) && v.id === id && isStr(v.display_name) &&
-  isStrOrNull(v.province) && isStrOrNull(v.city) && isStrOrNull(v.postal_code) && isStrOrNull(v.street) &&
-  optional(v.street_source, isStrOrNull) && isStr(v.current_status) && isStrOrNull(v.status_changed_at) &&
-  EMPLOYER_COUNTS.every((k) => isNum(v[k]));
-
-const FINDING_FIELDS = ["operating_name", "legal_name", "address", "reasons", "decision_date", "penalty", "status"] as const;
-const PROFILE_LISTS = ["names", "postings", "esdc", "registry", "indicators", "findings"] as const;
-const PROFILE_ROWS: Record<(typeof PROFILE_LISTS)[number], (v: unknown) => boolean> = {
-  names: (v) => isObj(v) && isStr(v.name),
-  postings: (v) => isObj(v) && isNum(v.posting_id) && isStrOrNull(v.title) && isStrOrNull(v.noc_code) &&
-    isNumOrNull(v.wage_min) && isNumOrNull(v.wage_max) && isStrOrNull(v.wage_unit) && isNumOrNull(v.vacancies) &&
-    isStrOrNull(v.date_posted) && isStrOrNull(v.valid_through) && isStr(v.first_seen) && isStr(v.last_seen) &&
-    isStr(v.flag_current) && isStrOrNull(v.approved_seen_at) && isStr(v.url),
-  esdc: (v) => isObj(v) && isStr(v.list) && isStr(v.period) && isStrOrNull(v.stream) && isNumOrNull(v.lmias) &&
-    isStrOrNull(v.city) && isStrOrNull(v.postal_code) && isStrOrNull(v.noc_code) && isStrOrNull(v.noc_title) &&
-    isNumOrNull(v.positions) && isStr(v.resource_id) && isStrOrNull(v.published),
-  registry: (v) => isObj(v) && isStr(v.registry) && isStr(v.registry_id) && isStrOrNull(v.legal_name) &&
-    isStrOrNull(v.entity_type) && isStrOrNull(v.status) && isStrOrNull(v.registered_on) && isStr(v.grade),
-  indicators: (v) => isObj(v) && isStr(v.indicator) && isStr(v.state) && isStr(v.basis),
-  findings: (v) => isObj(v) && FINDING_FIELDS.every((k) => isStrOrNull(v[k])),
-};
-
-// The public-record lists, checked the same way: every field the employer
-// page formats or links with, null where the export can write it.
-const PUBLIC_LISTS = ["grants", "alberta", "us_carrier"] as const;
-const isMatch = (v: Record<string, any>): boolean => isStr(v.grade) && isStr(v.basis);
-const PUBLIC_ROWS: Record<(typeof PUBLIC_LISTS)[number], (v: unknown) => boolean> = {
-  grants: (v) => isObj(v) && isMatch(v) && isStr(v.ref_number) && isNum(v.amendment_number) && isStr(v.owner_org) &&
-    isStrOrNull(v.department_en) && isStrOrNull(v.department_fr) && isStrOrNull(v.program_en) &&
-    isStrOrNull(v.program_fr) && isStrOrNull(v.agreement_type) && isNumOrNull(v.agreement_value) &&
-    isStrOrNull(v.start_date) && isStrOrNull(v.end_date),
-  alberta: (v) => isObj(v) && isMatch(v) && isStr(v.emp_key) && isNum(v.year) && isNumOrNull(v.first_year) &&
-    isStr(v.employer_name) && isStrOrNull(v.trade_name) && isStrOrNull(v.city) && isStrOrNull(v.industry) &&
-    isNumOrNull(v.person_years) && isNumOrNull(v.lost_time_claims) && isNumOrNull(v.lost_time_rate) &&
-    isNumOrNull(v.disabling_injuries) && isNumOrNull(v.disabling_rate) && isNumOrNull(v.fatalities) &&
-    isNumOrNull(v.cor_year),
-  us_carrier: (v) => isObj(v) && isMatch(v) && isNum(v.dot_number) && isStr(v.legal_name) && isStrOrNull(v.dba_name) &&
-    isStrOrNull(v.city) && isStrOrNull(v.province) && isStrOrNull(v.postal_code) && isStrOrNull(v.status) &&
-    isNumOrNull(v.power_units) && isNumOrNull(v.drivers) && isStrOrNull(v.safety_rating) &&
-    isStrOrNull(v.safety_rating_date) && isStrOrNull(v.record_date),
-};
-
-// Postings open to international candidates and designated-employer listings,
-// checked like the public records. Every link is held to the host it must
-// come from, since the page renders it as an href.
-const JOBBANK_POSTING = /^https:\/\/www\.jobbank\.gc\.ca\/jobsearch\/jobposting\/\d+$/;
-const HTTPS_URL = /^https:\/\/[A-Za-z0-9.-]+\.[a-z]{2,}(\/[^\s"<>]*)?$/;
-const isIntlPosting = (v: unknown): boolean => isObj(v) && isNum(v.id) && isStrOrNull(v.title) && isStrOrNull(v.noc) &&
-  isStrOrNull(v.city) && isStrOrNull(v.prov) && isStr(v.date) && typeof v.live === "boolean" && isStr(v.lmia) &&
-  (v.grade === null || v.grade === "A" || v.grade === "B" || v.grade === "C") && isListOf(v.reasons, isStr) &&
-  isStr(v.url) && JOBBANK_POSTING.test(v.url);
-const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
-const isDesignated = (v: unknown): boolean => isObj(v) && isMatch(v) && isStr(v.list) && isStr(v.program) &&
-  isStr(v.jurisdiction) && isStrOrNull(v.community) && isStr(v.name) && isStrOrNull(v.location) &&
-  isStrOrNull(v.designated_on) && isStr(v.first_seen) && isStr(v.last_seen) && typeof v.current === "boolean" &&
-  isStr(v.url) && HTTPS_URL.test(v.url) &&
-  (v.snapshot === undefined || (isObj(v.snapshot) && isStr(v.snapshot.list_date) && ISO_DAY.test(v.snapshot.list_date) &&
-    isStr(v.snapshot.loaded_on) && ISO_DAY.test(v.snapshot.loaded_on)));
-
-// Each is rendered as a link, so the id must be an employer id.
-const isRelated = (v: unknown): boolean => isObj(v) && isStr(v.id) && EMPLOYER_ID_RE.test(v.id) && isStr(v.name) &&
-  optional(v.city, isStr);
-
-// Rows of one list with no LMIA count (from ESDC files that carry positions
-// only, 2014 through 2021 Q3). Each such row is at least one LMIA, so the
-// employer page and its description show the sum plus these rows as a floor.
-export function lmiaGap(esdc: Profile["esdc"], list: "positive" | "negative" = "positive"): number {
-  return esdc.filter((r) => r.list === list && r.lmias === null).length;
+export async function loadCategory(env: Env, code: string): Promise<Category | null> {
+  if (!SEGMENT_RE.test(code) || !(code in SEGMENTS)) return null;
+  const v = await loadJson<unknown>(env, `categories/${code}.json`);
+  const ok = isObj(v) && v.code === code && isStr(v.title_en) && isStr(v.title_fr) && isListOf(v.open_tenders, isTenderRow) &&
+    isListOf(v.top_organizations, isOrgTotal) &&
+    isListOf(v.years, (y) => isObj(y) && isNum(y.year) && isCount(y.n) && isNumOrNull(y.total));
+  return ok ? (v as unknown as Category) : null;
 }
 
-export async function loadProfile(env: Env, id: string): Promise<Profile | null> {
-  if (!EMPLOYER_ID_RE.test(id)) return null;
-  const shard = await loadJson<Record<string, Profile>>(env, `profiles/${id.slice(4, 7)}.json`);
-  const profile: unknown = isObj(shard) ? shard[id] : null;
-  if (!isObj(profile) || !isEmployer(profile.employer, id)) return null;
-  if (!PROFILE_LISTS.every((k) => isListOf(profile[k], PROFILE_ROWS[k]))) return null;
-  // Absent (a shard from before these sources) reads as none; present, a list
-  // must be readable whole, like the lists above.
-  if (!PUBLIC_LISTS.every((k) => optional(profile[k], (v) => isListOf(v, PUBLIC_ROWS[k])))) return null;
-  if (!optional(profile.grants_total, isNum)) return null;
-  if (!optional(profile.intl, (v) => isListOf(v, isIntlPosting)) || !optional(profile.designated, (v) => isListOf(v, isDesignated))) {
-    return null;
-  }
-  // The shard is shared and frozen, so the lists filled in go on a copy.
-  const grants: unknown[] = profile.grants ?? [];
-  return {
-    ...profile,
-    grants,
-    alberta: profile.alberta ?? [],
-    us_carrier: profile.us_carrier ?? [],
-    intl: profile.intl ?? [],
-    designated: profile.designated ?? [],
-    // Links to other profiles, not records of this one: a list that does not
-    // read is left off rather than taking the profile down with it.
-    related: isListOf(profile.related, isRelated) ? profile.related : [],
-    // The count of agreements is never below the agreements listed.
-    grants_total: Math.max(profile.grants_total ?? 0, grants.length),
-  } as unknown as Profile;
-}
+// -- rankings -----------------------------------------------------------------------------
 
-// The id that took a retired employer id's records (ids change when employer
-// matching changes), from a shard keyed like the profiles by the old id. A
-// missing or unreadable shard, or an entry that is not an employer id, reads
-// as no alias. The value goes into a Location header, so it must be an id: a
-// stray character there would make the redirect itself fail. An entry
-// pointing at itself would redirect forever, so it counts as none.
-export async function loadAlias(env: Env, id: string): Promise<string | null> {
-  if (!EMPLOYER_ID_RE.test(id)) return null;
-  const shard = await loadJson<Record<string, unknown>>(env, `aliases/${id.slice(4, 7)}.json`);
-  const live: unknown = isObj(shard) ? shard[id] : null;
-  return typeof live === "string" && EMPLOYER_ID_RE.test(live) && live !== id ? live : null;
+const isBuyerRank = (v: unknown): v is BuyerRank => isObj(v) && isStr(v.id) && BUYER_ID_RE.test(v.id) && isStr(v.name_en) &&
+  isStrOrNull(v.name_fr) && isCount(v.n) && isNumOrNull(v.total);
+
+export async function loadRankings(env: Env, which: number | "all"): Promise<Rankings | null> {
+  if (which !== "all" && !(Number.isInteger(which) && which >= 1900 && which <= 2999)) return null;
+  const v = await loadJson<unknown>(env, `rankings/${which}.json`);
+  if (!isObj(v) || !(which === "all" ? v.year === null : v.year === which)) return null;
+  const ok = isListOf(v.years, (y) => isNum(y) && Number.isInteger(y)) && isObj(v.sources) &&
+    Object.entries(v.sources).every(([k, s]) => (SOURCES as readonly string[]).includes(k) && isObj(s) &&
+      isListOf(s.by_value, isOrgTotal) && isListOf(s.by_count, isOrgTotal)) &&
+    isObj(v.buyers) && Object.entries(v.buyers).every(([k, rows]) => isMoneySource(k) && isListOf(rows, isBuyerRank));
+  return ok ? (v as unknown as Rankings) : null;
 }

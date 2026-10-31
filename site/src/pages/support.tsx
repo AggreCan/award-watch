@@ -3,15 +3,13 @@ import type { FC } from "hono/jsx";
 import { loadStats } from "../data";
 import type { AppEnv, Env } from "../env";
 import { t, tn, type Key, type Lang } from "../i18n";
-import { Layout, fmtInt, page, periodLabel } from "../layout";
-import { COUNT_CAP, PAGE_SIZE as SEARCH_PAGE_SIZE, YEAR_MIN as SEARCH_YEAR_MIN } from "../search_db";
+import { Layout, fmtInt, page } from "../layout";
 import { pageSeo } from "../seo";
 import {
   ACTIONS_CENTS_PER_MONTH,
   COSTS_TODAY_CENTS,
   DOMAIN_CAD_PER_YEAR,
   DOMAIN_CENTS_PER_MONTH,
-  ESDC_HISTORY_START_YEAR,
   EXAMPLE_GIFT_CAD,
   PAID_REQUESTS_PER_MONTH,
   WORKERS_PAID_SINCE,
@@ -22,8 +20,6 @@ import {
   STORAGE_CENTS_PER_GB_MONTH,
   STORAGE_FREE_GB,
   TARGET_CENTS_PER_MONTH,
-  X_POST_CENTS_PER_MONTH,
-  X_POST_USD_EACH,
   WORKERS_PAID_LIST_CENTS,
   WORKERS_PAID_USD_PER_MONTH,
   barWidth,
@@ -111,14 +107,14 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
   const sup = await loadSupport(c.env.DB, new Date());
   const tiers = tierCoverage(sup.monthlySupportCents);
   const met = budgetMet(sup.monthlySupportCents, sup.reserveMonths);
-  const latest = stats?.esdc_latest_period ? periodLabel(stats.esdc_latest_period, lang) : null;
-  const employers = stats?.counts?.employers;
+  const counts = stats?.counts ?? {};
+  const held = (k: keyof typeof counts, key: Key) => (counts[k] !== undefined ? <li>{t(lang, key, { n: fmtInt(counts[k], lang) })}</li> : null);
   const money = (v: number) => fmtCents(v, lang);
   const goal = months(lang, RESERVE_GOAL_MONTHS);
 
   return page(
     c,
-    <Layout lang={lang} title={t(lang, "support.title")} dataAsOf={stats?.data_as_of ?? null} active="/support" seo={pageSeo("support", lang)}>
+    <Layout lang={lang} title={t(lang, "support.title")} dataAsOf={stats?.data_as_of ?? null} seo={pageSeo("support", lang)}>
       <div class="doc-layout">
         <nav aria-label={t(lang, "toc.label")} class="toc">
           <span class="toc-title">{t(lang, "toc.title")}</span>
@@ -137,25 +133,16 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
 
           <h2 id="holds">{t(lang, "support.toc_holds")}</h2>
           <ul>
-            <li>
-              {t(lang, "support.holds_lists", {
-                year: ESDC_HISTORY_START_YEAR,
-                through: latest ? t(lang, "support.holds_through", { period: latest }) : "",
-              })}
-            </li>
-            <li>
-              {t(lang, "support.holds_profiles", {
-                count: employers ? t(lang, "support.holds_employers", { n: fmtInt(employers, lang) }) : "",
-              })}
-            </li>
-            <li>{t(lang, "support.holds_search", { year: SEARCH_YEAR_MIN })}</li>
-            <li>{t(lang, "support.holds_matched")}</li>
+            {held("tenders_open", "support.holds_tenders")}
+            {held("awards", "support.holds_awards")}
+            {held("contracts", "support.holds_contracts")}
+            {held("grants", "support.holds_grants")}
+            {held("organizations", "support.holds_organizations")}
             <li>{t(lang, "support.holds_refresh", { time: refreshTimeText(undefined, lang) })}</li>
           </ul>
           <h3>{t(lang, "support.limits")}</h3>
           <ul>
             <li>{t(lang, "support.limit_paid", { date: WORKERS_PAID_SINCE, n: fmtInt(PAID_REQUESTS_PER_MONTH, lang) })}</li>
-            <li>{t(lang, "support.limit_search", { page: SEARCH_PAGE_SIZE, cap: fmtInt(COUNT_CAP, lang) })}</li>
             <li>{t(lang, "support.limit_storage", { n: STORAGE_FREE_GB })}</li>
           </ul>
 
@@ -168,7 +155,6 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
               { label: t(lang, "support.bar_workers"), cents: WORKERS_PLAN_CENTS_PER_MONTH },
               { label: t(lang, "support.bar_hosting"), cents: HOSTING_CENTS_PER_MONTH },
               { label: t(lang, "support.bar_github"), cents: ACTIONS_CENTS_PER_MONTH },
-              { label: t(lang, "support.bar_x"), cents: X_POST_CENTS_PER_MONTH },
               { label: t(lang, "support.bar_total"), cents: COSTS_TODAY_CENTS, total: true },
             ]}
           />
@@ -179,10 +165,7 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
               workersUsd: fmtUsd(WORKERS_PAID_USD_PER_MONTH, lang),
               workers: money(WORKERS_PLAN_CENTS_PER_MONTH),
               github: money(ACTIONS_CENTS_PER_MONTH),
-              usd: fmtUsd(X_POST_USD_EACH, lang),
-              monthly: money(X_POST_CENTS_PER_MONTH),
-            })}{" "}
-            {t(lang, "support.bluesky_free")}
+            })}
           </p>
 
           <h2 id="tiers">{t(lang, "support.toc_tiers")}</h2>
@@ -301,7 +284,7 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
                 ) : (
                   sup.ledger.map((r) => (
                     <tr>
-                      <td class="mono">{lang === "fr" ? periodLabel(r.quarter.replace(" ", ""), lang) : r.quarter}</td>
+                      <td class="mono">{lang === "fr" ? r.quarter.replace(" Q", " T") : r.quarter}</td>
                       <td class="mono num">{money(r.monthlyCostCents)}</td>
                       <td class="mono num">{money(r.receivedCents)}</td>
                       <td class="mono num">{money(r.spentCents)}</td>

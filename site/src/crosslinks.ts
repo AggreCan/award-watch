@@ -1,159 +1,38 @@
-// Links from an employer profile to the place and occupation pages that cover
-// its records: the province page in the breadcrumb, the city page on the city
-// name, the occupation page on each NOC code. Most profiles have no other
-// inbound link than the sitemap, and these give the place and occupation
-// pages links from every profile they cover.
-//
-// A link is written only where the page exists and is indexed: a city page
-// is listed in its province's file (places/<pp>.json, which lists every city
-// page of the province; places/index.json lists only the largest 25), and an
-// occupation page in occupations/index.json. A missing or unreadable file
-// means no link, never an error. The lookups built from a file are kept per
-// parsed file in a WeakMap: loadJson hands back the same frozen object while
-// the file stays in its cache with an unchanged ETag, so a lookup is built
-// once per parsed copy, and a deploy that changes the file brings a new
-// object and a new lookup (the old one goes with the old object).
+// Links between pages that do not read each other's files: from a profile to
+// the A to Z directory that lists it, and from any record to its buyer's
+// page. A profile's other inbound links are its sitemap entry and the lists
+// on buyer, category and ranking pages, so the directory is the link every
+// profile can count on.
 
-import { loadJson } from "./data";
+import { OUTSIDE, PROVINCES, UNKNOWN } from "./constants";
+import { type DirectorySummary, BUYER_ID_RE, loadDirectory } from "./data";
 import type { Env } from "./env";
-import { isNum, isObj, isStr } from "./valid";
-
-// The thirteen provinces and territories, each with a page at /places/<pp>.
-// XX (head office outside Canada) has none.
-const PLACE_PROVINCES = new Set(["AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT"]);
-
-export function provincePath(province: string | null | undefined): string | null {
-  return province && PLACE_PROVINCES.has(province) ? `/places/${province.toLowerCase()}` : null;
-}
-
-// A city name folded the way the pipeline folds it into a page slug
-// (places.slugify): accents and other combining marks stripped, lower case,
-// apostrophes dropped, any other run of characters outside a to z and 0 to 9
-// made one space, and "saint"/"sainte" written "st"/"ste". "St. John's",
-// "ST JOHNS" and the slug "st-johns" all read "st johns".
-export function placeKey(name: string): string {
-  return name
-    .normalize("NFKD")
-    .replace(/\p{Mn}/gu, "")
-    .toLowerCase()
-    .replace(/œ/g, "oe")
-    .replace(/æ/g, "ae")
-    .replace(/['’]/g, "")
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean)
-    .map((w) => (w === "saint" ? "st" : w === "sainte" ? "ste" : w))
-    .join(" ");
-}
-
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-// folded name -> slug, for the city pages one province file lists.
-const cityLookups = new WeakMap<object, Map<string, string>>();
-
-function cityLookup(file: Record<string, any>): Map<string, string> {
-  let lookup = cityLookups.get(file);
-  if (lookup) return lookup;
-  lookup = new Map();
-  const threshold = isNum(file.threshold) ? file.threshold : 0;
-  for (const c of Array.isArray(file.cities) ? file.cities : []) {
-    if (!isObj(c) || !isStr(c.slug) || !SLUG_RE.test(c.slug) || !isStr(c.name)) continue;
-    // The pipeline lists a city only from the threshold up, with no flag; a
-    // flag, where an entry carries one, decides.
-    const indexed = c.indexed === undefined ? isNum(c.records) && c.records >= threshold : c.indexed === true;
-    if (!indexed) continue;
-    for (const key of [placeKey(c.slug), placeKey(c.name)]) if (key && !lookup.has(key)) lookup.set(key, c.slug);
-  }
-  cityLookups.set(file, lookup);
-  return lookup;
-}
-
-// The city's page, or null when the province has no page for that city.
-export async function cityPath(env: Env, province: string | null, city: string | null): Promise<string | null> {
-  const key = city ? placeKey(city) : "";
-  if (!province || !PLACE_PROVINCES.has(province) || !key) return null;
-  const pp = province.toLowerCase();
-  try {
-    const file = await loadJson<unknown>(env, `places/${pp}.json`);
-    if (!isObj(file)) return null;
-    const slug = cityLookup(file).get(key);
-    return slug ? `/places/${pp}/${slug}` : null;
-  } catch (e) {
-    console.error(`city link ${province}: ${String(e).slice(0, 200)}`);
-    return null;
-  }
-}
-
-export interface OccupationTitle {
-  en: string;
-  fr: string;
-}
-
-// NOC 2021 code -> title, for the indexed occupation pages.
-export type OccupationLinks = ReadonlyMap<string, OccupationTitle | null>;
-
-const NO_OCCUPATIONS: OccupationLinks = new Map();
-const NOC_RE = /^[0-9]{5}$/;
-const occupationLookups = new WeakMap<object, Map<string, OccupationTitle | null>>();
-
-function occupationLookup(file: Record<string, any>): Map<string, OccupationTitle | null> {
-  let lookup = occupationLookups.get(file);
-  if (lookup) return lookup;
-  lookup = new Map();
-  const threshold = isNum(file.threshold) ? file.threshold : 0;
-  for (const r of Array.isArray(file.rows) ? file.rows : []) {
-    if (!isObj(r) || !isStr(r.noc) || !NOC_RE.test(r.noc)) continue;
-    const indexed = r.indexed === undefined ? isNum(r.records) && r.records >= threshold : r.indexed === true;
-    if (!indexed) continue;
-    const title = isObj(r.title) && isStr(r.title.en) && isStr(r.title.fr) ? { en: r.title.en, fr: r.title.fr } : null;
-    lookup.set(r.noc, title);
-  }
-  occupationLookups.set(file, lookup);
-  return lookup;
-}
-
-export async function occupationLinks(env: Env): Promise<OccupationLinks> {
-  try {
-    const file = await loadJson<unknown>(env, "occupations/index.json");
-    return isObj(file) ? occupationLookup(file) : NO_OCCUPATIONS;
-  } catch (e) {
-    console.error(`occupation links: ${String(e).slice(0, 200)}`);
-    return NO_OCCUPATIONS;
-  }
-}
-
-// The employer directory (pages/directory.tsx): one A to Z list per province
-// and territory with a place page, and one for employers with a head office
-// outside Canada (XX) or no province.
-export const OTHER = "other";
-export const DIRECTORY_CODES: readonly string[] = [...[...PLACE_PROVINCES].map((p) => p.toLowerCase()), OTHER];
 
 export function directoryPath(code: string, n = 1): string {
-  return n === 1 ? `/places/${code}/employers` : `/places/${code}/employers/${n}`;
+  return n === 1 ? `/organizations/directory/${code}` : `/organizations/directory/${code}/${n}`;
 }
 
-// The directory a profile's province puts it in.
-export function directoryCode(province: string | null | undefined): string {
-  return province && PLACE_PROVINCES.has(province) ? province.toLowerCase() : OTHER;
+// The directory a profile's place puts it in: its province when Canadian,
+// "xx" for an address outside Canada, "un" when the records carry none.
+export function directoryCode(province: string | null | undefined, country: string | null | undefined): string {
+  if (province && (PROVINCES as readonly string[]).includes(province)) return province.toLowerCase();
+  if (country && country !== "CA") return OUTSIDE.toLowerCase();
+  return UNKNOWN.toLowerCase();
 }
 
-export interface DirectorySummary { code: string; employers: number; pages: number }
+// A buyer's page, or null for an id that is not one (a record whose buyer the
+// pipeline could not map carries none).
+export function buyerPath(id: string | null | undefined): string | null {
+  return id && BUYER_ID_RE.test(id) ? `/buyers/${id}` : null;
+}
 
-const isCount = (v: unknown): v is number => isNum(v) && Number.isInteger(v) && v >= 0;
-
-// Each directory's counts (directory/index.json), for the links on the place
-// pages and the profiles; null when the file is missing or unreadable, and
-// then no page shows a link.
+// Each directory's counts (directory/index.json), for the links on the
+// profiles and the organizations page; null when the file is missing or
+// unreadable, and then no page shows a link.
 export async function loadDirectories(env: Env): Promise<ReadonlyMap<string, DirectorySummary> | null> {
   try {
-    const doc = await loadJson<unknown>(env, "directory/index.json");
-    if (!isObj(doc) || !Array.isArray(doc.directories)) return null;
-    const out = new Map<string, DirectorySummary>();
-    for (const d of doc.directories as unknown[]) {
-      if (isObj(d) && isStr(d.code) && DIRECTORY_CODES.includes(d.code) && isCount(d.employers) && isCount(d.pages)) {
-        out.set(d.code, { code: d.code, employers: d.employers, pages: d.pages });
-      }
-    }
-    return out;
+    const doc = await loadDirectory(env);
+    return doc ? new Map(doc.directories.map((d) => [d.code, d])) : null;
   } catch (e) {
     console.error(`directory links: ${String(e).slice(0, 200)}`);
     return null;

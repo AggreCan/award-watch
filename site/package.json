@@ -1,11 +1,11 @@
 {
-  "name": "pmw-site",
+  "name": "award-watch-site",
   "private": true,
   "license": "SEE LICENSE IN ../LICENSE.md",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "db:local": "wrangler d1 execute public-money-watch --local --file=../pipeline/schema.sql && wrangler d1 execute public-money-watch --local --file=./seed/dev_seed.sql",
+    "db:local": "wrangler d1 execute award-watch --local --file=../pipeline/schema.sql && wrangler d1 execute award-watch --local --file=./seed/dev_seed.sql",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "deploy": "wrangler deploy",

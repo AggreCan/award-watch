@@ -35,36 +35,42 @@ function visit(path: string, dataset?: AnalyticsEngineDataset, init: RequestInit
 describe("route templates", () => {
   it("names every route by its template, never by its parameters", () => {
     expect(routeTemplate("GET", "/")).toEqual({ route: "/", kind: "page" });
-    expect(routeTemplate("GET", "/search")).toEqual({ route: "/search", kind: "page" });
-    expect(routeTemplate("GET", "/employers/emp-a000000001")).toEqual({ route: "/employers/:id", kind: "page" });
-    expect(routeTemplate("GET", "/employers/emp-a000000001/respond")).toEqual({ route: "/employers/:id/respond", kind: "page" });
-    expect(routeTemplate("POST", "/employers/emp-a000000001/respond")).toEqual({ route: "/employers/:id/respond", kind: "form" });
+    expect(routeTemplate("GET", "/tenders")).toEqual({ route: "/tenders", kind: "page" });
+    expect(routeTemplate("GET", "/tenders/new")).toEqual({ route: "/tenders/new", kind: "page" });
+    expect(routeTemplate("GET", "/tenders/cb-100-10000001")).toEqual({ route: "/tenders/:reference", kind: "page" });
+    expect(routeTemplate("GET", "/awards/2026")).toEqual({ route: "/awards/:year", kind: "page" });
+    expect(routeTemplate("GET", "/awards/cb-400-40000004")).toEqual({ route: "/awards/:reference", kind: "page" });
+    expect(routeTemplate("GET", "/history/w8472-000633")).toEqual({ route: "/history/:reference", kind: "page" });
+    expect(routeTemplate("GET", "/organizations/org-a000000001")).toEqual({ route: "/organizations/:id", kind: "page" });
+    expect(routeTemplate("GET", "/organizations/org-a000000001/respond")).toEqual({ route: "/organizations/:id/respond", kind: "page" });
+    expect(routeTemplate("POST", "/organizations/org-a000000001/respond")).toEqual({ route: "/organizations/:id/respond", kind: "form" });
+    expect(routeTemplate("GET", "/organizations/directory/on")).toEqual({ route: "/organizations/directory/:code", kind: "page" });
+    expect(routeTemplate("GET", "/organizations/directory/on/2")).toEqual({ route: "/organizations/directory/:code/:page", kind: "page" });
+    expect(routeTemplate("GET", "/buyers/dnd-mdn")).toEqual({ route: "/buyers/:id", kind: "page" });
+    expect(routeTemplate("GET", "/categories/82")).toEqual({ route: "/categories/:nn", kind: "page" });
     expect(routeTemplate("POST", "/corrections")).toEqual({ route: "/corrections", kind: "form" });
-    expect(routeTemplate("GET", "/api/employers/emp-a000000001")).toEqual({ route: "/api/employers/:id", kind: "api" });
-    expect(routeTemplate("GET", "/api/area/V0N")).toEqual({ route: "/api/area/:fsa", kind: "api" });
+    expect(routeTemplate("GET", "/api/organizations/org-a000000001")).toEqual({ route: "/api/organizations/:id", kind: "api" });
+    expect(routeTemplate("GET", "/api/tenders/cb-100-10000001")).toEqual({ route: "/api/tenders/:reference", kind: "api" });
+    expect(routeTemplate("GET", "/api/buyers/dnd-mdn")).toEqual({ route: "/api/buyers/:id", kind: "api" });
+    expect(routeTemplate("GET", "/api/categories/82")).toEqual({ route: "/api/categories/:nn", kind: "api" });
     expect(routeTemplate("GET", "/api/stats")).toEqual({ route: "/api/stats", kind: "api" });
-    expect(routeTemplate("GET", "/api/search")).toEqual({ route: "/api/search", kind: "api" });
-    expect(routeTemplate("GET", "/api/search/facets")).toEqual({ route: "/api/search/facets", kind: "api" });
     expect(routeTemplate("GET", "/api/anything/else")).toEqual({ route: "/api/other", kind: "api" });
-    expect(routeTemplate("GET", "/downloads/employers.csv")).toEqual({ route: "/downloads/employers.csv", kind: "download" });
+    expect(routeTemplate("GET", "/downloads/organizations.csv")).toEqual({ route: "/downloads/organizations.csv", kind: "download" });
+    expect(routeTemplate("GET", "/downloads/awards-2024.csv")).toEqual({ route: "/downloads/awards-:year.csv", kind: "download" });
+    expect(routeTemplate("GET", "/downloads/history-2019.csv")).toEqual({ route: "/downloads/history-:year.csv", kind: "download" });
     expect(routeTemplate("GET", "/downloads/mirror/SHA256SUMS")).toEqual({ route: "/downloads/mirror/:file", kind: "download" });
     expect(routeTemplate("GET", "/downloads/secret.txt")).toEqual({ route: "/downloads/other", kind: "download" });
     expect(routeTemplate("POST", "/hooks/kofi")).toEqual({ route: "/hooks/kofi", kind: "hook" });
     expect(routeTemplate("GET", "/sitemap-12.xml")).toEqual({ route: "/sitemap.xml", kind: "file" });
     expect(routeTemplate("GET", "/robots.txt")).toEqual({ route: "/robots.txt", kind: "file" });
-    for (const page of ["/cite", "/feeds", "/watchlist", "/releases", "/rankings", "/trends", "/program", "/occupations", "/places"]) {
+    for (const page of ["/awards", "/organizations", "/buyers", "/categories", "/rankings", "/cite", "/feeds", "/watchlist", "/data", "/methodology", "/support"]) {
       expect(routeTemplate("GET", page), page).toEqual({ route: page, kind: "page" });
     }
-    expect(routeTemplate("GET", "/releases/2026-q1")).toEqual({ route: "/releases/:slug", kind: "page" });
     expect(routeTemplate("GET", "/rankings/2025")).toEqual({ route: "/rankings/:year", kind: "page" });
-    expect(routeTemplate("GET", "/trends/streams")).toEqual({ route: "/trends/:view", kind: "page" });
-    expect(routeTemplate("GET", "/occupations/63200")).toEqual({ route: "/occupations/:noc", kind: "page" });
-    expect(routeTemplate("GET", "/places/mb")).toEqual({ route: "/places/:prov", kind: "page" });
-    expect(routeTemplate("GET", "/places/mb/winnipeg")).toEqual({ route: "/places/:prov/:slug", kind: "page" });
   });
 
   it("stores a path that matches no route as 'other', whatever it holds", () => {
-    for (const path of ["/someone@example.com", "/search/", "/wp-login.php", "/employers/a/b/c", "/%E2%80%94", "/places/a/b/c", "/trends/a/b", "/program/2026"]) {
+    for (const path of ["/someone@example.com", "/search", "/wp-login.php", "/organizations/a/b/c", "/%E2%80%94", "/tenders/a/b", "/buyers/a/b"]) {
       expect(routeTemplate("GET", path), path).toEqual({ route: "other", kind: "other" });
     }
   });
@@ -92,18 +98,18 @@ describe("referrer and country", () => {
 describe("measurement middleware", () => {
   it("writes one aggregate point per response, with no address, agent, cookie or full referrer", async () => {
     const { points, dataset } = recorder();
-    const res = await visit("/employers/emp-a000000001", dataset);
+    const res = await visit("/organizations/org-a000000001", dataset);
     expect(res.status).toBe(200);
     expect(points).toHaveLength(1);
     const [p] = points;
     expect(p).toEqual({
-      indexes: ["/employers/:id"],
+      indexes: ["/organizations/:id"],
       // No VIEWS_SALT_KEY in the test environment, so no visitor code.
-      blobs: ["/employers/:id", "page", "fr", "", "news.example.org", "GET", "", "human", "desktop", ""],
+      blobs: ["/organizations/:id", "page", "fr", "", "news.example.org", "GET", "", "human", "desktop", ""],
       doubles: [200],
     });
     const raw = JSON.stringify(p);
-    for (const secret of [IP, UA, "theme", "lang=fr", "utm_source", "/2026/10/story", "emp-a000000001"]) {
+    for (const secret of [IP, UA, "theme", "lang=fr", "utm_source", "/2026/10/story", "org-a000000001"]) {
       expect(raw, secret).not.toContain(secret);
     }
   });
@@ -117,7 +123,7 @@ describe("measurement middleware", () => {
     await visit("/corrections", dataset, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ record_ref: "emp-a000000002", request: "The street address on this profile is out of date." }).toString(),
+      body: new URLSearchParams({ page: "/organizations/org-a000000002", text: "The city on this profile is out of date." }).toString(),
     });
     expect(points.map((p) => [p.blobs?.[0], p.blobs?.[1], p.blobs?.[2], p.doubles?.[0]])).toEqual([
       ["/", "page", "en", 200],
@@ -131,11 +137,11 @@ describe("measurement middleware", () => {
 
   it("records the edge's country code when the request carries one", async () => {
     const { points, dataset } = recorder();
-    const req = new Request("http://localhost/search", { headers: { referer: "https://lmiawatch.ca/" } });
+    const req = new Request("http://localhost/tenders", { headers: { referer: "https://awardwatch.ca/" } });
     Object.defineProperty(req, "cf", { value: { country: "CA", city: "Somewhere", latitude: "1" } });
     await app.fetch(req, { ...testEnv(), VIEWS: dataset });
     // No user agent at all: a program, so a bot with no device and no code.
-    expect(points[0].blobs).toEqual(["/search", "page", "en", "CA", "lmiawatch.ca", "GET", "", "bot", "", ""]);
+    expect(points[0].blobs).toEqual(["/tenders", "page", "en", "CA", "awardwatch.ca", "GET", "", "bot", "", ""]);
     expect(JSON.stringify(points)).not.toContain("Somewhere");
   });
 
@@ -175,8 +181,8 @@ describe("bot or human", () => {
       "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)",
       "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/130.0.0.0 Safari/537.36",
       "Mozilla/5.0 (compatible; Google-InspectionTool/1.0)",
-      "Mozilla/5.0 (compatible; LMIAWatch/0.1; +https://lmiawatch.ca)",
-      "LMIAWatch/0.1 (+https://lmiawatch.ca; https://lmiawatch.ca/corrections)",
+      "Mozilla/5.0 (compatible; AwardWatch/0.1; +https://awardwatch.ca)",
+      "AwardWatch/0.1 (+https://awardwatch.ca/corrections)",
       "python-requests/2.32.3",
       "curl/8.5.0",
       "Wget/1.21.4",
@@ -219,7 +225,7 @@ describe("bot or human", () => {
 
   it("takes any one of Sec-Fetch-Mode, Sec-Fetch-Dest and Sec-Fetch-Site as Fetch Metadata", () => {
     expect(hasFetchMetadata(new Headers())).toBe(false);
-    expect(hasFetchMetadata(new Headers({ "user-agent": CHROME, referer: "https://lmiawatch.ca/", "sec-ch-ua-mobile": "?0" }))).toBe(false);
+    expect(hasFetchMetadata(new Headers({ "user-agent": CHROME, referer: "https://awardwatch.ca/", "sec-ch-ua-mobile": "?0" }))).toBe(false);
     expect(hasFetchMetadata(new Headers({ "Sec-Fetch-Mode": "navigate" }))).toBe(true);
     expect(hasFetchMetadata(new Headers({ "sec-fetch-dest": "document" }))).toBe(true);
     expect(hasFetchMetadata(new Headers({ "sec-fetch-site": "none" }))).toBe(true);
@@ -237,7 +243,7 @@ describe("bot or human", () => {
 
   it("records the edge's verified-bot category as a bot on the data point", async () => {
     const { points, dataset } = recorder();
-    const req = new Request("http://localhost/search", { headers: { "user-agent": CHROME } });
+    const req = new Request("http://localhost/tenders", { headers: { "user-agent": CHROME } });
     Object.defineProperty(req, "cf", { value: { country: "US", verifiedBotCategory: "Search Engine Crawler" } });
     await app.fetch(req, { ...testEnv(), VIEWS: dataset, VIEWS_SALT_KEY: "test-secret" });
     expect(points[0].blobs?.slice(6)).toEqual(["", "bot", "", ""]);

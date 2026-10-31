@@ -4,12 +4,10 @@
 declare namespace Cloudflare {
   interface Env {
     DB: D1Database;
-    SEARCH: D1Database;
     DATA: R2Bucket;
     ASSETS: Fetcher;
     SCHEMA_SQL: string;
     SEED_SQL: string;
-    SEARCH_SCHEMA_SQL: string;
     DONATE_URL: string;
     DONATE_LABEL: string;
     DONATE_LABEL_FR: string;

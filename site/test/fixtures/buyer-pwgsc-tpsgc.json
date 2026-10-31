@@ -1,0 +1,88 @@
+{
+ "buyer": {
+  "acronym_en": "PSPC",
+  "acronym_fr": "SPAC",
+  "ckan_org": "pwgsc-tpsgc",
+  "department_number": "50",
+  "id": "pwgsc-tpsgc",
+  "kind": "department",
+  "n_awards": 1,
+  "n_contracts": 0,
+  "n_grants": 0,
+  "n_history": 1,
+  "n_open_tenders": 1,
+  "n_tenders": 4,
+  "name_en": "Public Services and Procurement Canada",
+  "name_fr": "Services publics et Approvisionnement Canada",
+  "total_awards": 250000,
+  "total_contracts": null,
+  "total_grants": null,
+  "total_history": 1200000
+ },
+ "open_tenders": 1,
+ "recent_awards": [
+  {
+   "awarded": "2026-09-15",
+   "buyer_en": "Public Services and Procurement Canada",
+   "buyer_fr": "Services publics et Approvisionnement Canada",
+   "buyer_id": "pwgsc-tpsgc",
+   "competitive": 1,
+   "currency": "CAD",
+   "instrument_en": "Standing Offer",
+   "instrument_fr": "Offre à commandes",
+   "organization": "Exemplar Translation Services Inc.",
+   "organization_id": "org-a000000001",
+   "provinces": [
+    "ON"
+   ],
+   "reference": "cb-400-40000004",
+   "segments": [
+    "82"
+   ],
+   "status": "active",
+   "title_en": "Translation standing offer, official languages",
+   "title_fr": "Offre à commandes de traduction, langues officielles",
+   "value": 250000
+  }
+ ],
+ "top_organizations": {
+  "awards": [
+   {
+    "id": "org-a000000001",
+    "n": 1,
+    "name": "Exemplar Translation Services Inc.",
+    "province": "ON",
+    "total": 250000
+   }
+  ],
+  "history": [
+   {
+    "id": "org-a000000002",
+    "n": 1,
+    "name": "Sample Harbour Marine Ltd.",
+    "province": "BC",
+    "total": 1200000
+   }
+  ]
+ },
+ "years": [
+  {
+   "n": 1,
+   "n_non_competitive": 0,
+   "n_organizations": 1,
+   "source": "awards",
+   "total": 250000,
+   "total_non_competitive": 0,
+   "year": 2026
+  },
+  {
+   "n": 1,
+   "n_non_competitive": 1,
+   "n_organizations": 1,
+   "source": "history",
+   "total": 1200000,
+   "total_non_competitive": 1200000,
+   "year": 2025
+  }
+ ]
+}

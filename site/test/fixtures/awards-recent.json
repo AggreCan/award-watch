@@ -1,0 +1,48 @@
+[
+ {
+  "awarded": "2026-09-15",
+  "buyer_en": "Public Services and Procurement Canada",
+  "buyer_fr": "Services publics et Approvisionnement Canada",
+  "buyer_id": "pwgsc-tpsgc",
+  "competitive": 1,
+  "currency": "CAD",
+  "instrument_en": "Standing Offer",
+  "instrument_fr": "Offre à commandes",
+  "organization": "Exemplar Translation Services Inc.",
+  "organization_id": "org-a000000001",
+  "provinces": [
+   "ON"
+  ],
+  "reference": "cb-400-40000004",
+  "segments": [
+   "82"
+  ],
+  "status": "active",
+  "title_en": "Translation standing offer, official languages",
+  "title_fr": "Offre à commandes de traduction, langues officielles",
+  "value": 250000
+ },
+ {
+  "awarded": "2026-08-02",
+  "buyer_en": "Fisheries and Oceans Canada",
+  "buyer_fr": "Pêches et Océans Canada",
+  "buyer_id": "dfo-mpo",
+  "competitive": 0,
+  "currency": "CAD",
+  "instrument_en": "Contract",
+  "instrument_fr": "Contrat",
+  "organization": "Sample Harbour Marine Ltd.",
+  "organization_id": "org-a000000002",
+  "provinces": [
+   "BC"
+  ],
+  "reference": "cb-500-50000005",
+  "segments": [
+   "72"
+  ],
+  "status": "cancelled",
+  "title_en": "Dock repairs, small craft harbour",
+  "title_fr": "Réparation de quais, port pour petits bateaux",
+  "value": 48500.5
+ }
+]

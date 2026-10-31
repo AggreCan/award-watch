@@ -4,28 +4,23 @@
 // Derived amounts are rounded to whole cents before they are summed, so the
 // rows a reader sees always add up to the totals shown. The words (tier
 // names, what each tier pays for) are in i18n.ts.
+//
+// PLACEHOLDER FIGURES: the site has not launched. Each figure below is a
+// planning estimate to be replaced with the real one (the domain's renewal
+// price, the first month's usage reports) before the page goes public.
 
 import { decimal, t, type Lang } from "./i18n";
 
 // ---------------------------------------------------------------------------
 // What the site holds and the free-tier limits
 
-// First year of the ESDC positive and negative lists on the open data portal.
-// Fixed by the source; revisit only if ESDC publishes earlier quarters.
-export const ESDC_HISTORY_START_YEAR = 2014;
-
 // Hour of the daily refresh, UTC. Matches the nightly workflow's schedule
 // (0 0 * * *). Revisit if the schedule changes.
 export const REFRESH_HOUR_UTC = 0;
 
-// Worker requests a day on the free plan, which is one per page view (static
-// files do not count). Host's published free-plan limit. Revisit with the
-// pricing page.
-export const FREE_PAGE_VIEWS_PER_DAY = 100_000;
-
-// The Workers Paid plan has been in place since this date. The operator pays
-// for it until monthly support covers its tier; the page says so.
-export const WORKERS_PAID_SINCE = "2026-10-20";
+// The Workers Paid plan the site runs on, already in place on the project
+// account. Placeholder date: the site's own first month.
+export const WORKERS_PAID_SINCE = "2026-11-01";
 
 // Worker requests included each month on the Workers Paid plan, with no daily
 // ceiling. Host's published allowance. Revisit with the pricing page.
@@ -38,78 +33,58 @@ export const STORAGE_FREE_GB = 10;
 // ---------------------------------------------------------------------------
 // Costs and upgrade tiers
 
-// Domain registration, CAD per year. Registrar renewal price for the site's
-// domain. Revisit at each annual renewal.
-export const DOMAIN_CAD_PER_YEAR = 14;
+// Domain registration, CAD per year. Placeholder until the registrar's
+// renewal price is known.
+export const DOMAIN_CAD_PER_YEAR = 20;
 
-// Hosting today, CAD per month: Workers, R2 storage, D1 and the scheduled
-// runs all fit inside free tiers (see the free-tier notes in the repo guide).
-// Revisit if any free allowance is exceeded or withdrawn.
+// Hosting today, CAD per month, beyond the Workers Paid plan: D1, R2 and the
+// scheduled runs fit inside the allowances. Revisit against the first invoice.
 export const HOSTING_CAD_PER_MONTH = 0;
 
 // Exchange rate used to convert USD list prices to CAD. Rounded up from the
-// market rate so the estimates err high. Revisit each quarter, when the
-// transparency table is updated.
+// market rate so the estimates err high. Revisit each quarter.
 export const USD_TO_CAD = 1.4;
 
-// Workers Paid plan, USD per month. Host's published list price for the paid
-// Workers plan. Revisit if the host changes its pricing page.
+// Workers Paid plan, USD per month. Host's published list price. The plan is
+// shared with other projects on the same account; this is the whole price, a
+// figure that errs high for this site.
 export const WORKERS_PAID_USD_PER_MONTH = 5;
 
 // Allowance on top of the Workers Paid list price, CAD per month, for usage
-// above the plan's included requests and CPU time and for sales tax. Planning
-// figure that brings the tier to about 9.50. Revisit against the first paid
-// invoice.
+// above the plan's included requests and CPU time and for sales tax.
+// Placeholder.
 export const WORKERS_USAGE_ALLOWANCE_CAD_PER_MONTH = 2.5;
 
-// Hosted search, CAD per month on top of the Workers Paid plan. Nothing: the
-// loaded database (about 360 MB), the nightly sync (tens of thousands of row
-// writes, a full reload about 7 million) and the search page's reads sit far
-// inside D1's included 5 GB, 50 million rows written and 25 billion rows read
-// a month (docs/hosted-search.md has the measurements). Revisit if the D1
-// usage report ever shows billed usage.
+// Hosted search (the next slice), CAD per month on top of the Workers Paid
+// plan. Placeholder: expected inside D1's included allowances.
 export const HOSTED_SEARCH_CAD_PER_MONTH = 0;
 
 // R2 storage above the free allowance, USD per GB per month. Host's published
 // standard storage rate. Revisit with the pricing page.
 export const STORAGE_USD_PER_GB_MONTH = 0.015;
 
-// Storage reserve, CAD per month, for files past the free allowance. Planning
-// figure; the page derives how many GB it buys. Revisit when stored data
-// approaches the free allowance.
-export const STORAGE_RESERVE_CAD_PER_MONTH = 1;
+// Storage reserve, CAD per month, for files past the free allowance (the
+// database backups are larger than the free allowance's share). Placeholder.
+export const STORAGE_RESERVE_CAD_PER_MONTH = 2;
 
-// Daily post on X, USD per message at X's pay-per-use rate for a post without
-// a link (a post carrying a link is billed at 0.20). Optional: the site runs
-// without it. Revisit with X's pricing page.
-export const X_POST_USD_EACH = 0.015;
-
-// Nights a month, averaged over the year: one refresh and one post a day.
+// Nights a month, averaged over the year: one refresh a night.
 export const NIGHTS_PER_MONTH = 365 / 12;
-export const X_POSTS_PER_MONTH = NIGHTS_PER_MONTH;
 
-// The nightly refresh runs as a scheduled task on GitHub, whose runners are
-// billed by the minute past a monthly allowance. Minutes a night is a
-// planning figure for the crawl at Job Bank's pace plus the registry and
-// reference downloads. Revisit against the first month's usage report.
-export const ACTIONS_MINUTES_PER_NIGHT = 120;
+// The nightly refresh runs as a scheduled task on GitHub; a public
+// repository's runner minutes are not billed. Minutes a night is a planning
+// figure. Placeholder.
+export const ACTIONS_MINUTES_PER_NIGHT = 60;
 
-// Runner minutes included each month. Host's published allowance. Revisit
-// with the pricing page.
-export const ACTIONS_FREE_MINUTES_PER_MONTH = 2000;
+// Runner minutes included each month for a public repository: no cap, so
+// the figure only has to exceed the nightly need.
+export const ACTIONS_FREE_MINUTES_PER_MONTH = 1_000_000;
 
 // USD per runner minute past the allowance, standard Linux runner. Host's
 // published rate. Revisit with the pricing page.
 export const ACTIONS_USD_PER_MINUTE = 0.006;
 
-// X Premium for the project's account, USD per month, which carries the
-// verified badge X shows beside the name on every post. Optional: the posts go
-// out without it. Revisit with X's subscription page.
-export const X_PREMIUM_USD_PER_MONTH = 8;
-
 // How many months of the full monthly cost the reserve should hold before the
-// page states that nothing further is needed. Fixed by policy; revisit only if
-// the policy changes.
+// page states that nothing further is needed. Fixed by policy.
 export const RESERVE_GOAL_MONTHS = 12;
 
 // ---------------------------------------------------------------------------
@@ -117,6 +92,7 @@ export const RESERVE_GOAL_MONTHS = 12;
 
 // The site's first month. Spending accrues from here, one monthly cost per
 // month started, and the transparency table lists every quarter since.
+// Placeholder until launch.
 export const SITE_START = "2026-10-01";
 
 // ---------------------------------------------------------------------------
@@ -129,7 +105,6 @@ export const CARD_FEE_BASIS_POINTS = 290;
 export const CARD_FEE_FIXED_CENTS = 30;
 
 // The gift used to illustrate the fee split, CAD. A round example amount.
-// Revisit only if a different example reads better.
 export const EXAMPLE_GIFT_CAD = 10;
 
 // ---------------------------------------------------------------------------
@@ -163,8 +138,6 @@ export function refreshTimeText(hour: number = REFRESH_HOUR_UTC, lang: Lang = "e
 
 export const DOMAIN_CENTS_PER_MONTH = toCents(DOMAIN_CAD_PER_YEAR / 12);
 export const HOSTING_CENTS_PER_MONTH = toCents(HOSTING_CAD_PER_MONTH);
-export const X_POST_CAD_PER_MONTH = X_POST_USD_EACH * X_POSTS_PER_MONTH * USD_TO_CAD;
-export const X_POST_CENTS_PER_MONTH = toCents(X_POST_CAD_PER_MONTH);
 export const ACTIONS_CAD_PER_MONTH =
   Math.max(0, ACTIONS_MINUTES_PER_NIGHT * NIGHTS_PER_MONTH - ACTIONS_FREE_MINUTES_PER_MONTH) * ACTIONS_USD_PER_MINUTE * USD_TO_CAD;
 export const ACTIONS_CENTS_PER_MONTH = toCents(ACTIONS_CAD_PER_MONTH);
@@ -172,18 +145,17 @@ export const ACTIONS_CENTS_PER_MONTH = toCents(ACTIONS_CAD_PER_MONTH);
 // allowance for tax and usage, the same estimate as its tier below.
 export const WORKERS_PLAN_CAD_PER_MONTH = WORKERS_PAID_USD_PER_MONTH * USD_TO_CAD + WORKERS_USAGE_ALLOWANCE_CAD_PER_MONTH;
 export const WORKERS_PLAN_CENTS_PER_MONTH = toCents(WORKERS_PLAN_CAD_PER_MONTH);
-export const COSTS_TODAY_CENTS =
-  DOMAIN_CENTS_PER_MONTH + HOSTING_CENTS_PER_MONTH + ACTIONS_CENTS_PER_MONTH + X_POST_CENTS_PER_MONTH + WORKERS_PLAN_CENTS_PER_MONTH;
+export const COSTS_TODAY_CENTS = DOMAIN_CENTS_PER_MONTH + HOSTING_CENTS_PER_MONTH + ACTIONS_CENTS_PER_MONTH + WORKERS_PLAN_CENTS_PER_MONTH;
 export const WORKERS_PAID_LIST_CENTS = toCents(WORKERS_PAID_USD_PER_MONTH * USD_TO_CAD);
 export const STORAGE_CENTS_PER_GB_MONTH = toCents(STORAGE_USD_PER_GB_MONTH * USD_TO_CAD);
 export const STORAGE_RESERVE_GB = Math.floor(STORAGE_RESERVE_CAD_PER_MONTH / (STORAGE_USD_PER_GB_MONTH * USD_TO_CAD));
 
-export type TierId = "baseline" | "workers_paid" | "hosted_search" | "storage" | "x_verification";
+export type TierId = "baseline" | "workers_paid" | "hosted_search" | "storage";
 // inPlace: the site already runs on this tier, paid by the operator until
 // monthly support covers it.
 export type Tier = { id: TierId; name: string; monthlyCost: number; unlocks: string; inPlace?: boolean };
 
-const TIER_VARS = { year: ESDC_HISTORY_START_YEAR, free: STORAGE_FREE_GB, gb: STORAGE_RESERVE_GB };
+const TIER_VARS = { free: STORAGE_FREE_GB, gb: STORAGE_RESERVE_GB };
 
 export function tierName(lang: Lang, id: TierId): string {
   return t(lang, `support.tier.${id}.name`);
@@ -198,7 +170,7 @@ export const TIERS: readonly Tier[] = [
   {
     id: "baseline",
     name: tierName("en", "baseline"),
-    monthlyCost: DOMAIN_CAD_PER_YEAR / 12 + HOSTING_CAD_PER_MONTH + ACTIONS_CAD_PER_MONTH + X_POST_CAD_PER_MONTH,
+    monthlyCost: DOMAIN_CAD_PER_YEAR / 12 + HOSTING_CAD_PER_MONTH + ACTIONS_CAD_PER_MONTH,
     unlocks: tierUnlocks("en", "baseline"),
   },
   {
@@ -213,19 +185,12 @@ export const TIERS: readonly Tier[] = [
     name: tierName("en", "hosted_search"),
     monthlyCost: HOSTED_SEARCH_CAD_PER_MONTH,
     unlocks: tierUnlocks("en", "hosted_search"),
-    inPlace: true,
   },
   {
     id: "storage",
     name: tierName("en", "storage"),
     monthlyCost: STORAGE_RESERVE_CAD_PER_MONTH,
     unlocks: tierUnlocks("en", "storage"),
-  },
-  {
-    id: "x_verification",
-    name: tierName("en", "x_verification"),
-    monthlyCost: X_PREMIUM_USD_PER_MONTH * USD_TO_CAD,
-    unlocks: tierUnlocks("en", "x_verification"),
   },
 ];
 

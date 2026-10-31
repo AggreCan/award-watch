@@ -3,14 +3,12 @@ import { loadStats } from "./data";
 
 // A daily check, run by the cron trigger, that emails the operator when the
 // site needs a hand: data that stopped refreshing, a backup that stopped
-// arriving, a refresh whose stages failed, a daily post that X or Bluesky
-// refused, a Zenodo deposit, search database sync or audience roll-up that
-// failed, or a deploy the run rolled back because the site answered with
-// server errors after it. The run's notices (a government notice first listed
-// that night, IRCC's high-wage list adopted or unreadable, a designated-employer
-// list or a news feed that changed state) are information, not alerts: the
-// email carries them in a section of their own, and a morning with notices and
-// no alert still sends one, with a subject that says notices.
+// arriving, a refresh whose stages failed, a search database sync or audience
+// roll-up that failed, or a deploy the run rolled back because the site
+// answered with server errors after it. The run's notices (a buyer spelling
+// no seed maps, a source that refused the download) are information, not
+// alerts: the email carries them in a section of their own, and a morning
+// with notices and no alert still sends one, with a subject that says notices.
 // It reads only what the nightly run leaves behind (the stats file, the
 // backup's timestamp, status.json in R2), so a run that never happened is
 // caught as well as one that failed. Sending goes through Cloudflare's email
@@ -18,15 +16,15 @@ import { loadStats } from "./data";
 // binding or no address the check still runs and only logs.
 
 export const DATA_STALE_HOURS = 36;
+// The backup is uploaded in parts of at most 250 MiB (the nightly pack); the
+// first part goes up first, so its upload time is the backup's.
+export const BACKUP_KEY = "awardwatch.sqlite.gz.000";
 export const BACKUP_STALE_HOURS = 36;
 const HOUR = 60 * 60 * 1000;
 
 export type RunStatus = {
   run_at?: string;
   ok?: boolean;
-  x_post?: string;
-  bluesky_post?: string;
-  zenodo_deposit?: string;
   search_sync?: string;
   views_rollup?: string;
   search_console?: string;
@@ -40,7 +38,7 @@ export type RunStatus = {
 export type Inputs = {
   now: Date;
   dataAsOf: string | null; // YYYY-MM-DD from stats.json, or null when missing
-  backupUploaded: Date | null; // pmw.sqlite.gz uploaded time in R2
+  backupUploaded: Date | null; // upload time of the backup's first part in R2
   status: RunStatus | null; // status.json from R2
   statusProblem?: string | null; // why status.json could not be read in full
 };
@@ -59,9 +57,6 @@ export function readStatus(raw: unknown): { status: RunStatus | null; problem: s
   if (typeof r.run_at === "string" && !Number.isNaN(Date.parse(r.run_at))) status.run_at = r.run_at;
   else unreadable.push("run_at");
   if (typeof r.ok === "boolean") status.ok = r.ok;
-  if (typeof r.x_post === "string") status.x_post = r.x_post;
-  if (typeof r.bluesky_post === "string") status.bluesky_post = r.bluesky_post;
-  if (typeof r.zenodo_deposit === "string") status.zenodo_deposit = r.zenodo_deposit;
   if (typeof r.search_sync === "string") status.search_sync = r.search_sync;
   if (typeof r.views_rollup === "string") status.views_rollup = r.views_rollup;
   if (typeof r.search_console === "string") status.search_console = r.search_console;
@@ -111,7 +106,7 @@ export function collectAlerts(i: Inputs): string[] {
   }
   if (i.statusProblem) out.push(i.statusProblem);
   if (!i.backupUploaded) {
-    out.push("No database backup (pmw.sqlite.gz) is in R2.");
+    out.push(`No database backup (${BACKUP_KEY}) is in R2.`);
   } else if ((i.now.getTime() - i.backupUploaded.getTime()) / HOUR > BACKUP_STALE_HOURS) {
     out.push(`The database backup in R2 was last saved ${i.backupUploaded.toISOString().slice(0, 16)} UTC, more than ${BACKUP_STALE_HOURS} hours ago.`);
   }
@@ -123,17 +118,6 @@ export function collectAlerts(i: Inputs): string[] {
     }
     for (const s of i.status.stages ?? []) {
       if (!s.ok) out.push(`Stage "${s.source}" failed in the last run${s.detail ? `: ${s.detail.slice(0, 160)}` : ""}.`);
-    }
-    if (i.status.x_post === "failed" || i.status.x_post === "no credentials") {
-      out.push(`The daily X post did not go out (${i.status.x_post}). Check the credits in the X developer console and the run log.`);
-    } else if (i.status.x_post === "unverified") {
-      out.push("X answered the daily post with an error and its account could not be read afterwards. Check the account: the post is recorded as made so no run repeats it.");
-    }
-    if (i.status.bluesky_post === "failed" || i.status.bluesky_post === "no credentials") {
-      out.push(`The daily Bluesky post did not go out (${i.status.bluesky_post}). Check the app password in the BSKY_APP_PASSWORD secret and the run log.`);
-    }
-    if (i.status.zenodo_deposit === "failed") {
-      out.push("The Zenodo deposit of the new ESDC quarter failed. The next run tries again; check the ZENODO_TOKEN secret and the run log.");
     }
     if (i.status.search_sync === "failed") {
       out.push("The search database sync failed. The next run sends the same changes again; check the run log.");
@@ -170,26 +154,34 @@ export function collectNotices(i: Inputs): string[] {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-export function buildEmail(from: string, to: string, alerts: string[], now: Date, notices: string[] = []): string {
+// The run log and site addresses come from the Worker's variables (RUN_LOG_URL,
+// SITE_URL), so the repository names neither; a line whose variable is unset
+// is left out.
+export function buildEmail(
+  from: string, to: string, alerts: string[], now: Date, notices: string[] = [],
+  links: { runLog?: string; site?: string } = {},
+): string {
   const subject = alerts.length
-    ? `LMIA Watch: ${plural(alerts.length, "item")} need attention${notices.length ? `, ${plural(notices.length, "notice")}` : ""}`
-    : `LMIA Watch: ${plural(notices.length, "notice")} from the last run`;
+    ? `Award Watch: ${plural(alerts.length, "item")} need attention${notices.length ? `, ${plural(notices.length, "notice")}` : ""}`
+    : `Award Watch: ${plural(notices.length, "notice")} from the last run`;
+  const linkLines = [
+    ...(links.runLog ? [`Run log: ${links.runLog}`] : []),
+    ...(links.site ? [`Site: ${links.site}`] : []),
+  ];
   const when = `Daily check at ${now.toISOString().slice(0, 16)} UTC`;
   const lines = [
     ...(alerts.length ? [`${when} found:`, "", ...alerts.map((a, n) => `${n + 1}. ${a}`)] : [`${when}: nothing needs attention.`]),
     ...(notices.length
       ? ["", "Notices from the last run (information; nothing failed):", "", ...notices.map((n) => `- ${n}`)]
       : []),
-    "",
-    "Run log: https://github.com/LMIAwatch/public-money-watch/actions",
-    "Site: https://lmiawatch.ca/data",
+    ...(linkLines.length ? ["", ...linkLines] : []),
     "",
     alerts.length
       ? "This message is sent by the site's own daily check; it repeats each day while an item remains."
       : "This message is sent by the site's own daily check when the last run recorded notices.",
   ];
   return [
-    `From: LMIA Watch <${from}>`,
+    `From: Award Watch <${from}>`,
     `To: ${to}`,
     `Subject: ${subject}`,
     `Date: ${now.toUTCString()}`,
@@ -207,7 +199,7 @@ export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const problems: string[] = [];
   if (env.DATA) {
     try {
-      const head = await env.DATA.head("pmw.sqlite.gz");
+      const head = await env.DATA.head(BACKUP_KEY);
       backupUploaded = head ? head.uploaded : null;
     } catch (e) {
       backupUploaded = null;
@@ -246,7 +238,8 @@ export async function runWatchdog(
   }
   try {
     const { EmailMessage } = await import("cloudflare:email");
-    await env.ALERTS.send(new EmailMessage(from, to, buildEmail(from, to, alerts, now, notices)));
+    const links = { runLog: (env.RUN_LOG_URL ?? "").trim() || undefined, site: (env.SITE_URL ?? "").trim() || undefined };
+    await env.ALERTS.send(new EmailMessage(from, to, buildEmail(from, to, alerts, now, notices, links)));
     console.log(`watchdog: ${counts}, email sent`);
     return { alerts, notices, sent: true };
   } catch (e) {

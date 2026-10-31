@@ -1,12 +1,8 @@
 import type { Lang } from "./i18n";
 
 export interface Env {
+  // The forms database: organization responses and corrections only.
   DB: D1Database;
-  // The hosted search database (wrangler.jsonc, binding SEARCH), filled by
-  // the nightly sync and read by GET /api/search (src/search_db.ts) and the
-  // search page's first view. Optional: without it the API answers 503 and
-  // the search page renders its fallback from search/first.json.
-  SEARCH?: D1Database;
   DATA?: R2Bucket;
   ASSETS?: Fetcher;
   SCHEMA_SQL?: string;
@@ -19,13 +15,18 @@ export interface Env {
   // The donation page's webhook token (a Worker secret). Unset keeps the
   // webhook route closed; a notice is stored only when its token matches.
   KOFI_VERIFICATION_TOKEN?: string;
-  // Rate limiters (wrangler.jsonc "ratelimits"). Absent in a bare test
-  // environment, in which case nothing is limited.
   // Daily check: the email binding, the sender on the zone, and the operator's
   // address (a secret, never in the repository).
   ALERTS?: SendEmail;
   ALERT_FROM?: string;
   ALERT_EMAIL?: string;
+  // The two addresses the daily check's email links to: the workflow's run
+  // log and the site's data page. Variables rather than code, so the
+  // repository names neither until the operator sets them.
+  RUN_LOG_URL?: string;
+  SITE_URL?: string;
+  // Rate limiters (wrangler.jsonc "ratelimits"). Absent in a bare test
+  // environment, in which case nothing is limited.
   PAGE_LIMIT?: RateLimit;
   API_LIMIT?: RateLimit;
   DOWNLOAD_LIMIT?: RateLimit;

@@ -4,7 +4,7 @@ import { html } from "hono/html";
 import { secureHeaders } from "hono/secure-headers";
 import { api } from "./api";
 import { conditional } from "./conditional";
-import { loadStats } from "./data";
+import { YEAR_RE, loadStats } from "./data";
 import type { AppEnv, Env } from "./env";
 import { kofiWebhook } from "./hooks";
 import { throttle } from "./limits";
@@ -12,43 +12,36 @@ import { measure } from "./views";
 import { runWatchdog } from "./watchdog";
 import { langFrom, t, tj } from "./i18n";
 import { Layout, page } from "./layout";
+import { awardsPage, awardsYearPage } from "./pages/awards";
+import { buyerPage, buyersIndex } from "./pages/buyers";
+import { categoriesIndex, categoryPage } from "./pages/categories";
 import { citePage } from "./pages/cite";
-import { DOWNLOADS, dataPage } from "./pages/data";
-import { employerPage } from "./pages/employer";
+import { contractPage } from "./pages/contract";
+import { DOWNLOADS, YEARLY_DOWNLOAD, dataPage } from "./pages/data";
+import { directoryPage, organizationsIndex } from "./pages/directory";
 import { feedsPage } from "./pages/feeds";
-import { directoryPage } from "./pages/directory";
 import { correctionsForm, correctionsSubmit, respondPage, respondSubmit } from "./pages/forms";
 import { homePage } from "./pages/home";
-import { internationalPage } from "./pages/international";
-import { mapPage } from "./pages/map";
 import { methodologyPage } from "./pages/methodology";
-import { noticesPage } from "./pages/notices";
+import { organizationPage } from "./pages/organization";
 import { rankingsPage } from "./pages/rankings";
-import { releasePage, releasesIndexPage } from "./pages/releases";
-import { occupationPage, occupationsIndex } from "./pages/occupations";
-import { placePage, placesIndex, provincePage } from "./pages/places";
-import { programPage } from "./pages/program";
-import { searchPage } from "./pages/search";
 import { supportPage } from "./pages/support";
-import { trendsPage } from "./pages/trends";
+import { tenderPage } from "./pages/tender";
+import { newTendersPage, tendersPage } from "./pages/tenders";
 import { watchlistPage } from "./pages/watchlist";
 import { llmsTxt, robotsTxt, sitemapFile } from "./seo";
 
 const app = new Hono<AppEnv>();
 
-// The page loads nothing from third parties except the map library and the
-// map tiles, and the policy says exactly that. The library is allowed by its
-// folder on the CDN, not the whole host, so no other script hosted there can
-// run on the site.
-const LEAFLET = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/";
+// The pages load nothing from third parties, and the policy says exactly that.
 app.use(
   "*",
   secureHeaders({
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", LEAFLET],
-      styleSrc: ["'self'", "'unsafe-inline'", LEAFLET],
-      imgSrc: ["'self'", "data:", "https://*.tile.openstreetmap.org", "https://tile.openstreetmap.org", LEAFLET],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
       connectSrc: ["'self'"],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
@@ -81,46 +74,46 @@ app.use("*", conditional);
 app.route("/api", api);
 
 app.get("/", homePage);
-app.get("/search", searchPage);
-app.get("/map", mapPage);
-app.get("/methodology", methodologyPage);
-app.get("/data", dataPage);
-app.get("/support", supportPage);
-app.get("/cite", citePage);
+// The open notices, filtered in the browser after the first view; the
+// notices first seen each day; one notice. /tenders/new is registered
+// before /tenders/:reference, which would read "new" as a reference.
+app.get("/tenders", tendersPage);
+app.get("/tenders/new", newTendersPage);
+app.get("/tenders/:reference", tenderPage);
+// /awards/2026 is a year; anything else after /awards/ is a reference.
+app.get("/awards", awardsPage);
+app.get("/awards/:key", (c) => {
+  const key = c.req.param("key") ?? "";
+  return YEAR_RE.test(key) ? awardsYearPage(c, key) : contractPage(c, "award", key);
+});
+app.get("/history/:reference", (c) => contractPage(c, "history", c.req.param("reference") ?? ""));
+// The directory's routes come before the profile's, which would read
+// "directory" as an id.
+app.get("/organizations", organizationsIndex);
+app.get("/organizations/directory", (c) => c.redirect("/organizations", 301));
+app.get("/organizations/directory/:code", directoryPage);
+app.get("/organizations/directory/:code/:page", directoryPage);
+app.get("/organizations/:id", organizationPage);
+// A browser only: a plain HTTP client gets a 403 naming the profile (forms.tsx).
+app.get("/organizations/:id/respond", respondPage);
+app.post("/organizations/:id/respond", respondSubmit);
+app.get("/buyers", buyersIndex);
+app.get("/buyers/:id", buyerPage);
+app.get("/categories", categoriesIndex);
+app.get("/categories/:nn", categoryPage);
+app.get("/rankings", rankingsPage);
+app.get("/rankings/:year", rankingsPage);
 // Feeds are static files under /data/feeds/; this page lists them. The
 // watchlist lives in the visitor's browser; this page is its shell.
 app.get("/feeds", feedsPage);
 app.get("/watchlist", watchlistPage);
-// Quarterly release pages and rankings: each page reads one small JSON file.
-app.get("/releases", releasesIndexPage);
-app.get("/releases/:slug", releasePage);
-app.get("/rankings", rankingsPage);
-app.get("/rankings/:year", rankingsPage);
-// The whole series at once: one small JSON file per view, charts drawn here.
-app.get("/trends", trendsPage);
-app.get("/trends/:view", trendsPage);
-// What the program's own pages state is in force: one small JSON file.
-app.get("/program", programPage);
-// Postings open to international candidates and the designated-employer lists: one small JSON file.
-app.get("/international", internationalPage);
-// IRCC and ESDC news items that name the programs, as the departments published them: one small JSON file.
-app.get("/notices", noticesPage);
-app.get("/occupations", occupationsIndex);
-app.get("/occupations/:noc", occupationPage);
-app.get("/places", placesIndex);
-app.get("/places/:prov", provincePage);
-// Every employer A to Z by province, 200 to a page; registered before the
-// city route, which would read "employers" as a city's slug.
-app.get("/places/:prov/employers", directoryPage);
-app.get("/places/:prov/employers/:page", directoryPage);
-app.get("/places/:prov/:slug", placePage);
-app.get("/employers/:id", employerPage);
-// A browser only: a plain HTTP client gets a 403 naming the profile (forms.tsx).
-app.get("/employers/:id/respond", respondPage);
-app.post("/employers/:id/respond", respondSubmit);
+app.get("/data", dataPage);
+app.get("/methodology", methodologyPage);
+app.get("/support", supportPage);
+app.get("/cite", citePage);
 app.get("/corrections", (c) => correctionsForm(c));
 app.post("/corrections", correctionsSubmit);
-// Payment notices from the donation page; see hooks.ts for what is kept.
+// Payment notices from a donation page, once there is one; see hooks.ts for what is kept.
 app.post("/hooks/kofi", kofiWebhook);
 app.get("/robots.txt", robotsTxt);
 app.get("/llms.txt", llmsTxt);
@@ -153,12 +146,17 @@ app.get("/data/feeds/*", async (c) => {
   return new Response(res.body, { status: res.status, headers });
 });
 
+// The CSV files in R2: a name on the Data page's list, a yearly file, or a
+// mirror file; nothing else is ever read from the bucket.
+export function downloadAllowed(file: string): boolean {
+  return DOWNLOADS.some((d) => d.file === file) || YEARLY_DOWNLOAD.test(file) || /^mirror\/[A-Za-z0-9._-]+$/.test(file);
+}
+
 app.get("/downloads/:file{.+}", async (c) => {
   const file = c.req.param("file");
-  const allowed = DOWNLOADS.some((d) => d.file === file) || /^mirror\/[A-Za-z0-9._-]+$/.test(file);
   let object: R2ObjectBody | null = null;
   let unavailable = false;
-  if (allowed && c.env.DATA) {
+  if (downloadAllowed(file) && c.env.DATA) {
     try {
       object = await c.env.DATA.get(file.startsWith("mirror/") ? file : `downloads/${file}`);
     } catch (e) {
@@ -176,14 +174,14 @@ app.get("/downloads/:file{.+}", async (c) => {
         <h1>{t(lang, "error.file")}</h1>
         <p>{tj(lang, "error.file_text", { file: <span class="mono">{file}</span> })}</p>
         <p>
-          <a href="/data">{t(lang, "error.file_back")}</a>
+          <a href="/data#downloads">{t(lang, "error.file_back")}</a>
         </p>
       </Layout>,
       unavailable ? 503 : 404,
     );
   }
   const headers = new Headers();
-  headers.set("Content-Type", file.endsWith(".csv") ? "text/csv; charset=utf-8" : "application/octet-stream");
+  headers.set("Content-Type", file.endsWith(".csv") ? "text/csv; charset=utf-8" : file === "SHA256SUMS" ? "text/plain; charset=utf-8" : "application/octet-stream");
   headers.set("Content-Disposition", `attachment; filename="${file.split("/").pop()}"`);
   headers.set("Cache-Control", "public, max-age=3600");
   return new Response(object.body, { headers });
@@ -203,7 +201,7 @@ app.notFound(async (c) => {
       <p>
         {tj(lang, "error.not_found_text", {
           home: <a href="/">{t(lang, "error.not_found_home")}</a>,
-          search: <a href="/search">{t(lang, "error.not_found_search")}</a>,
+          directory: <a href="/organizations">{t(lang, "error.not_found_directory")}</a>,
         })}
       </p>
     </Layout>,
