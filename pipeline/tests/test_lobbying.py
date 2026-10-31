@@ -200,4 +200,4 @@ def test_samples_read_a_zip_under_the_file_name_or_note_its_absence(seeded, fixt
     assert "1 office-holder or subject rows name a report the primary file lacks" in log["notice"]
     review = out_dir / "review" / "lobbying-persons.txt"
     assert [line for line in review.read_text(encoding="utf-8").splitlines() if not line.startswith("#")] == \
-        ["Corwin Ashdale"]
+        ["Daniel Ashdale"]

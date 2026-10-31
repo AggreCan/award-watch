@@ -108,9 +108,22 @@ PERSON_MAX_WORDS = 3
 # et Titane"); a name carrying one is never read as two people.
 CONNECTOR_RE = re.compile(r"&|\band\b|\bet\b", re.I)
 NOT_PERSONS_PATH = config.PACKAGE_DATA / "not_persons.csv"
-# What sources write for "no name". Treated as a blank, never as a business.
+GIVEN_NAMES_PATH = config.PACKAGE_DATA / "given_names.txt"
+# What sources write for "no name" or for no one supplier. Treated as a blank:
+# never a business, never a person, never in a review list.
 PLACEHOLDER_RE = re.compile(r"^\s*(?:n\s*/?\s*a|none|null|unknown|nil|-+|\.+)(?:\s*:\s*(?:n\s*/?\s*a|none))?\s*$",
                             re.I)
+# The same, compared as lower-case words with the punctuation dropped.
+PLACEHOLDER_PHRASES = frozenset({
+    "request for proposal", "request for proposals", "request for standing offer", "request for standing offers",
+    "rfp", "various", "various vendors", "various suppliers", "multiple", "multiple vendors", "multiple suppliers",
+    "see attached", "to be determined", "tbd",
+})
+# Courtesy titles, compared without their dot. "M." (monsieur) counts only
+# with its dot, since a bare "M" is an initial.
+HONORIFICS = frozenset({"mr", "mrs", "ms", "miss", "mme", "mlle", "dr", "me"})
+# The Arabic article joined to a surname ("Al-Zubaidi", "El-Khoury").
+ARTICLE_RE = re.compile(r"(?:al|el)-[^\W\d_]", re.I)
 
 # Words that name a kind of business, a place or a quality rather than one
 # business. A name made only of these is common: "Canadian Farms", "West
@@ -138,8 +151,76 @@ def first_language(text: object) -> str:
 
 
 def is_placeholder(name: object) -> bool:
-    """'NA : None', 'N/A', 'none': a source's way of leaving the name out."""
-    return bool(PLACEHOLDER_RE.match(str(name or "")))
+    """'NA : None', 'N/A', 'TBD', 'Request for Proposal', '***': a source's way of leaving the name out."""
+    text = str(name or "")
+    if PLACEHOLDER_RE.match(text):
+        return True
+    if text.strip() and not re.search(r"[^\W_]", text):
+        return True  # punctuation only
+    return " ".join(re.findall(r"[a-z0-9]+", fold_accents(text).casefold())) in PLACEHOLDER_PHRASES
+
+
+def given_name_key(word: object) -> str:
+    """'Hélène' -> 'helene', "D'Arcy" -> 'darcy', 'JEAN-PIERRE' -> 'jean-pierre': how given names are compared."""
+    return re.sub(r"[^a-z-]", "", fold_accents(str(word or "")).casefold()).strip("-")
+
+
+@lru_cache(maxsize=1)
+def given_names(path: Path | None = None) -> frozenset[str]:
+    """The given names in data/given_names.txt (built by scripts/build_given_names.py)."""
+    src = path or GIVEN_NAMES_PATH
+    if not src.exists():
+        return frozenset()
+    lines = (line.strip() for line in src.read_text(encoding="utf-8").splitlines())
+    return frozenset(line for line in lines if line and not line.startswith("#"))
+
+
+def _is_honorific(token: str) -> bool:
+    folded = fold_accents(token).casefold()
+    return folded == "m." or folded.rstrip(".") in HONORIFICS
+
+
+def _short(token: str) -> bool:
+    """An initial ("J.", "J.R.", "W.Bruce" written without its space) or a name of two letters,
+    which the given-name list leaves out."""
+    return len(re.sub(r"[^\w]", "", token)) <= 2 or bool(re.match(r"[^\W\d_]\.", token))
+
+
+def carries_given_name(legal: str) -> bool:
+    """The last condition of is_person_name: the name has a person's given name where one is written.
+
+    The given name is the first word, or the word after the comma of
+    "Last, First". It must be on the list in data/given_names.txt, or be an
+    initial or a name of two letters (the list leaves those out, and "J.
+    Smith" is a person). Whatever the list says, a name is a person's when it
+    carries a courtesy title (Mr, Mrs, Ms, Mme, M., Dr, Me), when it is
+    written "Last, First" in two or three words, or when it carries the
+    Arabic article joined to a surname (Al-, El-). With no list at all, every
+    name that passed the other conditions is a person's, as before the list.
+    """
+    names = given_names()
+    if not names:
+        return True
+    tokens = re.findall(r"[^\s,;/()]+|,", legal)
+    words = [t for t in tokens if t != "," and re.search(r"[^\W\d_]", t)]
+    if not words:
+        return False
+    if any(_is_honorific(w) for w in words) or ARTICLE_RE.search(legal):
+        return True
+    candidates = [words[0]]
+    if "," in tokens:
+        after = [t for t in tokens[tokens.index(",") + 1:] if t != ","]
+        if after and tokens.index(",") > 0:
+            if 2 <= len(words) <= 3:
+                return True
+            candidates.append(after[0])
+    for word in candidates:
+        if _short(word):
+            return True
+        key = given_name_key(word)
+        if key in names or key.split("-")[0] in names:
+            return True
+    return any(len(re.sub(r"[^\w]", "", w)) == 1 for w in words)
 
 
 @lru_cache(maxsize=1)
@@ -165,7 +246,9 @@ def is_person_name(name: object) -> bool:
     * no legal form (normalize.LEGAL_SUFFIXES, which holds the forms used
       abroad, or FOREIGN_LEGAL_FORMS as the last word), no business word, no
       acronym, no underscore or quotation mark;
-    * and household.reads_as_person reads the legal part as a person.
+    * household.reads_as_person reads the legal part as a person;
+    * and the legal part carries a given name (carries_given_name): without
+      one, "Eastern Partitions" and "Surrey Place" read as people.
     """
     text = first_language(name)
     if not text or is_placeholder(text) or CONNECTOR_RE.search(text):
@@ -190,7 +273,7 @@ def is_person_name(name: object) -> bool:
     if re.search(r"(?:^|\s)(?:a/s|b\.\s*v|s\.\s*a|s\.\s*l|n\.\s*v|s\.\s*r\.\s*l|s\.\s*a\.\s*s)\.?\s*$",
                  legal, re.I):
         return False
-    return reads_as_person(legal, business_words=PUBLIC_BUSINESS_WORDS)
+    return reads_as_person(legal, business_words=PUBLIC_BUSINESS_WORDS) and carries_given_name(legal)
 
 
 @dataclass
@@ -215,8 +298,12 @@ class PersonDrops:
             if len(self.names) < self.limit:
                 self.names.append(name)
 
-    def write(self, path: Path, *, what: str, stamp: str) -> str | None:
-        """Write (or, with nothing withheld, remove) the review list; returns the notice line."""
+    def write(self, path: Path, *, what: str, stamp: str, withheld: str = "supplier withheld") -> str | None:
+        """Write (or, with nothing withheld, remove) the review list; returns the notice line.
+
+        withheld says what was withheld in the source's own terms ("vendor
+        withheld", "recipient withheld", "client withheld").
+        """
         if not self.rows:
             path.unlink(missing_ok=True)
             return None
@@ -232,14 +319,14 @@ class PersonDrops:
             shown = path.relative_to(config.REPO_ROOT).as_posix()
         except ValueError:
             shown = str(path)
-        return (f"{self.rows} rows ({len(self.seen)} names) read as private individuals, supplier withheld; "
+        return (f"{self.rows} rows ({len(self.seen)} names) read as private individuals, {withheld}; "
                 f"the first {len(self.names)} names are listed for review in {shown}")
 
 
 def business_name(name: object) -> str | None:
-    """A name fit to store: None when blank or when it reads as a person."""
+    """A name fit to store: None when blank, a placeholder, or a name that reads as a person."""
     text = first_language(name)
-    return text if text and not is_person_name(text) else None
+    return text if text and not is_placeholder(text) and not is_person_name(text) else None
 
 
 def is_common_name(norm: str) -> bool:

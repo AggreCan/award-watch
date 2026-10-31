@@ -14,7 +14,7 @@ from conftest import FakeResponse
 from awardwatch_pipeline import cli, config, organizations
 from awardwatch_pipeline.db import get_meta
 from awardwatch_pipeline.normalize import norm_name, org_id
-from awardwatch_pipeline.sources import contracts
+from awardwatch_pipeline.sources import buyers, contracts
 
 csv.field_size_limit(2**31 - 1)
 DAY1 = "2026-10-31T01:00:00Z"
@@ -101,6 +101,21 @@ def test_a_vendor_named_as_a_person_keeps_the_record_and_withholds_the_vendor(co
     for table, column in (("organizations", "display_name"), ("organization_names", "raw_name"),
                           ("contracts", "vendor_raw")):
         assert conn.execute(f"SELECT 1 FROM {table} WHERE {column} LIKE '%Holloway%'").fetchone() is None
+
+
+def test_a_placeholder_vendor_keeps_the_row_with_no_vendor(conn, fixtures):
+    stats = contracts.load_file(conn, fixtures / FIXTURE, now=DAY1)
+    row = by_ref(conn)["C-2020-2021-Q4-00012"]  # "Request for Proposal" where the vendor goes
+    assert (row["vendor_raw"], row["organization_id"], row["vendor_withheld"], row["value"]) == (None, None, 0, 28250.0)
+    assert stats.withheld == 1  # the placeholder is no person
+    assert conn.execute("SELECT 1 FROM organization_names WHERE raw_name LIKE 'Request%'").fetchone() is None
+
+
+def test_a_department_not_among_the_ckan_organizations_is_made_and_listed(conn):
+    assert buyers.for_owner_org(conn, "xyz-abc", "Example Agency | Agence exemple", now=DAY1) == "xyz-abc"
+    assert buyers.take_notices(conn) == ["buyer xyz-abc made for 'Example Agency' (not among the CKAN organizations loaded)"]
+    assert buyers.for_owner_org(conn, "xyz-abc", "Example Agency | Agence exemple", now=DAY1) == "xyz-abc"
+    assert buyers.take_notices(conn) == []
 
 
 def test_the_buyer_name_is_never_stored_and_text_is_cut_at_600(conn, fixtures, tmp_path):
@@ -191,12 +206,14 @@ def test_the_stage_lists_withheld_names_for_review_and_logs_only_the_count(conn,
     contracts.run(conn, None, now=DAY1, samples=samples)
     review = out_dir / "review" / "contracts-persons.txt"
     assert [line for line in review.read_text(encoding="utf-8").splitlines() if not line.startswith("#")] == \
-        ["Tamsin Holloway"]
+        ["Laura Holloway"]
     log = conn.execute("SELECT detail, rows_in, rows_new, excluded, ok, notice FROM sources_log").fetchone()
     assert (log["rows_in"], log["rows_new"], log["excluded"], log["ok"]) == (30, 30, 1, 1)
     assert log["detail"] == "read rows=30 stored=30 withheld=1 duplicates=0 skipped=0"
     assert "1 rows (1 names) read as private individuals, vendor withheld" in log["notice"]
     assert "Holloway" not in log["notice"] and "Holloway" not in log["detail"]
+    # No CKAN in a samples run: the department is made from its title, and listed.
+    assert "buyer casdo-ocena made for 'Accessibility Standards Canada'" in log["notice"]
 
 
 def test_a_samples_run_without_the_sample_is_a_notice(conn, tmp_path):

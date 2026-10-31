@@ -66,7 +66,8 @@ CREATE INDEX IF NOT EXISTS idx_org_last_seen ON organizations(last_seen);
 CREATE TABLE IF NOT EXISTS organization_names (
   organization_id TEXT NOT NULL REFERENCES organizations(id),
   raw_name TEXT NOT NULL,
-  source TEXT NOT NULL,                          -- awards | history | contracts | grants | lobbying | registry
+  source TEXT NOT NULL,                          -- awards | history | contracts | grants | grants:operating (a grant's
+                                                 -- operating name) | lobbying | registry
   n INTEGER NOT NULL DEFAULT 1,                  -- rows carrying this spelling
   PRIMARY KEY (organization_id, raw_name, source)
 );
@@ -580,6 +581,29 @@ CREATE TABLE IF NOT EXISTS search_sync (
   manifest TEXT NOT NULL,
   rows INTEGER NOT NULL,
   full INTEGER NOT NULL
+);
+
+-- The organization directory's pages (directory.py) as last exported, by
+-- path, each with a hash of its rows and the data date on which that hash last
+-- changed. The sitemap gives that date as the page's lastmod, so a page whose
+-- rows stayed the same keeps its date; a page no longer written is deleted.
+CREATE TABLE IF NOT EXISTS directory_pages (
+  path TEXT PRIMARY KEY,                         -- '/organizations/directory/bc' (page 1), '/organizations/directory/bc/2'
+  code TEXT NOT NULL,                            -- the directory: 'ab', ..., 'yt', 'xx' (outside Canada) or 'un' (unknown)
+  page INTEGER NOT NULL,                         -- from 1
+  hash TEXT NOT NULL,                            -- directory.page_hash of the page's rows
+  changed_on TEXT NOT NULL                       -- ISO date: the data date of the export that first wrote this hash
+);
+
+-- Organization ids retired by a normalization change (migrate.py), each with
+-- the id that took over its records, so a link to an old profile can be sent
+-- on. export_static writes it, chains followed to the live id, as
+-- aliases/<abc>.json.
+CREATE TABLE IF NOT EXISTS organization_aliases (
+  old_id TEXT PRIMARY KEY,
+  new_id TEXT NOT NULL,
+  normalize_version INTEGER NOT NULL,            -- the normalization in force when old_id was retired
+  created_at TEXT NOT NULL
 );
 
 -- ---------------------------------------------------------------------------

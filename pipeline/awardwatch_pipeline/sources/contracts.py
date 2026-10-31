@@ -364,9 +364,9 @@ def finish(conn: sqlite3.Connection, result: StageResult, drops: matching.Person
         result.notices.append(f"no {spec.sample_name} in {_shown(samples)} (samples run)")
     if stats is not None:
         review = drops.write((review_dir or config.OUT_DIR / "review") / f"{spec.stage}-persons.txt",
-                             what=what, stamp=stamp)
+                             what=what, stamp=stamp, withheld=withheld)
         if review:
-            result.notices.append(review.replace("supplier withheld", withheld))
+            result.notices.append(review)
         if stats.missing:
             result.notices.append(f"{spec.file_name} lacks {', '.join(stats.missing)}")
         if stats.skipped:

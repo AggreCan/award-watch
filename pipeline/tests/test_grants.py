@@ -13,7 +13,7 @@ import csv
 import pytest
 
 from conftest import FakeResponse
-from awardwatch_pipeline import config
+from awardwatch_pipeline import config, organizations
 from awardwatch_pipeline.db import get_meta
 from awardwatch_pipeline.normalize import norm_name, org_id
 from awardwatch_pipeline.sources import grants
@@ -84,9 +84,20 @@ def test_recipients_become_organizations_with_the_operating_name_as_a_second_spe
     cnib = org_id(norm_name("Canadian National Institute for the Blind"))
     assert conn.execute("SELECT COUNT(*) FROM grants WHERE organization_id = ?", (cnib,)).fetchone()[0] == 3
     harbour = org_id(norm_name("Harbourview Accessibility Institute"))
-    names = dict(conn.execute("SELECT raw_name, n FROM organization_names WHERE organization_id = ? "
-                              "AND source = 'grants'", (harbour,)))
-    assert names == {"Harbourview Accessibility Institute": 2, "Harbourview Institute": 2}
+
+    def names():
+        return {(r[0], r[1]): r[2] for r in conn.execute(
+            "SELECT raw_name, source, n FROM organization_names WHERE organization_id = ?", (harbour,))}
+
+    expected = {("Harbourview Accessibility Institute", "grants"): 2, ("Harbourview Institute", "grants:operating"): 2}
+    assert names() == expected
+    # The nightly rebuild reads the operating name back from the grants table: it stays, counted once per row.
+    organizations.recompute(conn, now=DAY1)
+    assert names() == expected
+    assert conn.execute("SELECT display_name FROM organizations WHERE id = ?", (harbour,)).fetchone()[0] == \
+        "Harbourview Accessibility Institute"
+    # An operating name that repeats the legal name is not stored as a second spelling.
+    assert conn.execute("SELECT COUNT(*) FROM grants WHERE operating_name = legal_name").fetchone()[0] == 0
     places = {tuple(r) for r in conn.execute("SELECT country, province, city, postal_code FROM organization_places "
                                              "WHERE organization_id = ?", (harbour,))}
     assert places == {("CA", "NS", "Halifax", "B3H 4R2")}
@@ -149,7 +160,7 @@ def test_the_stage_counts_individuals_and_withheld_rows_and_lists_only_the_withh
     assert "recipient withheld" in log["notice"]
     review = out_dir / "review" / "grants-persons.txt"
     assert [line for line in review.read_text(encoding="utf-8").splitlines() if not line.startswith("#")] == \
-        ["Corwin Ashdale"]
+        ["Daniel Ashdale"]
     for name in ("Ashdale", "Penhaligon"):
         assert name not in log["notice"] and name not in log["detail"]
 

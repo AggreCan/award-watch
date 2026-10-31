@@ -108,6 +108,8 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
         if matching.is_placeholder(legal):
             legal = ""
         operating = _organization_name(get("recipient_operating_name"))
+        if operating == legal:
+            operating = None  # the legal name again says nothing more
         postal = matching.postal_code(get("recipient_postal_code"))
         city, province = _city_and_province(matching.first_language(get("recipient_city")),
                                             matching.province_of(get("recipient_province"), postal))
@@ -129,10 +131,10 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
             org = organizations.upsert(conn, legal, source="grants", country=get("recipient_country"),
                                        province=province, city=city, postal_code=postal or get("recipient_postal_code"),
                                        now=stamp) if legal else None
-            if org and operating and operating != legal:
-                # The operating name is a second spelling of the recipient, counted
-                # the way upsert counts one split off a legal name.
-                organizations._count_name(conn, org, operating, "grants")
+            if org and operating:
+                # A second spelling of the recipient, under the label the
+                # nightly rebuild reads it back with (organizations.NAME_COLUMNS).
+                organizations._count_name(conn, org, operating, "grants:operating")
         research = _organization_name(get("research_organization_name"))
         rec = {
             "owner_org": owner,

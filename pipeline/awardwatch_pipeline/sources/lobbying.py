@@ -446,9 +446,9 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | Non
     stats = result.stats
     if stats is not None:
         review = drops.write((review_dir or config.OUT_DIR / "review") / "lobbying-persons.txt",
-                             what="Lobbying communication reports", stamp=stamp)
+                             what="Lobbying communication reports", stamp=stamp, withheld="client withheld")
         if review:
-            result.notices.append(review.replace("supplier withheld", "client withheld"))
+            result.notices.append(review)
         if stats.missing:
             result.notices.append(f"the lobbying zip carries no {', '.join(stats.missing)} column")
         if stats.unread:

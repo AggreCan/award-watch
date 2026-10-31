@@ -208,6 +208,9 @@ def for_owner_org(conn: sqlite3.Connection, owner_org: str, title: str | None, *
         (bid, name_en, name_fr, bid, now or now_iso()),
     )
     _record(conn, bid, "ckan", name_en, name_fr or "")
+    # Listed like a buyer resolve makes: CKAN not listing an organization the
+    # publications name is worth a look (a run without CKAN, or a new one).
+    _note(conn, f"buyer {bid} made for '{name_en}' (not among the CKAN organizations loaded)")
     return bid
 
 

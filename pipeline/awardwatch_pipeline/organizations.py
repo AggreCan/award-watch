@@ -57,13 +57,16 @@ from .sources import matching
 
 log = logging.getLogger(__name__)
 
-# The record sources whose names the nightly rebuild derives, with the table
-# and column holding the spelling as loaded.
+# The record sources whose names the nightly rebuild derives: the source label
+# in organization_names, then the table and column holding the spelling as
+# loaded. A source may have a second column under its own label: a grant's
+# operating name is a second spelling of its recipient, not a legal name.
 NAME_COLUMNS: dict[str, tuple[str, str]] = {
     "awards": ("awards", "supplier_raw"),
     "history": ("contract_history", "supplier_raw"),
     "contracts": ("contracts", "vendor_raw"),
     "grants": ("grants", "legal_name"),
+    "grants:operating": ("grants", "operating_name"),
     "lobbying": ("lobbying_communications", "client_raw"),
 }
 PLACE_QUERIES = [

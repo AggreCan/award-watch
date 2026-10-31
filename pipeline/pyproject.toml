@@ -24,7 +24,7 @@ where = ["."]
 include = ["awardwatch_pipeline*"]
 
 [tool.setuptools.package-data]
-awardwatch_pipeline = ["data/*.csv", "data/*.json"]
+awardwatch_pipeline = ["data/*.csv", "data/*.json", "data/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
