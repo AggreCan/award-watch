@@ -1,6 +1,6 @@
 """The hosted search database: its rows, and the nightly sync that keeps it current.
 
-The search database (D1 `pmw-search`, schema in pipeline/search_schema.sql)
+The search database (D1 `awardwatch-search`, schema in pipeline/search_schema.sql)
 holds one row per ESDC list row since 2014 and per Job Bank posting whose LMIA
 flag is requested or approved. These are the rows and fields export_static
 writes for the search page, built by the same functions, plus a stable integer

@@ -157,12 +157,12 @@ def test_the_sql_for_a_day_covers_exactly_that_utc_day():
     assert vr.day_bounds(YESTERDAY) == (START, START + 86_400)
     assert vr.counts_sql(YESTERDAY) == (
         "SELECT blob1 AS route, blob2 AS kind, blob3 AS lang, blob4 AS country, blob5 AS referrer, "
-        "double1 AS status, SUM(_sample_interval) AS responses FROM pmw_views "
+        "double1 AS status, SUM(_sample_interval) AS responses FROM awardwatch_views "
         f"WHERE timestamp >= toDateTime({START}) AND timestamp < toDateTime({START + 86_400}) "
         "GROUP BY route, kind, lang, country, referrer, status ORDER BY responses DESC LIMIT 10000 FORMAT JSON"
     )
     assert vr.kinds_sql(YESTERDAY) == (
-        "SELECT blob2 AS kind, SUM(_sample_interval) AS responses FROM pmw_views "
+        "SELECT blob2 AS kind, SUM(_sample_interval) AS responses FROM awardwatch_views "
         f"WHERE timestamp >= toDateTime({START}) AND timestamp < toDateTime({START + 86_400}) "
         "GROUP BY kind ORDER BY kind FORMAT JSON"
     )
@@ -509,17 +509,17 @@ def test_the_people_and_bot_queries_read_page_views_below_400_and_only_count_cod
     where = f"timestamp >= toDateTime({START}) AND timestamp < toDateTime({START + 86_400})"
     assert vr.audience_sql(YESTERDAY) == (
         "SELECT blob8 AS agent, blob4 AS country, blob9 AS device, blob3 AS lang, SUM(_sample_interval) AS pages "
-        f"FROM pmw_views WHERE blob2 = 'page' AND double1 < 400 AND {where} "
+        f"FROM awardwatch_views WHERE blob2 = 'page' AND double1 < 400 AND {where} "
         "GROUP BY agent, country, device, lang ORDER BY pages DESC LIMIT 10000 FORMAT JSON")
     assert vr.human_routes_sql(YESTERDAY) == (
-        "SELECT blob1 AS route, SUM(_sample_interval) AS pages FROM pmw_views "
+        "SELECT blob1 AS route, SUM(_sample_interval) AS pages FROM awardwatch_views "
         f"WHERE blob2 = 'page' AND double1 < 400 AND blob8 = 'human' AND {where} "
         "GROUP BY route ORDER BY pages DESC LIMIT 10000 FORMAT JSON")
     assert vr.visitors_sql(YESTERDAY) == (
         "SELECT count(DISTINCT blob10) AS visitors, sumIf(_sample_interval, blob10 = '') AS uncoded "
-        f"FROM pmw_views WHERE blob8 = 'human' AND {where} FORMAT JSON")
+        f"FROM awardwatch_views WHERE blob8 = 'human' AND {where} FORMAT JSON")
     assert vr.visits_sql(YESTERDAY) == (
-        "SELECT count(DISTINCT blob10) AS visits FROM pmw_views "
+        "SELECT count(DISTINCT blob10) AS visits FROM awardwatch_views "
         f"WHERE blob8 = 'human' AND blob2 = 'page' AND blob10 != '' AND {where} FORMAT JSON")
     # No query ever reads a visitor code back: blob10 appears only inside a
     # distinct count or a comparison with the empty string.

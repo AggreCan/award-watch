@@ -5,9 +5,9 @@ pages (a wording fix, a layout fix, a page bug) in a few minutes, without
 running the nightly refresh. It ships the Worker from `main` together with
 the data the site already serves, and it is built so that it cannot write,
 delete or change that data. The data here means the R2 bucket
-`pmw-data` (backups, `static.tar.gz`, `downloads/`, `mirror/`,
-`views/`, `status.json`), the two D1 databases (`public-money-watch` for the forms,
-`pmw-search` for search), and the data files the Worker serves as
+`awardwatch-data` (backups, `static.tar.gz`, `downloads/`, `mirror/`,
+`views/`, `status.json`), the two D1 databases (`award-watch` for the forms,
+`awardwatch-search` for search), and the data files the Worker serves as
 assets (`site/public/data`).
 
 ## What it is for
@@ -36,7 +36,7 @@ change sooner.
    and the site's pinned Wrangler (`npm ci` in `site/`).
 3. It downloads `static.tar.gz` from R2, a read. The nightly saves that
    archive only after a deploy that passed its live check, so it should hold
-   the data the site serves. `python -m pmw_pipeline.nightly
+   the data the site serves. `python -m awardwatch_pipeline.nightly
    site-bundle-check` proves it: it fetches `/data/stats.json`,
    `/data/search/facets.json` and `/data/search/first.json` from the live
    site and compares each with the archive's copy as parsed JSON. stats.json
@@ -79,13 +79,13 @@ site's pinned Wrangler:
 
 | Command | What it does |
 |---|---|
-| `wrangler r2 object get --remote pmw-data/static.tar.gz` | reads the archive |
+| `wrangler r2 object get --remote awardwatch-data/static.tar.gz` | reads the archive |
 | `wrangler deployments status --json` | reads the version serving traffic, before the deploy and at the end |
 | `wrangler deploy` | uploads the Worker and its assets from `site/` |
 | `wrangler rollback <recorded version> --yes` | puts the recorded version back on all traffic |
 
 The pipeline commands are `live-version`, `smoke` and `site-bundle-check`
-from `pmw_pipeline.nightly`, which read files and fetch public pages.
+from `awardwatch_pipeline.nightly`, which read files and fetch public pages.
 
 `pipeline/tests/test_site_deploy.py` reads the workflow file and fails when:
 the trigger is anything but `workflow_dispatch`; `permissions` is anything
@@ -194,7 +194,7 @@ it reads nothing this run writes. Remember that the change is still on
 | Check the live site (unverifiable) | The pages answered, but not as expected (an edge refusal, a page without the data date). No rollback | Open the pages the step names. If the site is wrong, roll back by hand |
 | Roll the Worker back | The rollback failed, so the new version may still be live | Roll back by hand to the version in the summary |
 
-To roll back by hand: the dashboard (Workers & Pages, `public-money-watch`,
+To roll back by hand: the dashboard (Workers & Pages, `award-watch`,
 Deployments, the version listed as live before, Rollback), or
 `npx wrangler rollback <version id>` from `site/` with the token in the
 environment.

@@ -1,7 +1,7 @@
 """Nightly roll-up of the Worker's audience counts into files kept in R2.
 
 Why: Workers Analytics Engine keeps a data point for three months, so the
-counts the Worker writes (site/src/views.ts, dataset pmw_views) would
+counts the Worker writes (site/src/views.ts, dataset awardwatch_views) would
 be gone a quarter after they were taken. Once a night this asks the SQL API
 for each finished UTC day the summary does not hold yet (normally only
 yesterday) and keeps the answer: one CSV per day (`<day>.csv`) and one row
@@ -69,7 +69,7 @@ from . import config
 log = logging.getLogger(__name__)
 
 SQL_URL = "https://api.cloudflare.com/client/v4/accounts/{account}/analytics_engine/sql"
-DATASET = "pmw_views"
+DATASET = "awardwatch_views"
 TOKEN_ENV = "CLOUDFLARE_ANALYTICS_TOKEN"
 ACCOUNT_ENV = "CLOUDFLARE_ACCOUNT_ID"
 BSKY_PROFILE_URL = "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile"

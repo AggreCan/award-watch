@@ -383,7 +383,7 @@ def test_the_workflow_runs_it_after_the_smoke_test_and_records_it():
     assert "secrets." not in block
     assert "since=$(cat data/out/run_started.txt" in block
     assert ('python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --since "$since" \\\n'
-            '            --site-url "${PMW_SITE_URL:-https://lmiawatch.ca}"\n') in block
+            '            --site-url "${AWARDWATCH_SITE_URL:-https://lmiawatch.ca}"\n') in block
     assert ("--views-outcome data/out/views/last_outcome.txt \\\n"
             "            --indexnow-outcome data/out/indexnow/last_outcome.txt \\\n") in text
     # Not a --step: a failed submission must never make the retry gate run the night again.

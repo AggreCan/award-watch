@@ -658,8 +658,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--dir", required=True, help="folder holding the downloads and their .exit and .log files")
     r.add_argument("--db", required=True)
     r.add_argument("--out", required=True, help="where to write the restore record (source, counts)")
-    r.add_argument("--bucket", default=os.environ.get("BUCKET") or "pmw-data",
-                   help="the R2 bucket holding backups/weekly/ (default $BUCKET, else pmw-data)")
+    r.add_argument("--bucket", default=os.environ.get("BUCKET") or "awardwatch-data",
+                   help="the R2 bucket holding backups/weekly/ (default $BUCKET, else awardwatch-data)")
     v = sub.add_parser("verify")
     v.add_argument("--db", required=True)
     v.add_argument("--static", required=True)
@@ -729,7 +729,7 @@ def main(argv: list[str] | None = None) -> int:
     ix.add_argument("--db", required=True)
     ix.add_argument("--since", required=True,
                     help="the run's start, an ISO time in UTC (the workflow's data/out/run_started.txt)")
-    ix.add_argument("--site-url", default=config.SITE_URL, help="the live site (default $PMW_SITE_URL)")
+    ix.add_argument("--site-url", default=config.SITE_URL, help="the live site (default $AWARDWATCH_SITE_URL)")
     ix.add_argument("--out-dir", default=None,
                     help="where last_outcome.txt and urls.txt are written (default data/out/indexnow)")
     ix.add_argument("--dry-run", action="store_true", help="select and list the URLs, send nothing")

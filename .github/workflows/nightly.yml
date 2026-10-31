@@ -21,7 +21,7 @@
 # the stages include IRCC's high-wage list, adopted when it changes, and the
 # designated-employer lists; their changes of state are notices in the run status),
 # check the database and the export, send the changed rows to the search
-# database (D1 pmw-search), record the Worker version serving traffic,
+# database (D1 awardwatch-search), record the Worker version serving traffic,
 # deploy the Worker with that data as its assets, check the live site and roll
 # the Worker back when the deploy broke it, tell IndexNow which pages changed,
 # post the daily digest to X and to Bluesky when their secrets exist, deposit
@@ -32,7 +32,7 @@
 # expiry checks on the first of a month, write the run status, and report the
 # items needing attention (failed run, one GitHub issue).
 #
-# What a failure does (pmw_pipeline/nightly.py and resilience.py hold the
+# What a failure does (awardwatch_pipeline/nightly.py and resilience.py hold the
 # checks):
 # - A backup that exists but cannot be downloaded or used stops the run before
 #   the pipeline, so an empty database never rebuilds the site and never
@@ -152,7 +152,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       RETRY: ${{ github.event_name == 'schedule' && github.event.schedule != '0 0 * * *' }}
       WRANGLER: ${{ github.workspace }}/site/node_modules/.bin/wrangler
-      BUCKET: pmw-data
+      BUCKET: awardwatch-data
     steps:
       - name: Midnight or manual run, so the refresh goes ahead
         if: ${{ env.RETRY != 'true' }}
@@ -190,7 +190,7 @@ jobs:
             cat data/gate/get.log
             rm -f data/gate/status.json
           fi
-          python -m pmw_pipeline.nightly gate --status data/gate/status.json --today "$(date -u +%Y-%m-%d)"
+          python -m awardwatch_pipeline.nightly gate --status data/gate/status.json --today "$(date -u +%Y-%m-%d)"
 
   refresh:
     needs: gate
@@ -206,13 +206,13 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      PMW_SITE_URL: ${{ vars.SITE_URL }}
-      PMW_CONTACT: ${{ vars.CONTACT }}
+      AWARDWATCH_SITE_URL: ${{ vars.SITE_URL }}
+      AWARDWATCH_CONTACT: ${{ vars.CONTACT }}
       # The site's pinned Wrangler (package-lock.json) for every R2 call as well
       # as the deploy, so a new Wrangler release cannot change how the backup
       # is read or written. Installed by the "site's tools" step.
       WRANGLER: ${{ github.workspace }}/site/node_modules/.bin/wrangler
-      BUCKET: pmw-data
+      BUCKET: awardwatch-data
     steps:
       # Fail in seconds, not after an hour of crawling, until the account is wired up.
       - name: Check that the Cloudflare secrets exist
@@ -280,9 +280,9 @@ jobs:
               sleep 20
             done
           }
-          fetch pmw.sqlite.gz
-          fetch pmw.sqlite.prev.gz
-          python -m pmw_pipeline.nightly restore --dir data/restore --db data/pmw.sqlite --out data/out/restore.json \
+          fetch awardwatch.sqlite.gz
+          fetch awardwatch.sqlite.prev.gz
+          python -m awardwatch_pipeline.nightly restore --dir data/restore --db data/awardwatch.sqlite --out data/out/restore.json \
             --bucket "$BUCKET"
 
       # 150 posting pages a night, at Job Bank's pace with an 8-second gap between
@@ -298,16 +298,16 @@ jobs:
         id: pipeline
         run: |
           date -u +"%Y-%m-%dT%H:%M:%SZ" > data/out/run_started.txt
-          python -m pmw_pipeline run --db data/pmw.sqlite --detail-budget 150 --intl-detail-budget 400
+          python -m awardwatch_pipeline run --db data/awardwatch.sqlite --detail-budget 150 --intl-detail-budget 400
 
       - name: Check the database and the export
         id: verify
         if: ${{ !cancelled() && steps.restore.outcome == 'success' }}
         run: |
-          python -m pmw_pipeline.nightly verify --db data/pmw.sqlite --static data/out/static \
+          python -m awardwatch_pipeline.nightly verify --db data/awardwatch.sqlite --static data/out/static \
             --started-file data/out/run_started.txt --restore data/out/restore.json --out data/out/verify.json
 
-      # The search database (docs/hosted-search.md): D1 pmw-search,
+      # The search database (docs/hosted-search.md): D1 awardwatch-search,
       # apart from the forms database. search-sync writes the rows whose
       # content hash differs from the ledger in the SQLite file (every row on
       # a first load or a full reload) as SQL batches and a manifest. The
@@ -331,16 +331,16 @@ jobs:
         working-directory: site
         run: |
           out=../data/out/search
-          python -m pmw_pipeline search-sync --db ../data/pmw.sqlite --out "$out"
-          "$WRANGLER" d1 execute pmw-search --remote --yes --file ../pipeline/search_schema.sql
+          python -m awardwatch_pipeline search-sync --db ../data/awardwatch.sqlite --out "$out"
+          "$WRANGLER" d1 execute awardwatch-search --remote --yes --file ../pipeline/search_schema.sql
           for batch in $(python -c 'import json, sys; print(" ".join(json.load(open(sys.argv[1]))["batches"]))' "$out/manifest.json"); do
             echo "Applying $batch"
-            "$WRANGLER" d1 execute pmw-search --remote --yes --file "$out/$batch"
+            "$WRANGLER" d1 execute awardwatch-search --remote --yes --file "$out/$batch"
           done
-          "$WRANGLER" d1 execute pmw-search --remote --json --command "SELECT COUNT(*) AS n FROM search_rows" > "$out/count.json"
+          "$WRANGLER" d1 execute awardwatch-search --remote --json --command "SELECT COUNT(*) AS n FROM search_rows" > "$out/count.json"
           count=$(python -c 'import json, sys; print(int(json.load(open(sys.argv[1]))[0]["results"][0]["n"]))' "$out/count.json")
-          python -m pmw_pipeline search-check --db ../data/pmw.sqlite --manifest "$out/manifest.json" --count "$count"
-          python -m pmw_pipeline search-synced --db ../data/pmw.sqlite --manifest "$out/manifest.json"
+          python -m awardwatch_pipeline search-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --count "$count"
+          python -m awardwatch_pipeline search-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"
 
       - name: Bundle the static data for the site
         id: bundle
@@ -364,7 +364,7 @@ jobs:
         run: |
           mkdir -p ../data/out/deploy
           "$WRANGLER" deployments status --json > ../data/out/deploy/before.json 2> ../data/out/deploy/before.log || cat ../data/out/deploy/before.log
-          python -m pmw_pipeline.nightly live-version --file ../data/out/deploy/before.json --out ../data/out/deploy/version_before.txt
+          python -m awardwatch_pipeline.nightly live-version --file ../data/out/deploy/before.json --out ../data/out/deploy/version_before.txt
 
       # A failed deploy leaves the live site on its previous version. The
       # asset upload (thousands of small files) meets a transient API error
@@ -400,7 +400,7 @@ jobs:
         run: |
           mkdir -p data/out/deploy
           data_date=$(python -c 'import json, sys; print(json.load(open(sys.argv[1])).get("data_as_of") or "")' data/out/static/stats.json || true)
-          python -m pmw_pipeline.nightly smoke --base-url "${PMW_SITE_URL:-https://lmiawatch.ca}" \
+          python -m awardwatch_pipeline.nightly smoke --base-url "${AWARDWATCH_SITE_URL:-https://lmiawatch.ca}" \
             --data-date "$data_date" --stats data/out/static/stats.json --out data/out/deploy/smoke.json
 
       # Only when the Worker itself answered with server errors. A rollback
@@ -467,8 +467,8 @@ jobs:
             exit 0
           fi
           since=$(cat data/out/run_started.txt 2>/dev/null || true)
-          python -m pmw_pipeline.nightly indexnow --db data/pmw.sqlite --since "$since" \
-            --site-url "${PMW_SITE_URL:-https://lmiawatch.ca}"
+          python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --since "$since" \
+            --site-url "${AWARDWATCH_SITE_URL:-https://lmiawatch.ca}"
 
       # After the deploy, so the link shows the postings the digest counts, and
       # before the R2 save, so the recorded post date travels with the database.
@@ -494,7 +494,7 @@ jobs:
             echo "The X secrets are not set; no post."
             exit 0
           fi
-          python -m pmw_pipeline post-digest --db data/pmw.sqlite $LINK
+          python -m awardwatch_pipeline post-digest --db data/awardwatch.sqlite $LINK
 
       # The same digest and card on Bluesky, with the link (posting there is
       # free). Same shape as the X step: after the deploy, before the R2 save
@@ -515,7 +515,7 @@ jobs:
             echo "The Bluesky secrets are not set; no post."
             exit 0
           fi
-          python -m pmw_pipeline post-bluesky --db data/pmw.sqlite
+          python -m awardwatch_pipeline post-bluesky --db data/awardwatch.sqlite
 
       # A citable release: when a new ESDC quarter has been loaded (or no
       # record exists yet), a new version of the Zenodo record with the Open
@@ -541,7 +541,7 @@ jobs:
             echo "ZENODO_TOKEN is not set; no deposit."
             exit 0
           fi
-          python -m pmw_pipeline deposit-zenodo --db data/pmw.sqlite --csv-dir data/out/csv
+          python -m awardwatch_pipeline deposit-zenodo --db data/awardwatch.sqlite --csv-dir data/out/csv
 
       # Only a database that passed its checks is saved, whether or not the
       # deploy worked, so a night's Job Bank observations are kept even when
@@ -557,12 +557,12 @@ jobs:
         id: save_db
         if: ${{ !cancelled() && steps.verify.outputs.db_ok == 'true' }}
         run: |
-          python -m pmw_pipeline.nightly pack --db data/pmw.sqlite --out data/out/pmw.sqlite.gz
+          python -m awardwatch_pipeline.nightly pack --db data/awardwatch.sqlite --out data/out/awardwatch.sqlite.gz
           source=$(python -c 'import json; print(json.load(open("data/out/restore.json"))["source"])')
           if [ "$source" = "backup" ]; then
-            "$WRANGLER" r2 object put --remote "$BUCKET/pmw.sqlite.prev.gz" --file data/restore/pmw.sqlite.gz
+            "$WRANGLER" r2 object put --remote "$BUCKET/awardwatch.sqlite.prev.gz" --file data/restore/awardwatch.sqlite.gz
           fi
-          "$WRANGLER" r2 object put --remote "$BUCKET/pmw.sqlite.gz" --file data/out/pmw.sqlite.gz
+          "$WRANGLER" r2 object put --remote "$BUCKET/awardwatch.sqlite.gz" --file data/out/awardwatch.sqlite.gz
 
       # Weekly snapshots, kept eight weeks. The nightly save keeps only tonight's
       # backup and the previous night's, so a fault noticed later than that would
@@ -581,8 +581,8 @@ jobs:
         run: |
           if [ "$(date -u +%u)" != "7" ]; then echo "Not Sunday (UTC); no snapshot tonight."; exit 0; fi
           slot=$(( $(date -u +%s) / 604800 % 8 ))
-          "$WRANGLER" r2 object put --remote "$BUCKET/backups/weekly/db-slot-$slot.sqlite.gz" --file ../data/out/pmw.sqlite.gz
-          "$WRANGLER" d1 export public-money-watch --remote --output ../data/out/d1.sql
+          "$WRANGLER" r2 object put --remote "$BUCKET/backups/weekly/db-slot-$slot.sqlite.gz" --file ../data/out/awardwatch.sqlite.gz
+          "$WRANGLER" d1 export award-watch --remote --output ../data/out/d1.sql
           gzip -c ../data/out/d1.sql > ../data/out/d1.sql.gz
           "$WRANGLER" r2 object put --remote "$BUCKET/backups/weekly/d1-slot-$slot.sql.gz" --file ../data/out/d1.sql.gz
           "$WRANGLER" r2 object put --remote "$BUCKET/backups/weekly/d1-latest.sql.gz" --file ../data/out/d1.sql.gz
@@ -682,7 +682,7 @@ jobs:
             cat "$out/summary.log"
             exit 1
           fi
-          python -m pmw_pipeline rollup-views --out "$out"
+          python -m awardwatch_pipeline rollup-views --out "$out"
           while read -r day; do
             "$WRANGLER" r2 object put --remote "$BUCKET/views/$day.csv" --file "$out/$day.csv"
           done < "$out/rolled_up.txt"
@@ -739,7 +739,7 @@ jobs:
             cat "$out/get.log"
             exit 1
           fi
-          python -m pmw_pipeline import-search-console --out "$out"
+          python -m awardwatch_pipeline import-search-console --out "$out"
           outcome=$(cat "$out/outcome.txt")
           case "$outcome" in
             imported*)
@@ -785,7 +785,7 @@ jobs:
           if [ "$code" = "1" ]; then exit 1; fi
           code=0; fetch views/search_console.csv "$out/search_console.csv" || code=$?
           if [ "$code" = "1" ]; then exit 1; fi
-          python -m pmw_pipeline views-report --month "$month" --summary "$out/summary.csv" \
+          python -m awardwatch_pipeline views-report --month "$month" --summary "$out/summary.csv" \
             --search "$out/search_console.csv" --out "$out"
           outcome=$(cat "$out/outcome.txt")
           if [ "$outcome" = "written" ]; then
@@ -818,7 +818,7 @@ jobs:
           CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
         run: |
           mkdir -p data/out
-          python -m pmw_pipeline.nightly checks --today "$(date -u +%Y-%m-%d)" --out data/out/checks.json
+          python -m awardwatch_pipeline.nightly checks --today "$(date -u +%Y-%m-%d)" --out data/out/checks.json
 
       # What the daily check in the Worker and the next retry's gate read: when
       # the run finished, which stages and steps succeeded (every step's
@@ -838,7 +838,7 @@ jobs:
       - name: Write the run status
         if: ${{ always() }}
         run: |
-          python -m pmw_pipeline.nightly status --db data/pmw.sqlite \
+          python -m awardwatch_pipeline.nightly status --db data/awardwatch.sqlite \
             --started-file data/out/run_started.txt --verify data/out/verify.json \
             --outcome data/out/social/last_outcome.txt \
             --bluesky-outcome data/out/social/bluesky_outcome.txt \
@@ -923,7 +923,7 @@ jobs:
           fi
           # The run's notices, one per line with its full text (nothing when
           # there are none); a fault here leaves them out of the record only.
-          python -m pmw_pipeline.nightly notices --status data/out/status.json > data/out/notices.md 2>/dev/null || true
+          python -m awardwatch_pipeline.nightly notices --status data/out/status.json > data/out/notices.md 2>/dev/null || true
           if [ -s data/out/notices.md ]; then
             echo "" >> LAST_RUN.md
             cat data/out/notices.md >> LAST_RUN.md
@@ -942,7 +942,7 @@ jobs:
       # Last, after everything is saved and recorded: fail the run when an item
       # needs attention, so GitHub's failed-workflow email reaches the operator
       # as well as the Worker's own daily check. The items (attention_items in
-      # pmw_pipeline/resilience.py) also go to one open issue labelled
+      # awardwatch_pipeline/resilience.py) also go to one open issue labelled
       # run-attention: the first run with items opens it, each later run
       # replaces its text and adds a comment, and the first run with none
       # closes it with a comment naming that run. The issue calls run with
@@ -962,7 +962,7 @@ jobs:
         run: |
           set +e
           out=data/out/attention
-          python -m pmw_pipeline.nightly attention --status data/out/status.json --run-url "$RUN_URL" --out-dir "$out"
+          python -m awardwatch_pipeline.nightly attention --status data/out/status.json --run-url "$RUN_URL" --out-dir "$out"
           code=$?
           soft() {
             if ! gh "$@" --repo "$GITHUB_REPOSITORY" > /dev/null; then

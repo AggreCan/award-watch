@@ -327,8 +327,8 @@ def workflow_problems(text, nightly_text=None):
                 problems.append(f"nightly command {sub} is not allowed")
     if sum(1 for line in lines if line.strip() == WRANGLER_ENV) != 1:
         problems.append("WRANGLER must be defined once, as the site's pinned binary")
-    if [line.strip() for line in lines if line.strip().startswith("BUCKET:")] != ["BUCKET: pmw-data"]:
-        problems.append("BUCKET must be pmw-data, defined once")
+    if [line.strip() for line in lines if line.strip().startswith("BUCKET:")] != ["BUCKET: awardwatch-data"]:
+        problems.append("BUCKET must be awardwatch-data, defined once")
     return problems
 
 
@@ -369,11 +369,11 @@ PLANTED = [
     ("another group", "  group: nightly", "  group: site"),
     ("an R2 upload", '          ls -l "$WORK/static.tar.gz"',
      '          "$WRANGLER" r2 object put --remote "$BUCKET/static.tar.gz" --file "$WORK/static.tar.gz"'),
-    ("an R2 delete through npx", "        run: npm ci", "        run: npx wrangler r2 object delete --remote pmw-data/status.json"),
+    ("an R2 delete through npx", "        run: npm ci", "        run: npx wrangler r2 object delete --remote awardwatch-data/status.json"),
     ("a D1 command", '          ls -l "$WORK/static.tar.gz"',
-     '          "$WRANGLER" d1 execute public-money-watch --remote --command "DELETE FROM corrections"'),
+     '          "$WRANGLER" d1 execute award-watch --remote --command "DELETE FROM corrections"'),
     ("a second command on a line", '            if "$WRANGLER" deploy; then exit 0; fi',
-     '            if "$WRANGLER" deploy; then "$WRANGLER" r2 bucket delete pmw-data; fi'),
+     '            if "$WRANGLER" deploy; then "$WRANGLER" r2 bucket delete awardwatch-data; fi'),
     ("deploy flags", '            if "$WRANGLER" deploy; then exit 0; fi', '            if "$WRANGLER" deploy --assets ../other; then exit 0; fi'),
     ("the nightly's token", TOKEN_LINE, "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}"),
     ("a state-writing nightly command", "--out \"$WORK/version_before.txt\"",
@@ -382,7 +382,7 @@ PLANTED = [
      "        run: pip install -e ./pipeline && python -m awardwatch_pipeline run --db data/awardwatch.sqlite"),
     ("a commit", "          test -s \"$WORK/stats.before.json\"", "          git commit -am x && git push"),
     ("a direct API call", "          test -s \"$WORK/stats.before.json\"",
-     "          curl -X PUT https://api.cloudflare.com/client/v4/accounts/x/r2/buckets/pmw-data/objects/x"),
+     "          curl -X PUT https://api.cloudflare.com/client/v4/accounts/x/r2/buckets/awardwatch-data/objects/x"),
     ("another secret", "REASON: ${{ inputs.reason }}", "REASON: ${{ secrets.ZENODO_TOKEN }}"),
     ("another action", "      - uses: actions/checkout@v4", "      - uses: ./.github/workflows/nightly.yml"),
 ]

@@ -33,8 +33,8 @@ KEY_PEM = pem_of(KEY)
 MESSAGE = b"eyJhbGciOiJSUzI1NiJ9.eyJ0ZXN0Ijp0cnVlfQ"
 
 ACCOUNT_JSON = json.dumps({
-    "type": "service_account", "project_id": "public-money-watch-test", "private_key_id": "abc123",
-    "private_key": KEY_PEM, "client_email": "reader@public-money-watch-test.iam.gserviceaccount.com",
+    "type": "service_account", "project_id": "award-watch-test", "private_key_id": "abc123",
+    "private_key": KEY_PEM, "client_email": "reader@award-watch-test.iam.gserviceaccount.com",
     "token_uri": "https://oauth2.googleapis.com/token",
 })
 ENV = {sc.SECRET_ENV: ACCOUNT_JSON}
@@ -141,7 +141,7 @@ def test_the_assertion_is_a_jwt_google_can_verify():
     head, claims, signature = jwt.split(".")
     assert json.loads(b64decode(head)) == {"alg": "RS256", "typ": "JWT", "kid": "abc123"}
     assert json.loads(b64decode(claims)) == {
-        "iss": "reader@public-money-watch-test.iam.gserviceaccount.com",
+        "iss": "reader@award-watch-test.iam.gserviceaccount.com",
         "scope": "https://www.googleapis.com/auth/webmasters.readonly",
         "aud": "https://oauth2.googleapis.com/token", "iat": 1_800_000_000, "exp": 1_800_003_600}
     # As Google checks it: the signature over "header.claims" with the account's public key.
@@ -164,7 +164,7 @@ def test_a_key_that_is_not_a_usable_rsa_key_is_refused_without_echoing_it():
             sc.parse_account(text)
         assert KEY_FRAGMENT[:20] not in str(err.value)
     account = sc.parse_account(ACCOUNT_JSON)
-    assert repr(account) == "Account(reader@public-money-watch-test.iam.gserviceaccount.com)"
+    assert repr(account) == "Account(reader@award-watch-test.iam.gserviceaccount.com)"
 
 
 # -- the import ----------------------------------------------------------------

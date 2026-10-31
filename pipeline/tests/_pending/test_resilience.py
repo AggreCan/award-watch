@@ -277,7 +277,7 @@ def test_smoke_command_writes_the_verdict(tmp_path, monkeypatch):
 
 # -- weekly snapshot restore --------------------------------------------------
 
-OBJECTS = f"/client/v4/accounts/{ACCOUNT}/r2/buckets/pmw-data/objects"
+OBJECTS = f"/client/v4/accounts/{ACCOUNT}/r2/buckets/awardwatch-data/objects"
 MISSING = 'Downloading "awardwatch.sqlite.gz"\n[ERROR] The specified key does not exist.\n'
 
 
@@ -341,7 +341,7 @@ def snapshot_bytes(tmp_path, employers):
 
 
 def r2(fake):
-    return resilience.R2Rest(fake, ACCOUNT, DEPLOY_TOKEN, "pmw-data")
+    return resilience.R2Rest(fake, ACCOUNT, DEPLOY_TOKEN, "awardwatch-data")
 
 
 def both_missing(folder):
@@ -459,7 +459,7 @@ def test_restore_command_reads_the_weekly_snapshots_with_the_runs_token(tmp_path
     out = tmp_path / "restore.json"
     with caplog.at_level(logging.INFO):
         assert nightly.main(["restore", "--dir", str(folder), "--db", str(tmp_path / "awardwatch.sqlite"), "--out", str(out),
-                             "--bucket", "pmw-data"]) == 0
+                             "--bucket", "awardwatch-data"]) == 0
     record = json.loads(out.read_text())
     assert (record["source"], record["weekly_uploaded"]) == ("weekly", "2026-10-18T00:51:30+00:00")
     assert DEPLOY_TOKEN not in caplog.text and DEPLOY_TOKEN not in out.read_text()

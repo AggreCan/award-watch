@@ -24,3 +24,6 @@ site/public/data/
 
 # the operator's working notes stay off the public repository
 CLAUDE.md
+
+# internal notes (market research, planning): never on the public repository
+notes/

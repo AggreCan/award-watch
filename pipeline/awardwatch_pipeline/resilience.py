@@ -424,7 +424,7 @@ def bundle_check(http: Any, base_url: str, bundle: Path, saved_stats: Path | Non
 
 # -- R2 through the REST API --------------------------------------------------
 
-DATA_BUCKET = "pmw-data"
+DATA_BUCKET = "awardwatch-data"
 WEEKLY_PREFIX = "backups/weekly/db-slot-"
 WEEKLY_RE = re.compile(r"^backups/weekly/db-slot-\d+\.sqlite\.gz$")
 # A listing of the weekly folder is a handful of objects; the cap only bounds

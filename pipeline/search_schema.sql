@@ -1,6 +1,6 @@
--- The hosted search database: D1 `pmw-search`, binding SEARCH.
+-- The hosted search database: D1 `awardwatch-search`, binding SEARCH.
 --
--- A database of its own, apart from the forms database (`public-money-watch`, from
+-- A database of its own, apart from the forms database (`award-watch`, from
 -- schema.sql), so a rebuild here can never touch what readers submitted.
 -- Written only by the nightly sync (pipeline/awardwatch_pipeline/search_db.py),
 -- which applies this file before every sync: every statement is IF NOT

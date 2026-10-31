@@ -127,11 +127,11 @@ After a deploy that worked and that the smoke test did not find broken, the
 workflow step "Tell IndexNow which pages changed" runs
 
 ```
-python -m pmw_pipeline.nightly indexnow --db data/pmw.sqlite --since <run start> \
+python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --since <run start> \
   --site-url https://lmiawatch.ca
 ```
 
-(`pipeline/pmw_pipeline/indexnow.py`). It selects:
+(`pipeline/awardwatch_pipeline/indexnow.py`). It selects:
 
 - the home, search, trends, occupations, places, releases and program pages,
   which follow the nightly data;
@@ -163,7 +163,7 @@ sending anything.
 ### The key
 
 The key is the 32-character text in `INDEXNOW_KEY`
-(`pipeline/pmw_pipeline/indexnow.py`). The site serves it at
+(`pipeline/awardwatch_pipeline/indexnow.py`). The site serves it at
 `https://lmiawatch.ca/<key>.txt` from `site/public/<key>.txt`, a file whose
 entire content is the key, with no newline. An engine fetches that file to
 check that a submission comes from the site. The key is public by design, so
@@ -260,7 +260,7 @@ in `blob7` to `blob10`.
 
 A path that matches no route is stored as `other`, never as written, since a
 mistyped or pasted address could hold anything. Downloads keep their file
-name (the list is fixed). The dataset is `pmw_views`.
+name (the list is fixed). The dataset is `awardwatch_views`.
 
 **Bot or human** (`site/src/views.ts`, `agentClass`). A request is a bot when
 Cloudflare's edge gives it a verified-bot category (`request.cf.verifiedBotCategory`,
@@ -356,14 +356,14 @@ the secret rolls up every day Analytics Engine still holds.
 ### What the nightly run keeps in R2
 
 The workflow step "Roll up the audience counts" runs
-`python -m pmw_pipeline rollup-views` (`pipeline/pmw_pipeline/views_rollup.py`).
+`python -m awardwatch_pipeline rollup-views` (`pipeline/awardwatch_pipeline/views_rollup.py`).
 It asks the SQL API for every finished UTC day after the newest one in the
 summary (normally only yesterday; on the first night, the last 90 days), so
 a night that fails is caught up by the next. A day with no data points at all
 is not written and is asked again the next night. Each day costs one query,
 and six more when it has data points (counts, feeds, page views by bot flag,
 people's page views by route, distinct visitor codes, distinct codes with a
-page view). Files in the `pmw-data` bucket:
+page view). Files in the `awardwatch-data` bucket:
 
 | Key | What it is |
 |---|---|
@@ -446,9 +446,9 @@ day had a data point), `no token`, or `failed` (the SQL API failed, the
 summary could not be downloaded or read, or an upload failed). Only `failed`
 is an attention item. The step never stops the run.
 
-To read the files: Cloudflare dashboard, R2, `pmw-data`, folder
+To read the files: Cloudflare dashboard, R2, `awardwatch-data`, folder
 `views`, or from `site/` on the project account's machine,
-`npx wrangler r2 object get --remote pmw-data/views/summary.csv --file summary.csv`
+`npx wrangler r2 object get --remote awardwatch-data/views/summary.csv --file summary.csv`
 (without `--remote`, Wrangler reads a local simulated bucket). The weekly
 backup pull on the operator's PC keeps `views/summary.csv`; add
 `views/search_console.csv` and the reports to it if a copy off the account is
@@ -456,14 +456,14 @@ wanted.
 
 Nothing needs doing by hand. To look at one day from a machine anyway (within
 the 90 days, with `CLOUDFLARE_ANALYTICS_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
-set in the shell), `python -m pmw_pipeline rollup-views --day YYYY-MM-DD`
+set in the shell), `python -m awardwatch_pipeline rollup-views --day YYYY-MM-DD`
 writes its file to `data/out/views/`.
 
 ### Search Console's figures
 
 Search Console keeps 16 months. The workflow step "Import the Search Console
-figures" runs `python -m pmw_pipeline import-search-console`
-(`pipeline/pmw_pipeline/search_console.py`) and appends to
+figures" runs `python -m awardwatch_pipeline import-search-console`
+(`pipeline/awardwatch_pipeline/search_console.py`) and appends to
 `views/search_console.csv` one row per day after the newest one it holds
 (on the first night, everything Search Console still has), header
 `date,clicks,impressions,ctr,position,top_queries`:
@@ -501,7 +501,7 @@ Use the project's Google account (section 3), in the project's browser
 profile.
 
 1. Open `console.cloud.google.com` and create a project, for example
-   `public-money-watch-audience`. No billing account is needed.
+   `award-watch-audience`. No billing account is needed.
 2. APIs & Services, Library: find "Google Search Console API" and Enable it.
 3. IAM & Admin, Service Accounts, Create service account: name
    `search-console-reader`. Skip the optional role and user steps; the
@@ -527,7 +527,7 @@ of the property (step 5).
 ### The monthly report
 
 The workflow step "Write the monthly audience report" runs
-`python -m pmw_pipeline views-report` (`pipeline/pmw_pipeline/views_report.py`)
+`python -m awardwatch_pipeline views-report` (`pipeline/awardwatch_pipeline/views_report.py`)
 on the first run of each UTC month: every night it asks R2 whether
 `views/report-<last month>.md` exists, and writes it when it does not, from
 the summary and the Search Console file as R2 holds them. It waits up to a
@@ -548,11 +548,11 @@ wrote it. Outcomes, as `views_report`: `written`, `not due` (the report
 exists), `waiting`, `no data` (the summary holds no day of the month), or
 `failed` (an attention item and a watchdog email; the next run tries again).
 To write one by hand from downloaded files:
-`python -m pmw_pipeline views-report --month 2026-11 --summary summary.csv --search search_console.csv --out .`
+`python -m awardwatch_pipeline views-report --month 2026-11 --summary summary.csv --search search_console.csv --out .`
 
 ### The dashboard
 
-Workers & Pages, `public-money-watch`, Metrics shows requests, errors and CPU time
+Workers & Pages, `award-watch`, Metrics shows requests, errors and CPU time
 for the Worker with no setup. The per-route, per-language and per-referrer
 counts are only in Analytics Engine, read through the SQL API below or from
 the files above.
@@ -575,7 +575,7 @@ Page views a day, last 30 days:
 
 ```
 SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, SUM(_sample_interval) AS views
-FROM pmw_views
+FROM awardwatch_views
 WHERE blob2 = 'page' AND double1 < 400 AND timestamp > NOW() - INTERVAL '30' DAY
 GROUP BY day ORDER BY day
 ```
@@ -585,7 +585,7 @@ People and bots a day, with distinct visitors, last 7 days (from 2026-10-30):
 ```
 SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, blob8 AS agent,
   SUM(_sample_interval) AS views, count(DISTINCT blob10) AS codes
-FROM pmw_views
+FROM awardwatch_views
 WHERE blob2 = 'page' AND double1 < 400 AND timestamp > NOW() - INTERVAL '7' DAY
 GROUP BY day, agent ORDER BY day, agent
 ```
@@ -597,7 +597,7 @@ Most viewed routes and the language split, last 7 days:
 
 ```
 SELECT blob1 AS route, blob3 AS lang, SUM(_sample_interval) AS views
-FROM pmw_views
+FROM awardwatch_views
 WHERE (blob2 = 'page' OR blob2 = 'download') AND timestamp > NOW() - INTERVAL '7' DAY
 GROUP BY route, lang ORDER BY views DESC LIMIT 30
 ```
@@ -606,7 +606,7 @@ Other sites that send visitors, last 30 days:
 
 ```
 SELECT blob5 AS referrer, SUM(_sample_interval) AS views
-FROM pmw_views
+FROM awardwatch_views
 WHERE blob5 != '' AND blob5 != 'lmiawatch.ca' AND timestamp > NOW() - INTERVAL '30' DAY
 GROUP BY referrer ORDER BY views DESC LIMIT 25
 ```
@@ -615,7 +615,7 @@ Countries, last 30 days:
 
 ```
 SELECT blob4 AS country, SUM(_sample_interval) AS views
-FROM pmw_views
+FROM awardwatch_views
 WHERE blob2 = 'page' AND timestamp > NOW() - INTERVAL '30' DAY
 GROUP BY country ORDER BY views DESC LIMIT 25
 ```
@@ -624,7 +624,7 @@ Feed polls and the largest stated subscriber count per feed, last 7 days:
 
 ```
 SELECT blob7 AS feed, SUM(_sample_interval) AS polls, MAX(double2) AS subscribers
-FROM pmw_views
+FROM awardwatch_views
 WHERE blob2 = 'feed' AND timestamp > NOW() - INTERVAL '7' DAY
 GROUP BY feed ORDER BY polls DESC
 ```
@@ -633,7 +633,7 @@ Server errors, last 7 days (should be empty):
 
 ```
 SELECT blob1 AS route, double1 AS status, SUM(_sample_interval) AS n
-FROM pmw_views
+FROM awardwatch_views
 WHERE double1 >= 500 AND timestamp > NOW() - INTERVAL '7' DAY
 GROUP BY route, status ORDER BY n DESC
 ```
@@ -700,7 +700,7 @@ the Worker's parsed-file cache, so an isolate parses each once per deploy.
 Until 2026-10-30 a profile's only inbound links were its sitemap entry and,
 for a few hundred employers, a place page's list of the 20 with the newest
 records, and Google had crawled a few thousand of the profiles. Two kinds of
-link, both written by the nightly export (`pipeline/pmw_pipeline/directory.py`),
+link, both written by the nightly export (`pipeline/awardwatch_pipeline/directory.py`),
 now reach every profile:
 
 - The directory. Each of the thirteen provinces and territories has an A to Z
