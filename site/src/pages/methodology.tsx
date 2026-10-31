@@ -10,7 +10,9 @@ import { pageSeo } from "../seo";
 // How the site reads its sources, merges organizations and buyers, counts
 // money and derives statuses and competitive flags. The "Counting money"
 // section states the rules in the words the pipeline follows
-// (CLAUDE.md "Counting money"); change the code and this page together.
+// (CLAUDE.md "Counting money"); change the code and this page together. The
+// "Contracts ending soon" section states the radar's rules the same way
+// (CLAUDE.md "Expiring-contracts radar").
 
 const TOC: [string, Key][] = [
   ["sources", "methodology.toc_sources"],
@@ -19,6 +21,7 @@ const TOC: [string, Key][] = [
   ["counting", "methodology.toc_counting"],
   ["competitive", "methodology.toc_competitive"],
   ["statuses", "methodology.toc_statuses"],
+  ["expiring", "methodology.toc_expiring"],
   ["people", "methodology.toc_people"],
   ["claims", "methodology.toc_claims"],
   ["corrections", "methodology.toc_corrections"],
@@ -89,6 +92,14 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           <p>{t(lang, "methodology.status_closing", { days: CLOSING_SOON_DAYS })}</p>
           <p>{t(lang, "methodology.status_awards")}</p>
           <p>{t(lang, "methodology.status_regions")}</p>
+
+          <h2 id="expiring">{t(lang, "methodology.toc_expiring")}</h2>
+          <p>{t(lang, "methodology.expiring_intro")}</p>
+          <List lang={lang} keys={[
+            "methodology.expiring_candidates", "methodology.expiring_once", "methodology.expiring_windows",
+            "methodology.expiring_growth", "methodology.expiring_value", "methodology.expiring_feeds",
+          ]} />
+          <p>{t(lang, "methodology.expiring_claim")}</p>
 
           <h2 id="people">{t(lang, "methodology.toc_people")}</h2>
           <List lang={lang} keys={["methodology.people_individuals", "methodology.people_contacts", "methodology.people_officials"]} />

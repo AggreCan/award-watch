@@ -17,6 +17,7 @@ import {
 } from "../i18n";
 import { Breadcrumb, CompetitiveFlag, Layout, noDataPage, notFoundPage, page } from "../layout";
 import { organizationSeo } from "../seo";
+import { ExpiringSection, MoreInCsv } from "./expiring";
 import { AwardTable, BuyerLink, SourceLine, contractSearchUrl, datasetUrl, grantUrl, lobbyUrl, money } from "./shared";
 import { WATCH_MAX } from "./watchlist";
 
@@ -281,6 +282,12 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         </div>
       ) : <p class="muted">{t(lang, "org.years_none")}</p>}
       <p class="muted small">{t(lang, "org.nc_footnote")}</p>
+
+      {profile.expiring ? (
+        <ExpiringSection lang={lang} part={profile.expiring} heading="org.expiring" organization={false}
+          more={<MoreInCsv lang={lang} part={profile.expiring} />}
+          link={<a href="/expiring">{t(lang, "expiring.see_all")}</a>} />
+      ) : null}
 
       <h2 id="awards">{t(lang, SECTION_KEY.awards)}</h2>
       {profile.awards.length ? <AwardTable lang={lang} rows={profile.awards} organization={false} /> : <p class="muted">{t(lang, "org.none_awards")}</p>}

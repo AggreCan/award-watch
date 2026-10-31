@@ -9,10 +9,14 @@ import { SITE_ORIGIN, pageSeo } from "../seo";
 // A reader's poll passes through the Worker only to be counted (index.tsx
 // serves the file from the assets binding with a short cache). This page
 // reads only the small index of what was written: scoped feeds come and go
-// with the data, the two national feeds are always there.
+// with the data, the two national feeds are always there. The feeds of
+// contracts ending soon (event "expiring", national, per buyer and per
+// segment) are listed when the index names them.
 
 export const FEED_EVENTS = ["tenders", "awards"] as const;
-export type FeedEvent = (typeof FEED_EVENTS)[number];
+export const EXPIRING_EVENT = "expiring";
+export type FeedEvent = (typeof FEED_EVENTS)[number] | typeof EXPIRING_EVENT;
+const INDEX_EVENTS: readonly FeedEvent[] = [...FEED_EVENTS, EXPIRING_EVENT];
 type ScopeKind = "canada" | "segment" | "prov" | "buyer";
 
 export interface FeedRow {
@@ -32,8 +36,10 @@ export interface FeedIndex {
   feeds: FeedRow[];
 }
 
-const EVENT_KEY: Record<FeedEvent, Key> = { tenders: "feeds.ev.tenders", awards: "feeds.ev.awards" };
-const ABOUT_KEY: Record<FeedEvent, Key> = { tenders: "feeds.about.tenders", awards: "feeds.about.awards" };
+const EVENT_KEY: Record<FeedEvent, Key> = { tenders: "feeds.ev.tenders", awards: "feeds.ev.awards", expiring: "feeds.ev.expiring" };
+const ABOUT_KEY: Record<FeedEvent, Key> = {
+  tenders: "feeds.about.tenders", awards: "feeds.about.awards", expiring: "feeds.about.expiring",
+};
 const SCOPES: readonly ScopeKind[] = ["canada", "segment", "prov", "buyer"];
 
 export const nationalFeedPath = (event: FeedEvent) => `feeds/canada/${event}.xml`;
@@ -55,7 +61,7 @@ export async function loadFeedIndex(c: Context<AppEnv>): Promise<FeedIndex | nul
   if (!isObject(index) || !Array.isArray(index.feeds)) return null;
   const feeds = index.feeds.filter(
     (f): f is FeedRow => isObject(f) && typeof f.path === "string" && /^feeds\/[A-Za-z0-9/_-]+\.xml$/.test(f.path)
-      && FEED_EVENTS.includes(f.event as FeedEvent) && typeof f.key === "string" && SCOPES.includes(f.scope as ScopeKind),
+      && INDEX_EVENTS.includes(f.event as FeedEvent) && typeof f.key === "string" && SCOPES.includes(f.scope as ScopeKind),
   );
   return { ...index, feeds };
 }
@@ -74,6 +80,11 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
     if (f.scope === "prov") return provinceName(lang, f.key.toUpperCase());
     return pick(lang, f.name_en ?? null, f.name_fr ?? null) ?? f.key;
   };
+  // The expiring feeds appear wherever the index has any: in the list of
+  // kinds, as a national row, and as a column of the scopes that carry them.
+  const expiring = feeds.filter((f) => f.event === EXPIRING_EVENT);
+  const kinds: readonly FeedEvent[] = expiring.length ? INDEX_EVENTS : FEED_EVENTS;
+  const nationalExpiring = expiring.find((f) => f.scope === "canada");
 
   // One table per scope kind: a row per scope, a column per event.
   const ScopeTable = ({ kind, head }: { kind: ScopeKind; head: Key }) => {
@@ -86,13 +97,14 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
     firsts.sort(kind === "segment" ? (a, b) => a.key.localeCompare(b.key) : (a, b) => label(a).localeCompare(label(b), numberLocale(lang)));
     if (!index) return <p class="muted">{t(lang, "feeds.none_yet")}</p>;
     if (firsts.length === 0) return <p class="muted">{t(lang, "feeds.none_scope")}</p>;
+    const events: readonly FeedEvent[] = expiring.some((f) => f.scope === kind) ? INDEX_EVENTS : FEED_EVENTS;
     return (
       <div class="table-wrap bordered">
         <table class="restack">
           <thead>
             <tr>
               <th>{t(lang, head)}</th>
-              {FEED_EVENTS.map((e) => <th>{t(lang, EVENT_KEY[e])}</th>)}
+              {events.map((e) => <th>{t(lang, EVENT_KEY[e])}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -102,7 +114,7 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
               return (
                 <tr>
                   <td data-label={t(lang, head)}>{name}</td>
-                  {FEED_EVENTS.map((e) => {
+                  {events.map((e) => {
                     const f = cells.get(e);
                     return (
                       <td data-label={t(lang, EVENT_KEY[e])}>
@@ -148,13 +160,15 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
         </nav>
         <div class="doc">
           <h1>{t(lang, "feeds.title")}</h1>
-          <p class="lead">{t(lang, "feeds.lead", { n: index?.max_entries ?? 50 })}</p>
+          <p class="lead">{t(lang, expiring.length ? "feeds.lead_expiring" : "feeds.lead", { n: index?.max_entries ?? 50 })}</p>
           <p>{t(lang, "feeds.privacy")}</p>
 
           <h2 id="kinds">{t(lang, "feeds.toc_kinds")}</h2>
           <ul>
-            {FEED_EVENTS.map((e) => (
-              <li><strong>{t(lang, EVENT_KEY[e])}</strong>{lang === "fr" ? "\u202f: " : ": "}{t(lang, ABOUT_KEY[e])}</li>
+            {kinds.map((e) => (
+              <li id={e === EXPIRING_EVENT ? "expiring" : undefined}>
+                <strong>{t(lang, EVENT_KEY[e])}</strong>{lang === "fr" ? "\u202f: " : ": "}{t(lang, ABOUT_KEY[e])}
+              </li>
             ))}
           </ul>
 
@@ -174,6 +188,12 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
                     <td data-label={t(lang, "feeds.col_address")}><Address path={nationalFeedPath(e)} /></td>
                   </tr>
                 ))}
+                {nationalExpiring ? (
+                  <tr>
+                    <td data-label={t(lang, "feeds.col_feed")}>{t(lang, EVENT_KEY.expiring)}</td>
+                    <td data-label={t(lang, "feeds.col_address")}><Address path={nationalExpiring.path} /></td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>

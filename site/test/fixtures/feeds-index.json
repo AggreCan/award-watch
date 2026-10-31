@@ -53,6 +53,32 @@
   },
   {
    "entries": 1,
+   "event": "expiring",
+   "key": "canada",
+   "path": "feeds/canada/expiring.xml",
+   "scope": "canada",
+   "updated": "2026-10-31"
+  },
+  {
+   "entries": 1,
+   "event": "expiring",
+   "key": "82",
+   "path": "feeds/segment/82/expiring.xml",
+   "scope": "segment",
+   "updated": "2026-10-31"
+  },
+  {
+   "entries": 1,
+   "event": "expiring",
+   "key": "pwgsc-tpsgc",
+   "name_en": "Public Services and Procurement Canada",
+   "name_fr": "Services publics et Approvisionnement Canada",
+   "path": "feeds/buyer/pwgsc-tpsgc/expiring.xml",
+   "scope": "buyer",
+   "updated": "2026-10-31"
+  },
+  {
+   "entries": 1,
    "event": "tenders",
    "key": "x",
    "path": "feeds/x/tenders.xml",

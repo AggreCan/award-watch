@@ -1,7 +1,8 @@
 // /buyers: every federal institution with its counters, from buyers/index.json.
 // /buyers/:id: one institution's yearly figures per source, the organizations
-// it paid most in each, its open notices and newest award notices. Each
-// source keeps its own column; nothing adds two sources together.
+// it paid most in each, its contracts ending soon (when the file carries
+// them), its open notices and newest award notices. Each source keeps its own
+// column; nothing adds two sources together.
 
 import type { Context } from "hono";
 import { ChartStack, type Panel } from "../chart";
@@ -11,6 +12,7 @@ import type { AppEnv } from "../env";
 import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { Breadcrumb, Layout, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
 import { buyerSeo, pageSeo } from "../seo";
+import { ExpiringSection } from "./expiring";
 import { AwardTable, OrgTotalTable, money } from "./shared";
 
 const KIND: Record<string, Key> = {
@@ -188,6 +190,11 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
           </>
         ) : null;
       })}
+
+      {b.expiring ? (
+        <ExpiringSection lang={lang} part={b.expiring} heading="buyer.expiring" buyer={false}
+          link={<a href={`/expiring/12m?buyer=${b.buyer.id}`}>{t(lang, "buyer.expiring_all")}</a>} />
+      ) : null}
 
       <h2>{t(lang, "buyer.recent_awards")}</h2>
       {b.recent_awards.length ? <AwardTable lang={lang} rows={b.recent_awards} buyer={false} /> : <p class="muted">{t(lang, "awards.none")}</p>}

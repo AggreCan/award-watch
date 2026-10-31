@@ -26,6 +26,9 @@ const PAGES: [string, string, string, string][] = [
   ["/awards/2026", "<h1>Award Notices in 2026</h1>", "<h1>Avis d’attribution en 2026</h1>", "awards/2026/index.json"],
   ["/awards/2026?page=2", "Interpretation services, regional consultations", "interprétation, consultations régionales", "awards/2026/2.json"],
   ["/awards/cb-400-40000004", "<h1>Translation standing offer, official languages</h1>", "<h1>Offre à commandes de traduction, langues officielles</h1>", "stats.json"],
+  ["/expiring", "<h1>Contracts Ending Soon</h1>", "<h1>Contrats arrivant à échéance</h1>", "expiring/index.json"],
+  ["/expiring/3m", "<h1>Contracts Ending Within 3 Months</h1>", "<h1>Contrats prenant fin d’ici 3 mois</h1>", "expiring/3m/1.json"],
+  ["/expiring/3m?buyer=dnd-mdn", "Satellite communications terminal maintenance", "Entretien de terminaux de communication par satellite", "expiring/3m/index.json"],
   ["/history/w8472-000633", "<h1>Vessel refit, mid-shore patrol</h1>", "<h1>Radoub de navire, patrouille semi-hauturière</h1>", "stats.json"],
   ["/organizations", "<h1>Organizations</h1>", "<h1>Organisations</h1>", "directory/index.json"],
   ["/organizations/directory/on", "<h1>Organizations A to Z: Ontario</h1>", "<h1>Organisations de A à Z : Ontario</h1>", "directory/on/index.json"],
@@ -81,6 +84,9 @@ describe("every page", () => {
       ["/awards/cb-999-99999999", "Award Notice Not Found"],
       ["/history/w0000-000000", "Contract History Record Not Found"],
       ["/awards/2009", "No Award Notices for This Year"],
+      ["/expiring/1m", "Window Not Found"],
+      ["/expiring/3m?page=2", "Page Not Found"],
+      ["/expiring/6m", "Data Not Published Yet"],
       ["/organizations/org-ffffffffff", "Organization Not Found"],
       ["/buyers/no-such-buyer", "Buyer Not Found"],
       ["/categories/99", "Category Not Found"],
@@ -116,8 +122,9 @@ describe("every page", () => {
     const html = await res.text();
     const nav = html.match(/<nav aria-label="Main" class="main-nav">[\s\S]*?<\/nav>/)?.[0] ?? "";
     expect([...nav.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1])).toEqual([
-      "/tenders", "/awards", "/organizations", "/buyers", "/categories", "/rankings", "/data",
+      "/tenders", "/awards", "/expiring", "/organizations", "/buyers", "/categories", "/rankings", "/data",
     ]);
+    expect(nav).toContain('<a href="/expiring">Ending soon</a>');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));
     for (const href of ["/methodology", "/support", "/feeds", "/watchlist", "/corrections", "/cite", "/data#downloads", "/data#sources"]) {
       expect(footer, href).toContain(`href="${href}"`);

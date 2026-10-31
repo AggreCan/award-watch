@@ -137,6 +137,7 @@ const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, lang, tit
 const NAV: readonly [string, Key][] = [
   ["/tenders", "nav.tenders"],
   ["/awards", "nav.awards"],
+  ["/expiring", "nav.expiring"],
   ["/organizations", "nav.organizations"],
   ["/buyers", "nav.buyers"],
   ["/categories", "nav.categories"],

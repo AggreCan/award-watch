@@ -38,7 +38,7 @@ export interface Seo {
 type Both = Record<Lang, string>;
 
 export type PageKey =
-  | "home" | "tenders" | "tenders_new" | "awards" | "organizations" | "buyers" | "categories" | "rankings" | "feeds"
+  | "home" | "tenders" | "tenders_new" | "awards" | "expiring" | "organizations" | "buyers" | "categories" | "rankings" | "feeds"
   | "watchlist" | "methodology" | "data" | "support" | "cite" | "corrections";
 
 // `name` is the result-list name, either written here or, where the page's own
@@ -78,6 +78,14 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     description: {
       en: "The newest contract award notices on CanadaBuys: supplier, buyer, value and procurement method, each linked to the notice.",
       fr: "Les plus récents avis d'attribution de contrats sur AchatsCanada : fournisseur, acheteur, valeur et méthode d'approvisionnement, chacun lié à l'avis.",
+    },
+  },
+  expiring: {
+    path: "/expiring",
+    name: { en: "Federal Contracts Ending Soon", fr: "Contrats fédéraux arrivant à échéance" },
+    description: {
+      en: "Federal contracts ending within 3, 6 or 12 months: organization, buyer, value, competition and amendments, each listed once and linked to its record.",
+      fr: "Contrats fédéraux qui prennent fin d'ici 3, 6 ou 12 mois : organisation, acheteur, valeur, concurrence et modifications, chacun lié à son dossier.",
     },
   },
   organizations: {
@@ -341,6 +349,16 @@ export function sectionSeo(path: string, title: string, description: string, cru
     jsonLd: [breadcrumbJsonLd(crumbs)],
     noindex,
   };
+}
+
+// One window of the contracts ending soon. A filtered or later page is a view
+// of the window's first page and stays out of the index.
+export function expiringWindowSeo(
+  path: string, title: string, lang: Lang, crumbs: { name: string; path?: string }[],
+  o: { n: number; months: string; date: string; noindex: boolean },
+): Seo {
+  const description = t(lang, "expiring.window_description", { n: fmtInt(o.n, lang), months: o.months, date: o.date });
+  return sectionSeo(path, title, description, crumbs, o.noindex);
 }
 
 function plural(n: number, one: string, many: string, lang: Lang): string {

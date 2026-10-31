@@ -18,6 +18,7 @@ open-data files, refreshed every night.
 - https://awardwatch.ca/downloads/history-YYYY.csv: PSPC contract history of one calendar year of award
 - https://awardwatch.ca/downloads/organizations.csv: one row per organization, with counts and totals per source
 - https://awardwatch.ca/downloads/buyers.csv: one row per federal buyer, with counts and totals per source
+- https://awardwatch.ca/downloads/expiring-12m.csv: every contract ending within 12 months of the data date, each listed once across sources
 - https://awardwatch.ca/data: the source files the site reads, when each was last read, and the licence
 
 Downloads are limited to ten per minute per address.

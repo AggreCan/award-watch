@@ -14,6 +14,9 @@ import buyers from "./fixtures/buyers-index.json";
 import categories from "./fixtures/categories-index.json";
 import category82 from "./fixtures/category-82.json";
 import contracts from "./fixtures/contracts-637.json";
+import expiring3mPage1 from "./fixtures/expiring-3m-1.json";
+import expiring3m from "./fixtures/expiring-3m-index.json";
+import expiringIndex from "./fixtures/expiring-index.json";
 import feedCanadaTenders from "./fixtures/feed-canada-tenders.xml?raw";
 import directory from "./fixtures/directory-index.json";
 import directoryOn1 from "./fixtures/directory-on-1.json";
@@ -72,6 +75,12 @@ export const FILES: Record<string, unknown> = {
   "rankings/all.json": rankingsAll,
   "rankings/2026.json": rankings2026,
   "feeds/index.json": feeds,
+  // The contracts ending soon: the index and the 3-month window, one page.
+  // The 6- and 12-month windows are not published here, so they read as
+  // missing.
+  "expiring/index.json": expiringIndex,
+  "expiring/3m/index.json": expiring3m,
+  "expiring/3m/1.json": expiring3mPage1,
 };
 
 // The assets binding sends a strong ETag that changes with the file's

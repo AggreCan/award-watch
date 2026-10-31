@@ -27,6 +27,7 @@ const STRINGS = {
   // -- navigation, header and footer ------------------------------------------
   "nav.tenders": { en: "Tenders", fr: "Appels d'offres" },
   "nav.awards": { en: "Awards", fr: "Attributions" },
+  "nav.expiring": { en: "Ending soon", fr: "Échéances" },
   "nav.organizations": { en: "Organizations", fr: "Organisations" },
   "nav.buyers": { en: "Buyers", fr: "Acheteurs" },
   "nav.categories": { en: "Categories", fr: "Catégories" },
@@ -219,6 +220,11 @@ const STRINGS = {
   "home.tile_new_note": { en: "First seen in the last refresh", fr: "Vus pour la première fois à la dernière mise à jour" },
   "home.tile_awards": { en: "Award notices", fr: "Avis d'attribution" },
   "home.tile_awards_note": { en: "On CanadaBuys since 2012", fr: "Sur AchatsCanada depuis 2012" },
+  "home.tile_expiring": { en: "Ending within 3 months", fr: "Fin d'ici 3 mois" },
+  "home.tile_expiring_note": {
+    en: "Contracts whose end date falls within 3 months of the data date",
+    fr: "Contrats dont la date de fin tombe dans les 3 mois suivant la date des données",
+  },
   "home.tile_organizations": { en: "Organizations", fr: "Organisations" },
   "home.tile_organizations_note": { en: "Suppliers, recipients and lobbying clients", fr: "Fournisseurs, bénéficiaires et clients de lobbying" },
   "home.tile_contracts": { en: "Published contracts", fr: "Contrats publiés" },
@@ -447,6 +453,120 @@ const STRINGS = {
     fr: "Dossier {reference} de l'historique des contrats de SPAC : {supplier}, attribué pour {buyer} le {date}. Valeur, méthode et modifications.",
   },
 
+  // -- contracts ending soon (the radar; its rules are on the Methodology page) ----------
+  "expiring.title": { en: "Contracts Ending Soon", fr: "Contrats arrivant à échéance" },
+  "expiring.lead": {
+    en: "Contracts whose end date, as last amended, falls within 12 months of the data date ({date}): award notices, PSPC contract history and published contracts, each contract listed once.",
+    fr: "Contrats dont la date de fin, à la plus récente modification, tombe dans les 12 mois suivant la date des données ({date}) : avis d'attribution, historique des contrats de SPAC et contrats publiés, chaque contrat une seule fois.",
+  },
+  "expiring.value_note": {
+    en: "Each contract is listed once, from the source the {rules} prefer, with the value that source's counting rules give. Totals add those values in Canadian dollars; a contract in another currency shows its own currency and is left out of them.",
+    fr: "Chaque contrat figure une seule fois, tiré de la source que privilégient les {rules}, avec la valeur que donnent les règles de calcul de cette source. Les totaux additionnent ces valeurs en dollars canadiens; un contrat dans une autre devise affiche sa devise et en est exclu.",
+  },
+  "expiring.rules_link": { en: "rules of this list", fr: "règles de cette liste" },
+  "expiring.tiles_label": { en: "Contracts by end date", fr: "Contrats par date de fin" },
+  "expiring.window_3m": { en: "Within 3 months", fr: "D'ici 3 mois" },
+  "expiring.window_6m": { en: "Within 6 months", fr: "D'ici 6 mois" },
+  "expiring.window_12m": { en: "Within 12 months", fr: "D'ici 12 mois" },
+  "expiring.months_3m": { en: "3 months", fr: "3 mois" },
+  "expiring.months_6m": { en: "6 months", fr: "6 mois" },
+  "expiring.months_12m": { en: "12 months", fr: "12 mois" },
+  "expiring.tile_total": { en: "Value {total}", fr: "Valeur : {total}" },
+  "expiring.download": {
+    en: "Download every contract ending within 12 months (CSV)",
+    fr: "Télécharger tous les contrats prenant fin d'ici 12 mois (CSV)",
+  },
+  "expiring.feed": {
+    en: "Atom feed of contracts entering the 3-month window",
+    fr: "Fil Atom des contrats qui entrent dans la période de 3 mois",
+  },
+  "expiring.feeds_all": { en: "Feeds by buyer and by category", fr: "Fils par acheteur et par catégorie" },
+  "expiring.first_heading": { en: "Ending Within 3 Months", fr: "Fin d'ici 3 mois" },
+  "expiring.first_note": { en: "The first {n} by end date.", fr: "Les {n} premiers par date de fin." },
+  "expiring.first_all": { en: "All contracts ending within 3 months", fr: "Tous les contrats prenant fin d'ici 3 mois" },
+  "expiring.list_missing": { en: "The list for this window is not published yet.", fr: "La liste de cette période n'est pas encore publiée." },
+  "expiring.none_window": { en: "No contract ends within this window.", fr: "Aucun contrat ne prend fin dans cette période." },
+  "expiring.by_buyer": { en: "By Buyer, Within 12 Months", fr: "Par acheteur, d'ici 12 mois" },
+  "expiring.by_segment": { en: "By Category, Within 12 Months", fr: "Par catégorie, d'ici 12 mois" },
+  "expiring.by_segment_note": {
+    en: "A contract counts under every UNSPSC segment its codes fall in, so the rows overlap and are not added up.",
+    fr: "Un contrat compte dans chaque segment UNSPSC où tombent ses codes; les lignes se chevauchent donc et ne sont pas additionnées.",
+  },
+  "expiring.col_contracts": { en: "Contracts", fr: "Contrats" },
+  "expiring.windows_nav": { en: "Windows", fr: "Périodes" },
+  "expiring.window_title_3m": { en: "Contracts Ending Within 3 Months", fr: "Contrats prenant fin d'ici 3 mois" },
+  "expiring.window_title_6m": { en: "Contracts Ending Within 6 Months", fr: "Contrats prenant fin d'ici 6 mois" },
+  "expiring.window_title_12m": { en: "Contracts Ending Within 12 Months", fr: "Contrats prenant fin d'ici 12 mois" },
+  "expiring.window_count_one": {
+    en: "{n} contract ends within {months} of the data date ({date}).",
+    fr: "{n} contrat prend fin dans les {months} suivant la date des données ({date}).",
+  },
+  "expiring.window_count_many": {
+    en: "{n} contracts end within {months} of the data date ({date}).",
+    fr: "{n} contrats prennent fin dans les {months} suivant la date des données ({date}).",
+  },
+  "expiring.window_total": { en: "Value of the contracts listed: {total}.", fr: "Valeur des contrats de la liste : {total}." },
+  "expiring.window_description": {
+    en: "{n} federal contracts ending within {months} of {date}: organization, buyer, value, competition and amendments, each linked to its record.",
+    fr: "{n} contrats fédéraux prenant fin dans les {months} suivant le {date} : organisation, acheteur, valeur, concurrence et modifications, chacun lié à son dossier.",
+  },
+  "expiring.window_not_found": { en: "Window Not Found", fr: "Période introuvable" },
+  "expiring.back": { en: "Back to the contracts ending soon", fr: "Retour aux contrats arrivant à échéance" },
+  "expiring.page_not_found": { en: "Page Not Found", fr: "Page introuvable" },
+  "expiring.back_window": { en: "Back to the first page of the window", fr: "Retour à la première page de la période" },
+  "expiring.filter_value": { en: "Value", fr: "Valeur" },
+  "expiring.band_under_100k": { en: "Under $100,000", fr: "Moins de 100 000 $" },
+  "expiring.band_100k_1m": { en: "$100,000 to under $1 million", fr: "De 100 000 $ à moins de 1 million de dollars" },
+  "expiring.band_1m_10m": { en: "$1 million to under $10 million", fr: "De 1 à moins de 10 millions de dollars" },
+  "expiring.band_over_10m": { en: "$10 million and over", fr: "10 millions de dollars et plus" },
+  "expiring.band_note": {
+    en: "Value bands are in Canadian dollars; a contract in another currency falls in none.",
+    fr: "Les tranches de valeur sont en dollars canadiens; un contrat dans une autre devise n'entre dans aucune.",
+  },
+  "expiring.filter_note": {
+    en: "The filters apply to the {rows} contracts on this page (page {page} of {pages}); each other page is filtered when you open it.",
+    fr: "Les filtres s'appliquent aux {rows} contrats de cette page (page {page} sur {pages}); chaque autre page est filtrée lorsque vous l'ouvrez.",
+  },
+  "expiring.match_one": { en: "{n} contract on this page matches.", fr: "{n} contrat de cette page correspond." },
+  "expiring.match_many": { en: "{n} contracts on this page match.", fr: "{n} contrats de cette page correspondent." },
+  "expiring.none_match": { en: "No contract on this page matches these filters.", fr: "Aucun contrat de cette page ne correspond à ces filtres." },
+  "expiring.col_ends": { en: "Ends on", fr: "Prend fin le" },
+  "expiring.days_left_one": { en: "{n} day left", fr: "{n} jour restant" },
+  "expiring.days_left_many": { en: "{n} days left", fr: "{n} jours restants" },
+  "expiring.col_amendments": { en: "Amendments and growth", fr: "Modifications et variation de valeur" },
+  "expiring.amendments_none": { en: "None", fr: "Aucune" },
+  "expiring.amendments_one": { en: "{n} amendment", fr: "{n} modification" },
+  "expiring.amendments_many": { en: "{n} amendments", fr: "{n} modifications" },
+  "expiring.growth": { en: "{pct} on the original amount", fr: "{pct} par rapport au montant initial" },
+  "expiring.growth_def": {
+    en: "Amendments counts the versions beyond the original. Growth is the newest total value over the original amount, minus one, left blank when either is unknown.",
+    fr: "Les modifications comptent les versions qui suivent l'original. La variation est la plus récente valeur totale divisée par le montant initial, moins un, laissée vide si l'un ou l'autre est inconnu.",
+  },
+  "expiring.kind_award": { en: "Award notice", fr: "Avis d'attribution" },
+  "expiring.kind_history": { en: "PSPC contract history", fr: "Historique des contrats de SPAC" },
+  "expiring.kind_contract": { en: "Published contract", fr: "Contrat publié" },
+  "expiring.record_award": { en: "CanadaBuys notice", fr: "Avis sur AchatsCanada" },
+  "expiring.record_history": { en: "Contract history dataset", fr: "Jeu de données de l'historique" },
+  "expiring.record_contract": { en: "Contracts search", fr: "Recherche de contrats" },
+  "expiring.withheld": { en: "Individual, name withheld", fr: "Particulier, nom non divulgué" },
+  "expiring.part_none": {
+    en: "No contract ends within 12 months of the data date.",
+    fr: "Aucun contrat ne prend fin dans les 12 mois suivant la date des données.",
+  },
+  "expiring.part_one": {
+    en: "{n} contract ends within 12 months of the data date. Value: {total}.",
+    fr: "{n} contrat prend fin dans les 12 mois suivant la date des données. Valeur : {total}.",
+  },
+  "expiring.part_many": {
+    en: "{n} contracts end within 12 months of the data date. Value: {total}.",
+    fr: "{n} contrats prennent fin dans les 12 mois suivant la date des données. Valeur : {total}.",
+  },
+  "expiring.part_shown": { en: "The first {shown} by end date are shown.", fr: "Les {shown} premiers par date de fin sont affichés." },
+  "expiring.part_more_one": { en: "The other one is in {csv}.", fr: "L'autre se trouve dans {csv}." },
+  "expiring.part_more_many": { en: "The other {more} are in {csv}.", fr: "Les {more} autres se trouvent dans {csv}." },
+  "expiring.csv_link": { en: "the 12-month CSV file", fr: "le fichier CSV de 12 mois" },
+  "expiring.see_all": { en: "All contracts ending soon", fr: "Tous les contrats arrivant à échéance" },
+
   // -- organization profile -------------------------------------------------------------
   "org.title": { en: "Organization", fr: "Organisation" },
   "org.not_found": { en: "Organization Not Found", fr: "Organisation introuvable" },
@@ -547,6 +667,7 @@ const STRINGS = {
   },
   "org.buyers": { en: "Main Buyers by Source", fr: "Principaux acheteurs par source" },
   "org.buyers_none": { en: "No buyer on record.", fr: "Aucun acheteur au dossier." },
+  "org.expiring": { en: "Contracts Ending", fr: "Contrats prenant fin" },
   "org.responses": { en: "Responses from the Organization", fr: "Réponses de l'organisation" },
   "org.no_responses": { en: "The organization has not published a response.", fr: "L'organisation n'a publié aucune réponse." },
   "org.received": { en: "Received {date}", fr: "Reçu le {date}" },
@@ -677,6 +798,11 @@ const STRINGS = {
   "buyer.col_organizations": { en: "Organizations", fr: "Organisations" },
   "buyer.top": { en: "Largest Values: {source}", fr: "Valeurs les plus élevées : {source}" },
   "buyer.recent_awards": { en: "Newest Award Notices", fr: "Avis d'attribution les plus récents" },
+  "buyer.expiring": { en: "Contracts Ending Soon", fr: "Contrats arrivant à échéance" },
+  "buyer.expiring_all": {
+    en: "This buyer's contracts in the 12-month list",
+    fr: "Les contrats de cet acheteur dans la liste de 12 mois",
+  },
   "buyer.description": {
     en: "{name}: open tender notices, contract awards, published contracts and grants by year, and the organizations with the largest values in each source.",
     fr: "{name} : avis d'appel d'offres ouverts, attributions de contrats, contrats publiés et subventions par année, et les organisations aux valeurs les plus élevées dans chaque source.",
@@ -783,6 +909,10 @@ const STRINGS = {
     en: "Feeds of new tender notices and new award notices, each holding the {n} newest entries.",
     fr: "Fils des nouveaux avis d'appel d'offres et d'attribution, chacun contenant les {n} entrées les plus récentes.",
   },
+  "feeds.lead_expiring": {
+    en: "Feeds of new tender notices, new award notices and contracts ending within 3 months, each holding the {n} newest entries.",
+    fr: "Fils des nouveaux avis d'appel d'offres et d'attribution et des contrats prenant fin d'ici 3 mois, chacun contenant les {n} entrées les plus récentes.",
+  },
   "feeds.privacy": {
     en: "A feed reader polls the file; the site counts polls and keeps no address.",
     fr: "Un lecteur de fils interroge le fichier; le site compte les interrogations et ne conserve aucune adresse.",
@@ -795,6 +925,7 @@ const STRINGS = {
   "feeds.toc_subscribe": { en: "How to Subscribe", fr: "Comment s'abonner" },
   "feeds.ev.tenders": { en: "New tender notices", fr: "Nouveaux avis d'appel d'offres" },
   "feeds.ev.awards": { en: "New award notices", fr: "Nouveaux avis d'attribution" },
+  "feeds.ev.expiring": { en: "Contracts ending within 3 months", fr: "Contrats prenant fin d'ici 3 mois" },
   "feeds.about.tenders": {
     en: "notices first seen in the nightly refresh, with the buyer, the closing date and a link to the notice.",
     fr: "avis vus pour la première fois à la mise à jour de nuit, avec l'acheteur, la date de clôture et un lien vers l'avis.",
@@ -802,6 +933,10 @@ const STRINGS = {
   "feeds.about.awards": {
     en: "award notices first seen in the nightly refresh, with the supplier, the buyer, the value and a link to the notice.",
     fr: "avis d'attribution vus pour la première fois à la mise à jour de nuit, avec le fournisseur, l'acheteur, la valeur et un lien vers l'avis.",
+  },
+  "feeds.about.expiring": {
+    en: "contracts whose end date came within 3 months of the data date since the previous run, so each appears once, about 90 days before it ends.",
+    fr: "contrats dont la date de fin est entrée dans les 3 mois suivant la date des données depuis l'exécution précédente; chacun paraît donc une seule fois, environ 90 jours avant sa fin.",
   },
   "feeds.link_title": { en: "{event} (Atom feed)", fr: "{event} (fil Atom)" },
   "feeds.col_feed": { en: "Feed", fr: "Fil" },
@@ -876,6 +1011,10 @@ const STRINGS = {
     fr: "Toutes les organisations avec leurs nombres et totaux par source",
   },
   "data.file.buyers": { en: "Every buyer with its counts and totals per source", fr: "Tous les acheteurs avec leurs nombres et totaux par source" },
+  "data.file.expiring": {
+    en: "Every contract ending within 12 months of the data date, one row each, listed once across sources",
+    fr: "Tous les contrats prenant fin dans les 12 mois suivant la date des données, une ligne chacun, une seule fois toutes sources confondues",
+  },
   "data.file.sums": { en: "SHA-256 checksums of the files above", fr: "Sommes de contrôle SHA-256 des fichiers ci-dessus" },
   "data.yearly_awards": { en: "Award Notices by Year of Award", fr: "Avis d'attribution par année d'attribution" },
   "data.yearly_history": { en: "PSPC Contract History by Year of Award", fr: "Historique des contrats de SPAC par année d'attribution" },
@@ -961,6 +1100,7 @@ const STRINGS = {
   "methodology.toc_counting": { en: "Counting Money", fr: "Calcul des montants" },
   "methodology.toc_competitive": { en: "Competitive or Not", fr: "Concurrentiel ou non" },
   "methodology.toc_statuses": { en: "Statuses and Regions", fr: "Statuts et régions" },
+  "methodology.toc_expiring": { en: "Contracts Ending Soon", fr: "Contrats arrivant à échéance" },
   "methodology.toc_people": { en: "People", fr: "Personnes" },
   "methodology.toc_claims": { en: "What the Site Does Not Claim", fr: "Ce que le site n'affirme pas" },
   "methodology.toc_corrections": { en: "Corrections and Responses", fr: "Corrections et réponses" },
@@ -1098,6 +1238,38 @@ const STRINGS = {
   "methodology.status_regions": {
     en: "Regions of delivery map to provinces: a province named in either language to itself, the National Capital Region to Ontario and Quebec; \"Canada\", a blank or a city name maps to no province.",
     fr: "Les régions de livraison sont associées aux provinces : une province nommée dans l'une ou l'autre langue à elle-même, la région de la capitale nationale à l'Ontario et au Québec; « Canada », un champ vide ou un nom de ville ne correspond à aucune province.",
+  },
+  "methodology.expiring_intro": {
+    en: "The list of contracts ending soon is built from the end dates and suppliers the sources already give, by these rules:",
+    fr: "La liste des contrats arrivant à échéance est tirée des dates de fin et des fournisseurs que donnent déjà les sources, selon ces règles :",
+  },
+  "methodology.expiring_candidates": {
+    en: "A contract is listed when it is an award notice, a PSPC contract history record or a published contract whose newest version has an end date on or after the data date and within 12 months of it, and whose status is not cancelled. The end date is the newest version's, since amendments move it.",
+    fr: "Un contrat figure dans la liste lorsqu'il s'agit d'un avis d'attribution, d'un dossier de l'historique des contrats de SPAC ou d'un contrat publié dont la plus récente version porte une date de fin égale ou postérieure à la date des données et d'au plus 12 mois après celle-ci, et dont le statut n'est pas annulé. La date de fin est celle de la plus récente version, puisque les modifications la déplacent.",
+  },
+  "methodology.expiring_once": {
+    en: "The same contract can appear in all three sources, and the list shows it once. It prefers the CanadaBuys award notice, which links the solicitation, then PSPC contract history, then the published contract. A row from a later source is dropped when its contract number equals a kept row's, or when its organization, buyer, end date (within 3 days) and value (within 1 percent) all match a kept row.",
+    fr: "Un même contrat peut figurer dans les trois sources, et la liste ne le présente qu'une fois. Elle privilégie l'avis d'attribution d'AchatsCanada, qui renvoie à l'invitation, puis l'historique des contrats de SPAC, puis le contrat publié. Une ligne d'une source moins privilégiée est écartée lorsque son numéro de contrat est celui d'une ligne retenue, ou lorsque son organisation, son acheteur, sa date de fin (à 3 jours près) et sa valeur (à 1 pour cent près) correspondent tous à ceux d'une ligne retenue.",
+  },
+  "methodology.expiring_windows": {
+    en: "The windows are cumulative: within 3, 6 and 12 months of the data date. A contract ending within 3 months is also in the 6-month and 12-month lists.",
+    fr: "Les périodes sont cumulatives : d'ici 3, 6 et 12 mois après la date des données. Un contrat qui prend fin d'ici 3 mois figure aussi dans les listes de 6 et de 12 mois.",
+  },
+  "methodology.expiring_growth": {
+    en: "Amendments counts the versions beyond the original. Value growth is the newest total value over the original amount, minus one, shown as a percentage; it is left blank when either figure is unknown.",
+    fr: "Le nombre de modifications compte les versions qui suivent la version initiale. La variation de valeur est la plus récente valeur totale divisée par le montant initial, moins un, exprimée en pourcentage; elle reste vide lorsque l'un ou l'autre chiffre est inconnu.",
+  },
+  "methodology.expiring_value": {
+    en: "The value shown is the value counted for the row's own source under the rules above. A window's total adds the values of the contracts it lists, each counted once, in Canadian dollars.",
+    fr: "La valeur affichée est celle que retiennent les règles ci-dessus pour la source de la ligne. Le total d'une période additionne les valeurs des contrats qu'elle présente, chacun compté une seule fois, en dollars canadiens.",
+  },
+  "methodology.expiring_feeds": {
+    en: "The feeds carry the contracts that entered the 3-month window since the previous run, so a reader sees each contract once, about 90 days before it ends.",
+    fr: "Les fils contiennent les contrats entrés dans la période de 3 mois depuis l'exécution précédente; un lecteur voit donc chaque contrat une seule fois, environ 90 jours avant sa fin.",
+  },
+  "methodology.expiring_claim": {
+    en: "An end date is the date the record states. A contract can be extended, renewed or replaced, and the list says nothing about what follows its end.",
+    fr: "Une date de fin est celle qu'indique le dossier. Un contrat peut être prolongé, renouvelé ou remplacé, et la liste n'indique rien de ce qui suit sa fin.",
   },
   "methodology.people_individuals": {
     en: "Private individuals are never stored: grants to individuals and any supplier, recipient or client whose name reads as a person's are dropped before anything is written, and only their number is logged.",

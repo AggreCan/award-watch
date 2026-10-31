@@ -397,6 +397,8 @@ export interface Profile {
   buyers: { source: MoneySource; buyer_id: string; buyer_en: string | null; buyer_fr: string | null; n: number; total: number | null }[];
   // Rows left out of the totals because their currency is not CAD, per source.
   non_cad?: Partial<Record<MoneySource, number>>;
+  // The contracts ending within 12 months; absent from older exports.
+  expiring?: ExpiringPart;
 }
 
 export interface DirectorySummary { code: string; organizations: number; pages: number }
@@ -434,6 +436,8 @@ export interface Buyer {
   top_organizations: Partial<Record<MoneySource, OrgTotal[]>>;
   open_tenders: number;
   recent_awards: AwardRow[];
+  // The contracts ending within 12 months; absent from older exports.
+  expiring?: ExpiringPart;
 }
 
 export interface CategorySummary {
@@ -462,6 +466,77 @@ export interface Rankings {
   years: number[];
   sources: Partial<Record<SourceKey, { by_value: OrgTotal[]; by_count: OrgTotal[] }>>;
   buyers: Partial<Record<MoneySource, BuyerRank[]>>;
+}
+
+// -- expiring contracts ---------------------------------------------------------------
+
+// The radar's windows, cumulative: a contract ending within 3 months of the
+// data date is also in the 6- and 12-month lists (CLAUDE.md "Expiring-contracts
+// radar").
+export const EXPIRING_WINDOWS = ["3m", "6m", "12m"] as const;
+export type ExpiringWindow = (typeof EXPIRING_WINDOWS)[number];
+// The source a radar row was kept from: an award notice, a PSPC contract
+// history record or a published contract (proactive publication).
+export const EXPIRING_KINDS = ["award", "history", "contract"] as const;
+export type ExpiringKind = (typeof EXPIRING_KINDS)[number];
+
+// One contract whose newest version ends within 12 months of the data date,
+// listed once whichever sources hold it.
+export interface ExpiringRow {
+  kind: ExpiringKind;
+  // As published; for a published contract "owner_org:reference", since its
+  // reference is unique within one department only.
+  reference: string;
+  title_en: string | null;
+  title_fr: string | null;
+  // Both null, with supplier_withheld true, when the supplier reads as a person.
+  organization_id: string | null;
+  organization: string | null;
+  supplier_withheld?: boolean;
+  buyer_id: string | null;
+  buyer_en: string | null;
+  buyer_fr: string | null;
+  start: string | null;
+  end: string;
+  days_left: number;
+  value: number | null; // the value counted by the row's own source's rules
+  currency: string | null;
+  competitive: Competitive;
+  method_en: string | null;
+  method_fr: string | null;
+  instrument_en: string | null;
+  instrument_fr: string | null;
+  n_amendments: number; // versions beyond the original
+  value_growth: number | null; // newest total over the original amount, minus 1
+  // The tender notice for the solicitation, when the source gives one.
+  tender_reference?: string | null;
+  segments: string[];
+  provinces: string[];
+}
+
+export interface ExpiringIndex {
+  as_of: string;
+  windows: { window: ExpiringWindow; n: number; total: number | null }[];
+  by_buyer: { buyer_id: string | null; buyer_en: string | null; buyer_fr: string | null; n: number; total: number | null }[];
+  by_segment: { code: string; n: number; total: number | null }[];
+}
+
+// expiring/<window>/index.json: how many pages of rows the window has (500
+// to a page, soonest end first), how many rows in all and their value.
+export interface ExpiringWindowIndex {
+  window: ExpiringWindow;
+  pages: number;
+  rows: number;
+  total: number | null;
+}
+
+// What a buyer file and a profile carry of the radar: the number of rows,
+// their value, and the first 25 by end date. Absent from files written
+// before the radar.
+export interface ExpiringPart {
+  n: number;
+  total: number | null;
+  rows: ExpiringRow[];
 }
 
 // -- reading files ---------------------------------------------------------------------
@@ -830,7 +905,8 @@ const isProfile = (p: unknown, id: string): p is Profile => isObj(p) && isOrgani
   SOURCES.every((s) => isListOf(p[s], PROFILE_LISTS[s]) && isCount(p[`${s}_total_rows`])) &&
   isListOf(p.buyers, (b) => isObj(b) && isMoneySource(b.source) && isStr(b.buyer_id) && BUYER_ID_RE.test(b.buyer_id) &&
     isStrOrNull(b.buyer_en) && isStrOrNull(b.buyer_fr) && isCount(b.n) && isNumOrNull(b.total)) &&
-  optional(p.non_cad, (v) => isObj(v) && Object.entries(v).every(([k, n]) => isMoneySource(k) && isCount(n)));
+  optional(p.non_cad, (v) => isObj(v) && Object.entries(v).every(([k, n]) => isMoneySource(k) && isCount(n))) &&
+  optional(p.expiring, isExpiringPart);
 
 export async function loadProfile(env: Env, id: string): Promise<Profile | null> {
   if (!ORG_ID_RE.test(id)) return null;
@@ -907,7 +983,7 @@ export async function loadBuyer(env: Env, id: string): Promise<Buyer | null> {
     isListOf(v.years, (y) => isYearFigure(y) && isNumOrNull((y as unknown as Record<string, unknown>).n_organizations)) &&
     isObj(v.top_organizations) &&
     Object.entries(v.top_organizations).every(([k, rows]) => isMoneySource(k) && isListOf(rows, isOrgTotal)) &&
-    isCount(v.open_tenders) && isListOf(v.recent_awards, isAwardRow);
+    isCount(v.open_tenders) && isListOf(v.recent_awards, isAwardRow) && optional(v.expiring, isExpiringPart);
   return ok ? (v as unknown as Buyer) : null;
 }
 
@@ -945,4 +1021,55 @@ export async function loadRankings(env: Env, which: number | "all"): Promise<Ran
       isListOf(s.by_value, isOrgTotal) && isListOf(s.by_count, isOrgTotal)) &&
     isObj(v.buyers) && Object.entries(v.buyers).every(([k, rows]) => isMoneySource(k) && isListOf(rows, isBuyerRank));
   return ok ? (v as unknown as Rankings) : null;
+}
+
+// -- expiring contracts -------------------------------------------------------------
+
+export const isExpiringWindow = (v: unknown): v is ExpiringWindow => (EXPIRING_WINDOWS as readonly unknown[]).includes(v);
+const isExpiringKind = (v: unknown): v is ExpiringKind => (EXPIRING_KINDS as readonly unknown[]).includes(v);
+const isDay = (v: unknown): v is string => isStr(v) && /^\d{4}-\d{2}-\d{2}/.test(v);
+
+// An award or history reference becomes a path on this site, so it must be
+// one; a published contract's "owner_org:reference" only goes into a search
+// query, so any short string reads.
+export const isExpiringRow = (r: unknown): r is ExpiringRow => isObj(r) && isExpiringKind(r.kind) &&
+  (r.kind === "contract" ? isStr(r.reference) && r.reference.length > 0 && r.reference.length <= 200 : isRef(r.reference)) &&
+  isStrOrNull(r.title_en) && isStrOrNull(r.title_fr) && isOrgIdOrNull(r.organization_id) && isStrOrNull(r.organization) &&
+  optional(r.supplier_withheld, isBool) && isBuyerIdOrNull(r.buyer_id) && isStrOrNull(r.buyer_en) && isStrOrNull(r.buyer_fr) &&
+  isStrOrNull(r.start) && isDay(r.end) && isCount(r.days_left) && isNumOrNull(r.value) && isStrOrNull(r.currency) &&
+  isCompetitive(r.competitive) && isStrOrNull(r.method_en) && isStrOrNull(r.method_fr) && isStrOrNull(r.instrument_en) &&
+  isStrOrNull(r.instrument_fr) && isCount(r.n_amendments) && isNumOrNull(r.value_growth) &&
+  optional(r.tender_reference, (x) => x === null || isRef(x)) && isStrList(r.segments) && isStrList(r.provinces);
+
+// The part of a buyer file or a profile: never more rows than it counts.
+const isExpiringPart = (v: unknown): v is ExpiringPart => isObj(v) && isCount(v.n) && isNumOrNull(v.total) &&
+  isListOf(v.rows, isExpiringRow) && v.rows.length <= v.n;
+
+export async function loadExpiringIndex(env: Env): Promise<ExpiringIndex | null> {
+  const v = await loadJson<unknown>(env, "expiring/index.json");
+  const ok = isObj(v) && isStr(v.as_of) &&
+    isListOf(v.windows, (w) => isObj(w) && isExpiringWindow(w.window) && isCount(w.n) && isNumOrNull(w.total)) &&
+    isListOf(v.by_buyer, (b) => isObj(b) && isBuyerIdOrNull(b.buyer_id) && isStrOrNull(b.buyer_en) && isStrOrNull(b.buyer_fr) &&
+      isCount(b.n) && isNumOrNull(b.total)) &&
+    isListOf(v.by_segment, (g) => isObj(g) && isStr(g.code) && SEGMENT_RE.test(g.code) && isCount(g.n) && isNumOrNull(g.total));
+  return ok ? (v as unknown as ExpiringIndex) : null;
+}
+
+// A window is paged like a year of award notices, so no request parses more
+// than one page of 500 rows; its index says how many pages there are.
+export async function loadExpiringWindow(env: Env, window: string): Promise<ExpiringWindowIndex | null> {
+  if (!isExpiringWindow(window)) return null;
+  const v = await loadJson<unknown>(env, `expiring/${window}/index.json`);
+  return isObj(v) && v.window === window && isCount(v.pages) && isCount(v.rows) && v.rows >= v.pages && isNumOrNull(v.total)
+    ? (v as unknown as ExpiringWindowIndex)
+    : null;
+}
+
+// One page of a window: the rows as a list, or an object holding them as
+// "rows" (either form reads).
+export async function loadExpiringPage(env: Env, window: string, n: number): Promise<ExpiringRow[] | null> {
+  if (!isExpiringWindow(window) || !Number.isInteger(n) || n < 1 || n > 100_000) return null;
+  const v = await loadJson<unknown>(env, `expiring/${window}/${n}.json`);
+  const rows = isObj(v) ? v.rows : v;
+  return checkOnce(rows, "expiring", (r) => isListOf(r, isExpiringRow)) ? (rows as ExpiringRow[]) : null;
 }

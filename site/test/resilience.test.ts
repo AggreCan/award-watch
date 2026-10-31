@@ -56,6 +56,7 @@ const PAGES = [
   "/", "/tenders", "/tenders/new", "/tenders/cb-100-10000001", "/awards", "/awards/2026", "/awards/cb-400-40000004",
   "/history/w8472-000633", "/organizations", "/organizations/directory/on", "/organizations/org-a000000001", "/buyers",
   "/buyers/pwgsc-tpsgc", "/categories", "/categories/82", "/rankings", "/rankings/2026", "/data", "/cite",
+  "/expiring", "/expiring/3m",
 ];
 
 describe("missing and corrupt data files", () => {

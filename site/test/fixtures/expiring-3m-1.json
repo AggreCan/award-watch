@@ -1,0 +1,90 @@
+[
+ {
+  "buyer_en": "Fisheries and Oceans Canada",
+  "buyer_fr": "Pêches et Océans Canada",
+  "buyer_id": "dfo-mpo",
+  "competitive": 0,
+  "currency": "CAD",
+  "days_left": 45,
+  "end": "2026-12-15",
+  "instrument_en": "Contract",
+  "instrument_fr": "Contrat",
+  "kind": "history",
+  "method_en": "Non-competitive",
+  "method_fr": "Non concurrentielle",
+  "n_amendments": 0,
+  "organization": null,
+  "organization_id": null,
+  "provinces": [
+   "BC"
+  ],
+  "reference": "W8472-000777",
+  "segments": [
+   "25"
+  ],
+  "start": "2024-01-15",
+  "supplier_withheld": true,
+  "tender_reference": null,
+  "title_en": "Diesel engine overhaul, patrol vessel",
+  "title_fr": "Révision de moteur diesel, navire de patrouille",
+  "value": 98000,
+  "value_growth": null
+ },
+ {
+  "buyer_en": "National Defence",
+  "buyer_fr": "Défense nationale",
+  "buyer_id": "dnd-mdn",
+  "competitive": null,
+  "currency": "CAD",
+  "days_left": 81,
+  "end": "2027-01-20",
+  "instrument_en": null,
+  "instrument_fr": null,
+  "kind": "contract",
+  "method_en": null,
+  "method_fr": null,
+  "n_amendments": 1,
+  "organization": "Sample Harbour Marine Ltd.",
+  "organization_id": "org-a000000002",
+  "provinces": [],
+  "reference": "dnd-mdn:C-2026-0042",
+  "segments": [
+   "43"
+  ],
+  "start": "2025-02-01",
+  "title_en": "Satellite communications terminal maintenance",
+  "title_fr": "Entretien de terminaux de communication par satellite",
+  "value": 4500000,
+  "value_growth": -0.1
+ },
+ {
+  "buyer_en": "Public Services and Procurement Canada",
+  "buyer_fr": "Services publics et Approvisionnement Canada",
+  "buyer_id": "pwgsc-tpsgc",
+  "competitive": 1,
+  "currency": "CAD",
+  "days_left": 20,
+  "end": "2026-11-20",
+  "instrument_en": "Standing Offer",
+  "instrument_fr": "Offre à commandes",
+  "kind": "award",
+  "method_en": "Competitive - Open bidding",
+  "method_fr": "Concurrentielle - Appel d'offres ouvert",
+  "n_amendments": 2,
+  "organization": "Exemplar Translation Services Inc.",
+  "organization_id": "org-a000000001",
+  "provinces": [
+   "ON"
+  ],
+  "reference": "cb-400-40000004",
+  "segments": [
+   "82"
+  ],
+  "start": "2025-12-01",
+  "tender_reference": "cb-100-10000001",
+  "title_en": "Translation standing offer, official languages",
+  "title_fr": "Offre à commandes de traduction, langues officielles",
+  "value": 312500,
+  "value_growth": 0.25
+ }
+]

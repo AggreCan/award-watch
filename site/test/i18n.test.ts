@@ -51,6 +51,10 @@ const SENTINELS = [
   "Amendment History",
   "Value counted",
   "Rank by source",
+  "Contracts Ending Soon",
+  "days left",
+  "Individual, name withheld",
+  "Amendments and growth",
 ];
 
 const FRENCH_PAGES = [
@@ -64,6 +68,11 @@ const FRENCH_PAGES = [
   "/awards/2026?lang=fr",
   "/awards/2026?lang=fr&page=2",
   "/awards/cb-400-40000004?lang=fr",
+  "/expiring?lang=fr",
+  "/expiring/3m?lang=fr",
+  "/expiring/3m?lang=fr&buyer=dnd-mdn&value=1m-10m",
+  "/expiring/3m?lang=fr&value=over-10m",
+  "/expiring/1m?lang=fr",
   "/history/w8472-000633?lang=fr",
   "/organizations?lang=fr",
   "/organizations/directory/on?lang=fr",
@@ -328,7 +337,7 @@ describe("rendered French pages", () => {
       [
         "/", "/tenders", "/methodology", "/support", "/cite", "/organizations/org-a000000001", "/organizations/directory/on",
         "/nothing-here", "/organizations/org-a000000001/respond", "/tenders/cb-100-10000001", "/awards/cb-400-40000004",
-        "/rankings", "/corrections",
+        "/rankings", "/corrections", "/expiring",
       ].map(async (p) => (await get(p)).text()),
     );
     pages.push(await (await get("/", {}, testEnv(emptyAssets))).text());

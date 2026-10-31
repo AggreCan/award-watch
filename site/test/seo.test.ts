@@ -40,6 +40,8 @@ const PAGES: [string, string, string][] = [
   ["/awards", `${O}/awards`, "Federal Contract Award Notices | Award Watch"],
   ["/awards/2026", `${O}/awards/2026`, "Award Notices in 2026 | Award Watch"],
   ["/awards/cb-400-40000004", `${O}/awards/cb-400-40000004`, "Translation standing offer, official languages | Award Watch"],
+  ["/expiring", `${O}/expiring`, "Federal Contracts Ending Soon | Award Watch"],
+  ["/expiring/3m", `${O}/expiring/3m`, "Contracts Ending Within 3 Months | Award Watch"],
   ["/history/w8472-000633", `${O}/history/w8472-000633`, "Vessel refit, mid-shore patrol | Award Watch"],
   ["/organizations", `${O}/organizations`, "Organizations Receiving Federal Money | Award Watch"],
   ["/organizations/directory/on", `${O}/organizations/directory/on`, "Organizations A to Z: Ontario | Award Watch"],
@@ -159,7 +161,8 @@ describe("page metadata", () => {
   it("the response form, filtered views and later pages stay out of the index; error pages carry only the site description", async () => {
     for (const path of [
       "/organizations/org-a000000001/respond", "/tenders?segment=82", "/tenders/new?day=2026-10-30", "/awards?page=2",
-      "/rankings?source=contracts", "/rankings/2026?by=count",
+      "/rankings?source=contracts", "/rankings/2026?by=count", "/expiring/3m?buyer=dnd-mdn", "/expiring/3m?page=1",
+      "/expiring/3m?lang=fr&kind=award",
     ]) {
       expect(await headOf(path), path).toContain('<meta name="robots" content="noindex"/>');
     }
@@ -214,6 +217,7 @@ describe("crawler files", () => {
     expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     const text = await res.text();
     expect(text).toContain(`${O}/downloads/organizations.csv`);
+    expect(text).toContain(`${O}/downloads/expiring-12m.csv`);
     expect(text).toContain(`${O}/methodology`);
     expect(text).not.toContain("\u2014");
     const profile = await app.request("/organizations/org-a000000001", {}, testEnv(fakeAssets));

@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { loadStats } from "../data";
+import { loadExpiringIndex, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, noDataPage, page, todayOf } from "../layout";
@@ -22,6 +22,8 @@ const TILES: { count: CountKey; label: Key; note: Key; href: string }[] = [
   { count: "buyers", label: "home.tile_buyers", note: "home.tile_buyers_note", href: "/buyers" },
 ];
 
+type Tile = { label: Key; note: Key; href: string; value: number };
+
 const Empty = ({ lang, k }: { lang: Lang; k: Key }) => <p class="muted">{t(lang, k)}</p>;
 
 export async function homePage(c: Context<AppEnv>): Promise<Response> {
@@ -30,7 +32,17 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   if (!stats) return noDataPage(c, "site.name");
   const today = todayOf(stats.data_as_of);
   const year = today.slice(0, 4);
-  const tiles = TILES.filter((tile) => stats.counts[tile.count] !== undefined);
+  // The contracts ending within 3 months, after the award notices, when the
+  // radar's index is published.
+  const expiring = (await loadExpiringIndex(c.env))?.windows.find((w) => w.window === "3m");
+  const tiles: Tile[] = [];
+  for (const tile of TILES) {
+    const value = stats.counts[tile.count];
+    if (value !== undefined) tiles.push({ label: tile.label, note: tile.note, href: tile.href, value });
+    if (tile.count === "awards" && expiring) {
+      tiles.push({ label: "home.tile_expiring", note: "home.tile_expiring_note", href: "/expiring/3m", value: expiring.n });
+    }
+  }
 
   return page(
     c,
@@ -53,7 +65,7 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
           {tiles.map((tile) => (
             <a class="tile" href={tile.href}>
               <span class="tile-label">{t(lang, tile.label)}</span>
-              <span class="tile-value">{fmtInt(stats.counts[tile.count], lang)}</span>
+              <span class="tile-value">{fmtInt(tile.value, lang)}</span>
               <span class="tile-note">{t(lang, tile.note)}</span>
             </a>
           ))}

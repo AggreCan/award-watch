@@ -19,6 +19,7 @@ import { citePage } from "./pages/cite";
 import { contractPage } from "./pages/contract";
 import { DOWNLOADS, YEARLY_DOWNLOAD, dataPage } from "./pages/data";
 import { directoryPage, organizationsIndex } from "./pages/directory";
+import { expiringPage, expiringWindowPage } from "./pages/expiring";
 import { feedsPage } from "./pages/feeds";
 import { correctionsForm, correctionsSubmit, respondPage, respondSubmit } from "./pages/forms";
 import { homePage } from "./pages/home";
@@ -87,6 +88,10 @@ app.get("/awards/:key", (c) => {
   return YEAR_RE.test(key) ? awardsYearPage(c, key) : contractPage(c, "award", key);
 });
 app.get("/history/:reference", (c) => contractPage(c, "history", c.req.param("reference") ?? ""));
+// Contracts ending within 3, 6 and 12 months of the data date; anything
+// after /expiring/ that is not a window is a 404.
+app.get("/expiring", expiringPage);
+app.get("/expiring/:window", (c) => expiringWindowPage(c, c.req.param("window") ?? ""));
 // The directory's routes come before the profile's, which would read
 // "directory" as an id.
 app.get("/organizations", organizationsIndex);

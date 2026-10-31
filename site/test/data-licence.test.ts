@@ -14,11 +14,11 @@ const section = (html: string, id: string) => {
 
 describe("data page", () => {
   it("lists the fixed downloads and allows the yearly files by name only", () => {
-    expect(DOWNLOADS.map((d) => d.file)).toEqual(["open-tenders.csv", "organizations.csv", "buyers.csv", "SHA256SUMS"]);
-    for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "SHA256SUMS", "mirror/x.csv"]) {
+    expect(DOWNLOADS.map((d) => d.file)).toEqual(["open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-12m.csv", "SHA256SUMS"]);
+    for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "expiring-12m.csv", "SHA256SUMS", "mirror/x.csv"]) {
       expect(downloadAllowed(file), file).toBe(true);
     }
-    for (const file of ["awards-12.csv", "grants-2024.csv", "../stats.json", "awards-2024.csv.gz", "status.json", "mirror/../x"]) {
+    for (const file of ["awards-12.csv", "grants-2024.csv", "../stats.json", "awards-2024.csv.gz", "status.json", "mirror/../x", "expiring-3m.csv"]) {
       expect(downloadAllowed(file), file).toBe(false);
     }
     expect(YEARLY_DOWNLOAD.test("history-2025.csv")).toBe(true);

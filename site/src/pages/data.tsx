@@ -31,6 +31,7 @@ export const DOWNLOADS: { file: string; contents: Key }[] = [
   { file: "open-tenders.csv", contents: "data.file.open_tenders" },
   { file: "organizations.csv", contents: "data.file.organizations" },
   { file: "buyers.csv", contents: "data.file.buyers" },
+  { file: "expiring-12m.csv", contents: "data.file.expiring" },
   { file: "SHA256SUMS", contents: "data.file.sums" },
 ];
 // One file per calendar year of award notices and of contract history.

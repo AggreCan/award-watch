@@ -1,0 +1,60 @@
+{
+ "as_of": "2026-10-31",
+ "by_buyer": [
+  {
+   "buyer_en": "National Defence",
+   "buyer_fr": "Défense nationale",
+   "buyer_id": "dnd-mdn",
+   "n": 3,
+   "total": 7200000
+  },
+  {
+   "buyer_en": "Public Services and Procurement Canada",
+   "buyer_fr": "Services publics et Approvisionnement Canada",
+   "buyer_id": "pwgsc-tpsgc",
+   "n": 3,
+   "total": 4150000
+  },
+  {
+   "buyer_en": "Fisheries and Oceans Canada",
+   "buyer_fr": "Pêches et Océans Canada",
+   "buyer_id": "dfo-mpo",
+   "n": 2,
+   "total": 1100000
+  }
+ ],
+ "by_segment": [
+  {
+   "code": "43",
+   "n": 3,
+   "total": 7000000
+  },
+  {
+   "code": "82",
+   "n": 2,
+   "total": 3000000
+  },
+  {
+   "code": "25",
+   "n": 2,
+   "total": 1500000
+  }
+ ],
+ "windows": [
+  {
+   "n": 3,
+   "total": 4910500,
+   "window": "3m"
+  },
+  {
+   "n": 5,
+   "total": 6210500,
+   "window": "6m"
+  },
+  {
+   "n": 8,
+   "total": 12450000,
+   "window": "12m"
+  }
+ ]
+}

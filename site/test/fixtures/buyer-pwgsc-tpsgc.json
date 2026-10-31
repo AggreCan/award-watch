@@ -19,6 +19,42 @@
   "total_grants": null,
   "total_history": 1200000
  },
+ "expiring": {
+  "n": 1,
+  "rows": [
+   {
+    "buyer_en": "Public Services and Procurement Canada",
+    "buyer_fr": "Services publics et Approvisionnement Canada",
+    "buyer_id": "pwgsc-tpsgc",
+    "competitive": 1,
+    "currency": "CAD",
+    "days_left": 20,
+    "end": "2026-11-20",
+    "instrument_en": "Standing Offer",
+    "instrument_fr": "Offre à commandes",
+    "kind": "award",
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Appel d'offres ouvert",
+    "n_amendments": 2,
+    "organization": "Exemplar Translation Services Inc.",
+    "organization_id": "org-a000000001",
+    "provinces": [
+     "ON"
+    ],
+    "reference": "cb-400-40000004",
+    "segments": [
+     "82"
+    ],
+    "start": "2025-12-01",
+    "tender_reference": "cb-100-10000001",
+    "title_en": "Translation standing offer, official languages",
+    "title_fr": "Offre à commandes de traduction, langues officielles",
+    "value": 312500,
+    "value_growth": 0.25
+   }
+  ],
+  "total": 312500
+ },
  "open_tenders": 1,
  "recent_awards": [
   {

@@ -47,7 +47,7 @@ import { DOWNLOADS, YEARLY_DOWNLOAD } from "./pages/data";
 export type Kind = "page" | "api" | "download" | "form" | "hook" | "file" | "feed" | "other";
 
 const PAGES = new Set([
-  "/", "/tenders", "/tenders/new", "/awards", "/organizations", "/buyers", "/categories", "/rankings",
+  "/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/categories", "/rankings",
   "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections",
 ]);
 const API_FIXED = new Set(["/api/stats"]);
@@ -61,6 +61,7 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   if (/^\/awards\/[0-9]{4}$/.test(path)) return { route: "/awards/:year", kind: "page" };
   if (/^\/awards\/[^/]+$/.test(path)) return { route: "/awards/:reference", kind: "page" };
   if (/^\/history\/[^/]+$/.test(path)) return { route: "/history/:reference", kind: "page" };
+  if (/^\/expiring\/[^/]+$/.test(path)) return { route: "/expiring/:window", kind: "page" };
   if (/^\/organizations\/directory\/[^/]+$/.test(path)) return { route: "/organizations/directory/:code", kind: "page" };
   if (/^\/organizations\/directory\/[^/]+\/[^/]+$/.test(path)) return { route: "/organizations/directory/:code/:page", kind: "page" };
   if (/^\/organizations\/[^/]+$/.test(path)) return { route: "/organizations/:id", kind: "page" };
