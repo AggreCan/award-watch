@@ -401,8 +401,11 @@ CREATE TABLE IF NOT EXISTS contracts (
   vendor_raw TEXT,
   vendor_postal TEXT,
   vendor_country TEXT,
+  vendor_withheld INTEGER NOT NULL DEFAULT 0,    -- 1: the vendor reads as a private individual; its name, postal
+                                                 -- code and organization are withheld (NULL) and only the count
+                                                 -- is logged; the record itself is kept
   buyer_id TEXT REFERENCES buyers(id),           -- the reporting department (owner_org)
-  buyer_name_raw TEXT,                           -- buyer_name column, when filled
+  buyer_name_raw TEXT,                           -- always NULL: the buyer_name column names a public servant (a contact)
   contracting_entity TEXT,                       -- code: PSPC when contracted on the department's behalf
   contract_date TEXT,
   period_start TEXT,
@@ -449,8 +452,9 @@ CREATE INDEX IF NOT EXISTS idx_contracts_period ON contracts(reporting_period);
 -- ---------------------------------------------------------------------------
 -- Proactive publication of grants and contributions. One row per agreement
 -- version (department, reference number, amendment number); the highest
--- amendment carries the amended value. Recipient type P (individuals) and
--- any recipient that reads as a person are dropped at load.
+-- amendment carries the amended value. Recipient type P (individuals) is
+-- dropped at load; any other recipient that reads as a person keeps the
+-- row with the recipient withheld (recipient_withheld).
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS grants (
   owner_org TEXT NOT NULL,
@@ -468,6 +472,10 @@ CREATE TABLE IF NOT EXISTS grants (
   province TEXT,
   city TEXT,
   postal_code TEXT,
+  recipient_withheld INTEGER NOT NULL DEFAULT 0, -- 1: the recipient reads as a private individual; its legal and
+                                                 -- operating names, business number, city, postal code and
+                                                 -- organization are withheld (NULL) and only the count is logged;
+                                                 -- the record itself is kept
   riding_en TEXT,
   riding_fr TEXT,
   riding_number TEXT,
@@ -503,9 +511,13 @@ CREATE INDEX IF NOT EXISTS idx_grants_bn ON grants(business_number);
 CREATE TABLE IF NOT EXISTS lobbying_communications (
   comm_number TEXT PRIMARY KEY,
   registration_number TEXT,
+  registrant_number TEXT,                        -- the registry's number for the registrant, when the export gives it
   comm_date TEXT,
   registrant_raw TEXT,                           -- the registrant (a consultant lobbyist or the in-house officer)
   client_raw TEXT,                               -- the client organization as filed
+  client_withheld INTEGER NOT NULL DEFAULT 0,    -- 1: the client reads as a private individual; its name and
+                                                 -- organization are withheld (NULL) and only the count is logged;
+                                                 -- the record itself is kept
   organization_id TEXT REFERENCES organizations(id),
   subject_matters TEXT,                          -- JSON list
   institutions TEXT,                             -- JSON list of institution names as filed

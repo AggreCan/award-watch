@@ -22,12 +22,11 @@ def test_a_samples_run_logs_every_stage_once(conn, fixtures, tmp_path, monkeypat
 
     monkeypatch.setattr(cli, "PoliteClient", no_network)
     assert cli.run(conn, [], samples=samples_dir(fixtures, tmp_path)) == 0
-    rows = conn.execute("SELECT source, ok, notice, rows_in, excluded FROM sources_log ORDER BY id").fetchall()
+    rows = conn.execute("SELECT source, ok, notice, rows_in, excluded, detail FROM sources_log ORDER BY id").fetchall()
     assert [r["source"] for r in rows] == cli.STAGES
     assert all(r["ok"] == 1 for r in rows)
-    stubs = {"contracts", "grants", "lobbying", "indicators", "export"}
     for r in rows:
-        if r["source"] in stubs:
+        if r["detail"] == "not built":
             assert r["notice"] == f"the {r['source']} stage is not built yet"
     by = {r["source"]: r for r in rows}
     assert by["tenders"]["rows_in"] == 25 and by["awards"]["excluded"] == 1 and by["history"]["excluded"] == 1

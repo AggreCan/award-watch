@@ -19,6 +19,8 @@ from . import config, organizations
 from .db import connect, log_run
 from .http import PoliteClient
 from .sources import buyers, canadabuys, registry_federal
+from . import indicators
+from .sources import contracts, grants, lobbying
 
 log = logging.getLogger("awardwatch_pipeline")
 STAGES = ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry",
@@ -70,13 +72,13 @@ def stage_runners(conn: sqlite3.Connection, client: PoliteClient | None,
         "tenders": lambda: canadabuys.run(conn, client, "tenders", samples=samples),
         "awards": lambda: canadabuys.run(conn, client, "awards", samples=samples),
         "history": lambda: canadabuys.run(conn, client, "history", samples=samples),
-        "contracts": lambda: _not_built(conn, "contracts"),
-        "grants": lambda: _not_built(conn, "grants"),
-        "lobbying": lambda: _not_built(conn, "lobbying"),
+        "contracts": lambda: contracts.run(conn, client, samples=samples),
+        "grants": lambda: grants.run(conn, client, samples=samples),
+        "lobbying": lambda: lobbying.run(conn, client, samples=samples),
         # A 260 MB download can fail; the rest of the night still runs.
         "registry": lambda: registry_federal.run(conn, client, download=not offline),
         "organizations": lambda: organizations.run(conn),
-        "indicators": lambda: _not_built(conn, "indicators"),
+        "indicators": lambda: indicators.run(conn),
         "export": lambda: _not_built(conn, "export"),
     }
 
