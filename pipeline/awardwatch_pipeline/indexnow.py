@@ -1,23 +1,26 @@
 """IndexNow: tell the search engines that take it which pages changed tonight.
 
 Bing and the other engines that share IndexNow (Google does not take it)
-otherwise find a changed page only when they crawl it again, and with about
-160,000 employer pages a crawl takes weeks to come round. After each nightly
-deploy the workflow runs `python -m awardwatch_pipeline.nightly indexnow`, which
-sends the pages that changed during the run to api.indexnow.org, the shared
-endpoint that passes them on to every participating engine.
+otherwise find a changed page only when they crawl it again, and with tens of
+thousands of organization and notice pages a crawl takes weeks to come round.
+After each nightly deploy the workflow runs `python -m
+awardwatch_pipeline.nightly indexnow`, which sends the pages that changed
+during the run to api.indexnow.org, the shared endpoint that passes them on to
+every participating engine.
 
 The key proves the site sends them. It is not a secret: the protocol has the
 site publish it at its root as `<key>.txt` (site/public, served as a static
 asset), and an engine fetches that file to check a submission. So it lives
 here in the code and the workflow needs no secret.
 
-Which pages: every employer whose row changed during the run (status.recompute
-writes employers.updated_at only when something on the profile changed, and a
-new employer row gets the stamp of its insert), plus the home, search, trends,
-occupations, places, releases and program pages, which change every night. At
-most CAP URLs a night, the most recently changed first; employers beyond the
-cap wait for the sitemap, which lists every profile with its updated_at.
+Which pages: the pages that follow the nightly data (FIXED_PAGES); every
+tender notice with a version first seen during the run, and the category
+pages those notices fall in; every buyer and organization whose row changed
+during the run (organizations.recompute and indicators.compute write
+updated_at only when something on the page changed, and a new row gets the
+stamp of its insert). At most CAP URLs a night, in that order, the most
+recently changed first within each kind; pages beyond the cap wait for the
+sitemap, which lists every one with its date.
 
 Nothing here raises. Every answer becomes an outcome the run status records:
 "submitted <n> URLs", "rejected (<status>)" (the key file or the payload is
@@ -44,20 +47,21 @@ log = logging.getLogger("awardwatch_pipeline.indexnow")
 # 32 lowercase hex characters, generated once. site/public/<key>.txt holds
 # exactly this text (tests/test_indexnow.py checks the two agree). Changing it
 # means replacing that file in the same commit.
-INDEXNOW_KEY = "da4cf110740715c67595f11f8572d098"
+INDEXNOW_KEY = "5381529054ae7c8eb4a9d8553be9ab6f"
 
 ENDPOINT = "https://api.indexnow.org/indexnow"
 # The protocol accepts up to 10,000 URLs per request.
 BATCH = 10_000
-# A night with more changes than this (a new ESDC quarter touches tens of
-# thousands of employers) sends the most recent and leaves the rest to the
-# sitemap. The engines publish no daily limit; this keeps a night well clear
+# A night with more changes than this (the first load, or a weekly complete
+# file that touches most organizations) sends the most recent and leaves the
+# rest to the sitemap. The engines publish no daily limit; this keeps a night well clear
 # of looking like a flood.
 CAP = 20_000
 TIMEOUT = 30
 RETRY_S = 10.0
 # The pages whose content follows the nightly data. "/" is the home page.
-FIXED_PAGES: tuple[str, ...] = ("/", "/search", "/trends", "/occupations", "/places", "/releases", "/program")
+FIXED_PAGES: tuple[str, ...] = ("/", "/tenders", "/tenders/new", "/awards", "/organizations", "/buyers",
+                                "/categories", "/rankings")
 
 ACCEPTED = (200, 202)
 # 400 bad request, 403 key not valid, 422 URLs not on the host or a key that
@@ -70,7 +74,7 @@ URLS_FILE = "urls.txt"
 
 
 def normalize_since(text: str | None) -> str:
-    """The run's start as employers.updated_at writes it (YYYY-MM-DDTHH:MM:SSZ,
+    """The run's start as organizations.updated_at writes it (YYYY-MM-DDTHH:MM:SSZ,
     UTC), so the two compare as text. A time without a zone is read as UTC.
     Raises ValueError when the text is not an ISO date or time."""
     raw = (text or "").strip()
@@ -84,25 +88,47 @@ def normalize_since(text: str | None) -> str:
 
 def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: int = CAP,
                  pages: Sequence[str] = FIXED_PAGES) -> list[str]:
-    """The fixed pages, then the employer pages changed at or after since,
-    the most recently changed first (ties by id), without repeats and at
-    most cap in all. Raises ValueError for a since that is not ISO, and
-    sqlite3.Error when the employers table cannot be read."""
+    """The fixed pages, then the tender notices with a version first seen on
+    the run's day or later and the categories they fall in, then the buyers
+    and the organizations changed at or after since (the most recently
+    changed first, ties by id), without repeats and at most cap in all.
+    Raises ValueError for a since that is not ISO, and sqlite3.Error when a
+    table cannot be read."""
+    from .export_static import read_segments, url_reference
+
     base = site_url.rstrip("/")
     stamp = normalize_since(since)
-    urls = list(dict.fromkeys(base + p for p in pages))[:max(cap, 0)]
-    seen = set(urls)
-    rows = conn.execute(
-        "SELECT id FROM employers WHERE updated_at >= ? ORDER BY updated_at DESC, id LIMIT ?",
-        (stamp, max(cap, 0)),
-    )
-    for (eid,) in rows:
-        if len(urls) >= cap:
-            break
-        url = f"{base}/employers/{eid}"
-        if url not in seen:
+    limit = max(cap, 0)
+    urls: list[str] = []
+    seen: set[str] = set()
+
+    def add(path: str) -> None:
+        url = base + path
+        if len(urls) < limit and url not in seen:
             seen.add(url)
             urls.append(url)
+
+    for page in pages:
+        add(page)
+    # first_seen is the run's date (no time), so the day of since is the test.
+    segments = read_segments()
+    touched: set[str] = set()
+    for reference, codes in conn.execute(
+        "SELECT t.reference, (SELECT group_concat(c.unspsc, ' ') FROM tender_codes c WHERE c.reference = t.reference "
+        "AND c.amendment = t.amendment) FROM tenders t WHERE t.first_seen >= ? "
+        "GROUP BY t.reference ORDER BY MAX(t.first_seen) DESC, t.reference LIMIT ?",
+        (stamp[:10], limit),
+    ):
+        ref = url_reference(reference)
+        if ref:
+            add(f"/tenders/{ref.lower()}")
+        touched.update(c[:2] for c in (codes or "").split() if c[:2] in segments)
+    for code in sorted(touched):
+        add(f"/categories/{code}")
+    for table, prefix in (("buyers", "/buyers/"), ("organizations", "/organizations/")):
+        for (rid,) in conn.execute(f"SELECT id FROM {table} WHERE updated_at >= ? ORDER BY updated_at DESC, id LIMIT ?",
+                                   (stamp, limit)):
+            add(prefix + rid)
     return urls
 
 
@@ -247,7 +273,7 @@ def _run(db: Path, since: str | None, site_url: str, out: Path, http_factory: Ca
     try:
         urls = changed_urls(conn, since or "", base, cap=CAP if cap is None else cap)
     except sqlite3.Error as exc:
-        return failed(f"the employers table cannot be read ({exc})"[:300])
+        return failed(f"the database cannot be read ({exc})"[:300])
     finally:
         conn.close()
     write_urls(out, urls)

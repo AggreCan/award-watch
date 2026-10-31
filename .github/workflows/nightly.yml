@@ -1,8 +1,8 @@
 # Triggers: a scheduled run at midnight UTC, two retry schedules at 06:00 and
 # 12:00 UTC, and a manual run (the Actions tab, repository writers only) for
 # re-running a night on the newest code; a re-run of an old run keeps its old
-# commit. The pipeline refuses a second Job Bank pass within 20 hours of a
-# complete one, so neither a retry nor a manual run crawls twice in a day.
+# commit. Every source is a bulk file fetched with a conditional request, so
+# neither a retry nor a manual run downloads a file that has not changed.
 # There is no push trigger, and nothing on the site can start a run. Code on
 # main ships with the next run, because this job deploys the Worker from the
 # checked-out tree after the data stage.
@@ -15,18 +15,16 @@
 # delay, a runner fault or a Cloudflare API error is retried the same day with
 # no one involved, and a clean day costs two gate jobs of a minute each.
 #
-# Steps: restore the SQLite file from R2, run every pipeline stage (the
-# pipeline itself skips Job Bank if it already ran within the last 20 hours,
-# and the same for the pass over postings open to international candidates;
-# the stages include IRCC's high-wage list, adopted when it changes, and the
-# designated-employer lists; their changes of state are notices in the run status),
-# check the database and the export, send the changed rows to the search
-# database (D1 awardwatch-search), record the Worker version serving traffic,
-# deploy the Worker with that data as its assets, check the live site and roll
-# the Worker back when the deploy broke it, tell IndexNow which pages changed,
-# post the daily digest to X and to Bluesky when their secrets exist, deposit
-# a new ESDC quarter on Zenodo when its token exists, save the database and the public files back to R2, keep
-# the audience counts of the finished days in R2 when the analytics token
+# Steps: restore the SQLite file from R2 (saved in parts), run every pipeline
+# stage (the buyers, the CanadaBuys tender and award notices and contract
+# history, the published contracts, the grants and contributions, the
+# lobbying communications, the federal corporations registry, then the
+# organizations, the yearly figures and the export), check the database and
+# the export, record the Worker version serving traffic, deploy the Worker
+# with that data as its assets, check the live site and roll the Worker back
+# when the deploy broke it, tell IndexNow which pages changed, save the
+# database, the public files and the review files back to R2, keep the
+# audience counts of the finished days in R2 when the analytics token
 # exists, append Search Console's daily figures when its key exists, write
 # the monthly audience report on the first run of a month, run the monthly
 # expiry checks on the first of a month, write the run status, and report the
@@ -36,9 +34,10 @@
 # checks):
 # - A backup that exists but cannot be downloaded or used stops the run before
 #   the pipeline, so an empty database never rebuilds the site and never
-#   replaces the backup. A damaged newest backup falls back to the previous
-#   one; when both nightly files are missing or damaged, to the newest weekly
-#   snapshot (an attention item, since the days after it are lost); only when
+#   replaces the backup. A damaged newest backup (a part that fails its
+#   manifest's hash, a gzip that does not end, a database that fails its
+#   check) falls back to the previous one; when both nightly sets are missing
+#   or damaged, to the newest weekly snapshot (an attention item); only when
 #   nothing exists anywhere does the run start from nothing.
 # - A deploy after which the site answers 500 to 599 twice is rolled back to
 #   the version recorded before it (deploy_rolled_back: true, an attention
@@ -52,8 +51,6 @@
 #   kept as the previous one before it is replaced.
 # - The status file is written whatever happened, so the site's daily check
 #   always has something current to read.
-# - A search database sync that fails is reported (search_sync: failed) and
-#   sent again the next night; it never stops the run.
 # - An audience roll-up that fails is reported (views_rollup: failed) and
 #   caught up the next night; it never stops the run, and a summary that
 #   could not be downloaded is never replaced. The same holds for the Search
@@ -62,50 +59,33 @@
 # - An IndexNow submission that fails is reported (indexnow in the run status)
 #   and never stops the run; only a rejection (the key file or the payload is
 #   wrong) is an item needing attention.
-# - A designated-employer list read from its copy loaded by hand (Nova Scotia;
-#   registers/aip_ns.csv and .json in this bucket, read by the registers stage
-#   with this job's token, never in the repository) whose publisher links or
-#   serves a newer edition, or whose copy does not read, is an item needing
-#   attention (registers.attention in the run status): the copy's rows stand
-#   in meanwhile, the run stays ok and no retry follows; loading the new
-#   edition by hand clears it. No copy in R2 is a failed read like any other.
 # - A fault in the retry gate, the version record, the smoke test, the expiry
 #   checks or the issue update never stops the run: the gate then runs the
 #   refresh, a missing version means no rollback tonight, and each outcome is
 #   in status.json.
-# - A notice (a government notice first listed tonight; IRCC's high-wage list
-#   adopted after a change, or unreadable from tonight or readable again; a
-#   designated-employer list or a news feed that stops being read or is read
-#   again) is information, never an item needing attention: it goes to
-#   status.json's notices, LAST_RUN.md and the daily check's email, never fails
-#   the last step or opens the issue, and leaves the run ok, so no retry
-#   follows: a retry would read the same page again.
+# - A notice (a buyer spelling the seed does not map yet, a source file not
+#   published yet, a stage not built) is information, never an item needing
+#   attention: it goes to status.json's notices, LAST_RUN.md and the daily
+#   check's email, never fails the last step or opens the issue, and leaves
+#   the run ok, so no retry follows: a retry would read the same files again.
 #
 # Secrets on the project account: CLOUDFLARE_API_TOKEN (Workers + R2 + D1),
-# CLOUDFLARE_ACCOUNT_ID. Optional: X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN,
-# X_ACCESS_TOKEN_SECRET (the X post; without them the step does nothing);
-# BSKY_HANDLE, BSKY_APP_PASSWORD (the Bluesky post, docs/bluesky-account.md);
-# ZENODO_TOKEN (the Zenodo deposit, docs/zenodo.md);
-# CLOUDFLARE_ANALYTICS_TOKEN (Account Analytics Read only, the audience
-# roll-up, docs/search-engines.md section 6; without it the step does nothing);
-# GSC_SERVICE_ACCOUNT_JSON (a Google service account's JSON key, added as a
-# user of the Search Console property; without it the import reports "no
-# credentials"). The Worker secret VIEWS_SALT_KEY (the daily visitor code) is
-# set with wrangler, not here; the roll-up counts no unique visitors without it.
-# Variables: SITE_URL, CONTACT (the scraper's user agent); X_POST_ENABLED must be
-# "true" for the X step to run at all (X posting is pay-per-use, so it is opt-in);
-# optional X_POST_LINK, set to true to put the site link in the text (X bills a
-# post with a link at thirteen times the rate; the attached card carries the
-# address instead); BSKY_POST_ENABLED must be "true" for the Bluesky step;
-# optional ZENODO_SANDBOX, set to true to deposit on sandbox.zenodo.org (test
-# DOIs that never reach the site) instead of zenodo.org; optional
-# INDEXNOW_ENABLED, set to false to stop the IndexNow submission (it runs
-# unless the variable reads exactly "false"; the key is in the code, so it
-# needs no secret); optional GSC_SITE, the Search Console property when it is
-# not the domain property sc-domain:<site host>.
-# The repository is public, so Actions minutes are unlimited; the only pace
-# limit is Job Bank's five-second crawl delay, which puts a full sweep at a
-# few hours. The job must finish before the next midnight run.
+# CLOUDFLARE_ACCOUNT_ID. Optional: CLOUDFLARE_ANALYTICS_TOKEN (Account
+# Analytics Read only, the audience roll-up, docs/search-engines.md section 6;
+# without it the step does nothing); GSC_SERVICE_ACCOUNT_JSON (a Google
+# service account's JSON key, added as a user of the Search Console property;
+# without it the import reports "no credentials"). The Worker secret
+# VIEWS_SALT_KEY (the daily visitor code) is set with wrangler, not here; the
+# roll-up counts no unique visitors without it.
+# Variables: SITE_URL, CONTACT (the user agent's site and contact page);
+# optional INDEXNOW_ENABLED, set to false to stop the IndexNow submission (it
+# runs unless the variable reads exactly "false"; the key is in the code, so
+# it needs no secret); optional GSC_SITE, the Search Console property when it
+# is not the domain property sc-domain:<site host>.
+# The repository is public, so Actions minutes are unlimited. The longest
+# nights are the weekly re-reads of the published contracts (655 MB) and the
+# grants (2.4 GB), streamed to disk and deleted after the load; the job must
+# still finish before the next midnight run.
 
 name: nightly
 
@@ -200,8 +180,7 @@ jobs:
     if: ${{ !cancelled() && needs.gate.outputs.skip != 'true' }}
     runs-on: ubuntu-latest
     # GitHub ends a hosted job at six hours whatever this says, and a job
-    # ended that way skips the deploy, the backup and the status file. The
-    # Job Bank stage caps itself at four hours so the rest always fits.
+    # ended that way skips the deploy, the backup and the status file.
     timeout-minutes: 350
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -214,7 +193,7 @@ jobs:
       WRANGLER: ${{ github.workspace }}/site/node_modules/.bin/wrangler
       BUCKET: awardwatch-data
     steps:
-      # Fail in seconds, not after an hour of crawling, until the account is wired up.
+      # Fail in seconds, not after an hour of downloads, until the account is wired up.
       - name: Check that the Cloudflare secrets exist
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
@@ -236,13 +215,14 @@ jobs:
         working-directory: site
         run: npm ci
 
-      # The download cache (ESDC files, the federal extract, the wage tables, the
-      # LFS table, the boundaries) persists between runs through the Actions
-      # cache, so weekly and monthly revalidation means what it says instead
-      # of a fresh download every night. A new key each run saves the latest
-      # state; restore-keys picks the newest previous one. Restore and save are
-      # separate steps so the cache is saved even on a night that reports a
-      # failure; a cache service fault only costs a fresh download.
+      # The download cache (the CanadaBuys files' validators, the CKAN
+      # organization answers, the federal corporations extract) persists
+      # between runs through the Actions cache, so weekly and monthly
+      # revalidation means what it says instead of a fresh download every
+      # night. A new key each run saves the latest state; restore-keys picks
+      # the newest previous one. Restore and save are separate steps so the
+      # cache is saved even on a night that reports a failure; a cache service
+      # fault only costs a fresh download.
       - name: Restore the download cache
         uses: actions/cache/restore@v4
         continue-on-error: true
@@ -251,19 +231,24 @@ jobs:
           key: raw-cache-${{ github.run_id }}
           restore-keys: raw-cache-
 
-      # The database travels gzipped and without its secondary indexes (the
-      # save step's pack): the raw file is above the single-object size the
-      # command-line upload accepts. The pipeline puts the indexes back when it
-      # first opens the restored file, in seconds.
+      # The database travels gzipped, without its secondary indexes, and in
+      # parts of at most 250 MiB (the save step's pack): Wrangler refuses a
+      # single upload above 300 MiB. A set is <name>.parts, the manifest that
+      # lists each part's SHA-256 in order, and the parts it names; the
+      # pipeline puts the indexes back when it first opens the restored file.
       # --remote on every r2 command: without it Wrangler 4 reads and writes a
       # local simulated bucket on the runner, which is thrown away with the job.
       # Each download is tried three times; "does not exist" ends the tries,
-      # since that is an answer, not an outage. The restore command decides.
-      # When R2 answered that both nightly files are missing or they are both
-      # damaged, the command itself lists backups/weekly/ through the R2 REST
-      # API (Wrangler has no listing command) with CLOUDFLARE_API_TOKEN from
-      # the job's environment, downloads the newest db-slot snapshot the same
-      # way, and records source "weekly" and its upload time in restore.json.
+      # since that is an answer, not an outage. Only the part names of the two
+      # nightly sets are fetched, whatever a manifest holds. A manifest R2 says
+      # does not exist leads to the single file a backup was saved as before
+      # the split. The restore command decides: it joins the parts, checks each
+      # hash, and moves on to the previous set when one fails. When R2
+      # answered that both nightly backups are missing or both are damaged,
+      # the command itself lists backups/weekly/ through the R2 REST API
+      # (Wrangler has no listing command) with CLOUDFLARE_API_TOKEN from the
+      # job's environment, downloads the newest snapshot's parts the same way,
+      # and records source "weekly" and its upload time in restore.json.
       - name: Restore the database from R2
         id: restore
         run: |
@@ -280,25 +265,29 @@ jobs:
               sleep 20
             done
           }
-          fetch awardwatch.sqlite.gz
-          fetch awardwatch.sqlite.prev.gz
+          fetch_set() {
+            base="$1"
+            fetch "$base.parts"
+            if [ "$(cat "data/restore/$base.parts.exit")" = "0" ]; then
+              for part in $(awk '{print $2}' "data/restore/$base.parts" | grep -E '^awardwatch\.sqlite(\.prev)?\.gz\.[0-9]{3}$'); do
+                fetch "$part"
+              done
+            elif grep -qi "specified key does not exist" "data/restore/$base.parts.log"; then
+              fetch "$base"
+            fi
+          }
+          fetch_set awardwatch.sqlite.gz
+          fetch_set awardwatch.sqlite.prev.gz
           python -m awardwatch_pipeline.nightly restore --dir data/restore --db data/awardwatch.sqlite --out data/out/restore.json \
             --bucket "$BUCKET"
 
-      # 150 posting pages a night, at Job Bank's pace with an 8-second gap between
-      # requests: well inside the Job Bank stage's four-hour cap, and fewer
-      # requests from one address in one night. The pass over postings open to
-      # international candidates reads up to 400 more (about 55 minutes, inside
-      # its 90-minute cap; newest first, so a posting that appears tonight is
-      # graded tonight and the backlog of the first sweep drains behind it),
-      # plus a weekly sweep of every page of that filter (about 45 minutes).
       # A non-zero exit marks the run failed, and the steps below still check
       # and save what the run produced.
       - name: Run every stage
         id: pipeline
         run: |
           date -u +"%Y-%m-%dT%H:%M:%SZ" > data/out/run_started.txt
-          python -m awardwatch_pipeline run --db data/awardwatch.sqlite --detail-budget 150 --intl-detail-budget 400
+          python -m awardwatch_pipeline run --db data/awardwatch.sqlite
 
       - name: Check the database and the export
         id: verify
@@ -306,41 +295,6 @@ jobs:
         run: |
           python -m awardwatch_pipeline.nightly verify --db data/awardwatch.sqlite --static data/out/static \
             --started-file data/out/run_started.txt --restore data/out/restore.json --out data/out/verify.json
-
-      # The search database (docs/hosted-search.md): D1 awardwatch-search,
-      # apart from the forms database. search-sync writes the rows whose
-      # content hash differs from the ledger in the SQLite file (every row on
-      # a first load or a full reload) as SQL batches and a manifest. The
-      # schema goes first (every statement IF NOT EXISTS), then each batch in
-      # manifest order, one Wrangler call each; D1 rolls back a batch that
-      # fails, and the step stops there with every earlier batch applied in
-      # full. The row count is then read back and compared with the manifest,
-      # and only a match records the ledger, so a night that stopped anywhere
-      # is sent again the next night. Runs only when both checks passed: the
-      # ledger lives in the database, and a database that is not saved below
-      # would come back the next night with a ledger behind D1. Before the R2
-      # save, so the ledger travels with the database. Nothing reads this
-      # database yet; a failure shows as search_sync: failed in the run status
-      # and never stops the run. A first load or a full reload sends about
-      # 50 batches; a normal night sends one.
-      - name: Sync the search database
-        id: search
-        if: ${{ !cancelled() && steps.verify.outputs.export_ok == 'true' && steps.verify.outputs.db_ok == 'true' }}
-        continue-on-error: true
-        timeout-minutes: 60
-        working-directory: site
-        run: |
-          out=../data/out/search
-          python -m awardwatch_pipeline search-sync --db ../data/awardwatch.sqlite --out "$out"
-          "$WRANGLER" d1 execute awardwatch-search --remote --yes --file ../pipeline/search_schema.sql
-          for batch in $(python -c 'import json, sys; print(" ".join(json.load(open(sys.argv[1]))["batches"]))' "$out/manifest.json"); do
-            echo "Applying $batch"
-            "$WRANGLER" d1 execute awardwatch-search --remote --yes --file "$out/$batch"
-          done
-          "$WRANGLER" d1 execute awardwatch-search --remote --json --command "SELECT COUNT(*) AS n FROM search_rows" > "$out/count.json"
-          count=$(python -c 'import json, sys; print(int(json.load(open(sys.argv[1]))[0]["results"][0]["n"]))' "$out/count.json")
-          python -m awardwatch_pipeline search-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --count "$count"
-          python -m awardwatch_pipeline search-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"
 
       - name: Bundle the static data for the site
         id: bundle
@@ -383,15 +337,15 @@ jobs:
           done
           exit 1
 
-      # After a deploy that worked: the home, search and data pages and one
-      # employer profile (the first of stats.json's top_approvals), fetched
-      # from outside with the pipeline's user agent, each page that fails
-      # fetched again 30 seconds later. "ok": every page 200, and home and
-      # data show tonight's data date. "broken": a page answered 500 to 599
-      # both times. "unverifiable": anything else, above all a 403 or a
-      # challenge page from the edge (the dashboard's rules may refuse a cloud
-      # address), which is never a reason to roll back. The verdict lands in
-      # the run status as smoke.
+      # After a deploy that worked: the home, open tenders and data pages and
+      # one organization profile (the first of stats.json's
+      # top_organizations_year), fetched from outside with the pipeline's user
+      # agent, each page that fails fetched again 30 seconds later. "ok":
+      # every page 200, and home and data show tonight's data date. "broken":
+      # a page answered 500 to 599 both times. "unverifiable": anything else,
+      # above all a 403 or a challenge page from the edge (the dashboard's
+      # rules may refuse a cloud address), which is never a reason to roll
+      # back. The verdict lands in the run status as smoke.
       - name: Check the live site
         id: smoke
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
@@ -400,7 +354,7 @@ jobs:
         run: |
           mkdir -p data/out/deploy
           data_date=$(python -c 'import json, sys; print(json.load(open(sys.argv[1])).get("data_as_of") or "")' data/out/static/stats.json || true)
-          python -m awardwatch_pipeline.nightly smoke --base-url "${AWARDWATCH_SITE_URL:-https://lmiawatch.ca}" \
+          python -m awardwatch_pipeline.nightly smoke --base-url "${AWARDWATCH_SITE_URL:-https://awardwatch.ca}" \
             --data-date "$data_date" --stats data/out/static/stats.json --out data/out/deploy/smoke.json
 
       # Only when the Worker itself answered with server errors. A rollback
@@ -437,19 +391,19 @@ jobs:
 
       # IndexNow (docs/search-engines.md, section 5): Bing and the other engines
       # that take it (Google does not) hear about tonight's changed pages
-      # without waiting for a crawl. The command sends the employer pages whose
-      # row changed since the run's start (run_started.txt, written as the
-      # pipeline step began, in the same form as employers.updated_at) and the
-      # pages that follow the nightly data, at most 20,000 a night in batches
-      # of 10,000, to api.indexnow.org. An engine checks the request against
-      # the key file at the site's root (site/public/<key>.txt), which this
-      # deploy has just published; the key is in the code, so no secret is
-      # needed. Only after a deploy that worked and was not found broken, so
-      # the engines are pointed at pages the site serves. "failed" is written
-      # first, so a step stopped by its time limit reads as failed. Exits 1
-      # only on a rejection (the step shows red; an attention item); a rate
-      # limit or an outage is recorded and nothing more. Never stops the run.
-      # INDEXNOW_ENABLED=false turns it off.
+      # without waiting for a crawl. The command sends the pages whose rows
+      # changed since the run's start (run_started.txt, written as the
+      # pipeline step began, in the same form as the updated_at columns) and
+      # the pages that follow the nightly data, at most 20,000 a night in
+      # batches of 10,000, to api.indexnow.org. An engine checks the request
+      # against the key file at the site's root (site/public/<key>.txt), which
+      # this deploy has just published; the key is in the code, so no secret
+      # is needed. Only after a deploy that worked and was not found broken,
+      # so the engines are pointed at pages the site serves. "failed" is
+      # written first, so a step stopped by its time limit reads as failed.
+      # Exits 1 only on a rejection (the step shows red; an attention item);
+      # a rate limit or an outage is recorded and nothing more. Never stops
+      # the run. INDEXNOW_ENABLED=false turns it off.
       - name: Tell IndexNow which pages changed
         id: indexnow
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}
@@ -468,111 +422,59 @@ jobs:
           fi
           since=$(cat data/out/run_started.txt 2>/dev/null || true)
           python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --since "$since" \
-            --site-url "${AWARDWATCH_SITE_URL:-https://lmiawatch.ca}"
-
-      # After the deploy, so the link shows the postings the digest counts, and
-      # before the R2 save, so the recorded post date travels with the database.
-      # Opt-in (X_POST_ENABLED) because every post costs credits. Skips without
-      # the X secrets and never fails the run: the post is optional, the save is
-      # not. A refused post exits 1 so this step shows red while the run goes
-      # on, and LAST_RUN.md records the outcome. The pipeline refuses a second
-      # post for the same Job Bank pass, so a re-run cannot post twice. Not
-      # after a deploy the smoke test found broken (rolled back or not): the
-      # post would point at data the site does not show, and the retry that
-      # deploys again posts then.
-      - name: Post the daily digest to X (only when X_POST_ENABLED is true)
-        if: ${{ !cancelled() && vars.X_POST_ENABLED == 'true' && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}
-        continue-on-error: true
-        env:
-          X_API_KEY: ${{ secrets.X_API_KEY }}
-          X_API_SECRET: ${{ secrets.X_API_SECRET }}
-          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
-          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
-          LINK: ${{ vars.X_POST_LINK == 'true' && '--link' || '' }}
-        run: |
-          if [ -z "$X_API_KEY" ] || [ -z "$X_API_SECRET" ] || [ -z "$X_ACCESS_TOKEN" ] || [ -z "$X_ACCESS_TOKEN_SECRET" ]; then
-            echo "The X secrets are not set; no post."
-            exit 0
-          fi
-          python -m awardwatch_pipeline post-digest --db data/awardwatch.sqlite $LINK
-
-      # The same digest and card on Bluesky, with the link (posting there is
-      # free). Same shape as the X step: after the deploy, before the R2 save
-      # so the recorded post date travels with the database, opt-in through
-      # BSKY_POST_ENABLED, skipped without the two secrets, and never fails the
-      # run. Bluesky keeps its own record of the pass it posted, so each
-      # platform posts a pass at most once whatever the other did.
-      - name: Post the daily digest to Bluesky (only when BSKY_POST_ENABLED is true)
-        id: bluesky
-        if: ${{ !cancelled() && vars.BSKY_POST_ENABLED == 'true' && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}
-        continue-on-error: true
-        timeout-minutes: 10
-        env:
-          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
-          BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
-        run: |
-          if [ -z "$BSKY_HANDLE" ] || [ -z "$BSKY_APP_PASSWORD" ]; then
-            echo "The Bluesky secrets are not set; no post."
-            exit 0
-          fi
-          python -m awardwatch_pipeline post-bluesky --db data/awardwatch.sqlite
-
-      # A citable release: when a new ESDC quarter has been loaded (or no
-      # record exists yet), a new version of the Zenodo record with the Open
-      # Government Licence files from tonight's export. After the deploy, so
-      # the deposit matches the files the site serves; before the R2 save, so
-      # the recorded DOIs travel with the database. Skipped without
-      # ZENODO_TOKEN; ZENODO_SANDBOX=true sends it to sandbox.zenodo.org. A
-      # failure discards the draft, is reported in the run status, and is
-      # tried again the next night; it never stops the save. Before any draft
-      # the step asks Zenodo what it already holds, so a version whose publish
-      # answer or database save was lost is adopted, never published twice.
-      # Not after a broken deploy, for the same reason as the posts.
-      - name: Deposit a new ESDC quarter on Zenodo (only when ZENODO_TOKEN is set)
-        id: zenodo
-        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}
-        continue-on-error: true
-        timeout-minutes: 30
-        env:
-          ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
-          ZENODO_SANDBOX: ${{ vars.ZENODO_SANDBOX }}
-        run: |
-          if [ -z "$ZENODO_TOKEN" ]; then
-            echo "ZENODO_TOKEN is not set; no deposit."
-            exit 0
-          fi
-          python -m awardwatch_pipeline deposit-zenodo --db data/awardwatch.sqlite --csv-dir data/out/csv
+            --site-url "${AWARDWATCH_SITE_URL:-https://awardwatch.ca}"
 
       # Only a database that passed its checks is saved, whether or not the
-      # deploy worked, so a night's Job Bank observations are kept even when
-      # the site could not be updated. Last night's backup becomes the previous
-      # one first; when the run started from the previous one (the newest was
-      # damaged) that copy is left as it is.
+      # deploy worked, so a night's loads are kept even when the site could
+      # not be updated. Last night's backup becomes the previous one first;
+      # when the run started from the previous one (the newest was damaged)
+      # that copy is left as it is.
       # The pack copies the database with VACUUM INTO (which also takes rows
       # still in the write-ahead log), drops the secondary indexes, checks the
-      # copy and gzips it. It stops the step when the file would be above the
-      # 300 MiB one Wrangler upload accepts, so R2 keeps the previous backup
-      # rather than being sent a file it refuses.
+      # copy, gzips it and splits it into parts of at most 250 MiB with their
+      # manifest. Each set goes up part by part in order and its manifest last,
+      # so a save that stops part way leaves a set whose hashes fail, and the
+      # next restore takes the previous one. Parts left in R2 by an earlier,
+      # larger set are never read: the manifest names the parts that belong.
+      # Every upload is tried three times; one still failing fails the step.
       - name: Save the database to R2
         id: save_db
         if: ${{ !cancelled() && steps.verify.outputs.db_ok == 'true' }}
         run: |
+          put() {
+            local attempt
+            for attempt in 1 2 3; do
+              if "$WRANGLER" r2 object put --remote "$1" --file "$2"; then return 0; fi
+              echo "::warning::upload of $1 failed (attempt $attempt of 3)"
+              sleep $((20 * attempt))
+            done
+            return 1
+          }
+          put_set() {
+            dir="$1"
+            base="$2"
+            for part in $(awk '{print $2}' "$dir/$base.parts"); do
+              put "$BUCKET/$part" "$dir/$part"
+            done
+            put "$BUCKET/$base.parts" "$dir/$base.parts"
+          }
           python -m awardwatch_pipeline.nightly pack --db data/awardwatch.sqlite --out data/out/awardwatch.sqlite.gz
           source=$(python -c 'import json; print(json.load(open("data/out/restore.json"))["source"])')
           if [ "$source" = "backup" ]; then
-            "$WRANGLER" r2 object put --remote "$BUCKET/awardwatch.sqlite.prev.gz" --file data/restore/awardwatch.sqlite.gz
+            python -m awardwatch_pipeline.nightly prev-set --dir data/restore --out-dir data/out/prev
+            put_set data/out/prev awardwatch.sqlite.prev.gz
           fi
-          "$WRANGLER" r2 object put --remote "$BUCKET/awardwatch.sqlite.gz" --file data/out/awardwatch.sqlite.gz
+          put_set data/out awardwatch.sqlite.gz
 
       # Weekly snapshots, kept eight weeks. The nightly save keeps only tonight's
       # backup and the previous night's, so a fault noticed later than that would
       # reach every copy. Sundays (UTC) only; the slot is the count of whole weeks
       # since 1970-01-01 modulo 8, so each snapshot replaces the one from eight
-      # weeks before and nothing has to be listed or pruned. The ISO week number
-      # served before and restarts each year, which put weeks 53 and 5 in one
-      # slot. The site's own D1 tables (forms, donations) go with it. The
-      # operator's machine pulls the newest backup and the D1 export into a
-      # folder off this account each week.
+      # weeks before and nothing has to be listed or pruned. A snapshot is a set
+      # of parts like the nightly backup (db-slot-<n>.sqlite.gz.000 ... and
+      # db-slot-<n>.sqlite.gz.parts, the manifest last). The site's own D1
+      # tables (the forms) go with it. The operator's machine pulls the newest
+      # backup and the D1 export into a folder off this account each week.
       - name: Weekly snapshot (Sundays UTC, kept eight weeks)
         id: snapshot
         if: ${{ !cancelled() && steps.save_db.outcome == 'success' }}
@@ -581,7 +483,13 @@ jobs:
         run: |
           if [ "$(date -u +%u)" != "7" ]; then echo "Not Sunday (UTC); no snapshot tonight."; exit 0; fi
           slot=$(( $(date -u +%s) / 604800 % 8 ))
-          "$WRANGLER" r2 object put --remote "$BUCKET/backups/weekly/db-slot-$slot.sqlite.gz" --file ../data/out/awardwatch.sqlite.gz
+          base="db-slot-$slot.sqlite.gz"
+          python -m awardwatch_pipeline.nightly split --src ../data/out/awardwatch.sqlite.gz --base "$base" \
+            --out-dir ../data/out/weekly
+          for part in $(awk '{print $2}' "../data/out/weekly/$base.parts"); do
+            "$WRANGLER" r2 object put --remote "$BUCKET/backups/weekly/$part" --file "../data/out/weekly/$part"
+          done
+          "$WRANGLER" r2 object put --remote "$BUCKET/backups/weekly/$base.parts" --file "../data/out/weekly/$base.parts"
           "$WRANGLER" d1 export award-watch --remote --output ../data/out/d1.sql
           gzip -c ../data/out/d1.sql > ../data/out/d1.sql.gz
           "$WRANGLER" r2 object put --remote "$BUCKET/backups/weekly/d1-slot-$slot.sql.gz" --file ../data/out/d1.sql.gz
@@ -591,15 +499,17 @@ jobs:
           echo "Snapshot saved to slot $slot."
 
       # The downloads and the bundle match what was deployed, so they are saved
-      # only after a deploy that worked and was not found broken.
+      # only after a deploy that worked and was not found broken. The CSV files
+      # and their SHA256SUMS go under downloads/, the only prefix the site's
+      # /downloads route reads.
       - name: Save the public files to R2
         id: save_files
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}
         # Each upload is tried three times, 20, 40 and 60 seconds apart: the
-        # API answers an occasional 524 on a single put (2026-10-26), and one
-        # such answer must not leave the rest of the files a day old. A file
-        # still failing after three tries is named, the loop goes on, and the
-        # step fails at the end so the attention item says so.
+        # API answers an occasional 524 on a single put, and one such answer
+        # must not leave the rest of the files a day old. A file still failing
+        # after three tries is named, the loop goes on, and the step fails at
+        # the end so the attention item says so.
         run: |
           put() {
             local attempt
@@ -612,16 +522,32 @@ jobs:
           }
           failed=""
           put "$BUCKET/static.tar.gz" data/out/static.tar.gz || failed="$failed static.tar.gz"
-          for f in data/out/csv/*.csv; do
+          for f in data/out/csv/*.csv data/out/csv/SHA256SUMS; do
+            [ -f "$f" ] || continue
             put "$BUCKET/downloads/$(basename "$f")" "$f" || failed="$failed $(basename "$f")"
-          done
-          for f in data/out/mirror/*; do
-            put "$BUCKET/mirror/$(basename "$f")" "$f" || failed="$failed $(basename "$f")"
           done
           if [ -n "$failed" ]; then
             echo "::error::not saved to R2 after three tries:$failed"
             exit 1
           fi
+
+      # The names the person test withheld from tonight's records (the
+      # CanadaBuys stages list them in data/out/review/<stage>-persons.txt,
+      # never in the run log), for the operator to review: uploaded to the
+      # bucket under review/, which no route on the site reads, and nowhere
+      # else. They never enter the bundle (only data/out/static is packed),
+      # the download cache or the repository, and this step prints none of
+      # them. After the pipeline whatever it did, so a night that failed later
+      # still leaves its list; it never stops the run.
+      - name: Save the review files to R2 (private)
+        id: review
+        if: ${{ !cancelled() && steps.pipeline.outcome != 'skipped' }}
+        continue-on-error: true
+        run: |
+          shopt -s nullglob
+          for f in data/out/review/*.txt; do
+            "$WRANGLER" r2 object put --remote "$BUCKET/review/$(basename "$f")" --file "$f" > /dev/null
+          done
 
       # The audience counts (docs/search-engines.md, section 6). Analytics
       # Engine keeps the Worker's data points for three months; this keeps
@@ -632,15 +558,14 @@ jobs:
       # up by the next, and writes the days it rolled up to rolled_up.txt for
       # the upload loop. It reads with CLOUDFLARE_ANALYTICS_TOKEN, a token of
       # its own with Account Analytics Read and nothing else (the deploy token
-      # cannot read analytics); without it the step does nothing. On the night
-      # that rolls up a month's last day it also reads the X follower count
-      # once (a billed read), only when X posting is enabled; the employer and
-      # record counts come from tonight's data/out/static/stats.json. The summary
-      # is downloaded first and appended to: a download that fails for any
-      # reason but "does not exist" stops the step, so a summary R2 holds is
-      # never replaced by a shorter one. The outcome reads "failed" until both
-      # files are in R2, so a step stopped anywhere (its time limit included)
-      # reads as failed. It never stops the run and needs nothing else above.
+      # cannot read analytics); without it the step does nothing. The
+      # organization and record counts come from tonight's
+      # data/out/static/stats.json. The summary is downloaded first and
+      # appended to: a download that fails for any reason but "does not exist"
+      # stops the step, so a summary R2 holds is never replaced by a shorter
+      # one. The outcome reads "failed" until both files are in R2, so a step
+      # stopped anywhere (its time limit included) reads as failed. It never
+      # stops the run and needs nothing else above.
       - name: Roll up the audience counts (only when CLOUDFLARE_ANALYTICS_TOKEN is set)
         id: views
         if: ${{ !cancelled() }}
@@ -648,12 +573,6 @@ jobs:
         timeout-minutes: 15
         env:
           CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
-          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
-          X_POST_ENABLED: ${{ vars.X_POST_ENABLED }}
-          X_API_KEY: ${{ secrets.X_API_KEY }}
-          X_API_SECRET: ${{ secrets.X_API_SECRET }}
-          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
-          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
         run: |
           out=data/out/views
           mkdir -p "$out"
@@ -682,7 +601,7 @@ jobs:
             cat "$out/summary.log"
             exit 1
           fi
-          python -m awardwatch_pipeline rollup-views --out "$out"
+          python -m awardwatch_pipeline.nightly rollup-views --out "$out"
           while read -r day; do
             "$WRANGLER" r2 object put --remote "$BUCKET/views/$day.csv" --file "$out/$day.csv"
           done < "$out/rolled_up.txt"
@@ -739,7 +658,7 @@ jobs:
             cat "$out/get.log"
             exit 1
           fi
-          python -m awardwatch_pipeline import-search-console --out "$out"
+          python -m awardwatch_pipeline.nightly import-search-console --out "$out"
           outcome=$(cat "$out/outcome.txt")
           case "$outcome" in
             imported*)
@@ -785,7 +704,7 @@ jobs:
           if [ "$code" = "1" ]; then exit 1; fi
           code=0; fetch views/search_console.csv "$out/search_console.csv" || code=$?
           if [ "$code" = "1" ]; then exit 1; fi
-          python -m awardwatch_pipeline views-report --month "$month" --summary "$out/summary.csv" \
+          python -m awardwatch_pipeline.nightly views-report --month "$month" --summary "$out/summary.csv" \
             --search "$out/search_console.csv" --out "$out"
           outcome=$(cat "$out/outcome.txt")
           if [ "$outcome" = "written" ]; then
@@ -823,27 +742,19 @@ jobs:
       # What the daily check in the Worker and the next retry's gate read: when
       # the run finished, which stages and steps succeeded (every step's
       # outcome under steps), the notices (information, never failures or
-      # items needing attention), where the international-candidates pass, the
-      # designated-employer lists and the government notices stand (each
-      # notice first listed tonight is one of the notices), what the checks
-      # found, the outcomes of the X
-      # post, the Bluesky post, the Zenodo deposit, the search database sync,
-      # the audience roll-up, the Search Console import, the monthly report
-      # and the IndexNow submission, where the database
-      # came from (restore), the smoke test and any rollback, and the expiry
-      # checks. Written whatever happened above. The Bluesky, Zenodo,
-      # search-sync, roll-up, Search Console, report, IndexNow and rollback
-      # steps write "failed" before they start, so a step stopped by its time
-      # limit still reads as failed.
+      # items needing attention), what the checks found, the outcomes of the
+      # audience roll-up, the Search Console import, the monthly report and
+      # the IndexNow submission, where the database came from (restore), the
+      # smoke test and any rollback, and the expiry checks. search_sync reads
+      # "not run" until the hosted search database ships. Written whatever
+      # happened above. The roll-up, Search Console, report, IndexNow and
+      # rollback steps write "failed" before they start, so a step stopped by
+      # its time limit still reads as failed.
       - name: Write the run status
         if: ${{ always() }}
         run: |
           python -m awardwatch_pipeline.nightly status --db data/awardwatch.sqlite \
             --started-file data/out/run_started.txt --verify data/out/verify.json \
-            --outcome data/out/social/last_outcome.txt \
-            --bluesky-outcome data/out/social/bluesky_outcome.txt \
-            --zenodo-outcome data/out/zenodo/last_outcome.txt \
-            --search-outcome data/out/search/last_outcome.txt \
             --views-outcome data/out/views/last_outcome.txt \
             --indexnow-outcome data/out/indexnow/last_outcome.txt \
             --search-console-outcome data/out/search_console/last_outcome.txt \
@@ -866,28 +777,14 @@ jobs:
 
       # main may have moved while the job ran (a code change pushed during the
       # night), so the record is put on top of it before the push. A deploy
-      # the smoke test found broken is not a successful refresh.
+      # the smoke test found broken is not a successful refresh. The commit
+      # carries the project's own identity and a UTC timestamp, never the
+      # runner's or a person's.
       - name: Record the run so the schedule stays enabled
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}
         continue-on-error: true
         run: |
           date -u +"Last successful refresh: %Y-%m-%d %H:%M UTC" > LAST_RUN.md
-          if [ -f data/out/social/last_outcome.txt ]; then
-            echo "" >> LAST_RUN.md
-            echo "X post: $(cat data/out/social/last_outcome.txt)" >> LAST_RUN.md
-          fi
-          if [ -f data/out/social/bluesky_outcome.txt ]; then
-            echo "" >> LAST_RUN.md
-            echo "Bluesky post: $(cat data/out/social/bluesky_outcome.txt)" >> LAST_RUN.md
-          fi
-          if [ -f data/out/zenodo/last_outcome.txt ]; then
-            echo "" >> LAST_RUN.md
-            echo "Zenodo deposit: $(cat data/out/zenodo/last_outcome.txt)" >> LAST_RUN.md
-          fi
-          if [ -f data/out/search/last_outcome.txt ]; then
-            echo "" >> LAST_RUN.md
-            echo "Search database sync: $(cat data/out/search/last_outcome.txt)" >> LAST_RUN.md
-          fi
           if [ -f data/out/views/last_outcome.txt ]; then
             echo "" >> LAST_RUN.md
             echo "Audience roll-up: $(cat data/out/views/last_outcome.txt)" >> LAST_RUN.md
@@ -909,18 +806,6 @@ jobs:
             echo "" >> LAST_RUN.md
             echo "IndexNow: $(cat data/out/indexnow/last_outcome.txt)" >> LAST_RUN.md
           fi
-          if [ -f data/out/intl/last_outcome.txt ]; then
-            echo "" >> LAST_RUN.md
-            echo "Open to international candidates: $(cat data/out/intl/last_outcome.txt)" >> LAST_RUN.md
-          fi
-          if [ -f data/out/registers/last_outcome.txt ]; then
-            echo "" >> LAST_RUN.md
-            echo "Designated-employer lists: $(cat data/out/registers/last_outcome.txt)" >> LAST_RUN.md
-          fi
-          if [ -f data/out/notices/last_outcome.txt ]; then
-            echo "" >> LAST_RUN.md
-            echo "Government notices: $(cat data/out/notices/last_outcome.txt)" >> LAST_RUN.md
-          fi
           # The run's notices, one per line with its full text (nothing when
           # there are none); a fault here leaves them out of the record only.
           python -m awardwatch_pipeline.nightly notices --status data/out/status.json > data/out/notices.md 2>/dev/null || true
@@ -928,8 +813,8 @@ jobs:
             echo "" >> LAST_RUN.md
             cat data/out/notices.md >> LAST_RUN.md
           fi
-          git config user.name "LMIA Watch"
-          git config user.email "ops@lmiawatch.invalid"
+          git config user.name "Award Watch"
+          git config user.email "ops@awardwatch.invalid"
           git add LAST_RUN.md
           if git diff --cached --quiet; then exit 0; fi
           TZ=UTC git commit -m "refresh: $(date -u +%Y-%m-%d)"

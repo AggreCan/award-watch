@@ -20,11 +20,11 @@ them adds a cookie or a script to the pages:
    both languages. The nightly run keeps a daily roll-up, Search Console's
    daily figures and a monthly report in R2 (section 6).
 
-Before any of that, two fixes in the zone, both missing on 2026-10-18: plain
-HTTP is served without a redirect, and `www.lmiawatch.ca` serves a full copy
-of the site instead of redirecting to `lmiawatch.ca`. Search engines treat
-the copies as duplicates, and the canonical tags (which always name
-`https://lmiawatch.ca`) only partly make up for it.
+Before any of that, two settings a new zone lacks: without them plain HTTP
+is served without a redirect, and `www.awardwatch.ca` serves a full copy of
+the site instead of redirecting to `awardwatch.ca`. Search engines treat the
+copies as duplicates, and the canonical tags (which always name
+`https://awardwatch.ca`) only partly make up for it.
 
 Everything below is done in the Cloudflare dashboard, signed in as the
 project's Cloudflare account, or in accounts made for the project. The
@@ -33,7 +33,7 @@ this can be scripted from the repository.
 
 ## 1. Always Use HTTPS
 
-1. Cloudflare dashboard, the `lmiawatch.ca` zone, SSL/TLS, Edge
+1. Cloudflare dashboard, the `awardwatch.ca` zone, SSL/TLS, Edge
    Certificates.
 2. Turn on Always Use HTTPS. Every `http://` request now gets a 301 to the
    same `https://` address at the edge, before the Worker runs, so the
@@ -42,27 +42,27 @@ this can be scripted from the repository.
    trouble, HSTS can be turned on from the same page; it is hard to undo,
    because browsers remember it for its full max-age.
 
-Check: `curl -sI http://lmiawatch.ca/` from a terminal answers `301` with
-`Location: https://lmiawatch.ca/`.
+Check: `curl -sI http://awardwatch.ca/` from a terminal answers `301` with
+`Location: https://awardwatch.ca/`.
 
 ## 2. Redirect www to the apex
 
-`www.lmiawatch.ca` is a Worker custom domain (`site/wrangler.jsonc`), so it
+`www.awardwatch.ca` is a Worker custom domain (`site/wrangler.jsonc`), so it
 has a DNS record and a certificate. Keep both, and send its traffic to the
 apex with a redirect rule, which runs at the edge before the Worker.
 
-1. The `lmiawatch.ca` zone, Rules, Overview, Create rule, Redirect Rule. The
+1. The `awardwatch.ca` zone, Rules, Overview, Create rule, Redirect Rule. The
    template "Redirect from WWW to root" fills in most of it.
 2. Rule name: `www to apex`.
 3. When incoming requests match: custom filter expression, field Hostname,
-   operator equals, value `www.lmiawatch.ca`.
+   operator equals, value `www.awardwatch.ca`.
 4. Then: URL redirect, type Dynamic, expression
-   `concat("https://lmiawatch.ca", http.request.uri.path)`, status code 301,
+   `concat("https://awardwatch.ca", http.request.uri.path)`, status code 301,
    Preserve query string on.
 5. Deploy. The Free plan allows ten redirect rules; this uses one.
 
-Check: `curl -sI "https://www.lmiawatch.ca/search?lang=fr"` answers `301`
-with `Location: https://lmiawatch.ca/search?lang=fr`.
+Check: `curl -sI "https://www.awardwatch.ca/tenders?lang=fr"` answers `301`
+with `Location: https://awardwatch.ca/tenders?lang=fr`.
 
 ## 3. Google Search Console
 
@@ -70,11 +70,11 @@ Google needs a Google account. Make one for the project, in the project's
 browser profile, never signed in alongside a personal Google account. At the
 sign-up page choose "Use your existing email" and give the project's
 plus-alias address, so no Gmail mailbox is created. Google may ask for a
-phone number. The account name can be `LMIA Watch`; it is not shown on the
+phone number. The account name can be `Award Watch`; it is not shown on the
 site or in search results.
 
 1. Open `search.google.com/search-console`, Add property, choose Domain (not
-   URL prefix), enter `lmiawatch.ca`. A domain property covers `http`,
+   URL prefix), enter `awardwatch.ca`. A domain property covers `http`,
    `https` and `www` at once.
 2. Google shows a TXT record that starts `google-site-verification=`. Copy
    the whole value.
@@ -105,18 +105,18 @@ Bing's index also serves DuckDuckGo, Ecosia and Yahoo.
 2. Once the Google property is verified, choose Import from Google Search
    Console. Bing reads the verified property and its sitemap and needs no
    DNS record of its own. This is the quickest path.
-3. Without the import: Add a site, `https://lmiawatch.ca/`, and choose the
+3. Without the import: Add a site, `https://awardwatch.ca/`, and choose the
    DNS method. Bing shows a CNAME record (a name made of letters and digits,
    pointing to `verify.bing.com`). Add it in the Cloudflare zone with proxy
    status DNS only (the grey cloud): a proxied record answers with
    Cloudflare's addresses and the check fails. Verify, then leave the record
    in place.
-4. Sitemaps: Submit sitemap, `https://lmiawatch.ca/sitemap.xml`.
+4. Sitemaps: Submit sitemap, `https://awardwatch.ca/sitemap.xml`.
 
 ## 5. IndexNow
 
-Bing reads the sitemap, but with about 160,000 employer pages its crawl takes
-weeks to come back to a page that changed. IndexNow lets the site name the
+Bing reads the sitemap, but with tens of thousands of organization and
+notice pages its crawl takes weeks to come back to a page that changed. IndexNow lets the site name the
 changed pages itself, and Bing and the other engines that share the protocol
 take that as a cue to crawl them. Google does not take IndexNow and is
 unaffected.
@@ -128,32 +128,33 @@ workflow step "Tell IndexNow which pages changed" runs
 
 ```
 python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --since <run start> \
-  --site-url https://lmiawatch.ca
+  --site-url https://awardwatch.ca
 ```
 
 (`pipeline/awardwatch_pipeline/indexnow.py`). It selects:
 
-- the home, search, trends, occupations, places, releases and program pages,
-  which follow the nightly data;
-- every employer page whose row changed during the run. `--since` is the
-  time in `data/out/run_started.txt`, written as the pipeline step starts.
-  The status stage rewrites `employers.updated_at` only when something in an
-  employer's summary changed, and a new employer row carries the time it was
+- the fixed pages in `FIXED_PAGES` (the home page and the list pages that
+  follow the nightly data);
+- every organization page whose row changed during the run, and the buyer,
+  category and recent tender pages the night touched. `--since` is the time
+  in `data/out/run_started.txt`, written as the pipeline step starts. The
+  organizations stage rewrites `organizations.updated_at` only when a value
+  on the profile changed, and a new organization row carries the time it was
   first written.
 
 At most 20,000 URLs a night, the most recently changed first. A night with
-more (a new ESDC quarter changes tens of thousands of profiles) leaves the
-rest to the sitemap, which lists every profile with its `lastmod`. The list
+more (a change to the name rules re-keys every organization) leaves the rest
+to the sitemap, which lists every profile with its `lastmod`. The list
 goes to the shared endpoint, which passes it to every participating engine,
 in batches of at most 10,000 URLs:
 
 ```
 POST https://api.indexnow.org/indexnow
 Content-Type: application/json; charset=utf-8
-User-Agent: LMIAWatch/<version> (+https://lmiawatch.ca; https://lmiawatch.ca/corrections)
+User-Agent: AwardWatch/<version> (+https://awardwatch.ca; https://awardwatch.ca/corrections)
 
-{"host": "lmiawatch.ca", "key": "<key>", "keyLocation": "https://lmiawatch.ca/<key>.txt",
- "urlList": ["https://lmiawatch.ca/", "https://lmiawatch.ca/search", ...]}
+{"host": "awardwatch.ca", "key": "<key>", "keyLocation": "https://awardwatch.ca/<key>.txt",
+ "urlList": ["https://awardwatch.ca/", "https://awardwatch.ca/tenders", ...]}
 ```
 
 The step's log gives the counts. On the runner the list sent is in
@@ -164,7 +165,7 @@ sending anything.
 
 The key is the 32-character text in `INDEXNOW_KEY`
 (`pipeline/awardwatch_pipeline/indexnow.py`). The site serves it at
-`https://lmiawatch.ca/<key>.txt` from `site/public/<key>.txt`, a file whose
+`https://awardwatch.ca/<key>.txt` from `site/public/<key>.txt`, a file whose
 entire content is the key, with no newline. An engine fetches that file to
 check that a submission comes from the site. The key is public by design, so
 there is no secret to set, and a pipeline test fails when the code and the
@@ -199,7 +200,7 @@ not get through are not queued for the next; the sitemap carries them.
 The engines could not match the request with the key file, so the key file
 is the first thing to check:
 
-1. Open `https://lmiawatch.ca/<key>.txt`, with the key from `INDEXNOW_KEY`.
+1. Open `https://awardwatch.ca/<key>.txt`, with the key from `INDEXNOW_KEY`.
    It must answer 200 with the key as its entire content.
 2. A 404: the file is missing from `site/public` or the last deploy did not
    carry it. Check that it is committed and that the deploy step succeeded.
@@ -209,7 +210,7 @@ is the first thing to check:
    catches this before a push; fix whichever one changed.
 5. A 422 with a good key file: the URLs name a host other than the one
    serving the file, usually the repository variable `SITE_URL` (the step
-   falls back to `https://lmiawatch.ca` only when the variable is empty).
+   falls back to `https://awardwatch.ca` only when the variable is empty).
 
 The next nightly run submits again once the cause is fixed.
 
@@ -240,14 +241,14 @@ counts, Search Console's daily figures, and a report per month. Since
 
 | Column | Holds | Example |
 |---|---|---|
-| `index1` | the route template (the sampling key) | `/employers/:id` |
-| `blob1` | the route template | `/employers/:id` |
+| `index1` | the route template (the sampling key) | `/organizations/:id` |
+| `blob1` | the route template | `/organizations/:id` |
 | `blob2` | the kind: `page`, `api`, `download`, `form`, `feed`, `hook`, `file` or `other` | `page` |
 | `blob3` | the page language | `fr` |
 | `blob4` | the country code from Cloudflare's edge, empty when absent (`T1` is Tor) | `CA` |
 | `blob5` | the referring site's host name, empty when none | `news.google.com` |
 | `blob6` | the request method | `GET` |
-| `blob7` | feeds only: the feed file, empty when no file was served (empty on every other point) | `feeds/canada/pending.xml` |
+| `blob7` | feeds only: the feed file, empty when no file was served (empty on every other point) | `feeds/canada/tenders.xml` |
 | `blob8` | `bot` or `human` (from 2026-10-30) | `human` |
 | `blob9` | people only: `desktop`, `mobile` or `tablet`, read from the user agent; empty for a bot | `mobile` |
 | `blob10` | people only: the daily visitor code, 16 hex characters; empty for a bot and while `VIEWS_SALT_KEY` is not set | `79b509108f501ba3` |
@@ -268,7 +269,7 @@ any value: search engines, monitors, feed fetchers), when the user agent is
 missing or not shaped like a browser's (every browser starts `Mozilla/` or,
 for old Opera, `Opera/`), when the user agent holds one of the crawler words
 (bot, crawl, spider, slurp, fetch, python-requests, curl, wget, headless,
-the site's own `LMIAWatch`, and a few more listed in the code), when a
+the site's own `awardwatch`, and a few more listed in the code), when a
 browser-shaped user agent comes with none of the Fetch Metadata headers
 (`Sec-Fetch-Mode`, `Sec-Fetch-Dest`, `Sec-Fetch-Site`) that every current
 browser sends, and always for a feed poll or the payment hook. Browsers
@@ -356,7 +357,7 @@ the secret rolls up every day Analytics Engine still holds.
 ### What the nightly run keeps in R2
 
 The workflow step "Roll up the audience counts" runs
-`python -m awardwatch_pipeline rollup-views` (`pipeline/awardwatch_pipeline/views_rollup.py`).
+`python -m awardwatch_pipeline.nightly rollup-views` (`pipeline/awardwatch_pipeline/views_rollup.py`).
 It asks the SQL API for every finished UTC day after the newest one in the
 summary (normally only yesterday; on the first night, the last 90 days), so
 a night that fails is caught up by the next. A day with no data points at all
@@ -399,7 +400,7 @@ distinct counts of visitor codes would undercount if it ever sampled (this
 site's volume is far below where it starts).
 
 The summary, header
-`date,responses,pages,api,downloads,forms,feeds,other,feed_subscribers,bluesky_followers,top_routes,human_pages,bot_pages,unique_visitors,human_visits,human_by_country,human_by_device,human_by_lang,human_by_route,x_followers,employers,records`:
+`date,responses,pages,api,downloads,forms,feeds,other,feed_subscribers,top_routes,human_pages,bot_pages,unique_visitors,human_visits,human_by_country,human_by_device,human_by_lang,human_by_route,organizations,records`:
 
 | Column | Meaning |
 |---|---|
@@ -408,7 +409,6 @@ The summary, header
 | `pages`, `api`, `downloads`, `forms`, `feeds` | responses of kind `page`, `api`, `download`, `form`, `feed` |
 | `other` | everything else: the payment hook, `robots.txt`, the sitemaps, the feed index, paths that match no route |
 | `feed_subscribers` | the sum over feed files of each file's largest stated subscriber count; a person who follows two feeds counts twice, and a feed read through two services counts only the larger figure |
-| `bluesky_followers` | the Bluesky account's follower count when the roll-up ran, on the row for the day before; empty for days caught up later and when the profile could not be read |
 | `top_routes` | the five route templates with the most responses below status 400, people and bots together, as `route count` pairs separated by semicolons |
 | `human_pages` | page views (kind `page`, status below 400) marked human |
 | `bot_pages` | page views marked bot |
@@ -418,28 +418,21 @@ The summary, header
 | `human_by_device` | people's page views by `desktop`, `mobile`, `tablet` |
 | `human_by_lang` | people's page views by `en`, `fr` |
 | `human_by_route` | people's page views by route template, every route |
-| `x_followers` | the X account's follower count, read once a month on the night that rolls up the month's last day, only when X posting is enabled (`X_POST_ENABLED` and the four X secrets); one read, billed per use |
-| `employers`, `records` | the site's counts from tonight's `stats.json` (employers; rows on ESDC's positive and negative lists), on the row for the day before |
+| `organizations`, `records` | the site's counts from tonight's `stats.json` (organizations; records: award notices, contract history records, published contracts, grant agreements and lobbying communications, the five counts added), on the row for the day before |
 
 Blanks are deliberate and never mean zero. The eight people and bot columns
 are blank on any day on which a page view carries no bot flag (every day
 before 2026-10-30, and the day itself, which mixes points from before and
 after the deploy). `unique_visitors` and `human_visits` are also blank on any
 day on which a person's request carried no visitor code (no `VIEWS_SALT_KEY`,
-or the secret set part way through the day). The follower, employer and
-record readings are taken on the night, so a day rolled up again keeps the
-reading it had.
+or the secret set part way through the day). The organization and record
+readings are taken on the night, so a day rolled up again keeps the reading
+it had.
 
 Nothing in either file identifies a visitor: the queries can read only what
 the Worker writes, never ask for a visitor code itself, and the roll-up
 blanks any value that does not have the shape the Worker writes before it
 is stored.
-
-Bluesky's follower count comes from its public profile endpoint
-(`public.api.bsky.app`, `app.bsky.actor.getProfile`), which needs no token;
-the handle is the `BSKY_HANDLE` secret, or the site's domain when that is not
-set. X's comes from `GET /2/users/me?user.fields=public_metrics` with the
-posting credentials, once a month.
 
 Outcomes in the run status, as `views_rollup`: `rolled up`, `no data` (no
 day had a data point), `no token`, or `failed` (the SQL API failed, the
@@ -456,13 +449,13 @@ wanted.
 
 Nothing needs doing by hand. To look at one day from a machine anyway (within
 the 90 days, with `CLOUDFLARE_ANALYTICS_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
-set in the shell), `python -m awardwatch_pipeline rollup-views --day YYYY-MM-DD`
+set in the shell), `python -m awardwatch_pipeline.nightly rollup-views --day YYYY-MM-DD`
 writes its file to `data/out/views/`.
 
 ### Search Console's figures
 
 Search Console keeps 16 months. The workflow step "Import the Search Console
-figures" runs `python -m awardwatch_pipeline import-search-console`
+figures" runs `python -m awardwatch_pipeline.nightly import-search-console`
 (`pipeline/awardwatch_pipeline/search_console.py`) and appends to
 `views/search_console.csv` one row per day after the newest one it holds
 (on the first night, everything Search Console still has), header
@@ -508,7 +501,7 @@ profile.
    account needs no Cloud permissions.
 4. Open the new account, Keys, Add key, Create new key, JSON. A file
    downloads.
-5. Search Console, the `lmiawatch.ca` property, Settings, Users and
+5. Search Console, the `awardwatch.ca` property, Settings, Users and
    permissions, Add user: the service account's address (it ends in
    `.iam.gserviceaccount.com`), permission Restricted. Restricted can read
    every report and change nothing.
@@ -517,7 +510,7 @@ profile.
    the downloaded file as the value. Then delete the file.
 7. Only if the property is a URL-prefix property rather than the domain
    property: a repository variable `GSC_SITE` with its address, for example
-   `https://lmiawatch.ca/`. The default is `sc-domain:lmiawatch.ca`.
+   `https://awardwatch.ca/`. The default is `sc-domain:awardwatch.ca`.
 
 The next run imports the 16 months Search Console holds. A key does not
 expire; to replace one, add a new key, update the secret, and delete the old
@@ -527,7 +520,7 @@ of the property (step 5).
 ### The monthly report
 
 The workflow step "Write the monthly audience report" runs
-`python -m awardwatch_pipeline views-report` (`pipeline/awardwatch_pipeline/views_report.py`)
+`python -m awardwatch_pipeline.nightly views-report` (`pipeline/awardwatch_pipeline/views_report.py`)
 on the first run of each UTC month: every night it asks R2 whether
 `views/report-<last month>.md` exists, and writes it when it does not, from
 the summary and the Search Console file as R2 holds them. It waits up to a
@@ -537,7 +530,7 @@ writes with the days there are.
 The report is plain markdown: a table of the month and the three before it
 (days counted, page views by people, unique visitors summed by day, visits,
 Canada's share, the device split, search clicks, impressions and position,
-feed subscribers, Bluesky and X followers, employers and records), the
+feed subscribers, organizations and records), the
 month's top ten pages by people, and the definitions of each figure. A
 figure that was not counted reads `n/a`. Unique visitors are summed over the
 month's days ("visitor-days"), since the code changes daily: a person who
@@ -548,7 +541,7 @@ wrote it. Outcomes, as `views_report`: `written`, `not due` (the report
 exists), `waiting`, `no data` (the summary holds no day of the month), or
 `failed` (an attention item and a watchdog email; the next run tries again).
 To write one by hand from downloaded files:
-`python -m awardwatch_pipeline views-report --month 2026-11 --summary summary.csv --search search_console.csv --out .`
+`python -m awardwatch_pipeline.nightly views-report --month 2026-11 --summary summary.csv --search search_console.csv --out .`
 
 ### The dashboard
 
@@ -607,7 +600,7 @@ Other sites that send visitors, last 30 days:
 ```
 SELECT blob5 AS referrer, SUM(_sample_interval) AS views
 FROM awardwatch_views
-WHERE blob5 != '' AND blob5 != 'lmiawatch.ca' AND timestamp > NOW() - INTERVAL '30' DAY
+WHERE blob5 != '' AND blob5 != 'awardwatch.ca' AND timestamp > NOW() - INTERVAL '30' DAY
 GROUP BY referrer ORDER BY views DESC LIMIT 25
 ```
 
@@ -647,88 +640,54 @@ pins 4.105 for its test pool.
 
 ## 7. Crawl budget
 
-About 160,000 employer pages share each engine's crawl allowance. The site
-keeps crawlers off URLs that repeat another page, links every profile to the
-place and occupation pages that cover it, links every profile from an A to Z
-directory of its province and from the related lists of other profiles, and
-lets a crawler that already has a page skip it when nothing changed.
+Tens of thousands of organization and notice pages share each engine's crawl
+allowance. The site keeps crawlers off URLs that repeat another page, links
+every profile from an A to Z directory, and lets a crawler that already has
+a page skip it when nothing changed.
 
 ### robots.txt
 
 `site/public/robots.txt` gives every crawler the `User-agent: *` group (with
 `Crawl-delay: 5`) and Bingbot a group of its own with the same rules and no
-delay. Both groups carry three pairs of rules for pages whose query forms
-name the plain page as their canonical URL:
+delay (Bing honours the delay, and five seconds would cap it far below the
+number of pages). Both groups keep crawlers off the payment webhook
+(`/hooks/`), the JSON API (`/api/`) and the response form
+(`/organizations/*/respond`), and carry four pairs of rules for pages whose
+query forms name the plain page as their canonical URL:
 
 | Rules | Kept off | Open |
 |---|---|---|
-| `Disallow: /search?`, `Allow: /search?lang=fr$` | filtered searches and page cursors | `/search`, `/search?lang=fr` |
-| `Disallow: /corrections?`, `Allow: /corrections?lang=fr$` | the correction form opened from a profile (`?employer=<id>`) | `/corrections`, `/corrections?lang=fr` |
-| `Disallow: /map?`, `Allow: /map?lang=fr$` | the map opened on a postal area (`?fsa=<FSA>`, each profile's "nearby" link) | `/map`, `/map?lang=fr` |
+| `Disallow: /tenders?`, `Allow: /tenders?lang=fr$` | the open notices filtered or sorted | `/tenders`, `/tenders?lang=fr` |
+| `Disallow: /tenders/new?`, `Allow: /tenders/new?lang=fr$` | a day of new notices chosen by query | `/tenders/new`, `/tenders/new?lang=fr` |
+| `Disallow: /rankings?`, `Allow: /rankings?lang=fr$` | a ranking paged or filtered | `/rankings`, `/rankings?lang=fr` |
+| `Disallow: /corrections?`, `Allow: /corrections?lang=fr$` | the correction form opened from a profile (`?organization=<id>`) | `/corrections`, `/corrections?lang=fr` |
 
 Google and Bing apply the longest matching rule, so the `Allow` line, anchored
 at the end by `$`, opens the French page and nothing else under the same
-`Disallow`. The `/corrections?` and `/map?` pairs followed a week in which
-Claude-SearchBot fetched `/corrections?employer=` 2,599 times, Googlebot
-1,110 times, and crawlers fetched about 1,600 `/map?fsa=` variants. The
-robots test in `site/test/seo.test.ts` checks both groups against these
+`Disallow`. A last group shuts out the crawlers that gather pages for AI
+training or bulk scraping; the data is downloadable from the Data page. The
+robots test in `site/test/seo.test.ts` checks the groups against these
 paths.
 
-### Links from employer pages
+### Links to organization pages
 
-Each profile links (`site/src/crosslinks.ts`):
-
-- the breadcrumb's province to `/places/<pp>`, for the thirteen provinces and
-  territories. With no province, or a head office outside Canada, the crumb
-  is plain text and the breadcrumb JSON-LD leaves it out. The crumb linked
-  `/search?province=XX` before, which robots.txt blocks.
-- the city in the City row to `/places/<pp>/<slug>`, when the province's
-  file `places/<pp>.json` lists a page for that city (`places/index.json`
-  lists only the 25 largest per province). The city as written on the record
-  is folded as the pipeline folds names into slugs (accents dropped, lower
-  case, apostrophes dropped, other punctuation a space, Saint and Sainte read
-  as St and Ste) and compared with each listed city's slug and name.
-- each NOC code in the records table to `/occupations/<noc>`, when
-  `occupations/index.json` marks the code as indexed. The four-digit NOC 2011
-  codes of the older lists have no page.
-
-A missing or unreadable file leaves the text unlinked. Both files go through
-the Worker's parsed-file cache, so an isolate parses each once per deploy.
-
-### Links to employer pages
-
-Until 2026-10-30 a profile's only inbound links were its sitemap entry and,
-for a few hundred employers, a place page's list of the 20 with the newest
-records, and Google had crawled a few thousand of the profiles. Two kinds of
-link, both written by the nightly export (`pipeline/awardwatch_pipeline/directory.py`),
-now reach every profile:
-
-- The directory. Each of the thirteen provinces and territories has an A to Z
-  list of every employer with a profile there, 200 to a page, at
-  `/places/<pp>/employers` (page 1) and `/places/<pp>/employers/<n>`.
-  Employers with a head office outside Canada (province `XX`) or no province
-  share `/places/other/employers`. Rows sort by the normalized name, which is
-  part of the employer id and does not change, so a page's rows move only
-  when an employer is added or leaves. Each page links the previous and next
-  page (in the pager and as `<link rel="prev">` and `<link rel="next">` in the
-  head), every page of the directory, and the page on which each initial
-  starts, so any page is one click from any other. The province page, the
-  `/places` index and every profile link the directory. The pages are
-  indexable, carry their own canonical URL and language alternates, and are
-  in the sitemap; robots.txt does not touch them (the robots test lists
-  them among the open paths). A directory with no employer answers with a
-  short noindex page and has no sitemap entry. On the data of 2026-10-17:
-  849 pages, from 1 (Yukon, Nunavut, the Northwest Territories) to 244
-  (Ontario), 15 MB in all.
-- Related employers. Each profile lists up to five other employers: first
-  those in the same city (folded as the place pages fold it), then those in
-  the same province whose most common NOC code is the same. Within each group
-  the list takes the employers nearest in record count, one with more and one
-  with fewer in turn. Ranking the busiest employers of a city instead would
-  send every profile's links to the same few: on the data of 2026-10-17 that
-  linked 21,370 of 168,440 profiles (one profile received 10,892 links),
-  against 165,593 (at most 14 each) for the nearest. The list adds about
-  50 MB to the profile shards in all, about 12 KB a shard.
+A profile's inbound links are its sitemap entry, the lists that name it (an
+award, a buyer's or a category's top organizations, the rankings) and the
+directory, which reaches every profile. The nightly export writes it
+(`pipeline/awardwatch_pipeline/directory.py`): for each province and
+territory, an A to Z list of every organization whose main address is there,
+200 to a page, at `/organizations/directory/<code>` (page 1) and
+`/organizations/directory/<code>/<n>`; `xx` holds the organizations whose
+main address is outside Canada and `un` those whose records carry no usable
+address. The province is the one seen most often on the organization's
+records (`organizations.province`). Rows sort by the normalized name, from
+which the organization id is made and which does not change night to night,
+so a page's rows move only when an organization is added or leaves. Each
+page links the previous and next page (in the pager and as
+`<link rel="prev">` and `<link rel="next">` in the head) and every page of
+its directory. The pages are indexable, carry their own canonical URL and
+language alternates, and are in the sitemap; a directory with no
+organization has no sitemap entry.
 
 The sitemap dates each directory page by the night its rows last changed:
 the database's `directory_pages` table keeps each page's hash and that date,
@@ -751,7 +710,7 @@ Atom feeds (which pass the assets layer's own ETag through) are left as they
 are. A 304 is counted in Analytics Engine with status 304, so the day files'
 `status` column shows how often pages are revalidated.
 
-Check after the first deploy: `curl -sI https://lmiawatch.ca/methodology`
+Check after the first deploy: `curl -sI https://awardwatch.ca/methodology`
 shows `etag: W/"..."`, and the same request with
 `-H 'If-None-Match: W/"..."'` (the tag just shown) answers `304`. Cloudflare
 removes weak ETags when the zone runs Email Obfuscation, Automatic HTTPS
@@ -785,21 +744,20 @@ pages carry no email address to hide).
 
 ## 8. Pointing crawlers at the bulk files
 
-Nothing obliges a crawler to read the nightly CSVs instead of 160,000 profile
-pages, so the site makes the files easy to find for the ones that look:
-`/llms.txt` (the convention AI crawlers and agents read first) names every
-download, the Data page and the Zenodo deposit; every profile answers with a
-`Link` header naming `employers.csv` as an alternate representation and
-`/llms.txt` as help; robots.txt says the same in its opening comment, carries
-Cloudflare's `Content-Signal` line (search yes, AI input yes, AI training no),
-and no longer disallows `/downloads/` for search engines and Bing, which the
-Worker's ten-a-minute cap still protects. The AI-training group stays
-disallowed from everything.
+Nothing obliges a crawler to read the nightly CSVs instead of the profile
+and notice pages, so the site makes the files easy to find for the ones that
+look: `/llms.txt` (the convention AI crawlers and agents read first) names
+every download and the Data page; every profile answers with a `Link` header
+naming `/downloads/organizations.csv` as an alternate representation and
+`/llms.txt` as help; robots.txt says the same in its opening comment and
+carries Cloudflare's `Content-Signal` line (search yes, AI input yes, AI
+training no). `/downloads/` stays open to crawlers, protected by the
+Worker's ten-a-minute cap per address.
 
-The response form (`/employers/<id>/respond`) is disallowed in robots.txt,
-and a GET that carries neither `Sec-Fetch-Mode` nor a Referer from the site
-gets a 403 with one line naming the employer's profile
-(`respondPage` in `site/src/pages/forms.tsx`): a browser sends one or the
-other whenever a person follows a link to the form, from the site or from an
-emailed message, and a scraper that ignores robots.txt usually sends neither.
-The corrections page stays open to any client, since other sites link to it.
+The response form (`/organizations/<id>/respond`) is disallowed in
+robots.txt, and a GET that carries neither `Sec-Fetch-Mode` nor a Referer
+from the site gets a 403 with one line naming the organization's profile
+(`site/src/pages/forms.tsx`): a browser sends one or the other whenever a
+person follows a link to the form, from the site or from an emailed message,
+and a scraper that ignores robots.txt usually sends neither. The corrections
+page stays open to any client, since other sites link to it.

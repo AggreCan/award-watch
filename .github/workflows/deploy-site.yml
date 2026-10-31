@@ -11,10 +11,10 @@
 # 2. Check out main, install the pipeline and the site's pinned Wrangler.
 # 3. Download static.tar.gz from R2 (a read): the data bundle the nightly
 #    saves after a deploy that passed its live check. site-bundle-check
-#    proves it is what the site serves (stats.json, search/facets.json and
-#    search/first.json, compared as parsed JSON) before it is copied to
+#    proves it is what the site serves (stats.json and tenders/open.json,
+#    compared as parsed JSON) before it is copied to
 #    site/public/data. Any difference stops the run there.
-# 4. Record the Worker version serving traffic, check the three files again
+# 4. Record the Worker version serving traffic, check the two files again
 #    and keep the live stats.json, deploy, then run the nightly's smoke test
 #    and the bundle check against the live site and the kept stats.json. A
 #    failed deploy, a smoke test that finds server errors, or any difference
@@ -72,7 +72,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       AWARDWATCH_SITE_URL: ${{ vars.SITE_URL }}
       AWARDWATCH_CONTACT: ${{ vars.CONTACT }}
-      SITE: ${{ vars.SITE_URL || 'https://lmiawatch.ca' }}
+      SITE: ${{ vars.SITE_URL || 'https://awardwatch.ca' }}
       # The site's pinned Wrangler (package-lock.json), the binary the nightly
       # uses for its R2 calls and its deploy.
       WRANGLER: ${{ github.workspace }}/site/node_modules/.bin/wrangler
@@ -149,7 +149,7 @@ jobs:
           exit 1
 
       # The archive holds one folder, static/, as the nightly's bundle step
-      # packs it. The check fetches the same three files from the live site;
+      # packs it. The check fetches the same two files from the live site;
       # any difference, missing file or answer other than 200 stops the run
       # here, before anything is copied.
       - name: Unpack the bundle and check it against the live site
@@ -184,7 +184,7 @@ jobs:
           "$WRANGLER" deployments status --json > "$WORK/before.json" 2> "$WORK/before.log" || cat "$WORK/before.log"
           python -m awardwatch_pipeline.nightly live-version --file "$WORK/before.json" --out "$WORK/version_before.txt"
 
-      # Right before the deploy: the three files once more, read from the
+      # Right before the deploy: the two files once more, read from the
       # folder the deploy uploads (a deploy from anywhere else since the first
       # check would show here), and the live stats.json kept byte for byte
       # for the check after the deploy. Written only when every file matched.
@@ -211,7 +211,7 @@ jobs:
           done
           exit 1
 
-      # The nightly's smoke test: home, search, data and one profile, each
+      # The nightly's smoke test: home, open tenders, data and one profile, each
       # page that fails fetched again 30 seconds later. It exits 1 only for
       # "broken" (a page answered 500 to 599 twice). The data date it looks
       # for comes from the bundle's stats.json.
@@ -223,7 +223,7 @@ jobs:
         run: |
           python -m awardwatch_pipeline.nightly smoke --base-url "$SITE" --stats site/public/data/stats.json --out "$WORK/smoke.json"
 
-      # The same three files from the live site, now served by the new
+      # The same two files from the live site, now served by the new
       # version, and the archive's stats.json against the copy kept before
       # the deploy. A file that cannot be fetched counts as a difference: the
       # check before the deploy fetched it minutes earlier.

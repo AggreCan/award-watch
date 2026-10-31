@@ -18,9 +18,9 @@ and say so.
 Sums of daily figures: unique visitors come from a code that changes every
 UTC day, so a month's figure is the sum of daily uniques ("visitor-days"):
 a person who came on three days counts three times. The same holds for
-visits. Levels (followers, feed subscribers, employers, records) are not
-summed: each month shows the last reading in it (the largest daily figure
-for feed subscribers).
+visits. Levels (feed subscribers, organizations, records) are not summed:
+each month shows the last reading in it (the largest daily figure for feed
+subscribers).
 """
 
 from __future__ import annotations
@@ -105,9 +105,7 @@ class Month:
     devices: dict[str, int] = field(default_factory=dict)
     routes: dict[str, int] = field(default_factory=dict)
     feed_subscribers: int | None = None
-    bluesky: int | None = None
-    x: int | None = None
-    employers: int | None = None
+    organizations: int | None = None
     records: int | None = None
     search_days: int = 0
     clicks: int = 0
@@ -141,8 +139,7 @@ def gather(month: str, summary: list[dict[str, str]], search: list[dict[str, str
         subs = _int(row.get("feed_subscribers"))
         if subs is not None:
             m.feed_subscribers = subs if m.feed_subscribers is None else max(m.feed_subscribers, subs)
-        for attr, column in (("bluesky", "bluesky_followers"), ("x", "x_followers"), ("employers", "employers"),
-                             ("records", "records")):
+        for attr, column in (("organizations", "organizations"), ("records", "records")):
             value = _int(row.get(column))
             if value is not None:
                 setattr(m, attr, value)  # rows run oldest first, so the last reading stands
@@ -197,9 +194,7 @@ def render(month: str, months: list[Month], written: date) -> str:
         line("Average search position", [f"{m.position_weight / m.impressions:.1f}" if m.impressions else NA
                                          for m in months]),
         line("Feed subscribers (largest daily figure)", [_n(m.feed_subscribers) for m in months]),
-        line("Bluesky followers (last reading)", [_n(m.bluesky) for m in months]),
-        line("X followers (last reading)", [_n(m.x) for m in months]),
-        line("Employers (last reading)", [_n(m.employers) for m in months]),
+        line("Organizations (last reading)", [_n(m.organizations) for m in months]),
         line("Records (last reading)", [_n(m.records) for m in months]),
     ])
 
@@ -211,7 +206,7 @@ def render(month: str, months: list[Month], written: date) -> str:
         "No page views by people were counted this month.\n")
 
     return (
-        f"# LMIA Watch audience report, {month}\n\n"
+        f"# Award Watch audience report, {month}\n\n"
         f"Written {written.isoformat()} from views/summary.csv and views/search_console.csv in R2. "
         "Months are UTC calendar months. n/a means not counted.\n\n"
         f"## The month and the three before it\n\n{table}\n"
@@ -231,9 +226,9 @@ def render(month: str, months: list[Month], written: date) -> str:
         "(the newest two or three days of a month arrive after it ends). Average position is weighted by "
         "impressions.\n"
         "- Feed subscribers: the largest daily sum of the subscriber counts feed readers stated.\n"
-        "- Followers, employers, records: the last reading taken in the month. Followers are read by the nightly "
-        "run (X once a month, on the last day); employers and records are the site's counts after the nightly run "
-        "(records: rows on ESDC's positive and negative lists).\n"
+        "- Organizations, records: the last reading taken in the month, the site's counts after the nightly run "
+        "(records: award notices, contract history records, published contracts, grant agreements and lobbying "
+        "communications, each counted in its own source and the five counts added).\n"
     )
 
 

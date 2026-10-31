@@ -6,16 +6,15 @@ import csv
 import io
 import json
 from datetime import date, datetime, timedelta, timezone
-from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import requests
 
-from awardwatch_pipeline import cli, config, nightly, views_rollup as vr
+from awardwatch_pipeline import config, nightly, views_rollup as vr
 
 ACCOUNT = "0123456789abcdef0123456789abcdef"
 TOKEN = "analytics-token-value"
-ENV = {vr.TOKEN_ENV: TOKEN, vr.ACCOUNT_ENV: ACCOUNT, "BSKY_HANDLE": "lmiawatch.ca"}
+ENV = {vr.TOKEN_ENV: TOKEN, vr.ACCOUNT_ENV: ACCOUNT}
 NOW = datetime(2026, 10, 22, 0, 40, tzinfo=timezone.utc)
 YESTERDAY = date(2026, 10, 21)
 START = 1792540800  # 2026-10-21T00:00:00Z
@@ -42,13 +41,13 @@ KINDS = [{"kind": "page", "responses": "120"}, {"kind": "api", "responses": "30"
          {"kind": "download", "responses": "4"}, {"kind": "form", "responses": "1"},
          {"kind": "feed", "responses": "40"}, {"kind": "hook", "responses": "2"}, {"kind": "other", "responses": "9"}]
 COUNTS = [
-    {"route": "/employers/:id", "kind": "page", "lang": "en", "country": "CA", "referrer": "news.example.org",
+    {"route": "/organizations/:id", "kind": "page", "lang": "en", "country": "CA", "referrer": "news.example.org",
      "status": 200, "responses": "70"},
     {"route": "/", "kind": "page", "lang": "fr", "country": "CA", "referrer": "", "status": 200, "responses": "50"},
     {"route": "/api/stats", "kind": "api", "lang": "en", "country": "US", "referrer": "", "status": 200, "responses": "30"},
-    {"route": "/downloads/employers.csv", "kind": "download", "lang": "en", "country": "", "referrer": "",
+    {"route": "/downloads/organizations.csv", "kind": "download", "lang": "en", "country": "", "referrer": "",
      "status": 200, "responses": "4"},
-    {"route": "/corrections", "kind": "form", "lang": "en", "country": "CA", "referrer": "lmiawatch.ca",
+    {"route": "/corrections", "kind": "form", "lang": "en", "country": "CA", "referrer": "awardwatch.ca",
      "status": 200, "responses": "1"},
     {"route": "/data/feeds/:file", "kind": "feed", "lang": "en", "country": "US", "referrer": "", "status": 200,
      "responses": "36"},
@@ -59,8 +58,8 @@ COUNTS = [
 ]
 FEEDS = [
     {"feed": "", "responses": "4", "subscribers": 0},
-    {"feed": "feeds/canada/pending.xml", "responses": "30", "subscribers": 12},
-    {"feed": "feeds/prov/BC/approved.xml", "responses": "6", "subscribers": 3.0},
+    {"feed": "feeds/canada/tenders.xml", "responses": "30", "subscribers": 12},
+    {"feed": "feeds/prov/bc/awards.xml", "responses": "6", "subscribers": 3.0},
 ]
 
 
@@ -78,16 +77,12 @@ class FakeHttp:
     """Stands in for requests.Session. Answers the SQL API per day from `days`
     (day -> (kinds, counts, feeds) or (kinds, counts, feeds, audience answers);
     a day not listed has no data points; three answers stand for a day before
-    the bot flag), the Bluesky profile from `profile` and the X profile from
-    `x_profile`. `fail` replaces every SQL answer."""
+    the bot flag). `fail` replaces every SQL answer. A GET is recorded and
+    answered 404: the roll-up reads nothing but the SQL API."""
 
-    def __init__(self, days: dict | None = None, *, fail: FakeResponse | Exception | None = None,
-                 profile: FakeResponse | Exception | None = None,
-                 x_profile: FakeResponse | Exception | None = None) -> None:
+    def __init__(self, days: dict | None = None, *, fail: FakeResponse | Exception | None = None) -> None:
         self.days = {YESTERDAY: (KINDS, COUNTS, FEEDS)} if days is None else days
         self.fail = fail
-        self.profile = profile or FakeResponse(200, {"did": "did:plc:x", "handle": "lmiawatch.ca", "followersCount": 57})
-        self.x_profile = x_profile or FakeResponse(200, {"data": {"id": "1", "public_metrics": {"followers_count": 31}}})
         self.posts: list[dict] = []
         self.gets: list[dict] = []
         self.closed = False
@@ -126,10 +121,7 @@ class FakeHttp:
 
     def get(self, url, headers=None, timeout=None, params=None, auth=None):
         self.gets.append({"url": url, "headers": headers or {}, "params": params, "auth": auth})
-        reply = self.x_profile if url == vr.X_ME_URL else self.profile
-        if isinstance(reply, Exception):
-            raise reply
-        return reply
+        return FakeResponse(404, None, "not found")
 
     def close(self):
         self.closed = True
@@ -147,7 +139,7 @@ def roll(tmp_path, http: FakeHttp | None = None, **kw) -> str:
 
 @pytest.fixture(autouse=True)
 def site(monkeypatch):
-    monkeypatch.setattr(config, "SITE_URL", "https://lmiawatch.ca")
+    monkeypatch.setattr(config, "SITE_URL", "https://awardwatch.ca")
 
 
 # -- SQL ----------------------------------------------------------------------
@@ -208,12 +200,12 @@ def test_the_day_file_holds_the_total_the_kinds_every_count_and_every_feed(tmp_p
         "api": "30", "download": "4", "feed": "40", "form": "1", "hook": "2", "other": "9", "page": "120"}
     first = rows[8]
     assert (first["route"], first["kind"], first["lang"], first["country"], first["referrer"], first["status"],
-            first["responses"]) == ("/employers/:id", "page", "en", "CA", "news.example.org", "200", "70")
+            first["responses"]) == ("/organizations/:id", "page", "en", "CA", "news.example.org", "200", "70")
     feeds = {r["feed"]: (r["route"], r["kind"], r["responses"], r["subscribers"]) for r in rows if r["section"] == "feed"}
     assert feeds == {
         "": ("/data/feeds/:file", "feed", "4", "0"),
-        "feeds/canada/pending.xml": ("/data/feeds/:file", "feed", "30", "12"),
-        "feeds/prov/BC/approved.xml": ("/data/feeds/:file", "feed", "6", "3"),
+        "feeds/canada/tenders.xml": ("/data/feeds/:file", "feed", "30", "12"),
+        "feeds/prov/bc/awards.xml": ("/data/feeds/:file", "feed", "6", "3"),
     }
     assert (tmp_path / vr.ROLLED_UP).read_text(encoding="utf-8") == "2026-10-21\n"
     assert not list(tmp_path.glob("*.partial"))
@@ -244,36 +236,34 @@ def test_the_summary_gets_one_row_per_day_and_a_re_run_replaces_it_in_place(tmp_
     summary = tmp_path / vr.SUMMARY
     summary.write_text(
         ",".join(vr.SUMMARY_HEADER) + "\n"
-        "2026-10-19,100,80,10,5,1,4,0,6,50,/ 60\n"
-        "2026-10-20,110,90,10,5,1,4,0,6,55,/ 61\n", encoding="utf-8")
+        "2026-10-19,100,80,10,5,1,4,0,6,/ 60\n"
+        "2026-10-20,110,90,10,5,1,4,0,6,/ 61\n", encoding="utf-8")
     assert roll(tmp_path) == "rolled up"
     header, rows = read_csv(summary)
     assert header == vr.SUMMARY_HEADER == ["date", "responses", "pages", "api", "downloads", "forms", "feeds", "other",
-                                           "feed_subscribers", "bluesky_followers", "top_routes",
+                                           "feed_subscribers", "top_routes",
                                            "human_pages", "bot_pages", "unique_visitors", "human_visits",
                                            "human_by_country", "human_by_device", "human_by_lang", "human_by_route",
-                                           "x_followers", "employers", "records"]
+                                           "organizations", "records"]
     assert [r["date"] for r in rows] == ["2026-10-19", "2026-10-20", "2026-10-21"]
     assert rows[0]["top_routes"] == "/ 60"  # earlier rows are kept as they were
     new = rows[-1]
     assert {k: new[k] for k in vr.SUMMARY_HEADER} == {
         "date": "2026-10-21", "responses": "206", "pages": "120", "api": "30", "downloads": "4", "forms": "1",
-        "feeds": "40", "other": "11", "feed_subscribers": "15", "bluesky_followers": "57",
-        "top_routes": "/employers/:id 70; / 50; /data/feeds/:file 36; /api/stats 30; /downloads/employers.csv 4",
+        "feeds": "40", "other": "11", "feed_subscribers": "15",
+        "top_routes": "/organizations/:id 70; / 50; /data/feeds/:file 36; /api/stats 30; /downloads/organizations.csv 4",
         # A day before the bot flag: blank, never 0.
         **dict.fromkeys(vr.AUDIENCE_COLUMNS, ""),
-        # Not the last day of a month (no X reading), and no stats.json in this test.
-        "x_followers": "", "employers": "", "records": "",
+        # No stats.json in this test.
+        "organizations": "", "records": "",
     }
     assert rows[0]["human_pages"] == "" and rows[0]["unique_visitors"] == ""  # older rows read with blanks
 
-    # The same night again (a manual re-run): still one row for the day, and a
-    # follower count that could not be read this time keeps the one it had.
-    again = FakeHttp(profile=FakeResponse(503, None, "unavailable"))
-    assert roll(tmp_path, again) == "rolled up"
+    # The same night again (a manual re-run): still one row for the day.
+    assert roll(tmp_path, FakeHttp()) == "rolled up"
     _, rows = read_csv(summary)
     assert [r["date"] for r in rows] == ["2026-10-19", "2026-10-20", "2026-10-21"]
-    assert rows[-1]["bluesky_followers"] == "57" and rows[-1]["responses"] == "206"
+    assert rows[-1]["responses"] == "206"
 
 
 def test_a_summary_that_cannot_be_read_safely_is_never_replaced(tmp_path):
@@ -359,9 +349,8 @@ def test_missing_days_are_caught_up_and_empty_days_are_not_written(tmp_path):
     assert sorted(p.name for p in tmp_path.glob("2026-*.csv")) == ["2026-10-18.csv", "2026-10-21.csv"]
     assert (tmp_path / vr.ROLLED_UP).read_text(encoding="utf-8") == "2026-10-18\n2026-10-21\n"
     _, rows = read_csv(summary)
-    assert [(r["date"], r["bluesky_followers"]) for r in rows] == [
-        ("2026-10-17", ""), ("2026-10-18", ""), ("2026-10-21", "57")]
-    assert len(http.gets) == 1  # the follower count is read once, for yesterday
+    assert [r["date"] for r in rows] == ["2026-10-17", "2026-10-18", "2026-10-21"]
+    assert http.gets == []  # nothing is read but the SQL API
 
 
 def test_the_first_night_asks_for_all_three_months_analytics_engine_keeps(tmp_path):
@@ -403,7 +392,7 @@ def test_a_day_asked_for_by_hand_must_be_over_and_still_held(tmp_path):
     http = FakeHttp({oldest: (KINDS, COUNTS, FEEDS)})
     assert vr.run(tmp_path, day=oldest, env=ENV, session=http, now=NOW) == "rolled up"
     assert (tmp_path / f"{oldest.isoformat()}.csv").exists()
-    assert http.gets == []  # not yesterday, so no follower reading is attached
+    assert http.gets == []
 
 
 def test_a_malformed_account_id_is_failed_before_any_request(tmp_path):
@@ -413,68 +402,31 @@ def test_a_malformed_account_id_is_failed_before_any_request(tmp_path):
     assert http.posts == []
 
 
-# -- Bluesky ------------------------------------------------------------------
-
-
-def test_the_bluesky_follower_count_is_read_from_the_public_profile():
-    assert vr.parse_followers({"followersCount": 12, "followsCount": 3}) == 12
-    assert vr.parse_followers({"followersCount": 0}) == 0
-    for odd in ({"followersCount": "12"}, {"followersCount": -1}, {"followersCount": True},
-                {"followersCount": 1.5}, {}, [], None, "12"):
-        assert vr.parse_followers(odd) is None, odd
-
-    http = FakeHttp()
-    assert vr.bluesky_followers(http, "lmiawatch.ca") == 57
-    (get,) = http.gets
-    parts = urlsplit(get["url"])
-    assert f"{parts.scheme}://{parts.netloc}{parts.path}" == vr.BSKY_PROFILE_URL
-    assert parse_qs(parts.query) == {"actor": ["lmiawatch.ca"]}
-    assert "Authorization" not in get["headers"]
-
-    assert vr.bluesky_followers(FakeHttp(profile=FakeResponse(400, {"error": "InvalidRequest"})), "x.example") is None
-    assert vr.bluesky_followers(FakeHttp(profile=requests.Timeout("slow")), "lmiawatch.ca") is None
-    assert vr.bluesky_followers(FakeHttp(profile=FakeResponse(200, {"handle": "lmiawatch.ca"})), "lmiawatch.ca") is None
-    assert vr.bluesky_followers(FakeHttp(), "") is None
-
-
-def test_the_handle_comes_from_the_secret_else_the_site_domain(monkeypatch):
-    assert vr.bluesky_handle({"BSKY_HANDLE": " @lmiawatch.ca "}) == "lmiawatch.ca"
-    assert vr.bluesky_handle({}) == "lmiawatch.ca"
-    monkeypatch.setattr(config, "SITE_URL", "https://lmiawatch.example")
-    assert vr.bluesky_handle({}) == ""
-
-
-def test_a_bluesky_outage_never_fails_the_roll_up(tmp_path):
-    assert roll(tmp_path, FakeHttp(profile=requests.ConnectionError("down"))) == "rolled up"
-    _, rows = read_csv(tmp_path / vr.SUMMARY)
-    assert rows[-1]["bluesky_followers"] == ""
-
-
 # -- the command and the run status -------------------------------------------
 
 
 def test_the_command_exits_1_only_when_the_roll_up_failed(tmp_path, monkeypatch):
     monkeypatch.delenv(vr.TOKEN_ENV, raising=False)
-    assert cli.main(["rollup-views", "--out", str(tmp_path)]) == 0
+    assert nightly.main(["rollup-views", "--out", str(tmp_path)]) == 0
 
     fake = FakeHttp(fail=FakeResponse(500, None, "boom"))
     monkeypatch.setattr(requests, "Session", lambda: fake)
     monkeypatch.setenv(vr.TOKEN_ENV, TOKEN)
     monkeypatch.setenv(vr.ACCOUNT_ENV, ACCOUNT)
-    assert cli.main(["rollup-views", "--out", str(tmp_path)]) == 1
+    assert nightly.main(["rollup-views", "--out", str(tmp_path)]) == 1
     assert fake.closed and fake.posts
 
     good = FakeHttp({date(2026, 9, 1): (KINDS, COUNTS, FEEDS)})
     monkeypatch.setattr(requests, "Session", lambda: good)
     monkeypatch.setattr(vr, "previous_day", lambda now=None: date(2026, 9, 2))
-    assert cli.main(["rollup-views", "--out", str(tmp_path), "--day", "2026-09-01"]) == 0
+    assert nightly.main(["rollup-views", "--out", str(tmp_path), "--day", "2026-09-01"]) == 0
     assert (tmp_path / "2026-09-01.csv").exists()
 
 
 def test_the_run_status_carries_the_roll_up(tmp_path):
     db = tmp_path / "none.sqlite"
-    assert nightly.run_status(db, None, None, None, {}, views="failed")["views_rollup"] == "failed"
-    assert nightly.run_status(db, None, None, None, {})["views_rollup"] == "not run"
+    assert nightly.run_status(db, None, None, {}, views="failed")["views_rollup"] == "failed"
+    assert nightly.run_status(db, None, None, {})["views_rollup"] == "not run"
     (tmp_path / "views.txt").write_text("no token\n", encoding="utf-8")
     out = tmp_path / "status.json"
     assert nightly.main(["status", "--db", str(db), "--views-outcome", str(tmp_path / "views.txt"),
@@ -491,7 +443,7 @@ AUDIENCE = [
     {"agent": "human", "country": "", "device": "tablet", "lang": "en", "pages": "2"},
     {"agent": "bot", "country": "US", "device": "", "lang": "en", "pages": "300"},
 ]
-ROUTES = [{"route": "/employers/:id", "pages": "70"}, {"route": "/", "pages": "22"}]
+ROUTES = [{"route": "/organizations/:id", "pages": "70"}, {"route": "/", "pages": "22"}]
 FLAGGED = {"audience": AUDIENCE, "routes": ROUTES, "visitors": [{"visitors": "41", "uncoded": "0"}],
            "visits": [{"visits": "37"}]}
 
@@ -537,7 +489,7 @@ def test_a_flagged_day_fills_the_people_and_bot_columns(tmp_path):
         "human_by_country": '{"CA":80,"US":10,"unknown":2}',
         "human_by_device": '{"desktop":60,"mobile":30,"tablet":2}',
         "human_by_lang": '{"en":72,"fr":20}',
-        "human_by_route": '{"/employers/:id":70,"/":22}',
+        "human_by_route": '{"/organizations/:id":70,"/":22}',
     }
     # The existing columns are unchanged by the flag.
     assert (row["responses"], row["pages"]) == ("206", "120")
@@ -600,62 +552,29 @@ def test_values_the_worker_would_never_write_are_cleaned_before_they_are_stored(
 
 # -- readings taken on the night -----------------------------------------------
 
-X_ENV = {**ENV, "X_POST_ENABLED": "true", "X_API_KEY": "k", "X_API_SECRET": "s", "X_ACCESS_TOKEN": "t",
-         "X_ACCESS_TOKEN_SECRET": "ts"}
-MONTH_END_NOW = datetime(2026, 11, 1, 0, 40, tzinfo=timezone.utc)
-OCT31 = date(2026, 10, 31)
-
-
-def test_x_followers_are_read_once_a_month_for_the_last_day_when_x_posting_is_enabled(tmp_path):
-    http = FakeHttp({OCT31: (KINDS, COUNTS, FEEDS, FLAGGED)})
-    assert vr.run(tmp_path, env=X_ENV, session=http, now=MONTH_END_NOW, stats_path=tmp_path / "none") == "rolled up"
-    row = summary_last(tmp_path)
-    assert (row["date"], row["x_followers"], row["bluesky_followers"]) == ("2026-10-31", "31", "57")
-    (x_get,) = [g for g in http.gets if g["url"] == vr.X_ME_URL]
-    assert x_get["params"] == {"user.fields": "public_metrics"} and x_get["auth"] is not None
-
-    # Not the last day of a month, X not enabled, or no credentials: no read at all.
-    for env, now, day in ((X_ENV, NOW, YESTERDAY), ({**X_ENV, "X_POST_ENABLED": "false"}, MONTH_END_NOW, OCT31),
-                          ({**ENV, "X_POST_ENABLED": "true"}, MONTH_END_NOW, OCT31)):
-        http = FakeHttp({day: (KINDS, COUNTS, FEEDS, FLAGGED)})
-        assert vr.run(tmp_path / "other", env=env, session=http, now=now, stats_path=tmp_path / "none") == "rolled up"
-        assert not [g for g in http.gets if g["url"] == vr.X_ME_URL]
-
-
-def test_an_x_failure_leaves_the_reading_blank_and_never_fails_the_roll_up(tmp_path):
-    for n, reply in enumerate((FakeResponse(429, {"title": "Too Many Requests"}), requests.Timeout("slow"),
-                               FakeResponse(200, {"data": {"id": "1"}}))):
-        http = FakeHttp({OCT31: (KINDS, COUNTS, FEEDS, FLAGGED)}, x_profile=reply)
-        folder = tmp_path / str(n)
-        assert vr.run(folder, env=X_ENV, session=http, now=MONTH_END_NOW, stats_path=tmp_path / "none") == "rolled up"
-        assert summary_last(folder)["x_followers"] == ""
-    assert vr.parse_x_followers({"data": {"public_metrics": {"followers_count": 12}}}) == 12
-    for odd in ({"data": {"public_metrics": {"followers_count": "12"}}}, {"data": {}}, {"errors": []}, None,
-                {"data": {"public_metrics": {"followers_count": -1}}},
-                {"data": {"public_metrics": {"followers_count": True}}}):
-        assert vr.parse_x_followers(odd) is None, odd
-
 
 def test_the_site_counts_come_from_tonights_stats_and_go_on_yesterdays_row_only(tmp_path):
     stats = tmp_path / "stats.json"
-    stats.write_text(json.dumps({"counts": {"employers": 166497, "approved_records": 433083, "refused_records": 41319,
-                                            "pending": 4000}}), encoding="utf-8")
+    stats.write_text(json.dumps({"counts": {"organizations": 91234, "awards": 60000, "history": 300000,
+                                            "contracts": 1100000, "grants": 400000, "lobbying": 150000,
+                                            "tenders_open": 1200}}), encoding="utf-8")
     days = {date(2026, 10, 20): (KINDS, COUNTS, FEEDS, FLAGGED), YESTERDAY: (KINDS, COUNTS, FEEDS, FLAGGED)}
     summary = tmp_path / vr.SUMMARY
     # A summary written before the newer columns.
-    summary.write_text(",".join(vr.SUMMARY_HEADER[:11]) + "\n2026-10-19,1,1,0,0,0,0,0,0,,/ 1\n", encoding="utf-8")
+    summary.write_text(",".join(vr.SUMMARY_HEADER[:10]) + "\n2026-10-19,1,1,0,0,0,0,0,0,/ 1\n", encoding="utf-8")
     assert roll(tmp_path, FakeHttp(days), stats_path=stats) == "rolled up"
     _, rows = read_csv(summary)
-    assert [(r["date"], r["employers"], r["records"]) for r in rows] == [
-        ("2026-10-19", "", ""), ("2026-10-20", "", ""), ("2026-10-21", "166497", "474402")]
+    assert [(r["date"], r["organizations"], r["records"]) for r in rows] == [
+        ("2026-10-19", "", ""), ("2026-10-20", "", ""), ("2026-10-21", "91234", "2010000")]
 
     # Rolled up again without a readable stats file: the readings stay.
     assert roll(tmp_path, FakeHttp(days), stats_path=tmp_path / "gone.json") == "rolled up"
     row = summary_last(tmp_path)
-    assert (row["employers"], row["records"]) == ("166497", "474402")
+    assert (row["organizations"], row["records"]) == ("91234", "2010000")
 
     assert vr.site_counts(tmp_path / "gone.json") == {}
-    for bad in ('{"counts": {"employers": "1", "approved_records": 1, "refused_records": 1}}', "[]", "not json",
-                '{"counts": {"employers": 1}}'):
+    whole = {"organizations": 1, "awards": 1, "history": 1, "contracts": 1, "grants": 1, "lobbying": 1}
+    for bad in (json.dumps({"counts": {**whole, "organizations": "1"}}), json.dumps({"counts": {**whole, "grants": -1}}),
+                "[]", "not json", '{"counts": {"organizations": 1}}'):
         stats.write_text(bad, encoding="utf-8")
         assert vr.site_counts(stats) == {}, bad

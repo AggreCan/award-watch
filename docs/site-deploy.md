@@ -5,10 +5,10 @@ pages (a wording fix, a layout fix, a page bug) in a few minutes, without
 running the nightly refresh. It ships the Worker from `main` together with
 the data the site already serves, and it is built so that it cannot write,
 delete or change that data. The data here means the R2 bucket
-`awardwatch-data` (backups, `static.tar.gz`, `downloads/`, `mirror/`,
-`views/`, `status.json`), the two D1 databases (`award-watch` for the forms,
-`awardwatch-search` for search), and the data files the Worker serves as
-assets (`site/public/data`).
+`awardwatch-data` (backups, `static.tar.gz`, `downloads/`, `review/`,
+`views/`, `status.json`), the D1 database `award-watch` (the forms; the
+hosted search database `awardwatch-search` will join it), and the data files
+the Worker serves as assets (`site/public/data`).
 
 ## What it is for
 
@@ -37,18 +37,17 @@ change sooner.
 3. It downloads `static.tar.gz` from R2, a read. The nightly saves that
    archive only after a deploy that passed its live check, so it should hold
    the data the site serves. `python -m awardwatch_pipeline.nightly
-   site-bundle-check` proves it: it fetches `/data/stats.json`,
-   `/data/search/facets.json` and `/data/search/first.json` from the live
-   site and compares each with the archive's copy as parsed JSON. stats.json
-   lists the newest runs with their times, so an archive from any other
-   night fails. Only when all three match is the archive copied to
-   `site/public/data`.
+   site-bundle-check` proves it: it fetches `/data/stats.json` and
+   `/data/tenders/open.json` from the live site and compares each with the
+   archive's copy as parsed JSON. stats.json lists the newest runs with
+   their times, so an archive from any other night fails. Only when both
+   match is the archive copied to `site/public/data`.
 4. It records the Worker version serving traffic (`wrangler deployments
-   status`), compares the three files once more (now from
+   status`), compares the two files once more (now from
    `site/public/data`) and keeps the live stats.json byte for byte, then
    runs `wrangler deploy` from `site/`. After the deploy it runs the
-   nightly's smoke test (home, search, data and one profile) and the bundle
-   check again: the three files from the live site, and the archive's
+   nightly's smoke test (home, open tenders, data and one profile) and the
+   bundle check again: the two files from the live site, and the archive's
    stats.json against the copy kept before the deploy. The run rolls the
    Worker back to the recorded version when the deploy failed, when the
    smoke test found the Worker answering 500 to 599, or when any comparison
@@ -133,7 +132,7 @@ to roll back.
    | Zone | Workers Routes | Edit | the two custom domains in `site/wrangler.jsonc`, sent with every deploy |
 
    Account resources: the project account only. Zone resources: the
-   `lmiawatch.ca` zone only. No IP filtering (the GitHub runners' addresses
+   `awardwatch.ca` zone only. No IP filtering (the GitHub runners' addresses
    change). No end date: the monthly expiry checks of the nightly run do not
    read this token, so nothing would warn before it lapsed.
 3. GitHub, the repository, Settings, Secrets and variables, Actions, New
@@ -161,7 +160,7 @@ curl -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/vnd.github+json" \
   https://api.github.com/repos/OWNER/REPO/actions/workflows/deploy-site.yml/dispatches \
-  -d '{"ref": "main", "inputs": {"reason": "fix the Trends heading"}}'
+  -d '{"ref": "main", "inputs": {"reason": "fix the tenders page heading"}}'
 ```
 
 GitHub answers 204 and the run appears on the Actions tab. A run started

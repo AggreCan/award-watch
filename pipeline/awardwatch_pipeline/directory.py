@@ -1,42 +1,35 @@
-"""The employer directory and related employers: an inbound link to every profile.
+"""The organization directory: an inbound link to every profile.
 
-Why: a profile's only links were its sitemap entry and, for a few hundred
-employers, a place page's list of recent records, so search engines had
-crawled a few thousand of the 160,000 profiles. The nightly export now writes
-two kinds of link to them:
+Why: a profile's other links come from list pages (awards, rankings, buyer and
+category pages) that show the largest and the newest, so most organizations
+would be reachable only through the sitemap. The directory lists every one,
+A to Z, in one directory per province or territory, PAGE_SIZE to a page, at
+/organizations/directory/<code> (page 1) and /organizations/directory/<code>/<n>.
+Two more directories hold the rest: "xx" for an organization whose main
+address is outside Canada and "un" for one whose records carry no usable
+place (no country, or Canada with no province).
 
-- the directory: for each province and territory with a page at /places/<pp>,
-  an A to Z list of every employer with a profile there, PAGE_SIZE to a page,
-  at /places/<pp>/employers (page 1) and /places/<pp>/employers/<n>.
-  Employers with a head office outside Canada (province XX) or with no
-  province share one more, /places/other/employers. The province is the
-  employer's own (employers.province), the one its id was made with.
-- related employers on each profile (related()): up to RELATED_MAX other
-  employers, first those in the same city (province and city folded as the
-  place pages fold it), then those in the same province whose most common
-  occupation code is the same. Within each group the picks are the employers
-  nearest in record count, alternately one with more records and one with
-  fewer. Taking the busiest employers of a city instead would send every
-  profile's links to the same few: on the database of 2026-10-17 that linked
-  21,370 of 168,440 profiles (one received 10,892 links), against 165,593
-  (at most 14 each) for the nearest.
+The directory an organization files under is its own main place
+(organizations.country and province, the ones seen most often on its
+records); an organization has one profile wherever it was seen.
 
 Output tree (under data/out/static):
-  directory/index.json        every directory: code, employer count, page count, the date it last changed
-  directory/<pp>/index.json   one directory: its counts, each page's first and last name, and the page
-                              on which each initial starts
-  directory/<pp>/<n>.json     page n (from 1): rows of id, name, city and record count
+  directory/index.json        every directory: code, organization count, page count
+  directory/<code>/index.json one directory: its counts, each page's first and last name, the page
+                              on which each initial starts, the date it last changed
+  directory/<code>/<n>.json   page n (from 1): rows of id, name, city, record count and last record date
 
-A row's record count is what the profile lists: its Job Bank postings plus its
-ESDC list rows (the two lists write_profiles exports, counted the same way).
-Rows sort by the normalized name (employers.norm_name, from which the id is
-made, so it does not change night to night), then the id, so a page's rows
-move only when an employer is added or leaves, and a page file holds only its
-rows, so the totals changing does not rewrite every page.
+A row's record count is what the profile counts: award notices, contract
+history records, published contracts, grants and lobbying communications
+(organizations.n_*). Rows sort by the normalized name (organizations.norm_name,
+from which the id is made, so it does not change night to night), then the id,
+so a page's rows move only when an organization arrives or leaves, and a page
+file holds only its rows, so a count changing elsewhere does not rewrite every
+page.
 
-Lastmod: the table directory_pages keeps each page's hash and the data date
-on which it last changed; the sitemap lists every page with that date. A
-province with no employers gets an index with no pages and no sitemap entry.
+Lastmod: the table directory_pages keeps each page's hash and the data date on
+which it last changed; the sitemap lists every page with that date. A
+directory with no organizations gets an index with no pages and no sitemap entry.
 """
 
 from __future__ import annotations
@@ -45,27 +38,31 @@ import hashlib
 import json
 import re
 import sqlite3
-from collections import Counter, defaultdict
 from pathlib import Path
 
 from .db import today_iso
-from .places import PROVINCES, slugify
+from .normalize import PROVINCE_CODES
 
 PAGE_SIZE = 200
-RELATED_MAX = 5
-# The directory of employers with a head office outside Canada or no province.
-OTHER = "other"
-CODES = [p.lower() for p in PROVINCES] + [OTHER]
-NOC_RE = re.compile(r"^\d{4,5}$")
+PROVINCES = sorted(PROVINCE_CODES)
+# An address outside Canada, and a record with no usable address; the site's
+# constants.ts writes the same codes in upper case (XX, UN).
+OUTSIDE = "xx"
+UNKNOWN = "un"
+CODES = [p.lower() for p in PROVINCES] + [OUTSIDE, UNKNOWN]
 
 
-def code_for(province: str | None) -> str:
-    """The directory an employer's province puts it in."""
-    return province.lower() if province in PROVINCES else OTHER
+def code_for(country: str | None, province: str | None) -> str:
+    """The directory an organization's main place puts it in."""
+    if province in PROVINCE_CODES and country in (None, "", "CA"):
+        return province.lower()
+    if country and country != "CA":
+        return OUTSIDE
+    return UNKNOWN
 
 
 def page_path(code: str, page: int) -> str:
-    return f"/places/{code}/employers" if page == 1 else f"/places/{code}/employers/{page}"
+    return f"/organizations/directory/{code}" if page == 1 else f"/organizations/directory/{code}/{page}"
 
 
 def initial(norm: str) -> str:
@@ -74,57 +71,23 @@ def initial(norm: str) -> str:
     return first.upper() if "a" <= first <= "z" else "#"
 
 
-class Model:
-    """Every employer with its directory, record count and most common occupation code, built once per export."""
-
-    def __init__(self, conn: sqlite3.Connection) -> None:
-        self.employers: dict[str, sqlite3.Row] = {
-            r["id"]: r for r in conn.execute("SELECT id, display_name, norm_name, province, city FROM employers")}
-        self.records: Counter = Counter()
-        for table in ("esdc_records", "jobbank_postings"):
-            for eid, n in conn.execute(f"SELECT employer_id, COUNT(*) FROM {table} GROUP BY employer_id"):
-                self.records[eid] += n
-        codes: dict[str, Counter] = defaultdict(Counter)
-        for table in ("esdc_records", "jobbank_postings"):
-            for eid, noc, n in conn.execute(
-                    f"SELECT employer_id, noc_code, COUNT(*) FROM {table} WHERE noc_code IS NOT NULL GROUP BY employer_id, noc_code"):
-                if NOC_RE.match(noc.strip()):
-                    codes[eid][noc.strip()] += n
-        # Ties go to a NOC 2021 code (five digits, the newer classification),
-        # then to the lower code, so the choice does not change between runs.
-        self.noc: dict[str, str] = {
-            eid: min(c.items(), key=lambda kv: (-kv[1], -len(kv[0]), kv[0]))[0] for eid, c in codes.items()}
-
-    def order(self, eid: str) -> tuple[str, str]:
-        return (self.employers[eid]["norm_name"] or "", eid)
-
-    def rank(self, eid: str) -> tuple[int, str, str]:
-        """Most records first, then the directory's order."""
-        return (-self.records[eid], *self.order(eid))
-
-
-# -- the directory ---------------------------------------------------------------
-
-
-def pages(m: Model) -> dict[str, list[list[dict]]]:
-    """Each directory's pages of rows, for every code (an empty list where it has no employer)."""
-    members: dict[str, list[str]] = {code: [] for code in CODES}
-    for eid, e in m.employers.items():
-        members[code_for(e["province"])].append(eid)
+def pages(conn: sqlite3.Connection) -> tuple[dict[str, list[list[dict]]], dict[str, str]]:
+    """Each directory's pages of rows (an empty list where it has no organization), and each id's normalized name."""
+    members: dict[str, list[tuple[str, str, dict]]] = {code: [] for code in CODES}
+    norms: dict[str, str] = {}
+    for r in conn.execute(
+        "SELECT id, display_name, norm_name, country, province, city, last_seen, "
+        "n_awards + n_history + n_contracts + n_grants + n_lobbying AS n_records FROM organizations"
+    ):
+        norms[r["id"]] = r["norm_name"] or ""
+        row = {"id": r["id"], "name": r["display_name"], "city": r["city"], "n_records": r["n_records"] or 0,
+               "last_seen": r["last_seen"]}
+        members[code_for(r["country"], r["province"])].append((r["norm_name"] or "", r["id"], row))
     out: dict[str, list[list[dict]]] = {}
-    for code, ids in members.items():
-        ids.sort(key=m.order)
-        rows = []
-        for eid in ids:
-            e = m.employers[eid]
-            row = {"id": eid, "name": e["display_name"], "city": e["city"], "records": m.records[eid]}
-            # The other directory mixes head offices outside Canada with
-            # employers whose records give no province; the row says which.
-            if code == OTHER:
-                row["prov"] = e["province"]
-            rows.append(row)
+    for code, items in members.items():
+        rows = [row for _, _, row in sorted(items, key=lambda t: (t[0], t[1]))]
         out[code] = [rows[i:i + PAGE_SIZE] for i in range(0, len(rows), PAGE_SIZE)]
-    return out
+    return out, norms
 
 
 def page_hash(rows: list[dict]) -> str:
@@ -157,11 +120,10 @@ def _record(conn: sqlite3.Connection, written: dict[str, tuple[str, int, str]], 
     return dates
 
 
-def write_all(conn: sqlite3.Connection, out: Path, data_as_of: str | None, m: Model | None = None) -> dict[str, int]:
-    """Write directory/ under `out` and record each page in the ledger; returns counts for the run log."""
-    m = m or Model(conn)
+def write_all(conn: sqlite3.Connection, out: Path, data_as_of: str | None) -> dict[str, int]:
+    """Write directory/ under out and record each page in the ledger; returns counts for the run log."""
     today = (data_as_of or "")[:10] if re.match(r"\d{4}-\d{2}-\d{2}", data_as_of or "") else today_iso()
-    by_code = pages(m)
+    by_code, norms = pages(conn)
     written: dict[str, tuple[str, int, str]] = {}
     for code, chunks in by_code.items():
         for n, rows in enumerate(chunks, start=1):
@@ -173,23 +135,23 @@ def write_all(conn: sqlite3.Connection, out: Path, data_as_of: str | None, m: Mo
         letters: list[list] = []
         for n, rows in enumerate(chunks, start=1):
             for row in rows:
-                letter = initial(m.employers[row["id"]]["norm_name"] or "")
-                if not letters or all(letter != have for have, _ in letters):
+                letter = initial(norms[row["id"]])
+                if all(letter != have for have, _ in letters):
                     letters.append([letter, n])
         changed = max((dates[page_path(code, n)] for n in range(1, len(chunks) + 1)), default=None)
-        employers = sum(len(rows) for rows in chunks)
+        organizations = sum(len(rows) for rows in chunks)
         _dump(out / "directory" / code / "index.json", {
             "code": code,
-            "employers": employers,
+            "organizations": organizations,
             "pages": len(chunks),
             "page_size": PAGE_SIZE,
             "ranges": [[rows[0]["name"], rows[-1]["name"]] for rows in chunks],
             "letters": letters,
             "updated": changed,
         })
-        summary.append({"code": code, "employers": employers, "pages": len(chunks), "updated": changed})
+        summary.append({"code": code, "organizations": organizations, "pages": len(chunks), "updated": changed})
     _dump(out / "directory" / "index.json", {"page_size": PAGE_SIZE, "directories": summary})
-    return {"directory_pages": len(written), "directory_employers": sum(s["employers"] for s in summary)}
+    return {"directory_pages": len(written), "directory_organizations": sum(s["organizations"] for s in summary)}
 
 
 def sitemap_entries(conn: sqlite3.Connection) -> list[tuple[str, str | None]]:
@@ -198,65 +160,3 @@ def sitemap_entries(conn: sqlite3.Connection) -> list[tuple[str, str | None]]:
     rows = conn.execute("SELECT path, code, page, changed_on FROM directory_pages").fetchall()
     rows = sorted(rows, key=lambda r: (order.get(r["code"], len(order)), r["code"], r["page"]))
     return [(r["path"], r["changed_on"]) for r in rows]
-
-
-# -- related employers -----------------------------------------------------------
-
-
-def _nearest(group: list[str], at: int, want: int, taken: set[str]) -> list[str]:
-    """Up to `want` members of a ranked group nearest to position `at`, one above, then one below, skipping `taken`."""
-    out: list[str] = []
-    step = 1
-    while len(out) < want and (at - step >= 0 or at + step < len(group)):
-        for k in (at - step, at + step):
-            if 0 <= k < len(group) and group[k] not in taken and len(out) < want:
-                out.append(group[k])
-        step += 1
-    return out
-
-
-def related(m: Model) -> dict[str, list[dict]]:
-    """Each employer's related employers: id and name, and the city when it differs from the employer's.
-
-    The city and occupation groups are built once, each ranked once, so an
-    employer's picks are found by position, without a query per employer.
-    """
-    cities: dict[tuple, list[str]] = defaultdict(list)
-    occupations: dict[tuple, list[str]] = defaultdict(list)
-    city_key: dict[str, tuple] = {}
-    for eid, e in m.employers.items():
-        slug = slugify(e["city"])
-        if slug:
-            city_key[eid] = (e["province"], slug)
-            cities[city_key[eid]].append(eid)
-        if eid in m.noc:
-            occupations[(e["province"], m.noc[eid])].append(eid)
-    position: dict[tuple, dict[str, int]] = {}
-    for groups, kind in ((cities, "city"), (occupations, "noc")):
-        for key, group in groups.items():
-            group.sort(key=m.rank)
-            position[(kind, *key)] = {eid: i for i, eid in enumerate(group)}
-    out: dict[str, list[dict]] = {}
-    for eid, e in m.employers.items():
-        taken = {eid}
-        picks: list[str] = []
-        for kind, key, groups in (("city", city_key.get(eid), cities), ("noc", (e["province"], m.noc.get(eid)), occupations)):
-            if key is None or key not in groups or len(picks) >= RELATED_MAX:
-                continue
-            group = groups[key]
-            near = _nearest(group, position[(kind, *key)][eid], RELATED_MAX - len(picks), taken)
-            near.sort(key=m.rank)
-            picks += near
-            taken.update(near)
-        if not picks:
-            continue
-        own = city_key.get(eid, (None, None))[1]
-        rows = []
-        for rid in picks:
-            r = m.employers[rid]
-            row = {"id": rid, "name": r["display_name"]}
-            if r["city"] and slugify(r["city"]) != own:
-                row["city"] = r["city"]
-            rows.append(row)
-        out[eid] = rows
-    return out

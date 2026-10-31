@@ -11,8 +11,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 import pytest
 
-from awardwatch_pipeline import nightly, resilience
-from awardwatch_pipeline.db import connect, log_run, upsert_employer
+from awardwatch_pipeline import nightly, organizations, resilience
+from awardwatch_pipeline.db import connect, log_run
 
 TODAY = date(2026, 10, 22)
 NOW = datetime(2026, 10, 22, 0, 50, tzinfo=timezone.utc)
@@ -117,11 +117,11 @@ def test_gate_command_writes_its_output_and_never_fails(tmp_path, monkeypatch):
 def test_a_status_written_by_a_clean_run_lets_the_gate_skip(tmp_path):
     db = tmp_path / "awardwatch.sqlite"
     connect(db).close()
-    status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, "posted",
+    status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []},
                                 {"restore": "success", "pipeline": "success", "deploy": "success"}, now=NOW,
                                 smoke={"verdict": "ok", "detail": "4 pages answered 200"})
     assert resilience.gate(status, TODAY)[0] is True
-    rolled = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, "posted", {"deploy": "success"}, now=NOW,
+    rolled = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"}, now=NOW,
                                 smoke={"verdict": "broken", "detail": "/ answered 500 and 500"}, rollback="rolled back")
     assert resilience.gate(rolled, TODAY)[0] is False
 
@@ -174,9 +174,9 @@ def test_live_version_command(tmp_path, monkeypatch):
 
 # -- smoke test ---------------------------------------------------------------
 
-BASE = "https://lmiawatch.example"
+BASE = "https://awardwatch.example"
 DATA_DATE = "2026-10-22"
-PATHS = ["/", "/search", "/data", "/employers/emp-a000000005"]
+PATHS = ["/", "/tenders", "/data", "/organizations/org-a000000005"]
 
 
 def page(date_text=DATA_DATE, status=200, headers=None):
@@ -200,17 +200,17 @@ def test_a_healthy_site_is_ok_without_a_second_try():
     result, waits = run_smoke(http)
     assert (result["verdict"], waits) == ("ok", [20])
     assert [u for u, _ in http.calls] == [BASE + p for p in PATHS]
-    assert all(h["User-Agent"].startswith("LMIAWatch/") for _, h in http.calls)
+    assert all(h["User-Agent"].startswith("AwardWatch/") for _, h in http.calls)
 
 
 def test_a_page_answering_5xx_twice_is_broken():
-    http = site(**{"/search": [Resp(500, "Error 1101 Worker threw exception"), Resp(502, "bad gateway")]})
+    http = site(**{"/tenders": [Resp(500, "Error 1101 Worker threw exception"), Resp(502, "bad gateway")]})
     result, waits = run_smoke(http)
     assert result["verdict"] == "broken"
-    assert result["detail"] == "/search answered 500 and 502"
+    assert result["detail"] == "/tenders answered 500 and 502"
     # The second try waits 30 seconds and asks again only for the page that failed.
     assert waits == [20, 30]
-    assert [u for u, _ in http.calls].count(BASE + "/search") == 2 and len(http.calls) == 5
+    assert [u for u, _ in http.calls].count(BASE + "/tenders") == 2 and len(http.calls) == 5
 
 
 def test_a_5xx_that_recovers_is_ok():
@@ -236,7 +236,7 @@ def test_the_edge_refusing_the_runner_is_unverifiable_never_broken(answer):
 def test_a_missing_data_date_or_a_strange_answer_is_unverifiable():
     stale, _ = run_smoke(site(**{"/data": page("2026-10-21")}))
     assert stale["verdict"] == "unverifiable" and "/data: 200 without the data date 2026-10-22" in stale["detail"]
-    lost, _ = run_smoke(site(**{"/employers/emp-a000000005": Resp(404, "not found")}))
+    lost, _ = run_smoke(site(**{"/organizations/org-a000000005": Resp(404, "not found")}))
     assert lost["verdict"] == "unverifiable" and "404" in lost["detail"]
     down, _ = run_smoke(site(**{"/": ConnectionError("no route to host")}))
     assert down["verdict"] == "unverifiable" and "no answer (ConnectionError)" in down["detail"]
@@ -244,22 +244,24 @@ def test_a_missing_data_date_or_a_strange_answer_is_unverifiable():
     undated, _ = run_smoke(site(), data_date=None)
     assert undated["verdict"] == "unverifiable"
     # One 5xx and one timeout is not twice 5xx.
-    mixed, _ = run_smoke(site(**{"/search": [Resp(500), TimeoutError("slow")]}))
+    mixed, _ = run_smoke(site(**{"/tenders": [Resp(500), TimeoutError("slow")]}))
     assert mixed["verdict"] == "unverifiable"
 
 
-def test_smoke_paths_take_one_well_formed_employer_from_stats():
-    stats = {"top_approvals": [{"employer_id": "../../admin"}, {"employer_id": "emp-a000000005"}, {"employer_id": "emp-b"}]}
-    assert resilience.smoke_paths(stats) == ["/", "/search", "/data", "/employers/emp-a000000005"]
-    assert resilience.smoke_paths(None) == ["/", "/search", "/data"]
-    assert resilience.smoke_paths({"top_approvals": "x"}) == ["/", "/search", "/data"]
+def test_smoke_paths_take_one_well_formed_organization_from_stats():
+    stats = {"top_organizations_year": [{"id": "../../admin"}, {"id": "org-A000000005"}, {"id": "org-a000000005"},
+                                        {"id": "org-b"}]}
+    assert resilience.smoke_paths(stats) == ["/", "/tenders", "/data", "/organizations/org-a000000005"]
+    assert resilience.smoke_paths(None) == ["/", "/tenders", "/data"]
+    assert resilience.smoke_paths({"top_organizations_year": "x"}) == ["/", "/tenders", "/data"]
+    assert resilience.smoke_paths({"top_organizations_year": []}) == ["/", "/tenders", "/data"]
 
 
 def test_smoke_command_writes_the_verdict(tmp_path, monkeypatch):
     gh = tmp_path / "gh_output"
     monkeypatch.setenv("GITHUB_OUTPUT", str(gh))
     stats = tmp_path / "stats.json"
-    stats.write_text(json.dumps({"data_as_of": DATA_DATE, "top_approvals": [{"employer_id": "emp-a000000005"}]}))
+    stats.write_text(json.dumps({"data_as_of": DATA_DATE, "top_organizations_year": [{"id": "org-a000000005"}]}))
     http = site(**{"/data": [Resp(500), Resp(500)]})
     monkeypatch.setattr(nightly, "_session", lambda: http)
     monkeypatch.setattr(resilience.time, "sleep", lambda s: None)
@@ -318,10 +320,10 @@ class FakeR2:
         return Resp(404)
 
 
-def make_db(path, employers=3):
+def make_db(path, organizations_n=3):
     conn = connect(path)
-    for i in range(employers):
-        upsert_employer(conn, f"Employer {i} Ltd", "BC", source="jobbank", now="2026-10-18T00:00:00Z")
+    for i in range(organizations_n):
+        organizations.upsert(conn, f"Supplier {i} Ltd", source="awards", province="BC", now="2026-10-18T00:00:00Z")
     conn.commit()
     conn.close()
 
@@ -334,9 +336,9 @@ def download(folder, key, *, body=None, exit_code=0, log=""):
     (folder / f"{key}.log").write_text(log, encoding="utf-8")
 
 
-def snapshot_bytes(tmp_path, employers):
-    src = tmp_path / f"src-{employers}.sqlite"
-    make_db(src, employers)
+def snapshot_bytes(tmp_path, n):
+    src = tmp_path / f"src-{n}.sqlite"
+    make_db(src, n)
     return gzip.compress(src.read_bytes())
 
 
@@ -363,10 +365,54 @@ def test_both_nightly_backups_missing_restores_the_newest_weekly_snapshot(tmp_pa
     assert ok and record["source"] == "weekly"
     assert record["weekly_key"] == "backups/weekly/db-slot-4.sqlite.gz"
     assert record["weekly_uploaded"] == "2026-10-18T00:51:30+00:00"
-    assert record["counts"]["employers"] == 5
+    assert record["counts"]["organizations"] == 5
     # The listing followed its cursor, and every call carried the token in the header only.
     assert sum(1 for u, _ in fake.calls if urlsplit(u).path == OBJECTS) == 3
     assert all(h["Authorization"] == f"Bearer {DEPLOY_TOKEN}" and DEPLOY_TOKEN not in u for u, h in fake.calls)
+
+
+def weekly_set(tmp_path, slot, n, uploaded, part_bytes=700):
+    """The objects of a weekly snapshot saved in parts: each part, then the manifest (its time is the set's)."""
+    gz = snapshot_bytes(tmp_path, n)
+    work = tmp_path / f"set-{slot}"
+    work.mkdir()
+    (work / "whole.gz").write_bytes(gz)
+    base = f"db-slot-{slot}.sqlite.gz"
+    names = nightly.split_parts(work / "whole.gz", work, base, part_bytes)
+    objects = {f"backups/weekly/{name}": ((work / name).read_bytes(), uploaded) for name in names}
+    objects[f"backups/weekly/{base}.parts"] = ((work / f"{base}.parts").read_bytes(), uploaded)
+    return objects, names
+
+
+def test_a_weekly_snapshot_in_parts_is_found_by_its_manifest_and_joined(tmp_path):
+    folder = tmp_path / "restore"
+    both_missing(folder)
+    objects, names = weekly_set(tmp_path, 5, 6, "2026-10-25T00:51:30Z")
+    assert len(names) >= 2
+    objects["backups/weekly/db-slot-4.sqlite.gz"] = (snapshot_bytes(tmp_path, 4), "2026-10-18T00:51:30Z")
+    fake = FakeR2(objects)
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(fake))
+    assert ok and record["source"] == "weekly" and record["counts"]["organizations"] == 6
+    assert record["weekly_key"] == "backups/weekly/db-slot-5.sqlite.gz.parts"
+    downloaded = [unquote(urlsplit(u).path[len(OBJECTS) + 1:]) for u, _ in fake.calls if urlsplit(u).path != OBJECTS]
+    assert downloaded == ["backups/weekly/db-slot-5.sqlite.gz.parts", *(f"backups/weekly/{n}" for n in names)]
+
+
+def test_a_weekly_set_with_a_damaged_part_stops_the_run(tmp_path):
+    folder = tmp_path / "restore"
+    both_missing(folder)
+    objects, names = weekly_set(tmp_path, 5, 6, "2026-10-25T00:51:30Z")
+    body, when = objects[f"backups/weekly/{names[0]}"]
+    objects[f"backups/weekly/{names[0]}"] = (b"x" + body[1:], when)
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(FakeR2(objects)))
+    assert not ok and f"{names[0]} does not match its manifest" in record["message"]
+    assert not (tmp_path / "awardwatch.sqlite").exists()
+    # A part the manifest lists but the bucket lacks: R2 answers 404, so the set is not whole.
+    (tmp_path / "again").mkdir()
+    objects, names = weekly_set(tmp_path / "again", 6, 6, "2026-10-25T00:51:30Z")
+    del objects[f"backups/weekly/{names[-1]}"]
+    ok, record = nightly.restore_record(folder, tmp_path / "awardwatch.sqlite", r2(FakeR2(objects)))
+    assert not ok and "404" in record["message"]
 
 
 def test_both_nightly_backups_damaged_restores_the_weekly_snapshot(tmp_path):
@@ -375,7 +421,7 @@ def test_both_nightly_backups_damaged_restores_the_weekly_snapshot(tmp_path):
     download(folder, nightly.PREVIOUS, body=b"<html>oops</html>")
     fake = FakeR2({"backups/weekly/db-slot-4.sqlite.gz": (snapshot_bytes(tmp_path, 3), "2026-10-18T00:51:30Z")})
     ok, source, message, counts = nightly.restore(folder, tmp_path / "awardwatch.sqlite", r2(fake))
-    assert (ok, source, counts["employers"]) == (True, "weekly", 3)
+    assert (ok, source, counts["organizations"]) == (True, "weekly", 3)
     assert "awardwatch.sqlite.gz: not a complete gzip file" in message
 
 
@@ -474,7 +520,7 @@ def test_restore_command_reads_the_weekly_snapshots_with_the_runs_token(tmp_path
 
 VERIFY_USER = f"{resilience.API}/user/tokens/verify"
 VERIFY_ACCOUNT = f"{resilience.API}/accounts/{ACCOUNT}/tokens/verify"
-REGISTRAR = f"{resilience.API}/accounts/{ACCOUNT}/registrar/domains/lmiawatch.ca"
+REGISTRAR = f"{resilience.API}/accounts/{ACCOUNT}/registrar/domains/awardwatch.ca"
 FIRST = date(2026, 11, 1)
 FIRST_NOW = datetime(2026, 11, 1, 0, 55, tzinfo=timezone.utc)
 
@@ -512,7 +558,7 @@ ENV = {"CLOUDFLARE_API_TOKEN": DEPLOY_TOKEN, "CLOUDFLARE_ANALYTICS_TOKEN": ANALY
 def test_checks_run_on_the_first_day_of_a_month_only():
     assert resilience.checks_due(FIRST) and not resilience.checks_due(TODAY)
     # No request at all on another day.
-    assert resilience.run_checks(TODAY, ENV, None, domain="lmiawatch.ca") == {"due": False, "date": "2026-10-22", "items": []}
+    assert resilience.run_checks(TODAY, ENV, None, domain="awardwatch.ca") == {"due": False, "date": "2026-10-22", "items": []}
 
 
 def test_tokens_and_domain_far_from_expiry_are_ok_and_a_missing_permission_is_unknown():
@@ -521,7 +567,7 @@ def test_tokens_and_domain_far_from_expiry_are_ok_and_a_missing_permission_is_un
         (ANALYTICS_TOKEN, VERIFY_USER): verified(),
         (DEPLOY_TOKEN, REGISTRAR): refused(),
     })
-    result = resilience.run_checks(FIRST, ENV, api, domain="lmiawatch.ca", now=FIRST_NOW)
+    result = resilience.run_checks(FIRST, ENV, api, domain="awardwatch.ca", now=FIRST_NOW)
     assert result["deploy_token"] == {"status": "active", "expires_on": "2027-06-01T00:00:00+00:00", "days_left": 211, "state": "ok"}
     assert result["analytics_token"] == {"status": "active", "expires_on": None, "state": "ok"}
     assert result["domain"]["state"] == "unknown" and "lacks the permission" in result["domain"]["detail"]
@@ -535,12 +581,12 @@ def test_a_token_or_domain_close_to_expiry_or_a_token_not_active_is_an_item():
         (DEPLOY_TOKEN, REGISTRAR): Resp(200, json_data={"success": True, "result": {
             "expires_at": "2026-11-25T12:00:00Z", "auto_renew": False}}),
     })
-    result = resilience.run_checks(FIRST, ENV, api, domain="lmiawatch.ca", now=FIRST_NOW)
+    result = resilience.run_checks(FIRST, ENV, api, domain="awardwatch.ca", now=FIRST_NOW)
     assert [result[k]["state"] for k in ("deploy_token", "analytics_token", "domain")] == ["expiring", "inactive", "expiring"]
     assert result["items"] == [
         "The deploy token (CLOUDFLARE_API_TOKEN) expires 2026-11-20 (18 days): make a new one and replace the secret",
         "The analytics token (CLOUDFLARE_ANALYTICS_TOKEN) is disabled, not active",
-        "The domain lmiawatch.ca expires 2026-11-25 (24 days); auto-renew is off",
+        "The domain awardwatch.ca expires 2026-11-25 (24 days); auto-renew is off",
     ]
 
 
@@ -549,7 +595,7 @@ def test_an_account_owned_token_is_verified_at_the_account_address():
         (DEPLOY_TOKEN, VERIFY_USER): refused(1000, "Invalid API Token", 401),
         (DEPLOY_TOKEN, VERIFY_ACCOUNT): verified(expires="2027-01-01T00:00:00Z"),
     })
-    result = resilience.run_checks(FIRST, {**ENV, "CLOUDFLARE_ANALYTICS_TOKEN": ""}, api, domain="lmiawatch.ca", now=FIRST_NOW)
+    result = resilience.run_checks(FIRST, {**ENV, "CLOUDFLARE_ANALYTICS_TOKEN": ""}, api, domain="awardwatch.ca", now=FIRST_NOW)
     assert result["deploy_token"]["state"] == "ok"
     assert result["analytics_token"] == {"state": "not set"}
 
@@ -561,7 +607,7 @@ def test_checks_that_get_no_readable_answer_are_unknown_and_name_no_token():
         (ANALYTICS_TOKEN, VERIFY_USER): Resp(500, "oops"),
         (DEPLOY_TOKEN, REGISTRAR): Resp(200, json_data={"success": True, "result": {"auto_renew": True}}),
     })
-    result = resilience.run_checks(FIRST, ENV, api, domain="lmiawatch.ca", now=FIRST_NOW)
+    result = resilience.run_checks(FIRST, ENV, api, domain="awardwatch.ca", now=FIRST_NOW)
     assert [result[k]["state"] for k in ("deploy_token", "analytics_token", "domain")] == ["unknown"] * 3
     assert result["items"] == []
     text = json.dumps(result)
@@ -575,7 +621,7 @@ def test_checks_command_writes_its_file_and_logs_no_token(tmp_path, monkeypatch,
         monkeypatch.setenv(name, value)
     out = tmp_path / "checks.json"
     with caplog.at_level(logging.INFO):
-        assert nightly.main(["checks", "--today", "2026-11-01", "--domain", "lmiawatch.ca", "--out", str(out)]) == 0
+        assert nightly.main(["checks", "--today", "2026-11-01", "--domain", "awardwatch.ca", "--out", str(out)]) == 0
     written = json.loads(out.read_text())
     assert written["due"] is True and written["deploy_token"]["state"] == "expiring" and len(written["items"]) == 1
     assert DEPLOY_TOKEN not in caplog.text and ANALYTICS_TOKEN not in caplog.text
@@ -584,8 +630,8 @@ def test_checks_command_writes_its_file_and_logs_no_token(tmp_path, monkeypatch,
 
 
 def test_the_domain_comes_from_the_site_address():
-    assert resilience.domain_of("https://lmiawatch.ca") == "lmiawatch.ca"
-    assert resilience.domain_of("https://lmiawatch.example") == ""
+    assert resilience.domain_of("https://awardwatch.ca") == "awardwatch.ca"
+    assert resilience.domain_of("https://awardwatch.example") == ""
     assert resilience.domain_of("") == ""
 
 
@@ -596,10 +642,10 @@ def test_status_records_the_resilience_outcomes(tmp_path):
     db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     steps = {"restore": "success", "pipeline": "success", "deploy": "success"}
-    checks = {"due": True, "items": ["The domain lmiawatch.ca expires 2026-11-25 (24 days); auto-renew is off"]}
-    status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, "posted", steps, now=NOW,
+    checks = {"due": True, "items": ["The domain awardwatch.ca expires 2026-11-25 (24 days); auto-renew is off"]}
+    status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, steps, now=NOW,
                                 restore_info={"source": "weekly", "weekly_key": "backups/weekly/db-slot-4.sqlite.gz",
-                                              "weekly_uploaded": "2026-10-18T00:51:30+00:00", "counts": {"employers": 3}},
+                                              "weekly_uploaded": "2026-10-18T00:51:30+00:00", "counts": {"organizations": 3}},
                                 smoke={"verdict": "broken", "detail": "/ answered 500 and 500"},
                                 rollback="rolled back", version_before=VERSION_A, checks=checks)
     assert status["steps"] == steps
@@ -609,13 +655,13 @@ def test_status_records_the_resilience_outcomes(tmp_path):
     assert status["version_before"] == VERSION_A and status["checks"] == checks
     # The site was broken tonight even though it was put back.
     assert status["ok"] is False
-    calm = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, "posted", steps, now=NOW,
+    calm = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, steps, now=NOW,
                               smoke={"verdict": "unverifiable", "detail": "/: 403 from the edge"}, rollback="ignored")
     assert (calm["smoke"], calm["rollback"], calm["deploy_rolled_back"], calm["ok"]) == ("unverifiable", "not needed", False, True)
-    bare = nightly.run_status(db, None, None, None, {})
+    bare = nightly.run_status(db, None, None, {})
     assert (bare["smoke"], bare["rollback"], bare["restore"], bare["version_before"]) == ("not run", "not needed", {"source": "not run"}, None)
     assert bare["checks"]["due"] is None and bare["deploy_rolled_back"] is False
-    odd = nightly.run_status(db, None, None, None, {}, smoke={"verdict": "fine"}, version_before="$(id)")
+    odd = nightly.run_status(db, None, None, {}, smoke={"verdict": "fine"}, version_before="$(id)")
     assert (odd["smoke"], odd["version_before"]) == ("not run", None)
 
 
@@ -642,20 +688,16 @@ def test_status_command_reads_the_new_files(tmp_path):
 
 def test_attention_items_keep_the_existing_wording():
     status = {
-        "stages": [{"source": "jobbank", "ok": False, "detail": "HTTP 503"}, {"source": "esdc", "ok": True}],
-        "x_post": "failed", "bluesky_post": "no credentials", "zenodo_deposit": "failed",
+        "stages": [{"source": "awards", "ok": False, "detail": "HTTP 503"}, {"source": "tenders", "ok": True}],
         "search_sync": "failed", "views_rollup": "failed",
     }
     assert resilience.attention_items(status) == [
-        "jobbank: HTTP 503",
-        "X post: failed",
-        "Bluesky post: no credentials",
-        "Zenodo deposit: failed (tried again next run)",
+        "awards: HTTP 503",
         "Search database sync: failed (sent again next run)",
         "Audience roll-up: failed (caught up next run)",
     ]
     assert resilience.attention_items(None) == ["no run status was written"]
-    assert resilience.attention_items({"stages": [], "x_post": "posted", "smoke": "unverifiable"}) == []
+    assert resilience.attention_items({"stages": [], "search_sync": "not run", "smoke": "unverifiable"}) == []
 
 
 def test_only_an_indexnow_rejection_is_an_item():
@@ -667,22 +709,19 @@ def test_only_an_indexnow_rejection_is_an_item():
     assert resilience.attention_items({"stages": []}) == []
 
 
-def test_an_unverified_x_post_asks_for_a_look_at_the_account():
-    status = {"stages": [], "x_post": "unverified", "bluesky_post": "posted"}
-    assert resilience.attention_items(status) == ["X post: unverified after an error from X; check the account"]
-
-
 def test_attention_items_for_a_rollback_a_weekly_restore_and_the_checks():
     status = {"stages": [], "smoke": "broken", "smoke_detail": "/ answered 500 and 500", "deploy_rolled_back": True,
               "version_before": VERSION_A, "restore": {"source": "weekly", "weekly_key": "backups/weekly/db-slot-4.sqlite.gz",
                                                        "weekly_uploaded": "2026-10-18T00:51:30+00:00"},
-              "checks": {"due": True, "items": ["The domain lmiawatch.ca expires 2026-11-25 (24 days); auto-renew is off"]}}
+              "checks": {"due": True, "items": ["The domain awardwatch.ca expires 2026-11-25 (24 days); auto-renew is off"]}}
     assert resilience.attention_items(status) == [
         f"Deploy rolled back: the site answered with server errors after the deploy (/ answered 500 and 500); "
         f"the Worker is back on version {VERSION_A}, with the previous data, and a later run tries again",
         "Restored from the weekly snapshot backups/weekly/db-slot-4.sqlite.gz (uploaded 2026-10-18T00:51:30+00:00): "
-        "both nightly backups were missing or damaged, so the Job Bank observations since that snapshot are lost",
-        "Expiry check: The domain lmiawatch.ca expires 2026-11-25 (24 days); auto-renew is off",
+        "both nightly backups were missing or damaged; the records published since that snapshot are read again "
+        "from the source files by this and the next runs, and the first-seen dates of that week are the dates of "
+        "the re-read",
+        "Expiry check: The domain awardwatch.ca expires 2026-11-25 (24 days); auto-renew is off",
     ]
     stuck = {"stages": [], "smoke": "broken", "smoke_detail": "/data answered 502 and 500", "deploy_rolled_back": False,
              "rollback": "no version recorded"}
@@ -693,16 +732,16 @@ def test_attention_items_for_a_rollback_a_weekly_restore_and_the_checks():
 
 
 def test_the_issue_texts():
-    texts = resilience.issue_texts(["jobbank: HTTP 503", "X post: failed"], "https://github.com/o/r/actions/runs/7", "2026-10-22")
+    texts = resilience.issue_texts(["awards: HTTP 503", "views: failed"], "https://github.com/o/r/actions/runs/7", "2026-10-22")
     assert texts["title"] == "Nightly run needs attention"
     assert texts["body"] == (
         "The nightly run of 2026-10-22 found 2 items needing attention:\n\n"
-        "1. jobbank: HTTP 503\n2. X post: failed\n\n"
+        "1. awards: HTTP 503\n2. views: failed\n\n"
         "Run: https://github.com/o/r/actions/runs/7\n\n"
         "Each run updates this issue while an item remains, and the first run with none closes it.\n"
     )
     assert texts["comment"] == (
-        "The run of 2026-10-22 still finds:\n\n1. jobbank: HTTP 503\n2. X post: failed\n\n"
+        "The run of 2026-10-22 still finds:\n\n1. awards: HTTP 503\n2. views: failed\n\n"
         "Run: https://github.com/o/r/actions/runs/7\n"
     )
     assert texts["close"] == "The run of 2026-10-22 finished with nothing needing attention: https://github.com/o/r/actions/runs/7\n"
@@ -729,25 +768,25 @@ def test_attention_command_writes_the_issue_texts_and_its_exit_code(tmp_path, ca
 
 
 NOTICES = [
-    {"source": "gov_notices", "detail": "Government notice: 2026-10-26 Express Entry measure https://www.canada.ca/en/m.html"},
-    {"source": "high_wage", "detail": "IRCC high-wage list changed and was adopted for grading from 2026-10-26: 1 added"},
-    {"source": "registers", "detail": "Designated-employer lists read again: aip_nl"},
+    {"source": "buyers", "detail": "a buyer spelling no seed maps: Canadian Space Agency (CSA2)"},
+    {"source": "contracts", "detail": "the contracts stage is not built yet"},
+    {"source": "lobbying", "detail": "the registry refused the download (403)"},
 ]
 
 
 def test_notices_are_information_never_items_needing_attention():
-    status = {"run_at": "2026-10-27T00:48:10+00:00", "ok": True, "stages": [{"source": "gov_notices", "ok": True}],
+    status = {"run_at": "2026-10-27T00:48:10+00:00", "ok": True, "stages": [{"source": "buyers", "ok": True}],
               "notices": NOTICES + [{"source": "x"}, "junk"]}
     assert resilience.attention_items(status) == []
     assert resilience.notice_items(status) == [
-        "gov_notices: Government notice: 2026-10-26 Express Entry measure https://www.canada.ca/en/m.html",
-        "high_wage: IRCC high-wage list changed and was adopted for grading from 2026-10-26: 1 added",
-        "registers: Designated-employer lists read again: aip_nl",
+        "buyers: a buyer spelling no seed maps: Canadian Space Agency (CSA2)",
+        "contracts: the contracts stage is not built yet",
+        "lobbying: the registry refused the download (403)",
     ]
     assert resilience.notice_items(None) == []
     # A failed stage beside them is still an item needing attention.
-    failed = {**status, "stages": [{"source": "jobbank", "ok": False, "detail": "HTTP 503"}]}
-    assert resilience.attention_items(failed) == ["jobbank: HTTP 503"]
+    failed = {**status, "stages": [{"source": "awards", "ok": False, "detail": "HTTP 503"}]}
+    assert resilience.attention_items(failed) == ["awards: HTTP 503"]
 
 
 def test_the_attention_command_passes_with_notices_alone_and_prints_them(tmp_path, capsys):
@@ -756,7 +795,7 @@ def test_the_attention_command_passes_with_notices_alone_and_prints_them(tmp_pat
     out = tmp_path / "attention"
     assert nightly.main(["attention", "--status", str(status), "--run-url", "u", "--out-dir", str(out)]) == 0
     printed = capsys.readouterr().out
-    assert printed.startswith("NOTICE: gov_notices: Government notice: 2026-10-26 Express Entry measure")
+    assert printed.startswith("NOTICE: buyers: a buyer spelling no seed maps")
     assert "ATTENTION" not in printed
     # Nothing for the issue: the step neither opens nor updates it.
     assert (out / "items.txt").read_text() == ""
@@ -768,9 +807,9 @@ def test_the_notices_command_writes_the_section_for_last_run(tmp_path, capsys):
     assert nightly.main(["notices", "--status", str(status)]) == 0
     assert capsys.readouterr().out == (
         "Notices from this run (information; nothing failed):\n\n"
-        "- gov_notices: Government notice: 2026-10-26 Express Entry measure https://www.canada.ca/en/m.html\n"
-        "- high_wage: IRCC high-wage list changed and was adopted for grading from 2026-10-26: 1 added\n"
-        "- registers: Designated-employer lists read again: aip_nl\n"
+        "- buyers: a buyer spelling no seed maps: Canadian Space Agency (CSA2)\n"
+        "- contracts: the contracts stage is not built yet\n"
+        "- lobbying: the registry refused the download (403)\n"
     )
     status.write_text(json.dumps({"run_at": "2026-10-27T00:48:10+00:00", "stages": []}))
     assert nightly.main(["notices", "--status", str(status)]) == 0
@@ -794,7 +833,7 @@ def test_a_clean_night_with_the_new_fields_has_no_items(tmp_path):
     conn = connect(db)
     log_run(conn, "export", detail="static {}")
     conn.close()
-    status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, "posted",
+    status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []},
                                 {"restore": "success", "deploy": "success"}, now=NOW,
                                 restore_info={"source": "backup"}, smoke={"verdict": "ok", "detail": "4 pages"},
                                 checks={"due": True, "items": [], "domain": {"state": "unknown"}})

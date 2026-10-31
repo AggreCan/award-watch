@@ -41,13 +41,11 @@ Why "failed" never stops the run: the counts are a record of the audience,
 not part of the data refresh. The step reports the outcome in the run status
 and the next night catches up.
 
-Readings taken on the night, on the row for yesterday only: the Bluesky
-follower count (the public profile endpoint, no token); the X follower count
-once a month, on the row for a month's last day, when X posting is enabled
-(X_POST_ENABLED and the four X secrets), since a profile read costs a credit
-under X's pay-per-use API; and the site's employer and record counts from
-tonight's stats.json. A row rolled up again without a reading keeps the one
-it had.
+Readings taken on the night, on the row for yesterday only: the site's
+organization and record counts from tonight's stats.json (records: award
+notices, contract history records, published contracts, grant agreements and
+lobbying communications, the five source counts added). A row rolled up
+again without a reading keeps the one it had.
 """
 
 from __future__ import annotations
@@ -62,7 +60,6 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
-from urllib.parse import urlencode, urlsplit
 
 from . import config
 
@@ -72,8 +69,6 @@ SQL_URL = "https://api.cloudflare.com/client/v4/accounts/{account}/analytics_eng
 DATASET = "awardwatch_views"
 TOKEN_ENV = "CLOUDFLARE_ANALYTICS_TOKEN"
 ACCOUNT_ENV = "CLOUDFLARE_ACCOUNT_ID"
-BSKY_PROFILE_URL = "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile"
-X_ME_URL = "https://api.x.com/2/users/me"
 
 # Analytics Engine keeps data points for three months; asking for an older
 # day returns nothing, and on a re-run would replace a kept row with zeros.
@@ -92,15 +87,17 @@ DAY_HEADER = ["date", "section", "route", "kind", "lang", "country", "referrer",
 # New columns go at the end: a summary written before them still reads, with
 # the new columns blank on its rows.
 SUMMARY_HEADER = ["date", "responses", "pages", "api", "downloads", "forms", "feeds", "other",
-                  "feed_subscribers", "bluesky_followers", "top_routes",
+                  "feed_subscribers", "top_routes",
                   "human_pages", "bot_pages", "unique_visitors", "human_visits",
                   "human_by_country", "human_by_device", "human_by_lang", "human_by_route",
-                  "x_followers", "employers", "records"]
+                  "organizations", "records"]
 # The columns that are blank on a day counted before the bot flag.
 AUDIENCE_COLUMNS = ["human_pages", "bot_pages", "unique_visitors", "human_visits",
                     "human_by_country", "human_by_device", "human_by_lang", "human_by_route"]
 # Readings taken on the night (not counts of the day), kept when a re-run cannot take them again.
-READINGS = ["bluesky_followers", "x_followers", "employers", "records"]
+READINGS = ["organizations", "records"]
+# The stats.json counts added into the records reading.
+RECORD_COUNTS = ("awards", "history", "contracts", "grants", "lobbying")
 # Summary columns by the kind the Worker records; every other kind is "other".
 KIND_COLUMNS = {"page": "pages", "api": "api", "download": "downloads", "form": "forms", "feed": "feeds"}
 KINDS = {"page", "api", "download", "form", "hook", "file", "feed", "other"}
@@ -447,8 +444,7 @@ def audience_columns(d: Day) -> dict[str, Any]:
     return out
 
 
-def summary_row(d: Day, followers: int | None = None, *, x_followers: int | None = None,
-                site_counts: dict[str, int] | None = None) -> dict[str, Any]:
+def summary_row(d: Day, *, site_counts: dict[str, int] | None = None) -> dict[str, Any]:
     row: dict[str, Any] = dict.fromkeys(SUMMARY_HEADER, 0)
     row["date"] = d.day.isoformat()
     row["responses"] = d.total
@@ -457,12 +453,10 @@ def summary_row(d: Day, followers: int | None = None, *, x_followers: int | None
     # A person who follows two feeds counts twice, and a feed read through two
     # services counts only the larger figure; the column says what readers stated.
     row["feed_subscribers"] = sum(most for name, (_fetches, most) in d.feeds.items() if name)
-    row["bluesky_followers"] = "" if followers is None else followers
     row["top_routes"] = top_routes(d)
     row.update(audience_columns(d))
-    row["x_followers"] = "" if x_followers is None else x_followers
     counts = site_counts or {}
-    row["employers"] = counts.get("employers", "")
+    row["organizations"] = counts.get("organizations", "")
     row["records"] = counts.get("records", "")
     return row
 
@@ -524,8 +518,8 @@ def read_summary(path: Path) -> list[dict[str, str]]:
 def merge_summary(rows: list[dict[str, Any]], new: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """rows with each new row added, or put in place of the row for its date, sorted by date.
 
-    A follower count or a site count is a reading taken on the night, so a
-    day rolled up again without one keeps the one it had."""
+    A site count is a reading taken on the night, so a day rolled up again
+    without one keeps the one it had."""
     by_date = {r["date"]: r for r in rows}
     for row in new:
         old = by_date.get(row["date"])
@@ -544,102 +538,25 @@ def update_summary(path: Path, new: list[dict[str, Any]]) -> list[dict[str, Any]
     return rows
 
 
-# -- readings: Bluesky, X, the site's own counts ------------------------------
-
-
-def parse_followers(payload: Any) -> int | None:
-    """followersCount from a getProfile answer, when it is a whole number."""
-    n = payload.get("followersCount") if isinstance(payload, dict) else None
-    if isinstance(n, bool) or not isinstance(n, int) or n < 0:
-        return None
-    return n
-
-
-def bluesky_handle(env: Mapping[str, str]) -> str:
-    """BSKY_HANDLE, else the site's host name: the account's handle is its domain."""
-    handle = (env.get("BSKY_HANDLE") or "").strip().lstrip("@")
-    if handle:
-        return handle
-    host = urlsplit(config.SITE_URL).hostname or ""
-    return "" if host.endswith(".example") else host
-
-
-def bluesky_followers(http: Any, handle: str, timeout: float = 30) -> int | None:
-    """The account's follower count, or None. The endpoint is public, so no token is sent."""
-    if not handle:
-        return None
-    url = BSKY_PROFILE_URL + "?" + urlencode({"actor": handle})
-    try:
-        resp = http.get(url, headers={"User-Agent": config.USER_AGENT}, timeout=timeout)
-        status = _status(resp)
-        if not 200 <= status < 300:
-            log.warning("views: Bluesky profile HTTP %s; no follower count: %s", status, _body(resp))
-            return None
-        n = parse_followers(resp.json())
-    except Exception as exc:
-        log.warning("views: Bluesky profile not readable (%s); no follower count", type(exc).__name__)
-        return None
-    if n is None:
-        log.warning("views: the Bluesky profile carries no follower count")
-    return n
-
-
-def parse_x_followers(payload: Any) -> int | None:
-    """public_metrics.followers_count from a GET /2/users/me answer."""
-    try:
-        n = payload["data"]["public_metrics"]["followers_count"]
-    except (KeyError, TypeError):
-        return None
-    if isinstance(n, bool) or not isinstance(n, int) or n < 0:
-        return None
-    return n
-
-
-def x_due(day: date, env: Mapping[str, str]) -> bool:
-    """X is read once a month, for a month's last day, and only when X posting is enabled."""
-    from .social import credentials_from_env
-
-    last_of_month = (day + timedelta(days=1)).month != day.month
-    return last_of_month and (env.get("X_POST_ENABLED") or "").strip() == "true" and credentials_from_env(env) is not None
-
-
-def x_followers(http: Any, env: Mapping[str, str], timeout: float = 30) -> int | None:
-    """The X account's follower count (one read, billed per use), or None. Never raises."""
-    from .social import credentials_from_env
-
-    creds = credentials_from_env(env)
-    if creds is None:
-        return None
-    try:
-        from requests_oauthlib import OAuth1
-
-        auth = OAuth1(creds.api_key, creds.api_secret, creds.access_token, creds.access_token_secret)
-        resp = http.get(X_ME_URL, params={"user.fields": "public_metrics"}, auth=auth,
-                        headers={"User-Agent": config.USER_AGENT}, timeout=timeout)
-        status = _status(resp)
-        if not 200 <= status < 300:
-            log.warning("views: X profile HTTP %s; no follower count: %s", status, _body(resp))
-            return None
-        n = parse_x_followers(resp.json())
-    except Exception as exc:
-        log.warning("views: X profile not readable (%s); no follower count", type(exc).__name__)
-        return None
-    if n is None:
-        log.warning("views: the X profile carries no follower count")
-    return n
+# -- readings: the site's own counts --------------------------------------------
 
 
 def site_counts(stats_path: Path) -> dict[str, int]:
-    """Employers and records (ESDC list rows, approved and refused) from tonight's stats.json; {} when unreadable."""
+    """Organizations and records from tonight's stats.json; {} when unreadable.
+
+    Records are the five source counts added (award notices, contract history
+    records, published contracts, grant agreements, lobbying communications):
+    a measure of how much the site holds, not a figure the site shows."""
     try:
         counts = json.loads(stats_path.read_text(encoding="utf-8"))["counts"]
-        employers = counts["employers"]
-        records = counts["approved_records"] + counts["refused_records"]
+        organizations = counts["organizations"]
+        parts = [counts[k] for k in RECORD_COUNTS]
     except (OSError, ValueError, KeyError, TypeError):
         return {}
-    if not all(isinstance(n, int) and not isinstance(n, bool) and n >= 0 for n in (employers, records)):
+    values = [organizations, *parts]
+    if not all(isinstance(n, int) and not isinstance(n, bool) and n >= 0 for n in values):
         return {}
-    return {"employers": employers, "records": records}
+    return {"organizations": organizations, "records": sum(parts)}
 
 
 # -- the run ------------------------------------------------------------------
@@ -734,7 +651,6 @@ def _run(out_dir: Path | None, *, day: date | None, env: Mapping[str, str] | Non
         http: Any = requests.Session()
     else:
         http = session
-    followers = x_count = None
     try:
         rolled: list[Day] = []
         for d in days:
@@ -747,10 +663,6 @@ def _run(out_dir: Path | None, *, day: date | None, env: Mapping[str, str] | Non
                 log.info("views: no data points for %s; nothing written for it", d)
                 continue
             rolled.append(result)
-        if any(d.day == yesterday for d in rolled):
-            followers = bluesky_followers(http, bluesky_handle(source))
-            if x_due(yesterday, source):
-                x_count = x_followers(http, source)
     finally:
         if session is None:
             http.close()
@@ -764,7 +676,7 @@ def _run(out_dir: Path | None, *, day: date | None, env: Mapping[str, str] | Non
         log.info("views: %s: %d responses, %d grouped rows, %d feeds%s -> %s", d.day, d.total, len(d.counts),
                  len(d.feeds), "" if d.flagged else " (no bot flag, people columns blank)", path.name)
     update_summary(folder / SUMMARY, [
-        summary_row(d, followers, x_followers=x_count, site_counts=counts) if d.day == yesterday else summary_row(d)
+        summary_row(d, site_counts=counts) if d.day == yesterday else summary_row(d)
         for d in rolled])
     (folder / ROLLED_UP).write_text("".join(f"{d.day.isoformat()}\n" for d in rolled), encoding="utf-8")
     return "rolled up"

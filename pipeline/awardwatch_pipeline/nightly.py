@@ -6,7 +6,7 @@ one, and always leaves a status file the site's daily check can read.
 
   restore   pick the database to start from: the backup, else the previous
             backup when the newest is damaged, else the newest weekly
-            snapshot when both nightly files are missing or damaged, else
+            snapshot when both nightly sets are missing or damaged, else
             (only when nothing exists anywhere) an empty one. Exits 1 when a
             backup exists but cannot be used, so the run stops before it
             rebuilds from nothing.
@@ -15,8 +15,12 @@ one, and always leaves a status file the site's daily check can read.
   status    write status.json from the run's log rows, the workflow steps'
             outcomes and the checks, whatever state the run ended in.
   pack      write the backup the save step uploads: a copy of the database
-            without its secondary indexes, checked and gzipped. Exits 1 when
-            the copy fails its check or the file is above the upload cap.
+            without its secondary indexes, checked, gzipped and split into
+            parts of at most PART_MIB with a manifest of their SHA-256.
+            Exits 1 when the copy fails its check.
+  prev-set  re-split the backup the run restored from into the previous
+            backup's parts, which the save step uploads before the new ones.
+  split     split any gzip into a named set of parts (the weekly snapshot).
   gate      for a retry trigger: skip=true when today's run already
             finished clean (resilience.gate).
   live-version
@@ -39,17 +43,35 @@ one, and always leaves a status file the site's daily check can read.
             serves (resilience.bundle_check). Exits 1 on any difference, a
             missing file or an answer other than 200, so that workflow
             stops before its deploy or rolls it back after.
+  rollup-views, import-search-console, views-report
+            the audience roll-up (views_rollup.py), the Search Console import
+            (search_console.py) and the monthly report (views_report.py);
+            each exits 1 only when it failed.
+
+Backups travel in parts. Wrangler refuses a single R2 upload above 300 MiB,
+and the database holds every published contract and grant agreement, so its
+gzip passes that. A set is the parts <name>.000, <name>.001, ... and the
+manifest <name>.parts, which lists each part's SHA-256 in order in the
+SHA256SUMS layout. The manifest is uploaded last, so a set whose upload
+stopped part way fails its hashes and the restore moves on to the previous
+set; parts left over from a larger set are never read, since the manifest
+names the parts that belong. A backup saved as one file (<name> alone) still
+restores.
 
 The R2 transfers stay in the workflow, apart from the weekly snapshot's
 listing and download, which Wrangler has no command for; these commands read
 the files the workflow leaves. verify, status, gate, live-version, smoke and
-checks report what they find in their output and never stop the run.
+checks report what they find in their output and never stop the run. The
+gate and attention commands run before the pipeline is installed, so this
+module imports only the standard library at load; the audience and Search
+Console modules are imported by their own commands.
 """
 
 from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import logging
 import os
@@ -62,25 +84,40 @@ from pathlib import Path
 from typing import Any
 
 from . import config, indexnow, resilience
-from .sources import notices as gov_notices
-from .sources import registers as designated
 
 log = logging.getLogger("awardwatch_pipeline.nightly")
 
 BACKUP = "awardwatch.sqlite.gz"
 PREVIOUS = "awardwatch.sqlite.prev.gz"
 MISSING_TEXT = "specified key does not exist"
+PARTS_SUFFIX = ".parts"
+# Wrangler refuses a single-object R2 upload above 300 MiB
+# (MAX_UPLOAD_SIZE_BYTES in its source); a part stays well under it.
+PART_MIB = 250
+# Three digits in a part's name: a thousand parts of 250 MiB is far beyond
+# any database this pipeline will hold.
+MAX_PARTS = 1000
+SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+# The nightly sets' part names, the only ones the restore accepts from a
+# manifest (the workflow filters with the same pattern before it downloads).
+NIGHTLY_PART_RE = re.compile(r"^awardwatch\.sqlite(\.prev)?\.gz\.\d{3}$")
 
 # How far a count may fall between the restored backup and tonight's database
-# before the new one is held back. The pipeline never deletes postings or
-# their observations; list rows shrink a little when ESDC revises a file, and
-# employers when the name normalisation merges two spellings.
+# before the new one is held back. The CanadaBuys tables (tender and award
+# notices, contract history) are upserted and never deleted from, so any fall
+# is a fault. Published contracts and grants are rewritten whole each run from
+# files the publisher regenerates every day; a department withdrawing a
+# quarter or two moves the count by a few per cent, while a file cut short in
+# transit or a changed layout that drops rows moves it by half or more.
+# Organizations no record points to are removed each night, and a change to
+# the name rules merges spellings, so they get the same margin.
 MIN_SHARE = {
-    "jobbank_postings": 1.0,
-    "jobbank_observations": 1.0,
-    "esdc_records": 0.9,
-    "findings": 0.9,
-    "employers": 0.5,
+    "tenders": 1.0,
+    "awards": 1.0,
+    "contract_history": 1.0,
+    "contracts": 0.5,
+    "grants": 0.5,
+    "organizations": 0.5,
 }
 # The Worker accepts 20,000 files per version (its own assets included) and
 # 25 MiB per file.
@@ -88,12 +125,8 @@ MAX_FILES = 19_000
 MAX_FILE_BYTES = 25 * 1024 * 1024
 # A file this much older than the run's start is left over from an earlier run.
 CLOCK_SLACK_S = 120
-# Wrangler refuses a single-object R2 upload above 300 MiB
-# (MAX_UPLOAD_SIZE_BYTES in its source), and the save step uploads one file.
-MAX_UPLOAD_MIB = 300
 
-# The longest notice part status.json keeps: a government notice line is its
-# date, its full title (at most 500 characters) and its canada.ca link.
+# The longest notice part status.json keeps.
 NOTICE_PART_MAX = 1200
 
 STEP_DETAIL = {
@@ -152,6 +185,107 @@ def check_db(path: Path, before: dict[str, int] | None = None) -> tuple[list[str
     return problems, counts
 
 
+# -- sets of parts ----------------------------------------------------------
+
+
+def part_name(base_name: str, n: int) -> str:
+    return f"{base_name}.{n:03d}"
+
+
+def glob_escape(text: str) -> str:
+    """A name as a literal inside a glob pattern."""
+    return re.sub(r"([\[\]*?])", r"[\1]", text)
+
+
+def split_parts(src_gz: Path, dest_dir: Path, base_name: str, part_bytes: int) -> list[str]:
+    """Write src_gz as base_name.000, .001, ... of at most part_bytes each, and
+    base_name.parts listing each part's SHA-256 in order. Returns the part names.
+
+    Parts of the same name already in dest_dir go first, so a smaller set is
+    never uploaded beside the leftovers of a larger one. The manifest is
+    written last, through a partial file, in the order the upload follows."""
+    if part_bytes <= 0:
+        raise ValueError("a part must hold at least one byte")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for old in dest_dir.glob(f"{glob_escape(base_name)}.[0-9][0-9][0-9]"):
+        old.unlink()
+    manifest = dest_dir / (base_name + PARTS_SUFFIX)
+    manifest.unlink(missing_ok=True)
+    names: list[str] = []
+    lines: list[str] = []
+    with src_gz.open("rb") as fin:
+        while True:
+            if len(names) >= MAX_PARTS:
+                raise ValueError(f"{src_gz.name} needs more than {MAX_PARTS} parts")
+            name = part_name(base_name, len(names))
+            digest = hashlib.sha256()
+            written = 0
+            with (dest_dir / name).open("wb") as fout:
+                while written < part_bytes:
+                    chunk = fin.read(min(1 << 20, part_bytes - written))
+                    if not chunk:
+                        break
+                    fout.write(chunk)
+                    digest.update(chunk)
+                    written += len(chunk)
+            if written == 0 and names:
+                # The file ended exactly on a part boundary.
+                (dest_dir / name).unlink()
+                break
+            names.append(name)
+            lines.append(f"{digest.hexdigest()}  {name}\n")
+            if written < part_bytes:
+                break
+    partial = manifest.with_name(manifest.name + ".partial")
+    partial.write_text("".join(lines), encoding="utf-8", newline="\n")
+    partial.replace(manifest)
+    return names
+
+
+def read_manifest(path: Path, base_name: str) -> list[tuple[str, str]]:
+    """[(sha256, part name)] in order. Raises ValueError when a line does not
+    read, a name is not base_name.NNN counting up from 000, or there is none."""
+    entries: list[tuple[str, str]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        fields = line.split()
+        if len(fields) != 2 or not SHA_RE.match(fields[0]):
+            raise ValueError(f"{path.name} has a line that does not read: {line[:80]!r}")
+        want = part_name(base_name, len(entries))
+        if fields[1] != want:
+            raise ValueError(f"{path.name} names {fields[1][:80]!r} where {want} belongs")
+        entries.append((fields[0], fields[1]))
+    if not entries:
+        raise ValueError(f"{path.name} lists no part")
+    return entries
+
+
+def join_parts(folder: Path, entries: list[tuple[str, str]], dest: Path) -> str | None:
+    """Concatenate the listed parts in folder into dest, checking each hash;
+    the reason when a part is missing or differs (nothing is left at dest then)."""
+    partial = dest.with_name(dest.name + ".joining")
+    try:
+        with partial.open("wb") as fout:
+            for sha, name in entries:
+                part = folder / name
+                if not part.exists():
+                    return f"{name} is missing"
+                digest = hashlib.sha256()
+                with part.open("rb") as fin:
+                    for chunk in iter(lambda: fin.read(1 << 20), b""):
+                        digest.update(chunk)
+                        fout.write(chunk)
+                if digest.hexdigest() != sha:
+                    return f"{name} does not match its manifest (an upload stopped part way?)"
+        partial.replace(dest)
+        return None
+    except OSError as exc:
+        return f"the parts could not be joined ({exc})"[:200]
+    finally:
+        partial.unlink(missing_ok=True)
+
+
 # -- restore ----------------------------------------------------------------
 
 
@@ -169,7 +303,8 @@ def _gunzip(src: Path, dest: Path) -> str | None:
 def _download(folder: Path, key: str) -> tuple[str, str]:
     """('ok' | 'missing' | 'failed', detail) for one download the workflow attempted."""
     exit_file = folder / f"{key}.exit"
-    log_text = (folder / f"{key}.log").read_text(encoding="utf-8", errors="replace") if (folder / f"{key}.log").exists() else ""
+    log_file = folder / f"{key}.log"
+    log_text = log_file.read_text(encoding="utf-8", errors="replace") if log_file.exists() else ""
     code = exit_file.read_text(encoding="utf-8").strip() if exit_file.exists() else ""
     if code == "0" and (folder / key).exists() and (folder / key).stat().st_size > 0:
         return "ok", ""
@@ -177,6 +312,41 @@ def _download(folder: Path, key: str) -> tuple[str, str]:
         return "missing", ""
     tail = " ".join(log_text.split())[-200:]
     return "failed", f"download failed (exit {code or 'unknown'}): {tail}" if tail else f"download failed (exit {code or 'unknown'})"
+
+
+def _candidate(folder: Path, key: str) -> tuple[str, str]:
+    """('ok' | 'missing' | 'failed' | 'unusable', detail) for one backup in
+    either form; on 'ok' the whole gzip is at folder/key.
+
+    The parts form comes first. A manifest R2 said does not exist sends the
+    restore to the single file; a manifest that failed to download does not,
+    since the set it names may be the good one. A listed part R2 says does
+    not exist, or one whose hash differs, makes the set unusable; a part whose
+    download failed leaves it unknown ('failed'), which stops the run rather
+    than falling back past a backup that may be whole. A manifest the workflow
+    never asked for (no .exit file beside it) counts as missing."""
+    manifest = key + PARTS_SUFFIX
+    if not (folder / f"{manifest}.exit").exists():
+        return _download(folder, key)
+    state, detail = _download(folder, manifest)
+    if state == "failed":
+        return "failed", f"manifest: {detail}"
+    if state == "missing":
+        return _download(folder, key)
+    try:
+        entries = read_manifest(folder / (key + PARTS_SUFFIX), key)
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        return "unusable", str(exc)[:200]
+    for _sha, name in entries:
+        if not NIGHTLY_PART_RE.match(name):
+            return "unusable", f"the manifest names {name[:80]!r}, which is not a backup part"
+        part_state, part_detail = _download(folder, name)
+        if part_state == "missing":
+            return "unusable", f"{name} is listed but not in R2"
+        if part_state == "failed":
+            return "failed", f"{name}: {part_detail}"
+    why = join_parts(folder, entries, folder / key)
+    return ("unusable", why) if why else ("ok", "")
 
 
 def _drop_sidecars(db: Path) -> None:
@@ -197,14 +367,14 @@ def restore_record(folder: Path, db: Path, weekly: resilience.R2Rest | None = No
     """(go on, the restore record written to restore.json).
 
     weekly reads the bucket's weekly snapshots; None (no token on a dev
-    machine) leaves the decision as it was before they were a source."""
+    machine) leaves the decision to the two nightly backups."""
     tried: list[str] = []
     states = {}
     for key, source in ((BACKUP, "backup"), (PREVIOUS, "previous")):
-        state, detail = _download(folder, key)
+        state, detail = _candidate(folder, key)
         states[key] = state
         if state != "ok":
-            if state == "failed":
+            if state != "missing":
                 tried.append(f"{key}: {detail}")
             continue
         why = _gunzip(folder / key, db)
@@ -218,7 +388,7 @@ def restore_record(folder: Path, db: Path, weekly: resilience.R2Rest | None = No
         tried.append(f"{key}: {why}")
     _drop_sidecars(db)
     both_missing = states.get(BACKUP) == "missing" and states.get(PREVIOUS) == "missing"
-    # Only when R2 answered for both files. A download that failed may hide a
+    # Only when R2 answered for both backups. A download that failed may hide a
     # good backup, and a week-old snapshot saved over it would lose the days
     # between, so an outage still stops the run.
     answered = all(states.get(k) in ("missing", "unusable") for k in (BACKUP, PREVIOUS))
@@ -234,6 +404,30 @@ def restore_record(folder: Path, db: Path, weekly: resilience.R2Rest | None = No
 
 
 WEEKLY_FILE = "weekly.sqlite.gz"
+
+
+def _fetch_weekly(folder: Path, weekly: resilience.R2Rest, key: str, dest: Path) -> str | None:
+    """Download the weekly snapshot at key (a set's manifest, or a single file)
+    into dest as one gzip; the reason when it is not whole. Raises
+    resilience.R2Error when R2 does not answer as expected."""
+    if not key.endswith(PARTS_SUFFIX):
+        weekly.download(key, dest)
+        return None
+    prefix, _, manifest_name = key.rpartition("/")
+    base = manifest_name[: -len(PARTS_SUFFIX)]
+    raw = weekly.get_bytes(key, max_bytes=1 << 20)
+    if raw is None:
+        return f"{key} is listed but not in R2"
+    local = folder / "weekly"
+    local.mkdir(parents=True, exist_ok=True)
+    (local / manifest_name).write_bytes(raw)
+    try:
+        entries = read_manifest(local / manifest_name, base)
+    except (UnicodeDecodeError, ValueError) as exc:
+        return str(exc)[:200]
+    for _sha, name in entries:
+        weekly.download(f"{prefix}/{name}" if prefix else name, local / name)
+    return join_parts(local, entries, dest)
 
 
 def _restore_weekly(folder: Path, db: Path, weekly: resilience.R2Rest, tried: list[str],
@@ -259,11 +453,12 @@ def _restore_weekly(folder: Path, db: Path, weekly: resilience.R2Rest, tried: li
     key, uploaded = newest
     dest = folder / WEEKLY_FILE
     try:
-        weekly.download(key, dest)
+        why = _fetch_weekly(folder, weekly, key, dest)
     except resilience.R2Error as exc:
         tried.append(f"{key}: {exc}")
         return stop()
-    why = _gunzip(dest, db)
+    if why is None:
+        why = _gunzip(dest, db)
     if why is None:
         problems, counts = check_db(db)
         if not problems:
@@ -292,7 +487,11 @@ def _load(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def check_export(static: Path, started: float | None, before_employers: int = 0) -> list[str]:
+def _count(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def check_export(static: Path, started: float | None, before_organizations: int = 0) -> list[str]:
     """Problems that should keep tonight's export off the site."""
     if not static.is_dir():
         return ["no export was written"]
@@ -302,28 +501,31 @@ def check_export(static: Path, started: float | None, before_employers: int = 0)
         return ["stats.json is missing"]
     if started is not None and stats_path.stat().st_mtime < started - CLOCK_SLACK_S:
         problems.append("stats.json is left over from an earlier run")
+    organizations = 0
     try:
         stats = _load(stats_path)
-        counts = stats["counts"]
-        employers = int(counts["employers"])
+        counted = _count(stats["counts"]["organizations"])
         if not isinstance(stats.get("data_as_of"), str):
             problems.append("stats.json has no data date")
-        if employers <= 0:
-            problems.append("stats.json counts no employers")
-        elif before_employers and employers < before_employers * MIN_SHARE["employers"]:
-            problems.append(f"stats.json counts {employers} employers, down from {before_employers}")
+        if counted is None:
+            problems.append("stats.json has no organization count")
+        else:
+            organizations = counted
+            # No organization at all is fine only where the restored database
+            # had none either (a first run, before any record names a
+            # supplier); after a night that had some, it is a broken run.
+            if before_organizations and organizations < before_organizations * MIN_SHARE["organizations"]:
+                problems.append(f"stats.json counts {organizations} organizations, down from {before_organizations}")
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        problems.append(f"stats.json cannot be read: {exc}")
-        employers = 0
-    # The search page's fallback rows and counts, and the file /api/pending
-    # serves; the search page itself reads the search database.
-    for rel, kind in (("search/first.json", list), ("search/latest/status/pending.json", list), ("search/facets.json", dict)):
-        try:
-            if not isinstance(_load(static / rel), kind):
-                problems.append(f"{rel} has the wrong shape")
-        except (OSError, ValueError) as exc:
-            problems.append(f"{rel} cannot be read: {exc}"[:200])
-    if employers > 0 and not any((static / "profiles").glob("*.json")):
+        problems.append(f"stats.json cannot be read: {exc}"[:200])
+    # The open notices are the tender pages' list and the site-only deploy's
+    # second bundle file.
+    try:
+        if not isinstance(_load(static / "tenders" / "open.json"), list):
+            problems.append("tenders/open.json has the wrong shape")
+    except (OSError, ValueError) as exc:
+        problems.append(f"tenders/open.json cannot be read: {exc}"[:200])
+    if organizations > 0 and not any((static / "profiles").glob("*.json")):
         problems.append("no profile files were written")
     if not (static / "sitemaps" / "index.xml").exists():
         problems.append("sitemaps/index.xml is missing")
@@ -338,7 +540,7 @@ def check_export(static: Path, started: float | None, before_employers: int = 0)
 
 def verify(db: Path, static: Path, started: float | None, before: dict[str, int]) -> dict[str, Any]:
     db_problems, counts = check_db(db, before)
-    export_problems = check_export(static, started, before.get("employers", 0))
+    export_problems = check_export(static, started, before.get("organizations", 0))
     return {
         "db_ok": not db_problems,
         "export_ok": not export_problems,
@@ -351,9 +553,8 @@ def verify(db: Path, static: Path, started: float | None, before: dict[str, int]
 
 
 def run_status(
-    db: Path, started: str | None, verify_result: dict[str, Any] | None, outcome: str | None,
-    steps: dict[str, str], now: datetime | None = None, *, bluesky: str | None = None,
-    zenodo: str | None = None, search: str | None = None, views: str | None = None,
+    db: Path, started: str | None, verify_result: dict[str, Any] | None, steps: dict[str, str],
+    now: datetime | None = None, *, search: str | None = None, views: str | None = None,
     restore_info: dict[str, Any] | None = None, smoke: dict[str, Any] | None = None,
     rollback: str | None = None, version_before: str | None = None, checks: dict[str, Any] | None = None,
     indexnow_outcome: str | None = None, search_console: str | None = None, views_report: str | None = None,
@@ -361,18 +562,17 @@ def run_status(
     """status.json for the site's daily check. Every input may be missing: the
     status then says what is missing rather than failing to be written.
 
-    outcome, bluesky, zenodo, search, views and indexnow_outcome are the
-    outcomes the X post, the Bluesky post, the Zenodo deposit, the search
-    database sync ("synced", "nothing to send" or "failed"), the audience
-    roll-up ("rolled up", "no data", "no token" or "failed") and the IndexNow
+    search, views and indexnow_outcome are the outcomes the search database
+    sync (not run until the hosted search ships), the audience roll-up
+    ("rolled up", "no data", "no token" or "failed") and the IndexNow
     submission ("submitted <n> URLs", "rejected (<status>)", "rate limited",
     "failed" or "off") wrote; "not run" when the step did not run. So do
     search_console (the Search Console import: "imported <n> days", "up to
     date", "no credentials" or "failed") and views_report (the monthly
     audience report: "written", "not due", "waiting", "no data" or
     "failed"). They are reported beside the stages, not as stages, so a
-    refused post, a failed deposit, sync, roll-up, import, report or
-    submission alerts without marking the data refresh failed.
+    failed sync, roll-up, import, report or submission alerts without marking
+    the data refresh failed.
 
     The resilience fields: steps (every workflow step's outcome, which the
     retry gate reads), restore (where the database came from), smoke (the
@@ -382,9 +582,6 @@ def run_status(
     rolled back, so a retry trigger the same day deploys again."""
     stages: list[dict[str, Any]] = []
     notices: list[dict[str, str]] = []
-    international: dict[str, Any] = {}
-    registers: dict[str, Any] = {}
-    government_notices: dict[str, Any] = {}
     for name, result in steps.items():
         if result == "failure":
             stages.append({"source": f"workflow {name}", "ok": False, "detail": STEP_DETAIL.get(name, "the step failed")})
@@ -404,8 +601,6 @@ def run_status(
                 notices = _notices(conn, started)
             else:
                 stages.append({"source": "pipeline", "ok": False, "detail": "the run never started its stages"})
-            international, registers = _source_summaries(conn)
-            government_notices = _notices_summary(conn, started)
         except sqlite3.Error as exc:
             stages.append({"source": "database", "ok": False, "detail": f"the run log cannot be read: {exc}"[:200]})
         finally:
@@ -429,9 +624,8 @@ def run_status(
         "run_at": stamp,
         "stages": stages,
         "steps": dict(steps),
-        "x_post": outcome or "not run",
-        "bluesky_post": bluesky or "not run",
-        "zenodo_deposit": zenodo or "not run",
+        # The site's daily check reads this field; the step that sets it
+        # ships with the hosted search database.
         "search_sync": search or "not run",
         "views_rollup": views or "not run",
         "search_console": search_console or "not run",
@@ -444,16 +638,11 @@ def run_status(
         "rollback": rolled,
         "deploy_rolled_back": rolled == "rolled back",
         "checks": checks if isinstance(checks, dict) else {"due": None, "items": [], "detail": "the checks did not run"},
-        # Information that is not a failure (a government notice first listed,
-        # a reference list that changed, a list or feed that changed state):
-        # LAST_RUN.md and the daily check's email, never an item needing
-        # attention, and the run stays ok.
+        # Information that is not a failure (a buyer spelling no seed maps, a
+        # file not published yet, a stage not built): LAST_RUN.md and the
+        # daily check's email, never an item needing attention, and the run
+        # stays ok.
         "notices": notices,
-        "international": international,
-        "registers": registers,
-        # The government notices stage: listed, new tonight, last checked and
-        # each feed's state; its new items and feed changes are notices above.
-        "government_notices": government_notices,
         "ok": all(s["ok"] for s in stages) and verdict != "broken",
     }
 
@@ -466,53 +655,9 @@ def _notices(conn: sqlite3.Connection, started: str) -> list[dict[str, str]]:
             (started,)).fetchall()
     except sqlite3.Error:
         return []
-    # A stage may record several notices on one row, joined by " | ". A
-    # government notice carries its full title and link, so a part may be long.
+    # A stage may record several notices on one row, joined by " | ".
     return [{"source": s, "detail": part.strip()[:NOTICE_PART_MAX]} for s, n in rows
             for part in (n or "").split(" | ") if part.strip()]
-
-
-def _notices_summary(conn: sqlite3.Connection, started: str | None) -> dict[str, Any]:
-    """Where the government notices stand ({} before the first read or on a database from before the tables)."""
-    try:
-        return gov_notices.status_summary(conn, started)
-    except (sqlite3.Error, ValueError):
-        return {}
-
-
-def _source_summaries(conn: sqlite3.Connection) -> tuple[dict[str, Any], dict[str, Any]]:
-    """What the postings open to international candidates and the designated-employer lists stand at."""
-    international: dict[str, Any] = {}
-    registers: dict[str, Any] = {}
-    try:
-        meta = {k: v for k, v in conn.execute(
-            "SELECT key, value FROM meta WHERE key IN ('intl_last_run', 'intl_sweep_at', 'intl_baseline', "
-            "'high_wage_checked_at', 'high_wage_state')")}
-        live = conn.execute("SELECT COUNT(*), COALESCE(SUM(detail_fetched_at IS NULL), 0) FROM jobbank_intl_postings "
-                            "WHERE in_facet = 1").fetchone()
-        international = {"last_run": meta.get("intl_last_run"), "sweep_at": meta.get("intl_sweep_at"),
-                         "baseline": meta.get("intl_baseline"), "live": int(live[0] or 0), "unread": int(live[1] or 0),
-                         "high_wage_checked_at": meta.get("high_wage_checked_at"),
-                         "high_wage_state": meta.get("high_wage_state") or "not read"}
-        by_state: dict[str, list[str]] = {}
-        for key, state in conn.execute("SELECT key, state FROM designated_lists ORDER BY key"):
-            by_state.setdefault(state, []).append(key)
-        # Every night, the lists not read and which they are; a notice
-        # only on the night a list changes state (the registers stage's notices).
-        registers = {"lists": sum(len(v) for v in by_state.values()),
-                     "states": {k: len(v) for k, v in by_state.items()},
-                     "not_read": {k: v for k, v in by_state.items() if k != "ok"},
-                     "matched_employers": int(conn.execute(
-                         "SELECT COUNT(DISTINCT employer_id) FROM designated_matches").fetchone()[0])}
-        # The newer-edition check of each list loaded by hand, and the items
-        # needing attention it raises (a newer edition to load by hand), which
-        # resilience.attention_items reports; unlike a notice they fail the
-        # attention step and open the issue, without marking the run failed.
-        registers["editions"] = designated.edition_checks(conn)
-        registers["attention"] = designated.attention_items(conn)
-    except sqlite3.Error:
-        pass
-    return international, registers
 
 
 # -- pack -------------------------------------------------------------------
@@ -531,17 +676,20 @@ def _mib(n: int) -> str:
     return f"{n / (1024 * 1024):.1f} MiB"
 
 
-def pack(db: Path, out: Path, max_mib: float = MAX_UPLOAD_MIB,
+def pack(db: Path, out: Path, part_mib: float = PART_MIB,
          schema_path: Path | None = None) -> tuple[bool, str, dict[str, int]]:
     """Write the backup the save step uploads. Returns (ok, message, sizes in bytes).
 
-    Why not gzip the file as it is: the gzip outgrew most of the upload cap,
-    and about a fifth of it is the secondary indexes, which db.connect
-    rebuilds from schema.sql whenever a restored copy is opened (seconds). And
-    a step killed at its time limit can leave committed rows in the
-    write-ahead log beside the file, which a gzip of the file alone would
-    lose; VACUUM INTO reads them. The copy is checked before it is
-    compressed, so a backup that would not open is never uploaded.
+    out is the whole gzip (kept for the weekly snapshot, never uploaded as
+    one file); beside it go its parts, out.000, out.001, ..., and the
+    manifest out.parts, which are what the save step uploads.
+
+    Why not gzip the file as it is: about a fifth of it is the secondary
+    indexes, which db.connect rebuilds from schema.sql whenever a restored
+    copy is opened. And a step killed at its time limit can leave committed
+    rows in the write-ahead log beside the file, which a gzip of the file
+    alone would lose; VACUUM INTO reads them. The copy is checked before it
+    is compressed, so a backup that would not open is never uploaded.
     """
     sizes: dict[str, int] = {}
     src = _readable(db)
@@ -555,6 +703,7 @@ def pack(db: Path, out: Path, max_mib: float = MAX_UPLOAD_MIB,
     partial = out.with_name(out.name + ".partial")
     for leftover in (copy, Path(f"{copy}-journal"), partial):
         leftover.unlink(missing_ok=True)
+    names: list[str] = []
     try:
         try:
             src.execute("VACUUM INTO ?", (str(copy),))
@@ -565,8 +714,8 @@ def pack(db: Path, out: Path, max_mib: float = MAX_UPLOAD_MIB,
             # Rollback journal, so every change below lands in the one file
             # that is compressed.
             conn.execute("PRAGMA journal_mode = DELETE")
-            names = schema_indexes(schema_path)
-            for name in names:
+            indexes = schema_indexes(schema_path)
+            for name in indexes:
                 conn.execute(f'DROP INDEX IF EXISTS "{name}"')
             conn.commit()
             conn.execute("VACUUM")
@@ -579,23 +728,29 @@ def pack(db: Path, out: Path, max_mib: float = MAX_UPLOAD_MIB,
         with copy.open("rb") as fin, gzip.open(partial, "wb", compresslevel=6) as fout:
             shutil.copyfileobj(fin, fout, 1 << 20)
         sizes["gz"] = partial.stat().st_size
-    except (sqlite3.Error, OSError) as exc:
+        partial.replace(out)
+        names = split_parts(out, out.parent, out.name, max(int(part_mib * 1024 * 1024), 1))
+    except (sqlite3.Error, OSError, ValueError) as exc:
         partial.unlink(missing_ok=True)
         return False, f"the database could not be packed: {exc}"[:300], sizes
     finally:
         copy.unlink(missing_ok=True)
         Path(f"{copy}-journal").unlink(missing_ok=True)
+    sizes["parts"] = len(names)
     summary = (f"{db.name} {_mib(sizes['db'])} (write-ahead log {_mib(sizes['wal'])}), copy without its "
-               f"{len(names)} secondary indexes {_mib(sizes['copy'])}, {out.name} {_mib(sizes['gz'])}")
-    if sizes["gz"] > max_mib * 1024 * 1024:
-        # Removed, so no later step or re-run uploads a file R2 would refuse;
-        # the backup already in R2 stays as it is.
-        partial.unlink(missing_ok=True)
-        out.unlink(missing_ok=True)
-        return False, (f"{summary}: above the {max_mib:g} MiB a single upload accepts, so nothing is saved "
-                       f"tonight and R2 keeps the previous backup"), sizes
-    partial.replace(out)
+               f"{len(indexes)} secondary indexes {_mib(sizes['copy'])}, {out.name} {_mib(sizes['gz'])} "
+               f"in {len(names)} part{'s' if len(names) != 1 else ''} of at most {part_mib:g} MiB")
     return True, summary, sizes
+
+
+def prev_set(folder: Path, out_dir: Path, part_mib: float = PART_MIB) -> list[str]:
+    """The backup the run restored from (folder/BACKUP, whole: the restore
+    joined its parts there) as the previous backup's set in out_dir.
+    Raises OSError when it is not there."""
+    src = folder / BACKUP
+    if not src.is_file() or src.stat().st_size == 0:
+        raise OSError(f"{src} is missing or empty")
+    return split_parts(src, out_dir, PREVIOUS, max(int(part_mib * 1024 * 1024), 1))
 
 
 # -- command line -----------------------------------------------------------
@@ -650,16 +805,15 @@ def _weekly_source(bucket: str) -> resilience.R2Rest | None:
         return None
 
 
-def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="awardwatch_pipeline.nightly")
     sub = parser.add_subparsers(dest="command", required=True)
     r = sub.add_parser("restore")
     r.add_argument("--dir", required=True, help="folder holding the downloads and their .exit and .log files")
     r.add_argument("--db", required=True)
     r.add_argument("--out", required=True, help="where to write the restore record (source, counts)")
-    r.add_argument("--bucket", default=os.environ.get("BUCKET") or "awardwatch-data",
-                   help="the R2 bucket holding backups/weekly/ (default $BUCKET, else awardwatch-data)")
+    r.add_argument("--bucket", default=os.environ.get("BUCKET") or resilience.DATA_BUCKET,
+                   help=f"the R2 bucket holding backups/weekly/ (default $BUCKET, else {resilience.DATA_BUCKET})")
     v = sub.add_parser("verify")
     v.add_argument("--db", required=True)
     v.add_argument("--static", required=True)
@@ -670,9 +824,6 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--db", required=True)
     s.add_argument("--started-file", default=None)
     s.add_argument("--verify", default=None)
-    s.add_argument("--outcome", default=None, help="the X post's outcome file")
-    s.add_argument("--bluesky-outcome", default=None, help="the Bluesky post's outcome file")
-    s.add_argument("--zenodo-outcome", default=None, help="the Zenodo deposit's outcome file")
     s.add_argument("--search-outcome", default=None, help="the search database sync's outcome file")
     s.add_argument("--views-outcome", default=None, help="the audience roll-up's outcome file")
     s.add_argument("--indexnow-outcome", default=None, help="the IndexNow submission's outcome file")
@@ -687,9 +838,18 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--out", required=True)
     pk = sub.add_parser("pack")
     pk.add_argument("--db", required=True)
-    pk.add_argument("--out", required=True, help="the gzip file to write")
-    pk.add_argument("--max-mib", type=float, default=MAX_UPLOAD_MIB,
-                    help=f"fail when the gzip is larger than this (default {MAX_UPLOAD_MIB}, Wrangler's upload cap)")
+    pk.add_argument("--out", required=True, help="the gzip to write; its parts and manifest go beside it")
+    pk.add_argument("--part-mib", type=float, default=PART_MIB,
+                    help=f"the largest part, in MiB (default {PART_MIB}; Wrangler refuses one upload above 300)")
+    ps = sub.add_parser("prev-set", help="re-split the restored backup as the previous backup's parts")
+    ps.add_argument("--dir", required=True, help="the restore folder, holding the whole awardwatch.sqlite.gz")
+    ps.add_argument("--out-dir", required=True, help="where the previous set's parts and manifest are written")
+    ps.add_argument("--part-mib", type=float, default=PART_MIB)
+    sp = sub.add_parser("split", help="split a gzip into a named set of parts and its manifest")
+    sp.add_argument("--src", required=True)
+    sp.add_argument("--base", required=True, help="the set's name (its parts are <base>.000 ...)")
+    sp.add_argument("--out-dir", required=True)
+    sp.add_argument("--part-mib", type=float, default=PART_MIB)
     g = sub.add_parser("gate", help="skip=true when today's run already finished clean")
     g.add_argument("--status", required=True, help="status.json as downloaded from R2 (may be missing)")
     g.add_argument("--today", required=True, help="today's UTC date, YYYY-MM-DD")
@@ -700,7 +860,7 @@ def main(argv: list[str] | None = None) -> int:
     sm.add_argument("--base-url", required=True)
     sm.add_argument("--data-date", default=None, help="the data date the home and data pages must show")
     sm.add_argument("--stats", default=None, help="stats.json: the data date when --data-date is not given, "
-                                                   "and the employer whose profile is fetched")
+                                                   "and the organization whose profile is fetched")
     sm.add_argument("--out", required=True)
     sm.add_argument("--settle", type=float, default=resilience.SMOKE_SETTLE_S,
                     help="seconds to wait before the first request")
@@ -733,62 +893,103 @@ def main(argv: list[str] | None = None) -> int:
     ix.add_argument("--out-dir", default=None,
                     help="where last_outcome.txt and urls.txt are written (default data/out/indexnow)")
     ix.add_argument("--dry-run", action="store_true", help="select and list the URLs, send nothing")
-    args = parser.parse_args(argv)
+    # The audience counts (views_rollup.py, docs/search-engines.md section 6):
+    # the days Analytics Engine still holds and summary.csv lacks, as files
+    # the workflow uploads to R2. Needs CLOUDFLARE_ANALYTICS_TOKEN and
+    # CLOUDFLARE_ACCOUNT_ID; without the token it does nothing.
+    rv = sub.add_parser("rollup-views", help="save the audience counts of finished UTC days as CSV files")
+    rv.add_argument("--out", default=None,
+                    help="folder holding summary.csv; the day files go beside it (default data/out/views)")
+    rv.add_argument("--day", default=None,
+                    help="roll up this UTC day only (YYYY-MM-DD, within the last 90 days); default: every day due")
+    rv.add_argument("--stats", default=None,
+                    help="tonight's stats.json, for the organization and record counts (default data/out/static/stats.json)")
+    # Search Console's figures (search_console.py, docs/search-engines.md
+    # section 6): every final day after the newest in search_console.csv.
+    # Needs GSC_SERVICE_ACCOUNT_JSON; without it the outcome is "no credentials".
+    gs = sub.add_parser("import-search-console", help="append Search Console's daily figures to search_console.csv")
+    gs.add_argument("--out", default=None,
+                    help="folder holding search_console.csv; outcome.txt goes beside it (default data/out/search_console)")
+    # The monthly audience report (views_report.py), from the files in R2.
+    vp = sub.add_parser("views-report", help="write the audience report of a finished UTC month")
+    vp.add_argument("--month", default=None, help="YYYY-MM (default: the month before today, UTC)")
+    vp.add_argument("--summary", required=True, help="views/summary.csv as downloaded from R2")
+    vp.add_argument("--search", default=None, help="views/search_console.csv as downloaded from R2, when it exists")
+    vp.add_argument("--out", required=True, help="folder for report-<month>.md, summary_line.txt and outcome.txt")
+    vp.add_argument("--today", default=None, help="YYYY-MM-DD (default: today, UTC)")
+    return parser
 
-    if args.command == "pack":
-        ok, message, _ = pack(Path(args.db), Path(args.out), args.max_mib)
-        (log.info if ok else log.error)("pack: %s", message)
-        return 0 if ok else 1
 
-    if args.command == "restore":
-        ok, record = restore_record(Path(args.dir), Path(args.db), _weekly_source(args.bucket))
-        _write_json(Path(args.out), record)
-        (log.info if ok else log.error)("restore: %s", record["message"])
-        return 0 if ok else 1
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    args = build_parser().parse_args(argv)
+    handlers = {
+        "pack": _pack, "prev-set": _prev_set, "split": _split, "restore": _restore, "verify": _verify,
+        "status": _status, "gate": _gate, "live-version": _live_version, "smoke": _smoke, "checks": _checks,
+        "attention": _attention, "notices": _notice_section, "site-bundle-check": _site_bundle_check,
+        "indexnow": _indexnow, "rollup-views": _rollup_views, "import-search-console": _import_search_console,
+        "views-report": _views_report,
+    }
+    return handlers[args.command](args)
 
-    if args.command == "verify":
+
+def _pack(args: argparse.Namespace) -> int:
+    ok, message, _ = pack(Path(args.db), Path(args.out), args.part_mib)
+    (log.info if ok else log.error)("pack: %s", message)
+    return 0 if ok else 1
+
+
+def _prev_set(args: argparse.Namespace) -> int:
+    try:
+        names = prev_set(Path(args.dir), Path(args.out_dir), args.part_mib)
+    except (OSError, ValueError) as exc:
+        log.error("prev-set: %s", exc)
+        return 1
+    log.info("prev-set: %d part(s) and %s%s in %s", len(names), PREVIOUS, PARTS_SUFFIX, args.out_dir)
+    return 0
+
+
+def _split(args: argparse.Namespace) -> int:
+    try:
+        names = split_parts(Path(args.src), Path(args.out_dir), args.base, max(int(args.part_mib * 1024 * 1024), 1))
+    except (OSError, ValueError) as exc:
+        log.error("split: %s", exc)
+        return 1
+    log.info("split: %d part(s) and %s%s in %s", len(names), args.base, PARTS_SUFFIX, args.out_dir)
+    return 0
+
+
+def _restore(args: argparse.Namespace) -> int:
+    ok, record = restore_record(Path(args.dir), Path(args.db), _weekly_source(args.bucket))
+    _write_json(Path(args.out), record)
+    (log.info if ok else log.error)("restore: %s", record["message"])
+    return 0 if ok else 1
+
+
+def _verify(args: argparse.Namespace) -> int:
+    try:
+        record = json.loads(_read(args.restore) or "{}")
+    except ValueError:
         record = {}
-        try:
-            record = json.loads(_read(args.restore) or "{}")
-        except ValueError:
-            record = {}
-        result = verify(Path(args.db), Path(args.static), _parse_time(_read(args.started_file)), record.get("counts") or {})
-        _write_json(Path(args.out), result)
-        for p in result["problems"]:
-            log.warning("check: %s", p)
-        target = os.environ.get("GITHUB_OUTPUT")
-        if target:
-            with open(target, "a", encoding="utf-8") as fh:
-                fh.write(f"db_ok={'true' if result['db_ok'] else 'false'}\n")
-                fh.write(f"export_ok={'true' if result['export_ok'] else 'false'}\n")
-        log.info("verify: db_ok=%s export_ok=%s", result["db_ok"], result["export_ok"])
-        return 0
+    counts = record.get("counts") if isinstance(record, dict) else None
+    result = verify(Path(args.db), Path(args.static), _parse_time(_read(args.started_file)),
+                    counts if isinstance(counts, dict) else {})
+    _write_json(Path(args.out), result)
+    for p in result["problems"]:
+        log.warning("check: %s", p)
+    _output(db_ok="true" if result["db_ok"] else "false", export_ok="true" if result["export_ok"] else "false")
+    log.info("verify: db_ok=%s export_ok=%s", result["db_ok"], result["export_ok"])
+    return 0
 
-    if args.command == "gate":
-        return _gate(args)
-    if args.command == "live-version":
-        return _live_version(args)
-    if args.command == "smoke":
-        return _smoke(args)
-    if args.command == "checks":
-        return _checks(args)
-    if args.command == "attention":
-        return _attention(args)
-    if args.command == "notices":
-        return _notice_section(args)
-    if args.command == "site-bundle-check":
-        return _site_bundle_check(args)
-    if args.command == "indexnow":
-        return _indexnow(args)
 
+def _status(args: argparse.Namespace) -> int:
     verify_result = None
     try:
         verify_result = json.loads(_read(args.verify) or "null")
     except ValueError:
         verify_result = {"problems": ["the check results could not be read"]}
     steps = dict(item.split("=", 1) for item in args.step if "=" in item)
-    status = run_status(Path(args.db), _read(args.started_file), verify_result, _read(args.outcome), steps,
-                        bluesky=_read(args.bluesky_outcome), zenodo=_read(args.zenodo_outcome),
+    status = run_status(Path(args.db), _read(args.started_file), verify_result, steps,
                         search=_read(args.search_outcome), views=_read(args.views_outcome),
                         restore_info=_read_json(args.restore), smoke=_read_json(args.smoke),
                         rollback=_read(args.rollback_outcome), version_before=_read(args.version_before),
@@ -903,6 +1104,49 @@ def _indexnow(args: argparse.Namespace) -> int:
     log.info("indexnow: %d URLs selected, %d accepted, %d of %d batches sent; the list is in %s",
              record["urls"], record["accepted"], record["sent"], record["batches"], out / indexnow.URLS_FILE)
     return 1 if rejected else 0
+
+
+def _rollup_views(args: argparse.Namespace) -> int:
+    """Exit 1 only when the roll-up failed. The workflow writes the outcome
+    for the run status itself, after the uploads, because a night counts as
+    rolled up only once its files are in R2."""
+    from . import views_rollup
+
+    day = date.fromisoformat(args.day) if args.day else None
+    outcome = views_rollup.run(Path(args.out) if args.out else None, day=day,
+                               stats_path=Path(args.stats) if args.stats else None)
+    log.info("rollup-views: %s", outcome)
+    print(f"rollup-views: {outcome}")
+    return 1 if outcome == "failed" else 0
+
+
+def _import_search_console(args: argparse.Namespace) -> int:
+    """Exit 1 only when the import failed. outcome.txt holds the outcome for the
+    workflow, which reports it once the file is in R2."""
+    from . import search_console
+
+    folder = Path(args.out) if args.out else config.OUT_DIR / "search_console"
+    outcome = search_console.run(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "outcome.txt").write_text(outcome + "\n", encoding="utf-8")
+    log.info("import-search-console: %s", outcome)
+    print(f"import-search-console: {outcome}")
+    return 1 if outcome == "failed" else 0
+
+
+def _views_report(args: argparse.Namespace) -> int:
+    """Exit 1 only when the report failed; "waiting" and "no data" are not failures."""
+    from . import views_report
+
+    today = date.fromisoformat(args.today) if args.today else datetime.now(timezone.utc).date()
+    month = args.month or views_report.report_month(today)
+    out = Path(args.out)
+    outcome = views_report.run(out, month, today, Path(args.summary), Path(args.search) if args.search else None)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "outcome.txt").write_text(outcome + "\n", encoding="utf-8")
+    log.info("views-report %s: %s", month, outcome)
+    print(f"views-report {month}: {outcome}")
+    return 1 if outcome == "failed" else 0
 
 
 def _summary(lines: list[str]) -> None:

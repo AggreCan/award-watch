@@ -17,11 +17,12 @@ from awardwatch_pipeline import nightly, resilience
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "deploy-site.yml"
 NIGHTLY = ROOT / ".github" / "workflows" / "nightly.yml"
-BASE = "https://lmiawatch.example"
+BASE = "https://awardwatch.example"
 
-STATS = {"data_as_of": "2026-10-22", "counts": {"employers": 166497}, "top_approvals": [{"employer_id": "emp-a000000005"}]}
-FACETS = {"province": {"BC": 10, "ON": 12}, "status": {"approved": 20, "pending": 2}}
-FIRST = {"rows": [{"key": 2, "name": "Example Farms Ltd", "positions": 4}], "total": 1}
+STATS = {"data_as_of": "2026-10-22", "counts": {"organizations": 91234},
+         "top_organizations_year": [{"id": "org-a000000005", "name": "Example Works Ltd", "n": 3, "total": 125000.0}]}
+OPEN = [{"reference": "cb-100-10000001", "amendment": 1, "title_en": "Snow removal", "provinces": ["BC", "ON"],
+         "segments": ["72"], "closing": "2026-11-04T14:00:00"}]
 
 
 class Resp:
@@ -56,9 +57,9 @@ def body(data, **dump):
     return Resp(200, json.dumps(data, **dump).encode("utf-8"))
 
 
-def make_bundle(folder, stats=STATS, facets=FACETS, first=FIRST):
-    (folder / "search").mkdir(parents=True, exist_ok=True)
-    for rel, data in (("stats.json", stats), ("search/facets.json", facets), ("search/first.json", first)):
+def make_bundle(folder, stats=STATS, open_rows=OPEN):
+    (folder / "tenders").mkdir(parents=True, exist_ok=True)
+    for rel, data in (("stats.json", stats), ("tenders/open.json", open_rows)):
         if data is not None:
             (folder / rel).write_text(json.dumps(data), encoding="utf-8")
     return folder
@@ -66,8 +67,7 @@ def make_bundle(folder, stats=STATS, facets=FACETS, first=FIRST):
 
 def live(**overrides):
     routes = {f"{BASE}/data/stats.json": body(STATS, indent=2),
-              f"{BASE}/data/search/facets.json": body(FACETS),
-              f"{BASE}/data/search/first.json": body(FIRST)}
+              f"{BASE}/data/tenders/open.json": body(OPEN)}
     routes.update({f"{BASE}/data/{k.replace('__', '/')}": v for k, v in overrides.items()})
     return FakeHttp(routes)
 
@@ -92,18 +92,18 @@ def test_an_archive_equal_to_the_live_files_passes(tmp_path):
     http = live(**{"stats.json": Resp(200, json.dumps(dict(reversed(list(STATS.items()))), indent=4).encode())})
     record, live_stats, waits = check(http, bundle)
     assert record["ok"] is True and waits == []
-    assert [f["result"] for f in record["files"]] == ["same", "same", "same"]
+    assert [f["result"] for f in record["files"]] == ["same", "same"]
     assert [u for u, _ in http.calls] == [f"{BASE}/data/{rel}" for rel in resilience.BUNDLE_FILES]
-    assert all(h["User-Agent"].startswith("LMIAWatch/") and h["Cache-Control"] == "no-cache" for _, h in http.calls)
+    assert all(h["User-Agent"].startswith("AwardWatch/") and h["Cache-Control"] == "no-cache" for _, h in http.calls)
     assert json.loads(live_stats) == STATS
 
 
 @pytest.mark.parametrize("rel, changed", [
     ("stats.json", dict(STATS, data_as_of="2026-10-23")),
-    ("search/facets.json", dict(FACETS, province={"BC": 10, "ON": 13})),
+    ("tenders/open.json", [dict(OPEN[0], provinces=["BC"])]),
     # A change of type is a difference even where Python would call it equal.
-    ("search/first.json", dict(FIRST, total=True)),
-    ("search/first.json", dict(FIRST, total=1.0)),
+    ("tenders/open.json", [dict(OPEN[0], amendment=True)]),
+    ("tenders/open.json", [dict(OPEN[0], amendment=1.0)]),
 ])
 def test_a_file_that_differs_fails_and_is_named(tmp_path, rel, changed):
     bundle = make_bundle(tmp_path / "static")
@@ -116,22 +116,21 @@ def test_a_file_that_differs_fails_and_is_named(tmp_path, rel, changed):
 
 
 def test_a_file_missing_from_the_archive_fails_without_asking_the_site(tmp_path):
-    bundle = make_bundle(tmp_path / "static", facets=None)
+    bundle = make_bundle(tmp_path / "static", open_rows=None)
     http = live()
     record, _, _ = check(http, bundle)
     assert record["ok"] is False
-    assert results(record)[("search/facets.json", f"{BASE}/data/search/facets.json")] == "missing"
-    assert [f["note"] for f in record["files"] if f["result"] == "missing"] == ["search/facets.json: not in the archive"]
-    assert f"{BASE}/data/search/facets.json" not in [u for u, _ in http.calls]
+    assert results(record)[("tenders/open.json", f"{BASE}/data/tenders/open.json")] == "missing"
+    assert [f["note"] for f in record["files"] if f["result"] == "missing"] == ["tenders/open.json: not in the archive"]
+    assert f"{BASE}/data/tenders/open.json" not in [u for u, _ in http.calls]
 
 
 def test_a_file_the_site_does_not_serve_fails(tmp_path):
     bundle = make_bundle(tmp_path / "static")
-    record, _, waits = check(FakeHttp({f"{BASE}/data/stats.json": body(STATS),
-                                       f"{BASE}/data/search/facets.json": body(FACETS)}), bundle)
+    record, _, waits = check(FakeHttp({f"{BASE}/data/stats.json": body(STATS)}), bundle)
     assert record["ok"] is False
-    first = [f for f in record["files"] if f["file"] == "search/first.json"][0]
-    assert first["result"] == "unreachable" and first["note"] == f"search/first.json: {BASE}/data/search/first.json answered 404"
+    rows = [f for f in record["files"] if f["file"] == "tenders/open.json"][0]
+    assert rows["result"] == "unreachable" and rows["note"] == f"tenders/open.json: {BASE}/data/tenders/open.json answered 404"
     assert waits == [10]
 
 
@@ -152,20 +151,20 @@ def test_an_http_error_fails_after_one_more_try(tmp_path, answer, note):
 
 def test_an_error_that_clears_on_the_second_try_passes(tmp_path):
     bundle = make_bundle(tmp_path / "static")
-    http = live(**{"search__first.json": [Resp(502, b"bad gateway"), body(FIRST)]})
+    http = live(**{"tenders__open.json": [Resp(502, b"bad gateway"), body(OPEN)]})
     record, _, waits = check(http, bundle)
     assert record["ok"] is True and waits == [10]
 
 
 def test_a_body_that_is_not_json_fails(tmp_path):
     bundle = make_bundle(tmp_path / "static")
-    (bundle / "search" / "first.json").write_text("{not json", encoding="utf-8")
+    (bundle / "tenders" / "open.json").write_text("{not json", encoding="utf-8")
     http = live(**{"stats.json": Resp(200, b"<html>a page, not the file</html>")})
     record, _, _ = check(http, bundle)
     notes = {f["file"]: f["note"] for f in record["files"] if f["result"] == "unreadable"}
     assert record["ok"] is False
     assert notes == {"stats.json": f"stats.json: {BASE}/data/stats.json is not JSON",
-                     "search/first.json": "search/first.json: the archive's copy is not JSON"}
+                     "tenders/open.json": "tenders/open.json: the archive's copy is not JSON"}
 
 
 def test_the_saved_stats_are_compared_as_well(tmp_path):
@@ -194,20 +193,20 @@ def test_site_bundle_check_command(tmp_path, monkeypatch, caplog):
     assert nightly.main(args + ["--keep-live-stats", str(kept), "--title", "Before the deploy"]) == 0
     assert json.loads(kept.read_bytes()) == STATS
     text = summary.read_text(encoding="utf-8")
-    assert text.startswith("#### Before the deploy\n") and text.count("| same |") == 3
+    assert text.startswith("#### Before the deploy\n") and text.count("| same |") == 2
 
-    # After the deploy: the live facets changed, so the command fails, names
-    # the file in the log and the summary, and keeps nothing.
-    monkeypatch.setattr(nightly, "_session", lambda: live(**{"search__facets.json": body({"province": {}})}))
+    # After the deploy: the live open notices changed, so the command fails,
+    # names the file in the log and the summary, and keeps nothing.
+    monkeypatch.setattr(nightly, "_session", lambda: live(**{"tenders__open.json": body([])}))
     kept.unlink()
     assert nightly.main(args + ["--saved-stats", str(tmp_path / "work" / "missing.json"),
                                 "--keep-live-stats", str(kept)]) == 1
     assert not kept.exists()
-    assert f"search/facets.json: the archive and {BASE}/data/search/facets.json differ" in caplog.text
+    assert f"tenders/open.json: the archive and {BASE}/data/tenders/open.json differ" in caplog.text
     text = summary.read_text(encoding="utf-8")
-    assert "| search/facets.json | https://lmiawatch.example/data/search/facets.json | differs |" in text
+    assert "| tenders/open.json | https://awardwatch.example/data/tenders/open.json | differs |" in text
     assert "| stats.json | the copy saved before the deploy | unreachable |" in text
-    assert "2 of 4 comparisons failed" in text
+    assert "2 of 3 comparisons failed" in text
 
 
 # -- the workflow guard ----------------------------------------------------------
@@ -383,7 +382,7 @@ PLANTED = [
     ("a commit", "          test -s \"$WORK/stats.before.json\"", "          git commit -am x && git push"),
     ("a direct API call", "          test -s \"$WORK/stats.before.json\"",
      "          curl -X PUT https://api.cloudflare.com/client/v4/accounts/x/r2/buckets/awardwatch-data/objects/x"),
-    ("another secret", "REASON: ${{ inputs.reason }}", "REASON: ${{ secrets.ZENODO_TOKEN }}"),
+    ("another secret", "REASON: ${{ inputs.reason }}", "REASON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}"),
     ("another action", "      - uses: actions/checkout@v4", "      - uses: ./.github/workflows/nightly.yml"),
 ]
 

@@ -93,8 +93,9 @@ def _api_codes(resp: Any) -> set[int]:
 def gate(status: Any, today: date) -> tuple[bool, str]:
     """(skip, reason) for a retry trigger. Skip only when the status shows that
     a run finished today (UTC) clean and deployed; anything else, a missing or
-    unreadable status included, runs the refresh again. The pipeline's
-    20-hour guard keeps a second Job Bank pass from following a complete one."""
+    unreadable status included, runs the refresh again. A second refresh on
+    the same day costs only a conditional request per source file: the
+    files that did not change since the first are not downloaded again."""
     if not isinstance(status, dict):
         return False, "no readable run status, so the refresh runs"
     when = _parse_iso(status.get("run_at"))
@@ -182,7 +183,7 @@ def live_version(text: str) -> str | None:
 
 # -- smoke test ---------------------------------------------------------------
 
-SMOKE_PAGES = ("/", "/search", "/data")
+SMOKE_PAGES = ("/", "/tenders", "/data")
 # Pages that print the data date (the layout's "Data as of"); the deploy
 # carried tonight's export only if they show it.
 DATED_PAGES = {"/", "/data"}
@@ -190,7 +191,7 @@ SMOKE_RETRY_S = 30.0
 # A new version reaches every edge location within seconds of the deploy.
 SMOKE_SETTLE_S = 20.0
 SMOKE_TIMEOUT_S = 30.0
-EMPLOYER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+ORG_ID_RE = re.compile(r"^org-[0-9a-f]{10}$")
 # Text of Cloudflare's challenge and block pages. The edge answers a challenge
 # with 403 or, in Under Attack Mode, 503; neither says anything about the Worker.
 CHALLENGE_MARKERS = ("cf-chl", "challenge-platform", "just a moment...", "attention required! | cloudflare",
@@ -262,14 +263,15 @@ def fetch(http: Any, base_url: str, path: str, data_date: str | None, timeout: f
 
 
 def smoke_paths(stats: Any) -> list[str]:
-    """The pages to fetch: home, search, data, and the first employer of the
-    approvals table when stats.json names a well-formed id."""
+    """The pages to fetch: home, open tenders, data, and the profile of the
+    first organization in the year's top list when stats.json names a
+    well-formed id (a profile reads a shard, the path most likely to break)."""
     paths = list(SMOKE_PAGES)
-    rows = stats.get("top_approvals") if isinstance(stats, dict) else None
+    rows = stats.get("top_organizations_year") if isinstance(stats, dict) else None
     for row in rows if isinstance(rows, list) else []:
-        eid = row.get("employer_id") if isinstance(row, dict) else None
-        if isinstance(eid, str) and EMPLOYER_ID_RE.match(eid):
-            paths.append(f"/employers/{eid}")
+        oid = row.get("id") if isinstance(row, dict) else None
+        if isinstance(oid, str) and ORG_ID_RE.match(oid):
+            paths.append(f"/organizations/{oid}")
             break
     return paths
 
@@ -315,9 +317,9 @@ def smoke(http: Any, base_url: str, data_date: str | None, paths: list[str], *,
 # The files the site-only deploy (.github/workflows/deploy-site.yml) compares
 # between R2's static.tar.gz and the live site. stats.json lists the newest
 # runs with their times and changes with every refresh, so an archive from
-# any other night fails; the two search files are what the search page shows
-# first.
-BUNDLE_FILES = ("stats.json", "search/facets.json", "search/first.json")
+# any other night fails; the open notices are the list the tender pages and
+# the feeds are built from.
+BUNDLE_FILES = ("stats.json", "tenders/open.json")
 BUNDLE_RETRY_S = 10.0
 # The Worker refuses an asset above 25 MiB, so nothing larger is one of its files.
 MAX_BUNDLE_FILE = 25 * 1024 * 1024
@@ -426,7 +428,10 @@ def bundle_check(http: Any, base_url: str, bundle: Path, saved_stats: Path | Non
 
 DATA_BUCKET = "awardwatch-data"
 WEEKLY_PREFIX = "backups/weekly/db-slot-"
-WEEKLY_RE = re.compile(r"^backups/weekly/db-slot-\d+\.sqlite\.gz$")
+# A weekly snapshot is a set of parts named by its manifest
+# (db-slot-N.sqlite.gz.parts, uploaded after its parts, so its time is the
+# set's), or a single file from before the backups were split.
+WEEKLY_RE = re.compile(r"^backups/weekly/db-slot-\d+\.sqlite\.gz(?:\.parts)?$")
 # A listing of the weekly folder is a handful of objects; the cap only bounds
 # a cursor that never ends.
 MAX_LIST_PAGES = 20
@@ -487,8 +492,9 @@ class R2Rest:
         raise R2Error(f"the listing did not end after {MAX_LIST_PAGES} pages")
 
     def newest_weekly(self) -> tuple[str, str] | None:
-        """(key, upload time) of the newest weekly database snapshot, or None
-        when the bucket holds none. Raises R2Error when that cannot be known."""
+        """(key, upload time) of the newest weekly database snapshot (its
+        manifest, or the single file), or None when the bucket holds none.
+        Raises R2Error when that cannot be known."""
         best: tuple[datetime, str, str] | None = None
         undated = 0
         for obj in self.list(WEEKLY_PREFIX):
@@ -741,15 +747,6 @@ def attention_items(status: Any) -> list[str]:
         return ["no run status was written"]
     items = [f"{x.get('source')}: {x.get('detail', '')}" for x in status.get("stages") or []
              if isinstance(x, dict) and not x.get("ok")]
-    if status.get("x_post") in ("failed", "no credentials"):
-        items.append(f"X post: {status['x_post']}")
-    elif status.get("x_post") == "unverified":
-        # Recorded as posted so no run repeats it, but X never confirmed it.
-        items.append("X post: unverified after an error from X; check the account")
-    if status.get("bluesky_post") in ("failed", "no credentials"):
-        items.append(f"Bluesky post: {status['bluesky_post']}")
-    if status.get("zenodo_deposit") == "failed":
-        items.append("Zenodo deposit: failed (tried again next run)")
     if status.get("search_sync") == "failed":
         items.append("Search database sync: failed (sent again next run)")
     if status.get("views_rollup") == "failed":
@@ -776,27 +773,22 @@ def attention_items(status: Any) -> list[str]:
     restore = status.get("restore")
     if isinstance(restore, dict) and restore.get("source") == "weekly":
         items.append(f"Restored from the weekly snapshot {restore.get('weekly_key')} "
-                     f"(uploaded {restore.get('weekly_uploaded')}): both nightly backups were missing or damaged, "
-                     f"so the Job Bank observations since that snapshot are lost")
+                     f"(uploaded {restore.get('weekly_uploaded')}): both nightly backups were missing or damaged; "
+                     f"the records published since that snapshot are read again from the source files by this "
+                     f"and the next runs, and the first-seen dates of that week are the dates of the re-read")
     checks = status.get("checks")
     if isinstance(checks, dict):
         items.extend(f"Expiry check: {i}" for i in checks.get("items") or [] if isinstance(i, str))
-    # A designated-employer list loaded by hand whose publisher has a newer
-    # edition: someone has to load it by hand, so it is an item, not a notice.
-    registers = status.get("registers")
-    attention = registers.get("attention") if isinstance(registers, dict) else None
-    if isinstance(attention, list):
-        items.extend(i for i in attention if isinstance(i, str) and i)
     # The run's notices (notice_items) are not here: they never fail the step
     # or open the issue.
     return items
 
 
 def notice_items(status: Any) -> list[str]:
-    """The run's notices, one line each: a government notice first listed, IRCC's
-    high-wage list adopted or unreadable, a designated-employer list or a news
-    feed that changed state. Information, never an item needing attention: they
-    go to LAST_RUN.md and the daily check's email, and the run stays ok."""
+    """The run's notices, one line each: a buyer spelling the seed does not map
+    yet, a source file not published yet, a stage not built. Information,
+    never an item needing attention: they go to LAST_RUN.md and the daily
+    check's email, and the run stays ok."""
     if not isinstance(status, dict):
         return []
     return [f"{n.get('source') or 'notice'}: {n['detail']}" for n in status.get("notices") or []

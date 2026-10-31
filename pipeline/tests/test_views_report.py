@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 
-from awardwatch_pipeline import cli, nightly, resilience, search_console as sc, views_report as vrep, views_rollup as vr
+from awardwatch_pipeline import nightly, resilience, search_console as sc, views_report as vrep, views_rollup as vr
 
 
 def summary_row(day: str, **values) -> dict:
@@ -28,15 +28,15 @@ def people(human: int, ca: int, us: int, desktop: int, mobile: int, routes: dict
 
 ROWS = [
     # September: before the bot flag, the people columns blank.
-    summary_row("2026-09-29", feed_subscribers=10, bluesky_followers=40),
-    summary_row("2026-09-30", feed_subscribers=12, employers=165000, records=470000),
+    summary_row("2026-09-29", feed_subscribers=10, organizations=90000),
+    summary_row("2026-09-30", feed_subscribers=12, organizations=91000, records=1970000),
     # October: the 29th before the visitor code was set, then two full days.
-    summary_row("2026-10-29", **people(100, 80, 10, 60, 30, {"/employers/:id": 70, "/": 30}, "", ""),
-                feed_subscribers=15, bluesky_followers=50),
-    summary_row("2026-10-30", **people(200, 150, 30, 120, 70, {"/employers/:id": 150, "/search": 50}, 120, 110),
-                feed_subscribers=14, employers=166000, records=474000),
-    summary_row("2026-10-31", **people(300, 240, 40, 150, 130, {"/employers/:id": 200, "/": 60, "/search": 40}, 180, 170),
-                feed_subscribers=13, bluesky_followers=57, x_followers=31, employers=166497, records=474402),
+    summary_row("2026-10-29", **people(100, 80, 10, 60, 30, {"/organizations/:id": 70, "/": 30}, "", ""),
+                feed_subscribers=15),
+    summary_row("2026-10-30", **people(200, 150, 30, 120, 70, {"/organizations/:id": 150, "/tenders": 50}, 120, 110),
+                feed_subscribers=14, organizations=91200, records=2000000),
+    summary_row("2026-10-31", **people(300, 240, 40, 150, 130, {"/organizations/:id": 200, "/": 60, "/tenders": 40}, 180, 170),
+                feed_subscribers=13, organizations=91234, records=2010000),
 ]
 SEARCH = [
     {"date": "2026-10-28", "clicks": "10", "impressions": "100", "ctr": "0.1", "position": "8.0", "top_queries": "[]"},
@@ -71,7 +71,7 @@ def test_the_report_puts_the_month_beside_the_three_before_it(tmp_path):
     out = tmp_path / "out"
     assert vrep.run(out, "2026-10", date(2026, 11, 1), summary, search) == "written"
     text = (out / "report-2026-10.md").read_text(encoding="utf-8")
-    assert text.startswith("# LMIA Watch audience report, 2026-10\n")
+    assert text.startswith("# Award Watch audience report, 2026-10\n")
     assert "| Figure | 2026-07 | 2026-08 | 2026-09 | 2026-10 |" in text
     assert table_row(text, "Days in the roll-up") == ["0 of 31", "0 of 31", "2 of 30", "3 of 31"]
     assert table_row(text, "Days with people counted") == ["0 of 31", "0 of 31", "0 of 30", "3 of 31"]
@@ -88,13 +88,11 @@ def test_the_report_puts_the_month_beside_the_three_before_it(tmp_path):
     assert table_row(text, "Search impressions") == ["n/a", "n/a", "50", "400"]
     assert table_row(text, "Average search position") == ["n/a", "n/a", "10.0", "5.0"]  # (8x100 + 4x300) / 400
     assert table_row(text, "Feed subscribers (largest daily figure)") == ["n/a", "n/a", "12", "15"]
-    assert table_row(text, "Bluesky followers (last reading)") == ["n/a", "n/a", "40", "57"]
-    assert table_row(text, "X followers (last reading)") == ["n/a", "n/a", "n/a", "31"]
-    assert table_row(text, "Employers (last reading)") == ["n/a", "n/a", "165,000", "166,497"]
-    assert table_row(text, "Records (last reading)") == ["n/a", "n/a", "470,000", "474,402"]
+    assert table_row(text, "Organizations (last reading)") == ["n/a", "n/a", "91,000", "91,234"]
+    assert table_row(text, "Records (last reading)") == ["n/a", "n/a", "1,970,000", "2,010,000"]
     pages = text.split("## Top pages by people, 2026-10", 1)[1]
-    assert "| `/employers/:id` | 420 | 70.0% |" in pages
-    assert pages.index("`/employers/:id`") < pages.index("`/` ") < pages.index("`/search`")
+    assert "| `/organizations/:id` | 420 | 70.0% |" in pages
+    assert pages.index("`/organizations/:id`") < pages.index("`/` ") < pages.index("`/tenders`")
     assert "## Definitions" in text
     for dash in (chr(0x2014), chr(0x2013)):  # no em or en dash in the report's prose
         assert dash not in text
@@ -138,20 +136,20 @@ def test_the_command_writes_its_outcome_and_exits_1_only_when_failed(tmp_path):
     summary, search = write_files(tmp_path)
     out = tmp_path / "out"
     args = ["views-report", "--summary", str(summary), "--search", str(search), "--out", str(out)]
-    assert cli.main(args + ["--today", "2026-11-01"]) == 0
+    assert nightly.main(args + ["--today", "2026-11-01"]) == 0
     assert (out / "outcome.txt").read_text(encoding="utf-8") == "written\n"
     assert (out / "report-2026-10.md").exists()
-    assert cli.main(args + ["--today", "2026-10-31", "--month", "2026-10"]) == 1
+    assert nightly.main(args + ["--today", "2026-10-31", "--month", "2026-10"]) == 1
     assert (out / "outcome.txt").read_text(encoding="utf-8") == "failed\n"
-    assert cli.main(["views-report", "--summary", str(tmp_path / "none.csv"), "--out", str(out),
+    assert nightly.main(["views-report", "--summary", str(tmp_path / "none.csv"), "--out", str(out),
                      "--today", "2026-11-01"]) == 0
     assert (out / "outcome.txt").read_text(encoding="utf-8") == "no data\n"
 
 
 def test_the_run_status_carries_the_report_and_only_failed_needs_attention(tmp_path):
     db = tmp_path / "none.sqlite"
-    assert nightly.run_status(db, None, None, None, {}, views_report="written")["views_report"] == "written"
-    assert nightly.run_status(db, None, None, None, {})["views_report"] == "not run"
+    assert nightly.run_status(db, None, None, {}, views_report="written")["views_report"] == "written"
+    assert nightly.run_status(db, None, None, {})["views_report"] == "not run"
     clean = {"stages": []}
     for quiet in ("written", "not due", "waiting", "no data", "not run"):
         assert resilience.attention_items({**clean, "views_report": quiet}) == [], quiet

@@ -8,16 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from awardwatch_pipeline import config, indexnow, nightly, resilience, status
-from awardwatch_pipeline.db import connect, upsert_employer
+from awardwatch_pipeline import config, indexnow, nightly, organizations, resilience
+from awardwatch_pipeline.db import connect
 
 ROOT = Path(__file__).resolve().parents[2]
-BASE = "https://lmiawatch.example"
+BASE = "https://awardwatch.example"
 KEY = indexnow.INDEXNOW_KEY
 BEFORE = "2026-10-23T00:04:10Z"
 START = "2026-10-24T00:04:10Z"
-FIXED = [f"{BASE}/", f"{BASE}/search", f"{BASE}/trends", f"{BASE}/occupations", f"{BASE}/places",
-         f"{BASE}/releases", f"{BASE}/program"]
+FIXED = [BASE + p for p in indexnow.FIXED_PAGES]
 
 
 class Resp:
@@ -62,17 +61,29 @@ class KeyFileHttp(FakeHttp):
 
 def send(http, urls, **kwargs):
     waits = []
-    record = indexnow.submit(http, urls, key=KEY, host="lmiawatch.example", key_location=f"{BASE}/{KEY}.txt",
+    record = indexnow.submit(http, urls, key=KEY, host="awardwatch.example", key_location=f"{BASE}/{KEY}.txt",
                              sleep=waits.append, **kwargs)
     return record, waits
 
 
-def employer(conn, name, stamp):
-    return upsert_employer(conn, name, "BC", source="esdc", now=stamp)
+def organization(conn, name, stamp):
+    """An organization whose row was written at stamp (its updated_at)."""
+    return organizations.upsert(conn, name, source="awards", now=stamp)
+
+
+def tender(conn, reference, first_seen, codes=()):
+    conn.execute("INSERT INTO tenders (reference, amendment, status, source_file, first_seen, last_seen) "
+                 "VALUES (?, 0, 'open', 'f.csv', ?, ?)", (reference, first_seen, first_seen))
+    conn.executemany("INSERT INTO tender_codes (reference, amendment, unspsc) VALUES (?, 0, ?)",
+                     [(reference, c) for c in codes])
+
+
+def buyer(conn, bid, stamp):
+    conn.execute("INSERT INTO buyers (id, name_en, updated_at) VALUES (?, ?, ?)", (bid, bid, stamp))
 
 
 def urls_of(n):
-    return [f"{BASE}/employers/emp-{i:010x}" for i in range(n)]
+    return [f"{BASE}/organizations/org-{i:010x}" for i in range(n)]
 
 
 # -- the key file ----------------------------------------------------------------
@@ -82,74 +93,93 @@ def test_the_key_file_at_the_site_root_holds_exactly_the_key():
     assert re.fullmatch(r"[0-9a-f]{32}", KEY)
     key_file = ROOT / "site" / "public" / f"{KEY}.txt"
     assert key_file.is_file()
-    # The whole content, with no newline: an engine compares it with the key.
-    assert key_file.read_bytes() == KEY.encode("ascii")
+    # The whole content: an engine compares it with the key.
+    assert key_file.read_bytes().strip() == KEY.encode("ascii")
+    # No other key file at the root: a stale one would name a key nobody sends.
+    others = [p.name for p in (ROOT / "site" / "public").glob("*.txt") if re.fullmatch(r"[0-9a-f]{32}\.txt", p.name)]
+    assert others == [f"{KEY}.txt"]
 
 
 # -- which pages ------------------------------------------------------------------
 
 
-def test_the_fixed_pages_then_the_employers_changed_since_the_start(conn):
-    old = employer(conn, "Old Farms Ltd", BEFORE)
-    new = employer(conn, "New Farms Ltd", START)
-    later = employer(conn, "Later Farms Ltd", "2026-10-24T02:30:00Z")
+def test_the_fixed_pages_then_the_organizations_changed_since_the_start(conn):
+    old = organization(conn, "Old Supply Ltd", BEFORE)
+    new = organization(conn, "New Supply Ltd", START)
+    later = organization(conn, "Later Supply Ltd", "2026-10-24T02:30:00Z")
     conn.commit()
     urls = indexnow.changed_urls(conn, START, BASE + "/")
-    assert urls == FIXED + [f"{BASE}/employers/{later}", f"{BASE}/employers/{new}"]
-    assert f"{BASE}/employers/{old}" not in urls
+    assert urls == FIXED + [f"{BASE}/organizations/{later}", f"{BASE}/organizations/{new}"]
+    assert f"{BASE}/organizations/{old}" not in urls
+
+
+def test_tenders_first_seen_tonight_their_categories_and_changed_buyers_come_before_organizations(conn):
+    tender(conn, "cb-1-OLD", "2026-10-23", ["72101500"])
+    tender(conn, "cb-2-NEW", "2026-10-24", ["8111", "43"])
+    tender(conn, "SSC-26-1:T", "2026-10-24")
+    buyer(conn, "dnd-mdn", START)
+    buyer(conn, "pwgsc-tpsgc", BEFORE)
+    org = organization(conn, "New Supply Ltd", START)
+    conn.commit()
+    urls = indexnow.changed_urls(conn, START, BASE)
+    assert urls == FIXED + [f"{BASE}/tenders/ssc-26-1-t", f"{BASE}/tenders/cb-2-new", f"{BASE}/categories/43",
+                            f"{BASE}/categories/81", f"{BASE}/buyers/dnd-mdn", f"{BASE}/organizations/{org}"]
 
 
 def test_the_start_may_be_written_in_any_iso_form(conn):
-    eid = employer(conn, "New Farms Ltd", START)
+    oid = organization(conn, "New Supply Ltd", START)
     conn.commit()
     for since in (START, "2026-10-24T00:04:10+00:00", "2026-10-23T17:04:10-07:00", "2026-10-24T00:04:10"):
-        assert indexnow.changed_urls(conn, since, BASE)[-1] == f"{BASE}/employers/{eid}"
+        assert indexnow.changed_urls(conn, since, BASE)[-1] == f"{BASE}/organizations/{oid}"
     assert indexnow.normalize_since("2026-10-24") == "2026-10-24T00:00:00Z"
     for bad in ("", None, "yesterday"):
         with pytest.raises(ValueError):
             indexnow.normalize_since(bad)
 
 
-def test_employers_the_status_stage_rewrote_are_selected_and_unchanged_ones_are_not(conn):
-    a = employer(conn, "Alpha Farms Ltd", BEFORE)
-    b = employer(conn, "Beta Farms Ltd", BEFORE)
-    conn.commit()
-    status.recompute(conn, now=BEFORE)
-    conn.execute(
-        "INSERT INTO esdc_records (list, period, employer_id, employer_raw, province, lmias, positions, resource_id, row_hash) "
-        "VALUES ('positive', '2026Q1', ?, 'Alpha Farms Ltd', 'BC', 1, 4, 'res', 'h1')", (a,))
-    conn.commit()
-    assert status.recompute(conn, now=START) == 1
+def test_organizations_the_recompute_rewrote_are_selected_and_unchanged_ones_are_not(conn):
+    def award(ref, name):
+        oid = organizations.upsert(conn, name, source="awards", now=BEFORE)
+        conn.execute("INSERT INTO awards (reference, amendment, supplier_raw, organization_id, awarded, total_value, "
+                     "source_file, first_seen, last_seen) VALUES (?, 0, ?, ?, '2026-01-02', 10, 'f', ?, ?)",
+                     (ref, name, oid, BEFORE[:10], BEFORE[:10]))
+        return oid
+
+    a, b = award("A1", "Alpha Supply Ltd"), award("B1", "Beta Supply Ltd")
+    organizations.recompute(conn, now=BEFORE)
+    award("A2", "Alpha Supply Ltd")
+    assert organizations.recompute(conn, now=START)["updated"] == 1
     urls = indexnow.changed_urls(conn, START, BASE)
-    assert f"{BASE}/employers/{a}" in urls and f"{BASE}/employers/{b}" not in urls
+    assert f"{BASE}/organizations/{a}" in urls and f"{BASE}/organizations/{b}" not in urls
 
 
 def test_order_is_newest_change_first_with_ties_by_id_whatever_the_insert_order(conn):
     stamp = "2026-10-24T01:00:00Z"
-    ids = [employer(conn, name, stamp) for name in ("Zeta Ltd", "Eta Ltd", "Theta Ltd", "Iota Ltd")]
-    newest = employer(conn, "Kappa Ltd", "2026-10-24T03:00:00Z")
+    ids = [organization(conn, name, stamp) for name in ("Zeta Ltd", "Eta Ltd", "Theta Ltd", "Iota Ltd")]
+    newest = organization(conn, "Kappa Ltd", "2026-10-24T03:00:00Z")
     conn.commit()
     urls = indexnow.changed_urls(conn, START, BASE)
-    assert urls[len(FIXED):] == [f"{BASE}/employers/{e}" for e in [newest] + sorted(ids)]
+    assert urls[len(FIXED):] == [f"{BASE}/organizations/{e}" for e in [newest] + sorted(ids)]
     assert indexnow.changed_urls(conn, START, BASE) == urls
 
 
 def test_no_url_is_sent_twice(conn):
-    eid = employer(conn, "New Farms Ltd", START)
+    oid = organization(conn, "New Supply Ltd", START)
     conn.commit()
-    pages = ["/", "/search", "/search", f"/employers/{eid}"]
+    pages = ["/", "/tenders", "/tenders", f"/organizations/{oid}"]
     urls = indexnow.changed_urls(conn, START, BASE, pages=pages)
-    assert urls == [f"{BASE}/", f"{BASE}/search", f"{BASE}/employers/{eid}"]
+    assert urls == [f"{BASE}/", f"{BASE}/tenders", f"{BASE}/organizations/{oid}"]
     assert len(set(urls)) == len(urls)
 
 
 def test_the_cap_keeps_the_fixed_pages_and_the_most_recent_changes(conn):
     stamps = [f"2026-10-24T0{h}:00:00Z" for h in range(1, 6)]
-    ids = [employer(conn, f"Employer {h} Ltd", s) for h, s in enumerate(stamps)]
+    ids = [organization(conn, f"Supplier {h} Ltd", s) for h, s in enumerate(stamps)]
     conn.commit()
-    urls = indexnow.changed_urls(conn, START, BASE, cap=10)
-    assert len(urls) == 10
-    assert urls == FIXED + [f"{BASE}/employers/{e}" for e in reversed(ids[2:])]
+    cap = len(FIXED) + 3
+    urls = indexnow.changed_urls(conn, START, BASE, cap=cap)
+    assert len(urls) == cap
+    assert urls == FIXED + [f"{BASE}/organizations/{e}" for e in reversed(ids[2:])]
     assert indexnow.CAP == 20_000
     assert len(indexnow.changed_urls(conn, START, BASE, cap=3)) == 3
 
@@ -168,7 +198,7 @@ def test_one_request_per_ten_thousand_urls_with_the_documented_body(monkeypatch)
     first = http.calls[0]
     assert first["url"] == "https://api.indexnow.org/indexnow"
     assert set(first["body"]) == {"host", "key", "keyLocation", "urlList"}
-    assert first["body"]["host"] == "lmiawatch.example"
+    assert first["body"]["host"] == "awardwatch.example"
     assert first["body"]["key"] == KEY
     assert first["body"]["keyLocation"] == f"{BASE}/{KEY}.txt"
     assert first["headers"]["Content-Type"] == "application/json; charset=utf-8"
@@ -277,8 +307,8 @@ def test_the_submission_never_raises():
 def night(tmp_path):
     db = tmp_path / "awardwatch.sqlite"
     conn = connect(db)
-    employer(conn, "Old Farms Ltd", BEFORE)
-    changed = [employer(conn, f"New Farms {i} Ltd", START) for i in range(3)]
+    organization(conn, "Old Supply Ltd", BEFORE)
+    changed = [organization(conn, f"New Supply {i} Ltd", START) for i in range(3)]
     conn.commit()
     conn.close()
     return db, tmp_path / "indexnow", changed
@@ -293,9 +323,9 @@ def test_the_command_sends_and_writes_the_outcome_and_the_list(night, monkeypatc
     http = FakeHttp(200)
     monkeypatch.setattr(nightly, "_session", lambda: http)
     assert command(db, out) == 0
-    assert (out / "last_outcome.txt").read_text(encoding="utf-8") == "submitted 10 URLs\n"
+    assert (out / "last_outcome.txt").read_text(encoding="utf-8") == f"submitted {len(FIXED) + 3} URLs\n"
     sent = (out / "urls.txt").read_text(encoding="utf-8").splitlines()
-    assert sent == FIXED + [f"{BASE}/employers/{e}" for e in sorted(changed)]
+    assert sent == FIXED + [f"{BASE}/organizations/{e}" for e in sorted(changed)]
     assert http.calls[0]["body"]["urlList"] == sent and http.closed
 
 
@@ -328,8 +358,8 @@ def test_a_dry_run_lists_the_urls_and_sends_nothing(night, monkeypatch):
 
     monkeypatch.setattr(nightly, "_session", no_session)
     assert command(db, out, "--dry-run") == 0
-    assert (out / "last_outcome.txt").read_text(encoding="utf-8") == "dry run (10 URLs)\n"
-    assert len((out / "urls.txt").read_text(encoding="utf-8").splitlines()) == 10
+    assert (out / "last_outcome.txt").read_text(encoding="utf-8") == f"dry run ({len(FIXED) + 3} URLs)\n"
+    assert len((out / "urls.txt").read_text(encoding="utf-8").splitlines()) == len(FIXED) + 3
 
 
 @pytest.mark.parametrize("since", ["", "not a time"])
@@ -354,11 +384,11 @@ def test_a_missing_database_is_failed_and_not_created(tmp_path, monkeypatch):
 
 def test_the_run_status_carries_the_outcome_and_only_a_rejection_needs_attention(night):
     db, out, _ = night
-    clean = nightly.run_status(db, None, None, None, {})
+    clean = nightly.run_status(db, None, None, {})
     assert clean["indexnow"] == "not run"
     for outcome, items in (("submitted 613 URLs", []), ("rate limited", []), ("failed", []), ("off", []),
                            ("rejected (403)", ["IndexNow: rejected; check the key file"])):
-        record = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, "posted", {"deploy": "success"},
+        record = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"},
                                     indexnow_outcome=outcome)
         assert record["indexnow"] == outcome
         assert [i for i in resilience.attention_items(record) if i.startswith("IndexNow")] == items
@@ -372,20 +402,19 @@ def test_the_run_status_carries_the_outcome_and_only_a_rejection_needs_attention
     assert json.loads(written.read_text(encoding="utf-8"))["indexnow"] == "rejected (422)"
 
 
-def test_the_workflow_runs_it_after_the_smoke_test_and_records_it():
+def test_the_workflow_runs_it_after_the_smoke_test_and_before_the_save_and_records_it():
     text = (ROOT / ".github" / "workflows" / "nightly.yml").read_text(encoding="utf-8")
     names = re.findall(r"^      - name: (.+)$", text, re.MULTILINE)
     step = names.index("Tell IndexNow which pages changed")
-    assert names.index("Check the live site") < step < next(i for i, n in enumerate(names) if n.startswith("Post the daily digest to X"))
+    assert names.index("Check the live site") < step < names.index("Save the database to R2")
     block = text.split("- name: Tell IndexNow which pages changed", 1)[1].split("\n      - ", 1)[0]
     assert "if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}" in block
     assert "continue-on-error: true" in block and "timeout-minutes: 10" in block
     assert "secrets." not in block
     assert "since=$(cat data/out/run_started.txt" in block
     assert ('python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --since "$since" \\\n'
-            '            --site-url "${AWARDWATCH_SITE_URL:-https://lmiawatch.ca}"\n') in block
-    assert ("--views-outcome data/out/views/last_outcome.txt \\\n"
-            "            --indexnow-outcome data/out/indexnow/last_outcome.txt \\\n") in text
+            '            --site-url "${AWARDWATCH_SITE_URL:-https://awardwatch.ca}"\n') in block
+    assert "--indexnow-outcome data/out/indexnow/last_outcome.txt" in text
     # Not a --step: a failed submission must never make the retry gate run the night again.
     assert "--step \"indexnow=" not in text
     assert 'echo "IndexNow: $(cat data/out/indexnow/last_outcome.txt)" >> LAST_RUN.md' in text
