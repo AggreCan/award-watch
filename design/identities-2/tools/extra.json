@@ -1,0 +1,1401 @@
+{
+ "awards_by_pub": {
+  "2026-10-18": 0,
+  "2026-10-19": 35,
+  "2026-10-20": 25,
+  "2026-10-21": 39,
+  "2026-10-22": 32,
+  "2026-10-23": 14,
+  "2026-10-24": 4,
+  "2026-10-25": 0,
+  "2026-10-26": 31,
+  "2026-10-27": 30,
+  "2026-10-28": 16,
+  "2026-10-29": 17,
+  "2026-10-30": 9,
+  "2026-10-31": 0
+ },
+ "awards_by_pub_28": {
+  "2026-10-03": 9,
+  "2026-10-04": 0,
+  "2026-10-05": 25,
+  "2026-10-06": 20,
+  "2026-10-07": 36,
+  "2026-10-08": 39,
+  "2026-10-09": 35,
+  "2026-10-10": 1,
+  "2026-10-11": 1,
+  "2026-10-12": 1,
+  "2026-10-13": 34,
+  "2026-10-14": 20,
+  "2026-10-15": 38,
+  "2026-10-16": 24,
+  "2026-10-17": 17,
+  "2026-10-18": 0,
+  "2026-10-19": 35,
+  "2026-10-20": 25,
+  "2026-10-21": 39,
+  "2026-10-22": 32,
+  "2026-10-23": 14,
+  "2026-10-24": 4,
+  "2026-10-25": 0,
+  "2026-10-26": 31,
+  "2026-10-27": 30,
+  "2026-10-28": 16,
+  "2026-10-29": 17,
+  "2026-10-30": 9
+ },
+ "awards_this_week": 103,
+ "awards_prev_week": 149,
+ "awards_yesterday": 9,
+ "awards_2026_published_this_week": 100,
+ "facets": {
+  "category": {
+   "Services": 13,
+   "Goods": 10,
+   "Construction": 2
+  },
+  "notice_type": {
+   "Request for Proposal": 18,
+   "RFP against Supply Arrangement": 4,
+   "Advance Contract Award Notice": 2,
+   "Invitation to Qualify": 1
+  },
+  "buyer": {
+   "Department of National Defence (DND)": 8,
+   "Department of Public Works and Government Services (PSPC)": 5,
+   "Department of Fisheries and Oceans (DFO)": 2,
+   "Canada Lands Company Limited (CLC)": 2,
+   "National Research Council of Canada (NRC)": 2,
+   "Shared Services Canada": 2,
+   "Department of Employment and Social Development (ESDC)": 1,
+   "Royal Canadian Mounted Police (RCMP)": 1,
+   "Correctional Service of Canada (CSC)": 1,
+   "Department of Natural Resources (NRCan)": 1
+  },
+  "method": {
+   "Competitive - Open bidding": 11,
+   "Competitive - Selective tendering": 7,
+   "Competitive - Traditional": 4,
+   "Advance contract award notice": 2,
+   "Competitive - Limited tendering": 1
+  }
+ },
+ "closing_within_7": 1,
+ "closing_within_14": 3,
+ "detail": {
+  "title": "Solenoid Procurement",
+  "reference": "cb-746-37313616",
+  "amendment": "000",
+  "solicitation": "W0107-275654",
+  "published": "2026-10-30",
+  "closing": "2026-11-05T14:00:00",
+  "start": "2026-10-29",
+  "end": "2027-03-31",
+  "status": "Open",
+  "unspsc": [
+   "31270000"
+  ],
+  "unspsc_desc": [
+   "Machine made parts"
+  ],
+  "category": [
+   "Goods"
+  ],
+  "notice_type": "Request for Proposal",
+  "method": "Competitive - Open bidding",
+  "selection": "Lowest Price",
+  "trade": [
+   "Canadian Free Trade Agreement (CFTA)"
+  ],
+  "regions": [
+   "Canada",
+   "Ontario (except NCR)",
+   "Petawawa"
+  ],
+  "buyer": "Department of National Defence (DND)",
+  "buyer_city": "Petawawa",
+  "buyer_prov": "Ontario",
+  "end_user": "",
+  "description": "Canada is seeking offers from Offerors to Produce and ship factory-new solenoids in accordance with Drawing (OEM Part Number: Snap-tite Inc. V2W3X-85) specifications to DFTS Petawawa."
+ },
+ "details": {
+  "cb-418-22395949": {
+   "title": "Tier 2 TBIPS - Digital Transformation User Experience (UX)",
+   "reference": "cb-418-22395949",
+   "amendment": "000",
+   "solicitation": "30008545",
+   "published": "2026-10-30",
+   "closing": "2026-11-26T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [
+    "80101507",
+    "80172103"
+   ],
+   "unspsc_desc": [
+    "Information technology consultation services",
+    "Change management communication and advisory service"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Selective tendering",
+   "selection": "Highest Combined Rating of Technical Merit and Price",
+   "trade": [
+    "Canada-UK Trade Continuity Agreement (Canada-UK TCA)",
+    "Canada-Korea Free Trade Agreement (CKFTA)",
+    "Canada-Peru Free Trade Agreement (CPFTA)",
+    "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)",
+    "Canada-Panama Free Trade Agreement",
+    "Canada-Chile Free Trade Agreement (CCFTA)",
+    "Canada-Ukraine Free Trade Agreement (CUFTA)",
+    "Canada-Honduras Free Trade Agreement",
+    "Canada-Colombia Free Trade Agreement",
+    "Canadian Free Trade Agreement (CFTA)",
+    "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+    "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)",
+    "North American Free Trade Agreement (NAFTA)"
+   ],
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Department of Fisheries and Oceans (DFO)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "Ontario",
+   "end_user": "",
+   "description": "Fisheries and Oceans (DFO) has a requirement to obtain User Experience (UX) Professional Services on an “as-and-when requested” basis to support DFO, Chief Digital Officer Sector (CDOS) digital transformation to user-centered products and services with a goal to increase client satisfaction with the accessibility of DF"
+  },
+  "cb-438-11905524": {
+   "title": "IT Professional Services to Enhance and Deliver the Canada Disability Benefit Digital Solution",
+   "reference": "cb-438-11905524",
+   "amendment": "000",
+   "solicitation": "100031926",
+   "published": "2026-10-30",
+   "closing": "2026-11-20T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [
+    "81160000"
+   ],
+   "unspsc_desc": [
+    "Information Technology Service Delivery"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Traditional",
+   "selection": "Variations or combinations of the above methods",
+   "trade": [
+    "Please refer to Tender Description or Tender Documents"
+   ],
+   "regions": [
+    "Remote Offsite",
+    "Canada"
+   ],
+   "buyer": "Department of Employment and Social Development (ESDC)",
+   "buyer_city": "Gatineau",
+   "buyer_prov": "Quebec",
+   "end_user": "",
+   "description": "This procurement seeks to secure specialized and advance IT Professional Services TBIPS Consultants, who have skill sets not available internally. Employment and Social Development Canada’s (ESDC) Innovation, Information & Technology Branch (IITB), requires specialized IT professional services to enhance and deliver th"
+  },
+  "cb-504-3988252": {
+   "title": "Business Process Re-Engineer for the RCMP",
+   "reference": "cb-504-3988252",
+   "amendment": "000",
+   "solicitation": "202603790",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "start": "2026-12-01",
+   "end": "2029-10-31",
+   "status": "Open",
+   "unspsc": [
+    "81110000"
+   ],
+   "unspsc_desc": [
+    "Computer services"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Traditional",
+   "selection": "Highest Combined Rating of Technical Merit and Price",
+   "trade": [
+    "Please refer to Tender Description or Tender Documents"
+   ],
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Royal Canadian Mounted Police (RCMP)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "Ontario",
+   "end_user": "",
+   "description": "This requirement is for: The Royal Canadian Mounted Police This requirement is open only to those TBIPS Supply Arrangement Holders under EN578-170432 who qualified under Tier 1, under the National Capital region, level of expertise and for the following category: Level 3 - Business Process Re-Engineer The requirement i"
+  },
+  "cb-613-77108420": {
+   "title": "Demolition Kit, Bangalore Torpedo M1A2",
+   "reference": "cb-613-77108420",
+   "amendment": "000",
+   "solicitation": "W8703-270117/A",
+   "published": "2026-10-30",
+   "closing": "2026-12-01T14:00:00",
+   "start": "2027-01-01",
+   "end": "2028-11-01",
+   "status": "Open",
+   "unspsc": [
+    "46101600"
+   ],
+   "unspsc_desc": [
+    "Ammunition"
+   ],
+   "category": [
+    "Goods"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Traditional",
+   "selection": "Lowest Price",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "Dundurn",
+    "Saskatchewan"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "ON",
+   "end_user": "",
+   "description": "NOTICE OF PROPOSED PROCUREMENT Canada has a requirement for the items detailed below: GSIN: N1375 – Demolition Materials UNSPSC: 46101600 –Ammunition Description: Demolition Kit, Bangalore Torpedo M1A2 A requirement exists to resupply Canada with the Demolition Kit, Bangalore Torpedo M1A2. The Demolition Kit, Bangalore"
+  },
+  "cb-653-41609590": {
+   "title": "Snow Removal Services – Parrtown CCC",
+   "reference": "cb-653-41609590",
+   "amendment": "000",
+   "solicitation": "21201-27-5551031",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "start": "2026-12-01",
+   "end": "2027-04-30",
+   "status": "Open",
+   "unspsc": [
+    "72102903"
+   ],
+   "unspsc_desc": [
+    "Snow removal services"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "selection": "Lowest Price",
+   "trade": [
+    "Canada-Korea Free Trade Agreement (CKFTA)",
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "Saint John"
+   ],
+   "buyer": "Correctional Service of Canada (CSC)",
+   "buyer_city": "Ottawa ",
+   "buyer_prov": "Ontario",
+   "end_user": "",
+   "description": "This requirement is for: The Correctional Service of Canada, has a requirement for snow plowing services at the Parrtown Community Correctional Center (CCC) location in Saint John, NB. Trade agreement: Canadian Free Trade Agreement (CFTA), Canada Korea Trade Agreement (CKTA). Policy on Prioritizing Canadian Suppliers a"
+  },
+  "cb-694-71129009": {
+   "title": "TBIPS - Level 3 Business Analyst",
+   "reference": "cb-694-71129009",
+   "amendment": "000",
+   "solicitation": "W2294-26-AA005",
+   "published": "2026-10-30",
+   "closing": "2026-11-20T12:00:00",
+   "start": "2026-12-07",
+   "end": "2028-03-31",
+   "status": "Open",
+   "unspsc": [
+    "80101500"
+   ],
+   "unspsc_desc": [
+    "Business and corporate management consultation services"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "RFP against Supply Arrangement",
+   "method": "Competitive - Selective tendering",
+   "selection": "Highest Combined Rating of Technical Merit and Price",
+   "trade": [
+    "Canada-UK Trade Continuity Agreement (Canada-UK TCA)",
+    "Canadian Free Trade Agreement (CFTA)",
+    "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)",
+    "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+    "Canada-Korea Free Trade Agreement (CKFTA)",
+    "Canada-Honduras Free Trade Agreement",
+    "Canada-Peru Free Trade Agreement (CPFTA)",
+    "Canada-Panama Free Trade Agreement",
+    "Canada-Ukraine Free Trade Agreement (CUFTA)",
+    "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)",
+    "Canada-Colombia Free Trade Agreement",
+    "Canada-Chile Free Trade Agreement (CCFTA)"
+   ],
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "Ontario",
+   "end_user": "",
+   "description": "The Department of National Defence (DND) has a requirement for two (2) Level 3 Business Analysts to support Director of Digital Human Resources Systems Integration (DDHRSI) in establishing and operating a centralized intake, triage, and delivery enablement function. This function will support the rapid assessment and r"
+  },
+  "cb-713-39227575": {
+   "title": "BCH2026-11 - Request for Proposals - 1495 Heron Road - Structural Engineering",
+   "reference": "cb-713-39227575",
+   "amendment": "000",
+   "solicitation": "BCH2026-11 ",
+   "published": "2026-10-30",
+   "closing": "2026-11-30T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [
+    "81101505"
+   ],
+   "unspsc_desc": [
+    "Structural engineering"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "selection": "Highest Combined Rating of Technical Merit and Price",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "Ottawa"
+   ],
+   "buyer": "Canada Lands Company Limited (CLC)",
+   "buyer_city": "Toronto",
+   "buyer_prov": "Ontario",
+   "end_user": "",
+   "description": "This Request for Proposals (RFP) is issued to obtain professional structural engineering for the property located at 1495 Heron Road, Ottawa, Ontario."
+  },
+  "cb-746-37313616": {
+   "title": "Solenoid Procurement",
+   "reference": "cb-746-37313616",
+   "amendment": "000",
+   "solicitation": "W0107-275654",
+   "published": "2026-10-30",
+   "closing": "2026-11-05T14:00:00",
+   "start": "2026-10-29",
+   "end": "2027-03-31",
+   "status": "Open",
+   "unspsc": [
+    "31270000"
+   ],
+   "unspsc_desc": [
+    "Machine made parts"
+   ],
+   "category": [
+    "Goods"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "selection": "Lowest Price",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "Canada",
+    "Ontario (except NCR)",
+    "Petawawa"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "buyer_city": "Petawawa",
+   "buyer_prov": "Ontario",
+   "end_user": "",
+   "description": "Canada is seeking offers from Offerors to Produce and ship factory-new solenoids in accordance with Drawing (OEM Part Number: Snap-tite Inc. V2W3X-85) specifications to DFTS Petawawa."
+  },
+  "cb-748-18476391": {
+   "title": "Senior Learning Advisor in Support of the Logistics Vehicle Modernization (LVM) Project",
+   "reference": "cb-748-18476391",
+   "amendment": "000",
+   "solicitation": "W847L-270174",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "start": "2026-11-30",
+   "end": "2028-11-29",
+   "status": "Open",
+   "unspsc": [
+    "86141501"
+   ],
+   "unspsc_desc": [
+    "Educational advisory services"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "RFP against Supply Arrangement",
+   "method": "Competitive - Selective tendering",
+   "selection": "Lowest Price",
+   "trade": [
+    "Canada-Chile Free Trade Agreement (CCFTA)",
+    "Canada-Korea Free Trade Agreement (CKFTA)",
+    "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+    "Canadian Free Trade Agreement (CFTA)",
+    "Canada-Honduras Free Trade Agreement",
+    "Canada-Peru Free Trade Agreement (CPFTA)",
+    "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)",
+    "Canada-Colombia Free Trade Agreement",
+    "Canada-Panama Free Trade Agreement",
+    "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)",
+    "Canada-Ukraine Free Trade Agreement (CUFTA)",
+    "Canada-UK Trade Continuity Agreement (Canada-UK TCA)"
+   ],
+   "regions": [
+    "Canada",
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "Ontario",
+   "end_user": "",
+   "description": "The Department of National Defence has a requirement for the services of one (1) Senior Learning Advisor on an as and when requested basis to support Logistics Vehicle Modernization (LVM) Project."
+  },
+  "cb-796-70078432": {
+   "title": "Wheel Chocks / Cale de Roue",
+   "reference": "cb-796-70078432",
+   "amendment": "000",
+   "solicitation": "W847L-270183",
+   "published": "2026-10-30",
+   "closing": "2026-11-24T14:00:00",
+   "start": "2026-12-15",
+   "end": "2027-02-26",
+   "status": "Open",
+   "unspsc": [
+    "25172100"
+   ],
+   "unspsc_desc": [
+    "Vehicle safety and security systems and components"
+   ],
+   "category": [
+    "Goods"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Traditional",
+   "selection": "Lowest Price",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "Montréal"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "Ontario",
+   "end_user": "",
+   "description": "The Department of National Defence has a requirement for the items detailed below. The delivery is requested at Canadian Forces Supply Depot (25 CFSD) 6363 Notre Dame St E.Montreal, QC. H1N 3V9, Canada. Item 001, GSIN: N2540, NSN: 01-7078788, Chock, Wheel-Track Part No.: ESC-12593, NCAGE: 5FYD0, Equipment Supply Co. Qu"
+  },
+  "cb-806-6332445": {
+   "title": "Masonry Conservation S-77 Sections A and B",
+   "reference": "cb-806-6332445",
+   "amendment": "000",
+   "solicitation": "26-58147",
+   "published": "2026-10-30",
+   "closing": "2026-12-09T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [
+    "72151900"
+   ],
+   "unspsc_desc": [
+    "Masonry and stonework services"
+   ],
+   "category": [
+    "Construction"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "selection": "Variations or combinations of the above methods",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "Canada"
+   ],
+   "buyer": "National Research Council of Canada (NRC)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "ON",
+   "end_user": "",
+   "description": "The National Research Council Canada (NRC) requires intervention to restore the building envelope while respecting heritage conservation requirements and prevent further deterioration of the façade, at National Research Council of Canada, at 100 Sussex Drive, Building S-77, Ottawa, ON, K1N 1J1."
+  },
+  "cb-85-75674174": {
+   "title": "Requirement of multiple Lap and Polish Tools",
+   "reference": "cb-85-75674174",
+   "amendment": "000",
+   "solicitation": "26-58197",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [
+    "41100000",
+    "41101700",
+    "41101800",
+    "41101900",
+    "41120000"
+   ],
+   "unspsc_desc": [
+    "Laboratory and scientific equipment",
+    "Laboratory boring and grinding and cutting and crushing and pressing equipment",
+    "Laboratory electron and solid state physics equipment",
+    "Laboratory ionic equipment",
+    "Laboratory supplies and fixtures"
+   ],
+   "category": [
+    "Goods"
+   ],
+   "notice_type": "Advance Contract Award Notice",
+   "method": "Advance contract award notice",
+   "selection": "Not applicable",
+   "trade": [
+    "Canada-Ukraine Free Trade Agreement (CUFTA)",
+    "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+    "Canada-Chile Free Trade Agreement (CCFTA)",
+    "North American Free Trade Agreement (NAFTA)",
+    "Canada-Peru Free Trade Agreement (CPFTA)",
+    "Canada-Honduras Free Trade Agreement",
+    "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)",
+    "Canada-Colombia Free Trade Agreement",
+    "Canada-Korea Free Trade Agreement (CKFTA)",
+    "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)",
+    "Canada-UK Trade Continuity Agreement (Canada-UK TCA)",
+    "Canada-Panama Free Trade Agreement",
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "United States of America",
+    "Caribbean",
+    "Asia",
+    "Africa",
+    "Central America",
+    "Canada",
+    "South America",
+    "Mexico",
+    "Europe"
+   ],
+   "buyer": "National Research Council of Canada (NRC)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "ON",
+   "end_user": "",
+   "description": "The National Research Council Canada (NRC) has a requirement for multiple lapping and polishing tools to support the CPFC’s modernization to 4” wafer processing capability. Lapping and polishing equipment are mission critical for a photonics foundry producing waveguides, modulators, lasers, filters, or integrated photo"
+  },
+  "cb-935-21285129": {
+   "title": "NPP – S6057491 - THS SA – Three (3) Computer Application Support. Temporary Help Services against the Supply Arrangement for the National Capital Region (NCR).",
+   "reference": "cb-935-21285129",
+   "amendment": "000",
+   "solicitation": "S6057491",
+   "published": "2026-10-30",
+   "closing": "2026-11-23T13:00:00",
+   "start": "2026-11-23",
+   "end": "2027-11-12",
+   "status": "Open",
+   "unspsc": [
+    "80111600"
+   ],
+   "unspsc_desc": [
+    "Temporary personnel services"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "RFP against Supply Arrangement",
+   "method": "Competitive - Selective tendering",
+   "selection": "Lowest Price",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)",
+    "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)"
+   ],
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "ON",
+   "end_user": "",
+   "description": "Temporary Help Services Requirement This requirement is for: Department of National Defense (DND) This requirement is open only to those supply arrangement holders under EN578-172870 who qualified under the following streams and categories: Stream 5 – Computer Services Categories – 5.1 Computer Application Suppport The"
+  },
+  "cb-958-30929630": {
+   "title": "Kelowna Accommodations",
+   "reference": "cb-958-30929630",
+   "amendment": "000",
+   "solicitation": "W3999-270009",
+   "published": "2026-10-30",
+   "closing": "2026-11-25T12:00:00",
+   "start": "2027-01-04",
+   "end": "2027-12-17",
+   "status": "Open",
+   "unspsc": [
+    "95122100"
+   ],
+   "unspsc_desc": [
+    "Accommodation buildings and structures"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "selection": "Lowest Price",
+   "trade": [
+    "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)",
+    "Canada-Chile Free Trade Agreement (CCFTA)",
+    "Canadian Free Trade Agreement (CFTA)",
+    "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+    "Canada-Honduras Free Trade Agreement",
+    "Canada-Panama Free Trade Agreement",
+    "Canada-Colombia Free Trade Agreement",
+    "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)",
+    "Canada-Ukraine Free Trade Agreement (CUFTA)",
+    "Canada-Peru Free Trade Agreement (CPFTA)",
+    "Canada-Korea Free Trade Agreement (CKFTA)",
+    "Canada-UK Trade Continuity Agreement (Canada-UK TCA)"
+   ],
+   "regions": [
+    "Canada"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "buyer_city": "Winnipeg",
+   "buyer_prov": "Manitoba",
+   "end_user": "",
+   "description": "Title: Accommodations – Kelowna, British Columbia Department: Department of National Defence (DND) Procurement Type: Solicitation of Offers The Canadian Armed Forces (CAF) requires accommodations in Kelowna, BC for up to 15 military personnel. Contract Term: January 04, 2027 – December 17, 2027 Number of Contracts: Sin"
+  },
+  "SSC-26-00035339:T": {
+   "title": "Pure Storage FlashArray X50R3 – 3 Yr - Maintenance and Support -DND",
+   "reference": "SSC-26-00035339:T",
+   "amendment": "000",
+   "solicitation": "BPM026801/35339",
+   "published": "",
+   "closing": "2026-11-09T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [],
+   "unspsc_desc": [],
+   "category": [
+    "Goods"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Limited tendering",
+   "selection": "",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)",
+    "Canada-Chile Free Trade Agreement (CCFTA)"
+   ],
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Shared Services Canada",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "Ontario",
+   "end_user": "Shared Services Canada",
+   "description": "Services SSC Pure Storage FlashArray X50R3 – 3 Yr - Maintenance and Support -DND- Amendment 000"
+  },
+  "SSC-26-00035342:T": {
+   "title": "Purchase and Install two server racks in five sheds in southern Manitoba or equivalent, for the ROYAL CANADIReq. 2026-07-30",
+   "reference": "SSC-26-00035342:T",
+   "amendment": "000",
+   "solicitation": "BPM026860/35342",
+   "published": "",
+   "closing": "2026-11-09T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [],
+   "unspsc_desc": [],
+   "category": [
+    "Goods"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "selection": "",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "Manitoba"
+   ],
+   "buyer": "Shared Services Canada",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "Ontario",
+   "end_user": "Shared Services Canada",
+   "description": "GOODS SSC Purchase and Install two server racks in five sheds in southern Manitoba or equivalent, for the ROYAL CANADIReq. 2026-07-30- Amendment 000"
+  },
+  "cb-106-83883729": {
+   "title": "Pacific Science Enterprise Center (PSEC) - Power Distribution Upgrade",
+   "reference": "cb-106-83883729",
+   "amendment": "000",
+   "solicitation": "30008413",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "start": "2026-12-18",
+   "end": "2027-03-19",
+   "status": "Open",
+   "unspsc": [
+    "72102200",
+    "72120000"
+   ],
+   "unspsc_desc": [
+    "Electrical services",
+    "Nonresidential building construction services"
+   ],
+   "category": [
+    "Construction"
+   ],
+   "notice_type": "Invitation to Qualify",
+   "method": "Competitive - Open bidding",
+   "selection": "Lowest Price",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "British Columbia",
+    "Canada",
+    "Vancouver"
+   ],
+   "buyer": "Department of Fisheries and Oceans (DFO)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "ON",
+   "end_user": "",
+   "description": "Fisheries and Oceans Canada (DFO) requires the supply, installation, testing, and commissioning of new underground electrical distribution and communications infrastructure, including associated civil works required to provide expanded site electrical services and support future infrastructure requirements at the Pacif"
+  },
+  "cb-167-8734223": {
+   "title": "BCH2026-10 - Request for Proposals - 1495 Heron Road - Mechanical and Electrical Engineer Services",
+   "reference": "cb-167-8734223",
+   "amendment": "000",
+   "solicitation": "BCH2026-10",
+   "published": "2026-10-30",
+   "closing": "2026-11-30T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [
+    "81101600",
+    "81101701"
+   ],
+   "unspsc_desc": [
+    "Mechanical engineering",
+    "Electrical engineering services"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "selection": "Highest Combined Rating of Technical Merit and Price",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "Ottawa",
+    "Canada",
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Canada Lands Company Limited (CLC)",
+   "buyer_city": "Toronto",
+   "buyer_prov": "Ontario",
+   "end_user": "",
+   "description": "This Request for Proposals (RFP) is issued to obtain professional mechanical and electrical engineering services for the property located at 1495 Heron Road, Ottawa, Ontario."
+  },
+  "cb-215-65758115": {
+   "title": "ETS-Lindgren EMSENSE 40 Electric Field Probe System",
+   "reference": "cb-215-65758115",
+   "amendment": "000",
+   "solicitation": "W8703-270128/A      ",
+   "published": "2026-10-30",
+   "closing": "2026-11-17T14:00:00",
+   "start": "2026-12-21",
+   "end": "2027-02-28",
+   "status": "Open",
+   "unspsc": [
+    "32130000",
+    "81101700"
+   ],
+   "unspsc_desc": [
+    "Electronic hardware and component parts and accessories",
+    "Electrical and electronic engineering"
+   ],
+   "category": [
+    "Goods"
+   ],
+   "notice_type": "RFP against Supply Arrangement",
+   "method": "Competitive - Selective tendering",
+   "selection": "Lowest Price",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "Gatineau"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "buyer_city": "OTTAWA",
+   "buyer_prov": "ON",
+   "end_user": "",
+   "description": "As a requirement of the Supply Arrangement (SA) this notice is published on CanadaBuys for a period of 15 calendar days. Only pre-qualified Suppliers have been invited to bid. Suppliers that do not already hold a Supply Arrangement in series E60HN-16ELEC with PSPC cannot submit a bid. The Department of National Defence"
+  },
+  "cb-29-37893161": {
+   "title": "Open license for lidar data and data analysis",
+   "reference": "cb-29-37893161",
+   "amendment": "001",
+   "solicitation": "NRCan-5000098113",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "start": "2026-11-18",
+   "end": "2027-03-31",
+   "status": "Open",
+   "unspsc": [
+    "81151600"
+   ],
+   "unspsc_desc": [
+    "Cartography"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "Advance Contract Award Notice",
+   "method": "Advance contract award notice",
+   "selection": "",
+   "trade": [
+    "Canada-Korea Free Trade Agreement (CKFTA)",
+    "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)",
+    "Canada-UK Trade Continuity Agreement (Canada-UK TCA)",
+    "Canada-Colombia Free Trade Agreement",
+    "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)",
+    "Canada-Ukraine Free Trade Agreement (CUFTA)",
+    "North American Free Trade Agreement (NAFTA)",
+    "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+    "Canada-Honduras Free Trade Agreement",
+    "Canada-Panama Free Trade Agreement",
+    "Canada-Chile Free Trade Agreement (CCFTA)",
+    "Canada-Peru Free Trade Agreement (CPFTA)",
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [],
+   "buyer": "Department of Natural Resources (NRCan)",
+   "buyer_city": "Ottawa",
+   "buyer_prov": "Ontario",
+   "end_user": "",
+   "description": "1. Advance Contract Award Notice (ACAN): An ACAN is a public notice indicating to the supplier community that a department or agency intends to award a contract for goods, services or construction to a pre-identified supplier, thereby allowing other suppliers to signal their interest in bidding, by submitting a stateme"
+  },
+  "cb-3-34869181": {
+   "title": "Weak magnetic anomaly detection for defence and security",
+   "reference": "cb-3-34869181",
+   "amendment": "002",
+   "solicitation": "EN578-24ISC4/92",
+   "published": "2026-10-30",
+   "closing": "2026-11-27T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [
+    "81141900"
+   ],
+   "unspsc_desc": [
+    "Manufacturing technology research and development services"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Selective tendering",
+   "selection": "Variations or combinations of the above methods",
+   "trade": [
+    "None"
+   ],
+   "regions": [
+    "Canada"
+   ],
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "buyer_city": "Gatineau",
+   "buyer_prov": "QC",
+   "end_user": "",
+   "description": "*Please note that the ISC website will be available on October 30, 2026* This Challenge Notice is issued under the Innovative Solutions Canada Program (ISC) Call for Proposals 004 (EN578-24ISC4). For general ISC information, Offerors can visit the ISC website at: https://ised-isde.canada.ca/site/innovative-solutions-ca"
+  },
+  "cb-189-51083224": {
+   "title": "Artificial Intelligence (AI) decision-making process visibility, traceability and compliance governance",
+   "reference": "cb-189-51083224",
+   "amendment": "001",
+   "solicitation": "EN578-24ISC4/100",
+   "published": "2026-10-30",
+   "closing": "2026-12-22T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [
+    "81141900"
+   ],
+   "unspsc_desc": [
+    "Manufacturing technology research and development services"
+   ],
+   "category": [
+    "Services"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Selective tendering",
+   "selection": "Variations or combinations of the above methods",
+   "trade": [
+    "None"
+   ],
+   "regions": [
+    "Canada"
+   ],
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "buyer_city": "Gatineau",
+   "buyer_prov": "QC",
+   "end_user": "",
+   "description": "*Please note that the ISC website will be available on October 30th, 2026 as of 10:30am ET. This Challenge Notice is issued under the Innovative Solutions Canada Program (ISC) Call for Proposals 004 (EN578-24ISC4). For general ISC information, Offerors can visit the ISC website at: https://ised-isde.canada.ca/site/inno"
+  },
+  "WS5530498558-Doc5957736745": {
+   "title": "PR22657 47064-266992 FTIR Spectrometer and FT-Raman Spectrometer Module",
+   "reference": "WS5530498558-Doc5957736745",
+   "amendment": "000",
+   "solicitation": "WS5530498558",
+   "published": "2026-10-30",
+   "closing": "2026-11-17T14:00:00",
+   "start": "2026-06-01",
+   "end": "2027-04-30",
+   "status": "Open",
+   "unspsc": [
+    "41100000"
+   ],
+   "unspsc_desc": [
+    "Laboratory and scientific equipment"
+   ],
+   "category": [
+    "Goods"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "selection": "Lowest Price",
+   "trade": [
+    "Canada-UK Trade Continuity Agreement (Canada-UK TCA)",
+    "Canada-Chile Free Trade Agreement (CCFTA)",
+    "Canada-Korea Free Trade Agreement (CKFTA)",
+    "North American Free Trade Agreement (NAFTA)",
+    "Canada-Panama Free Trade Agreement",
+    "Canada-Ukraine Free Trade Agreement (CUFTA)",
+    "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+    "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)",
+    "Canadian Free Trade Agreement (CFTA)",
+    "Canada-Honduras Free Trade Agreement",
+    "Canada-Colombia Free Trade Agreement",
+    "Canada-Peru Free Trade Agreement (CPFTA)",
+    "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)"
+   ],
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "buyer_city": "Gatineau",
+   "buyer_prov": "Quebec",
+   "end_user": "Canada Border Services Agency - (Administered Activities) (CBSA)",
+   "description": ""
+  },
+  "WS5764451697-Doc5959158322": {
+   "title": "F7049-260131 - CCGS Tully - Oil Purifiers",
+   "reference": "WS5764451697-Doc5959158322",
+   "amendment": "000",
+   "solicitation": "WS5764451697",
+   "published": "2026-10-30",
+   "closing": "2026-11-20T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [
+    "25111900"
+   ],
+   "unspsc_desc": [
+    "Marine craft systems and subassemblies"
+   ],
+   "category": [
+    "Goods"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "selection": "Highest Combined Rating of Technical Merit and Price",
+   "trade": [
+    "Canadian Free Trade Agreement (CFTA)"
+   ],
+   "regions": [
+    "British Columbia"
+   ],
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "buyer_city": "Gatineau",
+   "buyer_prov": "Quebec",
+   "end_user": "Canadian Coast Guard (CCG)",
+   "description": "The Canadian Coast Guard has a requirement for two Fuel Oil purifiers and one Lube Oil Purifier to be supplied and installed on the CCGS John P. Tully. The purifiers must be delivered to Sidney, BC by October 31st, 2027. The Contract is for 3 years from Contract award and will include options to buy additional purifier"
+  },
+  "WS5765574021-Doc5959265471": {
+   "title": "F7049-260142 - CCGS Tully - Reverse Osmosis Water Maker",
+   "reference": "WS5765574021-Doc5959265471",
+   "amendment": "000",
+   "solicitation": "WS5765574021",
+   "published": "2026-10-30",
+   "closing": "2026-11-20T14:00:00",
+   "start": "",
+   "end": "",
+   "status": "Open",
+   "unspsc": [
+    "40161609"
+   ],
+   "unspsc_desc": [
+    "Water purification system"
+   ],
+   "category": [
+    "Goods"
+   ],
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "selection": "Highest Combined Rating of Technical Merit and Price",
+   "trade": [
+    "Canada-Colombia Free Trade Agreement",
+    "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+    "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)",
+    "Canada-Panama Free Trade Agreement",
+    "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)",
+    "Canada-Ukraine Free Trade Agreement (CUFTA)",
+    "Canada-Peru Free Trade Agreement (CPFTA)",
+    "Canada-Chile Free Trade Agreement (CCFTA)",
+    "Canada-Honduras Free Trade Agreement",
+    "Canada-UK Trade Continuity Agreement (Canada-UK TCA)",
+    "Canadian Free Trade Agreement (CFTA)",
+    "Canada-Korea Free Trade Agreement (CKFTA)"
+   ],
+   "regions": [
+    "British Columbia"
+   ],
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "buyer_city": "Gatineau",
+   "buyer_prov": "Quebec",
+   "end_user": "Canadian Coast Guard (CCG)",
+   "description": "The Canadian Coast Guard has a requirement for two reverse osmosis water maker to be supplied and installed on the CCGS John P. Tully. The water makers must be delivered to Sidney, BC by October 31st, 2027. The Contract is for 3 years from Contract award and will include options to buy additional water makers over this"
+  }
+ },
+ "awards_yesterday_rows": [
+  {
+   "reference": "CW2470164",
+   "title": "PhygitalX User Licence",
+   "supplier": "OVA",
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "awarded": "2026-10-09",
+   "value": 4267107.36,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Competitive - Open bidding",
+   "competitive": true
+  },
+  {
+   "reference": "CW2459841",
+   "title": "WinShield inclusive respirator",
+   "supplier": "Win-Shield Medical Devices Inc.",
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "awarded": "2026-08-07",
+   "value": 2605727.27,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Competitive - Open bidding",
+   "competitive": true
+  },
+  {
+   "reference": "CW2472159",
+   "title": "Unmanned Towed Active Sonar (UTAS)",
+   "supplier": "GeoSpectrum Technologies Inc.",
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "awarded": "2026-10-29",
+   "value": 1582145.44,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Competitive - Open bidding",
+   "competitive": true
+  },
+  {
+   "reference": "CW2467461",
+   "title": "W0114-250023 Snow Removal Services",
+   "supplier": "P. Munro Group Inc.",
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "awarded": "2026-10-23",
+   "value": 1463234.13,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Task Authorization Based Contract",
+   "method": "Competitive - Open bidding",
+   "competitive": true
+  },
+  {
+   "reference": "CW2453223",
+   "title": "F1782-26C004 - CCGS Sir John Franklin Knife Gate Valve",
+   "supplier": "CYL KNIFE VALVES S.L.",
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "awarded": "2026-09-02",
+   "value": 44174.83,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Non-competitive",
+   "competitive": false
+  },
+  {
+   "reference": "CW2474255",
+   "title": "Security Guard services SA - The Canadian Corps of Commissionaires",
+   "supplier": "The Canadian Corps of Commissionaires",
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "awarded": "2026-10-29",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Supply Arrangement",
+   "method": "Competitive - Open bidding",
+   "competitive": true
+  },
+  {
+   "reference": "CW2474261",
+   "title": "Security Guard services - Garda Canada Security Corporation",
+   "supplier": "Garda Canada Security Corporation",
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "awarded": "2026-10-29",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Supply Arrangement",
+   "method": "Competitive - Open bidding",
+   "competitive": true
+  },
+  {
+   "reference": "CW2474269",
+   "title": "Security Guard services - Paladin Security Group Ltd",
+   "supplier": "Paladin Security Group Ltd.",
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "awarded": "2026-10-29",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Supply Arrangement",
+   "method": "Competitive - Open bidding",
+   "competitive": true
+  },
+  {
+   "reference": "CW2474276",
+   "title": "Security Guard Services - Securitas Canada Limited",
+   "supplier": "Securitas Canada Limited",
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "awarded": "2026-10-29",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Supply Arrangement",
+   "method": "Competitive - Open bidding",
+   "competitive": true
+  }
+ ],
+ "awards_yesterday_withheld": 0,
+ "wsp_history": {
+  "rows": 14,
+  "references": 13,
+  "years": {
+   "2026": {
+    "n": 13,
+    "total": 10427178.0,
+    "noncomp_n": 0,
+    "noncomp_total": 0.0,
+    "stated_n": 13
+   }
+  },
+  "total": 10427178.0,
+  "list": [
+   {
+    "reference": "CW2471030",
+    "amendment": "000",
+    "awarded": "2026-10-06",
+    "value": 65458.8,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Selective tendering",
+    "title": "EB144-270651 Industrial Racking Inspection Service - CFB Halifax",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "instrument": "Contract",
+    "published": "2026-10-06"
+   },
+   {
+    "reference": "CW2468324",
+    "amendment": "000",
+    "awarded": "2026-09-15",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "EZ899-261170 – Bridge Engineering Services Supply Arrangement – WSP",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "instrument": "Supply Arrangement",
+    "published": "2026-09-25"
+   },
+   {
+    "reference": "CW2471570",
+    "amendment": "001",
+    "awarded": "2026-09-03",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "WSP - DISO Transportation Engineering and Prime Consultant Services SOA",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "instrument": "Standing Offer",
+    "published": "2026-10-07"
+   },
+   {
+    "reference": "CW2465780",
+    "amendment": "000",
+    "awarded": "2026-09-01",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "EF928-260641 - Standing offer - Petroleum Equipment Consulting Expert WSP CANADA",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "instrument": "Standing Offer",
+    "published": "2026-08-27"
+   },
+   {
+    "reference": "CW2460608",
+    "amendment": "000",
+    "awarded": "2026-07-15",
+    "value": 8400000.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "EZ113-261189-001-VIC - Contaminated Sites - Marine Sediment CTA",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "instrument": "Task Authorization Based Contract",
+    "published": "2026-07-29"
+   },
+   {
+    "reference": "CW2459469",
+    "amendment": "001",
+    "awarded": "2026-07-09",
+    "value": 386719.2,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "EW038-261275 - Polar Continental Shelf Program (PCSP) Structural Geotechnical Assessment",
+    "end_user": "Department of Public Works and Government Services (PSPC) / Department of Natural Resources  (NRCan)",
+    "instrument": "Contract",
+    "published": "2026-08-06"
+   },
+   {
+    "reference": "CW2458003",
+    "amendment": "000",
+    "awarded": "2026-06-26",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "Structural Engineering Services, Standing Offer - WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "instrument": "Standing Offer",
+    "published": "2026-06-26"
+   },
+   {
+    "reference": "CW2456561",
+    "amendment": "000",
+    "awarded": "2026-06-17",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "EE010-260270 Standing Offer Stream 1 and 2 - Environmental assessment and receiving environment WSP CANADA INC.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "instrument": "Standing Offer",
+    "published": "2026-07-03"
+   },
+   {
+    "reference": "CW2456729",
+    "amendment": "000",
+    "awarded": "2026-06-15",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "EE517-261077-005 WSP CANADA - Standing offers for marine engineering services, Quebec region",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "instrument": "Standing Offer",
+    "published": "2026-06-18"
+   },
+   {
+    "reference": "CW2456389",
+    "amendment": "000",
+    "awarded": "2026-06-11",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "EF997-260874 - Standing offer for airport engineering services in Inuits areas - ARNAIKTUK CONSULTING - WSP",
+    "end_user": "Department of Transport (TC)",
+    "instrument": "Standing Offer",
+    "published": "2026-06-15"
+   },
+   {
+    "reference": "CW2456367",
+    "amendment": "000",
+    "awarded": "2026-06-11",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "EF997-260874 - Standing offer for airport engineering services in Cree areas - INDIGENOUS CONSULTING GROUP - WSP",
+    "end_user": "Department of Transport (TC)",
+    "instrument": "Standing Offer",
+    "published": "2026-06-15"
+   },
+   {
+    "reference": "CW2447459",
+    "amendment": "000",
+    "awarded": "2026-04-09",
+    "value": 1575000.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "EZ897-251648 - Environmental Compliance Services - WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "instrument": "Task Authorization Based Contract",
+    "published": "2026-07-01"
+   },
+   {
+    "reference": "CW2447725",
+    "amendment": "000",
+    "awarded": "2026-04-07",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "method": "Competitive - Open bidding",
+    "title": "RISO WSP Canada Inc. - Environmental Services for Contaminated Sites",
+    "end_user": "Department of Transport (TC)",
+    "instrument": "Standing Offer",
+    "published": "2026-04-07"
+   }
+  ],
+  "spellings": {
+   "WSP Canada Inc.": 13,
+   "WSP CANADA INC": 1
+  }
+ }
+}

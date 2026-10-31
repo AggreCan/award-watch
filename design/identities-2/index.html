@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Award Watch: identity directions, round two</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap">
+<link rel="icon" type="image/svg+xml" href="../../brand/favicon-w.svg">
+<script>try{var t=localStorage.getItem("aw-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+:root{--bg:#fff;--ink:#111;--ink-2:#3d3d3d;--muted:#6b6b6b;--rule:#e5e5e5;--accent:#0f7b4f;color-scheme:light}
+:root[data-theme="dark"]{--bg:#0e0e0e;--ink:#eee;--ink-2:#c4c4c4;--muted:#9c9c9c;--rule:#2a2a2a;--accent:#34d399;color-scheme:dark}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e0e0e;--ink:#eee;--ink-2:#c4c4c4;--muted:#9c9c9c;--rule:#2a2a2a;--accent:#34d399;color-scheme:dark}}
+:root[data-theme="dark"] .mark [fill="#0f7b4f"]{fill:var(--accent)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mark [fill="#0f7b4f"]{fill:var(--accent)}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.55 Inter,ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-underline-offset:3px}
+h1,h2,p,ul{margin:0}
+.wrap{max-width:1160px;margin:0 auto;padding:0 32px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px;padding:20px 0;border-bottom:1px solid var(--ink)}
+.brand{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:16px}
+.brand .mark{width:30px;height:30px}
+.top .meta{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:13px;color:var(--ink-2)}
+.tog{font:inherit;font-size:13px;color:var(--ink);background:none;border:1px solid var(--rule);border-radius:0;padding:3px 10px;cursor:pointer}
+.intro{padding:40px 0 8px;max-width:760px}
+.intro h1{font-size:32px;line-height:1.15;font-weight:600;letter-spacing:-.025em}
+.intro p{margin-top:12px;color:var(--ink-2)}
+.dir{display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px 48px;padding:40px 0;border-bottom:1px solid var(--rule)}
+.k{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dir h2{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:4px 0 12px}
+.txt>p{color:var(--ink-2);max-width:620px}
+.moves{margin-top:14px;padding-left:18px;color:var(--ink-2);font-size:14px}
+.moves li{margin:3px 0}
+.links{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px}
+.links a{display:inline-block;border:1px solid var(--ink);color:var(--ink);text-decoration:none;padding:6px 14px;font-size:14px;font-weight:500}
+.links a:hover{background:var(--ink);color:var(--bg)}
+.pv{width:384px;height:240px;overflow:hidden;border:1px solid var(--rule);position:relative}
+.pv iframe{width:1280px;height:800px;border:0;transform:scale(.3);transform-origin:0 0;pointer-events:none;position:absolute;left:0;top:0}
+.sws{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.swh{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.sw ul{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
+.sw li{display:grid;grid-template-columns:28px minmax(0,1fr);column-gap:8px;font-size:12px;line-height:1.3}
+.sq{grid-row:span 2;width:28px;height:28px;border:1px solid var(--rule)}
+.sw b{font-weight:500}
+.sw code{font:inherit;color:var(--muted)}
+.foot{padding:24px 0 48px;font-size:13px;color:var(--ink-2)}
+@media (max-width:899px){.dir{grid-template-columns:minmax(0,1fr)}.pv{order:-1}}
+@media (max-width:699px){.wrap{padding:0 16px}.sws{grid-template-columns:minmax(0,1fr)}.pv{width:320px;height:200px}.pv iframe{transform:scale(.25)}.top .meta{margin-left:0;width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><span class="brand"><!-- brand/mark-two-tone.svg as filed --><svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <path fill="currentColor" fill-rule="evenodd" d="M4.35 24.79 L4.14 24.78 L3.75 24.76 L3.37 24.70 L3.01 24.62 L2.66 24.51 L2.33 24.37 L2.03 24.21 L1.73 24.02 L1.60 23.91 L1.53 23.86 L1.40 23.74 L1.28 23.62 L1.17 23.49 L1.07 23.36 L0.97 23.21 L0.89 23.06 L0.81 22.91 L0.71 22.66 L0.61 22.31 L0.54 21.94 L0.50 21.53 L0.50 21.32 L0.50 21.16 L0.52 20.86 L0.56 20.57 L0.62 20.30 L0.70 20.04 L0.79 19.81 L0.91 19.59 L1.04 19.39 L1.12 19.29 L1.20 19.20 L1.37 19.03 L1.54 18.87 L1.73 18.73 L1.94 18.59 L2.15 18.47 L2.37 18.36 L2.61 18.26 L2.73 18.22 L2.98 18.14 L3.50 18.00 L4.03 17.88 L4.58 17.80 L4.86 17.77 L5.22 17.74 L5.86 17.66 L6.40 17.59 L6.83 17.51 L7.01 17.47 L7.09 17.45 L7.23 17.39 L7.35 17.33 L7.46 17.25 L7.54 17.16 L7.60 17.05 L7.64 16.94 L7.66 16.81 L7.67 16.74 L7.67 16.69 L7.66 16.60 L7.65 16.42 L7.62 16.26 L7.58 16.11 L7.52 15.97 L7.44 15.83 L7.36 15.71 L7.25 15.60 L7.20 15.55 L7.14 15.50 L7.01 15.41 L6.86 15.34 L6.71 15.27 L6.54 15.22 L6.36 15.19 L6.17 15.16 L5.96 15.15 L5.86 15.15 L5.74 15.15 L5.53 15.16 L5.33 15.18 L5.13 15.22 L4.95 15.27 L4.78 15.33 L4.62 15.40 L4.48 15.49 L4.41 15.54 L4.34 15.59 L4.21 15.69 L4.10 15.80 L4.00 15.91 L3.91 16.03 L3.83 16.15 L3.76 16.28 L3.70 16.41 L3.67 16.48 L0.83 16.01 L0.89 15.82 L1.03 15.47 L1.19 15.13 L1.39 14.82 L1.61 14.53 L1.86 14.26 L2.14 14.01 L2.44 13.78 L2.60 13.68 L2.77 13.58 L3.12 13.40 L3.49 13.24 L3.88 13.11 L4.29 13.01 L4.72 12.93 L5.16 12.88 L5.63 12.85 L5.87 12.85 L6.02 12.85 L6.33 12.86 L6.63 12.89 L6.93 12.92 L7.22 12.97 L7.52 13.04 L7.80 13.11 L8.09 13.20 L8.23 13.24 L8.37 13.29 L8.64 13.41 L8.89 13.53 L9.13 13.68 L9.36 13.83 L9.58 14.01 L9.78 14.19 L9.97 14.39 L10.06 14.50 L10.15 14.61 L10.30 14.84 L10.44 15.09 L10.55 15.36 L10.64 15.64 L10.70 15.95 L10.75 16.26 L10.77 16.60 L10.77 16.77 L10.77 24.56 L7.83 24.56 L7.83 22.96 L7.73 22.96 L7.67 23.06 L7.56 23.25 L7.42 23.43 L7.28 23.61 L7.12 23.77 L6.95 23.93 L6.77 24.07 L6.57 24.21 L6.47 24.27 L6.36 24.34 L6.14 24.45 L5.90 24.55 L5.65 24.63 L5.38 24.69 L5.11 24.74 L4.81 24.77 L4.50 24.79 L4.35 24.79 M5.23 22.60 L5.36 22.60 L5.62 22.58 L5.87 22.54 L6.10 22.48 L6.32 22.40 L6.53 22.31 L6.73 22.19 L6.91 22.05 L7.00 21.97 L7.08 21.89 L7.23 21.73 L7.36 21.55 L7.47 21.37 L7.55 21.17 L7.62 20.97 L7.66 20.76 L7.68 20.54 L7.69 20.42 L7.69 19.17 L7.64 19.20 L7.51 19.27 L7.36 19.32 L7.18 19.38 L7.08 19.40 L6.87 19.45 L6.43 19.54 L6.20 19.58 L5.76 19.65 L5.39 19.70 L5.18 19.73 L4.79 19.82 L4.53 19.91 L4.37 19.98 L4.21 20.06 L4.07 20.14 L4.01 20.18 L3.94 20.23 L3.83 20.33 L3.73 20.44 L3.65 20.56 L3.58 20.70 L3.53 20.84 L3.50 20.99 L3.48 21.15 L3.48 21.24 L3.48 21.32 L3.50 21.48 L3.53 21.63 L3.57 21.77 L3.63 21.89 L3.71 22.01 L3.80 22.12 L3.91 22.21 L3.97 22.26 L4.03 22.30 L4.16 22.38 L4.30 22.44 L4.45 22.49 L4.61 22.54 L4.77 22.57 L4.95 22.59 L5.13 22.60 L5.23 22.60 Z"/>
+  <path fill="currentColor" fill-rule="evenodd" d="M15.83 24.56 L12.41 12.99 L15.67 12.99 L16.67 17.27 L16.89 18.26 L17.13 19.34 L17.25 19.90 L17.50 21.10 L17.62 21.74 L17.74 21.11 L17.99 19.93 L18.12 19.36 L18.38 18.28 L18.62 17.27 L19.52 13.65 L20.77 18.01 L20.68 18.43 L20.57 18.89 L20.37 19.72 L20.27 20.10 L18.98 24.56 L15.83 24.56 Z"/>
+  <path fill="#0f7b4f" fill-rule="evenodd" d="M19.87 12.99 L22.53 12.99 L23.57 17.27 L23.79 18.28 L24.05 19.36 L24.18 19.92 L24.43 21.12 L24.56 21.75 L24.67 21.12 L24.89 19.92 L25.01 19.36 L25.25 18.28 L25.48 17.27 L26.48 12.99 L28.20 7.21 L31.50 7.21 L26.35 24.56 L23.19 24.56 L21.91 20.10 L21.80 19.72 L21.59 18.88 L21.49 18.43 L21.29 17.50 L21.08 16.59 L21.00 16.95 L19.87 12.99 Z"/>
+</svg><span>Award Watch</span></span><div class="meta"><span>Identity directions, round two</span><span>Mockups dated 2026-10-31</span><button class="tog" type="button" data-theme-toggle>Dark</button></div></header>
+<div class="intro" id="main"><h1>Three directions for the site</h1>
+<p>Each direction has the same three pages with the same real records: today&#x27;s page, the open tender list and the profile of WSP Canada Inc., from the CanadaBuys files of 2026-10-31. All three set Inter alone and use white and near-white neutrals, near-black ink, the mark&#x27;s emerald for open, awarded, links and the check, and one amber for closing within 7 days. Corners are square, borders are 1 px, buttons are flat, and there are no shadows, gradients or images. Every page has a light and a dark scheme (the toggle is shared), restacks its tables below 700 px, and never scrolls sideways. Figures shown as [n] need the open-notices file, which the samples do not include.</p></div>
+<section class="dir" id="sheet">
+<div class="txt">
+<p class="k">Direction A</p>
+<h2>Sheet</h2>
+<p>The register as one ruled sheet. A white page, ink and 1 px rules, with no panels or cards anywhere. The mark&#x27;s own check is the system&#x27;s awarded glyph, every table ends on a right-aligned Source column, and amounts sit in a column ruled on both sides, as on a statement. Two hairlines make the masthead and nothing in it is filled. The aim is a document a reader trusts on sight, made by people who make good software.</p>
+<ul class="moves"><li>The check from the mark marks awarded rows and sits in the Awarded chip</li><li>A right-aligned Source column closes every table</li><li>A masthead of two ink hairlines, nothing filled</li><li>Amounts right-aligned in a column ruled on both sides</li></ul>
+<p class="links"><a href="sheet/home.html">Today</a><a href="sheet/tenders.html">Open tenders</a><a href="sheet/organization.html">WSP Canada Inc.</a></p>
+</div>
+<div class="pv" aria-hidden="true"><iframe src="sheet/home.html" tabindex="-1" loading="lazy" title="Sheet home, preview"></iframe></div>
+<div class="sws"><div class="sw"><p class="swh">Light scheme</p><ul><li><span class="sq" style="background:#ffffff"></span><b>Ground</b><code>#ffffff</code></li><li><span class="sq" style="background:#111111"></span><b>Ink</b><code>#111111</code></li><li><span class="sq" style="background:#374151"></span><b>Secondary</b><code>#374151</code></li><li><span class="sq" style="background:#6b7280"></span><b>Muted</b><code>#6b7280</code></li><li><span class="sq" style="background:#e5e7eb"></span><b>Rule</b><code>#e5e7eb</code></li><li><span class="sq" style="background:#0f7b4f"></span><b>Emerald</b><code>#0f7b4f</code></li><li><span class="sq" style="background:#b45309"></span><b>Amber</b><code>#b45309</code></li></ul></div><div class="sw"><p class="swh">Dark scheme</p><ul><li><span class="sq" style="background:#101010"></span><b>Ground</b><code>#101010</code></li><li><span class="sq" style="background:#ececec"></span><b>Ink</b><code>#ececec</code></li><li><span class="sq" style="background:#c2c2c2"></span><b>Secondary</b><code>#c2c2c2</code></li><li><span class="sq" style="background:#9a9a9a"></span><b>Muted</b><code>#9a9a9a</code></li><li><span class="sq" style="background:#2b2b2b"></span><b>Rule</b><code>#2b2b2b</code></li><li><span class="sq" style="background:#34d399"></span><b>Emerald</b><code>#34d399</code></li><li><span class="sq" style="background:#fbbf24"></span><b>Amber</b><code>#fbbf24</code></li></ul></div></div>
+</section><section class="dir" id="console">
+<div class="txt">
+<p class="k">Direction B</p>
+<h2>Console</h2>
+<p>The product a bid manager opens every morning. A live index down the left counts what changed: open notices, today&#x27;s new ones, those closing within 7 days, this week&#x27;s awards, the organizations being watched. White panels sit on a near-white page, and each stat tile carries its change on the line beneath. On wide screens the tender list and the selected notice sit side by side; j and k move through the list.</p>
+<ul class="moves"><li>A live index rail with counts, amber for closing within 7 days; a strip of counts below 1000 px</li><li>A split view from 1200 px: list left, notice right; j / k to move, Enter to open</li><li>Stat tiles with large tabular figures and a one-line change</li><li>A dense toolbar with removable filter chips below it</li></ul>
+<p class="links"><a href="console/home.html">Today</a><a href="console/tenders.html">Open tenders</a><a href="console/organization.html">WSP Canada Inc.</a></p>
+</div>
+<div class="pv" aria-hidden="true"><iframe src="console/home.html" tabindex="-1" loading="lazy" title="Console home, preview"></iframe></div>
+<div class="sws"><div class="sw"><p class="swh">Light scheme</p><ul><li><span class="sq" style="background:#f8fafc"></span><b>Page</b><code>#f8fafc</code></li><li><span class="sq" style="background:#ffffff"></span><b>Panel</b><code>#ffffff</code></li><li><span class="sq" style="background:#e2e8f0"></span><b>Border</b><code>#e2e8f0</code></li><li><span class="sq" style="background:#0f172a"></span><b>Ink</b><code>#0f172a</code></li><li><span class="sq" style="background:#334155"></span><b>Secondary</b><code>#334155</code></li><li><span class="sq" style="background:#5b6b80"></span><b>Muted</b><code>#5b6b80</code></li><li><span class="sq" style="background:#0f7b4f"></span><b>Emerald</b><code>#0f7b4f</code></li><li><span class="sq" style="background:#b45309"></span><b>Amber</b><code>#b45309</code></li></ul></div><div class="sw"><p class="swh">Dark scheme</p><ul><li><span class="sq" style="background:#0b1120"></span><b>Page</b><code>#0b1120</code></li><li><span class="sq" style="background:#0f172a"></span><b>Panel</b><code>#0f172a</code></li><li><span class="sq" style="background:#1e293b"></span><b>Border</b><code>#1e293b</code></li><li><span class="sq" style="background:#e2e8f0"></span><b>Ink</b><code>#e2e8f0</code></li><li><span class="sq" style="background:#cbd5e1"></span><b>Secondary</b><code>#cbd5e1</code></li><li><span class="sq" style="background:#94a3b8"></span><b>Muted</b><code>#94a3b8</code></li><li><span class="sq" style="background:#34d399"></span><b>Emerald</b><code>#34d399</code></li><li><span class="sq" style="background:#fbbf24"></span><b>Amber</b><code>#fbbf24</code></li></ul></div></div>
+</section><section class="dir" id="dossier">
+<div class="txt">
+<p class="k">Direction C</p>
+<h2>Dossier</h2>
+<p>The organization as a file, and the site as the archive that holds it. A strong type scale, sections numbered like a published report and a 24 px grid under every element (the footer button draws it). Each profile opens with a record line under the name. The home page is a dated issue, Today&#x27;s sheet, led by the day&#x27;s new notices. The wordmark is the masthead.</p>
+<ul class="moves"><li>A record line under every name, in tracked capitals</li><li>Today&#x27;s sheet: a dated issue with a lead table and numbered sections</li><li>The wordmark as masthead, one line of text links under a hairline</li><li>Inset tables; the hovered row takes a 2 px emerald rule</li></ul>
+<p class="links"><a href="dossier/home.html">Today</a><a href="dossier/tenders.html">Open tenders</a><a href="dossier/organization.html">WSP Canada Inc.</a></p>
+</div>
+<div class="pv" aria-hidden="true"><iframe src="dossier/home.html" tabindex="-1" loading="lazy" title="Dossier home, preview"></iframe></div>
+<div class="sws"><div class="sw"><p class="swh">Light scheme</p><ul><li><span class="sq" style="background:#ffffff"></span><b>Ground</b><code>#ffffff</code></li><li><span class="sq" style="background:#0a0a0a"></span><b>Ink</b><code>#0a0a0a</code></li><li><span class="sq" style="background:#3d3d3d"></span><b>Secondary</b><code>#3d3d3d</code></li><li><span class="sq" style="background:#6b6b6b"></span><b>Muted</b><code>#6b6b6b</code></li><li><span class="sq" style="background:#e6e6e6"></span><b>Rule</b><code>#e6e6e6</code></li><li><span class="sq" style="background:#0f7b4f"></span><b>Emerald</b><code>#0f7b4f</code></li><li><span class="sq" style="background:#b45309"></span><b>Amber</b><code>#b45309</code></li></ul></div><div class="sw"><p class="swh">Dark scheme</p><ul><li><span class="sq" style="background:#0c0c0c"></span><b>Ground</b><code>#0c0c0c</code></li><li><span class="sq" style="background:#f0f0f0"></span><b>Ink</b><code>#f0f0f0</code></li><li><span class="sq" style="background:#c6c6c6"></span><b>Secondary</b><code>#c6c6c6</code></li><li><span class="sq" style="background:#9e9e9e"></span><b>Muted</b><code>#9e9e9e</code></li><li><span class="sq" style="background:#262626"></span><b>Rule</b><code>#262626</code></li><li><span class="sq" style="background:#34d399"></span><b>Emerald</b><code>#34d399</code></li><li><span class="sq" style="background:#fbbf24"></span><b>Amber</b><code>#fbbf24</code></li></ul></div></div>
+</section>
+<p class="foot">Inter is under the SIL Open Font License 1.1. Data: CanadaBuys tender notices, award notices and contract history, Open Government Licence, Canada. The FR switch is not wired in the mockups.</p>
+</div>
+<script>
+(function(){
+var r=document.documentElement,b=document.querySelector("[data-theme-toggle]");
+function cur(){return r.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}
+function lab(){var d=cur()==="dark";b.textContent=d?"Light":"Dark";b.setAttribute("aria-label",d?"Switch to the light scheme":"Switch to the dark scheme")}
+if(b){b.addEventListener("click",function(){var n=cur()==="dark"?"light":"dark";r.setAttribute("data-theme",n);try{localStorage.setItem("aw-theme",n)}catch(e){}lab()});lab()}
+document.addEventListener("click",function(ev){
+var x=ev.target.closest(".fchip button");if(x){x.parentNode.remove();return}
+var w=ev.target.closest("[data-watch]");if(w){var p=w.getAttribute("aria-pressed")==="true";w.setAttribute("aria-pressed",String(!p));w.querySelector("span").textContent=p?w.dataset.off:w.dataset.on;return}
+var g=ev.target.closest("[data-toggle]");if(g){g.setAttribute("aria-pressed",String(g.getAttribute("aria-pressed")!=="true"))}
+var s=ev.target.closest("th[data-k] button");if(!s)return;
+var th=s.parentNode,t=th.closest("table"),i=[].indexOf.call(th.parentNode.children,th),d=th.getAttribute("aria-sort")==="ascending"?-1:1,n=th.dataset.k==="n",tb=t.tBodies[0];
+[].slice.call(tb.rows).sort(function(a,c){var p=a.cells[i],q=c.cells[i],u=p.dataset.v||p.textContent.trim(),v=q.dataset.v||q.textContent.trim();if(n){u=+u;v=+v}return u<v?-d:u>v?d:0}).forEach(function(row){tb.appendChild(row)});
+t.querySelectorAll("th[aria-sort]").forEach(function(h){h.removeAttribute("aria-sort")});th.setAttribute("aria-sort",d>0?"ascending":"descending")});
+})();
+</script>
+</body>
+</html>

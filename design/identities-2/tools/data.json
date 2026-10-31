@@ -1,0 +1,1901 @@
+{
+ "stats": {
+  "awards_rows": 4860,
+  "awards_2026_rows": 3895,
+  "awards_2026_future_dated": 5,
+  "awards_2026_cancelled": 10,
+  "awards_2026_value": 19197439673.29,
+  "awards_2026_noncad": 48,
+  "awards_published_min": "2026-04-01",
+  "awards_published_max": "2026-10-30",
+  "tenders_new": 25,
+  "person_test_available": true,
+  "tenders_closing_7d": 1,
+  "rows_flagged_by_person_test_2026": 48
+ },
+ "tenders": [
+  {
+   "title": "Tier 2 TBIPS - Digital Transformation User Experience (UX)",
+   "reference": "cb-418-22395949",
+   "amendment": "000",
+   "solicitation": "30008545",
+   "published": "2026-10-30",
+   "closing": "2026-11-26T14:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "80"
+   ],
+   "subject": "Information technology consultation services",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Selective tendering",
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Department of Fisheries and Oceans (DFO)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "IT Professional Services to Enhance and Deliver the Canada Disability Benefit Digital Solution",
+   "reference": "cb-438-11905524",
+   "amendment": "000",
+   "solicitation": "100031926",
+   "published": "2026-10-30",
+   "closing": "2026-11-20T14:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "81"
+   ],
+   "subject": "Information Technology Service Delivery",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Traditional",
+   "regions": [
+    "Remote Offsite",
+    "Canada"
+   ],
+   "buyer": "Department of Employment and Social Development (ESDC)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Business Process Re-Engineer for the RCMP",
+   "reference": "cb-504-3988252",
+   "amendment": "000",
+   "solicitation": "202603790",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "81"
+   ],
+   "subject": "Computer services",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Traditional",
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Royal Canadian Mounted Police (RCMP)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Demolition Kit, Bangalore Torpedo M1A2",
+   "reference": "cb-613-77108420",
+   "amendment": "000",
+   "solicitation": "W8703-270117/A",
+   "published": "2026-10-30",
+   "closing": "2026-12-01T14:00:00",
+   "status": "Open",
+   "category": [
+    "Goods"
+   ],
+   "segments": [
+    "46"
+   ],
+   "subject": "Ammunition",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Traditional",
+   "regions": [
+    "Dundurn",
+    "Saskatchewan"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Snow Removal Services – Parrtown CCC",
+   "reference": "cb-653-41609590",
+   "amendment": "000",
+   "solicitation": "21201-27-5551031",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "72"
+   ],
+   "subject": "Snow removal services",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "Saint John"
+   ],
+   "buyer": "Correctional Service of Canada (CSC)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "TBIPS - Level 3 Business Analyst",
+   "reference": "cb-694-71129009",
+   "amendment": "000",
+   "solicitation": "W2294-26-AA005",
+   "published": "2026-10-30",
+   "closing": "2026-11-20T12:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "80"
+   ],
+   "subject": "Business and corporate management consultation services",
+   "notice_type": "RFP against Supply Arrangement",
+   "method": "Competitive - Selective tendering",
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "BCH2026-11 - Request for Proposals - 1495 Heron Road - Structural Engineering",
+   "reference": "cb-713-39227575",
+   "amendment": "000",
+   "solicitation": "BCH2026-11",
+   "published": "2026-10-30",
+   "closing": "2026-11-30T14:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "81"
+   ],
+   "subject": "Structural engineering",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "Ottawa"
+   ],
+   "buyer": "Canada Lands Company Limited (CLC)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Solenoid Procurement",
+   "reference": "cb-746-37313616",
+   "amendment": "000",
+   "solicitation": "W0107-275654",
+   "published": "2026-10-30",
+   "closing": "2026-11-05T14:00:00",
+   "status": "Open",
+   "category": [
+    "Goods"
+   ],
+   "segments": [
+    "31"
+   ],
+   "subject": "Machine made parts",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "Canada",
+    "Ontario (except NCR)",
+    "Petawawa"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Senior Learning Advisor in Support of the Logistics Vehicle Modernization (LVM) Project",
+   "reference": "cb-748-18476391",
+   "amendment": "000",
+   "solicitation": "W847L-270174",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "86"
+   ],
+   "subject": "Educational advisory services",
+   "notice_type": "RFP against Supply Arrangement",
+   "method": "Competitive - Selective tendering",
+   "regions": [
+    "Canada",
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Wheel Chocks / Cale de Roue",
+   "reference": "cb-796-70078432",
+   "amendment": "000",
+   "solicitation": "W847L-270183",
+   "published": "2026-10-30",
+   "closing": "2026-11-24T14:00:00",
+   "status": "Open",
+   "category": [
+    "Goods"
+   ],
+   "segments": [
+    "25"
+   ],
+   "subject": "Vehicle safety and security systems and components",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Traditional",
+   "regions": [
+    "Montréal"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Masonry Conservation S-77 Sections A and B",
+   "reference": "cb-806-6332445",
+   "amendment": "000",
+   "solicitation": "26-58147",
+   "published": "2026-10-30",
+   "closing": "2026-12-09T14:00:00",
+   "status": "Open",
+   "category": [
+    "Construction"
+   ],
+   "segments": [
+    "72"
+   ],
+   "subject": "Masonry and stonework services",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "Canada"
+   ],
+   "buyer": "National Research Council of Canada (NRC)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Requirement of multiple Lap and Polish Tools",
+   "reference": "cb-85-75674174",
+   "amendment": "000",
+   "solicitation": "26-58197",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "status": "Open",
+   "category": [
+    "Goods"
+   ],
+   "segments": [
+    "41"
+   ],
+   "subject": "Laboratory and scientific equipment",
+   "notice_type": "Advance Contract Award Notice",
+   "method": "Advance contract award notice",
+   "regions": [
+    "United States of America",
+    "Caribbean",
+    "Asia",
+    "Africa",
+    "Central America",
+    "Canada",
+    "South America",
+    "Mexico",
+    "Europe"
+   ],
+   "buyer": "National Research Council of Canada (NRC)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "NPP – S6057491 - THS SA – Three (3) Computer Application Support. Temporary Help Services against the Supply Arrangement for the National Capital Region (NCR).",
+   "reference": "cb-935-21285129",
+   "amendment": "000",
+   "solicitation": "S6057491",
+   "published": "2026-10-30",
+   "closing": "2026-11-23T13:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "80"
+   ],
+   "subject": "Temporary personnel services",
+   "notice_type": "RFP against Supply Arrangement",
+   "method": "Competitive - Selective tendering",
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Kelowna Accommodations",
+   "reference": "cb-958-30929630",
+   "amendment": "000",
+   "solicitation": "W3999-270009",
+   "published": "2026-10-30",
+   "closing": "2026-11-25T12:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "95"
+   ],
+   "subject": "Accommodation buildings and structures",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "Canada"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Pure Storage FlashArray X50R3 – 3 Yr - Maintenance and Support -DND",
+   "reference": "SSC-26-00035339:T",
+   "amendment": "000",
+   "solicitation": "BPM026801/35339",
+   "published": "",
+   "closing": "2026-11-09T14:00:00",
+   "status": "Open",
+   "category": [
+    "Goods"
+   ],
+   "segments": [],
+   "subject": "ADP Software",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Limited tendering",
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Shared Services Canada",
+   "end_user": "Shared Services Canada",
+   "url": ""
+  },
+  {
+   "title": "Purchase and Install two server racks in five sheds in southern Manitoba or equivalent, for the ROYAL CANADIReq. 2026-07-30",
+   "reference": "SSC-26-00035342:T",
+   "amendment": "000",
+   "solicitation": "BPM026860/35342",
+   "published": "",
+   "closing": "2026-11-09T14:00:00",
+   "status": "Open",
+   "category": [
+    "Goods"
+   ],
+   "segments": [],
+   "subject": "Miscellaneous Communications Equipment",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "Manitoba"
+   ],
+   "buyer": "Shared Services Canada",
+   "end_user": "Shared Services Canada",
+   "url": ""
+  },
+  {
+   "title": "Pacific Science Enterprise Center (PSEC) - Power Distribution Upgrade",
+   "reference": "cb-106-83883729",
+   "amendment": "000",
+   "solicitation": "30008413",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "status": "Open",
+   "category": [
+    "Construction"
+   ],
+   "segments": [
+    "72"
+   ],
+   "subject": "Electrical services",
+   "notice_type": "Invitation to Qualify",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "British Columbia",
+    "Canada",
+    "Vancouver"
+   ],
+   "buyer": "Department of Fisheries and Oceans (DFO)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "BCH2026-10 - Request for Proposals - 1495 Heron Road - Mechanical and Electrical Engineer Services",
+   "reference": "cb-167-8734223",
+   "amendment": "000",
+   "solicitation": "BCH2026-10",
+   "published": "2026-10-30",
+   "closing": "2026-11-30T14:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "81"
+   ],
+   "subject": "Mechanical engineering",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "Ottawa",
+    "Canada",
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Canada Lands Company Limited (CLC)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "ETS-Lindgren EMSENSE 40 Electric Field Probe System",
+   "reference": "cb-215-65758115",
+   "amendment": "000",
+   "solicitation": "W8703-270128/A",
+   "published": "2026-10-30",
+   "closing": "2026-11-17T14:00:00",
+   "status": "Open",
+   "category": [
+    "Goods"
+   ],
+   "segments": [
+    "32",
+    "81"
+   ],
+   "subject": "Electronic hardware and component parts and accessories",
+   "notice_type": "RFP against Supply Arrangement",
+   "method": "Competitive - Selective tendering",
+   "regions": [
+    "Gatineau"
+   ],
+   "buyer": "Department of National Defence (DND)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Open license for lidar data and data analysis",
+   "reference": "cb-29-37893161",
+   "amendment": "001",
+   "solicitation": "NRCan-5000098113",
+   "published": "2026-10-30",
+   "closing": "2026-11-16T14:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "81"
+   ],
+   "subject": "Cartography",
+   "notice_type": "Advance Contract Award Notice",
+   "method": "Advance contract award notice",
+   "regions": [],
+   "buyer": "Department of Natural Resources (NRCan)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Weak magnetic anomaly detection for defence and security",
+   "reference": "cb-3-34869181",
+   "amendment": "002",
+   "solicitation": "EN578-24ISC4/92",
+   "published": "2026-10-30",
+   "closing": "2026-11-27T14:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "81"
+   ],
+   "subject": "Manufacturing technology research and development services",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Selective tendering",
+   "regions": [
+    "Canada"
+   ],
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "Artificial Intelligence (AI) decision-making process visibility, traceability and compliance governance",
+   "reference": "cb-189-51083224",
+   "amendment": "001",
+   "solicitation": "EN578-24ISC4/100",
+   "published": "2026-10-30",
+   "closing": "2026-12-22T14:00:00",
+   "status": "Open",
+   "category": [
+    "Services"
+   ],
+   "segments": [
+    "81"
+   ],
+   "subject": "Manufacturing technology research and development services",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Selective tendering",
+   "regions": [
+    "Canada"
+   ],
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "end_user": "",
+   "url": ""
+  },
+  {
+   "title": "PR22657 47064-266992 FTIR Spectrometer and FT-Raman Spectrometer Module",
+   "reference": "WS5530498558-Doc5957736745",
+   "amendment": "000",
+   "solicitation": "WS5530498558",
+   "published": "2026-10-30",
+   "closing": "2026-11-17T14:00:00",
+   "status": "Open",
+   "category": [
+    "Goods"
+   ],
+   "segments": [
+    "41"
+   ],
+   "subject": "Laboratory and scientific equipment",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "National Capital Region (NCR)"
+   ],
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "end_user": "Canada Border Services Agency - (Administered Activities) (CBSA)",
+   "url": "https://portal.us.bn.cloud.ariba.com/dashboard/public/appext/comsapsbncdiscoveryui#/RfxEvent/preview/1110030063?anId=ANONYMOUS"
+  },
+  {
+   "title": "F7049-260131 - CCGS Tully - Oil Purifiers",
+   "reference": "WS5764451697-Doc5959158322",
+   "amendment": "000",
+   "solicitation": "WS5764451697",
+   "published": "2026-10-30",
+   "closing": "2026-11-20T14:00:00",
+   "status": "Open",
+   "category": [
+    "Goods"
+   ],
+   "segments": [
+    "25"
+   ],
+   "subject": "Marine craft systems and subassemblies",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "British Columbia"
+   ],
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "end_user": "Canadian Coast Guard (CCG)",
+   "url": "https://portal.us.bn.cloud.ariba.com/dashboard/public/appext/comsapsbncdiscoveryui#/RfxEvent/preview/1110030095?anId=ANONYMOUS"
+  },
+  {
+   "title": "F7049-260142 - CCGS Tully - Reverse Osmosis Water Maker",
+   "reference": "WS5765574021-Doc5959265471",
+   "amendment": "000",
+   "solicitation": "WS5765574021",
+   "published": "2026-10-30",
+   "closing": "2026-11-20T14:00:00",
+   "status": "Open",
+   "category": [
+    "Goods"
+   ],
+   "segments": [
+    "40"
+   ],
+   "subject": "Water purification system",
+   "notice_type": "Request for Proposal",
+   "method": "Competitive - Open bidding",
+   "regions": [
+    "British Columbia"
+   ],
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "end_user": "Canadian Coast Guard (CCG)",
+   "url": "https://portal.us.bn.cloud.ariba.com/dashboard/public/appext/comsapsbncdiscoveryui#/RfxEvent/preview/1110030096?anId=ANONYMOUS"
+  }
+ ],
+ "top_orgs": [
+  {
+   "norm": "chantier davie canada",
+   "name": "Chantier Davie Canada Inc.",
+   "spellings": 1,
+   "n": 1,
+   "total": 13044299191.04,
+   "noncomp": 0,
+   "stated": 1
+  },
+  {
+   "norm": "mda systems",
+   "name": "MDA SYSTEMS LTD",
+   "spellings": 2,
+   "n": 2,
+   "total": 719671091.09,
+   "noncomp": 1,
+   "stated": 2
+  },
+  {
+   "norm": "kongsberg defence aerospace",
+   "name": "Kongsberg Defence & Aerospace",
+   "spellings": 2,
+   "n": 2,
+   "total": 695137779.0,
+   "noncomp": 2,
+   "stated": 2
+  },
+  {
+   "norm": "nmg matawinie",
+   "name": "NMG Matawinie Inc.",
+   "spellings": 1,
+   "n": 2,
+   "total": 489040959.25,
+   "noncomp": 2,
+   "stated": 2
+  },
+  {
+   "norm": "rio tinto fer titane",
+   "name": "Rio Tinto Fer et Titane",
+   "spellings": 1,
+   "n": 2,
+   "total": 255855278.72,
+   "noncomp": 2,
+   "stated": 2
+  },
+  {
+   "norm": "united van lines canada",
+   "name": "United Van Lines (Canada) Ltd.",
+   "spellings": 1,
+   "n": 1,
+   "total": 155000000.0,
+   "noncomp": 0,
+   "stated": 1
+  },
+  {
+   "norm": "pomerleau",
+   "name": "Pomerleau Inc.",
+   "spellings": 1,
+   "n": 2,
+   "total": 126915917.76,
+   "noncomp": 0,
+   "stated": 2
+  },
+  {
+   "norm": "general dynamics ordnance tactical systems canada inc general dynamics produits de defense systemes tactiques canada",
+   "name": "General Dynamics Ordnance and Tactical Systems - Canada Inc./ General dynamics produits de defense et systemes tactiques - Canada Inc.",
+   "spellings": 1,
+   "n": 5,
+   "total": 119154132.62,
+   "noncomp": 4,
+   "stated": 5
+  }
+ ],
+ "recent": [
+  {
+   "title": "Security Guard Services - Securitas Canada Limited",
+   "reference": "CW2474276",
+   "amendment": "000",
+   "published": "2026-10-30",
+   "awarded": "2026-10-29",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Supply Arrangement",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "Securitas Canada Limited",
+   "end_user": "Department of Public Works and Government Services (PSPC)",
+   "subject": "Security guard services"
+  },
+  {
+   "title": "Security Guard services - Paladin Security Group Ltd",
+   "reference": "CW2474269",
+   "amendment": "000",
+   "published": "2026-10-30",
+   "awarded": "2026-10-29",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Supply Arrangement",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "Paladin Security Group Ltd.",
+   "end_user": "Department of Public Works and Government Services (PSPC)",
+   "subject": "Security guard services"
+  },
+  {
+   "title": "Security Guard services - Garda Canada Security Corporation",
+   "reference": "CW2474261",
+   "amendment": "000",
+   "published": "2026-10-30",
+   "awarded": "2026-10-29",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Supply Arrangement",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "Garda Canada Security Corporation",
+   "end_user": "Department of Public Works and Government Services (PSPC)",
+   "subject": "Security guard services"
+  },
+  {
+   "title": "Security Guard services SA - The Canadian Corps of Commissionaires",
+   "reference": "CW2474255",
+   "amendment": "000",
+   "published": "2026-10-30",
+   "awarded": "2026-10-29",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Supply Arrangement",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "The Canadian Corps of Commissionaires",
+   "end_user": "Department of Public Works and Government Services (PSPC)",
+   "subject": "Security guard services"
+  },
+  {
+   "title": "Unmanned Towed Active Sonar (UTAS)",
+   "reference": "CW2472159",
+   "amendment": "000",
+   "published": "2026-10-30",
+   "awarded": "2026-10-29",
+   "value": 1582145.44,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "GeoSpectrum Technologies Inc.",
+   "end_user": "Department of National Defence (DND)",
+   "subject": "Product research and development service"
+  },
+  {
+   "title": "Bearing, Sleeve",
+   "reference": "cb-393-23364191",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-29",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of National Defence (DND)",
+   "supplier": "Simex Defence Inc.",
+   "end_user": "",
+   "subject": "Bearings"
+  },
+  {
+   "title": "Asymmetric Centrifugal Mixer",
+   "reference": "cb-254-76308340",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-29",
+   "value": 74653.56,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Advance contract award notice",
+   "competitive": false,
+   "buyer": "National Research Council of Canada (NRC)",
+   "supplier": "FlackTek Sales, LLC",
+   "end_user": "",
+   "subject": "Laboratory and scientific equipment"
+  },
+  {
+   "title": "F1782-26C150 - CCGS M Charles - Alongside Refit",
+   "reference": "CW2474554",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-29",
+   "value": 402319.42,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "Intercon Marine Inc",
+   "end_user": "Canadian Coast Guard (CCG)",
+   "subject": "Water transport vessel maintenance and repair services"
+  },
+  {
+   "title": "PR26543 T8086-261223 ESRI Canada Limited ArcGIS Subscription Licenses, maintenance and Support for Transport Canada",
+   "reference": "CW2474547",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-29",
+   "value": 240349.49,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract against SA",
+   "method": "Non-competitive",
+   "competitive": false,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "Esri Canada Limited",
+   "end_user": "Department of Transport (TC)",
+   "subject": "Software"
+  },
+  {
+   "title": "PR26058- 21120-276773 CCM Enterprise and CCM Conveyer annual Maintenance and Support for Correctional Service Canada",
+   "reference": "CW2474081",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-29",
+   "value": 96403.32,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract against SA",
+   "method": "Non-competitive",
+   "competitive": false,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "WorkDynamics Technologies Inc.",
+   "end_user": "Correctional Service of Canada (CSC)",
+   "subject": "Software maintenance and support"
+  },
+  {
+   "title": "TSPS SA (Task Based) – Neutra Cabinet Inc.",
+   "reference": "CW2473174",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-29",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Supply Arrangement",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "Neutra Cabinet inc.",
+   "end_user": "Department of Public Works and Government Services (PSPC)",
+   "subject": "Management advisory services"
+  },
+  {
+   "title": "EF944-270462 - Purchase of office seating under the SA for ESDC - CW",
+   "reference": "CW2474671",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-28",
+   "value": 24995.57,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract against SA",
+   "method": "Competitive - Selective tendering",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "ERGOCENTRIC INC.",
+   "end_user": "Department of Public Works and Government Services (PSPC)",
+   "subject": "Office or work chair"
+  },
+  {
+   "title": "6D063-253732 BIOSAFETY LEVEL 4 STEAM STERILIZER",
+   "reference": "CW2446765",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-28",
+   "value": 521006.85,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Non-competitive",
+   "competitive": false,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "GETINGE CANADA LIMITED",
+   "end_user": "Public Health Agency of Canada (PHAC)",
+   "subject": "Laboratory and Measuring and Observing and Testing Equipment"
+  },
+  {
+   "title": "Hook, Hoist",
+   "reference": "cb-953-6090035",
+   "amendment": "000",
+   "published": "2026-10-28",
+   "awarded": "2026-10-28",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of National Defence (DND)",
+   "supplier": "Peple Parts & Supplies Inc",
+   "end_user": "",
+   "subject": "Lifting equipment and accessories"
+  },
+  {
+   "title": "W6399-26LZ24 - ESRI Professional Services",
+   "reference": "CW2468454",
+   "amendment": "000",
+   "published": "2026-10-28",
+   "awarded": "2026-10-28",
+   "value": 2439913.24,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Task Authorization Based Contract",
+   "method": "Non-competitive",
+   "competitive": false,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "Esri Canada Limited",
+   "end_user": "Department of National Defence (DND)",
+   "subject": "Information technology consultation services"
+  },
+  {
+   "title": "Switch Assembly",
+   "reference": "cb-60-70439733",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-27",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of National Defence (DND)",
+   "supplier": "Simex Defence Inc",
+   "end_user": "",
+   "subject": "Electrical switches and accessories"
+  },
+  {
+   "title": "Request For Proposal (RFP) for Pharmacological testing of novel opioids, stimulants, and synthetic cannabinoids.",
+   "reference": "cb-178-15149127",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-27",
+   "value": 118450.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Health (HC)",
+   "supplier": "CENTRE HOSPITALIER UNIVERSITAIRE (CHU) SAINTEJUSTINE",
+   "end_user": "",
+   "subject": "Drugs and Pharmaceutical Products"
+  },
+  {
+   "title": "HOSE SET, NONMETALLIC",
+   "reference": "cb-12-72014695",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-27",
+   "value": 72449.58,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of National Defence (DND)",
+   "supplier": "Simex Defence Inc",
+   "end_user": "",
+   "subject": "Hoses"
+  },
+  {
+   "title": "RFP for Chemical analyses of marine sediment samples for determination of specified drugs, pesticides, & antibiotic's Concentrations",
+   "reference": "cb-490-47420146",
+   "amendment": "000",
+   "published": "2026-10-28",
+   "awarded": "2026-10-27",
+   "value": 135600.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Fisheries and Oceans (DFO)",
+   "supplier": "MB Laboratories Ltd.",
+   "end_user": "",
+   "subject": "Biological science services"
+  },
+  {
+   "title": "5K003-260867 - Texture Analyzers",
+   "reference": "CW2469278",
+   "amendment": "000",
+   "published": "2026-10-28",
+   "awarded": "2026-10-27",
+   "value": 101644.78,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Non-competitive",
+   "competitive": false,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "TEXTURE TECHNOLOGIES CORP",
+   "end_user": "Canadian Grain Commission (CGC)",
+   "subject": "Metals and metallurgy and structural materials testing instruments"
+  },
+  {
+   "title": "Contract - Cold Climate Aviation Technologies Ground Icing Research and Development",
+   "reference": "CW2444826",
+   "amendment": "000",
+   "published": "2026-10-28",
+   "awarded": "2026-10-27",
+   "value": 3955000.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Task Authorization Based Contract",
+   "method": "Advance contract award notice",
+   "competitive": false,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "APS Aviation Inc.",
+   "end_user": "Department of Transport (TC)",
+   "subject": "Product research and development service"
+  },
+  {
+   "title": "Greenhouse-E Controls Upgrade – Swift Current Research and Development Centre",
+   "reference": "cb-938-7793788",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-27",
+   "value": 537371.1,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Agriculture and Agri-Food (AAFC)",
+   "supplier": "Power-Link Technologies Ltd.",
+   "end_user": "",
+   "subject": "Environmental system control installation service"
+  },
+  {
+   "title": "Oracle Enterprise Resource Planning (ERP) Functional Analyst",
+   "reference": "cb-856-47444748",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-27",
+   "value": 518331.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Selective tendering",
+   "competitive": true,
+   "buyer": "Correctional Service of Canada (CSC)",
+   "supplier": "Cache Computer Consulting Corp.",
+   "end_user": "",
+   "subject": "Computer services"
+  },
+  {
+   "title": "Contract - Dominion No. 1A Outfall Design – Cape Breton",
+   "reference": "CW2474348",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-27",
+   "value": 311220.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Competitive - Selective tendering",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "GEMTEC Consulting Engineers and Scientists Limited",
+   "end_user": "Department of Public Works and Government Services (PSPC)",
+   "subject": "Heavy construction services"
+  },
+  {
+   "title": "9F019-260124 FASTRAD Software Maintenance and Support Renewal",
+   "reference": "CW2473722",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-27",
+   "value": 29068.04,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Non-competitive",
+   "competitive": false,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "TRAD SARL",
+   "end_user": "Canadian Space Agency (CSA)",
+   "subject": "Software"
+  },
+  {
+   "title": "K2B52-260794 - Enclosed Trailer - CWS Atlantic NS",
+   "reference": "CW2472730",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-27",
+   "value": 72390.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "2082169 ONTARIO INC",
+   "end_user": "Department of the Environment (ECCC )",
+   "subject": "Trailer, travel or caravan"
+  },
+  {
+   "title": "M6500-270890 Radiation Detector",
+   "reference": "CW2470470",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-27",
+   "value": 79574.6,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Non-competitive",
+   "competitive": false,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "GAMBLE TECHNOLOGIES LIMITED",
+   "end_user": "Royal Canadian Mounted Police (RCMP)",
+   "subject": "Radiation detector and alarm"
+  },
+  {
+   "title": "Roadside Brushing Vegetation Removal, Waterton Lakes National Park",
+   "reference": "cb-738-61958142",
+   "amendment": "000",
+   "published": "2026-10-29",
+   "awarded": "2026-10-26",
+   "value": 270217.5,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Parks Canada Agency (PC)",
+   "supplier": "Spider Mountain Excavators Ltd",
+   "end_user": "",
+   "subject": "Planting services or ornamental plant or bush or tree"
+  },
+  {
+   "title": "Construction Engineering Equipment",
+   "reference": "cb-413-39601394",
+   "amendment": "000",
+   "published": "2026-10-28",
+   "awarded": "2026-10-26",
+   "value": 43126.9,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of National Defence (DND)",
+   "supplier": "SIMEX Defence Inc.",
+   "end_user": "",
+   "subject": "Heavy construction machinery and equipment"
+  },
+  {
+   "title": "Construction Engineering Equipment",
+   "reference": "cb-395-12563685",
+   "amendment": "000",
+   "published": "2026-10-28",
+   "awarded": "2026-10-26",
+   "value": 17287.89,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of National Defence (DND)",
+   "supplier": "JHT Defense Inc.",
+   "end_user": "",
+   "subject": "Heavy construction machinery and equipment"
+  },
+  {
+   "title": "Jasco Applied Sciences Ltd - ISC - Phase 1 - Acoustic Detection-Classification-Localization-Tracking (DCLT) in a harbour environment",
+   "reference": "CW2451987",
+   "amendment": "000",
+   "published": "2026-10-28",
+   "awarded": "2026-10-26",
+   "value": 284991.62,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "JASCO Applied Sciences (Canada) Ltd.",
+   "end_user": "Department of Industry (ISED)",
+   "subject": "Product research and development service"
+  },
+  {
+   "title": "RFSO 2025-4867 Non-Executive Recruitment and Executive Search Services",
+   "reference": "cb-87-70380618",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-26",
+   "value": 0.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Canada Deposit Insurance Corporation (CDIC)",
+   "supplier": "TEEMA Solutions Group Inc.",
+   "end_user": "",
+   "subject": "Human resources consulting service"
+  },
+  {
+   "title": "Spares for armament loaders",
+   "reference": "cb-642-12489022",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-26",
+   "value": 5249.88,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of National Defence (DND)",
+   "supplier": "IMS Energy Limited",
+   "end_user": "",
+   "subject": "Loading equipment"
+  },
+  {
+   "title": "Spares for armament loaders",
+   "reference": "cb-565-87740422",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-26",
+   "value": 223085.64,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of National Defence (DND)",
+   "supplier": "EQUIPOS INDUSTRIALES DE MANUTENCION SA",
+   "end_user": "",
+   "subject": "Loading equipment"
+  },
+  {
+   "title": "Spares for armament loaders",
+   "reference": "cb-518-18350078",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-26",
+   "value": 451.42,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of National Defence (DND)",
+   "supplier": "Peple Parts & Supplies Inc.",
+   "end_user": "",
+   "subject": "Loading equipment"
+  },
+  {
+   "title": "Spares for armament loaders",
+   "reference": "cb-443-97756621",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-26",
+   "value": 2368.8,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Department of National Defence (DND)",
+   "supplier": "Edmonton Gear Centre Ltd",
+   "end_user": "",
+   "subject": "Loading equipment"
+  },
+  {
+   "title": "Secure Shredding Services",
+   "reference": "cb-203-15252425",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-26",
+   "value": 494978.0,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "",
+   "method": "Competitive - Open bidding",
+   "competitive": true,
+   "buyer": "Canada Revenue Agency (CRA)",
+   "supplier": "Access Information Management of Canada ULC",
+   "end_user": "",
+   "subject": "Document destruction services"
+  },
+  {
+   "title": "EC015-270643- IRCC Dieppe Workspace Furniture- MMP Office Interiors",
+   "reference": "CW2474130",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-26",
+   "value": 40960.4,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract",
+   "method": "Competitive - Selective tendering",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "MMP OFFICE INTERIORS INCORPORATED",
+   "end_user": "Department of Public Works and Government Services (PSPC) / Department of Citizenship & Immigration (IRCC)",
+   "subject": "Accommodation furniture"
+  },
+  {
+   "title": "Contract - Acolad Canada Inc - French-English Translation Services - General and Administrative Texts - Tier 2",
+   "reference": "CW2473741",
+   "amendment": "000",
+   "published": "2026-10-27",
+   "awarded": "2026-10-26",
+   "value": 199366.65,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract against SA",
+   "method": "Competitive - Selective tendering",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "Ubiqus Canada",
+   "end_user": "Department of Public Works and Government Services (PSPC)",
+   "subject": "Writing and translations"
+  },
+  {
+   "title": "Contract - Nations Translation - French-English Translation Services - General and Administrative Texts - Tier 2",
+   "reference": "CW2473739",
+   "amendment": "001",
+   "published": "2026-10-27",
+   "awarded": "2026-10-26",
+   "value": 166138.88,
+   "currency": "CAD",
+   "status": "Active",
+   "instrument": "Contract against SA",
+   "method": "Competitive - Selective tendering",
+   "competitive": true,
+   "buyer": "Department of Public Works and Government Services (PSPC)",
+   "supplier": "Nations Translation Group LP",
+   "end_user": "Department of Public Works and Government Services (PSPC)",
+   "subject": "Writing and translations"
+  }
+ ],
+ "profile": {
+  "display": "WSP Canada Inc.",
+  "spellings": {
+   "WSP Canada Inc.": 19,
+   "WSP Canada Inc": 2,
+   "WSP Canada inc.": 1,
+   "WSP CANADA INC.": 1,
+   "WSP CANADA INC": 1
+  },
+  "rows": 24,
+  "first": "2023-05-31",
+  "last": "2026-10-06",
+  "first_pub": "2026-04-07",
+  "last_pub": "2026-10-07",
+  "years": {
+   "2026": {
+    "n": 17,
+    "total": 10610928.0,
+    "noncomp_n": 0,
+    "noncomp_total": 0.0,
+    "stated_n": 17,
+    "stated_total": 10610928.0
+   },
+   "2024": {
+    "n": 5,
+    "total": 259777.35,
+    "noncomp_n": 1,
+    "noncomp_total": 59939.0,
+    "stated_n": 5,
+    "stated_total": 259777.35
+   },
+   "2023": {
+    "n": 2,
+    "total": 5000000.0,
+    "noncomp_n": 0,
+    "noncomp_total": 0.0,
+    "stated_n": 2,
+    "stated_total": 5000000.0
+   }
+  },
+  "total": 15870705.35,
+  "noncad": 0,
+  "blank_currency": 2,
+  "zero_value_rows": 16,
+  "buyers": [
+   {
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "n": 20,
+    "total": 15686955.35
+   },
+   {
+    "buyer": "National Research Council of Canada (NRC)",
+    "n": 1,
+    "total": 183750.0
+   },
+   {
+    "buyer": "Department of Fisheries and Oceans (DFO)",
+    "n": 1,
+    "total": 0.0
+   },
+   {
+    "buyer": "Department of Agriculture and Agri-Food (AAFC)",
+    "n": 1,
+    "total": 0.0
+   },
+   {
+    "buyer": "Department of Natural Resources (NRCan)",
+    "n": 1,
+    "total": 0.0
+   }
+  ],
+  "places": [
+   {
+    "city": "Montreal",
+    "prov": "Quebec",
+    "n": 20
+   },
+   {
+    "city": "Ottawa",
+    "prov": "Ontario",
+    "n": 1
+   },
+   {
+    "city": "Victoria",
+    "prov": "BC",
+    "n": 1
+   },
+   {
+    "city": "Quebec",
+    "prov": "QC",
+    "n": 1
+   },
+   {
+    "city": "Québec",
+    "prov": "Québec",
+    "n": 1
+   }
+  ],
+  "awards": [
+   {
+    "title": "EB144-270651 Industrial Racking Inspection Service - CFB Halifax",
+    "reference": "CW2471030",
+    "amendment": "000",
+    "published": "2026-10-06",
+    "awarded": "2026-10-06",
+    "value": 65458.8,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Contract",
+    "method": "Competitive - Selective tendering",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Structural engineering"
+   },
+   {
+    "title": "VIC 01 – Roof Replacement",
+    "reference": "cb-680-17244352",
+    "amendment": "000",
+    "published": "2026-10-05",
+    "awarded": "2026-09-23",
+    "value": 183750.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "National Research Council of Canada (NRC)",
+    "supplier": "WSP CANADA INC.",
+    "end_user": "",
+    "subject": "Architectural engineering"
+   },
+   {
+    "title": "EZ899-261170 – Bridge Engineering Services Supply Arrangement – WSP",
+    "reference": "CW2468324",
+    "amendment": "000",
+    "published": "2026-09-25",
+    "awarded": "2026-09-15",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Supply Arrangement",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Professional engineering services"
+   },
+   {
+    "title": "WSP - DISO Transportation Engineering and Prime Consultant Services SOA",
+    "reference": "CW2471570",
+    "amendment": "001",
+    "published": "2026-10-07",
+    "awarded": "2026-09-03",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Environmental sciences advisory services"
+   },
+   {
+    "title": "EF928-260641 - Standing offer - Petroleum Equipment Consulting Expert WSP CANADA",
+    "reference": "CW2465780",
+    "amendment": "000",
+    "published": "2026-08-27",
+    "awarded": "2026-09-01",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP CANADA INC",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Professional engineering services"
+   },
+   {
+    "title": "EZ113-261189-001-VIC - Contaminated Sites - Marine Sediment CTA",
+    "reference": "CW2460608",
+    "amendment": "000",
+    "published": "2026-07-29",
+    "awarded": "2026-07-15",
+    "value": 8400000.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Task Authorization Based Contract",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Polluted soil treatment or rehabilitation"
+   },
+   {
+    "title": "EW038-261275 - Polar Continental Shelf Program (PCSP) Structural Geotechnical Assessment",
+    "reference": "CW2459469",
+    "amendment": "001",
+    "published": "2026-07-15",
+    "awarded": "2026-07-09",
+    "value": 386719.2,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Contract",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC) / Department of Natural Resources  (NRCan)",
+    "subject": "Geotechnical or geoseismic engineering"
+   },
+   {
+    "title": "Mechanical and Electrical Engineering Services",
+    "reference": "cb-842-4058559",
+    "amendment": "000",
+    "published": "2026-07-29",
+    "awarded": "2026-06-29",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Agriculture and Agri-Food (AAFC)",
+    "supplier": "WSP Canada inc.",
+    "end_user": "",
+    "subject": "Professional engineering services"
+   },
+   {
+    "title": "Structural Engineering Services, Standing Offer - WSP Canada Inc.",
+    "reference": "CW2458003",
+    "amendment": "000",
+    "published": "2026-06-26",
+    "awarded": "2026-06-26",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Professional engineering services"
+   },
+   {
+    "title": "EE010-260270 Standing Offer Stream 1 and 2 - Environmental assessment and receiving environment WSP CANADA INC.",
+    "reference": "CW2456561",
+    "amendment": "000",
+    "published": "2026-07-03",
+    "awarded": "2026-06-17",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Environmental Services"
+   },
+   {
+    "title": "EE517-261077-005 WSP CANADA - Standing offers for marine engineering services, Quebec region",
+    "reference": "CW2456729",
+    "amendment": "000",
+    "published": "2026-06-18",
+    "awarded": "2026-06-15",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Harbor or water ports engineering"
+   },
+   {
+    "title": "EF997-260874 - Standing offer for airport engineering services in Inuits areas - ARNAIKTUK CONSULTING - WSP",
+    "reference": "CW2456389",
+    "amendment": "000",
+    "published": "2026-06-15",
+    "awarded": "2026-06-11",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Transport (TC)",
+    "subject": "Professional engineering services"
+   },
+   {
+    "title": "EF997-260874 - Standing offer for airport engineering services in Cree areas - INDIGENOUS CONSULTING GROUP - WSP",
+    "reference": "CW2456367",
+    "amendment": "000",
+    "published": "2026-06-15",
+    "awarded": "2026-06-11",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Transport (TC)",
+    "subject": "Professional engineering services"
+   },
+   {
+    "title": "SA - Photo interpretation services",
+    "reference": "cb-289-28835469",
+    "amendment": "000",
+    "published": "2026-06-02",
+    "awarded": "2026-05-21",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Natural Resources (NRCan)",
+    "supplier": "WSP Canada Inc",
+    "end_user": "",
+    "subject": "Satellite imaging and image processing service"
+   },
+   {
+    "title": "Regional standing offer for Environmental Services - Ontario and Prairie (O&P) region",
+    "reference": "cb-298-61626227",
+    "amendment": "000",
+    "published": "2026-05-11",
+    "awarded": "2026-04-22",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Fisheries and Oceans (DFO)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "",
+    "subject": "Environmental Impact Assessment EIA services"
+   },
+   {
+    "title": "EZ897-251648 - Environmental Compliance Services - WSP Canada Inc.",
+    "reference": "CW2447459",
+    "amendment": "000",
+    "published": "2026-04-09",
+    "awarded": "2026-04-09",
+    "value": 1575000.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Task Authorization Based Contract",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Environmental Services"
+   },
+   {
+    "title": "RISO WSP Canada Inc. - Environmental Services for Contaminated Sites",
+    "reference": "CW2447725",
+    "amendment": "000",
+    "published": "2026-04-07",
+    "awarded": "2026-04-07",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Transport (TC)",
+    "subject": "Environmental Services"
+   },
+   {
+    "title": "WSP STREAM 4 SO 001",
+    "reference": "CW2385213",
+    "amendment": "000",
+    "published": "2026-09-10",
+    "awarded": "2024-11-01",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Office of Infrastructure of Canada (INFC)",
+    "subject": "Environmental management"
+   },
+   {
+    "title": "WSP STREAM 3 SO 003",
+    "reference": "CW2385210",
+    "amendment": "000",
+    "published": "2026-09-10",
+    "awarded": "2024-11-01",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Office of Infrastructure of Canada (INFC)",
+    "subject": "Environmental management"
+   },
+   {
+    "title": "WSP STREAM 1 SO 003",
+    "reference": "CW2385192",
+    "amendment": "000",
+    "published": "2026-09-10",
+    "awarded": "2024-11-01",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Office of Infrastructure of Canada (INFC)",
+    "subject": "Environmental management"
+   },
+   {
+    "title": "Amendment no. 1 - ET022-2507744 G7 Climate Risk and Vulnerability Assessment",
+    "reference": "CW2372925",
+    "amendment": "001",
+    "published": "2026-07-06",
+    "awarded": "2024-08-29",
+    "value": 59939.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Contract",
+    "method": "Non-competitive",
+    "competitive": false,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Environmental management"
+   },
+   {
+    "title": "EE517-241046-006 -WSP-Standing offer - Civil Engineering",
+    "reference": "CW2363509",
+    "amendment": "001",
+    "published": "2026-06-04",
+    "awarded": "2024-02-23",
+    "value": 199838.35,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Highway engineering"
+   },
+   {
+    "title": "EZ113-221203 003 CONTAMINATED SITES CHARACTERIZATION BC AND YT CTA",
+    "reference": "CW2307661",
+    "amendment": "001",
+    "published": "2026-04-08",
+    "awarded": "2023-06-09",
+    "value": 5000000.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Task Authorization Based Contract",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Environmental Services"
+   },
+   {
+    "title": "WSP Canada Inc - DISO No. EQ755-231290-002-PWL - Building Condition Reports - Ontario Region",
+    "reference": "CW2307055",
+    "amendment": "001",
+    "published": "2026-07-16",
+    "awarded": "2023-05-31",
+    "value": 0.0,
+    "currency": "CAD",
+    "status": "Active",
+    "instrument": "Standing Offer",
+    "method": "Competitive - Open bidding",
+    "competitive": true,
+    "buyer": "Department of Public Works and Government Services (PSPC)",
+    "supplier": "WSP Canada Inc.",
+    "end_user": "Department of Public Works and Government Services (PSPC)",
+    "subject": "Architectural engineering"
+   }
+  ],
+  "exact_spelling_rows": 19
+ },
+ "other_samples_wsp": {
+  "2026-2027-contractHistory.csv": 14,
+  "contracts-head.csv": 2,
+  "grants-head.csv": 0
+ }
+}
