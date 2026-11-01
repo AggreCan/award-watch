@@ -1,0 +1,11 @@
+normalized_name,reason
+generic*supplier account*,PSPC's generic supplier account on award notices (GENERIC PSPC-MANAGE SUPPLIER ACCOUNT and the SO/SA master agreement account); the supplier is named only in the title
+redacted,the vendor or recipient name redacted by the publisher
+redacted caviarde,the vendor name redacted by the publisher (Redacted/Caviardé)
+withheld,the recipient name withheld by the publisher
+withheld retenu,the recipient name withheld by the publisher (Withheld / Retenu)
+individual,a grant recipient written as INDIVIDUAL in place of a name
+see below,award notices with See below in place of the supplier's name
+various see comments,a published contract with VARIOUS SEE COMMENTS in place of the vendor's name
+other vendor autre fournisseur,a published contract with Other Vendor/Autre Fournisseur in place of the vendor's name
+test,a test entry named Test (award notice CW2232720 Sourcing Project Test2 and its history record)

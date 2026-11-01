@@ -23,7 +23,9 @@ change there. Output tree (under data/out/static):
   awards/<year>/index.json      a year's page count and row count
   awards/<year>/<n>.json        the year's award notices, newest award date first, 500 to a page
   profiles/<abc>.json           organization profiles, sharded on the id's characters 5 to 7
-  aliases/<abc>.json            retired organization id -> the live id that took its records (migrate.py)
+  aliases/<abc>.json            retired organization id -> the live id that took its records: retired by a
+                                normalization change (migrate.py) or merged into another organization
+                                (merges.py); the site redirects a missing profile by it
   directory/...                 organizations A to Z by province (directory.py)
   buyers/index.json, buyers/<id>.json
   categories/index.json, categories/<nn>.json     the 57 UNSPSC segments
@@ -34,6 +36,28 @@ change there. Output tree (under data/out/static):
                                 (buyer files and profiles carry their own first 25 as "expiring")
   feeds/...                     Atom feeds (feeds.py)
   sitemaps/sitemap-<n>.xml, sitemaps/index.xml
+
+Values and totals. A value the source did not publish is null, never 0, on
+every row, and no total adds it; beside each total a count of the records it
+left out that way: n_no_value on every {n, total} object (the years of a
+profile and of a buyer, a profile's top buyers, the rankings' organizations
+and buyers, the year's top organizations in stats.json, the buyers' and
+categories' top organizations, a category's years, the radar's windows, its
+index pages, its by_buyer and by_segment rows and the "expiring" part of a
+buyer file or a profile), n_<source>_no_value beside total_<source> on a
+profile's organization block and in buyers/index.json, awards_n_no_value and
+awards_year_n_no_value in categories/index.json. A value value_checks.py
+flagged for checking stays on its row with value_flag "check" (award and
+history list rows and details, a profile's published contracts, the radar's
+rows) and no total adds it either; a profile's value_check {source: n} counts
+them, as non_cad counts the contracts in another currency.
+
+Profiles also carry "<source>_loaded": false for a source never read (the
+lobbying registry has refused every request so far), so a count of 0 there
+reads as not loaded rather than none; a source that was read carries no key.
+Radar rows carry client_buyer_id, client_buyer_name and client_buyer_name_fr,
+the client department expiring.py names, beside buyer_id (for an award notice
+that is PSPC).
 
 References in URLs and file names. The site takes a reference from its URL
 only when it reads as [A-Za-z0-9._-]{1,80}, and a few CanadaBuys references do
@@ -75,7 +99,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from . import config, directory, expiring, indicators, organizations
+from . import config, directory, expiring, indicators, organizations, value_checks
 from .db import log_run, set_meta
 from .export import scrub_doc
 from .feeds import write_feeds
@@ -312,11 +336,14 @@ def _materialize(conn: sqlite3.Connection) -> None:
     x_history: each contract at its newest amendment, attributed like the
     totals (organizations._newest_by_reference) except that a contract whose
     newest version withholds its supplier links to no organization; value is
-    the rules' value as shown (cancelled counts zero, any currency) and v the
-    value a total adds (CAD only, indicators.AWARD_VALUE). x_grants: each
-    agreement at its highest amendment. x_records: indicators.RECORDS, one row
-    per counted record. x_proc: the published-contract groups (department and
-    procurement_id) of more than one row, with the largest value reported.
+    the rules' value as shown (cancelled counts zero, any currency, NULL when
+    the source published none), v the value a total adds (CAD only, never a
+    value flagged for checking: organizations.award_value), nv 1 when the
+    source published no value, flag 1 when value_flags lists the contract.
+    x_grants: each agreement at its highest amendment. x_records:
+    indicators.RECORDS, one row per counted record. x_proc: the
+    published-contract groups (department and procurement_id) of more than one
+    row, with the largest value reported.
     """
     shown = "CASE WHEN status = 'cancelled' THEN 0 WHEN total_value > 0 THEN total_value ELSE amount END"
     drop_temp(conn)
@@ -327,9 +354,9 @@ def _materialize(conn: sqlite3.Connection) -> None:
         "AND c.amendment = t.amendment) AS codes "
         "FROM tenders t WHERE t.amendment = (SELECT MAX(y.amendment) FROM tenders y WHERE y.reference = t.reference)"
     )
-    for table, temp, codes, extra in (
-        ("awards", "x_awards", "award_codes", ""),
-        ("contract_history", "x_history", "history_codes", "n.client_id, n.client_raw_en, n.client_raw_fr, "),
+    for table, temp, codes, extra, kind in (
+        ("awards", "x_awards", "award_codes", "", "award"),
+        ("contract_history", "x_history", "history_codes", "n.client_id, n.client_raw_en, n.client_raw_fr, ", "history"),
     ):
         conn.execute(
             f"CREATE TEMP TABLE {temp} AS WITH newest AS ({organizations._newest_by_reference(table, ('reference',))}) "
@@ -338,7 +365,8 @@ def _materialize(conn: sqlite3.Connection) -> None:
             "n.title_en, n.title_fr, n.buyer_id, n.buyer_raw_en, n.buyer_raw_fr, " + extra +
             "n.published, n.awarded, n.currency, n.status, n.competitive, n.instrument_type_en, "
             "n.instrument_type_fr, n.provinces, "
-            f"{shown} AS value, {indicators.AWARD_VALUE} AS v, "
+            f"{shown} AS value, {organizations.award_value(kind)} AS v, {organizations.AWARD_NO_VALUE} AS nv, "
+            f"{organizations.award_flagged(kind)} AS flag, "
             f"(SELECT MIN(z.first_seen) FROM {table} z WHERE z.reference = n.reference) AS first_sight, "
             f"(SELECT group_concat(c.unspsc, ' ') FROM {codes} c WHERE c.reference = n.reference "
             "AND c.amendment = n.amendment) AS codes "
@@ -353,9 +381,7 @@ def _materialize(conn: sqlite3.Connection) -> None:
         "title_fr, value, start, end FROM newest"
     )
     conn.execute("CREATE INDEX temp.x_grants_org ON x_grants(org)")
-    conn.execute("CREATE TEMP TABLE x_records (source TEXT, org TEXT, buyer TEXT, year INTEGER, v REAL, comp INTEGER)")
-    for sql in indicators.RECORDS.values():
-        conn.execute(f"INSERT INTO temp.x_records (source, org, buyer, year, v, comp) {sql}")
+    indicators.load_records(conn, "x_records")
     conn.execute("CREATE INDEX temp.x_records_org ON x_records(org)")
     conn.execute(
         "CREATE TEMP TABLE x_proc AS SELECT owner_org, procurement_id, MAX(value) AS top FROM contracts "
@@ -381,6 +407,8 @@ class Model:
             for r in conn.execute("SELECT id, display_name, province FROM organizations")}
         self.refs = {kind: RefMap(conn, table) for kind, table in
                      (("tenders", "tenders"), ("awards", "awards"), ("history", "contract_history"))}
+        self.flags = value_checks.flagged(conn)
+        self.loaded = sources_loaded(conn)
         self._expiring: list[tuple[dict, float | None]] | None = None
         self._expiring_by: dict[str, dict[str, list[tuple[dict, float | None]]]] = {}
         _materialize(conn)
@@ -400,9 +428,10 @@ class Model:
             return oid, self.orgs[oid][0]
         return None, None
 
-    def org_total(self, oid: str, n: int, total: float | None) -> dict:
+    def org_total(self, oid: str, n: int, total: float | None, n_no_value: int | None = 0) -> dict:
         name, province = self.orgs[oid]
-        return {"id": oid, "name": name, "n": n, "total": _money(total), "province": province}
+        return {"id": oid, "name": name, "n": n, "total": _money(total), "n_no_value": n_no_value or 0,
+                "province": province}
 
     def expiring(self) -> list[tuple[dict, float | None]]:
         """The radar's rows as the site lists them, soonest end first, each with the value its totals add (CAD only)."""
@@ -420,13 +449,40 @@ class Model:
                     groups[item[0][column]].append(item)
             self._expiring_by[column] = groups
         items = self._expiring_by[column].get(key, [])
-        return {"n": len(items), "total": _total(c for _, c in items), "rows": [r for r, _ in items[:EXPIRING_PART_ROWS]]}
+        return {"n": len(items), "total": _total(c for _, c in items), "n_no_value": _no_value(items),
+                "rows": [r for r, _ in items[:EXPIRING_PART_ROWS]]}
 
 
 def _total(values: Iterable[float | None]) -> float | None:
     """The sum of the values that are known, to the cent; None when none is."""
     known = [v for v in values if v is not None]
     return round(sum(known), 2) if known else None
+
+
+def _no_value(items: Iterable[tuple[dict, float | None]]) -> int:
+    """How many radar rows carry no value: the source published none (a flagged value is still a value)."""
+    return sum(1 for r, _ in items if r["value"] is None)
+
+
+# The record tables of each profile source, and the meta keys that say a file of it was read.
+LOADED_TABLES = {"awards": "awards", "history": "contract_history", "contracts": "contracts", "grants": "grants",
+                 "lobbying": "lobbying_communications"}
+
+
+def sources_loaded(conn: sqlite3.Connection) -> dict[str, bool]:
+    """Whether each profile source has ever been read: its table holds a row, or a file of it was read.
+
+    A source never read (the lobbying registry refused every request so far)
+    makes each profile carry "<source>_loaded": false, so the site can say
+    "not loaded yet" where a count of 0 would read as none.
+    """
+    out: dict[str, bool] = {}
+    keys = [k for (k,) in conn.execute("SELECT key FROM meta WHERE key LIKE '%:sha256' OR key LIKE '%:read_at'")]
+    for source, table in LOADED_TABLES.items():
+        read = any(k.startswith(f"{source}:") or (k.startswith("canadabuys:") and _canadabuys_stage(k[11:]) == source)
+                   for k in keys)
+        out[source] = read or conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone() is not None
+    return out
 
 
 # -- rows -------------------------------------------------------------------------------
@@ -477,7 +533,14 @@ def award_row(m: Model, kind: str, r: sqlite3.Row) -> dict | None:
         row["reference_published"] = r["reference"]
     if r["supplier_withheld"]:
         row["supplier_withheld"] = True
+    _value_flag(row, r["flag"])
     return row
+
+
+def _value_flag(row: dict, flagged: object) -> None:
+    """value_flag "check" on a row whose value value_checks.py flagged (the site shows a note; no total adds it)."""
+    if flagged:
+        row["value_flag"] = "check"
 
 
 def contract_row(m: Model, r: sqlite3.Row) -> dict:
@@ -502,6 +565,7 @@ def contract_row(m: Model, r: sqlite3.Row) -> dict:
     }
     if r["top"] is not None:
         row["value_last_reported"] = _money(r["top"])
+    _value_flag(row, f"{r['owner_org']}:{r['procurement_id']}" in m.flags["contract"])
     return row
 
 
@@ -581,8 +645,17 @@ def expiring_row(m: Model, r: sqlite3.Row) -> tuple[dict, float | None] | None:
         row["supplier_withheld"] = True
     if kind != "contract" and ref != r["reference"]:
         row["reference_published"] = r["reference"]
-    counted = row["value"] if row["currency"] in (None, "CAD") else None
+    _expiring_extra(row, r)
+    counted = row["value"] if row["currency"] in (None, "CAD") and "value_flag" not in row else None
     return row, counted
+
+
+def _expiring_extra(row: dict, r: sqlite3.Row) -> None:
+    """The client department a reader filters by (expiring.py names it) and the value flag."""
+    client = _buyer_id(r["client_buyer_id"])
+    row.update(client_buyer_id=client, client_buyer_name=_text(r["client_buyer_name"]),
+               client_buyer_name_fr=_text(r["client_buyer_name_fr"]))
+    _value_flag(row, r["value_flag"])
 
 
 # -- stats.json -----------------------------------------------------------------------
@@ -880,6 +953,7 @@ def contract_detail(m: Model, kind: str, ref: str, versions: list[sqlite3.Row], 
     })
     if withheld:
         d["supplier_withheld"] = True
+    _value_flag(d, v["reference"] in m.flags["award" if kind == "awards" else "history"])
     if kind == "awards":
         d["end_users_en"], d["end_users_fr"] = _list(v["end_users_en"]), _list(v["end_users_fr"])
     else:
@@ -952,7 +1026,7 @@ def write_award_lists(m: Model, out: Path) -> dict[str, int]:
 
 ORG_FIELDS = ("id", "display_name", "country", "province", "city", "business_number", "first_seen", "last_seen",
               "n_awards", "n_history", "n_contracts", "n_grants", "n_lobbying", "total_awards", "total_history",
-              "total_contracts", "total_grants")
+              "total_contracts", "total_grants", *organizations.NO_VALUE_FIELDS)
 
 
 def _grouped(rows: Iterable[sqlite3.Row], column: str) -> dict[str, list[sqlite3.Row]]:
@@ -985,7 +1059,7 @@ def _profile_tables(conn: sqlite3.Connection, rng: tuple[str, str]) -> dict[str,
                    "org"),
         "lobbying": ("SELECT * FROM lobbying_communications WHERE organization_id >= ? AND organization_id < ? "
                      "ORDER BY organization_id, comm_date DESC, comm_number", "organization_id"),
-        "buyers": ("SELECT org, source, buyer, COUNT(*) AS n, SUM(v) AS total FROM x_records "
+        "buyers": ("SELECT org, source, buyer, COUNT(*) AS n, SUM(v) AS total, SUM(nv) AS nv FROM x_records "
                    "WHERE org >= ? AND org < ? AND buyer IS NOT NULL GROUP BY org, source, buyer", "org"),
     }
     return {name: _grouped(conn.execute(sql, rng), column) for name, (sql, column) in queries.items()}
@@ -1002,7 +1076,8 @@ def profile(m: Model, o: sqlite3.Row, t: dict[str, dict[str, list[sqlite3.Row]]]
         "registry": [{k: r[k] for k in ("registry", "registry_id", "legal_name", "entity_type", "status",
                                         "registered_on", "grade", "checked_at")} for r in t["registry"].get(oid, [])],
         "years": [{"year": r["year"], "source": r["source"], "n": r["n"], "total": _money(r["total"]),
-                   "n_non_competitive": r["n_non_competitive"], "total_non_competitive": _money(r["total_non_competitive"])}
+                   "n_non_competitive": r["n_non_competitive"], "total_non_competitive": _money(r["total_non_competitive"]),
+                   "n_no_value": r["n_no_value"] or 0}
                   for r in t["years"].get(oid, [])],
     }
     for k in ("total_awards", "total_history", "total_contracts", "total_grants"):
@@ -1023,14 +1098,36 @@ def profile(m: Model, o: sqlite3.Row, t: dict[str, dict[str, list[sqlite3.Row]]]
     top: list[dict] = []
     by_source = _grouped(t["buyers"].get(oid, []), "source")
     for source in MONEY_SOURCES:
-        cells = ((r["buyer"], r["n"], r["total"]) for r in by_source.get(source, []) if _buyer_id(r["buyer"]))
-        for bid, n, total in _top(cells, PROFILE_BUYERS, _by_value):
+        cells = ((r["buyer"], r["n"], r["total"], r["nv"]) for r in by_source.get(source, []) if _buyer_id(r["buyer"]))
+        for bid, n, total, nv in _top(cells, PROFILE_BUYERS, _by_value):
             en, fr = m.buyer_names(bid)
-            top.append({"source": source, "buyer_id": bid, "buyer_en": en, "buyer_fr": fr, "n": n, "total": _money(total)})
+            top.append({"source": source, "buyer_id": bid, "buyer_en": en, "buyer_fr": fr, "n": n, "total": _money(total),
+                        "n_no_value": nv or 0})
     p["buyers"] = top
     p["expiring"] = m.expiring_part("organization_id", oid)
     if non_cad:
         p["non_cad"] = dict(sorted(non_cad.items()))
+    return p
+
+
+def _value_checks(conn: sqlite3.Connection, rng: tuple[str, str]) -> dict[str, dict[str, int]]:
+    """Per organization of a shard, the records of each source whose value is flagged for checking."""
+    out: dict[str, dict[str, int]] = defaultdict(dict)
+    for oid, source, n in conn.execute("SELECT org, source, COUNT(*) FROM x_records WHERE org >= ? AND org < ? "
+                                       "AND chk = 1 GROUP BY org, source", rng):
+        out[oid][source] = n
+    return out
+
+
+def _profile_extra(m: Model, p: dict, checks: dict[str, int]) -> dict:
+    """What a profile carries beside its lists: value_check, the records of each source whose value is flagged
+    for checking and left out of the totals (like non_cad); and "<source>_loaded": false for a source never
+    read, whose count of 0 means not loaded rather than none."""
+    if checks:
+        p["value_check"] = dict(sorted(checks.items()))
+    for source in SOURCES:
+        if not m.loaded.get(source, True):
+            p[f"{source}_loaded"] = False
     return p
 
 
@@ -1050,7 +1147,9 @@ def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, i
                     f"SELECT org, COUNT(*) FROM {temp} WHERE org >= ? AND org < ? "
                     "AND UPPER(TRIM(COALESCE(currency, ''))) NOT IN ('', 'CAD') GROUP BY org", rng):
                 non_cad[oid][source] = n
-        shard = {o["id"]: profile(m, o, tables, non_cad.get(o["id"], {})) for o in orgs}
+        checks = _value_checks(conn, rng)
+        shard = {o["id"]: _profile_extra(m, profile(m, o, tables, non_cad.get(o["id"], {})), checks.get(o["id"], {}))
+                 for o in orgs}
         size = _dump(out / "profiles" / f"{key}.json", shard)
         written += 1
         largest_bytes = max(largest_bytes, size)
@@ -1109,16 +1208,18 @@ def write_aliases(conn: sqlite3.Connection, out: Path) -> dict[str, int]:
 class Totals:
     """The counted records (x_records) of each money source, per organization and per buyer, by year and in all.
 
-    Each source is totalled on its own: a cell is (records, CAD total), and
-    nothing here adds two sources together (CLAUDE.md "Counting money").
+    Each source is totalled on its own: a cell is (records, CAD total, records
+    whose source published no value), and nothing here adds two sources
+    together (CLAUDE.md "Counting money").
     """
 
     def __init__(self, m: Model) -> None:
         self.org: dict[tuple[int | str, str], dict[str, list]] = defaultdict(dict)
         self.buyer: dict[tuple[int | str, str], dict[str, list]] = defaultdict(dict)
         self.years: set[int] = set()
-        for year, source, oid, buyer, n, total in m.conn.execute(
-                "SELECT year, source, org, buyer, COUNT(*), SUM(v) FROM x_records GROUP BY year, source, org, buyer"):
+        for year, source, oid, buyer, n, total, no_value in m.conn.execute(
+                "SELECT year, source, org, buyer, COUNT(*), SUM(v), SUM(nv) FROM x_records "
+                "GROUP BY year, source, org, buyer"):
             keep = year is not None and FIRST_YEAR <= year <= m.year
             if keep:
                 self.years.add(year)
@@ -1126,8 +1227,9 @@ class Totals:
                 if key is None:
                     continue
                 for y in ((year, "all") if keep else ("all",)):
-                    cell = table[(y, source)].setdefault(key, [0, None])
+                    cell = table[(y, source)].setdefault(key, [0, None, 0])
                     cell[0] += n
+                    cell[2] += no_value or 0
                     if total is not None:
                         cell[1] = (cell[1] or 0) + total
         self.lobbying: dict[int | str, Counter] = defaultdict(Counter)
@@ -1147,12 +1249,13 @@ def write_rankings(m: Model, out: Path, totals: Totals) -> dict[str, int]:
     for which in ["all", *years]:
         sources: dict[str, dict[str, list[dict]]] = {}
         for source in MONEY_SOURCES:
-            cells = [(oid, n, total) for oid, (n, total) in totals.org.get((which, source), {}).items() if oid in m.orgs]
+            cells = [(oid, n, total, nv) for oid, (n, total, nv) in totals.org.get((which, source), {}).items()
+                     if oid in m.orgs]
             if cells:
                 sources[source] = {
-                    "by_value": [m.org_total(o, n, t) for o, n, t in
+                    "by_value": [m.org_total(*c) for c in
                                  _top((c for c in cells if c[2] is not None), RANK_ROWS, _by_value)],
-                    "by_count": [m.org_total(o, n, t) for o, n, t in _top(cells, RANK_ROWS, _by_count)],
+                    "by_count": [m.org_total(*c) for c in _top(cells, RANK_ROWS, _by_count)],
                 }
         lobby = [(oid, n, None) for oid, n in totals.lobbying.get(which, Counter()).items() if oid in m.orgs]
         if lobby:
@@ -1160,12 +1263,12 @@ def write_rankings(m: Model, out: Path, totals: Totals) -> dict[str, int]:
                                    "by_count": [m.org_total(o, n, None) for o, n, _ in _top(lobby, RANK_ROWS, _by_count)]}
         buyers: dict[str, list[dict]] = {}
         for source in MONEY_SOURCES:
-            cells = [(bid, n, total) for bid, (n, total) in totals.buyer.get((which, source), {}).items()
+            cells = [(bid, n, total, nv) for bid, (n, total, nv) in totals.buyer.get((which, source), {}).items()
                      if _buyer_id(bid) and bid in m.buyers]
             ranked = _top(cells, RANK_BUYERS, _by_value)
             if ranked:
                 buyers[source] = [{"id": b, "name_en": m.buyers[b]["name_en"], "name_fr": m.buyers[b]["name_fr"],
-                                   "n": n, "total": _money(t)} for b, n, t in ranked]
+                                   "n": n, "total": _money(t), "n_no_value": nv} for b, n, t, nv in ranked]
         _dump(out / "rankings" / f"{which}.json",
               {"year": None if which == "all" else which, "years": years, "sources": sources, "buyers": buyers})
     return {"ranking_years": len(years)}
@@ -1173,13 +1276,14 @@ def write_rankings(m: Model, out: Path, totals: Totals) -> dict[str, int]:
 
 def top_organizations_year(m: Model, totals: Totals) -> list[dict]:
     """The data year's top organizations by award notice value (stats.json; the smoke test fetches the first)."""
-    cells = [(oid, n, t) for oid, (n, t) in totals.org.get((m.year, "awards"), {}).items()
+    cells = [(oid, n, t, nv) for oid, (n, t, nv) in totals.org.get((m.year, "awards"), {}).items()
              if oid in m.orgs and t is not None]
-    return [m.org_total(o, n, t) for o, n, t in _top(cells, TOP_YEAR_ROWS, _by_value)]
+    return [m.org_total(*c) for c in _top(cells, TOP_YEAR_ROWS, _by_value)]
 
 
 BUYER_FIELDS = ("id", "name_en", "name_fr", "acronym_en", "acronym_fr", "kind", "n_tenders", "n_awards", "n_history",
-                "n_contracts", "n_grants", "total_awards", "total_contracts", "total_grants")
+                "n_contracts", "n_grants", "total_awards", "total_contracts", "total_grants", "n_awards_no_value",
+                "n_contracts_no_value", "n_grants_no_value")
 
 
 def listed_buyers(conn: sqlite3.Connection) -> set[str]:
@@ -1205,18 +1309,19 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
         for k in ("total_awards", "total_contracts", "total_grants"):
             s[k] = _money(s[k])
         s["n_open_tenders"] = open_by.get(bid, 0)
-        s["total_history"] = _money(history_totals.get(bid, [0, None])[1])
+        s["total_history"] = _money(history_totals.get(bid, [0, None, 0])[1])
+        s["n_history_no_value"] = history_totals.get(bid, [0, None, 0])[2]
         summaries.append(s)
     _dump(out / "buyers" / "index.json", {"buyers": summaries})
     years = _grouped(conn.execute("SELECT * FROM buyer_years ORDER BY buyer_id, year DESC, source"), "buyer_id")
     top: dict[str, dict[str, list[tuple]]] = defaultdict(dict)
     for source in MONEY_SOURCES:
         cells: dict[str, list[tuple]] = defaultdict(list)
-        for bid, oid, n, total in conn.execute(
-                "SELECT buyer, org, COUNT(*), SUM(v) FROM x_records WHERE source = ? AND buyer IS NOT NULL "
+        for bid, oid, n, total, nv in conn.execute(
+                "SELECT buyer, org, COUNT(*), SUM(v), SUM(nv) FROM x_records WHERE source = ? AND buyer IS NOT NULL "
                 "AND org IS NOT NULL GROUP BY buyer, org", (source,)):
             if oid in m.orgs:
-                cells[bid].append((oid, n, total))
+                cells[bid].append((oid, n, total, nv))
         for bid, items in cells.items():
             top[bid][source] = _top(items, BUYER_TOP, _by_value)
     for s in summaries:
@@ -1230,9 +1335,9 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
             "years": [{"year": y["year"], "source": y["source"], "n": y["n"], "total": _money(y["total"]),
                        "n_non_competitive": y["n_non_competitive"],
                        "total_non_competitive": _money(y["total_non_competitive"]),
-                       "n_organizations": y["n_organizations"]}
+                       "n_organizations": y["n_organizations"], "n_no_value": y["n_no_value"] or 0}
                       for y in years.get(bid, []) if y["source"] in MONEY_SOURCES],
-            "top_organizations": {source: [m.org_total(o, n, t) for o, n, t in ranked]
+            "top_organizations": {source: [m.org_total(*c) for c in ranked]
                                   for source, ranked in sorted(top.get(bid, {}).items()) if ranked},
             "open_tenders": s["n_open_tenders"],
             "recent_awards": recent,
@@ -1249,35 +1354,40 @@ def write_categories(m: Model, out: Path, open_rows: list[dict]) -> dict[str, in
         for seg in r["segments"]:
             open_by[seg].append(r)
     n_all: Counter = Counter()
+    nv_all: Counter = Counter()
     total_all: dict[str, float] = {}
     by_year: dict[str, dict[int, list]] = defaultdict(dict)
     orgs: dict[str, dict[str, list]] = defaultdict(dict)
-    for r in m.conn.execute("SELECT org, awarded, v, codes FROM x_awards"):
+    for r in m.conn.execute("SELECT org, awarded, v, nv, codes FROM x_awards"):
         year = _year_of(r["awarded"])
         for seg in m.segments_of(r["codes"]):
             n_all[seg] += 1
+            nv_all[seg] += r["nv"] or 0
             cells = []
             if year is not None and FIRST_YEAR <= year <= m.year:
-                cells.append(by_year[seg].setdefault(year, [0, None]))
+                cells.append(by_year[seg].setdefault(year, [0, None, 0]))
             if r["org"] in m.orgs:
-                cells.append(orgs[seg].setdefault(r["org"], [0, None]))
+                cells.append(orgs[seg].setdefault(r["org"], [0, None, 0]))
             for cell in cells:
                 cell[0] += 1
+                cell[2] += r["nv"] or 0
             if r["v"] is not None:
                 total_all[seg] = total_all.get(seg, 0) + r["v"]
                 for cell in cells:
                     cell[1] = (cell[1] or 0) + r["v"]
     index = []
     for code, (en, fr) in sorted(m.segments.items()):
-        this_year = by_year[code].get(m.year, [0, None])
+        this_year = by_year[code].get(m.year, [0, None, 0])
         index.append({"code": code, "title_en": en, "title_fr": fr, "open_tenders": len(open_by[code]),
                       "awards_year_n": this_year[0], "awards_year_total": _money(this_year[1]),
-                      "awards_n": n_all[code], "awards_total": _money(total_all.get(code))})
-        ranked = _top(((o, n, t) for o, (n, t) in orgs[code].items() if t is not None), CATEGORY_TOP, _by_value)
+                      "awards_year_n_no_value": this_year[2], "awards_n": n_all[code],
+                      "awards_total": _money(total_all.get(code)), "awards_n_no_value": nv_all[code]})
+        ranked = _top(((o, n, t, nv) for o, (n, t, nv) in orgs[code].items() if t is not None), CATEGORY_TOP, _by_value)
         _dump(out / "categories" / f"{code}.json", {
             "code": code, "title_en": en, "title_fr": fr, "open_tenders": open_by[code],
-            "top_organizations": [m.org_total(o, n, t) for o, n, t in ranked],
-            "years": [{"year": y, "n": n, "total": _money(t)} for y, (n, t) in sorted(by_year[code].items(), reverse=True)],
+            "top_organizations": [m.org_total(*c) for c in ranked],
+            "years": [{"year": y, "n": n, "total": _money(t), "n_no_value": nv}
+                      for y, (n, t, nv) in sorted(by_year[code].items(), reverse=True)],
         })
     _dump(out / "categories" / "index.json", {"year": m.year, "segments": index})
     return {"categories": len(index)}
@@ -1303,26 +1413,26 @@ def write_expiring(m: Model, out: Path) -> dict[str, int]:
         for n, page in enumerate(pages, start=1):
             _dump(out / "expiring" / name / f"{n}.json", [r for r, _ in page])
         _dump(out / "expiring" / name / "index.json", {"window": name, "pages": len(pages), "rows": len(chosen),
-                                                        "total": total})
-        windows.append({"window": name, "n": len(chosen), "total": total})
+                                                        "total": total, "n_no_value": _no_value(chosen)})
+        windows.append({"window": name, "n": len(chosen), "total": total, "n_no_value": _no_value(chosen)})
         counts[f"expiring_{name}"] = len(chosen)
     by_buyer: dict[str | None, list[tuple[dict, float | None]]] = defaultdict(list)
-    by_segment: dict[str, list[float | None]] = defaultdict(list)
+    by_segment: dict[str, list[tuple[dict, float | None]]] = defaultdict(list)
     for row, counted in items:
         by_buyer[row["buyer_id"]].append((row, counted))
         for seg in row["segments"]:
-            by_segment[seg].append(counted)
+            by_segment[seg].append((row, counted))
     buyers = []
     for bid, rows in by_buyer.items():
         first = rows[0][0]
         buyers.append({"buyer_id": bid, "buyer_en": first["buyer_en"] if bid else None,
                        "buyer_fr": first["buyer_fr"] if bid else None, "n": len(rows),
-                       "total": _total(c for _, c in rows)})
+                       "total": _total(c for _, c in rows), "n_no_value": _no_value(rows)})
     buyers = _top(buyers, EXPIRING_BUYERS, lambda b: (b["total"] is None, -(b["total"] or 0), -b["n"], b["buyer_id"] or ""))
     _dump(out / "expiring" / "index.json", {
         "as_of": m.as_of, "windows": windows, "by_buyer": buyers,
-        "by_segment": [{"code": code, "n": len(values), "total": _total(values)}
-                       for code, values in sorted(by_segment.items())],
+        "by_segment": [{"code": code, "n": len(rows), "total": _total(c for _, c in rows), "n_no_value": _no_value(rows)}
+                       for code, rows in sorted(by_segment.items())],
     })
     return counts
 

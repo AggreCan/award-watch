@@ -13,7 +13,7 @@ from export_seed import (CONTACT_EMAIL, CONTACT_NAME, PERSON, PERSON_STREET, PRO
 
 
 def rows(path):
-    return list(csv.DictReader(io.StringIO(path.read_text(encoding="utf-8"))))
+    return list(csv.DictReader(io.StringIO(path.read_text(encoding="utf-8-sig"))))
 
 
 def test_the_downloads_and_their_sums(conn, tmp_path):
@@ -44,7 +44,7 @@ def test_nothing_private_goes_in_a_file(conn, tmp_path):
         assert secret not in text
     withheld = next(r for r in rows(out / "awards-2026.csv") if r["reference"] == "AW-5")
     assert withheld["supplier"] == "" and withheld["supplier_withheld"] == "1" and withheld["organization_id"] == ""
-    header = (out / "open-tenders.csv").read_text(encoding="utf-8").splitlines()[0]
+    header = (out / "open-tenders.csv").read_text(encoding="utf-8-sig").splitlines()[0]
     assert "contact" not in header and header.startswith("reference,amendment,")
 
 

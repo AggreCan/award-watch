@@ -86,19 +86,19 @@ def test_a_later_source_with_a_kept_contract_number_is_dropped(db):
     assert rows["award:AW-1"]["contract_number"] == "W848624ABCD001XX"
 
 
-def test_a_later_source_matching_organization_buyer_end_and_value_is_dropped(db):
+def test_a_later_source_matching_organization_end_and_value_is_dropped_whatever_the_buyer(db):
     award(db, "AW-1", end=day(100), value=100_000.0)
-    # History names the client department; PSPC is its buyer as well, and the award notice's.
     history(db, "H-SAME", end=day(103), value=100_999.0)
     history(db, "H-FOUR-DAYS", end=day(104), value=100_000.0)
     history(db, "H-TWO-PERCENT", end=day(100), value=102_000.0)
     history(db, "H-OTHER-ORG", end=day(100), value=100_000.0, supplier="Other Org Ltd")
     contract(db, "C-SAME", end=day(98), value=99_500.0)
+    # The buyer is not compared: the department's own contract names the client, the notice PSPC.
     contract(db, "C-OTHER-BUYER", end=day(100), value=100_000.0, buyer="other-buyer")
     counts, rows = radar(db)
-    assert counts["dropped_match"] == 2 and counts["dropped_number"] == 0
-    assert "history:H-SAME" not in rows and "contract:dept:C-SAME" not in rows
-    assert {"history:H-FOUR-DAYS", "history:H-TWO-PERCENT", "history:H-OTHER-ORG", "contract:dept:C-OTHER-BUYER"} <= set(rows)
+    assert counts["dropped_match"] == 3 and counts["dropped_number"] == 0
+    assert not {"history:H-SAME", "contract:dept:C-SAME", "contract:dept:C-OTHER-BUYER"} & set(rows)
+    assert {"history:H-FOUR-DAYS", "history:H-TWO-PERCENT", "history:H-OTHER-ORG"} <= set(rows)
 
 
 def test_rows_of_one_source_are_never_dropped_against_each_other(db):
