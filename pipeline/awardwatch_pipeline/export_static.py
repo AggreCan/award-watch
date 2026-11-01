@@ -28,6 +28,10 @@ change there. Output tree (under data/out/static):
   buyers/index.json, buyers/<id>.json
   categories/index.json, categories/<nn>.json     the 57 UNSPSC segments
   rankings/all.json, rankings/<year>.json
+  expiring/index.json           the expiring-contracts radar (expiring.py): the three windows' counts and
+                                totals, the top buyers, the segments
+  expiring/<window>/index.json, expiring/<window>/<n>.json   a window's rows, soonest end first, 500 a page
+                                (buyer files and profiles carry their own first 25 as "expiring")
   feeds/...                     Atom feeds (feeds.py)
   sitemaps/sitemap-<n>.xml, sitemaps/index.xml
 
@@ -46,7 +50,9 @@ published contracts (a public servant's name), supplier street addresses and
 postal codes, and anything about a supplier, vendor, recipient or client the
 loaders withheld as a private individual. A withheld supplier is exported as
 supplier null with supplier_withheld true, and its record links to no
-organization.
+organization. The publishers' own prose (titles, descriptions, comments)
+sometimes carries an officer's email address or telephone number; _dump
+passes every free-text field through export.scrub before a file is written.
 
 Every file is written deterministically (sorted keys and rows, nothing taken
 from the clock but the data date), so an unchanged shard keeps its bytes and
@@ -69,8 +75,9 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from . import config, directory, indicators, organizations
+from . import config, directory, expiring, indicators, organizations
 from .db import log_run, set_meta
+from .export import scrub_doc
 from .feeds import write_feeds
 
 log = logging.getLogger(__name__)
@@ -99,6 +106,10 @@ RANK_ROWS = 100
 RANK_BUYERS = 50
 RUN_ROWS = 20
 RELATED_AWARDS = 50
+# The radar: rows to a window page, rows on a buyer file or profile, buyers in the index.
+EXPIRING_PAGE = 500
+EXPIRING_PART_ROWS = 25
+EXPIRING_BUYERS = 50
 # Yearly files start here; an award date before it (or after the data date)
 # is a typing error in the source and gets no page of its own.
 FIRST_YEAR = 2000
@@ -121,11 +132,11 @@ TEMP_TABLES = ("x_tenders", "x_awards", "x_history", "x_grants", "x_records", "x
 
 SITEMAP_MAX_URLS = 50_000
 SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
-SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/awards", "/organizations", "/buyers", "/categories",
+SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/categories",
                  "/rankings", "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections"]
 # Pages whose content follows the nightly data carry its date; the others
 # change only with the code, so they carry none rather than a false one.
-SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/organizations", "/buyers", "/categories",
+SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/categories",
                        "/rankings", "/feeds", "/data"}
 
 
@@ -134,6 +145,10 @@ SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/organizatio
 
 def _dump(path: Path, obj: object) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Every free-text field (titles, descriptions, comments) loses the email
+    # addresses and telephone numbers publishers write into it (export.scrub);
+    # one place, so no file can be written without it.
+    scrub_doc(obj)
     # allow_nan=False: Python would write NaN or Infinity, which no browser's
     # JSON parser accepts, and one such value would break a whole file on the
     # site. The export fails instead, and the previous one stays published.
@@ -366,6 +381,8 @@ class Model:
             for r in conn.execute("SELECT id, display_name, province FROM organizations")}
         self.refs = {kind: RefMap(conn, table) for kind, table in
                      (("tenders", "tenders"), ("awards", "awards"), ("history", "contract_history"))}
+        self._expiring: list[tuple[dict, float | None]] | None = None
+        self._expiring_by: dict[str, dict[str, list[tuple[dict, float | None]]]] = {}
         _materialize(conn)
 
     def buyer_names(self, buyer_id: str | None, raw_en: object = None, raw_fr: object = None) -> tuple[str | None, str | None]:
@@ -386,6 +403,30 @@ class Model:
     def org_total(self, oid: str, n: int, total: float | None) -> dict:
         name, province = self.orgs[oid]
         return {"id": oid, "name": name, "n": n, "total": _money(total), "province": province}
+
+    def expiring(self) -> list[tuple[dict, float | None]]:
+        """The radar's rows as the site lists them, soonest end first, each with the value its totals add (CAD only)."""
+        if self._expiring is None:
+            self._expiring = [item for r in self.conn.execute("SELECT * FROM expiring_contracts ORDER BY end, source_key")
+                              if (item := expiring_row(self, r)) is not None]
+        return self._expiring
+
+    def expiring_part(self, column: str, key: str) -> dict:
+        """What a buyer file or a profile carries of the radar: the count, the total and the first rows by end date."""
+        if column not in self._expiring_by:
+            groups: dict[str, list[tuple[dict, float | None]]] = defaultdict(list)
+            for item in self.expiring():
+                if item[0][column]:
+                    groups[item[0][column]].append(item)
+            self._expiring_by[column] = groups
+        items = self._expiring_by[column].get(key, [])
+        return {"n": len(items), "total": _total(c for _, c in items), "rows": [r for r, _ in items[:EXPIRING_PART_ROWS]]}
+
+
+def _total(values: Iterable[float | None]) -> float | None:
+    """The sum of the values that are known, to the cent; None when none is."""
+    known = [v for v in values if v is not None]
+    return round(sum(known), 2) if known else None
 
 
 # -- rows -------------------------------------------------------------------------------
@@ -497,6 +538,51 @@ def lobbying_row(r: sqlite3.Row) -> dict:
         "subject_matters": _codes(r["subject_matters"]), "institutions": _codes(r["institutions"]),
         "dpoh": _dpoh(r["dpoh"]),
     }
+
+
+def expiring_row(m: Model, r: sqlite3.Row) -> tuple[dict, float | None] | None:
+    """A row of the radar (expiring_contracts) as the site lists it, and the value its totals add.
+
+    days_left is counted again from the export's data date, and a row that has
+    ended since the radar was built, or that ends beyond the horizon, is left
+    out. An award or history reference takes its URL form like every other
+    file (reference_published beside it when they differ); a published
+    contract's "owner_org:reference" only goes into a search query on the site.
+    A withheld supplier stays withheld: no organization, supplier_withheld true.
+    """
+    end = _day(r["end"])
+    if end is None:
+        return None
+    days_left = (date.fromisoformat(end) - m.today).days
+    if not 0 <= days_left <= expiring.HORIZON_DAYS:
+        return None
+    kind = r["kind"]
+    if kind in ("award", "history"):
+        ref = m.refs["awards" if kind == "award" else "history"].get(r["reference"])
+        if ref is None:
+            return None
+    else:
+        ref = str(r["reference"])[:200]
+    withheld = bool(r["supplier_withheld"])
+    oid, name = (None, None) if withheld else m.org(r["organization_id"])
+    buyer = _buyer_id(r["buyer_id"])
+    en, fr = m.buyer_names(buyer, r["buyer_en"], r["buyer_fr"])
+    row = {
+        "kind": kind, "reference": ref, "title_en": r["title_en"], "title_fr": r["title_fr"], "organization_id": oid,
+        "organization": name, "buyer_id": buyer, "buyer_en": en, "buyer_fr": fr, "start": r["start"], "end": end,
+        "days_left": days_left, "value": _money(r["value"]), "currency": _currency(r["currency"]),
+        "competitive": _comp(r["competitive"]), "method_en": r["method_en"], "method_fr": r["method_fr"],
+        "instrument_en": r["instrument_en"], "instrument_fr": r["instrument_fr"], "n_amendments": r["n_amendments"] or 0,
+        "value_growth": None if r["value_growth"] is None else round(float(r["value_growth"]), 4),
+        "tender_reference": m.refs["tenders"].get(r["tender_reference"]) if r["tender_reference"] else None,
+        "segments": [s for s in _codes(r["segments"]) if s in m.segments], "provinces": _codes(r["provinces"]),
+    }
+    if withheld:
+        row["supplier_withheld"] = True
+    if kind != "contract" and ref != r["reference"]:
+        row["reference_published"] = r["reference"]
+    counted = row["value"] if row["currency"] in (None, "CAD") else None
+    return row, counted
 
 
 # -- stats.json -----------------------------------------------------------------------
@@ -938,6 +1024,7 @@ def profile(m: Model, o: sqlite3.Row, t: dict[str, dict[str, list[sqlite3.Row]]]
             en, fr = m.buyer_names(bid)
             top.append({"source": source, "buyer_id": bid, "buyer_en": en, "buyer_fr": fr, "n": n, "total": _money(total)})
     p["buyers"] = top
+    p["expiring"] = m.expiring_part("organization_id", oid)
     if non_cad:
         p["non_cad"] = dict(sorted(non_cad.items()))
     return p
@@ -1145,6 +1232,7 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
                                   for source, ranked in sorted(top.get(bid, {}).items()) if ranked},
             "open_tenders": s["n_open_tenders"],
             "recent_awards": recent,
+            "expiring": m.expiring_part("buyer_id", bid),
         })
     return {"buyers": len(summaries)}
 
@@ -1191,6 +1279,50 @@ def write_categories(m: Model, out: Path, open_rows: list[dict]) -> dict[str, in
     return {"categories": len(index)}
 
 
+# -- the expiring-contracts radar ----------------------------------------------------
+
+
+def write_expiring(m: Model, out: Path) -> dict[str, int]:
+    """expiring/index.json and each window's pages (expiring.py builds the rows).
+
+    Totals add each row's counted value, CAD only, once: the radar's duplicate
+    rule leaves one source per contract, which is why these totals may add
+    rows from different sources (the stated exception to CLAUDE.md rule 5).
+    """
+    items = m.expiring()
+    windows = []
+    counts: dict[str, int] = {"expiring_rows": len(items)}
+    for name, days in expiring.WINDOWS:
+        chosen = [item for item in items if item[0]["days_left"] <= days]
+        total = _total(c for _, c in chosen)
+        pages = [chosen[i:i + EXPIRING_PAGE] for i in range(0, len(chosen), EXPIRING_PAGE)]
+        for n, page in enumerate(pages, start=1):
+            _dump(out / "expiring" / name / f"{n}.json", [r for r, _ in page])
+        _dump(out / "expiring" / name / "index.json", {"window": name, "pages": len(pages), "rows": len(chosen),
+                                                        "total": total})
+        windows.append({"window": name, "n": len(chosen), "total": total})
+        counts[f"expiring_{name}"] = len(chosen)
+    by_buyer: dict[str | None, list[tuple[dict, float | None]]] = defaultdict(list)
+    by_segment: dict[str, list[float | None]] = defaultdict(list)
+    for row, counted in items:
+        by_buyer[row["buyer_id"]].append((row, counted))
+        for seg in row["segments"]:
+            by_segment[seg].append(counted)
+    buyers = []
+    for bid, rows in by_buyer.items():
+        first = rows[0][0]
+        buyers.append({"buyer_id": bid, "buyer_en": first["buyer_en"] if bid else None,
+                       "buyer_fr": first["buyer_fr"] if bid else None, "n": len(rows),
+                       "total": _total(c for _, c in rows)})
+    buyers = _top(buyers, EXPIRING_BUYERS, lambda b: (b["total"] is None, -(b["total"] or 0), -b["n"], b["buyer_id"] or ""))
+    _dump(out / "expiring" / "index.json", {
+        "as_of": m.as_of, "windows": windows, "by_buyer": buyers,
+        "by_segment": [{"code": code, "n": len(values), "total": _total(values)}
+                       for code, values in sorted(by_segment.items())],
+    })
+    return counts
+
+
 # -- sitemaps -----------------------------------------------------------------------
 
 
@@ -1231,6 +1363,8 @@ def sitemap_entries(m: Model, skip: Collection[str] = ()) -> list[tuple[str, str
     years = sorted({y for (a,) in conn.execute("SELECT DISTINCT substr(awarded, 1, 4) FROM x_awards")
                     if a and a.isdigit() and FIRST_YEAR <= (y := int(a)) <= m.year}, reverse=True)
     entries += [(f"/awards/{y}", dated) for y in years]
+    if "expiring" not in skip:
+        entries += [(f"/expiring/{name}", dated) for name, _ in expiring.WINDOWS]
     if "directory" not in skip:
         entries += directory.sitemap_entries(conn)
     return entries
@@ -1345,6 +1479,7 @@ def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: st
         ("buyers", lambda: write_buyers(m, out, totals, open_rows)),
         ("categories", lambda: write_categories(m, out, open_rows)),
         ("rankings", lambda: write_rankings(m, out, totals)),
+        ("expiring", lambda: write_expiring(m, out)),
         ("aliases", lambda: write_aliases(conn, out)),
         ("directory", lambda: directory.write_all(conn, out, m.as_of)),
     )

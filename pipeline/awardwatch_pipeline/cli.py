@@ -20,12 +20,12 @@ from .db import connect, log_run
 from .http import PoliteClient
 from .sources import buyers, canadabuys, registry_federal
 from . import indicators
-from . import export, export_static, migrate
+from . import expiring, export, export_static, migrate
 from .sources import contracts, grants, lobbying, matching
 
 log = logging.getLogger("awardwatch_pipeline")
 STAGES = ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry",
-          "organizations", "indicators", "export"]
+          "organizations", "indicators", "expiring", "export"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -96,6 +96,7 @@ def stage_runners(conn: sqlite3.Connection, client: PoliteClient | None,
         "registry": lambda: registry_federal.run(conn, client, download=not offline),
         "organizations": lambda: organizations.run(conn),
         "indicators": lambda: indicators.run(conn),
+        "expiring": lambda: expiring.run(conn),
         "export": lambda: _export(conn),
     }
 

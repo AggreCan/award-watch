@@ -60,7 +60,7 @@ CAP = 20_000
 TIMEOUT = 30
 RETRY_S = 10.0
 # The pages whose content follows the nightly data. "/" is the home page.
-FIXED_PAGES: tuple[str, ...] = ("/", "/tenders", "/tenders/new", "/awards", "/organizations", "/buyers",
+FIXED_PAGES: tuple[str, ...] = ("/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers",
                                 "/categories", "/rankings")
 
 ACCEPTED = (200, 202)

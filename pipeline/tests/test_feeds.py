@@ -36,7 +36,9 @@ def test_every_feed_is_valid_atom_and_listed(conn, tmp_path):
         for e in rows:
             assert e.findtext(f"{A}id").startswith("tag:awardwatch.ca,2026:")
             assert e.find(f"{A}link[@hreflang='fr']").get("href").endswith("?lang=fr")
-            assert e.find(f"{A}link[@rel='via']").get("href").startswith("https://canadabuys.canada.ca/en/tender-opportunities/")
+            assert e.find(f"{A}link[@rel='via']").get("href").startswith((
+                "https://canadabuys.canada.ca/en/tender-opportunities/", "https://open.canada.ca/data/en/dataset/",
+                "https://search.open.canada.ca/contracts/"))
 
 
 def test_scopes_written_and_their_paths(conn, tmp_path):
@@ -58,12 +60,13 @@ def test_scopes_written_and_their_paths(conn, tmp_path):
 def test_a_scope_with_nothing_new_for_ninety_days_is_not_written(conn, tmp_path):
     seed(conn)
     _, index = write(conn, tmp_path, today=date(2027, 3, 1))
-    assert {(f["scope"], f["event"]) for f in index["feeds"]} == {("canada", "tenders"), ("canada", "awards")}
+    assert {(f["scope"], f["event"]) for f in index["feeds"]} == {("canada", "tenders"), ("canada", "awards"),
+                                                                  ("canada", "expiring")}
 
 
 def test_national_feeds_are_written_even_when_empty(conn, tmp_path):
     counts, index = write(conn, tmp_path)
-    assert counts["feeds"] == 2 and [f["entries"] for f in index["feeds"]] == [0, 0]
+    assert counts["feeds"] == 3 and [f["entries"] for f in index["feeds"]] == [0, 0, 0]
     root, rows = entries(tmp_path, "feeds/canada/tenders.xml")
     assert rows == [] and root.findtext(f"{A}updated") == "2026-10-31T00:00:00Z"
 

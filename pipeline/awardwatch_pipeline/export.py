@@ -9,6 +9,8 @@ and the site serves only these names):
   history-<year>.csv      every contract history version, by the same rule
   organizations.csv       one row per organization: names, main place, counters and totals by source
   buyers.csv              one row per buyer: names, acronyms, counters and totals by source
+  expiring-12m.csv        the expiring-contracts radar: every contract ending within 365 days, listed
+                          once across the three sources (expiring.py), soonest end first
   SHA256SUMS              sha256sum's format: "<hex>  <file>" per line, sorted by file name
 
 What never goes in a file: the contacts on tender and award notices, supplier
@@ -38,8 +40,61 @@ from .db import log_run
 log = logging.getLogger(__name__)
 
 SUMS = "SHA256SUMS"
-YEAR_RE = re.compile(r"^(awards|history)-\d{4}\.csv$")
-FIXED_FILES = ("open-tenders.csv", "organizations.csv", "buyers.csv")
+
+# -- contact details inside the publishers' own text ------------------------------
+#
+# Descriptions and titles are the publisher's prose, and some carry a
+# contracting officer's email address or telephone number ("send questions to
+# the inbox X@... or call 613-..."). Contacts are never exported (CLAUDE.md rule
+# 3), so every free-text field the exports write goes through scrub: an email
+# address, a North American telephone or fax number (with or without
+# separators, a leading 1 or +1, an extension), and any other run of ten or
+# more digits become the placeholder in the field's language. A long digit run
+# is sometimes a solicitation number rather than a telephone number; losing it
+# from prose costs less than publishing a number that is someone's line.
+
+REMOVED = {"en": "[contact removed]", "fr": "[coordonnées retirées]"}
+# The fields whose text is the publisher's prose; names and code lists are not.
+FREE_TEXT_KEY = re.compile(r"^(title|description|comments|program|selection|limited_reason)_(en|fr)$")
+# An address may carry a space on either side of the @ in prose; its domain has a dot.
+EMAIL_RE = re.compile(r"[\w.+%'-]+\s?@\s?[\w-]+(?:\.[\w-]+)+")
+PHONE_RE = re.compile(
+    r"(?<![\w+])(?:\+\s?1[\s.-]?|1[\s.-])?(?:\(\s?\d{3}\s?\)|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}"
+    r"(?:\s*(?:ext\.?|extension|x|poste|p\.)\s*\d{1,6})?(?!\w)",
+    re.IGNORECASE,
+)
+LONG_DIGITS_RE = re.compile(r"\d{10,}")
+
+
+def scrub(text: object, lang: str = "en") -> object:
+    """text with every email address, telephone or fax number and long digit run replaced; anything else as given."""
+    if not isinstance(text, str) or not text:
+        return text
+    mark = REMOVED["fr" if lang == "fr" else "en"]
+    out = LONG_DIGITS_RE.sub(mark, PHONE_RE.sub(mark, EMAIL_RE.sub(mark, text)))
+    # An @ the address pattern did not take (a broken address) still goes.
+    return out.replace("@", mark)
+
+
+def scrub_doc(obj: object) -> object:
+    """Scrub every free-text field of a JSON-shaped value in place (lists and objects at any depth); returns it."""
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if isinstance(value, str):
+                m = FREE_TEXT_KEY.match(key) if isinstance(key, str) else None
+                if m:
+                    obj[key] = scrub(value, m.group(2))
+            elif isinstance(value, (dict, list)):
+                scrub_doc(value)
+    elif isinstance(obj, list):
+        for item in obj:
+            if isinstance(item, (dict, list)):
+                scrub_doc(item)
+    return obj
+
+
+YEAR_RE =re.compile(r"^(awards|history)-\d{4}\.csv$")
+FIXED_FILES = ("open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-12m.csv")
 
 OPEN_TENDERS = """
     SELECT t.reference, t.amendment, t.solicitation, t.title_en, t.title_fr, t.published, t.closing, t.amended,
@@ -81,6 +136,11 @@ ORGANIZATIONS = """
     SELECT id, display_name, country, province, city, business_number, first_seen, last_seen, n_awards,
            total_awards, n_history, total_history, n_contracts, total_contracts, n_grants, total_grants, n_lobbying
     FROM organizations ORDER BY norm_name, id"""
+EXPIRING = """
+    SELECT kind, reference, title_en, title_fr, organization_id, organization, supplier_withheld, buyer_id, buyer_en,
+           buyer_fr, start, end, days_left, value, currency, competitive, method_en, instrument_en, n_amendments,
+           value_growth, tender_reference, segments, provinces
+    FROM expiring_contracts ORDER BY end, source_key"""
 BUYERS = """
     SELECT id, name_en, name_fr, acronym_en, acronym_fr, ckan_org, department_number, kind, n_tenders, n_awards,
            total_awards, n_history, n_contracts, total_contracts, n_grants, total_grants
@@ -97,13 +157,14 @@ def _cell(value: object) -> object:
 def _write(path: Path, cur: sqlite3.Cursor) -> int:
     """One CSV through a partial file, renamed when complete, so a failure never leaves a truncated file for the upload."""
     headers = [d[0] for d in cur.description]
+    langs = [(m.group(2) if (m := FREE_TEXT_KEY.match(h)) else None) for h in headers]
     part = path.with_name(path.name + ".partial")
     n = 0
     with part.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh, lineterminator="\n")
         writer.writerow(headers)
         for row in cur:
-            writer.writerow([_cell(v) for v in row])
+            writer.writerow([_cell(scrub(v, lang) if lang else v) for v, lang in zip(row, langs)])
             n += 1
     part.replace(path)
     return n
@@ -136,6 +197,7 @@ def export_csv(conn: sqlite3.Connection, out_dir: Path | None = None) -> dict[st
             counts[name] = _write(out / name, conn.execute(sql, (year,)))
     counts["organizations.csv"] = _write(out / "organizations.csv", conn.execute(ORGANIZATIONS))
     counts["buyers.csv"] = _write(out / "buyers.csv", conn.execute(BUYERS))
+    counts["expiring-12m.csv"] = _write(out / "expiring-12m.csv", conn.execute(EXPIRING))
     # A yearly file from an earlier night whose year no longer has rows (a
     # date corrected upstream) would otherwise be uploaded again.
     for stale in out.glob("*.csv"):

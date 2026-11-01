@@ -12,7 +12,7 @@ import json
 import sqlite3
 from datetime import date
 
-from awardwatch_pipeline import indicators, organizations
+from awardwatch_pipeline import expiring, indicators, organizations
 
 TODAY = date(2026, 10, 31)
 STAMP = "2026-10-31T01:00:00Z"
@@ -32,6 +32,9 @@ NORTH = "Northern Translation Ltd"
 FOREIGN = "Overseas Optics GmbH"
 SLASH_REF = "23240-220799/001/IM"    # a published reference the site cannot take in a URL as it is
 COLON_REF = "SSC-26-00035339:T"
+# Contact details publishers write into their own prose: scrubbed from every exported text.
+PROSE_EMAIL = "generic.inbox@tpsgc-pwgsc.gc.ca"
+PROSE_PHONES = ("613 555 0142", "819.555.0123", "+1 (819) 555-0124 ext. 12", "6135550199", "1-800-555-0100")
 
 
 def _buyer(conn: sqlite3.Connection, bid: str, en: str, fr: str, acronym: str) -> None:
@@ -156,8 +159,22 @@ def seed(conn: sqlite3.Connection) -> dict[str, str]:
         (ACME, organizations.upsert(conn, ACME, source="lobbying"),
          json.dumps([{"name": "A Public Office Holder", "title": "Deputy Minister", "institution": "National Defence"}]),
          STAMP))
+    # The publishers' prose with an officer's contact details in it.
+    conn.execute("UPDATE awards SET description_en = ?, description_fr = ? WHERE reference = 'AW-2'",
+                 (f"Questions to {PROSE_EMAIL} or 613 555 0142.", f"Questions : {PROSE_EMAIL} ou 819.555.0123."))
+    conn.execute("UPDATE tenders SET title_en = title_en || ' (call 1-800-555-0100)', "
+                 "description_fr = 'Télécopieur : 6135550199' WHERE reference = 'cb-200-2'")
+    conn.execute("UPDATE contracts SET description_en = 'Translation. Fax +1 (819) 555-0124 ext. 12' WHERE reference = 'C-1'")
+    conn.execute("UPDATE contract_history SET description_fr = ? WHERE reference = 'H-1'", (f"Écrire à {PROSE_EMAIL}",))
+    # End dates for the expiring-contracts radar: within 3, 6 and 12 months of TODAY.
+    for table, ref, end in (("awards", "AW-2", "2026-12-15"), ("awards", "AW-1", "2027-06-30"),
+                            ("awards", "AW-5", "2026-11-30"), ("awards", SLASH_REF, "2027-02-01"),
+                            ("contract_history", "H-1", "2027-01-20")):
+        conn.execute(f'UPDATE {table} SET "end" = ? WHERE reference = ?', (end, ref))
+    conn.execute("UPDATE contracts SET delivery_date = '2027-03-31', period_start = '2025-11-12'")
     conn.commit()
     organizations.recompute(conn, now=STAMP)
     indicators.compute(conn, now=STAMP)
+    expiring.compute(conn, today=TODAY, now=STAMP)
     conn.commit()
     return ids

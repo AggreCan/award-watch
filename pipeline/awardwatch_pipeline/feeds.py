@@ -1,23 +1,29 @@
-"""Atom feeds of new tender and award notices, written as static files by the nightly export.
+"""Atom feeds of new tender and award notices and of contracts ending soon, written by the nightly export.
 
 Why static files: a feed reader, a Slack or Teams channel or a feed-to-email
 service polls a feed every few minutes to hours. Served from /data/feeds/ as
 static assets, a poll costs nothing and counts against no daily allowance. The
 site never learns who subscribes and holds no reader address.
 
-Two events, each its own feed:
+Three events, each its own feed:
   tenders   a CanadaBuys tender notice, the night it was first seen
   awards    a CanadaBuys award notice, the night it was first seen
+  expiring  a contract of the expiring-contracts radar (expiring.py), the night
+            its end date came within 91 days (expiring_contracts.entered_3m):
+            each contract once, about three months before it ends
 
 Scopes: Canada (always written), UNSPSC segment (a notice with codes in two
 segments is in both), province of delivery (tenders only: an award notice's
-delivery regions are often blank) and buyer. A scoped feed whose newest entry
+delivery regions are often blank) and buyer (the expiring feeds: Canada,
+segment and buyer). A scoped feed whose newest entry
 was first seen more than FRESH_DAYS ago is not written, so the folder holds
 the feeds someone could still be waiting on rather than one per buyer and
 segment ever seen.
 
 Entries are bilingual: one feed per scope and event, its titles and summaries
-in English and French. Ids are tag URIs built from the notice's reference, so
+in English and French; a title is the publisher's text and goes through
+export.scrub like every exported field. Ids are tag URIs built from the
+notice's reference (and, for the radar, the night the row entered), so
 a rebuilt database gives the same ids and a reader never sees an old entry
 twice. A supplier the loaders withheld as a private individual is never
 named: the entry says the supplier is withheld.
@@ -46,6 +52,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from . import config, organizations
+from .export import scrub
 from .normalize import PROVINCE_CODES
 
 ATOM_NS = "http://www.w3.org/2005/Atom"
@@ -58,7 +65,7 @@ SITE_NAME = "Award Watch"
 MAX_ENTRIES = 50
 FRESH_DAYS = 90
 
-EVENTS = ["tenders", "awards"]
+EVENTS = ["tenders", "awards", "expiring"]
 SCOPE_ORDER = {"canada": 0, "segment": 1, "prov": 2, "buyer": 3}
 
 PROVINCE_NAME = {
@@ -80,6 +87,7 @@ PROVINCE_NAME = {
 EVENT_NAME = {
     "tenders": ("New tender notices", "Nouveaux avis d’appel d’offres"),
     "awards": ("New award notices", "Nouveaux avis d’attribution"),
+    "expiring": ("Contracts ending within three months", "Contrats qui prennent fin d’ici trois mois"),
 }
 EVENT_ABOUT = {
     "tenders": (
@@ -90,12 +98,26 @@ EVENT_ABOUT = {
         "CanadaBuys award notices, newest first by the date Award Watch first recorded them.",
         "Avis d’attribution d’AchatsCanada, les plus récents en premier selon la date où Award Watch les a relevés.",
     ),
+    "expiring": (
+        "Award notices, contract history records and published contracts whose end date came within 91 days, "
+        "each contract once, newest first by the date Award Watch recorded it.",
+        "Avis d’attribution, contrats octroyés et contrats publiés dont la date de fin est à moins de 91 jours, "
+        "chaque contrat une seule fois, les plus récents en premier selon la date où Award Watch l’a relevé.",
+    ),
 }
 RIGHTS = (
     "CanadaBuys tender and award notices: Public Services and Procurement Canada, Open Government Licence, Canada.",
     "Avis d’appel d’offres et d’attribution d’AchatsCanada : Services publics et Approvisionnement Canada, "
     "Licence du gouvernement ouvert, Canada.",
 )
+EXPIRING_RIGHTS = (
+    "CanadaBuys award notices and contract history: Public Services and Procurement Canada; published contracts: "
+    "Treasury Board of Canada Secretariat; Open Government Licence, Canada.",
+    "Avis d’attribution et contrats octroyés d’AchatsCanada : Services publics et Approvisionnement Canada; "
+    "contrats publiés : Secrétariat du Conseil du Trésor du Canada; Licence du gouvernement ouvert, Canada.",
+)
+HISTORY_DATASET_URL = "https://open.canada.ca/data/en/dataset/4fe645a1-ffcd-40c1-9385-2c771be956a4"
+CONTRACT_SEARCH_URL = "https://search.open.canada.ca/contracts/?search_text="
 NOTICE_URL = {
     "tenders": "https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/",
     "awards": "https://canadabuys.canada.ca/en/tender-opportunities/award-notice/",
@@ -163,7 +185,8 @@ def _both(en: str, fr: str) -> str:
 
 
 def _title(en: object, fr: object, reference: str) -> str:
-    en_t, fr_t = _clean(en), _clean(fr)
+    # A title is the publisher's text and goes through the same scrub as every exported field.
+    en_t, fr_t = _clean(scrub(en, "en")), _clean(scrub(fr, "fr"))
     if en_t and fr_t:
         return _both(en_t, fr_t)
     return en_t or fr_t or reference
@@ -191,6 +214,11 @@ def _list(text: object) -> list[str]:
     except ValueError:
         return []
     return [str(v) for v in value if v] if isinstance(value, list) else []
+
+
+def notice_path(reference: str) -> str:
+    """A reference as published, in a CanadaBuys notice address: lower case, escaped, a "/" kept as a path separator."""
+    return quote(reference.lower(), safe="/")
 
 
 def _segments(codes: object, segments: dict[str, tuple[str, str]]) -> list[str]:
@@ -282,7 +310,7 @@ def tender_entries(conn: sqlite3.Connection, look: _Lookups, cutoff: str, max_en
         out.append(Entry(
             id=f"{TAG}tender/{ref.lower()}", updated=stamp, title=_title(r["title_en"], r["title_fr"], r["reference"]),
             summary=_both(en + ".", fr + "."), link=f"/tenders/{ref.lower()}",
-            via=NOTICE_URL["tenders"] + quote(r["reference"].lower(), safe=""),
+            via=NOTICE_URL["tenders"] + notice_path(r["reference"]),
             sort=(stamp, r["published"] or "", ref), scopes=scopes,
         ))
     return out
@@ -332,8 +360,62 @@ def award_entries(conn: sqlite3.Connection, look: _Lookups, cutoff: str, max_ent
         out.append(Entry(
             id=f"{TAG}award/{ref.lower()}", updated=stamp, title=_title(r["title_en"], r["title_fr"], r["reference"]),
             summary=_both(". ".join(p for p in en if p) + ".", ". ".join(p for p in fr if p) + "."),
-            link=f"/awards/{ref.lower()}", via=NOTICE_URL["awards"] + quote(r["reference"].lower(), safe=""),
+            link=f"/awards/{ref.lower()}", via=NOTICE_URL["awards"] + notice_path(r["reference"]),
             sort=(stamp, r["published"] or "", ref), scopes=scopes,
+        ))
+    return out
+
+
+def expiring_entries(conn: sqlite3.Connection, look: _Lookups, today: date) -> list[Entry]:
+    """The radar's rows inside the 3-month window, each dated by the night it entered (expiring.py).
+
+    An entry's id carries that night, and the text leaves out anything that
+    changes daily (the days left), so a row's entry keeps its id and its bytes
+    for as long as it stays in the window and a reader sees it once.
+    """
+    out: list[Entry] = []
+    for r in conn.execute("SELECT * FROM expiring_contracts WHERE entered_3m IS NOT NULL AND end >= ? "
+                          "ORDER BY entered_3m DESC, end, source_key", (today.isoformat(),)):
+        stamp = rfc3339(r["entered_3m"])
+        end = _day(r["end"])
+        if stamp is None or end is None:
+            continue
+        kind, published = r["kind"], r["reference"]
+        if kind == "contract":
+            link = f"/expiring/3m?buyer={r['buyer_id']}" if r["buyer_id"] and look.buyer(r["buyer_id"]) else "/expiring/3m"
+            via = CONTRACT_SEARCH_URL + quote(published.split(":", 1)[-1], safe="")
+        else:
+            ref = look.url_reference(published)
+            if ref is None:
+                continue
+            link = f"/{'awards' if kind == 'award' else 'history'}/{ref.lower()}"
+            via = NOTICE_URL["awards"] + notice_path(published) if kind == "award" else HISTORY_DATASET_URL
+        if r["supplier_withheld"]:
+            who_en, who_fr = "Supplier withheld", "Fournisseur non publié"
+        elif r["organization"]:
+            who_en = who_fr = _clean(r["organization"])
+        else:
+            who_en, who_fr = "Supplier not named", "Fournisseur non nommé"
+        b_en, b_fr = look.buyer_names(r["buyer_id"], r["buyer_en"], r["buyer_fr"])
+        en = [f"Ends on {end}", who_en]
+        fr = [f"Se termine le {end}", who_fr]
+        if b_en:
+            en.append(f"Buyer: {b_en}")
+            fr.append(f"Acheteur{FR_COLON} {b_fr}")
+        if (money := fmt_money(r["value"], r["currency"], "en")) is not None:
+            en.append(f"Value {money}")
+            fr.append(f"Valeur {fmt_money(r['value'], r['currency'], 'fr')}")
+        scopes = [CANADA]
+        scopes += [look.segment_scopes[s] for s in _list(r["segments"]) if s in look.segment_scopes]
+        if b := look.buyer(r["buyer_id"]):
+            scopes.append(b)
+        key = quote(f"{kind}/{published.lower()}", safe="/")
+        out.append(Entry(
+            id=f"{TAG}expiring/{key}/{r['entered_3m']}", updated=stamp,
+            title=_title(r["title_en"], r["title_fr"], published),
+            summary=_both(". ".join(en) + ".", ". ".join(fr) + "."), link=link, via=via,
+            # Newest night first; within a night, the soonest end first.
+            sort=(stamp, -date.fromisoformat(end).toordinal(), r["source_key"]), scopes=scopes,
         ))
     return out
 
@@ -349,6 +431,13 @@ def _el(parent: ET.Element, tag: str, text: str | None = None, **attrs: str) -> 
 
 
 def _page(scope: Scope, event: str) -> str:
+    if event == "expiring":
+        # The radar's 3-month list, filtered as the site's form filters it.
+        if scope.kind == "buyer":
+            return f"/expiring/3m?buyer={scope.key}"
+        if scope.kind == "segment":
+            return f"/expiring/3m?segment={scope.key}"
+        return "/expiring"
     if scope.kind == "canada":
         return "/tenders/new" if event == "tenders" else "/awards"
     return scope.page
@@ -369,7 +458,7 @@ def feed_document(scope: Scope, event: str, entries: list[Entry], base: str, fal
     author = _el(root, "author")
     _el(author, "name", SITE_NAME)
     _el(author, "uri", f"{base}/")
-    _el(root, "rights", _both(*RIGHTS))
+    _el(root, "rights", _both(*(EXPIRING_RIGHTS if event == "expiring" else RIGHTS)))
     _el(root, "icon", f"{base}/apple-touch-icon.png")
     for e in entries:
         entry = _el(root, "entry")
@@ -403,7 +492,8 @@ def write_feeds(conn: sqlite3.Connection, out: Path, *, today: date | None = Non
     look = _Lookups(conn)
     by_feed: dict[tuple[Scope, str], list[Entry]] = defaultdict(list)
     for event, entries in (("tenders", tender_entries(conn, look, cutoff, max_entries)),
-                           ("awards", award_entries(conn, look, cutoff, max_entries))):
+                           ("awards", award_entries(conn, look, cutoff, max_entries)),
+                           ("expiring", expiring_entries(conn, look, today))):
         entries.sort(key=lambda e: e.sort, reverse=True)
         for e in entries:
             for scope in e.scopes:

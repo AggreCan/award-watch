@@ -606,6 +606,46 @@ CREATE TABLE IF NOT EXISTS organization_aliases (
   created_at TEXT NOT NULL
 );
 
+-- The expiring-contracts radar (expiring.py, CLAUDE.md "Expiring-contracts
+-- radar"): every award notice, PSPC history contract and published contract
+-- whose newest version ends within 365 days of the data date and is not
+-- cancelled, listed once across the three sources (the duplicate rule keeps
+-- the award notice, then the history record, then the published contract).
+-- Rebuilt whole after the indicators stage; the export reads it.
+CREATE TABLE IF NOT EXISTS expiring_contracts (
+  source_key TEXT PRIMARY KEY,                   -- 'award:<reference>', 'history:<reference>', 'contract:<owner_org>:<reference>'
+  kind TEXT NOT NULL,                            -- award | history | contract
+  reference TEXT NOT NULL,                       -- as published; '<owner_org>:<reference>' for a published contract
+  title_en TEXT,
+  title_fr TEXT,
+  organization_id TEXT,                          -- NULL when withheld (supplier_withheld = 1) or not named
+  organization TEXT,                             -- its display name when the radar was built
+  supplier_withheld INTEGER NOT NULL DEFAULT 0,
+  buyer_id TEXT,                                 -- history: the client department, else PSPC
+  buyer_en TEXT,
+  buyer_fr TEXT,
+  start TEXT,
+  end TEXT NOT NULL,                             -- the newest version's end date
+  days_left INTEGER NOT NULL,                    -- end minus the data date
+  value REAL,                                    -- the counted value by the row's own source's rules, in its currency
+  currency TEXT,
+  competitive INTEGER,
+  method_en TEXT,
+  method_fr TEXT,
+  instrument_en TEXT,
+  instrument_fr TEXT,
+  n_amendments INTEGER NOT NULL DEFAULT 0,       -- versions beyond the original
+  value_growth REAL,                             -- the counted value over the original amount, minus 1; NULL when either is unknown
+  contract_number TEXT,                          -- what the duplicate rule compares (normalized), when the source gives one
+  tender_reference TEXT,                         -- the matched tender notice's reference (through tenders.solicitation), as published
+  segments TEXT,                                 -- JSON list of two-digit UNSPSC segments
+  provinces TEXT,                                -- JSON list of delivery provinces
+  entered_3m TEXT,                               -- the data date on which the row entered the 3-month window (the feed's
+                                                 -- entry date, carried over between rebuilds); NULL outside the window
+  computed_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_expiring_end ON expiring_contracts(end);
+
 -- ---------------------------------------------------------------------------
 -- Visitor submissions: the only tables the D1 database of the site holds.
 -- ---------------------------------------------------------------------------

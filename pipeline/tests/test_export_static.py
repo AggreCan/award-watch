@@ -16,7 +16,8 @@ import pytest
 from awardwatch_pipeline import export_static as es
 from awardwatch_pipeline.db import connect, log_run
 from export_seed import (ACME, COLON_REF, CONTACT_EMAIL, CONTACT_NAME, CONTACT_PHONE, FOREIGN, NORTH, PERSON,
-                         PERSON_STREET, SERVANT, SLASH_REF, SUPPLIER_POSTAL, SUPPLIER_STREET, TODAY, seed)
+                         PERSON_STREET, PROSE_EMAIL, PROSE_PHONES, SERVANT, SLASH_REF, SUPPLIER_POSTAL, SUPPLIER_STREET,
+                         TODAY, seed)
 
 BASE = "https://awardwatch.example"
 
@@ -186,7 +187,30 @@ def profile(p, oid):
             and every(p["contracts"], contract_row) and every(p["grants"], grant_row) and every(p["lobbying"], lobby_row)
             and all(count(p[f"{k}_total_rows"]) for k in (*MONEY, "lobbying"))
             and every(p["buyers"], lambda b: b["source"] in MONEY and BUYER_ID.match(b["buyer_id"]) and count(b["n"]))
-            and all(k in MONEY and count(n) for k, n in p.get("non_cad", {}).items()))
+            and all(k in MONEY and count(n) for k, n in p.get("non_cad", {}).items())
+            and ("expiring" not in p or expiring_part(p["expiring"])))
+
+
+def published_ref(v):
+    return v is None or (s(v) and 1 <= len(v) <= 200)
+
+
+def expiring_row(r):
+    reference_ok = (s(r["reference"]) and 0 < len(r["reference"]) <= 200) if r["kind"] == "contract" else ref(r["reference"])
+    return (r["kind"] in ("award", "history", "contract") and reference_ok and published_ref(r.get("reference_published"))
+            and s_or_none(r["title_en"]) and s_or_none(r["title_fr"]) and org_or_none(r["organization_id"])
+            and s_or_none(r["organization"]) and isinstance(r.get("supplier_withheld", False), bool)
+            and buyer_or_none(r["buyer_id"]) and s_or_none(r["buyer_en"]) and s_or_none(r["buyer_fr"])
+            and s_or_none(r["start"]) and s(r["end"]) and re.match(r"^\d{4}-\d{2}-\d{2}", r["end"])
+            and count(r["days_left"]) and num_or_none(r["value"]) and s_or_none(r["currency"])
+            and competitive(r["competitive"]) and s_or_none(r["method_en"]) and s_or_none(r["method_fr"])
+            and s_or_none(r["instrument_en"]) and s_or_none(r["instrument_fr"]) and count(r["n_amendments"])
+            and num_or_none(r["value_growth"]) and (r.get("tender_reference") is None or ref(r["tender_reference"]))
+            and strs(r["segments"]) and strs(r["provinces"]))
+
+
+def expiring_part(v):
+    return count(v["n"]) and num_or_none(v["total"]) and every(v["rows"], expiring_row) and len(v["rows"]) <= v["n"]
 
 
 def test_every_file_passes_the_site_checks(exported):
@@ -249,6 +273,19 @@ def test_every_file_passes_the_site_checks(exported):
                    for k, v in doc["sources"].items())
         assert all(k in MONEY and every(v, lambda r: BUYER_ID.match(r["id"]) and count(r["n"]))
                    for k, v in doc["buyers"].items())
+    radar = load(out, "expiring/index.json")
+    assert s(radar["as_of"]) and [w["window"] for w in radar["windows"]] == ["3m", "6m", "12m"]
+    assert all(count(w["n"]) and num_or_none(w["total"]) for w in radar["windows"])
+    assert every(radar["by_buyer"], lambda b: buyer_or_none(b["buyer_id"]) and count(b["n"]) and num_or_none(b["total"]))
+    assert every(radar["by_segment"], lambda g: re.match(r"^[0-9]{2}$", g["code"]) and count(g["n"]))
+    for w in radar["windows"]:
+        meta = load(out, f"expiring/{w['window']}/index.json")
+        assert meta["window"] == w["window"] and meta["rows"] == w["n"] and meta["rows"] >= meta["pages"]
+        rows = [r for n in range(1, meta["pages"] + 1) for r in load(out, f"expiring/{w['window']}/{n}.json")]
+        assert len(rows) == meta["rows"] and every(rows, expiring_row)
+        assert [r["end"] for r in rows] == sorted(r["end"] for r in rows)
+    for b in buyers:
+        assert expiring_part(load(out, f"buyers/{b['id']}.json")["expiring"])
     directories = load(out, "directory/index.json")["directories"]
     assert [d["code"] for d in directories] == es.directory.CODES
     for d in directories:
@@ -435,3 +472,67 @@ def test_an_empty_database_exports_a_tree_the_checks_accept(tmp_path):
     assert load(out, "stats.json")["counts"]["organizations"] == 0
     assert load(out, "tenders/open.json") == [] and (out / "sitemaps" / "index.xml").exists()
     assert counts["files"] > 0
+
+
+FREE_TEXT = re.compile(r"^(title|description|comments|program|selection|limited_reason)_(en|fr)$")
+
+
+def free_text(obj, key=None):
+    """Every (key, string) of a JSON value whose key names a free-text field, at any depth."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(v, str) and FREE_TEXT.match(k):
+                yield k, v
+            else:
+                yield from free_text(v, k)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from free_text(v, key)
+
+
+def test_contact_details_in_the_publishers_prose_never_reach_a_file(exported):
+    _, out, _, _ = exported
+    seen = []
+    for path in out.rglob("*.json"):
+        for key, value in free_text(json.loads(path.read_text(encoding="utf-8"))):
+            assert "@" not in value and not re.search(r"\d{10}", value), (path.name, key, value)
+            seen.append((key, value))
+    # The placeholder is in the field's own language.
+    assert any(k.endswith("_en") and "[contact removed]" in v for k, v in seen)
+    assert any(k.endswith("_fr") and "[coordonnées retirées]" in v for k, v in seen)
+    assert not any("[coordonnées retirées]" in v for k, v in seen if k.endswith("_en"))
+    text = "\n".join(p.read_text(encoding="utf-8") for p in out.rglob("*") if p.is_file())
+    for secret in (PROSE_EMAIL, *PROSE_PHONES):
+        assert secret not in text, secret
+
+
+def test_the_radar_lists_each_contract_once_by_window_with_its_parts(exported):
+    _, out, ids, _ = exported
+    radar = load(out, "expiring/index.json")
+    assert [(w["window"], w["n"], w["total"]) for w in radar["windows"]] == [
+        ("3m", 3, 562_000.0), ("6m", 5, 697_000.0), ("12m", 6, 1_947_000.0)]
+    rows = load(out, "expiring/12m/1.json")
+    assert [(r["kind"], r["reference"], r["days_left"]) for r in rows] == [
+        ("award", "AW-5", 30), ("award", "AW-2", 45), ("history", "H-1", 81),
+        ("award", "23240-220799-001-IM", 93), ("contract", "dnd-mdn:C-2", 151), ("award", "AW-1", 242)]
+    by_ref = {r["reference"]: r for r in rows}
+    assert by_ref["AW-5"]["organization_id"] is None and by_ref["AW-5"]["supplier_withheld"] is True
+    assert by_ref["AW-2"]["tender_reference"] == "cb-100-1" and by_ref["AW-2"]["organization_id"] == ids[NORTH]
+    assert by_ref["23240-220799-001-IM"]["reference_published"] == SLASH_REF
+    assert (by_ref["AW-1"]["n_amendments"], by_ref["AW-1"]["value_growth"]) == (1, 0.25)
+    contract = by_ref["dnd-mdn:C-2"]
+    assert (contract["value"], contract["value_growth"], contract["n_amendments"]) == (130_000.0, 0.3, 1)
+    assert contract["instrument_en"] == "Contract" and contract["tender_reference"] is None
+    assert by_ref["H-1"]["buyer_id"] == "dnd-mdn"
+    assert {b["buyer_id"]: b["n"] for b in radar["by_buyer"]} == {"dnd-mdn": 3, "pwgsc-tpsgc": 3}
+    dnd = load(out, "buyers/dnd-mdn.json")["expiring"]
+    assert dnd["n"] == 3 and [r["reference"] for r in dnd["rows"]] == ["H-1", "dnd-mdn:C-2", "AW-1"]
+    profiles = {}
+    for path in (out / "profiles").glob("*.json"):
+        profiles.update(json.loads(path.read_text(encoding="utf-8")))
+    acme = profiles[ids[ACME]]["expiring"]
+    assert acme["n"] == 3 and acme["total"] == 300_000.0 + 5_000.0 + 1_250_000.0
+    assert profiles[ids[FOREIGN]]["expiring"] == {"n": 0, "total": None, "rows": []}
+    sitemap = (out / "sitemaps" / "sitemap-1.xml").read_text(encoding="utf-8")
+    for path in ("/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m"):
+        assert f"<loc>{BASE}{path}</loc>" in sitemap
