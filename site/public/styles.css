@@ -14,6 +14,7 @@
 /* Inter, self-hosted: the variable files of the 4.1 release, weights 100 to
    900, SIL Open Font License (fonts/OFL.txt). The system stack shows while
    they load. */
+/* Subset with pyftsubset to Basic Latin, Latin-1, Latin Extended-A, general punctuation, the euro, trade mark, arrows and check (wght and opsz axes and tnum kept); any other character falls back to the system stack. */
 @font-face {
   font-family: "Inter";
   font-style: normal;

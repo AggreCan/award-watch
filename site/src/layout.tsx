@@ -248,7 +248,7 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null }> = ({ la
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 2;
+export const STYLES_VERSION = 3;
 
 export const Layout: FC<
   PropsWithChildren<{ lang: Lang; title: string; dataAsOf: string | null; active?: string; head?: unknown; seo?: Seo }>
