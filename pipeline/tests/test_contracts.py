@@ -209,7 +209,7 @@ def test_the_stage_lists_withheld_names_for_review_and_logs_only_the_count(conn,
         ["Laura Holloway"]
     log = conn.execute("SELECT detail, rows_in, rows_new, excluded, ok, notice FROM sources_log").fetchone()
     assert (log["rows_in"], log["rows_new"], log["excluded"], log["ok"]) == (30, 30, 1, 1)
-    assert log["detail"] == "read rows=30 stored=30 withheld=1 duplicates=0 skipped=0"
+    assert log["detail"] == "read rows=30 stored=30 withheld=1 duplicates=0 skipped=0 redacted=0"
     assert "1 rows (1 names) read as private individuals, vendor withheld" in log["notice"]
     assert "Holloway" not in log["notice"] and "Holloway" not in log["detail"]
     # No CKAN in a samples run: the department is made from its title, and listed.

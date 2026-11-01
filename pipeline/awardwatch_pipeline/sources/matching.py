@@ -110,9 +110,10 @@ CONNECTOR_RE = re.compile(r"&|\band\b|\bet\b", re.I)
 NOT_PERSONS_PATH = config.PACKAGE_DATA / "not_persons.csv"
 GIVEN_NAMES_PATH = config.PACKAGE_DATA / "given_names.txt"
 # Raised whenever is_person_name reads a name differently (its rules, the
-# given-name list, not_persons.csv), so that the next run reads every file
-# again and recomputes which rows are withheld (refresh_person_test).
-PERSON_TEST_VERSION = 4
+# given-name list, not_persons.csv) or a withheld row keeps something else
+# (5: the name is also taken out of the row's free text), so that the next run
+# reads every file again and recomputes the withheld rows (refresh_person_test).
+PERSON_TEST_VERSION = 5
 PERSON_TEST_KEY = "person_test_version"
 # The meta keys that let a loader skip a file: checksums, the validators of
 # its conditional request, and the weekly check. A refused lobbying download
@@ -196,6 +197,64 @@ def refresh_person_test(conn: sqlite3.Connection) -> bool:
     )
     conn.commit()
     return True
+
+
+# What a withheld name becomes in the free text of its own record.
+NAME_WITHHELD = {"en": "[name withheld]", "fr": "[nom retiré]"}
+_HONORIFIC_RE = r"(?:(?:mr|mrs|ms|miss|mme|mlle|dr|me)\.?|m\.)"
+
+
+def _person_words(part: str) -> list[str]:
+    words = part.split()
+    while words and _is_honorific(words[0]):
+        words.pop(0)
+    return words
+
+
+def _people(name: str) -> list[tuple[list[str], list[str]]]:
+    """The people a withheld name holds, each as (given names, surname)."""
+    out: list[tuple[list[str], list[str]]] = []
+    for part in re.split(r"[;/]", first_language(name)):
+        if "," in part:
+            last, first = (_person_words(p) for p in part.split(",", 1))
+            if len(last) >= 2 and len(first) >= 2:
+                # "Priya Sandhu, Arjun Sandhu": two people, each written first name first.
+                out += [(last[:-1], last[-1:]), (first[:-1], first[-1:])]
+            elif last and first:
+                out.append((first, last))
+        else:
+            words = _person_words(part)
+            if len(words) >= 2:
+                out.append((words[:-1], words[-1:]))
+    return out
+
+
+@lru_cache(maxsize=4096)
+def name_pattern(name: str) -> re.Pattern[str] | None:
+    """The ways a record's free text may write a withheld name: "First Last" and "Last, First",
+    with or without a courtesy title, in any case; None when the name holds no first and last name."""
+    variants: list[str] = []
+    for given, last in _people(name):
+        g = r"\s+".join(re.escape(w) for w in given)
+        s = r"\s+".join(re.escape(w) for w in last)
+        variants += [rf"{g}\s+{s}", rf"{s}\s*,\s*{g}"]
+    if not variants:
+        return None
+    alternatives = "|".join(sorted(set(variants), key=len, reverse=True))
+    return re.compile(rf"(?<!\w)(?:{_HONORIFIC_RE}\s*)?(?:{alternatives})(?!\w)", re.I)
+
+
+def redact(text: str | None, names: list[str] | tuple[str, ...], *, french: bool = False) -> tuple[str | None, int]:
+    """text with every withheld name in it replaced, and how many replacements were made."""
+    if not text:
+        return text, 0
+    count = 0
+    for name in names:
+        pattern = name_pattern(name) if name else None
+        if pattern is not None:
+            text, n = pattern.subn(NAME_WITHHELD["fr" if french else "en"], text)
+            count += n
+    return text, count
 
 
 def given_name_key(word: object) -> str:

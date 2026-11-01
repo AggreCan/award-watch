@@ -39,7 +39,9 @@ from ..db import now_iso
 from ..http import PoliteClient
 from ..normalize import business_number, iso_date, province_code, to_int
 from . import buyers, matching
-from .contracts import LoadStats, StageResult, WeeklyFile, csv_rows, cut, finish, refresh, rewrite, text
+from .contracts import (
+    LoadStats, StageResult, WeeklyFile, csv_rows, cut, finish, redact_fields, refresh, rewrite, text,
+)
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +57,12 @@ OPTIONAL = (
     "amendment_date", "research_organization_name", "federal_riding_name_en", "federal_riding_name_fr",
     "federal_riding_number", "agreement_title_en", "agreement_title_fr", "agreement_number",
     "foreign_currency_type", "foreign_currency_value", "naics_identifier", "description_en", "description_fr",
+)
+# The free text that may name the recipient: (column, field, French or not, how it is stored).
+GRANT_FREE_TEXT = (
+    ("agreement_title_en", "title_en", False, cut), ("agreement_title_fr", "title_fr", True, cut),
+    ("description_en", "description_en", False, cut), ("description_fr", "description_fr", True, cut),
+    ("prog_name_en", "program_en", False, text), ("prog_name_fr", "program_fr", True, text),
 )
 COLUMNS = (
     "owner_org", "reference", "amendment", "amendment_date", "agreement_type", "recipient_type", "business_number",
@@ -107,7 +115,10 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
         legal = matching.first_language(get("recipient_legal_name"))
         if matching.is_placeholder(legal):
             legal = ""
-        operating = _organization_name(get("recipient_operating_name"))
+        raw_operating = matching.first_language(get("recipient_operating_name"))
+        if matching.is_placeholder(raw_operating):
+            raw_operating = ""
+        operating = _organization_name(raw_operating)
         if operating == legal:
             operating = None  # the legal name again says nothing more
         postal = matching.postal_code(get("recipient_postal_code"))
@@ -126,7 +137,11 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
             drops.add(legal)
             legal_out = operating = number = None
             city_out = postal_out = org = None
+            # A sole proprietor's operating name points at them as surely as their own.
+            persons = [legal, raw_operating] if raw_operating else [legal]
         else:
+            # An operating name dropped as a person's is that person's name.
+            persons = [raw_operating] if raw_operating and matching.is_person_name(raw_operating) else []
             legal_out, city_out, postal_out = legal or None, place[2] or None, place[3] or None
             org = organizations.upsert(conn, legal, source="grants", country=get("recipient_country"),
                                        province=province, city=city, postal_code=postal or get("recipient_postal_code"),
@@ -172,6 +187,8 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
             "organization_id": org,
             "loaded_at": stamp,
         }
+        if persons:
+            stats.redacted += redact_fields(get, rec, persons, GRANT_FREE_TEXT)
         yield tuple(rec[c] for c in COLUMNS)
 
 

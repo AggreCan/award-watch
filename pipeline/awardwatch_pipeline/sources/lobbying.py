@@ -184,6 +184,7 @@ class LobbyingStats:
     superseded: int = 0
     stored: int = 0
     withheld: int = 0
+    redacted: int = 0          # withheld client names replaced in the subject matters
     dpoh_rows: int = 0
     orphans: int = 0           # office-holder or subject rows naming a report the primary file lacks
     missing: list[str] = field(default_factory=list)
@@ -323,10 +324,17 @@ def load_zip(conn: sqlite3.Connection, path: Path, *, now: str | None = None,
             if matching.is_placeholder(client):
                 client = ""
             withheld = bool(client) and matching.is_person_name(client)
+            subjects = report.subjects
             if withheld:
                 stats.withheld += 1
                 person_drops.add(client)
                 client_raw, org = None, None
+                # The subject matters are the report's only free text; the
+                # language of each is the filer's, so the English mark is used.
+                persons = [n for n in (report.client_en, report.client_fr) if n]
+                redacted = [matching.redact(s, persons) for s in subjects]
+                subjects = [s for s, _ in redacted]
+                stats.redacted += sum(n for _, n in redacted)
             else:
                 client_raw = client or None
                 org = organizations.upsert(conn, client, source="lobbying", now=stamp) if client else None
@@ -335,7 +343,7 @@ def load_zip(conn: sqlite3.Connection, path: Path, *, now: str | None = None,
             dpoh = [{"name": name or None, "title": title or None, "institution": inst or None}
                     for name, title, inst in report.dpoh]
             yield (comm, report.registration or None, report.registrant_number or None, report.date,
-                   report.registrant or None, client_raw, 1 if withheld else 0, org, _json(report.subjects),
+                   report.registrant or None, client_raw, 1 if withheld else 0, org, _json(subjects),
                    _json(institutions), _json(buyer_ids), _json(dpoh), stamp)
 
     marks = ", ".join("?" * len(COLUMNS))
@@ -389,7 +397,8 @@ class LobbyingResult:
         if s is None:
             return self.state
         return (f"{self.state} files={','.join(s.files)} reports={s.reports} stored={s.stored} "
-                f"superseded={s.superseded} withheld={s.withheld} office_holder_rows={s.dpoh_rows}")
+                f"superseded={s.superseded} withheld={s.withheld} office_holder_rows={s.dpoh_rows} "
+                f"redacted={s.redacted}")
 
 
 def _held(conn: sqlite3.Connection, stamp: str) -> str | None:

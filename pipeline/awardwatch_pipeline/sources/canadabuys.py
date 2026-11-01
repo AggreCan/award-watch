@@ -341,6 +341,7 @@ class FileStats:
     new: int = 0
     excluded: int = 0
     skipped: int = 0
+    redacted: int = 0  # withheld names replaced in titles and descriptions
     missing: list[str] = field(default_factory=list)
     # Kept for the open-notices file only: the status step needs its references,
     # and a legacy file's would be a million strings held for nothing.
@@ -505,6 +506,60 @@ def _history(ctx: _Context, get: Callable[[str], str], rec: dict[str, object]) -
 
 _BUILDERS = {"tenders": _tender, "awards": _award, "history": _history}
 _SUPPLIER_FIELDS = ("supplier_raw", "supplier_country", "supplier_province", "supplier_city", "supplier_postal")
+# The free text of a version that may name its supplier ("TSPS SA (Task
+# Based) - <name>"): the field, whether it is French, and how it is stored.
+_FREE_TEXT: tuple[tuple[str, bool, Callable[[object], str | None]], ...] = (
+    ("title_en", False, _text), ("title_fr", True, _text),
+    ("description_en", False, _cut), ("description_fr", True, _cut),
+)
+
+
+def _persons_named(stage: str, get: Callable[[str], str], name: str | None, withheld: bool) -> list[str]:
+    """The private individuals a version names: its withheld supplier, and (history) an operating or
+    standardized name the person test dropped."""
+    persons = [name] if withheld and name else []
+    if stage == "history":
+        persons += [n for n in (_text(get("supplier_standardized")), _text(get("supplier_operating")))
+                    if n and matching.is_person_name(n)]
+    return persons
+
+
+def _redact_free_text(get: Callable[[str], str], rec: dict[str, object], persons: list[str]) -> int:
+    """Replace the persons' names in the version's titles and descriptions, read again from the file
+    so a name is replaced before a description is cut; returns the replacements made."""
+    total = 0
+    for column, french, store in _FREE_TEXT:
+        text, n = matching.redact(get(column), persons, french=french)
+        if n:
+            rec[column] = store(text)
+            total += n
+    return total
+
+
+def _redact_other_versions(conn: sqlite3.Connection, table: str, key: tuple[str, int], persons: list[str]) -> int:
+    """The same in the versions of the reference stored earlier: a later run that withholds the
+    supplier must not leave the name in an older version's title, nor as that version's supplier
+    (a version missing from tonight's files is not read again)."""
+    columns = [c for c, _, _ in _FREE_TEXT]
+    folded = {squash(p).casefold() for p in persons}
+    total = 0
+    for row in conn.execute(f"SELECT amendment, supplier_raw, {', '.join(columns)} FROM {table} "
+                            "WHERE reference = ? AND amendment != ?", key).fetchall():
+        changed: dict[str, object] = {}
+        for (column, french, _), value in zip(_FREE_TEXT, tuple(row)[2:]):
+            text, n = matching.redact(value, persons, french=french)
+            if n:
+                changed[column] = text
+                total += n
+        if row[1] and squash(row[1]).casefold() in folded:
+            changed.update({"supplier_raw": None, "supplier_street": None, "supplier_city": None,
+                            "supplier_postal": None, "organization_id": None, "supplier_withheld": 1})
+            if table == "contract_history":
+                changed.update({"supplier_standardized": None, "supplier_operating": None})
+        if changed:
+            conn.execute(f"UPDATE {table} SET {', '.join(f'{c} = ?' for c in changed)} WHERE reference = ? AND amendment = ?",
+                         (*changed.values(), key[0], row[0]))
+    return total
 
 
 def _upsert_sql(ctx: _Context, table: str, cols: tuple[str, ...]) -> str:
@@ -556,7 +611,12 @@ def _load_row(ctx: _Context, get: Callable[[str], str], stats: FileStats) -> Non
         })
         if stage == "history":
             rec.update({"supplier_standardized": None, "supplier_operating": None})
+        persons = _persons_named(stage, get, name, True)
+        stats.redacted += _redact_free_text(get, rec, persons) + _redact_other_versions(conn, table, key, persons)
     elif supplied:
+        persons = _persons_named(stage, get, name, False)
+        if persons:
+            stats.redacted += _redact_free_text(get, rec, persons)
         current = (name, *(v or None for v in place))
         if prev is not None and tuple(prev)[:5] == current:
             org = prev[5]
@@ -709,6 +769,7 @@ class StageStats:
     excluded: int = 0
     skipped: int = 0
     expired: int = 0
+    redacted: int = 0
     notices: list[str] = field(default_factory=list)
 
     def detail(self) -> str:
@@ -718,6 +779,8 @@ class StageStats:
         parts.append(f"rows={self.rows} new={self.new} withheld={self.excluded} skipped={self.skipped}")
         if self.stage == "tenders":
             parts.append(f"expired={self.expired}")
+        else:
+            parts.append(f"redacted={self.redacted}")
         return " ".join(parts)
 
 
@@ -795,6 +858,7 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, stage: str, *, no
         stats.new += fs.new
         stats.excluded += fs.excluded
         stats.skipped += fs.skipped
+        stats.redacted += fs.redacted
         if fs.missing:
             stats.notices.append(f"{f.name} lacks {', '.join(fs.missing)}")
         if f.kind == "open":

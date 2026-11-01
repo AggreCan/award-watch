@@ -125,6 +125,7 @@ class LoadStats:
     withheld: int = 0        # rows kept with the organization withheld as a person
     dropped: int = 0         # rows left out entirely (grants to individuals)
     skipped: int = 0         # rows without a key, or cut short
+    redacted: int = 0        # withheld names replaced in the rows' free text
     missing: list[str] = field(default_factory=list)
 
     @property
@@ -146,7 +147,7 @@ class StageResult:
         parts = [f"{self.state} rows={s.rows} stored={s.stored} withheld={s.withheld}"]
         if self.stage == "grants":
             parts.append(f"dropped_individuals={s.dropped}")
-        parts.append(f"duplicates={s.written - s.stored} skipped={s.skipped}")
+        parts.append(f"duplicates={s.written - s.stored} skipped={s.skipped} redacted={s.redacted}")
         return " ".join(parts)
 
 
@@ -166,6 +167,20 @@ def cut(value: object) -> str | None:
 
 def text(value: object) -> str | None:
     return squash(value) or None
+
+
+def redact_fields(get: Callable[[str], str], rec: dict[str, object], persons: list[str],
+                  fields: tuple[tuple[str, str, bool, Callable[[object], str | None]], ...]) -> int:
+    """Replace the persons' names in a row's free text, each read again from the file so a name is
+    replaced before the text is cut: (column, field, French or not, how the field is stored).
+    Returns the replacements made."""
+    total = 0
+    for column, field_name, french, store in fields:
+        replaced, n = matching.redact(get(column), persons, french=french)
+        if n:
+            rec[field_name] = store(replaced)
+            total += n
+    return total
 
 
 def code_list(value: object) -> str | None:
@@ -385,6 +400,10 @@ def finish(conn: sqlite3.Connection, result: StageResult, drops: matching.Person
 # ---------------------------------------------------------------------------
 
 SPEC = WeeklyFile("contracts", config.CONTRACTS_URL, "contracts.csv", "contracts-head.csv")
+CONTRACT_FREE_TEXT = (
+    ("description_en", "description_en", False, cut), ("description_fr", "description_fr", True, cut),
+    ("comments_en", "comments_en", False, cut), ("comments_fr", "comments_fr", True, cut),
+)
 
 
 def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], stats: LoadStats,
@@ -402,6 +421,7 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
             name = None
         place = organizations.place_key(get("country_of_vendor"), None, None, get("vendor_postal_code"))
         withheld = bool(name) and matching.is_person_name(name)
+        person = name if withheld else None
         if withheld:
             # A private individual: the record stays and nothing that names or
             # locates the person is written. The country locates no one.
@@ -462,6 +482,9 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
             "organization_id": org,
             "loaded_at": stamp,
         }
+        if person:
+            # The description and comments may name the vendor too.
+            stats.redacted += redact_fields(get, rec, [person], CONTRACT_FREE_TEXT)
         yield tuple(rec[c] for c in COLUMNS)
 
 

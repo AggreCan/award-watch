@@ -156,7 +156,7 @@ def test_the_stage_counts_individuals_and_withheld_rows_and_lists_only_the_withh
     assert result.state == "read"
     log = conn.execute("SELECT detail, rows_in, rows_new, excluded, ok, notice FROM sources_log").fetchone()
     assert (log["rows_in"], log["rows_new"], log["excluded"], log["ok"]) == (30, 29, 2, 1)
-    assert log["detail"] == "read rows=30 stored=29 withheld=1 dropped_individuals=1 duplicates=0 skipped=0"
+    assert log["detail"] == "read rows=30 stored=29 withheld=1 dropped_individuals=1 duplicates=0 skipped=0 redacted=0"
     assert "recipient withheld" in log["notice"]
     review = out_dir / "review" / "grants-persons.txt"
     assert [line for line in review.read_text(encoding="utf-8").splitlines() if not line.startswith("#")] == \
