@@ -9,8 +9,9 @@ nightly.py calls these from its command line; the workflow calls nightly.py.
   smoke         fetch a few pages of the live site after a deploy and judge
                 it ok, broken (the Worker answers 5xx) or unverifiable (the
                 edge refused the runner, or the answer proves nothing).
-  bundle_check  for the site-only deploy: compare the data files of R2's
-                static.tar.gz with the ones the live site serves.
+  bundle_check  for the site-only deploy: compare the data files of the
+                static bundle saved in R2 (static.tar.gz, in parts) with the
+                ones the live site serves.
   R2Rest        list the bucket and download one object through Cloudflare's
                 REST API, for the weekly snapshot the restore falls back to.
   run_checks    once a month, the expiry dates of the tokens and the domain.
@@ -315,10 +316,10 @@ def smoke(http: Any, base_url: str, data_date: str | None, paths: list[str], *,
 # -- site bundle check --------------------------------------------------------
 
 # The files the site-only deploy (.github/workflows/deploy-site.yml) compares
-# between R2's static.tar.gz and the live site. stats.json lists the newest
-# runs with their times and changes with every refresh, so an archive from
-# any other night fails; the open notices are the list the tender pages and
-# the feeds are built from.
+# between the static bundle saved in R2 (static.tar.gz, joined from its parts)
+# and the live site. stats.json lists the newest runs with their times and
+# changes with every refresh, so an archive from any other night fails; the
+# open notices are the list the tender pages and the feeds are built from.
 BUNDLE_FILES = ("stats.json", "tenders/open.json")
 BUNDLE_RETRY_S = 10.0
 # The Worker refuses an asset above 25 MiB, so nothing larger is one of its files.

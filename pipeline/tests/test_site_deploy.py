@@ -1,6 +1,7 @@
-"""The site-only deploy: the bundle check that proves R2's static.tar.gz is
-what the site serves, and the guard on .github/workflows/deploy-site.yml that
-keeps that workflow from ever writing data.
+"""The site-only deploy: the bundle check that proves the static bundle in R2
+(static.tar.gz, saved in parts) is what the site serves, and the guard on
+.github/workflows/deploy-site.yml that keeps that workflow from ever writing
+data.
 
 The workflow checks are textual: PyYAML is not a dependency of the pipeline
 (pyproject.toml), so the file is read line by line. Comment lines are left
@@ -216,13 +217,21 @@ ALLOWED_ACTIONS = {"actions/checkout@v4", "actions/setup-python@v5", "actions/se
 TOKEN_LINE = "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_SITE_DEPLOY_TOKEN }}"
 WRANGLER_ENV = "WRANGLER: ${{ github.workspace }}/site/node_modules/.bin/wrangler"
 # Every form a Wrangler call may take, matched against what follows "$WRANGLER".
+# The bundle is read as its manifest and then the parts the manifest lists,
+# both from R2 with --remote and both into the work folder.
 ALLOWED_WRANGLER = {
-    "r2 object get": re.compile(r'r2 object get --remote "\$BUCKET/static\.tar\.gz" --file "\$WORK/static\.tar\.gz" '),
+    "r2 object get of the manifest": re.compile(
+        r'r2 object get --remote "\$BUCKET/static\.tar\.gz\.parts" --file "\$WORK/static\.tar\.gz\.parts" '),
+    "r2 object get of a part": re.compile(r'r2 object get --remote "\$BUCKET/\$part" --file "\$WORK/\$part" '),
     "deployments status": re.compile(r"deployments status --json "),
     "deploy": re.compile(r"deploy; "),
     "rollback": re.compile(r'rollback "\$VERSION_ID" --message "[^"$`\\]*" --yes; '),
 }
-ALLOWED_NIGHTLY = {"live-version", "smoke", "site-bundle-check"}
+ALLOWED_NIGHTLY = {"live-version", "smoke", "site-bundle-check", "join"}
+# The only line that gives part a value: the manifest's names, kept only when
+# they are static.tar.gz.NNN, before any of them reaches a key or a path.
+PART_LOOP = r"""for part in $(awk '{print $2}' "$WORK/static.tar.gz.parts" | grep -E '^static\.tar\.gz\.[0-9]{3}$'); do"""
+PART_BINDING = re.compile(r"\bfor\s+part\b|(?<![\w$])part=|\bread\s+(?:-\w+\s+)*part\b")
 FORBIDDEN = [
     ("r2 object put", re.compile(r"r2\s+object\s+put")),
     ("r2 object delete", re.compile(r"r2\s+object\s+delete")),
@@ -241,7 +250,7 @@ FORBIDDEN = [
     ("an npm command other than npm ci", re.compile(r"(?<![\w-])npm\s+(?!ci\s*$)")),
     ("a pip command other than the pipeline install", re.compile(r"(?<![\w-])pip3?\s+(?!install -e \./pipeline\s*$)")),
     ("python other than the allowed nightly commands",
-     re.compile(r"(?<![\w-])python3?\s+(?!-m awardwatch_pipeline\.nightly (?:live-version|smoke|site-bundle-check)\s)")),
+     re.compile(r"(?<![\w-])python3?\s+(?!-m awardwatch_pipeline\.nightly (?:live-version|smoke|site-bundle-check|join)\s)")),
     ("node", re.compile(r"(?<![\w-])node\s")),
     ("the gh command", re.compile(r"(?<![\w-])gh\s")),
     ("LAST_RUN.md", re.compile(r"LAST_RUN")),
@@ -324,6 +333,8 @@ def workflow_problems(text, nightly_text=None):
         for sub in re.findall(r"awardwatch_pipeline\.nightly\s+(\S+)", line):
             if sub not in ALLOWED_NIGHTLY:
                 problems.append(f"nightly command {sub} is not allowed")
+        if PART_BINDING.search(line) and line.strip() != PART_LOOP:
+            problems.append(f"part may only come from the manifest through the name check: {line.strip()}")
     if sum(1 for line in lines if line.strip() == WRANGLER_ENV) != 1:
         problems.append("WRANGLER must be defined once, as the site's pinned binary")
     if [line.strip() for line in lines if line.strip().startswith("BUCKET:")] != ["BUCKET: awardwatch-data"]:
@@ -336,13 +347,18 @@ def test_the_site_deploy_workflow_cannot_write_data():
     assert workflow_problems(text, NIGHTLY.read_text(encoding="utf-8")) == []
 
 
-def test_the_workflow_uses_every_allowed_wrangler_form_and_the_three_helpers():
-    calls = [call for line in code_lines(WORKFLOW.read_text(encoding="utf-8")) for call in wrangler_calls(line)]
+def test_the_workflow_uses_every_allowed_wrangler_form_and_the_four_helpers():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    calls = [call for line in code_lines(text) for call in wrangler_calls(line)]
     found = {name for call in calls for name, form in ALLOWED_WRANGLER.items() if form.match(call)}
     assert found == set(ALLOWED_WRANGLER)
-    assert len(calls) == 5  # get, status before, deploy, rollback, status after
-    subs = set(re.findall(r"awardwatch_pipeline\.nightly\s+(\S+)", WORKFLOW.read_text(encoding="utf-8")))
+    assert len(calls) == 6  # manifest get, part get, status before, deploy, rollback, status after
+    # The parts are named only by the checked loop, which the workflow has once.
+    assert [line.strip() for line in code_lines(text) if PART_BINDING.search(line)] == [PART_LOOP]
+    subs = set(re.findall(r"awardwatch_pipeline\.nightly\s+(\S+)", text))
     assert subs == ALLOWED_NIGHTLY
+    # The parts are joined into the archive the unpack step reads.
+    assert 'nightly join --dir "$WORK" --base static.tar.gz --out "$WORK/static.tar.gz"' in text
 
 
 def test_the_deploy_token_reaches_only_the_steps_that_call_wrangler():
@@ -368,6 +384,14 @@ PLANTED = [
     ("another group", "  group: nightly", "  group: site"),
     ("an R2 upload", '          ls -l "$WORK/static.tar.gz"',
      '          "$WRANGLER" r2 object put --remote "$BUCKET/static.tar.gz" --file "$WORK/static.tar.gz"'),
+    ("a part upload", 'r2 object get --remote "$BUCKET/$part"', 'r2 object put --remote "$BUCKET/$part"'),
+    ("a manifest read without --remote", 'r2 object get --remote "$BUCKET/static.tar.gz.parts"',
+     'r2 object get "$BUCKET/static.tar.gz.parts"'),
+    ("a part read outside the work folder", '--file "$WORK/$part"', '--file "site/public/data/$part"'),
+    ("a part name without the check", PART_LOOP,
+     "for part in $(awk '{print $2}' \"$WORK/static.tar.gz.parts\"); do"),
+    ("a part name set by hand", '          if [ -z "$got" ]; then exit 1; fi',
+     '          if [ -z "$got" ]; then exit 1; fi; part=../../site/public/data/x'),
     ("an R2 delete through npx", "        run: npm ci", "        run: npx wrangler r2 object delete --remote awardwatch-data/status.json"),
     ("a D1 command", '          ls -l "$WORK/static.tar.gz"',
      '          "$WRANGLER" d1 execute award-watch --remote --command "DELETE FROM corrections"'),
@@ -377,6 +401,7 @@ PLANTED = [
     ("the nightly's token", TOKEN_LINE, "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}"),
     ("a state-writing nightly command", "--out \"$WORK/version_before.txt\"",
      "--out \"$WORK/version_before.txt\"; python -m awardwatch_pipeline.nightly status --db x --out y"),
+    ("another nightly command", "awardwatch_pipeline.nightly join --dir", "awardwatch_pipeline.nightly split --dir"),
     ("the pipeline run", "        run: pip install -e ./pipeline",
      "        run: pip install -e ./pipeline && python -m awardwatch_pipeline run --db data/awardwatch.sqlite"),
     ("a commit", "          test -s \"$WORK/stats.before.json\"", "          git commit -am x && git push"),

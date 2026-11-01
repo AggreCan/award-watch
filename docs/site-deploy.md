@@ -5,10 +5,11 @@ pages (a wording fix, a layout fix, a page bug) in a few minutes, without
 running the nightly refresh. It ships the Worker from `main` together with
 the data the site already serves, and it is built so that it cannot write,
 delete or change that data. The data here means the R2 bucket
-`awardwatch-data` (backups, `static.tar.gz`, `downloads/`, `review/`,
-`views/`, `status.json`), the D1 database `award-watch` (the forms; the
-hosted search database `awardwatch-search` will join it), and the data files
-the Worker serves as assets (`site/public/data`).
+`awardwatch-data` (backups, the static bundle `static.tar.gz.parts` and its
+parts, `downloads/`, `review/`, `views/`, `status.json`), the D1 database
+`award-watch` (the forms; the hosted search database `awardwatch-search`
+will join it), and the data files the Worker serves as assets
+(`site/public/data`).
 
 ## What it is for
 
@@ -34,14 +35,21 @@ change sooner.
    deploy waits for it.
 2. It checks out `main` and installs the pipeline (for its helper commands)
    and the site's pinned Wrangler (`npm ci` in `site/`).
-3. It downloads `static.tar.gz` from R2, a read. The nightly saves that
-   archive only after a deploy that passed its live check, so it should hold
-   the data the site serves. `python -m awardwatch_pipeline.nightly
-   site-bundle-check` proves it: it fetches `/data/stats.json` and
-   `/data/tenders/open.json` from the live site and compares each with the
-   archive's copy as parsed JSON. stats.json lists the newest runs with
-   their times, so an archive from any other night fails. Only when both
-   match is the archive copied to `site/public/data`.
+3. It downloads the static bundle from R2, reads only. The nightly saves
+   the archive `static.tar.gz` in parts of at most 250 MiB (Wrangler refuses
+   a single upload above 300 MiB): `static.tar.gz.000`, `static.tar.gz.001`
+   and so on, then the manifest `static.tar.gz.parts` with each part's
+   SHA-256. The workflow downloads the manifest and each part it names (only
+   names of the form `static.tar.gz.NNN`), and `python -m
+   awardwatch_pipeline.nightly join` puts the archive back together,
+   stopping the run when a part is missing or does not match its hash. The
+   nightly saves the bundle only after a deploy that passed its live check,
+   so it should hold the data the site serves. `python -m
+   awardwatch_pipeline.nightly site-bundle-check` proves it: it fetches
+   `/data/stats.json` and `/data/tenders/open.json` from the live site and
+   compares each with the archive's copy as parsed JSON. stats.json lists
+   the newest runs with their times, so an archive from any other night
+   fails. Only when both match is the archive copied to `site/public/data`.
 4. It records the Worker version serving traffic (`wrangler deployments
    status`), compares the two files once more (now from
    `site/public/data`) and keeps the live stats.json byte for byte, then
@@ -78,13 +86,15 @@ site's pinned Wrangler:
 
 | Command | What it does |
 |---|---|
-| `wrangler r2 object get --remote awardwatch-data/static.tar.gz` | reads the archive |
+| `wrangler r2 object get --remote awardwatch-data/static.tar.gz.parts` | reads the bundle's manifest |
+| `wrangler r2 object get --remote awardwatch-data/static.tar.gz.NNN` | reads each part the manifest lists |
 | `wrangler deployments status --json` | reads the version serving traffic, before the deploy and at the end |
 | `wrangler deploy` | uploads the Worker and its assets from `site/` |
 | `wrangler rollback <recorded version> --yes` | puts the recorded version back on all traffic |
 
-The pipeline commands are `live-version`, `smoke` and `site-bundle-check`
-from `awardwatch_pipeline.nightly`, which read files and fetch public pages.
+The pipeline commands are `live-version`, `smoke`, `site-bundle-check` and
+`join` from `awardwatch_pipeline.nightly`. They read files and fetch public
+pages; `join` also writes the joined archive on the runner.
 
 `pipeline/tests/test_site_deploy.py` reads the workflow file and fails when:
 the trigger is anything but `workflow_dispatch`; `permissions` is anything
@@ -93,11 +103,12 @@ workflows; a line runs `r2 object put`, `r2 object delete`, `r2 bucket`, a
 `d1` command, the pipeline's main command line, a nightly command that
 writes state (`pack`, `status`, `attention`, `gate` and the others), `git`,
 `curl`, `npx` or the Cloudflare API directly; a Wrangler call is anything but
-the four forms above through the pinned binary; any secret other than the
-two above is read; or `CLOUDFLARE_API_TOKEN` (the variable Wrangler reads) is
-set from anything but the site deploy token. It also plants each of those
-changes in a copy of the file and checks that the guard catches it. The
-checks are textual: PyYAML is not a dependency of the pipeline.
+the five forms above through the pinned binary; a part name reaches a key or
+a path without being checked against `static.tar.gz.NNN`; any secret other
+than the two above is read; or `CLOUDFLARE_API_TOKEN` (the variable Wrangler
+reads) is set from anything but the site deploy token. It also plants each
+of those changes in a copy of the file and checks that the guard catches it.
+The checks are textual: PyYAML is not a dependency of the pipeline.
 
 The bundle check (`resilience.bundle_check`) exits non-zero on any
 difference, a file missing from the archive, an answer other than 200 or a
@@ -125,7 +136,7 @@ to roll back.
    | Type | Permission | Access | Needed for |
    |---|---|---|---|
    | Account | Workers Scripts | Edit | the deploy, the version reads and the rollback |
-   | Account | Workers R2 Storage | Read | reading `static.tar.gz`; the Worker's R2 binding |
+   | Account | Workers R2 Storage | Read | reading the static bundle's manifest and parts; the Worker's R2 binding |
    | Account | D1 | Read | the Worker's two D1 bindings |
    | Account | Account Settings | Read | Wrangler's account lookups |
    | User | User Details | Read | Wrangler's user lookups |
@@ -184,7 +195,7 @@ it reads nothing this run writes. Remember that the change is still on
 | Where it stopped | What it means | What to do |
 |---|---|---|
 | Check the deploy token and the branch | The secret is missing, or the run was started from another branch | Add the secret (above), or start it from `main` |
-| Download the static bundle from R2 | `static.tar.gz` is not in R2, or R2 refused the token | A permission error: add Workers R2 Storage Read. A missing archive: wait for a nightly run |
+| Download the static bundle from R2 | `static.tar.gz.parts` is not in R2, a part it lists is missing or does not match its hash, or R2 refused the token | A permission error: add Workers R2 Storage Read. A missing or damaged bundle: wait for a nightly run |
 | Unpack the bundle and check it | The archive is not what the site serves: the last nightly deployed but its save to R2 failed, or something was deployed since | Nothing was deployed. Wait for the next nightly run, which deploys `main` with fresh data |
 | Record the live Worker version | Wrangler could not read the deployments | Nothing was deployed. Check the token's Workers Scripts permission |
 | Check again and keep the live stats.json | The site's data changed between the two checks | Nothing was deployed. Start it again |

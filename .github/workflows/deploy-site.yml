@@ -9,11 +9,15 @@
 #    and only from main. It shares the nightly's concurrency group, so it
 #    waits for a running refresh and never deploys over one.
 # 2. Check out main, install the pipeline and the site's pinned Wrangler.
-# 3. Download static.tar.gz from R2 (a read): the data bundle the nightly
-#    saves after a deploy that passed its live check. site-bundle-check
-#    proves it is what the site serves (stats.json and tenders/open.json,
-#    compared as parsed JSON) before it is copied to
-#    site/public/data. Any difference stops the run there.
+# 3. Download the static bundle from R2 (reads only): the archive
+#    static.tar.gz that the nightly saves after a deploy that passed its live
+#    check, in parts of at most 250 MiB (static.tar.gz.000, .001, ...) with
+#    the manifest static.tar.gz.parts, since Wrangler refuses a single upload
+#    above 300 MiB. join puts the parts back together, checking each one's
+#    SHA-256 against the manifest. site-bundle-check proves the archive is
+#    what the site serves (stats.json and tenders/open.json, compared as
+#    parsed JSON) before it is copied to site/public/data. Any difference
+#    stops the run there.
 # 4. Record the Worker version serving traffic, check the two files again
 #    and keep the live stats.json, deploy, then run the nightly's smoke test
 #    and the bundle check against the live site and the kept stats.json. A
@@ -28,11 +32,12 @@
 #   CLOUDFLARE_SITE_DEPLOY_TOKEN, a token with no R2 write and no D1 write,
 #   and only the steps that call Wrangler receive it. The nightly's token is
 #   never referenced.
-# - Code: the only Wrangler commands are a get of static.tar.gz from R2,
-#   deployments status, deploy and rollback; the only pipeline commands are
-#   live-version, smoke and site-bundle-check. pipeline/tests/test_site_deploy.py
-#   fails when this file gains another trigger, a wider permission, another
-#   secret or a command outside those lists.
+# - Code: the only Wrangler commands are gets of the bundle's manifest and
+#   of the parts it lists from R2, deployments status, deploy and rollback;
+#   the only pipeline commands are live-version, smoke, site-bundle-check and
+#   join. pipeline/tests/test_site_deploy.py fails when this file gains
+#   another trigger, a wider permission, another secret, a command outside
+#   those lists or a part name that skips the pattern check.
 # - After the fact: the checks after the deploy, the automatic rollback, and
 #   a run that fails whenever anything could not be confirmed.
 #
@@ -125,33 +130,59 @@ jobs:
         working-directory: site
         run: npm ci
 
-      # One object read. "does not exist" ends the tries, since that is an
-      # answer: without the bundle there is no data to deploy with.
-      # --remote, as everywhere: without it Wrangler 4 reads a local
+      # Object reads only. The nightly saves the bundle as parts
+      # (static.tar.gz.000, .001, ...) and then, once every part is in, the
+      # manifest static.tar.gz.parts with each part's SHA-256 in order. The
+      # manifest comes first here, then each part it lists; only names of the
+      # form static.tar.gz.NNN are taken from it, whatever else it holds.
+      # Each download is tried three times; "does not exist" ends the tries,
+      # since that is an answer: without the bundle there is no data to
+      # deploy with. join checks every part against the manifest (a part
+      # from another night fails) and writes static.tar.gz only when all
+      # match. --remote, as everywhere: without it Wrangler 4 reads a local
       # simulated bucket on the runner.
       - name: Download the static bundle from R2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_SITE_DEPLOY_TOKEN }}
         run: |
           mkdir -p "$WORK"
+          got=""
           for attempt in 1 2 3; do
-            if "$WRANGLER" r2 object get --remote "$BUCKET/static.tar.gz" --file "$WORK/static.tar.gz" > "$WORK/get.log" 2>&1; then
-              ls -l "$WORK/static.tar.gz"
-              exit 0
+            if "$WRANGLER" r2 object get --remote "$BUCKET/static.tar.gz.parts" --file "$WORK/static.tar.gz.parts" > "$WORK/get.log" 2>&1; then
+              got=yes
+              break
             fi
             cat "$WORK/get.log"
             if grep -qi "specified key does not exist" "$WORK/get.log"; then
-              echo "::error::static.tar.gz is not in R2. A site-only deploy needs the bundle a nightly run saved; wait for the next refresh."
+              echo "::error::static.tar.gz.parts is not in R2. A site-only deploy needs the bundle a nightly run saved; wait for the next refresh."
               exit 1
             fi
             sleep 20
           done
-          exit 1
+          if [ -z "$got" ]; then exit 1; fi
+          for part in $(awk '{print $2}' "$WORK/static.tar.gz.parts" | grep -E '^static\.tar\.gz\.[0-9]{3}$'); do
+            got=""
+            for attempt in 1 2 3; do
+              if "$WRANGLER" r2 object get --remote "$BUCKET/$part" --file "$WORK/$part" > "$WORK/get.log" 2>&1; then
+                got=yes
+                break
+              fi
+              cat "$WORK/get.log"
+              if grep -qi "specified key does not exist" "$WORK/get.log"; then break; fi
+              sleep 20
+            done
+            if [ -z "$got" ]; then
+              echo "::error::$part is listed in the bundle's manifest but could not be downloaded."
+              exit 1
+            fi
+          done
+          python -m awardwatch_pipeline.nightly join --dir "$WORK" --base static.tar.gz --out "$WORK/static.tar.gz"
+          ls -l "$WORK/static.tar.gz"
 
-      # The archive holds one folder, static/, as the nightly's bundle step
-      # packs it. The check fetches the same two files from the live site;
-      # any difference, missing file or answer other than 200 stops the run
-      # here, before anything is copied.
+      # The joined archive holds one folder, static/, as the nightly's bundle
+      # step packs it. The check fetches the same two files from the live
+      # site; any difference, missing file or answer other than 200 stops the
+      # run here, before anything is copied.
       - name: Unpack the bundle and check it against the live site
         run: |
           rm -rf "$WORK/bundle"

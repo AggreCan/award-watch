@@ -20,7 +20,12 @@ one, and always leaves a status file the site's daily check can read.
             Exits 1 when the copy fails its check.
   prev-set  re-split the backup the run restored from into the previous
             backup's parts, which the save step uploads before the new ones.
-  split     split any gzip into a named set of parts (the weekly snapshot).
+  split     split any gzip into a named set of parts (the weekly snapshot,
+            the static bundle).
+  join      join a named set of parts back into one file, checking each
+            part's SHA-256 against the manifest (the site-only deploy's
+            bundle). Exits 1 when the manifest is missing or does not read,
+            or a part is missing or differs; nothing is left at --out then.
   gate      for a retry trigger: skip=true when today's run already
             finished clean (resilience.gate).
   live-version
@@ -57,6 +62,13 @@ stopped part way fails its hashes and the restore moves on to the previous
 set; parts left over from a larger set are never read, since the manifest
 names the parts that belong. A backup saved as one file (<name> alone) still
 restores.
+
+The static bundle (static.tar.gz, the data files the deploy published)
+passes the same limit and travels the same way: the save step splits it into
+static.tar.gz.000, ... and static.tar.gz.parts, uploads the parts and, once
+every one is in, the manifest, and the site-only deploy downloads the set and
+joins it. It has never been saved as one file, so there is no single-file
+form to read.
 
 The R2 transfers stay in the workflow, apart from the weekly snapshot's
 listing and download, which Wrangler has no command for; these commands read
@@ -850,6 +862,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--base", required=True, help="the set's name (its parts are <base>.000 ...)")
     sp.add_argument("--out-dir", required=True)
     sp.add_argument("--part-mib", type=float, default=PART_MIB)
+    jn = sub.add_parser("join", help="join a named set of parts into one file, checking each part's hash")
+    jn.add_argument("--dir", required=True, help="the folder holding <base>.parts and the parts it lists")
+    jn.add_argument("--base", required=True, help="the set's name (its manifest is <base>.parts)")
+    jn.add_argument("--out", required=True, help="the joined file, written only when every part matches its hash")
     g = sub.add_parser("gate", help="skip=true when today's run already finished clean")
     g.add_argument("--status", required=True, help="status.json as downloaded from R2 (may be missing)")
     g.add_argument("--today", required=True, help="today's UTC date, YYYY-MM-DD")
@@ -924,7 +940,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     args = build_parser().parse_args(argv)
     handlers = {
-        "pack": _pack, "prev-set": _prev_set, "split": _split, "restore": _restore, "verify": _verify,
+        "pack": _pack, "prev-set": _prev_set, "split": _split, "join": _join, "restore": _restore, "verify": _verify,
         "status": _status, "gate": _gate, "live-version": _live_version, "smoke": _smoke, "checks": _checks,
         "attention": _attention, "notices": _notice_section, "site-bundle-check": _site_bundle_check,
         "indexnow": _indexnow, "rollup-views": _rollup_views, "import-search-console": _import_search_console,
@@ -956,6 +972,28 @@ def _split(args: argparse.Namespace) -> int:
         log.error("split: %s", exc)
         return 1
     log.info("split: %d part(s) and %s%s in %s", len(names), args.base, PARTS_SUFFIX, args.out_dir)
+    return 0
+
+
+def _join(args: argparse.Namespace) -> int:
+    folder, out = Path(args.dir), Path(args.out)
+    manifest = folder / (args.base + PARTS_SUFFIX)
+    # A file already at --out must never pass for the joined one.
+    out.unlink(missing_ok=True)
+    if not manifest.is_file():
+        log.error("join: %s is missing", manifest)
+        return 1
+    try:
+        entries = read_manifest(manifest, args.base)
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        log.error("join: %s", str(exc)[:200])
+        return 1
+    out.parent.mkdir(parents=True, exist_ok=True)
+    why = join_parts(folder, entries, out)
+    if why:
+        log.error("join: %s", why)
+        return 1
+    log.info("join: %d part(s) of %s joined into %s (%s)", len(entries), args.base, out, _mib(out.stat().st_size))
     return 0
 
 

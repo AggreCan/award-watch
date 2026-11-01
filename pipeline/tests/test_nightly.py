@@ -3,6 +3,7 @@
 import gzip
 import hashlib
 import json
+import logging
 import os
 import sqlite3
 import time
@@ -613,6 +614,81 @@ def test_pack_stops_on_a_missing_damaged_or_failing_database(tmp_path, monkeypat
     assert list(out.parent.iterdir()) == []
 
 
+BUNDLE = "static.tar.gz"
+
+
+def split_bundle(tmp_path, size=20_000):
+    """A stand-in for static.tar.gz, split by the command the save step runs
+    (parts of 0.005 MiB, so four of them), in the folder the site-only deploy
+    downloads the set into."""
+    src = tmp_path / BUNDLE
+    src.write_bytes(b"".join(hashlib.sha256(str(i).encode()).digest() for i in range(size // 32 + 1))[:size])
+    work = tmp_path / "work"
+    assert nightly.main(["split", "--src", str(src), "--base", BUNDLE, "--out-dir", str(work), "--part-mib", "0.005"]) == 0
+    return src, work
+
+
+def join_bundle(work, out=None):
+    out = out or work / BUNDLE
+    return nightly.main(["join", "--dir", str(work), "--base", BUNDLE, "--out", str(out)]), out
+
+
+def test_split_then_join_reproduces_the_bundle_byte_for_byte(tmp_path, caplog):
+    caplog.set_level(logging.INFO, logger="awardwatch_pipeline.nightly")
+    src, work = split_bundle(tmp_path)
+    assert sorted(p.name for p in work.iterdir()) == [f"{BUNDLE}.{n:03d}" for n in range(4)] + [f"{BUNDLE}.parts"]
+    code, out = join_bundle(work)
+    assert code == 0
+    assert out.read_bytes() == src.read_bytes()
+    assert f"join: 4 part(s) of {BUNDLE} joined into {out}" in caplog.text
+    # Nothing is left beside it but the set it came from.
+    assert sorted(p.name for p in work.iterdir()) == [BUNDLE] + [f"{BUNDLE}.{n:03d}" for n in range(4)] + [f"{BUNDLE}.parts"]
+    # A folder that does not exist yet is made for the joined file.
+    code, elsewhere = join_bundle(work, tmp_path / "unpack" / BUNDLE)
+    assert code == 0 and elsewhere.read_bytes() == src.read_bytes()
+
+
+def test_join_refuses_a_tampered_part_and_leaves_nothing(tmp_path, caplog):
+    _, work = split_bundle(tmp_path)
+    part = work / f"{BUNDLE}.002"
+    data = bytearray(part.read_bytes())
+    data[-1] ^= 0xFF
+    part.write_bytes(bytes(data))
+    # A file already at --out (an earlier try) must not survive a failed join.
+    (work / BUNDLE).write_bytes(b"left from an earlier try")
+    code, out = join_bundle(work)
+    assert code == 1
+    assert f"join: {BUNDLE}.002 does not match its manifest (an upload stopped part way?)" in caplog.text
+    assert not out.exists() and not (work / f"{BUNDLE}.joining").exists()
+
+
+def test_join_fails_when_a_listed_part_is_missing(tmp_path, caplog):
+    _, work = split_bundle(tmp_path)
+    (work / f"{BUNDLE}.003").unlink()
+    code, out = join_bundle(work)
+    assert code == 1
+    assert f"join: {BUNDLE}.003 is missing" in caplog.text
+    assert not out.exists() and not (work / f"{BUNDLE}.joining").exists()
+
+
+@pytest.mark.parametrize("manifest, reason", [
+    (None, "static.tar.gz.parts is missing"),
+    (f"{'0' * 64}  ../../etc/passwd\n", "static.tar.gz.parts names '../../etc/passwd' where static.tar.gz.000 belongs"),
+    (f"{'0' * 64}  {BUNDLE}.001\n", "static.tar.gz.parts names 'static.tar.gz.001' where static.tar.gz.000 belongs"),
+    ("not a manifest\n", "static.tar.gz.parts has a line that does not read"),
+    ("", "static.tar.gz.parts lists no part"),
+])
+def test_join_fails_when_the_manifest_is_missing_or_does_not_read(tmp_path, caplog, manifest, reason):
+    _, work = split_bundle(tmp_path)
+    if manifest is None:
+        (work / f"{BUNDLE}.parts").unlink()
+    else:
+        (work / f"{BUNDLE}.parts").write_text(manifest, encoding="utf-8")
+    code, out = join_bundle(work)
+    assert code == 1 and reason in caplog.text
+    assert not out.exists()
+
+
 # -- the workflow's text ------------------------------------------------------
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "nightly.yml"
@@ -648,6 +724,23 @@ def test_the_workflow_moves_the_backup_in_parts():
     assert save.index("put_set data/out/prev awardwatch.sqlite.prev.gz") < save.index("put_set data/out awardwatch.sqlite.gz")
     weekly = step(text, "Weekly snapshot (Sundays UTC, kept eight weeks)")
     assert "nightly split --src ../data/out/awardwatch.sqlite.gz" in weekly and "d1 export award-watch" in weekly
+
+
+def test_the_workflow_saves_the_bundle_in_parts():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    save = step(text, "Save the public files to R2")
+    split = "nightly split --src data/out/static.tar.gz --base static.tar.gz --out-dir data/out/bundle"
+    assert split in save
+    # The parts in the manifest's order, then the manifest, in one loop that a
+    # failed upload ends, so the manifest never goes up without all its parts.
+    loop = "for name in $(awk '{print $2}' data/out/bundle/static.tar.gz.parts) static.tar.gz.parts; do"
+    assert loop in save
+    body = save.split(loop, 1)[1].split("\n            done", 1)[0]
+    assert 'put "$BUCKET/$name" "data/out/bundle/$name"' in body
+    assert 'failed="$failed $name"' in body and "break" in body
+    assert save.index(split) < save.index(loop) < save.index('put "$BUCKET/downloads/')
+    # The whole archive is never uploaded as one object (Wrangler refuses it).
+    assert '"$BUCKET/static.tar.gz"' not in text
 
 
 def test_the_review_files_go_to_the_private_prefix_and_nowhere_else():

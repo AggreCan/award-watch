@@ -23,12 +23,13 @@
 # the export, record the Worker version serving traffic, deploy the Worker
 # with that data as its assets, check the live site and roll the Worker back
 # when the deploy broke it, tell IndexNow which pages changed, save the
-# database, the public files and the review files back to R2, keep the
-# audience counts of the finished days in R2 when the analytics token
-# exists, append Search Console's daily figures when its key exists, write
-# the monthly audience report on the first run of a month, run the monthly
-# expiry checks on the first of a month, write the run status, and report the
-# items needing attention (failed run, one GitHub issue).
+# database (in parts), the public files (the static bundle, also in parts,
+# and the CSV downloads) and the review files back to R2, keep the audience
+# counts of the finished days in R2 when the analytics token exists, append
+# Search Console's daily figures when its key exists, write the monthly
+# audience report on the first run of a month, run the monthly expiry checks
+# on the first of a month, write the run status, and report the items
+# needing attention (failed run, one GitHub issue).
 #
 # What a failure does (awardwatch_pipeline/nightly.py and resilience.py hold the
 # checks):
@@ -499,9 +500,16 @@ jobs:
           echo "Snapshot saved to slot $slot."
 
       # The downloads and the bundle match what was deployed, so they are saved
-      # only after a deploy that worked and was not found broken. The CSV files
-      # and their SHA256SUMS go under downloads/, the only prefix the site's
-      # /downloads route reads.
+      # only after a deploy that worked and was not found broken. The bundle
+      # (static.tar.gz, the folder the deploy published, read back by the
+      # site-only deploy) passes Wrangler's 300 MiB limit on a single upload,
+      # so it travels as a set like the database: split writes
+      # static.tar.gz.000, .001, ... of at most 250 MiB and the manifest
+      # static.tar.gz.parts, which lists each part's SHA-256 in order. The
+      # parts go up in order and the manifest last, so a reader never finds
+      # a manifest whose parts are not all in R2. The CSV files and their
+      # SHA256SUMS go under downloads/, the only prefix the site's /downloads
+      # route reads.
       - name: Save the public files to R2
         id: save_files
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}
@@ -509,7 +517,11 @@ jobs:
         # API answers an occasional 524 on a single put, and one such answer
         # must not leave the rest of the files a day old. A file still failing
         # after three tries is named, the loop goes on, and the step fails at
-        # the end so the attention item says so.
+        # the end so the attention item says so. The bundle's manifest is the
+        # last name in its loop, so a part that fails ends the loop before the
+        # manifest goes up (the parts after it would be of no use without
+        # one); the CSV files still go up. A split that fails saves none of
+        # the bundle and fails the step the same way.
         run: |
           put() {
             local attempt
@@ -521,15 +533,28 @@ jobs:
             return 1
           }
           failed=""
-          put "$BUCKET/static.tar.gz" data/out/static.tar.gz || failed="$failed static.tar.gz"
+          split_failed=""
+          if python -m awardwatch_pipeline.nightly split --src data/out/static.tar.gz --base static.tar.gz --out-dir data/out/bundle; then
+            for name in $(awk '{print $2}' data/out/bundle/static.tar.gz.parts) static.tar.gz.parts; do
+              if ! put "$BUCKET/$name" "data/out/bundle/$name"; then
+                failed="$failed $name"
+                break
+              fi
+            done
+          else
+            split_failed=yes
+          fi
           for f in data/out/csv/*.csv data/out/csv/SHA256SUMS; do
             [ -f "$f" ] || continue
             put "$BUCKET/downloads/$(basename "$f")" "$f" || failed="$failed $(basename "$f")"
           done
+          if [ -n "$split_failed" ]; then
+            echo "::error::static.tar.gz could not be split into parts (the split line above says why), so the bundle was not saved"
+          fi
           if [ -n "$failed" ]; then
             echo "::error::not saved to R2 after three tries:$failed"
-            exit 1
           fi
+          if [ -n "$failed" ] || [ -n "$split_failed" ]; then exit 1; fi
 
       # The names the person test withheld from tonight's records (the
       # CanadaBuys stages list them in data/out/review/<stage>-persons.txt,
