@@ -6,14 +6,26 @@ and the site serves only these names):
   open-tenders.csv        every tender notice open on the data date, at its newest amendment (a notice
                           the source still lists as open after its closing day is left out)
   awards-<year>.csv       every award notice version whose award date (else
-                          publication date) falls in the year
-  history-<year>.csv      every contract history version, by the same rule
-  organizations.csv       one row per organization: names, main place, counters and totals by source
+                          publication date) falls in the year, from FIRST_YEAR["awards"] (2012)
+  awards-before-2012.csv  the award notice versions dated before it: a handful of rows whose dates
+                          are typing errors in the source, in one file rather than a file a year
+  history-<year>.csv      every contract history version, by the same rule, from 2009
+  history-before-2009.csv the same for the contract history (written only when such a row exists)
+  organizations.csv       one row per organization: names, main place, counters and totals by source,
+                          and beside each total the count of records whose source published no value
   buyers.csv              one row per buyer with a record in a column the buyers list shows (listed_buyer_ids):
-                          names, acronyms, counters and totals by source
+                          names, acronyms, counters and totals by source, with the same no-value counts
   expiring-12m.csv        the expiring-contracts radar: every contract ending within 365 days, listed
-                          once across the three sources (expiring.py), soonest end first
+                          once across the three sources (expiring.py), soonest end first, with the
+                          client department and the value flag
   SHA256SUMS              sha256sum's format: "<hex>  <file>" per line, sorted by file name
+
+Every CSV opens with a UTF-8 byte-order mark, so a spreadsheet reads the
+French names as written, and a list field (provinces, segments, end users) is
+its values joined by "; " ("SK; MB"), never a JSON array. A value the source
+did not publish is an empty cell, never 0. SHA256SUMS is computed on the bytes
+written, mark included. The award and history files carry value_flag
+("check" when value_checks.py flagged the contract's value).
 
 What never goes in a file: the contacts on tender and award notices, supplier
 street addresses, any name the loaders withheld as a private individual
@@ -33,6 +45,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import logging
 import re
 import sqlite3
@@ -131,7 +144,9 @@ def register_functions(conn: sqlite3.Connection) -> None:
     conn.create_function("tender_status_on", 3, tender_status_on, deterministic=True)
 
 
-YEAR_RE = re.compile(r"^(awards|history)-\d{4}\.csv$")
+YEAR_RE = re.compile(r"^(awards|history)-(?:before-)?\d{4}\.csv$")
+# The first year with a file of its own; earlier dates are typing errors in the source and share one file.
+FIRST_YEAR = {"awards": 2012, "history": 2009}
 FIXED_FILES = ("open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-12m.csv")
 
 OPEN_TENDERS = """
@@ -158,14 +173,16 @@ _CONTRACT_COLUMNS = """
        AND c.amendment = a.amendment) AS unspsc,
     a.gsin, a.provinces, a.source_file, a.first_seen, a.last_seen"""
 
+_FLAG = "(SELECT 'check' FROM value_flags f WHERE f.kind = '{kind}' AND f.key = a.reference) AS value_flag,"
 AWARDS = (
-    "SELECT " + _CONTRACT_COLUMNS.format(extra="a.end_users_en,", codes="award_codes") +
+    "SELECT " + _CONTRACT_COLUMNS.format(extra="a.end_users_en, " + _FLAG.format(kind="award"), codes="award_codes") +
     " FROM awards a LEFT JOIN buyers b ON b.id = a.buyer_id LEFT JOIN organizations o ON o.id = a.organization_id"
     " WHERE substr(COALESCE(a.awarded, a.published), 1, 4) = ? ORDER BY a.reference, a.amendment"
 )
 HISTORY = (
     "SELECT " + _CONTRACT_COLUMNS.format(
-        extra="a.procurement_number, a.client_id, k.name_en AS client_name_en, a.client_raw_en,",
+        extra="a.procurement_number, a.client_id, k.name_en AS client_name_en, a.client_raw_en, "
+              + _FLAG.format(kind="history"),
         codes="history_codes") +
     " FROM contract_history a LEFT JOIN buyers b ON b.id = a.buyer_id LEFT JOIN buyers k ON k.id = a.client_id"
     " LEFT JOIN organizations o ON o.id = a.organization_id"
@@ -173,12 +190,14 @@ HISTORY = (
 )
 ORGANIZATIONS = """
     SELECT id, display_name, country, province, city, business_number, first_seen, last_seen, n_awards,
-           total_awards, n_history, total_history, n_contracts, total_contracts, n_grants, total_grants, n_lobbying
+           total_awards, n_awards_no_value, n_history, total_history, n_history_no_value, n_contracts, total_contracts,
+           n_contracts_no_value, n_grants, total_grants, n_grants_no_value, n_lobbying
     FROM organizations ORDER BY norm_name, id"""
 EXPIRING = """
     SELECT kind, reference, title_en, title_fr, organization_id, organization, supplier_withheld, buyer_id, buyer_en,
            buyer_fr, start, end, days_left, value, currency, competitive, method_en, instrument_en, n_amendments,
-           value_growth, tender_reference, segments, provinces
+           value_growth, tender_reference, segments, provinces, client_buyer_id, client_buyer_name,
+           client_buyer_name_fr, value_flag
     FROM expiring_contracts ORDER BY end, source_key"""
 # A buyer is listed (buyers.csv, and buyers/, the rankings and stats.json in the
 # static export) when it has a record in a column the buyers list shows: an
@@ -192,7 +211,8 @@ LISTED_BUYER = """
                 AND t.amendment = (SELECT MAX(y.amendment) FROM tenders y WHERE y.reference = t.reference)))"""
 BUYERS = f"""
     SELECT id, name_en, name_fr, acronym_en, acronym_fr, ckan_org, department_number, kind, n_tenders, n_awards,
-           total_awards, n_history, n_contracts, total_contracts, n_grants, total_grants
+           total_awards, n_awards_no_value, n_history, n_contracts, total_contracts, n_contracts_no_value, n_grants,
+           total_grants, n_grants_no_value
     FROM buyers b WHERE {LISTED_BUYER} ORDER BY id"""
 # The raw spellings of a buyer the CSVs print: blank when they name or locate a person.
 RAW_BUYER_COLUMNS = frozenset({"buyer_raw_en", "client_raw_en"})
@@ -208,7 +228,25 @@ def _cell(value: object) -> object:
     # Floats in a fixed form, so a value read back the same writes the same bytes.
     if isinstance(value, float):
         return f"{value:.2f}"
-    return "" if value is None else value
+    return "" if value is None else _flat(value)
+
+
+def _flat(value: object) -> object:
+    """A list column (stored as a JSON array of strings) as its values joined by "; ": '["SK", "MB"]' -> 'SK; MB'.
+
+    A spreadsheet shows the array's brackets and quotes as they are. Only a
+    JSON array of strings is read so; any other text, a title that opens with
+    a bracket included, is written as it is.
+    """
+    if not (isinstance(value, str) and value.startswith("[") and value.endswith("]")):
+        return value
+    try:
+        items = json.loads(value)
+    except ValueError:
+        return value
+    if not isinstance(items, list) or not all(isinstance(i, str) for i in items):
+        return value
+    return "; ".join(i for i in items if i.strip())
 
 
 def _write(path: Path, cur: sqlite3.Cursor) -> int:
@@ -218,7 +256,8 @@ def _write(path: Path, cur: sqlite3.Cursor) -> int:
     raw = [h in RAW_BUYER_COLUMNS for h in headers]
     part = path.with_name(path.name + ".partial")
     n = 0
-    with part.open("w", newline="", encoding="utf-8") as fh:
+    # utf-8-sig: the byte-order mark makes a spreadsheet read the file as UTF-8.
+    with part.open("w", newline="", encoding="utf-8-sig") as fh:
         writer = csv.writer(fh, lineterminator="\n")
         writer.writerow(headers)
         for row in cur:
@@ -233,6 +272,22 @@ def _years(conn: sqlite3.Connection, table: str) -> list[str]:
     return [y for (y,) in conn.execute(
         f"SELECT DISTINCT substr(COALESCE(awarded, published), 1, 4) FROM {table} "
         "WHERE COALESCE(awarded, published) GLOB '[0-9][0-9][0-9][0-9]-*' ORDER BY 1")]
+
+
+def _yearly_files(conn: sqlite3.Connection, prefix: str, table: str, sql: str) -> list[tuple[str, str, tuple]]:
+    """(file name, query, arguments) for each yearly file of a table: one per year from FIRST_YEAR, and the
+    years before it together in <prefix>-before-<FIRST_YEAR>.csv (the Data page lists the years it has)."""
+    first = FIRST_YEAR[prefix]
+    years = _years(conn, table)
+    files = [(f"{prefix}-{y}.csv", sql, (y,)) for y in years if int(y) >= first]
+    if any(int(y) < first for y in years):
+        where = "WHERE substr(COALESCE(a.awarded, a.published), 1, 4) = ? ORDER BY a.reference"
+        if where not in sql:
+            raise ValueError(f"{prefix}: the yearly query no longer reads its year as expected")
+        before = sql.replace(where, "WHERE substr(COALESCE(a.awarded, a.published), 1, 4) < ? "
+                                    "ORDER BY substr(COALESCE(a.awarded, a.published), 1, 10), a.reference")
+        files.append((f"{prefix}-before-{first}.csv", before, (str(first),)))
+    return files
 
 
 def write_sums(out: Path) -> int:
@@ -253,9 +308,8 @@ def export_csv(conn: sqlite3.Connection, out_dir: Path | None = None, *, today: 
     counts: dict[str, int] = {}
     counts["open-tenders.csv"] = _write(out / "open-tenders.csv", conn.execute(OPEN_TENDERS, {"as_of": as_of}))
     for prefix, table, sql in (("awards", "awards", AWARDS), ("history", "contract_history", HISTORY)):
-        for year in _years(conn, table):
-            name = f"{prefix}-{year}.csv"
-            counts[name] = _write(out / name, conn.execute(sql, (year,)))
+        for name, query, args in _yearly_files(conn, prefix, table, sql):
+            counts[name] = _write(out / name, conn.execute(query, args))
     counts["organizations.csv"] = _write(out / "organizations.csv", conn.execute(ORGANIZATIONS))
     counts["buyers.csv"] = _write(out / "buyers.csv", conn.execute(BUYERS, {"as_of": as_of}))
     counts["expiring-12m.csv"] = _write(out / "expiring-12m.csv", conn.execute(EXPIRING))

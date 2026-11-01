@@ -458,13 +458,18 @@ def _supplier(get: Callable[[str], str]) -> tuple[str | None, tuple[str, str, st
 
 
 def _contract(ctx: _Context, get: Callable[[str], str], rec: dict[str, object]) -> None:
+    amount, total = money(get("amount")), money(get("total_value"))
+    if not amount and not total:
+        # The files write 0.00 in both where a notice publishes no value (its
+        # page shows none): stored NULL, never read as $0 (value_checks.clear_unpublished).
+        amount = total = None
     rec.update({
         "contract_number": _text(get("contract_number")),
         "awarded": iso_date(get("awarded")),
         "start": iso_date(get("start")),
         "end": iso_date(get("end")),
-        "amount": money(get("amount")),
-        "total_value": money(get("total_value")),
+        "amount": amount,
+        "total_value": total,
         "currency": _text(get("currency").upper()),
         "status": award_status(get("status") or get("status_fr")),
         "instrument_type_en": _text(get("instrument_type_en")),

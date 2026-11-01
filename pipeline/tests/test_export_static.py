@@ -586,7 +586,7 @@ def test_the_radar_lists_each_contract_once_by_window_with_its_parts(exported):
         profiles.update(json.loads(path.read_text(encoding="utf-8")))
     acme = profiles[ids[ACME]]["expiring"]
     assert acme["n"] == 3 and acme["total"] == 300_000.0 + 5_000.0 + 1_250_000.0
-    assert profiles[ids[FOREIGN]]["expiring"] == {"n": 0, "total": None, "rows": []}
+    assert profiles[ids[FOREIGN]]["expiring"] == {"n": 0, "total": None, "n_no_value": 0, "rows": []}
     sitemap = (out / "sitemaps" / "sitemap-1.xml").read_text(encoding="utf-8")
     for path in ("/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m"):
         assert f"<loc>{BASE}{path}</loc>" in sitemap

@@ -37,17 +37,37 @@ Totals follow CLAUDE.md "Counting money", CAD only, each source on its own:
 * grants: one agreement per department and reference, the value on its
   highest amendment.
 
+A value the source did not publish stays NULL (never 0): no total adds it,
+and n_<source>_no_value counts the contracts or agreements left out that way
+beside each total. A value value_checks.py flagged for checking (value_flags)
+is left out of every total too; the record keeps it.
+
 The counters count what the totals add up (contracts by reference,
 agreements, published-contract rows, lobbying communications), including the
-ones a total leaves out (another currency, cancelled).
+ones a total leaves out (another currency, cancelled, no value, flagged).
+
+Names that are not organizations (a source's generic supplier account, a
+redaction mark) are listed in awardwatch_pipeline/data/not_organizations.csv
+by normalized name, or by a pattern with * and ?: upsert refuses them, so
+their records keep the raw name and link to no organization, like withheld
+rows, and count under no profile and no ranking. The nightly merge step
+(merges.py) clears the ones a record still points at.
+
+The organizations stage (run) is the merges (merges.py), the value checks
+(value_checks.py) and recompute, in that order and in one transaction.
 """
 
 from __future__ import annotations
 
+import csv
+import fnmatch
 import logging
 import sqlite3
 from collections import Counter, defaultdict
+from functools import lru_cache
+from pathlib import Path
 
+from . import config
 from .db import log_run, now_iso
 from .normalize import (
     POSTAL_PROVINCE, PROVINCE_CODES, business_number, country_code, norm_name, org_id, province_code,
@@ -84,7 +104,82 @@ RECORD_TABLES = ("awards", "contract_history", "contracts", "grants", "lobbying_
 
 FIELDS = ("display_name", "country", "province", "city", "postal_code", "business_number", "first_seen",
           "last_seen", "n_awards", "n_history", "n_contracts", "n_grants", "n_lobbying", "total_awards",
-          "total_history", "total_contracts", "total_grants")
+          "total_history", "total_contracts", "total_grants", "n_awards_no_value", "n_history_no_value",
+          "n_contracts_no_value", "n_grants_no_value")
+NO_VALUE_FIELDS = ("n_awards_no_value", "n_history_no_value", "n_contracts_no_value", "n_grants_no_value")
+
+# -- the counting rules as SQL, shared by the totals here, indicators and the export -----------------
+#
+# Each reads one version row (a newest amendment for the notices, a published
+# contract row): the counted value, which no total adds when it is NULL, and
+# a 0/1 marker for a value the source did not publish.
+
+
+def award_value(kind: str, *, checked: bool = True) -> str:
+    """The counted value of an award notice ('award') or history contract ('history') version.
+
+    A currency other than CAD (blank is CAD) gives NULL, and so does, when
+    checked, a contract value_flags lists; a cancelled contract counts zero;
+    else the total value when positive, else the amount, NULL when the
+    source published neither.
+    """
+    flag = (f"WHEN EXISTS (SELECT 1 FROM value_flags f WHERE f.kind = '{kind}' AND f.key = reference) THEN NULL "
+            if checked else "")
+    return (f"CASE {flag}WHEN UPPER(TRIM(COALESCE(currency, ''))) NOT IN ('', 'CAD') THEN NULL "
+            "WHEN status = 'cancelled' THEN 0 WHEN total_value > 0 THEN total_value ELSE amount END")
+
+
+def award_flagged(kind: str) -> str:
+    """1 when value_flags lists the notice or history contract (by its reference), else 0."""
+    return (f"CASE WHEN EXISTS (SELECT 1 FROM value_flags f WHERE f.kind = '{kind}' AND f.key = reference) "
+            "THEN 1 ELSE 0 END")
+
+
+# 1 when the version published no value: not cancelled, no positive total and no amount.
+AWARD_NO_VALUE = ("CASE WHEN COALESCE(status, '') = 'cancelled' OR total_value > 0 OR amount IS NOT NULL "
+                  "THEN 0 ELSE 1 END")
+# A published contract row's own value (CLAUDE.md "Counting money").
+CONTRACT_OWN = (
+    "CASE WHEN instrument_type = 'A' OR (amendment_value IS NOT NULL AND amendment_value != 0) THEN amendment_value "
+    "WHEN original_value IS NOT NULL THEN original_value "
+    "ELSE value END"
+)
+_CONTRACT_FLAG = ("EXISTS (SELECT 1 FROM value_flags f WHERE f.kind = 'contract' "
+                  "AND f.key = owner_org || ':' || procurement_id)")
+CONTRACT_CHECKED = f"CASE WHEN {_CONTRACT_FLAG} THEN NULL ELSE {CONTRACT_OWN} END"
+CONTRACT_FLAGGED = f"CASE WHEN {_CONTRACT_FLAG} THEN 1 ELSE 0 END"
+CONTRACT_NO_VALUE = f"CASE WHEN ({CONTRACT_OWN}) IS NULL THEN 1 ELSE 0 END"
+GRANT_NO_VALUE = "CASE WHEN value IS NULL THEN 1 ELSE 0 END"
+
+
+# -- names that are not organizations ----------------------------------------------------------------
+
+NOT_ORGANIZATIONS_PATH = config.PACKAGE_DATA / "not_organizations.csv"
+
+
+@lru_cache(maxsize=4)
+def _not_organization_rules(path: Path) -> tuple[frozenset[str], tuple[str, ...]]:
+    exact: set[str] = set()
+    patterns: list[str] = []
+    if path.exists():
+        with path.open(encoding="utf-8", newline="") as fh:
+            for row in csv.DictReader(fh):
+                value = squash(row.get("normalized_name")).casefold()
+                if not value:
+                    continue
+                if any(ch in value for ch in "*?["):
+                    patterns.append(value)
+                else:
+                    exact.add(norm_name(value))
+    return frozenset(exact), tuple(patterns)
+
+
+def is_not_organization(norm: str, path: Path | None = None) -> bool:
+    """True when a normalized name is listed in not_organizations.csv, exactly or by a pattern."""
+    if not norm:
+        return False
+    exact, patterns = _not_organization_rules(path or NOT_ORGANIZATIONS_PATH)
+    return norm in exact or any(fnmatch.fnmatchcase(norm, p) for p in patterns)
 
 
 def tidy_city(raw: object) -> str:
@@ -153,8 +248,10 @@ def upsert(
 ) -> str | None:
     """Create or count the organization a record names, and return its id.
 
-    None when the name is blank, a placeholder ("N/A"), or its legal part
-    reads as a person (the caller then drops the record). Call it once per record version written:
+    None when the name is blank, a placeholder ("N/A"), a name that is not an
+    organization (not_organizations.csv: the record keeps its raw name and no
+    organization), or its legal part reads as a person (the caller then
+    withholds the name). Call it once per record version written:
     the spelling, its operating name and the address are counted, and the
     organization's own name and place fields are set only when the row is
     created (recompute owns them after that).
@@ -163,7 +260,7 @@ def upsert(
     if not raw or matching.is_placeholder(raw) or matching.is_person_name(raw):
         return None
     norm = norm_name(raw)
-    if not norm:
+    if not norm or is_not_organization(norm):
         return None
     oid = org_id(norm)
     key = place_key(country, province, city, postal_code)
@@ -308,40 +405,36 @@ def _figures(conn: sqlite3.Connection) -> dict[str, dict[str, object]]:
     figures: dict[str, dict[str, object]] = defaultdict(dict)
 
     # Awards and contract history: one contract per reference, valued on its newest amendment.
-    for source, table in (("awards", "awards"), ("history", "contract_history")):
+    for source, table, kind in (("awards", "awards", "award"), ("history", "contract_history", "history")):
         sql = (
             f"WITH newest AS ({_newest_by_reference(table, ('reference',))}) "
-            "SELECT org, COUNT(*), SUM(CASE "
-            "  WHEN UPPER(TRIM(COALESCE(currency, ''))) NOT IN ('', 'CAD') THEN NULL "
-            "  WHEN status = 'cancelled' THEN 0 "
-            "  WHEN total_value > 0 THEN total_value "
-            "  ELSE COALESCE(amount, 0) END) "
+            f"SELECT org, COUNT(*), SUM({award_value(kind)}), SUM({AWARD_NO_VALUE}) "
             "FROM newest WHERE org IS NOT NULL GROUP BY org"
         )
-        for oid, n, total in conn.execute(sql):
+        for oid, n, total, no_value in conn.execute(sql):
             figures[oid][f"n_{source}"] = n
             figures[oid][f"total_{source}"] = total
+            figures[oid][f"n_{source}_no_value"] = no_value or 0
         _dates(conn, figures, table, "COALESCE(awarded, published)")
 
     # Published contracts: each row's own value.
-    for oid, n, total in conn.execute(
-        "SELECT organization_id, COUNT(*), SUM(CASE "
-        "  WHEN instrument_type = 'A' OR (amendment_value IS NOT NULL AND amendment_value != 0) THEN amendment_value "
-        "  WHEN original_value IS NOT NULL THEN original_value "
-        "  ELSE value END) "
+    for oid, n, total, no_value in conn.execute(
+        f"SELECT organization_id, COUNT(*), SUM({CONTRACT_CHECKED}), SUM({CONTRACT_NO_VALUE}) "
         "FROM contracts WHERE organization_id IS NOT NULL GROUP BY organization_id"
     ):
         figures[oid]["n_contracts"] = n
         figures[oid]["total_contracts"] = total
+        figures[oid]["n_contracts_no_value"] = no_value or 0
     _dates(conn, figures, "contracts", "contract_date")
 
     # Grants: one agreement per department and reference, valued on its highest amendment.
-    for oid, n, total in conn.execute(
+    for oid, n, total, no_value in conn.execute(
         f"WITH newest AS ({_newest_by_reference('grants', ('owner_org', 'reference'))}) "
-        "SELECT org, COUNT(*), SUM(value) FROM newest WHERE org IS NOT NULL GROUP BY org"
+        f"SELECT org, COUNT(*), SUM(value), SUM({GRANT_NO_VALUE}) FROM newest WHERE org IS NOT NULL GROUP BY org"
     ):
         figures[oid]["n_grants"] = n
         figures[oid]["total_grants"] = total
+        figures[oid]["n_grants_no_value"] = no_value or 0
     _dates(conn, figures, "grants", "start")
 
     for oid, n in conn.execute(
@@ -412,6 +505,7 @@ def recompute(conn: sqlite3.Connection, *, now: str | None = None) -> dict[str, 
             "n_lobbying": fig.get("n_lobbying", 0),
             "total_awards": _cents(fig.get("total_awards")), "total_history": _cents(fig.get("total_history")),
             "total_contracts": _cents(fig.get("total_contracts")), "total_grants": _cents(fig.get("total_grants")),
+            **{k: fig.get(k, 0) for k in NO_VALUE_FIELDS},
         }
         if any(r[k] != new[k] for k in FIELDS):
             changed.append((*(new[k] for k in FIELDS), stamp, oid))
@@ -423,10 +517,33 @@ def recompute(conn: sqlite3.Connection, *, now: str | None = None) -> dict[str, 
     return {"organizations": len(rows), "updated": len(changed), "removed": removed}
 
 
-def run(conn: sqlite3.Connection, *, now: str | None = None) -> dict[str, int]:
-    result = recompute(conn, now=now)
+def run(conn: sqlite3.Connection, *, now: str | None = None, review_dir: Path | None = None) -> dict[str, int]:
+    """The organizations stage: the merges, the value checks, then the rebuild, in one transaction.
+
+    The merges (merges.py) move the night's records onto the organizations
+    they are joined to, and the value checks (value_checks.py) list the values
+    no total may add, before recompute writes the rows: so a row changes, and
+    its updated_at moves, only when its figures changed since the night before.
+    The review lists go to review_dir (default data/out/review).
+    """
+    from . import merges, value_checks
+
+    stamp = now or now_iso()
+    review = review_dir or config.OUT_DIR / "review"
+    try:
+        merged = merges.apply(conn, now=stamp)
+        flags = value_checks.compute(conn, now=stamp)
+        result = recompute(conn, now=stamp)
+    except BaseException:
+        conn.rollback()
+        raise
+    notices = [n for n in (merges.write_review(merged, review / merges.REVIEW_FILE, stamp=stamp),
+                           value_checks.write_review(flags, review / value_checks.REVIEW_FILE, stamp=stamp)) if n]
+    result.update(merged.counts())
+    result["value_flags"] = len(flags)
     log.info("organizations: %s", result)
-    log_run(conn, "organizations",
-            detail=f"organizations={result['organizations']} updated={result['updated']} removed={result['removed']}",
-            rows_in=result["organizations"], rows_new=result["updated"])
+    detail = (f"organizations={result['organizations']} updated={result['updated']} removed={result['removed']} "
+              + " ".join(f"{k}={v}" for k, v in merged.counts().items()) + f" value_flags={len(flags)}")
+    log_run(conn, "organizations", detail=detail, rows_in=result["organizations"], rows_new=result["updated"],
+            notice=" | ".join(notices) or None)
     return result

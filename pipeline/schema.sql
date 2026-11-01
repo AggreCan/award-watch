@@ -55,6 +55,10 @@ CREATE TABLE IF NOT EXISTS organizations (
   total_history REAL,
   total_contracts REAL,
   total_grants REAL,
+  n_awards_no_value INTEGER NOT NULL DEFAULT 0,  -- contracts or agreements counted in n_* whose source published no
+  n_history_no_value INTEGER NOT NULL DEFAULT 0, -- value (NULL, never 0): left out of the total beside it
+  n_contracts_no_value INTEGER NOT NULL DEFAULT 0,
+  n_grants_no_value INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_org_norm ON organizations(norm_name);
@@ -145,6 +149,9 @@ CREATE TABLE IF NOT EXISTS buyers (
   total_awards REAL,
   total_contracts REAL,
   total_grants REAL,
+  n_awards_no_value INTEGER NOT NULL DEFAULT 0,  -- records counted in n_* whose source published no value
+  n_contracts_no_value INTEGER NOT NULL DEFAULT 0,
+  n_grants_no_value INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 );
 
@@ -572,6 +579,7 @@ CREATE TABLE IF NOT EXISTS organization_years (
   total REAL,
   n_non_competitive INTEGER,
   total_non_competitive REAL,
+  n_no_value INTEGER,                            -- records counted in n whose source published no value
   PRIMARY KEY (organization_id, year, source)
 );
 
@@ -584,6 +592,7 @@ CREATE TABLE IF NOT EXISTS buyer_years (
   n_non_competitive INTEGER,
   total_non_competitive REAL,
   n_organizations INTEGER,
+  n_no_value INTEGER,                            -- records counted in n whose source published no value
   PRIMARY KEY (buyer_id, year, source)
 );
 
@@ -608,15 +617,29 @@ CREATE TABLE IF NOT EXISTS directory_pages (
   changed_on TEXT NOT NULL                       -- ISO date: the data date of the export that first wrote this hash
 );
 
--- Organization ids retired by a normalization change (migrate.py), each with
--- the id that took over its records, so a link to an old profile can be sent
--- on. export_static writes it, chains followed to the live id, as
--- aliases/<abc>.json.
+-- Organization ids retired by a normalization change (migrate.py) or merged
+-- into another organization (merges.py), each with the id that took over its
+-- records, so a link to an old profile can be sent on. export_static writes
+-- it, chains followed to the live id, as aliases/<abc>.json.
 CREATE TABLE IF NOT EXISTS organization_aliases (
   old_id TEXT PRIMARY KEY,
   new_id TEXT NOT NULL,
   normalize_version INTEGER NOT NULL,            -- the normalization in force when old_id was retired
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  reason TEXT                                    -- NULL: a normalization change; business_number | truncation | seed:
+                                                 -- a merge, rebuilt every night by merges.py
+);
+
+-- Values to check (value_checks.py), rebuilt whole every night: a record
+-- whose value another record contradicts. The value stays on the record and
+-- is exported with value_flag "check"; no total adds it.
+CREATE TABLE IF NOT EXISTS value_flags (
+  kind TEXT NOT NULL,                            -- award | history | contract
+  key TEXT NOT NULL,                             -- the reference; '<owner_org>:<procurement_id>' for a published contract
+  rule TEXT NOT NULL,                            -- other_source | total_vs_amount | currency_abroad (comma-joined)
+  detail TEXT,                                   -- what the rule compared, for the review list
+  computed_at TEXT NOT NULL,
+  PRIMARY KEY (kind, key)
 );
 
 -- The expiring-contracts radar (expiring.py, CLAUDE.md "Expiring-contracts
@@ -655,6 +678,12 @@ CREATE TABLE IF NOT EXISTS expiring_contracts (
   provinces TEXT,                                -- JSON list of delivery provinces
   entered_3m TEXT,                               -- the data date on which the row entered the 3-month window (the feed's
                                                  -- entry date, carried over between rebuilds); NULL outside the window
+  client_buyer_id TEXT,                          -- the client department: from a published contract or history record
+                                                 -- the duplicate rule dropped against this row, else the row's own
+                                                 -- (history: its client; contract: its department; award: its end user)
+  client_buyer_name TEXT,                        -- the client's English name (the end user as published when unmatched)
+  client_buyer_name_fr TEXT,
+  value_flag TEXT,                               -- 'check' when value_flags lists the contract (value_checks.py)
   computed_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_expiring_end ON expiring_contracts(end);

@@ -22,7 +22,11 @@ organizations.recompute applies to the all-time totals):
 A record with no date in its source's date column has no year: it counts in
 the all-time figures and in no yearly row (the log row says how many).
 Counters (n) count what the totals add up, including the contracts a total
-leaves out (another currency, cancelled). Competitive or not comes from the
+leaves out (another currency, cancelled, no value published, a value flagged
+for checking). A value the source did not publish is NULL, never 0, and
+n_no_value beside each total counts the records left out that way; a value
+value_checks.py flagged is left out of every total and kept on its record
+(organizations.award_value and the other rules there). Competitive or not comes from the
 stored competitive column (procurementMethod for awards and history,
 solicitation_procedure for published contracts); grants have none, so their
 non-competitive columns are NULL. A total is NULL when nothing in it was
@@ -50,44 +54,42 @@ from .sources import canadabuys
 log = logging.getLogger(__name__)
 
 # Bumped when a counting rule changes, so a reader can tell which rules a
-# figure was computed under.
-RULES_VERSION = 1
+# figure was computed under. 2: a value the source did not publish is NULL
+# (no longer 0), and a value flagged for checking is left out of the totals.
+RULES_VERSION = 2
 
-AWARD_VALUE = (
-    "CASE WHEN UPPER(TRIM(COALESCE(currency, ''))) NOT IN ('', 'CAD') THEN NULL "
-    "WHEN status = 'cancelled' THEN 0 "
-    "WHEN total_value > 0 THEN total_value "
-    "ELSE COALESCE(amount, 0) END"
-)
-CONTRACT_VALUE = (
-    "CASE WHEN instrument_type = 'A' OR (amendment_value IS NOT NULL AND amendment_value != 0) THEN amendment_value "
-    "WHEN original_value IS NOT NULL THEN original_value "
-    "ELSE value END"
-)
+# The rules as they read a version row, without the value checks: the value
+# a row shows (expiring.py, the export) as against the value a total adds.
+AWARD_VALUE = organizations.award_value("award", checked=False)
+CONTRACT_VALUE = organizations.CONTRACT_OWN
 
 
 def _year(column: str) -> str:
     return f"CASE WHEN {column} GLOB '[0-9][0-9][0-9][0-9]-*' THEN CAST(substr({column}, 1, 4) AS INTEGER) END"
 
 
-# One row per counted record: its source, organization, buyer, year, value and competitiveness.
+# One row per counted record: its source, organization, buyer, year, the value a total adds (NULL when another
+# currency, not published or flagged), competitiveness, 1 when the source published no value, 1 when flagged.
+RECORD_COLUMNS = ("source", "org", "buyer", "year", "v", "comp", "nv", "chk")
 RECORDS = {
     "awards": (
         f"WITH newest AS ({organizations._newest_by_reference('awards', ('reference',))}) "
-        f"SELECT 'awards', org, buyer_id, {_year('awarded')}, {AWARD_VALUE}, competitive FROM newest"
+        f"SELECT 'awards', org, buyer_id, {_year('awarded')}, {organizations.award_value('award')}, competitive, "
+        f"{organizations.AWARD_NO_VALUE}, {organizations.award_flagged('award')} FROM newest"
     ),
     "history": (
         f"WITH newest AS ({organizations._newest_by_reference('contract_history', ('reference',))}) "
-        f"SELECT 'history', org, COALESCE(client_id, buyer_id), {_year('awarded')}, {AWARD_VALUE}, competitive "
-        "FROM newest"
+        f"SELECT 'history', org, COALESCE(client_id, buyer_id), {_year('awarded')}, "
+        f"{organizations.award_value('history')}, competitive, {organizations.AWARD_NO_VALUE}, "
+        f"{organizations.award_flagged('history')} FROM newest"
     ),
     "contracts": (
-        f"SELECT 'contracts', organization_id, buyer_id, {_year('contract_date')}, {CONTRACT_VALUE}, competitive "
-        "FROM contracts"
+        f"SELECT 'contracts', organization_id, buyer_id, {_year('contract_date')}, {organizations.CONTRACT_CHECKED}, "
+        f"competitive, {organizations.CONTRACT_NO_VALUE}, {organizations.CONTRACT_FLAGGED} FROM contracts"
     ),
     "grants": (
         f"WITH newest AS ({organizations._newest_by_reference('grants', ('owner_org', 'reference'))}) "
-        f"SELECT 'grants', org, buyer_id, {_year('start')}, value, NULL FROM newest"
+        f"SELECT 'grants', org, buyer_id, {_year('start')}, value, NULL, {organizations.GRANT_NO_VALUE}, 0 FROM newest"
     ),
 }
 SOURCES = tuple(RECORDS)
@@ -97,27 +99,33 @@ _NON_COMPETITIVE = (
     "ROUND(SUM(CASE WHEN comp = 0 THEN v END), 2)",
 )
 BUYER_FIELDS = ("n_tenders", "n_awards", "n_history", "n_contracts", "n_grants", "total_awards", "total_contracts",
-                "total_grants")
+                "total_grants", "n_awards_no_value", "n_contracts_no_value", "n_grants_no_value")
+
+
+def load_records(conn: sqlite3.Connection, table: str) -> None:
+    """Fill a new temporary table with RECORDS (indicators and the export each build their own)."""
+    conn.execute(f"DROP TABLE IF EXISTS temp.{table}")
+    conn.execute(f"CREATE TEMP TABLE {table} (source TEXT, org TEXT, buyer TEXT, year INTEGER, v REAL, comp INTEGER, "
+                 "nv INTEGER, chk INTEGER)")
+    for sql in RECORDS.values():
+        conn.execute(f"INSERT INTO temp.{table} ({', '.join(RECORD_COLUMNS)}) {sql}")
 
 
 def _load_records(conn: sqlite3.Connection) -> None:
-    conn.execute("DROP TABLE IF EXISTS temp.indicator_records")
-    conn.execute("CREATE TEMP TABLE indicator_records (source TEXT, org TEXT, buyer TEXT, year INTEGER, v REAL, "
-                 "comp INTEGER)")
-    for sql in RECORDS.values():
-        conn.execute(f"INSERT INTO temp.indicator_records (source, org, buyer, year, v, comp) {sql}")
+    load_records(conn, "indicator_records")
 
 
 def _buyer_figures(conn: sqlite3.Connection) -> dict[str, dict[str, object]]:
     figures: dict[str, dict[str, object]] = {}
-    for buyer, source, n, total in conn.execute(
-        "SELECT buyer, source, COUNT(*), ROUND(SUM(v), 2) FROM temp.indicator_records WHERE buyer IS NOT NULL "
+    for buyer, source, n, total, no_value in conn.execute(
+        "SELECT buyer, source, COUNT(*), ROUND(SUM(v), 2), SUM(nv) FROM temp.indicator_records WHERE buyer IS NOT NULL "
         "GROUP BY buyer, source"
     ):
         entry = figures.setdefault(buyer, {})
         entry[f"n_{source}"] = n
         if source != "history":  # buyers keep no history total (schema.sql)
             entry[f"total_{source}"] = total
+            entry[f"n_{source}_no_value"] = no_value or 0
     for buyer, n in conn.execute(
         "SELECT buyer_id, COUNT(*) FROM tenders t WHERE buyer_id IS NOT NULL "
         "AND amendment = (SELECT MAX(y.amendment) FROM tenders y WHERE y.reference = t.reference) GROUP BY buyer_id"
@@ -134,15 +142,15 @@ def compute(conn: sqlite3.Connection, *, now: str | None = None) -> dict[str, in
         conn.execute("DELETE FROM organization_years")
         conn.execute(
             "INSERT INTO organization_years (organization_id, year, source, n, total, n_non_competitive, "
-            f"total_non_competitive) SELECT org, year, source, COUNT(*), ROUND(SUM(v), 2), {_NON_COMPETITIVE[0]}, "
-            f"{_NON_COMPETITIVE[1]} FROM temp.indicator_records WHERE org IS NOT NULL AND year IS NOT NULL "
-            "GROUP BY org, year, source"
+            f"total_non_competitive, n_no_value) SELECT org, year, source, COUNT(*), ROUND(SUM(v), 2), "
+            f"{_NON_COMPETITIVE[0]}, {_NON_COMPETITIVE[1]}, SUM(nv) FROM temp.indicator_records "
+            "WHERE org IS NOT NULL AND year IS NOT NULL GROUP BY org, year, source"
         )
         conn.execute("DELETE FROM buyer_years")
         conn.execute(
             "INSERT INTO buyer_years (buyer_id, year, source, n, total, n_non_competitive, total_non_competitive, "
-            f"n_organizations) SELECT buyer, year, source, COUNT(*), ROUND(SUM(v), 2), {_NON_COMPETITIVE[0]}, "
-            f"{_NON_COMPETITIVE[1]}, COUNT(DISTINCT org) FROM temp.indicator_records "
+            f"n_organizations, n_no_value) SELECT buyer, year, source, COUNT(*), ROUND(SUM(v), 2), "
+            f"{_NON_COMPETITIVE[0]}, {_NON_COMPETITIVE[1]}, COUNT(DISTINCT org), SUM(nv) FROM temp.indicator_records "
             "WHERE buyer IS NOT NULL AND year IS NOT NULL GROUP BY buyer, year, source"
         )
         figures = _buyer_figures(conn)
