@@ -217,8 +217,9 @@ def test_every_file_passes_the_site_checks(exported):
     conn, out, ids, _ = exported
     stats = load(out, "stats.json")
     assert s(stats["data_as_of"]) and all(num(v) for v in stats["counts"].values())
-    assert set(stats["counts"]) == {"organizations", "buyers", "tenders_open", "tenders_new_today", "awards", "history",
-                                    "contracts", "grants", "lobbying"}
+    assert set(stats["counts"]) == {"organizations", "buyers", "tenders_open", "tenders_new_today",
+                                    "tenders_closing_soon", "awards", "awards_year", "history", "contracts", "grants",
+                                    "lobbying"}
     assert every(stats["new_tenders"], tender_row) and every(stats["closing_soon"], tender_row)
     assert every(stats["recent_awards"], award_row) and every(stats["top_organizations_year"], org_total)
     assert every(stats["runs"], lambda r: s(r["run_at"]) and s(r["source"]) and num_or_none(r["rows_new"]))
@@ -302,7 +303,10 @@ def test_counts_and_home_lists(exported):
     stats = load(out, "stats.json")
     assert stats["data_as_of"] == "2026-10-31"
     assert stats["counts"] == {"organizations": 3, "buyers": 2, "tenders_open": 4, "tenders_new_today": 2,
-                               "awards": 6, "history": 2, "contracts": 2, "grants": 1, "lobbying": 1}
+                               "tenders_closing_soon": 1, "awards": 6, "awards_year": 3, "history": 2, "contracts": 2,
+                               "grants": 1, "lobbying": 1}
+    # The year's count is the year's award pages' row count.
+    assert stats["counts"]["awards_year"] == load(out, "awards/2026/index.json")["rows"]
     assert [r["reference"] for r in stats["closing_soon"]] == ["cb-200-2"]
     # The backlog notice was first seen today but published in 2024: not news.
     assert sorted(r["reference"] for r in stats["new_tenders"]) == ["SSC-26-00035339-T", "cb-200-2"]
@@ -407,6 +411,7 @@ def test_counting_rules_on_rows_and_profiles(exported):
 def test_open_first_counts_every_open_notice_and_award_years_are_paged(conn, tmp_path, monkeypatch):
     seed(conn)
     monkeypatch.setattr(es, "OPEN_FIRST_ROWS", 1)
+    monkeypatch.setattr(es, "HOME_ROWS", 0)
     monkeypatch.setattr(es, "AWARD_PAGE", 2)
     out = tmp_path / "static"
     es.export_static(conn, out, today=TODAY, base_url=BASE)
@@ -420,6 +425,9 @@ def test_open_first_counts_every_open_notice_and_award_years_are_paged(conn, tmp
     assert [r["awarded"] for r in load(out, "awards/2026/1.json")] == ["2026-10-20", "2026-08-08"]
     assert [r["reference"] for r in load(out, "awards/2026/2.json")] == ["AW-1"]
     assert not (out / "awards" / "2026.json").exists()
+    # The closing-soon count covers every open notice, not the home page's list.
+    stats = load(out, "stats.json")
+    assert stats["closing_soon"] == [] and stats["counts"]["tenders_closing_soon"] == 1
 
 
 def test_the_export_is_deterministic(conn, tmp_path):

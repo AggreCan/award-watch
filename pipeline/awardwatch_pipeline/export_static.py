@@ -626,11 +626,15 @@ def source_files(conn: sqlite3.Connection) -> list[dict]:
     return sorted(seen.values(), key=lambda e: (SOURCE_ORDER.index(e["source"]), e["file"]))
 
 
+def closing_soon(m: Model, open_rows: list[dict]) -> list[dict]:
+    """The open notices whose closing falls within CLOSING_SOON_DAYS of the data date, soonest first."""
+    soon_end = (m.today + timedelta(days=CLOSING_SOON_DAYS)).isoformat()
+    return [r for r in open_rows if r["closing"] and m.as_of <= r["closing"][:10] <= soon_end]
+
+
 def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[dict], new_today: list[dict],
                 top_year: list[dict]) -> dict:
     conn = m.conn
-    soon_end = (m.today + timedelta(days=CLOSING_SOON_DAYS)).isoformat()
-    closing_soon = [r for r in open_rows if r["closing"] and m.as_of <= r["closing"][:10] <= soon_end][:HOME_ROWS]
     recent = [row for r in conn.execute(
         "SELECT * FROM x_awards ORDER BY published DESC, awarded DESC, reference LIMIT ?", (HOME_ROWS * 2,))
         if (row := award_row(m, "awards", r))][:HOME_ROWS]
@@ -642,7 +646,7 @@ def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[
         "data_as_of": m.as_of,
         "counts": counts,
         "new_tenders": sorted(new_today, key=lambda r: (r["published"] or "", r["reference"]), reverse=True)[:HOME_ROWS],
-        "closing_soon": closing_soon,
+        "closing_soon": closing_soon(m, open_rows)[:HOME_ROWS],
         "recent_awards": recent,
         "top_organizations_year": top_year,
         "runs": runs,
@@ -1497,7 +1501,12 @@ def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: st
         "buyers": len(listed_buyers(conn) & set(m.buyers)),
         "tenders_open": len(open_rows),
         "tenders_new_today": len(new_today),
+        # The whole count, where the home page's list holds twelve rows.
+        "tenders_closing_soon": len(closing_soon(m, open_rows)),
         "awards": conn.execute("SELECT COUNT(*) FROM x_awards").fetchone()[0],
+        # One per reference, as awards/<year>/index.json counts the year's rows.
+        "awards_year": conn.execute("SELECT COUNT(*) FROM x_awards WHERE substr(awarded, 1, 4) = ?",
+                                    (str(m.year),)).fetchone()[0],
         "history": conn.execute("SELECT COUNT(*) FROM x_history").fetchone()[0],
         "contracts": conn.execute("SELECT COUNT(*) FROM contracts").fetchone()[0],
         "grants": conn.execute("SELECT COUNT(*) FROM x_grants").fetchone()[0],
