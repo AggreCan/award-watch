@@ -90,10 +90,11 @@ def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: in
                  pages: Sequence[str] = FIXED_PAGES) -> list[str]:
     """The fixed pages, then the tender notices with a version first seen on
     the run's day or later and the categories they fall in, then the buyers
-    and the organizations changed at or after since (the most recently
+    the export lists and the organizations changed at or after since (the most recently
     changed first, ties by id), without repeats and at most cap in all.
     Raises ValueError for a since that is not ISO, and sqlite3.Error when a
     table cannot be read."""
+    from .export import listed_buyer_ids
     from .export_static import read_segments, url_reference
 
     base = site_url.rstrip("/")
@@ -125,10 +126,14 @@ def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: in
         touched.update(c[:2] for c in (codes or "").split() if c[:2] in segments)
     for code in sorted(touched):
         add(f"/categories/{code}")
+    # Only a buyer the export lists has a page (export.LISTED_BUYER, on the export's data date).
+    as_of = (conn.execute("SELECT value FROM meta WHERE key = 'data_as_of'").fetchone() or (stamp[:10],))[0]
+    listed = listed_buyer_ids(conn, as_of)
     for table, prefix in (("buyers", "/buyers/"), ("organizations", "/organizations/")):
         for (rid,) in conn.execute(f"SELECT id FROM {table} WHERE updated_at >= ? ORDER BY updated_at DESC, id LIMIT ?",
                                    (stamp, limit)):
-            add(prefix + rid)
+            if table != "buyers" or rid in listed:
+                add(prefix + rid)
     return urls
 
 

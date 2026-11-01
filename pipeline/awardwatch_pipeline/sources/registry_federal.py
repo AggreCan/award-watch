@@ -75,8 +75,13 @@ def parse_extract(data: bytes, source_url: str) -> list[tuple]:
     return rows
 
 
-def load_extract(conn: sqlite3.Connection, client: PoliteClient) -> int:
-    """Download (cached) and load both files; returns rows loaded this run."""
+def load_extract(conn: sqlite3.Connection, client: PoliteClient, *, now: str | None = None) -> int:
+    """Download (cached) and load both files; returns rows loaded this run.
+
+    Each file read records when ("registry:<file>:read_at") and the
+    Last-Modified the host gave it ("registry:<file>:last_modified"), which
+    the Data page shows (export_static.source_files).
+    """
     loaded = 0
     for url in URLS:
         try:
@@ -84,8 +89,14 @@ def load_extract(conn: sqlite3.Connection, client: PoliteClient) -> int:
         except FetchError as exc:
             log.warning("federal extract %s: %s", url, exc)
             continue
+        name = url.rsplit("/", 1)[-1]
+        set_meta(conn, f"registry:{name}:read_at", now or now_iso())
+        last_modified = client.cached_headers(url).get("last_modified")
+        if last_modified:
+            set_meta(conn, f"registry:{name}:last_modified", last_modified)
+        conn.commit()
         marker = f"{hashlib.sha256(data).hexdigest()}:v{PARSER_VERSION}"
-        key = f"federal_extract_sha:{url.rsplit('/', 1)[-1]}"
+        key = f"federal_extract_sha:{name}"
         if get_meta(conn, key) == marker:
             continue
         rows = parse_extract(data, url)
@@ -161,7 +172,7 @@ def match(conn: sqlite3.Connection, *, now: str | None = None) -> int:
 def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | None = None,
         download: bool = True) -> int:
     """The registry stage. Without download (a samples run) the corporations already loaded are matched."""
-    loaded = load_extract(conn, client) if download and client is not None else 0
+    loaded = load_extract(conn, client, now=now) if download and client is not None else 0
     total = conn.execute("SELECT COUNT(*) FROM federal_corporations").fetchone()[0]
     matched = match(conn, now=now) if total else 0
     notice = None if download else "Corporations Canada extract not downloaded (samples run)"

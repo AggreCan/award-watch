@@ -87,7 +87,8 @@ def test_entries_name_the_notice_and_never_a_withheld_supplier(conn, tmp_path):
     _, tenders = entries(tmp_path, "feeds/canada/tenders.xml")
     slash = next(e for e in tenders if e.findtext(f"{A}id") == "tag:awardwatch.ca,2026:tender/ssc-26-00035339-t")
     assert slash.find(f"{A}link[@hreflang='en']").get("href") == f"{BASE}/tenders/ssc-26-00035339-t"
-    assert slash.find(f"{A}link[@rel='via']").get("href").endswith("/tender-notice/ssc-26-00035339%3At")
+    # CanadaBuys serves the notice at its reference with the colon removed.
+    assert slash.find(f"{A}link[@rel='via']").get("href").endswith("/tender-notice/ssc-26-00035339t")
     assert slash.findtext(f"{A}title") == "Network gear / Network gear (fr)"
 
 
@@ -129,3 +130,28 @@ def test_static_export_writes_the_feeds(conn, tmp_path):
     seed(conn)
     counts = export_static.export_static(conn, tmp_path / "static", today=TODAY, base_url=BASE)
     assert counts["feeds"] >= 2 and (tmp_path / "static" / "feeds" / "canada" / "awards.xml").exists()
+
+
+def test_the_tenders_feed_leaves_out_a_notice_past_its_closing_day(conn, tmp_path):
+    seed(conn)
+    tender(conn, "cb-yesterday", 0, title="Closed yesterday", closing="2026-10-30T14:00:00")
+    tender(conn, "cb-today", 0, title="Closes today", closing="2026-10-31T14:00:00")
+    tender(conn, "cb-tomorrow", 0, title="Closes tomorrow", closing="2026-11-01T09:00:00")
+    conn.commit()
+    write(conn, tmp_path)
+    _, rows = entries(tmp_path, "feeds/canada/tenders.xml")
+    ids = {e.findtext(f"{A}id").rsplit("/", 1)[1] for e in rows}
+    assert {"cb-today", "cb-tomorrow"} <= ids and "cb-yesterday" not in ids
+
+
+def test_the_notice_address_on_canadabuys_drops_colons_and_keeps_slashes():
+    """Checked against canadabuys.canada.ca and achatscanada.canada.ca on 2026-11-01: a colon reference is
+    served with its colons removed (the escaped form, ssc-26-00035339%3at, answers 404); a slash
+    reference keeps its slashes as path separators."""
+    assert feeds.notice_path("SSC-26-00035339:T") == "ssc-26-00035339t"
+    assert feeds.notice_path("SSC-26-00040563:A:1") == "ssc-26-00040563a1"
+    assert feeds.notice_path("W2585-220001:004:WPG") == "w2585-220001004wpg"
+    assert feeds.notice_path("01044-221065/001/PI") == "01044-221065/001/pi"
+    assert feeds.notice_path("W8484-210010/001/PI") == "w8484-210010/001/pi"
+    assert feeds.notice_path("EE520-221500/001/QCM") == "ee520-221500/001/qcm"
+    assert feeds.notice_path("cb-100-1") == "cb-100-1"

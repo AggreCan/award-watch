@@ -52,6 +52,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from . import organizations
 from .db import log_run, now_iso
+from .sources.buyers import public_spelling
 
 log = logging.getLogger(__name__)
 
@@ -134,9 +135,8 @@ class _Names:
     def buyer(self, buyer_id: str | None, raw_en: object = None, raw_fr: object = None) -> tuple[str | None, str | None]:
         if buyer_id in self.buyers:
             return self.buyers[buyer_id]
-        en = str(raw_en).strip() if raw_en else None
-        fr = str(raw_fr).strip() if raw_fr else None
-        return en or None, fr or None
+        # A spelling that names or locates a person is never shown.
+        return public_spelling(raw_en), public_spelling(raw_fr)
 
 
 def notice_candidates(conn: sqlite3.Connection, kind: str, names: _Names, first: str, last: str,

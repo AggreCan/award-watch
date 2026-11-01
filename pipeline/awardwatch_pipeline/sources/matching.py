@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -111,9 +112,14 @@ NOT_PERSONS_PATH = config.PACKAGE_DATA / "not_persons.csv"
 GIVEN_NAMES_PATH = config.PACKAGE_DATA / "given_names.txt"
 # Raised whenever is_person_name reads a name differently (its rules, the
 # given-name list, not_persons.csv) or a withheld row keeps something else
-# (5: the name is also taken out of the row's free text), so that the next run
-# reads every file again and recomputes the withheld rows (refresh_person_test).
-PERSON_TEST_VERSION = 5
+# (5: the name is also taken out of the row's free text; 6: a name that carries
+# an email address is withheld too), so that the next run reads every file
+# again and recomputes the withheld rows (refresh_person_test).
+PERSON_TEST_VERSION = 6
+# An email address written in a name field ("chemistryanalyzer@outlook.com",
+# "Canada@carahsoft.com"): a contact detail, often a person's, withheld like a
+# person's name.
+EMAIL_IN_NAME_RE = re.compile(r"[\w.+%'-]+@[\w-]+(?:\.[\w-]+)+")
 PERSON_TEST_KEY = "person_test_version"
 # The meta keys that let a loader skip a file: checksums, the validators of
 # its conditional request, and the weekly check. A refused lobbying download
@@ -333,8 +339,10 @@ def not_persons(path: Path | None = None) -> frozenset[str]:
 def is_person_name(name: object) -> bool:
     """True when a record's name is to be read as a private individual's.
 
-    Every one of these must hold, so that a firm is not withheld for lacking
-    a legal form:
+    A name that carries an email address is withheld whatever else it says
+    (EMAIL_IN_NAME_RE): the address is a contact detail, which is never
+    published, and often a person's own. Otherwise every one of these must
+    hold, so that a firm is not withheld for lacking a legal form:
 
     * not a placeholder, and not on the list in data/not_persons.csv;
     * no connector ("&", "and", "et") anywhere in the name;
@@ -347,6 +355,8 @@ def is_person_name(name: object) -> bool:
     * and the legal part carries a given name (carries_given_name): without
       one, "Eastern Partitions" and "Surrey Place" read as people.
     """
+    if EMAIL_IN_NAME_RE.search(str(name or "")):
+        return True
     text = first_language(name)
     if not text or is_placeholder(text) or CONNECTOR_RE.search(text):
         return False
@@ -395,29 +405,54 @@ class PersonDrops:
             if len(self.names) < self.limit:
                 self.names.append(name)
 
-    def write(self, path: Path, *, what: str, stamp: str, withheld: str = "supplier withheld") -> str | None:
-        """Write (or, with nothing withheld, remove) the review list; returns the notice line.
+    def write(self, path: Path, *, what: str, stamp: str, withheld: str = "supplier withheld",
+              buyers: Sequence[tuple[str, str]] = (), buyer_rows: int | None = None) -> str | None:
+        """Write (or, with nothing to list, remove) the review list; returns the notice line.
 
         withheld says what was withheld in the source's own terms ("vendor
-        withheld", "recipient withheld", "client withheld").
+        withheld", "recipient withheld", "client withheld"). buyers are the
+        buyer spellings that name no institution (sources/buyers.take_rejects,
+        as (reason, spelling)), listed after the names in a section of their
+        own; buyer_rows is how many rows carry them, when the stage counts them.
         """
-        if not self.rows:
+        if not self.rows and not buyers:
             path.unlink(missing_ok=True)
             return None
         path.parent.mkdir(parents=True, exist_ok=True)
-        header = [
-            f"# {what}: names the person test read as private individuals, run of {stamp}.",
-            f"# {self.rows} rows, {len(self.seen)} names; the first {len(self.names)} are listed. Their records were",
-            "# stored with the name withheld. A firm listed here belongs in awardwatch_pipeline/data/not_persons.csv",
-            "# (its normalized name). This file is for the operator: no step exports, logs or uploads it.",
-        ]
-        path.write_text("\n".join(header + self.names) + "\n", encoding="utf-8")
+        lines: list[str] = []
+        if self.rows:
+            lines += [
+                f"# {what}: names the person test read as private individuals or as email addresses, "
+                f"run of {stamp}.",
+                f"# {self.rows} rows, {len(self.seen)} names; the first {len(self.names)} are listed. Their records "
+                "were",
+                "# stored with the name withheld. A firm listed here belongs in awardwatch_pipeline/data/not_persons.csv",
+                "# (its normalized name). This file is for the operator: no step exports, logs or uploads it.",
+                *self.names,
+            ]
+        on_rows = f" on {buyer_rows} rows" if buyer_rows is not None else ""
+        if buyers:
+            lines += [
+                f"# {what}: buyer spellings that name no institution (sources/buyers.non_institution), run of {stamp}.",
+                f"# {len(buyers)} spellings{on_rows}. The records keep the spelling in their raw columns",
+                "# and count under no buyer. A spelling that names an institution belongs in",
+                "# awardwatch_pipeline/data/buyers.csv. One per line: the reason, a tab, the spelling. This file is for",
+                "# the operator: no step exports, logs or uploads it.",
+                *(f"{reason}\t{spelling}" for reason, spelling in buyers),
+            ]
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         try:
             shown = path.relative_to(config.REPO_ROOT).as_posix()
         except ValueError:
             shown = str(path)
-        return (f"{self.rows} rows ({len(self.seen)} names) read as private individuals, {withheld}; "
-                f"the first {len(self.names)} names are listed for review in {shown}")
+        parts = []
+        if self.rows:
+            parts.append(f"{self.rows} rows ({len(self.seen)} names) read as private individuals, {withheld}; "
+                         f"the first {len(self.names)} names are listed for review in {shown}")
+        if buyers:
+            parts.append(f"{len(buyers)} buyer spellings{on_rows} name no institution and count under "
+                         f"no buyer; listed for review in {shown}")
+        return "; ".join(parts)
 
 
 def business_name(name: object) -> str | None:

@@ -132,3 +132,15 @@ def test_a_new_person_test_makes_every_loader_read_its_files_again(conn):
     set_meta(conn, "contracts:sha256", "y")
     assert matching.refresh_person_test(conn) is False
     assert get_meta(conn, "contracts:sha256") == "y"
+
+
+
+def test_a_name_that_carries_an_email_address_is_withheld():
+    from awardwatch_pipeline.sources import matching
+    for name in ("chemistryanalyzer@outlook.com", "Canada@carahsoft.com", "sgevry@tenco.ca",
+                 "Le_ludovik_traiteur@icloud.com",
+                 "Ionicon Analytk Gesellschaft m.b.H. Eduard-Bodem-Gasse 3 6020 Innsbruck Austria office@ionicon.com"):
+        assert matching.is_person_name(name), name
+        assert matching.business_name(name) is None
+    # An at sign that is no address leaves the name to the rest of the test.
+    assert not matching.is_person_name("Smith @ Home Renovations Ltd")

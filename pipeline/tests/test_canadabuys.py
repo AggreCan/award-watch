@@ -208,12 +208,13 @@ def test_history_rows_keep_the_client_and_resolve_it_from_the_english_list(conn,
                             "WHERE reference = 'CW2446091' ORDER BY amendment").fetchall()
     assert [v[0] for v in versions] == [0, 1, 2]
     assert {v["buyer_id"] for v in versions} == {"pwgsc-tpsgc"} and {v["client_id"] for v in versions} == {"dnd-mdn"}
-    # English "Canadian Coast Guard / DND", French in the other order: the client is the Coast Guard.
+    # English "Canadian Coast Guard / DND", French in the other order: the client is the Coast Guard,
+    # which the seed places in Fisheries and Oceans.
     row = conn.execute("SELECT client_id, client_raw_en FROM contract_history WHERE reference = 'CW2439364'").fetchone()
-    assert row["client_id"] == "canadian-coast-guard"
+    assert row["client_id"] == "dfo-mpo"
     assert row["client_raw_en"].startswith("Canadian Coast Guard (CCG) / ")
     assert conn.execute("SELECT buyer_id FROM buyer_names WHERE raw_name = 'Canadian Coast Guard (CCG)'").fetchone()[0] \
-        == "canadian-coast-guard"
+        == "dfo-mpo"
     # The titles and the contracting entity's spelling are kept.
     first = conn.execute("SELECT title_en, title_fr, buyer_raw_en, buyer_raw_fr, supplier_withheld FROM contract_history "
                          "WHERE reference = 'CW2446091' AND amendment = 0").fetchone()
@@ -396,3 +397,59 @@ def test_organizations_upsert_place_key():
     assert organizations.place_key(None, None, "St. John's", "A1C 5M2") == ("CA", "NL", "St. John's", "A1C 5M2")
     assert organizations.place_key("USA", "Texas", "Austin", "78701") == ("US", "", "Austin", "78701")
     assert organizations.place_key(None, None, None, None) == ("", "", "", "")
+
+
+def test_a_buyer_spelling_that_names_no_institution_is_listed_for_review_never_logged(conn, seeded, fixtures,
+                                                                                      tmp_path, out_dir):
+    """The night of 2026-11-01 made buyers of contracting officers' names, job titles and addresses. The
+    record now keeps the spelling and links to no buyer; the spellings go to the stage's review file."""
+    header, rows = read_csv(fixtures / FILES["tenders"])
+    en, fr = "contractingEntityName-nomEntitContractante-eng", "contractingEntityName-nomEntitContractante-fra"
+    spellings = {0: "Adam Cheung", 1: "Contract Administrator", 2: "200 Promenade Portage",
+                 3: "À l'attention de : Matt MacDonald"}
+    for i, spelling in spellings.items():
+        rows[i][en] = rows[i][fr] = spelling
+    rows[4][en], rows[4][fr] = "Public Works and Government Services Canada", "Travaux publics et Services gouvernementaux Canada"
+    (tmp_path / "s").mkdir()
+    write_csv(tmp_path / "s" / "newTenderNotice.csv", header, rows)
+    canadabuys.run(conn, None, "tenders", now=DAY1, samples=tmp_path / "s")
+
+    refs = [r["referenceNumber-numeroReference"] for r in rows]
+    for i, spelling in spellings.items():
+        row = conn.execute("SELECT buyer_id, buyer_raw_en FROM tenders WHERE reference = ?", (refs[i],)).fetchone()
+        assert row["buyer_id"] is None and row["buyer_raw_en"] == spelling
+    assert conn.execute("SELECT buyer_id FROM tenders WHERE reference = ?", (refs[4],)).fetchone()[0] == "pwgsc-tpsgc"
+    assert not conn.execute("SELECT 1 FROM buyers WHERE id IN ('adam-cheung', 'contract-administrator', "
+                            "'200-promenade-portage')").fetchall()
+
+    review = (out_dir / "review" / "tenders-persons.txt").read_text(encoding="utf-8").splitlines()
+    assert [line for line in review if not line.startswith("#")] == [
+        "person\tAdam Cheung", "job title\tContract Administrator", "street address\t200 Promenade Portage",
+        "attention line\tÀ l'attention de : Matt MacDonald"]
+    log = conn.execute("SELECT detail, notice FROM sources_log WHERE source = 'tenders'").fetchone()
+    assert "4 buyer spellings on 4 rows name no institution" in log["notice"] and "tenders-persons.txt" in log["notice"]
+    for spelling in spellings.values():
+        assert spelling not in log["notice"] and spelling not in log["detail"]
+
+
+
+def test_a_supplier_named_by_an_email_address_is_withheld_like_a_person(conn, fixtures, tmp_path, out_dir):
+    """Five supplier names in the files are email addresses ("chemistryanalyzer@outlook.com"). They are
+    withheld at load like a person's name: the record stays, nothing names the supplier, and the spelling
+    goes to the review file only."""
+    header, rows = read_csv(fixtures / FILES["awards"])
+    row = dict(next(r for r in rows if r["referenceNumber-numeroReference"] == "cb-537-68386900"))
+    for column in ("supplierLegalName-nomLegalFournisseur-eng", "supplierLegalName-nomLegalFournisseur-fra"):
+        row[column] = "chemistryanalyzer@outlook.com"
+    (tmp_path / "s").mkdir()
+    write_csv(tmp_path / "s" / "2026-2027-awardNotice.csv", header, [row])
+    canadabuys.run(conn, None, "awards", now=DAY1, samples=tmp_path / "s")
+    award = conn.execute("SELECT * FROM awards WHERE reference = 'cb-537-68386900'").fetchone()
+    assert all(award[c] is None for c in WITHHELD) and award["supplier_withheld"] == 1
+    assert award["title_en"] and award["buyer_id"]
+    for table, column in (("organizations", "display_name"), ("organization_names", "raw_name")):
+        assert conn.execute(f"SELECT 1 FROM {table} WHERE {column} LIKE '%@%'").fetchone() is None
+    review = (out_dir / "review" / "awards-persons.txt").read_text(encoding="utf-8")
+    assert "chemistryanalyzer@outlook.com" in review.splitlines()
+    log = conn.execute("SELECT detail, notice FROM sources_log WHERE source = 'awards'").fetchone()
+    assert "@" not in log["notice"] and "@" not in log["detail"] and "withheld=1" in log["detail"]

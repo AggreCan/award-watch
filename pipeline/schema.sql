@@ -155,6 +155,19 @@ CREATE TABLE IF NOT EXISTS buyer_names (
   PRIMARY KEY (raw_name, source)
 );
 
+-- Buyer ids retired by the buyers stage, each with the live buyer that took
+-- its records, so a link to an old buyer page can be sent on
+-- (sources/buyers.refresh_aliases). Kept from night to night: each night adds
+-- its moves and the seed's re-pointed ids, follows chains to the live id and
+-- drops an alias that leads nowhere or whose old id is a buyer again.
+-- export_static writes it as buyers/aliases.json.
+CREATE TABLE IF NOT EXISTS buyer_aliases (
+  old_id TEXT PRIMARY KEY,
+  new_id TEXT NOT NULL,
+  reason TEXT,                                   -- merged (its spellings resolve to new_id) | seed (re-pointed in the seed)
+  updated_at TEXT
+);
+
 -- ---------------------------------------------------------------------------
 -- CanadaBuys tender notices (sources/canadabuys.py). One row per notice
 -- version: the reference number and its amendment number. The newest

@@ -12,6 +12,7 @@ import argparse
 import logging
 import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -73,8 +74,10 @@ def _export(conn: sqlite3.Connection) -> dict[str, int]:
     sitemaps inside it), which writes the stage's log row. A CSV failure is
     recorded as export_csv and does not hold back the files the site serves;
     it is raised after them, so the stage still reads as failed."""
-    csv_ok = _stage(conn, "export_csv", lambda: export.export_csv(conn))
-    counts = export_static.export_static(conn)
+    # One data date for both, so the CSV and the static files list the same open notices.
+    today = datetime.now(timezone.utc).date()
+    csv_ok = _stage(conn, "export_csv", lambda: export.export_csv(conn, today=today))
+    counts = export_static.export_static(conn, today=today)
     if not csv_ok:
         raise ExportIncomplete("the static files were written; the CSV downloads failed (see export_csv)")
     return counts

@@ -6,7 +6,7 @@ import hashlib
 import math
 import re
 import unicodedata
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 # Bump whenever norm_name or split_trade_name changes what a name normalizes
 # to. Organization ids are a hash of the normalized name, so a change re-keys
@@ -660,6 +660,43 @@ _AWARD_STATUS = {
 def tender_status(raw: object) -> str:
     """open | expired | cancelled | awarded | unknown, from a tender notice's status in either language."""
     return _TENDER_STATUS.get(fold_accents(squash(raw).casefold()), "unknown")
+
+
+def closing_day(closing: object) -> str | None:
+    """The calendar day of a tender's closing as stored (iso_datetime's form), in UTC.
+
+    CanadaBuys gives the closing with no zone, so its date part is the day. A
+    closing that carries a zone is converted to UTC first. None for a blank or
+    anything that is not a date.
+    """
+    m = _DATETIME_RE.match(squash(closing))
+    if not m:
+        return None
+    day, time, zone = m.groups()
+    if not (time and zone):
+        return day
+    try:
+        when = datetime.fromisoformat(f"{day}T{time}{'+00:00' if zone == 'Z' else zone}")
+    except ValueError:
+        return day
+    return when.astimezone(timezone.utc).date().isoformat()
+
+
+def tender_status_on(status: object, closing: object, as_of: str) -> str:
+    """A tender notice's status on the data date (as_of, an ISO date): the status stored from the
+    source, except that an open notice whose closing day (closing_day) is before as_of is closed.
+
+    CanadaBuys' open-notice file keeps listing some notices for months after
+    they close. A notice closing on as_of itself stays open: the run is at
+    midnight UTC and the notice is open for the rest of that day. A notice
+    with no closing date keeps its status.
+    """
+    text = squash(status) or "unknown"
+    if text == "open":
+        day = closing_day(closing)
+        if day is not None and day < as_of:
+            return "closed"
+    return text
 
 
 def award_status(raw: object) -> str:

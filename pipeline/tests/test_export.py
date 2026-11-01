@@ -7,9 +7,9 @@ import re
 
 import pytest
 
-from awardwatch_pipeline import export
+from awardwatch_pipeline import export, indicators
 from export_seed import (CONTACT_EMAIL, CONTACT_NAME, PERSON, PERSON_STREET, PROSE_EMAIL, SERVANT, SUPPLIER_STREET,
-                         seed)
+                         TODAY, seed, tender)
 
 
 def rows(path):
@@ -62,9 +62,9 @@ def test_a_year_with_no_rows_left_is_removed_and_files_are_rewritten_whole(conn,
 
 @pytest.mark.parametrize("text", [
     "Questions to generic.inbox@tpsgc-pwgsc.gc.ca.",
-    "Questions to someone @ tpsgc-pwgsc.gc.ca",
+    "Questions to someone @ tpsgc-pwgsc.gc.ca", "Write to someone@ministry",
     "Call 613-555-0142", "Call (819) 555 0123", "Call +1 819 555 0123", "Call +1 (819) 555-0124 ext. 12",
-    "Fax: 6135550199", "Toll free 1-800-555-0100", "Tel. 613.555.0199 poste 2345", "Number 12345678901234",
+    "Fax: 6135550199", "Toll free 1-800-555-0100", "Tel. 613.555.0199 poste 2345",
 ])
 def test_the_scrub_takes_every_address_and_number_form(text):
     for lang, mark in (("en", "[contact removed]"), ("fr", "[coordonnées retirées]")):
@@ -72,12 +72,31 @@ def test_the_scrub_takes_every_address_and_number_form(text):
         assert mark in out and "@" not in out and not re.search(r"\d{7,}", out.replace("-", "").replace(" ", "")), out
 
 
+@pytest.mark.parametrize("phone", [
+    "613-555-0100", "(613) 555-0100", "613.555.0100", "613 555 0100", "+1 613 555 0100", "1-800-555-0100",
+    "613-555-0100 ext. 123", "(613) 555-0100, ext 4", "+1-613-555-0100", "(613)555-0100 x22", "613 555-0100 poste 2345",
+])
+def test_the_scrub_takes_a_telephone_number_in_every_written_form(phone):
+    for text in (phone, f"Call {phone} before noon.", f"Tel: {phone}", f"Phone: {phone}Courriel : x"):
+        out = export.scrub(text)
+        assert "[contact removed]" in out and not re.search(r"\d{3}\D{0,2}\d{4}", out), (text, out)
+    assert export.scrub(f"Téléphone : {phone}", "fr") == "Téléphone : [coordonnées retirées]"
+
+
 @pytest.mark.parametrize("text", [
     "Snow removal, 2026-10-31 to 2027-03-31", "Value $1,234,567.89", "Contract W8486-123456/001/XX",
     "Item 12345678 qty 100", "Postal code K1A 0B1",
+    # What the scrub of 2026-10-30 took from titles and descriptions as contact details.
+    "RFI W8476226540A Deployable Camp Infrastructure and Utilities",
+    "at the following coordinates: 49.060149403918174, -125.72271370346736. The site",
+    "49.0601, -125.7227", "Bids are due January 23 2026 @ 2:00PM EST. Failure to",
+    "WS3779702227 (EN929-231320)", "ProServices SA – 1000309024 ONTARIO INC",
+    "W8484-199273", "WS5176912673", "Doc5303974397", "EN929-231320", "Number 12345678901234",
+    "Part No.: 400-013-4490-41, NCAGE: U1068", "closing at 14:00 EST, 2026-01-23", "2026-01-23 14:00:00",
+    "See solicitation 5000075642R", "https://www.sac-isc.gc.ca/eng/1100100033057/1610797769658",
 ])
-def test_the_scrub_leaves_dates_amounts_and_short_numbers(text):
-    assert export.scrub(text) == text
+def test_the_scrub_leaves_references_coordinates_times_and_numbers_that_are_not_telephones(text):
+    assert export.scrub(text) == text and export.scrub(text, "fr") == text
 
 
 def test_csv_prose_is_scrubbed_in_its_own_language(conn, tmp_path):
@@ -91,3 +110,34 @@ def test_csv_prose_is_scrubbed_in_its_own_language(conn, tmp_path):
     radar = rows(out / "expiring-12m.csv")
     assert [r["reference"] for r in radar][:2] == ["AW-5", "AW-2"] and radar[0]["supplier_withheld"] == "1"
     assert radar[0]["organization_id"] == "" and len(radar) == 6
+
+
+def test_the_open_tenders_file_leaves_out_a_notice_past_its_closing_day(conn, tmp_path):
+    """The open-notice file still lists notices that have closed; open-tenders.csv followed it."""
+    seed(conn)
+    tender(conn, "cb-yesterday", 0, title="Closed yesterday", closing="2026-10-30T14:00:00")
+    tender(conn, "cb-today", 0, title="Closes today", closing="2026-10-31T14:00:00")
+    tender(conn, "cb-tomorrow", 0, title="Closes tomorrow", closing="2026-11-01T09:00:00")
+    conn.commit()
+    out = tmp_path / "csv"
+    counts = export.export_csv(conn, out, today=TODAY)
+    refs = [r["reference"] for r in rows(out / "open-tenders.csv")]
+    assert "cb-today" in refs and "cb-tomorrow" in refs and "cb-yesterday" not in refs
+    assert counts["open-tenders.csv"] == 6 and all(r["status"] == "open" for r in rows(out / "open-tenders.csv"))
+
+
+def test_buyers_csv_lists_only_buyers_with_records_and_never_a_person_spelling(conn, tmp_path):
+    seed(conn)
+    conn.execute("INSERT INTO buyers (id, name_en, updated_at) VALUES ('closed-only', 'Closed Only Agency', '2026-10-31')")
+    tender(conn, "cb-closed", 0, title="Old", status="expired", closing="2026-01-10T14:00:00", buyer="closed-only")
+    conn.execute("UPDATE awards SET buyer_id = NULL, buyer_raw_en = 'Aarondeep Maan' WHERE reference = 'AW-3'")
+    conn.commit()
+    indicators.compute(conn, now="2026-10-31T01:00:00Z")
+    out = tmp_path / "csv"
+    export.export_csv(conn, out, today=TODAY)
+    assert [r["id"] for r in rows(out / "buyers.csv")] == ["dnd-mdn", "pwgsc-tpsgc"]
+    aw3 = next(r for r in rows(out / "awards-2025.csv") if r["reference"] == "AW-3")
+    assert aw3["buyer_id"] == "" and aw3["buyer_raw_en"] == ""
+    assert "Aarondeep Maan" not in "".join(p.read_text(encoding="utf-8") for p in out.glob("*.csv"))
+    # Another spelling stays as written.
+    assert next(r for r in rows(out / "awards-2026.csv") if r["reference"] == "AW-2")["buyer_raw_en"] == "Raw buyer"

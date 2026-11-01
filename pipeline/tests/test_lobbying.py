@@ -71,7 +71,7 @@ def test_reports_load_with_their_client_institutions_office_holders_and_subjects
     assert json.loads(first["subject_matters"]) == ["Agriculture", "Defence"]
     assert buyers.take_notices(conn) == ["buyer house-of-commons made for 'House of Commons'"]
     # An institution given as "Other" is the one named beside it.
-    assert json.loads(rows["500002"]["buyer_ids"]) == ["farm-credit-canada"]
+    assert json.loads(rows["500002"]["buyer_ids"]) == ["fcc-fac"]
     # The same office holder twice on one report is one entry; another spelling of the client is the same organization.
     assert len(json.loads(rows["500006"]["dpoh"])) == 1 and rows["500006"]["organization_id"] == northwind
     # A client named only in French.

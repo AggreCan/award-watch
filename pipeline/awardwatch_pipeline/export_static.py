@@ -12,7 +12,10 @@ change there. Output tree (under data/out/static):
 
   stats.json                    counts, today's notices, closing soon, recent awards, the year's top
                                 organizations by awards value, the last runs, the source files read
-  tenders/open.json             every open notice as a list row (read by the browser only)
+                                (source_files: one row per file read and one per source never read, each
+                                with last_read, last_modified as an ISO instant, last_modified_http as the
+                                publisher sent it, and loaded)
+  tenders/open.json             every notice open on the data date as a list row (read by the browser only)
   tenders/open-first.json       the 50 open notices closing soonest, the number open, and the facet
                                 counts over all of them (what /tenders renders on the server)
   tenders/new/<day>.json        the notices first seen on each of the last 30 days
@@ -25,7 +28,11 @@ change there. Output tree (under data/out/static):
   profiles/<abc>.json           organization profiles, sharded on the id's characters 5 to 7
   aliases/<abc>.json            retired organization id -> the live id that took its records (migrate.py)
   directory/...                 organizations A to Z by province (directory.py)
-  buyers/index.json, buyers/<id>.json
+  buyers/index.json, buyers/<id>.json   the listed buyers (export.LISTED_BUYER): those with an open notice,
+                                an award notice, a contract history record, a published contract or a grant
+  buyers/aliases.json           {"aliases": {old buyer id: listed buyer id}}: the buyer ids the buyers stage
+                                retired (buyer_aliases, chains followed), for a permanent redirect; an alias
+                                whose target is not listed, or whose old id is listed again, is left out
   categories/index.json, categories/<nn>.json     the 57 UNSPSC segments
   rankings/all.json, rankings/<year>.json
   expiring/index.json           the expiring-contracts radar (expiring.py): the three windows' counts and
@@ -35,12 +42,31 @@ change there. Output tree (under data/out/static):
   feeds/...                     Atom feeds (feeds.py)
   sitemaps/sitemap-<n>.xml, sitemaps/index.xml
 
+Open and closed. CanadaBuys' open-notice file keeps listing some notices for
+months after they close. A notice's status in the export is its status on the
+data date (normalize.tender_status_on): an open notice whose closing day (the
+date part of tenderClosingDate, in UTC) is before the data date is "closed",
+and the status its file states travels beside it as source_status (tender
+details, and the rows of tenders/new). Only a notice open on the data date is
+in tenders/open.json, tenders/open-first.json, the counts and closing-soon
+list of stats.json, a buyer's or a segment's open notices, open-tenders.csv
+and the tenders feed (feeds.py). A notice closing on the data date is open.
+
+Buyers. A record's buyer_id names a listed buyer or is null; the buyer's names
+stay on the record either way. A record whose buyer spelling named no
+institution (sources/buyers.non_institution) has no buyer, and its spelling is
+shown only when it neither names nor locates a person
+(buyers.public_spelling).
+
 References in URLs and file names. The site takes a reference from its URL
 only when it reads as [A-Za-z0-9._-]{1,80}, and a few CanadaBuys references do
 not ("23240-220799/001/IM", "SSC-26-00035339:T"). Each is exported under its
 URL form (url_reference: dollar signs dropped, any other run of characters
 outside that set made one hyphen), and the published form travels beside it
-as reference_published whenever the two differ, for the link to CanadaBuys.
+as reference_published whenever the two differ. CanadaBuys serves a notice at
+its published reference in lower case with the colons removed and each "/"
+kept as a path separator (feeds.notice_path; "SSC-26-00040563:A:1" is at
+.../award-notice/ssc-26-00040563a1), which is what a link builds from it.
 Shards are sha1 of the URL form in lower case, its first three hex digits,
 which is what the site computes from the address it was asked for.
 
@@ -72,13 +98,16 @@ import sqlite3
 from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Iterable, Sequence
 from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
 from . import config, directory, expiring, indicators, organizations
-from .db import log_run, set_meta
-from .export import scrub_doc
+from .db import get_meta, log_run, set_meta
+from .export import listed_buyer_ids, register_functions, scrub_doc
 from .feeds import write_feeds
+from .normalize import closing_day, tender_status_on
+from .sources.buyers import public_spelling
 
 log = logging.getLogger(__name__)
 
@@ -304,11 +333,13 @@ def drop_temp(conn: sqlite3.Connection) -> None:
             pass
 
 
-def _materialize(conn: sqlite3.Connection) -> None:
+def _materialize(conn: sqlite3.Connection, as_of: str) -> None:
     """Temporary tables of the records as the site lists them, built once per export.
 
     x_tenders: each notice at its newest amendment, with its first and last
-    sight over every version and the codes of the newest. x_awards and
+    sight over every version, the codes of the newest, and shown_status, its
+    status on the data date (normalize.tender_status_on: an open notice whose
+    closing day has passed is closed). x_awards and
     x_history: each contract at its newest amendment, attributed like the
     totals (organizations._newest_by_reference) except that a contract whose
     newest version withholds its supplier links to no organization; value is
@@ -320,12 +351,14 @@ def _materialize(conn: sqlite3.Connection) -> None:
     """
     shown = "CASE WHEN status = 'cancelled' THEN 0 WHEN total_value > 0 THEN total_value ELSE amount END"
     drop_temp(conn)
+    register_functions(conn)
     conn.execute(
-        "CREATE TEMP TABLE x_tenders AS SELECT t.*, "
+        "CREATE TEMP TABLE x_tenders AS SELECT t.*, tender_status_on(t.status, t.closing, ?) AS shown_status, "
         "(SELECT MIN(z.first_seen) FROM tenders z WHERE z.reference = t.reference) AS first_sight, "
         "(SELECT group_concat(c.unspsc, ' ') FROM tender_codes c WHERE c.reference = t.reference "
         "AND c.amendment = t.amendment) AS codes "
-        "FROM tenders t WHERE t.amendment = (SELECT MAX(y.amendment) FROM tenders y WHERE y.reference = t.reference)"
+        "FROM tenders t WHERE t.amendment = (SELECT MAX(y.amendment) FROM tenders y WHERE y.reference = t.reference)",
+        (as_of,),
     )
     for table, temp, codes, extra in (
         ("awards", "x_awards", "award_codes", ""),
@@ -383,13 +416,21 @@ class Model:
                      (("tenders", "tenders"), ("awards", "awards"), ("history", "contract_history"))}
         self._expiring: list[tuple[dict, float | None]] | None = None
         self._expiring_by: dict[str, dict[str, list[tuple[dict, float | None]]]] = {}
-        _materialize(conn)
+        _materialize(conn, self.as_of)
+        # The buyers the export lists (export.LISTED_BUYER): a page, a row in
+        # buyers/index.json and the rankings, and a link from a record.
+        self.listed: set[str] = {b for b in listed_buyer_ids(conn, self.as_of) if b in self.buyers and _buyer_id(b)}
 
     def buyer_names(self, buyer_id: str | None, raw_en: object = None, raw_fr: object = None) -> tuple[str | None, str | None]:
+        """The buyer's names, else the record's own spelling unless it names or locates a person."""
         b = self.buyers.get(buyer_id) if buyer_id else None
         if b is not None:
             return b["name_en"], b["name_fr"]
-        return _text(raw_en), _text(raw_fr)
+        return public_spelling(_text(raw_en)), public_spelling(_text(raw_fr))
+
+    def link(self, buyer_id: str | None) -> str | None:
+        """The buyer id a record links to: a listed buyer's, else None (the names stay)."""
+        return buyer_id if buyer_id in self.listed else None
 
     def segments_of(self, codes: object) -> list[str]:
         return sorted({c[:2] for c in str(codes or "").split() if c[:2] in self.segments})
@@ -438,6 +479,7 @@ def tender_row(m: Model, r: sqlite3.Row, *, status: bool = False) -> dict | None
         return None
     buyer = _buyer_id(r["buyer_id"])
     en, fr = m.buyer_names(buyer, r["buyer_raw_en"], r["buyer_raw_fr"])
+    buyer = m.link(buyer)
     row = {
         "reference": ref, "amendment": r["amendment"], "title_en": r["title_en"], "title_fr": r["title_fr"],
         "buyer_id": buyer, "buyer_en": en, "buyer_fr": fr, "published": r["published"], "closing": r["closing"],
@@ -448,7 +490,10 @@ def tender_row(m: Model, r: sqlite3.Row, *, status: bool = False) -> dict | None
     if ref != r["reference"]:
         row["reference_published"] = r["reference"]
     if status:
-        row["status"] = r["status"] or "unknown"
+        # The status on the data date; the file's own beside it (they differ
+        # when an open notice's closing day has passed).
+        row["status"] = r["shown_status"] or "unknown"
+        row["source_status"] = r["status"] or "unknown"
     return row
 
 
@@ -465,6 +510,7 @@ def award_row(m: Model, kind: str, r: sqlite3.Row) -> dict | None:
     else:
         buyer = _buyer_id(r["buyer_id"])
         en, fr = m.buyer_names(buyer, r["buyer_raw_en"], r["buyer_raw_fr"])
+    buyer = m.link(buyer)
     oid, name = m.org(r["org"])
     row = {
         "reference": ref, "title_en": r["title_en"], "title_fr": r["title_fr"], "organization_id": oid,
@@ -493,6 +539,7 @@ def contract_row(m: Model, r: sqlite3.Row) -> dict:
         own = r["value"]
     buyer = _buyer_id(r["buyer_id"])
     en, fr = m.buyer_names(buyer)
+    buyer = m.link(buyer)
     row = {
         "owner_org": r["owner_org"], "reference": r["reference"], "procurement_id": _text(r["procurement_id"]),
         "buyer_id": buyer, "buyer_en": en, "buyer_fr": fr, "contract_date": r["contract_date"], "value": _money(own),
@@ -508,6 +555,7 @@ def contract_row(m: Model, r: sqlite3.Row) -> dict:
 def grant_row(m: Model, r: sqlite3.Row) -> dict:
     buyer = _buyer_id(r["buyer_id"])
     en, fr = m.buyer_names(buyer)
+    buyer = m.link(buyer)
     return {
         "owner_org": r["owner_org"], "reference": r["reference"], "amendment": r["amendment"], "buyer_id": buyer,
         "buyer_en": en, "buyer_fr": fr, "agreement_type": r["agreement_type"], "program_en": r["program_en"],
@@ -567,6 +615,7 @@ def expiring_row(m: Model, r: sqlite3.Row) -> tuple[dict, float | None] | None:
     oid, name = (None, None) if withheld else m.org(r["organization_id"])
     buyer = _buyer_id(r["buyer_id"])
     en, fr = m.buyer_names(buyer, r["buyer_en"], r["buyer_fr"])
+    buyer = m.link(buyer)
     row = {
         "kind": kind, "reference": ref, "title_en": r["title_en"], "title_fr": r["title_fr"], "organization_id": oid,
         "organization": name, "buyer_id": buyer, "buyer_en": en, "buyer_fr": fr, "start": r["start"], "end": end,
@@ -593,7 +642,22 @@ SOURCE_FILES = {
     "grants": config.GRANTS_URL.rsplit("/", 1)[-1],
     "lobbying": config.LOBBYING_URL.rsplit("/", 1)[-1],
 }
-SOURCE_ORDER = ("tenders", "awards", "history", "contracts", "grants", "lobbying")
+# The stages that read a source, in the order the Data page lists them; each
+# key is the "source" of its rows in stats.json "sources".
+SOURCE_ORDER = ("buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry")
+# The file a source's row names until a read records its own (a source never read yet).
+SOURCE_DEFAULT_FILE = {
+    "buyers": "organization_show",
+    "tenders": config.TENDERS_COMPLETE_FILE,
+    "awards": config.AWARDS_COMPLETE_FILE,
+    "history": config.HISTORY_COMPLETE_FILE,
+    **SOURCE_FILES,
+    "registry": "corporations-active-cbca-en.csv",
+}
+# The buyers stage records the time it read the CKAN organization list under
+# this key (sources/buyers.py); a database from before it has only the
+# refresh schedule's key, which is set by a read too.
+BUYERS_READ_KEYS = ("buyers:read_at", "buyers_loaded_at")
 
 
 def _canadabuys_stage(name: str) -> str | None:
@@ -607,13 +671,44 @@ def _canadabuys_stage(name: str) -> str | None:
     return None
 
 
+def http_date_iso(value: object) -> str | None:
+    """A Last-Modified header ("Sun, 01 Nov 2026 17:15:06 GMT") as an ISO instant in UTC
+    ("2026-11-01T17:15:06Z"); None for a blank or a value that is not an HTTP date."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        when = parsedate_to_datetime(text)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def source_files(conn: sqlite3.Connection) -> list[dict]:
-    """The files the stages read, by stage: when each was last read and the Last-Modified the host gave."""
+    """The files the stages read, by stage: when each was last read and the Last-Modified the publisher gave.
+
+    One row per file read (meta "canadabuys:<file>:", "<stage>:" for the
+    proactive publications and the lobbying registry, "registry:<file>:" for
+    the corporations extract, "buyers:read_at" for the CKAN organization
+    list), and one row for every source with none, so each source the Data
+    page lists has a row. last_read is when the file was last read (ISO, UTC);
+    last_modified the publisher's Last-Modified as an ISO instant in UTC
+    (null when it gave none), with the header as sent in last_modified_http;
+    loaded is false until the first successful read.
+    """
     seen: dict[tuple[str, str], dict] = {}
+
+    def entry(stage: str, file: str) -> dict:
+        return seen.setdefault((stage, file), {"source": stage, "file": file, "last_read": None,
+                                               "last_modified": None, "last_modified_http": None, "loaded": False})
+
     for key, value in conn.execute("SELECT key, value FROM meta ORDER BY key"):
-        m = re.fullmatch(r"canadabuys:(.+):(read_at|last_modified)", key)
+        m = re.fullmatch(r"(canadabuys|registry):(.+):(read_at|last_modified)", key)
         if m:
-            stage, file, item = _canadabuys_stage(m.group(1)), m.group(1), m.group(2)
+            stage = _canadabuys_stage(m.group(2)) if m.group(1) == "canadabuys" else "registry"
+            file, item = m.group(2), m.group(3)
         else:
             m = re.fullmatch(r"(contracts|grants|lobbying):(read_at|last_modified)", key)
             if not m:
@@ -621,15 +716,28 @@ def source_files(conn: sqlite3.Connection) -> list[dict]:
             stage, file, item = m.group(1), SOURCE_FILES[m.group(1)], m.group(2)
         if stage is None:
             continue
-        entry = seen.setdefault((stage, file), {"source": stage, "file": file, "last_read": None, "last_modified": None})
-        entry["last_read" if item == "read_at" else "last_modified"] = value
+        row = entry(stage, file)
+        if item == "read_at":
+            row["last_read"] = value
+        else:
+            row["last_modified_http"] = value
+            row["last_modified"] = http_date_iso(value)
+    buyers_read = next((v for k in BUYERS_READ_KEYS if (v := get_meta(conn, k))), None)
+    if buyers_read:
+        entry("buyers", SOURCE_DEFAULT_FILE["buyers"])["last_read"] = buyers_read
+    for row in seen.values():
+        row["loaded"] = row["last_read"] is not None
+    for stage in SOURCE_ORDER:
+        if not any(source == stage for source, _ in seen):
+            entry(stage, SOURCE_DEFAULT_FILE[stage])
     return sorted(seen.values(), key=lambda e: (SOURCE_ORDER.index(e["source"]), e["file"]))
 
 
 def closing_soon(m: Model, open_rows: list[dict]) -> list[dict]:
-    """The open notices whose closing falls within CLOSING_SOON_DAYS of the data date, soonest first."""
+    """The open notices whose closing day (normalize.closing_day, in UTC) falls within CLOSING_SOON_DAYS of
+    the data date, soonest first."""
     soon_end = (m.today + timedelta(days=CLOSING_SOON_DAYS)).isoformat()
-    return [r for r in open_rows if r["closing"] and m.as_of <= r["closing"][:10] <= soon_end]
+    return [r for r in open_rows if (day := closing_day(r["closing"])) and m.as_of <= day <= soon_end]
 
 
 def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[dict], new_today: list[dict],
@@ -701,7 +809,7 @@ def write_tender_lists(m: Model, out: Path) -> tuple[list[dict], list[dict], dic
     """
     conn = m.conn
     open_rows = [row for r in conn.execute(
-        "SELECT * FROM x_tenders WHERE status = 'open' ORDER BY closing IS NULL, closing, reference")
+        "SELECT * FROM x_tenders WHERE shown_status = 'open' ORDER BY closing IS NULL, closing, reference")
         if (row := tender_row(m, r))]
     _dump(out / "tenders" / "open.json", open_rows)
     _dump(out / "tenders" / "open-first.json", {
@@ -781,14 +889,20 @@ _TENDER_LISTS = ("trade_agreements_en", "trade_agreements_fr", "regions_opportun
 
 def tender_detail(m: Model, ref: str, versions: list[sqlite3.Row], codes: list[str],
                   related: dict[str, list[dict]]) -> dict:
-    """A notice as it stands (its newest amendment) with its versions. The contact columns are never read."""
+    """A notice as it stands (its newest amendment) with its versions. The contact columns are never read.
+
+    status is the notice's status on the data date and source_status the one
+    its file states; each version in amendments keeps the status stored for it.
+    """
     v = versions[-1]
     buyer = _buyer_id(v["buyer_id"])
     en, fr = m.buyer_names(buyer, v["buyer_raw_en"], v["buyer_raw_fr"])
+    buyer = m.link(buyer)
     d: dict = {k: v[k] for k in _TENDER_TEXT}
     d.update({k: _list(v[k]) for k in _TENDER_LISTS})
     d.update({
-        "reference": ref, "amendment": v["amendment"], "status": v["status"] or "unknown",
+        "reference": ref, "amendment": v["amendment"],
+        "status": tender_status_on(v["status"], v["closing"], m.as_of), "source_status": v["status"] or "unknown",
         "gsin": _joined(v["gsin"], ", "), "gsin_desc_en": _joined(v["gsin_desc_en"], "; "),
         "gsin_desc_fr": _joined(v["gsin_desc_fr"], "; "), "category": _codes(v["category"]),
         "provinces": _codes(v["provinces"]), "buyer_id": buyer, "buyer_en": en, "buyer_fr": fr,
@@ -853,6 +967,7 @@ def contract_detail(m: Model, kind: str, ref: str, versions: list[sqlite3.Row], 
     oid, _ = m.org(org)
     buyer = _buyer_id(v["buyer_id"])
     en, fr = m.buyer_names(buyer, v["buyer_raw_en"], v["buyer_raw_fr"])
+    buyer = m.link(buyer)
     if v["status"] == "cancelled":
         value = 0.0
     elif v["total_value"] is not None and v["total_value"] > 0:
@@ -885,6 +1000,7 @@ def contract_detail(m: Model, kind: str, ref: str, versions: list[sqlite3.Row], 
     else:
         client = _buyer_id(v["client_id"])
         c_en, c_fr = m.buyer_names(client, v["client_raw_en"], v["client_raw_fr"])
+        client = m.link(client)
         d.update({"procurement_number": v["procurement_number"], "client_id": client, "client_en": c_en,
                   "client_fr": c_fr, "supplier_operating": None if withheld else v["supplier_operating"]})
     if ref != v["reference"]:
@@ -1023,7 +1139,7 @@ def profile(m: Model, o: sqlite3.Row, t: dict[str, dict[str, list[sqlite3.Row]]]
     top: list[dict] = []
     by_source = _grouped(t["buyers"].get(oid, []), "source")
     for source in MONEY_SOURCES:
-        cells = ((r["buyer"], r["n"], r["total"]) for r in by_source.get(source, []) if _buyer_id(r["buyer"]))
+        cells = ((r["buyer"], r["n"], r["total"]) for r in by_source.get(source, []) if m.link(r["buyer"]))
         for bid, n, total in _top(cells, PROFILE_BUYERS, _by_value):
             en, fr = m.buyer_names(bid)
             top.append({"source": source, "buyer_id": bid, "buyer_en": en, "buyer_fr": fr, "n": n, "total": _money(total)})
@@ -1161,7 +1277,7 @@ def write_rankings(m: Model, out: Path, totals: Totals) -> dict[str, int]:
         buyers: dict[str, list[dict]] = {}
         for source in MONEY_SOURCES:
             cells = [(bid, n, total) for bid, (n, total) in totals.buyer.get((which, source), {}).items()
-                     if _buyer_id(bid) and bid in m.buyers]
+                     if bid in m.listed]
             ranked = _top(cells, RANK_BUYERS, _by_value)
             if ranked:
                 buyers[source] = [{"id": b, "name_en": m.buyers[b]["name_en"], "name_fr": m.buyers[b]["name_fr"],
@@ -1182,20 +1298,12 @@ BUYER_FIELDS = ("id", "name_en", "name_fr", "acronym_en", "acronym_fr", "kind", 
                 "n_contracts", "n_grants", "total_awards", "total_contracts", "total_grants")
 
 
-def listed_buyers(conn: sqlite3.Connection) -> set[str]:
-    """The buyers some record names: a buyer page is written only for them."""
-    out: set[str] = set()
-    for sql in ("SELECT DISTINCT buyer_id FROM tenders", "SELECT DISTINCT buyer_id FROM awards",
-                "SELECT DISTINCT buyer_id FROM contract_history", "SELECT DISTINCT client_id FROM contract_history",
-                "SELECT DISTINCT buyer_id FROM contracts", "SELECT DISTINCT buyer_id FROM grants"):
-        out.update(b for (b,) in conn.execute(sql) if _buyer_id(b))
-    return out
-
-
 def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> dict[str, int]:
-    """buyers/index.json and buyers/<id>.json for every buyer a record names."""
+    """buyers/index.json and buyers/<id>.json for every listed buyer (Model.listed, export.LISTED_BUYER):
+    a buyer with no open tender notice, award notice, contract history record, published contract or grant
+    shows zero in every column of the list and is left out."""
     conn = m.conn
-    listed = listed_buyers(conn) & set(m.buyers)
+    listed = m.listed
     open_by: Counter = Counter(r["buyer_id"] for r in open_rows if r["buyer_id"])
     history_totals = totals.buyer.get(("all", "history"), {})
     summaries = []
@@ -1238,7 +1346,10 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
             "recent_awards": recent,
             "expiring": m.expiring_part("buyer_id", bid),
         })
-    return {"buyers": len(summaries)}
+    aliases = {old: new for old, new in conn.execute("SELECT old_id, new_id FROM buyer_aliases ORDER BY old_id")
+               if new in listed and old not in listed and _buyer_id(old)}
+    _dump(out / "buyers" / "aliases.json", {"aliases": aliases})
+    return {"buyers": len(summaries), "buyer_aliases": len(aliases)}
 
 
 def write_categories(m: Model, out: Path, open_rows: list[dict]) -> dict[str, int]:
@@ -1351,15 +1462,14 @@ def sitemap_entries(m: Model, skip: Collection[str] = ()) -> list[tuple[str, str
     entries += [(f"/organizations/{r['id']}", _lastmod(r["updated_at"]))
                 for r in conn.execute("SELECT id, updated_at FROM organizations ORDER BY id")]
     if "buyers" not in skip:
-        listed = listed_buyers(conn)
         entries += [(f"/buyers/{r['id']}", _lastmod(r["updated_at"]))
-                    for r in conn.execute("SELECT id, updated_at FROM buyers ORDER BY id") if r["id"] in listed]
+                    for r in conn.execute("SELECT id, updated_at FROM buyers ORDER BY id") if r["id"] in m.listed]
     if "categories" not in skip:
         entries += [(f"/categories/{code}", dated) for code in sorted(m.segments)]
     # Open notices and every notice first seen in the last 30 days, each dated
     # by the night its newest version first appeared.
     recent = (m.today - timedelta(days=NEW_DAYS - 1)).isoformat()
-    for r in conn.execute("SELECT reference, first_seen FROM x_tenders WHERE status = 'open' OR first_sight >= ? "
+    for r in conn.execute("SELECT reference, first_seen FROM x_tenders WHERE shown_status = 'open' OR first_sight >= ? "
                           "ORDER BY reference", (recent,)):
         ref = m.refs["tenders"].get(r["reference"])
         if ref:
@@ -1498,7 +1608,8 @@ def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: st
     counts.update(write_profiles(conn, out, m))
     stats_counts = {
         "organizations": len(m.orgs),
-        "buyers": len(listed_buyers(conn) & set(m.buyers)),
+        # The buyers with a record in a column the list shows (Model.listed).
+        "buyers": len(m.listed),
         "tenders_open": len(open_rows),
         "tenders_new_today": len(new_today),
         # The whole count, where the home page's list holds twelve rows.

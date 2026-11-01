@@ -294,3 +294,24 @@ def test_a_copy_refused_for_its_layout_is_not_downloaded_again_until_it_changes(
     assert contracts.run(conn, client, now="2026-11-15T00:00:00Z", work_dir=tmp_path / "w").state == "unchanged"
     oks = [r[0] for r in conn.execute("SELECT ok FROM sources_log WHERE source = 'contracts' ORDER BY id")]
     assert oks == [1, 1, 1]  # the two refusals raised: the run's _stage logs those
+
+
+
+def test_a_vendor_named_by_an_email_address_is_withheld_like_a_person(conn, fixtures, tmp_path, out_dir):
+    header, rows = read_csv(fixtures / FIXTURE)
+    rows[0]["vendor_name"] = "Canada@carahsoft.com"
+    reference = rows[0]["reference_number"]
+    samples = tmp_path / "s"
+    samples.mkdir()
+    write_csv(samples / "contracts-head.csv", header, rows)
+    contracts.run(conn, None, now=DAY1, samples=samples)
+    row = by_ref(conn)[reference]
+    assert (row["vendor_raw"], row["vendor_postal"], row["organization_id"], row["vendor_withheld"]) == \
+        (None, None, None, 1)
+    assert row["buyer_id"] and row["value"] is not None
+    for table, column in (("organizations", "display_name"), ("organization_names", "raw_name")):
+        assert conn.execute(f"SELECT 1 FROM {table} WHERE {column} LIKE '%carahsoft%'").fetchone() is None
+    review = (out_dir / "review" / "contracts-persons.txt").read_text(encoding="utf-8").splitlines()
+    assert "Canada@carahsoft.com" in review
+    log = conn.execute("SELECT detail, notice FROM sources_log").fetchone()
+    assert "carahsoft" not in log["notice"] and "carahsoft" not in log["detail"]

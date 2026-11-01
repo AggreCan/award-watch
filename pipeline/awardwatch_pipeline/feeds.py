@@ -6,7 +6,9 @@ static assets, a poll costs nothing and counts against no daily allowance. The
 site never learns who subscribes and holds no reader address.
 
 Three events, each its own feed:
-  tenders   a CanadaBuys tender notice, the night it was first seen
+  tenders   a CanadaBuys tender notice, the night it was first seen; a notice
+            whose closing day is before the data date has closed and is left
+            out (normalize.closing_day, the rule the open list follows)
   awards    a CanadaBuys award notice, the night it was first seen
   expiring  a contract of the expiring-contracts radar (expiring.py), the night
             its end date came within 91 days (expiring_contracts.entered_3m):
@@ -53,7 +55,8 @@ from urllib.parse import quote
 
 from . import config, organizations
 from .export import scrub
-from .normalize import PROVINCE_CODES
+from .normalize import PROVINCE_CODES, closing_day
+from .sources.buyers import public_spelling
 
 ATOM_NS = "http://www.w3.org/2005/Atom"
 ET.register_namespace("", ATOM_NS)
@@ -217,8 +220,15 @@ def _list(text: object) -> list[str]:
 
 
 def notice_path(reference: str) -> str:
-    """A reference as published, in a CanadaBuys notice address: lower case, escaped, a "/" kept as a path separator."""
-    return quote(reference.lower(), safe="/")
+    """A reference as published, in a CanadaBuys notice address.
+
+    CanadaBuys serves a notice at its reference in lower case with the colons
+    removed and each "/" kept as a path separator (checked on 2026-11-01:
+    SSC-26-00040563:A:1 is at .../award-notice/ssc-26-00040563a1, and
+    01044-221065/001/PI at .../award-notice/01044-221065/001/pi); anything
+    else that cannot sit in a path is escaped.
+    """
+    return quote(reference.lower().replace(":", ""), safe="/")
 
 
 def _segments(codes: object, segments: dict[str, tuple[str, str]]) -> list[str]:
@@ -267,8 +277,9 @@ class _Lookups:
 
     def buyer_names(self, buyer_id: str | None, raw_en: object, raw_fr: object) -> tuple[str, str]:
         en, fr = self.buyers.get(buyer_id or "", (None, None))
-        en = en or _clean(raw_en)
-        return en, fr or _clean(raw_fr) or en
+        # A spelling that names or locates a person is never shown.
+        en = en or _clean(public_spelling(raw_en))
+        return en, fr or _clean(public_spelling(raw_fr)) or en
 
 
 def _candidates(conn: sqlite3.Connection, sql: str, cutoff: str, max_entries: int) -> list[sqlite3.Row]:
@@ -281,7 +292,9 @@ def _candidates(conn: sqlite3.Connection, sql: str, cutoff: str, max_entries: in
     return out
 
 
-def tender_entries(conn: sqlite3.Connection, look: _Lookups, cutoff: str, max_entries: int) -> list[Entry]:
+def tender_entries(conn: sqlite3.Connection, look: _Lookups, cutoff: str, max_entries: int,
+                   today: date | None = None) -> list[Entry]:
+    """The notices newest first by the night first seen; with today, a notice whose closing day is before it is left out."""
     sql = (
         "SELECT t.reference, t.title_en, t.title_fr, t.published, t.closing, t.buyer_id, t.buyer_raw_en, "
         "t.buyer_raw_fr, t.provinces, "
@@ -292,10 +305,14 @@ def tender_entries(conn: sqlite3.Connection, look: _Lookups, cutoff: str, max_en
         "ORDER BY first_sight DESC, t.published DESC, t.reference DESC"
     )
     out: list[Entry] = []
+    as_of = today.isoformat() if today else None
     for r in _candidates(conn, sql, cutoff, max_entries):
         ref = look.url_reference(r["reference"])
         stamp = rfc3339(r["first_sight"])
         if ref is None or stamp is None:
+            continue
+        day = closing_day(r["closing"])
+        if as_of and day is not None and day < as_of:
             continue
         b_en, b_fr = look.buyer_names(r["buyer_id"], r["buyer_raw_en"], r["buyer_raw_fr"])
         closing = (r["closing"] or "")[:16].replace("T", " ") or None
@@ -491,7 +508,7 @@ def write_feeds(conn: sqlite3.Connection, out: Path, *, today: date | None = Non
 
     look = _Lookups(conn)
     by_feed: dict[tuple[Scope, str], list[Entry]] = defaultdict(list)
-    for event, entries in (("tenders", tender_entries(conn, look, cutoff, max_entries)),
+    for event, entries in (("tenders", tender_entries(conn, look, cutoff, max_entries, today)),
                            ("awards", award_entries(conn, look, cutoff, max_entries)),
                            ("expiring", expiring_entries(conn, look, today))):
         entries.sort(key=lambda e: e.sort, reverse=True)

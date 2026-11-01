@@ -8,8 +8,12 @@
 #   acronym_en  English acronym, same
 #   acronym_fr  French acronym, same
 # A seed row wins over any other resolution of its spelling. Names and acronyms
-# only fill what CKAN leaves blank. Add a row for each spelling the buyers
-# notices list ("buyer <slug> made for ...") that belongs to another buyer.
+# only fill what CKAN leaves blank. Each raw_name is also matched by its key
+# (buyers.name_key: case, accents, punctuation, "Department of", "Canada" and
+# a trailing region or branch do not count), so one row covers every way of
+# writing a former name or a unit. Add a row for each spelling the buyers
+# notices list ("buyer <slug> made for ...") that belongs to another buyer,
+# and for a spelling in the review files (data/out/review) that names one.
 raw_name,source,buyer_id,name_en,name_fr,acronym_en,acronym_fr
 Department of Public Works and Government Services (PSPC),canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
 Ministère des Travaux publics et des Services gouvernementaux (SPAC),canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
@@ -17,14 +21,161 @@ Department of National Defence (DND),canadabuys,dnd-mdn,National Defence,Défens
 Ministère de la Défense nationale (MDN),canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
 Shared Services Canada,canadabuys,ssc-spc,Shared Services Canada,Services partagés Canada,SSC,SPC
 Services partagés Canada,canadabuys,ssc-spc,Shared Services Canada,Services partagés Canada,SSC,SPC
-Business Development Bank of Canada,canadabuys,business-development-bank-of-canada,Business Development Bank of Canada,Banque de développement du Canada,BDC,BDC
-Export Development Canada - EDC,canadabuys,export-development-canada,Export Development Canada,Exportation et développement Canada,EDC,EDC
-Farm Credit Canada (FCC),canadabuys,farm-credit-canada,Farm Credit Canada,Financement agricole Canada,FCC,FAC
-Canada Post Corporation,canadabuys,canada-post-corporation,Canada Post Corporation,Société canadienne des postes,CPC,SCP
-Marine Atlantic,canadabuys,marine-atlantic,Marine Atlantic,Marine Atlantique,,
-Bank of Canada,canadabuys,bank-of-canada,Bank of Canada,Banque du Canada,,
-Telefilm Canada,canadabuys,telefilm-canada,Telefilm Canada,Téléfilm Canada,,
-Téléfilm Canada,canadabuys,telefilm-canada,Telefilm Canada,Téléfilm Canada,,
+# Crown corporations: the CKAN organization since CKAN lists them (2026-11).
+Business Development Bank of Canada,canadabuys,bdc,Business Development Bank of Canada,Banque de développement du Canada,BDC,BDC
+Export Development Canada - EDC,canadabuys,edc,Export Development Canada,Exportation et développement Canada,EDC,EDC
+Farm Credit Canada (FCC),canadabuys,fcc-fac,Farm Credit Canada,Financement agricole Canada,FCC,FAC
+Farm Credit Corporation Canada,canadabuys,fcc-fac,Farm Credit Canada,Financement agricole Canada,FCC,FAC
+Canada Post Corporation,canadabuys,cpc-scp,Canada Post,Postes Canada,CPC,SCP
+Marine Atlantic,canadabuys,mai,Marine Atlantic Inc.,Marine Atlantique S.C.C.,MAI,MAI
+Bank of Canada,canadabuys,bc,Bank of Canada,Banque du Canada,BC,BC
+Telefilm Canada,canadabuys,tf,Telefilm Canada,Téléfilm Canada,TF,TF
+Téléfilm Canada,canadabuys,tf,Telefilm Canada,Téléfilm Canada,TF,TF
+Parc Downsview Park Inc,canadabuys,pdp,Parc Downsview Park Inc.,Parc Downsview Park Inc,PDP,PDP
+VIA HFR,canadabuys,hgr-tgf,VIA HFR - VIA TGF Inc.,VIA HFR - VIA TGF Inc.,HGR,TGF
+# Institutions with no CKAN organization.
 Old Port of Montreal Corporation Inc.,canadabuys,old-port-of-montreal-corporation,Old Port of Montreal Corporation,Société du Vieux-Port de Montréal,,
 Société du Vieux Port de Montréal Inc.,canadabuys,old-port-of-montreal-corporation,Old Port of Montreal Corporation,Société du Vieux-Port de Montréal,,
-Parc Downsview Park Inc,canadabuys,parc-downsview-park,Parc Downsview Park,Parc Downsview Park,,
+Old Port of Montreal,canadabuys,old-port-of-montreal-corporation,Old Port of Montreal Corporation,Société du Vieux-Port de Montréal,,
+Senate of Canada,canadabuys,senate-of-canada,Senate of Canada,Sénat du Canada,,
+Parliamentary Protective Service,canadabuys,parliamentary-protective-service,Parliamentary Protective Service,Service de protection parlementaire,PPS,SPP
+Parlementary Protective Services,canadabuys,parliamentary-protective-service,Parliamentary Protective Service,Service de protection parlementaire,PPS,SPP
+# Former names and acronyms of CKAN organizations.
+Public Works and Government Services Canada,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+Travaux publics et Services gouvernementaux Canada,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+PWGSC,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+PSPC,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+Aboriginal Affairs and Northern Development Canada,canadabuys,aandc-aadnc,Crown-Indigenous Relations and Northern Affairs Canada,Relations Couronne-Autochtones et Affaires du Nord Canada,CIRNAC,RCAANC
+Indian and Northern Affairs Canada,canadabuys,aandc-aadnc,Crown-Indigenous Relations and Northern Affairs Canada,Relations Couronne-Autochtones et Affaires du Nord Canada,CIRNAC,RCAANC
+Indigenous and Northern Affairs Canada,canadabuys,aandc-aadnc,Crown-Indigenous Relations and Northern Affairs Canada,Relations Couronne-Autochtones et Affaires du Nord Canada,CIRNAC,RCAANC
+AANDC,canadabuys,aandc-aadnc,Crown-Indigenous Relations and Northern Affairs Canada,Relations Couronne-Autochtones et Affaires du Nord Canada,CIRNAC,RCAANC
+INAC,canadabuys,aandc-aadnc,Crown-Indigenous Relations and Northern Affairs Canada,Relations Couronne-Autochtones et Affaires du Nord Canada,CIRNAC,RCAANC
+Industry Canada,canadabuys,ic,"Innovation, Science and Economic Development Canada","Innovation, Sciences et Développement économique Canada",ISED,ISDE
+ISED,canadabuys,ic,"Innovation, Science and Economic Development Canada","Innovation, Sciences et Développement économique Canada",ISED,ISDE
+"INNOV, SCI AND ECON DEVT CAN",canadabuys,ic,"Innovation, Science and Economic Development Canada","Innovation, Sciences et Développement économique Canada",ISED,ISDE
+Environment Canada,canadabuys,ec,Environment and Climate Change Canada,Environnement et Changement climatique Canada,ECCC,ECCC
+ECCC,canadabuys,ec,Environment and Climate Change Canada,Environnement et Changement climatique Canada,ECCC,ECCC
+"Foreign Affairs, Trade and Development Canada",canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+Foreign Affairs and International Trade Canada,canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+Foreign Affairs Canada,canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+DFAIT,canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+GAC,canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+Canadian International Development Agency,canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+CIDA,canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+Citizenship and Immigration Canada,canadabuys,cic,"Immigration, Refugees and Citizenship Canada","Immigration, Réfugiés et Citoyenneté Canada",IRCC,IRCC
+"Immigration, Refugee and Citizenship Canada",canadabuys,cic,"Immigration, Refugees and Citizenship Canada","Immigration, Réfugiés et Citoyenneté Canada",IRCC,IRCC
+IRCC,canadabuys,cic,"Immigration, Refugees and Citizenship Canada","Immigration, Réfugiés et Citoyenneté Canada",IRCC,IRCC
+National Energy Board,canadabuys,cer-rec,Canada Energy Regulator,Régie de l'énergie du Canada,CER,REC
+Canadian Energy Regulator,canadabuys,cer-rec,Canada Energy Regulator,Régie de l'énergie du Canada,CER,REC
+Treasury Board of Canada,canadabuys,tbs-sct,Treasury Board of Canada Secretariat,Secrétariat du Conseil du Trésor du Canada,TBS,SCT
+Infrastructure Canada,canadabuys,infc,"Department of Housing, Infrastructure and Communities","Ministère du Logement, de l'Infrastructure et des Collectivités",INFC,INFC
+Office of Infrastructure of Canada,canadabuys,infc,"Department of Housing, Infrastructure and Communities","Ministère du Logement, de l'Infrastructure et des Collectivités",INFC,INFC
+Canadian Tourism Commission,canadabuys,ctc-cct,Destination Canada,Destination Canada,CTC,CCT
+Canadian Environmental Assessment Agency,canadabuys,iaac-aeic,Impact Assessment Agency of Canada,Agence d'évaluation d'impact du Canada,IAAC,AEIC
+National Parole Board,canadabuys,pbc-clcc,Parole Board of Canada,Commission des libérations conditionnelles du Canada,PBC,CLCC
+Economic Development Agency of Canada for the Regions of Quebec,canadabuys,ced-dec,Canada Economic Development for Quebec Regions,Développement économique Canada pour les régions du Québec,CED,DEC
+Social Development Canada,canadabuys,esdc-edsc,Employment and Social Development Canada,Emploi et Développement social Canada,ESDC,EDSC
+Office of the Chief Electoral Officer,canadabuys,elections,Elections Canada,Élections Canada,,
+National Archives of Canada,canadabuys,lac-bac,Library and Archives Canada,Bibliothèque et Archives Canada,LAC,BAC
+Library and Archive Canada,canadabuys,lac-bac,Library and Archives Canada,Bibliothèque et Archives Canada,LAC,BAC
+Canadian Accessibility Standards Development Organization,canadabuys,casdo-ocena,Accessibility Standards Canada,Normes d'accessibilité Canada,CASDO,OCENA
+Canadian Accessibility Standard Development Organization,canadabuys,casdo-ocena,Accessibility Standards Canada,Normes d'accessibilité Canada,CASDO,OCENA
+Correctional Services of Canada,canadabuys,csc-scc,Correctional Service of Canada,Service correctionnel du Canada,CSC,SCC
+Corrections Service Canada,canadabuys,csc-scc,Correctional Service of Canada,Service correctionnel du Canada,CSC,SCC
+Oceans and Fisheries Canada,canadabuys,dfo-mpo,Fisheries and Oceans Canada,Pêches et Océans Canada,DFO,MPO
+Canadian Radio-television and Telecommunications Commissions,canadabuys,crtc,Canadian Radio-television and Telecommunications Commission,Conseil de la radiodiffusion et des télécommunications canadiennes,CRTC,CRTC
+Conseil National de Recherche Canada,canadabuys,nrc-cnrc,National Research Council Canada,Conseil national de recherches Canada,NRC,CNRC
+Natural Resouces Canada,canadabuys,nrcan-rncan,Natural Resources Canada,Ressources naturelles Canada,NRCan,RNCan
+Canadian Polar Commission,canadabuys,polar-polaire,Polar Knowledge Canada,Savoir polaire Canada,POLAR,POLAIRE
+Canadian High Arctic Research Station,canadabuys,polar-polaire,Polar Knowledge Canada,Savoir polaire Canada,POLAR,POLAIRE
+National Museum of Science and Technology,canadabuys,cstm-mstc,Canada Science and Technology Museum,Musée des sciences et de la technologie du Canada,CSTM,MSTC
+Emergency Preparedness Canada,canadabuys,ps-sp,Public Safety Canada,Sécurité publique Canada,PS,SP
+Federal Judicial Affairs Canada,canadabuys,fja-cmf,Office of the Commissioner for Federal Judicial Affairs Canada,Commissariat à la magistrature fédérale Canada,FJA,CMF
+Supreme Court of Canada,canadabuys,scc-csc,Supreme Court of Canada,Cour suprême du Canada,SCC,CSC
+Canadian Human Rights Tribunal,canadabuys,chrt-tcdp,Canadian Human Rights Tribunal,Tribunal canadien des droits de la personne,CHRT,TCDP
+Registry of the Specific Claims Tribunal,canadabuys,sct-trp,Specific Claims Tribunal,Tribunal des revendications particulières,SCT,TRP
+Office of the Correctional Investigator,canadabuys,oci-bec,The Correctional Investigator Canada,L'Enquêteur correctionnel Canada,OCI,BEC
+Governor General,canadabuys,osgg-bsgg,Office of the Secretary to the Governor General,Bureau du secrétaire du gouverneur général,OSGG,BSGG
+Office of the Ombudsman for the Department of National Defence and the Canadian Forces,canadabuys,ndcfo-odnfc,National Defence and Canadian Forces Ombudsman,Ombudsman de la Défense nationale et des Forces canadiennes,NDCFO,ODNFC
+Indian Residential Schools Resolution Canada,canadabuys,aandc-aadnc,Crown-Indigenous Relations and Northern Affairs Canada,Relations Couronne-Autochtones et Affaires du Nord Canada,CIRNAC,RCAANC
+# Agencies and programs inside a department (special operating agencies, a
+# department's own branches): the department.
+Translation Bureau,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+Receiver General,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+Defence Major Projects Sector,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+Professional Services Transformative Solutions Sector,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+Departmental Acquisition Services,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+Departmental Acquisitions Services Directorate,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
+Canadian Intellectual Property Office,canadabuys,ic,"Innovation, Science and Economic Development Canada","Innovation, Sciences et Développement économique Canada",ISED,ISDE
+Communications Research Centre,canadabuys,ic,"Innovation, Science and Economic Development Canada","Innovation, Sciences et Développement économique Canada",ISED,ISDE
+Competition Bureau,canadabuys,ic,"Innovation, Science and Economic Development Canada","Innovation, Sciences et Développement économique Canada",ISED,ISDE
+Service Canada,canadabuys,esdc-edsc,Employment and Social Development Canada,Emploi et Développement social Canada,ESDC,EDSC
+Labour Program,canadabuys,esdc-edsc,Employment and Social Development Canada,Emploi et Développement social Canada,ESDC,EDSC
+Canadian Coast Guard,canadabuys,dfo-mpo,Fisheries and Oceans Canada,Pêches et Océans Canada,DFO,MPO
+CORCAN,canadabuys,csc-scc,Correctional Service of Canada,Service correctionnel du Canada,CSC,SCC
+Regional Headquarters - Atlantic,canadabuys,csc-scc,Correctional Service of Canada,Service correctionnel du Canada,CSC,SCC
+Regional Headquarters - Pacific,canadabuys,csc-scc,Correctional Service of Canada,Service correctionnel du Canada,CSC,SCC
+Regional Headquarters - Prairies,canadabuys,csc-scc,Correctional Service of Canada,Service correctionnel du Canada,CSC,SCC
+Contracting and Material Services - Ontario,canadabuys,csc-scc,Correctional Service of Canada,Service correctionnel du Canada,CSC,SCC
+Canada Firearms Centre,canadabuys,rcmp-grc,Royal Canadian Mounted Police,Gendarmerie royale du Canada,RCMP,GRC
+Canadian Police College,canadabuys,rcmp-grc,Royal Canadian Mounted Police,Gendarmerie royale du Canada,RCMP,GRC
+Canadian Conservation Institute,canadabuys,pch,Canadian Heritage,Patrimoine canadien,PCH,PCH
+Canadian Pari-Mutuel Agency,canadabuys,aafc-aac,Agriculture and Agri-Food Canada,Agriculture et Agroalimentaire Canada,AAFC,AAC
+Mission Procurement,canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+Embassy of Canada to China in Beijing,canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+"The Embassy of Canada to Qatar, in Doha",canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+"Canadian Embassy in the Democratic Republic of the Congo, in Kinshasa.",canadabuys,dfatd-maecd,Global Affairs Canada,Affaires mondiales Canada,GAC,AMC
+# National Defence: the Assistant Deputy Minister (Materiel) and its
+# directorates, which sign DND's notices under their own acronyms
+# (every notice under them gives a forces.gc.ca contact).
+ADM(Mat),canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+NDHQ,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DGAEPM,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DAEGPM,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DGAPEM,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DGLEPM,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DGMEPM,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DGMPD,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DGMPD(Sea),canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DPDCIS,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DLP,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+D Svcs C,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+D Mar P,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DES Proc,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Director Land Procurement,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Directorate of Land Procurement,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Directorate Land Procurement,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Director Aerospace Procurement,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Directorate Aerospace Procurement,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Directorate Maritime Procurement,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Director of Electronic Systems Procurement,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Director Electronic Systems Procurement,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Director of Electronic Systems,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Director Services Contracting,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Director General Land Equipment Program Management,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Director Strategic Procurement Coordination and Operation Support,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+DSPCOS,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Chief Combat Systems Integration,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Chief Professional Conduct and Culture,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+Sexual Misconduct Support and Resource Centre,canadabuys,dnd-mdn,National Defence,Défense nationale,DND,MDN
+# The Canadian Armed Forces' commands, formations and units: the CKAN
+# organization "Canadian Forces", where a "Canadian Forces ..." spelling
+# already resolves by its title.
+Canadian Army,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Royal Canadian Navy,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Royal Canadian Air Force,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+RCAF,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Canadian Special Operations Forces Command,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+CANSOFCOM,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Canadian Special Operations Regiment,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Canadian Joint Warfare Centre,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Military Personnel Command,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+MILPERSCOM,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Military Personnel Generation Training Group,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Military Personal Generation Training Group,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Canadian Defence Academy,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Royal Military College of Canada,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+Combat Training Centre,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+3rd Canadian Support Unit,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+3rd Support Unit of Canada,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC
+3CSU,canadabuys,caf-facdnd,Canadian Forces,Forces canadiennes,CAF,FAC

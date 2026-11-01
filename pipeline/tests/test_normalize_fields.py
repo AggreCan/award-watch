@@ -6,7 +6,7 @@ import pytest
 from awardwatch_pipeline.normalize import (
     has_legal_form, norm_name,
     award_status, competitive, competitive_code, country_code, iso_datetime, money, org_id, region_provinces,
-    slugify, squash, star_list, tender_status,
+    slugify, squash, star_list, tender_status, closing_day, tender_status_on,
 )
 from awardwatch_pipeline.sources import matching
 from awardwatch_pipeline.sources.matching import is_person_name, is_placeholder
@@ -199,3 +199,24 @@ def test_placeholders_are_neither_a_person_nor_a_name():
     for raw in ("NA : None", "N/A", "n/a", "None", "NA", "-", "unknown"):
         assert is_placeholder(raw) and not is_person_name(raw), raw
     assert not is_placeholder("NAV Canada") and not is_placeholder("Nana Foods")
+
+
+def test_a_closing_day_is_the_date_part_or_the_utc_day_of_a_zoned_time():
+    assert closing_day("2026-11-05T14:00:00") == "2026-11-05" and closing_day("2026-11-05") == "2026-11-05"
+    assert closing_day("2026-10-30T19:00:00-07:00") == "2026-10-31"
+    assert closing_day("2026-10-31T01:00:00+05:00") == "2026-10-30" and closing_day("2026-10-31T23:00:00Z") == "2026-10-31"
+    assert closing_day(None) is None and closing_day("") is None and closing_day("soon") is None
+
+
+def test_an_open_notice_closing_before_the_data_date_is_closed():
+    day = "2026-10-31"
+    assert tender_status_on("open", "2026-10-30T14:00:00", day) == "closed"
+    assert tender_status_on("open", "2026-10-31T14:00:00", day) == "open"
+    assert tender_status_on("open", "2026-10-31", day) == "open"
+    assert tender_status_on("open", "2026-11-01T09:00:00", day) == "open"
+    assert tender_status_on("open", "2023-07-12T10:00:00", day) == "closed"
+    assert tender_status_on("open", None, day) == "open"
+    # Only an open notice changes; another status is the file's own.
+    assert tender_status_on("awarded", "2026-10-30T14:00:00", day) == "awarded"
+    assert tender_status_on("cancelled", "2026-11-30", day) == "cancelled"
+    assert tender_status_on(None, None, day) == "unknown"

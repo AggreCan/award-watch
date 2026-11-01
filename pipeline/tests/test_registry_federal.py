@@ -93,3 +93,19 @@ def test_a_samples_run_matches_without_downloading(conn, fake_client):
     assert client.fake_session.calls == []
     notice = conn.execute("SELECT notice FROM sources_log WHERE source = 'registry'").fetchone()[0]
     assert "not downloaded" in notice
+
+
+def test_each_file_read_records_when_and_the_publishers_last_modified(conn, fake_client):
+    """The Data page showed the corporations extract as never read: the stage kept no read time."""
+    from conftest import FakeResponse
+    stamp = "Sun, 01 Nov 2026 06:00:00 GMT"
+    mapping = {registry_federal.URLS[0]: FakeResponse(200, ACTIVE.encode("utf-8"), {"Last-Modified": stamp}),
+               registry_federal.URLS[1]: INACTIVE.encode("utf-8")}
+    registry_federal.run(conn, fake_client(mapping), now="2026-11-01T18:47:00Z")
+    assert get_meta(conn, "registry:corporations-active-cbca-en.csv:read_at") == "2026-11-01T18:47:00Z"
+    assert get_meta(conn, "registry:corporations-active-cbca-en.csv:last_modified") == stamp
+    assert get_meta(conn, "registry:corporations-inactive-or-dissolved-cbca-en.csv:read_at") == "2026-11-01T18:47:00Z"
+    assert get_meta(conn, "registry:corporations-inactive-or-dissolved-cbca-en.csv:last_modified") is None
+    # A samples run reads nothing and claims no read.
+    registry_federal.run(conn, None, now="2026-11-02T18:47:00Z", download=False)
+    assert get_meta(conn, "registry:corporations-active-cbca-en.csv:read_at") == "2026-11-01T18:47:00Z"

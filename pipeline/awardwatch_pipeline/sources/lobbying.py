@@ -422,6 +422,7 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | Non
     stamp = now or now_iso()
     result = LobbyingResult()
     buyers.take_notices(conn)
+    buyers.take_rejects(conn)
     conn.commit()
     held = _held(conn, stamp) if samples is None else None
     if held:
@@ -454,8 +455,10 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | Non
         result.notices.append(f"lobbying: no {SPEC.sample_name} in the samples folder; not downloaded (samples run)")
     stats = result.stats
     if stats is not None:
+        rejected = buyers.take_rejects(conn)
         review = drops.write((review_dir or config.OUT_DIR / "review") / "lobbying-persons.txt",
-                             what="Lobbying communication reports", stamp=stamp, withheld="client withheld")
+                             what="Lobbying communication reports", stamp=stamp, withheld="client withheld",
+                             buyers=rejected)
         if review:
             result.notices.append(review)
         if stats.missing:

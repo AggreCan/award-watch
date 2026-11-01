@@ -14,10 +14,11 @@ from pathlib import Path
 import pytest
 
 from awardwatch_pipeline import export_static as es
+from awardwatch_pipeline import indicators
 from awardwatch_pipeline.db import connect, log_run
 from export_seed import (ACME, COLON_REF, CONTACT_EMAIL, CONTACT_NAME, CONTACT_PHONE, FOREIGN, NORTH, PERSON,
                          PERSON_STREET, PROSE_EMAIL, PROSE_PHONES, SERVANT, SLASH_REF, SUPPLIER_POSTAL, SUPPLIER_STREET,
-                         TODAY, seed)
+                         TODAY, seed, tender)
 
 BASE = "https://awardwatch.example"
 
@@ -323,12 +324,57 @@ def test_stats_list_the_newest_runs_and_the_files_read(conn, tmp_path):
     es.export_static(conn, out, today=TODAY, base_url=BASE)
     stats = load(out, "stats.json")
     assert stats["runs"][0]["source"] == "awards" and stats["runs"][0]["rows_new"] == 3
-    assert stats["sources"] == [
-        {"source": "awards", "file": "2026-2027-awardNotice-avisAttribution.csv", "last_read": "2026-10-31T00:10:00Z",
-         "last_modified": None},
-        {"source": "contracts", "file": "contracts.csv", "last_read": None,
-         "last_modified": "Fri, 30 Oct 2026 02:00:00 GMT"},
-    ]
+    by_source = {r["source"]: r for r in stats["sources"]}
+    assert by_source["awards"] == {
+        "source": "awards", "file": "2026-2027-awardNotice-avisAttribution.csv", "last_read": "2026-10-31T00:10:00Z",
+        "last_modified": None, "last_modified_http": None, "loaded": True}
+    # A Last-Modified alone is not a read; the publisher's date travels as an ISO instant.
+    assert by_source["contracts"] == {
+        "source": "contracts", "file": "contracts.csv", "last_read": None, "last_modified": "2026-10-30T02:00:00Z",
+        "last_modified_http": "Fri, 30 Oct 2026 02:00:00 GMT", "loaded": False}
+
+
+def test_every_source_the_data_page_lists_has_a_row_with_its_real_last_read(conn, tmp_path):
+    """The Data page read "Not read yet" for the CKAN organizations and the corporations registry, which
+    are read every night: neither wrote a row. Each source now has one, with loaded false until a read."""
+    seed(conn)
+    conn.executemany("INSERT INTO meta (key, value) VALUES (?, ?)", [
+        ("buyers_loaded_at", "2026-10-01T10:42:03Z"),
+        ("registry:corporations-active-cbca-en.csv:read_at", "2026-10-31T18:47:00Z"),
+        ("registry:corporations-active-cbca-en.csv:last_modified", "Sun, 01 Nov 2026 17:15:06 GMT"),
+        ("registry:corporations-inactive-or-dissolved-cbca-en.csv:read_at", "2026-10-31T18:47:30Z"),
+        ("canadabuys:openTenderNotice-ouvertAvisAppelOffres.csv:read_at", "2026-10-31T12:44:19Z"),
+        ("canadabuys:openTenderNotice-ouvertAvisAppelOffres.csv:last_modified", "Sat, 31 Oct 2026 11:20:14 GMT"),
+        ("lobbying:refused_on", "2026-10-31"),
+    ])
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    rows = load(out, "stats.json")["sources"]
+    assert [r["source"] for r in rows] == ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying",
+                                           "registry", "registry"]
+    assert all(set(r) == {"source", "file", "last_read", "last_modified", "last_modified_http", "loaded"} for r in rows)
+    assert all(r["loaded"] is (r["last_read"] is not None) for r in rows)
+    buyers_row, tenders_row = rows[0], rows[1]
+    assert buyers_row["file"] == "organization_show" and buyers_row["last_read"] == "2026-10-01T10:42:03Z"
+    assert tenders_row["last_modified"] == "2026-10-31T11:20:14Z" and tenders_row["loaded"] is True
+    registry = [r for r in rows if r["source"] == "registry"]
+    assert [r["file"] for r in registry] == ["corporations-active-cbca-en.csv",
+                                             "corporations-inactive-or-dissolved-cbca-en.csv"]
+    assert registry[0]["last_modified"] == "2026-11-01T17:15:06Z" and registry[0]["loaded"] is True
+    assert registry[0]["last_modified_http"] == "Sun, 01 Nov 2026 17:15:06 GMT"
+    # A source never read (the registry of lobbyists refused the download) still has its row.
+    lobbying = next(r for r in rows if r["source"] == "lobbying")
+    assert lobbying == {"source": "lobbying", "file": "communications_ocl_cal.zip", "last_read": None,
+                        "last_modified": None, "last_modified_http": None, "loaded": False}
+    # The buyers stage's own read time wins over the refresh schedule's.
+    conn.execute("INSERT INTO meta (key, value) VALUES ('buyers:read_at', '2026-10-31T10:42:03Z')")
+    assert es.source_files(conn)[0]["last_read"] == "2026-10-31T10:42:03Z"
+
+
+def test_http_dates_become_iso_instants():
+    assert es.http_date_iso("Sun, 01 Nov 2026 17:15:06 GMT") == "2026-11-01T17:15:06Z"
+    assert es.http_date_iso("Sun, 01 Nov 2026 12:15:06 -0500") == "2026-11-01T17:15:06Z"
+    assert es.http_date_iso("") is None and es.http_date_iso("Sun, 01 No") is None and es.http_date_iso(None) is None
 
 
 def test_the_shard_rule_is_sha1_of_the_lowercase_url_reference(exported):
@@ -544,3 +590,107 @@ def test_the_radar_lists_each_contract_once_by_window_with_its_parts(exported):
     sitemap = (out / "sitemaps" / "sitemap-1.xml").read_text(encoding="utf-8")
     for path in ("/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m"):
         assert f"<loc>{BASE}{path}</loc>" in sitemap
+
+
+# -- a notice the open-notice file still lists after its closing day ---------------------
+
+
+def test_a_notice_past_its_closing_day_is_closed_and_left_out_of_every_open_list(conn, tmp_path):
+    """CanadaBuys' open-notice file keeps some notices for months after they close; the export showed them as
+    open. A notice whose closing day (UTC) is before the data date is closed; one closing on the data date is
+    still open, the run being at midnight."""
+    seed(conn)
+    tender(conn, "cb-yesterday", 0, title="Closed yesterday", closing="2026-10-30T14:00:00", published="2026-10-29")
+    tender(conn, "cb-today", 0, title="Closes today", closing="2026-10-31T14:00:00", published="2026-10-29")
+    tender(conn, "cb-tomorrow", 0, title="Closes tomorrow", closing="2026-11-01T09:00:00", published="2026-10-29")
+    tender(conn, "cb-2023", 0, title="Closed in 2023", closing="2023-07-12T10:00:00", published="2023-06-01",
+           first_seen="2026-09-01")
+    # A closing given with a zone is compared on its day in UTC: 19:00 in Vancouver on the 30th is the 31st.
+    tender(conn, "cb-zoned", 0, title="Zoned", closing="2026-10-30T19:00:00-07:00", published="2026-10-29")
+    conn.commit()
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+
+    open_refs = [r["reference"] for r in load(out, "tenders/open.json")]
+    assert "cb-today" in open_refs and "cb-tomorrow" in open_refs and "cb-zoned" in open_refs
+    assert "cb-yesterday" not in open_refs and "cb-2023" not in open_refs
+    first = load(out, "tenders/open-first.json")
+    assert first["total"] == len(open_refs) == 7
+    assert not {"cb-yesterday", "cb-2023"} & {r["reference"] for r in first["rows"]}
+    stats = load(out, "stats.json")
+    assert stats["counts"]["tenders_open"] == 7
+    # Closing within the week from the data date: cb-200-2, today's, tomorrow's and the zoned one.
+    assert stats["counts"]["tenders_closing_soon"] == 4
+    assert {r["reference"] for r in stats["closing_soon"]} == {"cb-200-2", "cb-today", "cb-tomorrow", "cb-zoned"}
+
+    detail = load(out, f"tenders/{es.reference_shard('cb-yesterday')}.json")["cb-yesterday"]
+    assert detail["status"] == "closed" and detail["source_status"] == "open"
+    assert [a["status"] for a in detail["amendments"]] == ["open"]
+    assert load(out, f"tenders/{es.reference_shard('cb-today')}.json")["cb-today"]["status"] == "open"
+    new = {r["reference"]: r for r in load(out, "tenders/new/2026-10-31.json")}
+    assert new["cb-yesterday"]["status"] == "closed" and new["cb-yesterday"]["source_status"] == "open"
+    assert new["cb-today"]["status"] == "open" and new["cb-today"]["source_status"] == "open"
+    assert all(tender_row(r) for r in new.values())
+    buyer = load(out, "buyers/pwgsc-tpsgc.json")
+    assert buyer["open_tenders"] == 6 and buyer["buyer"]["n_open_tenders"] == 6
+
+
+# -- buyers with nothing to show ------------------------------------------------------------
+
+
+def test_a_buyer_with_nothing_in_any_column_is_left_out_and_a_person_is_never_a_buyer(conn, tmp_path):
+    """/buyers listed 196 buyers with zero in every column (their only records closed tender notices, or
+    none) and buyers named after people. A buyer is listed only with an open tender notice, an award notice,
+    a contract history record, a published contract or a grant; its records keep their names without a link."""
+    seed(conn)
+    conn.execute("INSERT INTO buyers (id, name_en, name_fr, updated_at) VALUES ('closed-only', 'Closed Only Agency', "
+                 "'Agence close', '2026-10-31')")
+    tender(conn, "cb-closed", 0, title="Old notice", status="expired", closing="2026-01-10T14:00:00",
+           published="2025-12-01", first_seen="2026-10-01", buyer="closed-only")
+    # A notice whose buyer spelling was a person's name: no buyer, and the spelling is never printed.
+    tender(conn, "cb-person", 0, title="Named contact", closing="2026-11-20T14:00:00", buyer=None)
+    conn.execute("UPDATE tenders SET buyer_raw_en = 'Adam Cheung', buyer_raw_fr = 'Adam Cheung' "
+                 "WHERE reference = 'cb-person'")
+    tender(conn, "cb-government", 0, title="Generic buyer", closing="2026-11-20T14:00:00", buyer=None)
+    conn.execute("UPDATE tenders SET buyer_raw_en = 'Government of Canada' WHERE reference = 'cb-government'")
+    conn.commit()
+    indicators.compute(conn, now="2026-10-31T01:00:00Z")
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+
+    index = [b["id"] for b in load(out, "buyers/index.json")["buyers"]]
+    assert index == ["dnd-mdn", "pwgsc-tpsgc"]
+    assert not (out / "buyers" / "closed-only.json").exists() and not (out / "buyers" / "never-buys.json").exists()
+    assert load(out, "stats.json")["counts"]["buyers"] == 2
+    for path in (out / "rankings").glob("*.json"):
+        assert all(r["id"] in index for rows in load(out, f"rankings/{path.name}")["buyers"].values() for r in rows)
+    sitemap = (out / "sitemaps" / "sitemap-1.xml").read_text(encoding="utf-8")
+    assert "/buyers/closed-only" not in sitemap and "/buyers/pwgsc-tpsgc" in sitemap
+
+    details = {}
+    for ref_ in ("cb-closed", "cb-person", "cb-government"):
+        details[ref_] = load(out, f"tenders/{es.reference_shard(ref_)}.json")[ref_]
+    # The unlisted buyer's notice keeps the buyer's name, with no link to a page that does not exist.
+    assert details["cb-closed"]["buyer_id"] is None and details["cb-closed"]["buyer_en"] == "Closed Only Agency"
+    assert details["cb-person"]["buyer_id"] is None and details["cb-person"]["buyer_en"] is None
+    assert details["cb-government"]["buyer_en"] == "Government of Canada"
+    text = "".join(p.read_text(encoding="utf-8") for p in out.rglob("*") if p.is_file())
+    assert "Adam Cheung" not in text
+
+
+
+def test_retired_buyer_ids_are_exported_as_aliases_to_listed_buyers(conn, tmp_path):
+    seed(conn)
+    conn.executemany("INSERT INTO buyer_aliases (old_id, new_id, reason, updated_at) VALUES (?, ?, ?, ?)", [
+        ("public-works-and-government-services-canada", "pwgsc-tpsgc", "merged", "2026-10-31T00:00:00Z"),
+        ("department-of-national-defence", "dnd-mdn", "merged", "2026-10-31T00:00:00Z"),
+        # A target with nothing to show has no page to send anyone to.
+        ("old-never-buys", "never-buys", "merged", "2026-10-31T00:00:00Z"),
+    ])
+    conn.commit()
+    out = tmp_path / "static"
+    counts = es.export_static(conn, out, today=TODAY, base_url=BASE)
+    assert load(out, "buyers/aliases.json") == {"aliases": {
+        "department-of-national-defence": "dnd-mdn", "public-works-and-government-services-canada": "pwgsc-tpsgc"}}
+    assert counts["buyer_aliases"] == 2
+    assert all(BUYER_ID.match(k) and BUYER_ID.match(v) for k, v in load(out, "buyers/aliases.json")["aliases"].items())

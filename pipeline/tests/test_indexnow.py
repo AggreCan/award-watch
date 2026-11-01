@@ -78,8 +78,9 @@ def tender(conn, reference, first_seen, codes=()):
                      [(reference, c) for c in codes])
 
 
-def buyer(conn, bid, stamp):
-    conn.execute("INSERT INTO buyers (id, name_en, updated_at) VALUES (?, ?, ?)", (bid, bid, stamp))
+def buyer(conn, bid, stamp, n_awards=1):
+    conn.execute("INSERT INTO buyers (id, name_en, n_awards, updated_at) VALUES (?, ?, ?, ?)",
+                 (bid, bid, n_awards, stamp))
 
 
 def urls_of(n):
@@ -119,6 +120,8 @@ def test_tenders_first_seen_tonight_their_categories_and_changed_buyers_come_bef
     tender(conn, "SSC-26-1:T", "2026-10-24")
     buyer(conn, "dnd-mdn", START)
     buyer(conn, "pwgsc-tpsgc", BEFORE)
+    # A buyer with nothing the export lists has no page to submit.
+    buyer(conn, "closed-only", START, n_awards=0)
     org = organization(conn, "New Supply Ltd", START)
     conn.commit()
     urls = indexnow.changed_urls(conn, START, BASE)

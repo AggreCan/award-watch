@@ -34,7 +34,10 @@ spending record, with the supplier withheld: its name, street, city, postal
 code and organization are stored NULL and supplier_withheld is 1. Only the
 count goes to the run log (rule 3); the first names are listed for the
 operator in data/out/review/<stage>-persons.txt. The contracting entity and a
-contract's client department go through buyers.resolve. UNSPSC codes go to the *_codes tables and unspsc_codes
+contract's client department go through buyers.resolve; a spelling that names
+no institution (a contracting officer's name, a job title, an address) leaves
+the record with no buyer and is listed in the same review file, never in the
+log. UNSPSC codes go to the *_codes tables and unspsc_codes
 (trimmed to their significant digits: 81110000 is the family 8111), GSIN
 codes to gsin_codes, and the delivery regions to provinces through
 normalize.region_provinces. Descriptions are cut at 600 characters. Contacts
@@ -43,7 +46,9 @@ are stored for the operator and never exported.
 Tender status comes from the file. After the open file is read, an open
 tender absent from it whose closing has passed becomes expired; the weekly
 complete pass, read before the open file, corrects any status the file states
-otherwise (cancelled, awarded).
+otherwise (cancelled, awarded). The open file itself keeps some notices for
+months after their closing; the exports read every notice's status on the
+data date (normalize.tender_status_on), which calls those closed.
 """
 
 from __future__ import annotations
@@ -55,6 +60,7 @@ import logging
 import re
 import sqlite3
 import sys
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -343,6 +349,8 @@ class FileStats:
     skipped: int = 0
     redacted: int = 0  # withheld names replaced in titles and descriptions
     missing: list[str] = field(default_factory=list)
+    # Rows per buyer spelling (English, French) that resolved to no buyer.
+    unbought: Counter = field(default_factory=Counter)
     # Kept for the open-notices file only: the status step needs its references,
     # and a legacy file's would be a million strings held for nothing.
     collect_references: bool = False
@@ -363,12 +371,16 @@ class _Context:
     unspsc: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
     gsin: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
     sql: dict[tuple, str] = field(default_factory=dict)
+    unbought: Counter = field(default_factory=Counter)
 
     def buyer(self, en: object, fr: object) -> str | None:
         key = (squash(en), squash(fr))
         if key not in self.buyer_cache:
             self.buyer_cache[key] = buyers.resolve(self.conn, key[0], key[1], now=self.stamp)
-        return self.buyer_cache[key]
+        found = self.buyer_cache[key]
+        if found is None and (key[0] or key[1]):
+            self.unbought[key] += 1
+        return found
 
 
 def _common(ctx: _Context, get: Callable[[str], str]) -> tuple[dict[str, object], list[tuple[str, str | None, str | None]]]:
@@ -689,6 +701,7 @@ def load_file(conn: sqlite3.Connection, stage: str, path: Path, source_file: str
                 conn.commit()
     _flush_codes(ctx)
     conn.commit()
+    stats.unbought = ctx.unbought
     return stats
 
 
@@ -811,7 +824,9 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, stage: str, *, no
     current = _iso(stamp) or datetime.now(timezone.utc)
     stats = StageStats(stage)
     drops = matching.PersonDrops()
-    buyers.take_notices(conn)  # start this stage's list empty
+    unbought: Counter = Counter()
+    buyers.take_notices(conn)  # start this stage's lists empty
+    buyers.take_rejects(conn)
     seed_segments(conn)
     if samples is not None:
         todo = [(f, path) for f, path in sample_files(stage, samples)]
@@ -859,6 +874,7 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, stage: str, *, no
         stats.excluded += fs.excluded
         stats.skipped += fs.skipped
         stats.redacted += fs.redacted
+        unbought.update(fs.unbought)
         if fs.missing:
             stats.notices.append(f"{f.name} lacks {', '.join(fs.missing)}")
         if f.kind == "open":
@@ -875,11 +891,15 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, stage: str, *, no
         stats.expired = expire_closed(conn, open_refs, stamp)
     if stats.read:
         recount_codes(conn)
-    if stage != "tenders":
-        review = drops.write((review_dir or config.OUT_DIR / "review") / f"{stage}-persons.txt",
-                             what=f"CanadaBuys {stage}", stamp=stamp)
-        if review:
-            stats.notices.append(review)
+    # The names the person test withheld (no supplier on a tender) and the
+    # buyer spellings that name no institution, for the operator only.
+    rejected = buyers.take_rejects(conn)
+    spellings = {spelling for _, spelling in rejected}
+    review = drops.write((review_dir or config.OUT_DIR / "review") / f"{stage}-persons.txt",
+                         what=f"CanadaBuys {stage}", stamp=stamp, buyers=rejected,
+                         buyer_rows=sum(n for key, n in unbought.items() if key[0] in spellings or key[1] in spellings))
+    if review:
+        stats.notices.append(review)
     notice = _buyer_notice(buyers.take_notices(conn))
     if notice:
         stats.notices.append(notice)
