@@ -52,7 +52,7 @@
       "binding": "DB",
       "database_name": "award-watch",
       // Replace with the id printed by `wrangler d1 create award-watch` on the project account.
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      "database_id": "7248573a-8f5a-4c18-a2f3-5eaa5eb813f6"
     }
   ],
   "r2_buckets": [
