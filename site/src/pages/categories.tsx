@@ -9,7 +9,7 @@ import { SEGMENT_CODES } from "../constants";
 import { SEGMENT_RE, loadCategories, loadCategory, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, segmentLabel, t } from "../i18n";
-import { Breadcrumb, Layout, noDataPage, notFoundPage, page, todayOf } from "../layout";
+import { Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { categorySeo, pageSeo } from "../seo";
 import { OrgTotalTable, TenderTable, money } from "./shared";
 
@@ -23,9 +23,10 @@ export async function categoriesIndex(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={t(lang, "categories.title")} dataAsOf={stats.data_as_of} active="/categories" seo={pageSeo("categories", lang)}>
-      <h1>{t(lang, "categories.title")}</h1>
-      <p class="lead">{t(lang, "categories.lead")}</p>
-      <p class="muted small">{t(lang, "categories.overlap")}</p>
+      <PageHead lang={lang} title={t(lang, "categories.title")} lead={t(lang, "categories.lead")}>
+        <p class="page-note">{t(lang, "categories.overlap")}</p>
+      </PageHead>
+      <Panel title={t(lang, "categories.title")} count={fmtInt(SEGMENT_CODES.length, lang)}>
       <div class="table-wrap bordered">
         <table class="restack">
           <thead>
@@ -61,6 +62,7 @@ export async function categoriesIndex(c: Context<AppEnv>): Promise<Response> {
           </tbody>
         </table>
       </div>
+      </Panel>
     </Layout>,
   );
 }
@@ -81,24 +83,25 @@ export async function categoryPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={name} dataAsOf={stats.data_as_of} active="/categories" seo={categorySeo(cat, lang, crumbs)}>
-      <Breadcrumb lang={lang} crumbs={crumbs} />
-      <p class="eyebrow">{t(lang, "category.segment", { code })}</p>
-      <h1>{name}</h1>
-      <p class="links">
-        <a href={`/tenders?segment=${code}`} class="btn btn-primary">{t(lang, "category.all_open", { n: n(cat.open_tenders.length) })}</a>
-        <a href={`/data/feeds/segment/${code}/tenders.xml`} class="btn">{t(lang, "category.feed")}</a>
-      </p>
+      <PageHead lang={lang} crumbs={crumbs} eyebrow={t(lang, "category.segment", { code })} title={name}
+        actions={<>
+          <a href={`/tenders?segment=${code}`} class="btn btn-primary">{t(lang, "category.all_open", { n: n(cat.open_tenders.length) })}</a>
+          <a href={`/data/feeds/segment/${code}/tenders.xml`} class="btn">{t(lang, "category.feed")}</a>
+        </>} />
 
-      <h2>{t(lang, "category.open")}</h2>
+      <Panel title={t(lang, "category.open")} count={n(cat.open_tenders.length)}>
       {cat.open_tenders.length ? (
         <TenderTable lang={lang} rows={cat.open_tenders} today={todayOf(stats.data_as_of)} />
       ) : <p class="muted">{t(lang, "category.open_none")}</p>}
+      </Panel>
 
-      <h2>{t(lang, "category.top")}</h2>
+      <div class="panel-grid">
+      <Panel title={t(lang, "category.top")}>
       <p class="muted small">{t(lang, "category.top_note")}</p>
       {cat.top_organizations.length ? <OrgTotalTable lang={lang} rows={cat.top_organizations} rank /> : <p class="muted">{t(lang, "awards.none")}</p>}
+      </Panel>
 
-      <h2>{t(lang, "category.years")}</h2>
+      <Panel title={t(lang, "category.years")}>
       {years.length ? (
         <div class="table-wrap bordered narrow">
           <table class="restack">
@@ -121,6 +124,8 @@ export async function categoryPage(c: Context<AppEnv>): Promise<Response> {
           </table>
         </div>
       ) : <p class="muted">{t(lang, "awards.none")}</p>}
+      </Panel>
+      </div>
     </Layout>,
   );
 }

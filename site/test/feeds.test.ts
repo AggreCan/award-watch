@@ -66,7 +66,7 @@ describe("watchlist page", () => {
     expect(page).toContain('No organizations yet. Use the Watch button on a profile; the <a href="/organizations">directory</a> lists every organization.');
     expect(page).toContain("<noscript> The watchlist needs JavaScript.</noscript>");
     expect(page).toContain('<div id="watch-move" hidden="">');
-    expect(page).toContain('<script src="/watchlist.js"></script>');
+    expect(page).toContain('<script src="/watchlist.js" defer=""></script>');
     expect(page).toContain(`data-max="${WATCH_MAX}"`);
     expect(page).toContain("Nothing about it is sent to the site.");
     expect(page).toContain('<link rel="canonical" href="https://awardwatch.ca/watchlist"');

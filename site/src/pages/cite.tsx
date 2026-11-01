@@ -3,7 +3,7 @@ import { HowToCite, STYLE_LABEL, datasetBibtex, datasetRis, isoDate, validCitati
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { t, type Key, type Lang } from "../i18n";
-import { Layout, noDataPage, page } from "../layout";
+import { Layout, PageHead, noDataPage, page } from "../layout";
 import { pageSeo } from "../seo";
 
 // How to cite the website and the Zenodo deposit of its files. The citations
@@ -29,9 +29,8 @@ export async function citePage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={t(lang, "cite.title")} dataAsOf={dataAsOf} seo={pageSeo("cite", lang)}>
-      <h1>{t(lang, "cite.title")}</h1>
-      <div class="cite-page" data-copy={t(lang, "citepage.copy")} data-copied={t(lang, "citepage.copied")}>
-        <p class="lead">{t(lang, "citepage.lead", { date: dataAsOf })}</p>
+      <PageHead lang={lang} title={t(lang, "cite.title")} lead={t(lang, "citepage.lead", { date: dataAsOf })} />
+      <div class="cite-page doc" data-copy={t(lang, "citepage.copy")} data-copied={t(lang, "citepage.copied")}>
         <p>{t(lang, "citepage.page_note")}</p>
 
         <h2 id="website">{t(lang, "citepage.website")}</h2>

@@ -117,14 +117,23 @@ describe("every page", () => {
     }
   });
 
-  it("keeps the layout: navigation, footer, data date, mark, theme and language toggles, no third-party asset", async () => {
+  it("keeps the layout: rail, footer, data date, mark, theme and language toggles, no third-party asset", async () => {
     const res = await get("/");
     const html = await res.text();
-    const nav = html.match(/<nav aria-label="Main" class="main-nav">[\s\S]*?<\/nav>/)?.[0] ?? "";
-    expect([...nav.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1])).toEqual([
-      "/tenders", "/awards", "/expiring", "/organizations", "/buyers", "/categories", "/rankings", "/data",
+    // The rail: the live index with its counts, the browse links, the reader's lists.
+    const nav = html.match(/<nav class="rail" aria-label="Main">[\s\S]*?<\/nav>/)?.[0] ?? "";
+    expect([...nav.matchAll(/<a class="rail-item[^"]*" href="([^"]+)"/g)].map((m) => m[1])).toEqual([
+      "/tenders", "/tenders/new", "/tenders?closing=7", "/expiring", "/awards/2026", "/organizations", "/buyers",
+      "/categories", "/rankings", "/feeds", "/data", "/methodology", "/watchlist",
     ]);
-    expect(nav).toContain('<a href="/expiring">Ending soon</a>');
+    expect(nav).toContain('<a class="rail-item" href="/tenders"><span class="rail-label">Open tenders</span><span class="rail-n">3</span></a>');
+    expect(nav).toContain('<a class="rail-item soon" href="/tenders?closing=7"><span class="rail-label">Closing within 7 days</span><span class="rail-n">1</span></a>');
+    expect(nav).toContain('<span class="rail-label">Ending within 3 months</span><span class="rail-n">3</span>');
+    expect(nav).toContain('<span class="rail-label">Awards in 2026</span><span class="rail-n">3</span>');
+    expect(nav).toContain('<span class="rail-n" data-watch-count="" hidden=""></span>');
+    expect(nav).toContain("Saved searches: soon");
+    // A page's own section is marked in the rail.
+    expect(await text("/buyers")).toContain('<a class="rail-item" href="/buyers" aria-current="page">');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));
     for (const href of ["/methodology", "/support", "/feeds", "/watchlist", "/corrections", "/cite", "/data#downloads", "/data#sources"]) {
       expect(footer, href).toContain(`href="${href}"`);
@@ -304,7 +313,7 @@ describe("award notices and contract history", () => {
     expect(html).toContain('<span class="badge badge-cancelled">Cancelled</span>');
     const year = await text("/awards/2026");
     expect(year).toContain("3 award notices dated 2026.");
-    expect(year).toContain('<a href="/downloads/awards-2026.csv">Download every award notice dated 2026 (CSV)</a>');
+    expect(year).toContain('<a href="/downloads/awards-2026.csv" class="btn">Download every award notice dated 2026 (CSV)</a>');
     expect(year).toContain('<span aria-current="page" class="mono">2026</span>');
     expect(year).toContain("cb-400-40000004");
     expect(year).not.toContain("cb-600-60000006");

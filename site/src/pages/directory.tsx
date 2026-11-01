@@ -14,7 +14,7 @@ import { directoryPath, loadDirectories } from "../crosslinks";
 import { loadDirectoryPage, loadDirectoryPart, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, t, tn } from "../i18n";
-import { Breadcrumb, Layout, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
+import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
 import { canonicalUrl, pageSeo, sectionSeo } from "../seo";
 import { directoryName } from "./organization";
 
@@ -28,9 +28,12 @@ export async function organizationsIndex(c: Context<AppEnv>): Promise<Response> 
   return page(
     c,
     <Layout lang={lang} title={t(lang, "directory.index_title")} dataAsOf={stats.data_as_of} active="/organizations" seo={pageSeo("organizations", lang)}>
-      <h1>{t(lang, "directory.index_title")}</h1>
-      <p class="lead">{t(lang, "directory.index_lead", { n: fmtInt(total, lang) })}</p>
-      <p class="muted small">{t(lang, "directory.index_note")}</p>
+      <PageHead lang={lang} title={t(lang, "directory.index_title")} lead={t(lang, "directory.index_lead", { n: fmtInt(total, lang) })}
+        actions={<a href="/downloads/organizations.csv" class="btn">{t(lang, "tenders.csv")}</a>}>
+        <p class="page-note">{t(lang, "directory.index_note")}</p>
+      </PageHead>
+      <Panel title={t(lang, "directory.col_place")} count={fmtInt(total, lang)}
+        foot={<span><a href="/rankings">{t(lang, "directory.to_rankings")}</a> · <a href="/buyers">{t(lang, "directory.to_buyers")}</a></span>}>
       <div class="table-wrap bordered narrow">
         <table class="restack">
           <thead>
@@ -51,9 +54,7 @@ export async function organizationsIndex(c: Context<AppEnv>): Promise<Response> 
           </tbody>
         </table>
       </div>
-      <p class="top-gap">
-        <a href="/rankings">{t(lang, "directory.to_rankings")}</a> · <a href="/buyers">{t(lang, "directory.to_buyers")}</a>
-      </p>
+      </Panel>
     </Layout>,
   );
 }
@@ -88,9 +89,7 @@ export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
       c,
       <Layout lang={lang} title={heading} dataAsOf={stats.data_as_of} active="/organizations"
         seo={sectionSeo(directoryPath(code), heading, none, [...crumbsBase, { name: place }], true)}>
-        <Breadcrumb lang={lang} crumbs={[...crumbsBase, { name: place }]} />
-        <h1>{heading}</h1>
-        <p class="lead">{none}</p>
+        <PageHead lang={lang} crumbs={[...crumbsBase, { name: place }]} title={heading} lead={none} />
       </Layout>,
     );
   }
@@ -120,20 +119,26 @@ export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/organizations" seo={sectionSeo(path, title, description, crumbs)} head={head}>
-      <Breadcrumb lang={lang} crumbs={crumbs} />
-      <h1>{title}</h1>
-      <p class="lead">
-        {tn(lang, "directory.lead_one", "directory.lead_many", idx.organizations, { n: fmt(idx.organizations), place, size: fmt(idx.page_size) })}
-      </p>
-      <p class="muted small">{t(lang, "directory.records_note")}</p>
-      <nav aria-label={t(lang, "directory.letters")}>
+      <PageHead lang={lang} crumbs={crumbs} title={title}
+        lead={tn(lang, "directory.lead_one", "directory.lead_many", idx.organizations, { n: fmt(idx.organizations), place, size: fmt(idx.page_size) })}>
+        <p class="page-note">{t(lang, "directory.records_note")}</p>
+      </PageHead>
+      <nav aria-label={t(lang, "directory.letters")} class="toolbar">
+        <span class="toolbar-label">{t(lang, "directory.letters")}</span>
         <ul class="quick-links">
           {idx.letters.map(([letter, at]) => (
             <li><a href={directoryPath(code, at)} aria-current={at === n ? "page" : undefined}>{letter}</a></li>
           ))}
         </ul>
       </nav>
-      <p class="small top-gap">{t(lang, "directory.range", { first, last })}</p>
+      <Panel title={place} count={t(lang, "directory.range", { first, last })}
+        foot={<nav aria-label={t(lang, "common.pagination")} class="pagination">
+          <span class="muted">{t(lang, "tenders.page_of", { page: fmt(n), pages: fmt(idx.pages) })}</span>
+          <span class="pages">
+            {prev ? <a href={prev} class="btn" rel="prev">{t(lang, "tenders.prev")}</a> : null}
+            {next ? <a href={next} class="btn" rel="next">{t(lang, "tenders.next")}</a> : null}
+          </span>
+        </nav>}>
       <div class="table-wrap bordered">
         <table class="restack">
           <thead>
@@ -156,16 +161,10 @@ export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
           </tbody>
         </table>
       </div>
-      <nav aria-label={t(lang, "common.pagination")} class="pagination">
-        <span class="muted">{t(lang, "tenders.page_of", { page: fmt(n), pages: fmt(idx.pages) })}</span>
-        <span class="pages">
-          {prev ? <a href={prev} class="btn" rel="prev">{t(lang, "tenders.prev")}</a> : null}
-          {next ? <a href={next} class="btn" rel="next">{t(lang, "tenders.next")}</a> : null}
-        </span>
-      </nav>
+      </Panel>
       {idx.pages > 1 ? (
-        <nav aria-label={t(lang, "directory.pages")}>
-          <h2>{t(lang, "directory.pages")}</h2>
+        <nav aria-label={t(lang, "directory.pages")} class="toolbar">
+          <span class="toolbar-label">{t(lang, "directory.pages")}</span>
           <ul class="quick-links">
             {idx.ranges.map(([from, to], i) => (
               <li>

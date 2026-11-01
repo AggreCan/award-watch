@@ -2,24 +2,26 @@ import type { Context } from "hono";
 import { loadExpiringIndex, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
-import { Layout, noDataPage, page, todayOf } from "../layout";
+import { Layout, PageHead, Panel, noDataPage, page, todayOf } from "../layout";
 import { homeJsonLd, pageSeo } from "../seo";
 import { FeedLinks } from "./feeds";
 import { AwardTable, OrgTotalTable, TenderTable } from "./shared";
 
 type CountKey = "tenders_open" | "tenders_new_today" | "organizations" | "awards" | "history" | "contracts" | "grants" | "buyers";
 
-// One tile per count, each linking to the page that lists what it counts. A
-// count the file does not carry leaves its tile out.
-const TILES: { count: CountKey; label: Key; note: Key; href: string }[] = [
-  { count: "tenders_open", label: "home.tile_open", note: "home.tile_open_note", href: "/tenders" },
-  { count: "tenders_new_today", label: "home.tile_new", note: "home.tile_new_note", href: "/tenders/new" },
-  { count: "awards", label: "home.tile_awards", note: "home.tile_awards_note", href: "/awards" },
-  { count: "organizations", label: "home.tile_organizations", note: "home.tile_organizations_note", href: "/organizations" },
-  { count: "contracts", label: "home.tile_contracts", note: "home.tile_contracts_note", href: "/data#sources" },
-  { count: "grants", label: "home.tile_grants", note: "home.tile_grants_note", href: "/data#sources" },
-  { count: "history", label: "home.tile_history", note: "home.tile_history_note", href: "/data#sources" },
-  { count: "buyers", label: "home.tile_buyers", note: "home.tile_buyers_note", href: "/buyers" },
+// One entry per count, each linking to the page that lists what it counts. A
+// count the file does not carry is left out. The day's figures (open, new,
+// award notices and, when the radar is published, the 3-month count) are the
+// tiles; the standing totals are the "records held" panel beneath.
+const TILES: { count: CountKey; label: Key; note: Key; href: string; tile: boolean }[] = [
+  { count: "tenders_open", label: "home.tile_open", note: "home.tile_open_note", href: "/tenders", tile: true },
+  { count: "tenders_new_today", label: "home.tile_new", note: "home.tile_new_note", href: "/tenders/new", tile: true },
+  { count: "awards", label: "home.tile_awards", note: "home.tile_awards_note", href: "/awards", tile: true },
+  { count: "organizations", label: "home.tile_organizations", note: "home.tile_organizations_note", href: "/organizations", tile: false },
+  { count: "contracts", label: "home.tile_contracts", note: "home.tile_contracts_note", href: "/data#sources", tile: false },
+  { count: "grants", label: "home.tile_grants", note: "home.tile_grants_note", href: "/data#sources", tile: false },
+  { count: "history", label: "home.tile_history", note: "home.tile_history_note", href: "/data#sources", tile: false },
+  { count: "buyers", label: "home.tile_buyers", note: "home.tile_buyers_note", href: "/buyers", tile: false },
 ];
 
 type Tile = { label: Key; note: Key; href: string; value: number };
@@ -36,29 +38,26 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   // radar's index is published.
   const expiring = (await loadExpiringIndex(c.env))?.windows.find((w) => w.window === "3m");
   const tiles: Tile[] = [];
-  for (const tile of TILES) {
-    const value = stats.counts[tile.count];
-    if (value !== undefined) tiles.push({ label: tile.label, note: tile.note, href: tile.href, value });
-    if (tile.count === "awards" && expiring) {
+  const held: Tile[] = [];
+  for (const entry of TILES) {
+    const value = stats.counts[entry.count];
+    if (value !== undefined) (entry.tile ? tiles : held).push({ label: entry.label, note: entry.note, href: entry.href, value });
+    if (entry.count === "awards" && expiring) {
       tiles.push({ label: "home.tile_expiring", note: "home.tile_expiring_note", href: "/expiring/3m", value: expiring.n });
     }
   }
+  // Four tiles to a row: without the radar the first standing total moves up.
+  while (tiles.length < 4 && held.length) tiles.push(held.shift()!);
 
   return page(
     c,
     <Layout lang={lang} title={t(lang, "site.name")} dataAsOf={stats.data_as_of} seo={pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] })}
       head={<FeedLinks lang={lang} />}>
-      <section class="hero">
-        <h1>{t(lang, "home.title")}</h1>
-        <p class="lead">{t(lang, "home.lead")}</p>
-        <div class="quick-links">
-          <a href="/tenders">{t(lang, "home.quick_open")}</a>
-          <a href="/tenders?closing=7">{t(lang, "home.quick_closing")}</a>
-          <a href="/tenders/new">{t(lang, "home.quick_new")}</a>
-          <a href="/awards">{t(lang, "home.quick_awards")}</a>
-          <a href="/organizations">{t(lang, "home.quick_directory")}</a>
-        </div>
-      </section>
+      <PageHead lang={lang} title={t(lang, "home.title")} lead={t(lang, "home.lead")}
+        actions={<>
+          <a href="/feeds" class="btn">{t(lang, "footer.feeds")}</a>
+          <a href="/data#downloads" class="btn">{t(lang, "footer.download")}</a>
+        </>} />
 
       {tiles.length ? (
         <section class="tiles" aria-label={t(lang, "home.tiles_label")}>
@@ -72,48 +71,48 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
         </section>
       ) : null}
 
-      <section class="topic">
-        <div class="topic-head">
-          <h2>{t(lang, "home.new_heading")}</h2>
-          <a href="/tenders/new">{t(lang, "home.new_all")}</a>
-        </div>
+      <Panel title={t(lang, "home.new_heading")} tools={<a href="/tenders/new">{t(lang, "home.new_all")}</a>}>
         {stats.new_tenders.length ? <TenderTable lang={lang} rows={stats.new_tenders} today={today} /> : <Empty lang={lang} k="home.new_none" />}
-      </section>
+      </Panel>
 
-      <section class="topic">
-        <div class="topic-head">
-          <h2>{t(lang, "home.closing_heading")}</h2>
-          <a href="/tenders?closing=7">{t(lang, "home.closing_all")}</a>
-        </div>
+      <Panel title={t(lang, "home.closing_heading")} class="soon" tools={<a href="/tenders?closing=7">{t(lang, "home.closing_all")}</a>}>
         {stats.closing_soon.length ? <TenderTable lang={lang} rows={stats.closing_soon} today={today} /> : <Empty lang={lang} k="home.closing_none" />}
-      </section>
+      </Panel>
 
-      <section class="topic">
-        <div class="topic-head">
-          <h2>{t(lang, "home.awards_heading")}</h2>
-          <a href="/awards">{t(lang, "home.awards_all")}</a>
-        </div>
+      <Panel title={t(lang, "home.awards_heading")} tools={<a href="/awards">{t(lang, "home.awards_all")}</a>}>
         {stats.recent_awards.length ? <AwardTable lang={lang} rows={stats.recent_awards} /> : <Empty lang={lang} k="home.awards_none" />}
-      </section>
+      </Panel>
 
-      <section class="topic">
-        <div class="topic-head">
-          <h2>{t(lang, "home.top_heading", { year })}</h2>
-          <a href={`/rankings/${year}`}>{t(lang, "home.top_all")}</a>
-        </div>
+      <Panel title={t(lang, "home.top_heading", { year })} tools={<a href={`/rankings/${year}`}>{t(lang, "home.top_all")}</a>}>
         <p class="muted small">{t(lang, "home.top_note")}</p>
         {stats.top_organizations_year.length ? <OrgTotalTable lang={lang} rows={stats.top_organizations_year} rank /> : <Empty lang={lang} k="home.top_none" />}
-      </section>
+      </Panel>
 
-      <section class="panel">
-        <h2>{t(lang, "home.read_heading")}</h2>
-        <ul>
-          <li>{t(lang, "home.read_records")}</li>
-          <li>{t(lang, "home.read_sources")}</li>
-          <li>{t(lang, "home.read_competitive")}</li>
-          <li>{tj(lang, "home.read_more", { methodology: <a href="/methodology">{t(lang, "nav.methodology")}</a> })}</li>
-        </ul>
-      </section>
+      <div class="panel-grid">
+        {held.length ? (
+          <Panel title={t(lang, "home.records_heading")}>
+            <ul class="kv">
+              {held.map((h) => (
+                <li>
+                  <span>
+                    <a href={h.href}>{t(lang, h.label)}</a>
+                    <span class="kv-note">{t(lang, h.note)}</span>
+                  </span>
+                  <span class="num">{fmtInt(h.value, lang)}</span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        ) : null}
+        <Panel title={t(lang, "home.read_heading")}>
+          <ul class="notes">
+            <li>{t(lang, "home.read_records")}</li>
+            <li>{t(lang, "home.read_sources")}</li>
+            <li>{t(lang, "home.read_competitive")}</li>
+            <li>{tj(lang, "home.read_more", { methodology: <a href="/methodology">{t(lang, "nav.methodology")}</a> })}</li>
+          </ul>
+        </Panel>
+      </div>
     </Layout>,
   );
 }

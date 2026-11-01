@@ -4,7 +4,7 @@ import { CLOSING_SOON_DAYS } from "../constants";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { t, tj, type Key } from "../i18n";
-import { Layout, page } from "../layout";
+import { Layout, PageHead, page } from "../layout";
 import { pageSeo } from "../seo";
 
 // How the site reads its sources, merges organizations and buyers, counts
@@ -38,15 +38,14 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
   const stats = await loadStats(c.env).catch(() => null);
   return page(
     c,
-    <Layout lang={lang} title={t(lang, "methodology.title")} dataAsOf={stats?.data_as_of ?? null} seo={pageSeo("methodology", lang)}>
+    <Layout lang={lang} title={t(lang, "methodology.title")} dataAsOf={stats?.data_as_of ?? null} active="/methodology" seo={pageSeo("methodology", lang)}>
+      <PageHead lang={lang} title={t(lang, "methodology.title")} lead={t(lang, "methodology.lead")} />
       <div class="doc-layout">
         <nav class="toc" aria-label={t(lang, "toc.label")}>
           <span class="toc-title">{t(lang, "toc.title")}</span>
           {TOC.map(([id, key]) => <a href={`#${id}`}>{t(lang, key)}</a>)}
         </nav>
         <div class="doc">
-          <h1>{t(lang, "methodology.title")}</h1>
-          <p class="lead">{t(lang, "methodology.lead")}</p>
 
           <h2 id="sources">{t(lang, "methodology.toc_sources")}</h2>
           <p>{t(lang, "methodology.sources_text")}</p>

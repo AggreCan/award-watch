@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { clientStrings, numberLocale, t, tj, type Key, type Lang } from "../i18n";
-import { ClientData, Layout, page } from "../layout";
+import { ClientData, Layout, PageHead, Panel, page } from "../layout";
 import { pageSeo } from "../seo";
 
 // The watchlist lives in the visitor's browser (localStorage) and nowhere
@@ -41,13 +41,13 @@ export async function watchlistPage(c: Context<AppEnv>): Promise<Response> {
   const stats = await loadStats(c.env).catch(() => null);
   return page(
     c,
-    <Layout lang={lang} title={t(lang, "watch.title")} dataAsOf={stats?.data_as_of ?? null} seo={pageSeo("watchlist", lang)}>
-      <h1>{t(lang, "watch.title")}</h1>
-      <p class="lead">{t(lang, "watch.lead")}</p>
-      <p>{t(lang, "watch.privacy")}</p>
-      <p class="muted small">{t(lang, "watch.records_note")} {t(lang, "watch.limit_note", { max: WATCH_MAX })}</p>
+    <Layout lang={lang} title={t(lang, "watch.title")} dataAsOf={stats?.data_as_of ?? null} active="/watchlist" seo={pageSeo("watchlist", lang)}>
+      <PageHead lang={lang} title={t(lang, "watch.title")} lead={t(lang, "watch.lead")}>
+        <p class="page-note">{t(lang, "watch.privacy")}</p>
+        <p class="page-note">{t(lang, "watch.records_note")} {t(lang, "watch.limit_note", { max: WATCH_MAX })}</p>
+      </PageHead>
 
-      <p id="watch-status" class="top-gap" aria-live="polite"></p>
+      <Panel title={t(lang, "watch.title")} tools={<span id="watch-status" aria-live="polite"></span>}>
       <div class="table-wrap bordered" id="watchlist" data-max={String(WATCH_MAX)}>
         <table class="restack">
           <thead>
@@ -65,9 +65,10 @@ export async function watchlistPage(c: Context<AppEnv>): Promise<Response> {
           </tbody>
         </table>
       </div>
+      </Panel>
 
       <div id="watch-move" hidden>
-        <h2>{t(lang, "watch.move_h")}</h2>
+        <Panel title={t(lang, "watch.move_h")}>
         <p>{t(lang, "watch.move_text")}</p>
         <div class="stack">
           <p>
@@ -87,9 +88,9 @@ export async function watchlistPage(c: Context<AppEnv>): Promise<Response> {
           <button type="button" class="btn" id="watch-import">{t(lang, "watch.import")}</button>
           <p id="watch-move-status" class="muted" aria-live="polite"></p>
         </div>
+        </Panel>
       </div>
       <ClientData id="i18n" data={watchlistClientData(lang)} />
-      <script src="/watchlist.js"></script>
     </Layout>,
   );
 }

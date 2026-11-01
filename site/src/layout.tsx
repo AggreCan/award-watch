@@ -1,10 +1,10 @@
 import type { Context } from "hono";
 import { html } from "hono/html";
-import type { FC, PropsWithChildren } from "hono/jsx";
+import { createContext, useContext, type FC, type PropsWithChildren } from "hono/jsx";
 import { CLOSING_SOON_DAYS } from "./constants";
-import { type Competitive, competitiveOf } from "./data";
+import { type Competitive, type RailCounts, competitiveOf, loadRail } from "./data";
 import type { AppEnv } from "./env";
-import { competitiveLabel, statusLabel, t, type Key, type Lang } from "./i18n";
+import { competitiveLabel, fmtInt, statusLabel, t, type Key, type Lang } from "./i18n";
 import { type Seo, absoluteUrl, alternates, canonicalUrl, defaultDescription, pageTitle } from "./seo";
 
 // The formatting helpers live with the dictionary; pages import them from here.
@@ -95,6 +95,48 @@ export const Breadcrumb: FC<{ lang: Lang; crumbs: { name: string; path?: string 
   </nav>
 );
 
+// The page's own band: the trail back, the title, a one-line description and
+// the page's actions (CSV, feed, watch) on the right. Anything else the head
+// needs (a second line of facts) comes in as children under the description.
+export const PageHead: FC<PropsWithChildren<{
+  lang: Lang; title: unknown; lead?: unknown; crumbs?: { name: string; path?: string }[]; eyebrow?: unknown; actions?: unknown;
+}>> = (p) => (
+  <header class="page-head">
+    {p.crumbs ? <Breadcrumb lang={p.lang} crumbs={p.crumbs} /> : null}
+    <div class="page-head-row">
+      <div class="page-head-text">
+        {p.eyebrow ? <p class="eyebrow">{p.eyebrow as any}</p> : null}
+        <h1>{p.title as any}</h1>
+        {p.lead ? <p class="lead">{p.lead as any}</p> : null}
+        {p.children}
+      </div>
+      {p.actions ? <div class="page-actions">{p.actions as any}</div> : null}
+    </div>
+  </header>
+);
+
+// A bordered region of the page under a labelled head band: the label on the
+// left, a count or a small action on the right. Tables sit flush inside; any
+// other block gets the panel's padding from the stylesheet. foot is the band
+// along the bottom (pager, source line, keyboard hint).
+export const Panel: FC<PropsWithChildren<{
+  title: unknown; id?: string; count?: unknown; tools?: unknown; foot?: unknown; class?: string; label?: string;
+}>> = (p) => (
+  <section class={p.class ? `panel ${p.class}` : "panel"} aria-label={p.label}>
+    <div class="panel-head">
+      <h2 id={p.id}>{p.title as any}</h2>
+      {p.count !== undefined || p.tools ? (
+        <div class="panel-tools">
+          {p.count !== undefined ? <span class="panel-count">{p.count as any}</span> : null}
+          {p.tools as any}
+        </div>
+      ) : null}
+    </div>
+    {p.children}
+    {p.foot ? <div class="panel-foot">{p.foot as any}</div> : null}
+  </section>
+);
+
 // Search and social metadata. A page without an Seo object (errors, the
 // thank-you page) gets only the site description: no canonical, no cards.
 const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, lang, title }) => {
@@ -134,26 +176,86 @@ const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, lang, tit
   );
 };
 
-const NAV: readonly [string, Key][] = [
-  ["/tenders", "nav.tenders"],
-  ["/awards", "nav.awards"],
-  ["/expiring", "nav.expiring"],
-  ["/organizations", "nav.organizations"],
-  ["/buyers", "nav.buyers"],
-  ["/categories", "nav.categories"],
-  ["/rankings", "nav.rankings"],
-  ["/data", "nav.data"],
-];
+// The rail's counts reach the shell through a render context set by page(),
+// so the pages, which already hand Layout their data date, do not each load
+// them. Outside page() (the error handler) the rail shows its links bare.
+export const RailContext = createContext<RailCounts | null>(null);
+
+type RailEntry = { href: string; label: string; n?: number; active?: string; soon?: boolean };
+
+const RailItem: FC<{ lang: Lang; e: RailEntry; current: boolean }> = ({ lang, e, current }) => (
+  <li>
+    <a class={e.soon ? "rail-item soon" : "rail-item"} href={e.href} aria-current={current ? "page" : undefined}>
+      <span class="rail-label">{e.label}</span>
+      {e.n !== undefined ? <span class="rail-n">{fmtInt(e.n, lang)}</span> : null}
+    </a>
+  </li>
+);
+
+// The left rail: a live index of counts, the browse links, and the reader's
+// own lists. The last group is anchored to the rail's foot, so the items an
+// account adds later (saved searches, alerts, the account itself) go there
+// without moving anything above them. Nothing in it assumes a signed-in
+// reader: the watchlist lives in this browser, and saved searches are a line
+// that says they are coming.
+const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null }> = ({ lang, active, rail }) => {
+  const year = rail?.year ?? new Date().toISOString().slice(0, 4);
+  const index: RailEntry[] = [
+    { href: "/tenders", label: t(lang, "rail.open"), n: rail?.open, active: "/tenders" },
+    { href: "/tenders/new", label: t(lang, "rail.new"), n: rail?.newToday },
+    { href: "/tenders?closing=7", label: t(lang, "rail.closing", { n: CLOSING_SOON_DAYS }), n: rail?.closingSoon, soon: true },
+    ...(rail?.ending3m !== undefined ? [{ href: "/expiring", label: t(lang, "rail.ending"), n: rail.ending3m, active: "/expiring" }] : []),
+    { href: `/awards/${year}`, label: t(lang, "rail.awards_year", { year }), n: rail?.awardsYear, active: "/awards" },
+    { href: "/organizations", label: t(lang, "nav.organizations"), n: rail?.organizations, active: "/organizations" },
+    { href: "/buyers", label: t(lang, "nav.buyers"), n: rail?.buyers, active: "/buyers" },
+  ];
+  const browse: RailEntry[] = [
+    { href: "/categories", label: t(lang, "nav.categories"), active: "/categories" },
+    { href: "/rankings", label: t(lang, "nav.rankings"), active: "/rankings" },
+    { href: "/feeds", label: t(lang, "nav.feeds"), active: "/feeds" },
+    { href: "/data", label: t(lang, "nav.data"), active: "/data" },
+    { href: "/methodology", label: t(lang, "nav.methodology"), active: "/methodology" },
+  ];
+  return (
+    <nav class="rail" aria-label={t(lang, "nav.main_label")}>
+      <div class="rail-group">
+        <p class="rail-head" id="rail-index">{t(lang, "rail.index")}</p>
+        <ul aria-labelledby="rail-index">
+          {index.map((e) => <RailItem lang={lang} e={e} current={e.active !== undefined && e.active === active} />)}
+        </ul>
+      </div>
+      <div class="rail-group rail-browse">
+        <p class="rail-head" id="rail-browse">{t(lang, "rail.browse")}</p>
+        <ul aria-labelledby="rail-browse">
+          {browse.map((e) => <RailItem lang={lang} e={e} current={e.active === active} />)}
+        </ul>
+      </div>
+      <div class="rail-group rail-user">
+        <p class="rail-head" id="rail-lists">{t(lang, "rail.lists")}</p>
+        <ul aria-labelledby="rail-lists">
+          <li>
+            <a class="rail-item" href="/watchlist" aria-current={active === "/watchlist" ? "page" : undefined}>
+              <span class="rail-label">{t(lang, "footer.watchlist")}</span>
+              <span class="rail-n" data-watch-count="" hidden></span>
+            </a>
+          </li>
+          <li class="rail-item rail-later">{t(lang, "rail.saved_soon")}</li>
+        </ul>
+      </div>
+    </nav>
+  );
+};
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 1;
+export const STYLES_VERSION = 2;
 
 export const Layout: FC<
   PropsWithChildren<{ lang: Lang; title: string; dataAsOf: string | null; active?: string; head?: unknown; seo?: Seo }>
 > = (props) => {
   const { lang, active } = props;
   const title = props.seo?.title ?? pageTitle(props.title);
+  const rail = useContext(RailContext);
   return (
     <html lang={lang}>
       <head>
@@ -163,7 +265,8 @@ export const Layout: FC<
         <link rel="stylesheet" href={`/styles.css?v=${STYLES_VERSION}`} />
         <script src="/theme.js"></script>
         <script src="/links.js" defer></script>
-        <link rel="preload" href="/fonts/public-sans-latin-var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+        <script src="/watchlist.js" defer></script>
+        <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
         <link rel="icon" href="/favicon.ico" sizes="48x48" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -171,76 +274,76 @@ export const Layout: FC<
         {props.head as any}
       </head>
       <body>
-        <header class="site-header">
-          <div class="header-top">
-            <div class="container header-row">
-              <a href="/" class="brand">
-                <BrandMark />
-                <span class="brand-name">{t(lang, "site.name")}</span>
-              </a>
-              <span class="tagline">{t(lang, "site.tagline")}</span>
-              <div class="header-meta">
-                <span class="mono">
-                  {t(lang, "nav.data_as_of")} {props.dataAsOf ?? t(lang, "common.na")}
-                </span>
-                <button type="button" class="theme-toggle">
-                  <span class="when-light">{t(lang, "nav.dark")}</span>
-                  <span class="when-dark">{t(lang, "nav.light")}</span>
-                </button>
-                <a href={`?lang=${lang === "fr" ? "en" : "fr"}`} class="lang-toggle" rel="nofollow">
-                  {t(lang, "nav.lang")}
-                </a>
-              </div>
-            </div>
-          </div>
-          <nav aria-label={t(lang, "nav.main_label")} class="main-nav">
-            <div class="container">
-              <ul>
-                {NAV.map(([href, key]) => (
-                  <li>
-                    <a href={href} class={active === href ? "active" : undefined} aria-current={active === href ? "page" : undefined}>
-                      {t(lang, key)}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </nav>
-        </header>
-        <main class="container">{props.children}</main>
-        <footer class="site-footer">
-          <div class="container footer-row">
-            <span>
-              {t(lang, "footer.sources")} <a href="/data#sources">{t(lang, "footer.sources_link")}</a>
+        <a class="skip" href="#main">{t(lang, "nav.skip")}</a>
+        <header class="topbar">
+          <a href="/" class="brand">
+            <BrandMark />
+            <span class="brand-name">{t(lang, "site.name")}</span>
+          </a>
+          <div class="topbar-meta">
+            <span class="asof">
+              {t(lang, "nav.data_as_of")} {props.dataAsOf ?? t(lang, "common.na")}
             </span>
-            <a href="/methodology">{t(lang, "footer.methodology")}</a>
-            <a href="/data#downloads">{t(lang, "footer.download")}</a>
-            <a href="/feeds">{t(lang, "footer.feeds")}</a>
-            <a href="/watchlist">{t(lang, "footer.watchlist")}</a>
-            <a href="/corrections">{t(lang, "footer.corrections")}</a>
-            <a href="/cite">{t(lang, "footer.cite")}</a>
-            <a href="/support">{t(lang, "footer.support")}</a>
+            <a href={`?lang=${lang === "fr" ? "en" : "fr"}`} class="lang-toggle" rel="nofollow">
+              {t(lang, "nav.lang")}
+            </a>
+            <button type="button" class="theme-toggle">
+              <span class="when-light">{t(lang, "nav.dark")}</span>
+              <span class="when-dark">{t(lang, "nav.light")}</span>
+            </button>
           </div>
-        </footer>
+        </header>
+        <div class="frame">
+          <Rail lang={lang} active={active} rail={rail} />
+          <div class="content">
+            <main id="main">{props.children}</main>
+            <footer class="site-footer">
+              <div class="footer-row">
+                <span class="footer-sources">
+                  {t(lang, "footer.sources")} <a href="/data#sources">{t(lang, "footer.sources_link")}</a>
+                </span>
+                <span class="footer-links">
+                  <a href="/categories">{t(lang, "nav.categories")}</a>
+                  <a href="/rankings">{t(lang, "nav.rankings")}</a>
+                  <a href="/methodology">{t(lang, "footer.methodology")}</a>
+                  <a href="/data#downloads">{t(lang, "footer.download")}</a>
+                  <a href="/feeds">{t(lang, "footer.feeds")}</a>
+                  <a href="/watchlist">{t(lang, "footer.watchlist")}</a>
+                  <a href="/corrections">{t(lang, "footer.corrections")}</a>
+                  <a href="/cite">{t(lang, "footer.cite")}</a>
+                  <a href="/support">{t(lang, "footer.support")}</a>
+                </span>
+              </div>
+            </footer>
+          </div>
+        </div>
       </body>
     </html>
   );
 };
 
-export function page(c: Context<AppEnv>, body: unknown, status = 200): Response | Promise<Response> {
+// Every page goes out through here: the rail's counts are loaded once and
+// handed to the shell through RailContext while the page renders. A failure
+// to read them leaves the rail's links without counts, never the page down.
+export async function page(c: Context<AppEnv>, body: unknown, status = 200): Promise<Response> {
+  let rail: RailCounts | null = null;
+  try {
+    rail = await loadRail(c.env);
+  } catch {
+    rail = null;
+  }
   c.header("Cache-Control", status === 200 ? "public, max-age=300" : "no-store");
-  return c.html(html`<!doctype html>${body as any}`, status as any);
+  return c.html(html`<!doctype html>${(<RailContext.Provider value={rail}>{body as any}</RailContext.Provider>) as any}`, status as any);
 }
 
 // Shown while the data files have not been published yet (before the first
 // nightly run, or on a dev checkout without `npm run data:local`).
-export function noDataPage(c: Context<AppEnv>, title: Key): Response | Promise<Response> {
+export function noDataPage(c: Context<AppEnv>, title: Key): Promise<Response> {
   const lang = c.get("lang") ?? "en";
   return page(
     c,
     <Layout lang={lang} title={t(lang, title)} dataAsOf={null}>
-      <h1>{t(lang, "error.no_data")}</h1>
-      <p>{t(lang, "error.no_data_text")}</p>
+      <PageHead lang={lang} title={t(lang, "error.no_data")} lead={t(lang, "error.no_data_text")} />
     </Layout>,
     503,
   );
@@ -249,15 +352,12 @@ export function noDataPage(c: Context<AppEnv>, title: Key): Response | Promise<R
 // A 404 for a well-formed id or reference that no file holds, with a way back.
 export function notFoundPage(
   c: Context<AppEnv>, dataAsOf: string | null, title: Key, back: string, backKey: Key,
-): Response | Promise<Response> {
+): Promise<Response> {
   const lang = c.get("lang") ?? "en";
   return page(
     c,
     <Layout lang={lang} title={t(lang, title)} dataAsOf={dataAsOf}>
-      <h1>{t(lang, title)}</h1>
-      <p>
-        <a href={back}>{t(lang, backKey)}</a>
-      </p>
+      <PageHead lang={lang} title={t(lang, title)} lead={<a href={back}>{t(lang, backKey)}</a>} />
     </Layout>,
     404,
   );

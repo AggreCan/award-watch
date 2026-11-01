@@ -5,11 +5,11 @@
   "compatibility_date": "2025-12-01",
   // Never publish under the account's workers.dev subdomain; the site lives on its own domain.
   "workers_dev": false,
-  // The custom domains go here once the zone is on the account:
-  // "routes": [
-  //   { "pattern": "awardwatch.ca", "custom_domain": true },
-  //   { "pattern": "www.awardwatch.ca", "custom_domain": true }
-  // ],
+  // The site's own domain and its www form, as custom domains on the zone.
+  "routes": [
+    { "pattern": "awardwatch.ca", "custom_domain": true },
+    { "pattern": "www.awardwatch.ca", "custom_domain": true }
+  ],
   // Per-address request caps, enforced inside the Worker (see src/limits.ts).
   // Static files under /data/ and /fonts/ never reach the Worker and are not
   // counted, apart from the Atom feeds (see "assets" below), which have a cap

@@ -194,7 +194,9 @@ export interface AwardYear {
 export interface Stats {
   data_as_of: string | null;
   counts: Partial<Record<
-    "organizations" | "buyers" | "tenders_open" | "tenders_new_today" | "awards" | "history" | "contracts" | "grants" | "lobbying",
+    | "organizations" | "buyers" | "tenders_open" | "tenders_new_today" | "awards" | "history" | "contracts" | "grants" | "lobbying"
+    // Read by the rail when the export writes them (see loadRail).
+    | "tenders_closing_soon" | "awards_year",
     number
   >>;
   new_tenders: TenderRow[];
@@ -1097,4 +1099,51 @@ export async function loadExpiringPage(env: Env, window: string, n: number): Pro
   const v = await loadJson<unknown>(env, `expiring/${window}/${n}.json`);
   const rows = isObj(v) ? v.rows : v;
   return checkOnce(rows, "expiring", (r) => isListOf(r, isExpiringRow)) ? (rows as ExpiringRow[]) : null;
+}
+
+// -- the rail ---------------------------------------------------------------------
+
+// How many rows the export keeps in each of the home page's lists in
+// stats.json (HOME_ROWS in the pipeline). A shorter closing-soon list is the
+// whole of it, so its length is the count; a full one may be cut short.
+export const STATS_LIST_ROWS = 12;
+
+// The counts beside the rail's links (layout.tsx). A count no file gives is
+// left out and its link shows without one, so the rail never shows a guess.
+export interface RailCounts {
+  year: string;
+  open?: number;
+  newToday?: number;
+  closingSoon?: number;
+  ending3m?: number;
+  awardsYear?: number;
+  organizations?: number;
+  buyers?: number;
+}
+
+// stats.json first. The closing-soon count and the year's award notices come
+// from their own count fields when the export writes them; until then from
+// the closing-soon list when it is shorter than its cap, and from the year's
+// award index. The 3-month count needs the expiring radar's index.
+export async function loadRail(env: Env): Promise<RailCounts | null> {
+  const stats = await loadStats(env);
+  if (!stats) return null;
+  const counts = stats.counts;
+  const year = (stats.data_as_of && /^\d{4}/.test(stats.data_as_of) ? stats.data_as_of : new Date().toISOString()).slice(0, 4);
+  const closingSoon = counts.tenders_closing_soon ??
+    (stats.closing_soon.length < STATS_LIST_ROWS ? stats.closing_soon.length : undefined);
+  const [awardYear, expiring] = await Promise.all([
+    counts.awards_year === undefined ? loadAwardYear(env, Number(year)).catch(() => null) : Promise.resolve(null),
+    loadExpiringIndex(env).catch(() => null),
+  ]);
+  return {
+    year,
+    open: counts.tenders_open,
+    newToday: counts.tenders_new_today,
+    closingSoon,
+    ending3m: expiring?.windows.find((w) => w.window === "3m")?.n,
+    awardsYear: counts.awards_year ?? awardYear?.rows,
+    organizations: counts.organizations,
+    buyers: counts.buyers,
+  };
 }

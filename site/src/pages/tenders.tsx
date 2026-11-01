@@ -21,9 +21,9 @@ import type { AppEnv } from "../env";
 import {
   categoryLabel, clientStrings, fmtInt, numberLocale, pick, provinceName, segmentLabel, t, tj, tn, type Key, type Lang,
 } from "../i18n";
-import { Breadcrumb, ClientData, Layout, addDays, noDataPage, page, todayOf } from "../layout";
+import { ClientData, Layout, PageHead, Panel, addDays, noDataPage, page, todayOf } from "../layout";
 import { pageSeo } from "../seo";
-import { FeedLinks } from "./feeds";
+import { FeedLinks, nationalFeedPath } from "./feeds";
 import { TenderTable } from "./shared";
 
 export const TENDER_PAGE_SIZE = 50;
@@ -144,14 +144,19 @@ function options(facets: OpenFirst["facets"], lang: Lang) {
 export const TENDERS_CLIENT_KEYS: readonly Key[] = [
   "col.notice", "col.buyer", "col.closing", "col.published", "col.region", "common.national", "common.not_stated",
   "status.open", "status.closing", "tenders.count_one", "tenders.count_many", "tenders.none_match", "tenders.page_of",
-  "tenders.prev", "tenders.next", "tenders.load_failed", "tenders.loading",
+  "tenders.prev", "tenders.next", "tenders.load_failed", "tenders.loading", "tenders.remove_filter",
+  "tenders.detail_empty", "tenders.detail_loading", "tenders.detail_failed", "tenders.detail_open",
+  "tenders.detail_canadabuys", "tenders.detail_more", "tender.notice_type", "tender.method", "tender.selection",
+  "tender.category", "tender.regions_delivery", "tender.trade_agreements", "tender.solicitation", "tender.end_users",
+  "tender.description_heading",
 ];
 
+// A filter field in the toolbar: its name above, the control below.
 const Select = ({ name, label, any, opts, value, lang }: {
   name: string; label: Key; any: Key; opts: Option[]; value: string; lang: Lang;
 }) => (
-  <label>
-    {t(lang, label)}
+  <label class="field">
+    <span class="field-label">{t(lang, label)}</span>
     <select name={name}>
       <option value="">{t(lang, any)}</option>
       {opts.map((o) => (
@@ -160,6 +165,24 @@ const Select = ({ name, label, any, opts, value, lang }: {
     </select>
   </label>
 );
+
+type Chip = { key: keyof TenderQuery; label: string; value: string };
+
+// The filters the URL sets, each as a chip whose link is the same view
+// without it, so a filter comes off with or without the script.
+function activeChips(q: TenderQuery, opts: ReturnType<typeof options>, lang: Lang): Chip[] {
+  const named = (list: Option[], v: string) => list.find((o) => o.value === v)?.label ?? v;
+  const chips: Chip[] = [];
+  if (q.q) chips.push({ key: "q", label: t(lang, "tenders.filter_text"), value: q.q });
+  if (q.category) chips.push({ key: "category", label: t(lang, "tenders.filter_category"), value: named(opts.category, q.category) });
+  if (q.segment) chips.push({ key: "segment", label: t(lang, "tenders.filter_segment"), value: named(opts.segment, q.segment) });
+  if (q.province) chips.push({ key: "province", label: t(lang, "tenders.filter_province"), value: named(opts.province, q.province) });
+  if (q.buyer) chips.push({ key: "buyer", label: t(lang, "tenders.filter_buyer"), value: named(opts.buyer, q.buyer) });
+  if (q.type) chips.push({ key: "type", label: t(lang, "tenders.filter_type"), value: named(opts.type, q.type) });
+  if (q.method) chips.push({ key: "method", label: t(lang, "tenders.filter_method"), value: named(opts.method, q.method) });
+  if (q.closing) chips.push({ key: "closing", label: t(lang, "tenders.filter_closing"), value: t(lang, "tenders.closing_days", { n: Number(q.closing) }) });
+  return chips;
+}
 
 export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
@@ -186,19 +209,26 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const labels = {
     segments: Object.fromEntries(opts.segment.map((o) => [o.value, segmentLabel(lang, o.value)])),
     provinces: Object.fromEntries([...PROVINCES, "XX", "UN"].map((p) => [p, provinceName(lang, p)])),
+    categories: Object.fromEntries(CATEGORIES.map((k) => [k, categoryLabel(lang, k)])),
   };
+  const chips = activeChips(q, opts, lang);
 
   return page(
     c,
     <Layout lang={lang} title={t(lang, "tenders.title")} dataAsOf={stats.data_as_of} active="/tenders" seo={seo}
       head={<FeedLinks lang={lang} />}>
-      <h1>{t(lang, "tenders.title")}</h1>
-      <p class="lead">{t(lang, "tenders.lead", { n: fmtInt(first.total, lang) })}</p>
-      <p class="muted small">{t(lang, "tenders.contact_note")}</p>
-      <div class="list-layout">
-        <form method="get" action="/tenders" class="filters stack" id="tender-filters">
-          <label>
-            {t(lang, "tenders.filter_text")}
+      <PageHead lang={lang} title={t(lang, "tenders.title")} lead={t(lang, "tenders.lead", { n: fmtInt(first.total, lang) })}
+        actions={<>
+          <a href="/downloads/open-tenders.csv" class="btn">{t(lang, "tenders.csv")}</a>
+          <a href={`/data/${nationalFeedPath("tenders")}`} class="btn">{t(lang, "category.feed")}</a>
+        </>}>
+        <p class="page-note">{t(lang, "tenders.contact_note")}</p>
+      </PageHead>
+
+      <form method="get" action="/tenders" class="toolbar" id="tender-filters">
+        <div class="toolbar-fields">
+          <label class="field field-text">
+            <span class="field-label">{t(lang, "tenders.filter_text")}</span>
             <input type="search" name="q" value={q.q} maxlength={MAX_TEXT} autocomplete="off" />
           </label>
           <Select name="category" label="tenders.filter_category" any="tenders.any" opts={opts.category} value={q.category} lang={lang} />
@@ -207,52 +237,78 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
           <Select name="buyer" label="tenders.filter_buyer" any="tenders.any" opts={opts.buyer} value={q.buyer} lang={lang} />
           <Select name="type" label="tenders.filter_type" any="tenders.any" opts={opts.type} value={q.type} lang={lang} />
           <Select name="method" label="tenders.filter_method" any="tenders.any" opts={opts.method} value={q.method} lang={lang} />
-          <label>
-            {t(lang, "tenders.filter_closing")}
+          <label class="field">
+            <span class="field-label">{t(lang, "tenders.filter_closing")}</span>
             <select name="closing">
               <option value="">{t(lang, "tenders.closing_any")}</option>
               <option value="7" selected={q.closing === "7"}>{t(lang, "tenders.closing_days", { n: CLOSING_SOON_DAYS })}</option>
               <option value="30" selected={q.closing === "30"}>{t(lang, "tenders.closing_days", { n: 30 })}</option>
             </select>
           </label>
-          <label>
-            {t(lang, "tenders.sort")}
+          <label class="field">
+            <span class="field-label">{t(lang, "tenders.sort")}</span>
             <select name="sort">
               <option value="closing">{t(lang, "tenders.sort_closing")}</option>
               <option value="published" selected={q.sort === "published"}>{t(lang, "tenders.sort_published")}</option>
             </select>
           </label>
-          <div class="form-actions">
+          <div class="toolbar-actions">
             <button type="submit" class="btn btn-primary" id="tender-apply">{t(lang, "tenders.apply")}</button>
             <a href="/tenders" class="btn">{t(lang, "tenders.reset")}</a>
           </div>
-        </form>
-        <div class="results" id="tender-results" data-today={today} data-page-size={String(TENDER_PAGE_SIZE)}>
-          <p id="tender-count" aria-live="polite">
-            {waiting ? "" : tn(lang, "tenders.count_one", "tenders.count_many", count, { n: fmtInt(count, lang) })}
-          </p>
-          <div id="tender-table">
-            {waiting ? (
-              <>
-                <p class="muted">{t(lang, "tenders.waiting")}</p>
-                <noscript>
-                  <p>{tj(lang, "tenders.noscript", { link: <a href="/tenders">{t(lang, "tenders.noscript_link")}</a> })}</p>
-                </noscript>
-              </>
-            ) : shown.length ? (
-              <TenderTable lang={lang} rows={shown} today={today} />
-            ) : (
-              <p class="muted">{t(lang, "tenders.none_match")}</p>
-            )}
-          </div>
-          <nav aria-label={t(lang, "common.pagination")} class="pagination" id="tender-pager">
-            <span class="muted">{waiting ? "" : t(lang, "tenders.page_of", { page: fmtInt(pageNo, lang), pages: fmtInt(pages, lang) })}</span>
-            <span class="pages">
-              {prev ? <a href={prev} class="btn" rel="prev">{t(lang, "tenders.prev")}</a> : null}
-              {next ? <a href={next} class="btn" rel="next">{t(lang, "tenders.next")}</a> : null}
-            </span>
-          </nav>
         </div>
+        <div class="toolbar-chips" id="tender-chips" hidden={chips.length === 0}>
+          <span class="chips-label">{t(lang, "tenders.filters_active")}</span>
+          {chips.map((ch) => (
+            <a class="fchip" href={`/tenders${tenderQueryString({ ...q, [ch.key]: "", page: 1 })}`}
+              aria-label={t(lang, "tenders.remove_filter", { name: ch.value })}>
+              <span>{ch.label}</span> <b>{ch.value}</b>
+              <span class="fchip-x" aria-hidden="true">×</span>
+            </a>
+          ))}
+        </div>
+      </form>
+
+      <div class="split" id="tender-split">
+        <Panel title={t(lang, "tenders.list_heading")} class="list-panel"
+          tools={<p id="tender-count" aria-live="polite">
+            {waiting ? "" : tn(lang, "tenders.count_one", "tenders.count_many", count, { n: fmtInt(count, lang) })}
+          </p>}
+          foot={<>
+            <span class="keys">{tj(lang, "tenders.keys_hint", { j: <kbd>j</kbd>, k: <kbd>k</kbd>, enter: <kbd>{t(lang, "tenders.key_enter")}</kbd> })}</span>
+            <nav aria-label={t(lang, "common.pagination")} class="pagination" id="tender-pager">
+              <span class="muted">{waiting ? "" : t(lang, "tenders.page_of", { page: fmtInt(pageNo, lang), pages: fmtInt(pages, lang) })}</span>
+              <span class="pages">
+                {prev ? <a href={prev} class="btn" rel="prev">{t(lang, "tenders.prev")}</a> : null}
+                {next ? <a href={next} class="btn" rel="next">{t(lang, "tenders.next")}</a> : null}
+              </span>
+            </nav>
+          </>}>
+          <div class="results" id="tender-results" data-today={today} data-page-size={String(TENDER_PAGE_SIZE)} data-lang={lang}>
+            <div id="tender-table">
+              {waiting ? (
+                <>
+                  <p class="muted">{t(lang, "tenders.waiting")}</p>
+                  <noscript>
+                    <p>{tj(lang, "tenders.noscript", { link: <a href="/tenders">{t(lang, "tenders.noscript_link")}</a> })}</p>
+                  </noscript>
+                </>
+              ) : shown.length ? (
+                <TenderTable lang={lang} rows={shown} today={today} selectable />
+              ) : (
+                <p class="muted">{t(lang, "tenders.none_match")}</p>
+              )}
+            </div>
+          </div>
+        </Panel>
+        <aside class="panel detail" id="tender-detail" aria-label={t(lang, "tenders.detail_heading")}>
+          <div class="panel-head">
+            <h2>{t(lang, "tenders.detail_heading")}</h2>
+          </div>
+          <div class="detail-body" id="tender-detail-body" aria-live="polite">
+            <p class="muted">{t(lang, "tenders.detail_empty")}</p>
+          </div>
+        </aside>
       </div>
       <ClientData id="i18n" data={{ lang, locale: numberLocale(lang), strings: clientStrings(lang, TENDERS_CLIENT_KEYS), labels }} />
       <script src="/tenders.js" defer></script>
@@ -279,34 +335,28 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/tenders" seo={seo} head={<FeedLinks lang={lang} />}>
-      <Breadcrumb lang={lang} crumbs={crumbs} />
-      <h1>{title}</h1>
-      <p class="lead">{t(lang, "tenders.new_lead", { days: NEW_DAYS })}</p>
-      <div class="list-layout">
-        <nav class="filters" aria-label={t(lang, "tenders.new_days")}>
-          <span class="filters-title">{t(lang, "tenders.new_days")}</span>
-          <ul class="day-list">
-            {days.map((d) => (
-              <li>
-                {d === day ? <span aria-current="page" class="mono">{d}</span> : <a class="mono" href={d === latest ? "/tenders/new" : `/tenders/new?day=${d}`}>{d}</a>}
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <div class="results">
-          <h2>{t(lang, "tenders.new_day", { day })}</h2>
-          {rows === null ? (
-            <p class="muted">{t(lang, "tenders.new_missing")}</p>
-          ) : rows.length === 0 ? (
-            <p class="muted">{t(lang, "tenders.new_none")}</p>
-          ) : (
-            <>
-              <p>{tn(lang, "tenders.count_one", "tenders.count_many", rows.length, { n: fmtInt(rows.length, lang) })}</p>
-              <TenderTable lang={lang} rows={rows} today={latest} status />
-            </>
-          )}
-        </div>
-      </div>
+      <PageHead lang={lang} title={title} crumbs={crumbs} lead={t(lang, "tenders.new_lead", { days: NEW_DAYS })}
+        actions={<a href={`/data/${nationalFeedPath("tenders")}`} class="btn">{t(lang, "category.feed")}</a>} />
+      <nav class="toolbar" aria-label={t(lang, "tenders.new_days")}>
+        <span class="toolbar-label">{t(lang, "tenders.new_days")}</span>
+        <ul class="quick-links day-list">
+          {days.map((d) => (
+            <li>
+              {d === day ? <span aria-current="page" class="mono">{d}</span> : <a class="mono" href={d === latest ? "/tenders/new" : `/tenders/new?day=${d}`}>{d}</a>}
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <Panel title={t(lang, "tenders.new_day", { day })}
+        count={rows && rows.length ? tn(lang, "tenders.count_one", "tenders.count_many", rows.length, { n: fmtInt(rows.length, lang) }) : undefined}>
+        {rows === null ? (
+          <p class="muted">{t(lang, "tenders.new_missing")}</p>
+        ) : rows.length === 0 ? (
+          <p class="muted">{t(lang, "tenders.new_none")}</p>
+        ) : (
+          <TenderTable lang={lang} rows={rows} today={latest} status />
+        )}
+      </Panel>
     </Layout>,
   );
 }

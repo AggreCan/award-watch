@@ -5,7 +5,7 @@ import { ORG_ID_RE, loadProfile, loadStats } from "../data";
 import { readForm } from "../body";
 import type { AppEnv } from "../env";
 import { t, tj, type Key } from "../i18n";
-import { Layout, page } from "../layout";
+import { Layout, PageHead, Panel, page } from "../layout";
 import { canonicalUrl, pageSeo, respondFormSeo } from "../seo";
 import { retiredIdRedirect } from "./organization";
 
@@ -49,9 +49,11 @@ export async function respondForm(
   return page(
     c,
     <Layout lang={lang} title={t(lang, "form.respond_title")} dataAsOf={await dataAsOf(c)} seo={respondFormSeo(profile, lang)}>
-      <h1>{t(lang, "form.respond_title")}</h1>
-      <p class="lead">{tj(lang, "form.respond_intro", { organization: <a href={`/organizations/${id}`}>{name}</a> })}</p>
-      <p class="muted">{t(lang, "form.respond_review")}</p>
+      <PageHead lang={lang} title={t(lang, "form.respond_title")}
+        lead={tj(lang, "form.respond_intro", { organization: <a href={`/organizations/${id}`}>{name}</a> })}>
+        <p class="page-note">{t(lang, "form.respond_review")}</p>
+      </PageHead>
+      <Panel title={t(lang, "form.statement")} class="panel-form">
       {errors.length ? <ul class="errors">{errors.map((e) => <li>{t(lang, e)}</li>)}</ul> : null}
       <form method="post" action={`/organizations/${id}/respond`} class="stack">
         <label>{t(lang, "form.statement")}<textarea name="text" rows={8} required maxlength={TEXT_MAX}>{values.text ?? ""}</textarea></label>
@@ -63,6 +65,7 @@ export async function respondForm(
         <div class="hp"><label>{t(lang, "form.honeypot")}<input name="website" type="text" tabindex={-1} autocomplete="off" /></label></div>
         <button type="submit" class="btn btn-primary">{t(lang, "form.submit_statement")}</button>
       </form>
+      </Panel>
     </Layout>,
     status ?? (errors.length ? 400 : 200),
   );
@@ -124,8 +127,8 @@ export async function correctionsForm(
   return page(
     c,
     <Layout lang={lang} title={t(lang, "form.correct_title")} dataAsOf={await dataAsOf(c)} seo={pageSeo("corrections", lang)}>
-      <h1>{t(lang, "form.correct_title")}</h1>
-      <p class="lead">{t(lang, "form.correct_intro")}</p>
+      <PageHead lang={lang} title={t(lang, "form.correct_title")} lead={t(lang, "form.correct_intro")} />
+      <Panel title={t(lang, "footer.corrections")} class="panel-form">
       {errors.length ? <ul class="errors">{errors.map((e) => <li>{t(lang, e)}</li>)}</ul> : null}
       <form method="post" action="/corrections" class="stack">
         <label>
@@ -142,6 +145,7 @@ export async function correctionsForm(
         <div class="hp"><label>{t(lang, "form.honeypot")}<input name="website" type="text" tabindex={-1} autocomplete="off" /></label></div>
         <button type="submit" class="btn btn-primary">{t(lang, "form.send_correction")}</button>
       </form>
+      </Panel>
     </Layout>,
     status ?? (errors.length ? 400 : 200),
   );
@@ -183,11 +187,7 @@ async function thanks(c: Context<AppEnv>, message: Key, back: string): Promise<R
   return c.html(
     html`<!doctype html>${(
       <Layout lang={lang} title={t(lang, "form.thanks")} dataAsOf={await dataAsOf(c)}>
-        <h1>{t(lang, "form.thanks")}</h1>
-        <p>{t(lang, message)}</p>
-        <p>
-          <a href={back}>{t(lang, "common.back")}</a>
-        </p>
+        <PageHead lang={lang} title={t(lang, "form.thanks")} lead={t(lang, message)} actions={<a href={back} class="btn">{t(lang, "common.back")}</a>} />
       </Layout>
     ) as any}`,
   );

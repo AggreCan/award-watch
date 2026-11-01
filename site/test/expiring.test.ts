@@ -53,7 +53,7 @@ describe("/expiring", () => {
     expect(html).toContain('<a href="/feeds#expiring" class="btn">Feeds by buyer and by category</a>');
     expect(head(html)).toContain('<link rel="alternate" type="application/atom+xml" title="Contracts ending within 3 months (Atom feed)" href="/data/feeds/canada/expiring.xml"/>');
     expect(head(html)).toContain('<link rel="canonical" href="https://awardwatch.ca/expiring"/>');
-    expect(html).toContain('<a href="/expiring" class="active" aria-current="page">Ending soon</a>');
+    expect(html).toContain('<a class="rail-item" href="/expiring" aria-current="page"><span class="rail-label">Ending within 3 months</span>');
     expect(html).not.toContain(EM_DASH);
     expect(html.replace(/<[^>]+>/g, " ")).not.toMatch(ADVICE);
   });
@@ -66,7 +66,7 @@ describe("/expiring", () => {
     expect(html).toContain("<h2>Fin d’ici 3 mois</h2>");
     expect(html).toContain('<a href="/buyers/dnd-mdn">Défense nationale</a>');
     expect(html).toContain("Télécharger tous les contrats prenant fin d’ici 12 mois (CSV)");
-    expect(html).toContain('<a href="/expiring" class="active" aria-current="page">Échéances</a>');
+    expect(html).toContain('<a class="rail-item" href="/expiring" aria-current="page"><span class="rail-label">Fin d’ici 3 mois</span>');
   });
 
   it("leaves out the feed links until the feed index lists them, and says so when the 3-month page is missing", async () => {
@@ -115,7 +115,7 @@ describe("/expiring/:window", () => {
     // Organization, withheld wording, buyer, value, competition.
     expect(html).toContain('<td data-label="Organization"><a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a></td>');
     expect(html).toContain('<td data-label="Organization"><span class="muted">Individual, name withheld</span></td>');
-    expect(html).toContain('<td data-label="Buyer"><a href="/buyers/dfo-mpo">Fisheries and Oceans Canada</a></td>');
+    expect(html).toContain('<td data-label="Buyer" class="mdh"><a href="/buyers/dfo-mpo">Fisheries and Oceans Canada</a></td>');
     expect(html).toContain('<td data-label="Value" class="mono num">$4,500,000</td>');
     expect(html).toContain('<span class="flag flag-yes"');
     expect(html).toContain('<span class="flag flag-no"');
@@ -123,7 +123,7 @@ describe("/expiring/:window", () => {
     // Amendments and growth as a signed percentage.
     expect(html).toContain("2 amendments<br/><span class=\"muted small\">+25% on the original amount</span>");
     expect(html).toContain("1 amendment<br/><span class=\"muted small\">-10% on the original amount</span>");
-    expect(html).toContain('<td data-label="Amendments and growth">None</td>');
+    expect(html).toContain('<td data-label="Amendments and growth" class="mdh">None</td>');
     // The source record: the CanadaBuys notice, the history dataset, the contracts search.
     expect(html).toContain('<a href="https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cb-400-40000004" rel="noopener">CanadaBuys notice</a>');
     expect(html).toContain('<a href="https://open.canada.ca/data/en/dataset/4fe645a1-ffcd-40c1-9385-2c771be956a4" rel="noopener">Contract history dataset</a>');
@@ -264,7 +264,7 @@ describe("contracts ending on buyer pages and profiles", () => {
     expect(section).toContain('<a href="/awards/cb-400-40000004">Translation standing offer, official languages</a>');
     expect(section).toContain('<a href="/expiring/12m?buyer=pwgsc-tpsgc">This buyer&#39;s contracts in the 12-month list</a>');
     // The buyer is the page's own, so the table leaves the column out.
-    expect(section).not.toContain("<th>Buyer</th>");
+    expect(section).not.toContain('<th class="mdh">Buyer</th>');
     expect(section).toContain("<th>Organization</th>");
     const fr = nbsp(await text("/buyers/pwgsc-tpsgc?lang=fr"));
     expect(fr).toContain('<h2 id="expiring">Contrats arrivant à échéance</h2>');
@@ -286,7 +286,7 @@ describe("contracts ending on buyer pages and profiles", () => {
     expect(section).toContain("<h2 id=\"expiring\">Contracts Ending</h2>");
     expect(section).toContain("1 contract ends within 12 months of the data date. Value: $312,500.");
     expect(section).not.toContain("<th>Organization</th>");
-    expect(section).toContain("<th>Buyer</th>");
+    expect(section).toContain('<th class="mdh">Buyer</th>');
     expect(section).toContain('<a href="/expiring">All contracts ending soon</a>');
     expect(section).not.toContain("The first");
     expect(await text("/organizations/org-a000000002")).not.toContain('id="expiring"');

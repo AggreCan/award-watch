@@ -1,4 +1,5 @@
-/* Watchlist: the Watch button on an organization profile and the /watchlist page.
+/* Watchlist: the Watch button on an organization profile, the /watchlist page,
+   and the watched count in the rail on every page.
 
    The list is a set of organization IDs kept in this browser's localStorage
    and nowhere else; nothing about it is sent to the site. The page reads each
@@ -53,7 +54,29 @@
     return out;
   }
   function readList() { return clean(readJson(LIST_KEY)); }
-  function writeList(list) { return writeJson(LIST_KEY, clean(list)); }
+  function writeList(list) {
+    var ok = writeJson(LIST_KEY, clean(list));
+    paintCount();
+    return ok;
+  }
+
+  // -- the count in the rail -------------------------------------------------
+  // Every page's rail shows how many organizations this browser watches; the
+  // number stays hidden where storage is blocked, as the Watch button does.
+
+  var counters = document.querySelectorAll("[data-watch-count]");
+  function paintCount() {
+    if (!counters || !counters.length) return;
+    var n = String(readList().length);
+    for (var i = 0; i < counters.length; i++) {
+      counters[i].textContent = n;
+      counters[i].hidden = false;
+    }
+  }
+  if (counters.length && storageOk()) {
+    paintCount();
+    window.addEventListener("storage", function (e) { if (!e.key || e.key === LIST_KEY) paintCount(); });
+  }
 
   // -- the Watch button on a profile -----------------------------------------
 

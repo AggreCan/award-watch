@@ -3,7 +3,7 @@ import type { FC } from "hono/jsx";
 import { loadStats } from "../data";
 import type { AppEnv, Env } from "../env";
 import { t, tn, type Key, type Lang } from "../i18n";
-import { Layout, fmtInt, page } from "../layout";
+import { Layout, PageHead, fmtInt, page } from "../layout";
 import { pageSeo } from "../seo";
 import {
   ACTIONS_CENTS_PER_MONTH,
@@ -115,6 +115,7 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={t(lang, "support.title")} dataAsOf={stats?.data_as_of ?? null} seo={pageSeo("support", lang)}>
+      <PageHead lang={lang} title={t(lang, "support.title")} lead={t(lang, "support.lead")} />
       <div class="doc-layout">
         <nav aria-label={t(lang, "toc.label")} class="toc">
           <span class="toc-title">{t(lang, "toc.title")}</span>
@@ -128,8 +129,6 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
           <a href="#law">{t(lang, "support.toc_law")}</a>
         </nav>
         <div class="doc">
-          <h1>{t(lang, "support.title")}</h1>
-          <p class="lead">{t(lang, "support.lead")}</p>
 
           <h2 id="holds">{t(lang, "support.toc_holds")}</h2>
           <ul>

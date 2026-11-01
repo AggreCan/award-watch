@@ -23,7 +23,7 @@ describe("the organizations page", () => {
     expect(page).toContain(">Yukon</td>");
     expect(page).not.toContain('href="/organizations/directory/yt"');
     expect(page).toContain(">Outside Canada</td>");
-    expect(page).toContain('class="active" aria-current="page">Organizations</a>');
+    expect(page).toContain('<a class="rail-item" href="/organizations" aria-current="page"><span class="rail-label">Organizations</span>');
   });
 
   it("reads in French", async () => {

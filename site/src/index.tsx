@@ -11,7 +11,7 @@ import { throttle } from "./limits";
 import { measure } from "./views";
 import { runWatchdog } from "./watchdog";
 import { langFrom, t, tj } from "./i18n";
-import { Layout, page } from "./layout";
+import { Layout, PageHead, page } from "./layout";
 import { awardsPage, awardsYearPage } from "./pages/awards";
 import { buyerPage, buyersIndex } from "./pages/buyers";
 import { categoriesIndex, categoryPage } from "./pages/categories";
@@ -176,11 +176,8 @@ app.get("/downloads/:file{.+}", async (c) => {
     return page(
       c,
       <Layout lang={lang} title={t(lang, "error.file")} dataAsOf={stats?.data_as_of ?? null}>
-        <h1>{t(lang, "error.file")}</h1>
-        <p>{tj(lang, "error.file_text", { file: <span class="mono">{file}</span> })}</p>
-        <p>
-          <a href="/data#downloads">{t(lang, "error.file_back")}</a>
-        </p>
+        <PageHead lang={lang} title={t(lang, "error.file")} lead={tj(lang, "error.file_text", { file: <span class="mono">{file}</span> })}
+          actions={<a href="/data#downloads" class="btn">{t(lang, "error.file_back")}</a>} />
       </Layout>,
       unavailable ? 503 : 404,
     );
@@ -202,13 +199,11 @@ app.notFound(async (c) => {
   return page(
     c,
     <Layout lang={lang} title={t(lang, "error.not_found")} dataAsOf={stats?.data_as_of ?? null}>
-      <h1>{t(lang, "error.not_found")}</h1>
-      <p>
-        {tj(lang, "error.not_found_text", {
+      <PageHead lang={lang} title={t(lang, "error.not_found")}
+        lead={tj(lang, "error.not_found_text", {
           home: <a href="/">{t(lang, "error.not_found_home")}</a>,
           directory: <a href="/organizations">{t(lang, "error.not_found_directory")}</a>,
-        })}
-      </p>
+        })} />
     </Layout>,
     404,
   );
@@ -221,8 +216,7 @@ app.onError((err, c) => {
   return c.html(
     html`<!doctype html>${(
       <Layout lang={lang} title={t(lang, "error.server")} dataAsOf={null}>
-        <h1>{t(lang, "error.server")}</h1>
-        <p>{t(lang, "error.server_text")}</p>
+        <PageHead lang={lang} title={t(lang, "error.server")} lead={t(lang, "error.server_text")} />
       </Layout>
     ) as any}`,
     500,

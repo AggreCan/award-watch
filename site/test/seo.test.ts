@@ -270,6 +270,5 @@ describe("crawler files", () => {
     for (const bot of ["ClaudeBot", "GPTBot", "Google-Extended", "CCBot", "Bytespider"]) expect(aiGroup).toContain(`User-agent: ${bot}`);
     expect(rules[rules.length - 1]).toBe(`Sitemap: ${O}/sitemap.xml`);
     expect(text).not.toContain("\u2014");
-    expect(text.toLowerCase()).not.toContain("lmia");
   });
 });

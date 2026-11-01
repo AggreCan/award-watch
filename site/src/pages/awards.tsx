@@ -9,9 +9,9 @@ import { FIRST_AWARD_YEAR } from "../constants";
 import { YEAR_RE, loadAwardPage, loadAwardYear, loadRecentAwards, loadStats, type AwardRow } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, t, tn } from "../i18n";
-import { Breadcrumb, Layout, noDataPage, notFoundPage, page, todayOf } from "../layout";
+import { Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { canonicalUrl, pageSeo, sectionSeo } from "../seo";
-import { FeedLinks } from "./feeds";
+import { FeedLinks, nationalFeedPath } from "./feeds";
 import { AwardTable, SourceLine } from "./shared";
 
 export const AWARD_PAGE_SIZE = 100;
@@ -43,7 +43,8 @@ export function awardYears(dataAsOf: string | null): number[] {
 }
 
 const YearLinks = ({ years, current, lang }: { years: number[]; current: number | null; lang: "en" | "fr" }) => (
-  <nav aria-label={t(lang, "awards.years")}>
+  <nav aria-label={t(lang, "awards.years")} class="toolbar">
+    <span class="toolbar-label">{t(lang, "awards.years")}</span>
     <ul class="quick-links">
       <li>{current === null ? <span aria-current="page">{t(lang, "awards.recent")}</span> : <a href="/awards">{t(lang, "awards.recent")}</a>}</li>
       {years.map((y) => (
@@ -80,13 +81,15 @@ export async function awardsPage(c: Context<AppEnv>): Promise<Response> {
     c,
     <Layout lang={lang} title={t(lang, "awards.title")} dataAsOf={stats.data_as_of} active="/awards"
       seo={pageSeo("awards", lang, c.req.query("page") !== undefined ? { noindex: true } : {})} head={<FeedLinks lang={lang} />}>
-      <h1>{t(lang, "awards.title")}</h1>
-      <p class="lead">{t(lang, "awards.lead", { n: fmtInt(rows.length, lang) })}</p>
-      <p class="muted small">{t(lang, "awards.value_note")}</p>
+      <PageHead lang={lang} title={t(lang, "awards.title")} lead={t(lang, "awards.lead", { n: fmtInt(rows.length, lang) })}
+        actions={<a href={`/data/${nationalFeedPath("awards")}`} class="btn">{t(lang, "feeds.link_title", { event: t(lang, "feeds.ev.awards") })}</a>}>
+        <p class="page-note">{t(lang, "awards.value_note")}</p>
+      </PageHead>
       <YearLinks years={awardYears(stats.data_as_of)} current={null} lang={lang} />
-      {shown.length ? <AwardTable lang={lang} rows={shown} /> : <p class="muted">{t(lang, "awards.none")}</p>}
-      {pager("/awards", n, pages, lang)}
-      <SourceLine lang={lang} source="awards" />
+      <Panel title={t(lang, "awards.recent")} count={fmtInt(rows.length, lang)}
+        foot={<>{pager("/awards", n, pages, lang)}<SourceLine lang={lang} source="awards" /></>}>
+        {shown.length ? <AwardTable lang={lang} rows={shown} /> : <p class="muted">{t(lang, "awards.none")}</p>}
+      </Panel>
     </Layout>,
   );
 }
@@ -116,17 +119,16 @@ export async function awardsYearPage(c: Context<AppEnv>, raw: string): Promise<R
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/awards"
       seo={sectionSeo(path, title, t(lang, "awards.year_description", { year, n: fmtInt(idx.rows, lang) }), crumbs, c.req.query("page") !== undefined)}
       head={<>{prev ? <link rel="prev" href={prev} /> : null}{next ? <link rel="next" href={next} /> : null}</>}>
-      <Breadcrumb lang={lang} crumbs={crumbs} />
-      <h1>{title}</h1>
-      <p class="lead">{tn(lang, "awards.year_count_one", "awards.year_count_many", idx.rows, { n: fmtInt(idx.rows, lang), year })}</p>
-      <p class="muted small">{t(lang, "awards.value_note")}</p>
-      <p>
-        <a href={`/downloads/awards-${year}.csv`}>{t(lang, "awards.download", { year })}</a>
-      </p>
+      <PageHead lang={lang} crumbs={crumbs} title={title}
+        lead={tn(lang, "awards.year_count_one", "awards.year_count_many", idx.rows, { n: fmtInt(idx.rows, lang), year })}
+        actions={<a href={`/downloads/awards-${year}.csv`} class="btn">{t(lang, "awards.download", { year })}</a>}>
+        <p class="page-note">{t(lang, "awards.value_note")}</p>
+      </PageHead>
       <YearLinks years={years} current={year} lang={lang} />
-      {shown.length ? <AwardTable lang={lang} rows={shown} /> : <p class="muted">{t(lang, "awards.none")}</p>}
-      {pager(path, n, pages, lang)}
-      <SourceLine lang={lang} source="awards" />
+      <Panel title={String(year)} count={fmtInt(idx.rows, lang)}
+        foot={<>{pager(path, n, pages, lang)}<SourceLine lang={lang} source="awards" /></>}>
+        {shown.length ? <AwardTable lang={lang} rows={shown} /> : <p class="muted">{t(lang, "awards.none")}</p>}
+      </Panel>
     </Layout>,
   );
 }

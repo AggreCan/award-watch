@@ -8,7 +8,7 @@ import { MONEY_SOURCES, SOURCES, type SourceKey } from "../constants";
 import { YEAR_RE, loadRankings, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, pick, sourceLabel, t } from "../i18n";
-import { Breadcrumb, Layout, noDataPage, notFoundPage, page } from "../layout";
+import { Layout, PageHead, Panel, noDataPage, notFoundPage, page } from "../layout";
 import { pageSeo, sectionSeo } from "../seo";
 import { OrgTotalTable, money } from "./shared";
 
@@ -44,11 +44,12 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/rankings" seo={seo}>
-      <Breadcrumb lang={lang} crumbs={crumbs} />
-      <h1>{title}</h1>
-      <p class="lead">{t(lang, "rankings.lead")}</p>
-      <p class="muted small">{t(lang, "rankings.note")}</p>
-      <nav aria-label={t(lang, "rankings.years")}>
+      <PageHead lang={lang} crumbs={crumbs} title={title} lead={t(lang, "rankings.lead")}>
+        <p class="page-note">{t(lang, "rankings.note")}</p>
+      </PageHead>
+      <div class="toolbar">
+      <nav aria-label={t(lang, "rankings.years")} class="toolbar-row">
+        <span class="toolbar-label">{t(lang, "rankings.years")}</span>
         <ul class="quick-links">
           <li>{year === null ? <span aria-current="page">{t(lang, "rankings.all_years")}</span> : <a href="/rankings">{t(lang, "rankings.all_years")}</a>}</li>
           {[...r.years].sort((a, b) => b - a).map((y) => (
@@ -56,24 +57,25 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
           ))}
         </ul>
       </nav>
-      <nav aria-label={t(lang, "rankings.sources")} class="tabs">
+      <nav aria-label={t(lang, "rankings.sources")} class="tabs toolbar-row">
         {available.map((s) => (
           <a href={href(s, by)} aria-current={s === source ? "page" : undefined}>{sourceLabel(lang, s)}</a>
         ))}
       </nav>
       {source !== "lobbying" ? (
-        <nav aria-label={t(lang, "rankings.measure")} class="tabs tabs-small">
+        <nav aria-label={t(lang, "rankings.measure")} class="tabs tabs-small toolbar-row">
           <a href={href(source, "value")} aria-current={by === "value" ? "page" : undefined}>{t(lang, "rankings.by_value")}</a>
           <a href={href(source, "count")} aria-current={by === "count" ? "page" : undefined}>{t(lang, "rankings.by_count")}</a>
         </nav>
       ) : null}
-      <h2>{t(lang, by === "count" ? "rankings.heading_count" : "rankings.heading_value", { source: sourceLabel(lang, source) })}</h2>
+      </div>
+      <Panel title={t(lang, by === "count" ? "rankings.heading_count" : "rankings.heading_value", { source: sourceLabel(lang, source) })}>
       {rows.length ? <OrgTotalTable lang={lang} rows={rows} rank /> : <p class="muted">{t(lang, "rankings.none")}</p>}
+      </Panel>
 
-      <h2>{t(lang, "rankings.buyers")}</h2>
+      <div class="panel-grid">
       {MONEY_SOURCES.filter((s) => (r.buyers[s] ?? []).length).map((s) => (
-        <>
-          <h3>{sourceLabel(lang, s)}</h3>
+        <Panel title={t(lang, "rankings.buyers")} count={sourceLabel(lang, s)}>
           <div class="table-wrap bordered">
             <table class="restack">
               <thead>
@@ -96,8 +98,9 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
               </tbody>
             </table>
           </div>
-        </>
+        </Panel>
       ))}
+      </div>
     </Layout>,
   );
 }

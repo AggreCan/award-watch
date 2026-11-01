@@ -9,7 +9,7 @@ import type { FC } from "hono/jsx";
 import { REFERENCE_RE, loadStats, loadTender, publishedReference, type TenderDetail } from "../data";
 import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, segmentLabel, t, tn, type Key, type Lang } from "../i18n";
-import { Breadcrumb, Layout, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, tenderState, todayOf } from "../layout";
+import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, tenderState, todayOf } from "../layout";
 import { tenderSeo } from "../seo";
 import { BuyerLink, closingText, money, provincesText, tenderNoticeUrl } from "./shared";
 
@@ -55,21 +55,18 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/tenders" seo={tenderSeo(d, lang, crumbs)}>
-      <Breadcrumb lang={lang} crumbs={crumbs} />
-      <h1>{title}</h1>
-      <p class="record-meta">
-        <StatusBadge lang={lang} status={tenderState(d.status, d.closing, today)} />{" "}
-        <span class="mono id">{shownRef}</span>
-        {d.amendment > 0 ? <span class="muted"> {t(lang, "tender.amendment_n", { n: d.amendment })}</span> : null}
-      </p>
-      <p class="links">
-        <a href={tenderNoticeUrl(shownRef, lang)} class="btn btn-primary" rel="noopener">{t(lang, "tender.on_canadabuys")}</a>
-      </p>
-      <p class="muted small">{t(lang, "tender.contact_note")}</p>
+      <PageHead lang={lang} crumbs={crumbs} title={title}
+        lead={<>
+          <StatusBadge lang={lang} status={tenderState(d.status, d.closing, today)} />{" "}
+          <span class="mono id">{shownRef}</span>
+          {d.amendment > 0 ? <span class="muted"> {t(lang, "tender.amendment_n", { n: d.amendment })}</span> : null}
+        </>}
+        actions={<a href={tenderNoticeUrl(shownRef, lang)} class="btn btn-primary" rel="noopener">{t(lang, "tender.on_canadabuys")}</a>}>
+        <p class="page-note">{t(lang, "tender.contact_note")}</p>
+      </PageHead>
 
-      <div class="cards">
-        <section class="card">
-          <h2>{t(lang, "tender.dates")}</h2>
+      <div class="panel-grid">
+        <Panel title={t(lang, "tender.dates")}>
           <dl>
             <Row lang={lang} k="col.published" v={d.published} />
             <Row lang={lang} k="col.closing" v={closingText(d.closing)} />
@@ -78,18 +75,17 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
             <Row lang={lang} k="tender.end_expected" v={d.end_expected} />
           </dl>
           {d.closing ? <p class="muted small">{t(lang, "tender.closing_zone")}</p> : null}
-        </section>
-        <section class="card">
-          <h2>{t(lang, "tender.buyer")}</h2>
+        </Panel>
+        <Panel title={t(lang, "tender.buyer")}>
           <dl>
             <Row lang={lang} k="col.buyer" v={<BuyerLink lang={lang} id={d.buyer_id} en={d.buyer_en} fr={d.buyer_fr} />} />
             <Row lang={lang} k="tender.end_users" v={<Lines items={listOf(lang, d.end_users_en, d.end_users_fr)} />} />
             <Row lang={lang} k="tender.solicitation" v={d.solicitation ? <span class="mono">{d.solicitation}</span> : null} />
           </dl>
-        </section>
+        </Panel>
       </div>
 
-      <h2>{t(lang, "tender.procurement")}</h2>
+      <Panel title={t(lang, "tender.procurement")}>
       <dl class="wide">
         <Row lang={lang} k="tender.category" v={d.category.map((code) => categoryLabel(lang, code)).join(", ")} />
         <Row lang={lang} k="tender.notice_type" v={pick(lang, d.notice_type_en, d.notice_type_fr)} />
@@ -102,10 +98,10 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         <Row lang={lang} k="col.region" v={provincesText(lang, d.provinces)} />
         <Row lang={lang} k="tender.gsin" v={d.gsin ? `${d.gsin} ${pick(lang, d.gsin_desc_en, d.gsin_desc_fr) ?? ""}`.trim() : null} />
       </dl>
+      </Panel>
 
       {d.codes.length ? (
-        <>
-          <h2>{t(lang, "tender.codes")}</h2>
+        <Panel title={t(lang, "tender.codes")} count={fmtInt(d.codes.length, lang)}>
           <div class="table-wrap bordered">
             <table class="restack">
               <thead>
@@ -129,17 +125,16 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
               </tbody>
             </table>
           </div>
-        </>
+        </Panel>
       ) : null}
 
       {description ? (
-        <>
-          <h2>{t(lang, "tender.description_heading")}</h2>
+        <Panel title={t(lang, "tender.description_heading")}>
           <div class="prose">{description.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
-        </>
+        </Panel>
       ) : null}
 
-      <h2>{t(lang, "tender.history")}</h2>
+      <Panel title={t(lang, "tender.history")} count={fmtInt(versions.length, lang)}>
       <p class="muted small">{t(lang, "tender.history_note")}</p>
       <div class="table-wrap bordered">
         <table class="restack">
@@ -167,8 +162,9 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
           </tbody>
         </table>
       </div>
+      </Panel>
 
-      <h2>{t(lang, "tender.related")}</h2>
+      <Panel title={t(lang, "tender.related")} count={fmtInt(d.related_awards.length, lang)}>
       {d.related_awards.length ? (
         <>
           <p class="muted small">{t(lang, "tender.related_note")}</p>
@@ -202,8 +198,9 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       ) : (
         <p class="muted">{t(lang, "tender.related_none")}</p>
       )}
+      </Panel>
 
-      <p class="muted small top-gap">
+      <p class="page-foot-note">
         {t(lang, "tender.provenance", { file: d.source_file, first: d.first_seen, last: d.last_seen })}{" "}
         {tn(lang, "tender.versions_one", "tender.versions_many", versions.length, { n: fmtInt(versions.length, lang) })}
       </p>

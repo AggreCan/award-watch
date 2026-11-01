@@ -20,7 +20,7 @@ const get = (path: string, headers: Record<string, string> = {}, env: object = t
   app.request(path, { headers }, env);
 
 // Located by class: the nav's aria-label is translated on French pages.
-const mainNav = (html: string) => html.match(/<nav aria-label="[^"]*" class="main-nav"[\s\S]*?<\/nav>/)?.[0] ?? "";
+const mainNav = (html: string) => html.match(/<nav class="rail"[\s\S]*?<\/nav>/)?.[0] ?? "";
 const count = (html: string, s: string) => html.split(s).length - 1;
 
 describe("support page", () => {

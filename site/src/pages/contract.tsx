@@ -10,7 +10,7 @@ import type { FC } from "hono/jsx";
 import { REFERENCE_RE, loadContract, loadStats, publishedReference, type ContractDetail } from "../data";
 import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, provinceName, segmentLabel, statusLabel, t, type Key, type Lang } from "../i18n";
-import { Breadcrumb, CompetitiveFlag, Layout, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
+import { CompetitiveFlag, Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
 import { contractSeo } from "../seo";
 import { BuyerLink, awardNoticeUrl, datasetUrl, money, provincesText } from "./shared";
 
@@ -56,25 +56,22 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active={kind === "award" ? "/awards" : undefined} seo={contractSeo(d, lang, crumbs)}>
-      <Breadcrumb lang={lang} crumbs={crumbs} />
-      <p class="eyebrow">{t(lang, titleKey)}</p>
-      <h1>{title}</h1>
-      <p class="record-meta">
-        <StatusBadge lang={lang} status={d.status} /> <span class="mono id">{shownRef}</span>{" "}
-        <CompetitiveFlag lang={lang} value={d.competitive} />
-      </p>
-      <p class="links">
-        {kind === "award" ? (
-          <a href={awardNoticeUrl(shownRef, lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.on_canadabuys")}</a>
-        ) : (
-          <a href={datasetUrl("history", lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.history_dataset")}</a>
-        )}
-        {d.tender_reference ? <a href={`/tenders/${d.tender_reference.toLowerCase()}`} class="btn">{t(lang, "contract.tender_link")}</a> : null}
-      </p>
+      <PageHead lang={lang} crumbs={crumbs} eyebrow={t(lang, titleKey)} title={title}
+        lead={<>
+          <StatusBadge lang={lang} status={d.status} /> <span class="mono id">{shownRef}</span>{" "}
+          <CompetitiveFlag lang={lang} value={d.competitive} />
+        </>}
+        actions={<>
+          {kind === "award" ? (
+            <a href={awardNoticeUrl(shownRef, lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.on_canadabuys")}</a>
+          ) : (
+            <a href={datasetUrl("history", lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.history_dataset")}</a>
+          )}
+          {d.tender_reference ? <a href={`/tenders/${d.tender_reference.toLowerCase()}`} class="btn">{t(lang, "contract.tender_link")}</a> : null}
+        </>} />
 
-      <div class="cards">
-        <section class="card">
-          <h2>{t(lang, "contract.parties")}</h2>
+      <div class="panel-grid">
+        <Panel title={t(lang, "contract.parties")}>
           <dl>
             <Row lang={lang} k="contract.supplier" v={d.organization_id ? <a href={`/organizations/${d.organization_id}`}>{d.supplier ?? d.organization_id}</a> : d.supplier} />
             <Row lang={lang} k="contract.operating_name" v={d.supplier_operating} />
@@ -86,9 +83,8 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
               <Row lang={lang} k="tender.end_users" v={listOf(lang, d.end_users_en, d.end_users_fr)} />
             )}
           </dl>
-        </section>
-        <section class="card">
-          <h2>{t(lang, "contract.value")}</h2>
+        </Panel>
+        <Panel title={t(lang, "contract.value")}>
           <dl>
             <Row lang={lang} k="contract.value_counted" v={money(lang, d.value, d.currency)} />
             <Row lang={lang} k="contract.total_value" v={d.total_value === null ? null : money(lang, d.total_value, d.currency)} />
@@ -96,10 +92,10 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
           </dl>
           <p class="muted small">{t(lang, d.status === "cancelled" ? "contract.value_cancelled" : "contract.value_note")}</p>
           {nonCad ? <p class="muted small">{t(lang, "contract.non_cad", { currency: d.currency ?? "" })}</p> : null}
-        </section>
+        </Panel>
       </div>
 
-      <h2>{t(lang, "contract.details")}</h2>
+      <Panel title={t(lang, "contract.details")}>
       <dl class="wide">
         <Row lang={lang} k="col.awarded" v={d.awarded} />
         <Row lang={lang} k="col.published" v={d.published} />
@@ -121,10 +117,10 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
         <Row lang={lang} k="col.region" v={provincesText(lang, d.provinces)} />
         <Row lang={lang} k="tender.gsin" v={d.gsin ? `${d.gsin} ${pick(lang, d.gsin_desc_en, d.gsin_desc_fr) ?? ""}`.trim() : null} />
       </dl>
+      </Panel>
 
       {d.codes.length ? (
-        <>
-          <h2>{t(lang, "tender.codes")}</h2>
+        <Panel title={t(lang, "tender.codes")} count={fmtInt(d.codes.length, lang)}>
           <ul class="plain">
             {d.codes.map((code) => (
               <li>
@@ -133,17 +129,16 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
               </li>
             ))}
           </ul>
-        </>
+        </Panel>
       ) : null}
 
       {description ? (
-        <>
-          <h2>{t(lang, "tender.description_heading")}</h2>
+        <Panel title={t(lang, "tender.description_heading")}>
           <div class="prose">{description.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
-        </>
+        </Panel>
       ) : null}
 
-      <h2>{t(lang, "contract.amendments")}</h2>
+      <Panel title={t(lang, "contract.amendments")} count={fmtInt(versions.length, lang)}>
       <div class="table-wrap bordered">
         <table class="restack">
           <thead>
@@ -170,8 +165,9 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
           </tbody>
         </table>
       </div>
+      </Panel>
 
-      <p class="muted small top-gap">{t(lang, "tender.provenance", { file: d.source_file, first: d.first_seen, last: d.last_seen })}</p>
+      <p class="page-foot-note">{t(lang, "tender.provenance", { file: d.source_file, first: d.first_seen, last: d.last_seen })}</p>
     </Layout>,
   );
 }

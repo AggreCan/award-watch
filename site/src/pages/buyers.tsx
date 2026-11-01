@@ -5,15 +5,15 @@
 // column; nothing adds two sources together.
 
 import type { Context } from "hono";
-import { ChartStack, type Panel } from "../chart";
+import { ChartStack, type Panel as ChartPanel } from "../chart";
 import { MONEY_SOURCES } from "../constants";
 import { BUYER_ID_RE, loadBuyer, loadBuyers, loadStats, type BuyerSummary } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
-import { Breadcrumb, Layout, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
+import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
 import { buyerSeo, pageSeo } from "../seo";
 import { ExpiringSection } from "./expiring";
-import { AwardTable, OrgTotalTable, money } from "./shared";
+import { AwardTable, OrgTotalTable, SourceLine, money } from "./shared";
 
 const KIND: Record<string, Key> = {
   department: "buyer.kind_department",
@@ -46,9 +46,11 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={t(lang, "buyers.title")} dataAsOf={stats.data_as_of} active="/buyers" seo={pageSeo("buyers", lang)}>
-      <h1>{t(lang, "buyers.title")}</h1>
-      <p class="lead">{t(lang, "buyers.lead", { n: n(rows.length) })}</p>
-      <p class="muted small">{t(lang, "buyers.note")}</p>
+      <PageHead lang={lang} title={t(lang, "buyers.title")} lead={t(lang, "buyers.lead", { n: n(rows.length) })}
+        actions={<a href="/downloads/buyers.csv" class="btn">{t(lang, "tenders.csv")}</a>}>
+        <p class="page-note">{t(lang, "buyers.note")}</p>
+      </PageHead>
+      <Panel title={t(lang, "buyers.title")} count={n(rows.length)}>
       <div class="table-wrap bordered">
         <table class="restack">
           <thead>
@@ -80,6 +82,7 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
           </tbody>
         </table>
       </div>
+      </Panel>
     </Layout>,
   );
 }
@@ -104,7 +107,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   if (withValue.length) {
     const first = Math.min(...withValue.map((y) => y.year));
     const last = Math.max(...withValue.map((y) => y.year));
-    const panels: Panel[] = MONEY_SOURCES.filter((s) => withValue.some((y) => y.source === s)).map((s) => ({
+    const panels: ChartPanel[] = MONEY_SOURCES.filter((s) => withValue.some((y) => y.source === s)).map((s) => ({
       title: sourceLabel(lang, s),
       bars: withValue.filter((y) => y.source === s).map((y) => ({ x0: y.year, x1: y.year + 1, value: y.total ?? 0, title: `${y.year}: ${fmtMoney(y.total ?? 0, lang)}` })),
     }));
@@ -122,17 +125,15 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={name} dataAsOf={stats.data_as_of} active="/buyers" seo={buyerSeo(b, lang, crumbs)}>
-      <Breadcrumb lang={lang} crumbs={crumbs} />
-      <h1>{name}{acronym(lang, b.buyer) ? <span class="muted"> ({acronym(lang, b.buyer)})</span> : null}</h1>
-      <p class="lead">
-        {b.buyer.kind && KIND[b.buyer.kind] ? t(lang, KIND[b.buyer.kind]) : t(lang, "buyer.kind_other")}
-        {b.buyer.ckan_org ? <> · <a href={`https://open.canada.ca/data/${lang}/organization/${encodeURIComponent(b.buyer.ckan_org)}`}>{t(lang, "buyer.open_data")}</a></> : null}
-      </p>
-      <p class="links">
-        <a href={`/tenders?buyer=${b.buyer.id}`} class="btn btn-primary">
+      <PageHead lang={lang} crumbs={crumbs}
+        title={<>{name}{acronym(lang, b.buyer) ? <span class="muted"> ({acronym(lang, b.buyer)})</span> : null}</>}
+        lead={<>
+          {b.buyer.kind && KIND[b.buyer.kind] ? t(lang, KIND[b.buyer.kind]) : t(lang, "buyer.kind_other")}
+          {b.buyer.ckan_org ? <> · <a href={`https://open.canada.ca/data/${lang}/organization/${encodeURIComponent(b.buyer.ckan_org)}`}>{t(lang, "buyer.open_data")}</a></> : null}
+        </>}
+        actions={<a href={`/tenders?buyer=${b.buyer.id}`} class="btn btn-primary">
           {tn(lang, "buyer.open_one", "buyer.open_many", b.open_tenders, { n: n(b.open_tenders) })}
-        </a>
-      </p>
+        </a>} />
 
       <section class="tiles" aria-label={t(lang, "org.tiles_label")}>
         {MONEY_SOURCES.map((s) => (
@@ -143,9 +144,9 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
           </div>
         ))}
       </section>
-      <p class="muted small">{t(lang, "org.never_added")}</p>
+      <p class="tiles-note">{t(lang, "org.never_added")}</p>
 
-      <h2>{t(lang, "org.years")}</h2>
+      <Panel title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
       {chart}
       {years.length ? (
         <div class="table-wrap bordered">
@@ -179,25 +180,27 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
           </table>
         </div>
       ) : <p class="muted">{t(lang, "org.years_none")}</p>}
-      <p class="muted small">{t(lang, "org.nc_footnote")}</p>
+      </Panel>
 
-      {MONEY_SOURCES.map((s) => {
-        const rows = b.top_organizations[s] ?? [];
-        return rows.length ? (
-          <>
-            <h2>{t(lang, "buyer.top", { source: sourceLabel(lang, s) })}</h2>
-            <OrgTotalTable lang={lang} rows={rows} rank />
-          </>
-        ) : null;
-      })}
+      <div class="panel-grid">
+        {MONEY_SOURCES.map((s) => {
+          const rows = b.top_organizations[s] ?? [];
+          return rows.length ? (
+            <Panel title={t(lang, "buyer.top", { source: sourceLabel(lang, s) })}>
+              <OrgTotalTable lang={lang} rows={rows} rank />
+            </Panel>
+          ) : null;
+        })}
+      </div>
 
       {b.expiring ? (
         <ExpiringSection lang={lang} part={b.expiring} heading="buyer.expiring" buyer={false}
           link={<a href={`/expiring/12m?buyer=${b.buyer.id}`}>{t(lang, "buyer.expiring_all")}</a>} />
       ) : null}
 
-      <h2>{t(lang, "buyer.recent_awards")}</h2>
-      {b.recent_awards.length ? <AwardTable lang={lang} rows={b.recent_awards} buyer={false} /> : <p class="muted">{t(lang, "awards.none")}</p>}
+      <Panel title={t(lang, "buyer.recent_awards")} foot={<SourceLine lang={lang} source="awards" />}>
+        {b.recent_awards.length ? <AwardTable lang={lang} rows={b.recent_awards} buyer={false} /> : <p class="muted">{t(lang, "awards.none")}</p>}
+      </Panel>
     </Layout>,
   );
 }

@@ -113,33 +113,39 @@ export const SegmentChips: FC<{ lang: Lang; codes: readonly string[] }> = ({ lan
 
 // -- tables ---------------------------------------------------------------------------
 
-export const TenderTable: FC<{ lang: Lang; rows: readonly TenderRow[]; today: string; status?: boolean }> = ({ lang, rows, today, status }) => (
+// The column classes say what each column is, so the stylesheet can set the
+// widths, hide the secondary ones on medium screens (mdh) and narrow the list
+// beside the split view's detail panel. public/tenders.js draws the same
+// markup; selectable rows carry their reference for it.
+export const TenderTable: FC<{ lang: Lang; rows: readonly TenderRow[]; today: string; status?: boolean; selectable?: boolean }> = ({
+  lang, rows, today, status, selectable,
+}) => (
   <div class="table-wrap bordered">
-    <table class="restack">
+    <table class="restack t-tenders">
       <thead>
         <tr>
-          <th>{t(lang, "col.notice")}</th>
-          <th>{t(lang, "col.buyer")}</th>
-          <th>{t(lang, "col.closing")}</th>
-          <th>{t(lang, "col.published")}</th>
-          <th>{t(lang, "col.region")}</th>
+          <th class="c-notice">{t(lang, "col.notice")}</th>
+          <th class="c-buyer">{t(lang, "col.buyer")}</th>
+          <th class="c-date">{t(lang, "col.closing")}</th>
+          <th class="c-pub mdh">{t(lang, "col.published")}</th>
+          <th class="c-region">{t(lang, "col.region")}</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr>
-            <td data-label={t(lang, "col.notice")}>
+          <tr data-ref={selectable ? r.reference.toLowerCase() : undefined}>
+            <td data-label={t(lang, "col.notice")} class="c-notice">
               <a href={`/tenders/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? publishedReference(r)}</a>
               <br />
               <span class="mono id muted">{publishedReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} />
             </td>
-            <td data-label={t(lang, "col.buyer")}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
-            <td data-label={t(lang, "col.closing")} class="mono">
+            <td data-label={t(lang, "col.buyer")} class="c-buyer"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
+            <td data-label={t(lang, "col.closing")} class="mono c-date">
               {closingText(r.closing)}{" "}
               <StatusBadge lang={lang} status={tenderState(status ? r.status ?? "open" : "open", r.closing, today)} />
             </td>
-            <td data-label={t(lang, "col.published")} class="mono">{r.published ?? ""}</td>
-            <td data-label={t(lang, "col.region")}>{provincesText(lang, r.provinces)}</td>
+            <td data-label={t(lang, "col.published")} class="mono c-pub mdh">{r.published ?? ""}</td>
+            <td data-label={t(lang, "col.region")} class="c-region">{provincesText(lang, r.provinces)}</td>
           </tr>
         ))}
       </tbody>
@@ -160,7 +166,7 @@ export const AwardTable: FC<{ lang: Lang; rows: readonly AwardRow[]; href?: stri
           <th>{t(lang, "col.awarded")}</th>
           <th>{t(lang, "col.contract")}</th>
           {organization ? <th>{t(lang, "col.organization")}</th> : null}
-          {buyer ? <th>{t(lang, href === "/history" ? "col.client" : "col.buyer")}</th> : null}
+          {buyer ? <th class="mdh">{t(lang, href === "/history" ? "col.client" : "col.buyer")}</th> : null}
           <th class="num">{t(lang, "col.value")}</th>
           <th>{t(lang, "col.method")}</th>
         </tr>
@@ -181,7 +187,7 @@ export const AwardTable: FC<{ lang: Lang; rows: readonly AwardRow[]; href?: stri
               </td>
             ) : null}
             {buyer ? (
-              <td data-label={t(lang, href === "/history" ? "col.client" : "col.buyer")}>
+              <td data-label={t(lang, href === "/history" ? "col.client" : "col.buyer")} class="mdh">
                 <BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} />
               </td>
             ) : null}

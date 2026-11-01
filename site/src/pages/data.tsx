@@ -4,7 +4,7 @@ import { FIRST_AWARD_YEAR } from "../constants";
 import { loadStats, type Stats } from "../data";
 import type { AppEnv } from "../env";
 import { t, tj, type Key, type Lang } from "../i18n";
-import { Layout, noDataPage, page, todayOf } from "../layout";
+import { Layout, PageHead, noDataPage, page, todayOf } from "../layout";
 import { OGL_URL, datasetJsonLd, pageSeo } from "../seo";
 import { datasetUrl } from "./shared";
 
@@ -97,14 +97,13 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
     c,
     <Layout lang={lang} title={t(lang, "data.title")} dataAsOf={stats.data_as_of} active="/data"
       seo={pageSeo("data", lang, { jsonLd: [datasetJsonLd(downloads, stats.data_as_of, lang)] })}>
+      <PageHead lang={lang} title={t(lang, "data.title")} lead={t(lang, "data.lead")} />
       <div class="doc-layout">
         <nav class="toc" aria-label={t(lang, "toc.label")}>
           <span class="toc-title">{t(lang, "toc.title")}</span>
           {toc.map(([id, key]) => <a href={`#${id}`}>{t(lang, key)}</a>)}
         </nav>
         <div class="doc">
-          <h1>{t(lang, "data.title")}</h1>
-          <p class="lead">{t(lang, "data.lead")}</p>
 
           <h2 id="sources">{t(lang, "data.toc_sources")}</h2>
           <p>{t(lang, "data.sources_text")}</p>

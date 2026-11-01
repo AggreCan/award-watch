@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { loadJson, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { numberLocale, pick, provinceName, segmentLabel, t, tj, type Key, type Lang } from "../i18n";
-import { Layout, page } from "../layout";
+import { Layout, PageHead, page } from "../layout";
 import { SITE_ORIGIN, pageSeo } from "../seo";
 
 // The pipeline writes the feeds as static files under /data/feeds/ (feeds.py).
@@ -152,15 +152,14 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
 
   return page(
     c,
-    <Layout lang={lang} title={t(lang, "feeds.title")} dataAsOf={stats?.data_as_of ?? null} head={<FeedLinks lang={lang} />} seo={pageSeo("feeds", lang)}>
+    <Layout lang={lang} title={t(lang, "feeds.title")} dataAsOf={stats?.data_as_of ?? null} active="/feeds" head={<FeedLinks lang={lang} />} seo={pageSeo("feeds", lang)}>
+      <PageHead lang={lang} title={t(lang, "feeds.title")} lead={t(lang, expiring.length ? "feeds.lead_expiring" : "feeds.lead", { n: index?.max_entries ?? 50 })} />
       <div class="doc-layout">
         <nav class="toc" aria-label={t(lang, "toc.label")}>
           <span class="toc-title">{t(lang, "toc.title")}</span>
           {toc.map(([id, key]) => <a href={`#${id}`}>{t(lang, key)}</a>)}
         </nav>
         <div class="doc">
-          <h1>{t(lang, "feeds.title")}</h1>
-          <p class="lead">{t(lang, expiring.length ? "feeds.lead_expiring" : "feeds.lead", { n: index?.max_entries ?? 50 })}</p>
           <p>{t(lang, "feeds.privacy")}</p>
 
           <h2 id="kinds">{t(lang, "feeds.toc_kinds")}</h2>

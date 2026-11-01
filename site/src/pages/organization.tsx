@@ -7,7 +7,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
-import { ChartStack, type Panel } from "../chart";
+import { ChartStack, type Panel as ChartPanel } from "../chart";
 import { MONEY_SOURCES, PROVINCES, type MoneySource, type SourceKey } from "../constants";
 import { buyerPath, directoryCode, directoryPath, loadDirectories } from "../crosslinks";
 import { loadAlias, loadProfile, loadStats, type Profile, type YearFigure } from "../data";
@@ -15,7 +15,7 @@ import type { AppEnv } from "../env";
 import {
   fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, provinceName, sourceLabel, t, tj, tn, type Key, type Lang,
 } from "../i18n";
-import { Breadcrumb, CompetitiveFlag, Layout, noDataPage, notFoundPage, page } from "../layout";
+import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page } from "../layout";
 import { organizationSeo } from "../seo";
 import { ExpiringSection, MoreInCsv } from "./expiring";
 import { AwardTable, BuyerLink, SourceLine, contractSearchUrl, datasetUrl, grantUrl, lobbyUrl, money } from "./shared";
@@ -78,7 +78,7 @@ const YearChart: FC<{ lang: Lang; years: readonly YearFigure[] }> = ({ lang, yea
   const first = Math.min(...withValue.map((y) => y.year));
   const last = Math.max(...withValue.map((y) => y.year));
   const domain: [number, number] = [first, last + 1];
-  const panels: Panel[] = MONEY_SOURCES.filter((s) => withValue.some((y) => y.source === s)).map((s) => ({
+  const panels: ChartPanel[] = MONEY_SOURCES.filter((s) => withValue.some((y) => y.source === s)).map((s) => ({
     title: sourceLabel(lang, s),
     bars: withValue.filter((y) => y.source === s).map((y) => ({
       x0: y.year, x1: y.year + 1, value: y.total ?? 0,
@@ -181,22 +181,21 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={o.display_name} dataAsOf={stats.data_as_of} active="/organizations" seo={organizationSeo(profile, lang, crumbs)}>
-      <Breadcrumb lang={lang} crumbs={crumbs} />
-      <h1>{o.display_name}</h1>
-      <p class="lead">{placeText(lang, o)}</p>
-      {otherNames.length ? <p>{t(lang, "org.also_recorded")} {otherNames.join(" · ")}</p> : null}
-      <p class="muted small">
-        {t(lang, "org.seen", { first: o.first_seen ?? t(lang, "common.na"), last: o.last_seen ?? t(lang, "common.na") })}
-        {o.business_number ? ` ${t(lang, "org.business_number", { bn: o.business_number })}` : ""}
-      </p>
-      <p class="links">
-        <button type="button" class="btn" id="watch-toggle" style="display:none" data-organization={o.id} data-max={String(WATCH_MAX)}
-          data-label-on={t(lang, "watch.on")} data-label-off={t(lang, "watch.off")} data-label-full={t(lang, "watch.full", { max: WATCH_MAX })}>
-          {t(lang, "watch.off")}
-        </button>
-        <a href={`/organizations/${o.id}/respond`} class="btn">{t(lang, "org.respond")}</a>
-        <a href={`/corrections?organization=${o.id}`} class="btn">{t(lang, "org.correct")}</a>
-      </p>
+      <PageHead lang={lang} crumbs={crumbs} title={o.display_name} lead={placeText(lang, o)}
+        actions={<>
+          <button type="button" class="btn" id="watch-toggle" style="display:none" data-organization={o.id} data-max={String(WATCH_MAX)}
+            data-label-on={t(lang, "watch.on")} data-label-off={t(lang, "watch.off")} data-label-full={t(lang, "watch.full", { max: WATCH_MAX })}>
+            {t(lang, "watch.off")}
+          </button>
+          <a href={`/organizations/${o.id}/respond`} class="btn">{t(lang, "org.respond")}</a>
+          <a href={`/corrections?organization=${o.id}`} class="btn">{t(lang, "org.correct")}</a>
+        </>}>
+        {otherNames.length ? <p class="page-note">{t(lang, "org.also_recorded")} {otherNames.join(" · ")}</p> : null}
+        <p class="page-note">
+          {t(lang, "org.seen", { first: o.first_seen ?? t(lang, "common.na"), last: o.last_seen ?? t(lang, "common.na") })}
+          {o.business_number ? ` ${t(lang, "org.business_number", { bn: o.business_number })}` : ""}
+        </p>
+      </PageHead>
 
       <section class="tiles" aria-label={t(lang, "org.tiles_label")}>
         {MONEY_SOURCES.map((s) => (
@@ -212,20 +211,219 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           <span class="tile-note">{t(lang, "org.tile_lobbying")}</span>
         </a>
       </section>
-      <p class="muted small">{t(lang, "org.never_added")}</p>
+      <p class="tiles-note">{t(lang, "org.never_added")}</p>
 
-      <div class="cards">
-        <section class="card">
-          <h2>{t(lang, "org.places")}</h2>
+      <Panel id="years" title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
+        <p class="muted small">
+          {tj(lang, "org.years_note", { methodology: <a href="/methodology#counting">{t(lang, "org.years_rules")}</a> })}
+        </p>
+        <YearChart lang={lang} years={profile.years} />
+        {years.length ? (
+          <div class="table-wrap bordered">
+            <table class="restack">
+              <thead>
+                <tr>
+                  <th>{t(lang, "col.year")}</th>
+                  <th>{t(lang, "col.source")}</th>
+                  <th class="num">{t(lang, "col.records")}</th>
+                  <th class="num">{t(lang, "col.value")}</th>
+                  <th class="num"><span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span></th>
+                  <th class="num"><span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_value")}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {years.map((y) => (
+                  <tr>
+                    <td data-label={t(lang, "col.year")} class="mono">{y.year}</td>
+                    <td data-label={t(lang, "col.source")}>{sourceLabel(lang, y.source)}</td>
+                    <td data-label={t(lang, "col.records")} class="mono num">{n(y.n)}</td>
+                    <td data-label={t(lang, "col.value")} class="mono num">{money(lang, y.total)}</td>
+                    <td data-label={t(lang, "org.col_nc_count")} class="mono num">{share(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}</td>
+                    <td data-label={t(lang, "org.col_nc_value")} class="mono num">
+                      {share(lang, y.total_non_competitive, y.source === "grants" ? null : y.total, (v) => fmtMoney(v, lang))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <p class="muted">{t(lang, "org.years_none")}</p>}
+      </Panel>
+
+      {profile.expiring ? (
+        <ExpiringSection lang={lang} part={profile.expiring} heading="org.expiring" organization={false}
+          more={<MoreInCsv lang={lang} part={profile.expiring} />}
+          link={<a href="/expiring">{t(lang, "expiring.see_all")}</a>} />
+      ) : null}
+
+      <Panel id="awards" title={t(lang, SECTION_KEY.awards)} count={n(profile.awards_total_rows)} foot={<SourceLine lang={lang} source="awards" />}>
+        {profile.awards.length ? <AwardTable lang={lang} rows={profile.awards} organization={false} /> : <p class="muted">{t(lang, "org.none_awards")}</p>}
+        <MoreRows lang={lang} source="awards" shown={profile.awards.length} total={profile.awards_total_rows} />
+        <NonCad lang={lang} n={nonCad.awards} />
+      </Panel>
+
+      <Panel id="history" title={t(lang, SECTION_KEY.history)} count={n(profile.history_total_rows)} foot={<SourceLine lang={lang} source="history" />}>
+        <p class="muted small">{t(lang, "org.history_note")}</p>
+        {profile.history.length ? <AwardTable lang={lang} rows={profile.history} href="/history" organization={false} /> : <p class="muted">{t(lang, "org.none_history")}</p>}
+        <MoreRows lang={lang} source="history" shown={profile.history.length} total={profile.history_total_rows} />
+        <NonCad lang={lang} n={nonCad.history} />
+      </Panel>
+
+      <Panel id="contracts" title={t(lang, SECTION_KEY.contracts)} count={n(profile.contracts_total_rows)} foot={<SourceLine lang={lang} source="contracts" />}>
+        <p class="muted small">{t(lang, "org.contracts_note")}</p>
+        {profile.contracts.length ? (
+          <div class="table-wrap bordered">
+            <table class="restack">
+              <thead>
+                <tr>
+                  <th>{t(lang, "col.date")}</th>
+                  <th>{t(lang, "col.description")}</th>
+                  <th class="mdh">{t(lang, "col.buyer")}</th>
+                  <th class="num">{t(lang, "col.value")}</th>
+                  <th>{t(lang, "col.method")}</th>
+                  <th>{t(lang, "col.record")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {profile.contracts.map((r) => (
+                  <tr>
+                    <td data-label={t(lang, "col.date")} class="mono">{r.contract_date ?? ""}</td>
+                    <td data-label={t(lang, "col.description")}>
+                      {pick(lang, r.description_en, r.description_fr) ?? t(lang, "common.not_stated")}
+                      {r.reporting_period ? <><br /><span class="muted small">{t(lang, "org.reporting_period", { period: r.reporting_period })}</span></> : null}
+                    </td>
+                    <td data-label={t(lang, "col.buyer")} class="mdh"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
+                    <td data-label={t(lang, "col.value")} class="mono num">
+                      {money(lang, r.value)}
+                      {r.value_last_reported !== undefined && r.value_last_reported !== null ? (
+                        <><br /><span class="muted small" title={t(lang, "org.last_reported_def")}>{t(lang, "org.last_reported", { value: money(lang, r.value_last_reported) })}</span></>
+                      ) : null}
+                    </td>
+                    <td data-label={t(lang, "col.method")}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
+                    <td data-label={t(lang, "col.record")}><a href={contractSearchUrl(r.reference)} class="mono" rel="nofollow noopener">{r.reference}</a></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <p class="muted">{t(lang, "org.none_contracts")}</p>}
+        <MoreRows lang={lang} source="contracts" shown={profile.contracts.length} total={profile.contracts_total_rows} />
+        <NonCad lang={lang} n={nonCad.contracts} />
+      </Panel>
+
+      <Panel id="grants" title={t(lang, SECTION_KEY.grants)} count={n(profile.grants_total_rows)} foot={<SourceLine lang={lang} source="grants" />}>
+        {profile.grants.length ? (
+          <div class="table-wrap bordered">
+            <table class="restack">
+              <thead>
+                <tr>
+                  <th>{t(lang, "grant.start")}</th>
+                  <th>{t(lang, "grant.program")}</th>
+                  <th class="mdh">{t(lang, "grant.department")}</th>
+                  <th>{t(lang, "grant.type")}</th>
+                  <th class="num">{t(lang, "col.value")}</th>
+                  <th>{t(lang, "col.record")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {profile.grants.map((g) => (
+                  <tr>
+                    <td data-label={t(lang, "grant.start")} class="mono">{g.start ?? ""}{g.end ? <span class="muted"> {t(lang, "grant.to", { end: g.end })}</span> : null}</td>
+                    <td data-label={t(lang, "grant.program")}>
+                      {pick(lang, g.program_en, g.program_fr) ?? ""}
+                      {pick(lang, g.title_en, g.title_fr) ? <><br /><span class="muted small">{pick(lang, g.title_en, g.title_fr)}</span></> : null}
+                    </td>
+                    <td data-label={t(lang, "grant.department")} class="mdh"><BuyerLink lang={lang} id={g.buyer_id} en={g.buyer_en} fr={g.buyer_fr} /></td>
+                    <td data-label={t(lang, "grant.type")}>{g.agreement_type && AGREEMENT_TYPE[g.agreement_type] ? t(lang, AGREEMENT_TYPE[g.agreement_type]) : g.agreement_type ?? ""}</td>
+                    <td data-label={t(lang, "col.value")} class="mono num">{money(lang, g.value)}</td>
+                    <td data-label={t(lang, "col.record")}>
+                      <a href={grantUrl(g.owner_org, g.reference)} class="mono" rel="nofollow noopener">{g.reference}</a>
+                      {g.amendment > 0 ? <span class="muted small"> {t(lang, "grant.amendment", { n: g.amendment })}</span> : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <p class="muted">{t(lang, "org.none_grants")}</p>}
+        <MoreRows lang={lang} source="grants" shown={profile.grants.length} total={profile.grants_total_rows} />
+        <NonCad lang={lang} n={nonCad.grants} />
+      </Panel>
+
+      <Panel id="lobbying" title={t(lang, SECTION_KEY.lobbying)} count={n(profile.lobbying_total_rows)} foot={<SourceLine lang={lang} source="lobbying" />}>
+        <p class="muted small">{t(lang, "org.lobbying_note")}</p>
+        {profile.lobbying.length ? (
+          <div class="table-wrap bordered">
+            <table class="restack">
+              <thead>
+                <tr>
+                  <th>{t(lang, "col.date")}</th>
+                  <th>{t(lang, "lobby.subjects")}</th>
+                  <th class="mdh">{t(lang, "lobby.institutions")}</th>
+                  <th>{t(lang, "lobby.officials")}</th>
+                  <th class="mdh">{t(lang, "lobby.registrant")}</th>
+                  <th>{t(lang, "col.record")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {profile.lobbying.map((r) => (
+                  <tr>
+                    <td data-label={t(lang, "col.date")} class="mono">{r.comm_date ?? ""}</td>
+                    <td data-label={t(lang, "lobby.subjects")}>{r.subject_matters.join("; ")}</td>
+                    <td data-label={t(lang, "lobby.institutions")} class="mdh">{r.institutions.join("; ")}</td>
+                    <td data-label={t(lang, "lobby.officials")}>
+                      {r.dpoh.map((d) => <span class="nw-block">{[d.name, d.title, d.institution].filter(Boolean).join(", ")}</span>)}
+                    </td>
+                    <td data-label={t(lang, "lobby.registrant")} class="mdh">{r.registrant ?? ""}</td>
+                    <td data-label={t(lang, "col.record")}><a href={lobbyUrl(r.comm_number)} class="mono" rel="nofollow noopener">{r.comm_number}</a></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <p class="muted">{t(lang, "org.none_lobbying")}</p>}
+        <MoreRows lang={lang} source="lobbying" shown={profile.lobbying.length} total={profile.lobbying_total_rows} />
+      </Panel>
+
+      <Panel id="buyers" title={t(lang, "org.buyers")}>
+        {profile.buyers.length ? (
+          <div class="table-wrap bordered">
+            <table class="restack">
+              <thead>
+                <tr>
+                  <th>{t(lang, "col.source")}</th>
+                  <th>{t(lang, "col.buyer")}</th>
+                  <th class="num">{t(lang, "col.records")}</th>
+                  <th class="num">{t(lang, "col.value")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {profile.buyers.map((b) => (
+                  <tr>
+                    <td data-label={t(lang, "col.source")}>{sourceLabel(lang, b.source)}</td>
+                    <td data-label={t(lang, "col.buyer")}>
+                      {buyerPath(b.buyer_id) ? <a href={`/buyers/${b.buyer_id}`}>{pick(lang, b.buyer_en, b.buyer_fr) ?? b.buyer_id}</a> : b.buyer_id}
+                    </td>
+                    <td data-label={t(lang, "col.records")} class="mono num">{n(b.n)}</td>
+                    <td data-label={t(lang, "col.value")} class="mono num">{money(lang, b.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <p class="muted">{t(lang, "org.buyers_none")}</p>}
+      </Panel>
+
+      <div class="panel-grid">
+        <Panel title={t(lang, "org.places")}>
           {places.length ? (
-            <ul class="plain">
-              {places.map((p) => <li>{placeText(lang, p)} <span class="muted small">{tn(lang, "org.rows_one", "org.rows_many", p.n, { n: n(p.n) })}</span></li>)}
+            <ul class="kv">
+              {places.map((p) => <li><span>{placeText(lang, p)}</span> <span class="num muted">{tn(lang, "org.rows_one", "org.rows_many", p.n, { n: n(p.n) })}</span></li>)}
             </ul>
           ) : <p class="muted">{t(lang, "common.not_stated")}</p>}
           {placeCount > 1 ? <p class="muted small">{t(lang, "org.places_note", { n: n(placeCount) })}</p> : null}
-        </section>
-        <section class="card">
-          <h2>{t(lang, "org.registry")}</h2>
+        </Panel>
+        <Panel title={t(lang, "org.registry")}>
           {profile.registry.length ? (
             <dl>
               {profile.registry.map((r) => (
@@ -243,235 +441,35 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
               ))}
             </dl>
           ) : <p class="muted">{t(lang, "registry.none")}</p>}
-        </section>
+        </Panel>
       </div>
 
-      <h2 id="years">{t(lang, "org.years")}</h2>
-      <p class="muted small">
-        {tj(lang, "org.years_note", { methodology: <a href="/methodology#counting">{t(lang, "org.years_rules")}</a> })}
-      </p>
-      <YearChart lang={lang} years={profile.years} />
-      {years.length ? (
-        <div class="table-wrap bordered">
-          <table class="restack">
-            <thead>
-              <tr>
-                <th>{t(lang, "col.year")}</th>
-                <th>{t(lang, "col.source")}</th>
-                <th class="num">{t(lang, "col.records")}</th>
-                <th class="num">{t(lang, "col.value")}</th>
-                <th class="num"><span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span></th>
-                <th class="num"><span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_value")}</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {years.map((y) => (
-                <tr>
-                  <td data-label={t(lang, "col.year")} class="mono">{y.year}</td>
-                  <td data-label={t(lang, "col.source")}>{sourceLabel(lang, y.source)}</td>
-                  <td data-label={t(lang, "col.records")} class="mono num">{n(y.n)}</td>
-                  <td data-label={t(lang, "col.value")} class="mono num">{money(lang, y.total)}</td>
-                  <td data-label={t(lang, "org.col_nc_count")} class="mono num">{share(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}</td>
-                  <td data-label={t(lang, "org.col_nc_value")} class="mono num">
-                    {share(lang, y.total_non_competitive, y.source === "grants" ? null : y.total, (v) => fmtMoney(v, lang))}
-                  </td>
-                </tr>
+      <div class="panel-grid">
+        <Panel id="responses" title={t(lang, "org.responses")} foot={<a href={`/organizations/${o.id}/respond`}>{t(lang, "org.respond")}</a>}>
+          {responses.length ? (
+            <ul class="statement-list">
+              {responses.map((r) => (
+                <li>
+                  <p class="muted small">{t(lang, "org.received", { date: r.submitted_at.slice(0, 10) })}</p>
+                  <blockquote>{r.text}</blockquote>
+                </li>
               ))}
-            </tbody>
-          </table>
-        </div>
-      ) : <p class="muted">{t(lang, "org.years_none")}</p>}
-      <p class="muted small">{t(lang, "org.nc_footnote")}</p>
-
-      {profile.expiring ? (
-        <ExpiringSection lang={lang} part={profile.expiring} heading="org.expiring" organization={false}
-          more={<MoreInCsv lang={lang} part={profile.expiring} />}
-          link={<a href="/expiring">{t(lang, "expiring.see_all")}</a>} />
-      ) : null}
-
-      <h2 id="awards">{t(lang, SECTION_KEY.awards)}</h2>
-      {profile.awards.length ? <AwardTable lang={lang} rows={profile.awards} organization={false} /> : <p class="muted">{t(lang, "org.none_awards")}</p>}
-      <MoreRows lang={lang} source="awards" shown={profile.awards.length} total={profile.awards_total_rows} />
-      <NonCad lang={lang} n={nonCad.awards} />
-      <SourceLine lang={lang} source="awards" />
-
-      <h2 id="history">{t(lang, SECTION_KEY.history)}</h2>
-      <p class="muted small">{t(lang, "org.history_note")}</p>
-      {profile.history.length ? <AwardTable lang={lang} rows={profile.history} href="/history" organization={false} /> : <p class="muted">{t(lang, "org.none_history")}</p>}
-      <MoreRows lang={lang} source="history" shown={profile.history.length} total={profile.history_total_rows} />
-      <NonCad lang={lang} n={nonCad.history} />
-      <SourceLine lang={lang} source="history" />
-
-      <h2 id="contracts">{t(lang, SECTION_KEY.contracts)}</h2>
-      <p class="muted small">{t(lang, "org.contracts_note")}</p>
-      {profile.contracts.length ? (
-        <div class="table-wrap bordered">
-          <table class="restack">
-            <thead>
-              <tr>
-                <th>{t(lang, "col.date")}</th>
-                <th>{t(lang, "col.description")}</th>
-                <th>{t(lang, "col.buyer")}</th>
-                <th class="num">{t(lang, "col.value")}</th>
-                <th>{t(lang, "col.method")}</th>
-                <th>{t(lang, "col.record")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profile.contracts.map((r) => (
-                <tr>
-                  <td data-label={t(lang, "col.date")} class="mono">{r.contract_date ?? ""}</td>
-                  <td data-label={t(lang, "col.description")}>
-                    {pick(lang, r.description_en, r.description_fr) ?? t(lang, "common.not_stated")}
-                    {r.reporting_period ? <><br /><span class="muted small">{t(lang, "org.reporting_period", { period: r.reporting_period })}</span></> : null}
-                  </td>
-                  <td data-label={t(lang, "col.buyer")}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
-                  <td data-label={t(lang, "col.value")} class="mono num">
-                    {money(lang, r.value)}
-                    {r.value_last_reported !== undefined && r.value_last_reported !== null ? (
-                      <><br /><span class="muted small" title={t(lang, "org.last_reported_def")}>{t(lang, "org.last_reported", { value: money(lang, r.value_last_reported) })}</span></>
-                    ) : null}
-                  </td>
-                  <td data-label={t(lang, "col.method")}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
-                  <td data-label={t(lang, "col.record")}><a href={contractSearchUrl(r.reference)} class="mono" rel="nofollow noopener">{r.reference}</a></td>
-                </tr>
+            </ul>
+          ) : <p class="muted">{t(lang, "org.no_responses")}</p>}
+        </Panel>
+        <Panel id="corrections" title={t(lang, "org.corrections")} foot={<a href={`/corrections?organization=${o.id}`}>{t(lang, "org.correct")}</a>}>
+          {corrections.length ? (
+            <ul class="statement-list">
+              {corrections.map((r) => (
+                <li>
+                  <p class="muted small">{t(lang, "org.received", { date: r.submitted_at.slice(0, 10) })}{r.page ? ` · ${r.page}` : ""}</p>
+                  <p>{r.text}</p>
+                </li>
               ))}
-            </tbody>
-          </table>
-        </div>
-      ) : <p class="muted">{t(lang, "org.none_contracts")}</p>}
-      <MoreRows lang={lang} source="contracts" shown={profile.contracts.length} total={profile.contracts_total_rows} />
-      <NonCad lang={lang} n={nonCad.contracts} />
-      <SourceLine lang={lang} source="contracts" />
-
-      <h2 id="grants">{t(lang, SECTION_KEY.grants)}</h2>
-      {profile.grants.length ? (
-        <div class="table-wrap bordered">
-          <table class="restack">
-            <thead>
-              <tr>
-                <th>{t(lang, "grant.start")}</th>
-                <th>{t(lang, "grant.program")}</th>
-                <th>{t(lang, "grant.department")}</th>
-                <th>{t(lang, "grant.type")}</th>
-                <th class="num">{t(lang, "col.value")}</th>
-                <th>{t(lang, "col.record")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profile.grants.map((g) => (
-                <tr>
-                  <td data-label={t(lang, "grant.start")} class="mono">{g.start ?? ""}{g.end ? <span class="muted"> {t(lang, "grant.to", { end: g.end })}</span> : null}</td>
-                  <td data-label={t(lang, "grant.program")}>
-                    {pick(lang, g.program_en, g.program_fr) ?? ""}
-                    {pick(lang, g.title_en, g.title_fr) ? <><br /><span class="muted small">{pick(lang, g.title_en, g.title_fr)}</span></> : null}
-                  </td>
-                  <td data-label={t(lang, "grant.department")}><BuyerLink lang={lang} id={g.buyer_id} en={g.buyer_en} fr={g.buyer_fr} /></td>
-                  <td data-label={t(lang, "grant.type")}>{g.agreement_type && AGREEMENT_TYPE[g.agreement_type] ? t(lang, AGREEMENT_TYPE[g.agreement_type]) : g.agreement_type ?? ""}</td>
-                  <td data-label={t(lang, "col.value")} class="mono num">{money(lang, g.value)}</td>
-                  <td data-label={t(lang, "col.record")}>
-                    <a href={grantUrl(g.owner_org, g.reference)} class="mono" rel="nofollow noopener">{g.reference}</a>
-                    {g.amendment > 0 ? <span class="muted small"> {t(lang, "grant.amendment", { n: g.amendment })}</span> : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : <p class="muted">{t(lang, "org.none_grants")}</p>}
-      <MoreRows lang={lang} source="grants" shown={profile.grants.length} total={profile.grants_total_rows} />
-      <NonCad lang={lang} n={nonCad.grants} />
-      <SourceLine lang={lang} source="grants" />
-
-      <h2 id="lobbying">{t(lang, SECTION_KEY.lobbying)}</h2>
-      <p class="muted small">{t(lang, "org.lobbying_note")}</p>
-      {profile.lobbying.length ? (
-        <div class="table-wrap bordered">
-          <table class="restack">
-            <thead>
-              <tr>
-                <th>{t(lang, "col.date")}</th>
-                <th>{t(lang, "lobby.subjects")}</th>
-                <th>{t(lang, "lobby.institutions")}</th>
-                <th>{t(lang, "lobby.officials")}</th>
-                <th>{t(lang, "lobby.registrant")}</th>
-                <th>{t(lang, "col.record")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profile.lobbying.map((r) => (
-                <tr>
-                  <td data-label={t(lang, "col.date")} class="mono">{r.comm_date ?? ""}</td>
-                  <td data-label={t(lang, "lobby.subjects")}>{r.subject_matters.join("; ")}</td>
-                  <td data-label={t(lang, "lobby.institutions")}>{r.institutions.join("; ")}</td>
-                  <td data-label={t(lang, "lobby.officials")}>
-                    {r.dpoh.map((d) => <span class="nw-block">{[d.name, d.title, d.institution].filter(Boolean).join(", ")}</span>)}
-                  </td>
-                  <td data-label={t(lang, "lobby.registrant")}>{r.registrant ?? ""}</td>
-                  <td data-label={t(lang, "col.record")}><a href={lobbyUrl(r.comm_number)} class="mono" rel="nofollow noopener">{r.comm_number}</a></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : <p class="muted">{t(lang, "org.none_lobbying")}</p>}
-      <MoreRows lang={lang} source="lobbying" shown={profile.lobbying.length} total={profile.lobbying_total_rows} />
-      <SourceLine lang={lang} source="lobbying" />
-
-      <h2 id="buyers">{t(lang, "org.buyers")}</h2>
-      {profile.buyers.length ? (
-        <div class="table-wrap bordered">
-          <table class="restack">
-            <thead>
-              <tr>
-                <th>{t(lang, "col.source")}</th>
-                <th>{t(lang, "col.buyer")}</th>
-                <th class="num">{t(lang, "col.records")}</th>
-                <th class="num">{t(lang, "col.value")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profile.buyers.map((b) => (
-                <tr>
-                  <td data-label={t(lang, "col.source")}>{sourceLabel(lang, b.source)}</td>
-                  <td data-label={t(lang, "col.buyer")}>
-                    {buyerPath(b.buyer_id) ? <a href={`/buyers/${b.buyer_id}`}>{pick(lang, b.buyer_en, b.buyer_fr) ?? b.buyer_id}</a> : b.buyer_id}
-                  </td>
-                  <td data-label={t(lang, "col.records")} class="mono num">{n(b.n)}</td>
-                  <td data-label={t(lang, "col.value")} class="mono num">{money(lang, b.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : <p class="muted">{t(lang, "org.buyers_none")}</p>}
-
-      <h2 id="responses">{t(lang, "org.responses")}</h2>
-      {responses.length ? (
-        <ul class="statement-list">
-          {responses.map((r) => (
-            <li>
-              <p class="muted small">{t(lang, "org.received", { date: r.submitted_at.slice(0, 10) })}</p>
-              <blockquote>{r.text}</blockquote>
-            </li>
-          ))}
-        </ul>
-      ) : <p class="muted">{t(lang, "org.no_responses")}</p>}
-      <p><a href={`/organizations/${o.id}/respond`}>{t(lang, "org.respond")}</a></p>
-
-      <h2 id="corrections">{t(lang, "org.corrections")}</h2>
-      {corrections.length ? (
-        <ul class="statement-list">
-          {corrections.map((r) => (
-            <li>
-              <p class="muted small">{t(lang, "org.received", { date: r.submitted_at.slice(0, 10) })}{r.page ? ` · ${r.page}` : ""}</p>
-              <p>{r.text}</p>
-            </li>
-          ))}
-        </ul>
-      ) : <p class="muted">{t(lang, "org.no_corrections")}</p>}
-      <p><a href={`/corrections?organization=${o.id}`}>{t(lang, "org.correct")}</a></p>
-      <script src="/watchlist.js" defer></script>
+            </ul>
+          ) : <p class="muted">{t(lang, "org.no_corrections")}</p>}
+        </Panel>
+      </div>
     </Layout>,
   );
 }
