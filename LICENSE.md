@@ -1,6 +1,6 @@
-# Public Money Watch source-available licence
+# Award Watch source-available licence
 
-Copyright 2026 Public Money Watch. All rights reserved.
+Copyright 2026 Award Watch. All rights reserved.
 
 This repository is published so that anyone can inspect how the Public Money
 Watch site gathers, matches and presents its records. Publication is not a
@@ -12,7 +12,7 @@ grant of rights to reuse it.
 2. Run the test suites locally for the sole purpose of verifying the site's
    methodology.
 3. Quote short excerpts of the code or documentation for commentary,
-   criticism, review or teaching, with attribution to Public Money Watch.
+   criticism, review or teaching, with attribution to Award Watch.
 
 ## What you may not do without written permission from the copyright holder
 
@@ -23,7 +23,7 @@ grant of rights to reuse it.
    others.
 3. Host, deploy or run the code, or any part or derivative of it, to operate a
    website, service, dataset, feed, application or product.
-4. Use the Public Money Watch name, mark or visual identity to describe any
+4. Use the Award Watch name, mark or visual identity to describe any
    other site or service.
 
 ## What this licence does not cover

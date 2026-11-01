@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "awardwatch-pipeline"
 version = "0.1.0"
-description = "Collects public federal spending records and builds the Public Money Watch database."
+description = "Collects public federal spending records and builds the Award Watch database."
 requires-python = ">=3.11"
 license = { text = "Source-available; see LICENSE.md at the repository root" }
 dependencies = [

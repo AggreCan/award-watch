@@ -1,3 +1,3 @@
-"""Public Money Watch pipeline."""
+"""Award Watch pipeline."""
 
 __version__ = "0.1.0"

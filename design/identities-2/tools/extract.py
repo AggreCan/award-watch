@@ -2,7 +2,7 @@
 import csv, json, sys, collections
 from pathlib import Path
 
-REPO = Path(r"C:/Users/kylep/OneDrive/Desktop/Repositories/public-money-watch")
+REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "pipeline"))
 from awardwatch_pipeline.normalize import norm_name
 try:

@@ -1,4 +1,4 @@
-# Public Money Watch
+# Award Watch
 
 Public records of federal spending in Canada, organized around the organizations
 that receive it: open tender notices and the awards that follow, every contract

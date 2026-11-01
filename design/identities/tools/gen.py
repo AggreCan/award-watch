@@ -5,7 +5,7 @@ import re
 from datetime import date
 from pathlib import Path
 
-REPO = Path(r"C:/Users/kylep/OneDrive/Desktop/Repositories/public-money-watch")
+REPO = Path(__file__).resolve().parents[3]
 OUT = REPO / "design" / "identities"
 D = json.loads(Path(__file__).with_name("data.json").read_text(encoding="utf-8"))
 TODAY = date(2026, 10, 31)

@@ -1,7 +1,7 @@
 """Load each page in an iframe of an exact width and report horizontal overflow inside it."""
 import re, shutil, subprocess, sys
 from pathlib import Path
-SRC = Path(r"C:/Users/kylep/OneDrive/Desktop/Repositories/public-money-watch/design/identities")
+SRC = Path(__file__).resolve().parents[1]
 WORK = Path(__file__).with_name("check2")
 CHROME = r"C:/Program Files/Google/Chrome/Application/chrome.exe"
 WIDTHS = [int(w) for w in sys.argv[1].split(",")]

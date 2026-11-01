@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Public Money Watch: mark options</title>
+<title>Award Watch: mark options</title>
 <style>
   body { margin: 0; font: 15px/1.5 system-ui, "Segoe UI", sans-serif; color: #111; background: #fff; }
   h1 { font-size: 20px; margin: 0 0 4px; }
@@ -26,7 +26,7 @@
 </head>
 <body>
 <div class="wrap">
-<h1>Public Money Watch: three mark options</h1>
+<h1>Award Watch: three mark options</h1>
 <p>Each mark is one path on a 32-unit box drawn on a 2-unit grid, filled with <code>currentColor</code>, so the same file serves the header, the favicon and the dark scheme with no second drawing. Judge them at the 16 px tab size first, since that is where a mark fails.</p>
 
 <script>
@@ -46,8 +46,8 @@ function cell(theme, name, path) {
   return `<div class="cell ${theme}">
     <div class="label">${theme} scheme</div>
     <div class="sizes">${sizes}</div>
-    <div class="lockup">${svg(path, 28)}<span>Public Money Watch</span></div><br>
-    <span class="tab">${svg(path, 16)}Public Money Watch</span>
+    <div class="lockup">${svg(path, 28)}<span>Award Watch</span></div><br>
+    <span class="tab">${svg(path, 16)}Award Watch</span>
   </div>`;
 }
 for (const [key, [name, note, path]] of Object.entries(MARKS)) {

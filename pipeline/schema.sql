@@ -1,4 +1,4 @@
--- Public Money Watch: the one schema both halves use.
+-- Award Watch: the one schema both halves use.
 -- The pipeline owns data/awardwatch.sqlite and applies this file on every connect
 -- (db.apply_schema adds columns an older database lacks). The site's own D1
 -- database holds only the tables under "Visitor submissions", applied there

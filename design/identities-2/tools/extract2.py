@@ -5,7 +5,7 @@ import csv, json, re, sys, collections
 from datetime import date, timedelta
 from pathlib import Path
 
-REPO = Path(r"C:/Users/kylep/OneDrive/Desktop/Repositories/public-money-watch")
+REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "pipeline"))
 from awardwatch_pipeline.normalize import norm_name
 from awardwatch_pipeline.sources.matching import is_person_name

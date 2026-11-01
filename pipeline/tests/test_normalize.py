@@ -280,8 +280,8 @@ def test_parse_salary_text_reads_compound_units_before_their_parts():
 
 
 def test_period_parsing():
-    assert period_from_text("2026Q1 employers with a positive LMIA, NOC 2021") == "2026Q1"
-    assert period_from_text("2023Q4 employers with a positive LMIA, by program stream, NOC 2011") == "2023Q4"
+    assert period_from_text("2026Q1 employers on the list, NOC 2021") == "2026Q1"
+    assert period_from_text("2023Q4 employers on the list, by program, NOC 2011") == "2023Q4"
     assert period_from_text("2017q1q2_positive_en.csv") == "2017Q1-Q2"
     assert period_from_text("2015_positive_employers_en.csv") == "2015"
     assert period_from_text("employer-list2020q22020q2csv202.csv") == "2020Q2"
