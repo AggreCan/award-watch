@@ -1,6 +1,7 @@
 """Buyers: CKAN organizations, the seed, and how a source's spelling resolves to one buyer."""
 
 import json
+import re
 
 import pytest
 
@@ -361,6 +362,10 @@ def test_the_buyers_stage_moves_records_off_buyers_made_for_former_names_and_peo
                  "'department-of-national-defence', 'Department of National Defence', 'f', '2026-10-30', '2026-10-30')")
     conn.execute("INSERT INTO lobbying_communications (comm_number, buyer_ids, loaded_at) VALUES ('L1', ?, ?)",
                  ('["adam-cheung", "department-of-national-defence", "dnd-mdn"]', NOW))
+    # Last night's derived rows (the indicators stage rebuilds them): they point at the made buyers and
+    # would stop the delete on a restored database (the foreign-key failure of the 2026-11-01 22:22 run).
+    conn.executemany("INSERT INTO buyer_years (buyer_id, year, source, n, total) VALUES (?, 2026, 'awards', 1, 10.0)",
+                     [(bid,) for bid in made])
     conn.commit()
 
     result = buyers.run(conn, None, now=NOW, offline=True)
@@ -372,6 +377,8 @@ def test_the_buyers_stage_moves_records_off_buyers_made_for_former_names_and_peo
     assert tuple(history) == ("pwgsc-tpsgc", "dnd-mdn")
     assert json.loads(conn.execute("SELECT buyer_ids FROM lobbying_communications").fetchone()[0]) == ["dnd-mdn"]
     assert not conn.execute(f"SELECT 1 FROM buyers WHERE id IN ({','.join('?' * len(made))})", list(made)).fetchall()
+    assert not conn.execute(f"SELECT 1 FROM buyer_years WHERE buyer_id IN ({','.join('?' * len(made))})",
+                            list(made)).fetchall()
     assert conn.execute("SELECT 1 FROM buyer_names WHERE raw_name = 'Adam Cheung'").fetchone() is None
     notice = conn.execute("SELECT notice FROM sources_log WHERE source = 'buyers'").fetchone()[0]
     assert "adam-cheung -> no buyer" in notice and "public-works-and-government-services-canada -> pwgsc-tpsgc" in notice
@@ -416,3 +423,18 @@ def test_every_buyer_retired_for_another_is_kept_as_an_alias_to_the_live_buyer(r
     buyers.run(conn, None, now="2026-11-02T00:00:00Z", offline=True)
     assert conn.execute("SELECT new_id FROM buyer_aliases WHERE old_id = 'public-works-and-government-services-canada'"
                         ).fetchone()[0] == "pwgsc-tpsgc"
+
+
+def test_every_schema_reference_to_a_buyer_is_moved_or_dropped_when_a_buyer_is_deleted():
+    """A column that points at buyers(id) and is on neither list makes the delete in reresolve fail the
+    foreign-key check on a database that carries rows from the night before."""
+    table, found = None, set()
+    for line in config.SCHEMA_PATH.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"CREATE TABLE IF NOT EXISTS (\w+)", line)
+        if m:
+            table = m.group(1)
+        m = re.match(r"\s+(\w+) TEXT(?: NOT NULL)? REFERENCES buyers\(id\)", line)
+        if m and table:
+            found.add((table, m.group(1)))
+    covered = set(buyers.BUYER_COLUMNS) | set(buyers.DERIVED_BUYER_COLUMNS) | {("buyer_names", "buyer_id")}
+    assert found == covered

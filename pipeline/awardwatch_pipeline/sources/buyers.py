@@ -97,6 +97,11 @@ BUYER_COLUMNS = (
     ("tenders", "buyer_id"), ("awards", "buyer_id"), ("contract_history", "buyer_id"),
     ("contract_history", "client_id"), ("contracts", "buyer_id"), ("grants", "buyer_id"),
 )
+# The derived tables that also point at a buyer (foreign keys), rebuilt whole by a
+# later stage every night: their rows for a buyer being deleted are dropped, not
+# moved, so the delete passes the foreign-key check on a database restored from
+# the night before. A test holds these two lists equal to the schema's references.
+DERIVED_BUYER_COLUMNS = (("buyer_years", "buyer_id"),)
 
 _PAREN_ACRONYM_RE = re.compile(r"\(([^()]{1,30})\)\s*$")
 # "Export Development Canada - EDC"
@@ -741,6 +746,8 @@ def reresolve(conn: sqlite3.Connection, seed_ids: set[str], *, now: str | None =
         for table, column in BUYER_COLUMNS:
             conn.execute(f"UPDATE {table} SET {column} = ? WHERE {column} = ?", (new, old))
         _replace_in_lobbying(conn, old, new)
+        for table, column in DERIVED_BUYER_COLUMNS:
+            conn.execute(f"DELETE FROM {table} WHERE {column} = ?", (old,))
         conn.execute("DELETE FROM buyers WHERE id = ?", (old,))
         if new:
             _alias(conn, old, new, "merged", now)
