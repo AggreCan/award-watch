@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import { HowToCite } from "../cite";
+import { Table } from "../columns";
 import { FIRST_AWARD_YEAR } from "../constants";
 import { loadStats, type Stats } from "../data";
 import type { AppEnv } from "../env";
@@ -108,16 +109,13 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
           <h2 id="sources">{t(lang, "data.toc_sources")}</h2>
           <p>{t(lang, "data.sources_text")}</p>
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "data.col_source")}</th>
-                  <th>{t(lang, "data.col_publisher")}</th>
-                  <th>{t(lang, "data.col_files")}</th>
-                  <th>{t(lang, "data.col_licence")}</th>
-                  <th>{t(lang, "data.col_last_read")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "main", label: t(lang, "data.col_source") },
+              { kind: "buyer", label: t(lang, "data.col_publisher") },
+              { kind: "text", label: t(lang, "data.col_files"), rest: "md" },
+              { kind: "label", label: t(lang, "data.col_licence") },
+              { kind: "text", label: t(lang, "data.col_last_read") },
+            ]}>
               <tbody>
                 {SOURCE_ROWS.map((s) => {
                   const read = filesRead(stats, s.key);
@@ -125,7 +123,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                     <tr>
                       <td data-label={t(lang, "data.col_source")}><a href={s.url(lang)}>{t(lang, s.name)}</a></td>
                       <td data-label={t(lang, "data.col_publisher")}>{t(lang, s.publisher)}</td>
-                      <td data-label={t(lang, "data.col_files")} class="small">{s.files}</td>
+                      <td data-label={t(lang, "data.col_files")} class="small mdh">{s.files}</td>
                       <td data-label={t(lang, "data.col_licence")}><a href={OGL_URL[lang]}>{t(lang, "data.ogl_short")}</a></td>
                       <td data-label={t(lang, "data.col_last_read")} class="small">
                         {read.length ? read.map((r) => (
@@ -140,19 +138,16 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                   );
                 })}
               </tbody>
-            </table>
+            </Table>
           </div>
 
           <h2 id="downloads">{t(lang, "data.toc_downloads")}</h2>
           <p>{t(lang, "data.downloads_text")}</p>
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "data.col_file")}</th>
-                  <th>{t(lang, "data.col_contents")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "file", label: t(lang, "data.col_file") },
+              { kind: "main", label: t(lang, "data.col_contents") },
+            ]}>
               <tbody>
                 {DOWNLOADS.map((d) => (
                   <tr>
@@ -161,7 +156,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
           <h3>{t(lang, "data.yearly_awards")}</h3>
           <ul class="quick-links">
@@ -176,13 +171,10 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
           <h2 id="api">{t(lang, "data.toc_api")}</h2>
           <p>{t(lang, "data.api_text")}</p>
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "data.col_endpoint")}</th>
-                  <th>{t(lang, "data.col_contents")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "file", label: t(lang, "data.col_endpoint") },
+              { kind: "main", label: t(lang, "data.col_contents") },
+            ]}>
               <tbody>
                 {API_ROWS.map(([endpoint, key]) => (
                   <tr>
@@ -191,20 +183,17 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
           <p class="muted small">{t(lang, "data.api_limits")}</p>
 
           <h2 id="licence">{t(lang, "data.toc_licence")}</h2>
           <p>{tj(lang, "data.licence_text", { ogl: <a href={OGL_URL[lang]}>{t(lang, "data.ogl")}</a> })}</p>
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "data.col_material")}</th>
-                  <th>{t(lang, "data.col_terms")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "main", label: t(lang, "data.col_material") },
+              { kind: "text", label: t(lang, "data.col_terms") },
+            ]}>
               <tbody>
                 {LICENCE_ROWS.map((r) => (
                   <tr>
@@ -213,7 +202,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
           <p>{t(lang, "data.credit")}</p>
           <HowToCite lang={lang} citation={stats.citation} />
@@ -221,15 +210,12 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
           <h2 id="runs">{t(lang, "data.toc_runs")}</h2>
           {stats.runs.length ? (
             <div class="table-wrap bordered">
-              <table class="restack">
-                <thead>
-                  <tr>
-                    <th>{t(lang, "data.col_run")}</th>
-                    <th>{t(lang, "data.col_stage")}</th>
-                    <th class="num">{t(lang, "data.col_new_rows")}</th>
-                    <th>{t(lang, "col.status")}</th>
-                  </tr>
-                </thead>
+              <Table cols={[
+                { kind: "datetime", label: t(lang, "data.col_run") },
+                { kind: "main", label: t(lang, "data.col_stage") },
+                { kind: "count", label: t(lang, "data.col_new_rows") },
+                { kind: "label", label: t(lang, "col.status") },
+              ]}>
                 <tbody>
                   {stats.runs.map((r) => (
                     <tr>
@@ -240,7 +226,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             </div>
           ) : <p class="muted">{t(lang, "data.runs_none")}</p>}
 
@@ -248,14 +234,11 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
           <p>{t(lang, "data.changes_text")}</p>
           {changes.length ? (
             <div class="table-wrap bordered">
-              <table class="restack">
-                <thead>
-                  <tr>
-                    <th>{t(lang, "col.date")}</th>
-                    <th>{t(lang, "data.col_change")}</th>
-                    <th>{t(lang, "data.col_recomputed")}</th>
-                  </tr>
-                </thead>
+              <Table cols={[
+                { kind: "date", label: t(lang, "col.date") },
+                { kind: "main", label: t(lang, "data.col_change") },
+                { kind: "text", label: t(lang, "data.col_recomputed") },
+              ]}>
                 <tbody>
                   {changes.map((r) => (
                     <tr>
@@ -265,7 +248,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             </div>
           ) : <p class="muted">{t(lang, "data.changes_none")}</p>}
 

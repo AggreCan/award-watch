@@ -4,6 +4,8 @@
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
 import type { TenderRow } from "../src/data";
+import { LOCKUP_WORD_PATH, MARK_CHECK_COLOUR, MARK_CHECK_PATH, MARK_INK_PATH } from "../src/layout";
+import lockupSvg from "../../brand/lockup.svg?raw";
 import { filterTenders, readTenderQuery, tenderQueryString } from "../src/pages/tenders";
 import { assetsWithout, emptyAssets, fakeAssets, makeFakeAssets, testEnv } from "./assets";
 import openFirst from "./fixtures/tenders-open-first.json";
@@ -139,7 +141,7 @@ describe("every page", () => {
       expect(footer, href).toContain(`href="${href}"`);
     }
     expect(html).toContain("Data as of 2026-10-31");
-    expect(html).toContain('<span class="brand-name">Award Watch</span>');
+    expect(html).toContain('<svg class="brand-lockup" viewBox="0 0 201 32"');
     expect(html).toContain('<path class="mark-check" fill="#0f7b4f" fill-rule="evenodd"');
     expect(html).toContain('<button type="button" class="theme-toggle"><span class="when-light">Dark</span><span class="when-dark">Light</span></button>');
     expect(html).toContain('<a href="?lang=fr" class="lang-toggle" rel="nofollow">Français</a>');
@@ -154,6 +156,32 @@ describe("every page", () => {
     expect(csp).toContain("script-src 'self';");
     expect(csp).not.toMatch(/leaflet|openstreetmap|cdnjs/);
     expect(res.headers.get("x-frame-options")).toBe("DENY");
+  });
+
+  it("carries the whole lockup in the top bar, named for readers, with no name in live text", async () => {
+    for (const path of ["/", "/?lang=fr", "/methodology"]) {
+      const html = await text(path);
+      const bar = html.match(/<header class="topbar">[\s\S]*?<\/header>/)?.[0] ?? "";
+      // The link and the image both carry the name, the same in either language.
+      expect(bar, path).toContain('<a href="/" class="brand" aria-label="Award Watch"><svg class="brand-lockup" viewBox="0 0 201 32" width="151" height="24" role="img"><title>Award Watch</title>');
+      // The mark's ink, its check in the check token's class, then the letters.
+      expect(bar, path).toContain(`<path fill="currentColor" fill-rule="evenodd" d="${MARK_INK_PATH}"></path>`);
+      expect(bar, path).toContain(`<path class="mark-check" fill="#0f7b4f" fill-rule="evenodd" d="${MARK_CHECK_PATH}"></path>`);
+      expect(bar, path).toContain(`<path fill="currentColor" fill-rule="evenodd" d="${LOCKUP_WORD_PATH}"></path></svg></a>`);
+      expect(bar, path).not.toContain("brand-name");
+      // Outside the image's title, the bar's text is the data date and the toggles.
+      expect(bar.replace(/<title>[^<]*<\/title>/g, "").replace(/<[^>]+>/g, " "), path).not.toContain("Award Watch");
+    }
+  });
+
+  it("draws the lockup from brand/lockup.svg's paths", () => {
+    const paths = [...lockupSvg.matchAll(/<path fill="([^"]+)" fill-rule="evenodd" d="([^"]+)"\/>/g)].map((m) => [m[1], m[2]]);
+    expect(paths).toHaveLength(13);
+    expect(lockupSvg).toContain('viewBox="0 0 201 32"');
+    expect(`${paths[0][1]} ${paths[1][1]}`).toBe(MARK_INK_PATH);
+    expect(paths[2]).toEqual([MARK_CHECK_COLOUR, MARK_CHECK_PATH]);
+    expect(paths.slice(3).every(([fill]) => fill === "currentColor")).toBe(true);
+    expect(paths.slice(3).map(([, d]) => d).join(" ")).toBe(LOCKUP_WORD_PATH);
   });
 });
 

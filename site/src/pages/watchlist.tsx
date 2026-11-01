@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { type ColumnKind, type Rest, Table, restClass } from "../columns";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { clientStrings, numberLocale, t, tj, type Key, type Lang } from "../i18n";
@@ -31,9 +32,13 @@ export function watchlistClientData(lang: Lang) {
   return { lang, locale: numberLocale(lang), max: WATCH_MAX, strings: clientStrings(lang, WATCHLIST_CLIENT_KEYS) };
 }
 
-const COLUMNS: Key[] = [
-  "col.organization", "source.awards", "source.history", "source.contracts", "source.grants", "source.lobbying",
-  "watch.col_latest", "watch.col_new", "watch.col_manage",
+// The latest record rests below 1440 px (src/columns.tsx). A row whose cell
+// spans columns keeps one cell for that column, here and in
+// public/watchlist.js, so the hidden column never shifts the cells after it.
+const COLUMNS: [Key, ColumnKind, Rest?][] = [
+  ["col.organization", "main"], ["source.awards", "count"], ["source.history", "count"], ["source.contracts", "count"],
+  ["source.grants", "count"], ["source.lobbying", "count"], ["watch.col_latest", "date", "lg"], ["watch.col_new", "text"],
+  ["watch.col_manage", "label"],
 ];
 
 export async function watchlistPage(c: Context<AppEnv>): Promise<Response> {
@@ -49,21 +54,18 @@ export async function watchlistPage(c: Context<AppEnv>): Promise<Response> {
 
       <Panel title={t(lang, "watch.title")} tools={<span id="watch-status" aria-live="polite"></span>}>
       <div class="table-wrap bordered" id="watchlist" data-max={String(WATCH_MAX)}>
-        <table class="restack">
-          <thead>
-            <tr>
-              {COLUMNS.map((k) => <th class={k.startsWith("source.") ? "num" : undefined}>{t(lang, k)}</th>)}
-            </tr>
-          </thead>
+        <Table cols={COLUMNS.map(([k, kind, rest]) => ({ kind, label: t(lang, k), rest }))}>
           <tbody id="watch-rows">
             <tr>
-              <td colspan={COLUMNS.length} class="muted" id="watch-empty">
+              <td colspan={6} class="muted" id="watch-empty">
                 {tj(lang, "watch.empty", { directory: <a href="/organizations">{t(lang, "watch.directory_link")}</a> })}
                 <noscript> {t(lang, "watch.noscript")}</noscript>
               </td>
+              <td class={restClass("lg")}></td>
+              <td colspan={2}></td>
             </tr>
           </tbody>
-        </table>
+        </Table>
       </div>
       </Panel>
 

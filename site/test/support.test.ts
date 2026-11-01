@@ -102,7 +102,7 @@ describe("support page", () => {
   it("shows an empty transparency table with a monthly cost column", async () => {
     const html = await (await get("/support")).text();
     const table = html.slice(html.indexOf('id="transparency"'));
-    expect(table).toContain('<th class="num">Monthly cost</th><th class="num">Received</th>');
+    expect(table).toContain('<th class="k-value num">Monthly cost</th><th class="k-value num">Received</th>');
     expect(table).toContain('<td colspan="5" class="muted">No donations yet</td>');
   });
 

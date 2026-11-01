@@ -15,6 +15,7 @@
 // the newest day by default and any of the last 30 on request.
 
 import type { Context } from "hono";
+import { clientTable } from "../columns";
 import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENTS } from "../constants";
 import { BUYER_ID_RE, DAY_RE, type FacetCount, type OpenFirst, loadNewTenders, loadOpenFirst, loadStats, type TenderRow } from "../data";
 import type { AppEnv } from "../env";
@@ -24,7 +25,7 @@ import {
 import { ClientData, Layout, PageHead, Panel, addDays, noDataPage, page, todayOf } from "../layout";
 import { pageSeo } from "../seo";
 import { FeedLinks, nationalFeedPath } from "./feeds";
-import { TenderTable } from "./shared";
+import { TenderTable, tenderColumns } from "./shared";
 
 export const TENDER_PAGE_SIZE = 50;
 export const CLOSING_WINDOWS = ["7", "30"] as const;
@@ -310,7 +311,10 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
           </div>
         </aside>
       </div>
-      <ClientData id="i18n" data={{ lang, locale: numberLocale(lang), strings: clientStrings(lang, TENDERS_CLIENT_KEYS), labels }} />
+      <ClientData id="i18n" data={{
+        lang, locale: numberLocale(lang), strings: clientStrings(lang, TENDERS_CLIENT_KEYS), labels,
+        table: clientTable(tenderColumns(lang), "t-tenders"),
+      }} />
       <script src="/tenders.js" defer></script>
     </Layout>,
   );

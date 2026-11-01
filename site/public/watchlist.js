@@ -319,7 +319,8 @@
     ["awards", "history", "contracts", "grants", "lobbying"].forEach(function (s) {
       cell(tr, "source." + s, "mono num").textContent = num(o["n_" + s]);
     });
-    cell(tr, "watch.col_latest", "mono").textContent = o.last_seen || "";
+    // The latest record rests below 1440 px, as its head cell does.
+    cell(tr, "watch.col_latest", "mono lgh").textContent = o.last_seen || "";
     if (found.first) {
       // No earlier visit to compare with: nothing to mark yet. The cell stays
       // empty, so a phone's restacked row leaves it out.
@@ -339,12 +340,17 @@
     return tr;
   }
 
+  // The message spans the five source columns; the row keeps one cell for
+  // each other column, so a resting column (the latest record, below 1440
+  // px) leaves it in line with the rest.
   function problemRow(id, message) {
     var tr = el("tr");
     cell(tr, "col.organization").appendChild(el("span", "mono id", id));
     var td = cell(tr, "watch.col_new", "muted");
-    td.colSpan = 7;
+    td.colSpan = 5;
     td.textContent = message;
+    cell(tr, "watch.col_latest", "lgh");
+    cell(tr, "watch.col_new");
     removeButton(tr, id, id);
     return tr;
   }

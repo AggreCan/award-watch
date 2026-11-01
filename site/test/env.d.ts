@@ -8,6 +8,7 @@ declare namespace Cloudflare {
     ASSETS: Fetcher;
     SCHEMA_SQL: string;
     SEED_SQL: string;
+    STYLES_CSS: string;
     DONATE_URL: string;
     DONATE_LABEL: string;
     DONATE_LABEL_FR: string;

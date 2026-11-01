@@ -4,6 +4,7 @@
 // at a time: a ranking never mixes sources.
 
 import type { Context } from "hono";
+import { Table } from "../columns";
 import { MONEY_SOURCES, SOURCES, type SourceKey } from "../constants";
 import { YEAR_RE, loadRankings, loadStats } from "../data";
 import type { AppEnv } from "../env";
@@ -77,15 +78,12 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
       {MONEY_SOURCES.filter((s) => (r.buyers[s] ?? []).length).map((s) => (
         <Panel title={t(lang, "rankings.buyers")} count={sourceLabel(lang, s)}>
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th class="num">{t(lang, "col.rank")}</th>
-                  <th>{t(lang, "col.buyer")}</th>
-                  <th class="num">{t(lang, "col.records")}</th>
-                  <th class="num">{t(lang, "col.value")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "count", label: t(lang, "col.rank") },
+              { kind: "main", label: t(lang, "col.buyer") },
+              { kind: "count", label: t(lang, "col.records") },
+              { kind: "total", label: t(lang, "col.value") },
+            ]}>
               <tbody>
                 {(r.buyers[s] ?? []).map((b, i) => (
                   <tr>
@@ -96,7 +94,7 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
         </Panel>
       ))}

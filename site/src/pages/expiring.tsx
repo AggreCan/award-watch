@@ -16,6 +16,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { type Rest, Table, restClass } from "../columns";
 import { SEGMENTS } from "../constants";
 import {
   BUYER_ID_RE, EXPIRING_KINDS, EXPIRING_WINDOWS, SEGMENT_RE, isExpiringWindow, loadExpiringIndex, loadExpiringPage,
@@ -195,23 +196,29 @@ const Organization: FC<{ lang: Lang; r: ExpiringRow }> = ({ lang, r }) => {
   return <>{r.organization ?? t(lang, "common.not_stated")}</>;
 };
 
+// The widest table on the site. The buyer is the column a reader filters on,
+// so it shows from 1280 px of viewport; the record links (the title opens
+// the site's own page, or for a published contract the contracts search)
+// and amendments and growth rest below 1600 px. The same order holds on a profile and a buyer page, which
+// drop one of the two parties. No range scrolls from 1280 px up
+// (src/columns.tsx).
+const BUYER_REST: Rest = "md";
+const LATE_REST: Rest = "xl";
+
 export const ExpiringTable: FC<{ lang: Lang; rows: readonly ExpiringRow[]; organization?: boolean; buyer?: boolean }> = ({
   lang, rows, organization = true, buyer = true,
 }) => (
   <div class="table-wrap bordered">
-    <table class="restack">
-      <thead>
-        <tr>
-          <th>{t(lang, "expiring.col_ends")}</th>
-          <th>{t(lang, "col.contract")}</th>
-          {organization ? <th>{t(lang, "col.organization")}</th> : null}
-          {buyer ? <th class="mdh">{t(lang, "col.buyer")}</th> : null}
-          <th class="num">{t(lang, "col.value")}</th>
-          <th>{t(lang, "col.method")}</th>
-          <th class="mdh"><span title={t(lang, "expiring.growth_def")}>{t(lang, "expiring.col_amendments")}</span></th>
-          <th>{t(lang, "col.record")}</th>
-        </tr>
-      </thead>
+    <Table cols={[
+      { kind: "date", label: t(lang, "expiring.col_ends") },
+      { kind: "main", label: t(lang, "col.contract") },
+      organization && { kind: "org", label: t(lang, "col.organization") },
+      buyer && { kind: "buyer", label: t(lang, "col.buyer"), rest: BUYER_REST },
+      { kind: "value", label: t(lang, "col.value") },
+      { kind: "comp", label: t(lang, "col.method") },
+      { kind: "amend", label: <span title={t(lang, "expiring.growth_def")}>{t(lang, "expiring.col_amendments")}</span>, rest: LATE_REST },
+      { kind: "record", label: t(lang, "col.record"), rest: LATE_REST },
+    ]}>
       <tbody>
         {rows.map((r) => {
           const title = pick(lang, r.title_en, r.title_fr) ?? contractReference(r);
@@ -225,16 +232,19 @@ export const ExpiringTable: FC<{ lang: Lang; rows: readonly ExpiringRow[]; organ
                 <span class="muted small">{tn(lang, "expiring.days_left_one", "expiring.days_left_many", r.days_left, { n: fmtInt(r.days_left, lang) })}</span>
               </td>
               <td data-label={t(lang, "col.contract")}>
-                {path ? <a href={path}>{title}</a> : title}
+                {/* A published contract has no page here: its title opens the
+                    government record the Record column links, so the row keeps
+                    a link out while that column rests. */}
+                {path ? <a href={path}>{title}</a> : <a href={expiringRecordUrl(r, lang)} rel="nofollow noopener">{title}</a>}
                 <br />
                 <span class="mono id muted">{contractReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} />
                 {instrument ? <><br /><span class="muted small">{instrument}</span></> : null}
               </td>
               {organization ? <td data-label={t(lang, "col.organization")}><Organization lang={lang} r={r} /></td> : null}
-              {buyer ? <td data-label={t(lang, "col.buyer")} class="mdh"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td> : null}
+              {buyer ? <td data-label={t(lang, "col.buyer")} class={restClass(BUYER_REST)}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td> : null}
               <td data-label={t(lang, "col.value")} class="mono num">{money(lang, r.value, r.currency)}</td>
               <td data-label={t(lang, "col.method")}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
-              <td data-label={t(lang, "expiring.col_amendments")} class="mdh">
+              <td data-label={t(lang, "expiring.col_amendments")} class={restClass(LATE_REST)}>
                 {r.n_amendments === 0
                   ? t(lang, "expiring.amendments_none")
                   : tn(lang, "expiring.amendments_one", "expiring.amendments_many", r.n_amendments, { n: fmtInt(r.n_amendments, lang) })}
@@ -242,7 +252,7 @@ export const ExpiringTable: FC<{ lang: Lang; rows: readonly ExpiringRow[]; organ
                   <><br /><span class="muted small">{t(lang, "expiring.growth", { pct: growthPct(lang, r.value_growth) })}</span></>
                 )}
               </td>
-              <td data-label={t(lang, "col.record")}>
+              <td data-label={t(lang, "col.record")} class={restClass(LATE_REST)}>
                 <span class="muted small">{t(lang, KIND_LABEL[r.kind])}</span>
                 <br />
                 <a href={expiringRecordUrl(r, lang)} rel={r.kind === "contract" ? "nofollow noopener" : "noopener"}>{t(lang, RECORD_LABEL[r.kind])}</a>
@@ -254,7 +264,7 @@ export const ExpiringTable: FC<{ lang: Lang; rows: readonly ExpiringRow[]; organ
           );
         })}
       </tbody>
-    </table>
+    </Table>
   </div>
 );
 
@@ -385,14 +395,11 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
       <Panel id="buyers" title={t(lang, "expiring.by_buyer")}>
       {idx.by_buyer.length ? (
         <div class="table-wrap bordered">
-          <table class="restack">
-            <thead>
-              <tr>
-                <th>{t(lang, "col.buyer")}</th>
-                <th class="num">{t(lang, "expiring.col_contracts")}</th>
-                <th class="num">{t(lang, "col.value")}</th>
-              </tr>
-            </thead>
+          <Table cols={[
+            { kind: "main", label: t(lang, "col.buyer") },
+            { kind: "count", label: t(lang, "expiring.col_contracts") },
+            { kind: "total", label: t(lang, "col.value") },
+          ]}>
             <tbody>
               {idx.by_buyer.map((b) => (
                 <tr>
@@ -406,7 +413,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         </div>
       ) : <p class="muted">{t(lang, "expiring.none_window")}</p>}
       </Panel>
@@ -415,14 +422,11 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
       <p class="muted small">{t(lang, "expiring.by_segment_note")}</p>
       {idx.by_segment.length ? (
         <div class="table-wrap bordered">
-          <table class="restack">
-            <thead>
-              <tr>
-                <th>{t(lang, "col.segment")}</th>
-                <th class="num">{t(lang, "expiring.col_contracts")}</th>
-                <th class="num">{t(lang, "col.value")}</th>
-              </tr>
-            </thead>
+          <Table cols={[
+            { kind: "main", label: t(lang, "col.segment") },
+            { kind: "count", label: t(lang, "expiring.col_contracts") },
+            { kind: "total", label: t(lang, "col.value") },
+          ]}>
             <tbody>
               {idx.by_segment.map((g) => (
                 <tr>
@@ -436,7 +440,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         </div>
       ) : <p class="muted">{t(lang, "expiring.none_window")}</p>}
       </Panel>

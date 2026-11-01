@@ -6,6 +6,7 @@
 
 import type { Context } from "hono";
 import { ChartStack, type Panel as ChartPanel } from "../chart";
+import { Table } from "../columns";
 import { MONEY_SOURCES } from "../constants";
 import { BUYER_ID_RE, loadBuyer, loadBuyers, loadStats, type BuyerSummary } from "../data";
 import type { AppEnv } from "../env";
@@ -52,17 +53,14 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
       </PageHead>
       <Panel title={t(lang, "buyers.title")} count={n(rows.length)}>
       <div class="table-wrap bordered">
-        <table class="restack">
-          <thead>
-            <tr>
-              <th>{t(lang, "col.buyer")}</th>
-              <th class="num">{t(lang, "buyers.col_open")}</th>
-              <th class="num">{sourceLabel(lang, "awards")}</th>
-              <th class="num">{sourceLabel(lang, "history")}</th>
-              <th class="num">{sourceLabel(lang, "contracts")}</th>
-              <th class="num">{sourceLabel(lang, "grants")}</th>
-            </tr>
-          </thead>
+        <Table cols={[
+          { kind: "main", label: t(lang, "col.buyer") },
+          { kind: "count", label: t(lang, "buyers.col_open") },
+          { kind: "total", label: sourceLabel(lang, "awards") },
+          { kind: "total", label: sourceLabel(lang, "history") },
+          { kind: "total", label: sourceLabel(lang, "contracts") },
+          { kind: "total", label: sourceLabel(lang, "grants") },
+        ]}>
           <tbody>
             {rows.map((b) => (
               <tr>
@@ -80,7 +78,7 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       </div>
       </Panel>
     </Layout>,
@@ -150,17 +148,14 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
       {chart}
       {years.length ? (
         <div class="table-wrap bordered">
-          <table class="restack">
-            <thead>
-              <tr>
-                <th>{t(lang, "col.year")}</th>
-                <th>{t(lang, "col.source")}</th>
-                <th class="num">{t(lang, "col.records")}</th>
-                <th class="num">{t(lang, "col.value")}</th>
-                <th class="num"><span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span></th>
-                <th class="num">{t(lang, "buyer.col_organizations")}</th>
-              </tr>
-            </thead>
+          <Table cols={[
+            { kind: "date", label: t(lang, "col.year") },
+            { kind: "main", label: t(lang, "col.source") },
+            { kind: "count", label: t(lang, "col.records") },
+            { kind: "total", label: t(lang, "col.value") },
+            { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span> },
+            { kind: "count", label: t(lang, "buyer.col_organizations"), rest: "md" },
+          ]}>
             <tbody>
               {years.map((y) => (
                 <tr>
@@ -173,11 +168,11 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
                       ? t(lang, "common.not_applicable")
                       : t(lang, "org.share", { part: n(y.n_non_competitive), whole: n(y.n), pct: fmtPct(y.n_non_competitive, y.n, lang) ? ` (${fmtPct(y.n_non_competitive, y.n, lang)})` : "" })}
                   </td>
-                  <td data-label={t(lang, "buyer.col_organizations")} class="mono num">{y.n_organizations === null ? "" : n(y.n_organizations)}</td>
+                  <td data-label={t(lang, "buyer.col_organizations")} class="mono num mdh">{y.n_organizations === null ? "" : n(y.n_organizations)}</td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         </div>
       ) : <p class="muted">{t(lang, "org.years_none")}</p>}
       </Panel>

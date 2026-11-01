@@ -4,7 +4,9 @@ import { defineConfig } from "vitest/config";
 
 // The schema and seed are read here, on the Node side, and handed to the
 // Workers runtime as plain text bindings; the setup file applies them to the
-// local forms database before the tests run.
+// local forms database before the tests run. The stylesheet goes the same
+// way, since a CSS import reaches a test empty even with ?raw; the column
+// test reads its widths.
 export default defineConfig({
   plugins: [
     cloudflareTest({
@@ -13,6 +15,7 @@ export default defineConfig({
         bindings: {
           SCHEMA_SQL: readFileSync("../pipeline/schema.sql", "utf8"),
           SEED_SQL: readFileSync("./seed/dev_seed.sql", "utf8"),
+          STYLES_CSS: readFileSync("./public/styles.css", "utf8"),
         },
       },
     }),

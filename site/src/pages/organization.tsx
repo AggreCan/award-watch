@@ -8,6 +8,7 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { ChartStack, type Panel as ChartPanel } from "../chart";
+import { Table, restClass } from "../columns";
 import { MONEY_SOURCES, PROVINCES, type MoneySource, type SourceKey } from "../constants";
 import { buyerPath, directoryCode, directoryPath, loadDirectories } from "../crosslinks";
 import { loadAlias, loadProfile, loadStats, type Profile, type YearFigure } from "../data";
@@ -220,17 +221,14 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         <YearChart lang={lang} years={profile.years} />
         {years.length ? (
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "col.year")}</th>
-                  <th>{t(lang, "col.source")}</th>
-                  <th class="num">{t(lang, "col.records")}</th>
-                  <th class="num">{t(lang, "col.value")}</th>
-                  <th class="num"><span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span></th>
-                  <th class="num"><span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_value")}</span></th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "date", label: t(lang, "col.year") },
+              { kind: "main", label: t(lang, "col.source") },
+              { kind: "count", label: t(lang, "col.records") },
+              { kind: "total", label: t(lang, "col.value") },
+              { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span> },
+              { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_value")}</span>, rest: "md" },
+            ]}>
               <tbody>
                 {years.map((y) => (
                   <tr>
@@ -239,13 +237,13 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                     <td data-label={t(lang, "col.records")} class="mono num">{n(y.n)}</td>
                     <td data-label={t(lang, "col.value")} class="mono num">{money(lang, y.total)}</td>
                     <td data-label={t(lang, "org.col_nc_count")} class="mono num">{share(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}</td>
-                    <td data-label={t(lang, "org.col_nc_value")} class="mono num">
+                    <td data-label={t(lang, "org.col_nc_value")} class="mono num mdh">
                       {share(lang, y.total_non_competitive, y.source === "grants" ? null : y.total, (v) => fmtMoney(v, lang))}
                     </td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
         ) : <p class="muted">{t(lang, "org.years_none")}</p>}
       </Panel>
@@ -273,17 +271,14 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         <p class="muted small">{t(lang, "org.contracts_note")}</p>
         {profile.contracts.length ? (
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "col.date")}</th>
-                  <th>{t(lang, "col.description")}</th>
-                  <th class="mdh">{t(lang, "col.buyer")}</th>
-                  <th class="num">{t(lang, "col.value")}</th>
-                  <th>{t(lang, "col.method")}</th>
-                  <th>{t(lang, "col.record")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "date", label: t(lang, "col.date") },
+              { kind: "main", label: t(lang, "col.description") },
+              { kind: "buyer", label: t(lang, "col.buyer"), rest: "md" },
+              { kind: "value", label: t(lang, "col.value") },
+              { kind: "comp", label: t(lang, "col.method") },
+              { kind: "record", label: t(lang, "col.record") },
+            ]}>
               <tbody>
                 {profile.contracts.map((r) => (
                   <tr>
@@ -304,7 +299,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
         ) : <p class="muted">{t(lang, "org.none_contracts")}</p>}
         <MoreRows lang={lang} source="contracts" shown={profile.contracts.length} total={profile.contracts_total_rows} />
@@ -314,17 +309,14 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
       <Panel id="grants" title={t(lang, SECTION_KEY.grants)} count={n(profile.grants_total_rows)} foot={<SourceLine lang={lang} source="grants" />}>
         {profile.grants.length ? (
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "grant.start")}</th>
-                  <th>{t(lang, "grant.program")}</th>
-                  <th class="mdh">{t(lang, "grant.department")}</th>
-                  <th>{t(lang, "grant.type")}</th>
-                  <th class="num">{t(lang, "col.value")}</th>
-                  <th>{t(lang, "col.record")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "date", label: t(lang, "grant.start") },
+              { kind: "main", label: t(lang, "grant.program") },
+              { kind: "buyer", label: t(lang, "grant.department"), rest: "md" },
+              { kind: "label", label: t(lang, "grant.type") },
+              { kind: "value", label: t(lang, "col.value") },
+              { kind: "record", label: t(lang, "col.record") },
+            ]}>
               <tbody>
                 {profile.grants.map((g) => (
                   <tr>
@@ -343,7 +335,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
         ) : <p class="muted">{t(lang, "org.none_grants")}</p>}
         <MoreRows lang={lang} source="grants" shown={profile.grants.length} total={profile.grants_total_rows} />
@@ -354,32 +346,29 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         <p class="muted small">{t(lang, "org.lobbying_note")}</p>
         {profile.lobbying.length ? (
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "col.date")}</th>
-                  <th>{t(lang, "lobby.subjects")}</th>
-                  <th class="mdh">{t(lang, "lobby.institutions")}</th>
-                  <th>{t(lang, "lobby.officials")}</th>
-                  <th class="mdh">{t(lang, "lobby.registrant")}</th>
-                  <th>{t(lang, "col.record")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "date", label: t(lang, "col.date") },
+              { kind: "main", label: t(lang, "lobby.subjects") },
+              { kind: "buyer", label: t(lang, "lobby.institutions"), rest: "md" },
+              { kind: "org", label: t(lang, "lobby.officials") },
+              { kind: "org", label: t(lang, "lobby.registrant"), rest: "lg" },
+              { kind: "record", label: t(lang, "col.record") },
+            ]}>
               <tbody>
                 {profile.lobbying.map((r) => (
                   <tr>
                     <td data-label={t(lang, "col.date")} class="mono">{r.comm_date ?? ""}</td>
                     <td data-label={t(lang, "lobby.subjects")}>{r.subject_matters.join("; ")}</td>
-                    <td data-label={t(lang, "lobby.institutions")} class="mdh">{r.institutions.join("; ")}</td>
+                    <td data-label={t(lang, "lobby.institutions")} class={restClass("md")}>{r.institutions.join("; ")}</td>
                     <td data-label={t(lang, "lobby.officials")}>
                       {r.dpoh.map((d) => <span class="nw-block">{[d.name, d.title, d.institution].filter(Boolean).join(", ")}</span>)}
                     </td>
-                    <td data-label={t(lang, "lobby.registrant")} class="mdh">{r.registrant ?? ""}</td>
+                    <td data-label={t(lang, "lobby.registrant")} class={restClass("lg")}>{r.registrant ?? ""}</td>
                     <td data-label={t(lang, "col.record")}><a href={lobbyUrl(r.comm_number)} class="mono" rel="nofollow noopener">{r.comm_number}</a></td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
         ) : <p class="muted">{t(lang, "org.none_lobbying")}</p>}
         <MoreRows lang={lang} source="lobbying" shown={profile.lobbying.length} total={profile.lobbying_total_rows} />
@@ -388,15 +377,12 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
       <Panel id="buyers" title={t(lang, "org.buyers")}>
         {profile.buyers.length ? (
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "col.source")}</th>
-                  <th>{t(lang, "col.buyer")}</th>
-                  <th class="num">{t(lang, "col.records")}</th>
-                  <th class="num">{t(lang, "col.value")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "source", label: t(lang, "col.source") },
+              { kind: "main", label: t(lang, "col.buyer") },
+              { kind: "count", label: t(lang, "col.records") },
+              { kind: "total", label: t(lang, "col.value") },
+            ]}>
               <tbody>
                 {profile.buyers.map((b) => (
                   <tr>
@@ -409,7 +395,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
         ) : <p class="muted">{t(lang, "org.buyers_none")}</p>}
       </Panel>

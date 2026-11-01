@@ -7,6 +7,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { Table } from "../columns";
 import { REFERENCE_RE, loadContract, loadStats, publishedReference, type ContractDetail } from "../data";
 import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, provinceName, segmentLabel, statusLabel, t, type Key, type Lang } from "../i18n";
@@ -140,17 +141,14 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
 
       <Panel title={t(lang, "contract.amendments")} count={fmtInt(versions.length, lang)}>
       <div class="table-wrap bordered">
-        <table class="restack">
-          <thead>
-            <tr>
-              <th class="num">{t(lang, "col.amendment")}</th>
-              <th>{t(lang, "tender.amended")}</th>
-              <th>{t(lang, "contract.amendment_type")}</th>
-              <th class="num">{t(lang, "contract.amount")}</th>
-              <th class="num">{t(lang, "contract.total_value")}</th>
-              <th>{t(lang, "col.status")}</th>
-            </tr>
-          </thead>
+        <Table cols={[
+          { kind: "count", label: t(lang, "col.amendment") },
+          { kind: "date", label: t(lang, "tender.amended") },
+          { kind: "main", label: t(lang, "contract.amendment_type") },
+          { kind: "value", label: t(lang, "contract.amount") },
+          { kind: "value", label: t(lang, "contract.total_value") },
+          { kind: "label", label: t(lang, "col.status") },
+        ]}>
           <tbody>
             {versions.map((v) => (
               <tr>
@@ -163,7 +161,7 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       </div>
       </Panel>
 

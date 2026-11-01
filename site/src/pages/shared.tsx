@@ -3,6 +3,7 @@
 // government's own record of each row.
 
 import type { FC } from "hono/jsx";
+import { type Column, Table } from "../columns";
 import { type AwardRow, type OrgTotal, type TenderRow, publishedReference } from "../data";
 import { buyerPath } from "../crosslinks";
 import { fmtInt, fmtMoney, pick, provinceName, segmentLabel, t, type Key, type Lang } from "../i18n";
@@ -113,24 +114,26 @@ export const SegmentChips: FC<{ lang: Lang; codes: readonly string[] }> = ({ lan
 
 // -- tables ---------------------------------------------------------------------------
 
-// The column classes say what each column is, so the stylesheet can set the
-// widths, hide the secondary ones on medium screens (mdh) and narrow the list
-// beside the split view's detail panel. public/tenders.js draws the same
-// markup; selectable rows carry their reference for it.
+// The tender list's columns. The c- classes name each column for the split
+// view, which hides the published date and the region beside its detail
+// panel; the kinds set the widths (src/columns.tsx).
+export function tenderColumns(lang: Lang): Column[] {
+  return [
+    { kind: "main", label: t(lang, "col.notice"), class: "c-notice" },
+    { kind: "buyer", label: t(lang, "col.buyer"), class: "c-buyer" },
+    { kind: "datetime", label: t(lang, "col.closing"), class: "c-date" },
+    { kind: "date", label: t(lang, "col.published"), rest: "md", class: "c-pub" },
+    { kind: "region", label: t(lang, "col.region"), class: "c-region" },
+  ];
+}
+
+// public/tenders.js draws the same markup; selectable rows carry their
+// reference for it.
 export const TenderTable: FC<{ lang: Lang; rows: readonly TenderRow[]; today: string; status?: boolean; selectable?: boolean }> = ({
   lang, rows, today, status, selectable,
 }) => (
   <div class="table-wrap bordered">
-    <table class="restack t-tenders">
-      <thead>
-        <tr>
-          <th class="c-notice">{t(lang, "col.notice")}</th>
-          <th class="c-buyer">{t(lang, "col.buyer")}</th>
-          <th class="c-date">{t(lang, "col.closing")}</th>
-          <th class="c-pub mdh">{t(lang, "col.published")}</th>
-          <th class="c-region">{t(lang, "col.region")}</th>
-        </tr>
-      </thead>
+    <Table cols={tenderColumns(lang)} class="t-tenders">
       <tbody>
         {rows.map((r) => (
           <tr data-ref={selectable ? r.reference.toLowerCase() : undefined}>
@@ -149,7 +152,7 @@ export const TenderTable: FC<{ lang: Lang; rows: readonly TenderRow[]; today: st
           </tr>
         ))}
       </tbody>
-    </table>
+    </Table>
   </div>
 );
 
@@ -160,17 +163,14 @@ export const AwardTable: FC<{ lang: Lang; rows: readonly AwardRow[]; href?: stri
   lang, rows, href = "/awards", organization = true, buyer = true,
 }) => (
   <div class="table-wrap bordered">
-    <table class="restack">
-      <thead>
-        <tr>
-          <th>{t(lang, "col.awarded")}</th>
-          <th>{t(lang, "col.contract")}</th>
-          {organization ? <th>{t(lang, "col.organization")}</th> : null}
-          {buyer ? <th class="mdh">{t(lang, href === "/history" ? "col.client" : "col.buyer")}</th> : null}
-          <th class="num">{t(lang, "col.value")}</th>
-          <th>{t(lang, "col.method")}</th>
-        </tr>
-      </thead>
+    <Table cols={[
+      { kind: "date", label: t(lang, "col.awarded") },
+      { kind: "main", label: t(lang, "col.contract") },
+      organization && { kind: "org", label: t(lang, "col.organization") },
+      buyer && { kind: "buyer", label: t(lang, href === "/history" ? "col.client" : "col.buyer"), rest: "md" },
+      { kind: "value", label: t(lang, "col.value") },
+      { kind: "comp", label: t(lang, "col.method") },
+    ]}>
       <tbody>
         {rows.map((r) => (
           <tr>
@@ -196,22 +196,19 @@ export const AwardTable: FC<{ lang: Lang; rows: readonly AwardRow[]; href?: stri
           </tr>
         ))}
       </tbody>
-    </table>
+    </Table>
   </div>
 );
 
 // Organizations with their total in one source, ranked as the file ranks them.
 export const OrgTotalTable: FC<{ lang: Lang; rows: readonly OrgTotal[]; rank?: boolean }> = ({ lang, rows, rank }) => (
   <div class="table-wrap bordered">
-    <table class="restack">
-      <thead>
-        <tr>
-          {rank ? <th class="num">{t(lang, "col.rank")}</th> : null}
-          <th>{t(lang, "col.organization")}</th>
-          <th class="num">{t(lang, "col.records")}</th>
-          <th class="num">{t(lang, "col.value")}</th>
-        </tr>
-      </thead>
+    <Table cols={[
+      rank && { kind: "count", label: t(lang, "col.rank") },
+      { kind: "main", label: t(lang, "col.organization") },
+      { kind: "count", label: t(lang, "col.records") },
+      { kind: "total", label: t(lang, "col.value") },
+    ]}>
       <tbody>
         {rows.map((r, i) => (
           <tr>
@@ -225,7 +222,7 @@ export const OrgTotalTable: FC<{ lang: Lang; rows: readonly OrgTotal[]; rank?: b
           </tr>
         ))}
       </tbody>
-    </table>
+    </Table>
   </div>
 );
 

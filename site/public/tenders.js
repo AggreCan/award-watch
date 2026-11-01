@@ -38,6 +38,8 @@
   try { I18N = JSON.parse(document.getElementById("i18n").textContent) || {}; } catch (e) { I18N = {}; }
   var STRINGS = I18N.strings || {};
   var LABELS = I18N.labels || {};
+  // The table's class, widths and head row, from the column system in src/columns.tsx.
+  var TABLE = I18N.table && I18N.table.heads ? I18N.table : null;
   var LANG = I18N.lang === "fr" ? "fr" : "en";
   var LOCALE = I18N.locale || "en-CA";
   var TODAY = results.getAttribute("data-today") || new Date().toISOString().slice(0, 10);
@@ -251,11 +253,15 @@
   }
   function table(list) {
     var wrap = el("div", "table-wrap bordered");
-    var t = el("table", "restack t-tenders");
+    var t = el("table", TABLE ? TABLE.cls : "restack t-tenders");
+    if (TABLE && TABLE.style) t.setAttribute("style", TABLE.style);
     var head = el("thead");
     var hr = el("tr");
-    [["col.notice", "c-notice"], ["col.buyer", "c-buyer"], ["col.closing", "c-date"], ["col.published", "c-pub mdh"], ["col.region", "c-region"]]
-      .forEach(function (c) { hr.appendChild(el("th", c[1], tx(c[0]))); });
+    var heads = TABLE ? TABLE.heads : [
+      ["c-notice", tx("col.notice")], ["c-buyer", tx("col.buyer")], ["c-date", tx("col.closing")],
+      ["c-pub mdh", tx("col.published")], ["c-region", tx("col.region")],
+    ];
+    heads.forEach(function (h) { hr.appendChild(el("th", h[0], h[1])); });
     head.appendChild(hr);
     t.appendChild(head);
     var body = el("tbody");

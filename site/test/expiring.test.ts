@@ -112,10 +112,19 @@ describe("/expiring/:window", () => {
     expect(html).toContain('<a href="/awards/cb-400-40000004">Translation standing offer, official languages</a>');
     expect(html).toContain('<a href="/history/w8472-000777">Diesel engine overhaul, patrol vessel</a>');
     expect(html).not.toContain('href="/awards/dnd-mdn');
+    // A published contract has no page here: its title opens the same record as
+    // its Record link (the contracts search), so it keeps a link out at every width.
+    expect(html).toContain('<td data-label="Contract"><a href="https://search.open.canada.ca/contracts/?search_text=C-2026-0042" rel="nofollow noopener">Satellite communications terminal maintenance</a>');
+    const fr = await text("/expiring/3m?lang=fr");
+    expect(fr).toContain('<td data-label="Contrat"><a href="https://search.open.canada.ca/contracts/?search_text=C-2026-0042" rel="nofollow noopener">Entretien de terminaux de communication par satellite</a>');
     // Organization, withheld wording, buyer, value, competition.
     expect(html).toContain('<td data-label="Organization"><a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a></td>');
     expect(html).toContain('<td data-label="Organization"><span class="muted">Individual, name withheld</span></td>');
+    // The buyer shows from 1280 px; the record links and amendments and growth from 1600 px.
     expect(html).toContain('<td data-label="Buyer" class="mdh"><a href="/buyers/dfo-mpo">Fisheries and Oceans Canada</a></td>');
+    expect(html).toContain('<th class="k-buyer mdh">Buyer</th>');
+    expect(html).toContain('<th class="k-record xlh">Record</th>');
+    expect(html).toContain('<td data-label="Record" class="xlh"><span class="muted small">Award notice</span>');
     expect(html).toContain('<td data-label="Value" class="mono num">$4,500,000</td>');
     expect(html).toContain('<span class="flag flag-yes"');
     expect(html).toContain('<span class="flag flag-no"');
@@ -123,7 +132,7 @@ describe("/expiring/:window", () => {
     // Amendments and growth as a signed percentage.
     expect(html).toContain("2 amendments<br/><span class=\"muted small\">+25% on the original amount</span>");
     expect(html).toContain("1 amendment<br/><span class=\"muted small\">-10% on the original amount</span>");
-    expect(html).toContain('<td data-label="Amendments and growth" class="mdh">None</td>');
+    expect(html).toContain('<td data-label="Amendments and growth" class="xlh">None</td>');
     // The source record: the CanadaBuys notice, the history dataset, the contracts search.
     expect(html).toContain('<a href="https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cb-400-40000004" rel="noopener">CanadaBuys notice</a>');
     expect(html).toContain('<a href="https://open.canada.ca/data/en/dataset/4fe645a1-ffcd-40c1-9385-2c771be956a4" rel="noopener">Contract history dataset</a>');
@@ -264,8 +273,11 @@ describe("contracts ending on buyer pages and profiles", () => {
     expect(section).toContain('<a href="/awards/cb-400-40000004">Translation standing offer, official languages</a>');
     expect(section).toContain('<a href="/expiring/12m?buyer=pwgsc-tpsgc">This buyer&#39;s contracts in the 12-month list</a>');
     // The buyer is the page's own, so the table leaves the column out.
-    expect(section).not.toContain('<th class="mdh">Buyer</th>');
-    expect(section).toContain("<th>Organization</th>");
+    expect(section).not.toMatch(/<th class="k-buyer[^"]*">Buyer<\/th>/);
+    expect(section).toContain('<th class="k-org">Organization</th>');
+    // The same order as the full list: amendments and growth and the record links from 1600 px.
+    expect(section).toContain('<th class="k-amend xlh">');
+    expect(section).toContain('<th class="k-record xlh">Record</th>');
     const fr = nbsp(await text("/buyers/pwgsc-tpsgc?lang=fr"));
     expect(fr).toContain('<h2 id="expiring">Contrats arrivant à échéance</h2>');
     expect(fr).toContain("1 contrat prend fin dans les 12 mois suivant la date des données. Valeur : 312 500 $.");
@@ -285,8 +297,10 @@ describe("contracts ending on buyer pages and profiles", () => {
     const section = html.slice(html.indexOf('<h2 id="expiring">'), html.indexOf('<h2 id="awards">'));
     expect(section).toContain("<h2 id=\"expiring\">Contracts Ending</h2>");
     expect(section).toContain("1 contract ends within 12 months of the data date. Value: $312,500.");
-    expect(section).not.toContain("<th>Organization</th>");
-    expect(section).toContain('<th class="mdh">Buyer</th>');
+    expect(section).not.toMatch(/<th class="k-org[^"]*">Organization<\/th>/);
+    expect(section).toContain('<th class="k-buyer mdh">Buyer</th>');
+    expect(section).toContain('<th class="k-amend xlh">');
+    expect(section).toContain('<th class="k-record xlh">Record</th>');
     expect(section).toContain('<a href="/expiring">All contracts ending soon</a>');
     expect(section).not.toContain("The first");
     expect(await text("/organizations/org-a000000002")).not.toContain('id="expiring"');

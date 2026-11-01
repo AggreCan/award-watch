@@ -5,6 +5,7 @@
 // its codes fall in, so segment figures overlap and are never added up.
 
 import type { Context } from "hono";
+import { Table } from "../columns";
 import { SEGMENT_CODES } from "../constants";
 import { SEGMENT_RE, loadCategories, loadCategory, loadStats } from "../data";
 import type { AppEnv } from "../env";
@@ -28,15 +29,12 @@ export async function categoriesIndex(c: Context<AppEnv>): Promise<Response> {
       </PageHead>
       <Panel title={t(lang, "categories.title")} count={fmtInt(SEGMENT_CODES.length, lang)}>
       <div class="table-wrap bordered">
-        <table class="restack">
-          <thead>
-            <tr>
-              <th>{t(lang, "col.segment")}</th>
-              <th class="num">{t(lang, "categories.col_open")}</th>
-              <th class="num">{t(lang, "categories.col_year", { year: idx.year })}</th>
-              <th class="num">{t(lang, "categories.col_all")}</th>
-            </tr>
-          </thead>
+        <Table cols={[
+          { kind: "main", label: t(lang, "col.segment") },
+          { kind: "count", label: t(lang, "categories.col_open") },
+          { kind: "total", label: t(lang, "categories.col_year", { year: idx.year }) },
+          { kind: "total", label: t(lang, "categories.col_all") },
+        ]}>
           <tbody>
             {SEGMENT_CODES.map((code) => {
               const s = bySegment.get(code);
@@ -60,7 +58,7 @@ export async function categoriesIndex(c: Context<AppEnv>): Promise<Response> {
               );
             })}
           </tbody>
-        </table>
+        </Table>
       </div>
       </Panel>
     </Layout>,
@@ -104,14 +102,11 @@ export async function categoryPage(c: Context<AppEnv>): Promise<Response> {
       <Panel title={t(lang, "category.years")}>
       {years.length ? (
         <div class="table-wrap bordered narrow">
-          <table class="restack">
-            <thead>
-              <tr>
-                <th>{t(lang, "col.year")}</th>
-                <th class="num">{t(lang, "col.records")}</th>
-                <th class="num">{t(lang, "col.value")}</th>
-              </tr>
-            </thead>
+          <Table cols={[
+            { kind: "main", label: t(lang, "col.year") },
+            { kind: "count", label: t(lang, "col.records") },
+            { kind: "total", label: t(lang, "col.value") },
+          ]}>
             <tbody>
               {years.map((y) => (
                 <tr>
@@ -121,7 +116,7 @@ export async function categoryPage(c: Context<AppEnv>): Promise<Response> {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         </div>
       ) : <p class="muted">{t(lang, "awards.none")}</p>}
       </Panel>

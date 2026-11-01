@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { type Column, Table } from "../columns";
 import { loadJson, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { numberLocale, pick, provinceName, segmentLabel, t, tj, type Key, type Lang } from "../i18n";
@@ -100,13 +101,10 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
     const events: readonly FeedEvent[] = expiring.some((f) => f.scope === kind) ? INDEX_EVENTS : FEED_EVENTS;
     return (
       <div class="table-wrap bordered">
-        <table class="restack">
-          <thead>
-            <tr>
-              <th>{t(lang, head)}</th>
-              {events.map((e) => <th>{t(lang, EVENT_KEY[e])}</th>)}
-            </tr>
-          </thead>
+        <Table cols={[
+          { kind: "main", label: t(lang, head) },
+          ...events.map((e): Column => ({ kind: "label", label: t(lang, EVENT_KEY[e]) })),
+        ]}>
           <tbody>
             {firsts.map((first) => {
               const name = label(first);
@@ -130,7 +128,7 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
               );
             })}
           </tbody>
-        </table>
+        </Table>
       </div>
     );
   };
@@ -173,13 +171,10 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
 
           <h2 id="canada">{t(lang, "feeds.toc_canada")}</h2>
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "feeds.col_feed")}</th>
-                  <th>{t(lang, "feeds.col_address")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "text", label: t(lang, "feeds.col_feed") },
+              { kind: "main", label: t(lang, "feeds.col_address") },
+            ]}>
               <tbody>
                 {FEED_EVENTS.map((e) => (
                   <tr>
@@ -194,7 +189,7 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
                   </tr>
                 ) : null}
               </tbody>
-            </table>
+            </Table>
           </div>
 
           <h2 id="segment">{t(lang, "feeds.toc_segment")}</h2>

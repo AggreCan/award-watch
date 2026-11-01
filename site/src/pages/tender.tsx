@@ -6,6 +6,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { Table } from "../columns";
 import { REFERENCE_RE, loadStats, loadTender, publishedReference, type TenderDetail } from "../data";
 import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, segmentLabel, t, tn, type Key, type Lang } from "../i18n";
@@ -103,14 +104,11 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       {d.codes.length ? (
         <Panel title={t(lang, "tender.codes")} count={fmtInt(d.codes.length, lang)}>
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "col.code")}</th>
-                  <th>{t(lang, "col.description")}</th>
-                  <th>{t(lang, "col.segment")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "label", label: t(lang, "col.code") },
+              { kind: "main", label: t(lang, "col.description") },
+              { kind: "text", label: t(lang, "col.segment") },
+            ]}>
               <tbody>
                 {d.codes.map((code) => {
                   const seg = code.code.slice(0, 2);
@@ -123,7 +121,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
                   );
                 })}
               </tbody>
-            </table>
+            </Table>
           </div>
         </Panel>
       ) : null}
@@ -137,17 +135,14 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       <Panel title={t(lang, "tender.history")} count={fmtInt(versions.length, lang)}>
       <p class="muted small">{t(lang, "tender.history_note")}</p>
       <div class="table-wrap bordered">
-        <table class="restack">
-          <thead>
-            <tr>
-              <th class="num">{t(lang, "col.amendment")}</th>
-              <th>{t(lang, "col.published")}</th>
-              <th>{t(lang, "tender.amended")}</th>
-              <th>{t(lang, "col.closing")}</th>
-              <th>{t(lang, "col.title")}</th>
-              <th>{t(lang, "tender.first_seen")}</th>
-            </tr>
-          </thead>
+        <Table cols={[
+          { kind: "count", label: t(lang, "col.amendment") },
+          { kind: "date", label: t(lang, "col.published") },
+          { kind: "date", label: t(lang, "tender.amended") },
+          { kind: "datetime", label: t(lang, "col.closing") },
+          { kind: "main", label: t(lang, "col.title") },
+          { kind: "date", label: t(lang, "tender.first_seen") },
+        ]}>
           <tbody>
             {versions.map((v) => (
               <tr>
@@ -160,7 +155,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       </div>
       </Panel>
 
@@ -169,15 +164,12 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         <>
           <p class="muted small">{t(lang, "tender.related_note")}</p>
           <div class="table-wrap bordered">
-            <table class="restack">
-              <thead>
-                <tr>
-                  <th>{t(lang, "col.awarded")}</th>
-                  <th>{t(lang, "col.contract")}</th>
-                  <th>{t(lang, "col.organization")}</th>
-                  <th class="num">{t(lang, "col.value")}</th>
-                </tr>
-              </thead>
+            <Table cols={[
+              { kind: "date", label: t(lang, "col.awarded") },
+              { kind: "main", label: t(lang, "col.contract") },
+              { kind: "org", label: t(lang, "col.organization") },
+              { kind: "value", label: t(lang, "col.value") },
+            ]}>
               <tbody>
                 {d.related_awards.map((a) => (
                   <tr>
@@ -192,7 +184,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
         </>
       ) : (

@@ -42,7 +42,8 @@ describe("organization profile", () => {
     const page = await html("/organizations/org-a000000001");
     const years = section(page, "years");
     expect(years).toContain('<td data-label="Non-competitive, by count" class="mono num">3 of 60 (5%)</td>');
-    expect(years).toContain('<td data-label="Non-competitive, by value" class="mono num">$54,000 of $1,100,000 (5%)</td>');
+    // The share by value rests on medium screens, so the table fits beside the rail.
+    expect(years).toContain('<td data-label="Non-competitive, by value" class="mono num mdh">$54,000 of $1,100,000 (5%)</td>');
     expect(years).toContain('<td data-label="Non-competitive, by count" class="mono num">0 of 41 (0%)</td>');
     expect(years).toContain('class="chart-stack"');
     const grants = section(await html("/organizations/org-a000000002"), "years");
@@ -71,7 +72,7 @@ describe("organization profile", () => {
     const two = await html("/organizations/org-a000000002");
     const history = section(two, "history");
     expect(history).toContain('<a href="/history/w8472-000633">Vessel refit, mid-shore patrol</a>');
-    expect(history).toContain('<th class="mdh">Client department</th>');
+    expect(history).toContain('<th class="k-buyer mdh">Client department</th>');
     expect(history).toContain('<span class="flag flag-no" title="The source&#39;s own term for a contract awarded without a competition');
     const grants = section(two, "grants");
     expect(grants).toContain(`<a href="${grantUrl("dfo-mpo", "GC-2025-0099")}" class="mono" rel="nofollow noopener">GC-2025-0099</a>`);

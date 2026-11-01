@@ -9,6 +9,7 @@
 // starts) and the page's own rows.
 
 import type { Context } from "hono";
+import { Table } from "../columns";
 import { DIRECTORY_CODES } from "../constants";
 import { directoryPath, loadDirectories } from "../crosslinks";
 import { loadDirectoryPage, loadDirectoryPart, loadStats } from "../data";
@@ -35,13 +36,10 @@ export async function organizationsIndex(c: Context<AppEnv>): Promise<Response> 
       <Panel title={t(lang, "directory.col_place")} count={fmtInt(total, lang)}
         foot={<span><a href="/rankings">{t(lang, "directory.to_rankings")}</a> · <a href="/buyers">{t(lang, "directory.to_buyers")}</a></span>}>
       <div class="table-wrap bordered narrow">
-        <table class="restack">
-          <thead>
-            <tr>
-              <th>{t(lang, "directory.col_place")}</th>
-              <th class="num">{t(lang, "directory.col_organizations")}</th>
-            </tr>
-          </thead>
+        <Table cols={[
+          { kind: "main", label: t(lang, "directory.col_place") },
+          { kind: "count", label: t(lang, "directory.col_organizations") },
+        ]}>
           <tbody>
             {listed.map((d) => (
               <tr>
@@ -52,7 +50,7 @@ export async function organizationsIndex(c: Context<AppEnv>): Promise<Response> 
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       </div>
       </Panel>
     </Layout>,
@@ -140,15 +138,12 @@ export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
           </span>
         </nav>}>
       <div class="table-wrap bordered">
-        <table class="restack">
-          <thead>
-            <tr>
-              <th>{t(lang, "col.organization")}</th>
-              <th>{t(lang, "col.city")}</th>
-              <th class="num">{t(lang, "col.records")}</th>
-              <th>{t(lang, "directory.col_last_seen")}</th>
-            </tr>
-          </thead>
+        <Table cols={[
+          { kind: "main", label: t(lang, "col.organization") },
+          { kind: "region", label: t(lang, "col.city") },
+          { kind: "count", label: t(lang, "col.records") },
+          { kind: "date", label: t(lang, "directory.col_last_seen") },
+        ]}>
           <tbody>
             {file.rows.map((r) => (
               <tr>
@@ -159,7 +154,7 @@ export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       </div>
       </Panel>
       {idx.pages > 1 ? (

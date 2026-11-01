@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { Table } from "../columns";
 import { loadStats } from "../data";
 import type { AppEnv, Env } from "../env";
 import { t, tn, type Key, type Lang } from "../i18n";
@@ -178,16 +179,13 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
           </p>
           <p class="muted small">{t(lang, "support.tiers_note")}</p>
           <div class="table-wrap bordered">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t(lang, "support.col_tier")}</th>
-                  <th class="num">{t(lang, "support.col_monthly_cost")}</th>
-                  <th>{t(lang, "support.col_pays_for")}</th>
-                  <th>{t(lang, "support.col_against")}</th>
-                  <th>{t(lang, "col.status")}</th>
-                </tr>
-              </thead>
+            <Table restack={false} cols={[
+              { kind: "label", label: t(lang, "support.col_tier") },
+              { kind: "value", label: t(lang, "support.col_monthly_cost") },
+              { kind: "main", label: t(lang, "support.col_pays_for") },
+              { kind: "share", label: t(lang, "support.col_against") },
+              { kind: "label", label: t(lang, "col.status") },
+            ]}>
               <tbody>
                 {tiers.map((tier) => (
                   <tr data-tier={tier.id}>
@@ -209,7 +207,7 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
           <p class="top-gap">{t(lang, "support.reserve_goal", { goal, about: aboutDollars(RESERVE_GOAL_CENTS, lang) })}</p>
           <p class="muted small">
@@ -264,17 +262,14 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
           )}
 
           <h2 id="transparency">{t(lang, "support.toc_transparency")}</h2>
-          <div class="table-wrap bordered narrow">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t(lang, "support.col_quarter")}</th>
-                  <th class="num">{t(lang, "support.col_monthly_cost")}</th>
-                  <th class="num">{t(lang, "support.col_received")}</th>
-                  <th class="num">{t(lang, "support.col_spent")}</th>
-                  <th class="num">{t(lang, "support.col_reserve")}</th>
-                </tr>
-              </thead>
+          <div class="table-wrap bordered">
+            <Table restack={false} cols={[
+              { kind: "main", label: t(lang, "support.col_quarter") },
+              { kind: "value", label: t(lang, "support.col_monthly_cost") },
+              { kind: "value", label: t(lang, "support.col_received") },
+              { kind: "value", label: t(lang, "support.col_spent") },
+              { kind: "value", label: t(lang, "support.col_reserve") },
+            ]}>
               <tbody>
                 {sup.donations === 0 ? (
                   <tr>
@@ -292,7 +287,7 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
                   ))
                 )}
               </tbody>
-            </table>
+            </Table>
           </div>
           <p class="top-gap">{t(lang, "support.transparency_text")}</p>
 
