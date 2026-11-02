@@ -27,3 +27,6 @@ CLAUDE.md
 
 # internal notes (market research, planning): never on the public repository
 notes/
+
+# Generated review sheet (design/email/build.py inlines a 350 KB font into it)
+design/email/prototypes.html
