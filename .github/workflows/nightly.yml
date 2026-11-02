@@ -290,6 +290,11 @@ jobs:
           fetch_set awardwatch.sqlite.prev.gz
           python -m awardwatch_pipeline.nightly restore --dir data/restore --db data/awardwatch.sqlite --out data/out/restore.json \
             --bucket "$BUCKET"
+          # The parts are joined and checked; only the joined backup is read again
+          # (prev-set, in the save step). The runner's disk is the tightest
+          # resource of the night, so the parts go now.
+          rm -f data/restore/*.gz.[0-9][0-9][0-9]
+          df -h --output=avail,pcent . | tail -1 | sed 's/^/disk after the restore: /'
 
       # A non-zero exit marks the run failed, and the steps below still check
       # and save what the run produced.
@@ -429,6 +434,17 @@ jobs:
             sleep 30
           done
           exit 1
+
+      # The deploy copy of the export (site/public/data, 2.9 GB on 2026-11-02) is
+      # read only by the deploy; once the deploy, the live check and any
+      # rollback are done it is freed, because the database pack later in the
+      # run failed with "database or disk is full" when the copy, the export,
+      # the bundle and the restored backup all sat on the runner at once.
+      - name: Free the deploy copy of the export
+        if: ${{ !cancelled() }}
+        run: |
+          rm -rf site/public/data
+          df -h --output=avail,pcent . | tail -1 | sed 's/^/disk after the deploy: /'
 
       # IndexNow (docs/search-engines.md, section 5): Bing and the other engines
       # that take it (Google does not) hear about tonight's changed pages
