@@ -58,7 +58,7 @@ describe("support page", () => {
     expect(html).toContain("<li>5,883 award notices since 2012.</li>");
     expect(html).toContain("<li>101 published contracts over $10,000.</li>");
     expect(html).toContain("<li>2 organization profiles.</li>");
-    expect(html).toContain("One refresh a day, at midnight UTC.</li>");
+    expect(html).toContain("Refreshed nightly, at midnight UTC.</li>");
     expect(html).toContain("about 10,000,000 page views a month are included, with no daily ceiling.");
     expect(html).toContain("planning estimates until the site&#39;s first invoices");
   });
@@ -67,21 +67,22 @@ describe("support page", () => {
     const res = await get("/support", {}, testEnv(emptyAssets));
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Data as of n/a");
+    expect(html).toContain("Data date: n/a");
     expect(html).not.toContain("open tender notices, refreshed nightly");
-    expect(html).toContain("One refresh a day, at midnight UTC.</li>");
+    expect(html).toContain("Refreshed nightly, at midnight UTC.</li>");
   });
 
   it("lists hosted search as the next tier, at no cost beyond the Workers Paid plan, in both languages", async () => {
     const row = (html: string) => html.match(/<tr data-tier="hosted_search">[\s\S]*?<\/tr>/)?.[0] ?? "";
     const en = row(await (await get("/support")).text());
-    expect(en).toContain('<td class="mono num">$0.00</td>');
+    expect(en).toContain('<td data-label="Monthly cost" class="mono num">$0.00</td>');
     expect(en).toContain("Search across tenders, awards and organizations on the site with no download.");
-    expect(en).toContain('<td class="tier-status">Not yet funded</td>');
+    // A tier that costs nothing needs no funding.
+    expect(en).toContain('<td data-label="Status" class="tier-status">No cost</td>');
     const fr = row((await (await get("/support", { cookie: "lang=fr" })).text()).replace(/[\u00a0\u202f]/g, " "));
-    expect(fr).toContain('<td class="mono num">0,00 $</td>');
+    expect(fr).toContain('<td data-label="Coût mensuel" class="mono num">0,00 $</td>');
     expect(fr).toContain("Recherche dans les appels d’offres, les attributions et les organisations sur le site, sans téléchargement.");
-    expect(fr).toContain('<td class="tier-status">Pas encore financé</td>');
+    expect(fr).toContain('<td data-label="Statut" class="tier-status">Sans frais</td>');
   });
 
   it("states monthly cost against monthly support; with no support the plan in place reads In place and the rest Not yet funded", async () => {
@@ -90,11 +91,13 @@ describe("support page", () => {
       `Monthly cost of every tier: ${fmtCents(TARGET_CENTS_PER_MONTH)}. Monthly support received: $0.00.`,
     );
     expect(html).toContain(`Reserve held: 0 of ${RESERVE_GOAL_MONTHS} months.`);
-    expect(count(html, '<td class="tier-status">Not yet funded</td>')).toBe(TIERS.filter((t) => !t.inPlace).length);
-    expect(count(html, '<td class="tier-status">In place, paid by the operator</td>')).toBe(TIERS.filter((t) => t.inPlace).length);
-    expect(html).toContain("The operator pays for the plan; support received does not cover it yet.");
-    expect(html).not.toContain('<td class="tier-status">Funded</td>');
-    expect(html).not.toContain('<td class="tier-status">Partly funded</td>');
+    const status = (s: string) => `<td data-label="Status" class="tier-status">${s}</td>`;
+    expect(count(html, status("Not yet funded"))).toBe(TIERS.filter((t) => !t.inPlace && t.monthlyCost > 0).length);
+    expect(count(html, status("No cost"))).toBe(TIERS.filter((t) => t.monthlyCost === 0).length);
+    expect(count(html, status("In place, paid by the operator"))).toBe(TIERS.filter((t) => t.inPlace && t.monthlyCost > 0).length);
+    expect(html).toContain("The operator pays for the plan. Support received does not cover it yet.");
+    expect(html).not.toContain(status("Funded"));
+    expect(html).not.toContain(status("Partly funded"));
     for (const t of TIERS) expect(html).toContain(`data-tier="${t.id}"`);
     expect(html).not.toContain("so the site needs nothing further.</strong>");
   });
@@ -103,7 +106,7 @@ describe("support page", () => {
     const html = await (await get("/support")).text();
     const table = html.slice(html.indexOf('id="transparency"'));
     expect(table).toContain('<th class="k-value num">Monthly cost</th><th class="k-value num">Received</th>');
-    expect(table).toContain('<td colspan="5" class="muted">No donations yet</td>');
+    expect(table).toContain('<td colspan="5" class="muted">No donation received yet.</td>');
   });
 
   it("says donations are closed when DONATE_URL is unset", async () => {
@@ -125,7 +128,7 @@ describe("support page", () => {
 
   it("splits the example gift into the card fee and the rest", async () => {
     const html = await (await get("/support")).text();
-    expect(html).toContain("Card processing fee: $0.59 (2.9 percent plus 30 cents)");
+    expect(html).toContain("Card processing fee: $0.59 (2.9% plus 30 cents)");
     expect(html).toContain("Toward the monthly cost: $9.41");
     expect(html).toContain('style="width:5.9%"');
     expect(html).toContain('style="width:94.1%"');

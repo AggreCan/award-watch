@@ -25,6 +25,17 @@ export function runTime(iso: string | null | undefined, lang: Lang): string {
   return m ? t(lang, "data.run_time", { date: m[1], hh: m[2], mm: m[3] }) : (iso ?? "");
 }
 
+// The publisher's date as an ISO day (2026-11-01). Exports have written the
+// publisher's Last-Modified header as sent ("Sun, 01 Nov 2026 17:15:06 GMT")
+// and may write an ISO date or instant; Date reads either. Null for a value
+// it cannot read.
+export function publisherDay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
+}
+
 // The fixed CSV files in R2 (downloads/<file>), the only names the download
 // route serves besides the yearly files below. All of them are derived from
 // Open Government Licence material and carry that licence.
@@ -129,8 +140,10 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                         {read.length ? read.map((r) => (
                           <span class="nw-block">
                             <span class="mono">{r.file}</span>{lang === "fr" ? "\u202f: " : ": "}
-                            {r.last_read ? runTime(r.last_read, lang) : t(lang, "data.not_read")}
-                            {r.last_modified ? <span class="muted"> {t(lang, "data.modified", { date: r.last_modified.slice(0, 10) })}</span> : null}
+                            {r.last_read && r.loaded !== false ? runTime(r.last_read, lang) : t(lang, "data.not_read")}
+                            {r.loaded !== false && publisherDay(r.last_modified)
+                              ? <span class="muted"> {t(lang, "data.modified", { date: publisherDay(r.last_modified) ?? "" })}</span>
+                              : null}
                           </span>
                         )) : <span class="muted">{t(lang, "data.not_read")}</span>}
                       </td>

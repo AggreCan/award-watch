@@ -34,7 +34,7 @@ describe("organization profile", () => {
     const page = await html("/organizations/org-a000000001");
     expect(page).toContain('<span class="tile-label">Published contracts</span><span class="tile-value">$1.9M</span><span class="tile-note">101 records</span>');
     expect(page).toContain('<span class="tile-label">Award notices</span><span class="tile-value">$250,000</span><span class="tile-note">1 record</span>');
-    expect(page).toContain("the figures are never added together.");
+    expect(page).toContain('<p class="tiles-note">Each source is totalled separately (<a href="/methodology#counting">Methodology</a>).</p>');
     expect(page).not.toMatch(/Total across|Grand total/);
   });
 
@@ -61,8 +61,8 @@ describe("organization profile", () => {
     expect(contracts).toContain(`<a href="${contractSearchUrl("C-2026-000")}" class="mono" rel="nofollow noopener">C-2026-000</a>`);
     expect(contracts).toContain("Value as last reported: $36,001");
     expect(contracts).toContain('<span class="flag flag-unstated" title="The source leaves the procurement method blank for this record.">Method not stated</span>');
-    expect(contracts).toContain('Showing the newest 100 of 101 rows; the other one is in <a href="https://open.canada.ca/data/en/dataset/d8f85d91-7dec-4fd1-8055-483b77225d8b">the publisher&#39;s file</a>.');
-    expect(contracts).toContain("1 row in another currency is shown with its currency and left out of the totals.");
+    expect(contracts).toContain('Showing the newest 100 of 101 records. The other one is in <a href="https://open.canada.ca/data/en/dataset/d8f85d91-7dec-4fd1-8055-483b77225d8b">the publisher&#39;s file</a>.');
+    expect(contracts).toContain("1 record in another currency is shown with its currency and left out of the totals.");
     const lobbying = section(page, "lobbying");
     expect(lobbying).toContain("Example Officeholder, Assistant Deputy Minister, Public Services and Procurement Canada (PSPC)");
     expect(lobbying).toContain(`<a href="${lobbyUrl("500001")}" class="mono" rel="nofollow noopener">500001</a>`);
@@ -94,7 +94,7 @@ describe("organization profile", () => {
     expect(section(one, "responses")).toContain("Received 2026-10-20");
     expect(one).not.toContain("A second statement that is still under review.");
     expect(one).not.toContain("office@example.invalid");
-    expect(section(one, "corrections")).toContain("No corrections to this profile so far.");
+    expect(section(one, "corrections")).toContain("No correction to this profile so far.");
     const two = await html("/organizations/org-a000000002");
     expect(section(two, "corrections")).toContain("The city shown was the old head office");
     expect(section(two, "responses")).toContain("The organization has not published a response.");

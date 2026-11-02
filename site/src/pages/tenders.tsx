@@ -22,10 +22,10 @@ import type { AppEnv } from "../env";
 import {
   categoryLabel, clientStrings, fmtInt, numberLocale, pick, provinceName, segmentLabel, t, tj, tn, type Key, type Lang,
 } from "../i18n";
-import { ClientData, Layout, PageHead, Panel, addDays, noDataPage, page, todayOf } from "../layout";
+import { ClientData, Layout, PageHead, Panel, addDays, closingPassed, noDataPage, page, todayOf } from "../layout";
 import { pageSeo } from "../seo";
 import { FeedLinks, nationalFeedPath } from "./feeds";
-import { TenderTable, tenderColumns } from "./shared";
+import { SegmentNote, TenderTable, tenderColumns } from "./shared";
 
 export const TENDER_PAGE_SIZE = 50;
 export const CLOSING_WINDOWS = ["7", "30"] as const;
@@ -75,7 +75,9 @@ export function fold(s: string): string {
 }
 
 // The rows that pass every filter, in the order asked for. The text filter
-// reads the title in both languages and the reference, as published too.
+// reads the title in both languages and the reference, as published too. By
+// closing date, a notice whose closing date has passed goes after the ones
+// still open.
 export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, today: string): TenderRow[] {
   const words = fold(q.q).split(/\s+/).filter(Boolean);
   const until = q.closing ? addDays(today, Number(q.closing)) : "";
@@ -101,8 +103,13 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, today:
   if (q.sort === "published") {
     out.sort((a, b) => (a.published ?? "") < (b.published ?? "") ? 1 : (a.published ?? "") > (b.published ?? "") ? -1 : byRef(a, b));
   } else {
-    // Soonest first; a notice with no closing date goes last.
+    // Soonest first; a notice whose closing date has passed, then one with
+    // no closing date, go last.
+    const rank = (r: TenderRow) => (r.closing === null ? 2 : closingPassed(r.closing, today) ? 1 : 0);
     out.sort((a, b) => {
+      const ra = rank(a);
+      const rb = rank(b);
+      if (ra !== rb) return ra - rb;
       const x = a.closing ?? "\uffff";
       const y = b.closing ?? "\uffff";
       return x < y ? -1 : x > y ? 1 : byRef(a, b);
@@ -144,7 +151,8 @@ function options(facets: OpenFirst["facets"], lang: Lang) {
 // Every string tenders.js draws, handed over in the page's JSON block.
 export const TENDERS_CLIENT_KEYS: readonly Key[] = [
   "col.notice", "col.buyer", "col.closing", "col.published", "col.region", "common.national", "common.not_stated",
-  "status.open", "status.closing", "tenders.count_one", "tenders.count_many", "tenders.none_match", "tenders.page_of",
+  "common.time", "common.other_lang_only", "segment.code",
+  "status.open", "status.closing", "status.closed", "tenders.count_one", "tenders.count_many", "tenders.none_match", "tenders.page_of",
   "tenders.prev", "tenders.next", "tenders.load_failed", "tenders.loading", "tenders.remove_filter",
   "tenders.detail_empty", "tenders.detail_loading", "tenders.detail_failed", "tenders.detail_open",
   "tenders.detail_canadabuys", "tenders.detail_more", "tender.notice_type", "tender.method", "tender.selection",
@@ -221,7 +229,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
       <PageHead lang={lang} title={t(lang, "tenders.title")} lead={t(lang, "tenders.lead", { n: fmtInt(first.total, lang) })}
         actions={<>
           <a href="/downloads/open-tenders.csv" class="btn">{t(lang, "tenders.csv")}</a>
-          <a href={`/data/${nationalFeedPath("tenders")}`} class="btn">{t(lang, "category.feed")}</a>
+          <a href={`/data/${nationalFeedPath("tenders")}`} class="btn">{t(lang, "feeds.button_tenders")}</a>
         </>}>
         <p class="page-note">{t(lang, "tenders.contact_note")}</p>
       </PageHead>
@@ -232,12 +240,13 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
             <span class="field-label">{t(lang, "tenders.filter_text")}</span>
             <input type="search" name="q" value={q.q} maxlength={MAX_TEXT} autocomplete="off" />
           </label>
-          <Select name="category" label="tenders.filter_category" any="tenders.any" opts={opts.category} value={q.category} lang={lang} />
+          {/* "All" agrees with the filter's noun in French: Toutes for Catégorie, Province, Méthode. */}
+          <Select name="category" label="tenders.filter_category" any="tenders.any_f" opts={opts.category} value={q.category} lang={lang} />
           <Select name="segment" label="tenders.filter_segment" any="tenders.any" opts={opts.segment} value={q.segment} lang={lang} />
-          <Select name="province" label="tenders.filter_province" any="tenders.any" opts={opts.province} value={q.province} lang={lang} />
+          <Select name="province" label="tenders.filter_province" any="tenders.any_f" opts={opts.province} value={q.province} lang={lang} />
           <Select name="buyer" label="tenders.filter_buyer" any="tenders.any" opts={opts.buyer} value={q.buyer} lang={lang} />
           <Select name="type" label="tenders.filter_type" any="tenders.any" opts={opts.type} value={q.type} lang={lang} />
-          <Select name="method" label="tenders.filter_method" any="tenders.any" opts={opts.method} value={q.method} lang={lang} />
+          <Select name="method" label="tenders.filter_method" any="tenders.any_f" opts={opts.method} value={q.method} lang={lang} />
           <label class="field">
             <span class="field-label">{t(lang, "tenders.filter_closing")}</span>
             <select name="closing">
@@ -285,6 +294,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
               </span>
             </nav>
           </>}>
+          <SegmentNote lang={lang} rows={first.rows} />
           <div class="results" id="tender-results" data-today={today} data-page-size={String(TENDER_PAGE_SIZE)} data-lang={lang}>
             <div id="tender-table">
               {waiting ? (
@@ -295,7 +305,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
                   </noscript>
                 </>
               ) : shown.length ? (
-                <TenderTable lang={lang} rows={shown} today={today} selectable />
+                <TenderTable lang={lang} rows={shown} today={today} selectable note={false} />
               ) : (
                 <p class="muted">{t(lang, "tenders.none_match")}</p>
               )}
@@ -331,7 +341,11 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
   const days = Array.from({ length: NEW_DAYS }, (_, i) => addDays(latest, -i));
   const asked = c.req.query("day") ?? "";
   const day = DAY_RE.test(asked) && days.includes(asked) ? asked : latest;
-  const rows = await loadNewTenders(c.env, day);
+  // A notice whose closing date has passed by the data date ("closed" in
+  // newer files, or still "open" with a past closing date) goes last.
+  const loaded = await loadNewTenders(c.env, day);
+  const passed = (r: TenderRow) => r.status === "closed" || (r.status === "open" && closingPassed(r.closing, latest));
+  const rows = loaded ? [...loaded.filter((r) => !passed(r)), ...loaded.filter(passed)] : null;
   const title = t(lang, "tenders.new_title");
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: title }];
   // Day views other than the newest are views of the same page.
@@ -340,7 +354,7 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/tenders" seo={seo} head={<FeedLinks lang={lang} />}>
       <PageHead lang={lang} title={title} crumbs={crumbs} lead={t(lang, "tenders.new_lead", { days: NEW_DAYS })}
-        actions={<a href={`/data/${nationalFeedPath("tenders")}`} class="btn">{t(lang, "category.feed")}</a>} />
+        actions={<a href={`/data/${nationalFeedPath("tenders")}`} class="btn">{t(lang, "feeds.button_tenders")}</a>} />
       <nav class="toolbar" aria-label={t(lang, "tenders.new_days")}>
         <span class="toolbar-label">{t(lang, "tenders.new_days")}</span>
         <ul class="quick-links day-list">

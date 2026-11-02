@@ -12,7 +12,7 @@ import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, segmentLabel, t, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, tenderState, todayOf } from "../layout";
 import { tenderSeo } from "../seo";
-import { BuyerLink, closingText, money, provincesText, tenderNoticeUrl } from "./shared";
+import { BuyerLink, closingHasZone, closingText, money, otherLanguageMark, provincesText, tenderNoticeUrl } from "./shared";
 
 // A field and its value as a definition-list row; an empty value leaves the
 // row out rather than printing a blank.
@@ -32,8 +32,10 @@ function listOf(lang: Lang, en: readonly string[] | null | undefined, fr: readon
   return mine && mine.length ? mine : other ?? [];
 }
 
-const Lines: FC<{ items: readonly string[] }> = ({ items }) =>
-  items.length ? <ul class="plain">{items.map((s) => <li>{s}</li>)}</ul> : null;
+// One item to a line; an empty list is no value, so its row is left out.
+function lines(items: readonly string[]): unknown {
+  return items.length ? <ul class="plain">{items.map((s) => <li>{s}</li>)}</ul> : null;
+}
 
 export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
@@ -51,12 +53,14 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   const title = pick(lang, d.title_en, d.title_fr) ?? shownRef;
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: shownRef }];
   const description = pick(lang, d.description_en, d.description_fr);
+  const descriptionMark = otherLanguageMark(lang, d.description_en, d.description_fr);
   const versions = [...d.amendments].sort((a, b) => b.amendment - a.amendment);
+  const endUsers = listOf(lang, d.end_users_en, d.end_users_fr);
 
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/tenders" seo={tenderSeo(d, lang, crumbs)}>
-      <PageHead lang={lang} crumbs={crumbs} title={title}
+      <PageHead lang={lang} crumbs={crumbs} eyebrow={t(lang, "tender.title")} title={title}
         lead={<>
           <StatusBadge lang={lang} status={tenderState(d.status, d.closing, today)} />{" "}
           <span class="mono id">{shownRef}</span>
@@ -70,17 +74,17 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         <Panel title={t(lang, "tender.dates")}>
           <dl>
             <Row lang={lang} k="col.published" v={d.published} />
-            <Row lang={lang} k="col.closing" v={closingText(d.closing)} />
+            <Row lang={lang} k="col.closing" v={closingText(d.closing, lang)} />
             <Row lang={lang} k="tender.amended" v={d.amended} />
             <Row lang={lang} k="tender.start_expected" v={d.start_expected} />
             <Row lang={lang} k="tender.end_expected" v={d.end_expected} />
           </dl>
-          {d.closing ? <p class="muted small">{t(lang, "tender.closing_zone")}</p> : null}
+          {d.closing && !closingHasZone(d.closing) ? <p class="muted small">{t(lang, "tender.closing_zone")}</p> : null}
         </Panel>
         <Panel title={t(lang, "tender.buyer")}>
           <dl>
             <Row lang={lang} k="col.buyer" v={<BuyerLink lang={lang} id={d.buyer_id} en={d.buyer_en} fr={d.buyer_fr} />} />
-            <Row lang={lang} k="tender.end_users" v={<Lines items={listOf(lang, d.end_users_en, d.end_users_fr)} />} />
+            <Row lang={lang} k="tender.end_users" v={endUsers.length ? lines(endUsers) : t(lang, "common.not_stated")} />
             <Row lang={lang} k="tender.solicitation" v={d.solicitation ? <span class="mono">{d.solicitation}</span> : null} />
           </dl>
         </Panel>
@@ -93,9 +97,9 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         <Row lang={lang} k="tender.method" v={pick(lang, d.method_en, d.method_fr)} />
         <Row lang={lang} k="tender.selection" v={pick(lang, d.selection_en, d.selection_fr)} />
         <Row lang={lang} k="tender.limited_reason" v={pick(lang, d.limited_reason_en, d.limited_reason_fr)} />
-        <Row lang={lang} k="tender.trade_agreements" v={<Lines items={listOf(lang, d.trade_agreements_en, d.trade_agreements_fr)} />} />
-        <Row lang={lang} k="tender.regions_opportunity" v={<Lines items={listOf(lang, d.regions_opportunity_en, d.regions_opportunity_fr)} />} />
-        <Row lang={lang} k="tender.regions_delivery" v={<Lines items={listOf(lang, d.regions_delivery_en, d.regions_delivery_fr)} />} />
+        <Row lang={lang} k="tender.trade_agreements" v={lines(listOf(lang, d.trade_agreements_en, d.trade_agreements_fr))} />
+        <Row lang={lang} k="tender.regions_opportunity" v={lines(listOf(lang, d.regions_opportunity_en, d.regions_opportunity_fr))} />
+        <Row lang={lang} k="tender.regions_delivery" v={lines(listOf(lang, d.regions_delivery_en, d.regions_delivery_fr))} />
         <Row lang={lang} k="col.region" v={provincesText(lang, d.provinces)} />
         <Row lang={lang} k="tender.gsin" v={d.gsin ? `${d.gsin} ${pick(lang, d.gsin_desc_en, d.gsin_desc_fr) ?? ""}`.trim() : null} />
       </dl>
@@ -116,7 +120,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
                     <tr>
                       <td data-label={t(lang, "col.code")} class="mono">{code.code}</td>
                       <td data-label={t(lang, "col.description")}>{pick(lang, code.desc_en, code.desc_fr) ?? ""}</td>
-                      <td data-label={t(lang, "col.segment")}><a href={`/categories/${seg}`}>{`${seg} ${segmentLabel(lang, seg)}`}</a></td>
+                      <td data-label={t(lang, "col.segment")}><a href={`/segments/${seg}`}>{`${seg} ${segmentLabel(lang, seg)}`}</a></td>
                     </tr>
                   );
                 })}
@@ -127,7 +131,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       ) : null}
 
       {description ? (
-        <Panel title={t(lang, "tender.description_heading")}>
+        <Panel title={descriptionMark ? `${t(lang, "tender.description_heading")} ${descriptionMark}` : t(lang, "tender.description_heading")}>
           <div class="prose">{description.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
         </Panel>
       ) : null}
@@ -149,7 +153,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
                 <td data-label={t(lang, "col.amendment")} class="mono num">{fmtInt(v.amendment, lang)}</td>
                 <td data-label={t(lang, "col.published")} class="mono">{v.published ?? ""}</td>
                 <td data-label={t(lang, "tender.amended")} class="mono">{v.amended ?? ""}</td>
-                <td data-label={t(lang, "col.closing")} class="mono">{closingText(v.closing)}</td>
+                <td data-label={t(lang, "col.closing")} class="mono">{closingText(v.closing, lang)}</td>
                 <td data-label={t(lang, "col.title")}>{pick(lang, v.title_en, v.title_fr) ?? ""}</td>
                 <td data-label={t(lang, "tender.first_seen")} class="mono">{v.first_seen}</td>
               </tr>
@@ -167,7 +171,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
             <Table cols={[
               { kind: "date", label: t(lang, "col.awarded") },
               { kind: "main", label: t(lang, "col.contract") },
-              { kind: "org", label: t(lang, "col.organization") },
+              { kind: "org", label: t(lang, "col.supplier") },
               { kind: "value", label: t(lang, "col.value") },
             ]}>
               <tbody>
@@ -177,7 +181,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
                     <td data-label={t(lang, "col.contract")}>
                       <a href={`/awards/${a.reference.toLowerCase()}`}>{pick(lang, a.title_en, a.title_fr) ?? publishedReference(a)}</a>
                     </td>
-                    <td data-label={t(lang, "col.organization")}>
+                    <td data-label={t(lang, "col.supplier")}>
                       {a.organization_id ? <a href={`/organizations/${a.organization_id}`}>{a.organization ?? a.organization_id}</a> : a.organization ?? ""}
                     </td>
                     <td data-label={t(lang, "col.value")} class="mono num">{money(lang, a.value, a.currency)}</td>

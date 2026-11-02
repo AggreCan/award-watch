@@ -11,7 +11,7 @@ import type { AppEnv } from "../env";
 import { fmtInt, pick, sourceLabel, t } from "../i18n";
 import { Layout, PageHead, Panel, noDataPage, notFoundPage, page } from "../layout";
 import { pageSeo, sectionSeo } from "../seo";
-import { OrgTotalTable, money } from "./shared";
+import { OrgTotalTable, SourcesSeparate, money } from "./shared";
 
 export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
@@ -36,6 +36,7 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
   const base = year === null ? "/rankings" : `/rankings/${year}`;
   const href = (s: string, b: string) => `${base}?source=${s}${b === "count" ? "&by=count" : ""}`;
   const title = year === null ? t(lang, "rankings.title") : t(lang, "rankings.title_year", { year });
+  // A top-level page has no trail, as in the rail beside it; a year's page leads back to the rankings.
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, ...(year === null ? [{ name: title }] : [{ name: t(lang, "rankings.title"), path: "/rankings" }, { name: String(year) }])];
   const filtered = askedSource !== "" || c.req.query("by") !== undefined;
   const seo = year === null
@@ -45,8 +46,8 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/rankings" seo={seo}>
-      <PageHead lang={lang} crumbs={crumbs} title={title} lead={t(lang, "rankings.lead")}>
-        <p class="page-note">{t(lang, "rankings.note")}</p>
+      <PageHead lang={lang} crumbs={year === null ? undefined : crumbs} title={title} lead={t(lang, "rankings.lead")}>
+        <p class="page-note"><SourcesSeparate lang={lang} /> {t(lang, "rankings.note")}</p>
       </PageHead>
       <div class="toolbar">
       <nav aria-label={t(lang, "rankings.years")} class="toolbar-row">
@@ -76,7 +77,7 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
 
       <div class="panel-grid">
       {MONEY_SOURCES.filter((s) => (r.buyers[s] ?? []).length).map((s) => (
-        <Panel title={t(lang, "rankings.buyers")} count={sourceLabel(lang, s)}>
+        <Panel title={t(lang, "rankings.buyers", { source: sourceLabel(lang, s) })}>
           <div class="table-wrap bordered">
             <Table cols={[
               { kind: "count", label: t(lang, "col.rank") },

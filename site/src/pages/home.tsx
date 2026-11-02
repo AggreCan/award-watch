@@ -2,8 +2,9 @@ import type { Context } from "hono";
 import { loadExpiringIndex, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
-import { Layout, PageHead, Panel, noDataPage, page, todayOf } from "../layout";
+import { Layout, PageHead, Panel, closingPassed, noDataPage, page, todayOf } from "../layout";
 import { homeJsonLd, pageSeo } from "../seo";
+import { newestFirst } from "./awards";
 import { FeedLinks } from "./feeds";
 import { AwardTable, OrgTotalTable, TenderTable } from "./shared";
 
@@ -48,6 +49,10 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   }
   // Four tiles to a row: without the radar the first standing total moves up.
   while (tiles.length < 4 && held.length) tiles.push(held.shift()!);
+  // A notice whose closing date has passed is not closing soon, whatever the file says.
+  const closingSoon = stats.closing_soon.filter((r) => !closingPassed(r.closing, today));
+  // The newest award notices published, in the order of the Awarded column.
+  const recentAwards = newestFirst(stats.recent_awards);
 
   return page(
     c,
@@ -55,7 +60,7 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
       head={<FeedLinks lang={lang} />}>
       <PageHead lang={lang} title={t(lang, "home.title")} lead={t(lang, "home.lead")}
         actions={<>
-          <a href="/feeds" class="btn">{t(lang, "footer.feeds")}</a>
+          <a href="/feeds" class="btn">{t(lang, "feeds.button_all")}</a>
           <a href="/data#downloads" class="btn">{t(lang, "footer.download")}</a>
         </>} />
 
@@ -76,11 +81,11 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
       </Panel>
 
       <Panel title={t(lang, "home.closing_heading")} class="soon" tools={<a href="/tenders?closing=7">{t(lang, "home.closing_all")}</a>}>
-        {stats.closing_soon.length ? <TenderTable lang={lang} rows={stats.closing_soon} today={today} /> : <Empty lang={lang} k="home.closing_none" />}
+        {closingSoon.length ? <TenderTable lang={lang} rows={closingSoon} today={today} /> : <Empty lang={lang} k="home.closing_none" />}
       </Panel>
 
       <Panel title={t(lang, "home.awards_heading")} tools={<a href="/awards">{t(lang, "home.awards_all")}</a>}>
-        {stats.recent_awards.length ? <AwardTable lang={lang} rows={stats.recent_awards} /> : <Empty lang={lang} k="home.awards_none" />}
+        {recentAwards.length ? <AwardTable lang={lang} rows={recentAwards} /> : <Empty lang={lang} k="home.awards_none" />}
       </Panel>
 
       <Panel title={t(lang, "home.top_heading", { year })} tools={<a href={`/rankings/${year}`}>{t(lang, "home.top_all")}</a>}>
@@ -110,6 +115,7 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
             <li>{t(lang, "home.read_sources")}</li>
             <li>{t(lang, "home.read_competitive")}</li>
             <li>{tj(lang, "home.read_more", { methodology: <a href="/methodology">{t(lang, "nav.methodology")}</a> })}</li>
+            <li>{tj(lang, "home.read_about", { about: <a href="/about">{t(lang, "footer.about")}</a> })}</li>
           </ul>
         </Panel>
       </div>

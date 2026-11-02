@@ -11,11 +11,11 @@ import type { FC, PropsWithChildren } from "hono/jsx";
 export const COLUMN_WIDTHS = {
   date: 112, // a date or a year
   datetime: 156, // a date with a time, or a closing date with its status chip under it
-  value: 120, // one record's amount
+  value: 132, // one record's amount, up to eleven digits ("$13,044,299,191") on one line
   total: 148, // a sum over many records (up to twelve digits)
   count: 96, // a count, a rank, an amendment number
   comp: 168, // the competition flag, its longest label ("Méthode non précisée") on one line
-  amend: 150, // amendments and value growth
+  amend: 144, // amendments and value growth; with value, the widest table fits 1600 px
   record: 168, // links to the government's own record, "Avis sur AchatsCanada" on one line
   org: 216, // an organization, or another party (officials, a registrant)
   buyer: 200, // a buyer, a department, an institution, a publisher

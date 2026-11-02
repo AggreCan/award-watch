@@ -30,12 +30,12 @@ export async function organizationsIndex(c: Context<AppEnv>): Promise<Response> 
     c,
     <Layout lang={lang} title={t(lang, "directory.index_title")} dataAsOf={stats.data_as_of} active="/organizations" seo={pageSeo("organizations", lang)}>
       <PageHead lang={lang} title={t(lang, "directory.index_title")} lead={t(lang, "directory.index_lead", { n: fmtInt(total, lang) })}
-        actions={<a href="/downloads/organizations.csv" class="btn">{t(lang, "tenders.csv")}</a>}>
+        actions={<a href="/downloads/organizations.csv" class="btn">{t(lang, "directory.csv")}</a>}>
         <p class="page-note">{t(lang, "directory.index_note")}</p>
       </PageHead>
       <Panel title={t(lang, "directory.col_place")} count={fmtInt(total, lang)}
         foot={<span><a href="/rankings">{t(lang, "directory.to_rankings")}</a> · <a href="/buyers">{t(lang, "directory.to_buyers")}</a></span>}>
-      <div class="table-wrap bordered narrow">
+      <div class="table-wrap bordered">
         <Table cols={[
           { kind: "main", label: t(lang, "directory.col_place") },
           { kind: "count", label: t(lang, "directory.col_organizations") },

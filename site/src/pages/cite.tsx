@@ -31,9 +31,8 @@ export async function citePage(c: Context<AppEnv>): Promise<Response> {
     <Layout lang={lang} title={t(lang, "cite.title")} dataAsOf={dataAsOf} seo={pageSeo("cite", lang)}>
       <PageHead lang={lang} title={t(lang, "cite.title")} lead={t(lang, "citepage.lead", { date: dataAsOf })} />
       <div class="cite-page doc" data-copy={t(lang, "citepage.copy")} data-copied={t(lang, "citepage.copied")}>
-        <p>{t(lang, "citepage.page_note")}</p>
-
         <h2 id="website">{t(lang, "citepage.website")}</h2>
+        <p>{t(lang, "citepage.page_note")}</p>
         {websiteCitations(lang, dataAsOf, accessed).map(({ style, body }) => (
           <Block id={style} label={STYLE_LABEL[style]} body={body} lang={lang} />
         ))}

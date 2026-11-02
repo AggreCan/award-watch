@@ -38,8 +38,8 @@ export interface Seo {
 type Both = Record<Lang, string>;
 
 export type PageKey =
-  | "home" | "tenders" | "tenders_new" | "awards" | "expiring" | "organizations" | "buyers" | "categories" | "rankings" | "feeds"
-  | "watchlist" | "methodology" | "data" | "support" | "cite" | "corrections";
+  | "home" | "tenders" | "tenders_new" | "awards" | "expiring" | "organizations" | "buyers" | "segments" | "rankings" | "feeds"
+  | "watchlist" | "methodology" | "data" | "support" | "cite" | "corrections" | "about" | "terms" | "privacy";
 
 // `name` is the result-list name, either written here or, where the page's own
 // heading already reads well in a result list, its dictionary key.
@@ -82,7 +82,7 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
   },
   expiring: {
     path: "/expiring",
-    name: { en: "Federal Contracts Ending Soon", fr: "Contrats fédéraux arrivant à échéance" },
+    name: { en: "Federal Contracts Ending Soon", fr: "Contrats fédéraux prenant fin bientôt" },
     description: {
       en: "Federal contracts ending within 3, 6 or 12 months: organization, buyer, value, competition and amendments, each listed once and linked to its record.",
       fr: "Contrats fédéraux qui prennent fin d'ici 3, 6 ou 12 mois : organisation, acheteur, valeur, concurrence et modifications, chacun lié à son dossier.",
@@ -104,9 +104,9 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
       fr: "Les appels d'offres ouverts, les attributions de contrats, les contrats publiés et les subventions de chaque institution fédérale, source par source.",
     },
   },
-  categories: {
-    path: "/categories",
-    name: { en: "Federal Procurement by Category", fr: "Approvisionnement fédéral par catégorie" },
+  segments: {
+    path: "/segments",
+    name: { en: "Federal Procurement by Segment", fr: "Approvisionnement fédéral par segment" },
     description: {
       en: "The 57 UNSPSC segments: open tenders, contract awards this year and the organizations that received them.",
       fr: "Les 57 segments de l'UNSPSC : appels d'offres ouverts, attributions de contrats de l'année et organisations qui les ont reçues.",
@@ -124,8 +124,8 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/feeds",
     name: "feeds.title",
     description: {
-      en: "Atom feeds of new tender notices and contract awards: all of Canada, by category, by province and by buyer.",
-      fr: "Fils Atom des nouveaux avis d'appel d'offres et d'attribution : tout le Canada, par catégorie, par province et par acheteur.",
+      en: "Atom feeds of new tender notices and award notices: all of Canada, by segment, by province and by buyer.",
+      fr: "Fils Atom des nouveaux avis d'appel d'offres et d'attribution : tout le Canada, par segment, par province et par acheteur.",
     },
   },
   watchlist: {
@@ -134,6 +134,30 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     description: {
       en: "Follow organizations from this browser and see which have new records since your last visit. Nothing is sent to the site.",
       fr: "Suivez des organisations à partir de ce navigateur et voyez lesquelles ont de nouveaux dossiers depuis votre dernière visite. Rien n'est transmis au site.",
+    },
+  },
+  about: {
+    path: "/about",
+    name: "about.title",
+    description: {
+      en: "Who publishes Award Watch, what it holds, how it counts, and how to reach it.",
+      fr: "Qui publie Award Watch, ce qu'il contient, comment il calcule et comment le joindre.",
+    },
+  },
+  terms: {
+    path: "/terms",
+    name: { en: "Terms of Use", fr: "Conditions d'utilisation" },
+    description: {
+      en: "The terms for reading Award Watch and reusing its files under the Open Government Licence, Canada.",
+      fr: "Les conditions de lecture d'Award Watch et de réutilisation de ses fichiers sous la Licence du gouvernement ouvert, Canada.",
+    },
+  },
+  privacy: {
+    path: "/privacy",
+    name: { en: "Privacy", fr: "Confidentialité" },
+    description: {
+      en: "What Award Watch keeps about a visit: aggregate counts with no address, one language cookie, and what the forms store.",
+      fr: "Ce qu'Award Watch conserve d'une visite : des comptes agrégés sans adresse, un témoin de langue et ce que conservent les formulaires.",
     },
   },
   methodology: {
@@ -470,13 +494,13 @@ export function buyerSeo(b: Buyer, lang: Lang, crumbs: { name: string; path?: st
   };
 }
 
-export function categorySeo(cat: Category, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
-  const name = segmentLabel(lang, cat.code);
+export function segmentSeo(seg: Category, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
+  const name = segmentLabel(lang, seg.code);
   return {
-    path: `/categories/${cat.code}`,
+    path: `/segments/${seg.code}`,
     title: pageTitle(name),
     socialTitle: name,
-    description: clip(t(lang, "category.description", { name, code: cat.code, n: fmtInt(cat.open_tenders.length, lang) })),
+    description: clip(t(lang, "segment.description", { name, code: seg.code, n: fmtInt(seg.open_tenders.length, lang) })),
     jsonLd: [breadcrumbJsonLd(crumbs)],
   };
 }

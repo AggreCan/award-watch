@@ -35,6 +35,11 @@ export function newestFirst(rows: readonly AwardRow[]): AwardRow[] {
   });
 }
 
+// Whether any row is dated after the data date (the source's own dates).
+function lateDates(rows: readonly AwardRow[], today: string): boolean {
+  return rows.some((r) => (r.awarded ?? "").slice(0, 10) > today);
+}
+
 export function awardYears(dataAsOf: string | null): number[] {
   const last = Number(todayOf(dataAsOf).slice(0, 4));
   const out: number[] = [];
@@ -77,13 +82,18 @@ export async function awardsPage(c: Context<AppEnv>): Promise<Response> {
   const pages = Math.max(1, Math.ceil(sorted.length / AWARD_PAGE_SIZE));
   const n = Math.min(pageOf(c) ?? 1, pages);
   const shown = sorted.slice((n - 1) * AWARD_PAGE_SIZE, n * AWARD_PAGE_SIZE);
+  const today = todayOf(stats.data_as_of);
+  const year = today.slice(0, 4);
   return page(
     c,
     <Layout lang={lang} title={t(lang, "awards.title")} dataAsOf={stats.data_as_of} active="/awards"
       seo={pageSeo("awards", lang, c.req.query("page") !== undefined ? { noindex: true } : {})} head={<FeedLinks lang={lang} />}>
       <PageHead lang={lang} title={t(lang, "awards.title")} lead={t(lang, "awards.lead", { n: fmtInt(rows.length, lang) })}
-        actions={<a href={`/data/${nationalFeedPath("awards")}`} class="btn">{t(lang, "feeds.link_title", { event: t(lang, "feeds.ev.awards") })}</a>}>
-        <p class="page-note">{t(lang, "awards.value_note")}</p>
+        actions={<>
+          <a href={`/downloads/awards-${year}.csv`} class="btn">{t(lang, "awards.download", { year })}</a>
+          <a href={`/data/${nationalFeedPath("awards")}`} class="btn">{t(lang, "feeds.button_awards")}</a>
+        </>}>
+        <p class="page-note">{t(lang, "awards.value_note")}{lateDates(sorted, today) ? ` ${t(lang, "common.dates_as_published")}` : ""}</p>
       </PageHead>
       <YearLinks years={awardYears(stats.data_as_of)} current={null} lang={lang} />
       <Panel title={t(lang, "awards.recent")} count={fmtInt(rows.length, lang)}
@@ -122,10 +132,12 @@ export async function awardsYearPage(c: Context<AppEnv>, raw: string): Promise<R
       <PageHead lang={lang} crumbs={crumbs} title={title}
         lead={tn(lang, "awards.year_count_one", "awards.year_count_many", idx.rows, { n: fmtInt(idx.rows, lang), year })}
         actions={<a href={`/downloads/awards-${year}.csv`} class="btn">{t(lang, "awards.download", { year })}</a>}>
-        <p class="page-note">{t(lang, "awards.value_note")}</p>
+        <p class="page-note">
+          {t(lang, "awards.value_note")}{lateDates(shown, todayOf(stats.data_as_of)) ? ` ${t(lang, "common.dates_as_published")}` : ""}
+        </p>
       </PageHead>
       <YearLinks years={years} current={year} lang={lang} />
-      <Panel title={String(year)} count={fmtInt(idx.rows, lang)}
+      <Panel title={t(lang, "awards.year_panel", { year })} count={fmtInt(idx.rows, lang)}
         foot={<>{pager(path, n, pages, lang)}<SourceLine lang={lang} source="awards" /></>}>
         {shown.length ? <AwardTable lang={lang} rows={shown} /> : <p class="muted">{t(lang, "awards.none")}</p>}
       </Panel>

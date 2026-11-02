@@ -70,6 +70,8 @@ const prose = (cents: number, lang: Lang) =>
 const months = (lang: Lang, n: number) => tn(lang, "support.months_one", "support.months_many", n, { n });
 const cents = (lang: Lang, n: number) => tn(lang, "support.cents_one", "support.cents_many", n, { n });
 
+// A tier that costs nothing needs no funding; its status says so rather
+// than "not yet funded".
 const TIER_STATUS: Record<TierStatus, Key> = {
   Funded: "support.status.funded",
   "Partly funded": "support.status.partly",
@@ -164,8 +166,10 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
               since: WORKERS_PAID_SINCE,
               workersUsd: fmtUsd(WORKERS_PAID_USD_PER_MONTH, lang),
               workers: money(WORKERS_PLAN_CENTS_PER_MONTH),
-              github: money(ACTIONS_CENTS_PER_MONTH),
-            })}
+            })}{" "}
+            {ACTIONS_CENTS_PER_MONTH > 0
+              ? t(lang, "support.costs_github", { github: money(ACTIONS_CENTS_PER_MONTH) })
+              : t(lang, "support.costs_github_free")}
           </p>
 
           <h2 id="tiers">{t(lang, "support.toc_tiers")}</h2>
@@ -179,7 +183,7 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
           </p>
           <p class="muted small">{t(lang, "support.tiers_note")}</p>
           <div class="table-wrap bordered">
-            <Table restack={false} cols={[
+            <Table cols={[
               { kind: "label", label: t(lang, "support.col_tier") },
               { kind: "value", label: t(lang, "support.col_monthly_cost") },
               { kind: "main", label: t(lang, "support.col_pays_for") },
@@ -189,10 +193,10 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
               <tbody>
                 {tiers.map((tier) => (
                   <tr data-tier={tier.id}>
-                    <td>{tierName(lang, tier.id)}</td>
-                    <td class="mono num">{money(tier.costCents)}</td>
-                    <td>{tierUnlocks(lang, tier.id)}</td>
-                    <td class="tier-funding">
+                    <td data-label={t(lang, "support.col_tier")}>{tierName(lang, tier.id)}</td>
+                    <td data-label={t(lang, "support.col_monthly_cost")} class="mono num">{money(tier.costCents)}</td>
+                    <td data-label={t(lang, "support.col_pays_for")}>{tierUnlocks(lang, tier.id)}</td>
+                    <td data-label={t(lang, "support.col_against")} class="tier-funding">
                       <span class="bar-track">
                         <span class="bar-fill" style={`width:${tier.width}%`}></span>
                       </span>
@@ -203,7 +207,9 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
                         })}
                       </span>
                     </td>
-                    <td class="tier-status">{t(lang, TIER_STATUS[tier.status])}</td>
+                    <td data-label={t(lang, "col.status")} class="tier-status">
+                      {t(lang, tier.costCents === 0 ? "support.status.no_cost" : TIER_STATUS[tier.status])}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -263,7 +269,7 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
 
           <h2 id="transparency">{t(lang, "support.toc_transparency")}</h2>
           <div class="table-wrap bordered">
-            <Table restack={false} cols={[
+            <Table cols={[
               { kind: "main", label: t(lang, "support.col_quarter") },
               { kind: "value", label: t(lang, "support.col_monthly_cost") },
               { kind: "value", label: t(lang, "support.col_received") },
@@ -278,11 +284,11 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
                 ) : (
                   sup.ledger.map((r) => (
                     <tr>
-                      <td class="mono">{lang === "fr" ? r.quarter.replace(" Q", " T") : r.quarter}</td>
-                      <td class="mono num">{money(r.monthlyCostCents)}</td>
-                      <td class="mono num">{money(r.receivedCents)}</td>
-                      <td class="mono num">{money(r.spentCents)}</td>
-                      <td class="mono num">{money(r.reserveCents)}</td>
+                      <td data-label={t(lang, "support.col_quarter")} class="mono">{lang === "fr" ? r.quarter.replace(" Q", " T") : r.quarter}</td>
+                      <td data-label={t(lang, "support.col_monthly_cost")} class="mono num">{money(r.monthlyCostCents)}</td>
+                      <td data-label={t(lang, "support.col_received")} class="mono num">{money(r.receivedCents)}</td>
+                      <td data-label={t(lang, "support.col_spent")} class="mono num">{money(r.spentCents)}</td>
+                      <td data-label={t(lang, "support.col_reserve")} class="mono num">{money(r.reserveCents)}</td>
                     </tr>
                   ))
                 )}

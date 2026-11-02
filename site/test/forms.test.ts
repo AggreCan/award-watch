@@ -26,14 +26,14 @@ describe("forms", () => {
     const res = await app.request("/organizations/org-a000000001/respond", { headers: NAVIGATE }, testEnv());
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Respond as the Organization");
+    expect(html).toContain("Respond as This Organization");
     expect(html).toContain('<a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a>');
     expect(html).toContain('<meta name="robots" content="noindex"');
     const unknown = await app.request("/organizations/org-ffffffffff/respond", { headers: NAVIGATE }, testEnv());
     expect(unknown.status).toBe(404);
   });
 
-  it("stores a valid response unpublished, with its optional contact", async () => {
+  it("stores a valid response unpublished, with its contact", async () => {
     const res = await post("/organizations/org-a000000002/respond", { text: STATEMENT, contact: "office@example.invalid" });
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("Thank You");
@@ -60,11 +60,11 @@ describe("forms", () => {
   });
 
   it("stores a response posted with no Fetch Metadata and no Referer: the POST is not checked", async () => {
-    const res = await post("/organizations/org-a000000001/respond", { text: STATEMENT });
+    const res = await post("/organizations/org-a000000001/respond", { text: STATEMENT, contact: "unchecked@example.invalid" });
     expect(res.status).toBe(200);
     const row = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM organization_responses WHERE organization_id = ? AND contact IS NULL",
-    ).bind("org-a000000001").first<{ n: number }>();
+      "SELECT COUNT(*) AS n FROM organization_responses WHERE organization_id = ? AND contact = ?",
+    ).bind("org-a000000001", "unchecked@example.invalid").first<{ n: number }>();
     expect(row?.n).toBe(1);
   });
 
@@ -144,7 +144,7 @@ describe("the response form opens in a browser only", () => {
     const { points, dataset } = recorder();
     const res = await open(FORM, NAVIGATE, dataset);
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("Respond as the Organization");
+    expect(await res.text()).toContain("Respond as This Organization");
     expect(points[0].blobs?.[7]).toBe("human");
   });
 

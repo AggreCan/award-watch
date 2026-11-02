@@ -49,10 +49,11 @@ describe("a converted tender notice", () => {
     expect(html).toContain("/ EN578-123456/A:1</nav>");
     expect(html).toContain('<link rel="canonical" href="https://awardwatch.ca/tenders/en578-123456-a-1"');
     // The notice link is built from the reference as published.
-    expect(html).toContain('href="https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/en578-123456/a%3A1"');
+    // CanadaBuys drops the colon from the address (EN578-123456/A:1).
+    expect(html).toContain('href="https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/en578-123456/a1"');
     expect(html).not.toContain("tender-notice/en578-123456-a-1");
     const fr = await text("/tenders/en578-123456-a-1?lang=fr");
-    expect(fr).toContain('href="https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/en578-123456/a%3A1"');
+    expect(fr).toContain('href="https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/en578-123456/a1"');
     // A related award keeps the site's own link and shows nothing else.
     expect(html).toContain('<a href="/awards/23240-220799-001-im">Marine fuel, call-up 1</a>');
     const moved = await get("/tenders/EN578-123456-A-1");
@@ -79,7 +80,7 @@ describe("a converted award and contract history record", () => {
     const html = await text("/awards/23240-220799-001-im");
     expect(html).toContain('<span class="mono id">23240-220799/001/IM</span>');
     expect(html).toContain('href="https://canadabuys.canada.ca/en/tender-opportunities/award-notice/23240-220799/001/im"');
-    expect(html).toContain('<a href="/tenders/en578-123456-a-1" class="btn">The tender notice</a>');
+    expect(html).toContain('<a href="/tenders/en578-123456-a-1" class="btn">Open the tender notice</a>');
     const fr = await text("/awards/23240-220799-001-im?lang=fr");
     expect(fr).toContain('href="https://achatscanada.canada.ca/fr/occasions-de-marche/avis-d-attribution/23240-220799/001/im"');
   });
@@ -125,7 +126,7 @@ describe("a reference as published that does not read", () => {
       expect((await get("/awards/23240-220799-001-im", env2)).status, JSON.stringify(bad)).toBe(404);
       // A list row that does not read empties its list, as any other bad row does.
       const home = await text("/", statsWith({ new_tenders: [{ ...tenderRow, reference_published: bad }] }));
-      expect(home).toContain("No new notices in the last refresh.");
+      expect(home).toContain("No new notice in the last refresh.");
     }
   });
 });

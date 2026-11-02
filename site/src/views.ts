@@ -46,9 +46,11 @@ import { DOWNLOADS, YEARLY_DOWNLOAD } from "./pages/data";
 
 export type Kind = "page" | "api" | "download" | "form" | "hook" | "file" | "feed" | "other";
 
+// /categories (and /categories/:nn below) now answer with a redirect to
+// /segments; they stay so the counts of old links keep their route.
 const PAGES = new Set([
-  "/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/categories", "/rankings",
-  "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections",
+  "/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments", "/categories", "/rankings",
+  "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections", "/about", "/terms", "/privacy",
 ]);
 const API_FIXED = new Set(["/api/stats"]);
 const DOWNLOAD_FILES = new Set(DOWNLOADS.map((d) => d.file));
@@ -67,6 +69,7 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   if (/^\/organizations\/[^/]+$/.test(path)) return { route: "/organizations/:id", kind: "page" };
   if (/^\/organizations\/[^/]+\/respond$/.test(path)) return { route: "/organizations/:id/respond", kind: method === "POST" ? "form" : "page" };
   if (/^\/buyers\/[^/]+$/.test(path)) return { route: "/buyers/:id", kind: "page" };
+  if (/^\/segments\/[^/]+$/.test(path)) return { route: "/segments/:nn", kind: "page" };
   if (/^\/categories\/[^/]+$/.test(path)) return { route: "/categories/:nn", kind: "page" };
   if (/^\/rankings\/[^/]+$/.test(path)) return { route: "/rankings/:year", kind: "page" };
   if (path.startsWith("/api/")) {

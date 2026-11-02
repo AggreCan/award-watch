@@ -98,17 +98,28 @@
     d.setUTCDate(d.getUTCDate() + n);
     return d.toISOString().slice(0, 10);
   }
+  // As closingText() in src/pages/shared.tsx: the date, the time in the
+  // page's language ("14:00", "14 h 00") and the zone when the value has one.
   function closingText(c) {
-    var m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?/.exec(c || "");
-    return m ? (m[2] ? m[1] + " " + m[2] : m[1]) : (c || "");
+    var m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2}|[A-Za-z][A-Za-z ()\/_-]*)?)?/.exec(c || "");
+    if (!m) return c || "";
+    if (!m[2]) return m[1];
+    var zone = m[4] ? " " + (m[4] === "Z" ? "UTC" : m[4].trim()) : "";
+    return m[1] + " " + tx("common.time", { hh: m[2], mm: m[3] }) + zone;
+  }
+  // A notice whose closing day is before the data date: the file still lists
+  // it as open, but its closing date has passed.
+  function passed(closing) {
+    var day = (closing || "").slice(0, 10);
+    return !!day && day < TODAY;
   }
   function shownRef(r) {
     return typeof r.reference_published === "string" && r.reference_published ? r.reference_published : r.reference;
   }
   // The notice on CanadaBuys in the page's language, as tenderNoticeUrl() in
-  // src/pages/shared.tsx builds it.
+  // src/pages/shared.tsx builds it: lower case, colons dropped, slashes kept.
   function noticeUrl(published) {
-    var ref = encodeURIComponent(String(published).toLowerCase()).replace(/%2F/gi, "/");
+    var ref = encodeURIComponent(String(published).toLowerCase().replace(/:/g, "")).replace(/%2F/gi, "/");
     return LANG === "fr"
       ? "https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/" + ref
       : "https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/" + ref;
@@ -192,7 +203,12 @@
         return x < y ? 1 : x > y ? -1 : byReference(a, b);
       });
     } else {
+      // Soonest first; a notice whose closing date has passed, then one with
+      // no closing date, go last (filterTenders() orders them the same way).
+      var rank = function (r) { return !r.closing ? 2 : passed(r.closing) ? 1 : 0; };
       out.sort(function (a, b) {
+        var ra = rank(a), rb = rank(b);
+        if (ra !== rb) return ra - rb;
         var x = a.closing || "￿", y = b.closing || "￿";
         return x < y ? -1 : x > y ? 1 : byReference(a, b);
       });
@@ -207,8 +223,8 @@
     return !!day && day >= TODAY && day <= addDays(TODAY, SOON_DAYS);
   }
   function badge(closing) {
-    var s = soon(closing);
-    return el("span", "badge badge-" + (s ? "closing" : "open"), tx(s ? "status.closing" : "status.open"));
+    var state = passed(closing) ? "closed" : soon(closing) ? "closing" : "open";
+    return el("span", "badge badge-" + state, tx("status." + state));
   }
   function cell(tr, label, cls) {
     var td = el("td", cls);
@@ -238,7 +254,8 @@
     (r.segments || []).forEach(function (code) {
       notice.appendChild(document.createTextNode(" "));
       var chip = el("a", "chip", code);
-      chip.href = "/categories/" + code;
+      chip.href = "/segments/" + code;
+      chip.setAttribute("aria-label", tx("segment.code", { code: code }));
       if (LABELS.segments && LABELS.segments[code]) chip.title = LABELS.segments[code];
       notice.appendChild(chip);
     });
@@ -487,7 +504,10 @@
     var text = pick(d.description_en, d.description_fr);
     if (text) {
       var box = el("div", "detail-text");
-      box.appendChild(el("h4", null, tx("tender.description_heading")));
+      // The description in the other language says so after the heading.
+      var mine = LANG === "fr" ? d.description_fr : d.description_en;
+      var other = !(mine && String(mine).trim());
+      box.appendChild(el("h4", null, tx("tender.description_heading") + (other ? " " + tx("common.other_lang_only") : "")));
       var first = String(text).split(/\n{2,}/)[0];
       var cut = first.length > DESCRIPTION_CHARS || first.length < String(text).length;
       box.appendChild(el("p", null, first.length > DESCRIPTION_CHARS ? first.slice(0, DESCRIPTION_CHARS).replace(/\s+\S*$/, "") + "…" : first));

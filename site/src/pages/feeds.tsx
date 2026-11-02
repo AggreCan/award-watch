@@ -86,6 +86,7 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
   const expiring = feeds.filter((f) => f.event === EXPIRING_EVENT);
   const kinds: readonly FeedEvent[] = expiring.length ? INDEX_EVENTS : FEED_EVENTS;
   const nationalExpiring = expiring.find((f) => f.scope === "canada");
+  const segmentCount = new Set(feeds.filter((f) => f.scope === "segment").map((f) => f.key)).size;
 
   // One table per scope kind: a row per scope, a column per event.
   const ScopeTable = ({ kind, head }: { kind: ScopeKind; head: Key }) => {
@@ -158,8 +159,6 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
           {toc.map(([id, key]) => <a href={`#${id}`}>{t(lang, key)}</a>)}
         </nav>
         <div class="doc">
-          <p>{t(lang, "feeds.privacy")}</p>
-
           <h2 id="kinds">{t(lang, "feeds.toc_kinds")}</h2>
           <ul>
             {kinds.map((e) => (
@@ -194,7 +193,14 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
 
           <h2 id="segment">{t(lang, "feeds.toc_segment")}</h2>
           {pattern("segment/<nn>")}
-          <ScopeTable kind="segment" head="col.segment" />
+          {/* 57 rows: on a phone the table starts folded (public/pager.js
+              closes it there); elsewhere, and without the script, it is open. */}
+          {segmentCount ? (
+            <details class="phone-fold" open data-phone-closed="">
+              <summary class="btn">{t(lang, "feeds.segments_show", { n: segmentCount })}</summary>
+              <ScopeTable kind="segment" head="col.segment" />
+            </details>
+          ) : <ScopeTable kind="segment" head="col.segment" />}
 
           <h2 id="province">{t(lang, "feeds.toc_prov")}</h2>
           {pattern("prov/<code>")}
@@ -205,6 +211,7 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
           <ScopeTable kind="buyer" head="col.buyer" />
 
           <h2 id="subscribe">{t(lang, "feeds.toc_subscribe")}</h2>
+          <p>{t(lang, "feeds.privacy")}</p>
           <ul>
             <li>{t(lang, "feeds.sub_reader")}</li>
             <li>{tj(lang, "feeds.sub_slack", { command: <span class="mono id">/feed subscribe</span> })}</li>
@@ -213,6 +220,7 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
           <p>{tj(lang, "feeds.watch_note", { watchlist: <a href="/watchlist">{t(lang, "feeds.watch_link")}</a> })}</p>
         </div>
       </div>
+      <script src="/pager.js" defer></script>
     </Layout>,
   );
 }

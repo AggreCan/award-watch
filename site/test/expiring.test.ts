@@ -45,28 +45,28 @@ describe("/expiring", () => {
     // By buyer and by segment, each count a link to the 12-month list filtered.
     expect(html).toContain('<a href="/buyers/dnd-mdn">National Defence</a>');
     expect(html).toContain('<a href="/expiring/12m?buyer=dnd-mdn">3</a>');
-    expect(html).toContain('<a href="/categories/43">43 Information Technology Broadcasting and Telecommunications</a>');
+    expect(html).toContain('<a href="/segments/43">43 Information Technology Broadcasting and Telecommunications</a>');
     expect(html).toContain('<a href="/expiring/12m?segment=43">3</a>');
     // The CSV and the feeds.
-    expect(html).toContain('<a href="/downloads/expiring-12m.csv" class="btn">Download every contract ending within 12 months (CSV)</a>');
+    expect(html).toContain('<a href="/downloads/expiring-12m.csv" class="btn">Download contracts ending within 12 months (CSV)</a>');
     expect(html).toContain('<a href="/data/feeds/canada/expiring.xml" class="btn">Atom feed of contracts entering the 3-month window</a>');
-    expect(html).toContain('<a href="/feeds#expiring" class="btn">Feeds by buyer and by category</a>');
+    expect(html).toContain('<a href="/feeds#expiring">Feeds by buyer and by segment</a>');
     expect(head(html)).toContain('<link rel="alternate" type="application/atom+xml" title="Contracts ending within 3 months (Atom feed)" href="/data/feeds/canada/expiring.xml"/>');
     expect(head(html)).toContain('<link rel="canonical" href="https://awardwatch.ca/expiring"/>');
-    expect(html).toContain('<a class="rail-item" href="/expiring" aria-current="page"><span class="rail-label">Ending within 3 months</span>');
+    expect(html).toContain('<a class="rail-item" href="/expiring" aria-current="page"><span class="rail-label">Contracts ending</span>');
     expect(html).not.toContain(EM_DASH);
     expect(html.replace(/<[^>]+>/g, " ")).not.toMatch(ADVICE);
   });
 
   it("speaks French", async () => {
     const html = nbsp(await text("/expiring?lang=fr"));
-    expect(html).toContain("<h1>Contrats arrivant à échéance</h1>");
+    expect(html).toContain("<h1>Contrats prenant fin bientôt</h1>");
     expect(html).toContain('<span class="tile-label">D’ici 3 mois</span><span class="tile-value">3</span><span class="tile-note">Valeur : 4,9 M$</span>');
     expect(html).toContain("Particulier, nom non divulgué");
     expect(html).toContain("<h2>Fin d’ici 3 mois</h2>");
     expect(html).toContain('<a href="/buyers/dnd-mdn">Défense nationale</a>');
-    expect(html).toContain("Télécharger tous les contrats prenant fin d’ici 12 mois (CSV)");
-    expect(html).toContain('<a class="rail-item" href="/expiring" aria-current="page"><span class="rail-label">Fin d’ici 3 mois</span>');
+    expect(html).toContain("Télécharger les contrats prenant fin d’ici 12 mois (CSV)");
+    expect(html).toContain('<a class="rail-item" href="/expiring" aria-current="page"><span class="rail-label">Contrats prenant fin</span>');
   });
 
   it("leaves out the feed links until the feed index lists them, and says so when the 3-month page is missing", async () => {
@@ -118,8 +118,8 @@ describe("/expiring/:window", () => {
     const fr = await text("/expiring/3m?lang=fr");
     expect(fr).toContain('<td data-label="Contrat"><a href="https://search.open.canada.ca/contracts/?search_text=C-2026-0042" rel="nofollow noopener">Entretien de terminaux de communication par satellite</a>');
     // Organization, withheld wording, buyer, value, competition.
-    expect(html).toContain('<td data-label="Organization"><a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a></td>');
-    expect(html).toContain('<td data-label="Organization"><span class="muted">Individual, name withheld</span></td>');
+    expect(html).toContain('<td data-label="Supplier"><a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a></td>');
+    expect(html).toContain('<td data-label="Supplier"><span class="muted">Individual, name withheld</span></td>');
     // The buyer shows from 1280 px; the record links and amendments and growth from 1600 px.
     expect(html).toContain('<td data-label="Buyer" class="mdh"><a href="/buyers/dfo-mpo">Fisheries and Oceans Canada</a></td>');
     expect(html).toContain('<th class="k-buyer mdh">Buyer</th>');
@@ -138,8 +138,8 @@ describe("/expiring/:window", () => {
     expect(html).toContain('<a href="https://open.canada.ca/data/en/dataset/4fe645a1-ffcd-40c1-9385-2c771be956a4" rel="noopener">Contract history dataset</a>');
     expect(html).toContain('<a href="https://search.open.canada.ca/contracts/?search_text=C-2026-0042" rel="nofollow noopener">Contracts search</a>');
     // The tender link only where the row names a tender.
-    expect(html.match(/>The tender notice</g)?.length).toBe(1);
-    expect(html).toContain('<a href="/tenders/cb-100-10000001">The tender notice</a>');
+    expect(html.match(/>Tender notice</g)?.length).toBe(1);
+    expect(html).toContain('<a href="/tenders/cb-100-10000001">Tender notice</a>');
     expect(html).toContain("Page 1 of 1");
     expect(head(html)).toContain('<link rel="canonical" href="https://awardwatch.ca/expiring/3m"/>');
     expect(head(html)).not.toContain('name="robots"');
@@ -159,7 +159,7 @@ describe("/expiring/:window", () => {
     expect(html).toContain(">Aucune</td>");
     expect(html).toContain('href="https://achatscanada.canada.ca/fr/occasions-de-marche/avis-d-attribution/cb-400-40000004"');
     expect(html).toContain('href="https://open.canada.ca/data/fr/dataset/4fe645a1-ffcd-40c1-9385-2c771be956a4"');
-    expect(html).toContain(">L’avis d’appel d’offres</a>");
+    expect(html).toContain(">Avis d’appel d’offres</a>");
   });
 
   it("filters the loaded page from the URL and says so", async () => {
@@ -178,7 +178,7 @@ describe("/expiring/:window", () => {
     const all = ["cb-400-40000004", "W8472-000777", "C-2026-0042"];
     for (const [query, want] of cases) {
       const html = await text(`/expiring/3m${query}`);
-      expect(html, query).toContain("The filters apply to the 3 contracts on this page (page 1 of 1); each other page is filtered when you open it.");
+      expect(html, query).toContain("The filters apply to the 3 contracts on this page (page 1 of 1). Each other page is filtered when you open it.");
       expect(html, query).toContain(want.length === 1 ? "1 contract on this page matches." : `${want.length} contracts on this page match.`);
       for (const ref of all) {
         if (want.includes(ref)) expect(html, `${query} keeps ${ref}`).toContain(`<span class="mono id muted">${ref}</span>`);
@@ -274,12 +274,12 @@ describe("contracts ending on buyer pages and profiles", () => {
     expect(section).toContain('<a href="/expiring/12m?buyer=pwgsc-tpsgc">This buyer&#39;s contracts in the 12-month list</a>');
     // The buyer is the page's own, so the table leaves the column out.
     expect(section).not.toMatch(/<th class="k-buyer[^"]*">Buyer<\/th>/);
-    expect(section).toContain('<th class="k-org">Organization</th>');
+    expect(section).toContain('<th class="k-org">Supplier</th>');
     // The same order as the full list: amendments and growth and the record links from 1600 px.
     expect(section).toContain('<th class="k-amend xlh">');
     expect(section).toContain('<th class="k-record xlh">Record</th>');
     const fr = nbsp(await text("/buyers/pwgsc-tpsgc?lang=fr"));
-    expect(fr).toContain('<h2 id="expiring">Contrats arrivant à échéance</h2>');
+    expect(fr).toContain('<h2 id="expiring">Contrats prenant fin bientôt</h2>');
     expect(fr).toContain("1 contrat prend fin dans les 12 mois suivant la date des données. Valeur : 312 500 $.");
     // Older files carry no radar: no section.
     const buyer = clone(FILES["buyers/pwgsc-tpsgc.json"]) as Record<string, unknown>;
@@ -322,7 +322,7 @@ describe("home, feeds, methodology and the downloads", () => {
     const html = await text("/");
     expect(html).toContain('<a class="tile" href="/expiring/3m"><span class="tile-label">Ending within 3 months</span><span class="tile-value">3</span>');
     // After the award notices tile.
-    expect(html.indexOf('href="/expiring/3m"')).toBeGreaterThan(html.indexOf('<span class="tile-label">Award notices</span>'));
+    expect(html.indexOf('<a class="tile" href="/expiring/3m"')).toBeGreaterThan(html.indexOf('<span class="tile-label">Award notices</span>'));
     expect(nbsp(await text("/?lang=fr"))).toContain('<span class="tile-label">Fin d’ici 3 mois</span>');
     for (const assets of [assetsWithout("expiring/index.json"), makeFakeAssets({}, { "expiring/index.json": "{" })]) {
       const res = await get("/", testEnv(assets));
@@ -346,7 +346,8 @@ describe("home, feeds, methodology and the downloads", () => {
     expect(prov).not.toContain("Contracts ending");
     const feeds = clone(FILES["feeds/index.json"]) as { feeds: { event: string }[] };
     feeds.feeds = feeds.feeds.filter((f) => f.event !== "expiring");
-    const none = await text("/feeds", testEnv(makeFakeAssets({}, { "feeds/index.json": feeds })));
+    // The page itself, past the rail, whose overview names the 12-month list.
+    const none = (await text("/feeds", testEnv(makeFakeAssets({}, { "feeds/index.json": feeds })))).replace(/<nav class="rail"[\s\S]*?<\/nav>/, "");
     expect(none).not.toContain("Contracts ending");
     expect(none).not.toContain("contracts ending");
     expect(none).not.toContain('id="expiring"');
@@ -357,14 +358,14 @@ describe("home, feeds, methodology and the downloads", () => {
     const html = await text("/methodology");
     expect(html).toContain('<a href="#expiring">Contracts Ending Soon</a>');
     expect(html).toContain('<h2 id="expiring">Contracts Ending Soon</h2>');
-    expect(html).toContain("whose newest version has an end date on or after the data date and within 12 months of it, and whose status is not cancelled");
+    expect(html).toContain("Its newest version must have an end date on or after the data date and within 12 months of it.");
     expect(html).toContain("It prefers the CanadaBuys award notice, which links the solicitation, then PSPC contract history, then the published contract.");
-    expect(html).toContain("end date (within 3 days) and value (within 1 percent) all match a kept row");
+    expect(html).toContain("end date (within 3 days) and value (within 1%) all match a kept record");
     expect(html).toContain("The windows are cumulative: within 3, 6 and 12 months of the data date.");
     expect(html).toContain("Value growth is the newest total value over the original amount, minus one");
     expect(html.replace(/<[^>]+>/g, " ")).not.toMatch(ADVICE);
     const fr = nbsp(await text("/methodology?lang=fr"));
-    expect(fr).toContain('<h2 id="expiring">Contrats arrivant à échéance</h2>');
+    expect(fr).toContain('<h2 id="expiring">Contrats prenant fin bientôt</h2>');
     expect(fr).toContain("Les périodes sont cumulatives : d’ici 3, 6 et 12 mois après la date des données.");
   });
 

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { html } from "hono/html";
 import { secureHeaders } from "hono/secure-headers";
@@ -14,8 +14,9 @@ import { langFrom, t, tj } from "./i18n";
 import { Layout, PageHead, page } from "./layout";
 import { awardsPage, awardsYearPage } from "./pages/awards";
 import { buyerPage, buyersIndex } from "./pages/buyers";
-import { categoriesIndex, categoryPage } from "./pages/categories";
+import { segmentPage, segmentsIndex } from "./pages/segments";
 import { citePage } from "./pages/cite";
+import { aboutPage, privacyPage, termsPage } from "./pages/docs";
 import { contractPage } from "./pages/contract";
 import { DOWNLOADS, YEARLY_DOWNLOAD, dataPage } from "./pages/data";
 import { directoryPage, organizationsIndex } from "./pages/directory";
@@ -33,6 +34,12 @@ import { watchlistPage } from "./pages/watchlist";
 import { llmsTxt, robotsTxt, sitemapFile } from "./seo";
 
 const app = new Hono<AppEnv>();
+
+// A permanent move to another path on the site, with the query string kept.
+function movedTo(c: Context<AppEnv>, path: string): Response {
+  c.header("Cache-Control", "public, max-age=300");
+  return c.redirect(`${path}${new URL(c.req.url).search}`, 301);
+}
 
 // The pages load nothing from third parties, and the policy says exactly that.
 app.use(
@@ -104,8 +111,12 @@ app.get("/organizations/:id/respond", respondPage);
 app.post("/organizations/:id/respond", respondSubmit);
 app.get("/buyers", buyersIndex);
 app.get("/buyers/:id", buyerPage);
-app.get("/categories", categoriesIndex);
-app.get("/categories/:nn", categoryPage);
+app.get("/segments", segmentsIndex);
+app.get("/segments/:nn", segmentPage);
+// The UNSPSC segment pages were /categories until "category" was kept for
+// the CanadaBuys field alone; old links move for good, the query kept.
+app.get("/categories", (c) => movedTo(c, "/segments"));
+app.get("/categories/:nn", (c) => movedTo(c, `/segments/${encodeURIComponent(c.req.param("nn") ?? "")}`));
 app.get("/rankings", rankingsPage);
 app.get("/rankings/:year", rankingsPage);
 // Feeds are static files under /data/feeds/; this page lists them. The
@@ -116,6 +127,9 @@ app.get("/data", dataPage);
 app.get("/methodology", methodologyPage);
 app.get("/support", supportPage);
 app.get("/cite", citePage);
+app.get("/about", aboutPage);
+app.get("/terms", termsPage);
+app.get("/privacy", privacyPage);
 app.get("/corrections", (c) => correctionsForm(c));
 app.post("/corrections", correctionsSubmit);
 // Payment notices from a donation page, once there is one; see hooks.ts for what is kept.

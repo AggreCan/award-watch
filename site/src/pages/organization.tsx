@@ -11,15 +11,17 @@ import { ChartStack, type Panel as ChartPanel } from "../chart";
 import { Table, restClass } from "../columns";
 import { MONEY_SOURCES, PROVINCES, type MoneySource, type SourceKey } from "../constants";
 import { buyerPath, directoryCode, directoryPath, loadDirectories } from "../crosslinks";
-import { loadAlias, loadProfile, loadStats, type Profile, type YearFigure } from "../data";
+import { loadAlias, loadProfile, loadStats, sourceLoaded, type Profile, type YearFigure } from "../data";
 import type { AppEnv } from "../env";
 import {
-  fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, provinceName, sourceLabel, t, tj, tn, type Key, type Lang,
+  fmtInt, fmtMoney, fmtMoneyShort, pick, provinceName, sourceLabel, t, tj, tn, type Key, type Lang,
 } from "../i18n";
-import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page } from "../layout";
+import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { organizationSeo } from "../seo";
 import { ExpiringSection, MoreInCsv } from "./expiring";
-import { AwardTable, BuyerLink, SourceLine, contractSearchUrl, datasetUrl, grantUrl, lobbyUrl, money } from "./shared";
+import {
+  AwardTable, BuyerLink, SourceLine, SourcesSeparate, contractSearchUrl, datasetUrl, grantUrl, lobbyUrl, money, shareText,
+} from "./shared";
 import { WATCH_MAX } from "./watchlist";
 
 const REGISTRY_NAME: Record<string, Key> = {
@@ -63,13 +65,6 @@ const MoreRows: FC<{ lang: Lang; source: SourceKey; shown: number; total: number
 const NonCad: FC<{ lang: Lang; n: number | undefined }> = ({ lang, n }) =>
   n ? <p class="muted small">{tn(lang, "org.non_cad_one", "org.non_cad_many", n, { n: fmtInt(n, lang) })}</p> : null;
 
-// "3 of 12 (25%)": the share and what it is a share of. Grants carry no
-// competitive flag, so their cells read "not applicable".
-function share(lang: Lang, part: number | null, whole: number | null, fmt: (v: number) => string): string {
-  if (part === null || whole === null) return t(lang, "common.not_applicable");
-  const pct = fmtPct(part, whole, lang);
-  return t(lang, "org.share", { part: fmt(part), whole: fmt(whole), pct: pct ? ` (${pct})` : "" });
-}
 
 // The yearly value of each money source as its own panel (each on its own
 // scale: the sources are never drawn as one series).
@@ -175,6 +170,16 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
   const years = [...profile.years].sort((a, b) => b.year - a.year || MONEY_SOURCES.indexOf(a.source) - MONEY_SOURCES.indexOf(b.source));
   const n = (v: number) => fmtInt(v, lang);
   const nonCad = profile.non_cad ?? {};
+  // A source never read shows "n/a" and says so, instead of zero and "none".
+  // The profile says so for its own five sources (a key it carries only for
+  // a source never read); the registry's read is on the Data page's rows.
+  const read = (s: SourceKey | "registry") => sourceLoaded(s, profile, s === "registry" ? stats : null) !== false;
+  const lobbyingRead = read("lobbying");
+  const registryRead = read("registry");
+  const notLoaded = <p class="muted">{t(lang, "common.not_loaded")}</p>;
+  const sectionCount = (s: SourceKey, total: number) => (read(s) ? n(total) : t(lang, "common.na"));
+  // Years after the data date's are as the source dates them.
+  const lateYears = profile.years.some((y) => y.year > Number(todayOf(stats.data_as_of).slice(0, 4)));
   // The bulk file that holds every profile, and the crawler guide to it, so a
   // client walking profiles can find the file instead.
   c.header("Link", '</downloads/organizations.csv>; rel="alternate"; type="text/csv", </llms.txt>; rel="help"');
@@ -202,21 +207,26 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         {MONEY_SOURCES.map((s) => (
           <a class="tile" href={`#${s}`}>
             <span class="tile-label">{sourceLabel(lang, s)}</span>
-            <span class="tile-value">{counts[s] ? fmtMoneyShort(totals[s] ?? 0, lang) : "0"}</span>
-            <span class="tile-note">{tn(lang, "org.tile_records_one", "org.tile_records_many", counts[s], { n: n(counts[s]) })}</span>
+            <span class="tile-value">{read(s) ? fmtMoneyShort(counts[s] ? totals[s] ?? 0 : 0, lang) : t(lang, "common.na")}</span>
+            <span class="tile-note">
+              {read(s) ? tn(lang, "org.tile_records_one", "org.tile_records_many", counts[s], { n: n(counts[s]) }) : t(lang, "data.not_read")}
+            </span>
           </a>
         ))}
         <a class="tile" href="#lobbying">
           <span class="tile-label">{sourceLabel(lang, "lobbying")}</span>
-          <span class="tile-value">{n(counts.lobbying)}</span>
-          <span class="tile-note">{t(lang, "org.tile_lobbying")}</span>
+          <span class="tile-value">{lobbyingRead ? n(counts.lobbying) : t(lang, "common.na")}</span>
+          <span class="tile-note">
+            {lobbyingRead ? tn(lang, "org.tile_reports_one", "org.tile_reports_many", counts.lobbying, { n: n(counts.lobbying) }) : t(lang, "data.not_read")}
+          </span>
         </a>
       </section>
-      <p class="tiles-note">{t(lang, "org.never_added")}</p>
+      <p class="tiles-note"><SourcesSeparate lang={lang} /></p>
 
       <Panel id="years" title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
         <p class="muted small">
           {tj(lang, "org.years_note", { methodology: <a href="/methodology#counting">{t(lang, "org.years_rules")}</a> })}
+          {lateYears ? ` ${t(lang, "common.dates_as_published")}` : ""}
         </p>
         <YearChart lang={lang} years={profile.years} />
         {years.length ? (
@@ -236,9 +246,9 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                     <td data-label={t(lang, "col.source")}>{sourceLabel(lang, y.source)}</td>
                     <td data-label={t(lang, "col.records")} class="mono num">{n(y.n)}</td>
                     <td data-label={t(lang, "col.value")} class="mono num">{money(lang, y.total)}</td>
-                    <td data-label={t(lang, "org.col_nc_count")} class="mono num">{share(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}</td>
+                    <td data-label={t(lang, "org.col_nc_count")} class="mono num">{shareText(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}</td>
                     <td data-label={t(lang, "org.col_nc_value")} class="mono num mdh">
-                      {share(lang, y.total_non_competitive, y.source === "grants" ? null : y.total, (v) => fmtMoney(v, lang))}
+                      {shareText(lang, y.total_non_competitive, y.source === "grants" ? null : y.total, (v) => fmtMoney(v, lang))}
                     </td>
                   </tr>
                 ))}
@@ -254,22 +264,22 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           link={<a href="/expiring">{t(lang, "expiring.see_all")}</a>} />
       ) : null}
 
-      <Panel id="awards" title={t(lang, SECTION_KEY.awards)} count={n(profile.awards_total_rows)} foot={<SourceLine lang={lang} source="awards" />}>
-        {profile.awards.length ? <AwardTable lang={lang} rows={profile.awards} organization={false} /> : <p class="muted">{t(lang, "org.none_awards")}</p>}
+      <Panel id="awards" title={t(lang, SECTION_KEY.awards)} count={sectionCount("awards", profile.awards_total_rows)} foot={<SourceLine lang={lang} source="awards" />}>
+        {!read("awards") ? notLoaded : profile.awards.length ? <AwardTable lang={lang} rows={profile.awards} organization={false} /> : <p class="muted">{t(lang, "org.none_awards")}</p>}
         <MoreRows lang={lang} source="awards" shown={profile.awards.length} total={profile.awards_total_rows} />
         <NonCad lang={lang} n={nonCad.awards} />
       </Panel>
 
-      <Panel id="history" title={t(lang, SECTION_KEY.history)} count={n(profile.history_total_rows)} foot={<SourceLine lang={lang} source="history" />}>
+      <Panel id="history" title={t(lang, SECTION_KEY.history)} count={sectionCount("history", profile.history_total_rows)} foot={<SourceLine lang={lang} source="history" />}>
         <p class="muted small">{t(lang, "org.history_note")}</p>
-        {profile.history.length ? <AwardTable lang={lang} rows={profile.history} href="/history" organization={false} /> : <p class="muted">{t(lang, "org.none_history")}</p>}
+        {!read("history") ? notLoaded : profile.history.length ? <AwardTable lang={lang} rows={profile.history} href="/history" organization={false} /> : <p class="muted">{t(lang, "org.none_history")}</p>}
         <MoreRows lang={lang} source="history" shown={profile.history.length} total={profile.history_total_rows} />
         <NonCad lang={lang} n={nonCad.history} />
       </Panel>
 
-      <Panel id="contracts" title={t(lang, SECTION_KEY.contracts)} count={n(profile.contracts_total_rows)} foot={<SourceLine lang={lang} source="contracts" />}>
+      <Panel id="contracts" title={t(lang, SECTION_KEY.contracts)} count={sectionCount("contracts", profile.contracts_total_rows)} foot={<SourceLine lang={lang} source="contracts" />}>
         <p class="muted small">{t(lang, "org.contracts_note")}</p>
-        {profile.contracts.length ? (
+        {!read("contracts") ? notLoaded : profile.contracts.length ? (
           <div class="table-wrap bordered">
             <Table cols={[
               { kind: "date", label: t(lang, "col.date") },
@@ -306,8 +316,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         <NonCad lang={lang} n={nonCad.contracts} />
       </Panel>
 
-      <Panel id="grants" title={t(lang, SECTION_KEY.grants)} count={n(profile.grants_total_rows)} foot={<SourceLine lang={lang} source="grants" />}>
-        {profile.grants.length ? (
+      <Panel id="grants" title={t(lang, SECTION_KEY.grants)} count={sectionCount("grants", profile.grants_total_rows)} foot={<SourceLine lang={lang} source="grants" />}>
+        {!read("grants") ? notLoaded : profile.grants.length ? (
           <div class="table-wrap bordered">
             <Table cols={[
               { kind: "date", label: t(lang, "grant.start") },
@@ -342,9 +352,10 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         <NonCad lang={lang} n={nonCad.grants} />
       </Panel>
 
-      <Panel id="lobbying" title={t(lang, SECTION_KEY.lobbying)} count={n(profile.lobbying_total_rows)} foot={<SourceLine lang={lang} source="lobbying" />}>
+      <Panel id="lobbying" title={t(lang, SECTION_KEY.lobbying)} count={sectionCount("lobbying", profile.lobbying_total_rows)}
+        foot={<SourceLine lang={lang} source="lobbying" />}>
         <p class="muted small">{t(lang, "org.lobbying_note")}</p>
-        {profile.lobbying.length ? (
+        {!lobbyingRead ? notLoaded : profile.lobbying.length ? (
           <div class="table-wrap bordered">
             <Table cols={[
               { kind: "date", label: t(lang, "col.date") },
@@ -426,7 +437,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                 </>
               ))}
             </dl>
-          ) : <p class="muted">{t(lang, "registry.none")}</p>}
+          ) : <p class="muted">{t(lang, registryRead ? "registry.none" : "common.not_loaded")}</p>}
         </Panel>
       </div>
 

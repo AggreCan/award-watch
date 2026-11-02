@@ -114,6 +114,17 @@ function anchor(left: number): string | undefined {
   return left < 4 ? "x-start" : left > 96 ? "x-end" : undefined;
 }
 
+// An anchored label runs inward from its end of the axis, over the next
+// slots, so a label within two slots of one is left out rather than drawn on
+// top of it. A slot is the gap between neighbouring labels.
+export function clearOfAnchors(lefts: readonly number[]): boolean[] {
+  const sorted = [...lefts].sort((a, b) => a - b);
+  let slot = Infinity;
+  for (let i = 1; i < sorted.length; i++) slot = Math.min(slot, sorted[i] - sorted[i - 1]);
+  const anchored = lefts.filter((l) => anchor(l) !== undefined);
+  return lefts.map((l) => anchor(l) !== undefined || !anchored.some((a) => Math.abs(l - a) <= 2 * slot + 1e-9));
+}
+
 export function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -221,10 +232,14 @@ export const ChartStack: FC<{
       <div class="chart-row" aria-hidden="true">
         <span></span>
         <div class="chart-x">
-          {xLabels.map((l) => {
-            const left = pct(l.x);
-            return <span class={[anchor(left), l.minor ? "x-minor" : ""].filter(Boolean).join(" ") || undefined} style={`left:${f(left)}%`}>{l.text}</span>;
-          })}
+          {(() => {
+            const lefts = xLabels.map((l) => pct(l.x));
+            const shown = clearOfAnchors(lefts);
+            // An end label always shows, even a minor one, as it stands for the axis's start or end.
+            return xLabels.map((l, i) => shown[i]
+              ? <span class={[anchor(lefts[i]), l.minor && !anchor(lefts[i]) ? "x-minor" : ""].filter(Boolean).join(" ") || undefined} style={`left:${f(lefts[i])}%`}>{l.text}</span>
+              : null);
+          })()}
         </div>
       </div>
     </div>

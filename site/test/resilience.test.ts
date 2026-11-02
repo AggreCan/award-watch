@@ -55,7 +55,7 @@ const req = (path: string, envOver: Record<string, unknown> = {}, init: RequestI
 const PAGES = [
   "/", "/tenders", "/tenders/new", "/tenders/cb-100-10000001", "/awards", "/awards/2026", "/awards/cb-400-40000004",
   "/history/w8472-000633", "/organizations", "/organizations/directory/on", "/organizations/org-a000000001", "/buyers",
-  "/buyers/pwgsc-tpsgc", "/categories", "/categories/82", "/rankings", "/rankings/2026", "/data", "/cite",
+  "/buyers/pwgsc-tpsgc", "/segments", "/segments/82", "/rankings", "/rankings/2026", "/data", "/cite",
   "/expiring", "/expiring/3m",
 ];
 
@@ -84,7 +84,7 @@ describe("missing and corrupt data files", () => {
     const html = await res.text();
     expect(html).toContain("Open tender notices");
     expect(html).not.toContain("<span class=\"tile-label\">Award notices</span>");
-    expect(html).toContain("No new notices in the last refresh.");
+    expect(html).toContain("No new notice in the last refresh.");
     expect(html).toContain("No open notice closes in the next 7 days.");
   });
 
@@ -186,7 +186,7 @@ describe("storage outages", () => {
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams(fields).toString(),
       });
-    const response = await form("/organizations/org-a000000001/respond", { text: "A statement long enough to pass the form's check." });
+    const response = await form("/organizations/org-a000000001/respond", { text: "A statement long enough to pass the form's check.", contact: "office@example.invalid" });
     expect(response.status).toBe(503);
     const html = await response.text();
     expect(html).toContain("Try again in a moment.");

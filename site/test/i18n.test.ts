@@ -35,7 +35,7 @@ const SENTINELS = [
   "What the Site Holds Today",
   "Data Not Published Yet",
   "Page Not Found",
-  "Respond as the Organization",
+  "Respond as This Organization",
   "Report a Correction",
   "Open Tender Notices",
   "Closing soon",
@@ -83,8 +83,8 @@ const FRENCH_PAGES = [
   "/organizations/org-a000000001/respond?lang=fr",
   "/buyers?lang=fr",
   "/buyers/pwgsc-tpsgc?lang=fr",
-  "/categories?lang=fr",
-  "/categories/82?lang=fr",
+  "/segments?lang=fr",
+  "/segments/82?lang=fr",
   "/rankings?lang=fr",
   "/rankings/2026?lang=fr&source=contracts&by=count",
   "/feeds?lang=fr",
@@ -301,12 +301,12 @@ describe("rendered French pages", () => {
     expect(org).toContain("Contrats publiés");
     expect(org).toContain("3 sur 60 (5 %)");
     expect(org).toContain("Services de traduction");
-    expect(org).toContain("1 ligne dans une autre devise est affichée avec sa devise et exclue des totaux.");
+    expect(org).toContain("1 dossier dans une autre devise est affiché avec sa devise et exclu des totaux.");
 
     const meth = nbsp(await (await get("/methodology?lang=fr")).text());
     expect(meth).toContain('<h2 id="counting">Calcul des montants</h2>');
     expect(meth).toContain("Un avis annulé compte pour zéro.");
-    expect(meth).toContain("TN et AC sont non concurrentiels; OB, TC et ST sont concurrentiels");
+    expect(meth).toContain("TN et AC sont non concurrentiels. OB, TC et ST sont concurrentiels");
 
     const support = nbsp(await (await get("/support?lang=fr")).text());
     expect(support).toContain("<h1>Soutenir le site</h1>");

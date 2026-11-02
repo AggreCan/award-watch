@@ -4,8 +4,11 @@
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
 import type { TenderRow } from "../src/data";
-import { LOCKUP_WORD_PATH, MARK_CHECK_COLOUR, MARK_CHECK_PATH, MARK_INK_PATH } from "../src/layout";
+import {
+  LOCKUP_WORD_PATH, MARK_CHECK_COLOUR, MARK_CHECK_PATH, MARK_INK_PATH, WORDMARK_CHECK_INDEX, WORDMARK_CHECK_PATH, WORDMARK_INK_PATHS,
+} from "../src/layout";
 import lockupSvg from "../../brand/lockup.svg?raw";
+import wordmarkSvg from "../../brand/wordmark.svg?raw";
 import { filterTenders, readTenderQuery, tenderQueryString } from "../src/pages/tenders";
 import { assetsWithout, emptyAssets, fakeAssets, makeFakeAssets, testEnv } from "./assets";
 import openFirst from "./fixtures/tenders-open-first.json";
@@ -24,11 +27,11 @@ const PAGES: [string, string, string, string][] = [
   ["/tenders", "<h1>Open Tender Notices</h1>", "<h1>Avis d’appel d’offres ouverts</h1>", "tenders/open-first.json"],
   ["/tenders/new", "<h1>New Tender Notices</h1>", "<h1>Nouveaux avis d’appel d’offres</h1>", "stats.json"],
   ["/tenders/cb-100-10000001", "<h1>Translation services for regional offices</h1>", "<h1>Services de traduction pour les bureaux régionaux</h1>", "stats.json"],
-  ["/awards", "<h1>Contract Award Notices</h1>", "<h1>Avis d’attribution de contrats</h1>", "awards/recent.json"],
+  ["/awards", "<h1>Award Notices</h1>", "<h1>Avis d’attribution</h1>", "awards/recent.json"],
   ["/awards/2026", "<h1>Award Notices in 2026</h1>", "<h1>Avis d’attribution en 2026</h1>", "awards/2026/index.json"],
   ["/awards/2026?page=2", "Interpretation services, regional consultations", "interprétation, consultations régionales", "awards/2026/2.json"],
   ["/awards/cb-400-40000004", "<h1>Translation standing offer, official languages</h1>", "<h1>Offre à commandes de traduction, langues officielles</h1>", "stats.json"],
-  ["/expiring", "<h1>Contracts Ending Soon</h1>", "<h1>Contrats arrivant à échéance</h1>", "expiring/index.json"],
+  ["/expiring", "<h1>Contracts Ending Soon</h1>", "<h1>Contrats prenant fin bientôt</h1>", "expiring/index.json"],
   ["/expiring/3m", "<h1>Contracts Ending Within 3 Months</h1>", "<h1>Contrats prenant fin d’ici 3 mois</h1>", "expiring/3m/1.json"],
   ["/expiring/3m?buyer=dnd-mdn", "Satellite communications terminal maintenance", "Entretien de terminaux de communication par satellite", "expiring/3m/index.json"],
   ["/history/w8472-000633", "<h1>Vessel refit, mid-shore patrol</h1>", "<h1>Radoub de navire, patrouille semi-hauturière</h1>", "stats.json"],
@@ -37,8 +40,8 @@ const PAGES: [string, string, string, string][] = [
   ["/organizations/org-a000000001", "<h1>Exemplar Translation Services Inc.</h1>", "Chiffres par année et par source", "stats.json"],
   ["/buyers", "<h1>Federal Buyers</h1>", "<h1>Acheteurs fédéraux</h1>", "buyers/index.json"],
   ["/buyers/pwgsc-tpsgc", "Public Services and Procurement Canada", "<h1>Services publics et Approvisionnement Canada", "stats.json"],
-  ["/categories", "<h1>Procurement by Category</h1>", "<h1>Approvisionnement par catégorie</h1>", "categories/index.json"],
-  ["/categories/82", "<h1>Editorial and Design and Graphic and Fine Art Services</h1>", "<h1>Services de rédaction, de design, de graphisme et de beaux-arts</h1>", "categories/82.json"],
+  ["/segments", "<h1>Procurement by Segment</h1>", "<h1>Approvisionnement par segment</h1>", "categories/index.json"],
+  ["/segments/82", "<h1>Editorial and Design and Graphic and Fine Art Services</h1>", "<h1>Services de rédaction, de design, de graphisme et de beaux-arts</h1>", "categories/82.json"],
   ["/rankings", "<h1>Rankings</h1>", "<h1>Classements</h1>", "rankings/all.json"],
   ["/rankings/2026", "<h1>Rankings for 2026</h1>", "<h1>Classements de 2026</h1>", "stats.json"],
   ["/data", "<h1>Data, Downloads and Licence</h1>", "<h1>Données, téléchargements et licence</h1>", "stats.json"],
@@ -91,8 +94,8 @@ describe("every page", () => {
       ["/expiring/6m", "Data Not Published Yet"],
       ["/organizations/org-ffffffffff", "Organization Not Found"],
       ["/buyers/no-such-buyer", "Buyer Not Found"],
-      ["/categories/99", "Category Not Found"],
-      ["/categories/10", "Data Not Published Yet"],
+      ["/segments/99", "Segment Not Found"],
+      ["/segments/10", "Data Not Published Yet"],
       ["/rankings/2019", "No Rankings for This Year"],
     ] as const) {
       const res = await get(path);
@@ -100,7 +103,7 @@ describe("every page", () => {
       expect(await res.text(), path).toContain(title);
     }
     // Things that are not ids at all fall through to the site's 404 page.
-    for (const path of ["/tenders/a%20b", "/organizations/not-an-id", "/buyers/Not_An_Id", "/categories/8", "/rankings/20x6", "/nowhere"]) {
+    for (const path of ["/tenders/a%20b", "/organizations/not-an-id", "/buyers/Not_An_Id", "/segments/8", "/rankings/20x6", "/nowhere"]) {
       const res = await get(path);
       expect(res.status, path).toBe(404);
     }
@@ -125,23 +128,28 @@ describe("every page", () => {
     // The rail: the live index with its counts, the browse links, the reader's lists.
     const nav = html.match(/<nav class="rail" aria-label="Main">[\s\S]*?<\/nav>/)?.[0] ?? "";
     expect([...nav.matchAll(/<a class="rail-item[^"]*" href="([^"]+)"/g)].map((m) => m[1])).toEqual([
-      "/tenders", "/tenders/new", "/tenders?closing=7", "/expiring", "/awards/2026", "/organizations", "/buyers",
-      "/categories", "/rankings", "/feeds", "/data", "/methodology", "/watchlist",
+      "/tenders", "/tenders/new", "/tenders?closing=7", "/awards", "/awards/2026", "/expiring", "/expiring/3m", "/organizations",
+      "/buyers", "/segments", "/rankings", "/feeds", "/data", "/methodology", "/watchlist",
     ]);
-    expect(nav).toContain('<a class="rail-item" href="/tenders"><span class="rail-label">Open tenders</span><span class="rail-n">3</span></a>');
-    expect(nav).toContain('<a class="rail-item soon" href="/tenders?closing=7"><span class="rail-label">Closing within 7 days</span><span class="rail-n">1</span></a>');
-    expect(nav).toContain('<span class="rail-label">Ending within 3 months</span><span class="rail-n">3</span>');
-    expect(nav).toContain('<span class="rail-label">Awards in 2026</span><span class="rail-n">3</span>');
+    expect(nav).toContain('<a class="rail-item" href="/tenders"><span class="rail-label">Open tender notices</span><span class="rail-n">3</span></a>');
+    expect(nav).toContain('<a class="rail-item rail-child soon" href="/tenders?closing=7"><span class="rail-label">Closing within 7 days</span><span class="rail-n">1</span></a>');
+    expect(nav).toContain('<a class="rail-item" href="/awards"><span class="rail-label">Award notices</span><span class="rail-n">5,883</span></a>');
+    expect(nav).toContain('<a class="rail-item rail-child" href="/awards/2026"><span class="rail-label"><span class="rail-short">In 2026</span><span class="rail-full">Award notices in 2026</span></span><span class="rail-n">3</span></a>');
+    expect(nav).toContain('<a class="rail-item" href="/expiring"><span class="rail-label">Contracts ending</span><span class="rail-n">8</span></a>');
+    expect(nav).toContain('<a class="rail-item rail-child" href="/expiring/3m"><span class="rail-label"><span class="rail-short">Within 3 months</span><span class="rail-full">Ending within 3 months</span></span><span class="rail-n">3</span></a>');
+    // The home page is none of the rail's items.
+    expect(nav).not.toContain("aria-current");
+    expect(nav).not.toContain("rail-ancestor");
     expect(nav).toContain('<span class="rail-n" data-watch-count="" hidden=""></span>');
     expect(nav).toContain("Saved searches: soon");
     // A page's own section is marked in the rail.
     expect(await text("/buyers")).toContain('<a class="rail-item" href="/buyers" aria-current="page">');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));
-    for (const href of ["/methodology", "/support", "/feeds", "/watchlist", "/corrections", "/cite", "/data#downloads", "/data#sources"]) {
+    for (const href of ["/methodology", "/support", "/feeds", "/watchlist", "/corrections", "/cite", "/data#downloads", "/data#sources", "/about", "/terms", "/privacy"]) {
       expect(footer, href).toContain(`href="${href}"`);
     }
-    expect(html).toContain("Data as of 2026-10-31");
-    expect(html).toContain('<svg class="brand-lockup" viewBox="0 0 201 32"');
+    expect(html).toContain("Data date: 2026-10-31");
+    expect(html).toContain('<svg class="brand-wordmark" viewBox="0 0 241 34"');
     expect(html).toContain('<path class="mark-check" fill="#0f7b4f" fill-rule="evenodd"');
     expect(html).toContain('<button type="button" class="theme-toggle"><span class="when-light">Dark</span><span class="when-dark">Light</span></button>');
     expect(html).toContain('<a href="?lang=fr" class="lang-toggle" rel="nofollow">Français</a>');
@@ -158,23 +166,36 @@ describe("every page", () => {
     expect(res.headers.get("x-frame-options")).toBe("DENY");
   });
 
-  it("carries the whole lockup in the top bar, named for readers, with no name in live text", async () => {
+  it("carries the wordmark in the top bar, named for readers, with no name in live text", async () => {
     for (const path of ["/", "/?lang=fr", "/methodology"]) {
       const html = await text(path);
       const bar = html.match(/<header class="topbar">[\s\S]*?<\/header>/)?.[0] ?? "";
-      // The link and the image both carry the name, the same in either language.
-      expect(bar, path).toContain('<a href="/" class="brand" aria-label="Award Watch"><svg class="brand-lockup" viewBox="0 0 201 32" width="151" height="24" role="img"><title>Award Watch</title>');
-      // The mark's ink, its check in the check token's class, then the letters.
-      expect(bar, path).toContain(`<path fill="currentColor" fill-rule="evenodd" d="${MARK_INK_PATH}"></path>`);
-      expect(bar, path).toContain(`<path class="mark-check" fill="#0f7b4f" fill-rule="evenodd" d="${MARK_CHECK_PATH}"></path>`);
-      expect(bar, path).toContain(`<path fill="currentColor" fill-rule="evenodd" d="${LOCKUP_WORD_PATH}"></path></svg></a>`);
+      // The link and the image both carry the name, the same in either language: 24 px tall, 170 wide.
+      expect(bar, path).toContain('<a href="/" class="brand" aria-label="Award Watch"><svg class="brand-wordmark" viewBox="0 0 241 34" width="170" height="24" role="img"><title>Award Watch</title>');
+      // The file's eleven shapes in its order: the letters in currentColor, the check in the check token's class.
+      const drawn = [...bar.matchAll(/<path (?:class="mark-check" )?fill="([^"]+)" fill-rule="evenodd" d="([^"]+)"><\/path>/g)].map((m) => m[2]);
+      const expected = [...WORDMARK_INK_PATHS];
+      expected.splice(WORDMARK_CHECK_INDEX, 0, WORDMARK_CHECK_PATH);
+      expect(drawn, path).toEqual(expected);
+      expect(bar, path).toContain(`<path class="mark-check" fill="#0f7b4f" fill-rule="evenodd" d="${WORDMARK_CHECK_PATH}"></path>`);
+      expect(bar, path).not.toContain("brand-lockup");
       expect(bar, path).not.toContain("brand-name");
       // Outside the image's title, the bar's text is the data date and the toggles.
       expect(bar.replace(/<title>[^<]*<\/title>/g, "").replace(/<[^>]+>/g, " "), path).not.toContain("Award Watch");
     }
   });
 
-  it("draws the lockup from brand/lockup.svg's paths", () => {
+  it("draws the wordmark from brand/wordmark.svg's paths", () => {
+    const paths = [...wordmarkSvg.matchAll(/<path fill="([^"]+)" fill-rule="evenodd" d="([^"]+)"\s*\/>/g)].map((m) => [m[1], m[2]]);
+    expect(paths).toHaveLength(11);
+    expect(wordmarkSvg).toContain('viewBox="0 0 241 34"');
+    expect(paths[WORDMARK_CHECK_INDEX]).toEqual([MARK_CHECK_COLOUR, WORDMARK_CHECK_PATH]);
+    const ink = paths.filter((_, i) => i !== WORDMARK_CHECK_INDEX);
+    expect(ink.every(([fill]) => fill === "currentColor")).toBe(true);
+    expect(ink.map(([, d]) => d)).toEqual([...WORDMARK_INK_PATHS]);
+  });
+
+  it("keeps the lockup's constants drawn from brand/lockup.svg's paths", () => {
     const paths = [...lockupSvg.matchAll(/<path fill="([^"]+)" fill-rule="evenodd" d="([^"]+)"\/>/g)].map((m) => [m[1], m[2]]);
     expect(paths).toHaveLength(13);
     expect(lockupSvg).toContain('viewBox="0 0 201 32"');
@@ -206,7 +227,7 @@ describe("tender notices", () => {
     expect(html).toContain('<span class="badge badge-open">Open</span>');
     expect(html).toContain('<a href="/buyers/dfo-mpo">Fisheries and Oceans Canada</a>');
     expect(html).toContain("72101500");
-    expect(html).toContain('<a href="/categories/72">72 Building and Facility Construction and Maintenance Services</a>');
+    expect(html).toContain('<a href="/segments/72">72 Building and Facility Construction and Maintenance Services</a>');
     expect(html).toContain('<a href="/awards/cb-500-50000005">Dock repairs, small craft harbour</a>');
     expect(html).toContain('<a href="/organizations/org-a000000002">Sample Harbour Marine Ltd.</a>');
     // Whole dollars from 1,000 up.
@@ -243,7 +264,7 @@ describe("tender notices", () => {
     for (const path of ["/tenders?segment=82", "/tenders?page=2", "/tenders?sort=published"]) {
       const html = await (await get(path, env)).text();
       expect(html, path).toContain("These filters apply once the full list of open notices has loaded in your browser.");
-      expect(html, path).toContain('<noscript><p>Filtering the full list needs JavaScript; <a href="/tenders">the unfiltered list</a> shows the open notices by closing date.</p></noscript>');
+      expect(html, path).toContain('<noscript><p>Filtering the full list needs JavaScript. Without it, <a href="/tenders">the unfiltered list</a> shows the open notices by closing date.</p></noscript>');
       expect(html, path).not.toContain("cb-100-10000001");
       expect(html, path).toContain('<meta name="robots" content="noindex"/>');
     }
@@ -341,7 +362,7 @@ describe("award notices and contract history", () => {
     expect(html).toContain('<span class="badge badge-cancelled">Cancelled</span>');
     const year = await text("/awards/2026");
     expect(year).toContain("3 award notices dated 2026.");
-    expect(year).toContain('<a href="/downloads/awards-2026.csv" class="btn">Download every award notice dated 2026 (CSV)</a>');
+    expect(year).toContain('<a href="/downloads/awards-2026.csv" class="btn">Download award notices dated 2026 (CSV)</a>');
     expect(year).toContain('<span aria-current="page" class="mono">2026</span>');
     expect(year).toContain("cb-400-40000004");
     expect(year).not.toContain("cb-600-60000006");
@@ -363,7 +384,7 @@ describe("award notices and contract history", () => {
     const empty = testEnv(makeFakeAssets({}, { "awards/2026/index.json": { year: 2026, pages: 0, rows: 0 } }));
     const none = await get("/awards/2026", empty);
     expect(none.status).toBe(200);
-    expect(await none.text()).toContain("No award notices to show.");
+    expect(await none.text()).toContain("No award notice to show.");
     // The index must name its own year and count at least one row per page.
     for (const bad of [{ year: 2025, pages: 1, rows: 3 }, { year: 2026, pages: 2, rows: 1 }, { year: 2026, pages: "2", rows: 3 }]) {
       expect((await get("/awards/2026", testEnv(makeFakeAssets({}, { "awards/2026/index.json": bad })))).status, JSON.stringify(bad)).toBe(503);
@@ -371,7 +392,7 @@ describe("award notices and contract history", () => {
   });
 });
 
-describe("buyers, categories and rankings", () => {
+describe("buyers, segments and rankings", () => {
   it("lists every buyer with its counts per source, and one buyer's figures", async () => {
     const index = await text("/buyers");
     expect(index).toContain('<a href="/buyers/dnd-mdn">National Defence</a><span class="muted"> (DND)</span>');
@@ -384,10 +405,10 @@ describe("buyers, categories and rankings", () => {
   });
 
   it("lists the 57 segments and one segment's notices and organizations", async () => {
-    const index = await text("/categories");
-    expect(index.match(/<a href="\/categories\/\d\d">/g)?.length).toBe(57);
+    const index = await text("/segments");
+    expect(index.match(/<a href="\/segments\/\d\d">/g)?.length).toBe(57);
     expect(index).toContain('<a href="/tenders?segment=82">1</a>');
-    const one = await text("/categories/82");
+    const one = await text("/segments/82");
     expect(one).toContain("UNSPSC segment 82");
     expect(one).toContain('<a href="/tenders?segment=82" class="btn btn-primary">Filter the open notices (1)</a>');
     expect(one).toContain("cb-100-10000001");
@@ -420,6 +441,6 @@ describe("home", () => {
     expect(html).toContain("<h2>Largest Award Values in 2026</h2>");
     expect(html).toContain('<a href="/rankings/2026">Full ranking</a>');
     expect(html).toContain("Exemplar Translation Services Inc.");
-    expect(html).toContain("Every row is a government record, linked to the notice or file it came from.");
+    expect(html).toContain("Each entry is a government record, linked to the notice or file it came from.");
   });
 });

@@ -11,6 +11,7 @@ import awards2026 from "./fixtures/awards-2026-index.json";
 import awardsRecent from "./fixtures/awards-recent.json";
 import buyer from "./fixtures/buyer-pwgsc-tpsgc.json";
 import buyers from "./fixtures/buyers-index.json";
+import buyerAliases from "./fixtures/buyers-aliases.json";
 import categories from "./fixtures/categories-index.json";
 import category82 from "./fixtures/category-82.json";
 import contracts from "./fixtures/contracts-637.json";
@@ -77,6 +78,8 @@ export const FILES: Record<string, unknown> = {
   "directory/yt/index.json": directoryYt,
   "buyers/index.json": buyers,
   "buyers/pwgsc-tpsgc.json": buyer,
+  // Buyer ids that moved: old id to new.
+  "buyers/aliases.json": buyerAliases,
   "categories/index.json": categories,
   "categories/82.json": category82,
   "rankings/all.json": rankingsAll,

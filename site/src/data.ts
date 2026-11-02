@@ -55,8 +55,11 @@ export interface TenderRow {
   segments: string[];
   provinces: string[];
   first_seen: string;
-  // Present on rows of tenders/new/<day>.json, where a notice may already be closed.
+  // Present on rows of tenders/new/<day>.json, where a notice may already be
+  // closed: the status on the data date ("closed" once the closing day has
+  // passed), with the file's own status in source_status.
   status?: string;
+  source_status?: string;
 }
 
 // One award notice or contract history row as a list row. On contract
@@ -204,7 +207,11 @@ export interface Stats {
   recent_awards: AwardRow[];
   top_organizations_year: OrgTotal[];
   runs: { run_at: string; source: string; detail: string | null; rows_new: number | null; ok: number | boolean }[];
-  sources: { source: string; file: string; last_read: string | null; last_modified: string | null }[];
+  // One row per file a stage reads. last_modified is the publisher's date: an
+  // HTTP date as sent ("Sun, 01 Nov 2026 17:15:06 GMT") or, from newer
+  // exports, an ISO instant. loaded, when present, is false for a source that
+  // was never read.
+  sources: { source: string; file: string; last_read: string | null; last_modified: string | null; loaded?: boolean }[];
   // A Zenodo record of the open files, when one is published; absent until then.
   citation?: Citation | null;
 }
@@ -409,6 +416,29 @@ export interface Profile {
   non_cad?: Partial<Record<MoneySource, number>>;
   // The contracts ending within 12 months; absent from older exports.
   expiring?: ExpiringPart;
+  // Whether each source was read at all, when the export says (see sourceLoaded).
+  sources?: Partial<Record<string, { loaded?: boolean }>>;
+  loaded?: Partial<Record<string, boolean>>;
+  lobbying_loaded?: boolean;
+  registry_loaded?: boolean;
+}
+
+// Whether a source was ever read, when the files say so: the profile's own
+// flag (the export writes <key>_loaded: false for a source never read; the
+// forms sources.<key>.loaded and loaded.<key> read too), then the rows of
+// stats.json "sources" for that stage when they carry `loaded`. Undefined
+// when nothing says, and the page reads as it always has.
+export function sourceLoaded(
+  key: string, profile: Profile | null, stats: Pick<Stats, "sources"> | null,
+): boolean | undefined {
+  const flags: unknown[] = profile
+    ? [profile.sources?.[key]?.loaded, profile.loaded?.[key], (profile as unknown as Record<string, unknown>)[`${key}_loaded`]]
+    : [];
+  const own = flags.find((v) => typeof v === "boolean");
+  if (typeof own === "boolean") return own;
+  const rows = (stats?.sources ?? []).filter((s) => s.source === key && typeof s.loaded === "boolean");
+  if (rows.length === 0) return undefined;
+  return rows.some((s) => s.loaded === true);
 }
 
 export interface DirectorySummary { code: string; organizations: number; pages: number }
@@ -767,7 +797,8 @@ const STAT_LISTS: [keyof Stats, (v: unknown) => boolean][] = [
   ["recent_awards", isAwardRow],
   ["top_organizations_year", isOrgTotal],
   ["runs", (r) => isObj(r) && isStr(r.run_at) && isStr(r.source) && isStrOrNull(r.detail) && isNumOrNull(r.rows_new) && (isNum(r.ok) || isBool(r.ok))],
-  ["sources", (r) => isObj(r) && isStr(r.source) && isStr(r.file) && isStrOrNull(r.last_read) && isStrOrNull(r.last_modified)],
+  ["sources", (r) => isObj(r) && isStr(r.source) && isStr(r.file) && isStrOrNull(r.last_read) && isStrOrNull(r.last_modified) &&
+    optional(r.loaded, isBool)],
 ];
 
 // Every page reads the data date from here, so the file is required only to
@@ -946,6 +977,17 @@ export async function loadProfile(env: Env, id: string): Promise<Profile | null>
 // missing or unreadable shard, or an entry that is not an organization id,
 // reads as no alias. The value goes into a Location header, so it must be an
 // id; an entry pointing at itself would redirect forever, so it counts as none.
+// The id a buyer moved to (buyers/aliases.json, {"aliases": {"old-id":
+// "new-id"}}), read like the organization aliases: anything that is not a
+// buyer id, or an id pointing at itself, reads as no alias.
+export async function loadBuyerAlias(env: Env, id: string): Promise<string | null> {
+  if (!BUYER_ID_RE.test(id) || id.length > 80) return null;
+  const file = await loadJson<Record<string, unknown>>(env, "buyers/aliases.json");
+  const aliases = isObj(file) && isObj(file.aliases) ? (file.aliases as Record<string, unknown>) : null;
+  const live: unknown = aliases && Object.prototype.hasOwnProperty.call(aliases, id) ? aliases[id] : null;
+  return typeof live === "string" && BUYER_ID_RE.test(live) && live.length <= 80 && live !== id ? live : null;
+}
+
 export async function loadAlias(env: Env, id: string): Promise<string | null> {
   if (!ORG_ID_RE.test(id)) return null;
   const shard = await loadJson<Record<string, unknown>>(env, `aliases/${id.slice(4, 7)}.json`);
@@ -1116,6 +1158,8 @@ export interface RailCounts {
   newToday?: number;
   closingSoon?: number;
   ending3m?: number;
+  ending12m?: number;
+  awards?: number;
   awardsYear?: number;
   organizations?: number;
   buyers?: number;
@@ -1123,15 +1167,19 @@ export interface RailCounts {
 
 // stats.json first. The closing-soon count and the year's award notices come
 // from their own count fields when the export writes them; until then from
-// the closing-soon list when it is shorter than its cap, and from the year's
-// award index. The 3-month count needs the expiring radar's index.
+// the closing-soon list when it is shorter than its cap, leaving out a notice
+// whose closing date is before the data date, and from the year's award
+// index. The 3-month count needs the expiring radar's index.
 export async function loadRail(env: Env): Promise<RailCounts | null> {
   const stats = await loadStats(env);
   if (!stats) return null;
   const counts = stats.counts;
-  const year = (stats.data_as_of && /^\d{4}/.test(stats.data_as_of) ? stats.data_as_of : new Date().toISOString()).slice(0, 4);
+  const day = (stats.data_as_of && /^\d{4}-\d{2}-\d{2}/.test(stats.data_as_of) ? stats.data_as_of : new Date().toISOString()).slice(0, 10);
+  const year = day.slice(0, 4);
   const closingSoon = counts.tenders_closing_soon ??
-    (stats.closing_soon.length < STATS_LIST_ROWS ? stats.closing_soon.length : undefined);
+    (stats.closing_soon.length < STATS_LIST_ROWS
+      ? stats.closing_soon.filter((r) => !r.closing || r.closing.slice(0, 10) >= day).length
+      : undefined);
   const [awardYear, expiring] = await Promise.all([
     counts.awards_year === undefined ? loadAwardYear(env, Number(year)).catch(() => null) : Promise.resolve(null),
     loadExpiringIndex(env).catch(() => null),
@@ -1142,6 +1190,8 @@ export async function loadRail(env: Env): Promise<RailCounts | null> {
     newToday: counts.tenders_new_today,
     closingSoon,
     ending3m: expiring?.windows.find((w) => w.window === "3m")?.n,
+    ending12m: expiring?.windows.find((w) => w.window === "12m")?.n,
+    awards: counts.awards,
     awardsYear: counts.awards_year ?? awardYear?.rows,
     organizations: counts.organizations,
     buyers: counts.buyers,

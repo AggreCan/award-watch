@@ -52,7 +52,7 @@ export async function watchlistPage(c: Context<AppEnv>): Promise<Response> {
         <p class="page-note">{t(lang, "watch.records_note")} {t(lang, "watch.limit_note", { max: WATCH_MAX })}</p>
       </PageHead>
 
-      <Panel title={t(lang, "watch.title")} tools={<span id="watch-status" aria-live="polite"></span>}>
+      <Panel title={t(lang, "watch.panel")} tools={<span id="watch-status" aria-live="polite"></span>}>
       <div class="table-wrap bordered" id="watchlist" data-max={String(WATCH_MAX)}>
         <Table cols={COLUMNS.map(([k, kind, rest]) => ({ kind, label: t(lang, k), rest }))}>
           <tbody id="watch-rows">
@@ -87,7 +87,7 @@ export async function watchlistPage(c: Context<AppEnv>): Promise<Response> {
             {t(lang, "watch.import_label")}
             <textarea id="watch-import-text" rows={3} spellcheck={false}></textarea>
           </label>
-          <button type="button" class="btn" id="watch-import">{t(lang, "watch.import")}</button>
+          <button type="button" class="btn btn-primary" id="watch-import">{t(lang, "watch.import")}</button>
           <p id="watch-move-status" class="muted" aria-live="polite"></p>
         </div>
         </Panel>

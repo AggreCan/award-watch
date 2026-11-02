@@ -10,7 +10,10 @@
    One spacing system: a 24 px gutter and 8 px steps. Type scale: 12/16
    (labels, chips, captions, headers), 13/20 (tables, rail, controls), 14/24
    (prose), 16/24 (the detail title), 24/32 (page titles), 32/40 (tile
-   figures). Inter throughout, every figure in tabular numerals. */
+   figures). Inter throughout. Columns of figures, tile figures and counts
+   take tabular numerals; nothing else does, since Inter's tabular forms also
+   set the hyphen, the comma, the colon and the space at figure width
+   ("Canada-wide" would read "Canada - wide", a date "2026 - 11 - 01"). */
 
 /* Inter, self-hosted: the variable files of the 4.1 release, weights 100 to
    900, SIL Open Font License (fonts/OFL.txt). The system stack shows while
@@ -39,6 +42,10 @@
   --page: #f8fafc;
   --panel: #ffffff;
   --band: #f8fafc;
+  /* The head band of a panel, a document section and the contents box: a
+     shade clearly off the white panel, under ink labels (15.9:1) and the
+     muted counts beside them (4.8:1). */
+  --head: #eef2f7;
   --border: #e2e8f0;
   --border-2: #cbd5e1;
   --ink: #0f172a;
@@ -49,6 +56,9 @@
   --accent: #0f7b4f;
   --amber: #b45309;
   --on-amber: #ffffff;
+  /* The edge of a field or a button: 3.46:1 on white, past the 3:1 a
+     control's boundary needs (WCAG 1.4.11). */
+  --field-border: #7c8ba1;
   /* The mark's check: the filed emerald, lifted with the accent in the dark. */
   --check: #0f7b4f;
   /* Charts: one hue, a lighter step for a partial year. */
@@ -69,6 +79,8 @@
   --page: #0b1120;
   --panel: #0f172a;
   --band: #131c2f;
+  /* Ink labels 12.3:1 and muted counts 5.9:1 on it. */
+  --head: #1c2638;
   --border: #1e293b;
   --border-2: #334155;
   --ink: #e2e8f0;
@@ -79,6 +91,7 @@
   --accent: #34d399;
   --amber: #fbbf24;
   --on-amber: #0b1120;
+  --field-border: #5b6b80;
   --check: #34d399;
   --chart-bar: #94a3b8;
   --chart-bar-light: #334155;
@@ -89,6 +102,7 @@
     --page: #0b1120;
     --panel: #0f172a;
     --band: #131c2f;
+    --head: #1c2638;
     --border: #1e293b;
     --border-2: #334155;
     --ink: #e2e8f0;
@@ -99,6 +113,7 @@
     --accent: #34d399;
     --amber: #fbbf24;
     --on-amber: #0b1120;
+    --field-border: #5b6b80;
     --check: #34d399;
     --chart-bar: #94a3b8;
     --chart-bar-light: #334155;
@@ -118,7 +133,6 @@ body {
   font-family: var(--font);
   font-size: 14px;
   line-height: 24px;
-  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 /* Links are ink, underlined in the muted tone; the underline turns ink under
@@ -128,6 +142,8 @@ a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--
 a:hover { text-decoration-color: currentColor; }
 td a { text-decoration-line: none; }
 td a:hover { text-decoration-line: underline; }
+/* A cell spanning the row is a sentence (an empty state), and its links read as links. */
+td[colspan] a { text-decoration-line: underline; }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 h1, h2, h3, h4 { margin: 0; }
 h3 { font-size: 13px; line-height: 20px; font-weight: 600; }
@@ -135,11 +151,14 @@ p { margin: 0 0 8px; }
 ul, ol { margin: 0 0 8px; padding-left: 24px; }
 li { margin: 0 0 4px; }
 strong, b { font-weight: 600; }
-.mono { font-variant-numeric: tabular-nums; }
+/* .mono marks a date, a reference or a figure; only right-aligned figures
+   (.num) take tabular numerals, so a date's hyphens keep their own width. */
 .id { font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; line-height: 16px; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
+.num { text-align: right; }
+/* The figures of a column line up; a head cell's words keep their own spacing. */
+td.num, span.num { font-variant-numeric: tabular-nums; }
 .nw-block { display: block; }
 .top-gap { margin-top: 16px; }
 .narrow { max-width: 640px; }
@@ -157,14 +176,14 @@ kbd { display: inline-block; min-width: 20px; padding: 0 4px; border: 1px solid 
 /* The lockup is the link's only content: the mark and the name drawn as
    paths, 24 px tall, the ink in currentColor and the check in --check. */
 .brand { display: inline-flex; align-items: center; flex: none; color: var(--ink); text-decoration: none; }
-.brand-lockup { display: block; flex: none; width: auto; height: 24px; }
+.brand-lockup, .brand-wordmark { display: block; flex: none; width: auto; height: 24px; }
 .brand-mark { display: block; flex: none; width: 28px; height: 28px; color: var(--ink); }
 .mark-check { fill: var(--check); }
 .topbar-meta { display: flex; align-items: center; gap: 8px 16px; margin-left: auto; font-size: 12px; line-height: 16px; color: var(--muted); }
 .asof { white-space: nowrap; }
 .lang-toggle, .theme-toggle {
   display: inline-flex; align-items: center; height: 32px; padding: 0 12px;
-  border: 1px solid var(--border-2); border-radius: 0; background: var(--panel); color: var(--ink-2);
+  border: 1px solid var(--field-border); border-radius: 0; background: var(--panel); color: var(--ink-2);
   font: inherit; font-size: 12px; line-height: 16px; font-weight: 500; text-decoration: none; cursor: pointer;
 }
 .lang-toggle:hover, .theme-toggle:hover { border-color: var(--ink-2); color: var(--ink); }
@@ -189,7 +208,7 @@ main { flex: 1 0 auto; min-width: 0; padding: 0 var(--gutter) var(--gutter); }
 .rail { background: var(--panel); }
 .rail-group { padding: 8px 0; }
 .rail-group + .rail-group { border-top: 1px solid var(--border); }
-.rail-head { margin: 0; padding: 8px var(--gutter) 4px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.rail-head { margin: 0; padding: 8px var(--gutter) 4px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
 .rail ul { list-style: none; margin: 0; padding: 0; }
 .rail li { margin: 0; }
 .rail-item {
@@ -200,6 +219,15 @@ main { flex: 1 0 auto; min-width: 0; padding: 0 var(--gutter) var(--gutter); }
 a.rail-item:hover { background: var(--hover); color: var(--ink); }
 .rail-item[aria-current="page"] { background: var(--sel); color: var(--ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
 .rail-label { min-width: 0; }
+/* The overview is a tree: a list, then the views of it, indented 12 px in
+   the same type with their counts in the parents' column. One item is the
+   page (the emerald edge and the selected ground); its parent, or the
+   section of a page no item leads to, reads in ink and bold, with no edge
+   and no ground. */
+.rail-sub { list-style: none; margin: 0; padding: 0; }
+.rail-child { padding-left: calc(var(--gutter) + 12px); }
+.rail-item.rail-ancestor { color: var(--ink); font-weight: 600; }
+.rail-full { display: none; }
 .rail-n { flex: none; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .rail-n[hidden] { display: none; }
 /* Closing within 7 days: the amber square and an amber count. */
@@ -229,7 +257,12 @@ a.rail-item:hover { background: var(--hover); color: var(--ink); }
   .rail-group + .rail-group { border-top: 0; margin-top: 8px; }
   .rail-head { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .rail ul { display: flex; flex-wrap: wrap; gap: 8px; }
-  .rail-item { min-height: 32px; padding: 0 12px; gap: 12px; border: 1px solid var(--border); font-size: 12px; }
+  .rail-item, .rail .rail-child { min-height: 32px; padding: 0 12px; gap: 12px; border: 1px solid var(--border); font-size: 12px; }
+  /* The tree flattens into the same wrap of items, in its order. */
+  .rail .rail-parent, .rail .rail-sub { display: contents; }
+  /* Out of the tree, a view's item says what it is a view of. */
+  .rail .rail-short { display: none; }
+  .rail .rail-full { display: inline; }
   .rail-item[aria-current="page"] { border-color: var(--border-2); }
   .rail-later { border-style: dashed; }
 }
@@ -258,7 +291,7 @@ h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02
 .btn {
   display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
   min-height: 32px; padding: 5px 12px;
-  border: 1px solid var(--border-2); border-radius: 0; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--field-border); border-radius: 0; background: var(--panel); color: var(--ink);
   font: inherit; font-size: 13px; line-height: 20px; font-weight: 500; text-align: left; text-decoration: none; cursor: pointer;
 }
 .btn:hover { border-color: var(--ink-2); background: var(--hover); text-decoration: none; }
@@ -271,7 +304,7 @@ h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02
 .btn-link:hover { text-decoration-color: currentColor; }
 input[type="search"], input[type="text"], input[type="number"], input[type="email"], select, textarea {
   max-width: 100%; min-height: 32px; padding: 5px 8px;
-  border: 1px solid var(--border-2); border-radius: 0; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--field-border); border-radius: 0; background: var(--panel); color: var(--ink);
   font: inherit; font-size: 13px; line-height: 20px;
 }
 textarea { width: 100%; }
@@ -279,11 +312,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
 
 /* -- panels ---------------------------------------------------------------- */
 .panel { margin: 0 0 var(--gutter); min-width: 0; background: var(--panel); border: 1px solid var(--border); }
+/* A head reads as a bar: its own ground, an ink label in spaced capitals and
+   a firmer rule under it than the hairlines inside the panel. */
 .panel-head {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px;
-  min-height: 40px; padding: 8px 16px; background: var(--band); border-bottom: 1px solid var(--border);
+  min-height: 40px; padding: 8px 16px; background: var(--head); border-bottom: 1px solid var(--border-2);
 }
-.panel-head h2 { font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); overflow-wrap: anywhere; }
+.panel-head h2 { font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); overflow-wrap: anywhere; }
 .panel.soon .panel-head h2::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; background: var(--amber); vertical-align: 0; }
 .panel-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; font-size: 12px; line-height: 16px; color: var(--muted); }
 .panel-tools p { margin: 0; }
@@ -336,7 +371,10 @@ a.tile:hover { border-color: var(--border-2); background: var(--hover); }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 20px; }
 table.cols { table-layout: fixed; min-width: var(--tmin, 0px); }
-th { padding: 8px; text-align: left; vertical-align: bottom; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--border); overflow-wrap: break-word; }
+/* A head cell wraps between words only: a word longer than a narrow column
+   ("Organizations" over a count) runs into the cell's padding rather than
+   splitting. */
+th { padding: 8px; text-align: left; vertical-align: bottom; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--border); overflow-wrap: normal; }
 td { padding: 8px; vertical-align: top; border-bottom: 1px solid var(--border); overflow-wrap: break-word; }
 th:first-child, td:first-child { padding-left: 16px; }
 th:last-child, td:last-child { padding-right: 16px; }
@@ -345,11 +383,11 @@ th.num { text-align: right; }
    to work out each table's least width, and a test keeps the two equal. */
 .k-date { width: 112px; }
 .k-datetime { width: 156px; }
-.k-value { width: 120px; }
+.k-value { width: 132px; }
 .k-total { width: 148px; }
 .k-count { width: 96px; }
 .k-comp { width: 168px; }
-.k-amend { width: 150px; }
+.k-amend { width: 144px; }
 .k-record { width: 168px; }
 .k-org { width: 216px; }
 .k-buyer { width: 200px; }
@@ -410,6 +448,8 @@ td.c-notice a:first-child { font-weight: 500; }
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='19.5 7 12.5 18'%3E%3Cpath d='M19.87 12.99L22.53 12.99L23.57 17.27L24.43 21.12L24.56 21.75L24.67 21.12L25.48 17.27L26.48 12.99L28.2 7.21L31.5 7.21L26.35 24.56L23.19 24.56L21.91 20.1L21.08 16.59L21 16.95Z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .badge-expired { color: var(--muted); }
+/* Closing date passed: the file still lists the notice as open. */
+.badge-closed { color: var(--muted); }
 .badge-cancelled { color: var(--muted); text-decoration: line-through; }
 .badge-cancelled::before { background: var(--muted); border-color: var(--muted); }
 .badge-unknown { border-style: dashed; color: var(--muted); }
@@ -449,8 +489,8 @@ nav.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px
 ul.quick-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .quick-links li { margin: 0; }
 .quick-links a, .quick-links span[aria-current] {
-  display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border: 1px solid var(--border);
-  color: var(--ink-2); font-size: 12px; line-height: 16px; text-decoration: none; font-variant-numeric: tabular-nums;
+  display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border: 1px solid var(--border-2);
+  color: var(--ink-2); font-size: 12px; line-height: 16px; text-decoration: none;
 }
 .quick-links a:hover { border-color: var(--ink-2); color: var(--ink); }
 .quick-links [aria-current="page"] { border-color: var(--ink); background: var(--sel); color: var(--ink); font-weight: 600; }
@@ -520,7 +560,7 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
    document, like the year links on a list. */
 .doc-layout { display: grid; grid-template-columns: minmax(0, var(--measure)); gap: var(--gutter); align-items: start; margin: 0 0 var(--gutter); }
 .toc { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; background: var(--panel); border: 1px solid var(--border); font-size: 12px; line-height: 16px; }
-.toc-title { margin: 0 8px 0 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.toc-title { margin: 0 8px 0 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
 .toc a { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border: 1px solid var(--border); color: var(--ink-2); text-decoration: none; }
 .toc a:hover { border-color: var(--ink-2); color: var(--ink); }
 @media (min-width: 1440px) {
@@ -530,7 +570,7 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
     flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 0;
     padding: 0 0 8px; font-size: 13px; line-height: 20px;
   }
-  .toc-title { display: block; margin: 0 0 8px; padding: 12px 16px; background: var(--band); border-bottom: 1px solid var(--border); color: var(--ink-2); }
+  .toc-title { display: block; margin: 0 0 8px; padding: 12px 16px; background: var(--head); border-bottom: 1px solid var(--border-2); color: var(--ink); }
   .toc a { display: block; height: auto; padding: 6px 16px; border: 0; }
   .toc a:hover { background: var(--hover); }
 }
@@ -541,8 +581,8 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 /* Each section of a document opens on a labelled band across the panel. */
 .doc h2 {
   margin: var(--gutter) -16px 16px; padding: 12px 16px;
-  background: var(--band); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2);
+  background: var(--head); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border-2);
+  font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink);
 }
 .doc > h2:first-child { margin-top: 0; border-top: 0; }
 .doc > :first-child:not(h2) { margin-top: 16px; }
@@ -559,6 +599,7 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .bar-track { display: block; height: 8px; background: var(--sel); border: 1px solid var(--border); }
 .bar-fill { display: block; height: 100%; background: var(--ink-2); }
 .bar-total .bar-label, .bar-total .bar-value { font-weight: 600; }
+.bar-value { font-variant-numeric: tabular-nums; }
 .bar-stack { display: flex; height: 16px; max-width: 640px; overflow: hidden; }
 .bar-stack .bar-fill { flex: none; }
 .bar-fill-light, .swatch-light { background: var(--border-2); }
@@ -575,6 +616,18 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .stack .btn { align-self: flex-start; }
 .hp { position: absolute; left: -9999px; }
 .errors { padding: 8px 16px 8px 32px; border: 1px solid var(--ink-2); font-weight: 600; }
+
+/* -- long lists on a phone (public/pager.js) -------------------------------- */
+/* A table marked data-phone-page shows 50 rows at a time below 700 px; its
+   pager sits under it. Until the script has run, the rows past the first
+   50 wait hidden, so a phone never lays out hundreds of restacked rows. */
+.phone-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; font-size: 12px; line-height: 16px; }
+.phone-pager .pages { display: flex; gap: 8px; }
+/* A long table in a document folds on a phone (details.phone-fold): the
+   summary is the button that opens it, and wider screens never see it. */
+.phone-fold > summary { list-style: none; margin: 0 0 16px; }
+.phone-fold > summary::-webkit-details-marker { display: none; }
+@media (min-width: 700px) { .phone-fold > summary { display: none; } }
 
 /* -- charts (site/src/chart.tsx): HTML labels around a stretched SVG ------- */
 .chart { margin: 16px; }
@@ -594,6 +647,8 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .chart-x { position: relative; height: 24px; font-size: 11px; color: var(--muted); }
 .chart-x span, .chart-marks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .chart-x span { top: 6px; line-height: 1; }
+/* Every other year rests until the plot is wide enough for all of them. */
+@media (max-width: 1199px) { .chart-x .x-minor { display: none; } }
 .chart-x .x-start, .chart-marks .x-start { transform: none; }
 .chart-x .x-end, .chart-marks .x-end { transform: translateX(-100%); }
 .chart-marks { position: relative; height: var(--hn); margin: 0 0 3px; font-size: 11px; }
@@ -613,9 +668,14 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
   .topbar-meta { flex-wrap: wrap; width: 100%; margin-left: 0; }
   .asof { margin-right: auto; }
   .rail-group:first-child ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rail-item { padding: 4px 8px; }
+  .rail-item, .rail .rail-child { padding: 4px 8px; }
+  .rail-group:first-child ul.rail-sub { display: contents; }
   /* The browse links are in the footer as well; on a phone the rail keeps the counts and the lists. */
   .rail-browse { display: none; }
+  /* "Saved searches: soon" waits for wider screens, so the counts take fewer rows. */
+  .rail-later { display: none; }
+  /* A filter's name wraps rather than being cut, in French above all. */
+  .field-label { white-space: normal; overflow: visible; text-overflow: clip; }
   .toolbar-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .field-text, .toolbar-actions { grid-column: 1 / -1; }
   .toolbar-actions { margin-left: 0; }
@@ -627,8 +687,8 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
   dl, dl.wide { grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); }
   .bar-row { grid-template-columns: 96px minmax(0, 1fr) 64px; gap: 8px; }
   .chart-row { grid-template-columns: 3.6rem minmax(0, 1fr); column-gap: 6px; }
-  .chart-x .x-minor { display: none; }
   .keys { display: none; }
+  html.js .table-wrap[data-phone-page]:not(.paged) tbody > tr:nth-child(n+51) { display: none; }
   /* Safari on iPhone zooms in on a focused field set under 16 px. */
   select, textarea, input[type="text"], input[type="search"], input[type="number"], input[type="email"] { font-size: 16px; }
   /* Tables restack into labelled blocks, so no page scrolls sideways; a
@@ -638,10 +698,18 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
   .restack, .restack tbody, .restack tr, .restack td { display: block; width: 100%; }
   .restack tr { position: relative; padding: 8px 16px; border-bottom: 1px solid var(--border); }
   .restack tbody tr:last-child { border-bottom: 0; }
+  /* Each cell is its label in a 7rem column, floated into the cell's left
+     padding, then the value. The cell holds its floats (flow-root), so a
+     label that wraps to two lines pushes the next cell down instead of
+     running into its label; any content, several links and chips
+     included, flows beside it unchanged. */
   .restack td, .restack td:first-child, .restack td:last-child {
-    position: relative; min-height: 28px; padding: 4px 0 4px 7.5rem; border: 0; text-align: left; white-space: normal;
+    display: flow-root; position: relative; min-height: 28px; padding: 4px 0 4px 7.5rem; border: 0; text-align: left; white-space: normal;
   }
-  .restack td::before { content: attr(data-label); position: absolute; left: 0; top: 4px; width: 7rem; color: var(--muted); font-size: 12px; line-height: 20px; }
+  .restack td::before { content: attr(data-label); float: left; width: 7rem; margin-left: -7.5rem; color: var(--muted); font-size: 12px; line-height: 20px; overflow-wrap: break-word; }
+  /* A cell spanning the row (an empty state) has no label and takes the full width. */
+  .restack td[colspan], .restack td[colspan]:first-child { padding-left: 0; }
+  .restack td[colspan]::before { content: none; }
   .restack td:empty { display: none; }
   .restack tbody tr:hover > td:first-child, .restack tbody tr.is-sel > td:first-child { box-shadow: none; }
   .restack tbody tr:hover, .restack tbody tr.is-sel { box-shadow: inset 2px 0 0 var(--accent); }

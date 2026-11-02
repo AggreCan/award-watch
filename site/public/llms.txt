@@ -29,6 +29,8 @@ Downloads are limited to ten per minute per address.
 - https://awardwatch.ca/tenders: the open tender notices
 - https://awardwatch.ca/organizations: every organization A to Z by province
 - https://awardwatch.ca/corrections: how to report an error
+- https://awardwatch.ca/about: who publishes the site and how to reach it
+- https://awardwatch.ca/terms: the terms of use and reuse
 
 ## Terms
 

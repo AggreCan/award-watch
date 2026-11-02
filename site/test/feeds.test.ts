@@ -63,7 +63,7 @@ describe("watchlist page", () => {
     expect(res.status).toBe(200);
     const page = await res.text();
     expect(page).toContain("<h1>Watchlist</h1>");
-    expect(page).toContain('No organizations yet. Use the Watch button on a profile; the <a href="/organizations">directory</a> lists every organization.');
+    expect(page).toContain('No organization yet. Use the Watch button on a profile. The <a href="/organizations">directory</a> lists every organization.');
     expect(page).toContain("<noscript> The watchlist needs JavaScript.</noscript>");
     expect(page).toContain('<div id="watch-move" hidden="">');
     expect(page).toContain('<script src="/watchlist.js" defer=""></script>');

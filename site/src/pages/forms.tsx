@@ -12,7 +12,9 @@ import { retiredIdRedirect } from "./organization";
 // The two forms write the only tables the site's database holds
 // (organization_responses, corrections in pipeline/schema.sql). A row is
 // stored unpublished; the operator publishes it after review. The contact
-// field is optional and never shown.
+// field is never shown. It is required on the response form, since a
+// statement is published only once the site has confirmed it through that
+// address, and optional on the corrections form.
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const TEXT_MAX = 5000;
@@ -58,8 +60,8 @@ export async function respondForm(
       <form method="post" action={`/organizations/${id}/respond`} class="stack">
         <label>{t(lang, "form.statement")}<textarea name="text" rows={8} required maxlength={TEXT_MAX}>{values.text ?? ""}</textarea></label>
         <label>
-          {t(lang, "form.contact")}
-          <input name="contact" type="email" maxlength={CONTACT_MAX} value={values.contact ?? ""} />
+          {t(lang, "form.contact_required")}
+          <input name="contact" type="email" required maxlength={CONTACT_MAX} autocomplete="email" value={values.contact ?? ""} />
           <span class="muted small">{t(lang, "form.contact_note")}</span>
         </label>
         <div class="hp"><label>{t(lang, "form.honeypot")}<input name="website" type="text" tabindex={-1} autocomplete="off" /></label></div>
@@ -102,7 +104,8 @@ export async function respondSubmit(c: Context<AppEnv>): Promise<Response> {
   const contact = field(body, "contact", CONTACT_MAX);
   const errors: Key[] = [];
   if (text.length < 20) errors.push("form.err_statement");
-  if (contact && !EMAIL_RE.test(contact)) errors.push("form.err_contact");
+  if (!contact) errors.push("form.err_contact_missing");
+  else if (!EMAIL_RE.test(contact)) errors.push("form.err_contact");
   const profile = await loadProfile(c.env, id);
   // 308, not 301: a browser repeats a 308 as a POST with the same body, so a
   // statement typed on a form for a retired id is not lost.
@@ -111,7 +114,7 @@ export async function respondSubmit(c: Context<AppEnv>): Promise<Response> {
   try {
     await c.env.DB.prepare(
       "INSERT INTO organization_responses (organization_id, text, contact, submitted_at, published) VALUES (?, ?, ?, ?, 0)",
-    ).bind(id, text, contact || null, new Date().toISOString()).run();
+    ).bind(id, text, contact, new Date().toISOString()).run();
   } catch (e) {
     console.error(`response not stored: ${String(e).slice(0, 200)}`);
     return respondForm(c, UNAVAILABLE, { text, contact }, 503);
@@ -128,7 +131,7 @@ export async function correctionsForm(
     c,
     <Layout lang={lang} title={t(lang, "form.correct_title")} dataAsOf={await dataAsOf(c)} seo={pageSeo("corrections", lang)}>
       <PageHead lang={lang} title={t(lang, "form.correct_title")} lead={t(lang, "form.correct_intro")} />
-      <Panel title={t(lang, "footer.corrections")} class="panel-form">
+      <Panel title={t(lang, "form.correct_panel")} class="panel-form">
       {errors.length ? <ul class="errors">{errors.map((e) => <li>{t(lang, e)}</li>)}</ul> : null}
       <form method="post" action="/corrections" class="stack">
         <label>

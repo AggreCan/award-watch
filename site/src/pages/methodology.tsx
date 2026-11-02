@@ -89,6 +89,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           <h2 id="statuses">{t(lang, "methodology.toc_statuses")}</h2>
           <List lang={lang} keys={["methodology.status_open", "methodology.status_expired", "methodology.status_weekly"]} />
           <p>{t(lang, "methodology.status_closing", { days: CLOSING_SOON_DAYS })}</p>
+          <p>{t(lang, "methodology.status_past")}</p>
           <p>{t(lang, "methodology.status_awards")}</p>
           <p>{t(lang, "methodology.status_regions")}</p>
 

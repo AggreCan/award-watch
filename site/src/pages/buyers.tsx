@@ -8,13 +8,13 @@ import type { Context } from "hono";
 import { ChartStack, type Panel as ChartPanel } from "../chart";
 import { Table } from "../columns";
 import { MONEY_SOURCES } from "../constants";
-import { BUYER_ID_RE, loadBuyer, loadBuyers, loadStats, type BuyerSummary } from "../data";
+import { BUYER_ID_RE, loadBuyer, loadBuyerAlias, loadBuyers, loadStats, type BuyerSummary } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
-import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
+import { fmtInt, fmtMoney, fmtMoneyShort, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
+import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { buyerSeo, pageSeo } from "../seo";
 import { ExpiringSection } from "./expiring";
-import { AwardTable, OrgTotalTable, SourceLine, money } from "./shared";
+import { AwardTable, OrgTotalTable, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, money, shareText } from "./shared";
 
 const KIND: Record<string, Key> = {
   department: "buyer.kind_department",
@@ -47,12 +47,12 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={t(lang, "buyers.title")} dataAsOf={stats.data_as_of} active="/buyers" seo={pageSeo("buyers", lang)}>
-      <PageHead lang={lang} title={t(lang, "buyers.title")} lead={t(lang, "buyers.lead", { n: n(rows.length) })}
-        actions={<a href="/downloads/buyers.csv" class="btn">{t(lang, "tenders.csv")}</a>}>
-        <p class="page-note">{t(lang, "buyers.note")}</p>
+      <PageHead lang={lang} title={t(lang, "buyers.title")} lead={t(lang, "buyers.lead", { n: n(stats.counts.buyers ?? rows.length) })}
+        actions={<a href="/downloads/buyers.csv" class="btn">{t(lang, "buyers.csv")}</a>}>
+        <p class="page-note"><SourcesSeparate lang={lang} /> {t(lang, "buyers.note")}</p>
       </PageHead>
-      <Panel title={t(lang, "buyers.title")} count={n(rows.length)}>
-      <div class="table-wrap bordered">
+      <Panel title={t(lang, "buyers.panel")} count={n(rows.length)}>
+      <PhonePages lang={lang} on>
         <Table cols={[
           { kind: "main", label: t(lang, "col.buyer") },
           { kind: "count", label: t(lang, "buyers.col_open") },
@@ -79,8 +79,9 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
             ))}
           </tbody>
         </Table>
-      </div>
+      </PhonePages>
       </Panel>
+      <PhonePagerScript lang={lang} />
     </Layout>,
   );
 }
@@ -95,7 +96,16 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   const stats = await loadStats(c.env);
   if (!stats) return noDataPage(c, "buyers.title");
   const b = await loadBuyer(c.env, id);
-  if (!b) return notFoundPage(c, stats.data_as_of, "buyer.not_found", "/buyers", "buyer.back");
+  if (!b) {
+    // A buyer id that moved (the export's buyers/aliases.json) answers with its new address.
+    const moved = await loadBuyerAlias(c.env, id);
+    if (moved) {
+      const asked = c.req.query("lang");
+      c.header("Cache-Control", "public, max-age=300");
+      return c.redirect(`/buyers/${moved}${asked === "en" || asked === "fr" ? `?lang=${asked}` : ""}`, 301);
+    }
+    return notFoundPage(c, stats.data_as_of, "buyer.not_found", "/buyers", "buyer.back");
+  }
   const name = buyerName(lang, b.buyer);
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "buyers.title"), path: "/buyers" }, { name }];
   const n = (v: number) => fmtInt(v, lang);
@@ -118,6 +128,8 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
     );
   }
   const totals = { awards: b.buyer.total_awards, history: b.buyer.total_history ?? null, contracts: b.buyer.total_contracts, grants: b.buyer.total_grants };
+  // Years after the data date's are as the sources date them.
+  const lateYears = b.years.some((y) => y.year > Number(todayOf(stats.data_as_of).slice(0, 4)));
   const counts = { awards: b.buyer.n_awards, history: b.buyer.n_history, contracts: b.buyer.n_contracts, grants: b.buyer.n_grants };
 
   return page(
@@ -142,9 +154,10 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
           </div>
         ))}
       </section>
-      <p class="tiles-note">{t(lang, "org.never_added")}</p>
+      <p class="tiles-note"><SourcesSeparate lang={lang} /></p>
 
       <Panel title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
+      {lateYears ? <p class="muted small">{t(lang, "common.dates_as_published")}</p> : null}
       {chart}
       {years.length ? (
         <div class="table-wrap bordered">
@@ -164,9 +177,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
                   <td data-label={t(lang, "col.records")} class="mono num">{n(y.n)}</td>
                   <td data-label={t(lang, "col.value")} class="mono num">{money(lang, y.total)}</td>
                   <td data-label={t(lang, "org.col_nc_count")} class="mono num">
-                    {y.n_non_competitive === null || y.source === "grants"
-                      ? t(lang, "common.not_applicable")
-                      : t(lang, "org.share", { part: n(y.n_non_competitive), whole: n(y.n), pct: fmtPct(y.n_non_competitive, y.n, lang) ? ` (${fmtPct(y.n_non_competitive, y.n, lang)})` : "" })}
+                    {shareText(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}
                   </td>
                   <td data-label={t(lang, "buyer.col_organizations")} class="mono num mdh">{y.n_organizations === null ? "" : n(y.n_organizations)}</td>
                 </tr>

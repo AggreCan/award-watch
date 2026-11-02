@@ -81,12 +81,12 @@ describe("statements on the Data and Support pages", () => {
     expect(en).toContain("The site counts the pages it serves in aggregate");
     expect(en).toContain("keeps no IP address.");
     // The visitor code in plain words: what is hashed, that it rotates daily, that no address is kept.
-    expect(en).toContain("a visitor code: the IP address and the browser&#39;s identification are hashed (SHA-256) with a key that changes every day (UTC)");
+    expect(en).toContain("a visitor code. The IP address and the browser&#39;s identification are hashed (SHA-256) with a key that changes every day (UTC).");
     expect(en).toContain("The address and the browser&#39;s identification are then dropped.");
     expect(en).toContain("The same browser gets a different code the next day");
     const fr = (await get("/data?lang=fr", dated)).replace(/[\u00a0\u202f]/g, " ");
     expect(fr).toContain("Le site compte de façon agrégée les pages qu’il sert");
-    expect(fr).toContain("l’adresse IP et l’identification du navigateur sont hachées (SHA-256) avec une clé qui change chaque jour (UTC)");
+    expect(fr).toContain("L’adresse IP et l’identification du navigateur sont hachées (SHA-256) avec une clé qui change chaque jour (UTC).");
     expect(fr).toContain("L’adresse et l’identification du navigateur sont ensuite écartées.");
     expect(fr).toContain("Le même navigateur reçoit un code différent le lendemain");
     expect(fr).toContain("ne conserve aucune adresse IP.");

@@ -18,7 +18,7 @@ const text = async (path: string) =>
 const PAGES = [
   "/", "/tenders", "/tenders/new", "/tenders/cb-100-10000001", "/awards", "/awards/2026", "/awards/cb-400-40000004",
   "/expiring", "/expiring/3m", "/organizations", "/organizations/directory/on", "/organizations/org-a000000001",
-  "/organizations/org-a000000002", "/buyers", "/buyers/pwgsc-tpsgc", "/categories", "/categories/82", "/rankings",
+  "/organizations/org-a000000002", "/buyers", "/buyers/pwgsc-tpsgc", "/segments", "/segments/82", "/rankings",
   "/data", "/feeds", "/support", "/watchlist",
 ];
 
@@ -79,7 +79,7 @@ describe("column widths", () => {
     expect(data.table.heads.map((h: string[]) => h[0])).toEqual([
       "k-main c-notice", "k-buyer c-buyer", "k-datetime c-date", "k-date mdh c-pub", "k-region c-region",
     ]);
-    expect(data.table.heads.map((h: string[]) => h[1])).toEqual(["Notice", "Buyer", "Closing", "Published", "Region of delivery"]);
+    expect(data.table.heads.map((h: string[]) => h[1])).toEqual(["Notice", "Buyer", "Closing", "Published", "Provinces of delivery"]);
     expect(data.table.style).toMatch(/^--tmin:\d+px;--tmin-xl:\d+px;--tmin-lg:\d+px;--tmin-md:\d+px$/);
   });
 });

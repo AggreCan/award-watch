@@ -13,7 +13,7 @@ import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, provinceName, segmentLabel, statusLabel, t, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
 import { contractSeo } from "../seo";
-import { BuyerLink, awardNoticeUrl, datasetUrl, money, provincesText } from "./shared";
+import { BuyerLink, awardNoticeUrl, datasetUrl, money, otherLanguageMark, provincesText } from "./shared";
 
 const Row: FC<{ lang: Lang; k: Key; v: unknown }> = ({ lang, k, v }) =>
   v === null || v === undefined || v === "" ? null : (
@@ -23,10 +23,14 @@ const Row: FC<{ lang: Lang; k: Key; v: unknown }> = ({ lang, k, v }) =>
     </>
   );
 
-function listOf(lang: Lang, en: readonly string[] | null | undefined, fr: readonly string[] | null | undefined): string {
+// A bilingual list in the page's language (the other when the page's is
+// empty), one item to a line as on the tender page; null when empty, so the
+// row is left out.
+function listOf(lang: Lang, en: readonly string[] | null | undefined, fr: readonly string[] | null | undefined): unknown {
   const mine = lang === "fr" ? fr : en;
   const other = lang === "fr" ? en : fr;
-  return (mine && mine.length ? mine : other ?? []).join("; ");
+  const items = mine && mine.length ? mine : other ?? [];
+  return items.length ? <ul class="plain">{items.map((s) => <li>{s}</li>)}</ul> : null;
 }
 
 export async function contractPage(c: Context<AppEnv>, kind: "award" | "history", raw: string): Promise<Response> {
@@ -45,13 +49,20 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
   }
   const shownRef = publishedReference(d);
   const title = pick(lang, d.title_en, d.title_fr) ?? shownRef;
+  // A contract history record has no list page of its own; its middle crumb
+  // opens the supplier's contract history section when the supplier has a profile.
   const crumbs = kind === "award"
     ? [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "awards.title"), path: "/awards" }, { name: shownRef }]
-    : [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "contract.title_history") }, { name: shownRef }];
+    : [
+      { name: t(lang, "common.home"), path: "/" },
+      { name: t(lang, "contract.title_history"), path: d.organization_id ? `/organizations/${d.organization_id}#history` : undefined },
+      { name: shownRef },
+    ];
   const supplierPlace = [d.supplier_city, d.supplier_province ? provinceName(lang, d.supplier_province) : null,
     d.supplier_country && d.supplier_country !== "CA" ? d.supplier_country : null].filter(Boolean).join(", ");
   const versions = [...d.amendments].sort((a, b) => b.amendment - a.amendment);
   const description = pick(lang, d.description_en, d.description_fr);
+  const descriptionMark = otherLanguageMark(lang, d.description_en, d.description_fr);
   const nonCad = d.currency && d.currency !== "CAD";
 
   return page(
@@ -126,7 +137,7 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
             {d.codes.map((code) => (
               <li>
                 <span class="mono">{code.code}</span> {pick(lang, code.desc_en, code.desc_fr) ?? ""}{" "}
-                <a href={`/categories/${code.code.slice(0, 2)}`} class="muted small">{segmentLabel(lang, code.code.slice(0, 2))}</a>
+                <a href={`/segments/${code.code.slice(0, 2)}`} class="muted small">{segmentLabel(lang, code.code.slice(0, 2))}</a>
               </li>
             ))}
           </ul>
@@ -134,7 +145,7 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
       ) : null}
 
       {description ? (
-        <Panel title={t(lang, "tender.description_heading")}>
+        <Panel title={descriptionMark ? `${t(lang, "tender.description_heading")} ${descriptionMark}` : t(lang, "tender.description_heading")}>
           <div class="prose">{description.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
         </Panel>
       ) : null}

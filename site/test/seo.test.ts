@@ -48,8 +48,8 @@ const PAGES: [string, string, string][] = [
   ["/organizations/org-a000000001", `${O}/organizations/org-a000000001`, "Exemplar Translation Services Inc. | Award Watch"],
   ["/buyers", `${O}/buyers`, "Federal Buyers: Departments, Agencies and Crown Corporations | Award Watch"],
   ["/buyers/pwgsc-tpsgc", `${O}/buyers/pwgsc-tpsgc`, "Public Services and Procurement Canada | Award Watch"],
-  ["/categories", `${O}/categories`, "Federal Procurement by Category | Award Watch"],
-  ["/categories/82", `${O}/categories/82`, "Editorial and Design and Graphic and Fine Art Services | Award Watch"],
+  ["/segments", `${O}/segments`, "Federal Procurement by Segment | Award Watch"],
+  ["/segments/82", `${O}/segments/82`, "Editorial and Design and Graphic and Fine Art Services | Award Watch"],
   ["/rankings", `${O}/rankings`, "Rankings: Organizations by Federal Contracts and Grants | Award Watch"],
   ["/rankings/2026", `${O}/rankings/2026`, "Rankings for 2026 | Award Watch"],
   ["/feeds", `${O}/feeds`, "Atom Feeds | Award Watch"],
@@ -254,7 +254,7 @@ describe("crawler files", () => {
     const open = [
       "/", "/tenders", "/tenders?lang=fr", "/tenders/new", "/tenders/new?lang=fr", "/tenders/cb-100-10000001",
       "/organizations", "/organizations/org-a000000001", "/organizations/org-a000000001?lang=fr", "/organizations/directory/on/2",
-      "/buyers/dnd-mdn", "/categories/82", "/rankings", "/rankings?lang=fr", "/rankings/2026", "/corrections", "/corrections?lang=fr",
+      "/buyers/dnd-mdn", "/segments/82", "/rankings", "/rankings?lang=fr", "/rankings/2026", "/corrections", "/corrections?lang=fr",
       "/downloads/organizations.csv",
     ];
     const shut = [
