@@ -56,7 +56,8 @@ DARK_RULES = [
     (".btn", "background:#e5edf7!important"),
     (".btn a", "color:#0f172a!important"),
     (".chip", "border-color:#3b4a63!important;color:#c7d2e0!important"),
-    (".logo", "color:#e5edf7!important"),
+    (".logo-light", "display:none!important"),
+    (".logo-dark", "display:block!important"),
 ]
 
 
@@ -72,12 +73,18 @@ HEAD_CSS = T("""
   @media only screen and (max-width:620px){ .wrap{width:100%!important;} .pad{padding-left:18px!important;padding-right:18px!important;} }
 """, page=C["page"], dark=dark_css(""))
 
-# The wordmark: a hosted PNG at 2x, 142 by 20 CSS pixels, with the name as
-# the fallback text in the same weight, for a client that shows no images.
+# The wordmark: two hosted PNGs at 2x, 142 by 20 CSS pixels, with the name
+# as the fallback text for a client that shows no images. The light one is
+# ink on a baked white ground, so a client that darkens the page on its own
+# and leaves images alone (the Gmail apps) still shows it as a white tab;
+# the dark one is light ink on a transparent ground, shown instead by the
+# clients that honour the dark query (Apple Mail, iOS Mail, Outlook for Mac).
 WORDMARK_IMG = T(
-    '<a href="{{site}}" style="text-decoration:none;color:{{ink}};">'
-    '<img src="{{site}}/brand/wordmark.png" width="142" height="20" alt="Award Watch" '
-    'style="display:block;border:0;width:142px;height:20px;font:700 18px {{font}};color:{{ink}};"></a>',
+    '<a href="{{site}}" style="text-decoration:none;">'
+    '<img class="logo-light" src="{{site}}/brand/wordmark.png" width="142" height="20" alt="Award Watch" '
+    'style="display:block;border:0;width:142px;height:20px;font:700 18px {{font}};color:{{ink}};">'
+    '<img class="logo-dark" src="{{site}}/brand/wordmark-dark.png" width="142" height="20" alt="Award Watch" '
+    'style="display:none;border:0;width:142px;height:20px;font:700 18px {{font}};color:#e5edf7;"></a>',
     site=SITE, ink=C["ink"], font=FONT)
 
 SHELL = T("""<!DOCTYPE html>
@@ -407,14 +414,17 @@ body.dark{background:#070d18;color:#e5edf7;}
 """, font_b64=FONT_B64, font=FONT, ink=C["ink"], ink2=C["ink2"], muted=C["muted"], accent=C["accent"], page=C["page"],
      dark_sheet=dark_css(".dark "))
 
-INLINE_LOGO = WORDMARK_SVG.replace('width="241" height="34"', 'width="142" height="20" style="display:block;"', 1)
+def inline_logo(cls: str, color: str, shown: bool) -> str:
+    svg = WORDMARK_SVG.replace('width="241" height="34"', 'width="142" height="20"', 1)
+    return f'<span class="{cls}" style="display:{"block" if shown else "none"};color:{color};line-height:0;">{svg}</span>'
 
 
 def embed(page: str) -> str:
-    """The email's body content for the sheet, with the hosted PNG swapped for the inline SVG."""
+    """The email's body content for the sheet, with the hosted PNGs swapped for inline SVGs in each colour."""
     m = re.search(r"<body[^>]*>(.*)</body>", page, re.S)
     inner = m.group(1)
-    inner = re.sub(r'<img src="[^"]*wordmark\.png"[^>]*>', INLINE_LOGO, inner)
+    inner = re.sub(r'<img class="logo-light"[^>]*>', inline_logo("logo-light", C["ink"], True), inner)
+    inner = re.sub(r'<img class="logo-dark"[^>]*>', inline_logo("logo-dark", "#e5edf7", False), inner)
     return f'<div class="mail bg" style="background:{C["page"]};">{inner}</div>'
 
 
