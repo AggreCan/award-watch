@@ -12,12 +12,15 @@
 // name is a proper name and stays English in French strings.
 
 import { SEGMENTS, SEGMENT_SHORT } from "./constants";
+import { ACCOUNT_STRINGS } from "./account/strings";
 
 export type Lang = "en" | "fr";
 
 type Entry = { en: string; fr: string };
 
 const STRINGS = {
+  // The accounts module's strings live with the module (src/account/strings.ts).
+  ...ACCOUNT_STRINGS,
   "site.name": { en: "Award Watch", fr: "Award Watch" },
   "site.tagline": {
     en: "Federal tenders, awards, contracts and grants, by organization.",

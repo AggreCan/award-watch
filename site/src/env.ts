@@ -39,6 +39,22 @@ export interface Env {
   // otherwise reads the time of the request (src/closing.ts). The tests set
   // it so the fixtures' closing states hold; never set in production.
   NOW?: string;
+
+  // -- accounts (src/account/, docs/accounts.md) -----------------------------
+  // The accounts database, apart from the forms database on purpose.
+  ACCOUNTS?: D1Database;
+  // The switch: "true" opens /account. Anything else keeps every account
+  // route a 404 and every public page exactly as it was.
+  ACCOUNTS_ENABLED?: string;
+  // "log" writes sign-in messages to the local outbox, and only on a local
+  // host; unset (production), messages go to the stub sender until a
+  // provider is wired in. MAIL_API_KEY is that provider's key (a secret);
+  // MAIL_FROM its verified sending address.
+  MAIL_SENDER?: string;
+  MAIL_API_KEY?: string;
+  MAIL_FROM?: string;
+  // Sign-in and code posts per address (wrangler.jsonc "ratelimits").
+  AUTH_LIMIT?: RateLimit;
 }
 
 export type AppEnv = {

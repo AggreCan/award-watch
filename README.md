@@ -24,6 +24,9 @@ finds an organization by any spelling on its records or its business number,
 and a buyer by name or acronym (`docs/hosted-search.md`); another holds only
 what visitors submit; object storage holds the downloads.
 
+Accounts (sign-in by an emailed code, saved searches, API keys) are built but
+not yet open; the switch `ACCOUNTS_ENABLED` keeps them off (`docs/accounts.md`).
+
 ## Quick start
 ```
 cd pipeline && pip install -e .[dev] && pytest

@@ -21,7 +21,10 @@
     { "name": "API_LIMIT", "namespace_id": "2002", "simple": { "limit": 60, "period": 60 } },
     { "name": "DOWNLOAD_LIMIT", "namespace_id": "2003", "simple": { "limit": 10, "period": 60 } },
     { "name": "FORM_LIMIT", "namespace_id": "2004", "simple": { "limit": 5, "period": 60 } },
-    { "name": "FEED_LIMIT", "namespace_id": "2005", "simple": { "limit": 600, "period": 60 } }
+    { "name": "FEED_LIMIT", "namespace_id": "2005", "simple": { "limit": 600, "period": 60 } },
+    // Accounts: posts of an address or a code to /account/sign-in and
+    // /account/check, only while ACCOUNTS_ENABLED is "true" (src/account/).
+    { "name": "AUTH_LIMIT", "namespace_id": "2006", "simple": { "limit": 5, "period": 60 } }
   ],
   // The daily check (src/watchdog.ts): 06:00 UTC, after the nightly run has had
   // its window. It emails the operator through the email binding when the data,
@@ -62,6 +65,16 @@
       "binding": "SEARCH",
       "database_name": "awardwatch-search",
       "database_id": "bd8f5b25-a9d6-423a-88bf-301c9a313820"
+    },
+    {
+      // Accounts (src/account/, docs/accounts.md): users, sign-in codes,
+      // sessions, saved searches, API keys, entitlements and the audit trail,
+      // apart from the forms database on purpose. Schema in
+      // accounts_schema.sql, applied by hand. Read only while
+      // ACCOUNTS_ENABLED is "true".
+      "binding": "ACCOUNTS",
+      "database_name": "awardwatch-accounts",
+      "database_id": "c5e21d6e-fe3c-4a3a-8d82-96e809e273b1"
     }
   ],
   "r2_buckets": [
@@ -73,11 +86,13 @@
   // ALERT_FROM is the daily check's sender on the zone. RUN_LOG_URL and
   // SITE_URL are the two addresses its email links to; the run log's address
   // is set by the operator once the repository exists (empty leaves the line
-  // out).
+  // out). ACCOUNTS_ENABLED is the accounts switch: "false" keeps every
+  // /account route a 404 and every public page as it was (docs/accounts.md).
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
-    "SITE_URL": "https://awardwatch.ca"
+    "SITE_URL": "https://awardwatch.ca",
+    "ACCOUNTS_ENABLED": "false"
   },
   "observability": {
     "enabled": true

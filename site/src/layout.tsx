@@ -6,6 +6,7 @@ import { type Competitive, type RailCounts, competitiveOf, loadRail } from "./da
 import type { AppEnv } from "./env";
 import { competitiveLabel, fmtInt, statusLabel, t, type Key, type Lang } from "./i18n";
 import { type Seo, absoluteUrl, alternates, canonicalUrl, defaultDescription, pageTitle } from "./seo";
+import { type RailAccount, railAccount } from "./account/session";
 
 // The formatting helpers live with the dictionary; pages import them from here.
 export { fmtInt, fmtMoney, fmtMoneyShort, pick } from "./i18n";
@@ -232,7 +233,7 @@ const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, lang, tit
 // each pass it: the rail's counts, and the page's own address as viewKey()
 // writes it, so the rail can mark the item that leads exactly here. Outside
 // page() (the error handler) the rail shows its links bare.
-export type Shell = { rail: RailCounts | null; here: string };
+export type Shell = { rail: RailCounts | null; here: string; account?: RailAccount };
 export const RailContext = createContext<Shell | null>(null);
 
 // A path and its query as one view: the language and the page number left
@@ -293,7 +294,7 @@ export function railStates(entries: readonly RailEntry[], here: string, section?
 // without moving anything above them. Nothing in it assumes a signed-in
 // reader: the watchlist lives in this browser, and alerts are a link to the
 // page that says they are coming and takes an address meanwhile.
-const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: string }> = ({ lang, active, rail, here }) => {
+const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: string; account?: RailAccount }> = ({ lang, active, rail, here, account }) => {
   const year = rail?.year ?? new Date().toISOString().slice(0, 4);
   const expiring = rail?.ending12m !== undefined || rail?.ending3m !== undefined;
   const index: RailEntry[] = [
@@ -362,6 +363,15 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
               <span class="rail-label">{t(lang, "rail.alerts_soon")}</span>
             </a>
           </li>
+          {/* Accounts (src/account/): only while the switch is on, so the rail is unchanged while it is off. */}
+          {account ? (
+            <li>
+              <a class="rail-item rail-account" href={account.email ? "/account" : "/account/sign-in"}
+                aria-current={active === "/account" ? "page" : undefined}>
+                <span class="rail-label">{account.email ?? t(lang, "account.sign_in")}</span>
+              </a>
+            </li>
+          ) : null}
         </ul>
       </div>
     </nav>
@@ -370,7 +380,7 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 8;
+export const STYLES_VERSION = 9;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -425,7 +435,7 @@ export const Layout: FC<
           </div>
         </header>
         <div class="frame">
-          <Rail lang={lang} active={active} rail={shell?.rail ?? null} here={shell?.here ?? ""} />
+          <Rail lang={lang} active={active} rail={shell?.rail ?? null} here={shell?.here ?? ""} account={shell?.account} />
           <div class="content">
             <main id="main">{props.children}</main>
             <footer class="site-footer">
@@ -471,6 +481,11 @@ export async function page(c: Context<AppEnv>, body: unknown, status = 200): Pro
   const url = new URL(c.req.url);
   const shell: Shell = { rail, here: viewKey(`${url.pathname}${url.search}`) };
   c.header("Cache-Control", status === 200 ? "public, max-age=300" : "no-store");
+  // Accounts: undefined while the switch is off, and nothing is read. A page
+  // that names the signed-in address is never stored by a shared cache.
+  const account = await railAccount(c).catch(() => undefined);
+  if (account) shell.account = account;
+  if (account?.email) c.header("Cache-Control", "private, no-store");
   return c.html(html`<!doctype html>${(<RailContext.Provider value={shell}>{body as any}</RailContext.Provider>) as any}`, status as any);
 }
 

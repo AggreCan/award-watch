@@ -1,6 +1,7 @@
 import type { Context, Next } from "hono";
 import type { AppEnv, Env } from "./env";
 import { t } from "./i18n";
+import { accountsEnabled } from "./account/switch";
 
 // Which cap a request falls under. The API and the downloads get their own
 // because a script can hammer them without ever looking like a visitor; form
@@ -10,7 +11,11 @@ import { t } from "./i18n";
 // from one address, and a 429 there would also hide those polls from the
 // counts (views.ts). Other static files are served before the Worker runs
 // and never arrive here.
-export type Bucket = "page" | "api" | "download" | "form" | "feed";
+//
+// The sign-in posts of the accounts module (the address and the code) get
+// the tightest cap of all, "auth", while the switch is on; while it is off
+// they are unknown paths and count as pages, as they did before.
+export type Bucket = "page" | "api" | "download" | "form" | "feed" | "auth";
 
 // A HEAD request for a download (a link checker, a client asking a file's
 // size before fetching it) moves no file, so it is not counted against the
@@ -19,6 +24,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/data/feeds/")) return "feed";
   if (path.startsWith("/api/")) return "api";
   if (path.startsWith("/downloads/")) return method === "HEAD" ? "page" : "download";
+  if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
     return "form";
   }
@@ -26,7 +32,7 @@ export function bucketFor(method: string, path: string): Bucket {
 }
 
 const BINDING: Record<Bucket, keyof Env> = {
-  page: "PAGE_LIMIT", api: "API_LIMIT", download: "DOWNLOAD_LIMIT", form: "FORM_LIMIT", feed: "FEED_LIMIT",
+  page: "PAGE_LIMIT", api: "API_LIMIT", download: "DOWNLOAD_LIMIT", form: "FORM_LIMIT", feed: "FEED_LIMIT", auth: "AUTH_LIMIT",
 };
 
 // The address Cloudflare saw. The edge sets this header itself and drops any
@@ -36,7 +42,8 @@ export function clientKey(c: Context<AppEnv>): string {
 }
 
 export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response | void> {
-  const bucket = bucketFor(c.req.method, c.req.path);
+  let bucket = bucketFor(c.req.method, c.req.path);
+  if (bucket === "auth" && !accountsEnabled(c.env)) bucket = "page";
   const limiter = c.env[BINDING[bucket]] as RateLimit | undefined;
   if (!limiter) return next();
   let allowed = true;

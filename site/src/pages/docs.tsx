@@ -12,6 +12,8 @@ import type { AppEnv } from "../env";
 import { t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { OGL_URL, pageSeo, type PageKey } from "../seo";
+import { AccountsPrivacy } from "../account/privacy";
+import { accountsEnabled } from "../account/switch";
 
 export const CONTACT_EMAIL = "contact@awardwatch.ca";
 
@@ -128,8 +130,12 @@ export function termsPage(c: Context<AppEnv>): Promise<Response> {
 }
 
 export function privacyPage(c: Context<AppEnv>): Promise<Response> {
+  // While accounts are open (src/account/switch.ts) the first section says what an account keeps.
+  const accounts = accountsEnabled(c.env);
   return doc(c, "privacy", "privacy.title", "privacy.lead", (lang) => [
-    { id: "accounts", title: "privacy.toc_accounts", body: <p>{t(lang, "privacy.accounts")}</p> },
+    accounts
+      ? { id: "accounts", title: "account.privacy_toc", body: <AccountsPrivacy lang={lang} /> }
+      : { id: "accounts", title: "privacy.toc_accounts", body: <p>{t(lang, "privacy.accounts")}</p> },
     { id: "browser", title: "privacy.toc_browser", body: <p>{t(lang, "privacy.cookie")}</p> },
     {
       id: "counting", title: "privacy.toc_counting", body: (
