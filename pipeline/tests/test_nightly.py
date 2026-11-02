@@ -396,7 +396,7 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
     assert set(status) == {"run_at", "stages", "steps", "search_sync", "views_rollup", "search_console",
                            "views_report", "indexnow", "interest", "restore", "smoke", "smoke_detail",
                            "version_before", "rollback", "deploy_rolled_back", "checks", "notices", "ok"}
-    # The search database step is not in the workflow yet; the site's check reads the field.
+    # No outcome file: the search database step did not run. The site's check reads the field.
     assert status["search_sync"] == "not run" and status["ok"] is True
 
 
@@ -759,9 +759,45 @@ def test_the_workflow_carries_the_project_identity_and_no_other_site():
     assert 'git config user.name "Award Watch"' in record and 'git config user.email "ops@awardwatch.invalid"' in record
     assert 'TZ=UTC git commit -m "refresh: $(date -u +%Y-%m-%d)"' in record
     assert text.count("${AWARDWATCH_SITE_URL:-https://awardwatch.ca}") == 2
-    # No social posting or deposit steps, no mirror of source files, no search sync yet.
-    for gone in ("bsky", "bluesky", "zenodo", "x_post", "x_api", "mirror", "search-sync", chr(0x2014)):
+    # No social posting or deposit steps, no mirror of source files.
+    for gone in ("bsky", "bluesky", "zenodo", "x_post", "x_api", "mirror", chr(0x2014)):
         assert gone not in text.lower(), gone
+
+
+def test_the_workflow_syncs_the_search_database_before_the_deploy_and_never_holds_it_back():
+    from awardwatch_pipeline import search_db
+
+    text = WORKFLOW.read_text(encoding="utf-8")
+    names = [line.strip()[len("- name: "):] for line in text.splitlines() if line.strip().startswith("- name: ")]
+    at = names.index("Sync the search database")
+    assert names[at - 1] == "Check the database and the export" and names[at + 1] == "Bundle the static data for the site"
+    assert at < names.index("Deploy the Worker with the new data as assets") < names.index("Save the database to R2")
+    sync = step(text, "Sync the search database")
+    assert "id: search" in sync and "continue-on-error: true" in sync and "timeout-minutes: 60" in sync
+    assert "steps.verify.outputs.export_ok == 'true' && steps.verify.outputs.db_ok == 'true'" in sync
+    # In this order: plan, schema, every batch in batches.txt, the counts, the check, the ledger.
+    order = [
+        "awardwatch_pipeline search-sync --db ../data/awardwatch.sqlite --static ../data/out/static --out \"$out\"",
+        '"$WRANGLER" d1 execute awardwatch-search --remote --yes --file ../pipeline/search_schema.sql',
+        'for batch in $(cat "$out/batches.txt"); do',
+        '"$WRANGLER" d1 execute awardwatch-search --remote --yes --file "$out/$batch"',
+        f'"$WRANGLER" d1 execute awardwatch-search --remote --json --command "{search_db.COUNT_SQL}" > "$out/count.json"',
+        'search-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --counts "$out/count.json"',
+        'search-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"',
+    ]
+    places = [sync.index(line) for line in order]
+    assert places == sorted(places)
+    # The deploy and the steps before it never wait on the sync.
+    for name in ("Bundle the static data for the site", "Deploy the Worker with the new data as assets",
+                 "Save the database to R2"):
+        assert "steps.search." not in step(text, name), name
+    # The run status and the record read its outcome.
+    assert "--search-outcome data/out/search/last_outcome.txt" in step(text, "Write the run status")
+    assert 'echo "Search database: $(cat data/out/search/last_outcome.txt)"' in step(
+        text, "Record the run so the schedule stays enabled")
+    # The binding the site reads is the database the step writes.
+    wrangler = (WORKFLOW.parents[2] / "site" / "wrangler.jsonc").read_text(encoding="utf-8")
+    assert '"binding": "SEARCH"' in wrangler and '"database_name": "awardwatch-search"' in wrangler
 
 
 def test_the_workflow_moves_the_backup_in_parts():

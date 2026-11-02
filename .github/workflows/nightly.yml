@@ -20,7 +20,8 @@
 # history, the published contracts, the grants and contributions, the
 # lobbying communications, the federal corporations registry, then the
 # organizations, the yearly figures and the export), check the database and
-# the export, record the Worker version serving traffic, deploy the Worker
+# the export, sync the hosted search database (D1, the changed rows only),
+# record the Worker version serving traffic, deploy the Worker
 # with that data as its assets, check the live site and roll the Worker back
 # when the deploy broke it, tell IndexNow which pages changed, save the
 # database (in parts), the public files (the static bundle, also in parts,
@@ -61,6 +62,10 @@
 # - A count of the alert sign-ups that cannot be read leaves the status's
 #   interest counts empty and adds a notice: information, never an item
 #   needing attention and never a failed run. The next run counts again.
+# - A search database sync that fails is reported (search_sync: failed, an
+#   item needing attention) and stops nothing: the deploy goes ahead, the
+#   search page answers from what D1 already holds, and the next night sends
+#   the same changes again.
 # - An IndexNow submission that fails is reported (indexnow in the run status)
 #   and never stops the run; only a rejection (the key file or the payload is
 #   wrong) is an item needing attention.
@@ -300,6 +305,37 @@ jobs:
         run: |
           python -m awardwatch_pipeline.nightly verify --db data/awardwatch.sqlite --static data/out/static \
             --started-file data/out/run_started.txt --restore data/out/restore.json --out data/out/verify.json
+
+      # The hosted search database, D1 awardwatch-search (docs/hosted-search.md):
+      # search-sync compares tonight's organizations and buyers with the
+      # ledger in the pipeline database and writes the changed rows as SQL
+      # batches (batches.txt lists them in order). Wrangler applies the schema
+      # (IF NOT EXISTS throughout, so it changes nothing on a database that has
+      # it) and each batch, then reads the row counts back; search-check
+      # compares them with the manifest, and only then does search-synced
+      # record the ledger. The ledger travels with the database, so this runs
+      # before the save. search-sync writes "failed" to the outcome file first
+      # and search-synced replaces it, so a step stopped anywhere reads as
+      # failed: an item needing attention (search_sync in the run status) that
+      # stops nothing. The deploy goes ahead and the search page answers from
+      # what D1 already holds; the next night sends the same changes again.
+      - name: Sync the search database
+        id: search
+        if: ${{ !cancelled() && steps.verify.outputs.export_ok == 'true' && steps.verify.outputs.db_ok == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 60
+        working-directory: site
+        run: |
+          out=../data/out/search
+          python -m awardwatch_pipeline search-sync --db ../data/awardwatch.sqlite --static ../data/out/static --out "$out"
+          "$WRANGLER" d1 execute awardwatch-search --remote --yes --file ../pipeline/search_schema.sql
+          for batch in $(cat "$out/batches.txt"); do
+            echo "Applying $batch"
+            "$WRANGLER" d1 execute awardwatch-search --remote --yes --file "$out/$batch"
+          done
+          "$WRANGLER" d1 execute awardwatch-search --remote --json --command "SELECT (SELECT COUNT(*) FROM search_orgs) AS orgs, (SELECT COUNT(*) FROM search_buyers) AS buyers" > "$out/count.json"
+          python -m awardwatch_pipeline search-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --counts "$out/count.json"
+          python -m awardwatch_pipeline search-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"
 
       - name: Bundle the static data for the site
         id: bundle
@@ -807,8 +843,9 @@ jobs:
       # audience roll-up, the Search Console import, the monthly report and
       # the IndexNow submission, the count of alert sign-ups (interest), where
       # the database came from (restore), the smoke test and any rollback, and
-      # the expiry checks. search_sync reads "not run" until the hosted search
-      # database ships. Written whatever happened above. The roll-up, Search
+      # the expiry checks. search_sync is the search database sync's outcome
+      # ("synced", "nothing to send", "failed", or "not run" when the checks
+      # before it failed). Written whatever happened above. The roll-up, Search
       # Console, report, IndexNow and rollback steps write "failed" before
       # they start, so a step stopped by its time limit still reads as failed.
       - name: Write the run status
@@ -817,6 +854,7 @@ jobs:
           python -m awardwatch_pipeline.nightly status --db data/awardwatch.sqlite \
             --started-file data/out/run_started.txt --verify data/out/verify.json \
             --views-outcome data/out/views/last_outcome.txt \
+            --search-outcome data/out/search/last_outcome.txt \
             --indexnow-outcome data/out/indexnow/last_outcome.txt \
             --search-console-outcome data/out/search_console/last_outcome.txt \
             --views-report-outcome data/out/report/last_outcome.txt \
@@ -867,6 +905,10 @@ jobs:
           if [ -f data/out/indexnow/last_outcome.txt ]; then
             echo "" >> LAST_RUN.md
             echo "IndexNow: $(cat data/out/indexnow/last_outcome.txt)" >> LAST_RUN.md
+          fi
+          if [ -f data/out/search/last_outcome.txt ]; then
+            echo "" >> LAST_RUN.md
+            echo "Search database: $(cat data/out/search/last_outcome.txt)" >> LAST_RUN.md
           fi
           # The run's notices, one per line with its full text (nothing when
           # there are none); a fault here leaves them out of the record only.

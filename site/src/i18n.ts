@@ -969,6 +969,55 @@ const STRINGS = {
   "directory.range": { en: "This page: {first} to {last}", fr: "Cette page : de {first} à {last}" },
   "directory.pages": { en: "All Pages", fr: "Toutes les pages" },
 
+  // -- search (the top bar's field and /search) ------------------------------------------------
+  "search.placeholder": { en: "Search organizations and buyers", fr: "Rechercher des organisations et des acheteurs" },
+  "search.label": {
+    en: "Search organizations and buyers by name or business number",
+    fr: "Rechercher des organisations et des acheteurs par nom ou par numéro d'entreprise",
+  },
+  "search.submit": { en: "Search", fr: "Rechercher" },
+  "search.title": { en: "Search Organizations and Buyers", fr: "Rechercher des organisations et des acheteurs" },
+  "search.title_q": { en: "Search: {q}", fr: "Recherche : {q}" },
+  "search.description": {
+    en: "Find an organization by any name on its federal records or by its business number, and a federal buyer by its name or acronym.",
+    fr: "Trouver une organisation par tout nom qui figure à ses dossiers fédéraux ou par son numéro d'entreprise, et un acheteur fédéral par son nom ou son sigle.",
+  },
+  "search.empty_lead": {
+    en: "Type an organization's name, any spelling found on its records or its business number, or a federal buyer's name or acronym, in English or French.",
+    fr: "Entrez le nom d'une organisation, toute graphie qui figure à ses dossiers ou son numéro d'entreprise, ou le nom ou le sigle d'un acheteur fédéral, en français ou en anglais.",
+  },
+  "search.no_terms": { en: "A search needs at least one letter or digit.", fr: "Une recherche doit contenir au moins une lettre ou un chiffre." },
+  "search.what": {
+    en: "Searched: organization names and every other spelling on their records, business numbers, and buyer names in English and French with their acronyms. The records themselves (titles, descriptions) are not searched. The last word also matches the start of a longer word. The closest names come first, then the organizations with the most records.",
+    fr: "Recherche dans : les noms des organisations et toutes les autres graphies de leurs dossiers, les numéros d'entreprise, et les noms des acheteurs en français et en anglais avec leurs sigles. Les dossiers eux-mêmes (titres, descriptions) ne sont pas cherchés. Le dernier mot trouve aussi le début d'un mot plus long. Les noms les plus proches viennent d'abord, puis les organisations qui comptent le plus de dossiers.",
+  },
+  "search.lead": { en: "{orgs} and {buyers} match.", fr: "{orgs} et {buyers} correspondent." },
+  "search.orgs_one": { en: "{n} organization", fr: "{n} organisation" },
+  "search.orgs_many": { en: "{n} organizations", fr: "{n} organisations" },
+  "search.buyers_one": { en: "{n} buyer", fr: "{n} acheteur" },
+  "search.buyers_many": { en: "{n} buyers", fr: "{n} acheteurs" },
+  "search.none": { en: "No organization or buyer name matches “{q}”.", fr: "Aucun nom d'organisation ou d'acheteur ne correspond à « {q} »." },
+  "search.none_hint": {
+    en: "Check the spelling or try fewer words, or browse the {directory} and the {buyers}.",
+    fr: "Vérifiez l'orthographe ou essayez moins de mots, ou parcourez le {directory} et la {buyers}.",
+  },
+  "search.buyers_link": { en: "list of federal buyers", fr: "liste des acheteurs fédéraux" },
+  "search.unavailable": { en: "Search Is Unavailable", fr: "Recherche indisponible" },
+  "search.unavailable_text": {
+    en: "The search database did not answer. Try again in a few minutes, or find an organization in the {directory} and a buyer in the {buyers}.",
+    fr: "La base de données de recherche n'a pas répondu. Réessayez dans quelques minutes, ou trouvez une organisation dans le {directory} et un acheteur dans la {buyers}.",
+  },
+  "search.range": { en: "{from} to {to} of {total}", fr: "{from} à {to} sur {total}" },
+  "search.col_lobbying": { en: "Lobbying", fr: "Lobbyisme" },
+  "search.no_orgs": { en: "No organization name matches.", fr: "Aucun nom d'organisation ne correspond." },
+  "search.buyers_shown": { en: "The {n} closest of {total}", fr: "Les {n} plus proches sur {total}" },
+  "search.buyers_narrow": { en: "Add a word to narrow the list of buyers.", fr: "Ajoutez un mot pour réduire la liste des acheteurs." },
+  "search.buyers_first_page": { en: "Matching buyers are listed on the first page.", fr: "Les acheteurs qui correspondent figurent sur la première page." },
+  "search.page_cap": {
+    en: "The first {n} organizations are listed; add a word to narrow the list.",
+    fr: "Les {n} premières organisations sont listées; ajoutez un mot pour réduire la liste.",
+  },
+
   // -- feeds ------------------------------------------------------------------------------------
   "feeds.title": { en: "Atom Feeds", fr: "Fils Atom" },
   "feeds.lead": {

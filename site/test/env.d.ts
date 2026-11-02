@@ -4,6 +4,8 @@
 declare namespace Cloudflare {
   interface Env {
     DB: D1Database;
+    SEARCH: D1Database;
+    SEARCH_SCHEMA_SQL: string;
     DATA: R2Bucket;
     ASSETS: Fetcher;
     SCHEMA_SQL: string;

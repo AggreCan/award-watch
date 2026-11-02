@@ -16,6 +16,8 @@ export default defineConfig({
           SCHEMA_SQL: readFileSync("../pipeline/schema.sql", "utf8"),
           SEED_SQL: readFileSync("./seed/dev_seed.sql", "utf8"),
           STYLES_CSS: readFileSync("./public/styles.css", "utf8"),
+          // The hosted search database's schema; test/search.test.ts applies it.
+          SEARCH_SCHEMA_SQL: readFileSync("../pipeline/search_schema.sql", "utf8"),
         },
       },
     }),

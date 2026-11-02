@@ -6,10 +6,10 @@ running the nightly refresh. It ships the Worker from `main` together with
 the data the site already serves, and it is built so that it cannot write,
 delete or change that data. The data here means the R2 bucket
 `awardwatch-data` (backups, the static bundle `static.tar.gz.parts` and its
-parts, `downloads/`, `review/`, `views/`, `status.json`), the D1 database
-`award-watch` (the forms; the hosted search database `awardwatch-search`
-will join it), and the data files the Worker serves as assets
-(`site/public/data`).
+parts, `downloads/`, `review/`, `views/`, `status.json`), the D1 databases
+`award-watch` (the forms) and `awardwatch-search` (the hosted search
+database, which only the nightly sync writes; `docs/hosted-search.md`), and
+the data files the Worker serves as assets (`site/public/data`).
 
 ## What it is for
 

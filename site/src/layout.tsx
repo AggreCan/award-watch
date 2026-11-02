@@ -382,8 +382,19 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
 // cached copy is never paired with new markup.
 export const STYLES_VERSION = 6;
 
+// The top bar's search field, on every page: a plain GET form to /search
+// (src/pages/search.tsx), so it works without the scripts. A form with one
+// field submits on Enter, so it needs no button. query fills it on the
+// results page.
+export const TopbarSearch: FC<{ lang: Lang; query?: string }> = ({ lang, query }) => (
+  <form class="topbar-search" method="get" action="/search" role="search">
+    <input type="search" name="q" value={query ?? ""} maxlength={200} autocomplete="off"
+      placeholder={t(lang, "search.placeholder")} aria-label={t(lang, "search.label")} />
+  </form>
+);
+
 export const Layout: FC<
-  PropsWithChildren<{ lang: Lang; title: string; dataAsOf: string | null; active?: string; head?: unknown; seo?: Seo }>
+  PropsWithChildren<{ lang: Lang; title: string; dataAsOf: string | null; active?: string; head?: unknown; seo?: Seo; query?: string }>
 > = (props) => {
   const { lang, active } = props;
   const title = props.seo?.title ?? pageTitle(props.title);
@@ -411,6 +422,7 @@ export const Layout: FC<
           <a href="/" class="brand" aria-label={t(lang, "site.name")}>
             <BrandWordmark name={t(lang, "site.name")} />
           </a>
+          <TopbarSearch lang={lang} query={props.query} />
           <div class="topbar-meta">
             <span class="asof">{t(lang, "nav.data_date", { date: props.dataAsOf ?? t(lang, "common.na") })}</span>
             <a href={`?lang=${lang === "fr" ? "en" : "fr"}`} class="lang-toggle" rel="nofollow">

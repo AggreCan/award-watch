@@ -53,6 +53,15 @@
       "database_name": "award-watch",
       // Replace with the id printed by `wrangler d1 create award-watch` on the project account.
       "database_id": "7248573a-8f5a-4c18-a2f3-5eaa5eb813f6"
+    },
+    {
+      // The hosted search database: organizations and buyers by name, read by
+      // /search with prepared statements only (src/search_db.ts). Written by
+      // the nightly workflow's "Sync the search database" step alone, schema
+      // in pipeline/search_schema.sql (docs/hosted-search.md).
+      "binding": "SEARCH",
+      "database_name": "awardwatch-search",
+      "database_id": "bd8f5b25-a9d6-423a-88bf-301c9a313820"
     }
   ],
   "r2_buckets": [

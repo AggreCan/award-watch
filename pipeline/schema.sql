@@ -596,13 +596,24 @@ CREATE TABLE IF NOT EXISTS buyer_years (
   PRIMARY KEY (buyer_id, year, source)
 );
 
--- The sync ledger of the hosted search database (search_db.py), when it ships.
+-- The hosted search database (D1 awardwatch-search, pipeline/search_schema.sql,
+-- search_db.py, docs/hosted-search.md). search_sync logs each sync recorded
+-- after D1 confirmed it: the manifest's summary (JSON, without its ledger
+-- entries), the rows the ledger then holds, and whether it was a full reload.
 CREATE TABLE IF NOT EXISTS search_sync (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   run_at TEXT NOT NULL,
   manifest TEXT NOT NULL,
   rows INTEGER NOT NULL,
   full INTEGER NOT NULL
+);
+
+-- The ledger: the key and content hash of every row as last confirmed in
+-- D1. The nightly sync compares tonight's rows with it and sends only what
+-- changed; nothing but search-synced writes it.
+CREATE TABLE IF NOT EXISTS search_ledger (
+  key TEXT PRIMARY KEY,                          -- 'o:<organization id>' or 'b:<buyer id>'
+  hash TEXT NOT NULL                             -- search_db.row_hash
 );
 
 -- The organization directory's pages (directory.py) as last exported, by

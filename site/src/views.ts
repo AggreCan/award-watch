@@ -53,6 +53,8 @@ const PAGES = new Set([
   "/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments", "/categories", "/rankings",
   "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections", "/about", "/terms", "/privacy",
   "/alerts", "/interest",
+  // The search page: its query string is never stored, only the route.
+  "/search",
 ]);
 const API_FIXED = new Set(["/api/stats"]);
 const DOWNLOAD_FILES = new Set(DOWNLOADS.map((d) => d.file));
