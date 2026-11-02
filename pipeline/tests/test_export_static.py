@@ -315,6 +315,42 @@ def test_counts_and_home_lists(exported):
     assert stats["top_organizations_year"][0]["total"] == 1_250_000.0
 
 
+def test_stats_carry_the_years_award_value_and_each_download_with_its_size_and_rows(conn, tmp_path):
+    """The home page's value beside the year's award notices, and the Data page's sizes and row counts: the CSV
+    export's own files, as it wrote them; an export with no CSV folder lists none."""
+    from awardwatch_pipeline import export
+    ids = seed(conn)
+    csv_dir = tmp_path / "csv"
+    written = export.export_csv(conn, csv_dir, today=TODAY)
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE, csv_dir=csv_dir)
+    stats = load(out, "stats.json")
+    # The seed's three award notices of 2026: ACME's and North's, ranked, and one whose supplier is withheld,
+    # which no ranking names but the year's value counts.
+    assert stats["totals"]["awards_year"] == 1_250_000.0 + 250_000.0 + 12_000.0
+    assert [o["id"] for o in stats["top_organizations_year"]] == [ids[ACME], ids[NORTH]]
+    downloads = {d["file"]: d for d in stats["downloads"]}
+    assert set(downloads) == set(written)
+    for name, d in downloads.items():
+        assert d["bytes"] == (csv_dir / name).stat().st_size
+        assert d["rows"] == written[name], name
+    # SHA256SUMS: one line a CSV file.
+    assert downloads["SHA256SUMS"]["rows"] == len(written) - 1
+    # The counts export_csv returned are used as given; a file they leave out is read.
+    es.export_static(conn, out, today=TODAY, base_url=BASE, csv_dir=csv_dir, csv_rows={"organizations.csv": 999})
+    again = {d["file"]: d for d in load(out, "stats.json")["downloads"]}
+    assert again["organizations.csv"]["rows"] == 999 and again["buyers.csv"]["rows"] == written["buyers.csv"]
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    assert load(out, "stats.json")["downloads"] == []
+
+
+def test_a_csv_record_holding_a_line_break_counts_once(tmp_path):
+    (tmp_path / "a.csv").write_text('\ufeffid,text\n1,"two\nlines"\n2,plain\n', encoding="utf-8")
+    (tmp_path / "notes.txt").write_text("not a download", encoding="utf-8")
+    assert es.download_files(tmp_path) == [{"file": "a.csv", "bytes": (tmp_path / "a.csv").stat().st_size, "rows": 2}]
+    assert es.download_files(tmp_path / "missing") == []
+
+
 def test_stats_list_the_newest_runs_and_the_files_read(conn, tmp_path):
     seed(conn)
     log_run(conn, "awards", detail="read=x.csv", rows_new=3)
@@ -598,7 +634,7 @@ def test_the_radar_lists_each_contract_once_by_window_with_its_parts(exported):
 def test_a_notice_past_its_closing_day_is_closed_and_left_out_of_every_open_list(conn, tmp_path):
     """CanadaBuys' open-notice file keeps some notices for months after they close; the export showed them as
     open. A notice whose closing day (UTC) is before the data date is closed; one closing on the data date is
-    still open, the run being at midnight."""
+    still open, the run being in the morning."""
     seed(conn)
     tender(conn, "cb-yesterday", 0, title="Closed yesterday", closing="2026-10-30T14:00:00", published="2026-10-29")
     tender(conn, "cb-today", 0, title="Closes today", closing="2026-10-31T14:00:00", published="2026-10-29")

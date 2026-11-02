@@ -84,8 +84,10 @@ def _export(conn: sqlite3.Connection) -> dict[str, int]:
     it is raised after them, so the stage still reads as failed."""
     # One data date for both, so the CSV and the static files list the same open notices.
     today = datetime.now(timezone.utc).date()
-    csv_ok = _stage(conn, "export_csv", lambda: export.export_csv(conn, today=today))
-    counts = export_static.export_static(conn, today=today)
+    # The rows of each CSV file as written, for the Data page's list of downloads.
+    rows: dict[str, int] = {}
+    csv_ok = _stage(conn, "export_csv", lambda: rows.update(export.export_csv(conn, today=today)) or rows)
+    counts = export_static.export_static(conn, today=today, csv_rows=rows if csv_ok else None)
     if not csv_ok:
         raise ExportIncomplete("the static files were written; the CSV downloads failed (see export_csv)")
     return counts

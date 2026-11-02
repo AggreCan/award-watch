@@ -60,6 +60,8 @@ def test_static_export_writes_the_sitemaps(conn, tmp_path):
     assert entries[f"{BASE}/"] == "2026-10-31" and entries[f"{BASE}/methodology"] is None
     # The alerts page changes with the code only, so it carries no date.
     assert entries[f"{BASE}/alerts"] is None
+    # The site takes no donations: there is no support page to list.
+    assert "/support" not in es.SITEMAP_PAGES and f"{BASE}/support" not in entries
     for oid in ids.values():
         assert entries[f"{BASE}/organizations/{oid}"] == "2026-10-31"
     # Buyers some record names; the one with none has no page.

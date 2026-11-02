@@ -21,7 +21,9 @@ Output tree (under data/out/static):
 
 A row's record count is what the profile counts: award notices, contract
 history records, published contracts, grants and lobbying communications
-(organizations.n_*). Rows sort by the normalized name (organizations.norm_name,
+(organizations.n_*). Its last record date is organizations.last_seen, left
+out (null) on a row that counts no record, since that date then comes from a
+record the count does not hold. Rows sort by the normalized name (organizations.norm_name,
 from which the id is made, so it does not change night to night), then the id,
 so a page's rows move only when an organization arrives or leaves, and a page
 file holds only its rows, so a count changing elsewhere does not rewrite every
@@ -80,8 +82,9 @@ def pages(conn: sqlite3.Connection) -> tuple[dict[str, list[list[dict]]], dict[s
         "n_awards + n_history + n_contracts + n_grants + n_lobbying AS n_records FROM organizations"
     ):
         norms[r["id"]] = r["norm_name"] or ""
-        row = {"id": r["id"], "name": r["display_name"], "city": r["city"], "n_records": r["n_records"] or 0,
-               "last_seen": r["last_seen"]}
+        n_records = r["n_records"] or 0
+        row = {"id": r["id"], "name": r["display_name"], "city": r["city"], "n_records": n_records,
+               "last_seen": r["last_seen"] if n_records else None}
         members[code_for(r["country"], r["province"])].append((r["norm_name"] or "", r["id"], row))
     out: dict[str, list[list[dict]]] = {}
     for code, items in members.items():

@@ -80,3 +80,15 @@ def test_initials_file_digits_and_other_scripts_under_one_mark():
     assert directory.initial("") == "#" and directory.initial("ébène") == "#"
     assert directory.page_path("on", 1) == "/organizations/directory/on"
     assert directory.page_path("on", 3) == "/organizations/directory/on/3"
+
+
+def test_a_row_with_no_record_counted_carries_no_last_record_date(conn, tmp_path):
+    """A last record date beside a count of 0 would name a record the row does not count."""
+    conn.execute(
+        "INSERT INTO organizations (id, display_name, norm_name, country, province, city, last_seen, updated_at) "
+        "VALUES ('org-0000000099', 'Pulse Growers', 'pulse growers', 'CA', 'SK', 'Saskatoon', '2018-04-01', ?)", (now_iso(),))
+    org(conn, "org-0000000098", "Prairie Seeds", "prairie seeds", province="SK")
+    directory.write_all(conn, tmp_path, "2026-10-12")
+    rows = {r["id"]: r for r in load(tmp_path, "directory/sk/1.json")["rows"]}
+    assert rows["org-0000000099"]["n_records"] == 0 and rows["org-0000000099"]["last_seen"] is None
+    assert rows["org-0000000098"]["n_records"] == 3 and rows["org-0000000098"]["last_seen"] == "2026-10-01"

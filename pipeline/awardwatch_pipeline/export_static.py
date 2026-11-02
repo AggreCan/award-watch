@@ -16,7 +16,10 @@ change there. Output tree (under data/out/static):
                                 organizations by awards value, the last runs, the source files read
                                 (source_files: one row per file read and one per source never read, each
                                 with last_read, last_modified as an ISO instant, last_modified_http as the
-                                publisher sent it, and loaded)
+                                publisher sent it, and loaded), totals (awards_year: the data year's award
+                                notices by the counting rules, CAD) and downloads (each file of the CSV
+                                export the Data page offers: file, bytes, and rows under the header, the
+                                lines of SHA256SUMS; empty when the CSV folder is missing)
   tenders/open.json             every notice open on the data date as a list row (read by the browser only)
   tenders/open-first.json       the open notices closing by the day after the data date and the 50 after
                                 them, the number open, and the facet counts over all of them (what
@@ -135,7 +138,7 @@ from xml.sax.saxutils import escape
 
 from . import config, directory, expiring, indicators, organizations, value_checks
 from .db import get_meta, log_run, set_meta
-from .export import listed_buyer_ids, register_functions, scrub, scrub_doc
+from .export import SUMS, listed_buyer_ids, register_functions, scrub, scrub_doc
 from .feeds import write_feeds
 from .normalize import closing_day, tender_status_on
 from .sources.buyers import public_spelling
@@ -200,7 +203,7 @@ TEMP_TABLES = ("x_tenders", "x_awards", "x_history", "x_grants", "x_records", "x
 SITEMAP_MAX_URLS = 50_000
 SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments",
-                 "/rankings", "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections",
+                 "/rankings", "/feeds", "/watchlist", "/data", "/methodology", "/cite", "/corrections",
                  "/about", "/terms", "/privacy", "/alerts"]
 # Pages whose content follows the nightly data carry its date; the others
 # change only with the code, so they carry none rather than a false one.
@@ -882,8 +885,34 @@ def open_first(m: Model, open_rows: list[dict]) -> list[dict]:
     return open_rows[:early + OPEN_FIRST_ROWS]
 
 
+def _csv_rows(path: Path) -> int:
+    """The records under a CSV file's header, read as CSV: a description holding a line break is one record."""
+    with path.open(newline="", encoding="utf-8-sig") as fh:
+        return max(0, sum(1 for _ in csv.reader(fh)) - 1)
+
+
+def download_files(csv_dir: Path | None, rows: dict[str, int] | None = None) -> list[dict]:
+    """The Data page's downloads as the CSV export left them, by file name: each file's size in bytes and its
+    rows under the header (SHA256SUMS: its lines, one a file). rows is the export's own count per file
+    (export.export_csv returns it); a file it does not name is counted here. Empty when the folder is missing."""
+    if csv_dir is None or not csv_dir.is_dir():
+        return []
+    out = []
+    for path in sorted(csv_dir.iterdir(), key=lambda p: p.name):
+        if not path.is_file() or not (path.name.endswith(".csv") or path.name == SUMS):
+            continue
+        if rows is not None and path.name in rows:
+            n = rows[path.name]
+        elif path.name == SUMS:
+            n = sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+        else:
+            n = _csv_rows(path)
+        out.append({"file": path.name, "bytes": path.stat().st_size, "rows": n})
+    return out
+
+
 def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[dict], new_today: list[dict],
-                top_year: list[dict]) -> dict:
+                top_year: list[dict], downloads: list[dict] | None = None) -> dict:
     conn = m.conn
     recent = [row for r in conn.execute(
         "SELECT * FROM x_awards ORDER BY published DESC, awarded DESC, reference LIMIT ?", (HOME_ROWS * 2,))
@@ -902,6 +931,10 @@ def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[
         "top_organizations_year": top_year,
         "runs": runs,
         "sources": source_files(conn),
+        # The value beside the year's count on the home page: what its award notices add up to (CAD, the rules' v).
+        "totals": {"awards_year": _money(conn.execute(
+            "SELECT SUM(v) FROM x_awards WHERE substr(awarded, 1, 4) = ?", (str(m.year),)).fetchone()[0])},
+        "downloads": downloads or [],
     }
     _dump(out / "stats.json", stats)
     return stats
@@ -1713,8 +1746,13 @@ def tree_size(root: Path) -> dict[str, object]:
 
 
 def export_static(conn: sqlite3.Connection, out_dir: Path | None = None, *, today: date | None = None,
-                  base_url: str | None = None) -> dict[str, int]:
+                  base_url: str | None = None, csv_dir: Path | None = None,
+                  csv_rows: dict[str, int] | None = None) -> dict[str, int]:
+    """Write the static tree. csv_dir is the CSV export's folder, whose files stats.json lists with their
+    sizes (data/out/csv by default when out_dir is the default too); csv_rows the rows export_csv counted."""
     final = out_dir or (config.OUT_DIR / "static")
+    if csv_dir is None and out_dir is None:
+        csv_dir = config.OUT_DIR / "csv"
     # Written beside the final folder and moved into place only when every
     # file is written, so a failure part way leaves the previous export (or
     # none at all) rather than a half-written tree the deploy would publish.
@@ -1723,7 +1761,8 @@ def export_static(conn: sqlite3.Connection, out_dir: Path | None = None, *, toda
         shutil.rmtree(out)
     out.mkdir(parents=True, exist_ok=True)
     try:
-        counts = _write_static(conn, out, today or datetime.now(timezone.utc).date(), base_url or config.SITE_URL)
+        counts = _write_static(conn, out, today or datetime.now(timezone.utc).date(), base_url or config.SITE_URL,
+                               download_files(csv_dir, csv_rows))
     except BaseException:
         shutil.rmtree(out, ignore_errors=True)
         raise
@@ -1748,7 +1787,8 @@ def export_static(conn: sqlite3.Connection, out_dir: Path | None = None, *, toda
     return counts
 
 
-def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: str) -> dict[str, int]:
+def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: str,
+                  downloads: list[dict] | None = None) -> dict[str, int]:
     set_meta(conn, "data_as_of", today.isoformat())
     conn.commit()
     m = Model(conn, today)
@@ -1806,7 +1846,7 @@ def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: st
         "lobbying": conn.execute("SELECT COUNT(*) FROM lobbying_communications").fetchone()[0],
     }
     write_stats(m, out, counts=stats_counts, open_rows=open_rows, new_today=new_today,
-                top_year=top_organizations_year(m, totals))
+                top_year=top_organizations_year(m, totals), downloads=downloads)
     counts.update(write_sitemaps(sitemap_entries(m, failed), out, base_url))
     counts["organizations"] = len(m.orgs)
     return counts
