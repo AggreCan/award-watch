@@ -688,8 +688,9 @@ def tender_status_on(status: object, closing: object, as_of: str) -> str:
 
     CanadaBuys' open-notice file keeps listing some notices for months after
     they close. A notice closing on as_of itself stays open: the run is at
-    midnight UTC and the notice is open for the rest of that day. A notice
-    with no closing date keeps its status.
+    12:30 UTC, the morning in Ottawa, and notices close in the afternoon; the
+    site's closing rule, read against the visitor's clock, covers the rest of
+    that day. A notice with no closing date keeps its status.
     """
     text = squash(status) or "unknown"
     if text == "open":

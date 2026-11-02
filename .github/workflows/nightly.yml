@@ -1,5 +1,5 @@
-# Triggers: a scheduled run at midnight UTC, two retry schedules at 06:00 and
-# 12:00 UTC, and a manual run (the Actions tab, repository writers only) for
+# Triggers: a scheduled run at 12:30 UTC, two retry schedules at 16:30 and
+# 20:30 UTC, and a manual run (the Actions tab, repository writers only) for
 # re-running a night on the newest code; a re-run of an old run keeps its old
 # commit. Every source is a bulk file fetched with a conditional request, so
 # neither a retry nor a manual run downloads a file that has not changed.
@@ -7,8 +7,8 @@
 # main ships with the next run, because this job deploys the Worker from the
 # checked-out tree after the data stage.
 #
-# The retry rule (job "gate"): the midnight schedule and a manual run always
-# go on to the refresh. At 06:00 and 12:00 the gate downloads status.json from
+# The retry rule (job "gate"): the 12:30 schedule and a manual run always
+# go on to the refresh. At 16:30 and 20:30 the gate downloads status.json from
 # R2 and skips the refresh only when it shows a run that finished today (UTC)
 # with ok true and the deploy step's outcome success; anything else, a status
 # it cannot download or read included, runs the refresh again. So a GitHub
@@ -95,18 +95,23 @@
 # The repository is public, so Actions minutes are unlimited. The longest
 # nights are the weekly re-reads of the published contracts (655 MB) and the
 # grants (2.4 GB), streamed to disk and deleted after the load; the job must
-# still finish before the next midnight run.
+# still finish before the next day's 12:30 run.
 
 name: nightly
 
 on:
   schedule:
-    - cron: "0 0 * * *"
-    # Retries, which the gate job skips when today's run finished clean.
-    # The midnight entry above must stay exactly "0 0 * * *": the gate
-    # tells the schedules apart by that string.
-    - cron: "0 6 * * *"
-    - cron: "0 12 * * *"
+    # 12:30 UTC: CanadaBuys regenerates its daily files between about 05:30
+    # and 07:15 Ottawa time (10:30 to 12:15 UTC in winter, an hour earlier in
+    # summer), so this run reads the same morning's files whatever the clock
+    # change, and the site carries them by about 08:30 Ottawa time in winter.
+    - cron: "30 12 * * *"
+    # Retries, which the gate job skips when today's run finished clean. They
+    # stay inside the same UTC day as the main run because the gate compares
+    # dates. The entry above must stay exactly "30 12 * * *": the gate tells
+    # the schedules apart by that string.
+    - cron: "30 16 * * *"
+    - cron: "30 20 * * *"
   workflow_dispatch:
 
 # contents: write only so a step can record the run date; GitHub pauses a
@@ -140,11 +145,11 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      RETRY: ${{ github.event_name == 'schedule' && github.event.schedule != '0 0 * * *' }}
+      RETRY: ${{ github.event_name == 'schedule' && github.event.schedule != '30 12 * * *' }}
       WRANGLER: ${{ github.workspace }}/site/node_modules/.bin/wrangler
       BUCKET: awardwatch-data
     steps:
-      - name: Midnight or manual run, so the refresh goes ahead
+      - name: Main schedule or manual run, so the refresh goes ahead
         if: ${{ env.RETRY != 'true' }}
         run: echo "Not a retry trigger; the refresh runs."
       - uses: actions/checkout@v4

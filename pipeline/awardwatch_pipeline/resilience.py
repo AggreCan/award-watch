@@ -2,7 +2,7 @@
 
 nightly.py calls these from its command line; the workflow calls nightly.py.
 
-  gate          decide whether a retry trigger (06:00 and 12:00 UTC) has
+  gate          decide whether a retry trigger (16:30 and 20:30 UTC) has
                 anything to do, from the status.json the last run left in R2.
   live_version  the Worker version serving traffic, from Wrangler's JSON, so
                 a deploy that breaks the site can be rolled back to it.
@@ -611,7 +611,7 @@ CHECK_TIMEOUT_S = 30.0
 
 
 def checks_due(today: date) -> bool:
-    """The first run of a month is the one on its first day (UTC): the midnight
+    """The first run of a month is the one on its first day (UTC): the 12:30
     run, or a retry the same day when that one did not finish."""
     return today.day == 1
 

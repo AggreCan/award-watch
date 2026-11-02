@@ -179,10 +179,10 @@ from any branch but `main` stops at its first step.
 
 GitHub keeps one waiting run per concurrency group: a run queued while
 another is waiting replaces the waiting one. So start one site deploy at a
-time, and avoid the minutes around 00:00, 06:00 and 12:00 UTC, when the
+time, and avoid the minutes around 12:30, 16:30 and 20:30 UTC, when the
 nightly's schedules fire. A site deploy replaced this way changed nothing;
 start it again. A nightly run replaced this way is made up by the next
-schedule (the 06:00 and 12:00 retries run whenever the day's run did not
+schedule (the 16:30 and 20:30 retries run whenever the day's run did not
 finish clean).
 
 ## What a failed run means
