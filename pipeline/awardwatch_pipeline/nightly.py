@@ -145,6 +145,12 @@ NOTICE_PART_MAX = 1200
 # The notice for a night the alert sign-ups were not counted.
 INTEREST_NOTICE = "the alert sign-ups were not counted tonight (the D1 query failed or did not run); the next run counts again"
 
+# The notices for a night one of the same-day refresh's steps failed (docs/intraday.md).
+INTRADAY_NOTICES = {
+    "intraday_lookup": "the buyer lookup for the same-day refresh was not saved; the intraday job keeps the one R2 has",
+    "intraday_prune": "the same-day notices older than two days were not pruned; the next run prunes them",
+}
+
 STEP_DETAIL = {
     "restore": "the database could not be restored, so nothing else ran",
     "pipeline": "the pipeline exited with an error (see the stage rows)",
@@ -575,6 +581,7 @@ def run_status(
     rollback: str | None = None, version_before: str | None = None, checks: dict[str, Any] | None = None,
     indexnow_outcome: str | None = None, search_console: str | None = None, views_report: str | None = None,
     interest: dict[str, int] | None = None, interest_tried: bool = False,
+    intraday_lookup: str | None = None, intraday_prune: str | None = None,
 ) -> dict[str, Any]:
     """status.json for the site's daily check. Every input may be missing: the
     status then says what is missing rather than failing to be written.
@@ -595,6 +602,13 @@ def run_status(
     database (interest_counts): n rows, live of them not unsubscribed; both
     null when it was not read. A count that was tried and not read
     (interest_tried) adds a notice, never an item needing attention.
+
+    intraday_lookup and intraday_prune are the outcomes of the same-day
+    refresh's two nightly steps (intraday.py: the buyer lookup saved to R2,
+    "saved"; the old rows deleted from the search database, "pruned"),
+    "failed", or "not run". Recorded beside search_sync; a failed one adds a
+    notice (INTRADAY_NOTICES), never an item needing attention, because
+    neither changes what the site publishes.
 
     The resilience fields: steps (every workflow step's outcome, which the
     retry gate reads), restore (where the database came from), smoke (the
@@ -642,6 +656,7 @@ def run_status(
         for key in ("weekly_key", "weekly_uploaded"):
             if restore_info.get(key):
                 restored[key] = str(restore_info[key])
+    intraday = {"intraday_lookup": intraday_lookup or "not run", "intraday_prune": intraday_prune or "not run"}
     return {
         "run_at": stamp,
         "stages": stages,
@@ -649,6 +664,7 @@ def run_status(
         # The site's daily check reads this field; the workflow's "Sync the
         # search database" step writes it (search_db.OUTCOME).
         "search_sync": search or "not run",
+        **intraday,
         "views_rollup": views or "not run",
         "search_console": search_console or "not run",
         "views_report": views_report or "not run",
@@ -665,7 +681,8 @@ def run_status(
         # file not published yet, a stage not built): LAST_RUN.md and the
         # daily check's email, never an item needing attention, and the run
         # stays ok.
-        "notices": notices + ([{"source": "interest", "detail": INTEREST_NOTICE}] if interest_tried and not interest else []),
+        "notices": notices + ([{"source": "interest", "detail": INTEREST_NOTICE}] if interest_tried and not interest else [])
+        + [{"source": name, "detail": text} for name, text in INTRADAY_NOTICES.items() if intraday[name] == "failed"],
         "ok": all(s["ok"] for s in stages) and verdict != "broken",
     }
 
@@ -891,6 +908,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--started-file", default=None)
     s.add_argument("--verify", default=None)
     s.add_argument("--search-outcome", default=None, help="the search database sync's outcome file")
+    s.add_argument("--intraday-lookup-outcome", default=None, help="the same-day refresh lookup's outcome file")
+    s.add_argument("--intraday-prune-outcome", default=None, help="the same-day refresh prune's outcome file")
     s.add_argument("--views-outcome", default=None, help="the audience roll-up's outcome file")
     s.add_argument("--indexnow-outcome", default=None, help="the IndexNow submission's outcome file")
     s.add_argument("--search-console-outcome", default=None, help="the Search Console import's outcome file")
@@ -1090,7 +1109,9 @@ def _status(args: argparse.Namespace) -> int:
                         checks=_read_json(args.checks), indexnow_outcome=_read(args.indexnow_outcome),
                         search_console=_read(args.search_console_outcome),
                         views_report=_read(args.views_report_outcome),
-                        interest=read_interest(args.interest), interest_tried=args.interest is not None)
+                        interest=read_interest(args.interest), interest_tried=args.interest is not None,
+                        intraday_lookup=_read(args.intraday_lookup_outcome),
+                        intraday_prune=_read(args.intraday_prune_outcome))
     _write_json(Path(args.out), status)
     print(json.dumps(status, indent=1))
     return 0

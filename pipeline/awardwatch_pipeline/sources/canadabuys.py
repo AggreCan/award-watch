@@ -55,11 +55,8 @@ from __future__ import annotations
 
 import csv
 import hashlib
-import json
 import logging
-import re
 import sqlite3
-import sys
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -70,11 +67,13 @@ from pathlib import Path
 from .. import config, organizations
 from ..db import get_meta, log_run, now_iso, set_meta
 from ..http import FetchError, PoliteClient
-from ..normalize import (
-    award_status, competitive, iso_date, iso_datetime, money, region_provinces, squash, star_list,
-    tender_status, to_int,
+from ..normalize import award_status, competitive, iso_date, money, squash, to_int
+from . import buyers, canadabuys_rows, matching
+# The column maps and the field normalizers live in canadabuys_rows, which the
+# same-day refresh (intraday.py) reads rows with too; the names stay importable here.
+from .canadabuys_rows import (  # noqa: F401
+    COLUMNS, DESCRIPTION_MAX, REQUIRED, cut as _cut, entity_list, json_list as _json, text as _text, unspsc_code,
 )
-from . import buyers, matching
 
 log = logging.getLogger(__name__)
 
@@ -82,108 +81,10 @@ STAGES = ("tenders", "awards", "history")
 TABLES = {"tenders": "tenders", "awards": "awards", "history": "contract_history"}
 CODE_TABLES = {"tenders": "tender_codes", "awards": "award_codes", "history": "history_codes"}
 COMPLETE_EVERY = timedelta(days=7)
-DESCRIPTION_MAX = 600
 COMMIT_EVERY = 20_000
 # Seconds between bytes; the whole body may take four times this (http.py).
 TIMEOUT_S = 900
 SEGMENTS_PATH = config.PACKAGE_DATA / "unspsc_segments.csv"
-
-# ---------------------------------------------------------------------------
-# Columns: the field each table stores, and the header it is read from.
-# ---------------------------------------------------------------------------
-
-_COMMON = {
-    "title_en": "title-titre-eng",
-    "title_fr": "title-titre-fra",
-    "reference": "referenceNumber-numeroReference",
-    "amendment": "amendmentNumber-numeroModification",
-    "solicitation": "solicitationNumber-numeroSollicitation",
-    "published": "publicationDate-datePublication",
-    "amended": "amendmentDate-dateModification",
-    "gsin": "gsin-nibs",
-    "gsin_desc_en": "gsinDescription-nibsDescription-eng",
-    "gsin_desc_fr": "gsinDescription-nibsDescription-fra",
-    "unspsc": "unspsc",
-    "unspsc_desc_en": "unspscDescription-eng",
-    "unspsc_desc_fr": "unspscDescription-fra",
-    "category": "procurementCategory-categorieApprovisionnement",
-    "notice_type_en": "noticeType-avisType-eng",
-    "notice_type_fr": "noticeType-avisType-fra",
-    "method_en": "procurementMethod-methodeApprovisionnement-eng",
-    "method_fr": "procurementMethod-methodeApprovisionnement-fra",
-    "selection_en": "selectionCriteria-criteresSelection-eng",
-    "selection_fr": "selectionCriteria-criteresSelection-fra",
-    "limited_reason_en": "limitedTenderingReason-raisonAppelOffresLimite-eng",
-    "limited_reason_fr": "limitedTenderingReason-raisonAppelOffresLimite-fra",
-    "trade_agreements_en": "tradeAgreements-accordsCommerciaux-eng",
-    "trade_agreements_fr": "tradeAgreements-accordsCommerciaux-fra",
-    "regions_delivery_en": "regionsOfDelivery-regionsLivraison-eng",
-    "regions_delivery_fr": "regionsOfDelivery-regionsLivraison-fra",
-    "buyer_en": "contractingEntityName-nomEntitContractante-eng",
-    "buyer_fr": "contractingEntityName-nomEntitContractante-fra",
-    "end_users_en": "endUserEntitiesName-nomEntitesUtilisateurFinal-eng",
-    "end_users_fr": "endUserEntitiesName-nomEntitesUtilisateurFinal-fra",
-}
-_CONTACTS = {
-    "contact_name": "contactInfoName-informationsContactNom",
-    "contact_email": "contactInfoEmail-informationsContactCourriel",
-    "contact_phone": "contactInfoPhone-contactInfoTelephone",
-}
-_CONTRACT = {
-    "contract_number": "contractNumber-numeroContrat",
-    "awarded": "contractAwardDate-dateAttributionContrat",
-    "start": "contractStartDate-contratDateDebut",
-    "end": "contractEndDate-dateFinContrat",
-    "amount": "contractAmount-montantContrat",
-    "total_value": "totalContractValue-valeurTotaleContrat",
-    "currency": "contractCurrency-contratMonnaie",
-    "instrument_type_en": "instrumentType-typeInstrument-eng",
-    "instrument_type_fr": "instrumentType-typeInstrument-fra",
-    "amendment_type_en": "amendmentType-typeModification-eng",
-    "amendment_type_fr": "amendmentType-typeModification-fra",
-    "supplier_en": "supplierLegalName-nomLegalFournisseur-eng",
-    "supplier_fr": "supplierLegalName-nomLegalFournisseur-fra",
-    "supplier_street": "supplierAddressLine-ligneAdresseFournisseur-eng",
-    "supplier_city": "supplierAddressCity-fournisseurAdresseVille-eng",
-    "supplier_province": "supplierAddressProvince-fournisseurAdresseProvince-eng",
-    "supplier_postal": "supplierAddressPostalCode-fournisseurAdresseCodePostal",
-    "supplier_country": "supplierAddressCountry-fournisseurAdressePays-eng",
-}
-COLUMNS: dict[str, dict[str, str]] = {
-    "tenders": {
-        **_COMMON, **_CONTACTS,
-        "closing": "tenderClosingDate-appelOffresDateCloture",
-        "start_expected": "expectedContractStartDate-dateDebutContratPrevue",
-        "end_expected": "expectedContractEndDate-dateFinContratPrevue",
-        "status": "tenderStatus-appelOffresStatut-eng",
-        "status_fr": "tenderStatus-appelOffresStatut-fra",
-        "regions_opportunity_en": "regionsOfOpportunity-regionAppelOffres-eng",
-        "regions_opportunity_fr": "regionsOfOpportunity-regionAppelOffres-fra",
-        "description_en": "tenderDescription-descriptionAppelOffres-eng",
-        "description_fr": "tenderDescription-descriptionAppelOffres-fra",
-    },
-    "awards": {
-        **_COMMON, **_CONTRACT, **_CONTACTS,
-        "status": "awardStatus-attributionStatut-eng",
-        "status_fr": "awardStatus-attributionStatut-fra",
-        "description_en": "awardDescription-descriptionAttribution-eng",
-        "description_fr": "awardDescription-descriptionAttribution-fra",
-    },
-    "history": {
-        **_COMMON, **_CONTRACT,
-        "status": "contractStatus-statutContrat-eng",
-        "status_fr": "contractStatus-statutContrat-fra",
-        "procurement_number": "procurementNumber-numeroApprovisionnement",
-        "n_records": "numberOfRecords-nombreEnregistrements",
-        "supplier_standardized": "supplierStandardizedName-nomNormaliseFournisseur-eng",
-        "supplier_operating": "supplierOperatingName-nomCommercialFournisseur-eng",
-        "supplier_employee_count": "supplierEmployeeCount-fournisseurNombreEmployes-eng",
-        "description_en": "tenderDescription-descriptionAppelOffres-eng",
-        "description_fr": "tenderDescription-descriptionAppelOffres-fra",
-    },
-}
-REQUIRED = ("reference", "amendment")
-
 
 # ---------------------------------------------------------------------------
 # Files
@@ -304,43 +205,6 @@ def _sha256(path: Path) -> str:
 # Rows
 # ---------------------------------------------------------------------------
 
-def _text(value: object) -> str | None:
-    return squash(value) or None
-
-
-def _json(items: list[str]) -> str | None:
-    return json.dumps(items, ensure_ascii=False) if items else None
-
-
-def _cut(value: object) -> str | None:
-    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
-    return text[:DESCRIPTION_MAX].rstrip() or None
-
-
-def entity_list(value: object) -> list[str]:
-    """End-user entities: a '*' list, or names joined by ' / ' as the award and history files write them."""
-    text = str(value or "").strip()
-    if text.startswith("*"):
-        return star_list(text)
-    return [squash(part) for part in text.split(" / ") if squash(part)]
-
-
-def unspsc_code(raw: object) -> str | None:
-    """'*81110000' -> '8111': the significant digits (2 segment, 4 family, 6 class, 8 commodity)."""
-    digits = re.sub(r"\D", "", str(raw or ""))
-    if not digits or len(digits) > 8 or len(digits) % 2:
-        return None
-    while len(digits) > 2 and digits.endswith("00"):
-        digits = digits[:-2]
-    return None if digits == "00" else digits
-
-
-def _aligned(codes: list[str], descs: list[str]) -> list[str | None]:
-    # A description list matches its codes only item for item; a list of
-    # another length cannot say which description is whose.
-    return list(descs) if len(descs) == len(codes) else [None] * len(codes)
-
-
 @dataclass
 class FileStats:
     rows: int = 0
@@ -385,66 +249,16 @@ class _Context:
 
 def _common(ctx: _Context, get: Callable[[str], str]) -> tuple[dict[str, object], list[tuple[str, str | None, str | None]]]:
     """The fields every table shares, and the version's UNSPSC codes with their descriptions."""
-    gsins = star_list(get("gsin"))
-    for code, desc_en, desc_fr in zip(gsins, _aligned(gsins, star_list(get("gsin_desc_en"))),
-                                      _aligned(gsins, star_list(get("gsin_desc_fr")))):
+    rec, codes, gsins = canadabuys_rows.common_fields(get)
+    for code, desc_en, desc_fr in gsins:
         have = ctx.gsin.get(code, (None, None))
         ctx.gsin[code] = (have[0] or desc_en, have[1] or desc_fr)
-    raw_codes = star_list(get("unspsc"))
-    codes: list[tuple[str, str | None, str | None]] = []
-    for raw, desc_en, desc_fr in zip(raw_codes, _aligned(raw_codes, star_list(get("unspsc_desc_en"))),
-                                     _aligned(raw_codes, star_list(get("unspsc_desc_fr")))):
-        code = unspsc_code(raw)
-        if code:
-            codes.append((code, desc_en, desc_fr))
-    delivery_en, delivery_fr = star_list(get("regions_delivery_en")), star_list(get("regions_delivery_fr"))
-    rec: dict[str, object] = {
-        "solicitation": _text(get("solicitation")),
-        "title_en": _text(get("title_en")),
-        "title_fr": _text(get("title_fr")),
-        "published": iso_date(get("published")),
-        "amended": iso_date(get("amended")),
-        "gsin": _json(gsins),
-        "gsin_desc_en": _json(star_list(get("gsin_desc_en"))),
-        "gsin_desc_fr": _json(star_list(get("gsin_desc_fr"))),
-        "category": _json(star_list(get("category"))),
-        "notice_type_en": _text(get("notice_type_en")),
-        "notice_type_fr": _text(get("notice_type_fr")),
-        "method_en": _text(get("method_en")),
-        "method_fr": _text(get("method_fr")),
-        "selection_en": _text(get("selection_en")),
-        "selection_fr": _text(get("selection_fr")),
-        "limited_reason_en": _text(get("limited_reason_en")),
-        "limited_reason_fr": _text(get("limited_reason_fr")),
-        "trade_agreements_en": _json(star_list(get("trade_agreements_en"))),
-        "trade_agreements_fr": _json(star_list(get("trade_agreements_fr"))),
-        "regions_delivery_en": _json(delivery_en),
-        "regions_delivery_fr": _json(delivery_fr),
-        "provinces": _json(region_provinces(delivery_en + delivery_fr)),
-        "description_en": _cut(get("description_en")),
-        "description_fr": _cut(get("description_fr")),
-        "source_file": ctx.source_file,
-    }
+    rec["source_file"] = ctx.source_file
     return rec, codes
 
 
 def _tender(ctx: _Context, get: Callable[[str], str], rec: dict[str, object]) -> None:
-    rec.update({
-        "closing": iso_datetime(get("closing")),
-        "start_expected": iso_date(get("start_expected")),
-        "end_expected": iso_date(get("end_expected")),
-        "status": tender_status(get("status") or get("status_fr")),
-        "regions_opportunity_en": _json(star_list(get("regions_opportunity_en"))),
-        "regions_opportunity_fr": _json(star_list(get("regions_opportunity_fr"))),
-        "buyer_id": ctx.buyer(get("buyer_en"), get("buyer_fr")),
-        "buyer_raw_en": _text(get("buyer_en")),
-        "buyer_raw_fr": _text(get("buyer_fr")),
-        "end_users_en": _json(entity_list(get("end_users_en"))),
-        "end_users_fr": _json(entity_list(get("end_users_fr"))),
-        "contact_name": _text(get("contact_name")),
-        "contact_email": _text(get("contact_email")),
-        "contact_phone": _text(get("contact_phone")),
-    })
+    rec.update(canadabuys_rows.tender_fields(get, ctx.buyer(get("buyer_en"), get("buyer_fr"))))
 
 
 def _supplier(get: Callable[[str], str]) -> tuple[str | None, tuple[str, str, str, str], str | None]:
@@ -683,22 +497,9 @@ def load_file(conn: sqlite3.Connection, stage: str, path: Path, source_file: str
     stamp = now or now_iso()
     ctx = _Context(conn, stage, source_file, stamp[:10], stamp, drops if drops is not None else matching.PersonDrops())
     stats = FileStats(collect_references=collect_references)
-    columns = COLUMNS[stage]
-    # Descriptions run to tens of kilobytes; the default limit is 128 KiB.
-    csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
-    with path.open(encoding="utf-8-sig", errors="replace", newline="") as fh:
-        reader = csv.DictReader(fh)
-        headers = set(reader.fieldnames or [])
-        lacking = [f for f in REQUIRED if columns[f] not in headers]
-        if lacking:
-            raise ValueError(f"{source_file}: no {', '.join(columns[f] for f in lacking)} column; the layout changed")
-        stats.missing = sorted(f for f, h in columns.items() if h not in headers)
-
-        for row in reader:
-
-            def get(f: str, row: dict = row) -> str:
-                return (row.get(columns[f]) or "").strip()
-
+    with canadabuys_rows.open_csv(path) as fh:
+        stats.missing, getters = canadabuys_rows.rows(fh, stage, source_file)
+        for get in getters:
             stats.rows += 1
             _load_row(ctx, get, stats)
             if stats.rows % COMMIT_EVERY == 0:

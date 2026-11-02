@@ -434,6 +434,22 @@ const STRINGS = {
   },
   "tenders.new_none": { en: "No new notice was seen on this day.", fr: "Aucun nouvel avis n'a été vu ce jour-là." },
 
+  // -- the same-day notices band (src/pages/intraday.tsx) ------------------------------
+  "intraday.heading_one": {
+    en: "{n} notice posted since this morning's refresh",
+    fr: "{n} avis publié depuis la mise à jour de ce matin",
+  },
+  "intraday.heading_many": {
+    en: "{n} notices posted since this morning's refresh",
+    fr: "{n} avis publiés depuis la mise à jour de ce matin",
+  },
+  "intraday.note": {
+    en: "Read from CanadaBuys every two hours. Each notice joins the list below at the next morning's refresh; until then its title opens the notice on CanadaBuys.",
+    fr: "Lus sur AchatsCanada toutes les deux heures. Chaque avis rejoint la liste ci-dessous à la mise à jour du lendemain matin; d'ici là, son titre ouvre l'avis sur AchatsCanada.",
+  },
+  "intraday.new": { en: "same day", fr: "le jour même" },
+  "intraday.amended": { en: "amended today", fr: "modifié aujourd'hui" },
+
   // -- one tender notice -----------------------------------------------------------------
   "tender.title": { en: "Tender Notice", fr: "Avis d'appel d'offres" },
   "tender.not_found": { en: "Tender Notice Not Found", fr: "Avis d'appel d'offres introuvable" },

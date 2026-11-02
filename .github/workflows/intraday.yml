@@ -1,0 +1,170 @@
+# The same-day tender notices (docs/intraday.md): between two nightly runs,
+# CanadaBuys' new notices file is read again after each of its cuts and what
+# it holds is written to the hosted search database (D1 awardwatch-search,
+# tables intraday_tenders and intraday_runs, schema
+# pipeline/intraday_schema.sql), where the site's paid view reads it.
+#
+# When. The host regenerates newTenderNotice-nouvelAvisAppelOffres.csv every
+# two hours from 06:15 to 22:15 Ottawa time (Last-Modified, measured
+# 2026-11-02): 11:15 to 03:15 UTC in winter (EST), an hour earlier in summer
+# (EDT). The runs are at 45 minutes past every odd hour UTC, 11:45 to 03:45:
+# thirty minutes after each winter cut and ninety after each summer cut, so
+# the same schedule reads every cut in both halves of the year without
+# changing at the clock changes. The 03:45 run reads the day's last cut
+# (22:15 Ottawa) in both halves; in summer the 01:45 run reads the 20:15 cut
+# and the 03:45 run the 22:15 one. Weekends too: the host still regenerates
+# the file, and a run whose file has not changed costs one short request and
+# a minute of runner time. The open notices file (amendments and closing
+# changes to every notice) comes once a day and is the nightly's; this job
+# never reads it.
+#
+# Steps: read the last run's file validators (and the versions the table
+# holds) from D1; fetch the file with a conditional request carrying them,
+# stopping at a 304 with a run row of zero rows; fetch the buyer lookup the
+# nightly saves to R2 (without it the buyers keep their names as published);
+# parse and resolve (python -m awardwatch_pipeline.intraday refresh, with the
+# nightly loader's own column map and normalizers); apply the SQL batch with
+# wrangler d1 execute --remote; record the run row. No database restore: the
+# job runs without the SQLite file.
+#
+# What a failure does: the run fails (a red run and GitHub's email) and
+# records a run row with ok 0 and the step that failed. The next run sends
+# the validators of the last run that went through, so it fetches the file
+# again and writes every row of the day; the file is cumulative, so nothing
+# is lost while a later cut comes. A notice the job never wrote comes with
+# the next nightly, as it always did. The job writes nothing else: no
+# status.json, no commit, no deploy, no R2 upload.
+#
+# --remote on every r2 and d1 command: without it Wrangler 4 reads and writes
+# a local simulated store on the runner (pipeline/tests/test_intraday.py
+# checks every command carries it).
+#
+# Secrets: the nightly's CLOUDFLARE_API_TOKEN (D1 edit and R2 read are what
+# this job uses of it) and CLOUDFLARE_ACCOUNT_ID. Variables: SITE_URL and
+# CONTACT, the user agent's site and contact page.
+
+name: intraday
+
+on:
+  schedule:
+    # 11:45, 13:45, ... 23:45 UTC, then 01:45 and 03:45 UTC: see "When" above.
+    - cron: "45 11-23/2 * * *"
+    - cron: "45 1-3/2 * * *"
+  workflow_dispatch:
+
+# Reads the repository and nothing else: no commit, no issue.
+permissions:
+  contents: read
+
+# A group of its own, not the nightly's: this job never waits for a refresh
+# (it touches neither the database backup nor the deploy), and two of its
+# own runs never overlap.
+concurrency:
+  group: intraday
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      AWARDWATCH_SITE_URL: ${{ vars.SITE_URL }}
+      AWARDWATCH_CONTACT: ${{ vars.CONTACT }}
+      # The site's pinned Wrangler (package-lock.json), like the nightly's R2
+      # and D1 calls. Installed by the "site's tools" step.
+      WRANGLER: ${{ github.workspace }}/site/node_modules/.bin/wrangler
+      BUCKET: awardwatch-data
+      OUT: ${{ github.workspace }}/data/out/intraday
+    steps:
+      - name: Check that the Cloudflare secrets exist
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set; nothing to do."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # Editable, because config.py finds the package's data relative to its own file.
+      - name: Install the pipeline
+        run: pip install -e ./pipeline
+      - name: Install the site's tools
+        working-directory: site
+        run: npm ci
+
+      # The validators of the newest run that went through and every version
+      # the table holds, in one statement (intraday.STATE_SQL). From the site
+      # folder, where wrangler.jsonc names the database.
+      - name: Read the last run from the search database
+        id: state
+        working-directory: site
+        run: |
+          mkdir -p "$OUT"
+          "$WRANGLER" d1 execute awardwatch-search --remote --json --command "SELECT 'run' AS kind, file_last_modified AS a, file_etag AS b FROM (SELECT file_last_modified, file_etag FROM intraday_runs WHERE ok = 1 AND (file_last_modified IS NOT NULL OR file_etag IS NOT NULL) ORDER BY at DESC LIMIT 1) UNION ALL SELECT 'row' AS kind, reference AS a, amendment AS b FROM intraday_tenders" > "$OUT/state.json"
+
+      # A conditional request (If-None-Match, If-Modified-Since) with the
+      # pipeline's named user agent; changed=false on a 304, and the steps up
+      # to the record are skipped.
+      - name: Fetch the new notices file when it changed
+        id: fetch
+        run: python -m awardwatch_pipeline.intraday fetch --state "$OUT/state.json" --out "$OUT"
+
+      # Tried three times; "does not exist" (no nightly has saved one yet) or
+      # three failures leave no file, and the refresh then keeps every buyer
+      # as published. Never fails the run: the next changed cut writes the
+      # day's rows again with the lookup.
+      - name: Fetch the buyer lookup from R2
+        id: lookup
+        if: ${{ steps.fetch.outputs.changed == 'true' }}
+        run: |
+          rm -f "$OUT/lookup.json.gz"
+          for attempt in 1 2 3; do
+            if "$WRANGLER" r2 object get --remote "$BUCKET/intraday/lookup.json.gz" --file "$OUT/lookup.json.gz" > "$OUT/lookup.log" 2>&1; then
+              exit 0
+            fi
+            rm -f "$OUT/lookup.json.gz"
+            if grep -qi "specified key does not exist" "$OUT/lookup.log"; then
+              echo "No buyer lookup in R2 yet; the buyers keep their names as published."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "The buyer lookup could not be downloaded; the buyers keep their names as published:"
+          cat "$OUT/lookup.log"
+
+      - name: Parse the notices and write the upserts
+        id: refresh
+        if: ${{ steps.fetch.outputs.changed == 'true' }}
+        run: |
+          python -m awardwatch_pipeline.intraday refresh --csv "$OUT/new.csv" --lookup "$OUT/lookup.json.gz" \
+            --state "$OUT/state.json" --out "$OUT"
+
+      # INSERT ... ON CONFLICT DO UPDATE throughout, so a batch applied twice
+      # leaves the same rows. Skipped when the file held nothing to write.
+      - name: Apply the upserts to the search database
+        id: apply
+        if: ${{ steps.fetch.outputs.changed == 'true' && steps.refresh.outputs.statements != '0' }}
+        working-directory: site
+        run: |
+          "$WRANGLER" d1 execute awardwatch-search --remote --yes --file "$OUT/batch.sql"
+
+      # Whatever happened after the state was read (a run that could not read
+      # D1 cannot write to it either): ok 1 when the file had not changed or
+      # was applied, otherwise ok 0 and the step that failed. The id is the
+      # run and its attempt, so a re-run writes a row of its own.
+      - name: Record the run
+        if: ${{ !cancelled() && steps.state.outcome == 'success' }}
+        working-directory: site
+        env:
+          RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          python -m awardwatch_pipeline.intraday record --run-id "$RUN_ID" --fetch "$OUT/fetch.json" \
+            --refresh "$OUT/refresh.json" --step "fetch=${{ steps.fetch.outcome }}" --step "lookup=${{ steps.lookup.outcome }}" \
+            --step "refresh=${{ steps.refresh.outcome }}" --step "apply=${{ steps.apply.outcome }}" --out "$OUT/run.sql"
+          "$WRANGLER" d1 execute awardwatch-search --remote --yes --file "$OUT/run.sql"

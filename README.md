@@ -16,13 +16,16 @@ pipeline/schema.sql   the one schema both halves use
 brand/      the mark and the lockup
 data/       raw downloads and outputs (git-ignored)
 .github/workflows/nightly.yml   the one scheduled run that refreshes data and deploys
+.github/workflows/intraday.yml  the day's new tender notices, read every two hours (docs/intraday.md)
 ```
 
 The data ships as static assets with the Worker; the browser filters the list
 pages; a D1 database of its own answers the search field on every page, which
 finds an organization by any spelling on its records or its business number,
-and a buyer by name or acronym (`docs/hosted-search.md`); another holds only
-what visitors submit; object storage holds the downloads.
+and a buyer by name or acronym (`docs/hosted-search.md`), and holds the day's
+new tender notices between two nightly runs for the paid view
+(`docs/intraday.md`); another holds only what visitors submit; object storage
+holds the downloads.
 
 Accounts (sign-in by an emailed code, saved searches, API keys) are built but
 not yet open; the switch `ACCOUNTS_ENABLED` keeps them off (`docs/accounts.md`).

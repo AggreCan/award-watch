@@ -27,6 +27,7 @@ import { ClientData, Layout, PageHead, Panel, addDays, noDataPage, page, todayOf
 import { pageSeo } from "../seo";
 import { FeedLinks, nationalFeedPath } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
+import { intradayBand } from "./intraday";
 import { CountdownScript, FiltersFold, SegmentNote, TenderTable, tenderColumns } from "./shared";
 
 export const TENDER_PAGE_SIZE = 50;
@@ -263,6 +264,8 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const chips = activeChips(q, opts, lang);
   const interest = await interestFilter(c.env, lang, "tenders", `/tenders${url.search}`);
   const empty = !waiting && shown.length === 0;
+  // The same-day notices for a paid request; null (nothing read) on the free plan.
+  const intraday = await intradayBand(c, stats.data_as_of, clock);
 
   return page(
     c,
@@ -336,6 +339,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
         </div>
       </form>
 
+      {intraday}
       <div class={empty ? "split is-empty" : "split"} id="tender-split">
         <Panel title={t(lang, "tenders.list_heading")} class="list-panel"
           tools={<p id="tender-count" aria-live="polite">
@@ -408,6 +412,8 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
   const clock = clockOf(c.env);
   const passed = (r: TenderRow) => r.status === "closed" || (r.status === "open" && closingPassed(r.closing, clock));
   const rows = loaded ? [...loaded.filter((r) => !passed(r)), ...loaded.filter(passed)] : null;
+  // The same-day notices for a paid request, on the newest day's view only.
+  const intraday = day === latest ? await intradayBand(c, stats.data_as_of, clock) : null;
   const title = t(lang, "tenders.new_title");
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: title }];
   // Day views other than the newest are views of the same page.
@@ -427,6 +433,7 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
           ))}
         </ul>
       </nav>
+      {intraday}
       <Panel title={t(lang, "tenders.new_day", { day })}
         count={rows && rows.length ? tn(lang, "tenders.count_one", "tenders.count_many", rows.length, { n: fmtInt(rows.length, lang) }) : undefined}>
         {rows === null ? (

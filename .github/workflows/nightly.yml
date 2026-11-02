@@ -23,15 +23,16 @@
 # the export, sync the hosted search database (D1, the changed rows only),
 # record the Worker version serving traffic, deploy the Worker
 # with that data as its assets, check the live site and roll the Worker back
-# when the deploy broke it, tell IndexNow which pages changed, save the
-# database (in parts), the public files (the static bundle, also in parts,
-# and the CSV downloads) and the review files back to R2, keep the audience
-# counts of the finished days in R2 when the analytics token exists, count the
-# alert sign-ups in the forms database, append Search Console's daily figures
-# when its key exists, write the monthly audience report on the first run of
-# a month, run the monthly expiry checks on the first of a month, write the
-# run status, and report the items needing attention (failed run, one GitHub
-# issue).
+# when the deploy broke it, save the buyer lookup the same-day refresh reads
+# and prune that refresh's old rows (docs/intraday.md), tell IndexNow which
+# pages changed, save the database (in parts), the public files (the static
+# bundle, also in parts, and the CSV downloads) and the review files back to
+# R2, keep the audience counts of the finished days in R2 when the analytics
+# token exists, count the alert sign-ups in the forms database, append Search
+# Console's daily figures when its key exists, write the monthly audience
+# report on the first run of a month, run the monthly expiry checks on the
+# first of a month, write the run status, and report the items needing
+# attention (failed run, one GitHub issue).
 #
 # What a failure does (awardwatch_pipeline/nightly.py and resilience.py hold the
 # checks):
@@ -69,6 +70,11 @@
 # - An IndexNow submission that fails is reported (indexnow in the run status)
 #   and never stops the run; only a rejection (the key file or the payload is
 #   wrong) is an item needing attention.
+# - A buyer lookup for the same-day refresh that cannot be saved, or a prune
+#   of its old rows that fails, is a notice (intraday_lookup or
+#   intraday_prune: failed in the run status) and stops nothing: the intraday
+#   job keeps the lookup R2 has, and the site shows only the rows read since
+#   the data date whatever the prune did.
 # - A fault in the retry gate, the version record, the smoke test, the expiry
 #   checks or the issue update never stops the run: the gate then runs the
 #   refresh, a missing version means no rollback tonight, and each outcome is
@@ -450,6 +456,55 @@ jobs:
         run: |
           rm -rf site/public/data
           df -h --output=avail,pcent . | tail -1 | sed 's/^/disk after the deploy: /'
+
+      # The same-day refresh (docs/intraday.md, .github/workflows/intraday.yml)
+      # runs without the database; it resolves buyer spellings with this file
+      # instead: every spelling the buyers stage has resolved, the titles,
+      # acronyms and keys its rules match, the listed buyers' names and the
+      # data date, gzipped (intraday lookup). Only after a deploy that worked
+      # and was not found broken, so the buyers it links are the ones the live
+      # site has pages for; otherwise R2 keeps the lookup of the last good
+      # deploy. The outcome reads "failed" until the file is in R2. A failure
+      # is a notice in the run status (intraday_lookup), never an item needing
+      # attention: the intraday job keeps the lookup it has.
+      - name: Save the buyer lookup for the same-day refresh
+        id: intraday_lookup
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          out=data/out/intraday
+          mkdir -p "$out"
+          echo "failed" > "$out/lookup_outcome.txt"
+          python -m awardwatch_pipeline.intraday lookup --db data/awardwatch.sqlite --static data/out/static --out "$out/lookup.json.gz"
+          for attempt in 1 2 3; do
+            if "$WRANGLER" r2 object put --remote "$BUCKET/intraday/lookup.json.gz" --file "$out/lookup.json.gz"; then
+              echo "saved" > "$out/lookup_outcome.txt"
+              exit 0
+            fi
+            sleep $((20 * attempt))
+          done
+          exit 1
+
+      # The same-day notices first read more than two days ago, and the
+      # intraday run rows older than 30 days, deleted from the search
+      # database (intraday prune). The site shows only the notices read since
+      # the data date, so a prune that fails changes no page: a notice in the
+      # run status (intraday_prune), and the next night deletes them. From the
+      # site folder, where wrangler.jsonc names the database.
+      - name: Prune the same-day notices
+        id: intraday_prune
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        working-directory: site
+        run: |
+          out=../data/out/intraday
+          mkdir -p "$out"
+          echo "failed" > "$out/prune_outcome.txt"
+          python -m awardwatch_pipeline.intraday prune --out "$out/prune.sql"
+          "$WRANGLER" d1 execute awardwatch-search --remote --yes --file "$out/prune.sql"
+          echo "pruned" > "$out/prune_outcome.txt"
 
       # IndexNow (docs/search-engines.md, section 5): Bing and the other engines
       # that take it (Google does not) hear about tonight's changed pages
@@ -866,8 +921,11 @@ jobs:
       # the database came from (restore), the smoke test and any rollback, and
       # the expiry checks. search_sync is the search database sync's outcome
       # ("synced", "nothing to send", "failed", or "not run" when the checks
-      # before it failed). Written whatever happened above. The roll-up, Search
-      # Console, report, IndexNow and rollback steps write "failed" before
+      # before it failed). intraday_lookup and intraday_prune are the same-day
+      # refresh's two nightly steps ("saved" or "pruned", "failed", or "not
+      # run"); a failed one is a notice, never an item needing attention.
+      # Written whatever happened above. The roll-up, Search Console, report,
+      # IndexNow, rollback and the two same-day steps write "failed" before
       # they start, so a step stopped by its time limit still reads as failed.
       - name: Write the run status
         if: ${{ always() }}
@@ -876,6 +934,8 @@ jobs:
             --started-file data/out/run_started.txt --verify data/out/verify.json \
             --views-outcome data/out/views/last_outcome.txt \
             --search-outcome data/out/search/last_outcome.txt \
+            --intraday-lookup-outcome data/out/intraday/lookup_outcome.txt \
+            --intraday-prune-outcome data/out/intraday/prune_outcome.txt \
             --indexnow-outcome data/out/indexnow/last_outcome.txt \
             --search-console-outcome data/out/search_console/last_outcome.txt \
             --views-report-outcome data/out/report/last_outcome.txt \

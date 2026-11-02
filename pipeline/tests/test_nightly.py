@@ -393,9 +393,10 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
     db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
-    assert set(status) == {"run_at", "stages", "steps", "search_sync", "views_rollup", "search_console",
-                           "views_report", "indexnow", "interest", "restore", "smoke", "smoke_detail",
-                           "version_before", "rollback", "deploy_rolled_back", "checks", "notices", "ok"}
+    assert set(status) == {"run_at", "stages", "steps", "search_sync", "intraday_lookup", "intraday_prune",
+                           "views_rollup", "search_console", "views_report", "indexnow", "interest", "restore",
+                           "smoke", "smoke_detail", "version_before", "rollback", "deploy_rolled_back", "checks",
+                           "notices", "ok"}
     # No outcome file: the search database step did not run. The site's check reads the field.
     assert status["search_sync"] == "not run" and status["ok"] is True
 
@@ -868,3 +869,76 @@ def test_the_review_files_go_to_the_private_prefix_and_nowhere_else():
     ]
     # The bundle is the static folder alone.
     assert "tar -czf data/out/static.tar.gz -C data/out static" in step(text, "Bundle the static data for the site")
+
+
+# -- the same-day refresh's two nightly steps (docs/intraday.md) -------------------------------
+
+
+def test_the_same_day_steps_land_in_the_status_and_a_failure_is_a_notice(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+    quiet = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
+    assert quiet["intraday_lookup"] == "not run" and quiet["intraday_prune"] == "not run"
+    assert quiet["notices"] == []
+    ok = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"},
+                            intraday_lookup="saved", intraday_prune="pruned")
+    assert (ok["intraday_lookup"], ok["intraday_prune"], ok["notices"]) == ("saved", "pruned", [])
+    failed = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"},
+                                intraday_lookup="failed", intraday_prune="failed")
+    assert failed["notices"] == [{"source": name, "detail": text} for name, text in nightly.INTRADAY_NOTICES.items()]
+    # Information only: the run stays ok, nothing needs attention, and the notices say what happened.
+    assert failed["ok"] is True and resilience.attention_items(failed) == []
+    assert any(line.startswith("intraday_prune: the same-day notices") for line in resilience.notice_items(failed))
+    # The command reads the outcome files the two steps write.
+    lookup, prune = tmp_path / "lookup_outcome.txt", tmp_path / "prune_outcome.txt"
+    lookup.write_text("saved\n", encoding="utf-8")
+    prune.write_text("failed\n", encoding="utf-8")
+    out = tmp_path / "status.json"
+    assert nightly.main(["status", "--db", str(db), "--intraday-lookup-outcome", str(lookup),
+                         "--intraday-prune-outcome", str(prune), "--out", str(out)]) == 0
+    status = json.loads(out.read_text(encoding="utf-8"))
+    assert status["intraday_lookup"] == "saved" and status["intraday_prune"] == "failed"
+    assert [n["source"] for n in status["notices"]] == ["intraday_prune"]
+
+
+def test_the_workflow_saves_the_lookup_after_a_good_deploy_and_prunes_every_night():
+    from awardwatch_pipeline import intraday
+
+    text = WORKFLOW.read_text(encoding="utf-8")
+    names = [line.strip()[len("- name: "):] for line in text.splitlines() if line.strip().startswith("- name: ")]
+    lookup_at = names.index("Save the buyer lookup for the same-day refresh")
+    prune_at = names.index("Prune the same-day notices")
+    # After the search sync and the deploy (the lookup names the buyers the live site has pages for),
+    # before the run status that records both outcomes.
+    assert names.index("Sync the search database") < names.index("Deploy the Worker with the new data as assets")
+    assert names.index("Free the deploy copy of the export") < lookup_at < prune_at < names.index("Write the run status")
+    lookup = step(text, "Save the buyer lookup for the same-day refresh")
+    assert "id: intraday_lookup" in lookup and "continue-on-error: true" in lookup
+    assert "steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken'" in lookup
+    assert ("python -m awardwatch_pipeline.intraday lookup --db data/awardwatch.sqlite --static data/out/static "
+            '--out "$out/lookup.json.gz"') in lookup
+    assert f'"$WRANGLER" r2 object put --remote "$BUCKET/{intraday.LOOKUP_KEY}" --file "$out/lookup.json.gz"' in lookup
+    # "failed" first, "saved" only once the file is in R2.
+    assert lookup.index('echo "failed" > "$out/lookup_outcome.txt"') < lookup.index("r2 object put") \
+        < lookup.index('echo "saved" > "$out/lookup_outcome.txt"')
+    prune = step(text, "Prune the same-day notices")
+    assert "id: intraday_prune" in prune and "continue-on-error: true" in prune and "if: ${{ !cancelled() }}" in prune
+    assert "working-directory: site" in prune
+    order = [
+        'echo "failed" > "$out/prune_outcome.txt"',
+        'python -m awardwatch_pipeline.intraday prune --out "$out/prune.sql"',
+        '"$WRANGLER" d1 execute awardwatch-search --remote --yes --file "$out/prune.sql"',
+        'echo "pruned" > "$out/prune_outcome.txt"',
+    ]
+    places = [prune.index(line) for line in order]
+    assert places == sorted(places)
+    # The run status reads both outcomes; the steps up to the deploy never wait on them.
+    status = step(text, "Write the run status")
+    assert "--intraday-lookup-outcome data/out/intraday/lookup_outcome.txt" in status
+    assert "--intraday-prune-outcome data/out/intraday/prune_outcome.txt" in status
+    for name in ("Bundle the static data for the site", "Deploy the Worker with the new data as assets",
+                 "Save the database to R2"):
+        assert "steps.intraday_" not in step(text, name), name
+    # The nightly never applies the intraday schema: the operator does, once (docs/intraday.md).
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    assert "intraday_schema.sql" not in code

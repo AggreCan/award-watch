@@ -388,6 +388,13 @@ def _ensure_keys(conn: sqlite3.Connection) -> None:
     conn.execute("INSERT INTO temp.buyer_keys_stamp (stamp) VALUES (?)", (stamp,))
 
 
+def key_index(conn: sqlite3.Connection) -> list[tuple[str, str, str]]:
+    """The key index as (key, buyer_id, tier) rows, built first if it is stale: what rules 4 and 6 match
+    against, for the same-day refresh's lookup (intraday.py), which resolves without the database."""
+    _ensure_keys(conn)
+    return [tuple(r) for r in conn.execute("SELECT key, buyer_id, tier FROM temp.buyer_keys ORDER BY key, buyer_id, tier")]
+
+
 def _keyed(conn: sqlite3.Connection, key: str, tier: str, exclude: set[str]) -> str | None:
     if not key:
         return None
