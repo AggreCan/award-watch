@@ -1,4 +1,5 @@
-"""Command line: `python -m awardwatch_pipeline run`, the nightly refresh, one stage after another.
+"""Command line: `python -m awardwatch_pipeline run`, the nightly refresh, one stage after another,
+and the search database's search-sync, search-check and search-synced (search_db.py).
 
 The stages run in CLAUDE.md's order. Each records one sources_log row (the
 module writes it on success, _stage on a failure) and never stops the stages
@@ -22,6 +23,7 @@ from .http import PoliteClient
 from .sources import buyers, canadabuys, registry_federal
 from . import indicators
 from . import expiring, export, export_static, migrate
+from . import search_db
 from .sources import contracts, grants, lobbying, matching
 
 log = logging.getLogger("awardwatch_pipeline")
@@ -38,6 +40,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--samples", action="store_true",
                      help="read data/raw/samples/*.csv instead of fetching; no network requests (dev runs)")
     run.add_argument("--db", default=None, help="SQLite path (default data/awardwatch.sqlite)")
+    # The hosted search database's sync (search_db.py, docs/hosted-search.md):
+    # search-sync, search-check and search-synced, run by the workflow around
+    # its Wrangler calls after the export.
+    search_db.add_parsers(sub)
     return parser
 
 
@@ -48,6 +54,8 @@ def main(argv: list[str] | None = None) -> int:
     # database that will not open, a full disk) so the workflow always gets an
     # exit code and a log line rather than a traceback from the interpreter.
     try:
+        if args.command in search_db.COMMANDS:
+            return search_db.command(args)
         conn = connect(args.db)
         try:
             return run(conn, [s for s in STAGES if getattr(args, s)], samples=config.SAMPLES_DIR if args.samples else None)

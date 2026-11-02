@@ -3,6 +3,9 @@ import type { Lang } from "./i18n";
 export interface Env {
   // The forms database: organization responses and corrections only.
   DB: D1Database;
+  // The hosted search database (src/search_db.ts), filled by the nightly
+  // sync. Absent or empty, /search explains and links the directory.
+  SEARCH?: D1Database;
   DATA?: R2Bucket;
   ASSETS?: Fetcher;
   SCHEMA_SQL?: string;

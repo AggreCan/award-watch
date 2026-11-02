@@ -575,7 +575,7 @@ def run_status(
     status then says what is missing rather than failing to be written.
 
     search, views and indexnow_outcome are the outcomes the search database
-    sync (not run until the hosted search ships), the audience roll-up
+    sync ("synced", "nothing to send" or "failed"; search_db.py), the audience roll-up
     ("rolled up", "no data", "no token" or "failed") and the IndexNow
     submission ("submitted <n> URLs", "rejected (<status>)", "rate limited",
     "failed" or "off") wrote; "not run" when the step did not run. So do
@@ -636,8 +636,8 @@ def run_status(
         "run_at": stamp,
         "stages": stages,
         "steps": dict(steps),
-        # The site's daily check reads this field; the step that sets it
-        # ships with the hosted search database.
+        # The site's daily check reads this field; the workflow's "Sync the
+        # search database" step writes it (search_db.OUTCOME).
         "search_sync": search or "not run",
         "views_rollup": views or "not run",
         "search_console": search_console or "not run",

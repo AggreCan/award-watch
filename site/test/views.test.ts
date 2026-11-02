@@ -70,7 +70,7 @@ describe("route templates", () => {
   });
 
   it("stores a path that matches no route as 'other', whatever it holds", () => {
-    for (const path of ["/someone@example.com", "/search", "/wp-login.php", "/organizations/a/b/c", "/%E2%80%94", "/tenders/a/b", "/buyers/a/b"]) {
+    for (const path of ["/someone@example.com", "/search/x", "/wp-login.php", "/organizations/a/b/c", "/%E2%80%94", "/tenders/a/b", "/buyers/a/b"]) {
       expect(routeTemplate("GET", path), path).toEqual({ route: "other", kind: "other" });
     }
   });

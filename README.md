@@ -19,9 +19,10 @@ data/       raw downloads and outputs (git-ignored)
 ```
 
 The data ships as static assets with the Worker; the browser filters the list
-pages; a database of its own answers the search page (the static files are its
-fallback); another holds only what visitors submit; object storage holds the
-downloads.
+pages; a D1 database of its own answers the search field on every page, which
+finds an organization by any spelling on its records or its business number,
+and a buyer by name or acronym (`docs/hosted-search.md`); another holds only
+what visitors submit; object storage holds the downloads.
 
 ## Quick start
 ```

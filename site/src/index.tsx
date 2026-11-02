@@ -27,6 +27,7 @@ import { homePage } from "./pages/home";
 import { methodologyPage } from "./pages/methodology";
 import { organizationPage } from "./pages/organization";
 import { rankingsPage } from "./pages/rankings";
+import { searchPage } from "./pages/search";
 import { supportPage } from "./pages/support";
 import { tenderPage } from "./pages/tender";
 import { newTendersPage, tendersPage } from "./pages/tenders";
@@ -119,6 +120,10 @@ app.get("/categories", (c) => movedTo(c, "/segments"));
 app.get("/categories/:nn", (c) => movedTo(c, `/segments/${encodeURIComponent(c.req.param("nn") ?? "")}`));
 app.get("/rankings", rankingsPage);
 app.get("/rankings/:year", rankingsPage);
+// Organizations and buyers by name, from the hosted search database (D1
+// SEARCH); the top bar's field on every page submits here. A page for the
+// rate limiter and the views like any other.
+app.get("/search", searchPage);
 // Feeds are static files under /data/feeds/; this page lists them. The
 // watchlist lives in the visitor's browser; this page is its shell.
 app.get("/feeds", feedsPage);

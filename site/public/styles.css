@@ -198,6 +198,22 @@ html.js .theme-toggle { display: inline-flex; }
   :root:not([data-theme="light"]) .theme-toggle .when-dark { display: inline; }
 }
 
+/* -- the top bar's search field (layout.tsx TopbarSearch) ------------------
+   A hairline field between the lockup and the right-hand controls, as wide as
+   the bar allows up to 480 px. From 1000 px it starts where the content
+   column's text starts (the lockup's link spans the rail less the gutter).
+   Below 700 px it takes a row of its own under the lockup. */
+.topbar-search { flex: 1 1 240px; min-width: 160px; max-width: 480px; margin: 0; }
+.topbar-search input[type="search"] { display: block; width: 100%; }
+.topbar-search input[type="search"]::placeholder { color: var(--muted); opacity: 1; }
+@media (min-width: 1000px) {
+  .topbar-search { margin-left: 8px; }
+}
+@media (max-width: 699px) {
+  .topbar-search { order: 1; flex: 1 1 100%; min-width: 0; max-width: none; }
+  .topbar-meta { order: 2; }
+}
+
 /* -- frame: the rail and the content column ----------------------------------- */
 .content { min-width: 0; display: flex; flex-direction: column; }
 main { flex: 1 0 auto; min-width: 0; padding: 0 var(--gutter) var(--gutter); }
