@@ -19,7 +19,7 @@ const PAGES = [
   "/", "/tenders", "/tenders/new", "/tenders/cb-100-10000001", "/awards", "/awards/2026", "/awards/cb-400-40000004",
   "/expiring", "/expiring/3m", "/organizations", "/organizations/directory/on", "/organizations/org-a000000001",
   "/organizations/org-a000000002", "/buyers", "/buyers/pwgsc-tpsgc", "/segments", "/segments/82", "/rankings",
-  "/data", "/feeds", "/support", "/watchlist",
+  "/data", "/feeds", "/watchlist",
 ];
 
 describe("column widths", () => {
@@ -113,7 +113,8 @@ describe("a source's name over its figure", () => {
       ["/segments", ["Award notices in 2026", "All award notices"]],
     ] as const) {
       const html = await text(path);
-      for (const head of heads) expect(html, `${path} ${head}`).toMatch(new RegExp(`<th class="k-tally( [a-z]+h)? num">${head}</th>`));
+      // A tally column may rest on a medium screen ([a-z]+h) or on a phone (ph).
+      for (const head of heads) expect(html, `${path} ${head}`).toMatch(new RegExp(`<th class="k-tally( [a-z]+h)? num( ph)?">${head}</th>`));
     }
   });
 

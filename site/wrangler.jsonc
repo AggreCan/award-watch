@@ -73,7 +73,7 @@
   // ALERT_FROM is the daily check's sender on the zone. RUN_LOG_URL and
   // SITE_URL are the two addresses its email links to; the run log's address
   // is set by the operator once the repository exists (empty leaves the line
-  // out). Donations stay closed until DONATE_URL is added (see src/env.ts).
+  // out).
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",

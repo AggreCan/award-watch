@@ -69,7 +69,7 @@ describe("missing and corrupt data files", () => {
       }
     }
     // The pages that do not need the data still answer.
-    for (const path of ["/methodology", "/support", "/feeds", "/watchlist", "/corrections"]) {
+    for (const path of ["/methodology", "/feeds", "/watchlist", "/corrections"]) {
       expect((await req(path, { ASSETS: assetsWith({ "stats.json": "{" }) })).status, path).toBe(200);
     }
   });
@@ -171,16 +171,12 @@ describe("missing and corrupt data files", () => {
 });
 
 describe("storage outages", () => {
-  it("pages render with D1 down; the support page shows its empty state", async () => {
+  it("pages render with D1 down", async () => {
     const profile = await req("/organizations/org-a000000001", { DB: brokenDb });
     expect(profile.status).toBe(200);
     const html = await profile.text();
     expect(html).toContain("Exemplar Translation Services Inc.");
     expect(html).toContain("The organization has not published a response.");
-    const support = await req("/support", { DB: brokenDb });
-    expect(support.status).toBe(200);
-    expect(await support.text()).toContain("Monthly support received: $0.00.");
-    expect((await req("/support", { DB: undefined })).status).toBe(200);
   });
 
   it("forms fail politely with D1 down: the form comes back with what was typed", async () => {
@@ -199,19 +195,6 @@ describe("storage outages", () => {
     const correction = await form("/corrections", { page: "/organizations/org-a000000002", text: "The city is out of date." });
     expect(correction.status).toBe(503);
     expect(await correction.text()).toContain("The city is out of date.");
-  });
-
-  it("the donation webhook answers 503 when it cannot store, so the notice is sent again", async () => {
-    const doc = {
-      verification_token: "tok-123456", kofi_transaction_id: "tx-outage-1", amount: "5.00", currency: "CAD",
-      timestamp: new Date().toISOString(), type: "Donation",
-    };
-    const res = await req("/hooks/kofi", { DB: brokenDb, KOFI_VERIFICATION_TOKEN: "tok-123456" }, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ data: JSON.stringify(doc) }).toString(),
-    });
-    expect(res.status).toBe(503);
   });
 
   it("downloads answer 503 when R2 fails and 404 when it is not bound or not on the list", async () => {

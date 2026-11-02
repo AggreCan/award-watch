@@ -6,7 +6,7 @@
 // nightly run. The feeds and the CSV files are written by the nightly and
 // keep the states of the data date; their notes say so.
 
-import { closingInstant, closingParts, closingPassed as passedAt, closingState, easternDay } from "../public/closing.js";
+import { closingInstant, closingParts, closingPassed as passedAt, closingState, countdownText, easternDay } from "../public/closing.js";
 import { CLOSING_SOON_DAYS } from "./constants";
 import { t, type Lang } from "./i18n";
 
@@ -73,6 +73,20 @@ export function closingText(closing: string | null | undefined, lang: Lang = "en
   if (!p) return closing;
   const time = closingTime(closing, lang);
   return time ? `${p.day} ${time}` : p.day;
+}
+
+// The time left as public/countdown.js writes it ("closes in 3 h 12 min",
+// "closes in 2 days"), from the page's clock, or null for a value without a
+// time or one already past. A list sorted by closing date shows it in place of
+// the closing-soon chip; the script rewrites it each minute.
+export function countdownLine(closing: string | null | undefined, clock: Clock, lang: Lang): string | null {
+  const at = closingInstant(closing);
+  if (at === null) return null;
+  const words = {
+    in_min: t(lang, "countdown.in_min"), in_hm: t(lang, "countdown.in_hm"), in_day: t(lang, "countdown.in_day"),
+    in_days: t(lang, "countdown.in_days"), today_at: t(lang, "countdown.today_at"),
+  };
+  return countdownText(at, clock.now, closingTime(closing, lang) ?? "", words);
 }
 
 // Whether a published closing value names its time zone.

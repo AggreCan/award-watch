@@ -44,14 +44,14 @@ import { DOWNLOADS, YEARLY_DOWNLOAD } from "./pages/data";
 // points are kept for three months; the nightly run keeps a daily roll-up in
 // R2 (pipeline/awardwatch_pipeline/views_rollup.py).
 
-export type Kind = "page" | "api" | "download" | "form" | "hook" | "file" | "feed" | "other";
+export type Kind = "page" | "api" | "download" | "form" | "file" | "feed" | "other";
 
 // /categories (and /categories/:nn below) now answer with a redirect to
 // /segments; they stay so the counts of old links keep their route.
 // /interest is the alerts form's post (kind form); a GET there is sent to /alerts.
 const PAGES = new Set([
   "/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments", "/categories", "/rankings",
-  "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections", "/about", "/terms", "/privacy",
+  "/feeds", "/watchlist", "/data", "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy",
   "/alerts", "/interest",
   // The search page: its query string is never stored, only the route.
   "/search",
@@ -94,7 +94,6 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   }
   if (FEED_PATH.test(path)) return { route: "/data/feeds/:file", kind: "feed" };
   if (path === "/data/feeds/index.json") return { route: path, kind: "file" };
-  if (path === "/hooks/kofi") return { route: path, kind: "hook" };
   if (path === "/robots.txt" || path === "/llms.txt") return { route: path, kind: "file" };
   if (/^\/sitemap(?:-[0-9]+)?\.xml$/.test(path)) return { route: "/sitemap.xml", kind: "file" };
   return { route: "other", kind: "other" };
@@ -174,7 +173,7 @@ export function hasFetchMetadata(headers: Headers): boolean {
 // category: search engine, monitoring, feed fetcher and so on), when the
 // user agent is missing, is not shaped like a browser's or carries one of the
 // words above, when a browser-shaped agent comes with no Fetch Metadata
-// header, and for every feed poll and payment hook (programs by nature).
+// header, and for every feed poll (a program by nature).
 // Everything else is "human": a person's browser, or a crawler that copies
 // a browser's headers too, which no header can tell apart. fetchMetadata says
 // whether the request carried any of the three headers; it defaults to true
@@ -182,7 +181,7 @@ export function hasFetchMetadata(headers: Headers): boolean {
 export function agentClass(
   userAgent: string | undefined | null, verifiedBotCategory: unknown, kind?: Kind, fetchMetadata = true,
 ): Agent {
-  if (kind === "feed" || kind === "hook") return "bot";
+  if (kind === "feed") return "bot";
   if (typeof verifiedBotCategory === "string" && verifiedBotCategory.trim() !== "") return "bot";
   const ua = (userAgent ?? "").slice(0, 512);
   if (!ua.trim() || !BROWSER_UA.test(ua) || BOT_UA.test(ua)) return "bot";

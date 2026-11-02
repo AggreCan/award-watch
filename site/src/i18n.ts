@@ -71,7 +71,6 @@ const STRINGS = {
   "footer.watchlist": { en: "Watchlist", fr: "Liste de suivi" },
   "footer.corrections": { en: "Report a correction", fr: "Signaler une correction" },
   "footer.cite": { en: "Cite", fr: "Citer" },
-  "footer.support": { en: "Support the site", fr: "Soutenir le site" },
   "footer.about": { en: "About", fr: "À propos" },
   "footer.terms": { en: "Terms", fr: "Conditions" },
   "footer.privacy": { en: "Privacy", fr: "Confidentialité" },
@@ -104,6 +103,24 @@ const STRINGS = {
     fr: "Les étiquettes qui suivent une référence sont des segments UNSPSC, par numéro et nom abrégé.",
   },
   "common.not_loaded": { en: "This source has not been loaded yet.", fr: "Cette source n'a pas encore été chargée." },
+  "common.not_loaded_short": { en: "Not loaded", fr: "Non chargé" },
+  // A list of two or more, the last joined by "or" ("a, b or c").
+  "common.list_or": { en: "{list} or {last}", fr: "{list} ou {last}" },
+  // Below 700 px a long table shows its first rows; this opens the rest (public/pager.js).
+  "common.show_rows": { en: "Show all {n} rows", fr: "Afficher les {n} lignes" },
+  "common.show_years": { en: "Show all years", fr: "Afficher toutes les années" },
+  "common.show_recent_years": { en: "Show the last {n} years only", fr: "N'afficher que les {n} dernières années" },
+  "common.years_source": { en: "Source shown", fr: "Source affichée" },
+  "common.years_all": { en: "All sources", fr: "Toutes les sources" },
+  // The order switch above a long list.
+  "common.order": { en: "Order", fr: "Ordre" },
+  "common.order_records": { en: "Most records", fr: "Le plus de dossiers" },
+  "common.order_name": { en: "A to Z", fr: "De A à Z" },
+  "common.order_code": { en: "By code", fr: "Par code" },
+  // The filters above a list fold on a phone; the button that opens them says how many are on.
+  "filters.fold": { en: "Filters", fr: "Filtres" },
+  "filters.fold_one": { en: "Filters (1 active)", fr: "Filtres (1 actif)" },
+  "filters.fold_many": { en: "Filters ({n} active)", fr: "Filtres ({n} actifs)" },
   "common.time": { en: "{hh}:{mm}", fr: "{hh} h {mm}" },
   // Beside a closing time that names no zone: CanadaBuys publishes them in Eastern time.
   "common.zone_et": { en: "ET", fr: "HE" },
@@ -275,8 +292,15 @@ const STRINGS = {
   "home.tile_new_note": { en: "First seen in the last refresh", fr: "Vus à la dernière mise à jour" },
   "home.tile_awards": { en: "Award notices", fr: "Avis d'attribution" },
   "home.tile_awards_note": { en: "On CanadaBuys since 2012", fr: "Sur AchatsCanada depuis 2012" },
-  "home.tile_expiring": { en: "Ending within 3 months", fr: "Fin d'ici 3 mois" },
+  "home.tile_expiring": { en: "Ending within 3 months", fr: "Contrats prenant fin d'ici 3 mois" },
   "home.tile_expiring_note": { en: "Ending within 3 months of the data date", fr: "Fin d'ici 3 mois à la date des données" },
+  // The home tiles carry what the rail beside them does not: how many close
+  // today, and the value of the year's award notices and of the contracts ending.
+  "home.tile_closing_none": { en: "None closes today", fr: "Aucun ne ferme aujourd'hui" },
+  "home.tile_closing_one": { en: "1 closes today", fr: "1 ferme aujourd'hui" },
+  "home.tile_closing_many": { en: "{n} close today", fr: "{n} ferment aujourd'hui" },
+  "home.tile_awards_year_note": { en: "Published on CanadaBuys this year", fr: "Publiés sur AchatsCanada cette année" },
+  "home.tile_value": { en: "Worth {total}", fr: "Valeur : {total}" },
   "home.tile_organizations": { en: "Organizations", fr: "Organisations" },
   "home.tile_organizations_note": { en: "Suppliers, recipients and lobbying clients", fr: "Fournisseurs, bénéficiaires et clients de lobbying" },
   "home.tile_contracts": { en: "Published contracts", fr: "Contrats publiés" },
@@ -325,8 +349,8 @@ const STRINGS = {
   // -- tender lists ----------------------------------------------------------------------
   "tenders.title": { en: "Open Tender Notices", fr: "Avis d'appel d'offres ouverts" },
   "tenders.lead": {
-    en: "{n} notices open on CanadaBuys at the data date, filtered here in your browser.",
-    fr: "{n} avis ouverts sur AchatsCanada à la date des données, filtrés ici dans votre navigateur.",
+    en: "{n} notices open on CanadaBuys at the data date.",
+    fr: "{n} avis ouverts sur AchatsCanada à la date des données.",
   },
   "tenders.contact_note": {
     en: "Contacts, documents and bid submission are on each notice's CanadaBuys page.",
@@ -356,6 +380,13 @@ const STRINGS = {
   "tenders.count_one": { en: "{n} notice", fr: "{n} avis" },
   "tenders.count_many": { en: "{n} notices", fr: "{n} avis" },
   "tenders.none_match": { en: "No open notice matches these filters.", fr: "Aucun avis ouvert ne correspond à ces filtres." },
+  "tenders.none_next": { en: "Remove a filter above, or {reset}.", fr: "Retirez un filtre ci-dessus, ou {reset}." },
+  "tenders.none_next_q": { en: "Remove a filter above, {reset}, or {search}.", fr: "Retirez un filtre ci-dessus, {reset}, ou {search}." },
+  "tenders.none_reset": { en: "show every open notice", fr: "affichez tous les avis ouverts" },
+  "tenders.none_search": {
+    en: "look for these words among organizations and buyers",
+    fr: "cherchez ces mots parmi les organisations et les acheteurs",
+  },
   "tenders.page_of": { en: "Page {page} of {pages}", fr: "Page {page} sur {pages}" },
   "tenders.prev": { en: "Previous", fr: "Précédente" },
   "tenders.next": { en: "Next", fr: "Suivante" },
@@ -410,6 +441,11 @@ const STRINGS = {
     fr: "Les coordonnées de l'agent de négociation des contrats et les documents d'invitation se trouvent sur la page d'AchatsCanada. Ce site ne reproduit pas les coordonnées.",
   },
   "tender.dates": { en: "Key Dates", fr: "Dates clés" },
+  // The head's line under the title: when the notice closes, who buys, what kind.
+  "tender.lead_closes": { en: "Closes {date}", fr: "Clôture le {date}" },
+  "tender.lead_closed": { en: "Closed {date}", fr: "Clôturé le {date}" },
+  "tender.buyer_open_one": { en: "{n} open notice from {buyer}", fr: "{n} avis ouvert de cet acheteur ({buyer})" },
+  "tender.buyer_open_many": { en: "{n} open notices from {buyer}", fr: "{n} avis ouverts de cet acheteur ({buyer})" },
   "tender.amended": { en: "Amended", fr: "Modifié le" },
   "tender.start_expected": { en: "Expected start", fr: "Début prévu" },
   "tender.end_expected": { en: "Expected end", fr: "Fin prévue" },
@@ -445,9 +481,19 @@ const STRINGS = {
     fr: "Aucun avis d'attribution ne porte encore ce numéro d'invitation.",
   },
   "tender.provenance": {
-    en: "Read from {file}. First seen {first}, last seen {last}.",
-    fr: "Lu dans {file}. Vu pour la première fois le {first}, pour la dernière fois le {last}.",
+    en: "Read from {file} (see {data}). First seen {first}, last seen {last}.",
+    fr: "Lu dans {file} (voir {data}). Vu pour la première fois le {first}, pour la dernière fois le {last}.",
   },
+  // The CanadaBuys files a notice is read from, by the start of the file's name.
+  "file.open_tenders": { en: "the CanadaBuys open tender notices file", fr: "le fichier des avis d'appel d'offres ouverts d'AchatsCanada" },
+  "file.new_tenders": { en: "the CanadaBuys new tender notices file", fr: "le fichier des nouveaux avis d'appel d'offres d'AchatsCanada" },
+  "file.all_tenders": { en: "the CanadaBuys file of all tender notices", fr: "le fichier de tous les avis d'appel d'offres d'AchatsCanada" },
+  "file.fy_awards": { en: "the CanadaBuys award notices file for {fy}", fr: "le fichier des avis d'attribution d'AchatsCanada pour {fy}" },
+  "file.all_awards": { en: "the CanadaBuys file of all award notices", fr: "le fichier de tous les avis d'attribution d'AchatsCanada" },
+  "file.old_awards": { en: "the CanadaBuys historical award notices file", fr: "le fichier des avis d'attribution historiques d'AchatsCanada" },
+  "file.fy_history": { en: "the CanadaBuys contract history file for {fy}", fr: "le fichier de l'historique des contrats d'AchatsCanada pour {fy}" },
+  "file.all_history": { en: "the CanadaBuys file of all contract history", fr: "le fichier de tout l'historique des contrats d'AchatsCanada" },
+  "file.old_history": { en: "the CanadaBuys historical contract history file", fr: "le fichier des anciens dossiers de l'historique des contrats d'AchatsCanada" },
   "tender.versions_one": { en: "{n} version on record.", fr: "{n} version au dossier." },
   "tender.versions_many": { en: "{n} versions on record.", fr: "{n} versions au dossier." },
   "tender.description": {
@@ -511,7 +557,17 @@ const STRINGS = {
     en: "The amounts are in {currency} as published and are left out of the site's totals, which are in Canadian dollars.",
     fr: "Les montants sont en {currency}, tels que publiés, et sont exclus des totaux du site, établis en dollars canadiens.",
   },
-  "contract.details": { en: "Details", fr: "Détails" },
+  "contract.lead_ends": { en: "ends {date}", fr: "prend fin le {date}" },
+  "contract.lead_ended": { en: "ended {date}", fr: "a pris fin le {date}" },
+  // Beside the end date while it falls within one of the radar's windows, linked to that window.
+  "contract.days_left_one": { en: "{n} day left", fr: "{n} jour restant" },
+  "contract.days_left_many": { en: "{n} days left", fr: "{n} jours restants" },
+  "contract.ends_today": { en: "Ends today", fr: "Prend fin aujourd'hui" },
+  // The source's own term spelled out: CanadaBuys writes "Contract against SA" in English.
+  "instrument.contract_sa": {
+    en: "Contract against a supply arrangement",
+    fr: "Contrat découlant d'un arrangement en matière d'approvisionnement",
+  },
   "contract.start": { en: "Contract start", fr: "Début du contrat" },
   "contract.end": { en: "Contract end", fr: "Fin du contrat" },
   "contract.number": { en: "Contract number", fr: "Numéro de contrat" },
@@ -556,7 +612,7 @@ const STRINGS = {
     fr: "Fil Atom des contrats qui entrent dans la période de 3 mois",
   },
   "expiring.feeds_all": { en: "Feeds by buyer and by segment", fr: "Fils par acheteur et par segment" },
-  "expiring.first_heading": { en: "Ending Within 3 Months", fr: "Fin d'ici 3 mois" },
+  "expiring.first_heading": { en: "Ending Within 3 Months", fr: "Contrats prenant fin d'ici 3 mois" },
   "expiring.first_note": { en: "The first {n} by end date.", fr: "Les {n} premiers par date de fin." },
   "expiring.first_all": { en: "All contracts ending within 3 months", fr: "Tous les contrats prenant fin d'ici 3 mois" },
   "expiring.list_missing": { en: "The list for this window is not published yet.", fr: "La liste de cette période n'est pas encore publiée." },
@@ -620,7 +676,12 @@ const STRINGS = {
   "expiring.days_left_one": { en: "{n} day left", fr: "{n} jour restant" },
   "expiring.days_left_many": { en: "{n} days left", fr: "{n} jours restants" },
   "expiring.ends_today": { en: "Ends today", fr: "Prend fin aujourd'hui" },
-  "expiring.col_amendments": { en: "Amendments and growth", fr: "Modifications et variation de valeur" },
+  "expiring.col_amendments": { en: "Amendments and value change", fr: "Modifications et variation de valeur" },
+  // Under the radar list while the amendments and record columns rest (700 to 1599 px).
+  "expiring.rest_note": {
+    en: "Amendments, value changes and the source record of each contract are in {csv}.",
+    fr: "Les modifications, les variations de valeur et le dossier source de chaque contrat se trouvent dans {csv}.",
+  },
   "expiring.amendments_none": { en: "None", fr: "Aucune" },
   "expiring.amendments_one": { en: "{n} amendment", fr: "{n} modification" },
   "expiring.amendments_many": { en: "{n} amendments", fr: "{n} modifications" },
@@ -690,7 +751,6 @@ const STRINGS = {
   },
   "org.col_nc_count": { en: "Non-competitive, by count", fr: "Non concurrentiels, en nombre" },
   "org.col_nc_value": { en: "Non-competitive, by value", fr: "Non concurrentiels, en valeur" },
-  "org.share": { en: "{part} of {whole}{pct}", fr: "{part} sur {whole}{pct}" },
   "org.nc_negative_note": {
     en: "* The year holds records below zero (an amendment that lowered a published contract). The non-competitive share by value counts positive values only; the value column is the net total.",
     fr: "* L'année compte des dossiers inférieurs à zéro (une modification qui a réduit un contrat publié). La part non concurrentielle en valeur ne compte que les valeurs positives; la colonne Valeur donne le total net.",
@@ -756,6 +816,14 @@ const STRINGS = {
   },
   "org.buyers": { en: "Main Buyers by Source", fr: "Principaux acheteurs par source" },
   "org.buyers_none": { en: "No buyer on record.", fr: "Aucun acheteur au dossier." },
+  // The line after the record lists that names the sources with no record of the organization.
+  "org.sources_none": { en: "No record in {list} names this organization.", fr: "Aucun dossier dans {list} ne nomme cette organisation." },
+  "org.sources_not_read": { en: "Not loaded yet: {list}.", fr: "Pas encore chargées : {list}." },
+  "org.in_awards": { en: "award notices", fr: "les avis d'attribution" },
+  "org.in_history": { en: "PSPC contract history", fr: "l'historique des contrats de SPAC" },
+  "org.in_contracts": { en: "published contracts", fr: "les contrats publiés" },
+  "org.in_grants": { en: "grants and contributions", fr: "les subventions et contributions" },
+  "org.in_lobbying": { en: "lobbying communications", fr: "les communications de lobbying" },
   "org.expiring": { en: "Contracts Ending", fr: "Contrats prenant fin" },
   "org.responses": { en: "Responses from the Organization", fr: "Réponses de l'organisation" },
   "org.no_responses": { en: "The organization has not published a response.", fr: "L'organisation n'a publié aucune réponse." },
@@ -791,8 +859,9 @@ const STRINGS = {
   "lobby.registrant": { en: "Registrant", fr: "Déclarant" },
 
   // -- watchlist (the strings watchlist.js draws come through the page) --------------
-  "watch.on": { en: "Watching", fr: "Suivie" },
-  "watch.off": { en: "Watch", fr: "Suivre" },
+  "watch.on": { en: "On your watchlist", fr: "Dans votre liste de suivi" },
+  "watch.off": { en: "Add to watchlist", fr: "Ajouter à la liste de suivi" },
+  "watch.button_title": { en: "Kept in this browser", fr: "Conservée dans ce navigateur" },
   "watch.full": { en: "Watchlist full ({max})", fr: "Liste de suivi pleine ({max})" },
   "watch.title": { en: "Watchlist", fr: "Liste de suivi" },
   "watch.lead": {
@@ -891,6 +960,8 @@ const STRINGS = {
   "buyer.open_one": { en: "{n} open notice", fr: "{n} avis ouvert" },
   "buyer.open_many": { en: "{n} open notices", fr: "{n} avis ouverts" },
   "buyer.col_organizations": { en: "Organizations", fr: "Organisations" },
+  // The years a buyer's records span, in the head ("de 2002 à 2026" in French, where a profile's dates read "du ... au").
+  "buyer.seen": { en: "Records from {first} to {last}.", fr: "Dossiers de {first} à {last}." },
   "buyer.top": { en: "Largest Values: {source}", fr: "Valeurs les plus élevées : {source}" },
   "buyer.recent_awards": { en: "Newest Award Notices", fr: "Avis d'attribution les plus récents" },
   "buyer.expiring": { en: "Contracts Ending Soon", fr: "Contrats prenant fin bientôt" },
@@ -928,7 +999,16 @@ const STRINGS = {
     en: "Award notices with a code in this segment, by the value on each notice's newest amendment.",
     fr: "Avis d'attribution portant un code de ce segment, selon la valeur de la plus récente modification de chaque avis.",
   },
+  "segment.top_years": { en: "All years, {first} to {last}.", fr: "Toutes les années, de {first} à {last}." },
   "segment.years": { en: "Award Notices by Year", fr: "Avis d'attribution par année" },
+  // The segment page's head: its open notices and the data year's award notices.
+  "segment.lead_open_one": { en: "{n} open notice.", fr: "{n} avis ouvert." },
+  "segment.lead_open_many": { en: "{n} open notices.", fr: "{n} avis ouverts." },
+  "segment.lead_awards_one": { en: "{n} award notice worth {total} in {year}.", fr: "{n} avis d'attribution d'une valeur de {total} en {year}." },
+  "segment.lead_awards_many": { en: "{n} award notices worth {total} in {year}.", fr: "{n} avis d'attribution d'une valeur totale de {total} en {year}." },
+  "segment.lead_awards_none": { en: "No award notice in {year} yet.", fr: "Aucun avis d'attribution en {year} pour l'instant." },
+  "segment.open_first": { en: "The {n} closing soonest.", fr: "Les {n} dont la clôture est la plus proche." },
+  "segment.expiring": { en: "Contracts ending in this segment ({n})", fr: "Contrats prenant fin dans ce segment ({n})" },
   "segment.not_found": { en: "Segment Not Found", fr: "Segment introuvable" },
   "segment.back": { en: "Back to the segments", fr: "Retour aux segments" },
   "segment.description": {
@@ -949,6 +1029,7 @@ const STRINGS = {
   },
   "rankings.years": { en: "Years", fr: "Années" },
   "rankings.all_years": { en: "All years", fr: "Toutes les années" },
+  "rankings.show": { en: "Show", fr: "Afficher" },
   "rankings.sources": { en: "Rank by source", fr: "Classer par source" },
   "rankings.measure": { en: "Measure", fr: "Mesure" },
   "rankings.by_value": { en: "By value", fr: "En valeur" },
@@ -967,14 +1048,15 @@ const STRINGS = {
   // -- directory ------------------------------------------------------------------------------
   "directory.index_title": { en: "Organizations", fr: "Organisations" },
   "directory.index_lead": {
-    en: "{n} organizations: every supplier, grant recipient and lobbying client on record, A to Z by province.",
-    fr: "{n} organisations : tous les fournisseurs, bénéficiaires de subventions et clients de lobbying au dossier, de A à Z par province.",
+    en: "Find an organization by name or business number with the search field at the top of every page, or browse A to Z by province below.",
+    fr: "Trouvez une organisation par son nom ou son numéro d'entreprise avec le champ de recherche en haut de chaque page, ou parcourez-les de A à Z par province ci-dessous.",
   },
   "directory.index_note": {
     en: "An organization is listed under the province it is recorded in most often.",
     fr: "Une organisation est classée sous la province où elle figure le plus souvent.",
   },
   "directory.col_place": { en: "Province or territory", fr: "Province ou territoire" },
+  "directory.panel": { en: "Organizations by Province", fr: "Organisations par province" },
   "directory.col_organizations": { en: "Organizations", fr: "Organisations" },
   "directory.col_last_seen": { en: "Latest record", fr: "Dernier dossier" },
   "directory.to_rankings": { en: "Organizations ranked by source", fr: "Organisations classées par source" },
@@ -1002,7 +1084,7 @@ const STRINGS = {
   "directory.pages": { en: "All Pages", fr: "Toutes les pages" },
 
   // -- search (the top bar's field and /search) ------------------------------------------------
-  "search.placeholder": { en: "Search organizations and buyers", fr: "Rechercher des organisations et des acheteurs" },
+  "search.placeholder": { en: "Organization or buyer", fr: "Organisation ou acheteur" },
   "search.label": {
     en: "Search organizations and buyers by name or business number",
     fr: "Rechercher des organisations et des acheteurs par nom ou par numéro d'entreprise",
@@ -1020,8 +1102,8 @@ const STRINGS = {
   },
   "search.no_terms": { en: "A search needs at least one letter or digit.", fr: "Une recherche doit contenir au moins une lettre ou un chiffre." },
   "search.what": {
-    en: "Searched: organization names and every other spelling on their records, business numbers, and buyer names in English and French with their acronyms. The records themselves (titles, descriptions) are not searched. The last word also matches the start of a longer word. The closest names come first, then the organizations with the most records.",
-    fr: "Recherche dans : les noms des organisations et toutes les autres graphies de leurs dossiers, les numéros d'entreprise, et les noms des acheteurs en français et en anglais avec leurs sigles. Les dossiers eux-mêmes (titres, descriptions) ne sont pas cherchés. Le dernier mot trouve aussi le début d'un mot plus long. Les noms les plus proches viennent d'abord, puis les organisations qui comptent le plus de dossiers.",
+    en: "Searched: organization names and every other spelling on their records, business numbers, and buyer names in English and French with their acronyms. The records themselves (titles, descriptions) are not searched. The last word also matches the start of a longer word. The names that hold the words come first, those with the most records first; matches through another spelling or a business number follow.",
+    fr: "Recherche dans : les noms des organisations et toutes les autres graphies de leurs dossiers, les numéros d'entreprise, et les noms des acheteurs en français et en anglais avec leurs sigles. Les dossiers eux-mêmes (titres, descriptions) ne sont pas cherchés. Le dernier mot trouve aussi le début d'un mot plus long. Les noms qui contiennent les mots viennent d'abord, ceux qui comptent le plus de dossiers en tête; suivent les correspondances par une autre graphie ou un numéro d'entreprise.",
   },
   "search.lead": { en: "{orgs} and {buyers} match.", fr: "{orgs} et {buyers} correspondent." },
   "search.orgs_one": { en: "{n} organization", fr: "{n} organisation" },
@@ -1041,6 +1123,10 @@ const STRINGS = {
   },
   "search.range": { en: "{from} to {to} of {total}", fr: "{from} à {to} sur {total}" },
   "search.col_lobbying": { en: "Lobbying", fr: "Lobbyisme" },
+  "search.open_notices": {
+    en: "Open notices with these words in the title: {n}",
+    fr: "Avis ouverts dont le titre contient ces mots : {n}",
+  },
   "search.no_orgs": { en: "No organization name matches.", fr: "Aucun nom d'organisation ne correspond." },
   "search.buyers_shown": { en: "The {n} closest of {total}", fr: "Les {n} plus proches sur {total}" },
   "search.buyers_narrow": { en: "Add a word to narrow the list of buyers.", fr: "Ajoutez un mot pour réduire la liste des acheteurs." },
@@ -1096,7 +1182,18 @@ const STRINGS = {
   "feeds.none_scope": { en: "No feed of this kind yet.", fr: "Aucun fil de ce type pour l'instant." },
   "feeds.segments_show": { en: "Show all {n} segments", fr: "Afficher les {n} segments" },
   "feeds.cell_aria": { en: "{scope}: {event}", fr: "{scope} : {event}" },
-  "feeds.sub_reader": { en: "Paste an address into a feed reader.", fr: "Collez une adresse dans un lecteur de fils." },
+  "feeds.sub_reader": {
+    en: "Paste an address into a feed reader such as Feedly or Thunderbird. It checks the feed and lists each new item.",
+    fr: "Collez une adresse dans un lecteur de fils comme Feedly ou Thunderbird. Il consulte le fil et affiche chaque nouvel élément.",
+  },
+  "feeds.sub_browser": {
+    en: "A browser shows a feed address as code. A feed reader shows the same address as a list of entries.",
+    fr: "Un navigateur affiche l'adresse d'un fil sous forme de code. Un lecteur de fils affiche la même adresse sous forme de liste.",
+  },
+  "feeds.paste_note": {
+    en: "Paste an address into a feed reader; a browser shows it as code.",
+    fr: "Collez une adresse dans un lecteur de fils; un navigateur l'affiche sous forme de code.",
+  },
   "feeds.sub_slack": { en: "In Slack, type {command} followed by the address.", fr: "Dans Slack, tapez {command} suivi de l'adresse." },
   "feeds.sub_email": {
     en: "Feed-to-email services send each new entry as a message.",
@@ -1129,11 +1226,26 @@ const STRINGS = {
   "data.col_source": { en: "Dataset", fr: "Jeu de données" },
   "data.col_publisher": { en: "Publisher", fr: "Éditeur" },
   "data.col_files": { en: "Files", fr: "Fichiers" },
-  "data.col_licence": { en: "Terms", fr: "Conditions" },
+  "data.col_size": { en: "Size", fr: "Taille" },
+  "data.col_rows": { en: "Rows", fr: "Lignes" },
+  "data.col_publisher_date": { en: "Publisher's date", fr: "Date de l'éditeur" },
+  "data.size_b": { en: "{n} B", fr: "{n} o" },
+  "data.size_kb": { en: "{n} KB", fr: "{n} Ko" },
+  "data.size_mb": { en: "{n} MB", fr: "{n} Mo" },
+  "data.size_gb": { en: "{n} GB", fr: "{n} Go" },
+  "data.size_rows": { en: "{size}, {n} rows", fr: "{size}, {n} lignes" },
+  "data.sizes_note": {
+    en: "Sizes and rows as of the last export. Rows are the records under the header row; for SHA256SUMS, the files it lists.",
+    fr: "Tailles et lignes à la dernière exportation. Les lignes sont les dossiers sous la ligne d'en-tête; pour SHA256SUMS, les fichiers qu'il énumère.",
+  },
+  "data.files_read": { en: "Files Read", fr: "Fichiers lus" },
+  "data.sources_runs": {
+    en: "Last read is the newest read of any of the source's files, with the publisher's newest date. Each file's own read is under {runs}.",
+    fr: "La dernière lecture est la plus récente lecture d'un fichier de la source, avec la date la plus récente de l'éditeur. La lecture de chaque fichier figure sous {runs}.",
+  },
   "data.col_last_read": { en: "Last read", fr: "Dernière lecture" },
   "data.not_read": { en: "Not read yet", fr: "Pas encore lu" },
   "data.modified": { en: "(publisher's date {date})", fr: "(date de l'éditeur : {date})" },
-  "data.ogl_short": { en: "Open Government Licence", fr: "Licence du gouvernement ouvert" },
   "data.ogl": { en: "Open Government Licence, Canada", fr: "Licence du gouvernement ouvert, Canada" },
   "data.pub.pspc": { en: "Public Services and Procurement Canada", fr: "Services publics et Approvisionnement Canada" },
   "data.pub.tbs": { en: "Treasury Board of Canada Secretariat", fr: "Secrétariat du Conseil du Trésor du Canada" },
@@ -1534,7 +1646,14 @@ const STRINGS = {
     en: "Alerts are being built. One message will announce them, with a link to unsubscribe; nothing else is sent. The address is kept for that only, as the {privacy} page says.",
     fr: "Les alertes sont en préparation. Un seul message les annoncera, avec un lien de désabonnement; rien d'autre n'est envoyé. L'adresse est conservée à cette seule fin, comme l'indique la page {privacy}.",
   },
-  "interest.done": { en: "Noted. One message will announce the alerts.", fr: "C'est noté. Un seul message annoncera les alertes." },
+  "interest.done": {
+    en: "Noted: {email}, for {label}. One message will announce the alerts.",
+    fr: "C'est noté : {email}, pour {label}. Un seul message annoncera les alertes.",
+  },
+  "interest.watch_note": {
+    en: "For a list in this browser without email, use Add to watchlist.",
+    fr: "Pour une liste conservée dans ce navigateur, sans courriel, utilisez Ajouter à la liste de suivi.",
+  },
   "interest.err_email": { en: "Enter a complete email address.", fr: "Entrez une adresse courriel complète." },
   "interest.err_rejected": { en: "The form could not be sent. Try again.", fr: "Le formulaire n'a pas pu être envoyé. Réessayez." },
   "interest.back": { en: "Back to the page", fr: "Retour à la page" },
@@ -1684,143 +1803,6 @@ const STRINGS = {
   "citepage.copy": { en: "Copy", fr: "Copier" },
   "citepage.copied": { en: "Copied", fr: "Copié" },
 
-  // -- support page (figures in src/support.ts) ------------------------------------------------
-  "support.title": { en: "Support the Site", fr: "Soutenir le site" },
-  "support.toc_holds": { en: "What the Site Holds Today", fr: "Ce que le site contient aujourd'hui" },
-  "support.toc_costs": { en: "What It Costs Today", fr: "Ce qu'il coûte aujourd'hui" },
-  "support.toc_tiers": { en: "Upgrade Paths", fr: "Paliers de mise à niveau" },
-  "support.toc_beyond": { en: "Beyond the Costs", fr: "Au-delà des coûts" },
-  "support.toc_donation": { en: "Where a Donation Goes", fr: "Où va un don" },
-  "support.toc_give": { en: "How to Give", fr: "Comment donner" },
-  "support.toc_transparency": { en: "Transparency", fr: "Transparence" },
-  "support.toc_law": { en: "The Records and the Law", fr: "Les dossiers et la loi" },
-  "support.lead": {
-    en: "The site is free to use, carries no advertising and sells nothing. Support is voluntary and brings no perks, early access or say in what is published. The site is not a registered charity and cannot issue tax receipts.",
-    fr: "Le site est gratuit, ne contient aucune publicité et ne vend rien. Le soutien est volontaire et ne donne droit à aucun avantage, accès anticipé ou droit de regard sur ce qui est publié. Le site n'est pas un organisme de bienfaisance enregistré et ne peut pas délivrer de reçus fiscaux.",
-  },
-  "support.holds_tenders": { en: "{n} open tender notices, refreshed nightly.", fr: "{n} avis d'appel d'offres ouverts, mis à jour chaque nuit." },
-  "support.holds_awards": { en: "{n} award notices since 2012.", fr: "{n} avis d'attribution depuis 2012." },
-  "support.holds_contracts": { en: "{n} published contracts over $10,000.", fr: "{n} contrats publiés de plus de 10 000 $." },
-  "support.holds_grants": { en: "{n} grant and contribution agreements.", fr: "{n} accords de subvention et de contribution." },
-  "support.holds_organizations": { en: "{n} organization profiles.", fr: "{n} profils d'organisations." },
-  "support.holds_refresh": { en: "Refreshed nightly, at {time}.", fr: "Mise à jour chaque nuit, à {time}." },
-  "support.refresh_midnight": { en: "midnight UTC", fr: "minuit UTC" },
-  "support.refresh_hour": { en: "{hh}:00 UTC", fr: "{hh} h 00 UTC" },
-  "support.limits": { en: "Current Limits", fr: "Limites actuelles" },
-  "support.limit_paid": {
-    en: "Since {date} the site runs on Cloudflare's Workers Paid plan: about {n} page views a month are included, with no daily ceiling. The operator pays for the plan. Support received does not cover it yet.",
-    fr: "Depuis le {date}, le site fonctionne avec le forfait Workers Paid de Cloudflare : environ {n} pages vues par mois sont incluses, sans plafond quotidien. L'exploitant paie le forfait. Le soutien reçu ne le couvre pas encore.",
-  },
-  "support.limit_storage": { en: "{n} GB of file storage at no charge.", fr: "{n} Go de stockage de fichiers sans frais." },
-  "support.costs_note": {
-    en: "Amounts are monthly and in Canadian dollars unless stated. They are planning estimates until the site's first invoices.",
-    fr: "Les montants sont mensuels et en dollars canadiens, sauf indication contraire. Ce sont des estimations jusqu'aux premières factures du site.",
-  },
-  "support.bar_domain": { en: "Domain registration", fr: "Enregistrement du domaine" },
-  "support.bar_workers": { en: "Workers Paid plan (paid by the operator for now)", fr: "Forfait Workers Paid (payé par l'exploitant pour l'instant)" },
-  "support.bar_hosting": { en: "Storage and database", fr: "Stockage et base de données" },
-  "support.bar_github": { en: "GitHub task fees", fr: "Frais de tâches GitHub" },
-  "support.bar_total": { en: "Total", fr: "Total" },
-  "support.costs_detail": {
-    en: "Domain registration is {domain} a year. Since {since} the site runs on the Workers Paid plan, {workersUsd} a month plus an allowance for tax and usage, about {workers}. The operator pays for it until support covers it.",
-    fr: "L'enregistrement du domaine coûte {domain} par année. Depuis le {since}, le site fonctionne avec le forfait Workers Paid, {workersUsd} par mois plus une provision pour la taxe et l'utilisation, soit environ {workers}. L'exploitant le paie jusqu'à ce que le soutien le couvre.",
-  },
-  "support.costs_free": {
-    en: "File storage, the databases and the nightly refresh on GitHub cost nothing today: they fit inside the included allowances.",
-    fr: "Le stockage de fichiers, les bases de données et la mise à jour de nuit sur GitHub ne coûtent rien aujourd'hui : ils tiennent dans les quantités incluses.",
-  },
-  "support.search_plan": {
-    en: "Search is part of the plan. The field at the top of every page finds an organization or a buyer by any name on its records, from a database inside the plan's included allowances, at no added cost.",
-    fr: "La recherche fait partie du forfait. Le champ en haut de chaque page trouve une organisation ou un acheteur par tout nom inscrit à ses dossiers, à partir d'une base de données comprise dans les quantités incluses du forfait, sans coût supplémentaire.",
-  },
-  "support.costs_github": {
-    en: "The nightly refresh runs as a scheduled task on GitHub, about {github} a month.",
-    fr: "La mise à jour de nuit s'exécute comme tâche planifiée sur GitHub, soit environ {github} par mois.",
-  },
-  "support.costs_github_free": {
-    en: "The nightly refresh runs as a scheduled task on GitHub at no charge.",
-    fr: "La mise à jour de nuit s'exécute comme tâche planifiée sur GitHub, sans frais.",
-  },
-  "support.tiers_summary": {
-    en: "Monthly cost of every tier: {target}. Monthly support received: {support}. Reserve held: {months} of {goal}.",
-    fr: "Coût mensuel de tous les paliers : {target}. Soutien mensuel reçu : {support}. Réserve détenue : {months} sur {goal}.",
-  },
-  "support.tiers_note": {
-    en: "Each tier assumes the ones above it. Support is measured against the cumulative cost. Support received is the last 30 days of payments.",
-    fr: "Chaque palier suppose ceux qui le précèdent. Le soutien est mesuré par rapport au coût cumulatif. Le soutien reçu correspond aux paiements des 30 derniers jours.",
-  },
-  "support.col_tier": { en: "Tier", fr: "Palier" },
-  "support.col_monthly_cost": { en: "Monthly cost", fr: "Coût mensuel" },
-  "support.col_pays_for": { en: "What it pays for", fr: "Ce qu'il finance" },
-  "support.col_against": { en: "Monthly support against cost", fr: "Soutien mensuel par rapport au coût" },
-  "support.of": { en: "{part} of {whole}", fr: "{part} sur {whole}" },
-  "support.status.funded": { en: "Funded", fr: "Financé" },
-  "support.status.partly": { en: "Partly funded", fr: "Partiellement financé" },
-  "support.status.not_yet": { en: "Not yet funded", fr: "Pas encore financé" },
-  "support.status.in_place": { en: "In place, paid by the operator", fr: "En place, payé par l'exploitant" },
-  "support.status.no_cost": { en: "No cost", fr: "Sans frais" },
-  "support.tier.baseline.name": { en: "Baseline", fr: "Base" },
-  "support.tier.baseline.unlocks": {
-    en: "The site at its own address, refreshed nightly.",
-    fr: "Le site à sa propre adresse, mis à jour chaque nuit.",
-  },
-  "support.tier.workers_paid.name": { en: "Workers Paid plan", fr: "Forfait Workers Paid" },
-  "support.tier.workers_paid.unlocks": {
-    en: "No daily page-view ceiling, more compute per request, and the search.",
-    fr: "Aucun plafond quotidien de pages vues, plus de calcul par requête, et la recherche.",
-  },
-  "support.tier.storage.name": { en: "Storage reserve", fr: "Réserve de stockage" },
-  "support.tier.storage.unlocks": {
-    en: "About {gb} GB of file storage past the free {free} GB.",
-    fr: "Environ {gb} Go de stockage de fichiers au-delà des {free} Go gratuits.",
-  },
-  "support.months_one": { en: "{n} month", fr: "{n} mois" },
-  "support.months_many": { en: "{n} months", fr: "{n} mois" },
-  "support.cents_one": { en: "{n} cent", fr: "{n} cent" },
-  "support.cents_many": { en: "{n} cents", fr: "{n} cents" },
-  "support.reserve_goal": {
-    en: "The reserve goal is {goal} of the full monthly cost, about {about}.",
-    fr: "L'objectif de réserve est de {goal} du coût mensuel complet, soit environ {about}.",
-  },
-  "support.estimates": {
-    en: "Monthly costs are estimates. The Workers Paid plan lists at {usd} a month, about {cad}. Its row adds an allowance for sales tax and usage above the included amounts. Extra storage costs about {cents} per GB a month.",
-    fr: "Les coûts mensuels sont des estimations. Le forfait Workers Paid est affiché à {usd} par mois, soit environ {cad}. Sa ligne ajoute une provision pour la taxe de vente et l'utilisation au-delà des quantités incluses. Le stockage supplémentaire coûte environ {cents} par Go par mois.",
-  },
-  "support.met": {
-    en: "Monthly support now covers every tier and the reserve holds {goal}, so the site needs nothing further.",
-    fr: "Le soutien mensuel couvre maintenant tous les paliers et la réserve contient {goal} : le site n'a besoin de rien de plus.",
-  },
-  "support.beyond_text": {
-    en: "The figures above are the whole hosting budget. Once monthly support covers the monthly cost of every tier and {goal} are held in reserve, the site needs nothing further. Anything given beyond that point is personal support for the person who runs the site, and it is not spent on hosting or database upgrades.",
-    fr: "Les chiffres ci-dessus constituent tout le budget d'hébergement. Une fois que le soutien mensuel couvre le coût mensuel de tous les paliers et que {goal} sont détenus en réserve, le site n'a besoin de rien de plus. Tout don au-delà de ce point est un soutien personnel à la personne qui gère le site, et il n'est pas dépensé pour l'hébergement ni pour des mises à niveau de la base de données.",
-  },
-  "support.gift_split": { en: "A {gift} gift, split:", fr: "Répartition d'un don de {gift} :" },
-  "support.split_aria": {
-    en: "Card processing fee {fee}, toward the monthly cost {net}",
-    fr: "Frais de traitement par carte {fee}, contribution au coût mensuel {net}",
-  },
-  "support.fee_line": { en: "Card processing fee: {fee} ({rate})", fr: "Frais de traitement par carte : {fee} ({rate})" },
-  "support.net_line": { en: "Toward the monthly cost: {net}", fr: "Contribution au coût mensuel : {net}" },
-  "support.fee_rate": { en: "{pct}% plus {cents} cents", fr: "{pct} % plus {cents} cents" },
-  "support.donate_default": { en: "Give through the payment page", fr: "Donner par la page de paiement" },
-  "support.card_note": {
-    en: "Card details are entered on an outside payment page and never reach this site.",
-    fr: "Les données de carte sont saisies sur une page de paiement externe et ne parviennent jamais à ce site.",
-  },
-  "support.closed": { en: "Donations are not open yet.", fr: "Les dons ne sont pas encore ouverts." },
-  "support.col_quarter": { en: "Quarter", fr: "Trimestre" },
-  "support.col_received": { en: "Received", fr: "Reçu" },
-  "support.col_spent": { en: "Spent", fr: "Dépensé" },
-  "support.col_reserve": { en: "Reserve", fr: "Réserve" },
-  "support.no_donations": { en: "No donation received yet.", fr: "Aucun don reçu pour l'instant." },
-  "support.transparency_text": {
-    en: "The table updates itself from the payment page's notices. The site keeps them as amount, time and kind only. Names and messages are not stored. Spent is the monthly cost for each month started. A shortfall is paid by the person who runs the site.",
-    fr: "Le tableau se met à jour à partir des avis de la page de paiement. Le site les conserve sous forme de montant, d'heure et de type seulement. Les noms et les messages ne sont pas conservés. « Dépensé » correspond au coût mensuel de chaque mois commencé. Un déficit est comblé par la personne qui gère le site.",
-  },
-  "support.law_text": {
-    en: "Every record on the site comes from the Government of Canada's open data under the Open Government Licence, Canada, which permits reuse. A donation does not buy access to any record or any say over one.",
-    fr: "Chaque dossier du site provient des données ouvertes du gouvernement du Canada, sous la Licence du gouvernement ouvert, Canada, qui en permet la réutilisation. Un don ne donne accès à aucun dossier ni droit de regard sur l'un d'eux.",
-  },
   "docs.publisher": {
     en: "Published by Award Watch, an independent Canadian project.",
     fr: "Publié par Award Watch, un projet canadien indépendant.",
@@ -1959,10 +1941,6 @@ const STRINGS = {
     fr: "Le formulaire de correction conserve la page ou le dossier indiqué, la correction, l'organisation lorsque la page en nomme une, l'heure de réception et l'adresse courriel lorsqu'elle est donnée. L'adresse courriel sert uniquement à donner suite à la correction, et elle n'est jamais affichée.",
   },
   "privacy.form_review": { en: "Both are reviewed before anything is published.", fr: "Les deux sont examinés avant toute publication." },
-  "privacy.donations": {
-    en: "A donation made on the outside payment page sends the site a notice, which the site keeps as amount, time and kind only.",
-    fr: "Un don fait sur la page de paiement externe envoie un avis au site, qui n'en conserve que le montant, l'heure et le type.",
-  },
   "privacy.toc_interest": { en: "Alert Interest", fr: "Intérêt pour les alertes" },
   "privacy.interest_kept": {
     en: "The alerts form stores the email address, the saved filter and the site's wording of it, the language of the page, the time it was received and a random token for the links in later messages. It stores no IP address, browser identification or visitor code.",
@@ -2022,9 +2000,6 @@ export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "grant.type_C",
   "citepage.style.bibtex",
   "citepage.style.ris",
-  "support.bar_total",
-  "support.cents_one",
-  "support.cents_many",
 ]);
 
 export function allKeys(): Key[] {
@@ -2241,6 +2216,7 @@ export function fmtMoneyShort(value: number, lang: Lang = "en"): string {
 export function fmtPct(part: number, whole: number, lang: Lang = "en"): string {
   if (!(whole > 0)) return "";
   const pct = (part / whole) * 100;
-  if (pct > 0 && pct < 1) return t(lang, "pct", { n: lang === "fr" ? "< 1" : "<1" });
+  // A no-break space keeps "<" with its figure in French ("< 1 %" never breaks after "<").
+  if (pct > 0 && pct < 1) return t(lang, "pct", { n: lang === "fr" ? "<\u00a01" : "<1" });
   return t(lang, "pct", { n: Math.round(pct) });
 }

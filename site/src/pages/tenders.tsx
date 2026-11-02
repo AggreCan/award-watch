@@ -27,7 +27,7 @@ import { ClientData, Layout, PageHead, Panel, addDays, noDataPage, page, todayOf
 import { pageSeo } from "../seo";
 import { FeedLinks, nationalFeedPath } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
-import { CountdownScript, SegmentNote, TenderTable, tenderColumns } from "./shared";
+import { CountdownScript, FiltersFold, SegmentNote, TenderTable, tenderColumns } from "./shared";
 
 export const TENDER_PAGE_SIZE = 50;
 export const CLOSING_WINDOWS = ["7", "30"] as const;
@@ -178,8 +178,24 @@ export const TENDERS_CLIENT_KEYS: readonly Key[] = [
   "tenders.detail_empty", "tenders.detail_loading", "tenders.detail_failed", "tenders.detail_open",
   "tenders.detail_canadabuys", "tenders.detail_more", "tender.notice_type", "tender.method", "tender.selection",
   "tender.category", "tender.regions_delivery", "tender.trade_agreements", "tender.solicitation", "tender.end_users",
-  "tender.description_heading",
+  "tender.description_heading", "tenders.none_next", "tenders.none_next_q", "tenders.none_reset", "tenders.none_search",
+  "filters.fold", "filters.fold_one", "filters.fold_many",
+  "countdown.in_min", "countdown.in_hm", "countdown.in_day", "countdown.in_days", "countdown.today_at",
 ];
+
+// The empty list: what to do next. With words in the title filter, the
+// organizations and buyers that carry them are a search away.
+export const NoMatch = ({ lang, q }: { lang: Lang; q: string }) => (
+  <div class="empty-state">
+    <p>{t(lang, "tenders.none_match")}</p>
+    <p class="muted">
+      {tj(lang, q ? "tenders.none_next_q" : "tenders.none_next", {
+        reset: <a href="/tenders">{t(lang, "tenders.none_reset")}</a>,
+        search: <a href={`/search?${new URLSearchParams({ q }).toString()}`}>{t(lang, "tenders.none_search")}</a>,
+      })}
+    </p>
+  </div>
+);
 
 // A filter field in the toolbar: its name above, the control below.
 const Select = ({ name, label, any, opts, value, lang }: {
@@ -246,6 +262,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   };
   const chips = activeChips(q, opts, lang);
   const interest = await interestFilter(c.env, lang, "tenders", `/tenders${url.search}`);
+  const empty = !waiting && shown.length === 0;
 
   return page(
     c,
@@ -260,6 +277,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
       </PageHead>
 
       <form method="get" action="/tenders" class="toolbar" id="tender-filters">
+        <FiltersFold lang={lang} active={chips.length} id="tender-fold">
         <div class="toolbar-fields">
           <label class="field field-text">
             <span class="field-label">{t(lang, "tenders.filter_text")}</span>
@@ -305,6 +323,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
             <a href="/tenders" class="btn">{t(lang, "tenders.reset")}</a>
           </div>
         </div>
+        </FiltersFold>
         <div class="toolbar-chips" id="tender-chips" hidden={chips.length === 0}>
           <span class="chips-label">{t(lang, "tenders.filters_active")}</span>
           {chips.map((ch) => (
@@ -317,9 +336,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
         </div>
       </form>
 
-      <InterestPanel lang={lang} filter={interest} />
-
-      <div class="split" id="tender-split">
+      <div class={empty ? "split is-empty" : "split"} id="tender-split">
         <Panel title={t(lang, "tenders.list_heading")} class="list-panel"
           tools={<p id="tender-count" aria-live="polite">
             {waiting ? "" : tn(lang, "tenders.count_one", "tenders.count_many", count, { n: fmtInt(count, lang) })}
@@ -334,7 +351,8 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
               </span>
             </nav>
           </>}>
-          <SegmentNote lang={lang} rows={first.rows} />
+          {/* Over the list only while it has rows; tenders.js keeps it so. */}
+          <SegmentNote lang={lang} rows={first.rows} id="tender-note" hidden={empty} />
           <div class="results" id="tender-results" data-page-size={String(TENDER_PAGE_SIZE)} data-lang={lang}>
             <div id="tender-table">
               {waiting ? (
@@ -345,9 +363,9 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
                   </noscript>
                 </>
               ) : shown.length ? (
-                <TenderTable lang={lang} rows={shown} clock={clock} selectable note={false} />
+                <TenderTable lang={lang} rows={shown} clock={clock} selectable note={false} timeLeft={q.sort === "closing"} />
               ) : (
-                <p class="muted">{t(lang, "tenders.none_match")}</p>
+                <NoMatch lang={lang} q={q.q} />
               )}
             </div>
           </div>
@@ -361,12 +379,14 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
           </div>
         </aside>
       </div>
+      <InterestPanel lang={lang} filter={interest} />
       <ClientData id="i18n" data={{
         lang, locale: numberLocale(lang), strings: clientStrings(lang, TENDERS_CLIENT_KEYS), labels,
         table: clientTable(tenderColumns(lang), "t-tenders"),
       }} />
       <CountdownScript lang={lang} />
       <script type="module" src="/tenders.js"></script>
+      <script src="/pager.js" defer></script>
     </Layout>,
   );
 }

@@ -21,12 +21,14 @@
 // - A page is PAGE_SIZE rows at an offset of at most (MAX_PAGE - 1) pages,
 //   the page number read as an integer.
 //
-// Ranking: match quality first, then the record count. Quality is a tier:
-// 0 the display name (for a buyer, either name or an acronym) is the query;
-// 1 it starts with the query as whole words; 2 it starts with the query; 3
-// every word is in the name; 4 the match is through another spelling or a
-// business number. Ties go to the organization or buyer with more records,
-// then by name.
+// Ranking: a match on the name itself first, then a match through another
+// spelling or a business number; within each, more records first, then by
+// name. The match is a tier: 0 the display name (for a buyer, either name or
+// an acronym) is the query; 1 it starts with the query as whole words; 2 it
+// starts with the query; 3 every word is in the name; 4 the match is through
+// another spelling or a business number. Tiers 0 to 3 rank alike, since every
+// word matches as a prefix in each: "IBM Canada Ltd." with 4,172 records
+// comes before "IBM" with 22.
 //
 // What a request reads: the full-text index lists every match once per
 // statement (the count, the page and the name tier), so a word in many names
@@ -120,14 +122,14 @@ export const ORG_SELECT_SQL =
   "o.n_records, o.total_awards, o.total_history, o.total_contracts, o.total_grants, " +
   TIER("o", "search_orgs_fts") +
   " FROM search_orgs AS o WHERE o.rid IN (SELECT rowid FROM search_orgs_fts WHERE search_orgs_fts MATCH ?)" +
-  " ORDER BY tier, o.n_records DESC, o.folds, o.id LIMIT ? OFFSET ?";
+  " ORDER BY tier = 4, o.n_records DESC, o.folds, o.id LIMIT ? OFFSET ?";
 
 export const BUYER_SELECT_SQL =
   "SELECT b.id, b.name, b.name_fr, b.acronym_en, b.acronym_fr, b.alt, b.n_tenders, b.n_open_tenders, b.n_awards, " +
   "b.n_history, b.n_contracts, b.n_grants, b.n_records, b.total_awards, b.total_history, b.total_contracts, b.total_grants, " +
   TIER("b", "search_buyers_fts") +
   " FROM search_buyers AS b WHERE b.rid IN (SELECT rowid FROM search_buyers_fts WHERE search_buyers_fts MATCH ?)" +
-  " ORDER BY tier, b.n_records DESC, b.folds, b.id LIMIT ? OFFSET ?";
+  " ORDER BY tier = 4, b.n_records DESC, b.folds, b.id LIMIT ? OFFSET ?";
 
 // One row read: whether the table holds anything, to tell an empty database
 // (the first night, or a full reload under way) from a query nothing matches.

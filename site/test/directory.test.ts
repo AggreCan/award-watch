@@ -16,7 +16,9 @@ describe("the organizations page", () => {
     expect(res.status).toBe(200);
     const page = await res.text();
     expect(page).toContain("<h1>Organizations</h1>");
-    expect(page).toContain("2 organizations: every supplier, grant recipient and lobbying client on record");
+    // The lead names the search field; the counts are the rows' (and the rail's), not a panel count.
+    expect(page).toContain("Find an organization by name or business number with the search field at the top of every page");
+    expect(page).toContain('<h2>Organizations by Province</h2></div>');
     expect(page).toContain('<a href="/organizations/directory/on">Ontario</a>');
     expect(page).toContain('<a href="/organizations/directory/bc">British Columbia</a>');
     // A directory with nobody in it is named, not linked.

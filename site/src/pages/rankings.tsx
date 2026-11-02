@@ -5,7 +5,7 @@
 
 import type { Context } from "hono";
 import { Table } from "../columns";
-import { MONEY_SOURCES, SOURCES, type SourceKey } from "../constants";
+import { MONEY_SOURCES, SOURCES, type MoneySource, type SourceKey } from "../constants";
 import { YEAR_RE, loadRankings, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, pick, sourceLabel, t } from "../i18n";
@@ -17,6 +17,18 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const raw = c.req.param("year");
   if (raw !== undefined && !YEAR_RE.test(raw)) return c.notFound();
+  // The year select a phone shows sends ?year=; it answers with the year's own address.
+  const picked = c.req.query("year");
+  if (picked !== undefined && (picked === "all" || YEAR_RE.test(picked))) {
+    const keep = new URLSearchParams();
+    for (const k of ["source", "by"]) {
+      const v = c.req.query(k);
+      if (v) keep.set(k, v);
+    }
+    const query = keep.toString();
+    c.header("Cache-Control", "public, max-age=300");
+    return c.redirect(`${picked === "all" ? "/rankings" : `/rankings/${picked}`}${query ? `?${query}` : ""}`, 302);
+  }
   const year = raw === undefined ? null : Number(raw);
   const stats = await loadStats(c.env);
   if (!stats) return noDataPage(c, "rankings.title");
@@ -32,6 +44,8 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
   // Lobbying reports carry no amount, so they rank by count only.
   const by = c.req.query("by") === "count" || source === "lobbying" ? "count" : "value";
   const block = r.sources[source];
+  const buyerSource = (MONEY_SOURCES as readonly string[]).includes(source) ? (source as MoneySource) : null;
+  const buyers = buyerSource ? r.buyers[buyerSource] ?? [] : [];
   const rows = block ? (by === "count" ? block.by_count : block.by_value) : [];
   const base = year === null ? "/rankings" : `/rankings/${year}`;
   const href = (s: string, b: string) => `${base}?source=${s}${b === "count" ? "&by=count" : ""}`;
@@ -50,7 +64,7 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
         <p class="page-note"><SourcesSeparate lang={lang} /> {t(lang, "rankings.note")}</p>
       </PageHead>
       <div class="toolbar">
-      <nav aria-label={t(lang, "rankings.years")} class="toolbar-row">
+      <nav aria-label={t(lang, "rankings.years")} class="toolbar-row no-phone">
         <span class="toolbar-label">{t(lang, "rankings.years")}</span>
         <ul class="quick-links">
           <li>{year === null ? <span aria-current="page">{t(lang, "rankings.all_years")}</span> : <a href="/rankings">{t(lang, "rankings.all_years")}</a>}</li>
@@ -59,6 +73,19 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
           ))}
         </ul>
       </nav>
+      {/* On a phone the 27 year links would take five rows: a select instead. */}
+      <form method="get" action="/rankings" class="toolbar-row phone-only">
+        <label class="field">
+          <span class="field-label">{t(lang, "rankings.years")}</span>
+          <select name="year">
+            <option value="all" selected={year === null}>{t(lang, "rankings.all_years")}</option>
+            {[...r.years].sort((a, b) => b - a).map((y) => <option value={String(y)} selected={y === year}>{String(y)}</option>)}
+          </select>
+        </label>
+        {askedSource ? <input type="hidden" name="source" value={source} /> : null}
+        {by === "count" ? <input type="hidden" name="by" value="count" /> : null}
+        <button type="submit" class="btn">{t(lang, "rankings.show")}</button>
+      </form>
       <nav aria-label={t(lang, "rankings.sources")} class="tabs toolbar-row">
         {available.map((s) => (
           <a href={href(s, by)} aria-current={s === source ? "page" : undefined}>{sourceLabel(lang, s)}</a>
@@ -75,22 +102,22 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
       {rows.length ? <OrgTotalTable lang={lang} rows={rows} rank /> : <p class="muted">{t(lang, "rankings.none")}</p>}
       </Panel>
 
-      <div class="panel-grid">
-      {MONEY_SOURCES.filter((s) => (r.buyers[s] ?? []).length).map((s) => (
-        <Panel title={t(lang, "rankings.buyers", { source: sourceLabel(lang, s) })}>
+      {/* The buyers of the source the tab shows; lobbying reports name no buyer. */}
+      {buyerSource && buyers.length ? (
+        <Panel title={t(lang, "rankings.buyers", { source: sourceLabel(lang, buyerSource) })}>
           <div class="table-wrap bordered">
-            <Table cols={[
-              { kind: "count", label: t(lang, "col.rank") },
+            <Table restack={false} class="compact" cols={[
+              { kind: "count", label: t(lang, "col.rank"), class: "c-rank" },
               { kind: "main", label: t(lang, "col.buyer") },
-              { kind: "count", label: t(lang, "col.records") },
+              { kind: "count", label: t(lang, "col.records"), class: "ph" },
               { kind: "total", label: t(lang, "col.value") },
             ]}>
               <tbody>
-                {(r.buyers[s] ?? []).map((b, i) => (
+                {buyers.map((b, i) => (
                   <tr>
                     <td data-label={t(lang, "col.rank")} class="mono num">{fmtInt(i + 1, lang)}</td>
                     <td data-label={t(lang, "col.buyer")}><a href={`/buyers/${b.id}`}>{pick(lang, b.name_en, b.name_fr) ?? b.id}</a></td>
-                    <td data-label={t(lang, "col.records")} class="mono num">{fmtInt(b.n, lang)}</td>
+                    <td data-label={t(lang, "col.records")} class="mono num ph">{fmtInt(b.n, lang)}</td>
                     <td data-label={t(lang, "col.value")} class="mono num">{money(lang, b.total)}</td>
                   </tr>
                 ))}
@@ -98,8 +125,7 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
             </Table>
           </div>
         </Panel>
-      ))}
-      </div>
+      ) : null}
     </Layout>,
   );
 }

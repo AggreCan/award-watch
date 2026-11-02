@@ -38,7 +38,6 @@ describe("request buckets", () => {
     expect(bucketFor("POST", "/organizations/org-a000000001/respond")).toBe("form");
     expect(bucketFor("GET", "/corrections")).toBe("page");
     expect(bucketFor("GET", "/organizations/org-a000000001")).toBe("page");
-    expect(bucketFor("POST", "/hooks/kofi")).toBe("page");
     expect(bucketFor("GET", FEED)).toBe("feed");
     expect(bucketFor("GET", "/data/feeds/index.json")).toBe("feed");
     expect(bucketFor("GET", "/feeds")).toBe("page");

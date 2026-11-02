@@ -139,14 +139,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 /* Links are ink, underlined in the muted tone; the underline turns ink under
-   the pointer. In a table cell the underline waits for the pointer, as the
-   row's own hover already marks it. A visited link keeps its colour. */
+   the pointer. In a table cell the underline is fainter, in the border tone,
+   so a column of links still reads as links (a touch screen has no hover)
+   without striping the table. A visited link keeps its colour. */
 a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--muted); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 a:hover { text-decoration-color: currentColor; }
-td a { text-decoration-line: none; }
-td a:hover { text-decoration-line: underline; }
-/* A cell spanning the row is a sentence (an empty state), and its links read as links. */
-td[colspan] a { text-decoration-line: underline; }
+td a { text-decoration-color: var(--border-2); }
+td a:hover { text-decoration-color: currentColor; }
+/* A cell spanning the row is a sentence (an empty state), and its links read as prose links. */
+td[colspan] a { text-decoration-color: var(--muted); }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 h1, h2, h3, h4 { margin: 0; }
 h3 { font-size: 13px; line-height: 20px; font-weight: 600; }
@@ -163,6 +164,11 @@ strong, b { font-weight: 600; }
 /* The figures of a column line up; a head cell's words keep their own spacing. */
 td.num, span.num { font-variant-numeric: tabular-nums; }
 .nw-block { display: block; }
+/* A date or a reference never breaks inside itself ("2026-08-" over "29");
+   a long address (a feed's, marked .wrap) still wraps. */
+.nw, td a.mono:not(.wrap), td.mono:not(.num):not(.c-date):not(.wrap):not(:has(br, .nw)) { white-space: nowrap; }
+/* Zero among figures: a muted dash, so the figures that are not zero stand out. */
+.zero { color: var(--muted); }
 .top-gap { margin-top: 16px; }
 .narrow { max-width: 640px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -304,7 +310,8 @@ h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02
 .eyebrow { margin: 0 0 4px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .lead { margin: 8px 0 0; font-size: 14px; line-height: 24px; color: var(--ink-2); }
 .lead .badge, .lead .flag { vertical-align: 1px; }
-.page-note { margin: 8px 0 0; font-size: 12px; line-height: 16px; color: var(--muted); }
+/* A note line stays near the measure a reader's eye can hold. */
+.page-note { max-width: 72ch; margin: 8px 0 0; font-size: 12px; line-height: 16px; color: var(--muted); }
 .page-actions { display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; }
 .page-foot-note { margin: 0 0 var(--gutter); font-size: 12px; line-height: 16px; color: var(--muted); }
 
@@ -387,6 +394,16 @@ a.tile:hover { border-color: var(--border-2); background: var(--hover); }
 .tile-label { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted); }
 .tile-value { font-size: 32px; line-height: 40px; font-weight: 600; letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .tile-note { font-size: 12px; line-height: 16px; color: var(--ink-2); }
+/* A tile that opens a list carries a chevron at the right of its label,
+   drawn from two borders, so it reads as a link without the pointer. */
+a.tile .tile-label { display: flex; align-items: center; gap: 8px; }
+a.tile .tile-label::after {
+  content: ""; flex: none; width: 6px; height: 6px; margin: 0 2px 0 auto;
+  border-top: 1.5px solid currentColor; border-right: 1.5px solid currentColor; transform: rotate(45deg);
+}
+a.tile:hover .tile-label { color: var(--ink); }
+/* Closing soon: the amber square of the rail's item, before the label. */
+.tile-soon .tile-label::before { content: ""; flex: none; width: 8px; height: 8px; background: var(--amber); }
 /* Labels, figures and captions line up across a row of tiles, whatever wraps. */
 @supports (grid-template-rows: subgrid) {
   .tile { display: grid; grid-row: span 3; grid-template-rows: subgrid; align-content: start; row-gap: 8px; }
@@ -432,6 +449,13 @@ th.num { text-align: right; }
 .k-file { width: 220px; }
 .k-text { width: 192px; }
 tbody tr:last-child td { border-bottom: 0; }
+/* A sub-head inside a table (a source over its rows): a band, its name in spaced capitals. */
+th.group-head {
+  padding-top: 12px; padding-bottom: 4px; background: var(--band); color: var(--ink-2); vertical-align: bottom;
+  font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+}
+tbody + tbody th.group-head { border-top: 1px solid var(--border-2); }
+tbody tr.group-row:hover { background: none; }
 tbody tr:hover { background: var(--hover); }
 tbody tr.is-sel { background: var(--sel); }
 /* The emerald edge of the row under the pointer or selected. */
@@ -444,6 +468,8 @@ td.c-date .badge { display: flex; width: max-content; margin-top: 4px; }
    colour of time pressure, at caption size. */
 .countdown { display: block; margin-top: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--amber); }
 td.c-notice a:first-child { font-weight: 500; }
+/* Beside the detail panel the provinces column rests; a row's provinces show under its buyer instead. */
+.split-only { display: none; }
 .scroll-y { max-height: 360px; overflow-y: auto; }
 .scroll-y thead th { position: sticky; top: 0; z-index: 1; }
 /* Secondary columns rest while the content column is too narrow for the
@@ -555,6 +581,37 @@ ul.quick-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0
 .tabs a:hover { color: var(--ink); border-bottom-color: var(--border-2); }
 .tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
 .tabs-small a { font-size: 12px; line-height: 16px; }
+.panel-tools .tabs { gap: 0 16px; }
+
+/* -- the year tables (YearsBox in src/pages/shared.tsx) ------------------------
+   A switch above the table shows one source at a time; the rows older than
+   the last ten years wait under the fold below it. Both from :has alone. */
+.panel > .years-box { margin: 0; }
+.years-box > .table-wrap { margin-bottom: -1px; border-top: 1px solid var(--border); }
+.ysw { display: flex; flex-wrap: wrap; gap: 0 var(--gutter); padding: 0 16px; border-top: 1px solid var(--border); }
+.ysw label {
+  position: relative; display: inline-flex; align-items: center; padding: 6px 0 4px; border-bottom: 2px solid transparent;
+  color: var(--ink-2); font-size: 13px; line-height: 20px; font-weight: 500; cursor: pointer;
+}
+.ysw input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; }
+.ysw label:hover { color: var(--ink); border-bottom-color: var(--border-2); }
+.ysw label:has(input:checked) { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+.ysw label:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; }
+.years-box:has(.ysw input[value="awards"]:checked) tr[data-source]:not([data-source="awards"]),
+.years-box:has(.ysw input[value="history"]:checked) tr[data-source]:not([data-source="history"]),
+.years-box:has(.ysw input[value="contracts"]:checked) tr[data-source]:not([data-source="contracts"]),
+.years-box:has(.ysw input[value="grants"]:checked) tr[data-source]:not([data-source="grants"]) { display: none; }
+.years-box:not(:has(> .years-more[open])) tr.older { display: none; }
+/* With one source shown, the fold goes when that source has no older year to show. */
+.years-box:has(.ysw input[value="awards"]:checked) .years-more:not([data-older~="awards"]),
+.years-box:has(.ysw input[value="history"]:checked) .years-more:not([data-older~="history"]),
+.years-box:has(.ysw input[value="contracts"]:checked) .years-more:not([data-older~="contracts"]),
+.years-box:has(.ysw input[value="grants"]:checked) .years-more:not([data-older~="grants"]) { display: none; }
+.years-more { position: relative; padding: 8px 16px; border-top: 1px solid var(--border); }
+.years-more > summary { list-style: none; }
+.years-more > summary::-webkit-details-marker { display: none; }
+.years-more[open] .when-closed, .years-more:not([open]) .when-open { display: none; }
+.years-box > .phone-more { margin: 8px 16px; }
 
 /* -- the tender list: a split view from 1200 px ---------------------------- */
 .split { margin: 0 0 var(--gutter); }
@@ -565,8 +622,15 @@ ul.quick-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0
 .keys { white-space: nowrap; }
 html:not(.js) .keys { display: none; }
 .detail { display: none; }
+/* The empty list: what to do next, inside the panel's padding. */
+.empty-state { margin: 16px; }
+.empty-state p:last-child { margin-bottom: 0; }
 @media (min-width: 1200px) {
   html.js .split { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--gutter); align-items: start; }
+  /* With no notice listed there is nothing to select: the list takes the row. */
+  html.js .split.is-empty { grid-template-columns: minmax(0, 1fr); }
+  html.js .split.is-empty .detail { display: none; }
+  html.js .split .split-only { display: block; }
   html.js .detail { display: block; position: sticky; top: calc(var(--topbar) + var(--gutter)); max-height: calc(100vh - var(--topbar) - 2 * var(--gutter)); overflow-y: auto; }
   /* Beside the detail panel the list keeps the notice, the buyer and the
      closing date, and never scrolls: the notice takes what is left. */
@@ -586,7 +650,8 @@ html:not(.js) .keys { display: none; }
 /* -- key and value lists ------------------------------------------------- */
 dl { display: grid; grid-template-columns: minmax(7rem, 35%) minmax(0, 1fr); margin: 0; font-size: 13px; line-height: 20px; }
 dt, dd { margin: 0; padding: 8px 16px; border-top: 1px solid var(--border); }
-dt { color: var(--muted); }
+/* A long label ("Méthode d'approvisionnement" in the 360 px detail panel) breaks rather than running into its value. */
+dt { color: var(--muted); overflow-wrap: break-word; hyphens: auto; }
 dd { overflow-wrap: anywhere; }
 dl.wide { grid-template-columns: minmax(8rem, 25%) minmax(0, 1fr); }
 .panel-head + dl > dt:first-of-type, .panel-head + dl > dd:first-of-type,
@@ -607,7 +672,7 @@ ul.plain { padding: 0; list-style: none; }
 .statement-list > li:first-child { border-top: 0; padding-top: 0; }
 blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--border-2); color: var(--ink-2); }
 
-/* -- documents: methodology, data, feeds, support, citation ------------- */
+/* -- documents: methodology, data, feeds, citation, about ----------------- */
 /* Every block of a document shares one measure: the panel is capped at
    --measure, and paragraphs, lists, definition lists, tables, charts and the
    section bands all run its full width, so their right edges line up. From
@@ -621,6 +686,8 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .toc a:hover { border-color: var(--ink-2); color: var(--ink); }
 @media (min-width: 1440px) {
   .doc-layout { grid-template-columns: 200px minmax(0, var(--measure)); }
+  /* A page short enough to read at a glance has no contents box. */
+  .doc-layout.doc-alone { grid-template-columns: minmax(0, var(--measure)); }
   .toc {
     position: sticky; top: calc(var(--topbar) + var(--gutter));
     flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 0;
@@ -633,7 +700,7 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .doc { min-width: 0; max-width: var(--measure); margin: 0 0 var(--gutter); padding: 0 16px 16px; background: var(--panel); border: 1px solid var(--border); }
 .doc-layout > .doc { margin: 0; }
 .doc p { margin: 0 0 16px; }
-.doc .narrow, .doc .bar-stack { max-width: none; }
+.doc .narrow { max-width: none; }
 /* Each section of a document opens on a labelled band across the panel. */
 .doc h2 {
   margin: var(--gutter) -16px 16px; padding: 12px 16px;
@@ -648,22 +715,6 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .doc dl { grid-template-columns: minmax(8rem, 25%) minmax(0, 1fr); margin: 0 -16px 16px; border-bottom: 1px solid var(--border); }
 .cite-block { margin: 0 0 8px; padding: 8px 16px; background: var(--band); border: 1px solid var(--border); font-family: var(--font); font-size: 12px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cite-copy { min-height: 24px; padding: 1px 8px; font-size: 12px; line-height: 20px; }
-
-/* -- support page: funding bars, one hue ----------------------------------- */
-.bars { display: flex; flex-direction: column; gap: 8px; }
-.bar-row { display: grid; grid-template-columns: 160px minmax(0, 1fr) 80px; gap: 16px; align-items: center; font-size: 13px; }
-.bar-track { display: block; height: 8px; background: var(--sel); border: 1px solid var(--border); }
-.bar-fill { display: block; height: 100%; background: var(--ink-2); }
-.bar-total .bar-label, .bar-total .bar-value { font-weight: 600; }
-.bar-value { font-variant-numeric: tabular-nums; }
-.bar-stack { display: flex; height: 16px; max-width: 640px; overflow: hidden; }
-.bar-stack .bar-fill { flex: none; }
-.bar-fill-light, .swatch-light { background: var(--border-2); }
-.swatch-dark { background: var(--ink-2); }
-.bar-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; }
-.bar-legend li { display: flex; align-items: center; gap: 8px; margin: 0; }
-.swatch { display: inline-block; flex: none; width: 12px; height: 12px; border: 1px solid var(--border-2); }
-.tier-funding .bar-track { margin: 4px 0; }
 
 /* -- forms ----------------------------------------------------------------- */
 .stack { display: flex; flex-direction: column; gap: 16px; max-width: 640px; }
@@ -699,6 +750,19 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .phone-fold > summary { list-style: none; margin: 0 0 16px; }
 .phone-fold > summary::-webkit-details-marker { display: none; }
 @media (min-width: 700px) { .phone-fold > summary { display: none; } }
+/* The filters above a list fold the same way; the chips of the active ones stay in view below the fold. */
+.toolbar .phone-fold > summary { margin: 8px 0; }
+.toolbar-row + .filters-fold { border-top: 1px solid var(--border); }
+/* A record list on a phone shows its first rows, and a button the rest (public/pager.js). */
+tr[data-phone-cut] { display: none !important; }
+.phone-more { justify-content: center; }
+/* A control for one screen size only: the rankings' year select is a phone's. */
+.phone-only { display: none; }
+/* Below the radar's list while its amendments and record columns rest. */
+.rest-note { display: none; }
+@media (min-width: 700px) and (max-width: 1599px) { .rest-note { display: block; } }
+/* The sources a profile holds no record in, as one line after its lists. */
+.sources-line { margin: 0 0 var(--gutter); padding: 8px 16px; background: var(--panel); border: 1px solid var(--border); font-size: 13px; line-height: 20px; color: var(--ink-2); }
 
 /* -- charts (site/src/chart.tsx): HTML labels around a stretched SVG ------- */
 .chart { margin: 16px; }
@@ -720,6 +784,9 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .chart-x span { top: 6px; line-height: 1; }
 /* Every other year rests until the plot is wide enough for all of them. */
 @media (max-width: 1199px) { .chart-x .x-minor { display: none; } }
+@media (min-width: 700px) and (max-width: 1199px) { .chart-x .x-tablet-minor { display: none; } }
+/* A yearly chart on a phone labels its first and last years and every fifth. */
+@media (max-width: 699px) { .chart-x .x-phone-minor { display: none; } }
 .chart-x .x-start, .chart-marks .x-start { transform: none; }
 .chart-x .x-end, .chart-marks .x-end { transform: translateX(-100%); }
 .chart-marks { position: relative; height: var(--hn); margin: 0 0 3px; font-size: 11px; }
@@ -738,9 +805,19 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
   .topbar { flex-wrap: wrap; height: auto; min-height: var(--topbar); padding: 8px var(--gutter); }
   .topbar-meta { flex-wrap: wrap; width: 100%; margin-left: 0; }
   .asof { margin-right: auto; }
-  .rail-group:first-child ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rail-item, .rail .rail-child { padding: 4px 8px; }
-  .rail-group:first-child ul.rail-sub { display: contents; }
+  /* The overview stays a tree, one item a line, each view under its list in
+     its short label, so a count is never read beside another list's. */
+  .rail .rail-tree { display: block; border: 1px solid var(--border); }
+  .rail .rail-tree .rail-parent, .rail .rail-tree .rail-sub { display: block; }
+  .rail .rail-tree li + li, .rail .rail-tree .rail-sub li { border-top: 1px solid var(--border); }
+  .rail .rail-tree .rail-item { min-height: 28px; padding: 2px 12px; border: 0; }
+  .rail .rail-tree .rail-child { padding-left: 28px; }
+  .rail .rail-tree .rail-short { display: inline; }
+  .rail .rail-tree .rail-full { display: none; }
+  .no-phone { display: none; }
+  .toolbar-row.phone-only { display: flex; align-items: flex-end; }
+  .toolbar-row.phone-only .field { flex: 1 1 auto; }
   /* The browse links are in the footer as well; on a phone the rail keeps the counts and the lists. */
   .rail-browse { display: none; }
   .interest-form .interest-field, .interest-form .btn { flex: 1 1 100%; width: 100%; }
@@ -755,7 +832,6 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
   .tile-value { font-size: 24px; line-height: 32px; }
   .page-head-text { flex-basis: 100%; }
   dl, dl.wide { grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); }
-  .bar-row { grid-template-columns: 96px minmax(0, 1fr) 64px; gap: 8px; }
   .chart-row { grid-template-columns: 3.6rem minmax(0, 1fr); column-gap: 6px; }
   .keys { display: none; }
   html.js .table-wrap[data-phone-page]:not(.paged) tbody > tr:nth-child(n+51) { display: none; }
@@ -781,6 +857,24 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
   .restack td[colspan], .restack td[colspan]:first-child { padding-left: 0; }
   .restack td[colspan]::before { content: none; }
   .restack td:empty { display: none; }
+  /* The row's main cell (its first, or the one marked lead-cell, moved up)
+     is a heading across the block, over the label and value pairs. */
+  .restack tbody tr { display: flex; flex-direction: column; }
+  .restack td.lead-cell { order: -1; }
+  .restack tr:not(:has(> td.lead-cell)) > td:first-child:not([colspan]), .restack td.lead-cell { padding-left: 0; padding-bottom: 4px; }
+  .restack tr:not(:has(> td.lead-cell)) > td:first-child::before, .restack td.lead-cell::before { content: none; }
+  .restack tr:not(:has(> td.lead-cell)) > td:first-child > a:first-child, .restack td.lead-cell > a:first-child { font-weight: 500; }
+  /* A narrow table (a ranking, the main buyers, the segments) stays a table:
+     rank, name and value side by side, the records resting. */
+  table.compact { min-width: 0; }
+  .compact .ph { display: none; }
+  .compact .k-count { width: 72px; }
+  .compact .k-total { width: 136px; }
+  .compact .k-value { width: 128px; }
+  .compact .k-tally { width: 120px; }
+  .compact .c-rank { width: 48px; }
+  /* A figure stays on one line: "$13,044,299,191" fits the value column. */
+  .compact td.num { white-space: nowrap; }
   .restack tbody tr:hover > td:first-child, .restack tbody tr.is-sel > td:first-child { box-shadow: none; }
   .restack tbody tr:hover, .restack tbody tr.is-sel { box-shadow: inset 2px 0 0 var(--accent); }
   td.c-date .badge { margin-top: 0; }

@@ -39,7 +39,7 @@ type Both = Record<Lang, string>;
 
 export type PageKey =
   | "home" | "tenders" | "tenders_new" | "awards" | "expiring" | "organizations" | "buyers" | "segments" | "rankings" | "feeds"
-  | "watchlist" | "methodology" | "data" | "support" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts";
+  | "watchlist" | "methodology" | "data" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts";
 
 // `name` is the result-list name, either written here or, where the page's own
 // heading already reads well in a result list, its dictionary key.
@@ -182,14 +182,6 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     description: {
       en: "The open-data files the site reads, when each was last read, the CSV downloads, the read-only JSON API and the licence.",
       fr: "Les fichiers de données ouvertes que lit le site, leur dernière lecture, les téléchargements CSV, l'API JSON en lecture seule et la licence.",
-    },
-  },
-  support: {
-    path: "/support",
-    name: "support.title",
-    description: {
-      en: "What the site costs to run each month and how it is funded. The site is free, carries no advertising and sells nothing.",
-      fr: "Ce que coûte le site chaque mois et comment il est financé. Le site est gratuit, sans publicité, et ne vend rien.",
     },
   },
   cite: {

@@ -115,7 +115,8 @@ describe("POST /interest", () => {
     expect(res.headers.get("set-cookie")).toBeNull();
     expect(res.headers.get("cache-control")).toBe("no-store");
     const html = await res.text();
-    expect(html).toContain('<p class="interest-done" role="status">Noted. One message will announce the alerts.</p>');
+    // The line repeats the address as stored and the filter, so a mistyped address shows.
+    expect(html).toContain('<p class="interest-done" role="status">Noted: reader.one@example.ca, for contracts entering the 3-month window for National Defence. One message will announce the alerts.</p>');
     expect(html).toContain('<a href="/expiring/3m?buyer=dnd-mdn" class="btn">Back to the page</a>');
     expect(html).not.toContain('name="email"');
     const [row] = await rows("reader.one@example.ca");
@@ -135,7 +136,7 @@ describe("POST /interest", () => {
   it("writes the label in the form's language", async () => {
     const res = await post({ email: "lectrice@example.ca", kind: "buyer", params: "/buyers/pwgsc-tpsgc", lang: "fr" });
     expect(res.status).toBe(200);
-    expect(nbsp(await res.text())).toContain("C’est noté. Un seul message annoncera les alertes.");
+    expect(nbsp(await res.text())).toContain("C’est noté : lectrice@example.ca, pour nouveaux avis d’attribution et contrats de Services publics et Approvisionnement Canada. Un seul message annoncera les alertes.");
     const [row] = await rows("lectrice@example.ca");
     expect(row.lang).toBe("fr");
     expect(row.label).toBe("Nouveaux avis d’attribution et contrats de Services publics et Approvisionnement Canada");
@@ -147,7 +148,7 @@ describe("POST /interest", () => {
     const again = await post({ ...fields, email: " TWICE@example.ca", params: "/tenders?sort=published&segment=82" });
     expect(first.status).toBe(200);
     expect(again.status).toBe(200);
-    expect(await again.text()).toContain("Noted. One message will announce the alerts.");
+    expect(await again.text()).toContain("Noted: twice@example.ca, for new tender notices matching UNSPSC segment: 82 ");
     const stored = await rows("twice@example.ca");
     expect(stored).toHaveLength(1);
     // Another filter for the same address is a row of its own, with its own token.
@@ -233,7 +234,8 @@ describe("POST /interest", () => {
     const html = await ok.text();
     expect(html.startsWith('<div class="interest-body" data-interest="">')).toBe(true);
     expect(html).not.toContain("<html");
-    expect(html).toContain("Noted. One message will announce the alerts.");
+    expect(html).toContain("Noted: fragment@example.ca, for ");
+    expect(html).toContain("One message will announce the alerts.");
     const bad = await post({ email: "nope", kind: "segment", params: "/segments/82", lang: "en" }, { "x-interest-fragment": "1" });
     expect(bad.status).toBe(400);
     const again = await bad.text();
@@ -275,7 +277,8 @@ describe("the alerts page and the privacy page", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("<h1>Email Alerts</h1>");
-    expect(html).toContain('<div class="doc-layout">');
+    // About one screen: no contents box.
+    expect(html).toContain('<div class="doc-layout doc-alone"><div class="doc">');
     expect(html).toContain('<h2 id="cover">What Alerts Will Cover</h2>');
     expect(html).toContain("Contracts entering the 3-, 6- or 12-month window of contracts ending soon, for one buyer, one segment or every contract.");
     expect(html).toContain("New records naming an organization you watch: an award notice, a contract or a grant.");

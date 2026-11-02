@@ -56,7 +56,6 @@ const PAGES: [string, string, string][] = [
   ["/watchlist", `${O}/watchlist`, "Watchlist | Award Watch"],
   ["/methodology", `${O}/methodology`, "Methodology: Sources, Identity and Counting | Award Watch"],
   ["/data", `${O}/data`, "Data: Sources, Downloads, API and Licence | Award Watch"],
-  ["/support", `${O}/support`, "Support the Site | Award Watch"],
   ["/cite", `${O}/cite`, "How to Cite | Award Watch"],
   ["/corrections?organization=org-a000000001", `${O}/corrections`, "Report a Correction | Award Watch"],
 ];
@@ -102,7 +101,6 @@ describe("page metadata", () => {
     expect(nbsp(title(data))).toBe("Données : sources, téléchargements, API et licence | Award Watch");
     expect(jsonLd(data)[0].inLanguage).toBe("fr");
     expect(jsonLd(data)[0].license).toBe("https://ouvert.canada.ca/fr/licence-du-gouvernement-ouvert-canada");
-    expect(title(await headOf("/support?lang=fr"))).toBe("Soutenir le site | Award Watch");
     const cite = await headOf("/cite?lang=fr");
     expect(title(cite)).toBe("Comment citer | Award Watch");
     expect(canonical(cite)).toBe(`${O}/cite?lang=fr`);
@@ -241,9 +239,9 @@ describe("crawler files", () => {
       "User-agent: *",
       "Content-Signal: search=yes, ai-input=yes, ai-train=no",
       "Allow: /",
-      "Disallow: /hooks/",
       "Disallow: /api/",
       "Disallow: /organizations/*/respond",
+      "Disallow: /search",
     ]);
     // Bing obeys Crawl-delay, so its own group carries the same rules without one.
     const bing = rules.indexOf("User-agent: bingbot");
@@ -259,7 +257,7 @@ describe("crawler files", () => {
     ];
     const shut = [
       "/tenders?segment=82", "/tenders?lang=fr&segment=82", "/tenders/new?day=2026-10-30", "/rankings?source=contracts",
-      "/organizations/org-a000000001/respond", "/api/stats", "/corrections?organization=org-a000000001", "/hooks/kofi",
+      "/organizations/org-a000000001/respond", "/api/stats", "/corrections?organization=org-a000000001",
     ];
     for (const group of [everyone, bingRules]) {
       for (const path of open) expect(robotsAllow(group, path), path).toBe(true);

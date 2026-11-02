@@ -28,10 +28,23 @@ import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, pag
 import { canonicalUrl, expiringWindowSeo, pageSeo } from "../seo";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
-import { BuyerLink, PhonePagerScript, PhonePages, SegmentChips, SegmentNote, awardNoticeUrl, contractSearchUrl, datasetUrl, money } from "./shared";
+import {
+  BuyerLink, FiltersFold, PhonePagerScript, PhonePages, SegmentChips, SegmentNote, type ServerPages, awardNoticeUrl, contractSearchUrl,
+  datasetUrl, instrumentText, money,
+} from "./shared";
 
 // How many rows of the 3-month list the overview shows.
 export const EXPIRING_FIRST = 50;
+// The rows in each page file of a window (expiring/<window>/<n>.json).
+export const EXPIRING_PAGE_ROWS = 500;
+// Each window in days from the data date, as the pipeline cuts them (expiring.py WINDOWS).
+export const WINDOW_DAYS: Record<ExpiringWindow, number> = { "3m": 91, "6m": 182, "12m": 365 };
+
+// The narrowest window a contract ending in this many days falls in, or null past the last.
+export function windowOf(daysLeft: number): ExpiringWindow | null {
+  if (daysLeft < 0) return null;
+  return EXPIRING_WINDOWS.find((w) => daysLeft <= WINDOW_DAYS[w]) ?? null;
+}
 export const EXPIRING_CSV = "expiring-12m.csv";
 export const EXPIRING_FEED = "feeds/canada/expiring.xml";
 
@@ -186,7 +199,7 @@ export function growthPct(lang: Lang, growth: number): string {
   const pct = growth * 100;
   const whole = Math.round(pct);
   const sign = pct > 0 ? "+" : pct < 0 ? "-" : "";
-  const n = whole === 0 && pct !== 0 ? (lang === "fr" ? "< 1" : "<1") : fmtInt(Math.abs(whole), lang);
+  const n = whole === 0 && pct !== 0 ? (lang === "fr" ? "<\u00a01" : "<1") : fmtInt(Math.abs(whole), lang);
   return t(lang, "pct", { n: `${sign}${n}` });
 }
 
@@ -234,12 +247,15 @@ const Organization: FC<{ lang: Lang; r: ExpiringRow }> = ({ lang, r }) => {
 const BUYER_REST: Rest = "md";
 const LATE_REST: Rest = "xl";
 
-export const ExpiringTable: FC<{ lang: Lang; rows: readonly ExpiringRow[]; organization?: boolean; buyer?: boolean; phonePages?: boolean }> = ({
-  lang, rows, organization = true, buyer = true, phonePages = false,
-}) => (
+// phonePages: a long list, 50 rows at a time on a phone (pages: the window's
+// server pages, which the phone pager steps through); phoneRows: a short
+// list on a profile or a buyer page, its first rows on a phone.
+export const ExpiringTable: FC<{
+  lang: Lang; rows: readonly ExpiringRow[]; organization?: boolean; buyer?: boolean; phonePages?: boolean; pages?: ServerPages; phoneRows?: number;
+}> = ({ lang, rows, organization = true, buyer = true, phonePages = false, pages, phoneRows }) => (
   <>
   <SegmentNote lang={lang} rows={rows} />
-  <PhonePages lang={lang} on={phonePages}>
+  <PhonePages lang={lang} on={phonePages} pages={pages} rows={phoneRows}>
     <Table cols={[
       { kind: "date", label: t(lang, "expiring.col_ends") },
       { kind: "main", label: t(lang, "col.contract") },
@@ -254,7 +270,7 @@ export const ExpiringTable: FC<{ lang: Lang; rows: readonly ExpiringRow[]; organ
         {rows.map((r) => {
           const title = pick(lang, r.title_en, r.title_fr) ?? contractReference(r);
           const path = sitePath(r);
-          const instrument = pick(lang, r.instrument_en, r.instrument_fr);
+          const instrument = instrumentText(lang, r.instrument_en, r.instrument_fr);
           return (
             <tr>
               <td data-label={t(lang, "expiring.col_ends")} class="mono">
@@ -266,17 +282,20 @@ export const ExpiringTable: FC<{ lang: Lang; rows: readonly ExpiringRow[]; organ
                     : tn(lang, "expiring.days_left_one", "expiring.days_left_many", r.days_left, { n: fmtInt(r.days_left, lang) })}
                 </span>
               </td>
-              <td data-label={t(lang, "col.contract")}>
+              <td data-label={t(lang, "col.contract")} class="lead-cell">
                 {/* A published contract has no page here: its title opens the
                     government record the Record column links, so the row keeps
                     a link out while that column rests. */}
                 {path ? <a href={path}>{title}</a> : <a href={expiringRecordUrl(r, lang)} rel="nofollow noopener">{title}</a>}
                 <br />
                 <span class="mono id muted">{contractReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} />
-                {/* A standing offer or supply arrangement is tagged (a framework, not one purchase), and so is an end on March 31. */}
-                {instrument || fiscalYearEnd(r) ? <br /> : null}
-                {instrument ? <span class={standingOffer(r) ? "tag" : "muted small"}>{instrument}</span> : null}
-                {fiscalYearEnd(r) ? <>{instrument ? " " : null}<span class="tag">{t(lang, "expiring.tag_fye")}</span></> : null}
+                {/* The source the row was kept from, then the instrument; a
+                    standing offer or supply arrangement is tagged (a framework,
+                    not one purchase), and so is an end on March 31. */}
+                <br />
+                <span class="muted small">{t(lang, KIND_LABEL[r.kind])}{instrument && !standingOffer(r) ? ` · ${instrument}` : ""}</span>
+                {instrument && standingOffer(r) ? <> <span class="tag">{instrument}</span></> : null}
+                {fiscalYearEnd(r) ? <> <span class="tag">{t(lang, "expiring.tag_fye")}</span></> : null}
               </td>
               {organization ? <td data-label={t(lang, "col.supplier")}><Organization lang={lang} r={r} /></td> : null}
               {buyer ? <td data-label={t(lang, "col.buyer")} class={restClass(BUYER_REST)}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td> : null}
@@ -290,9 +309,8 @@ export const ExpiringTable: FC<{ lang: Lang; rows: readonly ExpiringRow[]; organ
                   <><br /><span class="muted small">{t(lang, "expiring.growth", { pct: growthPct(lang, r.value_growth) })}</span></>
                 )}
               </td>
+              {/* The source the row was kept from is under its title, so this cell holds the links alone. */}
               <td data-label={t(lang, "col.record")} class={restClass(LATE_REST)}>
-                <span class="muted small">{t(lang, KIND_LABEL[r.kind])}</span>
-                <br />
                 <a href={expiringRecordUrl(r, lang)} rel={r.kind === "contract" ? "nofollow noopener" : "noopener"}>{t(lang, RECORD_LABEL[r.kind])}</a>
                 {r.tender_reference ? (
                   <><br /><a href={`/tenders/${r.tender_reference.toLowerCase()}`}>{t(lang, "expiring.record_tender")}</a></>
@@ -304,25 +322,37 @@ export const ExpiringTable: FC<{ lang: Lang; rows: readonly ExpiringRow[]; organ
       </tbody>
     </Table>
   </PhonePages>
+  {/* While the amendments and record columns rest (700 to 1599 px), a line
+      says where they are; wider screens and phones show them. */}
+  {rows.length ? (
+    <p class="rest-note muted small">
+      {tj(lang, "expiring.rest_note", { csv: <a href={`/downloads/${EXPIRING_CSV}`}>{t(lang, "expiring.csv_link")}</a> })}
+    </p>
+  ) : null}
   </>
+);
+
+// The rule the radar lists by, for the foot of a list that shows rows.
+export const ExpiringNote: FC<{ lang: Lang }> = ({ lang }) => (
+  <span>{tj(lang, "expiring.value_note", { rules: <a href="/methodology#expiring">{t(lang, "expiring.rules_link")}</a> })}</span>
 );
 
 // The section on a buyer page or a profile: how many of its contracts end
 // within 12 months, their value, the first rows, and where the rest are.
-// more is said when the part holds fewer rows than it counts; link always.
+// more is said when the part holds fewer rows than it counts; link when given.
 export const ExpiringSection: FC<{
-  lang: Lang; part: ExpiringPart; heading: Key; organization?: boolean; buyer?: boolean; more?: unknown; link?: unknown;
-}> = ({ lang, part, heading, organization, buyer, more, link }) => {
+  lang: Lang; part: ExpiringPart; heading: Key; organization?: boolean; buyer?: boolean; more?: unknown; link?: unknown; phoneRows?: number;
+}> = ({ lang, part, heading, organization, buyer, more, link, phoneRows }) => {
   const rows = soonestFirst(part.rows);
   return (
     <Panel id="expiring" title={t(lang, heading)} count={fmtInt(part.n, lang)} tools={link}
-      foot={<span>{tj(lang, "expiring.value_note", { rules: <a href="/methodology#expiring">{t(lang, "expiring.rules_link")}</a> })}</span>}>
+      foot={part.n > 0 ? <ExpiringNote lang={lang} /> : undefined}>
       {part.n === 0 ? (
         <p class="muted">{t(lang, "expiring.part_none")}</p>
       ) : (
         <p>{tn(lang, "expiring.part_one", "expiring.part_many", part.n, { n: fmtInt(part.n, lang), total: money(lang, part.total) })}</p>
       )}
-      {rows.length ? <ExpiringTable lang={lang} rows={rows} organization={organization} buyer={buyer} /> : null}
+      {rows.length ? <ExpiringTable lang={lang} rows={rows} organization={organization} buyer={buyer} phoneRows={phoneRows} /> : null}
       {rows.length < part.n ? (
         <p class="more-rows">{t(lang, "expiring.part_shown", { shown: fmtInt(rows.length, lang) })}{more ? <> {more as any}</> : null}</p>
       ) : null}
@@ -356,19 +386,15 @@ const FeedLink: FC<{ lang: Lang }> = ({ lang }) => (
   <link rel="alternate" type="application/atom+xml" title={t(lang, "feeds.link_title", { event: t(lang, "feeds.ev.expiring") })} href={`/data/${EXPIRING_FEED}`} />
 );
 
+// The windows as tabs, the current one underlined.
 const WindowLinks: FC<{ lang: Lang; current: ExpiringWindow; q: ExpiringQuery }> = ({ lang, current, q }) => (
-  <nav aria-label={t(lang, "expiring.windows_nav")} class="toolbar-row">
-    <ul class="quick-links">
-      {EXPIRING_WINDOWS.map((w) => (
-        <li>
-          {w === current
-            ? <span aria-current="page">{t(lang, WINDOW_LABEL[w])}</span>
-            : <a href={`/expiring/${w}${expiringQueryString(q)}`}>{t(lang, WINDOW_LABEL[w])}</a>}
-        </li>
-      ))}
-    </ul>
+  <nav aria-label={t(lang, "expiring.windows_nav")} class="tabs toolbar-row">
+    {EXPIRING_WINDOWS.map((w) => (
+      <a href={`/expiring/${w}${expiringQueryString(q)}`} aria-current={w === current ? "page" : undefined}>{t(lang, WINDOW_LABEL[w])}</a>
+    ))}
   </nav>
 );
+
 
 export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
@@ -397,11 +423,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
         actions={<>
           <a href={`/downloads/${EXPIRING_CSV}`} class="btn">{t(lang, "expiring.download")}</a>
           {feeds.national ? <a href={`/data/${EXPIRING_FEED}`} class="btn">{t(lang, "expiring.feed")}</a> : null}
-        </>}>
-        <p class="page-note">
-          {tj(lang, "expiring.value_note", { rules: <a href="/methodology#expiring">{t(lang, "expiring.rules_link")}</a> })}
-        </p>
-      </PageHead>
+        </>} />
 
       {windows.length ? (
         <section class="tiles" aria-label={t(lang, "expiring.tiles_label")}>
@@ -417,9 +439,8 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
         </section>
       ) : null}
 
-      <InterestPanel lang={lang} filter={interest} />
-
-      <Panel title={t(lang, "expiring.first_heading")} tools={<a href="/expiring/3m">{t(lang, "expiring.first_all")}</a>}>
+      <Panel title={t(lang, "expiring.first_heading")} tools={<a href="/expiring/3m">{t(lang, "expiring.first_all")}</a>}
+        foot={shown.length ? <ExpiringNote lang={lang} /> : undefined}>
         {first === null ? (
           <p class="muted">{t(lang, "expiring.list_missing")}</p>
         ) : shown.length ? (
@@ -432,12 +453,14 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
         )}
       </Panel>
 
+      <InterestPanel lang={lang} filter={interest} />
+
       <div class="panel-grid">
       <Panel id="buyers" title={t(lang, "expiring.by_buyer")}
         tools={feeds.any ? <a href="/feeds#expiring">{t(lang, "expiring.feeds_all")}</a> : undefined}>
       {idx.by_buyer.length ? (
         <div class="table-wrap bordered">
-          <Table cols={[
+          <Table restack={false} class="compact" cols={[
             { kind: "main", label: t(lang, "col.buyer") },
             { kind: "count", label: t(lang, "expiring.col_contracts") },
             { kind: "total", label: t(lang, "col.value") },
@@ -464,7 +487,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
       <p class="muted small">{t(lang, "expiring.by_segment_note")}</p>
       {idx.by_segment.length ? (
         <div class="table-wrap bordered">
-          <Table cols={[
+          <Table restack={false} class="compact" cols={[
             { kind: "main", label: t(lang, "col.segment") },
             { kind: "count", label: t(lang, "expiring.col_contracts") },
             { kind: "total", label: t(lang, "col.value") },
@@ -574,6 +597,12 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   // A filtered or later view is a view of the window's first page.
   const noindex = filtered || c.req.query("page") !== undefined;
   const opts = options(sorted, q, lang);
+  const active = FILTER_KEYS.filter((k) => q[k]).length + (q.fye ? 0 : 1) + (q.sosa ? 0 : 1);
+  // Unfiltered, the phone pager counts the window's contracts and steps
+  // through its server pages; filtered, it counts the page's matches.
+  const serverPages: ServerPages | undefined = filtered ? undefined : {
+    offset: (n - 1) * EXPIRING_PAGE_ROWS, total: idx.rows, prev: prevPath, next: nextPath, replaces: "radar-pager",
+  };
 
   return page(
     c,
@@ -588,13 +617,10 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
           {tn(lang, "expiring.window_count_one", "expiring.window_count_many", idx.rows, { n: fmtInt(idx.rows, lang), months, date })}{" "}
           {t(lang, "expiring.window_total", { total: money(lang, idx.total) })}
         </>}
-        actions={<a href={`/downloads/${EXPIRING_CSV}`} class="btn">{t(lang, "expiring.download")}</a>}>
-        <p class="page-note">
-          {tj(lang, "expiring.value_note", { rules: <a href="/methodology#expiring">{t(lang, "expiring.rules_link")}</a> })}
-        </p>
-      </PageHead>
+        actions={<a href={`/downloads/${EXPIRING_CSV}`} class="btn">{t(lang, "expiring.download")}</a>} />
       <form method="get" action={path} class="toolbar">
         <WindowLinks lang={lang} current={window} q={q} />
+        <FiltersFold lang={lang} active={active}>
         <div class="toolbar-fields">
           <Select name="buyer" label="tenders.filter_buyer" opts={opts.buyer} value={q.buyer} lang={lang} />
           <Select name="segment" label="tenders.filter_segment" opts={opts.segment} value={q.segment} lang={lang} />
@@ -620,6 +646,8 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
             <span>{t(lang, "expiring.filter_sosa", { n: fmtInt(sorted.filter(standingOffer).length, lang) })}</span>
           </label>
         </div>
+        <p class="toolbar-note">{t(lang, "expiring.band_note")}</p>
+        </FiltersFold>
         {filtered ? (
           <div class="toolbar-chips">
             <span class="chips-label">{t(lang, "tenders.filters_active")}</span>
@@ -641,29 +669,31 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
             ))}
           </div>
         ) : null}
-        <p class="toolbar-note">{t(lang, "expiring.band_note")}</p>
       </form>
-      <InterestPanel lang={lang} filter={interest} />
       <Panel title={t(lang, WINDOW_LABEL[window])}
         count={filtered ? tn(lang, "expiring.match_one", "expiring.match_many", shown.length, { n: fmtInt(shown.length, lang) }) : fmtInt(idx.rows, lang)}
-        foot={<nav aria-label={t(lang, "common.pagination")} class="pagination">
-          <span class="muted">{t(lang, "tenders.page_of", { page: fmtInt(n, lang), pages: fmtInt(pages, lang) })}</span>
-          <span class="pages">
-            {prevPath ? <a href={prevPath} class="btn" rel="prev">{t(lang, "tenders.prev")}</a> : null}
-            {nextPath ? <a href={nextPath} class="btn" rel="next">{t(lang, "tenders.next")}</a> : null}
-          </span>
-        </nav>}>
+        foot={<>
+          {shown.length ? <ExpiringNote lang={lang} /> : null}
+          <nav aria-label={t(lang, "common.pagination")} class="pagination" id="radar-pager">
+            <span class="muted">{t(lang, "tenders.page_of", { page: fmtInt(n, lang), pages: fmtInt(pages, lang) })}</span>
+            <span class="pages">
+              {prevPath ? <a href={prevPath} class="btn" rel="prev">{t(lang, "tenders.prev")}</a> : null}
+              {nextPath ? <a href={nextPath} class="btn" rel="next">{t(lang, "tenders.next")}</a> : null}
+            </span>
+          </nav>
+        </>}>
         {filtered ? (
           <p class="muted small" aria-live="polite">
             {t(lang, "expiring.filter_note", { rows: fmtInt(sorted.length, lang), page: fmtInt(n, lang), pages: fmtInt(pages, lang) })}
           </p>
         ) : null}
         {shown.length ? (
-          <ExpiringTable lang={lang} rows={shown} phonePages />
+          <ExpiringTable lang={lang} rows={shown} phonePages pages={serverPages} />
         ) : (
           <p class="muted">{t(lang, filtered ? "expiring.none_match" : "expiring.none_window")}</p>
         )}
       </Panel>
+      <InterestPanel lang={lang} filter={interest} />
       <PhonePagerScript lang={lang} />
     </Layout>,
   );

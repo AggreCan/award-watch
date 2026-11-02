@@ -25,13 +25,20 @@
    when it renders: a notice whose closing time has passed reads "Closing
    date passed" and sorts last. A notice closing soon carries its closing
    instant for countdown.js, which this script tells ("aw:rows") after each
-   draw of the list or the detail panel.
+   draw of the list or the detail panel. Sorted by closing date, a row
+   closing soon shows the time left in place of its chip (the chip waits
+   hidden until the time comes), as the server draws it.
+
+   An empty list says what to do next and hides the detail panel. Beside the
+   panel the provinces column rests, and each row's provinces show under its
+   buyer. On a phone the filters fold behind a button that counts the active
+   ones (pager.js folds them); this script keeps the count.
 
    Everything rendered from data uses textContent. Every word the script
    draws comes from the page's <script type="application/json" id="i18n">
    block or from the toolbar's own labels, so the script holds no copy of
    its own in either language. The page loads it as a module. */
-import { addDays, closingInstant, closingParts, closingPassed, closingState, easternDay } from "./closing.js";
+import { addDays, closingInstant, closingParts, closingPassed, closingState, countdownText, easternDay } from "./closing.js";
 
 (function () {
   var form = document.getElementById("tender-filters");
@@ -40,6 +47,9 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, eas
   var countEl = document.getElementById("tender-count");
   var pager = document.getElementById("tender-pager");
   var chipsEl = document.getElementById("tender-chips");
+  var foldEl = document.getElementById("tender-fold");
+  var splitEl = document.getElementById("tender-split");
+  var noteEl = document.getElementById("tender-note");
   var detail = document.getElementById("tender-detail-body");
   if (!form || !results || !tableBox || !countEl || !pager) return;
 
@@ -269,6 +279,17 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, eas
     tr.appendChild(td);
     return td;
   }
+  function provincesText(list) {
+    var names = (list || []).map(function (p) { return (LABELS.provinces && LABELS.provinces[p]) || p; });
+    return names.length ? names.join(", ") : tx("common.national");
+  }
+  // The words countdownText fills, as countdown.js reads them.
+  function countdownWords() {
+    return {
+      in_min: tx("countdown.in_min"), in_hm: tx("countdown.in_hm"), in_day: tx("countdown.in_day"),
+      in_days: tx("countdown.in_days"), today_at: tx("countdown.today_at"),
+    };
+  }
   function buyerNode(id, en, fr) {
     var name = pick(en, fr) || tx("common.not_stated");
     if (id && BUYER_RE.test(id)) {
@@ -297,16 +318,26 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, eas
       if (LABELS.segments && LABELS.segments[code]) chip.title = LABELS.segments[code];
       notice.appendChild(chip);
     });
-    cell(tr, "col.buyer", "c-buyer").appendChild(buyerNode(r.buyer_id, r.buyer_en, r.buyer_fr));
+    var buyer = cell(tr, "col.buyer", "c-buyer");
+    buyer.appendChild(buyerNode(r.buyer_id, r.buyer_en, r.buyer_fr));
+    buyer.appendChild(el("span", "split-only muted small", provincesText(r.provinces)));
     var closing = cell(tr, "col.closing", "mono c-date");
     var state = stateOf(r.closing);
     var ref = r.reference.toLowerCase();
     closing.appendChild(document.createTextNode(closingText(r.closing) + " "));
-    closing.appendChild(badge(state, ref));
-    if (state === "closing") markCountdown(closing, r.closing, ref);
+    var chip = badge(state, ref);
+    closing.appendChild(chip);
+    if (state === "closing") {
+      markCountdown(closing, r.closing, ref);
+      var at = closingInstant(r.closing);
+      var left = sortedByClosing() && at !== null ? countdownText(at, Date.now(), closingTime(r.closing) || "", countdownWords()) : null;
+      if (left) {
+        chip.hidden = true;
+        closing.appendChild(el("span", "countdown", left));
+      }
+    }
     cell(tr, "col.published", "mono c-pub mdh").textContent = r.published || "";
-    var provinces = (r.provinces || []).map(function (p) { return (LABELS.provinces && LABELS.provinces[p]) || p; });
-    cell(tr, "col.region", "c-region").textContent = provinces.length ? provinces.join(", ") : tx("common.national");
+    cell(tr, "col.region", "c-region").textContent = provincesText(r.provinces);
     return tr;
   }
   function table(list) {
@@ -392,6 +423,31 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, eas
       chipsEl.appendChild(chip);
     });
     chipsEl.hidden = !any;
+    if (foldEl) {
+      var active = FIELDS.filter(function (k) { return !!state[k]; }).length;
+      foldEl.textContent = active === 0 ? tx("filters.fold") : txn("filters.fold_one", "filters.fold_many", active, { n: num(active) });
+    }
+  }
+
+  function sortedByClosing() { return state.sort === "closing"; }
+
+  // The empty list's next steps, as NoMatch in src/pages/tenders.tsx draws them.
+  function noMatch() {
+    var box = el("div", "empty-state");
+    box.appendChild(el("p", null, tx("tenders.none_match")));
+    var next = el("p", "muted");
+    var reset = el("a", null, tx("tenders.none_reset"));
+    reset.href = "/tenders";
+    var search = el("a", null, tx("tenders.none_search"));
+    search.href = "/search?" + new URLSearchParams({ q: state.q }).toString();
+    var parts = tx(state.q ? "tenders.none_next_q" : "tenders.none_next").split(/(\{reset\}|\{search\})/);
+    parts.forEach(function (part) {
+      if (part === "{reset}") next.appendChild(reset);
+      else if (part === "{search}") next.appendChild(search);
+      else if (part) next.appendChild(document.createTextNode(part));
+    });
+    box.appendChild(next);
+    return box;
   }
 
   function render(push) {
@@ -401,7 +457,9 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, eas
     var shown = matched.slice((state.page - 1) * PAGE, state.page * PAGE);
     countEl.textContent = txn("tenders.count_one", "tenders.count_many", matched.length, { n: num(matched.length) });
     tableBox.textContent = "";
-    tableBox.appendChild(shown.length ? table(shown) : el("p", "muted", tx("tenders.none_match")));
+    tableBox.appendChild(shown.length ? table(shown) : noMatch());
+    if (splitEl) splitEl.classList.toggle("is-empty", !shown.length);
+    if (noteEl) noteEl.hidden = !shown.length;
     pager.textContent = "";
     pager.appendChild(el("span", "muted", tx("tenders.page_of", { page: num(state.page), pages: num(pages) })));
     var links = el("span", "pages");

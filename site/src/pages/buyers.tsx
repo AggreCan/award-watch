@@ -5,7 +5,7 @@
 // column; nothing adds two sources together.
 
 import type { Context } from "hono";
-import { ChartStack, type Panel as ChartPanel } from "../chart";
+import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
 import { Table } from "../columns";
 import { MONEY_SOURCES } from "../constants";
 import { BUYER_ID_RE, loadBuyer, loadBuyerAlias, loadBuyers, loadStats, type BuyerSummary } from "../data";
@@ -15,10 +15,11 @@ import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page,
 import { buyerSeo, pageSeo } from "../seo";
 import { newestFirst } from "./awards";
 import { ExpiringSection } from "./expiring";
+import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
 import {
-  AwardTable, BUYER_SOURCE_RESTS, OrgTotalTable, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, money, shareText, sourceCellClass,
-  sourceColumns,
+  AwardTable, BUYER_SOURCE_RESTS, Count, OrgTotalTable, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, money,
+  shareText, sourceCellClass, sourceColumns,
 } from "./shared";
 
 const KIND: Record<string, Key> = {
@@ -36,27 +37,40 @@ function acronym(lang: Lang, b: Pick<BuyerSummary, "acronym_en" | "acronym_fr">)
   return pick(lang, b.acronym_en, b.acronym_fr);
 }
 
+// A buyer's records in the four sources, the order /buyers lists them in by default.
+export function buyerRecords(b: Pick<BuyerSummary, "n_awards" | "n_history" | "n_contracts" | "n_grants">): number {
+  return b.n_awards + b.n_history + b.n_contracts + b.n_grants;
+}
+
 export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
   const idx = stats ? await loadBuyers(c.env) : null;
   if (!stats || !idx) return noDataPage(c, "buyers.title");
-  const rows = [...idx.buyers].sort((a, b) => buyerName(lang, a).localeCompare(buyerName(lang, b), numberLocale(lang)));
+  // The departments with the most records first; ?sort=name for A to Z.
+  const byName = c.req.query("sort") === "name";
+  const name = (a: BuyerSummary, b: BuyerSummary) => buyerName(lang, a).localeCompare(buyerName(lang, b), numberLocale(lang));
+  const rows = [...idx.buyers].sort(byName ? name : (a, b) => buyerRecords(b) - buyerRecords(a) || name(a, b));
   const n = (v: number) => fmtInt(v, lang);
   const cell = (count: number, total: number | null | undefined) => (
     <>
-      {n(count)}
+      <Count lang={lang} n={count} />
       {total ? <><br /><span class="muted small">{money(lang, total)}</span></> : null}
     </>
   );
+  const sortHref = (s: "" | "name") => (s ? `/buyers?sort=${s}` : "/buyers");
   return page(
     c,
-    <Layout lang={lang} title={t(lang, "buyers.title")} dataAsOf={stats.data_as_of} active="/buyers" seo={pageSeo("buyers", lang)}>
+    <Layout lang={lang} title={t(lang, "buyers.title")} dataAsOf={stats.data_as_of} active="/buyers" seo={pageSeo("buyers", lang, byName ? { noindex: true } : {})}>
       <PageHead lang={lang} title={t(lang, "buyers.title")} lead={t(lang, "buyers.lead", { n: n(stats.counts.buyers ?? rows.length) })}
         actions={<a href="/downloads/buyers.csv" class="btn">{t(lang, "buyers.csv")}</a>}>
         <p class="page-note"><SourcesSeparate lang={lang} /> {t(lang, "buyers.note")}</p>
       </PageHead>
-      <Panel title={t(lang, "buyers.panel")} count={n(rows.length)}>
+      <Panel title={t(lang, "buyers.panel")} count={n(rows.length)}
+        tools={<nav class="tabs tabs-small" aria-label={t(lang, "common.order")}>
+          <a href={sortHref("")} aria-current={byName ? undefined : "page"}>{t(lang, "common.order_records")}</a>
+          <a href={sortHref("name")} aria-current={byName ? "page" : undefined}>{t(lang, "common.order_name")}</a>
+        </nav>}>
       <PhonePages lang={lang} on>
         <Table cols={[
           { kind: "main", label: t(lang, "col.buyer") },
@@ -71,7 +85,7 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
                   {acronym(lang, b) ? <span class="muted"> ({acronym(lang, b)})</span> : null}
                 </td>
                 <td data-label={t(lang, "buyers.col_open")} class="mono num">
-                  {b.n_open_tenders ? <a href={`/tenders?buyer=${b.id}`}>{n(b.n_open_tenders)}</a> : n(b.n_open_tenders ?? 0)}
+                  {b.n_open_tenders ? <a href={`/tenders?buyer=${b.id}`}>{n(b.n_open_tenders)}</a> : <Count lang={lang} n={0} />}
                 </td>
                 <td data-label={sourceLabel(lang, "awards")} class={sourceCellClass("awards", BUYER_SOURCE_RESTS)}>{cell(b.n_awards, b.total_awards)}</td>
                 <td data-label={sourceLabel(lang, "history")} class={sourceCellClass("history", BUYER_SOURCE_RESTS)}>{cell(b.n_history, b.total_history)}</td>
@@ -111,7 +125,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   const name = buyerName(lang, b.buyer);
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "buyers.title"), path: "/buyers" }, { name }];
   const n = (v: number) => fmtInt(v, lang);
-  const years = [...b.years].sort((x, y) => y.year - x.year || MONEY_SOURCES.indexOf(x.source) - MONEY_SOURCES.indexOf(y.source));
+  const dataYear = Number(todayOf(stats.data_as_of).slice(0, 4));
   const withValue = b.years.filter((y) => (y.total ?? 0) > 0);
   let chart = null;
   if (withValue.length) {
@@ -121,19 +135,29 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
       title: sourceLabel(lang, s),
       bars: withValue.filter((y) => y.source === s).map((y) => ({ x0: y.year, x1: y.year + 1, value: y.total ?? 0, title: `${y.year}: ${fmtMoney(y.total ?? 0, lang)}` })),
     }));
-    const labels = [];
-    for (let y = first; y <= last; y++) labels.push({ x: y + 0.5, text: String(y), minor: (last - y) % 2 === 1 && last - first > 8 });
     chart = (
       <div class="chart">
-        <ChartStack domain={[first, last + 1]} panels={panels} height={110} xLabels={labels} fmt={(v) => fmtMoneyShort(v, lang)} aria={t(lang, "org.chart_aria")} />
+        <ChartStack domain={[first, last + 1]} panels={panels} height={110} xLabels={yearLabels(first, last)} fmt={(v) => fmtMoneyShort(v, lang)} aria={t(lang, "org.chart_aria")} />
       </div>
     );
   }
   const totals = { awards: b.buyer.total_awards, history: b.buyer.total_history ?? null, contracts: b.buyer.total_contracts, grants: b.buyer.total_grants };
   // Years after the data date's are as the sources date them.
-  const lateYears = b.years.some((y) => y.year > Number(todayOf(stats.data_as_of).slice(0, 4)));
+  const lateYears = b.years.some((y) => y.year > dataYear);
   const counts = { awards: b.buyer.n_awards, history: b.buyer.n_history, contracts: b.buyer.n_contracts, grants: b.buyer.n_grants };
-  const interest = await interestFilter(c.env, lang, "buyer", `/buyers/${b.buyer.id}`, { name });
+  // The years the records span, from the first to the data year (a year typed
+  // past it in the source stays in the table, not in this line).
+  const known = b.years.filter((y) => y.n > 0).map((y) => y.year);
+  const upTo = known.filter((y) => y <= dataYear);
+  const span = known.length ? { first: Math.min(...known), last: upTo.length ? Math.max(...upTo) : Math.max(...known) } : null;
+  const ranked = MONEY_SOURCES.filter((s) => (b.top_organizations[s] ?? []).length);
+  const [interest, feedIndex] = await Promise.all([
+    interestFilter(c.env, lang, "buyer", `/buyers/${b.buyer.id}`, { name }),
+    loadFeedIndex(c).catch(() => null),
+  ]);
+  const feeds = feedIndex?.feeds.filter((f) => f.scope === "buyer" && f.key === b.buyer.id) ?? [];
+  const feed = (event: string) => feeds.find((f) => f.event === event);
+  const FEED_BUTTON: [string, Key][] = [["tenders", "feeds.button_tenders"], ["awards", "feeds.button_awards"], [EXPIRING_EVENT, "expiring.feed"]];
 
   return page(
     c,
@@ -144,75 +168,79 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
           {b.buyer.kind && KIND[b.buyer.kind] ? t(lang, KIND[b.buyer.kind]) : t(lang, "buyer.kind_other")}
           {b.buyer.ckan_org ? <> · <a href={`https://open.canada.ca/data/${lang}/organization/${encodeURIComponent(b.buyer.ckan_org)}`}>{t(lang, "buyer.open_data")}</a></> : null}
         </>}
-        actions={<a href={`/tenders?buyer=${b.buyer.id}`} class="btn btn-primary">
-          {tn(lang, "buyer.open_one", "buyer.open_many", b.open_tenders, { n: n(b.open_tenders) })}
-        </a>} />
+        actions={<>
+          <a href={`/tenders?buyer=${b.buyer.id}`} class="btn btn-primary">
+            {tn(lang, "buyer.open_one", "buyer.open_many", b.open_tenders, { n: n(b.open_tenders) })}
+          </a>
+          {FEED_BUTTON.map(([event, key]) => {
+            const f = feed(event);
+            return f ? <a href={`/data/${f.path}`} class="btn">{t(lang, key)}</a> : null;
+          })}
+        </>}>
+        {span ? <p class="page-note">{t(lang, "buyer.seen", { first: String(span.first), last: String(span.last) })}</p> : null}
+      </PageHead>
 
+      {/* A tile opens the source's largest values when the page has them. */}
       <section class="tiles" aria-label={t(lang, "org.tiles_label")}>
-        {MONEY_SOURCES.map((s) => (
-          <div class="tile">
-            <span class="tile-label">{sourceLabel(lang, s)}</span>
-            <span class="tile-value">{fmtMoneyShort(totals[s] ?? 0, lang)}</span>
-            <span class="tile-note">{tn(lang, "org.tile_records_one", "org.tile_records_many", counts[s], { n: n(counts[s]) })}</span>
-          </div>
-        ))}
+        {MONEY_SOURCES.map((s) => {
+          const body = (
+            <>
+              <span class="tile-label">{sourceLabel(lang, s)}</span>
+              <span class="tile-value">{fmtMoneyShort(totals[s] ?? 0, lang)}</span>
+              <span class="tile-note">{tn(lang, "org.tile_records_one", "org.tile_records_many", counts[s], { n: n(counts[s]) })}</span>
+            </>
+          );
+          return ranked.includes(s) ? <a class="tile" href={`#top-${s}`}>{body}</a> : <div class="tile">{body}</div>;
+        })}
       </section>
       <p class="tiles-note"><SourcesSeparate lang={lang} /></p>
 
-      <InterestPanel lang={lang} filter={interest} />
-
-      <Panel title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
-      {lateYears ? <p class="muted small">{t(lang, "common.dates_as_published")}</p> : null}
-      {chart}
-      {years.length ? (
-        <div class="table-wrap bordered">
-          <Table cols={[
-            { kind: "date", label: t(lang, "col.year") },
-            { kind: "main", label: t(lang, "col.source") },
-            { kind: "count", label: t(lang, "col.records") },
-            { kind: "total", label: t(lang, "col.value") },
-            { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span> },
-            { kind: "count", label: t(lang, "buyer.col_organizations"), rest: "md" },
-          ]}>
-            <tbody>
-              {years.map((y) => (
-                <tr>
-                  <td data-label={t(lang, "col.year")} class="mono">{y.year}</td>
-                  <td data-label={t(lang, "col.source")}>{sourceLabel(lang, y.source)}</td>
-                  <td data-label={t(lang, "col.records")} class="mono num">{n(y.n)}</td>
-                  <td data-label={t(lang, "col.value")} class="mono num">{money(lang, y.total)}</td>
-                  <td data-label={t(lang, "org.col_nc_count")} class="mono num">
-                    {shareText(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}
-                  </td>
-                  <td data-label={t(lang, "buyer.col_organizations")} class="mono num mdh">{y.n_organizations === null ? "" : n(y.n_organizations)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
-      ) : <p class="muted">{t(lang, "org.years_none")}</p>}
-      </Panel>
-
-      <div class="panel-grid">
-        {MONEY_SOURCES.map((s) => {
-          const rows = b.top_organizations[s] ?? [];
-          return rows.length ? (
-            <Panel title={t(lang, "buyer.top", { source: sourceLabel(lang, s) })}>
-              <OrgTotalTable lang={lang} rows={rows} rank />
-            </Panel>
-          ) : null;
-        })}
-      </div>
-
       {b.expiring ? (
-        <ExpiringSection lang={lang} part={b.expiring} heading="buyer.expiring" buyer={false}
+        <ExpiringSection lang={lang} part={b.expiring} heading="buyer.expiring" buyer={false} phoneRows={PHONE_ROWS}
           link={<a href={`/expiring/12m?buyer=${b.buyer.id}`}>{t(lang, "buyer.expiring_all")}</a>} />
       ) : null}
 
+      <div class="panel-grid">
+        {ranked.map((s) => (
+          <Panel id={`top-${s}`} title={t(lang, "buyer.top", { source: sourceLabel(lang, s) })}>
+            <OrgTotalTable lang={lang} rows={b.top_organizations[s] ?? []} rank />
+          </Panel>
+        ))}
+      </div>
+
       <Panel title={t(lang, "buyer.recent_awards")} foot={<SourceLine lang={lang} source="awards" />}>
         {/* The newest published notices, in the order of the Awarded column, as on the home page. */}
-        {b.recent_awards.length ? <AwardTable lang={lang} rows={newestFirst(b.recent_awards)} buyer={false} /> : <p class="muted">{t(lang, "awards.none")}</p>}
+        {b.recent_awards.length ? <AwardTable lang={lang} rows={newestFirst(b.recent_awards)} buyer={false} phoneRows={PHONE_ROWS} /> : <p class="muted">{t(lang, "awards.none")}</p>}
       </Panel>
+
+      <InterestPanel lang={lang} filter={interest} />
+
+      <Panel id="years" title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
+      {lateYears ? <p class="muted small">{t(lang, "common.dates_as_published")}</p> : null}
+      {chart}
+      {b.years.length ? (
+        <YearsBox lang={lang} years={b.years} dataYear={dataYear} cols={[
+          { kind: "date", label: t(lang, "col.year") },
+          { kind: "main", label: t(lang, "col.source") },
+          { kind: "count", label: t(lang, "col.records") },
+          { kind: "total", label: t(lang, "col.value") },
+          { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span> },
+          { kind: "count", label: t(lang, "buyer.col_organizations"), rest: "md" },
+        ]} cells={(y) => (
+          <>
+            <td data-label={t(lang, "col.year")} class="mono">{y.year}</td>
+            <td data-label={t(lang, "col.source")}>{sourceLabel(lang, y.source)}</td>
+            <td data-label={t(lang, "col.records")} class="mono num">{n(y.n)}</td>
+            <td data-label={t(lang, "col.value")} class="mono num">{money(lang, y.total)}</td>
+            <td data-label={t(lang, "org.col_nc_count")} class="mono num">
+              {shareText(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}
+            </td>
+            <td data-label={t(lang, "buyer.col_organizations")} class="mono num mdh">{y.n_organizations === null ? "" : n(y.n_organizations)}</td>
+          </>
+        )} />
+      ) : <p class="muted">{t(lang, "org.years_none")}</p>}
+      </Panel>
+      <PhonePagerScript lang={lang} />
     </Layout>,
   );
 }

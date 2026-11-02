@@ -11,12 +11,6 @@ import { Layout, PageHead, page } from "../layout";
 import { pageSeo } from "../seo";
 import { InterestBody, interestFilter } from "./interest";
 
-const TOC: [string, Key][] = [
-  ["cover", "alerts.toc_cover"],
-  ["now", "alerts.toc_now"],
-  ["register", "interest.title"],
-  ["where", "alerts.toc_where"],
-];
 
 export async function alertsPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
@@ -27,11 +21,8 @@ export async function alertsPage(c: Context<AppEnv>): Promise<Response> {
     c,
     <Layout lang={lang} title={t(lang, "alerts.title")} dataAsOf={stats?.data_as_of ?? null} active="/alerts" seo={pageSeo("alerts", lang)}>
       <PageHead lang={lang} title={t(lang, "alerts.title")} lead={t(lang, "alerts.lead")} />
-      <div class="doc-layout">
-        <nav class="toc" aria-label={t(lang, "toc.label")}>
-          <span class="toc-title">{t(lang, "toc.title")}</span>
-          {TOC.map(([id, key]) => <a href={`#${id}`}>{t(lang, key)}</a>)}
-        </nav>
+      {/* About one screen at 1440 px: no contents box. */}
+      <div class="doc-layout doc-alone">
         <div class="doc">
 
           <h2 id="cover">{t(lang, "alerts.toc_cover")}</h2>
@@ -49,7 +40,7 @@ export async function alertsPage(c: Context<AppEnv>): Promise<Response> {
 
           <h2 id="register">{t(lang, "interest.title")}</h2>
           <p>{t(lang, "alerts.register_intro")}</p>
-          {general ? <InterestBody lang={lang} filter={general} /> : null}
+          {general ? <InterestBody lang={lang} filter={general} primary /> : null}
 
           <h2 id="where">{t(lang, "alerts.toc_where")}</h2>
           <ul>

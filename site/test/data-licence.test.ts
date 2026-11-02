@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { app, downloadAllowed } from "../src/index";
-import { CHANGELOG, DOWNLOADS, LICENCE_ROWS, SOURCE_ROWS, YEARLY_DOWNLOAD } from "../src/pages/data";
-import { testEnv } from "./assets";
+import { CHANGELOG, DOWNLOADS, LICENCE_ROWS, SOURCE_ROWS, YEARLY_DOWNLOAD, fileSize } from "../src/pages/data";
+import stats from "./fixtures/stats.json";
+import { makeFakeAssets, testEnv } from "./assets";
+
+const withFiles = (overrides: Record<string, unknown>) => testEnv(makeFakeAssets({}, overrides));
 
 const get = (path: string) => app.request(path, {}, testEnv());
 const nbsp = (s: string) => s.replace(/[\u00a0\u202f]/g, " ");
@@ -34,10 +37,36 @@ describe("data page", () => {
     expect(sources).toContain("Public Services and Procurement Canada");
     expect(sources).toContain("Treasury Board of Canada Secretariat");
     expect(sources).toContain("Office of the Commissioner of Lobbying");
-    expect(sources).toContain('<span class="mono">openTenderNotice-ouvertAvisAppelOffres.csv</span>: 2026-10-31 00:40 UTC');
-    expect(sources).toContain("(publisher&#39;s date 2026-10-30)");
+    // One last read per source, with the publisher's newest date under it; no column of terms (the licence section has them).
+    expect(sources).toContain('<td data-label="Last read" class="mono">2026-10-31 00:40 UTC<span class="nw-block muted small">(publisher&#39;s date 2026-10-30)</span></td>');
+    expect(sources).not.toContain('data-label="Terms"');
     // A source the last run did not read says so.
     expect(sources).toContain("Not read yet");
+    // Each file's own read is under Last Runs.
+    const runs = section(html, "runs");
+    expect(runs).toContain('<h3 id="files">Files Read</h3>');
+    expect(runs).toContain('<td data-label="File" class="mono wrap">openTenderNotice-ouvertAvisAppelOffres.csv</td>');
+  });
+
+  it("gives each download its size and rows when the export lists them, and nothing when it does not", async () => {
+    expect(fileSize("en", 512)).toBe("512 B");
+    expect(fileSize("en", 42_372)).toBe("41 KB");
+    expect(fileSize("en", 2_231_436)).toBe("2.1 MB");
+    expect(nbsp(fileSize("fr", 2_231_436))).toBe("2,1 Mo");
+    expect(fileSize("en", 3 * 1024 ** 3)).toBe("3 GB");
+    const plain = section(await (await get("/data")).text(), "downloads");
+    expect(plain).not.toContain('data-label="Size"');
+    const downloads = [
+      { file: "organizations.csv", bytes: 760_062, rows: 4321 }, { file: "SHA256SUMS", bytes: 1811, rows: 22 },
+      { file: "awards-2026.csv", bytes: 2_231_436, rows: 4860 }, { file: "bad", bytes: "x", rows: 1 },
+    ];
+    const html = await (await app.request("/data", {}, withFiles({ "stats.json": { ...stats, downloads } }))).text();
+    const listed = section(html, "downloads");
+    expect(listed).toContain('<td data-label="Size" class="mono num">742 KB</td><td data-label="Rows" class="mono num">4,321</td>');
+    expect(listed).toContain('<td data-label="Size" class="mono num">2 KB</td><td data-label="Rows" class="mono num">22</td>');
+    // A file the list does not name has empty cells; a yearly file carries its size and rows on its link.
+    expect(listed).toContain('<td data-label="Size" class="mono num"></td><td data-label="Rows" class="mono num"></td>');
+    expect(listed).toContain('<a class="mono" href="/downloads/awards-2026.csv" title="2.1 MB, 4,860 rows">awards-2026.csv</a>');
   });
 
   it("states the licence of every source and of the site's own files, the lobbying registry's its own", async () => {

@@ -82,6 +82,23 @@ export interface AxisLabel {
   text: string;
   // Hidden on a narrow screen, so every other year shows.
   minor?: boolean;
+  // False for a label a phone leaves out (below 700 px only some years show).
+  phone?: boolean;
+}
+
+// The labels of a chart with one bar a year, from first to last: every other
+// year rests below 1200 px, and below 700 px only the first, the last and
+// every fifth year at least three years clear of both show.
+export function yearLabels(first: number, last: number): AxisLabel[] {
+  const labels: AxisLabel[] = [];
+  for (let y = first; y <= last; y++) {
+    labels.push({
+      x: y + 0.5, text: String(y),
+      minor: (last - y) % 2 === 1 && last - first > 8,
+      phone: y === first || y === last || (y % 5 === 0 && y - first >= 3 && last - y >= 3),
+    });
+  }
+  return labels;
 }
 
 const f = (v: number) => (Math.round(v * 100) / 100).toString();
@@ -112,6 +129,16 @@ export function markerRows(markers: Marker[], domain: [number, number], gap = MA
 // Labels near either end are anchored to that end, so they stay over the plot.
 function anchor(left: number): string | undefined {
   return left < 4 ? "x-start" : left > 96 ? "x-end" : undefined;
+}
+
+// A label's classes: its anchor, and when it rests. A chart whose labels say
+// what a phone shows (yearLabels) rests the minor ones from 700 to 1199 px and
+// the others below 700; any other chart rests the minor ones below 1200 px.
+function labelClass(l: AxisLabel, anchored: string | undefined): string | undefined {
+  const rest = l.phone === undefined
+    ? [l.minor && !anchored ? "x-minor" : ""]
+    : [l.minor && !anchored ? "x-tablet-minor" : "", l.phone ? "" : "x-phone-minor"];
+  return [anchored, ...rest].filter(Boolean).join(" ") || undefined;
 }
 
 // An anchored label runs inward from its end of the axis, over the next
@@ -237,7 +264,7 @@ export const ChartStack: FC<{
             const shown = clearOfAnchors(lefts);
             // An end label always shows, even a minor one, as it stands for the axis's start or end.
             return xLabels.map((l, i) => shown[i]
-              ? <span class={[anchor(lefts[i]), l.minor && !anchor(lefts[i]) ? "x-minor" : ""].filter(Boolean).join(" ") || undefined} style={`left:${f(lefts[i])}%`}>{l.text}</span>
+              ? <span class={labelClass(l, anchor(lefts[i]))} style={`left:${f(lefts[i])}%`}>{l.text}</span>
               : null);
           })()}
         </div>

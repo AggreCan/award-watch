@@ -25,18 +25,17 @@ export async function organizationsIndex(c: Context<AppEnv>): Promise<Response> 
   const directories = stats ? await loadDirectories(c.env) : null;
   if (!stats || !directories) return noDataPage(c, "directory.index_title");
   const listed = DIRECTORY_CODES.map((code) => directories.get(code)).filter((d) => d !== undefined);
-  const total = listed.reduce((sum, d) => sum + d.organizations, 0);
   return page(
     c,
     <Layout lang={lang} title={t(lang, "directory.index_title")} dataAsOf={stats.data_as_of} active="/organizations" seo={pageSeo("organizations", lang)}>
-      <PageHead lang={lang} title={t(lang, "directory.index_title")} lead={t(lang, "directory.index_lead", { n: fmtInt(total, lang) })}
+      <PageHead lang={lang} title={t(lang, "directory.index_title")} lead={t(lang, "directory.index_lead")}
         actions={<a href="/downloads/organizations.csv" class="btn">{t(lang, "directory.csv")}</a>}>
         <p class="page-note">{t(lang, "directory.index_note")}</p>
       </PageHead>
-      <Panel title={t(lang, "directory.col_place")} count={fmtInt(total, lang)}
+      <Panel title={t(lang, "directory.panel")}
         foot={<span><a href="/rankings">{t(lang, "directory.to_rankings")}</a> · <a href="/buyers">{t(lang, "directory.to_buyers")}</a></span>}>
       <div class="table-wrap bordered">
-        <Table cols={[
+        <Table restack={false} class="compact" cols={[
           { kind: "main", label: t(lang, "directory.col_place") },
           { kind: "count", label: t(lang, "directory.col_organizations") },
         ]}>
@@ -150,7 +149,8 @@ export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
                 <td data-label={t(lang, "col.organization")}><a href={`/organizations/${r.id}`}>{r.name}</a></td>
                 <td data-label={t(lang, "col.city")}>{r.city ?? <span class="muted">{t(lang, "common.na")}</span>}</td>
                 <td data-label={t(lang, "col.records")} class="mono num">{fmt(r.n_records)}</td>
-                <td data-label={t(lang, "directory.col_last_seen")} class="mono">{r.last_seen ?? ""}</td>
+                {/* A row that counts no record shows no date: it would come from a record the count does not hold. */}
+                <td data-label={t(lang, "directory.col_last_seen")} class="mono">{r.n_records > 0 ? r.last_seen ?? "" : ""}</td>
               </tr>
             ))}
           </tbody>

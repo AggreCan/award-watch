@@ -145,11 +145,12 @@ stored). It is `noindex`, and `robots.txt` keeps crawlers off it.
 - The query: at most 200 characters, folded, at most 8 words of letters and
   digits. Each word becomes a quoted FTS5 phrase and the last one a prefix
   (`"tim" "horton"*`).
-- Ranking: an exact display name (for a buyer, either name or an acronym)
-  first, then a name that starts with the query as whole words, then one
-  that starts with it, then a name holding every word, then a match through
-  another spelling or a business number; within each, more records first,
-  then by name. A match through another spelling shows "Also recorded as"
+- Ranking: a match on the name itself (an exact display name, for a buyer
+  either name or an acronym; a name that starts with the query; a name
+  holding every word) first, then a match through another spelling or a
+  business number; within each, more records first, then by name. Every word
+  matches as a prefix in each kind of name match, so they rank alike: "IBM
+  Canada Ltd." with 4,172 records comes before "IBM" with 22. A match through another spelling shows "Also recorded as"
   and the spelling; a match through a business number shows the number.
 - Two panels on the column system: the matching buyers (the 50 closest, on
   the first page) and the organizations, 50 to a page (`?page=`, at most 200
@@ -209,7 +210,7 @@ The first batch drops and recreates the tables, so search answers
 "unavailable" until the last batch is applied. A changed column or tokenizer
 in `search_schema.sql` reaches D1 only this way. Skip `search-synced`: the
 ledger that counts is the one in R2's database, and the next night compares
-with it. Avoid the nightly window (00:00 UTC to about 01:00 UTC).
+with it. Avoid the nightly window (12:30 UTC to about 13:30 UTC).
 
 ## Local development
 

@@ -2,8 +2,8 @@
 // the Methodology page. The publisher is named as the project only ("Award
 // Watch, an independent Canadian project"); no person or company appears.
 // The request limits /terms quotes are wrangler.jsonc's (a test holds the
-// two together), and /privacy states what views.ts, forms.tsx, interest.tsx
-// and the Ko-fi hook keep, in the words of their own comments.
+// two together), and /privacy states what views.ts, forms.tsx and
+// interest.tsx keep, in the words of their own comments.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -24,7 +24,11 @@ const Mail: FC = () => <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>;
 
 const link = (href: string, text: string) => <a href={href}>{text}</a>;
 
-async function doc(c: Context<AppEnv>, key: PageKey, title: Key, lead: Key, sections: (lang: Lang) => Section[]): Promise<Response> {
+// toc: the contents box, left out of a page shorter than about two screens
+// (all three are, at 1440 px: 1,289 to 1,883 px tall).
+async function doc(
+  c: Context<AppEnv>, key: PageKey, title: Key, lead: Key, sections: (lang: Lang) => Section[], toc = false,
+): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env).catch(() => null);
   const list = sections(lang);
@@ -34,11 +38,13 @@ async function doc(c: Context<AppEnv>, key: PageKey, title: Key, lead: Key, sect
       <PageHead lang={lang} title={t(lang, title)} lead={t(lang, lead)}>
         <p class="page-note">{t(lang, "docs.publisher")}</p>
       </PageHead>
-      <div class="doc-layout">
-        <nav class="toc" aria-label={t(lang, "toc.label")}>
-          <span class="toc-title">{t(lang, "toc.title")}</span>
-          {list.map((s) => <a href={`#${s.id}`}>{t(lang, s.title)}</a>)}
-        </nav>
+      <div class={toc ? "doc-layout" : "doc-layout doc-alone"}>
+        {toc ? (
+          <nav class="toc" aria-label={t(lang, "toc.label")}>
+            <span class="toc-title">{t(lang, "toc.title")}</span>
+            {list.map((s) => <a href={`#${s.id}`}>{t(lang, s.title)}</a>)}
+          </nav>
+        ) : null}
         <div class="doc">
           {list.map((s) => (
             <>
@@ -141,7 +147,6 @@ export function privacyPage(c: Context<AppEnv>): Promise<Response> {
           <p>{t(lang, "privacy.form_response")}</p>
           <p>{t(lang, "privacy.form_correction")}</p>
           <p>{t(lang, "privacy.form_review")}</p>
-          <p>{t(lang, "privacy.donations")}</p>
         </>
       ),
     },

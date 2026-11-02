@@ -45,7 +45,7 @@ describe("a converted tender notice", () => {
     const res = await get("/tenders/en578-123456-a-1");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('<span class="mono id">EN578-123456/A:1</span>');
+    expect(html).toContain('<p class="page-note"><span class="mono">EN578-123456/A:1</span>');
     expect(html).toContain("/ EN578-123456/A:1</nav>");
     expect(html).toContain('<link rel="canonical" href="https://awardwatch.ca/tenders/en578-123456-a-1"');
     // The notice link is built from the reference as published.
@@ -78,7 +78,7 @@ describe("a converted tender notice", () => {
 describe("a converted award and contract history record", () => {
   it("shows the award under its reference as published and links CanadaBuys with it", async () => {
     const html = await text("/awards/23240-220799-001-im");
-    expect(html).toContain('<span class="mono id">23240-220799/001/IM</span>');
+    expect(html).toContain('<p class="page-note"><span class="mono">23240-220799/001/IM</span>');
     expect(html).toContain('href="https://canadabuys.canada.ca/en/tender-opportunities/award-notice/23240-220799/001/im"');
     expect(html).toContain('<a href="/tenders/en578-123456-a-1" class="btn">Open the tender notice</a>');
     const fr = await text("/awards/23240-220799-001-im?lang=fr");
@@ -89,7 +89,7 @@ describe("a converted award and contract history record", () => {
     const res = await get("/history/23240-220799-001-im");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('<span class="mono id">23240-220799/001/IM</span>');
+    expect(html).toContain('<p class="page-note"><span class="mono">23240-220799/001/IM</span>');
     expect(html).toContain('<link rel="canonical" href="https://awardwatch.ca/history/23240-220799-001-im"');
     expect(html).toContain("PSPC contract history record 23240-220799/001/IM:");
   });
@@ -107,10 +107,10 @@ describe("plain references", () => {
     expect(publishedReference({ reference: "cb-100-10000001" })).toBe("cb-100-10000001");
     expect(publishedReference({ reference: "x-1", reference_published: "X/1" })).toBe("X/1");
     const html = await text("/tenders/cb-100-10000001");
-    expect(html).toContain('<span class="mono id">cb-100-10000001</span>');
+    expect(html).toContain('<p class="page-note"><span class="mono">cb-100-10000001</span>');
     expect(html).toContain('href="https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-100-10000001"');
     const award = await text("/awards/cb-400-40000004");
-    expect(award).toContain('<span class="mono id">cb-400-40000004</span>');
+    expect(award).toContain('<p class="page-note"><span class="mono">cb-400-40000004</span>');
     expect(award).toContain('href="https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cb-400-40000004"');
   });
 });

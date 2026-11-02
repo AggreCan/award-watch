@@ -1,6 +1,5 @@
 # Award Watch. Every page is open to search engines, in English and in French
-# (?lang=fr). The payment webhook, the JSON API and the response form are not
-# pages to index.
+# (?lang=fr). The JSON API and the response form are not pages to index.
 #
 # Crawling the profile and notice pages gains nothing the nightly bulk files
 # do not hold: see /llms.txt for the files and their licence. The bulk files
@@ -8,7 +7,6 @@
 User-agent: *
 Content-Signal: search=yes, ai-input=yes, ai-train=no
 Allow: /
-Disallow: /hooks/
 Disallow: /api/
 Disallow: /organizations/*/respond
 # Search results: every query would be a page, and each one reads the search
@@ -33,7 +31,6 @@ Crawl-delay: 5
 # names it, so Bingbot's group repeats the rules without the delay.
 User-agent: bingbot
 Allow: /
-Disallow: /hooks/
 Disallow: /api/
 Disallow: /organizations/*/respond
 Disallow: /search

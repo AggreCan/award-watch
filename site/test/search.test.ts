@@ -155,17 +155,18 @@ describe("the query builder", () => {
 });
 
 describe("the search database", () => {
-  it("ranks the exact name, then a leading name, then a name holding the words, then other spellings", async () => {
+  it("ranks the names that hold the words by records, then the matches through other spellings", async () => {
     const res = await runSearch(testEnv(), searchTerms("Exemplar"), 1);
     expect(res).not.toBeNull();
     const r = res!;
+    // Every word matches as a prefix in the first five names, so the most
+    // records lead whatever the tier; the exact name, with one record, is fifth.
     expect(r.orgs.map((o) => [o.id, o.tier])).toEqual([
-      ["org-a000000002", 0],
-      // Two names that start with the word: more records first.
+      ["org-a000000004", 3],
+      ["org-a000000003", 2],
       ["org-a000000006", 1],
       ["org-a000000001", 1],
-      ["org-a000000003", 2],
-      ["org-a000000004", 3],
+      ["org-a000000002", 0],
       ["org-a000000005", 4],
     ]);
     expect(r.orgTotal).toBe(6);
@@ -227,7 +228,24 @@ describe("/search", () => {
     expect(html).toContain("1 to 6 of 6");
     expect(html).not.toContain(EM_DASH);
     // The top bar's field holds the query.
-    expect(html).toContain('<input type="search" name="q" value="exemplar" maxlength="200" autocomplete="off" placeholder="Search organizations and buyers"');
+    expect(html).toContain('<input type="search" name="q" value="exemplar" maxlength="200" autocomplete="off" placeholder="Organization or buyer"');
+    // How the search works is a line under the results, not ahead of them.
+    expect(html.indexOf("Searched: organization names")).toBeGreaterThan(html.indexOf("1 to 6 of 6"));
+  });
+
+  it("drops the Lobbying column until the registry is read, and dashes the zeros", async () => {
+    const html = await (await get("/search?q=exemplar")).text();
+    expect(html).not.toContain(">Lobbying</th>");
+    expect(html).toContain('<span class="zero"><span aria-hidden="true">–</span><span class="visually-hidden">0</span></span>');
+  });
+
+  it("counts the open notices the tender list finds for the same words, and links that list", async () => {
+    const html = await (await get("/search?q=translation")).text();
+    expect(html).toMatch(/<p class="page-note"><a href="\/tenders\?q=translation">Open notices with these words in the title: \d+<\/a><\/p>/);
+    const none = await (await get("/search?q=zzqqxx")).text();
+    expect(none).toContain('<a href="/tenders?q=zzqqxx">Open notices with these words in the title: 0</a>');
+    const fr = nbsp(await (await get("/search?q=translation&lang=fr")).text());
+    expect(fr).toMatch(/Avis ouverts dont le titre contient ces mots : \d+/);
   });
 
   it("lists the buyers with their figures and links", async () => {
@@ -238,8 +256,8 @@ describe("/search", () => {
     const fr = nbsp(await (await get("/search?q=canada&lang=fr")).text());
     expect(fr).toContain("<h1>Recherche : canada</h1>");
     expect(fr).toContain('<a href="/buyers/pwgsc-tpsgc">Services publics et Approvisionnement Canada</a>');
-    expect(fr).toContain('placeholder="Rechercher des organisations et des acheteurs"');
-    expect(fr).not.toContain("Search organizations and buyers");
+    expect(fr).toContain('placeholder="Organisation ou acheteur"');
+    expect(fr).not.toContain('placeholder="Organization or buyer"');
   });
 
   it("escapes the query wherever it is echoed", async () => {
@@ -334,7 +352,7 @@ describe("the top bar and the counters", () => {
     for (const path of ["/", "/tenders", "/organizations", "/methodology", "/nothing-here"]) {
       const html = await (await get(path)).text();
       expect(html, path).toContain('<form class="topbar-search" method="get" action="/search" role="search">');
-      expect(html, path).toContain('placeholder="Search organizations and buyers"');
+      expect(html, path).toContain('placeholder="Organization or buyer"');
       expect(html.indexOf("brand-lockup"), path).toBeLessThan(html.indexOf("topbar-search"));
       expect(html.indexOf("topbar-search"), path).toBeLessThan(html.indexOf("topbar-meta"));
     }

@@ -4,7 +4,7 @@ import { Table } from "../columns";
 import { FIRST_AWARD_YEAR } from "../constants";
 import { loadStats, type Stats } from "../data";
 import type { AppEnv } from "../env";
-import { t, tj, type Key, type Lang } from "../i18n";
+import { decimal, fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, noDataPage, page, todayOf } from "../layout";
 import { ODLA_URL, OGL_URL, datasetJsonLd, pageSeo } from "../seo";
 import { datasetUrl } from "./shared";
@@ -34,6 +34,25 @@ export function publisherDay(value: string | null | undefined): string | null {
   const d = new Date(value);
   if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
+}
+
+// A file's size as a reader reads it: bytes below a kilobyte, whole
+// kilobytes below a megabyte, then megabytes and gigabytes to one decimal.
+export function fileSize(lang: Lang, bytes: number): string {
+  const one = (n: number) => decimal(lang, (Math.round(n * 10) / 10).toFixed(1).replace(/\.0$/, ""));
+  if (bytes < 1024) return t(lang, "data.size_b", { n: fmtInt(bytes, lang) });
+  if (bytes < 1024 ** 2) return t(lang, "data.size_kb", { n: fmtInt(Math.max(1, Math.round(bytes / 1024)), lang) });
+  if (bytes < 1024 ** 3) return t(lang, "data.size_mb", { n: one(bytes / 1024 ** 2) });
+  return t(lang, "data.size_gb", { n: one(bytes / 1024 ** 3) });
+}
+
+// The export's list of downloads with their sizes and rows, by file name;
+// empty for an older export without it, and the columns then show nothing.
+export function downloadSizes(stats: Stats): Map<string, { bytes: number; rows: number | null }> {
+  const list = Array.isArray(stats.downloads) ? stats.downloads : [];
+  return new Map(list
+    .filter((d) => d && typeof d.file === "string" && typeof d.bytes === "number" && (d.rows === null || typeof d.rows === "number"))
+    .map((d) => [d.file, { bytes: d.bytes, rows: d.rows }]));
 }
 
 // The fixed CSV files in R2 (downloads/<file>), the only names the download
@@ -91,6 +110,16 @@ function filesRead(stats: Stats, key: string): Stats["sources"] {
   return stats.sources.filter((s) => s.source === key);
 }
 
+// A dataset's one "last read": the newest read of its files, with the
+// publisher's newest date; null when no file of it was ever read.
+export function lastRead(rows: Stats["sources"]): { read: string; modified: string | null } | null {
+  const read = rows.filter((r) => r.last_read && r.loaded !== false);
+  if (!read.length) return null;
+  const newest = read.reduce((a, b) => ((b.last_read ?? "") > (a.last_read ?? "") ? b : a));
+  const days = read.map((r) => publisherDay(r.last_modified)).filter((d): d is string => d !== null).sort();
+  return { read: newest.last_read ?? "", modified: days.length ? days[days.length - 1] : null };
+}
+
 export async function dataPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
@@ -98,6 +127,14 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
   const lastYear = Number(todayOf(stats.data_as_of).slice(0, 4));
   const years = (from: number) => Array.from({ length: lastYear - from + 1 }, (_, i) => lastYear - i);
   const downloads = DOWNLOADS.map((d) => ({ file: d.file, contents: t(lang, d.contents) }));
+  const sizes = downloadSizes(stats);
+  const sizeOf = (file: string) => sizes.get(file);
+  // A yearly file's size and rows ride on its link's title.
+  const sizeTitle = (file: string) => {
+    const s = sizeOf(file);
+    if (!s) return undefined;
+    return s.rows === null ? fileSize(lang, s.bytes) : t(lang, "data.size_rows", { size: fileSize(lang, s.bytes), n: fmtInt(s.rows, lang) });
+  };
   const changes = changelog();
   const toc: [string, Key][] = [
     ["sources", "data.toc_sources"],
@@ -128,30 +165,27 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
               { kind: "main", label: t(lang, "data.col_source") },
               { kind: "buyer", label: t(lang, "data.col_publisher") },
               { kind: "text", label: t(lang, "data.col_files"), rest: "md" },
-              { kind: "label", label: t(lang, "data.col_licence") },
-              { kind: "text", label: t(lang, "data.col_last_read") },
+              { kind: "datetime", label: t(lang, "data.col_last_read") },
             ]}>
               <tbody>
                 {SOURCE_ROWS.map((s) => {
-                  const read = filesRead(stats, s.key);
+                  const last = lastRead(filesRead(stats, s.key));
                   return (
                     <tr>
-                      <td data-label={t(lang, "data.col_source")}><a href={s.url(lang)}>{t(lang, s.name)}</a></td>
+                      <td data-label={t(lang, "data.col_source")}>
+                        <a href={s.url(lang)}>{t(lang, s.name)}</a>
+                        {/* The licence table below covers the terms; the one source under its own licence says so here. */}
+                        {s.odla ? <span class="nw-block small"><a href={ODLA_URL}>{t(lang, "data.odla")}</a></span> : null}
+                      </td>
                       <td data-label={t(lang, "data.col_publisher")}>{t(lang, s.publisher)}</td>
                       <td data-label={t(lang, "data.col_files")} class="small mdh">{s.files}</td>
-                      <td data-label={t(lang, "data.col_licence")}>
-                        {s.odla ? <a href={ODLA_URL}>{t(lang, "data.odla")}</a> : <a href={OGL_URL[lang]}>{t(lang, "data.ogl_short")}</a>}
-                      </td>
-                      <td data-label={t(lang, "data.col_last_read")} class="small">
-                        {read.length ? read.map((r) => (
-                          <span class="nw-block">
-                            <span class="mono">{r.file}</span>{lang === "fr" ? "\u202f: " : ": "}
-                            {r.last_read && r.loaded !== false ? runTime(r.last_read, lang) : t(lang, "data.not_read")}
-                            {r.loaded !== false && publisherDay(r.last_modified)
-                              ? <span class="muted"> {t(lang, "data.modified", { date: publisherDay(r.last_modified) ?? "" })}</span>
-                              : null}
-                          </span>
-                        )) : <span class="muted">{t(lang, "data.not_read")}</span>}
+                      <td data-label={t(lang, "data.col_last_read")} class="mono">
+                        {last ? (
+                          <>
+                            {runTime(last.read, lang)}
+                            {last.modified ? <span class="nw-block muted small">{t(lang, "data.modified", { date: last.modified })}</span> : null}
+                          </>
+                        ) : <span class="muted">{t(lang, "data.not_read")}</span>}
                       </td>
                     </tr>
                   );
@@ -159,6 +193,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
               </tbody>
             </Table>
           </div>
+          <p class="muted small">{tj(lang, "data.sources_runs", { runs: <a href="#files">{t(lang, "data.files_read")}</a> })}</p>
 
           <h2 id="downloads">{t(lang, "data.toc_downloads")}</h2>
           <p>{t(lang, "data.downloads_text")}</p>
@@ -166,29 +201,43 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
             <Table cols={[
               { kind: "file", label: t(lang, "data.col_file") },
               { kind: "main", label: t(lang, "data.col_contents") },
+              sizes.size > 0 && { kind: "count", label: t(lang, "data.col_size") },
+              sizes.size > 0 && { kind: "count", label: t(lang, "data.col_rows") },
             ]}>
               <tbody>
-                {DOWNLOADS.map((d) => (
-                  <tr>
-                    <td data-label={t(lang, "data.col_file")}><a href={`/downloads/${d.file}`} class="mono">{d.file}</a></td>
-                    <td data-label={t(lang, "data.col_contents")}>{t(lang, d.contents)}</td>
-                  </tr>
-                ))}
+                {DOWNLOADS.map((d) => {
+                  const size = sizeOf(d.file);
+                  return (
+                    <tr>
+                      <td data-label={t(lang, "data.col_file")}><a href={`/downloads/${d.file}`} class="mono">{d.file}</a></td>
+                      <td data-label={t(lang, "data.col_contents")}>{t(lang, d.contents)}</td>
+                      {sizes.size > 0 ? <td data-label={t(lang, "data.col_size")} class="mono num">{size ? fileSize(lang, size.bytes) : ""}</td> : null}
+                      {sizes.size > 0 ? (
+                        <td data-label={t(lang, "data.col_rows")} class="mono num">{size && size.rows !== null ? fmtInt(size.rows, lang) : ""}</td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
               </tbody>
             </Table>
           </div>
+          {sizes.size > 0 ? <p class="muted small">{t(lang, "data.sizes_note")}</p> : null}
           <h3>{t(lang, "data.yearly_awards")}</h3>
           <ul class="quick-links">
-            {years(FIRST_AWARD_YEAR).map((y) => <li><a class="mono" href={`/downloads/awards-${y}.csv`}>{`awards-${y}.csv`}</a></li>)}
+            {years(FIRST_AWARD_YEAR).map((y) => (
+              <li><a class="mono" href={`/downloads/awards-${y}.csv`} title={sizeTitle(`awards-${y}.csv`)}>{`awards-${y}.csv`}</a></li>
+            ))}
           </ul>
           <h3>{t(lang, "data.yearly_history")}</h3>
           <ul class="quick-links">
-            {years(FIRST_HISTORY_YEAR).map((y) => <li><a class="mono" href={`/downloads/history-${y}.csv`}>{`history-${y}.csv`}</a></li>)}
+            {years(FIRST_HISTORY_YEAR).map((y) => (
+              <li><a class="mono" href={`/downloads/history-${y}.csv`} title={sizeTitle(`history-${y}.csv`)}>{`history-${y}.csv`}</a></li>
+            ))}
           </ul>
           <h3>{t(lang, "data.yearly_other", { first: FIRST_AWARD_YEAR, last: lastYear })}</h3>
           <ul class="quick-links">
             {[`awards-before-${FIRST_AWARD_YEAR}.csv`, `awards-after-${lastYear}.csv`, `history-before-${FIRST_HISTORY_YEAR}.csv`,
-              `history-after-${lastYear}.csv`].map((f) => <li><a class="mono" href={`/downloads/${f}`}>{f}</a></li>)}
+              `history-after-${lastYear}.csv`].map((f) => <li><a class="mono" href={`/downloads/${f}`} title={sizeTitle(f)}>{f}</a></li>)}
           </ul>
           <p class="muted small top-gap">{t(lang, "data.downloads_note")}</p>
 
@@ -249,6 +298,35 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                       <td data-label={t(lang, "col.status")}>{r.ok ? t(lang, "data.run_ok") : t(lang, "data.run_failed")}</td>
                     </tr>
                   ))}
+                </tbody>
+              </Table>
+            </div>
+          ) : <p class="muted">{t(lang, "data.runs_none")}</p>}
+
+          <h3 id="files">{t(lang, "data.files_read")}</h3>
+          {stats.sources.length ? (
+            <div class="table-wrap bordered">
+              <Table cols={[
+                { kind: "file", label: t(lang, "data.col_file") },
+                { kind: "main", label: t(lang, "data.col_source") },
+                { kind: "datetime", label: t(lang, "data.col_last_read") },
+                { kind: "date", label: t(lang, "data.col_publisher_date") },
+              ]}>
+                <tbody>
+                  {stats.sources.map((r) => {
+                    const row = SOURCE_ROWS.find((s) => s.key === r.source);
+                    return (
+                      <tr>
+                        {/* A file name can run past its column ("openTenderNotice-ouvertAvisAppelOffres.csv"): it wraps. */}
+                        <td data-label={t(lang, "data.col_file")} class="mono wrap">{r.file}</td>
+                        <td data-label={t(lang, "data.col_source")}>{row ? t(lang, row.name) : r.source}</td>
+                        <td data-label={t(lang, "data.col_last_read")} class="mono">
+                          {r.last_read && r.loaded !== false ? runTime(r.last_read, lang) : <span class="muted">{t(lang, "data.not_read")}</span>}
+                        </td>
+                        <td data-label={t(lang, "data.col_publisher_date")} class="mono">{r.loaded !== false ? publisherDay(r.last_modified) ?? "" : ""}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </Table>
             </div>

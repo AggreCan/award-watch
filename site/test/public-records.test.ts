@@ -41,10 +41,12 @@ describe("organization profile", () => {
   it("gives the figures by year with the non-competitive share and what it is a share of", async () => {
     const page = await html("/organizations/org-a000000001");
     const years = section(page, "years");
-    expect(years).toContain('<td data-label="Non-competitive, by count" class="mono num">3 of 60 (5%)</td>');
+    // The share and its percentage; the whole is the Records or Value cell beside it.
+    expect(years).toContain('<td data-label="Records" class="mono num">60</td>');
+    expect(years).toContain('<td data-label="Non-competitive, by count" class="mono num">3 (5%)</td>');
     // The share by value rests on medium screens, so the table fits beside the rail.
-    expect(years).toContain('<td data-label="Non-competitive, by value" class="mono num mdh">$54,000 of $1,100,000 (5%)</td>');
-    expect(years).toContain('<td data-label="Non-competitive, by count" class="mono num">0 of 41 (0%)</td>');
+    expect(years).toContain('<td data-label="Non-competitive, by value" class="mono num mdh">$54,000 (5%)</td>');
+    expect(years).toContain('<td data-label="Non-competitive, by count" class="mono num">0 (0%)</td>');
     expect(years).toContain('class="chart-stack"');
     const grants = section(await html("/organizations/org-a000000002"), "years");
     expect(grants).toContain('<td data-label="Non-competitive, by count" class="mono num">Not applicable</td>');
@@ -66,8 +68,13 @@ describe("organization profile", () => {
     const lobbying = section(page, "lobbying");
     expect(lobbying).toContain("Example Officeholder, Assistant Deputy Minister, Public Services and Procurement Canada (PSPC)");
     expect(lobbying).toContain(`<a href="${lobbyUrl("500001")}" class="mono" rel="nofollow noopener">500001</a>`);
-    expect(section(page, "history")).toContain("No PSPC contract history record names this organization.");
-    expect(section(page, "grants")).toContain("No grant or contribution agreement names this organization.");
+    // The sources with no record of the organization: one line after the lists, no empty panels, no link from their tiles.
+    expect(page).not.toContain('<h2 id="history">');
+    expect(page).not.toContain('<h2 id="grants">');
+    expect(page).toContain('<p class="sources-line">No record in PSPC contract history or grants and contributions names this organization.</p>');
+    expect(page).toContain('<div class="tile"><span class="tile-label">PSPC contract history</span>');
+    expect(page).toContain('<a class="tile" href="#contracts"><span class="tile-label">Published contracts</span>');
+    expect(page.indexOf('class="sources-line"')).toBeGreaterThan(page.indexOf('<h2 id="lobbying">'));
 
     const two = await html("/organizations/org-a000000002");
     const history = section(two, "history");
@@ -106,7 +113,7 @@ describe("organization profile", () => {
     expect(page).toContain("Ports pour petits bateaux");
     expect(page).toContain("Pêches et Océans Canada");
     expect(page).toContain("Non concurrentiel");
-    expect(page).toContain("1 sur 1 (100 %)");
+    expect(page).toContain("1 (100 %)");
     expect(page).toContain("Sans objet");
   });
 });

@@ -116,8 +116,10 @@ export function addDays(day: string, n: number): string {
 
 // notice: the reference of a notice closing soon, so public/countdown.js can
 // turn every chip of that notice on the page once its closing time passes.
-export const StatusBadge: FC<{ status: string; lang: Lang; notice?: string }> = ({ status, lang, notice }) => (
-  <span class={`badge badge-${/^[a-z]+$/.test(status) ? status : "unknown"}`} data-notice={notice}>{statusLabel(lang, status)}</span>
+// hidden: a closing-soon chip a list shows as the time left instead; the
+// script turns it on with "Closing date passed" once the time comes.
+export const StatusBadge: FC<{ status: string; lang: Lang; notice?: string; hidden?: boolean }> = ({ status, lang, notice, hidden }) => (
+  <span class={`badge badge-${/^[a-z]+$/.test(status) ? status : "unknown"}`} data-notice={notice} hidden={hidden}>{statusLabel(lang, status)}</span>
 );
 
 // "Non-competitive" is the source's own term: the definition rides along as
@@ -368,7 +370,7 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 7;
+export const STYLES_VERSION = 8;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -442,7 +444,6 @@ export const Layout: FC<
                   <a href="/watchlist">{t(lang, "footer.watchlist")}</a>
                   <a href="/corrections">{t(lang, "footer.corrections")}</a>
                   <a href="/cite">{t(lang, "footer.cite")}</a>
-                  <a href="/support">{t(lang, "footer.support")}</a>
                   <a href="/about">{t(lang, "footer.about")}</a>
                   <a href="/terms">{t(lang, "footer.terms")}</a>
                   <a href="/privacy">{t(lang, "footer.privacy")}</a>

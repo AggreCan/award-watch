@@ -241,7 +241,9 @@ export async function interestFilter(
 
 // -- the block ----------------------------------------------------------------
 
-export type InterestState = { done?: boolean; error?: Key; email?: string };
+// primary: the form is the page's main action (/alerts), its button filled;
+// on a list page it follows the list with the secondary button.
+export type InterestState = { done?: boolean; error?: Key; email?: string; primary?: boolean };
 
 // On /tenders the list's script changes the address as the filters change;
 // interest.js then saves the address shown and words the label from these.
@@ -249,14 +251,20 @@ const FOLLOW_KEYS = [...TENDER_KEYS].sort().join(" ");
 
 // The part that changes: the label, the form or the line that says it was
 // noted, an error line, and the note on what the address is for.
-export const InterestBody: FC<{ lang: Lang; filter: InterestFilter } & InterestState> = ({ lang, filter, done, error, email }) => {
+// The label as the end of a sentence ("for every new tender notice"): its
+// first letter lowered, as every label starts with a common word.
+function labelInSentence(label: string): string {
+  return label.charAt(0).toLowerCase() + label.slice(1);
+}
+
+export const InterestBody: FC<{ lang: Lang; filter: InterestFilter } & InterestState> = ({ lang, filter, done, error, email, primary }) => {
   const follow = filter.kind === "tenders";
   return (
     <div class="interest-body" data-interest="">
       <p class="interest-label">{filter.label}</p>
       {error ? <p class="interest-error" role="alert">{t(lang, error)}</p> : null}
       {done ? (
-        <p class="interest-done" role="status">{t(lang, "interest.done")}</p>
+        <p class="interest-done" role="status">{t(lang, "interest.done", { email: email ?? "", label: labelInSentence(filter.label) })}</p>
       ) : (
         <form method="post" action="/interest" class="interest-form" data-interest-form=""
           data-follow={follow ? "" : undefined} data-keys={follow ? FOLLOW_KEYS : undefined}
@@ -265,15 +273,18 @@ export const InterestBody: FC<{ lang: Lang; filter: InterestFilter } & InterestS
           <input type="hidden" name="kind" value={filter.kind} />
           <input type="hidden" name="params" value={filter.params} />
           <input type="hidden" name="lang" value={lang} />
+          {primary ? <input type="hidden" name="place" value="primary" /> : null}
           <div class="hp"><label>{t(lang, "form.honeypot")}<input name="website" type="text" tabindex={-1} autocomplete="off" /></label></div>
           <label class="field interest-field">
             <span class="field-label">{t(lang, "interest.email")}</span>
             <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={email ?? ""} />
           </label>
-          <button type="submit" class="btn btn-primary">{t(lang, "interest.submit")}</button>
+          <button type="submit" class={primary ? "btn btn-primary" : "btn"}>{t(lang, "interest.submit")}</button>
         </form>
       )}
       <p class="interest-note">{tj(lang, "interest.note", { privacy: <a href="/privacy#interest">{t(lang, "footer.privacy")}</a> })}</p>
+      {/* A profile's head offers the watchlist too; the two differ in where the list is kept. */}
+      {filter.kind === "organization" ? <p class="interest-note">{t(lang, "interest.watch_note")}</p> : null}
     </div>
   );
 };
@@ -346,12 +357,14 @@ export async function interestSubmit(c: Context<AppEnv>): Promise<Response> {
   if (asked === "en" || asked === "fr") c.set("lang", asked);
   const lang = c.get("lang");
   const fragment = c.req.header("x-interest-fragment") === "1";
+  // The form answers in the style it was sent from.
+  const primary = field(body, "place", 10) === "primary";
   const filter = await interestFilter(c.env, lang, field(body, "kind", 20), field(body, "params", PARAMS_MAX));
   if (!filter) return c.text(t(lang, "form.rejected"), 400);
   const typed = field(body, "email", EMAIL_MAX + 50);
-  if (field(body, "website", 10)) return answer(c, filter, { error: "interest.err_rejected", email: typed.slice(0, EMAIL_MAX) }, 400, fragment);
+  if (field(body, "website", 10)) return answer(c, filter, { error: "interest.err_rejected", email: typed.slice(0, EMAIL_MAX), primary }, 400, fragment);
   const email = normalizeEmail(typed);
-  if (!email) return answer(c, filter, { error: "interest.err_email", email: typed.slice(0, EMAIL_MAX) }, 400, fragment);
+  if (!email) return answer(c, filter, { error: "interest.err_email", email: typed.slice(0, EMAIL_MAX), primary }, 400, fragment);
   try {
     await c.env.DB.prepare(
       "INSERT INTO interest (email, kind, params, label, lang, created_at, token) VALUES (?, ?, ?, ?, ?, ?, ?) " +
@@ -359,7 +372,8 @@ export async function interestSubmit(c: Context<AppEnv>): Promise<Response> {
     ).bind(email, filter.kind, filter.params, filter.label, lang, new Date().toISOString(), newToken()).run();
   } catch (e) {
     console.error(`interest not stored: ${String(e).slice(0, 200)}`);
-    return answer(c, filter, { error: "form.err_unavailable", email }, 503, fragment);
+    return answer(c, filter, { error: "form.err_unavailable", email, primary }, 503, fragment);
   }
-  return answer(c, filter, { done: true }, 200, fragment);
+  // The line that says it was noted repeats the address and the filter, so a mistyped address shows.
+  return answer(c, filter, { done: true, email, primary }, 200, fragment);
 }

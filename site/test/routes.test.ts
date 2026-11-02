@@ -12,6 +12,7 @@ import wordmarkSvg from "../../brand/wordmark.svg?raw";
 import { filterTenders, readTenderQuery, tenderQueryString } from "../src/pages/tenders";
 import { assetsWithout, emptyAssets, fakeAssets, makeFakeAssets, testClock, testEnv } from "./assets";
 import openFirst from "./fixtures/tenders-open-first.json";
+import stats from "./fixtures/stats.json";
 import openTenders from "./fixtures/tenders-open.json";
 
 let address = 0;
@@ -51,7 +52,6 @@ const PAGES: [string, string, string, string][] = [
 // Pages that answer without the data files, in both languages.
 const STATIC: [string, string, string][] = [
   ["/methodology", "<h1>Methodology</h1>", "<h1>Méthodologie</h1>"],
-  ["/support", "<h1>Support the Site</h1>", "<h1>Soutenir le site</h1>"],
   ["/feeds", "<h1>Atom Feeds</h1>", "<h1>Fils Atom</h1>"],
   ["/watchlist", "<h1>Watchlist</h1>", "<h1>Liste de suivi</h1>"],
   ["/corrections", "<h1>Report a Correction</h1>", "<h1>Signaler une correction</h1>"],
@@ -145,7 +145,7 @@ describe("every page", () => {
     // A page's own section is marked in the rail.
     expect(await text("/buyers")).toContain('<a class="rail-item" href="/buyers" aria-current="page">');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));
-    for (const href of ["/methodology", "/support", "/feeds", "/alerts", "/watchlist", "/corrections", "/cite", "/data#downloads", "/data#sources", "/about", "/terms", "/privacy"]) {
+    for (const href of ["/methodology", "/feeds", "/alerts", "/watchlist", "/corrections", "/cite", "/data#downloads", "/data#sources", "/about", "/terms", "/privacy"]) {
       expect(footer, href).toContain(`href="${href}"`);
     }
     expect(html).toContain("Data date: 2026-10-31");
@@ -157,6 +157,9 @@ describe("every page", () => {
     expect(html).toMatch(/<link rel="stylesheet" href="\/styles\.css\?v=\d+"\/>/);
     // No social accounts, no notice bar, nothing loaded from another host.
     expect(html).not.toMatch(/x\.com|bsky|notice-ee|ko-fi/i);
+    // The site takes no donations: no support page, no payment link, no webhook.
+    expect(footer).not.toContain('href="/support"');
+    expect(html).not.toMatch(/donat|Support the site/i);
     expect(html).not.toMatch(/<script[^>]+src="https?:/);
     expect(html).not.toMatch(/<link rel="(?:stylesheet|icon|preload|apple-touch-icon)"[^>]+href="https?:/);
     const csp = res.headers.get("content-security-policy") ?? "";
@@ -356,7 +359,13 @@ describe("award notices and contract history", () => {
   it("shows an award with its value by the counting rules, its method and its amendments", async () => {
     const html = await text("/awards/cb-400-40000004");
     expect(html).toContain('<a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a>');
-    expect(html).toContain("<dt>Value counted</dt><dd>$250,000</dd>");
+    // The three figures agree, so one row gives the value and no rule is needed to pick among them.
+    expect(html).toContain("<dt>Value</dt><dd>$250,000</dd>");
+    expect(html).not.toContain("Value counted");
+    // The lead: the supplier, the value and the end date, which the radar's window links when it is near.
+    expect(html).toContain('<a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a> · $250,000 · ends 2029-09-30');
+    // One version, the original: no amendments table.
+    expect(html).not.toContain("<h2>Amendments</h2>");
     expect(html).toContain('<span class="flag flag-yes"');
     expect(html).toContain("Standing Offer");
     expect(html).toContain("Department of Fisheries and Oceans (DFO)");
@@ -428,9 +437,14 @@ describe("buyers, segments and rankings", () => {
     expect(index).toContain('<a href="/tenders?segment=82">1</a>');
     const one = await text("/segments/82");
     expect(one).toContain("UNSPSC segment 82");
-    expect(one).toContain('<a href="/tenders?segment=82" class="btn btn-primary">Filter the open notices (1)</a>');
+    // The lead counts the open notices and the data year's award notices; the soonest open notices
+    // come first with the filtered list's button under them.
+    expect(one).toMatch(/<p class="lead">1 open notice\. (No award notice in 2026 yet|\d+ award notices? worth [^<]+ in 2026)\.?<\/p>/);
+    expect(one).toContain('<div class="panel-foot"><a href="/tenders?segment=82" class="btn btn-primary">Filter the open notices (1)</a></div>');
     expect(one).toContain("cb-100-10000001");
-    expect(one).toContain('<a href="/awards/2024">2024</a>');
+    // A year's list would hold every segment's notices: the year is not a link.
+    expect(one).toContain('<td data-label="Year" class="mono">2024</td>');
+    expect(one).not.toContain('<a href="/awards/2024">');
   });
 
   it("ranks one source at a time, by value or by count", async () => {
@@ -452,13 +466,39 @@ describe("buyers, segments and rankings", () => {
 describe("home", () => {
   it("shows the counts, today's notices, those closing soon, recent awards and the year's largest", async () => {
     const html = await text("/");
-    expect(html).toContain('<span class="tile-label">Open tender notices</span><span class="tile-value">3</span>');
-    expect(html).toContain('<span class="tile-label">Award notices</span><span class="tile-value">5,883</span>');
+    // The tiles add what the rail beside them lacks; the rail keeps the open and the award notices' counts.
+    expect(html).toContain('<a class="tile tile-soon" href="/tenders?closing=7"><span class="tile-label">Closing within 7 days</span><span class="tile-value" data-soon-count="">');
+    expect(html).toContain('<a class="tile" href="/awards/2026"><span class="tile-label">Award notices in 2026</span><span class="tile-value">3</span>');
+    expect(html).not.toContain('<span class="tile-label">Open tender notices</span>');
+    // Records held: the standing totals the rail does not count.
+    expect(html).toContain("<h2>Records Held</h2>");
+    expect(html).not.toMatch(/<a href="\/organizations">Organizations<\/a><span class="kv-note">/);
+    // An older export without the closing times, the year's count or the radar keeps the old tiles.
+    const older = await text("/", testEnv(makeFakeAssets({}, {
+      "stats.json": { ...stats, closing_soon_times: undefined, counts: { ...stats.counts, tenders_closing_soon: undefined } },
+      "expiring/index.json": "{", "awards/2026/index.json": "{",
+    })));
+    expect(older).toContain('<span class="tile-label">Open tender notices</span><span class="tile-value">3</span>');
+    expect(older).toContain('<span class="tile-label">Award notices</span><span class="tile-value">5,883</span>');
     expect(html).toContain("<h2>New Tender Notices Today</h2>");
     expect(html).toContain("<h2>Closing Within 7 Days</h2>");
     expect(html).toContain("<h2>Largest Award Values in 2026</h2>");
     expect(html).toContain('<a href="/rankings/2026">Full ranking</a>');
     expect(html).toContain("Exemplar Translation Services Inc.");
     expect(html).toContain("Each entry is a government record, linked to the notice or file it came from.");
+  });
+});
+
+describe("no donations", () => {
+  it("answers 404 for the old support page and the payment webhook", async () => {
+    for (const path of ["/support", "/support?lang=fr"]) expect((await get(path)).status, path).toBe(404);
+    const hook = await app.request("/hooks/kofi", {
+      method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "data=%7B%7D",
+    }, testEnv());
+    expect(hook.status).toBe(404);
+    // Neither the footer, the About page nor the Privacy page mentions donations.
+    for (const path of ["/", "/about", "/privacy", "/terms", "/data", "/alerts"]) {
+      expect(await text(path), path).not.toMatch(/donat|ko-fi|Support the site/i);
+    }
   });
 });

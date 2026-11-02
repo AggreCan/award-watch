@@ -145,13 +145,19 @@ describe("the UNSPSC segment pages", () => {
     expect((await get("/segments/99")).status).toBe(404);
   });
 
-  it("explain the segment chips once above a list, and name each chip by number and short name", async () => {
-    const html = await text("/segments/82");
-    expect(html).toContain("The tags after a reference are UNSPSC segments, by number and short name.");
+  it("explain the segment chips once on a page, name each chip by number and short name, and leave out the page's own", async () => {
+    const note = /The tags after a reference are UNSPSC segments, by number and short name\./g;
+    // The segment's own page: every row would carry its chip, so none does, and nothing is left to explain.
+    const own = await text("/segments/82");
+    expect(own).not.toContain('<a href="/segments/82" class="chip"');
+    expect(own).not.toMatch(note);
+    const html = await text("/tenders");
+    expect(html.match(note)).toHaveLength(1);
     // The full title on hover; the accessible name holds the visible text.
     expect(html).toContain('<a href="/segments/82" class="chip" title="Editorial and Design and Graphic and Fine Art Services" aria-label="UNSPSC segment 82 Editorial and design">82 Editorial and design</a>');
-    expect(await text("/tenders")).toContain("The tags after a reference are UNSPSC segments, by number and short name.");
-    const fr = nbsp(await text("/segments/82?lang=fr"));
+    // Two lists of notices on the home page, one note.
+    expect((await text("/")).match(note)?.length ?? 0).toBeLessThanOrEqual(1);
+    const fr = nbsp(await text("/tenders?lang=fr"));
     expect(fr).toContain('aria-label="Segment UNSPSC 82 Rédaction et conception">82 Rédaction et conception</a>');
   });
 });
@@ -177,22 +183,27 @@ describe("a source never read", () => {
       "profiles/a00.json": { ...shard, "org-a000000002": { ...shard["org-a000000002"], lobbying_loaded: false, grants_loaded: false } },
     });
     const html = await text("/organizations/org-a000000002", env);
-    expect(html).toContain('<span class="tile-label">Lobbying communications</span><span class="tile-value">n/a</span><span class="tile-note">Not read yet</span>');
-    expect(html).toContain('<span class="tile-label">Grants and contributions</span><span class="tile-value">n/a</span><span class="tile-note">Not read yet</span>');
+    // The tile says the source is not loaded, with no note and no link to a list it does not have.
+    expect(html).toContain('<div class="tile"><span class="tile-label">Lobbying communications</span><span class="tile-value">Not loaded</span><span class="tile-note"></span></div>');
+    expect(html).toContain('<div class="tile"><span class="tile-label">Grants and contributions</span><span class="tile-value">Not loaded</span><span class="tile-note"></span></div>');
+    // The line after the lists names the sources never read; the registry's panel says so too.
+    expect(html).toContain("Not loaded yet: grants and contributions, lobbying communications.");
     expect(html).toContain("This source has not been loaded yet.");
     expect(html).not.toContain("No lobbying communication report names this organization as a client.");
-    expect(html).not.toContain("No grant or contribution agreement names this organization.");
     expect(html).not.toContain("No match in the federal corporate registry.");
+    expect(html).not.toContain('id="grants"');
     // A source the profile does not flag reads as before, whatever stats.json says of it.
-    expect(html).toContain("No published contract names this organization.");
+    expect(html).toMatch(/No record in [^<]*published contracts[^<]* names this organization\./);
     const fr = nbsp(await text("/organizations/org-a000000002?lang=fr", env));
+    expect(fr).toContain("Pas encore chargées : les subventions et contributions, les communications de lobbying.");
     expect(fr).toContain("Cette source n’a pas encore été chargée.");
   });
 
   it("reads as before when nothing says", async () => {
     const html = await text("/organizations/org-a000000002");
-    expect(html).toContain('<span class="tile-label">Lobbying communications</span><span class="tile-value">0</span><span class="tile-note">0 reports</span>');
-    expect(html).toContain("No lobbying communication report names this organization as a client.");
+    expect(html).toContain('<div class="tile"><span class="tile-label">Lobbying communications</span><span class="tile-value">0</span><span class="tile-note">0 reports</span></div>');
+    // A source read with nothing in it joins the one line after the lists.
+    expect(html).toMatch(/<p class="sources-line">No record in [^<]*lobbying communications names this organization\.<\/p>/);
     expect(html).toContain("No match in the federal corporate registry.");
     expect(html).not.toContain("This source has not been loaded yet.");
     // A money source with nothing in it still reads in dollars.
@@ -211,7 +222,8 @@ describe("a source never read", () => {
     const html = await text("/data", withFiles({ "stats.json": { ...stats, sources } }));
     expect(html).toContain("(publisher&#39;s date 2026-11-01)");
     expect(html).not.toContain("Sun, 01 No");
-    expect(html).toMatch(/communications_ocl_cal\.zip<\/span>: Not read yet/);
+    // The file's own row under Files Read; the source's row has no read to give.
+    expect(html).toMatch(/communications_ocl_cal\.zip<\/td><td data-label="Dataset">Registry of Lobbyists, communication reports<\/td><td data-label="Last read" class="mono"><span class="muted">Not read yet<\/span>/);
   });
 });
 
@@ -271,7 +283,9 @@ describe("the about, terms and privacy pages", () => {
       const html = await english.text();
       expect(html, path).toContain(en);
       expect(html, path).toContain("Published by Award Watch, an independent Canadian project.");
-      expect(html, path).toContain('<div class="doc-layout">');
+      // Each is shorter than about two screens: no contents box.
+      expect(html, path).toContain('<div class="doc-layout doc-alone"><div class="doc">');
+      expect(html, path).not.toContain('<nav class="toc"');
       const french = await get(`${path}?lang=fr`);
       expect(french.status, path).toBe(200);
       const page = nbsp(await french.text());
@@ -353,9 +367,10 @@ describe("smaller fixes", () => {
 
   it("reads a missing non-competitive part of a known whole as none of it", () => {
     const money = (v: number) => `$${v.toLocaleString("en-CA")}`;
-    expect(shareText("en", null, 16809952, money)).toBe("$0 of $16,809,952 (0%)");
+    // The whole is the Records or Value cell beside it, so the share gives the part and its percentage.
+    expect(shareText("en", null, 16809952, money)).toBe("$0 (0%)");
     expect(shareText("en", null, null, money)).toBe("Not applicable");
-    expect(shareText("en", 3, 60, String)).toBe("3 of 60 (5%)");
+    expect(shareText("en", 3, 60, String)).toBe("3 (5%)");
   });
 
   it("leaves out the axis labels within two slots of an anchored end label", () => {

@@ -46,18 +46,15 @@ describe("controls", () => {
 });
 
 describe("the home tiles", () => {
-  it("keep each note short enough for one line at 1440 px, in both languages", async () => {
+  it("carry what the rail beside them does not, each note short enough for one line at 1440 px, in both languages", async () => {
     const notes = (html: string) => [...html.matchAll(/<span class="tile-note">([^<]*)<\/span>/g)].map((m) => nbsp(m[1]));
-    expect(notes(await text("/"))).toEqual([
-      "Open on CanadaBuys at the data date", "First seen in the last refresh", "On CanadaBuys since 2012",
-      "Ending within 3 months of the data date",
-    ]);
-    expect(notes(await text("/?lang=fr"))).toEqual([
-      "Ouverts à la date des données", "Vus à la dernière mise à jour", "Sur AchatsCanada depuis 2012",
-      "Fin d’ici 3 mois à la date des données",
-    ]);
+    // How many of the notices closing soon close today, and the value of the year's award notices and of the contracts ending.
+    expect(notes(await text("/"))).toEqual(["None closes today", "Published on CanadaBuys this year", "Worth $4.9M"]);
+    expect(notes(await text("/?lang=fr"))).toEqual(["Aucun ne ferme aujourd’hui", "Publiés sur AchatsCanada cette année", "Valeur : 4,9 M$"]);
+    const withTotal = await text("/", testEnv(makeFakeAssets({}, { "stats.json": { ...stats, totals: { awards_year: 518_923_210 } } })));
+    expect(notes(withTotal)[1]).toBe("Worth $519M");
     // About 230 px of 12 px type: 42 characters in English at the most, as measured in Chrome.
-    for (const key of ["home.tile_open_note", "home.tile_new_note", "home.tile_awards_note", "home.tile_expiring_note"] as const) {
+    for (const key of ["home.tile_closing_none", "home.tile_closing_many", "home.tile_awards_year_note", "home.tile_value", "home.tile_expiring_note"] as const) {
       expect(t("en", key).length, key).toBeLessThanOrEqual(42);
       expect(t("fr", key).length, key).toBeLessThanOrEqual(42);
     }
@@ -107,12 +104,14 @@ describe("the non-competitive share by value", () => {
 
   it("is taken over positive values when the export gives them, with a mark when a record is below zero", () => {
     const y = year({ total_positive: 215_748_311, total_non_competitive_positive: 1_000_000, n_negative: 3 });
-    expect(valueShare("en", y)).toBe("$1,000,000 of $215,748,311 (<1%) *");
-    expect(valueShare("en", { ...y, n_negative: 0 })).toBe("$1,000,000 of $215,748,311 (<1%)");
+    expect(valueShare("en", y)).toBe("$1,000,000 (<1%) *");
+    expect(valueShare("en", { ...y, n_negative: 0 })).toBe("$1,000,000 (<1%)");
+    // In French the "<" never ends a line apart from its figure.
+    expect(valueShare("fr", { ...y, n_negative: 0 })).toContain("(<\u00a01\u00a0%)");
   });
 
-  it("never reads below zero on an older export: the two amounts stand without a percentage", () => {
-    expect(valueShare("en", year({}))).toBe("-$20,474,204 of $195,274,107");
+  it("never reads below zero on an older export: the part stands without a percentage", () => {
+    expect(valueShare("en", year({}))).toBe("-$20,474,204");
     expect(valueShare("en", year({ source: "grants" }))).toBe("Not applicable");
   });
 
@@ -162,7 +161,7 @@ describe("smaller review items", () => {
     const older = { ...award, reference: "cb-400-40000099", awarded: "2025-01-10" };
     const newer = { ...award, reference: "cb-400-40000098", awarded: "2026-10-20" };
     const page = await text("/buyers/pwgsc-tpsgc", withFiles({ "buyers/pwgsc-tpsgc.json": { ...buyer, recent_awards: [older, award, newer] } }));
-    const html = page.slice(page.lastIndexOf('<section class="panel"'));
+    const html = page.slice(page.indexOf("<h2>Newest Award Notices</h2>"));
     const at = (ref: string) => html.indexOf(`/awards/${ref}"`);
     expect(at("cb-400-40000098")).toBeGreaterThan(0);
     expect(at("cb-400-40000098")).toBeLessThan(at(award.reference.toLowerCase()));

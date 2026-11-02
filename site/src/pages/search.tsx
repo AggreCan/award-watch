@@ -12,14 +12,16 @@
 import type { Context } from "hono";
 import { Table } from "../columns";
 import { MONEY_SOURCES } from "../constants";
-import { ORG_ID_RE, loadStats } from "../data";
-import type { AppEnv } from "../env";
+import { ORG_ID_RE, loadOpenList, loadStats, sourceLoaded } from "../data";
+import type { AppEnv, Env } from "../env";
 import { fmtInt, pick, provinceName, sourceLabel, t, tj, tn, type Lang } from "../i18n";
+import { clockOf } from "../closing";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { BUYER_ROWS, MAX_PAGE, MAX_Q, PAGE_SIZE, type BuyerHit, type Figures, type OrgHit, runSearch, searchTerms } from "../search_db";
 import type { Seo } from "../seo";
 import { directoryName } from "./organization";
-import { BUYER_SOURCE_RESTS, money, sourceCellClass, sourceColumns } from "./shared";
+import { BUYER_SOURCE_RESTS, Count, money, sourceCellClass, sourceColumns } from "./shared";
+import { filterTenders, readTenderQuery, tenderQueryString } from "./tenders";
 
 export function searchPath(q: string, n = 1): string {
   const params = new URLSearchParams({ q });
@@ -61,11 +63,25 @@ const links = (lang: Lang) => ({
 function SourceCell({ lang, n, total }: { lang: Lang; n: number; total: number | null }) {
   return (
     <>
-      {fmtInt(n, lang)}
+      <Count lang={lang} n={n} />
       {total ? <><br /><span class="muted small">{money(lang, total)}</span></> : null}
     </>
   );
 }
+
+// The open notices the tender list finds for the same words (its title filter
+// reads the title, the start of the description and the reference), with the
+// link to that list; null when the open list cannot be read.
+async function openNotices(env: Env, q: string): Promise<{ n: number; href: string } | null> {
+  const rows = await loadOpenList(env).catch(() => null);
+  if (!rows) return null;
+  const query = readTenderQuery(new URL(`https://search.invalid/tenders?${new URLSearchParams({ q }).toString()}`));
+  if (!query.q) return null;
+  return { n: filterTenders(rows, query, clockOf(env)).length, href: `/tenders${tenderQueryString(query)}` };
+}
+
+const OpenNotices = ({ lang, open }: { lang: Lang; open: { n: number; href: string } | null }) =>
+  open ? <p class="page-note"><a href={open.href}>{t(lang, "search.open_notices", { n: fmtInt(open.n, lang) })}</a></p> : null;
 
 const SOURCE_KEYS: Record<(typeof MONEY_SOURCES)[number], [keyof Figures, keyof Figures]> = {
   awards: ["n_awards", "total_awards"],
@@ -92,7 +108,7 @@ function place(lang: Lang, o: OrgHit): string {
   return [o.city, where].filter(Boolean).join(", ");
 }
 
-function OrgRow({ lang, o }: { lang: Lang; o: OrgHit }) {
+function OrgRow({ lang, o, lobbying }: { lang: Lang; o: OrgHit; lobbying: boolean }) {
   return (
     <tr>
       <td data-label={t(lang, "col.organization")}>
@@ -103,7 +119,7 @@ function OrgRow({ lang, o }: { lang: Lang; o: OrgHit }) {
       </td>
       <td data-label={t(lang, "col.records")} class="mono num">{fmtInt(o.n_records, lang)}</td>
       {sourceCells(lang, o)}
-      <td data-label={t(lang, "search.col_lobbying")} class="mono num xlh">{fmtInt(o.n_lobbying, lang)}</td>
+      {lobbying ? <td data-label={t(lang, "search.col_lobbying")} class="mono num xlh"><Count lang={lang} n={o.n_lobbying} /></td> : null}
     </tr>
   );
 }
@@ -119,7 +135,7 @@ function BuyerRow({ lang, b }: { lang: Lang; b: BuyerHit }) {
         {b.also ? <span class="muted small nw-block">{t(lang, "org.also_recorded")} {b.also}</span> : null}
       </td>
       <td data-label={t(lang, "buyers.col_open")} class="mono num">
-        {b.n_open_tenders ? <a href={`/tenders?buyer=${b.id}`}>{fmtInt(b.n_open_tenders, lang)}</a> : fmtInt(0, lang)}
+        {b.n_open_tenders ? <a href={`/tenders?buyer=${b.id}`}>{fmtInt(b.n_open_tenders, lang)}</a> : <Count lang={lang} n={0} />}
       </td>
       {sourceCells(lang, b)}
     </tr>
@@ -139,6 +155,9 @@ export async function searchPage(c: Context<AppEnv>): Promise<Response> {
   const wanted = readPage(c.req.query("page"));
   const stats = await loadStats(c.env).catch(() => null);
   const dataAsOf = stats?.data_as_of ?? null;
+  // The Lobbying column waits until the Registry of Lobbyists has been read.
+  const lobbying = stats ? sourceLoaded("lobbying", null, stats) === true : false;
+  const open = terms.terms.length ? await openNotices(c.env, q) : null;
 
   if (!terms.terms.length) {
     return page(
@@ -161,7 +180,9 @@ export async function searchPage(c: Context<AppEnv>): Promise<Response> {
     return page(
       c,
       <Layout lang={lang} title={t(lang, "search.unavailable")} dataAsOf={dataAsOf} seo={seo(lang)} query={q}>
-        <PageHead lang={lang} title={t(lang, "search.unavailable")} lead={tj(lang, "search.unavailable_text", links(lang))} />
+        <PageHead lang={lang} title={t(lang, "search.unavailable")} lead={tj(lang, "search.unavailable_text", links(lang))}>
+          <OpenNotices lang={lang} open={open} />
+        </PageHead>
         <SearchForm lang={lang} q={q} />
       </Layout>,
       503,
@@ -186,6 +207,7 @@ export async function searchPage(c: Context<AppEnv>): Promise<Response> {
       <Layout lang={lang} title={title} dataAsOf={dataAsOf} seo={seo(lang)} query={q}>
         <PageHead lang={lang} title={title} lead={t(lang, "search.none", { q })}>
           <p class="page-note">{tj(lang, "search.none_hint", links(lang))}</p>
+          <OpenNotices lang={lang} open={open} />
         </PageHead>
         <SearchForm lang={lang} q={q} />
         <p class="page-foot-note">{t(lang, "search.what")}</p>
@@ -232,10 +254,10 @@ export async function searchPage(c: Context<AppEnv>): Promise<Response> {
           { kind: "main", label: t(lang, "col.organization") },
           { kind: "count", label: t(lang, "col.records") },
           ...sourceColumns(lang, BUYER_SOURCE_RESTS),
-          { kind: "count", label: t(lang, "search.col_lobbying"), rest: "xl" },
+          lobbying && { kind: "count", label: t(lang, "search.col_lobbying"), rest: "xl" },
         ]}>
           <tbody>
-            {result.orgs.map((o) => <OrgRow lang={lang} o={o} />)}
+            {result.orgs.map((o) => <OrgRow lang={lang} o={o} lobbying={lobbying} />)}
           </tbody>
         </Table>
       </div>
@@ -251,11 +273,12 @@ export async function searchPage(c: Context<AppEnv>): Promise<Response> {
     <Layout lang={lang} title={shownPage > 1 ? `${title}, ${t(lang, "common.page_n", { n: n(shownPage) })}` : title}
       dataAsOf={dataAsOf} seo={seo(lang)} query={q}>
       <PageHead lang={lang} title={title} lead={lead}>
-        <p class="page-note">{t(lang, "search.what")}</p>
+        <OpenNotices lang={lang} open={open} />
       </PageHead>
       {buyersPanel}
       {shownPage > 1 && result.buyerTotal > 0 ? <p class="page-foot-note">{t(lang, "search.buyers_first_page")}</p> : null}
       {orgsPanel}
+      <p class="page-foot-note">{t(lang, "search.what")}</p>
     </Layout>,
   );
 }

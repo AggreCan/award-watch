@@ -60,10 +60,11 @@ describe("route templates", () => {
     expect(routeTemplate("GET", "/downloads/history-2019.csv")).toEqual({ route: "/downloads/history-:year.csv", kind: "download" });
     expect(routeTemplate("GET", "/downloads/mirror/SHA256SUMS")).toEqual({ route: "/downloads/mirror/:file", kind: "download" });
     expect(routeTemplate("GET", "/downloads/secret.txt")).toEqual({ route: "/downloads/other", kind: "download" });
-    expect(routeTemplate("POST", "/hooks/kofi")).toEqual({ route: "/hooks/kofi", kind: "hook" });
+    // The donation webhook is gone: its old path counts as any other unknown path.
+    expect(routeTemplate("POST", "/hooks/kofi")).toEqual({ route: "other", kind: "other" });
     expect(routeTemplate("GET", "/sitemap-12.xml")).toEqual({ route: "/sitemap.xml", kind: "file" });
     expect(routeTemplate("GET", "/robots.txt")).toEqual({ route: "/robots.txt", kind: "file" });
-    for (const page of ["/awards", "/organizations", "/buyers", "/categories", "/rankings", "/cite", "/feeds", "/watchlist", "/data", "/methodology", "/support"]) {
+    for (const page of ["/awards", "/organizations", "/buyers", "/categories", "/rankings", "/cite", "/feeds", "/watchlist", "/data", "/methodology"]) {
       expect(routeTemplate("GET", page), page).toEqual({ route: page, kind: "page" });
     }
     expect(routeTemplate("GET", "/rankings/2025")).toEqual({ route: "/rankings/:year", kind: "page" });
@@ -205,9 +206,8 @@ describe("bot or human", () => {
     expect(agentClass(CHROME, 7)).toBe("human");
   });
 
-  it("counts every feed poll and payment hook as a bot, whatever its agent", () => {
+  it("counts every feed poll as a bot, whatever its agent", () => {
     expect(agentClass(CHROME, undefined, "feed")).toBe("bot");
-    expect(agentClass(CHROME, undefined, "hook")).toBe("bot");
     expect(agentClass(CHROME, undefined, "page")).toBe("human");
     expect(agentClass(CHROME, undefined, "api")).toBe("human");
   });

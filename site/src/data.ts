@@ -232,6 +232,12 @@ export interface Stats {
   sources: { source: string; file: string; last_read: string | null; last_modified: string | null; loaded?: boolean }[];
   // A Zenodo record of the open files, when one is published; absent until then.
   citation?: Citation | null;
+  // Values beside the counts: the data year's award notices by the counting
+  // rules (Canadian dollars). Absent from older exports.
+  totals?: { awards_year?: number | null };
+  // Each file of the Data page's downloads as the export found it: its size in
+  // bytes and, for a CSV file, its rows under the header. Absent from older exports.
+  downloads?: { file: string; bytes: number; rows: number | null }[];
 }
 
 export interface CodeRow { code: string; desc_en: string | null; desc_fr: string | null }
@@ -852,6 +858,15 @@ export async function loadOpenFirst(env: Env): Promise<OpenFirst | null> {
   const ok = isObj(v) && isCount(v.total) && isListOf(v.rows, isTenderRow) && v.rows.length <= v.total &&
     isObj(v.facets) && FACETS.every((f) => isListOf((v.facets as Record<string, unknown>)[f], isFacetCount));
   return ok ? (v as unknown as OpenFirst) : null;
+}
+
+// tenders/open.json, every open notice. The browser reads it for /tenders;
+// on the server only the search page reads it, to count the open notices
+// whose title holds the searched words (about a thousand rows, parsed once an
+// isolate while its ETag holds).
+export async function loadOpenList(env: Env): Promise<TenderRow[] | null> {
+  const rows = await loadJson<unknown>(env, "tenders/open.json");
+  return checkOnce(rows, "tenders/open.json", (v) => isListOf(v, isTenderRow)) ? (rows as TenderRow[]) : null;
 }
 
 export async function loadNewTenders(env: Env, day: string): Promise<TenderRow[] | null> {

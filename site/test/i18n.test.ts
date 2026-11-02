@@ -31,8 +31,6 @@ const post = (path: string, fields: Record<string, string>, headers: Record<stri
 // English phrases that must never reach a French page. Each one appears on
 // an English page (checked below), so the list cannot go stale silently.
 const SENTINELS = [
-  "Support the Site",
-  "What the Site Holds Today",
   "Data Not Published Yet",
   "Page Not Found",
   "Respond as This Organization",
@@ -41,8 +39,6 @@ const SENTINELS = [
   "Closing soon",
   "Figures by Year and Source",
   "How to Read This Site",
-  "Not yet funded",
-  "Card processing fee",
   "is a secondary source",
   "Counting Money",
   "Also recorded as",
@@ -54,7 +50,7 @@ const SENTINELS = [
   "Contracts Ending Soon",
   "days left",
   "Individual, name withheld",
-  "Amendments and growth",
+  "Amendments and value change",
   "Get Alerts by Email",
   "Every new tender notice",
   "Contracts entering the",
@@ -94,7 +90,6 @@ const FRENCH_PAGES = [
   "/watchlist?lang=fr",
   "/methodology?lang=fr",
   "/data?lang=fr",
-  "/support?lang=fr",
   "/cite?lang=fr",
   "/corrections?lang=fr",
   "/alerts?lang=fr",
@@ -304,7 +299,7 @@ describe("rendered French pages", () => {
     const org = nbsp(await (await get("/organizations/org-a000000001?lang=fr")).text());
     expect(org).toContain("Chiffres par année et par source");
     expect(org).toContain("Contrats publiés");
-    expect(org).toContain("3 sur 60 (5 %)");
+    expect(org).toContain("3 (5 %)");
     expect(org).toContain("Services de traduction");
     expect(org).toContain("1 dossier dans une autre devise est affiché avec sa devise et exclu des totaux.");
 
@@ -312,13 +307,6 @@ describe("rendered French pages", () => {
     expect(meth).toContain('<h2 id="counting">Calcul des montants</h2>');
     expect(meth).toContain("Un avis annulé compte pour zéro.");
     expect(meth).toContain("TN et AC sont non concurrentiels. OB, TC et ST sont concurrentiels");
-
-    const support = nbsp(await (await get("/support?lang=fr")).text());
-    expect(support).toContain("<h1>Soutenir le site</h1>");
-    expect(support).toContain("Ce que le site contient aujourd’hui");
-    expect(support).toContain("Frais de traitement par carte : 0,59 $ (2,9 % plus 30 cents)");
-    expect(support).toContain("Réserve détenue : 0 sur 12 mois.");
-    expect(support).toContain("Les dons ne sont pas encore ouverts.");
   });
 
   it("show the 503 page and form errors in French", async () => {
@@ -340,9 +328,9 @@ describe("rendered French pages", () => {
   it("keep the sentinel list honest: each phrase is on an English page", async () => {
     const pages = await Promise.all(
       [
-        "/", "/tenders", "/methodology", "/support", "/cite", "/organizations/org-a000000001", "/organizations/directory/on",
+        "/", "/tenders", "/methodology", "/cite", "/organizations/org-a000000001", "/organizations/directory/on",
         "/nothing-here", "/organizations/org-a000000001/respond", "/tenders/cb-100-10000001", "/awards/cb-400-40000004",
-        "/rankings", "/corrections", "/expiring",
+        "/rankings", "/corrections", "/expiring", "/history/w8472-000633",
       ].map(async (p) => (await get(p)).text()),
     );
     pages.push(await (await get("/", {}, testEnv(emptyAssets))).text());

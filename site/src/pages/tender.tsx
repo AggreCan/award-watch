@@ -7,13 +7,16 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { Table } from "../columns";
-import { REFERENCE_RE, loadStats, loadTender, publishedReference, type TenderDetail } from "../data";
+import { REFERENCE_RE, loadOpenFirst, loadStats, loadTender, publishedReference, type TenderDetail } from "../data";
+import { buyerPath } from "../crosslinks";
 import type { AppEnv } from "../env";
-import { categoryLabel, fmtInt, pick, segmentLabel, t, tn, type Key, type Lang } from "../i18n";
+import { categoryLabel, fmtInt, pick, segmentLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { clockOf, closesAtUtc, closingTime, tenderState } from "../closing";
 import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
 import { tenderSeo } from "../seo";
-import { BuyerLink, CountdownScript, closingHasZone, closingText, money, otherLanguageMark, provincesText, tenderNoticeUrl } from "./shared";
+import {
+  BuyerLink, CountdownScript, closingHasZone, closingText, money, otherLanguageMark, provincesText, sourceFileText, tenderNoticeUrl,
+} from "./shared";
 
 // A field and its value as a definition-list row; an empty value leaves the
 // row out rather than printing a blank.
@@ -61,6 +64,18 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   const descriptionMark = otherLanguageMark(lang, d.description_en, d.description_fr);
   const versions = [...d.amendments].sort((a, b) => b.amendment - a.amendment);
   const endUsers = listOf(lang, d.end_users_en, d.end_users_fr);
+  const buyerName = pick(lang, d.buyer_en, d.buyer_fr);
+  // The buyer's open notices, from the facet counts over the open list; this
+  // notice alone among them is no lead to follow.
+  const facets = d.buyer_id && buyerPath(d.buyer_id) ? (await loadOpenFirst(c.env).catch(() => null))?.facets : null;
+  const buyerOpen = facets?.buyer.find((f) => f.value === d.buyer_id)?.n ?? 0;
+  const otherOpen = buyerOpen > 1 || (buyerOpen === 1 && state !== "open" && state !== "closing");
+  const categories = d.category.map((code) => categoryLabel(lang, code)).join(", ");
+  const description_ = description ? (
+    <Panel title={descriptionMark ? `${t(lang, "tender.description_heading")} ${descriptionMark}` : t(lang, "tender.description_heading")}>
+      <div class="prose">{description.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
+    </Panel>
+  ) : null;
 
   return page(
     c,
@@ -68,10 +83,17 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       <PageHead lang={lang} crumbs={crumbs} eyebrow={t(lang, "tender.title")} title={title}
         lead={<>
           <StatusBadge lang={lang} status={state} notice={notice} />{" "}
-          <span class="mono id">{shownRef}</span>
-          {d.amendment > 0 ? <span class="muted"> {t(lang, "tender.amendment_n", { n: d.amendment })}</span> : null}
+          {[
+            d.closing ? t(lang, state === "closed" ? "tender.lead_closed" : "tender.lead_closes", { date: closingText(d.closing, lang) }) : null,
+            buyerName ? <BuyerLink lang={lang} id={d.buyer_id} en={d.buyer_en} fr={d.buyer_fr} /> : null,
+            categories || null,
+          ].filter((x) => x !== null).map((x, i) => <>{i > 0 ? " · " : null}{x}</>)}
         </>}
         actions={<a href={tenderNoticeUrl(shownRef, lang)} class="btn btn-primary" rel="noopener">{t(lang, "tender.on_canadabuys")}</a>}>
+        <p class="page-note">
+          <span class="mono">{shownRef}</span>
+          {d.amendment > 0 ? ` · ${t(lang, "tender.amendment_n", { n: d.amendment })}` : null}
+        </p>
         <p class="page-note">{t(lang, "tender.contact_note")}</p>
       </PageHead>
 
@@ -93,12 +115,23 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         </Panel>
         <Panel title={t(lang, "tender.buyer")}>
           <dl>
-            <Row lang={lang} k="col.buyer" v={<BuyerLink lang={lang} id={d.buyer_id} en={d.buyer_en} fr={d.buyer_fr} />} />
+            <Row lang={lang} k="col.buyer" v={<>
+              <BuyerLink lang={lang} id={d.buyer_id} en={d.buyer_en} fr={d.buyer_fr} />
+              {otherOpen && d.buyer_id ? (
+                <span class="nw-block small">
+                  <a href={`/tenders?buyer=${d.buyer_id}`}>
+                    {tn(lang, "tender.buyer_open_one", "tender.buyer_open_many", buyerOpen, { n: fmtInt(buyerOpen, lang), buyer: buyerName ?? "" })}
+                  </a>
+                </span>
+              ) : null}
+            </>} />
             <Row lang={lang} k="tender.end_users" v={endUsers.length ? lines(endUsers) : t(lang, "common.not_stated")} />
             <Row lang={lang} k="tender.solicitation" v={d.solicitation ? <span class="mono">{d.solicitation}</span> : null} />
           </dl>
         </Panel>
       </div>
+
+      {description_}
 
       <Panel title={t(lang, "tender.procurement")}>
       <dl class="wide">
@@ -140,12 +173,6 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         </Panel>
       ) : null}
 
-      {description ? (
-        <Panel title={descriptionMark ? `${t(lang, "tender.description_heading")} ${descriptionMark}` : t(lang, "tender.description_heading")}>
-          <div class="prose">{description.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
-        </Panel>
-      ) : null}
-
       <Panel title={t(lang, "tender.history")} count={fmtInt(versions.length, lang)}>
       <p class="muted small">{t(lang, "tender.history_note")}</p>
       <div class="table-wrap bordered">
@@ -164,7 +191,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
                 <td data-label={t(lang, "col.published")} class="mono">{v.published ?? ""}</td>
                 <td data-label={t(lang, "tender.amended")} class="mono">{v.amended ?? ""}</td>
                 <td data-label={t(lang, "col.closing")} class="mono">{closingText(v.closing, lang)}</td>
-                <td data-label={t(lang, "col.title")}>{pick(lang, v.title_en, v.title_fr) ?? ""}</td>
+                <td data-label={t(lang, "col.title")} class="lead-cell">{pick(lang, v.title_en, v.title_fr) ?? ""}</td>
                 <td data-label={t(lang, "tender.first_seen")} class="mono">{v.first_seen}</td>
               </tr>
             ))}
@@ -207,7 +234,10 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       </Panel>
 
       <p class="page-foot-note">
-        {t(lang, "tender.provenance", { file: d.source_file, first: d.first_seen, last: d.last_seen })}{" "}
+        {tj(lang, "tender.provenance", {
+          file: <span title={d.source_file}>{sourceFileText(lang, d.source_file)}</span>,
+          data: <a href="/data#sources">{t(lang, "nav.data")}</a>, first: d.first_seen, last: d.last_seen,
+        })}{" "}
         {tn(lang, "tender.versions_one", "tender.versions_many", versions.length, { n: fmtInt(versions.length, lang) })}
       </p>
       {closes ? <CountdownScript lang={lang} /> : null}

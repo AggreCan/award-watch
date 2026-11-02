@@ -11,14 +11,6 @@ export interface Env {
   ASSETS?: Fetcher;
   SCHEMA_SQL?: string;
   SEED_SQL?: string;
-  // Support page: the payment page address and the button text in English
-  // and French. Empty or unset DONATE_URL keeps donations closed (no button).
-  DONATE_URL?: string;
-  DONATE_LABEL?: string;
-  DONATE_LABEL_FR?: string;
-  // The donation page's webhook token (a Worker secret). Unset keeps the
-  // webhook route closed; a notice is stored only when its token matches.
-  KOFI_VERIFICATION_TOKEN?: string;
   // Daily check: the email binding, the sender on the zone, and the operator's
   // address (a secret, never in the repository).
   ALERTS?: SendEmail;

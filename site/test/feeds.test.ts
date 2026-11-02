@@ -18,7 +18,7 @@ describe("feeds page", () => {
     expect(page).toContain("<h1>Atom Feeds</h1>");
     expect(FEED_EVENTS).toEqual(["tenders", "awards"]);
     for (const e of FEED_EVENTS) {
-      expect(page).toContain(`<a href="/data/${nationalFeedPath(e)}" class="mono" style="overflow-wrap:anywhere">https://awardwatch.ca/data/feeds/canada/${e}.xml</a>`);
+      expect(page).toContain(`<a href="/data/${nationalFeedPath(e)}" class="mono wrap" style="overflow-wrap:anywhere">https://awardwatch.ca/data/feeds/canada/${e}.xml</a>`);
     }
     // One row per scope, one column per event.
     expect(page).toContain('<td data-label="Segment">82 Editorial and Design and Graphic and Fine Art Services</td>');
@@ -92,12 +92,14 @@ describe("watchlist page", () => {
 describe("watch button on the profile", () => {
   it("carries its labels and stays hidden until the script shows it", async () => {
     const page = await html("/organizations/org-a000000001");
-    expect(page).toContain('id="watch-toggle" style="display:none" data-organization="org-a000000001"');
-    expect(page).toContain('data-label-on="Watching" data-label-off="Watch"');
+    // "Add to watchlist", titled with where the list is kept, so it reads apart from the email alerts.
+    expect(page).toContain('id="watch-toggle" style="display:none" title="Kept in this browser" data-organization="org-a000000001"');
+    expect(page).toContain('data-label-on="On your watchlist" data-label-off="Add to watchlist"');
     expect(page).toContain(`data-label-full="Watchlist full (${WATCH_MAX})"`);
     expect(page).toContain('<script src="/watchlist.js" defer=""></script>');
+    expect(page).toContain("For a list in this browser without email, use Add to watchlist.");
     const fr = await html("/organizations/org-a000000001?lang=fr");
-    expect(fr).toContain('data-label-on="Suivie" data-label-off="Suivre"');
+    expect(fr).toContain('data-label-on="Dans votre liste de suivi" data-label-off="Ajouter à la liste de suivi"');
   });
 });
 

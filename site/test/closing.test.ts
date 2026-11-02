@@ -85,8 +85,12 @@ describe("the state at render", () => {
   it("turns a notice closed at its closing time, and sorts it last, on the server's list", async () => {
     // cb-100-10000001 closes 2026-11-04 at 14:00 Eastern, 19:00 UTC.
     const soon = await page("/tenders", "2026-11-04T18:30:00Z");
-    expect(soon).toContain('<span class="badge badge-closing" data-notice="cb-100-10000001">Closing soon</span>');
+    // Sorted by closing date, the row shows the time left; the chip waits hidden for countdown.js.
+    expect(soon).toContain('<span class="badge badge-closing" data-notice="cb-100-10000001" hidden="">Closing soon</span><span class="countdown">closes in 30 min</span>');
     expect(soon).toContain('data-closes="2026-11-04T19:00:00Z" data-time="14:00 ET" data-notice="cb-100-10000001"');
+    // Sorted by publication date the chip stands.
+    const published = await page("/tenders?sort=published", "2026-11-04T18:30:00Z");
+    expect(published).toContain('<span class="badge badge-closing" data-notice="cb-100-10000001">Closing soon</span>');
     expect(soon.indexOf('data-ref="cb-100-10000001"')).toBeLessThan(soon.indexOf('data-ref="cb-200-20005019"'));
     const past = await page("/tenders", "2026-11-04T19:00:00Z");
     expect(past).toContain('<span class="badge badge-closed">Closing date passed</span>');

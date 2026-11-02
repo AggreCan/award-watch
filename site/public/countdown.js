@@ -33,6 +33,8 @@ function closeNotice(ref, host) {
   for (const chip of document.querySelectorAll(".badge[data-notice]")) {
     if (chip.getAttribute("data-notice") !== ref) continue;
     chip.className = "badge badge-closed";
+    // A list sorted by closing date shows the time left in place of the chip; the chip comes back now.
+    chip.hidden = false;
     if (words["status.closed"]) chip.textContent = words["status.closed"];
   }
   for (const other of document.querySelectorAll("[data-closes][data-notice]")) {

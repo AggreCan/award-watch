@@ -68,7 +68,7 @@ export async function loadFeedIndex(c: Context<AppEnv>): Promise<FeedIndex | nul
 }
 
 const Address = ({ path }: { path: string }) => (
-  <a href={`/data/${path}`} class="mono" style="overflow-wrap:anywhere">{`${SITE_ORIGIN}/data/${path}`}</a>
+  <a href={`/data/${path}`} class="mono wrap" style="overflow-wrap:anywhere">{`${SITE_ORIGIN}/data/${path}`}</a>
 );
 
 export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
@@ -136,17 +136,18 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
 
   const pattern = (folder: string) => (
     <p class="muted small">
-      {tj(lang, "feeds.pattern", { pattern: <span class="mono" style="overflow-wrap:anywhere">{`${SITE_ORIGIN}/data/feeds/${folder}/<feed>.xml`}</span> })}
+      {tj(lang, "feeds.pattern", { pattern: <span class="mono" style="overflow-wrap:anywhere">{`${SITE_ORIGIN}/data/feeds/${folder}/<feed>.xml`}</span> })}{" "}
+      {t(lang, "feeds.paste_note")}
     </p>
   );
 
   const toc: [string, Key][] = [
     ["kinds", "feeds.toc_kinds"],
+    ["subscribe", "feeds.toc_subscribe"],
     ["canada", "feeds.toc_canada"],
     ["segment", "feeds.toc_segment"],
     ["province", "feeds.toc_prov"],
     ["buyer", "feeds.toc_buyer"],
-    ["subscribe", "feeds.toc_subscribe"],
   ];
 
   return page(
@@ -168,7 +169,18 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
             ))}
           </ul>
 
+          <h2 id="subscribe">{t(lang, "feeds.toc_subscribe")}</h2>
+          <ul>
+            <li>{t(lang, "feeds.sub_reader")}</li>
+            <li>{tj(lang, "feeds.sub_slack", { command: <span class="mono id">/feed subscribe</span> })}</li>
+            <li>{t(lang, "feeds.sub_email")}</li>
+          </ul>
+          <p>{t(lang, "feeds.sub_browser")}</p>
+          <p>{t(lang, "feeds.privacy")}</p>
+          <p>{tj(lang, "feeds.watch_note", { watchlist: <a href="/watchlist">{t(lang, "feeds.watch_link")}</a> })}</p>
+
           <h2 id="canada">{t(lang, "feeds.toc_canada")}</h2>
+          <p class="muted small">{t(lang, "feeds.paste_note")}</p>
           <div class="table-wrap bordered">
             <Table cols={[
               { kind: "text", label: t(lang, "feeds.col_feed") },
@@ -210,14 +222,6 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
           {pattern("buyer/<id>")}
           <ScopeTable kind="buyer" head="col.buyer" />
 
-          <h2 id="subscribe">{t(lang, "feeds.toc_subscribe")}</h2>
-          <p>{t(lang, "feeds.privacy")}</p>
-          <ul>
-            <li>{t(lang, "feeds.sub_reader")}</li>
-            <li>{tj(lang, "feeds.sub_slack", { command: <span class="mono id">/feed subscribe</span> })}</li>
-            <li>{t(lang, "feeds.sub_email")}</li>
-          </ul>
-          <p>{tj(lang, "feeds.watch_note", { watchlist: <a href="/watchlist">{t(lang, "feeds.watch_link")}</a> })}</p>
         </div>
       </div>
       <script src="/pager.js" defer></script>

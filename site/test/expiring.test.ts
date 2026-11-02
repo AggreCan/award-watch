@@ -63,7 +63,7 @@ describe("/expiring", () => {
     expect(html).toContain("<h1>Contrats prenant fin bientôt</h1>");
     expect(html).toContain('<span class="tile-label">D’ici 3 mois</span><span class="tile-value">3</span><span class="tile-note">Valeur : 4,9 M$</span>');
     expect(html).toContain("Particulier, nom non divulgué");
-    expect(html).toContain("<h2>Fin d’ici 3 mois</h2>");
+    expect(html).toContain("<h2>Contrats prenant fin d’ici 3 mois</h2>");
     expect(html).toContain('<a href="/buyers/dnd-mdn">Défense nationale</a>');
     expect(html).toContain("Télécharger les contrats prenant fin d’ici 12 mois (CSV)");
     expect(html).toContain('<a class="rail-item" href="/expiring" aria-current="page"><span class="rail-label">Contrats prenant fin</span>');
@@ -114,9 +114,14 @@ describe("/expiring/:window", () => {
     expect(html).not.toContain('href="/awards/dnd-mdn');
     // A published contract has no page here: its title opens the same record as
     // its Record link (the contracts search), so it keeps a link out at every width.
-    expect(html).toContain('<td data-label="Contract"><a href="https://search.open.canada.ca/contracts/?search_text=C-2026-0042" rel="nofollow noopener">Satellite communications terminal maintenance</a>');
+    expect(html).toContain('<td data-label="Contract" class="lead-cell"><a href="https://search.open.canada.ca/contracts/?search_text=C-2026-0042" rel="nofollow noopener">Satellite communications terminal maintenance</a>');
     const fr = await text("/expiring/3m?lang=fr");
-    expect(fr).toContain('<td data-label="Contrat"><a href="https://search.open.canada.ca/contracts/?search_text=C-2026-0042" rel="nofollow noopener">Entretien de terminaux de communication par satellite</a>');
+    expect(fr).toContain('<td data-label="Contrat" class="lead-cell"><a href="https://search.open.canada.ca/contracts/?search_text=C-2026-0042" rel="nofollow noopener">Entretien de terminaux de communication par satellite</a>');
+    // The source each row was kept from, on the line under the contract, so it shows while the Record column rests.
+    expect(html).toMatch(/Translation standing offer, official languages<\/a><br\/><span class="mono id muted">[^<]+<\/span>[^]*?<br\/><span class="muted small">Award notice/);
+    expect(html).toContain('<span class="muted small">Published contract');
+    // A line says where the resting columns are, shown only while they rest.
+    expect(html).toContain('<p class="rest-note muted small">Amendments, value changes and the source record of each contract are in <a href="/downloads/expiring-12m.csv">the 12-month CSV file</a>.</p>');
     // Organization, withheld wording, buyer, value, competition.
     expect(html).toContain('<td data-label="Supplier"><a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a></td>');
     expect(html).toContain('<td data-label="Supplier"><span class="muted">Individual, name withheld</span></td>');
@@ -124,15 +129,16 @@ describe("/expiring/:window", () => {
     expect(html).toContain('<td data-label="Buyer" class="mdh"><a href="/buyers/dfo-mpo">Fisheries and Oceans Canada</a></td>');
     expect(html).toContain('<th class="k-buyer mdh">Buyer</th>');
     expect(html).toContain('<th class="k-record xlh">Record</th>');
-    expect(html).toContain('<td data-label="Record" class="xlh"><span class="muted small">Award notice</span>');
+    // The Record cell holds the links; the source is under the title.
+    expect(html).toMatch(/<td data-label="Record" class="xlh"><a href="https:\/\/canadabuys/);
     expect(html).toContain('<td data-label="Value" class="mono num">$4,500,000</td>');
     expect(html).toContain('<span class="flag flag-yes"');
     expect(html).toContain('<span class="flag flag-no"');
     expect(html).toContain('<span class="flag flag-unstated"');
-    // Amendments and growth as a signed percentage.
+    // Amendments and value change as a signed percentage.
     expect(html).toContain("2 amendments<br/><span class=\"muted small\">+25% on the original amount</span>");
     expect(html).toContain("1 amendment<br/><span class=\"muted small\">-10% on the original amount</span>");
-    expect(html).toContain('<td data-label="Amendments and growth" class="xlh">None</td>');
+    expect(html).toContain('<td data-label="Amendments and value change" class="xlh">None</td>');
     // The source record: the CanadaBuys notice, the history dataset, the contracts search.
     expect(html).toContain('<a href="https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cb-400-40000004" rel="noopener">CanadaBuys notice</a>');
     expect(html).toContain('<a href="https://open.canada.ca/data/en/dataset/4fe645a1-ffcd-40c1-9385-2c771be956a4" rel="noopener">Contract history dataset</a>');
@@ -301,7 +307,8 @@ describe("contracts ending on buyer pages and profiles", () => {
     expect(section).toContain('<th class="k-buyer mdh">Buyer</th>');
     expect(section).toContain('<th class="k-amend xlh">');
     expect(section).toContain('<th class="k-record xlh">Record</th>');
-    expect(section).toContain('<a href="/expiring">All contracts ending soon</a>');
+    // The radar has no supplier filter: a link to it would drop the organization, so the profile has none.
+    expect(section).not.toContain('<a href="/expiring">');
     expect(section).not.toContain("The first");
     expect(await text("/organizations/org-a000000002")).not.toContain('id="expiring"');
     const fr = nbsp(await text("/organizations/org-a000000001?lang=fr"));
@@ -320,10 +327,11 @@ describe("contracts ending on buyer pages and profiles", () => {
 describe("home, feeds, methodology and the downloads", () => {
   it("shows the 3-month tile on the home page when the index is published", async () => {
     const html = await text("/");
-    expect(html).toContain('<a class="tile" href="/expiring/3m"><span class="tile-label">Ending within 3 months</span><span class="tile-value">3</span>');
-    // After the award notices tile.
-    expect(html.indexOf('<a class="tile" href="/expiring/3m"')).toBeGreaterThan(html.indexOf('<span class="tile-label">Award notices</span>'));
-    expect(nbsp(await text("/?lang=fr"))).toContain('<span class="tile-label">Fin d’ici 3 mois</span>');
+    // With the window's value, which the rail beside it does not give.
+    expect(html).toContain('<a class="tile" href="/expiring/3m"><span class="tile-label">Ending within 3 months</span><span class="tile-value">3</span><span class="tile-note">Worth $4.9M</span>');
+    // After the year's award notices tile.
+    expect(html.indexOf('<a class="tile" href="/expiring/3m"')).toBeGreaterThan(html.indexOf('<span class="tile-label">Award notices in 2026</span>'));
+    expect(nbsp(await text("/?lang=fr"))).toContain('<span class="tile-label">Contrats prenant fin d’ici 3 mois</span>');
     for (const assets of [assetsWithout("expiring/index.json"), makeFakeAssets({}, { "expiring/index.json": "{" })]) {
       const res = await get("/", testEnv(assets));
       expect(res.status).toBe(200);

@@ -75,7 +75,7 @@ describe("how to cite", () => {
   });
 });
 
-describe("statements on the Data and Support pages", () => {
+describe("statements on the Data page", () => {
   it("says the site counts pages in aggregate, in both languages", async () => {
     const en = await get("/data", dated);
     expect(en).toContain("The site counts the pages it serves in aggregate");
@@ -103,7 +103,7 @@ const blocks = (html: string) =>
 const today = () => new Date().toISOString().slice(0, 10);
 
 describe("the /cite page", () => {
-  it("answers in both languages, linked from the footer between Corrections and Support", async () => {
+  it("answers in both languages, linked from the footer after Corrections", async () => {
     for (const [path, word] of [["/cite", "Cite"], ["/cite?lang=fr", "Citer"], ["/", "Cite"], ["/data?lang=fr", "Citer"]]) {
       const res = await app.request(path, {}, testEnv(dated));
       expect(res.status, path).toBe(200);
@@ -112,7 +112,7 @@ describe("the /cite page", () => {
       const at = (href: string) => footer.indexOf(`<a href="${href}">`);
       expect(at("/corrections"), path).toBeGreaterThan(-1);
       expect(at("/corrections"), path).toBeLessThan(at("/cite"));
-      expect(at("/cite"), path).toBeLessThan(at("/support"));
+      expect(footer, path).not.toContain('href="/support"');
       expect(footer, path).toContain(`<a href="/cite">${word}</a>`);
       expect(html, path).not.toContain(EM_DASH);
     }
