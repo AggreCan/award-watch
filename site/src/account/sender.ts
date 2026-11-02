@@ -1,7 +1,6 @@
 // The mail sender for sign-in messages (and, in phase 2, saved-search
 // deliveries). Callers build a MailMessage and call send(); which sender
-// answers is decided here alone, so a provider slots in without touching a
-// caller.
+// answers is decided here alone, so no caller knows how mail leaves.
 //
 //   log       development and tests: the message goes to the sent_mail table
 //             of the local accounts database (seed/accounts_dev.sql), or to
@@ -9,16 +8,18 @@
 //             MAIL_SENDER is "log" AND the request came to a local host, so a
 //             variable set by mistake on the account cannot write a code to a
 //             table or a log there.
-//   stub      production until a provider exists: records the attempt in
-//             the audit trail (no address, no code) and answers not sent,
-//             and the page says the message could not be sent.
-//   provider  an HTTP API that takes a key (the Worker secret MAIL_API_KEY)
-//             and sends from a verified domain (MAIL_FROM). providerSender()
-//             returns null until one is written; docs/accounts.md lists the
-//             operator's steps.
+//   provider  Cloudflare Email Sending through the Worker's MAIL binding,
+//             from MAIL_FROM on the domain onboarded for it
+//             (docs/accounts.md). No third-party service and no key: the
+//             binding is the credential.
+//   stub      production while the MAIL binding or MAIL_FROM is missing:
+//             records the attempt in the audit trail (no address, no code)
+//             and answers not sent, and the page says the message could not
+//             be sent.
 
 import type { Env } from "../env";
 import { t, type Lang } from "../i18n";
+import { CONTACT_EMAIL } from "../pages/docs";
 import { audit } from "./audit";
 
 export interface MailMessage {
@@ -72,14 +73,50 @@ export function stubSender(env: Env): Sender {
   };
 }
 
-// The provider goes here: a Sender whose send() posts the message to the
-// provider's HTTP API with env.MAIL_API_KEY, from env.MAIL_FROM, answers
-// { sent: true } on the provider's acceptance and { sent: false, reason:
-// "failed" } otherwise (logging the status, never the message). Until one is
-// written this returns null and the stub answers.
+const FROM_NAME = "Award Watch";
+
+// What a failed send leaves in the log: the binding's error code
+// (E_SENDER_NOT_VERIFIED, E_DAILY_LIMIT_EXCEEDED, ...) or the error's name.
+// Never the message text, which can quote the recipient's address; the
+// shape check keeps anything else out too.
+function errorTag(e: unknown): string {
+  if (e && typeof e === "object") {
+    for (const field of ["code", "name"] as const) {
+      const value = (e as Record<string, unknown>)[field];
+      if (typeof value === "string" && /^[A-Za-z0-9_]{1,64}$/.test(value)) return value;
+    }
+  }
+  return "unknown";
+}
+
+// Null when the binding or the sending address is missing, so the stub
+// answers. A reply goes to the contact address the site's documents print
+// rather than to the sending address. Auto-Submitted marks the message as
+// machine-sent, so mail servers send no out-of-office reply to it.
 export function providerSender(env: Env): Sender | null {
-  if (!env.MAIL_API_KEY || !env.MAIL_FROM) return null;
-  return null;
+  const mail = env.MAIL;
+  const from = env.MAIL_FROM?.trim();
+  if (!mail || !from) return null;
+  return {
+    kind: "provider",
+    async send(m) {
+      try {
+        await mail.send({
+          from: { email: from, name: FROM_NAME },
+          to: m.to,
+          replyTo: CONTACT_EMAIL,
+          subject: m.subject,
+          text: m.text,
+          html: m.html,
+          headers: { "Auto-Submitted": "auto-generated" },
+        });
+        return { sent: true };
+      } catch (e) {
+        console.log(`[mail] not sent: ${errorTag(e)}`);
+        return { sent: false, reason: "failed" };
+      }
+    },
+  };
 }
 
 export function senderFor(env: Env, requestUrl: string): Sender {

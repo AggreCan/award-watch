@@ -29,9 +29,12 @@ export function useAccountsDb(): void {
   });
 }
 
-// The switch on, the log sender; extra replaces or adds bindings.
+// The switch on, the log sender; extra replaces or adds bindings. MAIL is
+// left out: wrangler.jsonc's binding reaches the tests as the local runtime's
+// stand-in, which writes every message it is given to a file, so a test that
+// means the binding to answer passes its own (accounts-mail.test.ts).
 export function onEnv(extra: Record<string, unknown> = {}) {
-  return { ...testEnv(), ACCOUNTS_ENABLED: "true", MAIL_SENDER: "log", ...extra };
+  return { ...testEnv(), ACCOUNTS_ENABLED: "true", MAIL_SENDER: "log", MAIL: undefined, ...extra };
 }
 
 // The switch as wrangler.jsonc ships it ("false").

@@ -114,15 +114,16 @@ describe("the sign-in request", () => {
 });
 
 describe("the sender", () => {
-  it("uses the log outbox only on a local host with MAIL_SENDER=log, else the stub", () => {
+  it("uses the log outbox only on a local host with MAIL_SENDER=log, else the stub without the MAIL binding", () => {
     const env = onEnv() as never;
     expect(isLocalHost("http://localhost:8787/account/sign-in")).toBe(true);
     expect(isLocalHost("https://awardwatch.ca/account/sign-in")).toBe(false);
     expect(senderFor(env, "http://localhost/account/sign-in").kind).toBe("log");
     expect(senderFor(env, "https://awardwatch.ca/account/sign-in").kind).toBe("stub");
     expect(senderFor({ ...(env as object), MAIL_SENDER: undefined } as never, "http://localhost/").kind).toBe("stub");
-    // A key alone does not invent a provider: the stub answers until one is written.
-    expect(senderFor({ ...(env as object), MAIL_SENDER: undefined, MAIL_API_KEY: "k", MAIL_FROM: "a@b.c" } as never, "http://localhost/").kind).toBe("stub");
+    // A sending address alone does not make a sender: the binding is needed
+    // too (accounts-mail.test.ts has the binding's half).
+    expect(senderFor({ ...(env as object), MAIL_SENDER: undefined, MAIL_FROM: "a@b.c" } as never, "http://localhost/").kind).toBe("stub");
   });
 
   it("with the stub, records the attempt without the address and says the message could not be sent", async () => {

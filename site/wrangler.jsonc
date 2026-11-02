@@ -38,7 +38,16 @@
   // VIEWS_SALT_KEY (`npx wrangler secret put VIEWS_SALT_KEY`); never an
   // address, user agent or cookie. The dataset is created by the first write.
   "analytics_engine_datasets": [{ "binding": "VIEWS", "dataset": "awardwatch_views" }],
-  "send_email": [{ "name": "ALERTS" }],
+  "send_email": [
+    { "name": "ALERTS" },
+    // The accounts module's sender (src/account/sender.ts): sign-in messages
+    // go out from MAIL_FROM through Cloudflare Email Sending, once the
+    // operator has onboarded awardwatch.ca for it (that onboarding adds the
+    // SPF and DKIM records; docs/accounts.md). A binding rather than a mail
+    // service's API, so there is no key to hold. allowed_sender_addresses
+    // locks the binding to MAIL_FROM, so a mistake cannot send as anyone else.
+    { "name": "MAIL", "allowed_sender_addresses": ["alerts@awardwatch.ca"] }
+  ],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
@@ -88,11 +97,14 @@
   // is set by the operator once the repository exists (empty leaves the line
   // out). ACCOUNTS_ENABLED is the accounts switch: "false" keeps every
   // /account route a 404 and every public page as it was (docs/accounts.md).
+  // MAIL_FROM is the sign-in messages' sender on the zone, sent through the
+  // MAIL binding.
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
     "SITE_URL": "https://awardwatch.ca",
-    "ACCOUNTS_ENABLED": "false"
+    "ACCOUNTS_ENABLED": "false",
+    "MAIL_FROM": "alerts@awardwatch.ca"
   },
   "observability": {
     "enabled": true

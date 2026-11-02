@@ -1,8 +1,9 @@
 // The accounts switch (ACCOUNTS_ENABLED, src/account/switch.ts). Off, as
 // wrangler.jsonc ships it: every /account route is the site's own 404, no
 // public page links to an account or changes in any byte, the sign-in posts
-// count as pages, the API keys gate nothing, and the accounts database is
-// never read (a binding that records and throws on any use proves it). On:
+// count as pages, the API keys gate nothing, and neither the accounts
+// database nor the mail binding is read (bindings that record and throw on
+// any use prove it). On:
 // the routes answer and the rail gains one item.
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
@@ -24,16 +25,17 @@ const ACCOUNT_ROUTES: [string, string][] = [
   ["POST", "/account/searches/import"], ["POST", "/account/keys"], ["POST", "/account/delete"],
 ];
 
-// A database binding that notes every use and throws.
-function trap() {
+// A binding that notes every use and throws: the accounts database, or the
+// mail binding.
+function trap<T>(what = "the accounts database") {
   const used: string[] = [];
-  const db = new Proxy({}, {
+  const binding = new Proxy({}, {
     get(_t, prop) {
       used.push(String(prop));
-      throw new Error("the accounts database was read while the switch is off");
+      throw new Error(`${what} was read while the switch is off`);
     },
-  }) as D1Database;
-  return { used, db };
+  }) as T;
+  return { used, binding };
 }
 
 async function render(path: string, env: object, cookie?: string) {
@@ -45,8 +47,9 @@ async function render(path: string, env: object, cookie?: string) {
 
 describe("with the switch off", () => {
   it("answers every account route with the site's own 404 page, reading nothing", async () => {
-    const { used, db } = trap();
-    const env = { ...testEnv(), ACCOUNTS: db };
+    const { used, binding: db } = trap<D1Database>();
+    const mail = trap<SendEmail>("the mail binding");
+    const env = { ...testEnv(), ACCOUNTS: db, MAIL: mail.binding };
     const notFound = (await render("/nothing-here", env)).body;
     for (const [method, path] of ACCOUNT_ROUTES) {
       const init: RequestInit = { method, headers: { "cf-connecting-ip": nextIp(), "sec-fetch-mode": "navigate" } };
@@ -60,16 +63,20 @@ describe("with the switch off", () => {
       expect(await res.text(), `${method} ${path}`).toBe(notFound);
     }
     expect(used).toEqual([]);
+    expect(mail.used).toEqual([]);
   });
 
   it("leaves every public page byte for byte as it is without the accounts module's bindings, even with a session cookie", async () => {
     // A real session, made while the switch is on, sent back while it is off.
     const cookie = await signIn(newEmail("cookie"));
-    const { used, db } = trap();
-    const off = { ...testEnv(), ACCOUNTS: db };
+    const { used, binding: db } = trap<D1Database>();
+    const mail = trap<SendEmail>("the mail binding");
+    const off = { ...testEnv(), ACCOUNTS: db, MAIL: mail.binding };
     const bare = { ...testEnv() } as Record<string, unknown>;
     delete bare.ACCOUNTS;
     delete bare.ACCOUNTS_ENABLED;
+    delete bare.MAIL;
+    delete bare.MAIL_FROM;
     for (const path of PUBLIC_PAGES) {
       const a = await render(path, off);
       const b = await render(path, bare);
@@ -81,6 +88,7 @@ describe("with the switch off", () => {
       expect(a.body, path).not.toContain("rail-account");
     }
     expect(used).toEqual([]);
+    expect(mail.used).toEqual([]);
   });
 
   it("keeps the rail's lists at two items and the privacy page's 'No Accounts'", async () => {

@@ -47,11 +47,14 @@ export interface Env {
   // route a 404 and every public page exactly as it was.
   ACCOUNTS_ENABLED?: string;
   // "log" writes sign-in messages to the local outbox, and only on a local
-  // host; unset (production), messages go to the stub sender until a
-  // provider is wired in. MAIL_API_KEY is that provider's key (a secret);
-  // MAIL_FROM its verified sending address.
+  // host. Unset (production), they go out through the MAIL binding, or to
+  // the stub sender when the binding or MAIL_FROM is missing.
   MAIL_SENDER?: string;
-  MAIL_API_KEY?: string;
+  // Cloudflare Email Sending, the accounts module's own binding (ALERTS stays
+  // the daily check's). No key: the binding is the credential.
+  MAIL?: SendEmail;
+  // The sign-in messages' sender, an address on the domain onboarded for
+  // Email Sending (a variable in wrangler.jsonc).
   MAIL_FROM?: string;
   // Sign-in and code posts per address (wrangler.jsonc "ratelimits").
   AUTH_LIMIT?: RateLimit;

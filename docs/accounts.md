@@ -27,8 +27,9 @@ the schema is `site/accounts_schema.sql`; the tests are
   with `allowed({ plan }, feature)` (`site/src/account/entitlements.ts`).
 - **Deletion.** The reader deletes the account from its own page.
 
-Nothing is sent by email except the sign-in message, and nothing at all
-until a mail provider is set up (see *Operator steps*).
+Nothing is sent by email except the sign-in message, which goes out through
+Cloudflare Email Sending from the Worker's own binding once the domain is
+onboarded (see *Sending mail* and *Operator steps*).
 
 ## Data model
 
@@ -63,7 +64,7 @@ they end; audit rows after 90 days. The sweep runs with each sign-in request.
 2. The site counts the address's requests in the last hour (5 at most), then
    stores a row with a fresh 6-digit code and link secret, both from
    `crypto.getRandomValues` and both stored only as SHA-256 hashes.
-3. The message goes out through the sender (below). The page that answers is
+3. The message goes out through the sender (*Sending mail*). The page that answers is
    the same for an address with an account and one without; no user row is
    made at this step.
 4. `POST /account/check` with the address and the code, or with the link's
@@ -96,7 +97,7 @@ is anything but `"true"` (or the `ACCOUNTS` binding is missing):
 - the sign-in posts count as page requests;
 - `requireApiKey` gates nothing;
 - `planOfRequest` answers `free` for every request;
-- nothing reads the accounts database.
+- nothing reads the accounts database or the mail binding.
 
 `site/test/accounts-switch.test.ts` proves each point, rendering the public
 pages with the switch off, with the module's bindings removed and with a
@@ -105,6 +106,39 @@ With the switch on, the rail's "Your lists" group gains one item (the
 signed-in address, or "Sign in") and the privacy page's first section
 describes accounts; a page that shows a signed-in address is sent
 `Cache-Control: private, no-store`.
+
+## Sending mail
+
+Sign-in messages go through Cloudflare Email Sending from the Worker's
+`MAIL` binding (`site/wrangler.jsonc`). There is no outside mail service and
+no key to store: the binding is the credential. `senderFor()` in
+`site/src/account/sender.ts` picks the sender for each request, in this
+order:
+
+| Sender | Chosen when | What it does |
+|---|---|---|
+| log | `MAIL_SENDER` is `"log"` and the request came to a local host | writes the message to the `sent_mail` table of the local database |
+| binding | the `MAIL` binding and `MAIL_FROM` are both set | hands the message to Email Sending |
+| stub | neither of the above | records `mail_not_sent` in the audit trail; the page answers 503, "Sign-in by email is not available yet" |
+
+The binding's message comes from `MAIL_FROM` (`alerts@awardwatch.ca`) under
+the name Award Watch. Replies go to the contact address the site's
+documents print, and the header `Auto-Submitted: auto-generated` keeps
+out-of-office replies from coming back. Each message has a plain-text and
+an HTML body, in the language of the page it was asked from; the code is in
+both bodies and never in the subject.
+
+When the binding refuses a message (the domain is not onboarded, the
+recipient is on the suppression list, the daily limit is reached), the
+sender logs the error's code alone, never the address or the message; the
+audit trail records `mail_failed`; and the page answers 503 with "The
+message could not be sent. Try again in a few minutes."
+
+As shipped, `wrangler.jsonc` sets both the binding and `MAIL_FROM`, so the
+binding answers on the site and the stub only answers if one of them is
+removed. Until the domain is onboarded, Email Sending delivers only to the
+account's verified destination addresses, and any other address gets the
+"could not be sent" page. With the switch off, none of this runs.
 
 ## Operator steps
 
@@ -118,22 +152,62 @@ describes accounts; a page that shows a signed-in address is sent
    Every statement is idempotent. `npm run db:local` applies it to the local
    database, with `seed/accounts_dev.sql` (the development outbox, never
    applied on the account).
-2. **Set up the mail provider.** Sign-in needs a transactional mail service
-   with an HTTP API. Verify the sending domain with it (the provider gives
-   the DNS records: an SPF include, DKIM keys, and a DMARC policy on the
-   zone), then store the key as a Worker secret and the sending address as a
-   variable:
+2. **Onboard awardwatch.ca for Email Sending.** In the dashboard: Compute &
+   AI (Compute on some dashboards), Email Service, Email Sending, Onboard
+   Domain; pick awardwatch.ca, review the records it lists and confirm with
+   **Add records and onboard**. Or, from `site/`, with an API token that
+   carries the Email Sending edit permission:
 
    ```
-   npx wrangler secret put MAIL_API_KEY
+   npx wrangler email sending enable awardwatch.ca
+   npx wrangler email sending dns get awardwatch.ca
    ```
 
-   and `"MAIL_FROM": "<sender on the verified domain>"` under `vars`. The
-   provider's code goes in `providerSender()` in
-   `site/src/account/sender.ts`; no caller changes. Until it exists, the
-   stub sender answers: it records the attempt in the audit trail and the
-   page says the message could not be sent.
-3. **Turn the switch on**: set `"ACCOUNTS_ENABLED": "true"` in
+   The onboarding adds the SPF and DKIM records itself, on the `cf-bounce`
+   subdomain, apart from the MX and SPF records Email Routing keeps on the
+   zone; `dns get` lists them. On a Cloudflare zone they usually settle
+   within 15 minutes.
+3. **Keep one DMARC record.** The onboarding adds a TXT record named
+   `_dmarc` with the policy `v=DMARC1; p=reject;`. Keep it, and add none
+   beside it: a domain with two DMARC records has no policy at all, since
+   receivers stop reading when they find more than one. Reject is the right
+   policy here, because every message from the domain leaves signed through
+   Cloudflare; a message that claims the domain and is not is refused rather
+   than filed as junk. If the onboarding added none, add that record by hand
+   in the zone's DNS (Type TXT, Name `_dmarc`, Content `v=DMARC1; p=reject;`).
+   Then watch the next daily check's message arrive in the inbox: it leaves
+   through the same facility, and its arrival proves the policy and the
+   signing agree.
+4. **Prove sending works**, before the switch flips:
+
+   ```
+   npx wrangler email sending send --from alerts@awardwatch.ca --from-name "Award Watch" --to <an inbox you control> --subject "Award Watch sending test" --text "A test of Email Sending on awardwatch.ca."
+   ```
+
+   Send it to an inbox that is not one of the account's verified Email
+   Routing destinations: those receive mail even before onboarding, so a
+   delivery there proves less. In the received message's headers, SPF,
+   DKIM and DMARC should each read `pass`. This goes through the same
+   account and domain as the binding; the binding's own path is covered by
+   `site/test/accounts-mail.test.ts` and shows on the first sign-in after
+   the switch.
+5. **Know the daily limit.** Email Sending caps each account's sends per
+   day. A new account starts low and the cap rises on its own as the
+   account builds a sending history; Cloudflare publishes no fixed figure.
+   The API gives the account's current figure:
+
+   ```
+   curl "https://api.cloudflare.com/client/v4/accounts/<account id>/email/sending/limits" --header "Authorization: Bearer <token>"
+   ```
+
+   Each day's sends are on the dashboard under Email Service, Email
+   Sending, the domain, **Analytics**. The Workers Paid plan includes 3,000
+   messages a month for the whole account, billed per thousand after that;
+   mail to the account's verified destinations is free and not counted. A
+   send over the cap fails with `E_DAILY_LIMIT_EXCEEDED`: the reader gets
+   the "could not be sent" page and the log shows the code. A higher cap is
+   asked for through Cloudflare's limit increase form.
+6. **Turn the switch on**: set `"ACCOUNTS_ENABLED": "true"` in
    `site/wrangler.jsonc` and deploy. Turning it back off hides everything
    again at once; the data stays.
 
@@ -146,8 +220,10 @@ npx wrangler dev --port 8787 --local-upstream localhost:8787 --var ACCOUNTS_ENAB
 ```
 
 `--local-upstream` keeps the request's own host: without it `wrangler dev`
-hands the Worker the route's host, the site's domain, and the sign-in page
-answers with the stub's "could not be sent". The log sender writes each message to the `sent_mail` table of the local
+hands the Worker the route's host, the site's domain, and the message goes
+to the local stand-in for the `MAIL` binding, which prints the sender, the
+recipient and the subject in the terminal and writes the bodies to
+temporary files; no mail leaves the machine. The log sender writes each message to the `sent_mail` table of the local
 database (`npx wrangler d1 execute awardwatch-accounts --local --command
 "SELECT text FROM sent_mail ORDER BY id DESC LIMIT 1"`). It answers only on
 a local host, so the variable set by mistake on the account sends nothing
@@ -230,7 +306,7 @@ profile, buyer and segment files), keeps the records first seen since
 `last_delivered_at`, and sends one message per account through the sender
 with an unsubscribe link per search. Each send writes a `deliveries` row and
 moves `last_delivered_at`; a search with nothing new writes an `empty` row
-and sends nothing. A provider failure leaves `last_delivered_at` where it
+and sends nothing. A failed send leaves `last_delivered_at` where it
 was, so the next run includes the missed items.
 
 ## Phase 3: payments and the metered API
