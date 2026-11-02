@@ -26,7 +26,9 @@ change there. Output tree (under data/out/static):
   awards/<year>/index.json      a year's page count and row count
   awards/<year>/<n>.json        the year's award notices, newest award date first, 500 to a page
   profiles/<abc>.json           organization profiles, sharded on the id's characters 5 to 7
-  aliases/<abc>.json            retired organization id -> the live id that took its records: retired by a
+  aliases/<ab>.json             retired organization id -> the live id that took its records, sharded on the
+                                id's characters 5 and 6 (256 files at most: 27,000 merged ids on 4,096
+                                shards pushed the export past the file cap on 2026-11-02): retired by a
                                 normalization change (migrate.py) or merged into another organization
                                 (merges.py); the site redirects a missing profile by it
   directory/...                 organizations A to Z by province (directory.py)
@@ -1303,7 +1305,7 @@ def resolve_aliases(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def write_aliases(conn: sqlite3.Connection, out: Path) -> dict[str, int]:
-    """aliases/<abc>.json: retired organization id -> live id, sharded on the retired id like the profiles.
+    """aliases/<ab>.json: retired organization id -> live id, sharded on the retired id's characters 5 and 6.
 
     Why: a profile link shared before a normalization change names an id that
     no longer exists, and the site looks a missing id up here (in the file
@@ -1313,7 +1315,7 @@ def write_aliases(conn: sqlite3.Connection, out: Path) -> dict[str, int]:
     shards: dict[str, dict[str, str]] = defaultdict(dict)
     for old, new in resolve_aliases(conn).items():
         if ORG_ID_RE.match(old) and ORG_ID_RE.match(new):
-            shards[shard_key(old)][old] = new
+            shards[old[4:6]][old] = new
     for key in sorted(shards):
         _dump(out / "aliases" / f"{key}.json", shards[key])
     return {"alias_shards": len(shards)}

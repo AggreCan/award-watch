@@ -58,7 +58,7 @@ def test_records_move_to_the_new_id_and_retired_ids_become_aliases(conn, tmp_pat
 
     out = tmp_path / "static"
     export_static.write_aliases(conn, out)
-    shard = json.loads((out / "aliases" / "aaa.json").read_text(encoding="utf-8"))
+    shard = json.loads((out / "aliases" / "aa.json").read_text(encoding="utf-8"))
     assert shard == {OLD_A: new}
     assert export_static.resolve_aliases(conn)["org-cccccccccc"] == new
 

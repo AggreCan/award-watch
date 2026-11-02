@@ -71,7 +71,7 @@ export const FILES: Record<string, unknown> = {
   "awards/2026/1.json": awards2026Page1,
   "awards/2026/2.json": awards2026Page2,
   "profiles/a00.json": profiles,
-  "aliases/a00.json": aliases,
+  "aliases/a0.json": aliases,
   "directory/index.json": directory,
   "directory/on/index.json": directoryOn,
   "directory/on/1.json": directoryOn1,

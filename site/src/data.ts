@@ -990,7 +990,7 @@ export async function loadBuyerAlias(env: Env, id: string): Promise<string | nul
 
 export async function loadAlias(env: Env, id: string): Promise<string | null> {
   if (!ORG_ID_RE.test(id)) return null;
-  const shard = await loadJson<Record<string, unknown>>(env, `aliases/${id.slice(4, 7)}.json`);
+  const shard = await loadJson<Record<string, unknown>>(env, `aliases/${id.slice(4, 6)}.json`);
   const live: unknown = isObj(shard) ? shard[id] : null;
   return typeof live === "string" && ORG_ID_RE.test(live) && live !== id ? live : null;
 }

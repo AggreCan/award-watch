@@ -1,7 +1,7 @@
 // Retired organization ids. An id is the SHA-1 of the normalized name, so a
 // change to the name rules moves an organization to a new id; the export can
-// list the old ids in aliases/<abc>.json (keyed like the profile shards, by
-// characters 5 to 7 of the old id) and every route that takes an id sends
+// list the old ids in aliases/<ab>.json (keyed by characters 5 and 6 of the
+// old id) and every route that takes an id sends
 // the old one to the new one.
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
@@ -64,7 +64,7 @@ describe("retired organization ids", () => {
       expect((await app.request(`/organizations/${id}`, {}, testEnv())).status, id).toBe(404);
     }
     for (const body of ["{", "[]", '{"org-a00000000f": 5}']) {
-      const assets = makeFakeAssets({}, { "aliases/a00.json": body });
+      const assets = makeFakeAssets({}, { "aliases/a0.json": body });
       expect((await app.request(`/organizations/${OLD}`, {}, testEnv(assets))).status, body).toBe(404);
     }
   });

@@ -24,7 +24,7 @@ const READERS: Record<string, string[]> = {
   "awards/2026/1.json": ["/awards/2026"],
   "awards/2026/2.json": ["/awards/2026?page=2"],
   "profiles/a00.json": ["/organizations/org-a000000001", "/organizations/org-a000000001/respond", "/api/organizations/org-a000000001"],
-  "aliases/a00.json": ["/organizations/org-a00000000f"],
+  "aliases/a0.json": ["/organizations/org-a00000000f"],
   "directory/index.json": ["/organizations", "/organizations/org-a000000001"],
   "directory/on/index.json": ["/organizations/directory/on"],
   "directory/on/1.json": ["/organizations/directory/on"],

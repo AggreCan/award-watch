@@ -214,7 +214,7 @@ def test_a_merged_id_is_exported_as_an_alias_the_site_redirects_by(conn, tmp_pat
     assert export_static.resolve_aliases(conn) == {bilingual: ltd}
     out = tmp_path / "static"
     assert export_static.write_aliases(conn, out) == {"alias_shards": 1}
-    shard = json.loads((out / "aliases" / f"{bilingual[4:7]}.json").read_text(encoding="utf-8"))
+    shard = json.loads((out / "aliases" / f"{bilingual[4:6]}.json").read_text(encoding="utf-8"))
     assert shard == {bilingual: ltd}
 
 
