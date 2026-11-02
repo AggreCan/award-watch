@@ -323,6 +323,8 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
     { href: "/segments", label: t(lang, "nav.segments"), section: "/segments" },
     { href: "/rankings", label: t(lang, "nav.rankings"), section: "/rankings" },
     { href: "/feeds", label: t(lang, "nav.feeds"), section: "/feeds" },
+    // The alerts form, reachable without scrolling to a page's foot (operator, 2026-11-02).
+    { href: "/alerts", label: t(lang, "rail.email_list"), section: "/alerts" },
     { href: "/data", label: t(lang, "nav.data"), section: "/data" },
     { href: "/methodology", label: t(lang, "nav.methodology"), section: "/methodology" },
   ];
@@ -359,7 +361,8 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
             </a>
           </li>
           <li>
-            <a class="rail-item rail-later" href="/alerts" aria-current={active === "/alerts" ? "page" : undefined}>
+            {/* The Browse entry marks the current page; this one only says alerts are coming. */}
+            <a class="rail-item rail-later" href="/alerts">
               <span class="rail-label">{t(lang, "rail.alerts_soon")}</span>
             </a>
           </li>

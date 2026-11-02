@@ -129,7 +129,7 @@ describe("every page", () => {
     const nav = html.match(/<nav class="rail" aria-label="Main">[\s\S]*?<\/nav>/)?.[0] ?? "";
     expect([...nav.matchAll(/<a class="rail-item[^"]*" href="([^"]+)"/g)].map((m) => m[1])).toEqual([
       "/tenders", "/tenders/new", "/tenders?closing=7", "/awards", "/awards/2026", "/expiring", "/expiring/3m", "/organizations",
-      "/buyers", "/segments", "/rankings", "/feeds", "/data", "/methodology", "/watchlist", "/alerts",
+      "/buyers", "/segments", "/rankings", "/feeds", "/alerts", "/data", "/methodology", "/watchlist", "/alerts",
     ]);
     expect(nav).toContain('<a class="rail-item" href="/tenders"><span class="rail-label">Open tender notices</span><span class="rail-n">3</span></a>');
     expect(nav).toContain('<a class="rail-item rail-child soon" href="/tenders?closing=7"><span class="rail-label">Closing within 7 days</span><span class="rail-n" data-soon-count="">1</span></a>');

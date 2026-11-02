@@ -288,7 +288,9 @@ describe("the alerts page and the privacy page", () => {
     for (const href of ["/tenders", "/expiring", "/organizations", "/buyers", "/segments", "/privacy#interest"]) {
       expect(html, href).toContain(`<a href="${href}">`);
     }
-    expect(html).toContain('<a class="rail-item rail-later" href="/alerts" aria-current="page">');
+    // The Browse entry marks the page; the "soon" item under Your lists is a plain link.
+    expect(html).toContain('href="/alerts" aria-current="page"');
+    expect(html).toContain('<a class="rail-item rail-later" href="/alerts">');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));
     expect(footer).toContain('<a href="/feeds">Feeds</a><a href="/alerts">Alerts</a>');
     const fr = await get("/alerts?lang=fr");

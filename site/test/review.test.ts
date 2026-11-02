@@ -38,7 +38,13 @@ describe("controls", () => {
   });
 
   it("set the alerts form's field and button to one height and one border token, side by side, stacked on a phone", async () => {
-    expect(styles).toContain('.interest-form input[type="email"], .interest-form .btn { height: var(--field-h); min-height: 0; border: 1px solid var(--field-border); vertical-align: bottom; }');
+    expect(styles).toContain('.interest-form input[type="email"], .interest-form .btn { height: var(--field-h); min-height: 0; border: 1px solid var(--field-border); }');
+    // The button is pinned to the input's top (the label line plus its 4 px), not to the column's
+    // bottom: a password manager's zero-height element after the input would otherwise push it down.
+    expect(styles).toContain('.interest-form .interest-field { flex: 0 1 320px; gap: 0; }');
+    expect(styles).toContain('.interest-form .interest-field > .field-label { margin-bottom: 4px; }');
+    expect(styles).toContain('.interest-form .btn { flex: none; align-self: flex-start; margin-top: 20px; justify-content: center; white-space: nowrap; }');
+    expect(styles).toMatch(/@media \(max-width: 699px\) \{[\s\S]*\.interest-form \.btn \{ margin-top: 0; \}/);
     expect(styles).toMatch(/@media \(max-width: 699px\) \{[\s\S]*\.interest-form \.interest-field, \.interest-form \.btn \{ flex: 1 1 100%; width: 100%; \}/);
     const fr = nbsp(await text("/alerts?lang=fr"));
     expect(fr).toContain('<button type="submit" class="btn btn-primary">M’avertir</button>');

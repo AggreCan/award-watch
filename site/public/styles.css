@@ -730,10 +730,15 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .interest-body { max-width: var(--measure); }
 .interest-body > .interest-label { margin: 0 0 8px; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
 .interest-body > .interest-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin: 0 0 8px; }
-.interest-form .interest-field { flex: 0 1 320px; }
-/* The field and its button: one height, one border token, bottoms in line. */
-.interest-form input[type="email"], .interest-form .btn { height: var(--field-h); min-height: 0; border: 1px solid var(--field-border); vertical-align: bottom; }
-.interest-form .btn { flex: none; justify-content: center; white-space: nowrap; }
+.interest-form .interest-field { flex: 0 1 320px; gap: 0; }
+.interest-form .interest-field > .field-label { margin-bottom: 4px; }
+/* The field and its button: one height, one border token. The button is
+   pinned to the input's top (the label's 16 px line plus the 4 px under it)
+   rather than to the column's bottom: a password manager drops a zero-height
+   element after the input, and a column gap or a bottom alignment would let
+   it push the button down. */
+.interest-form input[type="email"], .interest-form .btn { height: var(--field-h); min-height: 0; border: 1px solid var(--field-border); }
+.interest-form .btn { flex: none; align-self: flex-start; margin-top: 20px; justify-content: center; white-space: nowrap; }
 .interest-body > .interest-done { margin: 0 0 8px; color: var(--ink); font-weight: 500; }
 .interest-body > .interest-error { margin: 0 0 8px; padding-left: 8px; border-left: 2px solid var(--ink-2); color: var(--ink); font-size: 12px; line-height: 16px; }
 .interest-body > .interest-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; }
@@ -821,6 +826,7 @@ tr[data-phone-cut] { display: none !important; }
   /* The browse links are in the footer as well; on a phone the rail keeps the counts and the lists. */
   .rail-browse { display: none; }
   .interest-form .interest-field, .interest-form .btn { flex: 1 1 100%; width: 100%; }
+  .interest-form .btn { margin-top: 0; }
   /* A filter's name wraps rather than being cut, in French above all. */
   .field-label { white-space: normal; overflow: visible; text-overflow: clip; }
   .toolbar-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

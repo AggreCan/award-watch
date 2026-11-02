@@ -56,6 +56,7 @@ const STRINGS = {
   "rail.ending_3m_full": { en: "Ending within 3 months", fr: "Fin d'ici 3 mois" },
   "rail.browse": { en: "Browse", fr: "Parcourir" },
   "rail.lists": { en: "Your lists", fr: "Vos listes" },
+  "rail.email_list": { en: "Email list", fr: "Liste de diffusion" },
   "rail.alerts_soon": { en: "Alerts: soon", fr: "Alertes : bientôt" },
   "footer.sources": {
     en: "Records from CanadaBuys, open.canada.ca and the Registry of Lobbyists.",
