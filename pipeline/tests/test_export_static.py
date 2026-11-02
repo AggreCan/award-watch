@@ -516,7 +516,7 @@ def test_a_failing_section_is_logged_and_left_out_of_the_sitemap(conn, tmp_path,
     assert [tuple(r) for r in failed] == [("export_buyers", 0, "RuntimeError: bad buyer")]
     assert not (out / "buyers").exists() and (out / "categories" / "index.json").exists()
     sitemap = (out / "sitemaps" / "sitemap-1.xml").read_text(encoding="utf-8")
-    assert "/buyers" not in sitemap and f"{BASE}/categories</loc>" in sitemap
+    assert "/buyers" not in sitemap and f"{BASE}/segments</loc>" in sitemap
 
 
 def test_an_empty_database_exports_a_tree_the_checks_accept(tmp_path):

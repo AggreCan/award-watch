@@ -185,11 +185,12 @@ TEMP_TABLES = ("x_tenders", "x_awards", "x_history", "x_grants", "x_records", "x
 
 SITEMAP_MAX_URLS = 50_000
 SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
-SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/categories",
-                 "/rankings", "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections"]
+SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments",
+                 "/rankings", "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections",
+                 "/about", "/terms", "/privacy"]
 # Pages whose content follows the nightly data carry its date; the others
 # change only with the code, so they carry none rather than a false one.
-SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/categories",
+SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments",
                        "/rankings", "/feeds", "/data"}
 
 
@@ -1575,7 +1576,7 @@ def sitemap_entries(m: Model, skip: Collection[str] = ()) -> list[tuple[str, str
         entries += [(f"/buyers/{r['id']}", _lastmod(r["updated_at"]))
                     for r in conn.execute("SELECT id, updated_at FROM buyers ORDER BY id") if r["id"] in m.listed]
     if "categories" not in skip:
-        entries += [(f"/categories/{code}", dated) for code in sorted(m.segments)]
+        entries += [(f"/segments/{code}", dated) for code in sorted(m.segments)]
     # Open notices and every notice first seen in the last 30 days, each dated
     # by the night its newest version first appeared.
     recent = (m.today - timedelta(days=NEW_DAYS - 1)).isoformat()

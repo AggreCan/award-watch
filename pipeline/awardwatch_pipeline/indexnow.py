@@ -61,7 +61,7 @@ TIMEOUT = 30
 RETRY_S = 10.0
 # The pages whose content follows the nightly data. "/" is the home page.
 FIXED_PAGES: tuple[str, ...] = ("/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers",
-                                "/categories", "/rankings")
+                                "/segments", "/rankings")
 
 ACCEPTED = (200, 202)
 # 400 bad request, 403 key not valid, 422 URLs not on the host or a key that
@@ -125,7 +125,7 @@ def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: in
             add(f"/tenders/{ref.lower()}")
         touched.update(c[:2] for c in (codes or "").split() if c[:2] in segments)
     for code in sorted(touched):
-        add(f"/categories/{code}")
+        add(f"/segments/{code}")
     # Only a buyer the export lists has a page (export.LISTED_BUYER, on the export's data date).
     as_of = (conn.execute("SELECT value FROM meta WHERE key = 'data_as_of'").fetchone() or (stamp[:10],))[0]
     listed = listed_buyer_ids(conn, as_of)

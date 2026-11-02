@@ -125,8 +125,8 @@ def test_tenders_first_seen_tonight_their_categories_and_changed_buyers_come_bef
     org = organization(conn, "New Supply Ltd", START)
     conn.commit()
     urls = indexnow.changed_urls(conn, START, BASE)
-    assert urls == FIXED + [f"{BASE}/tenders/ssc-26-1-t", f"{BASE}/tenders/cb-2-new", f"{BASE}/categories/43",
-                            f"{BASE}/categories/81", f"{BASE}/buyers/dnd-mdn", f"{BASE}/organizations/{org}"]
+    assert urls == FIXED + [f"{BASE}/tenders/ssc-26-1-t", f"{BASE}/tenders/cb-2-new", f"{BASE}/segments/43",
+                            f"{BASE}/segments/81", f"{BASE}/buyers/dnd-mdn", f"{BASE}/organizations/{org}"]
 
 
 def test_the_start_may_be_written_in_any_iso_form(conn):

@@ -240,7 +240,7 @@ def _segments(codes: object, segments: dict[str, tuple[str, str]]) -> list[str]:
 
 def segment_scope(code: str, segments: dict[str, tuple[str, str]]) -> Scope:
     en, fr = segments[code]
-    return Scope("segment", code, f"{code} {en}", f"{code} {fr}", f"/categories/{code}")
+    return Scope("segment", code, f"{code} {en}", f"{code} {fr}", f"/segments/{code}")
 
 
 def province_scope(code: str) -> Scope:

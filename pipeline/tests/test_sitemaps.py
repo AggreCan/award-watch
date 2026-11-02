@@ -62,7 +62,7 @@ def test_static_export_writes_the_sitemaps(conn, tmp_path):
         assert entries[f"{BASE}/organizations/{oid}"] == "2026-10-31"
     # Buyers some record names; the one with none has no page.
     assert f"{BASE}/buyers/dnd-mdn" in entries and f"{BASE}/buyers/never-buys" not in entries
-    assert sum(u.startswith(f"{BASE}/categories/") for u in urls) == 57
+    assert sum(u.startswith(f"{BASE}/segments/") for u in urls) == 57
     # Open notices and notices first seen in the last 30 days, in lower case; an
     # expired notice first seen 30 days ago is neither.
     assert f"{BASE}/tenders/{es.url_reference(COLON_REF).lower()}" in entries
