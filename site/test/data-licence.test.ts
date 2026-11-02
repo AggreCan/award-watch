@@ -15,10 +15,12 @@ const section = (html: string, id: string) => {
 describe("data page", () => {
   it("lists the fixed downloads and allows the yearly files by name only", () => {
     expect(DOWNLOADS.map((d) => d.file)).toEqual(["open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-12m.csv", "SHA256SUMS"]);
-    for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "expiring-12m.csv", "SHA256SUMS", "mirror/x.csv"]) {
+    for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "expiring-12m.csv", "SHA256SUMS", "mirror/x.csv",
+      "awards-before-2012.csv", "awards-after-2026.csv", "history-before-2009.csv"]) {
       expect(downloadAllowed(file), file).toBe(true);
     }
-    for (const file of ["awards-12.csv", "grants-2024.csv", "../stats.json", "awards-2024.csv.gz", "status.json", "mirror/../x", "expiring-3m.csv"]) {
+    for (const file of ["awards-12.csv", "grants-2024.csv", "../stats.json", "awards-2024.csv.gz", "status.json", "mirror/../x", "expiring-3m.csv",
+      "awards-later-2026.csv", "awards-before-.csv"]) {
       expect(downloadAllowed(file), file).toBe(false);
     }
     expect(YEARLY_DOWNLOAD.test("history-2025.csv")).toBe(true);
@@ -38,11 +40,16 @@ describe("data page", () => {
     expect(sources).toContain("Not read yet");
   });
 
-  it("states the one licence of every source and of the site's own files", async () => {
+  it("states the licence of every source and of the site's own files, the lobbying registry's its own", async () => {
     const html = await (await get("/data")).text();
     const lic = section(html, "licence");
     expect(LICENCE_ROWS.length).toBe(6);
-    expect(lic).toContain('Every source is published under the <a href="https://open.canada.ca/en/open-government-licence-canada">Open Government Licence, Canada</a>, and so are the site&#39;s files.');
+    expect(lic).toContain('Every source but the Registry of Lobbyists is published under the <a href="https://open.canada.ca/en/open-government-licence-canada">Open Government Licence, Canada</a>, and so are the site&#39;s files.');
+    // The registry publishes under the Commissioner of Lobbying's Open Data Licence Agreement, not the OGL.
+    const odla = '<a href="https://lobbycanada.gc.ca/en/open-data/open-data-licence-agreement/">';
+    expect(lic).toContain(`${odla}Open Data Licence Agreement</a>, which the site will follow once it reads them.`);
+    expect(lic).toContain(`${odla}Open Data Licence Agreement, Office of the Commissioner of Lobbying (not loaded yet)</a>`);
+    expect(section(html, "sources")).toContain(`${odla}Open Data Licence Agreement</a>`);
     expect(lic).toContain("Contains information licensed under the Open Government Licence, Canada.");
     expect(lic).toContain("The site&#39;s merged organizations, buyer mapping, totals and rankings");
     expect(html).not.toContain(EM_DASH);
@@ -56,6 +63,10 @@ describe("data page", () => {
     expect(downloads).toContain('<a class="mono" href="/downloads/awards-2012.csv">awards-2012.csv</a>');
     expect(downloads).toContain('<a class="mono" href="/downloads/history-2009.csv">history-2009.csv</a>');
     expect(downloads).not.toContain("awards-2011.csv");
+    // The dates before the first year and after the data year: every name SHA256SUMS can list is offered.
+    expect(downloads).toContain('<a class="mono" href="/downloads/awards-before-2012.csv">awards-before-2012.csv</a>');
+    expect(downloads).toContain('<a class="mono" href="/downloads/awards-after-2026.csv">awards-after-2026.csv</a>');
+    expect(downloads).toContain('<a class="mono" href="/downloads/history-before-2009.csv">history-before-2009.csv</a>');
     const api = section(html, "api");
     for (const endpoint of ["GET /api/stats", "GET /api/organizations/{id}", "GET /api/tenders/{reference}", "GET /api/buyers/{id}", "GET /api/categories/{nn}"]) {
       expect(api).toContain(endpoint);

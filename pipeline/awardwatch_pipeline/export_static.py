@@ -10,14 +10,19 @@ loaders (site/src/data.ts) check every field they render and answer "not
 published" for a file that does not read, so a shape change here goes with a
 change there. Output tree (under data/out/static):
 
-  stats.json                    counts, today's notices, closing soon, recent awards, the year's top
+  stats.json                    counts, today's notices, closing soon, the closing values of every open
+                                notice closing within CLOSING_TIMES_DAYS (closing_soon_times: the site
+                                counts closing soon from them at render), recent awards, the year's top
                                 organizations by awards value, the last runs, the source files read
                                 (source_files: one row per file read and one per source never read, each
                                 with last_read, last_modified as an ISO instant, last_modified_http as the
                                 publisher sent it, and loaded)
   tenders/open.json             every notice open on the data date as a list row (read by the browser only)
-  tenders/open-first.json       the 50 open notices closing soonest, the number open, and the facet
-                                counts over all of them (what /tenders renders on the server)
+  tenders/open-first.json       the open notices closing by the day after the data date and the 50 after
+                                them, the number open, and the facet counts over all of them (what
+                                /tenders and the home page render on the server: a notice whose closing
+                                time passes before the next nightly sorts last there, and the rows
+                                after it still fill the first page)
   tenders/new/<day>.json        the notices first seen on each of the last 30 days
   tenders/<abc>.json            every notice in the database, detail form, sharded on the reference
   contracts/<abc>.json          award notices and contract history records, detail form, same sharding,
@@ -130,7 +135,7 @@ from xml.sax.saxutils import escape
 
 from . import config, directory, expiring, indicators, organizations, value_checks
 from .db import get_meta, log_run, set_meta
-from .export import listed_buyer_ids, register_functions, scrub_doc
+from .export import listed_buyer_ids, register_functions, scrub, scrub_doc
 from .feeds import write_feeds
 from .normalize import closing_day, tender_status_on
 from .sources.buyers import public_spelling
@@ -142,12 +147,19 @@ TOP_YEAR_ROWS = 8
 RECENT_AWARDS = 500
 AWARD_PAGE = 500
 OPEN_FIRST_ROWS = 50
+# open-first.json also holds every notice closing up to this many days after
+# the data date: the site reads closing times at render, and those are the
+# notices that can close before the next nightly.
+OPEN_FIRST_MARGIN_DAYS = 1
 NEW_DAYS = 30
 # A notice counts as new on the day it is first seen only when it was
 # published within this many days before: the first load reads every notice
 # since 2022 and sees them all that night, and none of those is news.
 NEW_LAG_DAYS = 7
 CLOSING_SOON_DAYS = 7
+# stats.json closing_soon_times covers the window and two days more, so a
+# page read a day or two after the nightly still counts from the file.
+CLOSING_TIMES_DAYS = CLOSING_SOON_DAYS + 2
 PROFILE_ROWS = 100
 # CLAUDE.md's profile contract: the newest 50 lobbying communications.
 LOBBYING_ROWS = 50
@@ -531,8 +543,43 @@ def sources_loaded(conn: sqlite3.Connection) -> dict[str, bool]:
 
 # -- rows -------------------------------------------------------------------------------
 
+# The open list's rows carry this much of a notice's description, so the list
+# page's word filter reads it too (tenders/open.json is about 1 MB with it).
+EXCERPT_CHARS = 200
+_SPACES = re.compile(r"\s+")
 
-def tender_row(m: Model, r: sqlite3.Row, *, status: bool = False) -> dict | None:
+
+def excerpt(text: object, lang: str) -> str | None:
+    """The start of a description for the open list: scrubbed of contacts first (a cut could split an address
+    or a telephone number the scrub would no longer see), whitespace folded, cut at a word boundary within
+    EXCERPT_CHARS with an ellipsis."""
+    if not isinstance(text, str) or not text.strip():
+        return None
+    clean = _SPACES.sub(" ", str(scrub(text, lang))).strip()
+    if len(clean) <= EXCERPT_CHARS:
+        return clean
+    cut = clean[:EXCERPT_CHARS + 1]
+    space = cut.rfind(" ")
+    return (cut[:space] if space > EXCERPT_CHARS // 2 else cut[:EXCERPT_CHARS]).rstrip(" ,;:.") + "…"
+
+
+WORD_FIELDS = ("excerpt_en", "excerpt_fr", "codes")
+
+
+def list_fields(row: dict) -> dict:
+    """An open-list row without what only the open list's filters read (a segment's file, the home lists)."""
+    return {k: v for k, v in row.items() if k not in WORD_FIELDS}
+
+
+def full_codes(codes: object) -> list[str]:
+    """A notice's UNSPSC codes as stored (the newest amendment's), digits only, sorted: the list page filters a
+    family (4 digits) or a class (6) by prefix."""
+    return sorted({c for c in str(codes or "").split() if c.isdigit() and 2 <= len(c) <= 8})
+
+
+def tender_row(m: Model, r: sqlite3.Row, *, status: bool = False, words: bool = False) -> dict | None:
+    """A notice as a list row. words adds what the open list's filters read beyond the list fields: the start of
+    the description in each language and the full UNSPSC codes."""
     ref = m.refs["tenders"].get(r["reference"])
     if ref is None:
         return None
@@ -548,6 +595,10 @@ def tender_row(m: Model, r: sqlite3.Row, *, status: bool = False) -> dict | None
     }
     if ref != r["reference"]:
         row["reference_published"] = r["reference"]
+    if words:
+        row["excerpt_en"] = excerpt(r["description_en"], "en")
+        row["excerpt_fr"] = excerpt(r["description_fr"], "fr")
+        row["codes"] = full_codes(r["codes"])
     if status:
         # The status on the data date; the file's own beside it (they differ
         # when an open notice's closing day has passed).
@@ -816,6 +867,21 @@ def closing_soon(m: Model, open_rows: list[dict]) -> list[dict]:
     return [r for r in open_rows if (day := closing_day(r["closing"])) and m.as_of <= day <= soon_end]
 
 
+def closing_soon_times(m: Model, open_rows: list[dict]) -> list[str]:
+    """The closing values of the open notices whose closing day falls within CLOSING_TIMES_DAYS of the data
+    date, soonest first: the site counts closing soon from them at render (src/closing.ts)."""
+    end = (m.today + timedelta(days=CLOSING_TIMES_DAYS)).isoformat()
+    return [r["closing"] for r in open_rows if (day := closing_day(r["closing"])) and m.as_of <= day <= end]
+
+
+def open_first(m: Model, open_rows: list[dict]) -> list[dict]:
+    """The rows of tenders/open-first.json: every open notice closing by OPEN_FIRST_MARGIN_DAYS after the data
+    date (open_rows is soonest first), then OPEN_FIRST_ROWS more."""
+    end = (m.today + timedelta(days=OPEN_FIRST_MARGIN_DAYS)).isoformat()
+    early = sum(1 for r in open_rows if (day := closing_day(r["closing"])) is not None and day <= end)
+    return open_rows[:early + OPEN_FIRST_ROWS]
+
+
 def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[dict], new_today: list[dict],
                 top_year: list[dict]) -> dict:
     conn = m.conn
@@ -830,7 +896,8 @@ def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[
         "data_as_of": m.as_of,
         "counts": counts,
         "new_tenders": sorted(new_today, key=lambda r: (r["published"] or "", r["reference"]), reverse=True)[:HOME_ROWS],
-        "closing_soon": closing_soon(m, open_rows)[:HOME_ROWS],
+        "closing_soon": [list_fields(r) for r in closing_soon(m, open_rows)[:HOME_ROWS]],
+        "closing_soon_times": closing_soon_times(m, open_rows),
         "recent_awards": recent,
         "top_organizations_year": top_year,
         "runs": runs,
@@ -886,10 +953,10 @@ def write_tender_lists(m: Model, out: Path) -> tuple[list[dict], list[dict], dic
     conn = m.conn
     open_rows = [row for r in conn.execute(
         "SELECT * FROM x_tenders WHERE shown_status = 'open' ORDER BY closing IS NULL, closing, reference")
-        if (row := tender_row(m, r))]
+        if (row := tender_row(m, r, words=True))]
     _dump(out / "tenders" / "open.json", open_rows)
     _dump(out / "tenders" / "open-first.json", {
-        "total": len(open_rows), "rows": open_rows[:OPEN_FIRST_ROWS], "facets": tender_facets(open_rows)})
+        "total": len(open_rows), "rows": open_first(m, open_rows), "facets": tender_facets(open_rows)})
     first_day = (m.today - timedelta(days=NEW_DAYS - 1)).isoformat()
     by_day: dict[str, list[dict]] = {(m.today - timedelta(days=i)).isoformat(): [] for i in range(NEW_DAYS)}
     for r in conn.execute("SELECT * FROM x_tenders WHERE first_sight >= ? ORDER BY published DESC, reference",
@@ -1196,7 +1263,9 @@ def profile(m: Model, o: sqlite3.Row, t: dict[str, dict[str, list[sqlite3.Row]]]
                                         "registered_on", "grade", "checked_at")} for r in t["registry"].get(oid, [])],
         "years": [{"year": r["year"], "source": r["source"], "n": r["n"], "total": _money(r["total"]),
                    "n_non_competitive": r["n_non_competitive"], "total_non_competitive": _money(r["total_non_competitive"]),
-                   "n_no_value": r["n_no_value"] or 0}
+                   "n_no_value": r["n_no_value"] or 0, "total_positive": _money(r["total_positive"]),
+                   "total_non_competitive_positive": _money(r["total_non_competitive_positive"]),
+                   "n_negative": r["n_negative"] or 0}
                   for r in t["years"].get(oid, [])],
     }
     for k in ("total_awards", "total_history", "total_contracts", "total_grants"):
@@ -1466,7 +1535,7 @@ def write_categories(m: Model, out: Path, open_rows: list[dict]) -> dict[str, in
     open_by: dict[str, list[dict]] = defaultdict(list)
     for r in open_rows:
         for seg in r["segments"]:
-            open_by[seg].append(r)
+            open_by[seg].append(list_fields(r))
     n_all: Counter = Counter()
     nv_all: Counter = Counter()
     total_all: dict[str, float] = {}

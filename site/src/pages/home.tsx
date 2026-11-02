@@ -1,12 +1,13 @@
 import type { Context } from "hono";
-import { loadExpiringIndex, loadStats } from "../data";
+import { clockOf, tenderState } from "../closing";
+import { STATS_LIST_ROWS, closingSoonTotal, loadExpiringIndex, loadOpenFirst, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
-import { Layout, PageHead, Panel, closingPassed, noDataPage, page, todayOf } from "../layout";
+import { Layout, PageHead, Panel, noDataPage, page, todayOf } from "../layout";
 import { homeJsonLd, pageSeo } from "../seo";
 import { newestFirst } from "./awards";
 import { FeedLinks } from "./feeds";
-import { AwardTable, OrgTotalTable, TenderTable } from "./shared";
+import { AwardTable, CountdownScript, OrgTotalTable, TenderTable } from "./shared";
 
 type CountKey = "tenders_open" | "tenders_new_today" | "organizations" | "awards" | "history" | "contracts" | "grants" | "buyers";
 
@@ -35,6 +36,7 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   if (!stats) return noDataPage(c, "site.name");
   const today = todayOf(stats.data_as_of);
   const year = today.slice(0, 4);
+  const clock = clockOf(c.env);
   // The contracts ending within 3 months, after the award notices, when the
   // radar's index is published.
   const expiring = (await loadExpiringIndex(c.env))?.windows.find((w) => w.window === "3m");
@@ -49,8 +51,20 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   }
   // Four tiles to a row: without the radar the first standing total moves up.
   while (tiles.length < 4 && held.length) tiles.push(held.shift()!);
-  // A notice whose closing date has passed is not closing soon, whatever the file says.
-  const closingSoon = stats.closing_soon.filter((r) => !closingPassed(r.closing, today));
+  // Closing soon at the page's clock: a notice whose closing time has passed
+  // since the nightly is left out. The first open notices
+  // (tenders/open-first.json) hold every notice that could close before the
+  // next nightly and the ones after them, so the panel stays full through
+  // the day; stats.json's own list stands in when the file is missing.
+  const first = await loadOpenFirst(c.env);
+  const closingSoon = (first?.rows ?? stats.closing_soon)
+    .filter((r) => tenderState("open", r.closing, clock) === "closing")
+    .slice(0, STATS_LIST_ROWS);
+  const soonTotal = closingSoonTotal(stats, clock);
+  // The day's new notices: one whose closing time has passed goes after the others.
+  const passed = (r: { closing: string | null }) => tenderState("open", r.closing, clock) === "closed";
+  const newToday = [...stats.new_tenders.filter((r) => !passed(r)), ...stats.new_tenders.filter(passed)];
+  const countdown = [...stats.new_tenders, ...closingSoon].some((r) => tenderState("open", r.closing, clock) === "closing");
   // The newest award notices published, in the order of the Awarded column.
   const recentAwards = newestFirst(stats.recent_awards);
 
@@ -77,11 +91,12 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
       ) : null}
 
       <Panel title={t(lang, "home.new_heading")} tools={<a href="/tenders/new">{t(lang, "home.new_all")}</a>}>
-        {stats.new_tenders.length ? <TenderTable lang={lang} rows={stats.new_tenders} today={today} /> : <Empty lang={lang} k="home.new_none" />}
+        {newToday.length ? <TenderTable lang={lang} rows={newToday} clock={clock} /> : <Empty lang={lang} k="home.new_none" />}
       </Panel>
 
-      <Panel title={t(lang, "home.closing_heading")} class="soon" tools={<a href="/tenders?closing=7">{t(lang, "home.closing_all")}</a>}>
-        {closingSoon.length ? <TenderTable lang={lang} rows={closingSoon} today={today} /> : <Empty lang={lang} k="home.closing_none" />}
+      <Panel title={t(lang, "home.closing_heading")} class="soon" tools={<a href="/tenders?closing=7">{t(lang, "home.closing_all")}</a>}
+        count={soonTotal !== undefined ? <span data-soon-count="">{fmtInt(soonTotal, lang)}</span> : undefined}>
+        {closingSoon.length ? <TenderTable lang={lang} rows={closingSoon} clock={clock} /> : <Empty lang={lang} k="home.closing_none" />}
       </Panel>
 
       <Panel title={t(lang, "home.awards_heading")} tools={<a href="/awards">{t(lang, "home.awards_all")}</a>}>
@@ -119,6 +134,7 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
           </ul>
         </Panel>
       </div>
+      {countdown ? <CountdownScript lang={lang} /> : null}
     </Layout>,
   );
 }

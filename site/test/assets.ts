@@ -2,6 +2,7 @@
 // /data/ the way the deployed Worker reads the pipeline's export, plus the
 // two crawler files from public/.
 import { env } from "cloudflare:test";
+import { clockAt } from "../src/closing";
 import llms from "../public/llms.txt?raw";
 import robots from "../public/robots.txt?raw";
 import aliases from "./fixtures/aliases-a00.json";
@@ -136,6 +137,12 @@ export function assetsWithout(...paths: string[]): Fetcher {
   return makeFakeAssets({}, Object.fromEntries(paths.map((p) => [p, undefined])));
 }
 
-export function testEnv(assets: Fetcher = fakeAssets) {
-  return { ...(env as object), ASSETS: assets } as typeof env & { ASSETS: Fetcher };
+// The pages' clock in the tests: noon, Eastern time, on the fixtures' data
+// date (2026-10-31, before the clocks went back), so a fixture's closing
+// state holds whatever day the tests run.
+export const TEST_NOW = "2026-10-31T16:00:00Z";
+export const testClock = clockAt(Date.parse(TEST_NOW));
+
+export function testEnv(assets: Fetcher = fakeAssets, now: string = TEST_NOW) {
+  return { ...(env as object), ASSETS: assets, NOW: now } as typeof env & { ASSETS: Fetcher; NOW: string };
 }

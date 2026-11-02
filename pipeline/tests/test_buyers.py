@@ -438,3 +438,35 @@ def test_every_schema_reference_to_a_buyer_is_moved_or_dropped_when_a_buyer_is_d
             found.add((table, m.group(1)))
     covered = set(buyers.BUYER_COLUMNS) | set(buyers.DERIVED_BUYER_COLUMNS) | {("buyer_names", "buyer_id")}
     assert found == covered
+
+
+def test_the_tribunals_support_service_is_one_buyer_and_its_made_duplicates_go(real):
+    """The buyers list showed "Administrative Tribunals Support Service of Canada" twice (2026-11-02): the
+    acronyms alone and the French name with a typographic apostrophe had made buyers of their own. The seed
+    maps those spellings to the CKAN id, atssc-scdata; the made ids (atssc on the live site,
+    administrative-tribunals-support-service-of-canada on a dev load) move their records there and go."""
+    conn = real
+    buyers.upsert_ckan(conn, ckan_org("atssc-scdata", "Administrative Tribunals Support Service of Canada",
+                                      "Service canadien d'appui aux tribunaux administratifs", "ATSSC", "SCDATA"), now=NOW)
+    made = {"atssc": ["ATSSC", "SCDATA"],
+            "administrative-tribunals-support-service-of-canada": ["Service canadien d’appui aux tribunaux administratifs (SCDATA)"]}
+    for bid, names in made.items():
+        conn.execute("INSERT INTO buyers (id, name_en, updated_at) VALUES (?, ?, ?)",
+                     (bid, "Administrative Tribunals Support Service of Canada", NOW))
+        conn.executemany("INSERT INTO buyer_names (raw_name, source, buyer_id) VALUES (?, 'canadabuys', ?) "
+                         "ON CONFLICT(raw_name, source) DO UPDATE SET buyer_id = excluded.buyer_id",
+                         [(n, bid) for n in names])
+    conn.execute("INSERT INTO awards (reference, amendment, buyer_id, buyer_raw_en, source_file, first_seen, last_seen) "
+                 "VALUES ('T1', 0, 'atssc', 'ATSSC', 'f', '2026-10-30', '2026-10-30')")
+    conn.commit()
+    buyers.run(conn, None, now=NOW, offline=True)
+    assert conn.execute("SELECT buyer_id FROM awards WHERE reference = 'T1'").fetchone()[0] == "atssc-scdata"
+    assert not conn.execute("SELECT 1 FROM buyers WHERE id IN ('atssc', 'administrative-tribunals-support-service-of-canada')").fetchall()
+    for spelling in ("ATSSC", "SCDATA", "Service canadien d’appui aux tribunaux administratifs (SCDATA)",
+                     "Administrative Tribunals Support Service of Canada (ATSSC)"):
+        assert buyers.resolve(conn, spelling) == "atssc-scdata", spelling
+    named = conn.execute("SELECT COUNT(*) FROM buyers WHERE name_en = 'Administrative Tribunals Support Service of Canada'")
+    assert named.fetchone()[0] == 1
+    # The old buyer pages redirect.
+    aliases = dict(conn.execute("SELECT old_id, new_id FROM buyer_aliases").fetchall())
+    assert aliases.get("atssc") == "atssc-scdata"

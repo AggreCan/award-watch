@@ -153,10 +153,13 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
           <CostBars
             lang={lang}
             rows={[
-              { label: t(lang, "support.bar_domain"), cents: DOMAIN_CENTS_PER_MONTH },
-              { label: t(lang, "support.bar_workers"), cents: WORKERS_PLAN_CENTS_PER_MONTH },
-              { label: t(lang, "support.bar_hosting"), cents: HOSTING_CENTS_PER_MONTH },
-              { label: t(lang, "support.bar_github"), cents: ACTIONS_CENTS_PER_MONTH },
+              // A cost of nothing gets no bar of its own: the line under the bars says so.
+              ...[
+                { label: t(lang, "support.bar_domain"), cents: DOMAIN_CENTS_PER_MONTH },
+                { label: t(lang, "support.bar_workers"), cents: WORKERS_PLAN_CENTS_PER_MONTH },
+                { label: t(lang, "support.bar_hosting"), cents: HOSTING_CENTS_PER_MONTH },
+                { label: t(lang, "support.bar_github"), cents: ACTIONS_CENTS_PER_MONTH },
+              ].filter((r) => r.cents > 0),
               { label: t(lang, "support.bar_total"), cents: COSTS_TODAY_CENTS, total: true },
             ]}
           />
@@ -167,10 +170,13 @@ export async function supportPage(c: Context<AppEnv>): Promise<Response> {
               workersUsd: fmtUsd(WORKERS_PAID_USD_PER_MONTH, lang),
               workers: money(WORKERS_PLAN_CENTS_PER_MONTH),
             })}{" "}
-            {ACTIONS_CENTS_PER_MONTH > 0
-              ? t(lang, "support.costs_github", { github: money(ACTIONS_CENTS_PER_MONTH) })
-              : t(lang, "support.costs_github_free")}
+            {HOSTING_CENTS_PER_MONTH === 0 && ACTIONS_CENTS_PER_MONTH === 0
+              ? t(lang, "support.costs_free")
+              : ACTIONS_CENTS_PER_MONTH > 0
+                ? t(lang, "support.costs_github", { github: money(ACTIONS_CENTS_PER_MONTH) })
+                : t(lang, "support.costs_github_free")}
           </p>
+          <p>{t(lang, "support.search_plan")}</p>
 
           <h2 id="tiers">{t(lang, "support.toc_tiers")}</h2>
           <p>

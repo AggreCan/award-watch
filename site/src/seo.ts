@@ -285,6 +285,11 @@ export function homeJsonLd(lang: Lang): object {
   };
 }
 
+// The licence the Registry of Lobbyists publishes its data under, as its
+// open.canada.ca record links it (an English page; the registry's site
+// switches language itself).
+export const ODLA_URL = "https://lobbycanada.gc.ca/en/open-data/open-data-licence-agreement/";
+
 export const OGL_URL: Both = {
   en: "https://open.canada.ca/en/open-government-licence-canada",
   fr: "https://ouvert.canada.ca/fr/licence-du-gouvernement-ouvert-canada",

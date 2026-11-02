@@ -9,8 +9,11 @@ and the site serves only these names):
                           publication date) falls in the year, from FIRST_YEAR["awards"] (2012)
   awards-before-2012.csv  the award notice versions dated before it: a handful of rows whose dates
                           are typing errors in the source, in one file rather than a file a year
+  awards-after-<year>.csv the versions dated after the data date's year, typing errors too ("2040"),
+                          in one file named for that year
   history-<year>.csv      every contract history version, by the same rule, from 2009
-  history-before-2009.csv the same for the contract history (written only when such a row exists)
+  history-before-2009.csv, history-after-<year>.csv   the same for the contract history
+                          (the before and after files are written only when such a row exists)
   organizations.csv       one row per organization: names, main place, counters and totals by source,
                           and beside each total the count of records whose source published no value
   buyers.csv              one row per buyer with a record in a column the buyers list shows (listed_buyer_ids):
@@ -18,7 +21,8 @@ and the site serves only these names):
   expiring-12m.csv        the expiring-contracts radar: every contract ending within 365 days, listed
                           once across the three sources (expiring.py), soonest end first, with the
                           client department and the value flag
-  SHA256SUMS              sha256sum's format: "<hex>  <file>" per line, sorted by file name
+  SHA256SUMS              sha256sum's format: "<hex>  <file>" per line, sorted by file name; every file
+                          in it is one the Data page offers
 
 Every CSV opens with a UTF-8 byte-order mark, so a spreadsheet reads the
 French names as written, and a list field (provinces, segments, end users) is
@@ -82,7 +86,7 @@ SUMS = "SHA256SUMS"
 
 REMOVED = {"en": "[contact removed]", "fr": "[coordonnées retirées]"}
 # The fields whose text is the publisher's prose; names and code lists are not.
-FREE_TEXT_KEY = re.compile(r"^(title|description|comments|program|selection|limited_reason)_(en|fr)$")
+FREE_TEXT_KEY = re.compile(r"^(title|description|excerpt|comments|program|selection|limited_reason)_(en|fr)$")
 # An address may carry a space on either side of the @ in prose; its domain has a dot.
 EMAIL_RE = re.compile(r"[\w.+%'-]+\s?@\s?[\w-]+(?:\.[\w-]+)+")
 # Not joined to a letter, a digit, a "+", a hyphen, or a decimal ("49.613 555 0100" is a coordinate).
@@ -144,7 +148,7 @@ def register_functions(conn: sqlite3.Connection) -> None:
     conn.create_function("tender_status_on", 3, tender_status_on, deterministic=True)
 
 
-YEAR_RE = re.compile(r"^(awards|history)-(?:before-)?\d{4}\.csv$")
+YEAR_RE = re.compile(r"^(awards|history)-(?:before-|after-)?\d{4}\.csv$")
 # The first year with a file of its own; earlier dates are typing errors in the source and share one file.
 FIRST_YEAR = {"awards": 2012, "history": 2009}
 FIXED_FILES = ("open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-12m.csv")
@@ -274,19 +278,25 @@ def _years(conn: sqlite3.Connection, table: str) -> list[str]:
         "WHERE COALESCE(awarded, published) GLOB '[0-9][0-9][0-9][0-9]-*' ORDER BY 1")]
 
 
-def _yearly_files(conn: sqlite3.Connection, prefix: str, table: str, sql: str) -> list[tuple[str, str, tuple]]:
-    """(file name, query, arguments) for each yearly file of a table: one per year from FIRST_YEAR, and the
-    years before it together in <prefix>-before-<FIRST_YEAR>.csv (the Data page lists the years it has)."""
+def _yearly_files(conn: sqlite3.Connection, prefix: str, table: str, sql: str,
+                  last: int | None = None) -> list[tuple[str, str, tuple]]:
+    """(file name, query, arguments) for each yearly file of a table: one per year from FIRST_YEAR to last (the
+    data date's year), the years before it together in <prefix>-before-<FIRST_YEAR>.csv and the years after
+    last together in <prefix>-after-<last>.csv. The Data page offers exactly these names, so SHA256SUMS lists
+    nothing it does not."""
     first = FIRST_YEAR[prefix]
+    last = last if last is not None else datetime.now(timezone.utc).year
     years = _years(conn, table)
-    files = [(f"{prefix}-{y}.csv", sql, (y,)) for y in years if int(y) >= first]
-    if any(int(y) < first for y in years):
-        where = "WHERE substr(COALESCE(a.awarded, a.published), 1, 4) = ? ORDER BY a.reference"
-        if where not in sql:
-            raise ValueError(f"{prefix}: the yearly query no longer reads its year as expected")
-        before = sql.replace(where, "WHERE substr(COALESCE(a.awarded, a.published), 1, 4) < ? "
-                                    "ORDER BY substr(COALESCE(a.awarded, a.published), 1, 10), a.reference")
-        files.append((f"{prefix}-before-{first}.csv", before, (str(first),)))
+    files = [(f"{prefix}-{y}.csv", sql, (y,)) for y in years if first <= int(y) <= last]
+    where = "WHERE substr(COALESCE(a.awarded, a.published), 1, 4) = ? ORDER BY a.reference"
+    for test, op, year, name in ((lambda y: y < first, "<", first, f"{prefix}-before-{first}.csv"),
+                                 (lambda y: y > last, ">", last, f"{prefix}-after-{last}.csv")):
+        if any(test(int(y)) for y in years):
+            if where not in sql:
+                raise ValueError(f"{prefix}: the yearly query no longer reads its year as expected")
+            query = sql.replace(where, f"WHERE substr(COALESCE(a.awarded, a.published), 1, 4) {op} ? "
+                                       "ORDER BY substr(COALESCE(a.awarded, a.published), 1, 10), a.reference")
+            files.append((name, query, (str(year),)))
     return files
 
 
@@ -308,7 +318,7 @@ def export_csv(conn: sqlite3.Connection, out_dir: Path | None = None, *, today: 
     counts: dict[str, int] = {}
     counts["open-tenders.csv"] = _write(out / "open-tenders.csv", conn.execute(OPEN_TENDERS, {"as_of": as_of}))
     for prefix, table, sql in (("awards", "awards", AWARDS), ("history", "contract_history", HISTORY)):
-        for name, query, args in _yearly_files(conn, prefix, table, sql):
+        for name, query, args in _yearly_files(conn, prefix, table, sql, int(as_of[:4])):
             counts[name] = _write(out / name, conn.execute(query, args))
     counts["organizations.csv"] = _write(out / "organizations.csv", conn.execute(ORGANIZATIONS))
     counts["buyers.csv"] = _write(out / "buyers.csv", conn.execute(BUYERS, {"as_of": as_of}))

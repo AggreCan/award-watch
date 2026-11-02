@@ -98,6 +98,14 @@ _NON_COMPETITIVE = (
     "CASE WHEN source = 'grants' THEN NULL ELSE SUM(CASE WHEN comp = 0 THEN 1 ELSE 0 END) END",
     "ROUND(SUM(CASE WHEN comp = 0 THEN v END), 2)",
 )
+# The positive values alone, for the non-competitive share by value: an
+# amendment that lowers a published contract is a negative row, and a share
+# of a net total can fall below zero (one profile read -10 percent).
+_POSITIVE = (
+    "ROUND(SUM(CASE WHEN v > 0 THEN v END), 2), "
+    "CASE WHEN source = 'grants' THEN NULL ELSE ROUND(SUM(CASE WHEN comp = 0 AND v > 0 THEN v END), 2) END, "
+    "SUM(CASE WHEN v < 0 THEN 1 ELSE 0 END)"
+)
 BUYER_FIELDS = ("n_tenders", "n_awards", "n_history", "n_contracts", "n_grants", "total_awards", "total_contracts",
                 "total_grants", "n_awards_no_value", "n_contracts_no_value", "n_grants_no_value")
 
@@ -142,8 +150,9 @@ def compute(conn: sqlite3.Connection, *, now: str | None = None) -> dict[str, in
         conn.execute("DELETE FROM organization_years")
         conn.execute(
             "INSERT INTO organization_years (organization_id, year, source, n, total, n_non_competitive, "
-            f"total_non_competitive, n_no_value) SELECT org, year, source, COUNT(*), ROUND(SUM(v), 2), "
-            f"{_NON_COMPETITIVE[0]}, {_NON_COMPETITIVE[1]}, SUM(nv) FROM temp.indicator_records "
+            "total_non_competitive, n_no_value, total_positive, total_non_competitive_positive, n_negative) "
+            f"SELECT org, year, source, COUNT(*), ROUND(SUM(v), 2), "
+            f"{_NON_COMPETITIVE[0]}, {_NON_COMPETITIVE[1]}, SUM(nv), {_POSITIVE} FROM temp.indicator_records "
             "WHERE org IS NOT NULL AND year IS NOT NULL GROUP BY org, year, source"
         )
         conn.execute("DELETE FROM buyer_years")

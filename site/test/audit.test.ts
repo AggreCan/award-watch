@@ -9,12 +9,13 @@ import { clearOfAnchors } from "../src/chart";
 import { sourceLoaded, type Profile, type TenderRow } from "../src/data";
 import { t } from "../src/i18n";
 import { app } from "../src/index";
-import { closingPassed, tenderState, viewKey } from "../src/layout";
+import { closingPassed, tenderState } from "../src/closing";
+import { viewKey } from "../src/layout";
 import { publisherDay } from "../src/pages/data";
 import { REQUEST_LIMITS } from "../src/pages/docs";
 import { awardNoticeUrl, closingText, shareText, tenderNoticeUrl } from "../src/pages/shared";
 import { filterTenders, readTenderQuery } from "../src/pages/tenders";
-import { makeFakeAssets, testEnv } from "./assets";
+import { makeFakeAssets, testClock, testEnv } from "./assets";
 import expiring3mPage1 from "./fixtures/expiring-3m-1.json";
 import profiles from "./fixtures/profiles-a00.json";
 import stats from "./fixtures/stats.json";
@@ -35,15 +36,17 @@ const nbsp = (s: string) => s.replace(/[  ]/g, " ");
 const withFiles = (overrides: Record<string, unknown>) => testEnv(makeFakeAssets({}, overrides));
 const rail = (html: string) => html.match(/<nav class="rail"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? "";
 
-const TODAY = "2026-10-31";
+const TODAY = testClock;
 const firstRows = openFirst.rows as unknown as TenderRow[];
 // The first open notice with its closing date moved before the data date.
 const passedRow: TenderRow = { ...firstRows[0], closing: "2026-10-20T14:00:00" };
 
 describe("a notice whose closing date has passed", () => {
-  it("reads closed (closing date passed) before the data date, closing soon from the data date on", () => {
+  it("reads closed (closing date passed) once its closing time has passed, closing soon until then", () => {
     expect(tenderState("open", "2026-10-20T14:00:00", TODAY)).toBe("closed");
-    expect(tenderState("open", "2026-10-31T09:00:00", TODAY)).toBe("closing");
+    // The clock is at noon Eastern time on 2026-10-31: 09:00 has passed, 14:00 has not.
+    expect(tenderState("open", "2026-10-31T09:00:00", TODAY)).toBe("closed");
+    expect(tenderState("open", "2026-10-31T14:00:00", TODAY)).toBe("closing");
     expect(tenderState("open", "2026-11-20T14:00:00", TODAY)).toBe("open");
     // The export's own "closed" passes through, and other statuses stay as they are.
     expect(tenderState("closed", "2026-10-20T14:00:00", TODAY)).toBe("closed");
@@ -72,7 +75,7 @@ describe("a notice whose closing date has passed", () => {
     const soon = stats.closing_soon[0] as unknown as TenderRow;
     const past = { ...soon, reference: "cb-900-90000009", closing: "2026-10-29T14:00:00" };
     const html = await text("/", withFiles({ "stats.json": { ...stats, closing_soon: [soon, past] } }));
-    expect(rail(html)).toContain('<span class="rail-label">Closing within 7 days</span><span class="rail-n">1</span>');
+    expect(rail(html)).toContain('<span class="rail-label">Closing within 7 days</span><span class="rail-n" data-soon-count="">1</span>');
     const panel = html.slice(html.indexOf("Closing Within 7 Days"), html.indexOf("Recent Award Notices"));
     expect(panel).toContain(soon.reference);
     expect(panel).not.toContain("cb-900-90000009");
@@ -142,11 +145,14 @@ describe("the UNSPSC segment pages", () => {
     expect((await get("/segments/99")).status).toBe(404);
   });
 
-  it("explain the numbered chips once above a list, and name each chip for a reader", async () => {
+  it("explain the segment chips once above a list, and name each chip by number and short name", async () => {
     const html = await text("/segments/82");
-    expect(html).toContain("Numbers after a reference are UNSPSC segments.");
-    expect(html).toContain('<a href="/segments/82" class="chip" title="Editorial and Design and Graphic and Fine Art Services" aria-label="UNSPSC segment 82">82</a>');
-    expect(await text("/tenders")).toContain("Numbers after a reference are UNSPSC segments.");
+    expect(html).toContain("The tags after a reference are UNSPSC segments, by number and short name.");
+    // The full title on hover; the accessible name holds the visible text.
+    expect(html).toContain('<a href="/segments/82" class="chip" title="Editorial and Design and Graphic and Fine Art Services" aria-label="UNSPSC segment 82 Editorial and design">82 Editorial and design</a>');
+    expect(await text("/tenders")).toContain("The tags after a reference are UNSPSC segments, by number and short name.");
+    const fr = nbsp(await text("/segments/82?lang=fr"));
+    expect(fr).toContain('aria-label="Segment UNSPSC 82 Rédaction et conception">82 Rédaction et conception</a>');
   });
 });
 
@@ -337,8 +343,10 @@ describe("buyer ids that moved", () => {
 
 describe("smaller fixes", () => {
   it("writes the closing time the way each language does, with the zone when the value has one", () => {
-    expect(closingText("2026-11-26T14:00:00")).toBe("2026-11-26 14:00");
-    expect(closingText("2026-11-26T14:00:00", "fr")).toBe("2026-11-26 14 h 00");
+    // CanadaBuys' times name no zone and are Eastern time.
+    expect(closingText("2026-11-26T14:00:00")).toBe("2026-11-26 14:00 ET");
+    expect(closingText("2026-11-26T14:00:00", "fr")).toBe("2026-11-26 14 h 00 HE");
+    expect(closingText("2026-11-26T14:00:00Z")).toBe("2026-11-26 14:00 UTC");
     expect(closingText("2026-11-26T14:00:00-05:00")).toBe("2026-11-26 14:00 -05:00");
     expect(closingText("2026-11-26")).toBe("2026-11-26");
   });

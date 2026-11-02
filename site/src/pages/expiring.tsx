@@ -72,6 +72,22 @@ export interface ExpiringQuery {
   competitive: CompetitiveFilter | "";
   value: ValueBand | "";
   kind: ExpiringKind | "";
+  // Whether contracts ending on March 31 and standing offers and supply
+  // arrangements stay in the list: on unless the address says fye=0 or sosa=0.
+  fye: boolean;
+  sosa: boolean;
+}
+
+// A contract ending on March 31, the last day of the federal fiscal year.
+export function fiscalYearEnd(r: Pick<ExpiringRow, "end">): boolean {
+  return r.end.slice(5, 10) === "03-31";
+}
+
+// A standing offer or a supply arrangement (CanadaBuys' instrument types, and
+// the published contracts' "Standing offer or supply arrangement"), not a
+// contract made under one.
+export function standingOffer(r: Pick<ExpiringRow, "instrument_en">): boolean {
+  return /^(standing offer|supply arrangement)/i.test((r.instrument_en ?? "").trim());
 }
 
 // The query as the form writes it. A value the filter cannot use reads as no
@@ -83,7 +99,15 @@ export function readExpiringQuery(url: URL): ExpiringQuery {
   const competitive = get("competitive").toLowerCase();
   const value = get("value").toLowerCase();
   const kind = get("kind").toLowerCase();
+  // The form sends 0 from a hidden field and 1 from a ticked box, so a 1 or
+  // no value at all keeps the rows in.
+  const kept = (k: string) => {
+    const v = url.searchParams.getAll(k);
+    return v.length === 0 || v.includes("1");
+  };
   return {
+    fye: kept("fye"),
+    sosa: kept("sosa"),
     buyer: BUYER_ID_RE.test(buyer) && buyer.length <= 80 ? buyer : "",
     segment: SEGMENT_RE.test(segment) ? segment : "",
     competitive: (COMPETITIVE_FILTERS as readonly string[]).includes(competitive) ? (competitive as CompetitiveFilter) : "",
@@ -99,13 +123,15 @@ const FILTER_LABEL: Record<(typeof FILTER_KEYS)[number], Key> = {
 };
 
 export function isFiltered(q: ExpiringQuery): boolean {
-  return FILTER_KEYS.some((k) => q[k] !== "");
+  return FILTER_KEYS.some((k) => q[k] !== "") || !q.fye || !q.sosa;
 }
 
 // The URL of a view: only the values set, in a fixed order, then the page.
 export function expiringQueryString(q: ExpiringQuery, pageNo = 1): string {
   const p = new URLSearchParams();
   for (const k of FILTER_KEYS) if (q[k]) p.set(k, q[k]);
+  if (!q.fye) p.set("fye", "0");
+  if (!q.sosa) p.set("sosa", "0");
   if (pageNo > 1) p.set("page", String(pageNo));
   const s = p.toString();
   return s ? `?${s}` : "";
@@ -146,6 +172,8 @@ export function filterExpiring(rows: readonly ExpiringRow[], q: ExpiringQuery): 
     if (q.competitive && competitiveOfRow(r) !== q.competitive) return false;
     if (q.value && valueBand(r) !== q.value) return false;
     if (q.kind && r.kind !== q.kind) return false;
+    if (!q.fye && fiscalYearEnd(r)) return false;
+    if (!q.sosa && standingOffer(r)) return false;
     return true;
   });
 }
@@ -245,7 +273,10 @@ export const ExpiringTable: FC<{ lang: Lang; rows: readonly ExpiringRow[]; organ
                 {path ? <a href={path}>{title}</a> : <a href={expiringRecordUrl(r, lang)} rel="nofollow noopener">{title}</a>}
                 <br />
                 <span class="mono id muted">{contractReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} />
-                {instrument ? <><br /><span class="muted small">{instrument}</span></> : null}
+                {/* A standing offer or supply arrangement is tagged (a framework, not one purchase), and so is an end on March 31. */}
+                {instrument || fiscalYearEnd(r) ? <br /> : null}
+                {instrument ? <span class={standingOffer(r) ? "tag" : "muted small"}>{instrument}</span> : null}
+                {fiscalYearEnd(r) ? <>{instrument ? " " : null}<span class="tag">{t(lang, "expiring.tag_fye")}</span></> : null}
               </td>
               {organization ? <td data-label={t(lang, "col.supplier")}><Organization lang={lang} r={r} /></td> : null}
               {buyer ? <td data-label={t(lang, "col.buyer")} class={restClass(BUYER_REST)}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td> : null}
@@ -575,6 +606,20 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
             <a href={path} class="btn">{t(lang, "tenders.reset")}</a>
           </div>
         </div>
+        {/* Two kinds of rows, in by default; the counts are the loaded page's, as the selects' are. */}
+        <div class="toolbar-row" role="group" aria-labelledby="radar-include">
+          <span class="toolbar-label" id="radar-include">{t(lang, "expiring.filter_include")}</span>
+          <label class="check">
+            <input type="hidden" name="fye" value="0" />
+            <input type="checkbox" name="fye" value="1" checked={q.fye} />
+            <span>{t(lang, "expiring.filter_fye", { n: fmtInt(sorted.filter(fiscalYearEnd).length, lang) })}</span>
+          </label>
+          <label class="check">
+            <input type="hidden" name="sosa" value="0" />
+            <input type="checkbox" name="sosa" value="1" checked={q.sosa} />
+            <span>{t(lang, "expiring.filter_sosa", { n: fmtInt(sorted.filter(standingOffer).length, lang) })}</span>
+          </label>
+        </div>
         {filtered ? (
           <div class="toolbar-chips">
             <span class="chips-label">{t(lang, "tenders.filters_active")}</span>
@@ -587,6 +632,13 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
                 </a>
               );
             })}
+            {([["fye", "expiring.chip_fye"], ["sosa", "expiring.chip_sosa"]] as const).filter(([k]) => !q[k]).map(([k, label]) => (
+              <a class="fchip" href={`${path}${expiringQueryString({ ...q, [k]: true })}`}
+                aria-label={t(lang, "tenders.remove_filter", { name: t(lang, label) })}>
+                <span>{t(lang, label)}</span> <b>{t(lang, "expiring.chip_left_out")}</b>
+                <span class="fchip-x" aria-hidden="true">×</span>
+              </a>
+            ))}
           </div>
         ) : null}
         <p class="toolbar-note">{t(lang, "expiring.band_note")}</p>

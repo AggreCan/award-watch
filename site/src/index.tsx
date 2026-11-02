@@ -186,11 +186,14 @@ export function downloadAllowed(file: string): boolean {
 
 app.get("/downloads/:file{.+}", async (c) => {
   const file = c.req.param("file");
-  let object: R2ObjectBody | null = null;
+  // A HEAD reads the object's metadata only.
+  const head = c.req.method === "HEAD";
+  let object: R2Object | R2ObjectBody | null = null;
   let unavailable = false;
   if (downloadAllowed(file) && c.env.DATA) {
     try {
-      object = await c.env.DATA.get(file.startsWith("mirror/") ? file : `downloads/${file}`);
+      const key = file.startsWith("mirror/") ? file : `downloads/${file}`;
+      object = head ? await c.env.DATA.head(key) : await c.env.DATA.get(key);
     } catch (e) {
       // Storage outage: the same page as a missing file, with a status that says try later.
       console.error(`download ${file}: ${String(e).slice(0, 200)}`);
@@ -213,7 +216,8 @@ app.get("/downloads/:file{.+}", async (c) => {
   headers.set("Content-Type", file.endsWith(".csv") ? "text/csv; charset=utf-8" : file === "SHA256SUMS" ? "text/plain; charset=utf-8" : "application/octet-stream");
   headers.set("Content-Disposition", `attachment; filename="${file.split("/").pop()}"`);
   headers.set("Cache-Control", "public, max-age=3600");
-  return new Response(object.body, { headers });
+  headers.set("Content-Length", String(object.size));
+  return new Response(head ? null : (object as R2ObjectBody).body, { headers });
 });
 
 app.notFound(async (c) => {

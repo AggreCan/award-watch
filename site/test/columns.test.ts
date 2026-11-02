@@ -41,8 +41,14 @@ describe("column widths", () => {
     const lg = md + COLUMN_WIDTHS.record;
     const xl = lg + COLUMN_WIDTHS.amend;
     const all = xl + COLUMN_WIDTHS.buyer;
-    expect(minWidths(cols)).toEqual({ all, xl, lg, md });
+    // No column rests in the widest range, so its width is the whole table's and the style leaves it out.
+    expect(minWidths(cols)).toEqual({ all, xxl: all, xl, lg, md });
     expect(tableStyle(cols)).toBe(`--tmin:${all}px;--tmin-xl:${xl}px;--tmin-lg:${lg}px;--tmin-md:${md}px`);
+    const wide: Column[] = [...cols, { kind: "tally", label: "", rest: "xxl" }];
+    expect(minWidths(wide)).toEqual({ all: all + COLUMN_WIDTHS.tally, xxl: all, xl, lg, md });
+    expect(tableStyle(wide)).toBe(`--tmin:${all + COLUMN_WIDTHS.tally}px;--tmin-xxl:${all}px;--tmin-xl:${xl}px;--tmin-lg:${lg}px;--tmin-md:${md}px`);
+    expect(headClass({ kind: "tally", label: "", rest: "xxl", class: "num" })).toBe("k-tally xxh num");
+    expect(headClass({ kind: "tally", label: "" })).toBe("k-tally");
     expect(headClass({ kind: "value", label: "" })).toBe("k-value num");
     expect(headClass({ kind: "buyer", label: "", rest: "md", class: "c-buyer" })).toBe("k-buyer mdh c-buyer");
   });
@@ -61,7 +67,8 @@ describe("column widths", () => {
           const kinds = heads.map((cls) => {
             const k = cls.filter((c) => c.startsWith("k-"));
             expect(k, `${path} ${cls.join(" ")}`).toHaveLength(1);
-            return { kind: k[0].slice(2), rest: cls.includes("mdh") ? "md" : cls.includes("lgh") ? "lg" : cls.includes("xlh") ? "xl" : undefined } as Column;
+            const rest = cls.includes("mdh") ? "md" : cls.includes("lgh") ? "lg" : cls.includes("xlh") ? "xl" : cls.includes("xxh") ? "xxl" : undefined;
+            return { kind: k[0].slice(2), rest } as Column;
           });
           // One main column per table, which takes the width the others leave.
           expect(kinds.filter((c) => c.kind === "main"), path).toHaveLength(1);
@@ -81,5 +88,42 @@ describe("column widths", () => {
     ]);
     expect(data.table.heads.map((h: string[]) => h[1])).toEqual(["Notice", "Buyer", "Closing", "Published", "Provinces of delivery"]);
     expect(data.table.style).toMatch(/^--tmin:\d+px;--tmin-xl:\d+px;--tmin-lg:\d+px;--tmin-md:\d+px$/);
+  });
+});
+
+// The content column at the narrowest window of each range: the window less
+// a 15 px scrollbar, the 240 px rail, the two 24 px gutters and the panel's
+// two borders. A table fits its range when its least width there is no wider.
+const CONTENT = { lg: 1280 - 15 - 240 - 48 - 2, xl: 1440 - 15 - 240 - 48 - 2, xxl: 1600 - 15 - 240 - 48 - 2, all: 1920 - 15 - 240 - 48 - 2 };
+const styleOf = (html: string, marker: string) => {
+  const at = html.indexOf(marker);
+  const m = html.slice(at).match(/<table class="[^"]*" style="([^"]+)"/);
+  const v = (name: string) => Number(m?.[1].match(new RegExp(`--tmin${name}:([0-9]+)px`))?.[1]);
+  return { all: v(""), xxl: v("-xxl") || v(""), xl: v("-xl"), lg: v("-lg") };
+};
+
+describe("a source's name over its figure", () => {
+  it("heads its column on one line, in the tally kind, on every table that has one", async () => {
+    // "Historique des contrats de SPAC", the longest, is 186 px of 12 px Inter
+    // at weight 500 (measured in Chrome); the cell's padding is 8 px a side.
+    expect(COLUMN_WIDTHS.tally).toBeGreaterThanOrEqual(186 + 16);
+    for (const [path, heads] of [
+      ["/buyers?lang=fr", ["Avis d’attribution", "Historique des contrats de SPAC", "Contrats publiés", "Subventions et contributions"]],
+      ["/watchlist", ["Award notices", "PSPC contract history", "Published contracts", "Grants and contributions", "Lobbying communications"]],
+      ["/segments", ["Award notices in 2026", "All award notices"]],
+    ] as const) {
+      const html = await text(path);
+      for (const head of heads) expect(html, `${path} ${head}`).toMatch(new RegExp(`<th class="k-tally( [a-z]+h)? num">${head}</th>`));
+    }
+  });
+
+  it("keeps the buyers list and the watchlist inside the window at 1280, 1440, 1600 and 1920 px, resting columns rather than scrolling", async () => {
+    for (const [path, marker] of [["/buyers", 'id="main"'], ["/watchlist", 'id="watchlist"']] as const) {
+      const w = styleOf(await text(path), marker);
+      expect(w.lg, path).toBeLessThanOrEqual(CONTENT.lg);
+      expect(w.xl, path).toBeLessThanOrEqual(CONTENT.xl);
+      expect(w.xxl, path).toBeLessThanOrEqual(CONTENT.xxl);
+      expect(w.all, path).toBeLessThanOrEqual(CONTENT.all);
+    }
   });
 });

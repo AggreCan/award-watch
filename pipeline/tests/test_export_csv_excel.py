@@ -3,6 +3,8 @@ the sums computed on the bytes written, and the few award dates before 2012 in o
 
 import csv
 import hashlib
+import re
+from datetime import date
 
 from awardwatch_pipeline import export
 from export_seed import seed
@@ -60,3 +62,23 @@ def test_award_dates_before_2012_share_one_file(conn, tmp_path):
     assert all(export.YEAR_RE.match(n) for n in names if n.startswith(("awards-", "history-")))
     sums = (out / "SHA256SUMS").read_text(encoding="utf-8")
     assert "awards-before-2012.csv" in sums and "awards-1996.csv" not in sums
+
+
+def test_award_dates_after_the_data_year_share_one_file_and_every_file_is_offered(conn, tmp_path):
+    """A date after the data date's year is a typing error too ("2040"); those rows share one file named for
+    the data year, and SHA256SUMS lists only names the Data page offers (site/src/pages/data.tsx)."""
+    seed(conn)
+    for ref, day in (("LATE-1", "2027-03-01"), ("LATE-2", "2040-01-15"), ("OLD-1", "2011-12-31")):
+        conn.execute("INSERT INTO awards (reference, amendment, awarded, published, amount, currency, status, "
+                     "source_file, first_seen, last_seen) VALUES (?, 0, ?, ?, 10, 'CAD', 'active', 'f', ?, ?)",
+                     (ref, day, day, day, day))
+    out = tmp_path / "csv"
+    counts = export.export_csv(conn, out, today=date(2026, 11, 2))
+    names = sorted(p.name for p in out.iterdir())
+    assert "awards-after-2026.csv" in names and "awards-2027.csv" not in names and "awards-2040.csv" not in names
+    assert [r["reference"] for r in read(out / "awards-after-2026.csv")] == ["LATE-1", "LATE-2"]
+    assert counts["awards-before-2012.csv"] == 1
+    offered = re.compile(r"^(open-tenders|organizations|buyers|expiring-12m)\.csv$|^(awards|history)-(\d{4}|before-\d{4}|after-\d{4})\.csv$")
+    sums = [line.split("  ")[1] for line in (out / "SHA256SUMS").read_text(encoding="utf-8").splitlines()]
+    assert sums and all(offered.match(n) for n in sums)
+    assert all(int(m.group(1)) <= 2026 for n in sums if (m := re.match(r"^awards-(\d{4})\.csv$", n)))

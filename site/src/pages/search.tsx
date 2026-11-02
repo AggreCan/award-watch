@@ -19,7 +19,7 @@ import { Layout, PageHead, Panel, page } from "../layout";
 import { BUYER_ROWS, MAX_PAGE, MAX_Q, PAGE_SIZE, type BuyerHit, type Figures, type OrgHit, runSearch, searchTerms } from "../search_db";
 import type { Seo } from "../seo";
 import { directoryName } from "./organization";
-import { money } from "./shared";
+import { BUYER_SOURCE_RESTS, money, sourceCellClass, sourceColumns } from "./shared";
 
 export function searchPath(q: string, n = 1): string {
   const params = new URLSearchParams({ q });
@@ -78,14 +78,13 @@ function sourceCells(lang: Lang, f: Figures) {
   return MONEY_SOURCES.map((s) => {
     const [n, total] = SOURCE_KEYS[s];
     return (
-      <td data-label={sourceLabel(lang, s)} class="mono num">
+      <td data-label={sourceLabel(lang, s)} class={sourceCellClass(s, BUYER_SOURCE_RESTS)}>
         <SourceCell lang={lang} n={f[n] as number} total={f[total] as number | null} />
       </td>
     );
   });
 }
 
-const sourceColumns = (lang: Lang) => MONEY_SOURCES.map((s) => ({ kind: "total" as const, label: sourceLabel(lang, s) }));
 
 function place(lang: Lang, o: OrgHit): string {
   const code = o.prov.toLowerCase();
@@ -104,7 +103,7 @@ function OrgRow({ lang, o }: { lang: Lang; o: OrgHit }) {
       </td>
       <td data-label={t(lang, "col.records")} class="mono num">{fmtInt(o.n_records, lang)}</td>
       {sourceCells(lang, o)}
-      <td data-label={t(lang, "search.col_lobbying")} class="mono num lgh">{fmtInt(o.n_lobbying, lang)}</td>
+      <td data-label={t(lang, "search.col_lobbying")} class="mono num xlh">{fmtInt(o.n_lobbying, lang)}</td>
     </tr>
   );
 }
@@ -202,7 +201,7 @@ export async function searchPage(c: Context<AppEnv>): Promise<Response> {
         <Table cols={[
           { kind: "main", label: t(lang, "col.buyer") },
           { kind: "count", label: t(lang, "buyers.col_open") },
-          ...sourceColumns(lang),
+          ...sourceColumns(lang, BUYER_SOURCE_RESTS),
         ]}>
           <tbody>
             {result.buyers.map((b) => <BuyerRow lang={lang} b={b} />)}
@@ -232,8 +231,8 @@ export async function searchPage(c: Context<AppEnv>): Promise<Response> {
         <Table cols={[
           { kind: "main", label: t(lang, "col.organization") },
           { kind: "count", label: t(lang, "col.records") },
-          ...sourceColumns(lang),
-          { kind: "count", label: t(lang, "search.col_lobbying"), rest: "lg" },
+          ...sourceColumns(lang, BUYER_SOURCE_RESTS),
+          { kind: "count", label: t(lang, "search.col_lobbying"), rest: "xl" },
         ]}>
           <tbody>
             {result.orgs.map((o) => <OrgRow lang={lang} o={o} />)}

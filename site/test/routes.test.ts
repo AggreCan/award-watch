@@ -10,7 +10,7 @@ import {
 import lockupSvg from "../../brand/lockup.svg?raw";
 import wordmarkSvg from "../../brand/wordmark.svg?raw";
 import { filterTenders, readTenderQuery, tenderQueryString } from "../src/pages/tenders";
-import { assetsWithout, emptyAssets, fakeAssets, makeFakeAssets, testEnv } from "./assets";
+import { assetsWithout, emptyAssets, fakeAssets, makeFakeAssets, testClock, testEnv } from "./assets";
 import openFirst from "./fixtures/tenders-open-first.json";
 import openTenders from "./fixtures/tenders-open.json";
 
@@ -132,7 +132,7 @@ describe("every page", () => {
       "/buyers", "/segments", "/rankings", "/feeds", "/data", "/methodology", "/watchlist", "/alerts",
     ]);
     expect(nav).toContain('<a class="rail-item" href="/tenders"><span class="rail-label">Open tender notices</span><span class="rail-n">3</span></a>');
-    expect(nav).toContain('<a class="rail-item rail-child soon" href="/tenders?closing=7"><span class="rail-label">Closing within 7 days</span><span class="rail-n">1</span></a>');
+    expect(nav).toContain('<a class="rail-item rail-child soon" href="/tenders?closing=7"><span class="rail-label">Closing within 7 days</span><span class="rail-n" data-soon-count="">1</span></a>');
     expect(nav).toContain('<a class="rail-item" href="/awards"><span class="rail-label">Award notices</span><span class="rail-n">5,883</span></a>');
     expect(nav).toContain('<a class="rail-item rail-child" href="/awards/2026"><span class="rail-label"><span class="rail-short">In 2026</span><span class="rail-full">Award notices in 2026</span></span><span class="rail-n">3</span></a>');
     expect(nav).toContain('<a class="rail-item" href="/expiring"><span class="rail-label">Contracts ending</span><span class="rail-n">8</span></a>');
@@ -233,8 +233,8 @@ describe("tender notices", () => {
     // Whole dollars from 1,000 up.
     expect(html).toContain("$48,501");
     const one = await text("/tenders/cb-100-10000001");
-    expect(one).toContain('<span class="badge badge-closing">Closing soon</span>');
-    expect(one).toContain("2026-11-03 14:00");
+    expect(one).toContain('<span class="badge badge-closing" data-notice="cb-100-10000001">Closing soon</span>');
+    expect(one).toContain("2026-11-03 14:00 ET");
     expect(one).toContain("2 versions on record.");
   });
 
@@ -279,16 +279,20 @@ describe("tender notices", () => {
     expect(html.indexOf("cb-200-20005019")).toBeLessThan(html.indexOf("cb-300-30000003"));
     expect(html).toContain('<option value="82">82 Editorial and Design and Graphic and Fine Art Services (1)</option>');
     expect(html).toContain('<option value="dnd-mdn">Department of National Defence (1)</option>');
-    expect(html).toContain('<script src="/tenders.js" defer=""></script>');
-    expect(html).toContain('data-today="2026-10-31"');
+    expect(html).toContain('<script type="module" src="/tenders.js"></script>');
+    // The script reads closing states from the visitor's clock, not a date the page hands it.
+    expect(html).not.toContain("data-today=");
+    expect(html).toContain('<script type="module" src="/countdown.js"></script>');
     expect(html).toContain("Canada-wide or not stated");
   });
 
   it("renders a filtered view from its URL, so the link works without the script", async () => {
-    const html = await text("/tenders?province=bc&sort=published");
+    // A province keeps the notices that name none, unless the box is unticked.
+    const html = await text("/tenders?province=bc&sort=published&national=0");
     expect(html).toContain("1 notice");
     expect(html).toContain("cb-200-20005019");
     expect(html).not.toContain(">cb-100-10000001<");
+    expect(html).toMatch(/<input type="checkbox" name="national" value="1"\/>/);
     expect(html).toContain('<option value="BC" selected="">British Columbia (1)</option>');
     expect(html).toContain('<meta name="robots" content="noindex"/>');
     const none = await text("/tenders?q=zzzz");
@@ -298,14 +302,25 @@ describe("tender notices", () => {
   it("filters and sorts by the rules the script uses", () => {
     const rows = openTenders as unknown as TenderRow[];
     const q = (s: string) => readTenderQuery(new URL(`https://x/tenders${s}`));
-    const refs = (s: string) => filterTenders(rows, q(s), "2026-10-31").map((r) => r.reference);
+    const refs = (s: string) => filterTenders(rows, q(s), testClock).map((r) => r.reference);
     expect(refs("")).toEqual(["cb-100-10000001", "cb-200-20005019", "cb-300-30000003"]);
     expect(refs("?sort=published")).toEqual(["cb-200-20005019", "cb-100-10000001", "cb-300-30000003"]);
     expect(refs("?closing=7")).toEqual(["cb-100-10000001"]);
     expect(refs("?closing=30")).toEqual(["cb-100-10000001", "cb-200-20005019"]);
     expect(refs("?segment=43")).toEqual(["cb-300-30000003"]);
     expect(refs("?category=gd")).toEqual(["cb-300-30000003"]);
-    expect(refs("?province=QC")).toEqual(["cb-100-10000001"]);
+    // Notices that name no province (Canada-wide or not stated) stay in unless national=0 alone says otherwise.
+    expect(refs("?province=QC")).toEqual(["cb-100-10000001", "cb-300-30000003"]);
+    expect(refs("?province=QC&national=0")).toEqual(["cb-100-10000001"]);
+    expect(refs("?province=QC&national=0&national=1")).toEqual(["cb-100-10000001", "cb-300-30000003"]);
+    // A UNSPSC family or class is a prefix of any of a notice's codes.
+    expect(refs("?code=7210")).toEqual(["cb-200-20005019"]);
+    expect(refs("?code=781815")).toEqual(["cb-200-20005019"]);
+    expect(refs("?code=43")).toEqual(["cb-300-30000003"]);
+    expect(refs("?code=4321150x")).toHaveLength(3);
+    // The words reach the start of the description, in either language.
+    expect(refs("?q=propeller")).toEqual(["cb-200-20005019"]);
+    expect(refs("?q=correspondance")).toEqual(["cb-100-10000001"]);
     expect(refs("?buyer=dfo-mpo")).toEqual(["cb-200-20005019"]);
     expect(refs(`?type=${encodeURIComponent("Invitation to Qualify")}`)).toEqual(["cb-300-30000003"]);
     expect(refs(`?method=${encodeURIComponent("Competitive - Selective tendering")}`)).toEqual(["cb-200-20005019"]);
@@ -316,6 +331,9 @@ describe("tender notices", () => {
     // Values the filter cannot use read as no filter.
     expect(refs("?segment=99&province=ZZ&closing=5&buyer=BAD_ID&sort=up")).toHaveLength(3);
     expect(tenderQueryString(q("?segment=82&sort=published&page=2&bogus=1"))).toBe("?segment=82&sort=published&page=2");
+    expect(tenderQueryString(q("?province=QC&national=0&code=4321"))).toBe("?code=4321&province=QC&national=0");
+    // Without a province the box changes nothing, so the address leaves it out.
+    expect(tenderQueryString(q("?national=0"))).toBe("");
     expect(tenderQueryString(q(""))).toBe("");
   });
 

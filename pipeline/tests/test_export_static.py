@@ -694,3 +694,58 @@ def test_retired_buyer_ids_are_exported_as_aliases_to_listed_buyers(conn, tmp_pa
         "department-of-national-defence": "dnd-mdn", "public-works-and-government-services-canada": "pwgsc-tpsgc"}}
     assert counts["buyer_aliases"] == 2
     assert all(BUYER_ID.match(k) and BUYER_ID.match(v) for k, v in load(out, "buyers/aliases.json")["aliases"].items())
+
+
+# -- closing times read at render ---------------------------------------------------------
+
+
+def test_open_first_holds_the_notices_that_can_close_before_the_next_nightly(conn, tmp_path, monkeypatch):
+    """The site reads closing times at render and sorts a notice whose time has passed last; open-first.json
+    holds every notice closing by the day after the data date and OPEN_FIRST_ROWS after them, so the first page
+    stays full. stats.json carries every closing value within CLOSING_TIMES_DAYS for the counts."""
+    seed(conn)
+    for i in range(3):
+        tender(conn, f"cb-early-{i}", 0, title=f"Closes today {i}", closing="2026-10-31T14:00:00", published="2026-10-29")
+    tender(conn, "cb-next-day", 0, title="Closes tomorrow", closing="2026-11-01T09:00:00", published="2026-10-29")
+    tender(conn, "cb-far", 0, title="Closes in a month", closing="2026-12-01T14:00:00", published="2026-10-29")
+    tender(conn, "cb-day-9", 0, title="Closes on day 9", closing="2026-11-09", published="2026-10-29")
+    tender(conn, "cb-day-10", 0, title="Closes on day 10", closing="2026-11-10T14:00:00", published="2026-10-29")
+    conn.commit()
+    monkeypatch.setattr(es, "OPEN_FIRST_ROWS", 2)
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    open_rows = load(out, "tenders/open.json")
+    first = load(out, "tenders/open-first.json")
+    early = [r["reference"] for r in open_rows if r["closing"][:10] <= "2026-11-01"]
+    assert set(early) == {"cb-early-0", "cb-early-1", "cb-early-2", "cb-next-day"}
+    assert [r["reference"] for r in first["rows"]] == [r["reference"] for r in open_rows[:len(early) + 2]]
+    stats = load(out, "stats.json")
+    times = stats["closing_soon_times"]
+    assert times == [r["closing"] for r in open_rows if "2026-10-31" <= r["closing"][:10] <= "2026-11-09"]
+    assert "2026-11-09" in times and "2026-11-10T14:00:00" not in times and "2026-12-01T14:00:00" not in times
+    assert times.count("2026-10-31T14:00:00") == 3
+
+
+def test_the_open_list_carries_a_scrubbed_excerpt_and_the_full_codes_and_nothing_else_does(conn, tmp_path):
+    """The list page's word filter reads the start of each description and its code filter the full UNSPSC
+    codes; both ride on tenders/open.json and open-first.json only. The excerpt is scrubbed before it is cut,
+    so a cut never leaves part of an address or a telephone number the scrub would miss."""
+    seed(conn)
+    long = ("Snow clearing for the regional depot. " * 4) + "Questions to jane.officer@example.gc.ca or 613-555-0142 "
+    tender(conn, "cb-words", 0, title="Snow clearing", closing="2026-11-03T14:00:00", codes=("72102900", "7210"))
+    conn.execute("UPDATE tenders SET description_en = ?, description_fr = ? WHERE reference = 'cb-words'",
+                 (long + "before the closing date.", "Déneigement du dépôt régional."))
+    conn.commit()
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    row = next(r for r in load(out, "tenders/open.json") if r["reference"] == "cb-words")
+    assert row["excerpt_fr"] == "Déneigement du dépôt régional."
+    assert len(row["excerpt_en"]) <= es.EXCERPT_CHARS + 1 and row["excerpt_en"].endswith("…")
+    assert "jane.officer" not in row["excerpt_en"] and "613-555" not in row["excerpt_en"]
+    assert row["codes"] == ["7210", "72102900"]
+    assert any("excerpt_en" in r for r in load(out, "tenders/open-first.json")["rows"])
+    stats = load(out, "stats.json")
+    assert not any("excerpt_en" in r or "codes" in r for r in stats["closing_soon"] + stats["new_tenders"])
+    category = load(out, "categories/72.json")
+    assert category["open_tenders"] and not any("excerpt_en" in r for r in category["open_tenders"])
+    assert es.excerpt("  short   text ", "en") == "short text" and es.excerpt(None, "en") is None

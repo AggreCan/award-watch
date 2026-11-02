@@ -6,7 +6,7 @@ import { loadStats, type Stats } from "../data";
 import type { AppEnv } from "../env";
 import { t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, noDataPage, page, todayOf } from "../layout";
-import { OGL_URL, datasetJsonLd, pageSeo } from "../seo";
+import { ODLA_URL, OGL_URL, datasetJsonLd, pageSeo } from "../seo";
 import { datasetUrl } from "./shared";
 
 // The changelog of anything that changes how a figure is computed, newest
@@ -46,15 +46,19 @@ export const DOWNLOADS: { file: string; contents: Key }[] = [
   { file: "expiring-12m.csv", contents: "data.file.expiring" },
   { file: "SHA256SUMS", contents: "data.file.sums" },
 ];
-// One file per calendar year of award notices and of contract history.
-export const YEARLY_DOWNLOAD = /^(awards|history)-([0-9]{4})\.csv$/;
+// One file per calendar year of award notices and of contract history, and
+// one each for the dates before the first year and after the data date's
+// year (typing errors in the source), as the pipeline writes them: the page
+// offers every name SHA256SUMS can list.
+export const YEARLY_DOWNLOAD = /^(awards|history)-(?:[0-9]{4}|before-[0-9]{4}|after-[0-9]{4})\.csv$/;
 export const FIRST_HISTORY_YEAR = 2009;
 
 // The licence table: what each source supplies and the terms it carries.
-export const LICENCE_ROWS: readonly { material: Key; terms: Key }[] = [
+// The Registry of Lobbyists' data comes under the Commissioner's own licence.
+export const LICENCE_ROWS: readonly { material: Key; terms: Key; url?: string }[] = [
   { material: "data.lic.canadabuys", terms: "data.lic.ogl_terms" },
   { material: "data.lic.proactive", terms: "data.lic.ogl_terms" },
-  { material: "data.lic.lobbying", terms: "data.lic.ogl_terms" },
+  { material: "data.lic.lobbying", terms: "data.lic.odla_terms", url: ODLA_URL },
   { material: "data.lic.organizations", terms: "data.lic.ogl_terms" },
   { material: "data.lic.corporations", terms: "data.lic.ogl_terms" },
   { material: "data.lic.computed", terms: "data.lic.computed_terms" },
@@ -63,14 +67,14 @@ export const LICENCE_ROWS: readonly { material: Key; terms: Key }[] = [
 // The sources the pipeline reads, in the order of its stages. `key` matches
 // the `source` of the rows in stats.json "sources", which say when each file
 // was last read and the Last-Modified date the publisher gave it.
-export const SOURCE_ROWS: readonly { key: string; name: Key; publisher: Key; files: string; url: (lang: Lang) => string }[] = [
+export const SOURCE_ROWS: readonly { key: string; name: Key; publisher: Key; files: string; url: (lang: Lang) => string; odla?: boolean }[] = [
   { key: "buyers", name: "data.src.buyers", publisher: "data.pub.tbs", files: "organization_show", url: (lang) => `https://open.canada.ca/data/${lang}/organization` },
   { key: "tenders", name: "data.src.tenders", publisher: "data.pub.pspc", files: "newTenderNotice, openTenderNotice, tenderNoticeComplete", url: (lang) => datasetUrl("tenders", lang) },
   { key: "awards", name: "data.src.awards", publisher: "data.pub.pspc", files: "awardNotice, awardNoticeComplete, awardNoticeHistorical", url: (lang) => datasetUrl("awards", lang) },
   { key: "history", name: "data.src.history", publisher: "data.pub.pspc", files: "contractHistory, contractHistoryComplete, contractHistoryHistorical", url: (lang) => datasetUrl("history", lang) },
   { key: "contracts", name: "data.src.contracts", publisher: "data.pub.tbs", files: "contracts.csv", url: (lang) => datasetUrl("contracts", lang) },
   { key: "grants", name: "data.src.grants", publisher: "data.pub.tbs", files: "grants.csv", url: (lang) => datasetUrl("grants", lang) },
-  { key: "lobbying", name: "data.src.lobbying", publisher: "data.pub.ocl", files: "communications_ocl_cal.zip", url: (lang) => datasetUrl("lobbying", lang) },
+  { key: "lobbying", name: "data.src.lobbying", publisher: "data.pub.ocl", files: "communications_ocl_cal.zip", url: (lang) => datasetUrl("lobbying", lang), odla: true },
   { key: "registry", name: "data.src.registry", publisher: "data.pub.ised", files: "federal corporations extract", url: (lang) => `https://open.canada.ca/data/${lang}/dataset/0032ce54-c5dd-4b66-99a0-320a7b5e99f2` },
 ];
 
@@ -135,7 +139,9 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                       <td data-label={t(lang, "data.col_source")}><a href={s.url(lang)}>{t(lang, s.name)}</a></td>
                       <td data-label={t(lang, "data.col_publisher")}>{t(lang, s.publisher)}</td>
                       <td data-label={t(lang, "data.col_files")} class="small mdh">{s.files}</td>
-                      <td data-label={t(lang, "data.col_licence")}><a href={OGL_URL[lang]}>{t(lang, "data.ogl_short")}</a></td>
+                      <td data-label={t(lang, "data.col_licence")}>
+                        {s.odla ? <a href={ODLA_URL}>{t(lang, "data.odla")}</a> : <a href={OGL_URL[lang]}>{t(lang, "data.ogl_short")}</a>}
+                      </td>
                       <td data-label={t(lang, "data.col_last_read")} class="small">
                         {read.length ? read.map((r) => (
                           <span class="nw-block">
@@ -179,7 +185,12 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
           <ul class="quick-links">
             {years(FIRST_HISTORY_YEAR).map((y) => <li><a class="mono" href={`/downloads/history-${y}.csv`}>{`history-${y}.csv`}</a></li>)}
           </ul>
-          <p class="muted small">{t(lang, "data.downloads_note")}</p>
+          <h3>{t(lang, "data.yearly_other", { first: FIRST_AWARD_YEAR, last: lastYear })}</h3>
+          <ul class="quick-links">
+            {[`awards-before-${FIRST_AWARD_YEAR}.csv`, `awards-after-${lastYear}.csv`, `history-before-${FIRST_HISTORY_YEAR}.csv`,
+              `history-after-${lastYear}.csv`].map((f) => <li><a class="mono" href={`/downloads/${f}`}>{f}</a></li>)}
+          </ul>
+          <p class="muted small top-gap">{t(lang, "data.downloads_note")}</p>
 
           <h2 id="api">{t(lang, "data.toc_api")}</h2>
           <p>{t(lang, "data.api_text")}</p>
@@ -201,7 +212,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
           <p class="muted small">{t(lang, "data.api_limits")}</p>
 
           <h2 id="licence">{t(lang, "data.toc_licence")}</h2>
-          <p>{tj(lang, "data.licence_text", { ogl: <a href={OGL_URL[lang]}>{t(lang, "data.ogl")}</a> })}</p>
+          <p>{tj(lang, "data.licence_text", { ogl: <a href={OGL_URL[lang]}>{t(lang, "data.ogl")}</a>, odla: <a href={ODLA_URL}>{t(lang, "data.odla")}</a> })}</p>
           <div class="table-wrap bordered">
             <Table cols={[
               { kind: "main", label: t(lang, "data.col_material") },
@@ -211,7 +222,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                 {LICENCE_ROWS.map((r) => (
                   <tr>
                     <td data-label={t(lang, "data.col_material")}>{t(lang, r.material)}</td>
-                    <td data-label={t(lang, "data.col_terms")}>{t(lang, r.terms)}</td>
+                    <td data-label={t(lang, "data.col_terms")}>{r.url ? <a href={r.url}>{t(lang, r.terms)}</a> : t(lang, r.terms)}</td>
                   </tr>
                 ))}
               </tbody>

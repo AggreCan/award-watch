@@ -121,6 +121,13 @@
   var LANG = I18N.lang === "fr" ? "fr" : "en";
   var LOCALE = I18N.locale || "en-CA";
   var MAX = Number(I18N.max) || 100;
+  // The rest class of each resting column by its label key (src/pages/watchlist.tsx),
+  // so a cell rests with its head.
+  var RESTS = I18N.rests && typeof I18N.rests === "object" ? I18N.rests : {};
+  function rest(key, cls) {
+    var r = typeof RESTS[key] === "string" && /^[a-z]+$/.test(RESTS[key]) ? RESTS[key] : "";
+    return [cls || "", r].filter(Boolean).join(" ");
+  }
   var NUMBER = null;
   try { NUMBER = new Intl.NumberFormat(LOCALE); } catch (e) { NUMBER = null; }
 
@@ -317,10 +324,10 @@
     var place = [o.city, o.province].filter(Boolean).join(", ");
     if (place) { who.appendChild(document.createElement("br")); who.appendChild(el("span", "muted small", place)); }
     ["awards", "history", "contracts", "grants", "lobbying"].forEach(function (s) {
-      cell(tr, "source." + s, "mono num").textContent = num(o["n_" + s]);
+      cell(tr, "source." + s, rest("source." + s, "mono num")).textContent = num(o["n_" + s]);
     });
-    // The latest record rests below 1440 px, as its head cell does.
-    cell(tr, "watch.col_latest", "mono lgh").textContent = o.last_seen || "";
+    // Resting columns rest in the rows as their head cells do.
+    cell(tr, "watch.col_latest", rest("watch.col_latest", "mono")).textContent = o.last_seen || "";
     if (found.first) {
       // No earlier visit to compare with: nothing to mark yet. The cell stays
       // empty, so a phone's restacked row leaves it out.
@@ -340,17 +347,16 @@
     return tr;
   }
 
-  // The message spans the five source columns; the row keeps one cell for
-  // each other column, so a resting column (the latest record, below 1440
-  // px) leaves it in line with the rest.
+  // The message goes where what is new would; the row keeps one empty cell
+  // for each other column, each resting with its head, so nothing shifts.
   function problemRow(id, message) {
     var tr = el("tr");
     cell(tr, "col.organization").appendChild(el("span", "mono id", id));
-    var td = cell(tr, "watch.col_new", "muted");
-    td.colSpan = 5;
-    td.textContent = message;
-    cell(tr, "watch.col_latest", "lgh");
-    cell(tr, "watch.col_new");
+    ["awards", "history", "contracts", "grants", "lobbying"].forEach(function (s) {
+      cell(tr, "source." + s, rest("source." + s, "mono num"));
+    });
+    cell(tr, "watch.col_latest", rest("watch.col_latest"));
+    cell(tr, "watch.col_new", "muted").textContent = message;
     removeButton(tr, id, id);
     return tr;
   }

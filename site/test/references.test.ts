@@ -10,7 +10,7 @@ import { app } from "../src/index";
 import { type TenderRow, publishedReference } from "../src/data";
 import { contractReference, expiringRecordUrl } from "../src/pages/expiring";
 import { filterTenders, readTenderQuery } from "../src/pages/tenders";
-import { FILES, makeFakeAssets, testEnv } from "./assets";
+import { FILES, makeFakeAssets, testClock, testEnv } from "./assets";
 import contracts557 from "./fixtures/contracts-557.json";
 import tenderShard from "./fixtures/tenders-f3d.json";
 
@@ -69,8 +69,8 @@ describe("a converted tender notice", () => {
 
   it("matches the text filter on either form, as the script does", () => {
     const q = (s: string) => readTenderQuery(new URL(`https://x/tenders${s}`));
-    expect(filterTenders([tenderRow], q("?q=A:1"), "2026-10-31")).toHaveLength(1);
-    expect(filterTenders([tenderRow], q("?q=123456-a-1"), "2026-10-31")).toHaveLength(1);
+    expect(filterTenders([tenderRow], q("?q=A:1"), testClock)).toHaveLength(1);
+    expect(filterTenders([tenderRow], q("?q=123456-a-1"), testClock)).toHaveLength(1);
     expect(tendersJs).toContain("r.reference_published");
   });
 });

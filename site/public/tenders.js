@@ -20,10 +20,19 @@
    When the full list cannot be fetched the server's rows stay, a sentence
    says why, and the toolbar keeps working as a plain form.
 
+   Closing states come from the visitor's clock by the rule in closing.js
+   (Eastern time when the value names no zone), as the server works them out
+   when it renders: a notice whose closing time has passed reads "Closing
+   date passed" and sorts last. A notice closing soon carries its closing
+   instant for countdown.js, which this script tells ("aw:rows") after each
+   draw of the list or the detail panel.
+
    Everything rendered from data uses textContent. Every word the script
    draws comes from the page's <script type="application/json" id="i18n">
    block or from the toolbar's own labels, so the script holds no copy of
-   its own in either language. */
+   its own in either language. The page loads it as a module. */
+import { addDays, closingInstant, closingParts, closingPassed, closingState, easternDay } from "./closing.js";
+
 (function () {
   var form = document.getElementById("tender-filters");
   var results = document.getElementById("tender-results");
@@ -42,12 +51,12 @@
   var TABLE = I18N.table && I18N.table.heads ? I18N.table : null;
   var LANG = I18N.lang === "fr" ? "fr" : "en";
   var LOCALE = I18N.locale || "en-CA";
-  var TODAY = results.getAttribute("data-today") || new Date().toISOString().slice(0, 10);
   var PAGE = parseInt(results.getAttribute("data-page-size") || "50", 10) || 50;
   var SOON_DAYS = 7;
   var TYPING_MS = 250;
   var DESCRIPTION_CHARS = 600;
-  var FIELDS = ["q", "category", "segment", "province", "buyer", "type", "method", "closing"];
+  var FIELDS = ["q", "category", "segment", "code", "province", "buyer", "type", "method", "closing"];
+  var CODE_RE = /^[0-9]{2,8}$/;
   var BUYER_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
   var REF_RE = /^[a-z0-9._-]{1,80}$/;
   var NUMBER = null;
@@ -93,25 +102,33 @@
   function fold(s) {
     return String(s || "").normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
   }
-  function addDays(day, n) {
-    var d = new Date(day + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + n);
-    return d.toISOString().slice(0, 10);
+  // As closingTime() and closingText() in src/closing.ts: the time in the
+  // page's language ("14:00", "14 h 00") with its zone (Eastern time, "ET",
+  // when the value names none), after the date.
+  function closingTime(c) {
+    var p = closingParts(c);
+    if (!p || !p.hh) return null;
+    var zone = !p.zone ? tx("common.zone_et") : p.zone === "Z" ? "UTC" : p.zone;
+    return tx("common.time", { hh: p.hh, mm: p.mm }) + " " + zone;
   }
-  // As closingText() in src/pages/shared.tsx: the date, the time in the
-  // page's language ("14:00", "14 h 00") and the zone when the value has one.
   function closingText(c) {
-    var m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2}|[A-Za-z][A-Za-z ()\/_-]*)?)?/.exec(c || "");
-    if (!m) return c || "";
-    if (!m[2]) return m[1];
-    var zone = m[4] ? " " + (m[4] === "Z" ? "UTC" : m[4].trim()) : "";
-    return m[1] + " " + tx("common.time", { hh: m[2], mm: m[3] }) + zone;
+    var p = closingParts(c);
+    if (!p) return c || "";
+    var time = closingTime(c);
+    return time ? p.day + " " + time : p.day;
   }
-  // A notice whose closing day is before the data date: the file still lists
-  // it as open, but its closing date has passed.
-  function passed(closing) {
-    var day = (closing || "").slice(0, 10);
-    return !!day && day < TODAY;
+  // The Eastern date now, which the closing filter counts from.
+  function today() { return easternDay(Date.now()); }
+  // A notice's state now: "closed" once its closing time has passed,
+  // "closing" within the window, else "open".
+  function stateOf(closing) { return closingState(closing, Date.now(), SOON_DAYS); }
+  function closesAt(closing) {
+    var at = closingInstant(closing);
+    return at === null ? null : new Date(at).toISOString().replace(".000Z", "Z");
+  }
+  // The countdown script reads new marks at once.
+  function rowsDrawn() {
+    try { document.dispatchEvent(new CustomEvent("aw:rows")); } catch (e) { /* the countdown reads them on its next minute */ }
   }
   function shownRef(r) {
     return typeof r.reference_published === "string" && r.reference_published ? r.reference_published : r.reference;
@@ -134,6 +151,7 @@
     s.q = (raw.q || "").trim().slice(0, 100);
     s.category = /^(SRV|GD|CNST|SRVTGD)$/.test((raw.category || "").toUpperCase()) ? raw.category.toUpperCase() : "";
     s.segment = /^\d{2}$/.test(raw.segment || "") ? raw.segment : "";
+    s.code = CODE_RE.test(raw.code || "") ? raw.code : "";
     s.province = /^(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)$/.test((raw.province || "").toUpperCase()) ? raw.province.toUpperCase() : "";
     var buyer = (raw.buyer || "").toLowerCase();
     s.buyer = BUYER_RE.test(buyer) && buyer.length <= 80 ? buyer : "";
@@ -141,22 +159,30 @@
     s.method = (raw.method || "").slice(0, 200);
     s.closing = raw.closing === "7" || raw.closing === "30" ? raw.closing : "";
     s.sort = raw.sort === "published" ? "published" : "closing";
+    // The Canada-wide notices stay in unless the address or the box says otherwise.
+    s.national = raw.national !== false;
     var page = parseInt(raw.page || "1", 10);
     s.page = page >= 1 && page <= 10000 ? page : 1;
     return s;
   }
+  // As readTenderQuery() on the server: national=0 alone turns the
+  // Canada-wide notices out; a 1 beside it (the ticked box) keeps them.
   function readUrl() {
     var p = new URLSearchParams(location.search);
     var raw = {};
     FIELDS.concat(["sort", "page"]).forEach(function (k) { raw[k] = p.get(k) || ""; });
+    var national = p.getAll("national");
+    raw.national = national.length === 0 || national.indexOf("1") >= 0;
     return clean(raw);
   }
+  var nationalBox = form.querySelector('input[type="checkbox"][name="national"]');
   function readForm() {
     var raw = {};
     FIELDS.concat(["sort"]).forEach(function (k) {
       var field = form.elements.namedItem(k);
       raw[k] = field && "value" in field ? field.value : "";
     });
+    raw.national = nationalBox ? nationalBox.checked : true;
     return clean(raw);
   }
   function writeForm() {
@@ -164,10 +190,12 @@
       var field = form.elements.namedItem(k);
       if (field && "value" in field) field.value = state[k] || (k === "sort" ? "closing" : "");
     });
+    if (nationalBox) nationalBox.checked = state.national;
   }
   function query(s, page) {
     var p = new URLSearchParams();
     FIELDS.forEach(function (k) { if (s[k]) p.set(k, s[k]); });
+    if (s.province && !s.national) p.set("national", "0");
     if (s.sort !== "closing") p.set("sort", s.sort);
     if (page > 1) p.set("page", String(page));
     var q = p.toString();
@@ -178,20 +206,23 @@
 
   function filter(all, s) {
     var words = fold(s.q).split(/\s+/).filter(Boolean);
-    var until = s.closing ? addDays(TODAY, Number(s.closing)) : "";
+    var now = Date.now();
+    var until = s.closing ? addDays(today(), Number(s.closing)) : "";
     var out = all.filter(function (r) {
       if (s.category && r.category.indexOf(s.category) < 0) return false;
       if (s.segment && r.segments.indexOf(s.segment) < 0) return false;
-      if (s.province && r.provinces.indexOf(s.province) < 0) return false;
+      if (s.code && !(r.codes || []).some(function (c) { return String(c).indexOf(s.code) === 0; })) return false;
+      if (s.province && r.provinces.indexOf(s.province) < 0 && !(s.national && !r.provinces.length)) return false;
       if (s.buyer && r.buyer_id !== s.buyer) return false;
       if (s.type && r.notice_type_en !== s.type) return false;
       if (s.method && r.method_en !== s.method) return false;
       if (until) {
         var day = (r.closing || "").slice(0, 10);
-        if (!day || day < TODAY || day > until) return false;
+        if (!day || day > until || closingPassed(r.closing, now)) return false;
       }
       if (words.length) {
-        var text = fold((r.title_en || "") + " " + (r.title_fr || "") + " " + r.reference + " " + (r.reference_published || ""));
+        var text = fold((r.title_en || "") + " " + (r.title_fr || "") + " " + (r.excerpt_en || "") + " " + (r.excerpt_fr || "") + " " +
+          r.reference + " " + (r.reference_published || ""));
         for (var i = 0; i < words.length; i++) if (text.indexOf(words[i]) < 0) return false;
       }
       return true;
@@ -203,11 +234,12 @@
         return x < y ? 1 : x > y ? -1 : byReference(a, b);
       });
     } else {
-      // Soonest first; a notice whose closing date has passed, then one with
+      // Soonest first; a notice whose closing time has passed, then one with
       // no closing date, go last (filterTenders() orders them the same way).
-      var rank = function (r) { return !r.closing ? 2 : passed(r.closing) ? 1 : 0; };
+      var ranks = {};
+      out.forEach(function (r) { ranks[r.reference] = !r.closing ? 2 : closingPassed(r.closing, now) ? 1 : 0; });
       out.sort(function (a, b) {
-        var ra = rank(a), rb = rank(b);
+        var ra = ranks[a.reference], rb = ranks[b.reference];
         if (ra !== rb) return ra - rb;
         var x = a.closing || "￿", y = b.closing || "￿";
         return x < y ? -1 : x > y ? 1 : byReference(a, b);
@@ -218,13 +250,18 @@
 
   // -- rendering (the same markup as TenderTable in src/pages/shared.tsx) -----
 
-  function soon(closing) {
-    var day = (closing || "").slice(0, 10);
-    return !!day && day >= TODAY && day <= addDays(TODAY, SOON_DAYS);
+  function badge(state, ref) {
+    var chip = el("span", "badge badge-" + state, tx("status." + state));
+    if (state === "closing" && ref) chip.setAttribute("data-notice", ref);
+    return chip;
   }
-  function badge(closing) {
-    var state = passed(closing) ? "closed" : soon(closing) ? "closing" : "open";
-    return el("span", "badge badge-" + state, tx("status." + state));
+  // The marks countdown.js reads on an element showing a closing-soon time.
+  function markCountdown(node, closing, ref) {
+    var at = closesAt(closing);
+    if (!at) return;
+    node.setAttribute("data-closes", at);
+    node.setAttribute("data-time", closingTime(closing) || "");
+    node.setAttribute("data-notice", ref);
   }
   function cell(tr, label, cls) {
     var td = el("td", cls);
@@ -253,16 +290,20 @@
     notice.appendChild(el("span", "mono id muted", shown));
     (r.segments || []).forEach(function (code) {
       notice.appendChild(document.createTextNode(" "));
-      var chip = el("a", "chip", code);
+      var short = (LABELS.short && LABELS.short[code]) || "";
+      var chip = el("a", "chip", short ? code + " " + short : code);
       chip.href = "/segments/" + code;
-      chip.setAttribute("aria-label", tx("segment.code", { code: code }));
+      chip.setAttribute("aria-label", tx("segment.chip", { code: code, name: short }));
       if (LABELS.segments && LABELS.segments[code]) chip.title = LABELS.segments[code];
       notice.appendChild(chip);
     });
     cell(tr, "col.buyer", "c-buyer").appendChild(buyerNode(r.buyer_id, r.buyer_en, r.buyer_fr));
     var closing = cell(tr, "col.closing", "mono c-date");
+    var state = stateOf(r.closing);
+    var ref = r.reference.toLowerCase();
     closing.appendChild(document.createTextNode(closingText(r.closing) + " "));
-    closing.appendChild(badge(r.closing));
+    closing.appendChild(badge(state, ref));
+    if (state === "closing") markCountdown(closing, r.closing, ref);
     cell(tr, "col.published", "mono c-pub mdh").textContent = r.published || "";
     var provinces = (r.provinces || []).map(function (p) { return (LABELS.provinces && LABELS.provinces[p]) || p; });
     cell(tr, "col.region", "c-region").textContent = provinces.length ? provinces.join(", ") : tx("common.national");
@@ -369,6 +410,7 @@
     pager.appendChild(links);
     renderChips();
     restoreSelection();
+    rowsDrawn();
     var url = location.pathname + query(state, state.page);
     try {
       if (push) history.pushState(null, "", url);
@@ -470,7 +512,9 @@
     detail.textContent = "";
     var head = el("div", "detail-head");
     var chips = el("p", "detail-chips");
-    chips.appendChild(badge(d.closing || listed.closing));
+    var closing = d.closing || listed.closing;
+    var state = stateOf(closing);
+    chips.appendChild(badge(state, ref));
     (Array.isArray(d.category) ? d.category : []).forEach(function (c) {
       chips.appendChild(document.createTextNode(" "));
       chips.appendChild(el("span", "chip", (LABELS.categories && LABELS.categories[c]) || c));
@@ -490,8 +534,11 @@
     detail.appendChild(head);
 
     var dl = el("dl");
-    var closing = d.closing || listed.closing;
     kv(dl, "col.closing", closing ? closingText(closing) : null);
+    if (closing && state === "closing") {
+      var dds = dl.getElementsByTagName("dd");
+      if (dds.length) markCountdown(dds[dds.length - 1], closing, ref);
+    }
     kv(dl, "col.published", d.published || listed.published || null);
     kv(dl, "col.buyer", pick(d.buyer_en, d.buyer_fr) ? buyerNode(d.buyer_id, d.buyer_en, d.buyer_fr) : null);
     kv(dl, "tender.end_users", pickList(d.end_users_en, d.end_users_fr));
@@ -516,6 +563,7 @@
       if (cut) box.appendChild(el("p", "muted small", tx("tenders.detail_more")));
       detail.appendChild(box);
     }
+    rowsDrawn();
   }
 
   function showDetail(ref) {
@@ -572,16 +620,19 @@
     rows.forEach(function (r) { byRef[r.reference.toLowerCase()] = r; });
     form.addEventListener("submit", function (e) { e.preventDefault(); applyForm(); });
     form.addEventListener("change", function (e) {
-      if (e.target && e.target.name === "q") return;
+      if (e.target && (e.target.name === "q" || e.target.name === "code")) return;
       applyForm();
     });
-    var text = form.elements.namedItem("q");
-    if (text) {
-      text.addEventListener("input", function () {
+    // Typed text applies after a short pause; a code once it is 2 to 8 digits, or empty.
+    ["q", "code"].forEach(function (name) {
+      var input = form.elements.namedItem(name);
+      if (!input) return;
+      input.addEventListener("input", function () {
         if (typing) clearTimeout(typing);
+        if (name === "code" && input.value && !CODE_RE.test(input.value)) return;
         typing = setTimeout(applyForm, TYPING_MS);
       });
-    }
+    });
     // The apply button is for the form without the script; filters apply as they change.
     var apply = document.getElementById("tender-apply");
     if (apply) apply.hidden = true;

@@ -85,7 +85,11 @@ describe("missing and corrupt data files", () => {
     expect(html).toContain("Open tender notices");
     expect(html).not.toContain("<span class=\"tile-label\">Award notices</span>");
     expect(html).toContain("No new notice in the last refresh.");
-    expect(html).toContain("No open notice closes in the next 7 days.");
+    // The closing-soon panel reads the first open notices, so a bad list in
+    // stats.json leaves it whole; without that file it falls back to the list.
+    expect(html.slice(html.indexOf("Closing Within 7 Days"))).toContain("cb-100-10000001");
+    const bare = await (await req("/", { ASSETS: assetsWith({ "stats.json": partial, "tenders/open-first.json": null }) })).text();
+    expect(bare).toContain("No open notice closes in the next 7 days.");
   });
 
   it("a list file with an unreadable row reads as not published; a shard entry that does not read is a 404", async () => {

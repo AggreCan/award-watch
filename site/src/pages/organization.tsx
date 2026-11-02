@@ -126,6 +126,65 @@ export async function retiredIdRedirect(
   return c.redirect(`/organizations/${live}${suffix}${lang === "en" || lang === "fr" ? `?lang=${lang}` : ""}`, status);
 }
 
+// The non-competitive share of a year's value. Over the positive values
+// alone when the export gives them, so an amendment that lowered a published
+// contract cannot turn the share negative or past 100 percent; a year with
+// such a record carries the footnote's mark. An older export gives the net
+// figures: a part below zero or past the whole shows without a percentage.
+export function valueShare(lang: Lang, y: YearFigure): string {
+  if (y.source === "grants") return shareText(lang, null, null, (v) => fmtMoney(v, lang));
+  const money = (v: number) => fmtMoney(v, lang);
+  if (y.total_positive !== undefined) {
+    const text = shareText(lang, y.total_non_competitive_positive ?? 0, y.total_positive, money);
+    return (y.n_negative ?? 0) > 0 ? `${text} *` : text;
+  }
+  const part = y.total_non_competitive ?? 0;
+  if (y.total !== null && (part < 0 || part > y.total)) return t(lang, "org.share", { part: money(part), whole: money(y.total), pct: "" });
+  return shareText(lang, y.total_non_competitive, y.total, money);
+}
+
+type Place = Profile["places"][number];
+
+// A place as the records spell it, reduced so trivial variants match: case,
+// accents and punctuation folded ("Pointe-Claire" and "pointe claire"), a
+// postal code run into the city dropped ("Toronto2C4"), and a province
+// written after the city left out ("Markham Ontario", "Markham, Ontario",
+// "Markham ON" with Ontario as the province).
+export function placeKey(p: Pick<Place, "country" | "province" | "city">): string {
+  const fold = (s: string | null) => (s ?? "").normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
+  let city = fold(p.city).replace(/[0-9].*$/, "").replace(/[^a-z]+/g, " ").trim();
+  const province = (p.province ?? "").toUpperCase();
+  if (province) {
+    const names = [province.toLowerCase(), fold(provinceName("en", province)), fold(provinceName("fr", province))]
+      .map((s) => s.replace(/[^a-z]+/g, " ").trim()).filter(Boolean);
+    for (const name of names) {
+      if (city !== name && city.endsWith(` ${name}`)) city = city.slice(0, -name.length - 1).trim();
+    }
+  }
+  return `${(p.country ?? "").toUpperCase()}|${province}|${city}`;
+}
+
+// The places with their variants merged: one row per key, counted together,
+// spelled as its most frequent variant (the export lists the most frequent first).
+export function mergedPlaces(places: readonly Place[]): Place[] {
+  const byKey = new Map<string, Place>();
+  for (const p of places) {
+    const key = placeKey(p);
+    const seen = byKey.get(key);
+    if (seen) byKey.set(key, { ...seen, n: seen.n + p.n });
+    else byKey.set(key, { ...p });
+  }
+  return [...byKey.values()].sort((a, b) => b.n - a.n);
+}
+
+// How many addresses the note counts: the distinct places that name a city
+// (a country or province alone could be any of them), plus the places past
+// the ten listed, which the page cannot compare.
+export function addressCount(places: readonly Place[], total?: number): number {
+  const named = new Set(places.filter((p) => placeKey(p).split("|")[2]).map(placeKey)).size;
+  return named + Math.max(0, (total ?? places.length) - places.length);
+}
+
 export function directoryName(lang: Lang, code: string): string {
   if (code === "xx") return t(lang, "directory.name_xx");
   if (code === "un") return t(lang, "directory.name_un");
@@ -162,8 +221,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
     { name: o.display_name },
   ];
   const otherNames = [...new Set(profile.names.map((n) => n.name).filter((n) => n !== o.display_name))];
-  const places = profile.places;
-  const placeCount = profile.places_total_rows ?? places.length;
+  const places = mergedPlaces(profile.places);
+  const placeCount = addressCount(profile.places, profile.places_total_rows);
   const counts: Record<SourceKey, number> = {
     awards: o.n_awards, history: o.n_history, contracts: o.n_contracts, grants: o.n_grants, lobbying: o.n_lobbying,
   };
@@ -228,7 +287,10 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
 
       <InterestPanel lang={lang} filter={interest} />
 
-      <Panel id="years" title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
+      <Panel id="years" title={t(lang, "org.years")} foot={<span>
+        {t(lang, "org.nc_footnote")}
+        {years.some((y) => (y.n_negative ?? 0) > 0 && y.source !== "grants") ? <><br />{t(lang, "org.nc_negative_note")}</> : null}
+      </span>}>
         <p class="muted small">
           {tj(lang, "org.years_note", { methodology: <a href="/methodology#counting">{t(lang, "org.years_rules")}</a> })}
           {lateYears ? ` ${t(lang, "common.dates_as_published")}` : ""}
@@ -252,9 +314,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                     <td data-label={t(lang, "col.records")} class="mono num">{n(y.n)}</td>
                     <td data-label={t(lang, "col.value")} class="mono num">{money(lang, y.total)}</td>
                     <td data-label={t(lang, "org.col_nc_count")} class="mono num">{shareText(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}</td>
-                    <td data-label={t(lang, "org.col_nc_value")} class="mono num mdh">
-                      {shareText(lang, y.total_non_competitive, y.source === "grants" ? null : y.total, (v) => fmtMoney(v, lang))}
-                    </td>
+                    <td data-label={t(lang, "org.col_nc_value")} class="mono num mdh">{valueShare(lang, y)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -101,8 +101,9 @@ export const BrandWordmark: FC<{ name: string }> = ({ name }) => (
   </svg>
 );
 
-// The day a page counts "closing soon" from: the data's own date when it has
-// one, so a page and the file it reads agree, else today in UTC.
+// The data's own date when it has one, else today in UTC: the day a page
+// reads years and late dates against. Closing states read the clock
+// instead (src/closing.ts).
 export function todayOf(dataAsOf: string | null | undefined): string {
   return dataAsOf && /^\d{4}-\d{2}-\d{2}/.test(dataAsOf) ? dataAsOf.slice(0, 10) : new Date().toISOString().slice(0, 10);
 }
@@ -113,24 +114,10 @@ export function addDays(day: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-// A notice the file still lists as open after its closing day: its closing
-// date is before the page's data date.
-export function closingPassed(closing: string | null | undefined, today: string): boolean {
-  return !!closing && closing.slice(0, 10) < today;
-}
-
-// An open notice closing within the window reads as closing soon; the tag's
-// colour differs from the open one in lightness as well as hue. One whose
-// closing day has passed reads "closed" (closing date passed), the status the
-// export writes for it too, so the same label covers both.
-export function tenderState(status: string, closing: string | null, today: string): string {
-  if (status !== "open" || !closing) return status;
-  if (closingPassed(closing, today)) return "closed";
-  return closing.slice(0, 10) <= addDays(today, CLOSING_SOON_DAYS) ? "closing" : "open";
-}
-
-export const StatusBadge: FC<{ status: string; lang: Lang }> = ({ status, lang }) => (
-  <span class={`badge badge-${/^[a-z]+$/.test(status) ? status : "unknown"}`}>{statusLabel(lang, status)}</span>
+// notice: the reference of a notice closing soon, so public/countdown.js can
+// turn every chip of that notice on the page once its closing time passes.
+export const StatusBadge: FC<{ status: string; lang: Lang; notice?: string }> = ({ status, lang, notice }) => (
+  <span class={`badge badge-${/^[a-z]+$/.test(status) ? status : "unknown"}`} data-notice={notice}>{statusLabel(lang, status)}</span>
 );
 
 // "Non-competitive" is the source's own term: the definition rides along as
@@ -270,7 +257,8 @@ const RailLink: FC<{ lang: Lang; e: RailEntry; state: RailState; child?: boolean
     <span class="rail-label">
       {e.short ? <><span class="rail-short">{e.short}</span><span class="rail-full">{e.label}</span></> : e.label}
     </span>
-    {e.n !== undefined ? <span class="rail-n">{fmtInt(e.n, lang)}</span> : null}
+    {/* The closing-soon count goes down as public/countdown.js sees a notice on the page close. */}
+    {e.n !== undefined ? <span class="rail-n" data-soon-count={e.soon ? "" : undefined}>{fmtInt(e.n, lang)}</span> : null}
   </a>
 );
 
@@ -380,7 +368,7 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 6;
+export const STYLES_VERSION = 7;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -441,7 +429,8 @@ export const Layout: FC<
             <footer class="site-footer">
               <div class="footer-row">
                 <span class="footer-sources">
-                  {t(lang, "footer.sources")} <a href="/data#sources">{t(lang, "footer.sources_link")}</a>
+                  {t(lang, shell?.rail?.lobbyingLoaded ? "footer.sources" : "footer.sources_no_lobbying")}{" "}
+                  <a href="/data#sources">{t(lang, "footer.sources_link")}</a>
                 </span>
                 <span class="footer-links">
                   <a href="/segments">{t(lang, "nav.segments")}</a>

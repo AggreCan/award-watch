@@ -13,9 +13,13 @@ import type { AppEnv } from "../env";
 import { fmtInt, fmtMoney, fmtMoneyShort, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { buyerSeo, pageSeo } from "../seo";
+import { newestFirst } from "./awards";
 import { ExpiringSection } from "./expiring";
 import { InterestPanel, interestFilter } from "./interest";
-import { AwardTable, OrgTotalTable, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, money, shareText } from "./shared";
+import {
+  AwardTable, BUYER_SOURCE_RESTS, OrgTotalTable, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, money, shareText, sourceCellClass,
+  sourceColumns,
+} from "./shared";
 
 const KIND: Record<string, Key> = {
   department: "buyer.kind_department",
@@ -57,10 +61,7 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
         <Table cols={[
           { kind: "main", label: t(lang, "col.buyer") },
           { kind: "count", label: t(lang, "buyers.col_open") },
-          { kind: "total", label: sourceLabel(lang, "awards") },
-          { kind: "total", label: sourceLabel(lang, "history") },
-          { kind: "total", label: sourceLabel(lang, "contracts") },
-          { kind: "total", label: sourceLabel(lang, "grants") },
+          ...sourceColumns(lang, BUYER_SOURCE_RESTS),
         ]}>
           <tbody>
             {rows.map((b) => (
@@ -72,10 +73,10 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
                 <td data-label={t(lang, "buyers.col_open")} class="mono num">
                   {b.n_open_tenders ? <a href={`/tenders?buyer=${b.id}`}>{n(b.n_open_tenders)}</a> : n(b.n_open_tenders ?? 0)}
                 </td>
-                <td data-label={sourceLabel(lang, "awards")} class="mono num">{cell(b.n_awards, b.total_awards)}</td>
-                <td data-label={sourceLabel(lang, "history")} class="mono num">{cell(b.n_history, b.total_history)}</td>
-                <td data-label={sourceLabel(lang, "contracts")} class="mono num">{cell(b.n_contracts, b.total_contracts)}</td>
-                <td data-label={sourceLabel(lang, "grants")} class="mono num">{cell(b.n_grants, b.total_grants)}</td>
+                <td data-label={sourceLabel(lang, "awards")} class={sourceCellClass("awards", BUYER_SOURCE_RESTS)}>{cell(b.n_awards, b.total_awards)}</td>
+                <td data-label={sourceLabel(lang, "history")} class={sourceCellClass("history", BUYER_SOURCE_RESTS)}>{cell(b.n_history, b.total_history)}</td>
+                <td data-label={sourceLabel(lang, "contracts")} class={sourceCellClass("contracts", BUYER_SOURCE_RESTS)}>{cell(b.n_contracts, b.total_contracts)}</td>
+                <td data-label={sourceLabel(lang, "grants")} class={sourceCellClass("grants", BUYER_SOURCE_RESTS)}>{cell(b.n_grants, b.total_grants)}</td>
               </tr>
             ))}
           </tbody>
@@ -209,7 +210,8 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
       ) : null}
 
       <Panel title={t(lang, "buyer.recent_awards")} foot={<SourceLine lang={lang} source="awards" />}>
-        {b.recent_awards.length ? <AwardTable lang={lang} rows={b.recent_awards} buyer={false} /> : <p class="muted">{t(lang, "awards.none")}</p>}
+        {/* The newest published notices, in the order of the Awarded column, as on the home page. */}
+        {b.recent_awards.length ? <AwardTable lang={lang} rows={newestFirst(b.recent_awards)} buyer={false} /> : <p class="muted">{t(lang, "awards.none")}</p>}
       </Panel>
     </Layout>,
   );

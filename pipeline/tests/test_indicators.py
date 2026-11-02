@@ -240,3 +240,22 @@ def test_a_samples_run_loads_every_source_and_its_years_agree_with_the_profiles(
         assert off == [], source
     assert conn.execute("SELECT COUNT(*) FROM organization_years WHERE source = 'contracts'").fetchone()[0] > 0
     assert conn.execute("SELECT COUNT(*) FROM buyer_years WHERE source = 'grants'").fetchone()[0] > 0
+
+
+def test_the_non_competitive_share_by_value_is_over_positive_values(conn, records):
+    """A published contract's amendment can lower a value (C4: -100); a share of the net total ran below zero
+    on a profile (-10 percent). organization_years keeps the positive values apart, and how many records were
+    below zero, so the share is taken over positive values only."""
+    a, b = records
+    contract(conn, "C7", a, "dept-a", instrument="C", value=400, day="2026-02-01", comp=0)
+    conn.commit()
+    indicators.compute(conn, now=T1)
+    rows = {(r[0], r[1], r[2]): tuple(r)[3:] for r in conn.execute(
+        "SELECT organization_id, year, source, total, total_non_competitive, total_positive, "
+        "total_non_competitive_positive, n_negative FROM organization_years")}
+    # 2026: C4 -100 (non-competitive) and C7 400 (non-competitive): net 300, positive 400, one record below zero.
+    assert rows[(a, 2026, "contracts")] == (300.0, 300.0, 400.0, 400.0, 1)
+    # 2025: nothing below zero, so the positive figures are the totals.
+    assert rows[(a, 2025, "contracts")] == (1750.0, 500.0, 1750.0, 500.0, 0)
+    # Grants carry no competitive flag.
+    assert rows[(a, 2024, "grants")][3] is None

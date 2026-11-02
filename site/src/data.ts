@@ -5,6 +5,7 @@
 // null for a file that is missing, unreadable or the wrong shape, so a page
 // says "not published" or "not found", never a server error.
 
+import { type Clock, clockOf, closingSoonCount } from "./closing";
 import { DIRECTORY_CODES, MONEY_SOURCES, SEGMENTS, SOURCES, type MoneySource, type SourceKey } from "./constants";
 import type { Env } from "./env";
 import { isBool, isListOf, isNum, isNumOrNull, isObj, isStr, isStrOrNull, optional } from "./valid";
@@ -55,6 +56,12 @@ export interface TenderRow {
   segments: string[];
   provinces: string[];
   first_seen: string;
+  // On the rows of tenders/open.json and open-first.json, for the word and
+  // code filters: the start of the description in each language (about 200
+  // characters, contacts removed) and the full UNSPSC codes.
+  excerpt_en?: string | null;
+  excerpt_fr?: string | null;
+  codes?: string[];
   // Present on rows of tenders/new/<day>.json, where a notice may already be
   // closed: the status on the data date ("closed" once the closing day has
   // passed), with the file's own status in source_status.
@@ -153,6 +160,12 @@ export interface YearFigure {
   // Null for grants, which have no competitive flag.
   n_non_competitive: number | null;
   total_non_competitive: number | null;
+  // A profile's years: the positive values alone, which the non-competitive
+  // share by value is taken over, and how many records were below zero (an
+  // amendment that lowered a published contract). Absent from older exports.
+  total_positive?: number | null;
+  total_non_competitive_positive?: number | null;
+  n_negative?: number;
 }
 
 export interface Citation {
@@ -204,6 +217,11 @@ export interface Stats {
   >>;
   new_tenders: TenderRow[];
   closing_soon: TenderRow[];
+  // The closing value of every open notice closing within a few days more
+  // than the closing-soon window of the data date, soonest first: the rail
+  // and the home page count "closing soon" from it at render, leaving out a
+  // notice whose closing time has passed. Absent from older exports.
+  closing_soon_times?: string[];
   recent_awards: AwardRow[];
   top_organizations_year: OrgTotal[];
   runs: { run_at: string; source: string; detail: string | null; rows_new: number | null; ok: number | boolean }[];
@@ -755,7 +773,8 @@ export const isTenderRow = (r: unknown): r is TenderRow => isObj(r) && isRef(r.r
   isStrOrNull(r.title_en) && isStrOrNull(r.title_fr) && isBuyerIdOrNull(r.buyer_id) && isStrOrNull(r.buyer_en) &&
   isStrOrNull(r.buyer_fr) && isStrOrNull(r.published) && isStrOrNull(r.closing) && isStrList(r.category) &&
   isStrOrNull(r.notice_type_en) && isStrOrNull(r.notice_type_fr) && isStrOrNull(r.method_en) && isStrOrNull(r.method_fr) &&
-  isStrList(r.segments) && isStrList(r.provinces) && isStr(r.first_seen) && optional(r.status, isStr);
+  isStrList(r.segments) && isStrList(r.provinces) && isStr(r.first_seen) && optional(r.status, isStr) &&
+  optional(r.excerpt_en, isStrOrNull) && optional(r.excerpt_fr, isStrOrNull) && optional(r.codes, isStrList);
 
 export const isAwardRow = (r: unknown): r is AwardRow => isObj(r) && isRef(r.reference) &&
   optional(r.reference_published, isPublishedRef) && isStrOrNull(r.title_en) &&
@@ -785,7 +804,8 @@ export const isOrgTotal = (r: unknown): r is OrgTotal => isObj(r) && isStr(r.id)
 
 const isYearFigure = (r: unknown): r is YearFigure => isObj(r) && isNum(r.year) && Number.isInteger(r.year) &&
   isMoneySource(r.source) && isCount(r.n) && isNumOrNull(r.total) && isNumOrNull(r.n_non_competitive) &&
-  isNumOrNull(r.total_non_competitive);
+  isNumOrNull(r.total_non_competitive) && optional(r.total_positive, isNumOrNull) &&
+  optional(r.total_non_competitive_positive, isNumOrNull) && optional(r.n_negative, isCount);
 
 const isCodeRow = (r: unknown): r is CodeRow => isObj(r) && isStr(r.code) && isStrOrNull(r.desc_en) && isStrOrNull(r.desc_fr);
 
@@ -812,9 +832,13 @@ export async function loadStats(env: Env): Promise<Stats | null> {
   const counts = stats.counts as Record<string, unknown>;
   const badCounts = Object.keys(counts).filter((k) => !isNum(counts[k]));
   const badLists = STAT_LISTS.filter(([k, each]) => !checkOnce(stats[k], `stats.${k}`, (v) => isListOf(v, each))).map(([k]) => k);
-  if (badCounts.length === 0 && badLists.length === 0) return stats as unknown as Stats;
+  // The closing times are optional: a list that does not read is left out, so the rail falls back to the counts.
+  const badTimes = stats.closing_soon_times !== undefined &&
+    !checkOnce(stats.closing_soon_times, "stats.closing_soon_times", (v) => isListOf(v, isStr));
+  if (badCounts.length === 0 && badLists.length === 0 && !badTimes) return stats as unknown as Stats;
   const fixed: Record<string, unknown> = { ...stats, counts: Object.fromEntries(Object.entries(counts).filter(([, v]) => isNum(v))) };
   for (const k of badLists) fixed[k] = [];
+  if (badTimes) delete fixed.closing_soon_times;
   return fixed as unknown as Stats;
 }
 
@@ -1163,23 +1187,32 @@ export interface RailCounts {
   awardsYear?: number;
   organizations?: number;
   buyers?: number;
+  // Whether the lobbying registry has been read: the footer names only the
+  // sources that have.
+  lobbyingLoaded?: boolean;
 }
 
-// stats.json first. The closing-soon count and the year's award notices come
-// from their own count fields when the export writes them; until then from
-// the closing-soon list when it is shorter than its cap, leaving out a notice
-// whose closing date is before the data date, and from the year's award
-// index. The 3-month count needs the expiring radar's index.
+// The open notices closing soon at the page's clock (src/closing.ts): counted
+// from the export's closing times, so a notice whose closing time has passed
+// since the nightly is left out. An older export without them gives its own
+// count (as of the data date), else the closing-soon list when it is shorter
+// than its cap; otherwise there is no count.
+export function closingSoonTotal(stats: Stats, clock: Clock): number | undefined {
+  if (stats.closing_soon_times) return closingSoonCount(stats.closing_soon_times, clock);
+  if (stats.counts.tenders_closing_soon !== undefined) return stats.counts.tenders_closing_soon;
+  return stats.closing_soon.length < STATS_LIST_ROWS ? closingSoonCount(stats.closing_soon.map((r) => r.closing), clock) : undefined;
+}
+
+// stats.json first. The year's award notices come from their own count
+// field when the export writes it, else from the year's award index. The
+// 3-month count needs the expiring radar's index.
 export async function loadRail(env: Env): Promise<RailCounts | null> {
   const stats = await loadStats(env);
   if (!stats) return null;
   const counts = stats.counts;
   const day = (stats.data_as_of && /^\d{4}-\d{2}-\d{2}/.test(stats.data_as_of) ? stats.data_as_of : new Date().toISOString()).slice(0, 10);
   const year = day.slice(0, 4);
-  const closingSoon = counts.tenders_closing_soon ??
-    (stats.closing_soon.length < STATS_LIST_ROWS
-      ? stats.closing_soon.filter((r) => !r.closing || r.closing.slice(0, 10) >= day).length
-      : undefined);
+  const closingSoon = closingSoonTotal(stats, clockOf(env));
   const [awardYear, expiring] = await Promise.all([
     counts.awards_year === undefined ? loadAwardYear(env, Number(year)).catch(() => null) : Promise.resolve(null),
     loadExpiringIndex(env).catch(() => null),
@@ -1195,5 +1228,6 @@ export async function loadRail(env: Env): Promise<RailCounts | null> {
     awardsYear: counts.awards_year ?? awardYear?.rows,
     organizations: counts.organizations,
     buyers: counts.buyers,
+    lobbyingLoaded: sourceLoaded("lobbying", null, stats) === true,
   };
 }

@@ -130,8 +130,14 @@ async function tendersFilter(env: Env, lang: Lang, url: URL): Promise<InterestFi
     pairs.push(["segment", q.segment]);
     named.push(pair(lang, "tenders.filter_segment", `${q.segment} ${segmentLabel(lang, q.segment)}`));
   }
+  if (q.code) {
+    pairs.push(["code", q.code]);
+    named.push(pair(lang, "tenders.filter_code", q.code));
+  }
   if (q.province) {
     pairs.push(["province", q.province]);
+    // With the box unticked, the notices that name no province are out.
+    if (!q.national) pairs.push(["national", "0"]);
     named.push(pair(lang, "tenders.filter_province", provinceName(lang, q.province)));
   }
   if (q.buyer) {
@@ -188,6 +194,11 @@ async function expiringFilter(env: Env, lang: Lang, url: URL): Promise<InterestF
   if (q.kind) {
     pairs.push(["kind", q.kind]);
     extras.push(pair(lang, "col.source", sourceLabel(lang, KIND_SOURCE[q.kind])));
+  }
+  for (const [key, label] of [["fye", "expiring.chip_fye"], ["sosa", "expiring.chip_sosa"]] as const) {
+    if (q[key]) continue;
+    pairs.push([key, "0"]);
+    extras.push(pair(lang, label, t(lang, "expiring.chip_left_out")));
   }
   const scope = buyer && segment
     ? t(lang, "interest.scope_both", { buyer, segment })

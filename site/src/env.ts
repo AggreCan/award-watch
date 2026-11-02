@@ -43,6 +43,10 @@ export interface Env {
   // is HMAC-SHA-256 of the UTC date under it. Unset: no code is written and
   // the roll-up counts no unique visitors. Set with `wrangler secret put`.
   VIEWS_SALT_KEY?: string;
+  // A fixed instant ("2026-10-31T16:00:00Z") for the pages' clock, which
+  // otherwise reads the time of the request (src/closing.ts). The tests set
+  // it so the fixtures' closing states hold; never set in production.
+  NOW?: string;
 }
 
 export type AppEnv = {

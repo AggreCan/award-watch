@@ -155,3 +155,68 @@ def test_the_notice_address_on_canadabuys_drops_colons_and_keeps_slashes():
     assert feeds.notice_path("W8484-210010/001/PI") == "w8484-210010/001/pi"
     assert feeds.notice_path("EE520-221500/001/QCM") == "ee520-221500/001/qcm"
     assert feeds.notice_path("cb-100-1") == "cb-100-1"
+
+
+def test_a_tender_entry_prints_its_closing_time_in_eastern_time_and_the_feed_says_states_are_of_the_data_date(
+        conn, tmp_path):
+    """CanadaBuys publishes closing times in Eastern time with no zone in its file; the summary names the zone
+    as the site does, and the description says the closing states are those of the data date."""
+    seed(conn)
+    tender(conn, "cb-zone-none", 0, title="No zone", closing="2026-11-04T14:00:00")
+    tender(conn, "cb-zone-given", 0, title="Zone given", closing="2026-11-04T14:00:00-08:00")
+    conn.commit()
+    write(conn, tmp_path)
+    root, rows = entries(tmp_path, "feeds/canada/tenders.xml")
+    summary = {e.findtext(f"{A}id").rsplit("/", 1)[1]: e.findtext(f"{A}summary") for e in rows}
+    assert "Closing 2026-11-04 14:00 ET." in summary["cb-zone-none"]
+    assert "Clôture le 2026-11-04 14 h 00 HE." in summary["cb-zone-none"]
+    assert "Closing 2026-11-04 14:00 -08:00." in summary["cb-zone-given"]
+    assert "Closing states are as of the data date" in root.findtext(f"{A}subtitle")
+    assert "Les états de clôture sont ceux de la date des données" in root.findtext(f"{A}subtitle")
+    assert feeds.closing_text("2026-11-04", "en") == "2026-11-04"
+    assert feeds.closing_text("2026-11-04T14:00:00Z", "fr") == "2026-11-04 14 h 00 UTC"
+
+
+def test_a_night_past_the_first_page_continues_in_linked_pages(conn, tmp_path, monkeypatch):
+    """RFC 5005 paged feeds: the first file holds the newest MAX_ENTRIES; the rest of the newest night follow
+    in <event>-2.xml and on, linked next, previous, first and last; an older night is not paged."""
+    seed(conn)
+    for i in range(7):
+        tender(conn, f"cb-night-{i}", 0, title=f"Tonight {i}", closing="2026-11-20T14:00:00")
+    for i in range(3):
+        tender(conn, f"cb-before-{i}", 0, title=f"Last week {i}", closing="2026-11-20T14:00:00", first_seen="2026-10-24")
+    conn.commit()
+    counts, index = write(conn, tmp_path, max_entries=3)
+    item = next(f for f in index["feeds"] if f["scope"] == "canada" and f["event"] == "tenders")
+    tonight = 7
+    assert item["entries"] == 3 and item["pages"] >= 3
+    root1, first = entries(tmp_path, "feeds/canada/tenders.xml")
+    assert root1.find(f"{A}link[@rel='next']").get("href") == f"{BASE}/data/feeds/canada/tenders-2.xml"
+    assert root1.find(f"{A}link[@rel='previous']") is None
+    last = item["pages"]
+    root_last, rows_last = entries(tmp_path, f"feeds/canada/tenders-{last}.xml")
+    assert root_last.find(f"{A}link[@rel='next']") is None
+    assert root_last.find(f"{A}link[@rel='previous']").get("href").endswith(f"tenders-{last - 1}.xml" if last > 2 else "tenders.xml")
+    assert root_last.find(f"{A}link[@rel='first']").get("href") == f"{BASE}/data/feeds/canada/tenders.xml"
+    # Every entry of the night is on some page, each once; last week's are not paged.
+    ids = []
+    for n in range(1, last + 1):
+        _, rows = entries(tmp_path, "feeds/canada/tenders.xml" if n == 1 else f"feeds/canada/tenders-{n}.xml")
+        ids += [e.findtext(f"{A}id").rsplit("/", 1)[1] for e in rows]
+    assert len(ids) == len(set(ids))
+    assert {f"cb-night-{i}" for i in range(tonight)} <= set(ids)
+    assert not {f"cb-before-{i}" for i in range(3)} & set(ids)
+    assert counts["feed_files"] > counts["feeds"]
+    assert not (tmp_path / "feeds" / "canada" / f"tenders-{last + 1}.xml").exists()
+
+
+def test_feed_pages_stop_at_the_newest_night_and_the_page_cap():
+    def e(day, i):
+        return feeds.Entry(id=str(i), updated=f"{day}T00:00:00Z", title="t", summary="s", link="/", via="v")
+    night = [e("2026-10-31", i) for i in range(12)] + [e("2026-10-30", 100 + i) for i in range(5)]
+    pages = feeds.feed_pages(night, max_entries=5, max_pages=20)
+    assert [len(p) for p in pages] == [5, 5, 2]
+    assert [len(p) for p in feeds.feed_pages(night, max_entries=5, max_pages=2)] == [5, 5]
+    assert feeds.feed_pages([], max_entries=5) == [[]]
+    # A short night fills the first page with older entries and has no second.
+    assert [len(p) for p in feeds.feed_pages(night[10:], max_entries=5)] == [5]

@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { type ColumnKind, type Rest, Table, restClass } from "../columns";
+import { type ColumnKind, REST_CLASS, type Rest, Table, restClass } from "../columns";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { clientStrings, numberLocale, t, tj, type Key, type Lang } from "../i18n";
@@ -28,18 +28,29 @@ export const WATCHLIST_CLIENT_KEYS: readonly Key[] = [
   "watch.import_full",
 ];
 
-export function watchlistClientData(lang: Lang) {
-  return { lang, locale: numberLocale(lang), max: WATCH_MAX, strings: clientStrings(lang, WATCHLIST_CLIENT_KEYS) };
-}
-
-// The latest record rests below 1440 px (src/columns.tsx). A row whose cell
-// spans columns keeps one cell for that column, here and in
-// public/watchlist.js, so the hidden column never shifts the cells after it.
-const COLUMNS: [Key, ColumnKind, Rest?][] = [
-  ["col.organization", "main"], ["source.awards", "count"], ["source.history", "count"], ["source.contracts", "count"],
-  ["source.grants", "count"], ["source.lobbying", "count"], ["watch.col_latest", "date", "lg"], ["watch.col_new", "text"],
-  ["watch.col_manage", "label"],
+// Each source's head is its name over the count (the tally kind, on one
+// line), and the new records since the last visit, counted by source, take
+// the same width. The
+// table is wider than a window below 1920 px can hold, so the
+// columns the rows use least rest first (src/columns.tsx), lobbying (not
+// loaded yet) and the latest record below 1920 px, grants below 1600,
+// contract history below 1440, published contracts below 1280. A row whose
+// cell spans columns keeps one cell for each resting column, here and in
+// public/watchlist.js, so a hidden column never shifts the cells after it.
+const COLUMNS: [Key, ColumnKind, Rest?, string?][] = [
+  ["col.organization", "main"], ["source.awards", "tally", undefined, "num"], ["source.history", "tally", "lg", "num"],
+  ["source.contracts", "tally", "md", "num"], ["source.grants", "tally", "xl", "num"], ["source.lobbying", "tally", "xxl", "num"],
+  ["watch.col_latest", "date", "xxl"], ["watch.col_new", "tally"], ["watch.col_manage", "label"],
 ];
+
+// The rest class of each column the script draws, by its label key.
+export const WATCH_RESTS: Record<string, string> = Object.fromEntries(
+  COLUMNS.filter(([, , rest]) => rest).map(([key, , rest]) => [key, REST_CLASS[rest as Rest]]),
+);
+
+export function watchlistClientData(lang: Lang) {
+  return { lang, locale: numberLocale(lang), max: WATCH_MAX, strings: clientStrings(lang, WATCHLIST_CLIENT_KEYS), rests: WATCH_RESTS };
+}
 
 export async function watchlistPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
@@ -54,14 +65,14 @@ export async function watchlistPage(c: Context<AppEnv>): Promise<Response> {
 
       <Panel title={t(lang, "watch.panel")} tools={<span id="watch-status" aria-live="polite"></span>}>
       <div class="table-wrap bordered" id="watchlist" data-max={String(WATCH_MAX)}>
-        <Table cols={COLUMNS.map(([k, kind, rest]) => ({ kind, label: t(lang, k), rest }))}>
+        <Table cols={COLUMNS.map(([k, kind, rest, cls]) => ({ kind, label: t(lang, k), rest, class: cls }))}>
           <tbody id="watch-rows">
             <tr>
-              <td colspan={6} class="muted" id="watch-empty">
+              <td colspan={2} class="muted" id="watch-empty">
                 {tj(lang, "watch.empty", { directory: <a href="/organizations">{t(lang, "watch.directory_link")}</a> })}
                 <noscript> {t(lang, "watch.noscript")}</noscript>
               </td>
-              <td class={restClass("lg")}></td>
+              {COLUMNS.slice(2, 7).map(([, , rest]) => <td class={restClass(rest)}></td>)}
               <td colspan={2}></td>
             </tr>
           </tbody>

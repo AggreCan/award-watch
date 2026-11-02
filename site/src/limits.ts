@@ -12,10 +12,13 @@ import { t } from "./i18n";
 // and never arrive here.
 export type Bucket = "page" | "api" | "download" | "form" | "feed";
 
+// A HEAD request for a download (a link checker, a client asking a file's
+// size before fetching it) moves no file, so it is not counted against the
+// download cap; it is counted with the pages.
 export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/data/feeds/")) return "feed";
   if (path.startsWith("/api/")) return "api";
-  if (path.startsWith("/downloads/")) return "download";
+  if (path.startsWith("/downloads/")) return method === "HEAD" ? "page" : "download";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
     return "form";
   }

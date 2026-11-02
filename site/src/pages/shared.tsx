@@ -3,11 +3,13 @@
 // government's own record of each row.
 
 import type { FC, PropsWithChildren } from "hono/jsx";
-import { type Column, Table } from "../columns";
+import { type Column, type Rest, Table, restClass } from "../columns";
+import { MONEY_SOURCES, type MoneySource } from "../constants";
 import { type AwardRow, type OrgTotal, type TenderRow, publishedReference } from "../data";
 import { buyerPath } from "../crosslinks";
-import { fmtInt, fmtMoney, fmtPct, pick, provinceName, segmentLabel, t, tj, type Key, type Lang } from "../i18n";
-import { ClientData, CompetitiveFlag, StatusBadge, tenderState } from "../layout";
+import { fmtInt, fmtMoney, fmtPct, pick, provinceName, segmentLabel, segmentShort, sourceLabel, t, tj, type Key, type Lang } from "../i18n";
+import { type Clock, closesAtUtc, closingText, closingTime, tenderState } from "../closing";
+import { ClientData, CompetitiveFlag, StatusBadge } from "../layout";
 
 // -- links to the record ---------------------------------------------------------
 
@@ -89,22 +91,8 @@ export function money(lang: Lang, value: number | null | undefined, currency?: s
   return fmtMoney(value, lang, currency);
 }
 
-// "2026-11-26T14:00:00" as published: the date and the time ("14:00", or
-// "14 h 00" in French), and the time zone when the value carries one ("Z",
-// "-05:00" or a name after the time).
-export function closingText(closing: string | null, lang: Lang = "en"): string {
-  if (!closing) return "";
-  const m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2}|[A-Za-z][A-Za-z ()/_-]*)?)?/.exec(closing);
-  if (!m) return closing;
-  if (!m[2]) return m[1];
-  const zone = m[4] ? ` ${m[4] === "Z" ? "UTC" : m[4].trim()}` : "";
-  return `${m[1]} ${t(lang, "common.time", { hh: m[2], mm: m[3] })}${zone}`;
-}
-
-// Whether a published closing value names its time zone.
-export function closingHasZone(closing: string | null): boolean {
-  return !!closing && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2}|[A-Za-z])/.test(closing);
-}
+// Closing times print with their zone (src/closing.ts); the pages import them from here.
+export { closingHasZone, closingText } from "../closing";
 
 // The language a bilingual text is shown in when the page's own is blank:
 // the marker after it, or null when the text is in the page's language.
@@ -124,13 +112,15 @@ export const BuyerLink: FC<{ lang: Lang; id: string | null; en: string | null; f
   return href ? <a href={href}>{name}</a> : <>{name}</>;
 };
 
-// A notice's UNSPSC segments as numbered chips. The title names the segment
-// on hover; the label says what the number is for a screen reader and on a
-// touch screen, and SegmentNote says it once above the list.
+// A notice's UNSPSC segments as chips, the number and a short name ("86
+// Education"). The title gives the segment's full name on hover; the label
+// says what the chip is for a screen reader and holds its visible text, and
+// SegmentNote says it once above the list.
 export const SegmentChips: FC<{ lang: Lang; codes: readonly string[] }> = ({ lang, codes }) => (
   <>
     {codes.map((code) => (
-      <a href={`/segments/${code}`} class="chip" title={segmentLabel(lang, code)} aria-label={t(lang, "segment.code", { code })}>{code}</a>
+      <a href={`/segments/${code}`} class="chip" title={segmentLabel(lang, code)}
+        aria-label={t(lang, "segment.chip", { code, name: segmentShort(lang, code) })}>{`${code} ${segmentShort(lang, code)}`}</a>
     ))}
   </>
 );
@@ -156,6 +146,24 @@ export function shareText(lang: Lang, part: number | null, whole: number | null,
 }
 
 // -- tables ---------------------------------------------------------------------------
+
+// The four money sources as columns of their own, each head the source's
+// name over its figure (the tally kind, wide enough for the longest name on
+// one line). Where a table is too wide for the window, the sources a table's
+// rows use least rest first: on the buyers lists, grants and then published
+// contracts (the fewest buyers have them; 51 and 99 of 599 on 2026-11-01).
+export type SourceRests = Partial<Record<MoneySource, Rest>>;
+export const BUYER_SOURCE_RESTS: SourceRests = { grants: "lg", contracts: "md" };
+
+export function sourceColumns(lang: Lang, rests: SourceRests = {}): Column[] {
+  return MONEY_SOURCES.map((s) => ({ kind: "tally" as const, label: sourceLabel(lang, s), rest: rests[s], class: "num" }));
+}
+
+// The class a source's cells carry so they rest with their head.
+export function sourceCellClass(s: MoneySource, rests: SourceRests, base = "mono num"): string {
+  const rest = restClass(rests[s]);
+  return rest ? `${base} ${rest}` : base;
+}
 
 // A long list on a phone: below 700 px public/pager.js shows a table marked
 // with data-phone-page this many rows at a time, with its own Previous and
@@ -191,34 +199,58 @@ export function tenderColumns(lang: Lang): Column[] {
 }
 
 // public/tenders.js draws the same markup; selectable rows carry their
-// reference for it.
-export const TenderTable: FC<{ lang: Lang; rows: readonly TenderRow[]; today: string; status?: boolean; selectable?: boolean; note?: boolean }> = ({
-  lang, rows, today, status, selectable, note = true,
+// reference for it. The state is the notice's at the page's clock; a notice
+// closing soon carries its closing instant for public/countdown.js, which
+// writes the time left under it (CountdownScript, once per page).
+export const TenderTable: FC<{ lang: Lang; rows: readonly TenderRow[]; clock: Clock; status?: boolean; selectable?: boolean; note?: boolean }> = ({
+  lang, rows, clock, status, selectable, note = true,
 }) => (
   <>
   {note ? <SegmentNote lang={lang} rows={rows} /> : null}
   <div class="table-wrap bordered">
     <Table cols={tenderColumns(lang)} class="t-tenders">
       <tbody>
-        {rows.map((r) => (
-          <tr data-ref={selectable ? r.reference.toLowerCase() : undefined}>
-            <td data-label={t(lang, "col.notice")} class="c-notice">
-              <a href={`/tenders/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? publishedReference(r)}</a>
-              <br />
-              <span class="mono id muted">{publishedReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} />
-            </td>
-            <td data-label={t(lang, "col.buyer")} class="c-buyer"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
-            <td data-label={t(lang, "col.closing")} class="mono c-date">
-              {closingText(r.closing, lang)}{" "}
-              <StatusBadge lang={lang} status={tenderState(status ? r.status ?? "open" : "open", r.closing, today)} />
-            </td>
-            <td data-label={t(lang, "col.published")} class="mono c-pub mdh">{r.published ?? ""}</td>
-            <td data-label={t(lang, "col.region")} class="c-region">{provincesText(lang, r.provinces)}</td>
-          </tr>
-        ))}
+        {rows.map((r) => {
+          const state = tenderState(status ? r.status ?? "open" : "open", r.closing, clock);
+          const closes = state === "closing" ? closesAtUtc(r.closing) : null;
+          return (
+            <tr data-ref={selectable ? r.reference.toLowerCase() : undefined}>
+              <td data-label={t(lang, "col.notice")} class="c-notice">
+                <a href={`/tenders/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? publishedReference(r)}</a>
+                <br />
+                <span class="mono id muted">{publishedReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} />
+              </td>
+              <td data-label={t(lang, "col.buyer")} class="c-buyer"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
+              <td data-label={t(lang, "col.closing")} class="mono c-date" data-closes={closes ?? undefined}
+                data-time={closes ? closingTime(r.closing, lang) ?? undefined : undefined} data-notice={closes ? r.reference.toLowerCase() : undefined}>
+                {closingText(r.closing, lang)}{" "}
+                <StatusBadge lang={lang} status={state} notice={closes ? r.reference.toLowerCase() : undefined} />
+              </td>
+              <td data-label={t(lang, "col.published")} class="mono c-pub mdh">{r.published ?? ""}</td>
+              <td data-label={t(lang, "col.region")} class="c-region">{provincesText(lang, r.provinces)}</td>
+            </tr>
+          );
+        })}
       </tbody>
     </Table>
   </div>
+  </>
+);
+
+// The countdown under each closing-soon time (public/countdown.js) and the
+// words it writes, once per page that shows one. Without the script the
+// server's chip stands.
+export const COUNTDOWN_KEYS: readonly Key[] = [
+  "countdown.in_min", "countdown.in_hm", "countdown.in_day", "countdown.in_days", "countdown.today_at", "status.closed",
+];
+
+export const CountdownScript: FC<{ lang: Lang }> = ({ lang }) => (
+  <>
+    <ClientData id="countdown-i18n" data={{
+      locale: lang === "fr" ? "fr-CA" : "en-CA",
+      words: Object.fromEntries(COUNTDOWN_KEYS.map((k) => [k.replace(/^countdown\./, ""), t(lang, k)])),
+    }} />
+    <script type="module" src="/countdown.js"></script>
   </>
 );
 

@@ -92,6 +92,13 @@ National Museum of Science and Technology,canadabuys,cstm-mstc,Canada Science an
 Emergency Preparedness Canada,canadabuys,ps-sp,Public Safety Canada,Sécurité publique Canada,PS,SP
 Federal Judicial Affairs Canada,canadabuys,fja-cmf,Office of the Commissioner for Federal Judicial Affairs Canada,Commissariat à la magistrature fédérale Canada,FJA,CMF
 Supreme Court of Canada,canadabuys,scc-csc,Supreme Court of Canada,Cour suprême du Canada,SCC,CSC
+# The Administrative Tribunals Support Service: its acronyms alone ("ATSSC", "SCDATA") and its French name
+# written with a typographic apostrophe each made a second buyer of the same name (atssc, and
+# administrative-tribunals-support-service-of-canada on a dev load); these rows send them to the CKAN id, and
+# the made ids go (their records move and the old addresses redirect).
+ATSSC,canadabuys,atssc-scdata,Administrative Tribunals Support Service of Canada,Service canadien d'appui aux tribunaux administratifs,ATSSC,SCDATA
+SCDATA,canadabuys,atssc-scdata,Administrative Tribunals Support Service of Canada,Service canadien d'appui aux tribunaux administratifs,ATSSC,SCDATA
+Service canadien d’appui aux tribunaux administratifs (SCDATA),canadabuys,atssc-scdata,Administrative Tribunals Support Service of Canada,Service canadien d'appui aux tribunaux administratifs,ATSSC,SCDATA
 Canadian Human Rights Tribunal,canadabuys,chrt-tcdp,Canadian Human Rights Tribunal,Tribunal canadien des droits de la personne,CHRT,TCDP
 Registry of the Specific Claims Tribunal,canadabuys,sct-trp,Specific Claims Tribunal,Tribunal des revendications particulières,SCT,TRP
 Office of the Correctional Investigator,canadabuys,oci-bec,The Correctional Investigator Canada,L'Enquêteur correctionnel Canada,OCI,BEC

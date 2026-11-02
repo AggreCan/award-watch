@@ -10,9 +10,10 @@ import { Table } from "../columns";
 import { REFERENCE_RE, loadStats, loadTender, publishedReference, type TenderDetail } from "../data";
 import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, segmentLabel, t, tn, type Key, type Lang } from "../i18n";
-import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, tenderState, todayOf } from "../layout";
+import { clockOf, closesAtUtc, closingTime, tenderState } from "../closing";
+import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
 import { tenderSeo } from "../seo";
-import { BuyerLink, closingHasZone, closingText, money, otherLanguageMark, provincesText, tenderNoticeUrl } from "./shared";
+import { BuyerLink, CountdownScript, closingHasZone, closingText, money, otherLanguageMark, provincesText, tenderNoticeUrl } from "./shared";
 
 // A field and its value as a definition-list row; an empty value leaves the
 // row out rather than printing a blank.
@@ -48,7 +49,11 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   const d: TenderDetail | null = await loadTender(c.env, raw);
   if (!d) return notFoundPage(c, stats.data_as_of, "tender.not_found", "/tenders", "tender.back");
 
-  const today = todayOf(stats.data_as_of);
+  const clock = clockOf(c.env);
+  const state = tenderState(d.status, d.closing, clock);
+  // A notice closing soon: the countdown goes under its closing time.
+  const closes = state === "closing" ? closesAtUtc(d.closing) : null;
+  const notice = closes ? d.reference.toLowerCase() : undefined;
   const shownRef = publishedReference(d);
   const title = pick(lang, d.title_en, d.title_fr) ?? shownRef;
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: shownRef }];
@@ -62,7 +67,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/tenders" seo={tenderSeo(d, lang, crumbs)}>
       <PageHead lang={lang} crumbs={crumbs} eyebrow={t(lang, "tender.title")} title={title}
         lead={<>
-          <StatusBadge lang={lang} status={tenderState(d.status, d.closing, today)} />{" "}
+          <StatusBadge lang={lang} status={state} notice={notice} />{" "}
           <span class="mono id">{shownRef}</span>
           {d.amendment > 0 ? <span class="muted"> {t(lang, "tender.amendment_n", { n: d.amendment })}</span> : null}
         </>}
@@ -74,7 +79,12 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         <Panel title={t(lang, "tender.dates")}>
           <dl>
             <Row lang={lang} k="col.published" v={d.published} />
-            <Row lang={lang} k="col.closing" v={closingText(d.closing, lang)} />
+            {closes ? (
+              <>
+                <dt>{t(lang, "col.closing")}</dt>
+                <dd data-closes={closes} data-time={closingTime(d.closing, lang) ?? undefined} data-notice={notice}>{closingText(d.closing, lang)}</dd>
+              </>
+            ) : <Row lang={lang} k="col.closing" v={closingText(d.closing, lang)} />}
             <Row lang={lang} k="tender.amended" v={d.amended} />
             <Row lang={lang} k="tender.start_expected" v={d.start_expected} />
             <Row lang={lang} k="tender.end_expected" v={d.end_expected} />
@@ -200,6 +210,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         {t(lang, "tender.provenance", { file: d.source_file, first: d.first_seen, last: d.last_seen })}{" "}
         {tn(lang, "tender.versions_one", "tender.versions_many", versions.length, { n: fmtInt(versions.length, lang) })}
       </p>
+      {closes ? <CountdownScript lang={lang} /> : null}
     </Layout>,
   );
 }

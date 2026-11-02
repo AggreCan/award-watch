@@ -580,6 +580,12 @@ CREATE TABLE IF NOT EXISTS organization_years (
   n_non_competitive INTEGER,
   total_non_competitive REAL,
   n_no_value INTEGER,                            -- records counted in n whose source published no value
+  -- The non-competitive share by value is taken over positive values only: a
+  -- published contract's amendment can lower a value (a negative row), and a
+  -- share of a net total can run below zero or past 100 percent.
+  total_positive REAL,                           -- the records' positive values, added
+  total_non_competitive_positive REAL,           -- the same, over the non-competitive records
+  n_negative INTEGER,                            -- records whose value is below zero
   PRIMARY KEY (organization_id, year, source)
 );
 

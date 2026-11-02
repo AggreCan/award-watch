@@ -107,6 +107,11 @@
     "SRV"
    ],
    "closing": "2026-11-04T14:00:00",
+   "codes": [
+    "82111800"
+   ],
+   "excerpt_en": "Translation of reports and correspondence between English and French for the regional offices.",
+   "excerpt_fr": "Traduction de rapports et de correspondance entre l'anglais et le français pour les bureaux régionaux.",
    "first_seen": "2026-10-30",
    "method_en": "Competitive - Open bidding",
    "method_fr": "Concurrentielle - Appel d'offres ouvert",
@@ -133,6 +138,12 @@
     "SRV"
    ],
    "closing": "2026-11-26T14:00:00",
+   "codes": [
+    "72101500",
+    "78181500"
+   ],
+   "excerpt_en": "Dry-dock inspection of the hull, propeller shafts and rudders.",
+   "excerpt_fr": null,
    "first_seen": "2026-10-31",
    "method_en": "Competitive - Selective tendering",
    "method_fr": "Concurrentielle - Appel d'offres sélectif",
@@ -159,6 +170,11 @@
     "GD"
    ],
    "closing": "2026-12-15T13:00:00",
+   "codes": [
+    "43211509"
+   ],
+   "excerpt_en": null,
+   "excerpt_fr": null,
    "first_seen": "2026-10-20",
    "method_en": "Competitive - Traditional",
    "method_fr": "Concurrentielle - Traditionnelle",

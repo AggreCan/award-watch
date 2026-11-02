@@ -72,17 +72,18 @@ describe("support page", () => {
     expect(html).toContain("Refreshed nightly, at midnight UTC.</li>");
   });
 
-  it("lists hosted search as the next tier, at no cost beyond the Workers Paid plan, in both languages", async () => {
-    const row = (html: string) => html.match(/<tr data-tier="hosted_search">[\s\S]*?<\/tr>/)?.[0] ?? "";
-    const en = row(await (await get("/support")).text());
-    expect(en).toContain('<td data-label="Monthly cost" class="mono num">$0.00</td>');
-    expect(en).toContain("Search across tenders, awards and organizations on the site with no download.");
-    // A tier that costs nothing needs no funding.
-    expect(en).toContain('<td data-label="Status" class="tier-status">No cost</td>');
-    const fr = row((await (await get("/support", { cookie: "lang=fr" })).text()).replace(/[\u00a0\u202f]/g, " "));
-    expect(fr).toContain('<td data-label="Coût mensuel" class="mono num">0,00 $</td>');
-    expect(fr).toContain("Recherche dans les appels d’offres, les attributions et les organisations sur le site, sans téléchargement.");
-    expect(fr).toContain('<td data-label="Statut" class="tier-status">Sans frais</td>');
+  it("states the search as part of the Workers Paid plan, with no tier of its own, in both languages", async () => {
+    const en = await (await get("/support")).text();
+    expect(en).not.toContain('data-tier="hosted_search"');
+    expect(en).not.toContain("Hosted search");
+    expect(en).toContain("Search is part of the plan. The field at the top of every page finds an organization or a buyer");
+    expect(en.match(/<tr data-tier="workers_paid">[\s\S]*?<\/tr>/)?.[0]).toContain("and the search.");
+    // Costs of nothing get no bar; one line says what they are.
+    expect(en).not.toContain('<span class="bar-label">Storage and database</span>');
+    expect(en).toContain("File storage, the databases and the nightly refresh on GitHub cost nothing today");
+    const fr = (await (await get("/support", { cookie: "lang=fr" })).text()).replace(/[\u00a0\u202f]/g, " ");
+    expect(fr).toContain("La recherche fait partie du forfait.");
+    expect(fr).not.toContain("Recherche hébergée");
   });
 
   it("states monthly cost against monthly support; with no support the plan in place reads In place and the rest Not yet funded", async () => {
@@ -173,7 +174,7 @@ describe("fee split", () => {
 
 describe("tier coverage", () => {
   const tier = (id: Tier["id"], monthlyCost: number): Tier => ({ id, name: id, monthlyCost, unlocks: "" });
-  const sample = [tier("baseline", 1), tier("workers_paid", 2), tier("hosted_search", 3), tier("storage", 4)];
+  const sample = [tier("baseline", 1), tier("workers_paid", 2), tier("storage", 3), tier("storage", 4)];
 
   it("funds the first two tiers exactly and part of the third", () => {
     // Cumulative monthly cost: 1.00, 3.00, 6.00, 10.00. Support of 4.50 covers
@@ -186,19 +187,13 @@ describe("tier coverage", () => {
 
   it("does the same with the real tiers", () => {
     const real = tierCoverage(0, TIERS);
-    // Hosted search costs nothing beyond the plan, so its cumulative cost is
-    // the plan's and support that covers the plan covers it too; the storage
-    // reserve is the first tier with a cost of its own after them.
-    expect(real[2].costCents).toBe(0);
-    expect(real[2].cumulativeCents).toBe(real[1].cumulativeCents);
-    const support = real[2].cumulativeCents + Math.floor(real[3].costCents / 2);
+    // The storage reserve is the first tier with a cost of its own after the plan.
+    const support = real[1].cumulativeCents + Math.floor(real[2].costCents / 2);
     const rows = tierCoverage(support, TIERS);
-    expect(rows.map((r) => r.status)).toEqual(["Funded", "Funded", "Funded", "Partly funded"]);
+    expect(rows.map((r) => r.status)).toEqual(["Funded", "Funded", "Partly funded"]);
     // Below the plan's cumulative cost, the tier in place reads In place, not Partly funded.
-    expect(tierCoverage(real[0].cumulativeCents, TIERS).map((r) => r.status)).toEqual(
-      ["Funded", "In place", "Partly funded", "Partly funded"],
-    );
-    expect(rows[3].width).toBeLessThan(100);
+    expect(tierCoverage(real[0].cumulativeCents, TIERS).map((r) => r.status)).toEqual(["Funded", "In place", "Partly funded"]);
+    expect(rows[2].width).toBeLessThan(100);
   });
 
   it("reads Not yet funded everywhere with no support, and Funded everywhere at the target", () => {
@@ -209,11 +204,11 @@ describe("tier coverage", () => {
   });
 
   it("keeps the tiers in order and the target equal to their cumulative cost", () => {
-    expect(TIERS.map((t) => t.id)).toEqual(["baseline", "workers_paid", "hosted_search", "storage"]);
+    expect(TIERS.map((t) => t.id)).toEqual(["baseline", "workers_paid", "storage"]);
     const rows = tierCoverage(0);
     expect(rows[rows.length - 1].cumulativeCents).toBe(TARGET_CENTS_PER_MONTH);
     // Today's costs are the baseline plus the tier already in place, the
-    // Workers Paid plan; hosted search is the next slice.
+    // Workers Paid plan, which also runs the search.
     expect(TIERS.filter((t) => t.inPlace).map((t) => t.id)).toEqual(["workers_paid"]);
     expect(rows.filter((r, i) => i === 0 || r.inPlace).reduce((s, r) => s + r.costCents, 0)).toBe(COSTS_TODAY_CENTS);
     expect(TARGET_CENTS_PER_MONTH).toBe(TIERS.reduce((s, t) => s + toCents(t.monthlyCost), 0));

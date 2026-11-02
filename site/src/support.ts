@@ -55,10 +55,6 @@ export const WORKERS_PAID_USD_PER_MONTH = 5;
 // Placeholder.
 export const WORKERS_USAGE_ALLOWANCE_CAD_PER_MONTH = 2.5;
 
-// Hosted search (the next slice), CAD per month on top of the Workers Paid
-// plan. Placeholder: expected inside D1's included allowances.
-export const HOSTED_SEARCH_CAD_PER_MONTH = 0;
-
 // R2 storage above the free allowance, USD per GB per month. Host's published
 // standard storage rate. Revisit with the pricing page.
 export const STORAGE_USD_PER_GB_MONTH = 0.015;
@@ -150,7 +146,9 @@ export const WORKERS_PAID_LIST_CENTS = toCents(WORKERS_PAID_USD_PER_MONTH * USD_
 export const STORAGE_CENTS_PER_GB_MONTH = toCents(STORAGE_USD_PER_GB_MONTH * USD_TO_CAD);
 export const STORAGE_RESERVE_GB = Math.floor(STORAGE_RESERVE_CAD_PER_MONTH / (STORAGE_USD_PER_GB_MONTH * USD_TO_CAD));
 
-export type TierId = "baseline" | "workers_paid" | "hosted_search" | "storage";
+// Search runs on the site since 2026-11-02, inside the Workers Paid plan's
+// database allowances: it is part of the plan's tier, not a tier of its own.
+export type TierId = "baseline" | "workers_paid" | "storage";
 // inPlace: the site already runs on this tier, paid by the operator until
 // monthly support covers it.
 export type Tier = { id: TierId; name: string; monthlyCost: number; unlocks: string; inPlace?: boolean };
@@ -179,12 +177,6 @@ export const TIERS: readonly Tier[] = [
     monthlyCost: WORKERS_PLAN_CAD_PER_MONTH,
     unlocks: tierUnlocks("en", "workers_paid"),
     inPlace: true,
-  },
-  {
-    id: "hosted_search",
-    name: tierName("en", "hosted_search"),
-    monthlyCost: HOSTED_SEARCH_CAD_PER_MONTH,
-    unlocks: tierUnlocks("en", "hosted_search"),
   },
   {
     id: "storage",

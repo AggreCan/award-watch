@@ -22,6 +22,14 @@ was first seen more than FRESH_DAYS ago is not written, so the folder holds
 the feeds someone could still be waiting on rather than one per buyer and
 segment ever seen.
 
+Pages (RFC 5005, paged feeds). A night can add thousands of entries and a
+reader polls the feed's first file, which holds the newest MAX_ENTRIES. When
+the newest night holds more, the rest of that night's entries follow in
+<event>-2.xml, <event>-3.xml and so on (MAX_PAGES files at most), each
+linked from the one before by rel="next" and back by rel="previous" and
+rel="first", so a reader that pages follows the whole night. Older nights
+are not paged: a reader that polls once a day has seen them.
+
 Entries are bilingual: one feed per scope and event, its titles and summaries
 in English and French; a title is the publisher's text and goes through
 export.scrub like every exported field. Ids are tag URIs built from the
@@ -32,7 +40,7 @@ named: the entry says the supplier is withheld.
 
 Output (under data/out/static/feeds):
   index.json                       every feed written, for the site's /feeds page
-  canada/<event>.xml
+  canada/<event>.xml               and canada/<event>-<n>.xml for a night's later pages, in every scope
   segment/<nn>/<event>.xml
   prov/<pp>/tenders.xml            pp in lower case (the key in index.json is the upper-case code)
   buyer/<id>/<event>.xml
@@ -66,6 +74,8 @@ TAG = "tag:awardwatch.ca,2026:"
 SITE_NAME = "Award Watch"
 
 MAX_ENTRIES = 50
+# A feed's files at most, its first included: 20 pages hold a night of 1,000 entries.
+MAX_PAGES = 20
 FRESH_DAYS = 90
 
 EVENTS = ["tenders", "awards", "expiring"]
@@ -94,8 +104,10 @@ EVENT_NAME = {
 }
 EVENT_ABOUT = {
     "tenders": (
-        "CanadaBuys tender notices, newest first by the date Award Watch first recorded them.",
-        "Avis d’appel d’offres d’AchatsCanada, les plus récents en premier selon la date où Award Watch les a relevés.",
+        "CanadaBuys tender notices, newest first by the date Award Watch first recorded them. "
+        "Closing states are as of the data date; closing times are Eastern time (ET).",
+        "Avis d’appel d’offres d’AchatsCanada, les plus récents en premier selon la date où Award Watch les a relevés. "
+        "Les états de clôture sont ceux de la date des données; les heures de clôture sont en heure de l’Est (HE).",
     ),
     "awards": (
         "CanadaBuys award notices, newest first by the date Award Watch first recorded them.",
@@ -231,6 +243,26 @@ def notice_path(reference: str) -> str:
     return quote(reference.lower().replace(":", ""), safe="/")
 
 
+_CLOSING = re.compile(r"^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2}|[A-Za-z][A-Za-z ()/_-]*)?")
+
+
+def closing_text(closing: object, lang: str) -> str | None:
+    """A closing value as the site prints it: '2026-11-26 14:00 ET' ('2026-11-26 14 h 00 HE' in French).
+
+    CanadaBuys publishes closing times in Eastern time and its file names no
+    zone, so a value without one reads ET; a value with a zone keeps it ("Z"
+    reads UTC). A date without a time is the date alone.
+    """
+    text = str(closing or "").strip()
+    m = _CLOSING.match(text)
+    if not m:
+        return _day(text)
+    day, hh, mm, zone = m.groups()
+    zone = zone.strip() if zone else ("ET" if lang == "en" else "HE")
+    time = f"{hh}:{mm}" if lang == "en" else f"{hh} h {mm}"
+    return f"{day} {time} {'UTC' if zone == 'Z' else zone}"
+
+
 def _segments(codes: object, segments: dict[str, tuple[str, str]]) -> list[str]:
     return sorted({c[:2] for c in str(codes or "").split() if c[:2] in segments})
 
@@ -315,9 +347,9 @@ def tender_entries(conn: sqlite3.Connection, look: _Lookups, cutoff: str, max_en
         if as_of and day is not None and day < as_of:
             continue
         b_en, b_fr = look.buyer_names(r["buyer_id"], r["buyer_raw_en"], r["buyer_raw_fr"])
-        closing = (r["closing"] or "")[:16].replace("T", " ") or None
-        en = ". ".join(p for p in (b_en, f"Closing {closing}" if closing else "", f"Reference {r['reference']}") if p)
-        fr = ". ".join(p for p in (b_fr, f"Clôture le {closing}" if closing else "",
+        closing_en, closing_fr = closing_text(r["closing"], "en"), closing_text(r["closing"], "fr")
+        en = ". ".join(p for p in (b_en, f"Closing {closing_en}" if closing_en else "", f"Reference {r['reference']}") if p)
+        fr = ". ".join(p for p in (b_fr, f"Clôture le {closing_fr}" if closing_fr else "",
                                    f"Référence {r['reference']}") if p)
         scopes = [CANADA]
         scopes += [look.segment_scopes[s] for s in _segments(r["codes"], look.segments)]
@@ -460,8 +492,26 @@ def _page(scope: Scope, event: str) -> str:
     return scope.page
 
 
-def feed_document(scope: Scope, event: str, entries: list[Entry], base: str, fallback_updated: str) -> bytes:
-    rel = f"feeds/{scope.folder}/{event}.xml"
+def page_path(scope: Scope, event: str, n: int) -> str:
+    """A feed page's path under the static folder: the first page is the feed's own file."""
+    return f"feeds/{scope.folder}/{event}.xml" if n == 1 else f"feeds/{scope.folder}/{event}-{n}.xml"
+
+
+def feed_pages(entries: list[Entry], max_entries: int = MAX_ENTRIES, max_pages: int = MAX_PAGES) -> list[list[Entry]]:
+    """A feed's entries (newest first) in pages: the newest max_entries, then the rest of the newest night's
+    entries, max_entries a page, max_pages pages at most. An empty feed is one empty page."""
+    first = entries[:max_entries]
+    if not first:
+        return [[]]
+    night = first[0].updated[:10]
+    rest = [e for e in entries[max_entries:] if e.updated[:10] == night]
+    pages = [first] + [rest[i:i + max_entries] for i in range(0, len(rest), max_entries)]
+    return pages[:max_pages]
+
+
+def feed_document(scope: Scope, event: str, entries: list[Entry], base: str, fallback_updated: str,
+                  page: int = 1, pages: int = 1) -> bytes:
+    rel = page_path(scope, event, page)
     ev_en, ev_fr = EVENT_NAME[event]
     about_en, about_fr = EVENT_ABOUT[event]
     root = ET.Element(f"{{{ATOM_NS}}}feed")
@@ -470,6 +520,14 @@ def feed_document(scope: Scope, event: str, entries: list[Entry], base: str, fal
     _el(root, "subtitle", _both(about_en, about_fr))
     _el(root, "updated", entries[0].updated if entries else fallback_updated)
     _el(root, "link", rel="self", type="application/atom+xml", href=f"{base}/data/{rel}")
+    # RFC 5005 paged feeds: the next page holds the night's older entries.
+    if pages > 1:
+        _el(root, "link", rel="first", type="application/atom+xml", href=f"{base}/data/{page_path(scope, event, 1)}")
+        if page > 1:
+            _el(root, "link", rel="previous", type="application/atom+xml", href=f"{base}/data/{page_path(scope, event, page - 1)}")
+        if page < pages:
+            _el(root, "link", rel="next", type="application/atom+xml", href=f"{base}/data/{page_path(scope, event, page + 1)}")
+        _el(root, "link", rel="last", type="application/atom+xml", href=f"{base}/data/{page_path(scope, event, pages)}")
     _el(root, "link", rel="alternate", type="text/html", href=f"{base}{_page(scope, event)}")
     _el(root, "link", rel="related", type="text/html", href=f"{base}/feeds")
     author = _el(root, "author")
@@ -508,6 +566,9 @@ def write_feeds(conn: sqlite3.Connection, out: Path, *, today: date | None = Non
 
     look = _Lookups(conn)
     by_feed: dict[tuple[Scope, str], list[Entry]] = defaultdict(list)
+    # A feed keeps its newest max_entries and, past them, the rest of its
+    # newest night for the later pages (feed_pages).
+    cap = max_entries * MAX_PAGES
     for event, entries in (("tenders", tender_entries(conn, look, cutoff, max_entries, today)),
                            ("awards", award_entries(conn, look, cutoff, max_entries)),
                            ("expiring", expiring_entries(conn, look, today))):
@@ -515,7 +576,7 @@ def write_feeds(conn: sqlite3.Connection, out: Path, *, today: date | None = Non
         for e in entries:
             for scope in e.scopes:
                 bucket = by_feed[(scope, event)]
-                if len(bucket) < max_entries:
+                if len(bucket) < max_entries or (len(bucket) < cap and e.updated[:10] == bucket[0].updated[:10]):
                     bucket.append(e)
     for event in EVENTS:
         by_feed.setdefault((CANADA, event), [])
@@ -527,16 +588,20 @@ def write_feeds(conn: sqlite3.Connection, out: Path, *, today: date | None = Non
                                           key=lambda kv: (SCOPE_ORDER[kv[0][0].kind], kv[0][0].key, EVENTS.index(kv[0][1]))):
         if scope.kind != "canada" and not _fresh(entries, cutoff):
             continue
-        rel = f"feeds/{scope.folder}/{event}.xml"
-        data = feed_document(scope, event, entries, base, fallback)
-        path = out / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        written += 1
-        entries_written += len(entries)
-        size += len(data)
-        item = {"scope": scope.kind, "key": scope.key, "event": event, "path": rel, "entries": len(entries),
+        pages = feed_pages(entries, max_entries)
+        for n, page in enumerate(pages, start=1):
+            data = feed_document(scope, event, page, base, fallback, n, len(pages))
+            path = out / page_path(scope, event, n)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            written += 1
+            entries_written += len(page)
+            size += len(data)
+        rel = page_path(scope, event, 1)
+        item = {"scope": scope.kind, "key": scope.key, "event": event, "path": rel, "entries": len(pages[0]),
                 "updated": entries[0].updated[:10] if entries else None}
+        if len(pages) > 1:
+            item["pages"] = len(pages)
         if scope.named:
             item["name_en"], item["name_fr"] = scope.en, scope.fr
         index.append(item)
@@ -544,4 +609,4 @@ def write_feeds(conn: sqlite3.Connection, out: Path, *, today: date | None = Non
     folder.mkdir(parents=True, exist_ok=True)
     data = json.dumps(doc, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
     (folder / "index.json").write_bytes(data)
-    return {"feeds": written, "feed_entries": entries_written, "feed_bytes": size + len(data)}
+    return {"feeds": len(index), "feed_files": written, "feed_entries": entries_written, "feed_bytes": size + len(data)}

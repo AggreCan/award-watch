@@ -10,9 +10,14 @@ import type { FC, PropsWithChildren } from "hono/jsx";
 
 export const COLUMN_WIDTHS = {
   date: 112, // a date or a year
-  datetime: 156, // a date with a time, or a closing date with its status chip under it
+  datetime: 184, // a date with a time, or a closing date with its status chip under it ("Date de clôture passée" on one line)
   value: 132, // one record's amount, up to eleven digits ("$13,044,299,191") on one line
   total: 148, // a sum over many records (up to twelve digits)
+  // A source's name over a figure from it: "Grants and contributions" over a
+  // total, or a count, with the longest name, "Historique des contrats de
+  // SPAC" (186 px of type), on one line; also the watchlist's new records by
+  // source.
+  tally: 204,
   count: 96, // a count, a rank, an amendment number
   comp: 168, // the competition flag, its longest label ("Méthode non précisée") on one line
   amend: 144, // amendments and value growth; with value, the widest table fits 1600 px
@@ -31,17 +36,18 @@ export type ColumnKind = "main" | keyof typeof COLUMN_WIDTHS;
 
 // The main column never gets narrower than this: below it the table keeps
 // its width and its wrapper scrolls sideways. At this floor the awards list,
-// buyer included, fits a 1280 px screen.
-export const MAIN_MIN = 152;
+// buyer included, fits a 1280 px window with its 15 px scrollbar.
+export const MAIN_MIN = 144;
 
 // A secondary column rests (is hidden) while the content column is too
 // narrow for the whole table, from 700 px of viewport up to 1279 px ("md"),
-// 1439 px ("lg") or 1599 px ("xl"). With the 240 px rail those are content
-// columns of about 975, 1135 and 1295 px. Below 700 px a table restacks
-// into labelled blocks and shows every column again.
-export type Rest = "md" | "lg" | "xl";
+// 1439 px ("lg"), 1599 px ("xl") or 1919 px ("xxl"). With the 240 px rail
+// and the scrollbar, the narrowest window of each range above it leaves a
+// content column of about 975, 1135, 1295 and 1615 px. Below 700 px a table
+// restacks into labelled blocks and shows every column again.
+export type Rest = "md" | "lg" | "xl" | "xxl";
 
-export const REST_CLASS: Record<Rest, string> = { md: "mdh", lg: "lgh", xl: "xlh" };
+export const REST_CLASS: Record<Rest, string> = { md: "mdh", lg: "lgh", xl: "xlh", xxl: "xxh" };
 
 export function restClass(rest: Rest | undefined): string | undefined {
   return rest ? REST_CLASS[rest] : undefined;
@@ -49,6 +55,8 @@ export function restClass(rest: Rest | undefined): string | undefined {
 
 export type Column = { kind: ColumnKind; label: unknown; rest?: Rest; class?: string };
 
+// A tally column is a figure's when its table says so (class "num"): the
+// watchlist's new records by source are words.
 const NUMERIC: ReadonlySet<ColumnKind> = new Set<ColumnKind>(["value", "total", "count", "share"]);
 
 export function headClass(c: Column): string {
@@ -63,23 +71,27 @@ function widthOf(kind: ColumnKind): number {
 
 // The least width a table takes in each range: every column it shows there
 // at its kind's width, and the main column at its minimum. all is from
-// 1600 px up; xl is the range where the "xl" columns rest, lg where the "lg"
-// and "xl" ones do, md where every resting column does.
-export function minWidths(cols: readonly Column[]): { all: number; xl: number; lg: number; md: number } {
+// 1920 px up; xxl is the range where the "xxl" columns rest, xl where the
+// "xl" and "xxl" ones do, and so on down to md, where every resting column does.
+export function minWidths(cols: readonly Column[]): { all: number; xxl: number; xl: number; lg: number; md: number } {
   const sum = (list: readonly Column[]) => list.reduce((n, c) => n + widthOf(c.kind), 0);
+  const shownIn = (...resting: Rest[]) => cols.filter((c) => !c.rest || !resting.includes(c.rest));
   return {
     all: sum(cols),
-    xl: sum(cols.filter((c) => c.rest !== "xl")),
-    lg: sum(cols.filter((c) => c.rest !== "xl" && c.rest !== "lg")),
+    xxl: sum(shownIn("xxl")),
+    xl: sum(shownIn("xxl", "xl")),
+    lg: sum(shownIn("xxl", "xl", "lg")),
     md: sum(cols.filter((c) => !c.rest)),
   };
 }
 
 // The same numbers as custom properties for the stylesheet, which picks the
-// one for the viewport's range.
+// one for the viewport's range. A table with no column resting in the widest
+// range leaves its --tmin-xxl out (the stylesheet falls back to --tmin).
 export function tableStyle(cols: readonly Column[]): string {
   const w = minWidths(cols);
-  return `--tmin:${w.all}px;--tmin-xl:${w.xl}px;--tmin-lg:${w.lg}px;--tmin-md:${w.md}px`;
+  const xxl = w.xxl !== w.all ? `--tmin-xxl:${w.xxl}px;` : "";
+  return `--tmin:${w.all}px;${xxl}--tmin-xl:${w.xl}px;--tmin-lg:${w.lg}px;--tmin-md:${w.md}px`;
 }
 
 export type MaybeColumn = Column | false | null | undefined;

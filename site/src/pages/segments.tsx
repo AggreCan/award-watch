@@ -13,10 +13,11 @@ import { SEGMENT_CODES } from "../constants";
 import { SEGMENT_RE, loadCategories, loadCategory, loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, segmentLabel, t } from "../i18n";
-import { Layout, PageHead, Panel, closingPassed, noDataPage, notFoundPage, page, todayOf } from "../layout";
+import { clockOf, closingPassed, tenderState } from "../closing";
+import { Layout, PageHead, Panel, noDataPage, notFoundPage, page } from "../layout";
 import { pageSeo, segmentSeo } from "../seo";
 import { InterestPanel, interestFilter } from "./interest";
-import { OrgTotalTable, TenderTable, money } from "./shared";
+import { CountdownScript, OrgTotalTable, TenderTable, money } from "./shared";
 
 export async function segmentsIndex(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
@@ -36,8 +37,8 @@ export async function segmentsIndex(c: Context<AppEnv>): Promise<Response> {
         <Table cols={[
           { kind: "main", label: t(lang, "col.segment") },
           { kind: "count", label: t(lang, "segments.col_open") },
-          { kind: "total", label: t(lang, "segments.col_year", { year: idx.year }) },
-          { kind: "total", label: t(lang, "segments.col_all") },
+          { kind: "tally", label: t(lang, "segments.col_year", { year: idx.year }), class: "num" },
+          { kind: "tally", label: t(lang, "segments.col_all"), class: "num" },
         ]}>
           <tbody>
             {SEGMENT_CODES.map((code) => {
@@ -82,9 +83,9 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "segments.title"), path: "/segments" }, { name: `${code} ${name}` }];
   const years = [...seg.years].sort((a, b) => b.year - a.year);
   const n = (v: number) => fmtInt(v, lang);
-  const today = todayOf(stats.data_as_of);
-  // An open list: a notice whose closing date has passed goes after the ones still open.
-  const open = [...seg.open_tenders.filter((r) => !closingPassed(r.closing, today)), ...seg.open_tenders.filter((r) => closingPassed(r.closing, today))];
+  const clock = clockOf(c.env);
+  // An open list: a notice whose closing time has passed goes after the ones still open.
+  const open = [...seg.open_tenders.filter((r) => !closingPassed(r.closing, clock)), ...seg.open_tenders.filter((r) => closingPassed(r.closing, clock))];
   const interest = await interestFilter(c.env, lang, "segment", `/segments/${code}`);
   return page(
     c,
@@ -99,7 +100,7 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
 
       <Panel title={t(lang, "segment.open")} count={n(seg.open_tenders.length)}>
       {open.length ? (
-        <TenderTable lang={lang} rows={open} today={today} />
+        <TenderTable lang={lang} rows={open} clock={clock} />
       ) : <p class="muted">{t(lang, "segment.open_none")}</p>}
       </Panel>
 
@@ -131,6 +132,7 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
       ) : <p class="muted">{t(lang, "awards.none")}</p>}
       </Panel>
       </div>
+      {open.some((r) => tenderState("open", r.closing, clock) === "closing") ? <CountdownScript lang={lang} /> : null}
     </Layout>,
   );
 }

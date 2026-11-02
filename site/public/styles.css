@@ -59,6 +59,9 @@
   /* The edge of a field or a button: 3.46:1 on white, past the 3:1 a
      control's boundary needs (WCAG 1.4.11). */
   --field-border: #7c8ba1;
+  /* One height for every field, select and button, so a control in a row
+     lines up with the ones beside it. */
+  --field-h: 32px;
   /* The mark's check: the filed emerald, lifted with the accent in the dark. */
   --check: #0f7b4f;
   /* Charts: one hue, a lighter step for a partial year. */
@@ -308,7 +311,7 @@ h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02
 /* -- buttons and controls ------------------------------------------------- */
 .btn {
   display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
-  min-height: 32px; padding: 5px 12px;
+  min-height: var(--field-h); padding: 5px 12px;
   border: 1px solid var(--field-border); border-radius: 0; background: var(--panel); color: var(--ink);
   font: inherit; font-size: 13px; line-height: 20px; font-weight: 500; text-align: left; text-decoration: none; cursor: pointer;
 }
@@ -321,9 +324,21 @@ h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02
 .btn-link { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 2px; cursor: pointer; }
 .btn-link:hover { text-decoration-color: currentColor; }
 input[type="search"], input[type="text"], input[type="number"], input[type="email"], select, textarea {
-  max-width: 100%; min-height: 32px; padding: 5px 8px;
+  max-width: 100%; min-height: var(--field-h); padding: 5px 8px;
   border: 1px solid var(--field-border); border-radius: 0; background: var(--panel); color: var(--ink);
   font: inherit; font-size: 13px; line-height: 20px;
+}
+/* A select draws its own chevron, so its text sits as far from the right
+   edge as from the left: the 8 px padding, the 10 px chevron, then an 8 px
+   gap before the text. The chevron is two halves of a square in the
+   secondary ink, so it follows the theme. */
+select {
+  -webkit-appearance: none; appearance: none;
+  padding-right: 26px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-2) 50%), linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+  background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
 }
 textarea { width: 100%; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 16px; height: 16px; margin: 0; flex: none; }
@@ -382,7 +397,7 @@ a.tile:hover { border-color: var(--border-2); background: var(--hover); }
 /* One column system (src/columns.tsx). Every table lays out at a fixed width:
    each kind of column has one width across the site, set below on its head
    cell, and the main column (the title, description or name a row is about)
-   takes the rest. A table never gets narrower than its columns with a 152 px
+   takes the rest. A table never gets narrower than its columns with a 144 px
    main column (--tmin, written on the table for the columns it shows in each
    range); below that its wrapper scrolls sideways. Content never widens a
    column: a long word breaks inside its cell. Below 700 px the rows restack. */
@@ -400,9 +415,10 @@ th.num { text-align: right; }
 /* Widths by kind, padding included; src/columns.tsx holds the same numbers
    to work out each table's least width, and a test keeps the two equal. */
 .k-date { width: 112px; }
-.k-datetime { width: 156px; }
+.k-datetime { width: 184px; }
 .k-value { width: 132px; }
 .k-total { width: 148px; }
+.k-tally { width: 204px; }
 .k-count { width: 96px; }
 .k-comp { width: 168px; }
 .k-amend { width: 144px; }
@@ -424,14 +440,22 @@ tbody tr:hover > td:first-child, tbody tr.is-sel > td:first-child { box-shadow: 
 .th-wrap { white-space: normal; }
 /* A notice's closing date on one line, its status chip under it. */
 td.c-date .badge { display: flex; width: max-content; margin-top: 4px; }
+/* The time left under a closing-soon time (public/countdown.js): amber, the
+   colour of time pressure, at caption size. */
+.countdown { display: block; margin-top: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--amber); }
 td.c-notice a:first-child { font-weight: 500; }
 .scroll-y { max-height: 360px; overflow-y: auto; }
 .scroll-y thead th { position: sticky; top: 0; z-index: 1; }
 /* Secondary columns rest while the content column is too narrow for the
-   whole table: xlh below 1600 px of viewport, lgh below 1440, mdh below 1280
-   (with the 240 px rail, content columns of about 1295, 1135 and 975 px).
-   Each range takes the table's least width without the columns resting in
-   it. A phone shows every column again in its restacked rows. */
+   whole table: xxh below 1920 px of viewport, xlh below 1600, lgh below 1440,
+   mdh below 1280 (with the 240 px rail and the scrollbar, content columns
+   from about 1615, 1295, 1135 and 975 px at the next range's edge). Each
+   range takes the table's least width without the columns resting in it. A
+   phone shows every column again in its restacked rows. */
+@media (min-width: 700px) and (max-width: 1919px) {
+  .xxh { display: none; }
+  table.cols { min-width: var(--tmin-xxl, var(--tmin, 0px)); }
+}
 @media (min-width: 700px) and (max-width: 1599px) {
   .xlh { display: none; }
   table.cols { min-width: var(--tmin-xl, var(--tmin, 0px)); }
@@ -480,9 +504,13 @@ td.c-notice a:first-child { font-weight: 500; }
 td .flag { max-width: none; }
 .flag-no { border-color: var(--ink-2); color: var(--ink); font-weight: 600; }
 .flag-unstated { border-style: dashed; color: var(--muted); }
-.chip { padding: 0 6px; overflow: hidden; text-overflow: ellipsis; }
+/* A chip that starts a line keeps its 4 px gap inside the cell. */
+.chip { max-width: calc(100% - 4px); padding: 0 6px; overflow: hidden; text-overflow: ellipsis; }
 a.chip:hover { border-color: var(--ink-2); color: var(--ink); }
 .chip + .chip { margin-left: 4px; }
+/* A muted tag on a row of the radar: a standing offer or supply arrangement,
+   an end on March 31. Quieter than a chip: no link, the muted ink. */
+.tag { display: inline-flex; align-items: center; max-width: 100%; height: 20px; margin-top: 4px; padding: 0 6px; border: 1px solid var(--border-2); color: var(--muted); font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .fchip { gap: 4px; padding: 0 4px 0 8px; color: var(--ink); font-weight: 400; }
 .fchip b { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .fchip-x { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 16px; height: 16px; color: var(--muted); font-size: 14px; }
@@ -493,13 +521,23 @@ a.chip:hover { border-color: var(--ink-2); color: var(--ink); }
 .toolbar { margin: 0 0 var(--gutter); padding: 0 16px; background: var(--panel); border: 1px solid var(--border); }
 nav.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 16px; }
 .toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 0; }
-.toolbar-row + .toolbar-row, .toolbar-row + .toolbar-fields { border-top: 1px solid var(--border); }
+.toolbar-row + .toolbar-row, .toolbar-row + .toolbar-fields, .toolbar-fields + .toolbar-row { border-top: 1px solid var(--border); }
 .toolbar-label, .chips-label { font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .toolbar-fields { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 8px 0; }
 .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 160px; min-width: 0; margin: 0; }
 .field-text { flex: 2 1 240px; }
+/* A filter left alone on the last line keeps a field's width instead of
+   spanning the toolbar. */
+.toolbar-fields .field:not(.field-text) { max-width: 280px; }
 .field-label { overflow: hidden; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted); white-space: nowrap; text-overflow: ellipsis; }
 .field select, .field input { width: 100%; min-width: 0; }
+/* A code is a few digits: its field takes less room than a select. */
+.field-code { flex: 0 1 176px; }
+/* A box beside the filters, on the controls' line: an empty label above it
+   keeps it level with them. */
+.field-check { flex: 0 1 auto; }
+.check { display: inline-flex; align-items: center; gap: 8px; min-height: var(--field-h); font-size: 13px; line-height: 20px; color: var(--ink-2); cursor: pointer; }
+.field .check input { width: 16px; }
 .toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .toolbar-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
 .toolbar-chips[hidden] { display: none; }
@@ -642,6 +680,9 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .interest-body > .interest-label { margin: 0 0 8px; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
 .interest-body > .interest-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin: 0 0 8px; }
 .interest-form .interest-field { flex: 0 1 320px; }
+/* The field and its button: one height, one border token, bottoms in line. */
+.interest-form input[type="email"], .interest-form .btn { height: var(--field-h); min-height: 0; border: 1px solid var(--field-border); vertical-align: bottom; }
+.interest-form .btn { flex: none; justify-content: center; white-space: nowrap; }
 .interest-body > .interest-done { margin: 0 0 8px; color: var(--ink); font-weight: 500; }
 .interest-body > .interest-error { margin: 0 0 8px; padding-left: 8px; border-left: 2px solid var(--ink-2); color: var(--ink); font-size: 12px; line-height: 16px; }
 .interest-body > .interest-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; }
@@ -702,7 +743,7 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
   .rail-group:first-child ul.rail-sub { display: contents; }
   /* The browse links are in the footer as well; on a phone the rail keeps the counts and the lists. */
   .rail-browse { display: none; }
-  .interest-form .interest-field { flex-basis: 100%; }
+  .interest-form .interest-field, .interest-form .btn { flex: 1 1 100%; width: 100%; }
   /* A filter's name wraps rather than being cut, in French above all. */
   .field-label { white-space: normal; overflow: visible; text-overflow: clip; }
   .toolbar-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

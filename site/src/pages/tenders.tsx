@@ -16,26 +16,34 @@
 
 import type { Context } from "hono";
 import { clientTable } from "../columns";
-import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENTS } from "../constants";
+import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENTS, SEGMENT_CODES } from "../constants";
 import { BUYER_ID_RE, DAY_RE, type FacetCount, type OpenFirst, loadNewTenders, loadOpenFirst, loadStats, type TenderRow } from "../data";
 import type { AppEnv } from "../env";
 import {
-  categoryLabel, clientStrings, fmtInt, numberLocale, pick, provinceName, segmentLabel, t, tj, tn, type Key, type Lang,
+  categoryLabel, clientStrings, fmtInt, numberLocale, pick, provinceName, segmentLabel, segmentShort, t, tj, tn, type Key, type Lang,
 } from "../i18n";
-import { ClientData, Layout, PageHead, Panel, addDays, closingPassed, noDataPage, page, todayOf } from "../layout";
+import { type Clock, clockOf, closingPassed, tenderState } from "../closing";
+import { ClientData, Layout, PageHead, Panel, addDays, noDataPage, page, todayOf } from "../layout";
 import { pageSeo } from "../seo";
 import { FeedLinks, nationalFeedPath } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
-import { SegmentNote, TenderTable, tenderColumns } from "./shared";
+import { CountdownScript, SegmentNote, TenderTable, tenderColumns } from "./shared";
 
 export const TENDER_PAGE_SIZE = 50;
 export const CLOSING_WINDOWS = ["7", "30"] as const;
+export const CODE_RE = /^[0-9]{2,8}$/;
 
 export interface TenderQuery {
   q: string;
   category: string;
   segment: string;
+  // A UNSPSC code prefix: a family (4 digits), a class (6) or any 2 to 8.
+  code: string;
   province: string;
+  // With a province chosen, whether the notices that name none (Canada-wide
+  // or not stated, about half of them) stay in the list. On unless the
+  // address says national=0.
+  national: boolean;
   buyer: string;
   type: string;
   method: string;
@@ -56,11 +64,17 @@ export function readTenderQuery(url: URL): TenderQuery {
   const buyer = get("buyer").toLowerCase();
   const closing = get("closing");
   const pageNo = Number(get("page"));
+  const code = get("code");
+  // The form sends national=0 from a hidden field and national=1 from the
+  // ticked box, so either 1 or no value at all keeps the notices in.
+  const national = url.searchParams.getAll("national");
   return {
     q: get("q").slice(0, MAX_TEXT),
     category: (CATEGORIES as readonly string[]).includes(category) ? category : "",
     segment: segment in SEGMENTS ? segment : "",
+    code: CODE_RE.test(code) ? code : "",
     province: (PROVINCES as readonly string[]).includes(province) ? province : "",
+    national: national.length === 0 || national.includes("1"),
     buyer: BUYER_ID_RE.test(buyer) && buyer.length <= 80 ? buyer : "",
     type: get("type").slice(0, 200),
     method: get("method").slice(0, 200),
@@ -75,26 +89,30 @@ export function fold(s: string): string {
   return s.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
 }
 
-// The rows that pass every filter, in the order asked for. The text filter
-// reads the title in both languages and the reference, as published too. By
-// closing date, a notice whose closing date has passed goes after the ones
-// still open.
-export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, today: string): TenderRow[] {
+// The rows that pass every filter, in the order asked for, at the page's
+// clock. The text filter reads the title and the start of the description
+// in both languages and the reference, as published too. A province keeps
+// the notices that name none unless national is off. The code filter is a
+// prefix of any of a notice's UNSPSC codes. The closing window counts from
+// the Eastern date and leaves out a notice whose closing time has passed.
+// By closing date, such a notice goes after the ones still open.
+export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock: Clock): TenderRow[] {
   const words = fold(q.q).split(/\s+/).filter(Boolean);
-  const until = q.closing ? addDays(today, Number(q.closing)) : "";
+  const until = q.closing ? addDays(clock.today, Number(q.closing)) : "";
   const out = rows.filter((r) => {
     if (q.category && !r.category.includes(q.category)) return false;
     if (q.segment && !r.segments.includes(q.segment)) return false;
-    if (q.province && !r.provinces.includes(q.province)) return false;
+    if (q.code && !(r.codes ?? []).some((c) => c.startsWith(q.code))) return false;
+    if (q.province && !r.provinces.includes(q.province) && !(q.national && r.provinces.length === 0)) return false;
     if (q.buyer && r.buyer_id !== q.buyer) return false;
     if (q.type && r.notice_type_en !== q.type) return false;
     if (q.method && r.method_en !== q.method) return false;
     if (until) {
       const day = (r.closing ?? "").slice(0, 10);
-      if (!day || day < today || day > until) return false;
+      if (!day || day > until || closingPassed(r.closing, clock)) return false;
     }
     if (words.length) {
-      const text = fold(`${r.title_en ?? ""} ${r.title_fr ?? ""} ${r.reference} ${r.reference_published ?? ""}`);
+      const text = fold(`${r.title_en ?? ""} ${r.title_fr ?? ""} ${r.excerpt_en ?? ""} ${r.excerpt_fr ?? ""} ${r.reference} ${r.reference_published ?? ""}`);
       if (!words.every((w) => text.includes(w))) return false;
     }
     return true;
@@ -104,12 +122,12 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, today:
   if (q.sort === "published") {
     out.sort((a, b) => (a.published ?? "") < (b.published ?? "") ? 1 : (a.published ?? "") > (b.published ?? "") ? -1 : byRef(a, b));
   } else {
-    // Soonest first; a notice whose closing date has passed, then one with
-    // no closing date, go last.
-    const rank = (r: TenderRow) => (r.closing === null ? 2 : closingPassed(r.closing, today) ? 1 : 0);
+    // Soonest first; a notice whose closing time has passed, then one with
+    // no closing date, go last. Each rank is worked out once.
+    const ranks = new Map(out.map((r) => [r, r.closing === null ? 2 : closingPassed(r.closing, clock) ? 1 : 0]));
     out.sort((a, b) => {
-      const ra = rank(a);
-      const rb = rank(b);
+      const ra = ranks.get(a)!;
+      const rb = ranks.get(b)!;
       if (ra !== rb) return ra - rb;
       const x = a.closing ?? "\uffff";
       const y = b.closing ?? "\uffff";
@@ -119,10 +137,12 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, today:
   return out;
 }
 
-// The URL of a view: only the values set, in a fixed order.
+// The URL of a view: only the values set, in a fixed order; national=0 only
+// where it changes the list, beside a province.
 export function tenderQueryString(q: TenderQuery, pageNo = q.page): string {
   const p = new URLSearchParams();
-  for (const k of ["q", "category", "segment", "province", "buyer", "type", "method", "closing"] as const) if (q[k]) p.set(k, q[k]);
+  for (const k of ["q", "category", "segment", "code", "province", "buyer", "type", "method", "closing"] as const) if (q[k]) p.set(k, q[k]);
+  if (q.province && !q.national) p.set("national", "0");
   if (q.sort !== "closing") p.set("sort", q.sort);
   if (pageNo > 1) p.set("page", String(pageNo));
   const s = p.toString();
@@ -152,7 +172,7 @@ function options(facets: OpenFirst["facets"], lang: Lang) {
 // Every string tenders.js draws, handed over in the page's JSON block.
 export const TENDERS_CLIENT_KEYS: readonly Key[] = [
   "col.notice", "col.buyer", "col.closing", "col.published", "col.region", "common.national", "common.not_stated",
-  "common.time", "common.other_lang_only", "segment.code",
+  "common.time", "common.zone_et", "common.other_lang_only", "segment.chip",
   "status.open", "status.closing", "status.closed", "tenders.count_one", "tenders.count_many", "tenders.none_match", "tenders.page_of",
   "tenders.prev", "tenders.next", "tenders.load_failed", "tenders.loading", "tenders.remove_filter",
   "tenders.detail_empty", "tenders.detail_loading", "tenders.detail_failed", "tenders.detail_open",
@@ -186,6 +206,7 @@ function activeChips(q: TenderQuery, opts: ReturnType<typeof options>, lang: Lan
   if (q.q) chips.push({ key: "q", label: t(lang, "tenders.filter_text"), value: q.q });
   if (q.category) chips.push({ key: "category", label: t(lang, "tenders.filter_category"), value: named(opts.category, q.category) });
   if (q.segment) chips.push({ key: "segment", label: t(lang, "tenders.filter_segment"), value: named(opts.segment, q.segment) });
+  if (q.code) chips.push({ key: "code", label: t(lang, "tenders.filter_code"), value: q.code });
   if (q.province) chips.push({ key: "province", label: t(lang, "tenders.filter_province"), value: named(opts.province, q.province) });
   if (q.buyer) chips.push({ key: "buyer", label: t(lang, "tenders.filter_buyer"), value: named(opts.buyer, q.buyer) });
   if (q.type) chips.push({ key: "type", label: t(lang, "tenders.filter_type"), value: named(opts.type, q.type) });
@@ -199,7 +220,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const stats = await loadStats(c.env);
   const first = stats ? await loadOpenFirst(c.env) : null;
   if (!stats || !first) return noDataPage(c, "tenders.title");
-  const today = todayOf(stats.data_as_of);
+  const clock = clockOf(c.env);
   const url = new URL(c.req.url);
   const q = readTenderQuery(url);
   const filtered = tenderQueryString({ ...q, page: 1 }) !== "";
@@ -207,7 +228,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   // The first file answers the plain list, and any view when it holds every
   // open notice; any other view waits for the script and the full list.
   const waiting = (filtered || q.page > 1) && !complete;
-  const matched = waiting ? [] : filterTenders(first.rows, q, today);
+  const matched = waiting ? [] : filterTenders(first.rows, q, clock);
   const count = filtered ? matched.length : first.total;
   const pages = Math.max(1, Math.ceil(count / TENDER_PAGE_SIZE));
   const pageNo = Math.min(q.page, pages);
@@ -219,6 +240,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const next = !waiting && pageNo < pages ? `/tenders${tenderQueryString(q, pageNo + 1)}` : null;
   const labels = {
     segments: Object.fromEntries(opts.segment.map((o) => [o.value, segmentLabel(lang, o.value)])),
+    short: Object.fromEntries(SEGMENT_CODES.map((code) => [code, segmentShort(lang, code)])),
     provinces: Object.fromEntries([...PROVINCES, "XX", "UN"].map((p) => [p, provinceName(lang, p)])),
     categories: Object.fromEntries(CATEGORIES.map((k) => [k, categoryLabel(lang, k)])),
   };
@@ -246,7 +268,20 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
           {/* "All" agrees with the filter's noun in French: Toutes for Catégorie, Province, Méthode. */}
           <Select name="category" label="tenders.filter_category" any="tenders.any_f" opts={opts.category} value={q.category} lang={lang} />
           <Select name="segment" label="tenders.filter_segment" any="tenders.any" opts={opts.segment} value={q.segment} lang={lang} />
+          <label class="field field-code">
+            <span class="field-label">{t(lang, "tenders.filter_code")}</span>
+            <input type="text" name="code" value={q.code} maxlength={8} inputmode="numeric" pattern="[0-9]{2,8}" autocomplete="off"
+              placeholder={t(lang, "tenders.code_placeholder")} />
+          </label>
           <Select name="province" label="tenders.filter_province" any="tenders.any_f" opts={opts.province} value={q.province} lang={lang} />
+          <div class="field field-check">
+            <span class="field-label" aria-hidden="true">&nbsp;</span>
+            <label class="check">
+              <input type="hidden" name="national" value="0" />
+              <input type="checkbox" name="national" value="1" checked={q.national} />
+              <span>{t(lang, "tenders.include_national")}</span>
+            </label>
+          </div>
           <Select name="buyer" label="tenders.filter_buyer" any="tenders.any" opts={opts.buyer} value={q.buyer} lang={lang} />
           <Select name="type" label="tenders.filter_type" any="tenders.any" opts={opts.type} value={q.type} lang={lang} />
           <Select name="method" label="tenders.filter_method" any="tenders.any_f" opts={opts.method} value={q.method} lang={lang} />
@@ -300,7 +335,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
             </nav>
           </>}>
           <SegmentNote lang={lang} rows={first.rows} />
-          <div class="results" id="tender-results" data-today={today} data-page-size={String(TENDER_PAGE_SIZE)} data-lang={lang}>
+          <div class="results" id="tender-results" data-page-size={String(TENDER_PAGE_SIZE)} data-lang={lang}>
             <div id="tender-table">
               {waiting ? (
                 <>
@@ -310,7 +345,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
                   </noscript>
                 </>
               ) : shown.length ? (
-                <TenderTable lang={lang} rows={shown} today={today} selectable note={false} />
+                <TenderTable lang={lang} rows={shown} clock={clock} selectable note={false} />
               ) : (
                 <p class="muted">{t(lang, "tenders.none_match")}</p>
               )}
@@ -330,7 +365,8 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
         lang, locale: numberLocale(lang), strings: clientStrings(lang, TENDERS_CLIENT_KEYS), labels,
         table: clientTable(tenderColumns(lang), "t-tenders"),
       }} />
-      <script src="/tenders.js" defer></script>
+      <CountdownScript lang={lang} />
+      <script type="module" src="/tenders.js"></script>
     </Layout>,
   );
 }
@@ -346,10 +382,11 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
   const days = Array.from({ length: NEW_DAYS }, (_, i) => addDays(latest, -i));
   const asked = c.req.query("day") ?? "";
   const day = DAY_RE.test(asked) && days.includes(asked) ? asked : latest;
-  // A notice whose closing date has passed by the data date ("closed" in
-  // newer files, or still "open" with a past closing date) goes last.
+  // A notice whose closing has passed ("closed" in the file, or still "open"
+  // with a closing time now past) goes last.
   const loaded = await loadNewTenders(c.env, day);
-  const passed = (r: TenderRow) => r.status === "closed" || (r.status === "open" && closingPassed(r.closing, latest));
+  const clock = clockOf(c.env);
+  const passed = (r: TenderRow) => r.status === "closed" || (r.status === "open" && closingPassed(r.closing, clock));
   const rows = loaded ? [...loaded.filter((r) => !passed(r)), ...loaded.filter(passed)] : null;
   const title = t(lang, "tenders.new_title");
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: title }];
@@ -377,9 +414,10 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
         ) : rows.length === 0 ? (
           <p class="muted">{t(lang, "tenders.new_none")}</p>
         ) : (
-          <TenderTable lang={lang} rows={rows} today={latest} status />
+          <TenderTable lang={lang} rows={rows} clock={clock} status />
         )}
       </Panel>
+      {rows?.some((r) => tenderState(r.status ?? "open", r.closing, clock) === "closing") ? <CountdownScript lang={lang} /> : null}
     </Layout>,
   );
 }
