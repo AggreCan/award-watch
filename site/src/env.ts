@@ -1,7 +1,8 @@
 import type { Lang } from "./i18n";
 
 export interface Env {
-  // The forms database: organization responses and corrections only.
+  // The forms database: organization responses, corrections and interest in
+  // email alerts only.
   DB: D1Database;
   DATA?: R2Bucket;
   ASSETS?: Fetcher;

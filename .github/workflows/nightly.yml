@@ -25,11 +25,12 @@
 # when the deploy broke it, tell IndexNow which pages changed, save the
 # database (in parts), the public files (the static bundle, also in parts,
 # and the CSV downloads) and the review files back to R2, keep the audience
-# counts of the finished days in R2 when the analytics token exists, append
-# Search Console's daily figures when its key exists, write the monthly
-# audience report on the first run of a month, run the monthly expiry checks
-# on the first of a month, write the run status, and report the items
-# needing attention (failed run, one GitHub issue).
+# counts of the finished days in R2 when the analytics token exists, count the
+# alert sign-ups in the forms database, append Search Console's daily figures
+# when its key exists, write the monthly audience report on the first run of
+# a month, run the monthly expiry checks on the first of a month, write the
+# run status, and report the items needing attention (failed run, one GitHub
+# issue).
 #
 # What a failure does (awardwatch_pipeline/nightly.py and resilience.py hold the
 # checks):
@@ -57,6 +58,9 @@
 #   could not be downloaded is never replaced. The same holds for the Search
 #   Console import (search_console: failed) and its file, and for the monthly
 #   report (views_report: failed), which the next run writes instead.
+# - A count of the alert sign-ups that cannot be read leaves the status's
+#   interest counts empty and adds a notice: information, never an item
+#   needing attention and never a failed run. The next run counts again.
 # - An IndexNow submission that fails is reported (indexnow in the run status)
 #   and never stops the run; only a rejection (the key file or the payload is
 #   wrong) is an item needing attention.
@@ -474,8 +478,9 @@ jobs:
       # weeks before and nothing has to be listed or pruned. A snapshot is a set
       # of parts like the nightly backup (db-slot-<n>.sqlite.gz.000 ... and
       # db-slot-<n>.sqlite.gz.parts, the manifest last). The site's own D1
-      # tables (the forms) go with it. The operator's machine pulls the newest
-      # backup and the D1 export into a folder off this account each week.
+      # database (the forms and the alert sign-ups) goes with it, exported
+      # whole. The operator's machine pulls the newest backup and the D1
+      # export into a folder off this account each week.
       - name: Weekly snapshot (Sundays UTC, kept eight weeks)
         id: snapshot
         if: ${{ !cancelled() && steps.save_db.outcome == 'success' }}
@@ -637,6 +642,37 @@ jobs:
             echo "no data" > "$out/last_outcome.txt"
           fi
 
+      # The alert sign-ups (site/src/pages/interest.tsx): how many rows the
+      # interest table of the forms database holds, and how many of them have
+      # not unsubscribed. The query returns those two numbers and nothing
+      # else, so no address leaves D1. The deploy token reads D1 already (the
+      # weekly snapshot exports it). Wrangler's JSON answer goes to
+      # data/out/interest/count.json, which the run status (interest) and the
+      # monthly audience report read; a query that fails three times leaves
+      # no file, and the status then carries a notice. It never stops the run
+      # and is never an item needing attention.
+      - name: Count the alert sign-ups
+        id: interest
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        working-directory: site
+        run: |
+          out=../data/out/interest
+          mkdir -p "$out"
+          rm -f "$out/count.json" "$out/answer.json"
+          for attempt in 1 2 3; do
+            if "$WRANGLER" d1 execute award-watch --remote --json --command "SELECT COUNT(*) AS n, SUM(unsubscribed_at IS NULL) AS live FROM interest" > "$out/answer.json" 2> "$out/count.log"; then
+              mv "$out/answer.json" "$out/count.json"
+              exit 0
+            fi
+            sleep 20
+          done
+          rm -f "$out/answer.json"
+          echo "The alert sign-ups could not be counted:"
+          cat "$out/count.log"
+          exit 1
+
       # Search Console's figures (docs/search-engines.md, section 6): clicks,
       # impressions, position and the top 50 queries of every final day after
       # the newest in views/search_console.csv, appended to it. Google keeps
@@ -730,7 +766,7 @@ jobs:
           code=0; fetch views/search_console.csv "$out/search_console.csv" || code=$?
           if [ "$code" = "1" ]; then exit 1; fi
           python -m awardwatch_pipeline.nightly views-report --month "$month" --summary "$out/summary.csv" \
-            --search "$out/search_console.csv" --out "$out"
+            --search "$out/search_console.csv" --interest data/out/interest/count.json --out "$out"
           outcome=$(cat "$out/outcome.txt")
           if [ "$outcome" = "written" ]; then
             "$WRANGLER" r2 object put --remote "$BUCKET/views/report-$month.md" --file "$out/report-$month.md"
@@ -769,12 +805,12 @@ jobs:
       # outcome under steps), the notices (information, never failures or
       # items needing attention), what the checks found, the outcomes of the
       # audience roll-up, the Search Console import, the monthly report and
-      # the IndexNow submission, where the database came from (restore), the
-      # smoke test and any rollback, and the expiry checks. search_sync reads
-      # "not run" until the hosted search database ships. Written whatever
-      # happened above. The roll-up, Search Console, report, IndexNow and
-      # rollback steps write "failed" before they start, so a step stopped by
-      # its time limit still reads as failed.
+      # the IndexNow submission, the count of alert sign-ups (interest), where
+      # the database came from (restore), the smoke test and any rollback, and
+      # the expiry checks. search_sync reads "not run" until the hosted search
+      # database ships. Written whatever happened above. The roll-up, Search
+      # Console, report, IndexNow and rollback steps write "failed" before
+      # they start, so a step stopped by its time limit still reads as failed.
       - name: Write the run status
         if: ${{ always() }}
         run: |
@@ -784,6 +820,7 @@ jobs:
             --indexnow-outcome data/out/indexnow/last_outcome.txt \
             --search-console-outcome data/out/search_console/last_outcome.txt \
             --views-report-outcome data/out/report/last_outcome.txt \
+            --interest data/out/interest/count.json \
             --restore data/out/restore.json --smoke data/out/deploy/smoke.json \
             --rollback-outcome data/out/deploy/rollback.txt --version-before data/out/deploy/version_before.txt \
             --checks data/out/checks.json \

@@ -27,6 +27,7 @@ import { fmtInt, fmtMoneyShort, numberLocale, pick, segmentLabel, sourceLabel, t
 import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { canonicalUrl, expiringWindowSeo, pageSeo } from "../seo";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
+import { InterestPanel, interestFilter } from "./interest";
 import { BuyerLink, PhonePagerScript, PhonePages, SegmentChips, SegmentNote, awardNoticeUrl, contractSearchUrl, datasetUrl, money } from "./shared";
 
 // How many rows of the 3-month list the overview shows.
@@ -41,7 +42,7 @@ const WINDOW_TITLE: Record<ExpiringWindow, Key> = {
 export const WINDOW_MONTHS: Record<ExpiringWindow, Key> = { "3m": "expiring.months_3m", "6m": "expiring.months_6m", "12m": "expiring.months_12m" };
 const KIND_LABEL: Record<ExpiringKind, Key> = { award: "expiring.kind_award", history: "expiring.kind_history", contract: "expiring.kind_contract" };
 // The source each kind is read from, for the source filter's labels.
-const KIND_SOURCE: Record<ExpiringKind, string> = { award: "awards", history: "history", contract: "contracts" };
+export const KIND_SOURCE: Record<ExpiringKind, string> = { award: "awards", history: "history", contract: "contracts" };
 
 // -- value bands and the filters in the URL -------------------------------------
 
@@ -54,7 +55,7 @@ const BAND_LIMITS: Record<ValueBand, [number, number]> = {
   "1m-10m": [1_000_000, 10_000_000],
   "over-10m": [10_000_000, Infinity],
 };
-const BAND_LABEL: Record<ValueBand, Key> = {
+export const BAND_LABEL: Record<ValueBand, Key> = {
   "under-100k": "expiring.band_under_100k",
   "100k-1m": "expiring.band_100k_1m",
   "1m-10m": "expiring.band_1m_10m",
@@ -63,7 +64,7 @@ const BAND_LABEL: Record<ValueBand, Key> = {
 
 export const COMPETITIVE_FILTERS = ["yes", "no", "unstated"] as const;
 export type CompetitiveFilter = (typeof COMPETITIVE_FILTERS)[number];
-const COMPETITIVE_LABEL: Record<CompetitiveFilter, Key> = { yes: "competitive.yes", no: "competitive.no", unstated: "competitive.unstated" };
+export const COMPETITIVE_LABEL: Record<CompetitiveFilter, Key> = { yes: "competitive.yes", no: "competitive.no", unstated: "competitive.unstated" };
 
 export interface ExpiringQuery {
   buyer: string;
@@ -347,9 +348,10 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
   const three = windows.find((w) => w.window === "3m");
   // The 3-month list's first page: none to read when the window is empty,
   // null when its file is missing (the section says so, the page stands).
-  const [first, feeds] = await Promise.all([
+  const [first, feeds, interest] = await Promise.all([
     three && three.n > 0 ? loadExpiringPage(c.env, "3m", 1) : Promise.resolve([] as ExpiringRow[]),
     expiringFeeds(c),
+    interestFilter(c.env, lang, "expiring", "/expiring"),
   ]);
   const shown = first ? soonestFirst(first).slice(0, EXPIRING_FIRST) : [];
   const n = (v: number) => fmtInt(v, lang);
@@ -383,6 +385,8 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
           ))}
         </section>
       ) : null}
+
+      <InterestPanel lang={lang} filter={interest} />
 
       <Panel title={t(lang, "expiring.first_heading")} tools={<a href="/expiring/3m">{t(lang, "expiring.first_all")}</a>}>
         {first === null ? (
@@ -523,8 +527,10 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   if (n === null || (n > 1 && n > idx.pages)) return notFoundPage(c, stats.data_as_of, "expiring.page_not_found", path, "expiring.back_window");
   const rows = idx.pages === 0 ? [] : await loadExpiringPage(c.env, window, n);
   if (!rows) return noDataPage(c, "expiring.title");
-  const q = readExpiringQuery(new URL(c.req.url));
+  const url = new URL(c.req.url);
+  const q = readExpiringQuery(url);
   const filtered = isFiltered(q);
+  const interest = await interestFilter(c.env, lang, "expiring", `${path}${url.search}`);
   const sorted = soonestFirst(rows);
   const shown = filtered ? filterExpiring(sorted, q) : sorted;
   const pages = Math.max(1, idx.pages);
@@ -585,6 +591,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
         ) : null}
         <p class="toolbar-note">{t(lang, "expiring.band_note")}</p>
       </form>
+      <InterestPanel lang={lang} filter={interest} />
       <Panel title={t(lang, WINDOW_LABEL[window])}
         count={filtered ? tn(lang, "expiring.match_one", "expiring.match_many", shown.length, { n: fmtInt(shown.length, lang) }) : fmtInt(idx.rows, lang)}
         foot={<nav aria-label={t(lang, "common.pagination")} class="pagination">

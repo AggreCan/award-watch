@@ -39,7 +39,7 @@ type Both = Record<Lang, string>;
 
 export type PageKey =
   | "home" | "tenders" | "tenders_new" | "awards" | "expiring" | "organizations" | "buyers" | "segments" | "rankings" | "feeds"
-  | "watchlist" | "methodology" | "data" | "support" | "cite" | "corrections" | "about" | "terms" | "privacy";
+  | "watchlist" | "methodology" | "data" | "support" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts";
 
 // `name` is the result-list name, either written here or, where the page's own
 // heading already reads well in a result list, its dictionary key.
@@ -158,6 +158,14 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     description: {
       en: "What Award Watch keeps about a visit: aggregate counts with no address, one language cookie, and what the forms store.",
       fr: "Ce qu'Award Watch conserve d'une visite : des comptes agrégés sans adresse, un témoin de langue et ce que conservent les formulaires.",
+    },
+  },
+  alerts: {
+    path: "/alerts",
+    name: "alerts.title",
+    description: {
+      en: "Email alerts for new tender notices, contracts entering the ending-soon windows and new records of an organization are being built. Register an address now; one message will announce them.",
+      fr: "Les alertes par courriel sur les nouveaux avis d'appel d'offres, les contrats qui entrent dans les périodes de fin et les nouveaux dossiers d'une organisation sont en préparation. Inscrivez une adresse dès maintenant : un seul message les annoncera.",
     },
   },
   methodology: {

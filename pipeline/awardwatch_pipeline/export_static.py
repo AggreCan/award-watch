@@ -187,7 +187,7 @@ SITEMAP_MAX_URLS = 50_000
 SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments",
                  "/rankings", "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections",
-                 "/about", "/terms", "/privacy"]
+                 "/about", "/terms", "/privacy", "/alerts"]
 # Pages whose content follows the nightly data carry its date; the others
 # change only with the code, so they carry none rather than a false one.
 SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments",

@@ -13,7 +13,8 @@ one, and always leaves a status file the site's daily check can read.
   verify    check tonight's database and export; writes db_ok and export_ok
             for the save and deploy steps (to $GITHUB_OUTPUT when set).
   status    write status.json from the run's log rows, the workflow steps'
-            outcomes and the checks, whatever state the run ended in.
+            outcomes and the checks, whatever state the run ended in, with
+            the count of alert sign-ups the workflow read from D1.
   pack      write the backup the save step uploads: a copy of the database
             without its secondary indexes, checked, gzipped and split into
             parts of at most PART_MIB with a manifest of their SHA-256.
@@ -140,6 +141,9 @@ CLOCK_SLACK_S = 120
 
 # The longest notice part status.json keeps.
 NOTICE_PART_MAX = 1200
+
+# The notice for a night the alert sign-ups were not counted.
+INTEREST_NOTICE = "the alert sign-ups were not counted tonight (the D1 query failed or did not run); the next run counts again"
 
 STEP_DETAIL = {
     "restore": "the database could not be restored, so nothing else ran",
@@ -570,6 +574,7 @@ def run_status(
     restore_info: dict[str, Any] | None = None, smoke: dict[str, Any] | None = None,
     rollback: str | None = None, version_before: str | None = None, checks: dict[str, Any] | None = None,
     indexnow_outcome: str | None = None, search_console: str | None = None, views_report: str | None = None,
+    interest: dict[str, int] | None = None, interest_tried: bool = False,
 ) -> dict[str, Any]:
     """status.json for the site's daily check. Every input may be missing: the
     status then says what is missing rather than failing to be written.
@@ -585,6 +590,11 @@ def run_status(
     "failed"). They are reported beside the stages, not as stages, so a
     failed sync, roll-up, import, report or submission alerts without marking
     the data refresh failed.
+
+    interest is the count of alert sign-ups the workflow read from the forms
+    database (interest_counts): n rows, live of them not unsubscribed; both
+    null when it was not read. A count that was tried and not read
+    (interest_tried) adds a notice, never an item needing attention.
 
     The resilience fields: steps (every workflow step's outcome, which the
     retry gate reads), restore (where the database came from), smoke (the
@@ -643,6 +653,7 @@ def run_status(
         "search_console": search_console or "not run",
         "views_report": views_report or "not run",
         "indexnow": indexnow_outcome or "not run",
+        "interest": dict(interest) if interest else {"n": None, "live": None},
         "restore": restored,
         "smoke": verdict,
         "smoke_detail": str(smoke.get("detail") or "")[:300] if isinstance(smoke, dict) else "",
@@ -654,7 +665,7 @@ def run_status(
         # file not published yet, a stage not built): LAST_RUN.md and the
         # daily check's email, never an item needing attention, and the run
         # stays ok.
-        "notices": notices,
+        "notices": notices + ([{"source": "interest", "detail": INTEREST_NOTICE}] if interest_tried and not interest else []),
         "ok": all(s["ok"] for s in stages) and verdict != "broken",
     }
 
@@ -670,6 +681,49 @@ def _notices(conn: sqlite3.Connection, started: str) -> list[dict[str, str]]:
     # A stage may record several notices on one row, joined by " | ".
     return [{"source": s, "detail": part.strip()[:NOTICE_PART_MAX]} for s, n in rows
             for part in (n or "").split(" | ") if part.strip()]
+
+
+# -- alert sign-ups ---------------------------------------------------------
+
+
+def interest_counts(data: Any) -> dict[str, int] | None:
+    """{"n", "live"} from Wrangler's answer to the workflow's count query
+    (`d1 execute --json`: a list holding one result, whose rows are
+    [{"n": ..., "live": ...}]), or None when it is not that answer. SUM over
+    no rows is null, so an empty table reads live 0."""
+    if isinstance(data, list):
+        data = data[0] if len(data) == 1 else None
+    if not isinstance(data, dict) or data.get("success") is False:
+        return None
+    rows = data.get("results")
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+        return None
+    n, live = rows[0].get("n"), rows[0].get("live")
+    if live is None and n == 0:
+        live = 0
+    if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in (n, live)) or live > n:
+        return None
+    return {"n": n, "live": live}
+
+
+def read_interest(path: str | None) -> dict[str, int] | None:
+    """The counts in the file the workflow's count step wrote, or None when it
+    is missing or does not read. Anything Wrangler prints before its JSON is
+    skipped."""
+    try:
+        text = _read(path)
+    except OSError:
+        return None
+    if not text:
+        return None
+    starts = [i for i in (text.find("["), text.find("{")) if i >= 0]
+    if not starts:
+        return None
+    try:
+        data, _ = json.JSONDecoder().raw_decode(text, min(starts))
+    except ValueError:
+        return None
+    return interest_counts(data)
 
 
 # -- pack -------------------------------------------------------------------
@@ -841,6 +895,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--indexnow-outcome", default=None, help="the IndexNow submission's outcome file")
     s.add_argument("--search-console-outcome", default=None, help="the Search Console import's outcome file")
     s.add_argument("--views-report-outcome", default=None, help="the monthly audience report's outcome file")
+    s.add_argument("--interest", default=None, help="Wrangler's JSON answer to the count of alert sign-ups")
     s.add_argument("--restore", default=None, help="the restore record")
     s.add_argument("--smoke", default=None, help="the smoke test's result file")
     s.add_argument("--rollback-outcome", default=None, help="the rollback step's outcome file")
@@ -933,6 +988,7 @@ def build_parser() -> argparse.ArgumentParser:
     vp.add_argument("--search", default=None, help="views/search_console.csv as downloaded from R2, when it exists")
     vp.add_argument("--out", required=True, help="folder for report-<month>.md, summary_line.txt and outcome.txt")
     vp.add_argument("--today", default=None, help="YYYY-MM-DD (default: today, UTC)")
+    vp.add_argument("--interest", default=None, help="Wrangler's JSON answer to the count of alert sign-ups, when read")
     return parser
 
 
@@ -1033,7 +1089,8 @@ def _status(args: argparse.Namespace) -> int:
                         rollback=_read(args.rollback_outcome), version_before=_read(args.version_before),
                         checks=_read_json(args.checks), indexnow_outcome=_read(args.indexnow_outcome),
                         search_console=_read(args.search_console_outcome),
-                        views_report=_read(args.views_report_outcome))
+                        views_report=_read(args.views_report_outcome),
+                        interest=read_interest(args.interest), interest_tried=args.interest is not None)
     _write_json(Path(args.out), status)
     print(json.dumps(status, indent=1))
     return 0
@@ -1179,7 +1236,8 @@ def _views_report(args: argparse.Namespace) -> int:
     today = date.fromisoformat(args.today) if args.today else datetime.now(timezone.utc).date()
     month = args.month or views_report.report_month(today)
     out = Path(args.out)
-    outcome = views_report.run(out, month, today, Path(args.summary), Path(args.search) if args.search else None)
+    outcome = views_report.run(out, month, today, Path(args.summary), Path(args.search) if args.search else None,
+                               interest=read_interest(args.interest))
     out.mkdir(parents=True, exist_ok=True)
     (out / "outcome.txt").write_text(outcome + "\n", encoding="utf-8")
     log.info("views-report %s: %s", month, outcome)

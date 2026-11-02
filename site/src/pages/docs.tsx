@@ -2,8 +2,8 @@
 // the Methodology page. The publisher is named as the project only ("Award
 // Watch, an independent Canadian project"); no person or company appears.
 // The request limits /terms quotes are wrangler.jsonc's (a test holds the
-// two together), and /privacy states what views.ts, forms.tsx and the
-// Ko-fi hook keep, in the words of their own comments.
+// two together), and /privacy states what views.ts, forms.tsx, interest.tsx
+// and the Ko-fi hook keep, in the words of their own comments.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -142,6 +142,16 @@ export function privacyPage(c: Context<AppEnv>): Promise<Response> {
           <p>{t(lang, "privacy.form_correction")}</p>
           <p>{t(lang, "privacy.form_review")}</p>
           <p>{t(lang, "privacy.donations")}</p>
+        </>
+      ),
+    },
+    {
+      id: "interest", title: "privacy.toc_interest", body: (
+        <>
+          <p>{t(lang, "privacy.interest_kept")}</p>
+          <p>{t(lang, "privacy.interest_use")}</p>
+          <p>{t(lang, "privacy.interest_shown")}</p>
+          <p>{tj(lang, "privacy.interest_removal", { email: <Mail /> })}</p>
         </>
       ),
     },

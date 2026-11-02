@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from awardwatch_pipeline import nightly, organizations
+from awardwatch_pipeline import nightly, organizations, resilience
 from awardwatch_pipeline.db import connect, log_run
 
 NOW = "2026-10-18T00:00:00Z"
@@ -394,8 +394,8 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
     make_db(db)
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
     assert set(status) == {"run_at", "stages", "steps", "search_sync", "views_rollup", "search_console",
-                           "views_report", "indexnow", "restore", "smoke", "smoke_detail", "version_before",
-                           "rollback", "deploy_rolled_back", "checks", "notices", "ok"}
+                           "views_report", "indexnow", "interest", "restore", "smoke", "smoke_detail",
+                           "version_before", "rollback", "deploy_rolled_back", "checks", "notices", "ok"}
     # The search database step is not in the workflow yet; the site's check reads the field.
     assert status["search_sync"] == "not run" and status["ok"] is True
 
@@ -414,6 +414,61 @@ def test_status_carries_the_notices_and_they_never_fail_the_run(tmp_path):
         {"source": "buyers", "detail": "unmapped spelling B"},
     ]
     assert status["ok"] is True
+
+
+# Wrangler's answer to the workflow's count, as `d1 execute --remote --json` prints it.
+INTEREST_ANSWER = Path(__file__).parent / "fixtures" / "d1_interest_count.json"
+
+
+def test_status_carries_the_alert_sign_ups_from_the_d1_answer(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+    out = tmp_path / "status.json"
+    assert nightly.main(["status", "--db", str(db), "--interest", str(INTEREST_ANSWER), "--out", str(out)]) == 0
+    status = json.loads(out.read_text(encoding="utf-8"))
+    assert status["interest"] == {"n": 12, "live": 11}
+    assert status["notices"] == []
+    # Text Wrangler prints before its JSON is skipped.
+    noisy = tmp_path / "noisy.json"
+    noisy.write_text("Executing on remote database award-watch:\n" + INTEREST_ANSWER.read_text(encoding="utf-8"),
+                     encoding="utf-8")
+    assert nightly.read_interest(str(noisy)) == {"n": 12, "live": 11}
+
+
+def test_an_unread_count_is_a_notice_never_an_item_needing_attention(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+    garbled = tmp_path / "count.json"
+    garbled.write_text("[ERROR] no such table: interest", encoding="utf-8")
+    for path in (garbled, tmp_path / "missing.json"):
+        out = tmp_path / "status.json"
+        assert nightly.main(["status", "--db", str(db), "--started-file", str(tmp_path / "none"),
+                             "--interest", str(path), "--step", "deploy=success", "--out", str(out)]) == 0
+        status = json.loads(out.read_text(encoding="utf-8"))
+        assert status["interest"] == {"n": None, "live": None}
+        assert {"source": "interest", "detail": nightly.INTEREST_NOTICE} in status["notices"]
+        assert resilience.attention_items({**status, "stages": []}) == []
+        assert any(item.startswith("interest: the alert sign-ups were not counted") for item in resilience.notice_items(status))
+    # A status written without the count step (a run before it existed) says nothing about it.
+    quiet = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
+    assert quiet["interest"] == {"n": None, "live": None} and quiet["notices"] == [] and quiet["ok"] is True
+
+
+@pytest.mark.parametrize("answer, counts", [
+    ([{"results": [{"n": 0, "live": None}], "success": True}], {"n": 0, "live": 0}),  # SUM over no rows is null
+    ([{"results": [{"n": 3, "live": 3}], "success": True}], {"n": 3, "live": 3}),
+    ({"results": [{"n": 5, "live": 2}]}, {"n": 5, "live": 2}),
+    ([{"results": [{"n": 2, "live": 3}], "success": True}], None),  # more live than rows
+    ([{"results": [{"n": 2, "live": None}], "success": True}], None),
+    ([{"results": [{"n": True, "live": 1}], "success": True}], None),
+    ([{"results": [{"n": -1, "live": 0}], "success": True}], None),
+    ([{"results": [{"n": 2, "live": 1}], "success": False}], None),
+    ([{"results": [], "success": True}], None),
+    ([{"results": [{"n": 1, "live": 1}]}, {"results": [{"n": 1, "live": 1}]}], None),
+    ({"error": "no such table: interest"}, None),
+])
+def test_interest_counts_read_only_the_two_numbers_of_one_answer(answer, counts):
+    assert nightly.interest_counts(answer) == counts
 
 
 def test_a_clean_night_reports_ok(tmp_path):
@@ -741,6 +796,28 @@ def test_the_workflow_saves_the_bundle_in_parts():
     assert save.index(split) < save.index(loop) < save.index('put "$BUCKET/downloads/')
     # The whole archive is never uploaded as one object (Wrangler refuses it).
     assert '"$BUCKET/static.tar.gz"' not in text
+
+
+def test_the_workflow_counts_the_alert_sign_ups_and_never_fails_on_them():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    count = step(text, "Count the alert sign-ups")
+    query = ('"$WRANGLER" d1 execute award-watch --remote --json --command '
+             '"SELECT COUNT(*) AS n, SUM(unsubscribed_at IS NULL) AS live FROM interest"')
+    assert query in count
+    # Two numbers leave D1 and nothing else: no column of an address or a filter is named.
+    assert "email" not in count and "params" not in count and "label" not in count
+    assert "continue-on-error: true" in count and "if: ${{ !cancelled() }}" in count
+    assert "working-directory: site" in count and 'mv "$out/answer.json" "$out/count.json"' in count
+    # After the audience roll-up, before the monthly report that reads it.
+    names = [line.strip()[len("- name: "):] for line in text.splitlines() if line.strip().startswith("- name: ")]
+    at = names.index("Count the alert sign-ups")
+    assert names[at - 1] == "Roll up the audience counts (only when CLOUDFLARE_ANALYTICS_TOKEN is set)"
+    assert at < names.index("Write the monthly audience report (the first run of a month)") < names.index("Write the run status")
+    assert "--interest data/out/interest/count.json" in step(text, "Write the run status")
+    assert "--interest data/out/interest/count.json" in step(text, "Write the monthly audience report (the first run of a month)")
+    # The weekly D1 export takes the whole forms database, the interest table with it.
+    assert '"$WRANGLER" d1 export award-watch --remote --output ../data/out/d1.sql' in step(
+        text, "Weekly snapshot (Sundays UTC, kept eight weeks)")
 
 
 def test_the_review_files_go_to_the_private_prefix_and_nowhere_else():

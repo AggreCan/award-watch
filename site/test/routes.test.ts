@@ -129,7 +129,7 @@ describe("every page", () => {
     const nav = html.match(/<nav class="rail" aria-label="Main">[\s\S]*?<\/nav>/)?.[0] ?? "";
     expect([...nav.matchAll(/<a class="rail-item[^"]*" href="([^"]+)"/g)].map((m) => m[1])).toEqual([
       "/tenders", "/tenders/new", "/tenders?closing=7", "/awards", "/awards/2026", "/expiring", "/expiring/3m", "/organizations",
-      "/buyers", "/segments", "/rankings", "/feeds", "/data", "/methodology", "/watchlist",
+      "/buyers", "/segments", "/rankings", "/feeds", "/data", "/methodology", "/watchlist", "/alerts",
     ]);
     expect(nav).toContain('<a class="rail-item" href="/tenders"><span class="rail-label">Open tender notices</span><span class="rail-n">3</span></a>');
     expect(nav).toContain('<a class="rail-item rail-child soon" href="/tenders?closing=7"><span class="rail-label">Closing within 7 days</span><span class="rail-n">1</span></a>');
@@ -141,11 +141,11 @@ describe("every page", () => {
     expect(nav).not.toContain("aria-current");
     expect(nav).not.toContain("rail-ancestor");
     expect(nav).toContain('<span class="rail-n" data-watch-count="" hidden=""></span>');
-    expect(nav).toContain("Saved searches: soon");
+    expect(nav).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Alerts: soon</span></a>');
     // A page's own section is marked in the rail.
     expect(await text("/buyers")).toContain('<a class="rail-item" href="/buyers" aria-current="page">');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));
-    for (const href of ["/methodology", "/support", "/feeds", "/watchlist", "/corrections", "/cite", "/data#downloads", "/data#sources", "/about", "/terms", "/privacy"]) {
+    for (const href of ["/methodology", "/support", "/feeds", "/alerts", "/watchlist", "/corrections", "/cite", "/data#downloads", "/data#sources", "/about", "/terms", "/privacy"]) {
       expect(footer, href).toContain(`href="${href}"`);
     }
     expect(html).toContain("Data date: 2026-10-31");

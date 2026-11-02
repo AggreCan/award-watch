@@ -16,6 +16,7 @@ import { awardsPage, awardsYearPage } from "./pages/awards";
 import { buyerPage, buyersIndex } from "./pages/buyers";
 import { segmentPage, segmentsIndex } from "./pages/segments";
 import { citePage } from "./pages/cite";
+import { alertsPage } from "./pages/alerts";
 import { aboutPage, privacyPage, termsPage } from "./pages/docs";
 import { contractPage } from "./pages/contract";
 import { DOWNLOADS, YEARLY_DOWNLOAD, dataPage } from "./pages/data";
@@ -24,6 +25,7 @@ import { expiringPage, expiringWindowPage } from "./pages/expiring";
 import { feedsPage } from "./pages/feeds";
 import { correctionsForm, correctionsSubmit, respondPage, respondSubmit } from "./pages/forms";
 import { homePage } from "./pages/home";
+import { interestSubmit } from "./pages/interest";
 import { methodologyPage } from "./pages/methodology";
 import { organizationPage } from "./pages/organization";
 import { rankingsPage } from "./pages/rankings";
@@ -123,6 +125,12 @@ app.get("/rankings/:year", rankingsPage);
 // watchlist lives in the visitor's browser; this page is its shell.
 app.get("/feeds", feedsPage);
 app.get("/watchlist", watchlistPage);
+// Interest in email alerts: the page that explains them, and the form's post
+// (pages/interest.tsx). The post answers in place; an address typed or
+// reloaded as a GET lands on the page.
+app.get("/alerts", alertsPage);
+app.post("/interest", interestSubmit);
+app.get("/interest", (c) => c.redirect("/alerts", 302));
 app.get("/data", dataPage);
 app.get("/methodology", methodologyPage);
 app.get("/support", supportPage);

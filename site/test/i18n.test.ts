@@ -55,6 +55,9 @@ const SENTINELS = [
   "days left",
   "Individual, name withheld",
   "Amendments and growth",
+  "Get Alerts by Email",
+  "Every new tender notice",
+  "Contracts entering the",
 ];
 
 const FRENCH_PAGES = [
@@ -94,6 +97,8 @@ const FRENCH_PAGES = [
   "/support?lang=fr",
   "/cite?lang=fr",
   "/corrections?lang=fr",
+  "/alerts?lang=fr",
+  "/tenders?lang=fr&q=traduction&buyer=pwgsc-tpsgc",
   "/nothing-here?lang=fr",
   "/downloads/organizations.csv?lang=fr",
 ];

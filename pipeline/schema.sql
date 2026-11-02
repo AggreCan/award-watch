@@ -711,3 +711,27 @@ CREATE TABLE IF NOT EXISTS corrections (
   published INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_corrections_org ON corrections(organization_id, published);
+
+-- Interest in email alerts, from the "Get alerts by email" form
+-- (site/src/pages/interest.tsx): one row per address and saved filter. No
+-- alert is sent yet. One message will announce the alerts, with an
+-- unsubscribe link built from the token; the confirmation link at launch is
+-- built from it too. No IP address, user agent or visitor code is kept, and
+-- the address is never shown. The nightly run reads the two counts only
+-- (rows, and rows not unsubscribed).
+CREATE TABLE IF NOT EXISTS interest (
+  id INTEGER PRIMARY KEY,
+  email TEXT NOT NULL,                           -- trimmed and lower-cased, at most 254 characters
+  kind TEXT NOT NULL,                            -- tenders | expiring | organization | buyer | segment
+  params TEXT NOT NULL,                          -- the saved filter: the page's path and query, rebuilt by the site from
+                                                 -- the filter keys it allows for the kind, keys sorted, no lang
+  label TEXT NOT NULL,                           -- what the filter means, in the visitor's language, written by the site
+                                                 -- from the filter's codes and the names the data holds; words typed
+                                                 -- into a title search stay in params and are never in the label
+  lang TEXT NOT NULL,                            -- en | fr: the language of the form, and of the messages
+  created_at TEXT NOT NULL,
+  token TEXT NOT NULL,                           -- 32 random hex characters, for the confirmation and unsubscribe links
+  confirmed_at TEXT,                             -- when the address confirmed (the confirmation ships with the alerts)
+  unsubscribed_at TEXT,
+  UNIQUE (email, kind, params)
+);

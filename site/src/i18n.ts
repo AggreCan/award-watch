@@ -53,7 +53,7 @@ const STRINGS = {
   "rail.ending_3m_full": { en: "Ending within 3 months", fr: "Fin d'ici 3 mois" },
   "rail.browse": { en: "Browse", fr: "Parcourir" },
   "rail.lists": { en: "Your lists", fr: "Vos listes" },
-  "rail.saved_soon": { en: "Saved searches: soon", fr: "Recherches enregistrées : bientôt" },
+  "rail.alerts_soon": { en: "Alerts: soon", fr: "Alertes : bientôt" },
   "footer.sources": {
     en: "Records from CanadaBuys, open.canada.ca and the Registry of Lobbyists.",
     fr: "Dossiers d'AchatsCanada, d'ouvert.canada.ca et du Registre des lobbyistes.",
@@ -62,6 +62,7 @@ const STRINGS = {
   "footer.methodology": { en: "Methodology", fr: "Méthodologie" },
   "footer.download": { en: "Download the data", fr: "Télécharger les données" },
   "footer.feeds": { en: "Feeds", fr: "Fils Atom" },
+  "footer.alerts": { en: "Alerts", fr: "Alertes" },
   "footer.watchlist": { en: "Watchlist", fr: "Liste de suivi" },
   "footer.corrections": { en: "Report a correction", fr: "Signaler une correction" },
   "footer.cite": { en: "Cite", fr: "Citer" },
@@ -1434,6 +1435,101 @@ const STRINGS = {
   },
   "form.thanks_correction": { en: "The correction was received and will be reviewed.", fr: "La correction a été reçue et sera examinée." },
 
+  // -- interest in email alerts (pages/interest.tsx) and the alerts page --------------------------
+  "interest.title": { en: "Get Alerts by Email", fr: "Recevoir des alertes par courriel" },
+  "interest.about": { en: "How alerts will work", fr: "Fonctionnement des alertes" },
+  "interest.email": { en: "Email address", fr: "Adresse courriel" },
+  "interest.submit": { en: "Notify me", fr: "M'avertir" },
+  "interest.note": {
+    en: "Alerts are being built. One message will announce them, with a link to unsubscribe; nothing else is sent. The address is kept for that only, as the {privacy} page says.",
+    fr: "Les alertes sont en préparation. Un seul message les annoncera, avec un lien de désabonnement; rien d'autre n'est envoyé. L'adresse est conservée à cette seule fin, comme l'indique la page {privacy}.",
+  },
+  "interest.done": { en: "Noted. One message will announce the alerts.", fr: "C'est noté. Un seul message annoncera les alertes." },
+  "interest.err_email": { en: "Enter a complete email address.", fr: "Entrez une adresse courriel complète." },
+  "interest.err_rejected": { en: "The form could not be sent. Try again.", fr: "Le formulaire n'a pas pu être envoyé. Réessayez." },
+  "interest.back": { en: "Back to the page", fr: "Retour à la page" },
+  // The label of a saved filter. A filter is named as its chip names it, "Name: value", the pairs joined by "; ".
+  "interest.pair": { en: "{name}: {value}", fr: "{name} : {value}" },
+  "interest.label_tenders_all": { en: "Every new tender notice", fr: "Chaque nouvel avis d'appel d'offres" },
+  "interest.label_tenders": { en: "New tender notices matching {filters}", fr: "Nouveaux avis d'appel d'offres correspondant à {filters}" },
+  "interest.label_tenders_words": {
+    en: "New tender notices with the searched words in the title",
+    fr: "Nouveaux avis d'appel d'offres dont le titre contient les mots recherchés",
+  },
+  "interest.label_tenders_words_filters": {
+    en: "New tender notices with the searched words in the title, matching {filters}",
+    fr: "Nouveaux avis d'appel d'offres dont le titre contient les mots recherchés, correspondant à {filters}",
+  },
+  "interest.follow_some": { en: "New tender notices matching the filters above", fr: "Nouveaux avis d'appel d'offres correspondant aux filtres ci-dessus" },
+  "interest.label_expiring": { en: "Contracts entering the {n}-month window {scope}", fr: "Contrats qui entrent dans la période de {n} mois {scope}" },
+  "interest.scope_all": { en: "for every buyer and segment", fr: "pour tous les acheteurs et segments" },
+  "interest.scope_buyer": { en: "for {buyer}", fr: "pour {buyer}" },
+  "interest.scope_segment": { en: "in segment {segment}", fr: "dans le segment {segment}" },
+  "interest.scope_both": { en: "for {buyer} in segment {segment}", fr: "pour {buyer} dans le segment {segment}" },
+  "interest.label_organization": {
+    en: "When {organization} is named on a new award, contract or grant",
+    fr: "Quand {organization} figure dans une nouvelle attribution, un nouveau contrat ou une nouvelle subvention",
+  },
+  "interest.label_buyer": { en: "New award notices and contracts from {buyer}", fr: "Nouveaux avis d'attribution et contrats de {buyer}" },
+  "interest.label_segment": {
+    en: "New tender notices and award notices in segment {segment}",
+    fr: "Nouveaux avis d'appel d'offres et d'attribution dans le segment {segment}",
+  },
+  "alerts.title": { en: "Email Alerts", fr: "Alertes par courriel" },
+  "alerts.lead": {
+    en: "Alerts by email are being built. Register an address now, and one message will announce them.",
+    fr: "Les alertes par courriel sont en préparation. Inscrivez une adresse dès maintenant, et un seul message les annoncera.",
+  },
+  "alerts.toc_cover": { en: "What Alerts Will Cover", fr: "Ce que couvriront les alertes" },
+  "alerts.cover_intro": { en: "An alert follows one saved filter and reports what is new in it.", fr: "Une alerte suit un filtre enregistré et signale ce qui y est nouveau." },
+  "alerts.cover_tenders": {
+    en: "New tender notices: every one, or those matching the filters of the open notices list (words in the title, category, segment, province, buyer, notice type, procurement method).",
+    fr: "Les nouveaux avis d'appel d'offres : tous, ou ceux qui correspondent aux filtres de la liste des avis ouverts (mots du titre, catégorie, segment, province, acheteur, type d'avis, méthode d'approvisionnement).",
+  },
+  "alerts.cover_expiring": {
+    en: "Contracts entering the 3-, 6- or 12-month window of contracts ending soon, for one buyer, one segment or every contract.",
+    fr: "Les contrats qui entrent dans la période de 3, 6 ou 12 mois des contrats prenant fin bientôt, pour un acheteur, un segment ou tous les contrats.",
+  },
+  "alerts.cover_organizations": {
+    en: "New records naming an organization you watch: an award notice, a contract or a grant.",
+    fr: "Les nouveaux dossiers qui nomment une organisation que vous suivez : un avis d'attribution, un contrat ou une subvention.",
+  },
+  "alerts.cover_buyers": {
+    en: "New award notices and contracts from one buyer, and new tender and award notices in one UNSPSC segment.",
+    fr: "Les nouveaux avis d'attribution et contrats d'un acheteur, et les nouveaux avis d'appel d'offres et d'attribution d'un segment UNSPSC.",
+  },
+  "alerts.toc_now": { en: "Until Then", fr: "D'ici là" },
+  "alerts.now": {
+    en: "Nothing is sent yet. The form keeps the address and the filter. One message will announce the alerts, with a link to unsubscribe, and nothing else is sent before it. The address is never shown or shared.",
+    fr: "Rien n'est encore envoyé. Le formulaire conserve l'adresse et le filtre. Un seul message annoncera les alertes, avec un lien de désabonnement, et rien d'autre n'est envoyé d'ici là. L'adresse n'est jamais affichée ni communiquée.",
+  },
+  "alerts.privacy": {
+    en: "The {privacy} page says what the form keeps and how to have the address removed.",
+    fr: "La page {privacy} indique ce que conserve le formulaire et comment faire retirer l'adresse.",
+  },
+  "alerts.register_intro": {
+    en: "This form saves the widest alert, every new tender notice. A narrower one is saved from the page that shows it.",
+    fr: "Ce formulaire enregistre l'alerte la plus large, chaque nouvel avis d'appel d'offres. Une alerte plus précise s'enregistre depuis la page qui l'affiche.",
+  },
+  "alerts.toc_where": { en: "Where the Form Appears", fr: "Où trouver le formulaire" },
+  "alerts.where_tenders": {
+    en: "{link}: new notices matching the filters the list shows.",
+    fr: "{link} : les nouveaux avis qui correspondent aux filtres de la liste.",
+  },
+  "alerts.where_expiring": {
+    en: "{link} and its windows: contracts entering the window shown, for the buyer or segment chosen or for every contract.",
+    fr: "{link} et ses périodes : les contrats qui entrent dans la période affichée, pour l'acheteur ou le segment choisi ou pour tous les contrats.",
+  },
+  "alerts.where_profiles": { en: "Every {link}: new records naming the organization.", fr: "Chaque {link} : les nouveaux dossiers qui nomment l'organisation." },
+  "alerts.where_more": {
+    en: "Every {buyers} and {segments}: new award notices and contracts from the buyer, new notices in the segment.",
+    fr: "Chaque {buyers} et chaque {segments} : les nouveaux avis d'attribution et contrats de l'acheteur, les nouveaux avis du segment.",
+  },
+  "alerts.link_expiring": { en: "Contracts ending soon", fr: "Contrats prenant fin bientôt" },
+  "alerts.link_profiles": { en: "organization profile", fr: "profil d'organisation" },
+  "alerts.link_buyers": { en: "buyer page", fr: "page d'acheteur" },
+  "alerts.link_segments": { en: "segment page", fr: "page de segment" },
+
   // -- citing -------------------------------------------------------------------------------------
   "cite.title": { en: "How to Cite", fr: "Comment citer" },
   "cite.text": {
@@ -1773,6 +1869,20 @@ const STRINGS = {
   "privacy.donations": {
     en: "A donation made on the outside payment page sends the site a notice, which the site keeps as amount, time and kind only.",
     fr: "Un don fait sur la page de paiement externe envoie un avis au site, qui n'en conserve que le montant, l'heure et le type.",
+  },
+  "privacy.toc_interest": { en: "Alert Interest", fr: "Intérêt pour les alertes" },
+  "privacy.interest_kept": {
+    en: "The alerts form stores the email address, the saved filter and the site's wording of it, the language of the page, the time it was received and a random token for the links in later messages. It stores no IP address, browser identification or visitor code.",
+    fr: "Le formulaire d'alertes conserve l'adresse courriel, le filtre enregistré et la formulation qu'en donne le site, la langue de la page, l'heure de réception et un jeton aléatoire pour les liens des messages à venir. Il ne conserve aucune adresse IP, identification de navigateur ni code de visiteur.",
+  },
+  "privacy.interest_use": {
+    en: "The address is used for one message announcing the alerts, with a link to unsubscribe, and then for the alerts asked for once they exist. Nothing else is sent to it.",
+    fr: "L'adresse sert à un seul message annonçant les alertes, avec un lien de désabonnement, puis aux alertes demandées une fois qu'elles existeront. Rien d'autre n'y est envoyé.",
+  },
+  "privacy.interest_shown": { en: "The address is never shown or shared.", fr: "L'adresse n'est jamais affichée ni communiquée." },
+  "privacy.interest_removal": {
+    en: "To have it removed, use the unsubscribe link in that message or write to {email}. Removal is free of charge.",
+    fr: "Pour la faire retirer, utilisez le lien de désabonnement de ce message ou écrivez à {email}. Le retrait est gratuit.",
   },
   "privacy.toc_third": { en: "Third Parties and Hosting", fr: "Tiers et hébergement" },
   "privacy.third": {

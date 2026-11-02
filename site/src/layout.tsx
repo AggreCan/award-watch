@@ -301,8 +301,8 @@ export function railStates(entries: readonly RailEntry[], here: string, section?
 // own lists. The last group is anchored to the rail's foot, so the items an
 // account adds later (saved searches, alerts, the account itself) go there
 // without moving anything above them. Nothing in it assumes a signed-in
-// reader: the watchlist lives in this browser, and saved searches are a line
-// that says they are coming.
+// reader: the watchlist lives in this browser, and alerts are a link to the
+// page that says they are coming and takes an address meanwhile.
 const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: string }> = ({ lang, active, rail, here }) => {
   const year = rail?.year ?? new Date().toISOString().slice(0, 4);
   const expiring = rail?.ending12m !== undefined || rail?.ending3m !== undefined;
@@ -367,7 +367,11 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
               <span class="rail-n" data-watch-count="" hidden></span>
             </a>
           </li>
-          <li class="rail-item rail-later">{t(lang, "rail.saved_soon")}</li>
+          <li>
+            <a class="rail-item rail-later" href="/alerts" aria-current={active === "/alerts" ? "page" : undefined}>
+              <span class="rail-label">{t(lang, "rail.alerts_soon")}</span>
+            </a>
+          </li>
         </ul>
       </div>
     </nav>
@@ -376,7 +380,7 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 5;
+export const STYLES_VERSION = 6;
 
 export const Layout: FC<
   PropsWithChildren<{ lang: Lang; title: string; dataAsOf: string | null; active?: string; head?: unknown; seo?: Seo }>
@@ -433,6 +437,7 @@ export const Layout: FC<
                   <a href="/methodology">{t(lang, "footer.methodology")}</a>
                   <a href="/data#downloads">{t(lang, "footer.download")}</a>
                   <a href="/feeds">{t(lang, "footer.feeds")}</a>
+                  <a href="/alerts">{t(lang, "footer.alerts")}</a>
                   <a href="/watchlist">{t(lang, "footer.watchlist")}</a>
                   <a href="/corrections">{t(lang, "footer.corrections")}</a>
                   <a href="/cite">{t(lang, "footer.cite")}</a>

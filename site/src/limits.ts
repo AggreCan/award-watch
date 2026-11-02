@@ -16,7 +16,9 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/data/feeds/")) return "feed";
   if (path.startsWith("/api/")) return "api";
   if (path.startsWith("/downloads/")) return "download";
-  if (method === "POST" && (path === "/corrections" || /^\/organizations\/[^/]+\/respond$/.test(path))) return "form";
+  if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
+    return "form";
+  }
   return "page";
 }
 

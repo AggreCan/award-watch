@@ -48,9 +48,11 @@ export type Kind = "page" | "api" | "download" | "form" | "hook" | "file" | "fee
 
 // /categories (and /categories/:nn below) now answer with a redirect to
 // /segments; they stay so the counts of old links keep their route.
+// /interest is the alerts form's post (kind form); a GET there is sent to /alerts.
 const PAGES = new Set([
   "/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments", "/categories", "/rankings",
   "/feeds", "/watchlist", "/data", "/methodology", "/support", "/cite", "/corrections", "/about", "/terms", "/privacy",
+  "/alerts", "/interest",
 ]);
 const API_FIXED = new Set(["/api/stats"]);
 const DOWNLOAD_FILES = new Set(DOWNLOADS.map((d) => d.file));

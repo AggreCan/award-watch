@@ -47,8 +47,8 @@
   },
   "d1_databases": [
     {
-      // The forms database: organization_responses and corrections only
-      // (the "Visitor submissions" tables of pipeline/schema.sql).
+      // The forms database: organization_responses, corrections and interest
+      // only (the "Visitor submissions" tables of pipeline/schema.sql).
       "binding": "DB",
       "database_name": "award-watch",
       // Replace with the id printed by `wrangler d1 create award-watch` on the project account.

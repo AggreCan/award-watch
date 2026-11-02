@@ -14,6 +14,7 @@ import { fmtInt, fmtMoney, fmtMoneyShort, numberLocale, pick, sourceLabel, t, tn
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { buyerSeo, pageSeo } from "../seo";
 import { ExpiringSection } from "./expiring";
+import { InterestPanel, interestFilter } from "./interest";
 import { AwardTable, OrgTotalTable, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, money, shareText } from "./shared";
 
 const KIND: Record<string, Key> = {
@@ -131,6 +132,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   // Years after the data date's are as the sources date them.
   const lateYears = b.years.some((y) => y.year > Number(todayOf(stats.data_as_of).slice(0, 4)));
   const counts = { awards: b.buyer.n_awards, history: b.buyer.n_history, contracts: b.buyer.n_contracts, grants: b.buyer.n_grants };
+  const interest = await interestFilter(c.env, lang, "buyer", `/buyers/${b.buyer.id}`, { name });
 
   return page(
     c,
@@ -155,6 +157,8 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
         ))}
       </section>
       <p class="tiles-note"><SourcesSeparate lang={lang} /></p>
+
+      <InterestPanel lang={lang} filter={interest} />
 
       <Panel title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
       {lateYears ? <p class="muted small">{t(lang, "common.dates_as_published")}</p> : null}

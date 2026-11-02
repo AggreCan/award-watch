@@ -19,6 +19,7 @@ import {
 import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { organizationSeo } from "../seo";
 import { ExpiringSection, MoreInCsv } from "./expiring";
+import { InterestPanel, interestFilter } from "./interest";
 import {
   AwardTable, BuyerLink, SourceLine, SourcesSeparate, contractSearchUrl, datasetUrl, grantUrl, lobbyUrl, money, shareText,
 } from "./shared";
@@ -149,7 +150,9 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
     return notFoundPage(c, stats.data_as_of, "org.not_found", "/organizations", "org.back");
   }
   const o = profile.organization;
-  const [{ responses, corrections }, directories] = await Promise.all([siteRows(c, id), loadDirectories(c.env)]);
+  const [{ responses, corrections }, directories, interest] = await Promise.all([
+    siteRows(c, id), loadDirectories(c.env), interestFilter(c.env, lang, "organization", `/organizations/${o.id}`, { name: o.display_name }),
+  ]);
   const dirCode = directoryCode(o.province, o.country);
   const dirListed = (directories?.get(dirCode)?.pages ?? 0) > 0;
   const crumbs = [
@@ -222,6 +225,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         </a>
       </section>
       <p class="tiles-note"><SourcesSeparate lang={lang} /></p>
+
+      <InterestPanel lang={lang} filter={interest} />
 
       <Panel id="years" title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
         <p class="muted small">

@@ -15,6 +15,7 @@ import type { AppEnv } from "../env";
 import { fmtInt, segmentLabel, t } from "../i18n";
 import { Layout, PageHead, Panel, closingPassed, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { pageSeo, segmentSeo } from "../seo";
+import { InterestPanel, interestFilter } from "./interest";
 import { OrgTotalTable, TenderTable, money } from "./shared";
 
 export async function segmentsIndex(c: Context<AppEnv>): Promise<Response> {
@@ -84,6 +85,7 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
   const today = todayOf(stats.data_as_of);
   // An open list: a notice whose closing date has passed goes after the ones still open.
   const open = [...seg.open_tenders.filter((r) => !closingPassed(r.closing, today)), ...seg.open_tenders.filter((r) => closingPassed(r.closing, today))];
+  const interest = await interestFilter(c.env, lang, "segment", `/segments/${code}`);
   return page(
     c,
     <Layout lang={lang} title={name} dataAsOf={stats.data_as_of} active="/segments" seo={segmentSeo(seg, lang, crumbs)}>
@@ -92,6 +94,8 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
           <a href={`/tenders?segment=${code}`} class="btn btn-primary">{t(lang, "segment.all_open", { n: n(seg.open_tenders.length) })}</a>
           <a href={`/data/feeds/segment/${code}/tenders.xml`} class="btn">{t(lang, "feeds.button_tenders")}</a>
         </>} />
+
+      <InterestPanel lang={lang} filter={interest} />
 
       <Panel title={t(lang, "segment.open")} count={n(seg.open_tenders.length)}>
       {open.length ? (

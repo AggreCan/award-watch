@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from pathlib import Path
 
 from awardwatch_pipeline import nightly, resilience, search_console as sc, views_report as vrep, views_rollup as vr
 
@@ -160,3 +161,28 @@ def test_the_run_status_carries_the_report_and_only_failed_needs_attention(tmp_p
     assert nightly.main(["status", "--db", str(db), "--views-report-outcome", str(tmp_path / "report.txt"),
                          "--out", str(out)]) == 0
     assert json.loads(out.read_text(encoding="utf-8"))["views_report"] == "not due"
+
+
+def test_the_report_carries_the_alert_sign_ups_and_the_public_line_does_not(tmp_path):
+    summary, search = write_files(tmp_path)
+    out = tmp_path / "out"
+    assert vrep.run(out, "2026-10", date(2026, 11, 1), summary, search, interest={"n": 1234, "live": 1200}) == "written"
+    text = (out / "report-2026-10.md").read_text(encoding="utf-8")
+    section = text.split("## Alert sign-ups\n\n", 1)[1].split("\n## ", 1)[0]
+    assert section.startswith("1,234 sign-ups when this report was written, 1,200 of them not unsubscribed.")
+    assert text.index("## Top pages by people") < text.index("## Alert sign-ups") < text.index("## Definitions")
+    assert "- Alert sign-ups: rows of the interest table" in text
+    assert "sign-up" not in (out / "summary_line.txt").read_text(encoding="utf-8")
+    assert vrep.run(out, "2026-10", date(2026, 11, 1), summary, search) == "written"
+    assert "## Alert sign-ups\n\nNot counted. The forms database could not be read" in (
+        out / "report-2026-10.md").read_text(encoding="utf-8")
+
+
+def test_the_report_command_reads_the_count_wrangler_wrote(tmp_path):
+    summary, search = write_files(tmp_path)
+    out = tmp_path / "out"
+    answer = Path(__file__).parent / "fixtures" / "d1_interest_count.json"
+    assert nightly.main(["views-report", "--summary", str(summary), "--search", str(search), "--out", str(out),
+                         "--today", "2026-11-01", "--interest", str(answer)]) == 0
+    assert "12 sign-ups when this report was written, 11 of them not unsubscribed." in (
+        out / "report-2026-10.md").read_text(encoding="utf-8")

@@ -21,6 +21,12 @@ a person who came on three days counts three times. The same holds for
 visits. Levels (feed subscribers, organizations, records) are not summed:
 each month shows the last reading in it (the largest daily figure for feed
 subscribers).
+
+Alert sign-ups: the count the nightly run read from the forms database just
+before the report (rows of the interest table, one per address and saved
+filter, and how many have not unsubscribed), as it stood when the report was
+written. It stays out of the one-line summary, which goes to the public
+LAST_RUN.md.
 """
 
 from __future__ import annotations
@@ -169,7 +175,15 @@ def _days(n: int, month: str) -> str:
     return f"{n} of {(last - first).days + 1}"
 
 
-def render(month: str, months: list[Month], written: date) -> str:
+def interest_text(interest: dict[str, int] | None) -> str:
+    if not interest:
+        return "Not counted. The forms database could not be read when this report was written.\n"
+    return (f"{_n(interest['n'])} sign-ups when this report was written, {_n(interest['live'])} of them not "
+            "unsubscribed. A sign-up is one address with one saved filter, so an address that saved two filters "
+            "counts twice.\n")
+
+
+def render(month: str, months: list[Month], written: date, interest: dict[str, int] | None = None) -> str:
     cols = [m.month for m in months]
     head = "| Figure | " + " | ".join(cols) + " |\n|---|" + "---:|" * len(cols) + "\n"
 
@@ -211,6 +225,7 @@ def render(month: str, months: list[Month], written: date) -> str:
         "Months are UTC calendar months. n/a means not counted.\n\n"
         f"## The month and the three before it\n\n{table}\n"
         f"## Top pages by people, {month}\n\n{pages}\n"
+        f"## Alert sign-ups\n\n{interest_text(interest)}\n"
         "## Definitions\n\n"
         "- Days in the roll-up: days with a row in views/summary.csv (a day the Worker counted nothing has none).\n"
         "- Page views by people: responses to page routes below status 400 that the Worker marked human "
@@ -229,6 +244,9 @@ def render(month: str, months: list[Month], written: date) -> str:
         "- Organizations, records: the last reading taken in the month, the site's counts after the nightly run "
         "(records: award notices, contract history records, published contracts, grant agreements and lobbying "
         "communications, each counted in its own source and the five counts added).\n"
+        "- Alert sign-ups: rows of the interest table of the forms database (the \"Get alerts by email\" form) "
+        "read by the nightly run just before this report, and how many of them have no unsubscribe date. A count, "
+        "not a monthly figure.\n"
     )
 
 
@@ -249,9 +267,11 @@ def _read_search(path: Path | None) -> list[dict[str, str]]:
     return [r for r in csv.DictReader(io.StringIO(text)) if isinstance(r.get("date"), str)]
 
 
-def run(out_dir: Path, month: str, today: date, summary_path: Path, search_path: Path | None = None) -> str:
+def run(out_dir: Path, month: str, today: date, summary_path: Path, search_path: Path | None = None,
+        interest: dict[str, int] | None = None) -> str:
     """Write report-<month>.md and summary_line.txt in out_dir. Returns "written",
-    "waiting" (the month's last day is not rolled up yet), "no data" or "failed"; never raises."""
+    "waiting" (the month's last day is not rolled up yet), "no data" or "failed"; never raises.
+    interest is the count of alert sign-ups (nightly.interest_counts), None when it was not read."""
     try:
         first, last = month_bounds(month)
         if today <= last:
@@ -272,7 +292,8 @@ def run(out_dir: Path, month: str, today: date, summary_path: Path, search_path:
         search = _read_search(search_path)
         months = [gather(m, summary, search) for m in previous_months(month)]
         out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / f"report-{month}.md").write_text(render(month, months, today), encoding="utf-8", newline="\n")
+        report = render(month, months, today, interest)
+        (out_dir / f"report-{month}.md").write_text(report, encoding="utf-8", newline="\n")
         (out_dir / "summary_line.txt").write_text(summary_line(month, months[-1]) + "\n", encoding="utf-8")
         return "written"
     except Exception as exc:

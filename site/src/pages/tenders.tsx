@@ -25,6 +25,7 @@ import {
 import { ClientData, Layout, PageHead, Panel, addDays, closingPassed, noDataPage, page, todayOf } from "../layout";
 import { pageSeo } from "../seo";
 import { FeedLinks, nationalFeedPath } from "./feeds";
+import { InterestPanel, interestFilter } from "./interest";
 import { SegmentNote, TenderTable, tenderColumns } from "./shared";
 
 export const TENDER_PAGE_SIZE = 50;
@@ -199,7 +200,8 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const first = stats ? await loadOpenFirst(c.env) : null;
   if (!stats || !first) return noDataPage(c, "tenders.title");
   const today = todayOf(stats.data_as_of);
-  const q = readTenderQuery(new URL(c.req.url));
+  const url = new URL(c.req.url);
+  const q = readTenderQuery(url);
   const filtered = tenderQueryString({ ...q, page: 1 }) !== "";
   const complete = first.rows.length >= first.total;
   // The first file answers the plain list, and any view when it holds every
@@ -221,6 +223,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
     categories: Object.fromEntries(CATEGORIES.map((k) => [k, categoryLabel(lang, k)])),
   };
   const chips = activeChips(q, opts, lang);
+  const interest = await interestFilter(c.env, lang, "tenders", `/tenders${url.search}`);
 
   return page(
     c,
@@ -278,6 +281,8 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
           ))}
         </div>
       </form>
+
+      <InterestPanel lang={lang} filter={interest} />
 
       <div class="split" id="tender-split">
         <Panel title={t(lang, "tenders.list_heading")} class="list-panel"

@@ -374,6 +374,8 @@
       if (push) history.pushState(null, "", url);
       else history.replaceState(null, "", url);
     } catch (e) { /* a sandboxed page may refuse; the view still updates */ }
+    // The alerts block (interest.js) saves the address shown.
+    try { document.dispatchEvent(new CustomEvent("aw:view")); } catch (e) { /* the form still reads the address when it is sent */ }
   }
 
   function applyForm() {
