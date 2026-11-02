@@ -2,8 +2,9 @@
 
 Copyright 2026 Award Watch. All rights reserved.
 
-This repository is published so that anyone can inspect how the Award Watch site gathers, matches and presents its records. Publication is not a
-grant of rights to reuse it.
+This repository is published so that anyone can inspect how the Award Watch
+site gathers, matches and presents its records. Publication is not a grant of
+rights to reuse it.
 
 ## What you may do
 
