@@ -583,11 +583,14 @@ page in either case.
 
 The Checkout Session is `mode=subscription` with the chosen price and
 quantity 1, `client_reference_id` and `subscription_data[metadata][user_id]`
-set to the user id, `automatic_tax[enabled]=true`, the user's address in
-`customer_email` (or, for a returning subscriber, the stored `customer` with
-`customer_update[address]=auto`), `success_url` `/account?billing=done`,
-`cancel_url` `/account/billing`, and `locale` `en` or `fr-CA` from the page
-language. The portal session names the stored customer, returns to
+set to the user id, the user's address in `customer_email` (or, for a
+returning subscriber, the stored `customer`), `success_url`
+`/account?billing=done`, `cancel_url` `/account/billing`, and `locale` `en`
+or `fr-CA` from the page language. No `automatic_tax` and no
+`customer_update[address]`: under Managed Payments the service computes and
+collects the tax itself from the address Checkout asks for, and its
+documentation lists both among the parameters an integration must not
+send. The portal session names the stored customer, returns to
 `/account/billing` and opens in `en-CA` or `fr-CA`.
 
 The site's Content-Security-Policy keeps `form-action 'self'` on every page,

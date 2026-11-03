@@ -332,8 +332,10 @@ export function stripeSource(env: Env): PaymentSource | null {
     // user id rides as client_reference_id (checkout.session.completed) and
     // in the subscription's metadata (every later invoice and subscription
     // notice), so a notice that arrives before the checkout's still finds
-    // its user. Stripe Tax computes the tax from the address Checkout asks
-    // for; a returning customer's address may be updated there.
+    // its user. The account sells under Managed Payments, where the service
+    // computes and collects the tax itself from the address Checkout asks
+    // for: automatic_tax and customer_update[address] are among the
+    // parameters it has no use for, so neither is sent.
     async checkoutUrl(input: CheckoutInput): Promise<string | null | "busy"> {
       if (!offer) return null;
       const form: [string, string][] = [
@@ -342,12 +344,11 @@ export function stripeSource(env: Env): PaymentSource | null {
         ["line_items[0][quantity]", "1"],
         ["client_reference_id", input.userId],
         ["subscription_data[metadata][user_id]", input.userId],
-        ["automatic_tax[enabled]", "true"],
         ["success_url", input.successUrl],
         ["cancel_url", input.cancelUrl],
         ["locale", CHECKOUT_LOCALE[input.lang]],
       ];
-      if (input.customerId) form.push(["customer", input.customerId], ["customer_update[address]", "auto"]);
+      if (input.customerId) form.push(["customer", input.customerId]);
       else form.push(["customer_email", input.email]);
       const idempotencyKey = `checkout-${input.userId}-${Math.floor(Date.now() / CHECKOUT_WINDOW_MS)}`;
       let res = await call<J>(key, "POST", "/checkout/sessions", "checkout session", form, idempotencyKey);

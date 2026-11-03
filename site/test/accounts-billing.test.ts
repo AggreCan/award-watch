@@ -416,7 +416,6 @@ describe("checkout and the portal", () => {
       "line_items[0][quantity]": "1",
       client_reference_id: await userId(email),
       "subscription_data[metadata][user_id]": await userId(email),
-      "automatic_tax[enabled]": "true",
       success_url: "http://localhost/account?billing=done",
       cancel_url: "http://localhost/account/billing",
       locale: "en",
@@ -433,10 +432,14 @@ describe("checkout and the portal", () => {
     expect(res.status).toBe(303);
     const form = Object.fromEntries(sent[0].form);
     expect(form).toMatchObject({
-      "line_items[0][price]": "price_monthlyTEST", locale: "fr-CA", customer: cus, "customer_update[address]": "auto",
+      "line_items[0][price]": "price_monthlyTEST", locale: "fr-CA", customer: cus,
       success_url: "http://localhost/account?billing=done&lang=fr", cancel_url: "http://localhost/account/billing?lang=fr",
     });
     expect(form.customer_email).toBeUndefined();
+    // Managed Payments computes the tax itself: the two parameters it has no
+    // use for are never sent.
+    expect(form["automatic_tax[enabled]"]).toBeUndefined();
+    expect(form["customer_update[address]"]).toBeUndefined();
     expect(JSON.stringify(form)).not.toContain(email);
   });
 
