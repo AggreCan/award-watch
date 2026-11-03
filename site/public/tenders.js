@@ -6,9 +6,14 @@
    script fetches the full list, /data/tenders/open.json, once, renders the
    view the URL asks for, and then answers every filter, sort and page change
    in memory, typed text after a short pause, writing the state back into the
-   URL so the view can be shared. The filter rules match filterTenders() in
-   src/pages/tenders.tsx, which the server uses when its small file holds
-   every open notice; the tests hold that function to them.
+   URL so the view can be shared. The view's reading, address and filter
+   rules live in tender-query.js, the browser's copy of readTenderQuery(),
+   tenderQueryString() and filterTenders() in src/pages/tenders.tsx (which
+   the server uses when its small file holds every open notice); the tests
+   hold the two to the same answers. Category, segment and province may
+   each carry several values (a list saved on the Email lists page opens
+   so): each value has its own chip, and the key's select reads "Several
+   (n)" until another value is chosen there.
 
    The list is a split view from 1200 px: a click, j or k selects a row and
    the panel beside the list shows that notice, read from its detail shard
@@ -38,7 +43,8 @@
    draws comes from the page's <script type="application/json" id="i18n">
    block or from the toolbar's own labels, so the script holds no copy of
    its own in either language. The page loads it as a module. */
-import { addDays, closingInstant, closingParts, closingPassed, closingState, countdownText, easternDay } from "./closing.js";
+import { closingInstant, closingParts, closingPassed, closingState, countdownText } from "./closing.js";
+import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readSearch } from "./tender-query.js";
 
 (function () {
   var form = document.getElementById("tender-filters");
@@ -65,9 +71,6 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, cou
   var SOON_DAYS = 7;
   var TYPING_MS = 250;
   var DESCRIPTION_CHARS = 600;
-  var FIELDS = ["q", "category", "segment", "code", "province", "buyer", "type", "method", "closing"];
-  var CODE_RE = /^[0-9]{2,8}$/;
-  var BUYER_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
   var REF_RE = /^[a-z0-9._-]{1,80}$/;
   var NUMBER = null;
   try { NUMBER = new Intl.NumberFormat(LOCALE); } catch (e) { NUMBER = null; }
@@ -109,9 +112,6 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, cou
     var other = LANG === "fr" ? en : fr;
     return Array.isArray(mine) && mine.length ? mine : Array.isArray(other) ? other : [];
   }
-  function fold(s) {
-    return String(s || "").normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
-  }
   // As closingTime() and closingText() in src/closing.ts: the time in the
   // page's language ("14:00", "14 h 00") with its zone (Eastern time, "ET",
   // when the value names none), after the date.
@@ -127,8 +127,6 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, cou
     var time = closingTime(c);
     return time ? p.day + " " + time : p.day;
   }
-  // The Eastern date now, which the closing filter counts from.
-  function today() { return easternDay(Date.now()); }
   // A notice's state now: "closed" once its closing time has passed,
   // "closing" within the window, else "open".
   function stateOf(closing) { return closingState(closing, Date.now(), SOON_DAYS); }
@@ -154,109 +152,58 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, cou
 
   // -- state ------------------------------------------------------------------
 
-  // The same reading as readTenderQuery() on the server: a value the filter
-  // cannot use reads as no filter.
-  function clean(raw) {
-    var s = {};
-    s.q = (raw.q || "").trim().slice(0, 100);
-    s.category = /^(SRV|GD|CNST|SRVTGD)$/.test((raw.category || "").toUpperCase()) ? raw.category.toUpperCase() : "";
-    s.segment = /^\d{2}$/.test(raw.segment || "") ? raw.segment : "";
-    s.code = CODE_RE.test(raw.code || "") ? raw.code : "";
-    s.province = /^(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)$/.test((raw.province || "").toUpperCase()) ? raw.province.toUpperCase() : "";
-    var buyer = (raw.buyer || "").toLowerCase();
-    s.buyer = BUYER_RE.test(buyer) && buyer.length <= 80 ? buyer : "";
-    s.type = (raw.type || "").slice(0, 200);
-    s.method = (raw.method || "").slice(0, 200);
-    s.closing = raw.closing === "7" || raw.closing === "30" ? raw.closing : "";
-    s.sort = raw.sort === "published" ? "published" : "closing";
-    // The Canada-wide notices stay in unless the address or the box says otherwise.
-    s.national = raw.national !== false;
-    var page = parseInt(raw.page || "1", 10);
-    s.page = page >= 1 && page <= 10000 ? page : 1;
-    return s;
-  }
-  // As readTenderQuery() on the server: national=0 alone turns the
-  // Canada-wide notices out; a 1 beside it (the ticked box) keeps them.
-  function readUrl() {
-    var p = new URLSearchParams(location.search);
-    var raw = {};
-    FIELDS.concat(["sort", "page"]).forEach(function (k) { raw[k] = p.get(k) || ""; });
-    var national = p.getAll("national");
-    raw.national = national.length === 0 || national.indexOf("1") >= 0;
-    return clean(raw);
-  }
+  function readUrl() { return readSearch(location.search); }
   var nationalBox = form.querySelector('input[type="checkbox"][name="national"]');
+  // A key with several values shows "Several (n)" in its select; choosing
+  // anything else there replaces them with that choice.
+  function multiSelect(k) { return form.querySelector('select[name="' + k + '"]'); }
   function readForm() {
     var raw = {};
     FIELDS.concat(["sort"]).forEach(function (k) {
+      if (MULTI.indexOf(k) >= 0) {
+        var select = multiSelect(k);
+        var opt = select ? select.options[select.selectedIndex] : null;
+        raw[k] = opt && opt.hasAttribute("data-several") ? state[k].slice() : select && select.value ? [select.value] : [];
+        return;
+      }
       var field = form.elements.namedItem(k);
       raw[k] = field && "value" in field ? field.value : "";
     });
     raw.national = nationalBox ? nationalBox.checked : true;
     return clean(raw);
   }
+  function writeMulti(k) {
+    var select = multiSelect(k);
+    if (!select) return;
+    var values = state[k];
+    var several = select.querySelector("option[data-several]");
+    if (values.length > 1) {
+      if (!several) {
+        several = document.createElement("option");
+        several.value = "";
+        several.setAttribute("data-several", "");
+        select.insertBefore(several, select.firstChild);
+      }
+      several.textContent = tx("tenders.several", { n: num(values.length) });
+      several.selected = true;
+    } else {
+      if (several) select.removeChild(several);
+      select.value = values[0] || "";
+    }
+  }
   function writeForm() {
     FIELDS.concat(["sort"]).forEach(function (k) {
+      if (MULTI.indexOf(k) >= 0) return writeMulti(k);
       var field = form.elements.namedItem(k);
       if (field && "value" in field) field.value = state[k] || (k === "sort" ? "closing" : "");
     });
     if (nationalBox) nationalBox.checked = state.national;
   }
-  function query(s, page) {
-    var p = new URLSearchParams();
-    FIELDS.forEach(function (k) { if (s[k]) p.set(k, s[k]); });
-    if (s.province && !s.national) p.set("national", "0");
-    if (s.sort !== "closing") p.set("sort", s.sort);
-    if (page > 1) p.set("page", String(page));
-    var q = p.toString();
-    return q ? "?" + q : "";
-  }
+  function query(s, page) { return queryString(s, page); }
 
   // -- filtering --------------------------------------------------------------
 
-  function filter(all, s) {
-    var words = fold(s.q).split(/\s+/).filter(Boolean);
-    var now = Date.now();
-    var until = s.closing ? addDays(today(), Number(s.closing)) : "";
-    var out = all.filter(function (r) {
-      if (s.category && r.category.indexOf(s.category) < 0) return false;
-      if (s.segment && r.segments.indexOf(s.segment) < 0) return false;
-      if (s.code && !(r.codes || []).some(function (c) { return String(c).indexOf(s.code) === 0; })) return false;
-      if (s.province && r.provinces.indexOf(s.province) < 0 && !(s.national && !r.provinces.length)) return false;
-      if (s.buyer && r.buyer_id !== s.buyer) return false;
-      if (s.type && r.notice_type_en !== s.type) return false;
-      if (s.method && r.method_en !== s.method) return false;
-      if (until) {
-        var day = (r.closing || "").slice(0, 10);
-        if (!day || day > until || closingPassed(r.closing, now)) return false;
-      }
-      if (words.length) {
-        var text = fold((r.title_en || "") + " " + (r.title_fr || "") + " " + (r.excerpt_en || "") + " " + (r.excerpt_fr || "") + " " +
-          r.reference + " " + (r.reference_published || ""));
-        for (var i = 0; i < words.length; i++) if (text.indexOf(words[i]) < 0) return false;
-      }
-      return true;
-    });
-    function byReference(a, b) { return a.reference < b.reference ? -1 : a.reference > b.reference ? 1 : 0; }
-    if (s.sort === "published") {
-      out.sort(function (a, b) {
-        var x = a.published || "", y = b.published || "";
-        return x < y ? 1 : x > y ? -1 : byReference(a, b);
-      });
-    } else {
-      // Soonest first; a notice whose closing time has passed, then one with
-      // no closing date, go last (filterTenders() orders them the same way).
-      var ranks = {};
-      out.forEach(function (r) { ranks[r.reference] = !r.closing ? 2 : closingPassed(r.closing, now) ? 1 : 0; });
-      out.sort(function (a, b) {
-        var ra = ranks[a.reference], rb = ranks[b.reference];
-        if (ra !== rb) return ra - rb;
-        var x = a.closing || "￿", y = b.closing || "￿";
-        return x < y ? -1 : x > y ? 1 : byReference(a, b);
-      });
-    }
-    return out;
-  }
+  function filter(all, s) { return filterRows(all, s, Date.now()); }
 
   // -- rendering (the same markup as TenderTable in src/pages/shared.tsx) -----
 
@@ -373,10 +320,11 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, cou
     return a;
   }
 
-  // The active filters as chips: the toolbar's own label for the filter and
-  // the value as its control shows it (without the count in brackets).
+  // The active filters as chips, one a value: the toolbar's own label for
+  // the filter and the value as its control shows it (without the count in
+  // brackets).
   function fieldLabel(name) {
-    var field = form.elements.namedItem(name);
+    var field = MULTI.indexOf(name) >= 0 ? multiSelect(name) : form.elements.namedItem(name);
     var label = field && field.closest ? field.closest("label") : null;
     var span = label ? label.querySelector(".field-label") : null;
     return span ? span.textContent : name;
@@ -390,19 +338,45 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, cou
     }
     return state[name];
   }
+  function optionText(name, value) {
+    var select = multiSelect(name);
+    var opts = select ? select.options : [];
+    for (var i = 0; i < opts.length; i++) {
+      if (opts[i].value === value && !opts[i].hasAttribute("data-several")) return opts[i].textContent.replace(/\s*\([\d\s.,  ]+\)$/, "");
+    }
+    return value;
+  }
+  // Each active filter as [key, value shown, the state without it].
+  function activeFilters() {
+    var out = [];
+    var copy = function () {
+      var without = {};
+      Object.keys(state).forEach(function (x) { without[x] = state[x]; });
+      return without;
+    };
+    FIELDS.forEach(function (k) {
+      if (MULTI.indexOf(k) >= 0) {
+        state[k].forEach(function (v) {
+          var without = copy();
+          without[k] = state[k].filter(function (x) { return x !== v; });
+          out.push([k, optionText(k, v), without]);
+        });
+      } else if (state[k]) {
+        var without = copy();
+        without[k] = "";
+        out.push([k, fieldValue(k), without]);
+      }
+    });
+    return out;
+  }
   function renderChips() {
     if (!chipsEl) return;
     var label = chipsEl.querySelector(".chips-label");
     chipsEl.textContent = "";
     if (label) chipsEl.appendChild(label);
-    var any = false;
-    FIELDS.forEach(function (k) {
-      if (!state[k]) return;
-      any = true;
-      var without = {};
-      Object.keys(state).forEach(function (x) { without[x] = state[x]; });
-      without[k] = "";
-      var value = fieldValue(k);
+    var active = activeFilters();
+    active.forEach(function (f) {
+      var k = f[0], value = f[1], without = f[2];
       var chip = el("a", "fchip");
       chip.href = "/tenders" + query(without, 1);
       chip.setAttribute("aria-label", tx("tenders.remove_filter", { name: value }));
@@ -414,7 +388,7 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, cou
       chip.appendChild(x);
       chip.addEventListener("click", function (e) {
         e.preventDefault();
-        state[k] = "";
+        state[k] = without[k];
         state.page = 1;
         writeForm();
         selected = null;
@@ -422,10 +396,10 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, cou
       });
       chipsEl.appendChild(chip);
     });
-    chipsEl.hidden = !any;
+    chipsEl.hidden = !active.length;
     if (foldEl) {
-      var active = FIELDS.filter(function (k) { return !!state[k]; }).length;
-      foldEl.textContent = active === 0 ? tx("filters.fold") : txn("filters.fold_one", "filters.fold_many", active, { n: num(active) });
+      var n = active.length;
+      foldEl.textContent = n === 0 ? tx("filters.fold") : txn("filters.fold_one", "filters.fold_many", n, { n: num(n) });
     }
   }
 
@@ -480,6 +454,8 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, cou
 
   function applyForm() {
     state = readForm();
+    // A value chosen where "Several (n)" stood replaces them, and the select drops that line.
+    MULTI.forEach(writeMulti);
     state.page = 1;
     selected = null;
     render(false);
@@ -676,6 +652,11 @@ import { addDays, closingInstant, closingParts, closingPassed, closingState, cou
     rows = data;
     byRef = {};
     rows.forEach(function (r) { byRef[r.reference.toLowerCase()] = r; });
+    // The values a key carries beyond its select ride as hidden fields for
+    // the form without the script; from here the state keeps them.
+    Array.prototype.forEach.call(form.querySelectorAll("input[type=hidden][data-several]"), function (input) {
+      input.parentNode.removeChild(input);
+    });
     form.addEventListener("submit", function (e) { e.preventDefault(); applyForm(); });
     form.addEventListener("change", function (e) {
       if (e.target && (e.target.name === "q" || e.target.name === "code")) return;

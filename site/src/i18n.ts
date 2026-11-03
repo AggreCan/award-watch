@@ -56,7 +56,7 @@ const STRINGS = {
   "rail.ending_3m_full": { en: "Ending within 3 months", fr: "Fin d'ici 3 mois" },
   "rail.browse": { en: "Browse", fr: "Parcourir" },
   "rail.lists": { en: "Your lists", fr: "Vos listes" },
-  "rail.email_list": { en: "Email list", fr: "Liste de diffusion" },
+  "rail.email_lists": { en: "Email lists", fr: "Listes de diffusion" },
   "rail.alerts_soon": { en: "Alerts: soon", fr: "Alertes : bientôt" },
   "footer.sources": {
     en: "Records from CanadaBuys, open.canada.ca and the Registry of Lobbyists.",
@@ -71,7 +71,6 @@ const STRINGS = {
   "footer.methodology": { en: "Methodology", fr: "Méthodologie" },
   "footer.download": { en: "Download the data", fr: "Télécharger les données" },
   "footer.feeds": { en: "Feeds", fr: "Fils Atom" },
-  "footer.alerts": { en: "Alerts", fr: "Alertes" },
   "footer.watchlist": { en: "Watchlist", fr: "Liste de suivi" },
   "footer.corrections": { en: "Report a correction", fr: "Signaler une correction" },
   "footer.cite": { en: "Cite", fr: "Citer" },
@@ -376,6 +375,8 @@ const STRINGS = {
   "tenders.closing_days": { en: "Within {n} days", fr: "D'ici {n} jours" },
   "tenders.any": { en: "All", fr: "Tous" },
   "tenders.any_f": { en: "All", fr: "Toutes" },
+  // A filter's select when the address gives it several values (each has its chip).
+  "tenders.several": { en: "Several ({n})", fr: "Plusieurs ({n})" },
   "tenders.sort": { en: "Sort", fr: "Trier" },
   "tenders.sort_closing": { en: "Closing soonest", fr: "Clôture la plus proche" },
   "tenders.sort_published": { en: "Newest published", fr: "Publication la plus récente" },
@@ -1691,6 +1692,8 @@ const STRINGS = {
   },
   "interest.follow_some": { en: "New tender notices matching the filters above", fr: "Nouveaux avis d'appel d'offres correspondant aux filtres ci-dessus" },
   "interest.label_expiring": { en: "Contracts entering the {n}-month window {scope}", fr: "Contrats qui entrent dans la période de {n} mois {scope}" },
+  // Beside the provinces when the "Include Canada-wide or not stated" box is unticked.
+  "interest.national_out": { en: "Canada-wide or not stated: left out", fr: "Tout le Canada ou non indiqué : exclus" },
   "interest.scope_all": { en: "for every buyer and segment", fr: "pour tous les acheteurs et segments" },
   "interest.scope_buyer": { en: "for {buyer}", fr: "pour {buyer}" },
   "interest.scope_segment": { en: "in segment {segment}", fr: "dans le segment {segment}" },
@@ -1704,10 +1707,10 @@ const STRINGS = {
     en: "New tender notices and award notices in segment {segment}",
     fr: "Nouveaux avis d'appel d'offres et d'attribution dans le segment {segment}",
   },
-  "alerts.title": { en: "Email Alerts", fr: "Alertes par courriel" },
+  "alerts.title": { en: "Email Lists", fr: "Listes de diffusion" },
   "alerts.lead": {
-    en: "Alerts by email are being built. Register an address now, and one message will announce them.",
-    fr: "Les alertes par courriel sont en préparation. Inscrivez une adresse dès maintenant, et un seul message les annoncera.",
+    en: "Join one list or several with one address. Alerts by email are being built, and one message will announce them.",
+    fr: "Inscrivez une adresse à une liste ou à plusieurs. Les alertes par courriel sont en préparation, et un seul message les annoncera.",
   },
   "alerts.toc_cover": { en: "What Alerts Will Cover", fr: "Ce que couvriront les alertes" },
   "alerts.cover_intro": { en: "An alert follows one saved filter and reports what is new in it.", fr: "Une alerte suit un filtre enregistré et signale ce qui y est nouveau." },
@@ -1729,16 +1732,16 @@ const STRINGS = {
   },
   "alerts.toc_now": { en: "Until Then", fr: "D'ici là" },
   "alerts.now": {
-    en: "Nothing is sent yet. The form keeps the address and the filter. One message will announce the alerts, with a link to unsubscribe, and nothing else is sent before it. The address is never shown or shared.",
-    fr: "Rien n'est encore envoyé. Le formulaire conserve l'adresse et le filtre. Un seul message annoncera les alertes, avec un lien de désabonnement, et rien d'autre n'est envoyé d'ici là. L'adresse n'est jamais affichée ni communiquée.",
+    en: "Nothing is sent yet. The form keeps the address and each list chosen. One message will announce the alerts, with a link to unsubscribe, and nothing else is sent before it. The address is never shown or shared.",
+    fr: "Rien n'est encore envoyé. Le formulaire conserve l'adresse et chaque liste choisie. Un seul message annoncera les alertes, avec un lien de désabonnement, et rien d'autre n'est envoyé d'ici là. L'adresse n'est jamais affichée ni communiquée.",
   },
   "alerts.privacy": {
     en: "The {privacy} page says what the form keeps and how to have the address removed.",
     fr: "La page {privacy} indique ce que conserve le formulaire et comment faire retirer l'adresse.",
   },
   "alerts.register_intro": {
-    en: "This form saves the widest alert, every new tender notice. A narrower one is saved from the page that shows it.",
-    fr: "Ce formulaire enregistre l'alerte la plus large, chaque nouvel avis d'appel d'offres. Une alerte plus précise s'enregistre depuis la page qui l'affiche.",
+    en: "Tick each list to join. The filtered list takes any mix of the categories, segments and provinces under it. A list for one buyer, organization or segment, or another view of contracts ending soon, is saved from the page that shows it.",
+    fr: "Cochez chaque liste qui vous intéresse. La liste filtrée accepte toute combinaison des catégories, segments et provinces proposés en dessous. Une liste pour un acheteur, une organisation ou un segment, ou une autre vue des contrats prenant fin bientôt, s'enregistre depuis la page qui l'affiche.",
   },
   "alerts.toc_where": { en: "Where the Form Appears", fr: "Où trouver le formulaire" },
   "alerts.where_tenders": {
@@ -1758,6 +1761,23 @@ const STRINGS = {
   "alerts.link_profiles": { en: "organization profile", fr: "profil d'organisation" },
   "alerts.link_buyers": { en: "buyer page", fr: "page d'acheteur" },
   "alerts.link_segments": { en: "segment page", fr: "page de segment" },
+  // The chooser on the Email lists page (pages/alerts.tsx): a box per list, the
+  // filters of the matching list under its box, one address and one button.
+  "lists.title": { en: "Choose Your Lists", fr: "Choisissez vos listes" },
+  "lists.legend": { en: "Lists", fr: "Listes" },
+  "lists.matching": { en: "New tender notices matching filters", fr: "Nouveaux avis d'appel d'offres correspondant à des filtres" },
+  "lists.hint_none": {
+    en: "With no filter chosen, this list is every new tender notice.",
+    fr: "Sans filtre choisi, cette liste comprend chaque nouvel avis d'appel d'offres.",
+  },
+  "lists.hint_keys": {
+    en: "Hold Ctrl (Cmd on a Mac) to choose several segments or provinces.",
+    fr: "Maintenez la touche Ctrl (Cmd sur un Mac) pour choisir plusieurs segments ou provinces.",
+  },
+  "lists.submit": { en: "Sign me up", fr: "Inscrivez-moi" },
+  // Above the list of the lists saved, so a mistyped address shows.
+  "lists.done": { en: "Saved for {email}:", fr: "C'est noté pour {email} :" },
+  "lists.err_none": { en: "Choose at least one list.", fr: "Choisissez au moins une liste." },
 
   // -- citing -------------------------------------------------------------------------------------
   "cite.title": { en: "How to Cite", fr: "Comment citer" },

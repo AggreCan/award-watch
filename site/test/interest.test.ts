@@ -1,8 +1,10 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import nightly from "../../.github/workflows/nightly.yml?raw";
 import { app } from "../src/index";
 import { bucketFor } from "../src/limits";
 import { normalizeEmail } from "../src/pages/interest";
+import { DESCRIPTION_MAX } from "../src/seo";
 import { routeTemplate } from "../src/views";
 import { testEnv } from "./assets";
 
@@ -19,6 +21,21 @@ const post = (fields: Record<string, string>, headers: Record<string, string> = 
     e,
   );
 const get = (path: string) => app.request(path, {}, testEnv());
+// A post of the Email lists page's chooser: its fields as the form sends them,
+// a field repeated for each box ticked and each option chosen. The
+// Canada-wide box sends national=0 from a hidden field and national=1 when ticked.
+const choose = (fields: [string, string][], headers: Record<string, string> = {}, e: object = testEnv()) =>
+  app.request(
+    "/interest",
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", "cf-connecting-ip": `203.0.113.${nextAddress++}`, ...headers },
+      body: new URLSearchParams([
+        ["place", "lists"], ["national", "0"], ...fields, ...(fields.some(([k]) => k === "website") ? [] : [["website", ""]]),
+      ]).toString(),
+    },
+    e,
+  );
 const text = async (path: string) => (await get(path)).text();
 
 const nbsp = (s: string) => s.replace(/[  ]/g, " ");
@@ -272,34 +289,45 @@ describe("POST /interest", () => {
 });
 
 describe("the alerts page and the privacy page", () => {
-  it("explain alerts in both languages and carry the general form", async () => {
+  it("explain alerts in both languages, around the chooser", async () => {
     const res = await get("/alerts");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("<h1>Email Alerts</h1>");
-    // About one screen: no contents box.
-    expect(html).toContain('<div class="doc-layout doc-alone"><div class="doc">');
+    expect(html).toContain("<h1>Email Lists</h1>");
+    expect(html).toContain("<title>Email Lists | Award Watch</title>");
+    expect(html).toContain("Join one list or several with one address.");
+    // A few short sections: no contents box. The chooser comes first, the page's own action.
+    expect(html).toContain('<div class="doc-layout doc-alone"><div class="doc"><h2 id="register">Choose Your Lists</h2>');
     expect(html).toContain('<h2 id="cover">What Alerts Will Cover</h2>');
     expect(html).toContain("Contracts entering the 3-, 6- or 12-month window of contracts ending soon, for one buyer, one segment or every contract.");
     expect(html).toContain("New records naming an organization you watch: an award notice, a contract or a grant.");
-    expect(hidden(html, "kind")).toBe("tenders");
-    expect(hidden(html, "params")).toBe("/tenders");
-    expect(label(html)).toBe("Every new tender notice");
+    expect(html).toContain("The form keeps the address and each list chosen.");
     for (const href of ["/tenders", "/expiring", "/organizations", "/buyers", "/segments", "/privacy#interest"]) {
       expect(html, href).toContain(`<a href="${href}">`);
     }
-    // The Browse entry marks the page; the "soon" item under Your lists is a plain link.
-    expect(html).toContain('href="/alerts" aria-current="page"');
-    expect(html).toContain('<a class="rail-item rail-later" href="/alerts">');
+    // The Browse entry is named for the page and marks it; the "soon" item under Your lists stays a plain link.
+    expect(html).toContain('<a class="rail-item" href="/alerts" aria-current="page"><span class="rail-label">Email lists</span></a>');
+    expect(html).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Alerts: soon</span></a>');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));
-    expect(footer).toContain('<a href="/feeds">Feeds</a><a href="/alerts">Alerts</a>');
+    // The footer names the page as the rail does.
+    expect(footer).toContain('<a href="/feeds">Feeds</a><a href="/alerts">Email lists</a>');
     const fr = await get("/alerts?lang=fr");
     expect(fr.status).toBe(200);
     const french = nbsp(await fr.text());
-    expect(french).toContain("<h1>Alertes par courriel</h1>");
+    expect(french).toContain("<h1>Listes de diffusion</h1>");
+    expect(french).toContain("<title>Listes de diffusion | Award Watch</title>");
+    expect(french).toContain("Inscrivez une adresse à une liste ou à plusieurs.");
+    expect(french).toContain('<h2 id="register">Choisissez vos listes</h2>');
     expect(french).toContain("Rien n’est encore envoyé.");
-    expect(label(french)).toBe("Chaque nouvel avis d’appel d’offres");
+    expect(french).toContain('<a class="rail-item" href="/alerts" aria-current="page"><span class="rail-label">Listes de diffusion</span></a>');
     expect(french).toContain('<span class="rail-label">Alertes : bientôt</span>');
+    expect(french.slice(french.indexOf('<footer class="site-footer">'))).toContain('<a href="/alerts">Listes de diffusion</a>');
+    // The description fits a result list in both languages.
+    for (const page of [html, french]) {
+      const description = decode(page.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? "");
+      expect(description.length).toBeGreaterThan(50);
+      expect(description.length).toBeLessThanOrEqual(DESCRIPTION_MAX);
+    }
   });
 
   it("say what the interest table keeps, what it is for and how it is removed, in both languages", async () => {
@@ -316,5 +344,264 @@ describe("the alerts page and the privacy page", () => {
     expect(french).toContain('<h2 id="interest">Intérêt pour les alertes</h2>');
     expect(french).toContain("L’adresse n’est jamais affichée ni communiquée.");
     expect(french).toContain("Le retrait est gratuit.");
+  });
+});
+
+describe("the Email lists page's chooser", () => {
+  // The boxes and options as rendered: [name, value, ticked or chosen].
+  const boxes = (html: string) =>
+    [...html.matchAll(/<input type="checkbox" name="(list|category|national)" value="([^"]+)"( checked="")?/g)].map((m) => `${m[1]}=${m[2]}${m[3] ? " ticked" : ""}`);
+  const options = (html: string, name: string) =>
+    [...(html.match(new RegExp(`<select name="${name}" multiple="" size="\\d+">([\\s\\S]*?)</select>`))?.[1] ?? "").matchAll(/<option value="([^"]+)"( selected="")?>([^<]*)<\/option>/g)]
+      .map((m) => `${m[1]}${m[2] ? " chosen" : ""}: ${nbsp(decode(m[3]))}`);
+
+  it("offers three lists, none ticked, with the tender filters under the second, in both languages", async () => {
+    const html = await text("/alerts");
+    const form = html.match(/<form method="post" action="\/interest" class="lists-form" data-interest-form="" data-lists="">[\s\S]*?<\/form>/)?.[0] ?? "";
+    expect(form).toContain('<input type="hidden" name="place" value="lists"/><input type="hidden" name="lang" value="en"/>');
+    expect(boxes(form)).toEqual([
+      "list=tenders", "list=matching", "category=GD", "category=SRV", "category=CNST", "national=1 ticked", "list=expiring",
+    ]);
+    // Each list is named as its row will be; no list for every new award notice, which no kind covers.
+    expect(form).toContain('value="tenders"/><span>Every new tender notice</span>');
+    expect(form).toContain('value="matching"/><span>New tender notices matching filters</span>');
+    expect(form).toContain('value="expiring"/><span>Contracts entering the 3-month window for every buyer and segment</span>');
+    expect(form).not.toMatch(/value="awards?"/);
+    expect(form).toContain("<span>Goods</span>");
+    expect(form).toContain("<span>Include Canada-wide or not stated</span>");
+    // The segments and provinces the tenders page offers, with its counts, several at once.
+    expect(options(form, "segment")).toEqual([
+      "43: 43 Information Technology Broadcasting and Telecommunications (1)", "72: 72 Building and Facility Construction and Maintenance Services (1)",
+      "78: 78 Transportation and Storage and Mail Services (1)", "82: 82 Editorial and Design and Graphic and Fine Art Services (1)",
+    ]);
+    expect(options(form, "province")).toEqual(["BC: British Columbia (1)", "ON: Ontario (1)", "QC: Quebec (1)"]);
+    expect(form).toContain("With no filter chosen, this list is every new tender notice.");
+    // One address, the honeypot and one button, on the alerts form's line.
+    expect(form.match(/<input name="email"/g)).toHaveLength(1);
+    expect(form).toContain('<div class="hp"><label>Leave this field empty<input name="website" type="text" tabindex="-1" autocomplete="off"/></label></div>');
+    expect(form).toContain('<div class="interest-form"><label class="field interest-field"><span class="field-label">Email address</span><input name="email" type="email" required="" maxlength="254" autocomplete="email"');
+    expect(form.match(/<button/g)).toHaveLength(1);
+    expect(form).toContain('<button type="submit" class="btn btn-primary">Sign me up</button>');
+    expect(html).toContain('<script src="/interest.js" defer=""></script>');
+
+    const french = nbsp(await text("/alerts?lang=fr"));
+    const formFr = french.match(/<form method="post" action="\/interest" class="lists-form"[\s\S]*?<\/form>/)?.[0] ?? "";
+    expect(boxes(formFr)).toEqual(boxes(form));
+    expect(formFr).toContain('<input type="hidden" name="lang" value="fr"/>');
+    expect(formFr).toContain("<span>Chaque nouvel avis d’appel d’offres</span>");
+    expect(formFr).toContain("<span>Nouveaux avis d’appel d’offres correspondant à des filtres</span>");
+    expect(formFr).toContain("<span>Contrats qui entrent dans la période de 3 mois pour tous les acheteurs et segments</span>");
+    expect(formFr).toContain('<legend class="field-label">Catégorie</legend>');
+    expect(formFr).toContain("<span>Biens</span>");
+    expect(formFr).toContain('<span class="field-label">Segment UNSPSC</span>');
+    expect(formFr).toContain('<span class="field-label">Province de livraison</span>');
+    expect(options(formFr, "province")).toEqual(["BC: Colombie-Britannique (1)", "ON: Ontario (1)", "QC: Québec (1)"]);
+    expect(formFr).toContain("Maintenez la touche Ctrl (Cmd sur un Mac) pour choisir plusieurs segments ou provinces.");
+    expect(formFr).toContain('<button type="submit" class="btn btn-primary">Inscrivez-moi</button>');
+  });
+
+  it("saves one row per list ticked, with the kinds, filters and labels the pages' own blocks save", async () => {
+    const res = await choose([
+      ["lang", "en"], ["list", "tenders"], ["list", "matching"], ["list", "expiring"],
+      ["category", "GD"], ["segment", "82"], ["province", "QC"], ["national", "1"], ["email", " Three.Lists@Example.CA "],
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("set-cookie")).toBeNull();
+    const html = decode(await res.text());
+    // The page again, with the address and every list saved in place of the form.
+    expect(html).toContain("<h1>Email Lists</h1>");
+    expect(html).toContain(
+      '<div class="interest-done" role="status"><p>Saved for three.lists@example.ca:</p><ul class="lists-saved">' +
+      "<li>Every new tender notice</li>" +
+      "<li>New tender notices matching Category: Goods; UNSPSC segment: 82 Editorial and Design and Graphic and Fine Art Services; Province of delivery: Quebec</li>" +
+      "<li>Contracts entering the 3-month window for every buyer and segment</li></ul></div>",
+    );
+    expect(html).not.toContain('name="email"');
+    const stored = await rows("three.lists@example.ca");
+    expect(stored.map((r) => [r.kind, r.params, r.lang])).toEqual([
+      ["tenders", "/tenders", "en"],
+      ["tenders", "/tenders?category=GD&province=QC&segment=82", "en"],
+      ["expiring", "/expiring/3m", "en"],
+    ]);
+    expect(stored[1].label).toBe(
+      "New tender notices matching Category: Goods; UNSPSC segment: 82 Editorial and Design and Graphic and Fine Art Services; Province of delivery: Quebec",
+    );
+    expect(new Set(stored.map((r) => r.token)).size).toBe(3);
+    for (const r of stored) {
+      expect(r.token).toMatch(/^[0-9a-f]{32}$/);
+      expect(r.confirmed_at).toBeNull();
+      expect(r.unsubscribed_at).toBeNull();
+    }
+    // The block on the tenders page for the same view, and on /expiring, save the same rows: posting them adds nothing.
+    const view = await text("/tenders?province=QC&category=GD&segment=82");
+    expect(hidden(view, "params")).toBe(stored[1].params);
+    expect(label(view)).toBe(stored[1].label);
+    expect(hidden(await text("/expiring"), "params")).toBe(stored[2].params);
+    for (const [kind, params] of [["tenders", String(stored[1].params)], ["expiring", "/expiring"], ["tenders", "/tenders"]]) {
+      expect((await post({ email: "three.lists@example.ca", kind, params, lang: "en" })).status).toBe(200);
+    }
+    // The same lists from the chooser again: the same answer, nothing new.
+    const again = await choose([["lang", "en"], ["list", "expiring"], ["list", "tenders"], ["email", "three.lists@example.ca"]]);
+    expect(again.status).toBe(200);
+    expect(await rows("three.lists@example.ca")).toHaveLength(3);
+  });
+
+  it("makes the filtered list one row from several values of each filter, labelled in the form's language", async () => {
+    const res = await choose([
+      ["lang", "en"], ["list", "matching"], ["list", "awards"],
+      ["category", "SRV"], ["category", "GD"], ["category", "SRVTGD"], ["segment", "82"], ["segment", "43"], ["segment", "99"], ["segment", "82"],
+      ["province", "QC"], ["province", "ON"], ["province", "ZZ"], ["email", "several@example.ca"],
+    ]);
+    expect(res.status).toBe(200);
+    const [row, ...more] = await rows("several@example.ca");
+    expect(more).toHaveLength(0);
+    // Keys sorted, each key's values in the page's order, once; the box unticked, so national=0 beside the provinces, and the label says so.
+    expect(row.params).toBe("/tenders?category=GD&category=SRV&national=0&province=ON&province=QC&segment=43&segment=82");
+    expect(row.label).toBe(
+      "New tender notices matching Category: Goods or Services; " +
+      "UNSPSC segment: 43 Information Technology Broadcasting and Telecommunications or 82 Editorial and Design and Graphic and Fine Art Services; " +
+      "Province of delivery: Ontario or Quebec; Canada-wide or not stated: left out",
+    );
+    const fr = await choose([
+      ["lang", "fr"], ["list", "matching"], ["category", "CNST"], ["category", "GD"], ["category", "SRV"], ["segment", "43"], ["province", "BC"],
+      ["national", "1"], ["email", "plusieurs@example.ca"],
+    ]);
+    expect(fr.status).toBe(200);
+    const [french] = await rows("plusieurs@example.ca");
+    expect(french.lang).toBe("fr");
+    expect(french.params).toBe("/tenders?category=GD&category=SRV&category=CNST&province=BC&segment=43");
+    expect(nbsp(String(french.label))).toBe(
+      "Nouveaux avis d’appel d’offres correspondant à Catégorie : Biens, Services ou Construction; " +
+      "Segment UNSPSC : 43 Technologies de l’information, radiodiffusion et télécommunications; Province de livraison : Colombie-Britannique",
+    );
+    expect(nbsp(decode(await fr.text()))).toContain("<p>C’est noté pour plusieurs@example.ca :</p>");
+  });
+
+  it("names the Canada-wide notices in the label when they are left out, so two lists never share a label", async () => {
+    // [lang, box ticked, params, label]
+    const cases: [string, boolean, string, string][] = [
+      ["en", true, "/tenders?province=QC", "New tender notices matching Province of delivery: Quebec"],
+      ["en", false, "/tenders?national=0&province=QC", "New tender notices matching Province of delivery: Quebec; Canada-wide or not stated: left out"],
+      ["fr", true, "/tenders?province=QC", "Nouveaux avis d’appel d’offres correspondant à Province de livraison : Québec"],
+      ["fr", false, "/tenders?national=0&province=QC",
+        "Nouveaux avis d’appel d’offres correspondant à Province de livraison : Québec; Tout le Canada ou non indiqué : exclus"],
+    ];
+    for (const [lang, ticked, params, expected] of cases) {
+      const email = `national.${lang}.${ticked ? "in" : "out"}@example.ca`;
+      const res = await choose([["lang", lang], ["list", "matching"], ["province", "QC"], ...(ticked ? [["national", "1"] as [string, string]] : []), ["email", email]]);
+      expect(res.status, email).toBe(200);
+      const [row] = await rows(email);
+      expect(row.params, email).toBe(params);
+      expect(nbsp(String(row.label)), email).toBe(expected);
+    }
+    // The block on the tenders page names the view the same way.
+    expect(label(await text("/tenders?province=QC&national=0"))).toBe("New tender notices matching Province of delivery: Quebec; Canada-wide or not stated: left out");
+    expect(label(await text("/tenders?province=QC"))).toBe("New tender notices matching Province of delivery: Quebec");
+  });
+
+  it("saves the filtered list with no filter chosen as every new tender notice, once", async () => {
+    const both = await choose([["lang", "en"], ["list", "tenders"], ["list", "matching"], ["email", "widest@example.ca"]]);
+    expect(both.status).toBe(200);
+    const html = await both.text();
+    expect(html).toContain('<ul class="lists-saved"><li>Every new tender notice</li></ul>');
+    const alone = await choose([["lang", "en"], ["list", "matching"], ["national", "1"], ["email", "widest.alone@example.ca"]]);
+    expect(alone.status).toBe(200);
+    for (const email of ["widest@example.ca", "widest.alone@example.ca"]) {
+      expect((await rows(email)).map((r) => [r.kind, r.params, r.label])).toEqual([["tenders", "/tenders", "Every new tender notice"]]);
+    }
+  });
+
+  it("answers a post with no list ticked with the chooser as sent and a line saying so, 400, and stores nothing", async () => {
+    const res = await choose([["lang", "en"], ["category", "GD"], ["segment", "82"], ["province", "ON"], ["email", "none.ticked@example.ca"]]);
+    expect(res.status).toBe(400);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const html = await res.text();
+    expect(html).toContain('<p class="interest-error" role="alert">Choose at least one list.</p>');
+    // The form comes back as it was sent, the cursor's place marked for the script.
+    expect(html).toContain('<input type="checkbox" name="list" value="tenders" data-focus=""/>');
+    expect(boxes(html)).toEqual(["list=tenders", "list=matching", "category=GD ticked", "category=SRV", "category=CNST", "national=1", "list=expiring"]);
+    expect(options(html, "segment").filter((o) => o.includes("chosen"))).toEqual(["82 chosen: 82 Editorial and Design and Graphic and Fine Art Services (1)"]);
+    expect(options(html, "province").filter((o) => o.includes("chosen"))).toEqual(["ON chosen: Ontario (1)"]);
+    expect(html).toContain('value="none.ticked@example.ca"');
+    expect(await rows("none.ticked@example.ca")).toHaveLength(0);
+    // A list the page does not offer counts as none; a bad address as well gets its own line.
+    const both = await choose([["lang", "en"], ["list", "awards"], ["email", "nope"]]);
+    expect(both.status).toBe(400);
+    const lines = [...(await both.text()).matchAll(/<p class="interest-error" role="alert">([^<]*)<\/p>/g)].map((m) => m[1]);
+    expect(lines).toEqual(["Choose at least one list.", "Enter a complete email address."]);
+    const fr = await choose([["lang", "fr"], ["email", "aucune@example.ca"]]);
+    expect(fr.status).toBe(400);
+    const french = nbsp(await fr.text());
+    expect(french).toContain('<p class="interest-error" role="alert">Choisissez au moins une liste.</p>');
+    expect(french).toContain("<h1>Listes de diffusion</h1>");
+  });
+
+  it("refuses the honeypot and a bad address with a line, keeping the lists ticked, and stores nothing", async () => {
+    const bot = await choose([["lang", "en"], ["list", "tenders"], ["email", "bot.lists@example.ca"], ["website", "http://spam.example"]]);
+    expect(bot.status).toBe(400);
+    const html = await bot.text();
+    expect(html).toContain('<p class="interest-error" role="alert">The form could not be sent. Try again.</p>');
+    expect(await rows("bot.lists@example.ca")).toHaveLength(0);
+    const bad = await choose([["lang", "en"], ["list", "expiring"], ["email", "two@@example.ca"]]);
+    expect(bad.status).toBe(400);
+    const again = await bad.text();
+    expect(again).toContain('<p class="interest-error" role="alert">Enter a complete email address.</p>');
+    expect(boxes(again)).toContain("list=expiring ticked");
+    expect(again).toContain('value="two@@example.ca"');
+  });
+
+  it("answers the script with the chooser's block alone", async () => {
+    const ok = await choose([["lang", "en"], ["list", "expiring"], ["email", "script.lists@example.ca"]], { "x-interest-fragment": "1" });
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("x-interest-fragment")).toBe("1");
+    expect(ok.headers.get("cache-control")).toBe("no-store");
+    const html = await ok.text();
+    expect(html.startsWith('<div class="interest-body lists-body" data-interest="">')).toBe(true);
+    expect(html).not.toContain("<html");
+    expect(html).toContain("<p>Saved for script.lists@example.ca:</p>");
+    const bad = await choose([["lang", "en"], ["email", "script.none@example.ca"]], { "x-interest-fragment": "1" });
+    expect(bad.status).toBe(400);
+    const block = await bad.text();
+    expect(block.startsWith('<div class="interest-body lists-body" data-interest="">')).toBe(true);
+    expect(block).toContain("Choose at least one list.");
+    expect(block).toContain('<form method="post" action="/interest" class="lists-form" data-interest-form="" data-lists="">');
+  });
+
+  it("keeps the choice and asks to try again when the database cannot take the rows", async () => {
+    const broken = { ...testEnv(), DB: { prepare: () => { throw new Error("D1 is down"); } } };
+    const res = await choose([["lang", "en"], ["list", "tenders"], ["list", "expiring"], ["email", "later.lists@example.ca"]], {}, broken);
+    expect(res.status).toBe(503);
+    const html = await res.text();
+    expect(html).toContain("The message could not be saved just now. Try again in a moment.");
+    expect(boxes(html)).toEqual(["list=tenders ticked", "list=matching", "category=GD", "category=SRV", "category=CNST", "national=1", "list=expiring ticked"]);
+    expect(html).toContain('value="later.lists@example.ca"');
+  });
+
+  it("refuses a post from another site's page and a body that is not a form", async () => {
+    for (const origin of ["https://evil.example", "null"]) {
+      const cross = await choose([["lang", "en"], ["list", "tenders"], ["email", "cross.lists@example.ca"]], { origin });
+      expect(cross.status, origin).toBe(403);
+    }
+    const json = await app.request("/interest", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.251" },
+      body: JSON.stringify({ place: "lists", list: ["tenders"], email: "json.lists@example.ca" }),
+    }, testEnv());
+    expect(json.status).toBe(400);
+    for (const email of ["cross.lists@example.ca", "json.lists@example.ca"]) expect(await rows(email), email).toHaveLength(0);
+  });
+
+  it("adds a row per list to the nightly run's count of sign-ups", async () => {
+    // The query the workflow's "Count the alert sign-ups" step runs against the forms database.
+    const step = nightly.slice(nightly.indexOf("- name: Count the alert sign-ups"));
+    const query = /--command "([^"]+)"/.exec(step)?.[1] ?? "";
+    expect(query).toBe("SELECT COUNT(*) AS n, SUM(unsubscribed_at IS NULL) AS live FROM interest");
+    const count = async () => (await env.DB.prepare(query).first<{ n: number; live: number }>())!;
+    const before = await count();
+    expect((await choose([["lang", "en"], ["list", "tenders"], ["list", "matching"], ["segment", "43"], ["list", "expiring"], ["email", "counted@example.ca"]])).status).toBe(200);
+    const after = await count();
+    expect(after.n - before.n).toBe(3);
+    expect(after.live - before.live).toBe(3);
   });
 });

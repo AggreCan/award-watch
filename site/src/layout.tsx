@@ -323,8 +323,8 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
     { href: "/segments", label: t(lang, "nav.segments"), section: "/segments" },
     { href: "/rankings", label: t(lang, "nav.rankings"), section: "/rankings" },
     { href: "/feeds", label: t(lang, "nav.feeds"), section: "/feeds" },
-    // The alerts form, reachable without scrolling to a page's foot (operator, 2026-11-02).
-    { href: "/alerts", label: t(lang, "rail.email_list"), section: "/alerts" },
+    // The Email lists page, reachable without scrolling to a page's foot (operator, 2026-11-02).
+    { href: "/alerts", label: t(lang, "rail.email_lists"), section: "/alerts" },
     { href: "/data", label: t(lang, "nav.data"), section: "/data" },
     { href: "/methodology", label: t(lang, "nav.methodology"), section: "/methodology" },
   ];
@@ -459,7 +459,7 @@ export const Layout: FC<
                   <a href="/methodology">{t(lang, "footer.methodology")}</a>
                   <a href="/data#downloads">{t(lang, "footer.download")}</a>
                   <a href="/feeds">{t(lang, "footer.feeds")}</a>
-                  <a href="/alerts">{t(lang, "footer.alerts")}</a>
+                  <a href="/alerts">{t(lang, "rail.email_lists")}</a>
                   <a href="/watchlist">{t(lang, "footer.watchlist")}</a>
                   <a href="/corrections">{t(lang, "footer.corrections")}</a>
                   <a href="/cite">{t(lang, "footer.cite")}</a>

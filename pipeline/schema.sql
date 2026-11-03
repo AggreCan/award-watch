@@ -730,7 +730,9 @@ CREATE TABLE IF NOT EXISTS corrections (
 CREATE INDEX IF NOT EXISTS idx_corrections_org ON corrections(organization_id, published);
 
 -- Interest in email alerts, from the "Get alerts by email" form
--- (site/src/pages/interest.tsx): one row per address and saved filter. No
+-- (site/src/pages/interest.tsx) and the Email lists page, which saves one row
+-- per list ticked (site/src/pages/alerts.tsx): one row per address and saved
+-- filter. No
 -- alert is sent yet. One message will announce the alerts, with an
 -- unsubscribe link built from the token; the confirmation link at launch is
 -- built from it too. No IP address, user agent or visitor code is kept, and
@@ -741,7 +743,9 @@ CREATE TABLE IF NOT EXISTS interest (
   email TEXT NOT NULL,                           -- trimmed and lower-cased, at most 254 characters
   kind TEXT NOT NULL,                            -- tenders | expiring | organization | buyer | segment
   params TEXT NOT NULL,                          -- the saved filter: the page's path and query, rebuilt by the site from
-                                                 -- the filter keys it allows for the kind, keys sorted, no lang
+                                                 -- the filter keys it allows for the kind, keys sorted, no lang; on
+                                                 -- /tenders category, segment and province may repeat (any one of
+                                                 -- the values matches), each key's values in a fixed order
   label TEXT NOT NULL,                           -- what the filter means, in the visitor's language, written by the site
                                                  -- from the filter's codes and the names the data holds; words typed
                                                  -- into a title search stay in params and are never in the label

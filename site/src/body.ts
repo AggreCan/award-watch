@@ -8,7 +8,12 @@ import type { AppEnv } from "./env";
 // the same isolate. A browser-sent form here is a few kilobytes.
 export const FORM_MAX_BYTES = 64 * 1024;
 
-export type FormResult = { ok: true; fields: Record<string, string> } | { ok: false; status: 400 | 413 };
+// fields holds the first value of each text field; values holds every value,
+// for a field a form sends more than once (the lists and the multiple
+// selects of the Email lists page).
+export type FormResult =
+  | { ok: true; fields: Record<string, string>; values: Record<string, string[]> }
+  | { ok: false; status: 400 | 413 };
 
 async function readCapped(body: ReadableStream<Uint8Array> | null, max: number): Promise<Uint8Array | null> {
   if (!body) return new Uint8Array(0);
@@ -34,7 +39,7 @@ async function readCapped(body: ReadableStream<Uint8Array> | null, max: number):
   return out;
 }
 
-// The first value of each text field. A body that is too large answers 413;
+// The text fields of a form post. A body that is too large answers 413;
 // one that is not a form (wrong content type, a multipart body without its
 // boundary, broken encoding) answers 400.
 export async function readForm(c: Context<AppEnv>, max: number = FORM_MAX_BYTES): Promise<FormResult> {
@@ -52,10 +57,14 @@ export async function readForm(c: Context<AppEnv>, max: number = FORM_MAX_BYTES)
   try {
     const form = await new Request("https://form.invalid/", { method: "POST", headers: { "content-type": type }, body: bytes }).formData();
     const fields: Record<string, string> = {};
+    // No prototype, so a field named like one of Object's members is a field.
+    const values: Record<string, string[]> = Object.create(null);
     form.forEach((value, key) => {
-      if (typeof value === "string" && !(key in fields)) fields[key] = value;
+      if (typeof value !== "string") return;
+      if (!(key in fields)) fields[key] = value;
+      (values[key] ??= []).push(value);
     });
-    return { ok: true, fields };
+    return { ok: true, fields, values };
   } catch {
     return { ok: false, status: 400 };
   }

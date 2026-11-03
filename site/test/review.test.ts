@@ -46,8 +46,18 @@ describe("controls", () => {
     expect(styles).toContain('.interest-form .btn { flex: none; align-self: flex-start; margin-top: 20px; justify-content: center; white-space: nowrap; }');
     expect(styles).toMatch(/@media \(max-width: 699px\) \{[\s\S]*\.interest-form \.btn \{ margin-top: 0; \}/);
     expect(styles).toMatch(/@media \(max-width: 699px\) \{[\s\S]*\.interest-form \.interest-field, \.interest-form \.btn \{ flex: 1 1 100%; width: 100%; \}/);
+    // The Email lists page's chooser ends on the same line, under the same rules.
+    expect(styles).toContain(".interest-body > .interest-form, .lists-form > .interest-form { display: flex;");
     const fr = nbsp(await text("/alerts?lang=fr"));
-    expect(fr).toContain('<button type="submit" class="btn btn-primary">M’avertir</button>');
+    expect(fr).toMatch(/<form method="post" action="\/interest" class="lists-form"[^>]*>[\s\S]*<div class="interest-form"><label class="field interest-field">/);
+    expect(fr).toContain('<button type="submit" class="btn btn-primary">Inscrivez-moi</button>');
+  });
+
+  it("give a select that takes several values the same room on both sides and no chevron", () => {
+    const list = styles.match(/\nselect\[multiple\] \{[^}]*\}/)?.[0] ?? "";
+    expect(list).toContain("padding: 4px 8px;");
+    expect(list).toContain("background-image: none;");
+    expect(list).toContain("height: auto;");
   });
 });
 

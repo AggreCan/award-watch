@@ -7,7 +7,9 @@
 //
 // A link to a filtered, sorted or later view is rendered by the script once
 // the list has loaded; the server shows the form set to the link's values and
-// says so. When the first file holds every open notice (a short list), the
+// says so. Category, segment and province may each carry several values (a
+// list saved on the Email lists page opens so): a notice matches when it
+// carries any one of a key's values, and it must match every key given. When the first file holds every open notice (a short list), the
 // server answers any view itself, with the same rules as the script
 // (filterTenders below; the tests hold both to the same answers).
 //
@@ -16,7 +18,7 @@
 
 import type { Context } from "hono";
 import { clientTable } from "../columns";
-import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENTS, SEGMENT_CODES } from "../constants";
+import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENT_CODES } from "../constants";
 import { BUYER_ID_RE, DAY_RE, type FacetCount, type OpenFirst, loadNewTenders, loadOpenFirst, loadStats, type TenderRow } from "../data";
 import type { AppEnv } from "../env";
 import {
@@ -34,13 +36,22 @@ export const TENDER_PAGE_SIZE = 50;
 export const CLOSING_WINDOWS = ["7", "30"] as const;
 export const CODE_RE = /^[0-9]{2,8}$/;
 
+// The order several values of a key are read, written and named in, so a
+// view has one address. Segments go by code and provinces by their code's
+// order in PROVINCES.
+export const CATEGORY_ORDER = ["GD", "SRV", "CNST", "SRVTGD"] as const;
+// The keys that take several values.
+export const MULTI_KEYS = ["category", "segment", "province"] as const;
+type MultiKey = (typeof MULTI_KEYS)[number];
+
 export interface TenderQuery {
   q: string;
-  category: string;
-  segment: string;
+  // Each value once, in the fixed order; empty for no filter.
+  category: string[];
+  segment: string[];
   // A UNSPSC code prefix: a family (4 digits), a class (6) or any 2 to 8.
   code: string;
-  province: string;
+  province: string[];
   // With a province chosen, whether the notices that name none (Canada-wide
   // or not stated, about half of them) stay in the list. On unless the
   // address says national=0.
@@ -59,9 +70,11 @@ const MAX_TEXT = 100;
 // use reads as no filter, so a stale or hand-typed link still opens a page.
 export function readTenderQuery(url: URL): TenderQuery {
   const get = (k: string) => (url.searchParams.get(k) ?? "").trim();
-  const category = get("category").toUpperCase();
-  const segment = get("segment");
-  const province = get("province").toUpperCase();
+  // Every value of the key the filter can use, once each, in the fixed order.
+  const all = (k: MultiKey, allowed: readonly string[]) => {
+    const asked = new Set(url.searchParams.getAll(k).map((v) => v.trim().toUpperCase()));
+    return allowed.filter((v) => asked.has(v));
+  };
   const buyer = get("buyer").toLowerCase();
   const closing = get("closing");
   const pageNo = Number(get("page"));
@@ -71,10 +84,10 @@ export function readTenderQuery(url: URL): TenderQuery {
   const national = url.searchParams.getAll("national");
   return {
     q: get("q").slice(0, MAX_TEXT),
-    category: (CATEGORIES as readonly string[]).includes(category) ? category : "",
-    segment: segment in SEGMENTS ? segment : "",
+    category: all("category", CATEGORY_ORDER),
+    segment: all("segment", SEGMENT_CODES),
     code: CODE_RE.test(code) ? code : "",
-    province: (PROVINCES as readonly string[]).includes(province) ? province : "",
+    province: all("province", PROVINCES),
     national: national.length === 0 || national.includes("1"),
     buyer: BUYER_ID_RE.test(buyer) && buyer.length <= 80 ? buyer : "",
     type: get("type").slice(0, 200),
@@ -91,9 +104,10 @@ export function fold(s: string): string {
 }
 
 // The rows that pass every filter, in the order asked for, at the page's
-// clock. The text filter reads the title and the start of the description
-// in both languages and the reference, as published too. A province keeps
-// the notices that name none unless national is off. The code filter is a
+// clock. Each of category, segment and province keeps a notice that carries
+// any one of its values. The text filter reads the title and the start of
+// the description in both languages and the reference, as published too. A
+// province keeps the notices that name none unless national is off. The code filter is a
 // prefix of any of a notice's UNSPSC codes. The closing window counts from
 // the Eastern date and leaves out a notice whose closing time has passed.
 // By closing date, such a notice goes after the ones still open.
@@ -101,10 +115,10 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock:
   const words = fold(q.q).split(/\s+/).filter(Boolean);
   const until = q.closing ? addDays(clock.today, Number(q.closing)) : "";
   const out = rows.filter((r) => {
-    if (q.category && !r.category.includes(q.category)) return false;
-    if (q.segment && !r.segments.includes(q.segment)) return false;
+    if (q.category.length && !q.category.some((v) => r.category.includes(v))) return false;
+    if (q.segment.length && !q.segment.some((v) => r.segments.includes(v))) return false;
     if (q.code && !(r.codes ?? []).some((c) => c.startsWith(q.code))) return false;
-    if (q.province && !r.provinces.includes(q.province) && !(q.national && r.provinces.length === 0)) return false;
+    if (q.province.length && !q.province.some((v) => r.provinces.includes(v)) && !(q.national && r.provinces.length === 0)) return false;
     if (q.buyer && r.buyer_id !== q.buyer) return false;
     if (q.type && r.notice_type_en !== q.type) return false;
     if (q.method && r.method_en !== q.method) return false;
@@ -138,12 +152,17 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock:
   return out;
 }
 
-// The URL of a view: only the values set, in a fixed order; national=0 only
-// where it changes the list, beside a province.
+// The URL of a view: only the values set, keys in a fixed order and a key's
+// values once each in theirs; national=0 only where it changes the list,
+// beside a province.
 export function tenderQueryString(q: TenderQuery, pageNo = q.page): string {
   const p = new URLSearchParams();
-  for (const k of ["q", "category", "segment", "code", "province", "buyer", "type", "method", "closing"] as const) if (q[k]) p.set(k, q[k]);
-  if (q.province && !q.national) p.set("national", "0");
+  for (const k of ["q", "category", "segment", "code", "province", "buyer", "type", "method", "closing"] as const) {
+    const v = q[k];
+    if (Array.isArray(v)) for (const one of new Set(v)) p.append(k, one);
+    else if (v) p.set(k, v);
+  }
+  if (q.province.length && !q.national) p.set("national", "0");
   if (q.sort !== "closing") p.set("sort", q.sort);
   if (pageNo > 1) p.set("page", String(pageNo));
   const s = p.toString();
@@ -153,8 +172,9 @@ export function tenderQueryString(q: TenderQuery, pageNo = q.page): string {
 type Option = { value: string; label: string; n: number };
 
 // Each select lists the values the open notices carry (the export counts them
-// over the whole list), so no choice leads to an empty list.
-function options(facets: OpenFirst["facets"], lang: Lang) {
+// over the whole list), so no choice leads to an empty list. The Email lists
+// page offers the same segments and provinces.
+export function tenderOptions(facets: OpenFirst["facets"], lang: Lang) {
   const list = (counts: readonly FacetCount[], label: (f: FacetCount) => string, byValue = false) =>
     counts
       .map((f) => ({ value: f.value, label: label(f), n: f.n }))
@@ -180,7 +200,7 @@ export const TENDERS_CLIENT_KEYS: readonly Key[] = [
   "tenders.detail_canadabuys", "tenders.detail_more", "tender.notice_type", "tender.method", "tender.selection",
   "tender.category", "tender.regions_delivery", "tender.trade_agreements", "tender.solicitation", "tender.end_users",
   "tender.description_heading", "tenders.none_next", "tenders.none_next_q", "tenders.none_reset", "tenders.none_search",
-  "filters.fold", "filters.fold_one", "filters.fold_many",
+  "filters.fold", "filters.fold_one", "filters.fold_many", "tenders.several",
   "countdown.in_min", "countdown.in_hm", "countdown.in_day", "countdown.in_days", "countdown.today_at",
 ];
 
@@ -198,37 +218,52 @@ export const NoMatch = ({ lang, q }: { lang: Lang; q: string }) => (
   </div>
 );
 
-// A filter field in the toolbar: its name above, the control below.
+// A filter field in the toolbar: its name above, the control below. A key
+// set to several values shows "Several (n)", and the values ride along as
+// hidden fields, so the form without the script keeps them (a value chosen
+// in the select is added to them; the chips take one off). tenders.js
+// removes the hidden fields and keeps the values itself.
 const Select = ({ name, label, any, opts, value, lang }: {
-  name: string; label: Key; any: Key; opts: Option[]; value: string; lang: Lang;
-}) => (
-  <label class="field">
-    <span class="field-label">{t(lang, label)}</span>
-    <select name={name}>
-      <option value="">{t(lang, any)}</option>
-      {opts.map((o) => (
-        <option value={o.value} selected={o.value === value}>{`${o.label} (${fmtInt(o.n, lang)})`}</option>
-      ))}
-    </select>
-  </label>
-);
+  name: string; label: Key; any: Key; opts: Option[]; value: string | readonly string[]; lang: Lang;
+}) => {
+  const values = typeof value === "string" ? (value ? [value] : []) : value;
+  const several = values.length > 1;
+  return (
+    <label class="field">
+      <span class="field-label">{t(lang, label)}</span>
+      <select name={name}>
+        {several ? <option value="" selected data-several="">{t(lang, "tenders.several", { n: values.length })}</option> : null}
+        <option value="">{t(lang, any)}</option>
+        {opts.map((o) => (
+          <option value={o.value} selected={!several && o.value === values[0]}>{`${o.label} (${fmtInt(o.n, lang)})`}</option>
+        ))}
+      </select>
+      {several ? values.map((v) => <input type="hidden" name={name} value={v} data-several="" />) : null}
+    </label>
+  );
+};
 
-type Chip = { key: keyof TenderQuery; label: string; value: string };
+type Chip = { label: string; value: string; without: TenderQuery };
 
-// The filters the URL sets, each as a chip whose link is the same view
-// without it, so a filter comes off with or without the script.
-function activeChips(q: TenderQuery, opts: ReturnType<typeof options>, lang: Lang): Chip[] {
+// The filters the URL sets, one chip a value, each linking to the same view
+// without that value, so a filter comes off with or without the script.
+function activeChips(q: TenderQuery, opts: ReturnType<typeof tenderOptions>, lang: Lang): Chip[] {
   const named = (list: Option[], v: string) => list.find((o) => o.value === v)?.label ?? v;
   const chips: Chip[] = [];
-  if (q.q) chips.push({ key: "q", label: t(lang, "tenders.filter_text"), value: q.q });
-  if (q.category) chips.push({ key: "category", label: t(lang, "tenders.filter_category"), value: named(opts.category, q.category) });
-  if (q.segment) chips.push({ key: "segment", label: t(lang, "tenders.filter_segment"), value: named(opts.segment, q.segment) });
-  if (q.code) chips.push({ key: "code", label: t(lang, "tenders.filter_code"), value: q.code });
-  if (q.province) chips.push({ key: "province", label: t(lang, "tenders.filter_province"), value: named(opts.province, q.province) });
-  if (q.buyer) chips.push({ key: "buyer", label: t(lang, "tenders.filter_buyer"), value: named(opts.buyer, q.buyer) });
-  if (q.type) chips.push({ key: "type", label: t(lang, "tenders.filter_type"), value: named(opts.type, q.type) });
-  if (q.method) chips.push({ key: "method", label: t(lang, "tenders.filter_method"), value: named(opts.method, q.method) });
-  if (q.closing) chips.push({ key: "closing", label: t(lang, "tenders.filter_closing"), value: t(lang, "tenders.closing_days", { n: Number(q.closing) }) });
+  const one = (key: Exclude<keyof TenderQuery, MultiKey | "national" | "sort" | "page">, label: Key, value: string) =>
+    chips.push({ label: t(lang, label), value, without: { ...q, [key]: "", page: 1 } });
+  const each = (key: MultiKey, label: Key, list: Option[]) => {
+    for (const v of q[key]) chips.push({ label: t(lang, label), value: named(list, v), without: { ...q, [key]: q[key].filter((x) => x !== v), page: 1 } });
+  };
+  if (q.q) one("q", "tenders.filter_text", q.q);
+  each("category", "tenders.filter_category", opts.category);
+  each("segment", "tenders.filter_segment", opts.segment);
+  if (q.code) one("code", "tenders.filter_code", q.code);
+  each("province", "tenders.filter_province", opts.province);
+  if (q.buyer) one("buyer", "tenders.filter_buyer", named(opts.buyer, q.buyer));
+  if (q.type) one("type", "tenders.filter_type", named(opts.type, q.type));
+  if (q.method) one("method", "tenders.filter_method", named(opts.method, q.method));
+  if (q.closing) one("closing", "tenders.filter_closing", t(lang, "tenders.closing_days", { n: Number(q.closing) }));
   return chips;
 }
 
@@ -250,7 +285,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const pages = Math.max(1, Math.ceil(count / TENDER_PAGE_SIZE));
   const pageNo = Math.min(q.page, pages);
   const shown = matched.slice((pageNo - 1) * TENDER_PAGE_SIZE, pageNo * TENDER_PAGE_SIZE);
-  const opts = options(first.facets, lang);
+  const opts = tenderOptions(first.facets, lang);
   // The canonical page is the unfiltered list; a filtered view is a view of it.
   const seo = pageSeo("tenders", lang, filtered || q.page > 1 ? { noindex: true } : {});
   const prev = !waiting && pageNo > 1 ? `/tenders${tenderQueryString(q, pageNo - 1)}` : null;
@@ -330,7 +365,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
         <div class="toolbar-chips" id="tender-chips" hidden={chips.length === 0}>
           <span class="chips-label">{t(lang, "tenders.filters_active")}</span>
           {chips.map((ch) => (
-            <a class="fchip" href={`/tenders${tenderQueryString({ ...q, [ch.key]: "", page: 1 })}`}
+            <a class="fchip" href={`/tenders${tenderQueryString(ch.without)}`}
               aria-label={t(lang, "tenders.remove_filter", { name: ch.value })}>
               <span>{ch.label}</span> <b>{ch.value}</b>
               <span class="fchip-x" aria-hidden="true">×</span>

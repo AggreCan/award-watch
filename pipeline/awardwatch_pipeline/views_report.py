@@ -244,7 +244,8 @@ def render(month: str, months: list[Month], written: date, interest: dict[str, i
         "- Organizations, records: the last reading taken in the month, the site's counts after the nightly run "
         "(records: award notices, contract history records, published contracts, grant agreements and lobbying "
         "communications, each counted in its own source and the five counts added).\n"
-        "- Alert sign-ups: rows of the interest table of the forms database (the \"Get alerts by email\" form) "
+        "- Alert sign-ups: rows of the interest table of the forms database (the \"Get alerts by email\" form and "
+        "the Email lists page; one row per address and list, so an address on three lists counts three times) "
         "read by the nightly run just before this report, and how many of them have no unsubscribe date. A count, "
         "not a monthly figure.\n"
     )

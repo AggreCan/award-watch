@@ -55,8 +55,8 @@ export async function get(path: string, o: Opts = {}): Promise<Response> {
 }
 
 // A form post from the site's own page (Origin http://localhost) unless
-// origin says otherwise; null sends none.
-export async function post(path: string, fields: Record<string, string>, o: Opts = {}): Promise<Response> {
+// origin says otherwise; null sends none. Pairs send a field more than once.
+export async function post(path: string, fields: Record<string, string> | [string, string][], o: Opts = {}): Promise<Response> {
   const headers: Record<string, string> = {
     "content-type": "application/x-www-form-urlencoded", "cf-connecting-ip": o.ip ?? nextIp(), ...o.headers,
   };

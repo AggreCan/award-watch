@@ -10,18 +10,25 @@
    form then saves the address shown, and its wording comes from the form's
    data attributes: the site's own wording while the filters are the ones the
    page was served with, otherwise "every new notice" or "the filters above".
-   The site writes the exact wording again in its answer. This file holds no
-   text of its own. */
+   The site writes the exact wording again in its answer.
+
+   On the Email lists page (src/pages/alerts.tsx) the same posting applies to
+   the chooser, and choosing one of the filters under "New tender notices
+   matching filters" ticks that list's box, so the filters are never left
+   out of the post by an unticked box. This file holds no text of its own. */
 (function () {
   if (!window.fetch || !window.URLSearchParams || !window.FormData) return;
 
-  // The allowed keys that carry a value, sorted, as one string.
+  // The allowed keys that carry a value, sorted, as one string. A key may
+  // carry several values (a saved list of several segments).
   function filterKey(search, keys) {
     var p = new URLSearchParams(search);
     var out = [];
     keys.forEach(function (k) {
-      var v = (p.get(k) || "").trim();
-      if (v) out.push(k + "=" + v);
+      p.getAll(k).forEach(function (v) {
+        v = v.trim();
+        if (v) out.push(k + "=" + v);
+      });
     });
     return out.sort().join("&");
   }
@@ -45,10 +52,23 @@
     form.addEventListener("submit", update);
   }
 
+  // The Canada-wide box only narrows a province, so it alone ticks nothing.
+  function lists(box) {
+    var filters = box.querySelector("form[data-lists] [data-list-filters]");
+    var list = box.querySelector('form[data-lists] input[name="list"][value="matching"]');
+    if (!filters || !list) return;
+    filters.addEventListener("change", function (ev) {
+      var t = ev.target;
+      if (!t || t.name === "national") return;
+      if (t.type === "checkbox" ? t.checked : t.selectedOptions && t.selectedOptions.length > 0) list.checked = true;
+    });
+  }
+
   function bind(box) {
     var form = box.querySelector("form[data-interest-form]");
     if (!form) return;
     follow(box);
+    lists(box);
     form.addEventListener("submit", function (ev) {
       ev.preventDefault();
       var button = form.querySelector("button[type=submit]");
@@ -70,7 +90,10 @@
           if (!next) throw new Error("not the block");
           box.parentNode.replaceChild(next, box);
           bind(next);
-          var field = next.querySelector(".interest-error") && next.querySelector("input[name=email]");
+          // After an error the cursor goes where the site points (the first
+          // list box when none was ticked), else to the address.
+          var field = next.querySelector(".interest-error") &&
+            (next.querySelector("[data-focus]") || next.querySelector("input[name=email]"));
           if (field) field.focus();
         })
         .catch(function () {

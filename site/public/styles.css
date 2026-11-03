@@ -729,11 +729,12 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 
 /* -- the alerts form (src/pages/interest.tsx): what the saved filter means,
    one field and one button on a line, a quiet line under them. The same
-   block sits in a panel on the list pages and in the Alerts document, so its
-   rules outrank the document's paragraph spacing. */
+   block sits in a panel on the list pages, and the Email lists page's
+   chooser ends on the same line (a div.interest-form inside its form), so
+   its rules outrank the document's paragraph spacing. */
 .interest-body { max-width: var(--measure); }
 .interest-body > .interest-label { margin: 0 0 8px; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
-.interest-body > .interest-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin: 0 0 8px; }
+.interest-body > .interest-form, .lists-form > .interest-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin: 0 0 8px; }
 .interest-form .interest-field { flex: 0 1 320px; gap: 0; }
 .interest-form .interest-field > .field-label { margin-bottom: 4px; }
 /* The field and its button: one height, one border token. The button is
@@ -747,6 +748,36 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .interest-body > .interest-error { margin: 0 0 8px; padding-left: 8px; border-left: 2px solid var(--ink-2); color: var(--ink); font-size: 12px; line-height: 16px; }
 .interest-body > .interest-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; }
 .errors { padding: 8px 16px 8px 32px; border: 1px solid var(--ink-2); font-weight: 600; }
+
+/* -- the Email lists page's chooser (src/pages/alerts.tsx): a box per list,
+   ruled apart; under "matching filters" its filters, indented to the box's
+   text: categories on a line, the segments across the measure (a list box
+   cannot wrap an option, and segment titles run to 90 characters), the
+   provinces in the first half below them (the whole width on a phone); then
+   the address and the button on the alerts form's line. A select that takes
+   several values is a list box: no chevron, the same 8 px on both sides. */
+.lists-form { margin: 0 0 8px; }
+.lists { min-width: 0; margin: 0 0 16px; padding: 0; border: 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.list { padding: 4px 0; }
+.list + .list { border-top: 1px solid var(--border); }
+/* A list's name may wrap on a phone: its box stays on the first line. */
+.list-check { align-items: flex-start; min-height: 0; padding: 4px 0; font-size: 14px; line-height: 24px; color: var(--ink); font-weight: 500; }
+.list-check > input { margin-top: 4px; }
+.list-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; align-items: start; margin: 0 0 8px 24px; }
+.list-categories, .list-segments { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 0; border: 0; }
+.list-categories > .field-label { display: block; margin: 0; padding: 0; }
+.list-boxes { display: flex; flex-wrap: wrap; gap: 0 24px; }
+.list-province { display: flex; flex-direction: column; min-width: 0; }
+/* A field in a toolbar row takes a basis of 160 px; in this column that would be height. */
+.list-province > .field { flex: none; }
+.lists-body .list-hint { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; }
+select[multiple] { height: auto; padding: 4px 8px; background-image: none; overflow-y: auto; }
+select[multiple] option { padding: 2px 0; }
+.lists-body .interest-done > p { margin: 0; }
+.lists-body .lists-saved { margin: 4px 0 0; padding-left: 24px; font-weight: 400; }
+.lists-body .lists-saved li { margin: 0; overflow-wrap: anywhere; }
+/* Ctrl and Cmd mean nothing to a touch screen, whose own picker takes several. */
+@media (pointer: coarse) { .list-keys { display: none; } }
 
 /* -- long lists on a phone (public/pager.js) -------------------------------- */
 /* A table marked data-phone-page shows 50 rows at a time below 700 px; its
@@ -831,6 +862,7 @@ tr[data-phone-cut] { display: none !important; }
   .rail-browse { display: none; }
   .interest-form .interest-field, .interest-form .btn { flex: 1 1 100%; width: 100%; }
   .interest-form .btn { margin-top: 0; }
+  .list-filters { grid-template-columns: minmax(0, 1fr); }
   /* A filter's name wraps rather than being cut, in French above all. */
   .field-label { white-space: normal; overflow: visible; text-overflow: clip; }
   .toolbar-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

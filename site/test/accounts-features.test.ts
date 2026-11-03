@@ -10,7 +10,7 @@ import { sha256Hex } from "../src/account/secrets";
 import { forgetSessions, planOfRequest } from "../src/account/session";
 import type { AppEnv } from "../src/env";
 import {
-  ACCOUNTS, DB, MANUAL_GRANT_SQL, csrf, decode, get, grantPro, newEmail, nextIp, onEnv, post, sessionCookie, signIn, useAccountsDb, userId,
+  ACCOUNTS, DB, MANUAL_GRANT_SQL, csrf, decode, get, grantPro, nbsp, newEmail, nextIp, onEnv, post, sessionCookie, signIn, useAccountsDb, userId,
 } from "./accounts-helpers";
 
 useAccountsDb();
@@ -150,6 +150,35 @@ describe("the alerts form's rows", () => {
     const res = await post("/account/searches/import", { csrf: await csrf(cookie, "/account/searches") }, { cookie });
     expect(res.headers.get("location")).toBe("/account/searches?m=imported_some");
     expect(await searches(email)).toHaveLength(3);
+    const confirmed = await DB.prepare("SELECT COUNT(*) AS n FROM interest WHERE email = ? AND confirmed_at IS NOT NULL").bind(email).first<{ n: number }>();
+    expect(confirmed?.n).toBe(3);
+  });
+
+  it("include the lists the Email lists page saved together, each label rebuilt in the page's language", async () => {
+    const email = newEmail("lists");
+    const res = await post("/interest", [
+      ["place", "lists"], ["lang", "en"], ["website", ""], ["list", "tenders"], ["list", "matching"], ["list", "expiring"],
+      ["category", "GD"], ["category", "SRV"], ["segment", "82"], ["segment", "43"], ["province", "QC"], ["national", "0"], ["email", email],
+    ], { env: onEnv() });
+    expect(res.status).toBe(200);
+    const filtered = "/tenders?category=GD&category=SRV&national=0&province=QC&segment=43&segment=82";
+    const cookie = await signIn(email);
+    const french = nbsp(decode(await (await get("/account/searches?lang=fr", { cookie })).text()));
+    expect(french).toContain(
+      "Nouveaux avis d’appel d’offres correspondant à Catégorie : Biens ou Services; " +
+      "Segment UNSPSC : 43 Technologies de l’information, radiodiffusion et télécommunications ou 82 Services de rédaction, de design, de graphisme et de beaux-arts; " +
+      "Province de livraison : Québec; Tout le Canada ou non indiqué : exclus",
+    );
+    expect(french).toContain("Contrats qui entrent dans la période de 3 mois pour tous les acheteurs et segments");
+    const done = await post("/account/searches/import", { csrf: await csrf(cookie, "/account/searches") }, { cookie });
+    expect(done.headers.get("location")).toBe("/account/searches?m=imported");
+    const saved = await searches(email);
+    expect(saved.map((s) => [s.kind, s.params]).sort()).toEqual([["expiring", "/expiring/3m"], ["tenders", "/tenders"], ["tenders", filtered]]);
+    expect(saved.find((s) => s.params === filtered)?.label).toBe(
+      "New tender notices matching Category: Goods or Services; " +
+      "UNSPSC segment: 43 Information Technology Broadcasting and Telecommunications or 82 Editorial and Design and Graphic and Fine Art Services; " +
+      "Province of delivery: Quebec; Canada-wide or not stated: left out",
+    );
     const confirmed = await DB.prepare("SELECT COUNT(*) AS n FROM interest WHERE email = ? AND confirmed_at IS NOT NULL").bind(email).first<{ n: number }>();
     expect(confirmed?.n).toBe(3);
   });

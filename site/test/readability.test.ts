@@ -110,8 +110,8 @@ describe("the lists", () => {
       expect(html.indexOf("Get Alerts by Email"), path).toBeGreaterThan(html.indexOf(list));
       expect(html, path).toContain('<button type="submit" class="btn">Notify me</button>');
     }
-    // On /alerts the form is the page's own action.
-    expect(await text("/alerts")).toContain('<button type="submit" class="btn btn-primary">Notify me</button>');
+    // On /alerts the chooser is the page's own action.
+    expect(await text("/alerts")).toContain('<button type="submit" class="btn btn-primary">Sign me up</button>');
   });
 
   it("move the radar's rule to the list's foot, and only under rows", async () => {

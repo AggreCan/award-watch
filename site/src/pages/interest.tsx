@@ -16,6 +16,11 @@
 // block in its new state. public/interest.js posts it with fetch and the
 // x-interest-fragment header instead, and the answer is the block alone,
 // which takes the place of the one on the page.
+//
+// The Email lists page (pages/alerts.tsx) posts to the same address with
+// several lists at once; its handler reads the post with readInterestPost
+// and builds each list through interestFilter, so both forms save the same
+// rows.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -28,8 +33,10 @@ import {
 import type { AppEnv, Env } from "../env";
 import { categoryLabel, pick, provinceName, segmentLabel, sourceLabel, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
+import { clip } from "../seo";
 import { BAND_LABEL, COMPETITIVE_LABEL, KIND_SOURCE, readExpiringQuery } from "./expiring";
-import { readTenderQuery } from "./tenders";
+import { orList } from "./shared";
+import { CATEGORY_ORDER, readTenderQuery } from "./tenders";
 
 export const INTEREST_KINDS = ["tenders", "expiring", "organization", "buyer", "segment"] as const;
 export type InterestKind = (typeof INTEREST_KINDS)[number];
@@ -114,6 +121,10 @@ function searchWords(q: string): string {
   return q.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// The categories the Email lists page offers, in the tenders page's order
+// (which names services related to goods last; the page leaves it out).
+export const LIST_CATEGORIES = CATEGORY_ORDER.slice(0, 3);
+
 async function tendersFilter(env: Env, lang: Lang, url: URL): Promise<InterestFilter> {
   const q = readTenderQuery(url);
   const facets = (await loadOpenFirst(env).catch(() => null))?.facets;
@@ -122,23 +133,31 @@ async function tendersFilter(env: Env, lang: Lang, url: URL): Promise<InterestFi
   const named: string[] = [];
   const words = searchWords(q.q);
   if (words) pairs.push(["q", words]);
-  if (q.category) {
-    pairs.push(["category", q.category]);
-    named.push(pair(lang, "tenders.filter_category", categoryLabel(lang, q.category)));
+  // Category, segment and province may each hold several values, as the
+  // tenders page reads them (once each, in its fixed order), so the same
+  // choice always saves the same filter; a notice matches any one of them.
+  const { category: categories, segment: segments, province: provinces } = q;
+  if (categories.length) {
+    for (const v of categories) pairs.push(["category", v]);
+    named.push(pair(lang, "tenders.filter_category", orList(lang, categories.map((v) => categoryLabel(lang, v)))));
   }
-  if (q.segment) {
-    pairs.push(["segment", q.segment]);
-    named.push(pair(lang, "tenders.filter_segment", `${q.segment} ${segmentLabel(lang, q.segment)}`));
+  if (segments.length) {
+    for (const v of segments) pairs.push(["segment", v]);
+    named.push(pair(lang, "tenders.filter_segment", orList(lang, segments.map((v) => `${v} ${segmentLabel(lang, v)}`))));
   }
   if (q.code) {
     pairs.push(["code", q.code]);
     named.push(pair(lang, "tenders.filter_code", q.code));
   }
-  if (q.province) {
-    pairs.push(["province", q.province]);
-    // With the box unticked, the notices that name no province are out.
-    if (!q.national) pairs.push(["national", "0"]);
-    named.push(pair(lang, "tenders.filter_province", provinceName(lang, q.province)));
+  if (provinces.length) {
+    for (const v of provinces) pairs.push(["province", v]);
+    named.push(pair(lang, "tenders.filter_province", orList(lang, provinces.map((v) => provinceName(lang, v)))));
+    // With the box unticked, the notices that name no province are out, and
+    // the label says so: two lists never share a label with different filters.
+    if (!q.national) {
+      pairs.push(["national", "0"]);
+      named.push(t(lang, "interest.national_out"));
+    }
   }
   if (q.buyer) {
     const name = await buyerName(env, lang, q.buyer, facet(facets?.buyer, q.buyer));
@@ -236,14 +255,15 @@ export async function interestFilter(
       filter = { kind: found, params: `/segments/${code}`, label: t(lang, "interest.label_segment", { segment: `${code} ${segmentLabel(lang, code)}` }) };
     }
   }
-  return filter ? { ...filter, label: filter.label.slice(0, LABEL_MAX) } : null;
+  // A label past the cap (a long run of segments) is cut at a word, with an ellipsis.
+  return filter ? { ...filter, label: clip(filter.label, LABEL_MAX) } : null;
 }
 
 // -- the block ----------------------------------------------------------------
 
-// primary: the form is the page's main action (/alerts), its button filled;
-// on a list page it follows the list with the secondary button.
-export type InterestState = { done?: boolean; error?: Key; email?: string; primary?: boolean };
+// The block follows a page's list, so its button is the secondary one; the
+// Email lists page, whose form is the page's action, has its own chooser.
+export type InterestState = { done?: boolean; error?: Key; email?: string };
 
 // On /tenders the list's script changes the address as the filters change;
 // interest.js then saves the address shown and words the label from these.
@@ -257,7 +277,7 @@ function labelInSentence(label: string): string {
   return label.charAt(0).toLowerCase() + label.slice(1);
 }
 
-export const InterestBody: FC<{ lang: Lang; filter: InterestFilter } & InterestState> = ({ lang, filter, done, error, email, primary }) => {
+export const InterestBody: FC<{ lang: Lang; filter: InterestFilter } & InterestState> = ({ lang, filter, done, error, email }) => {
   const follow = filter.kind === "tenders";
   return (
     <div class="interest-body" data-interest="">
@@ -273,13 +293,12 @@ export const InterestBody: FC<{ lang: Lang; filter: InterestFilter } & InterestS
           <input type="hidden" name="kind" value={filter.kind} />
           <input type="hidden" name="params" value={filter.params} />
           <input type="hidden" name="lang" value={lang} />
-          {primary ? <input type="hidden" name="place" value="primary" /> : null}
           <div class="hp"><label>{t(lang, "form.honeypot")}<input name="website" type="text" tabindex={-1} autocomplete="off" /></label></div>
           <label class="field interest-field">
             <span class="field-label">{t(lang, "interest.email")}</span>
             <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={email ?? ""} />
           </label>
-          <button type="submit" class={primary ? "btn btn-primary" : "btn"}>{t(lang, "interest.submit")}</button>
+          <button type="submit" class="btn">{t(lang, "interest.submit")}</button>
         </form>
       )}
       <p class="interest-note">{tj(lang, "interest.note", { privacy: <a href="/privacy#interest">{t(lang, "footer.privacy")}</a> })}</p>
@@ -305,10 +324,15 @@ export const InterestPanel: FC<{ lang: Lang; filter: InterestFilter | null } & I
 
 const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 
-function field(body: Record<string, string>, key: string, max: number): string {
+export function field(body: Record<string, string>, key: string, max: number): string {
   const v = body[key];
   return (typeof v === "string" ? v : "").replace(CONTROL_RE, "").trim().slice(0, max);
 }
+
+// One row per address and filter; the same pair again stores nothing.
+export const INSERT_INTEREST =
+  "INSERT INTO interest (email, kind, params, label, lang, created_at, token) VALUES (?, ?, ?, ?, ?, ?, ?) " +
+  "ON CONFLICT (email, kind, params) DO NOTHING";
 
 // 32 hex characters from the platform's random source.
 export function newToken(): string {
@@ -341,13 +365,20 @@ async function answer(
   return res;
 }
 
-// POST /interest. A post from another site's page (its Origin names another
-// host, or "null") is refused before the body is read; a client that sends no
-// Origin is let through, as a browser on the site's own page always sends one.
-// A filter that does not rebuild is refused as unreadable; a filled honeypot
-// or an address that does not check out gets a line in the block. A second
-// post of the same address and filter answers the same and stores nothing.
-export async function interestSubmit(c: Context<AppEnv>): Promise<Response> {
+// A post to /interest as read: the first value of each field, every value of
+// a field sent more than once, where the form sat ("lists" from the Email
+// lists page's chooser, nothing from a page's block), and whether
+// interest.js sent it and wants the block alone.
+export type InterestPost = {
+  body: Record<string, string>; values: Record<string, string[]>; place: string; fragment: boolean;
+};
+
+// POST /interest, read once for both forms (index.tsx hands it on by its
+// place). A post from another site's page (its Origin names another host, or
+// "null") is refused before the body is read; a client that sends no Origin
+// is let through, as a browser on the site's own page always sends one. The
+// form's language becomes the request's.
+export async function readInterestPost(c: Context<AppEnv>): Promise<InterestPost | Response> {
   const origin = c.req.header("origin");
   if (origin !== undefined && !isOwnAddress(origin, c.req.url)) return c.text(t(c.get("lang"), "form.rejected"), 403);
   const form = await readForm(c);
@@ -355,25 +386,28 @@ export async function interestSubmit(c: Context<AppEnv>): Promise<Response> {
   const body = form.fields;
   const asked = field(body, "lang", 2);
   if (asked === "en" || asked === "fr") c.set("lang", asked);
+  return { body, values: form.values, place: field(body, "place", 10), fragment: c.req.header("x-interest-fragment") === "1" };
+}
+
+// The post of a page's block: one filter. A filter that does not rebuild is
+// refused as unreadable; a filled honeypot or an address that does not check
+// out gets a line in the block. A second post of the same address and filter
+// answers the same and stores nothing.
+export async function interestSubmit(c: Context<AppEnv>, post: InterestPost): Promise<Response> {
+  const { body, fragment } = post;
   const lang = c.get("lang");
-  const fragment = c.req.header("x-interest-fragment") === "1";
-  // The form answers in the style it was sent from.
-  const primary = field(body, "place", 10) === "primary";
   const filter = await interestFilter(c.env, lang, field(body, "kind", 20), field(body, "params", PARAMS_MAX));
   if (!filter) return c.text(t(lang, "form.rejected"), 400);
   const typed = field(body, "email", EMAIL_MAX + 50);
-  if (field(body, "website", 10)) return answer(c, filter, { error: "interest.err_rejected", email: typed.slice(0, EMAIL_MAX), primary }, 400, fragment);
+  if (field(body, "website", 10)) return answer(c, filter, { error: "interest.err_rejected", email: typed.slice(0, EMAIL_MAX) }, 400, fragment);
   const email = normalizeEmail(typed);
-  if (!email) return answer(c, filter, { error: "interest.err_email", email: typed.slice(0, EMAIL_MAX), primary }, 400, fragment);
+  if (!email) return answer(c, filter, { error: "interest.err_email", email: typed.slice(0, EMAIL_MAX) }, 400, fragment);
   try {
-    await c.env.DB.prepare(
-      "INSERT INTO interest (email, kind, params, label, lang, created_at, token) VALUES (?, ?, ?, ?, ?, ?, ?) " +
-      "ON CONFLICT (email, kind, params) DO NOTHING",
-    ).bind(email, filter.kind, filter.params, filter.label, lang, new Date().toISOString(), newToken()).run();
+    await c.env.DB.prepare(INSERT_INTEREST).bind(email, filter.kind, filter.params, filter.label, lang, new Date().toISOString(), newToken()).run();
   } catch (e) {
     console.error(`interest not stored: ${String(e).slice(0, 200)}`);
-    return answer(c, filter, { error: "form.err_unavailable", email, primary }, 503, fragment);
+    return answer(c, filter, { error: "form.err_unavailable", email }, 503, fragment);
   }
   // The line that says it was noted repeats the address and the filter, so a mistyped address shows.
-  return answer(c, filter, { done: true, email, primary }, 200, fragment);
+  return answer(c, filter, { done: true, email }, 200, fragment);
 }

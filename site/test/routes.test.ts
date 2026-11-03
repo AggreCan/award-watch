@@ -20,6 +20,7 @@ const get = (path: string, env = testEnv(), headers: Record<string, string> = {}
   app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.0.${(address++ % 250) + 1}`, ...headers } }, env);
 const text = async (path: string, env = testEnv()) => (await get(path, env)).text();
 const nbsp = (s: string) => s.replace(/[\u00a0\u202f]/g, " ");
+const decode = (s: string) => s.replace(/&amp;/g, "&");
 const EM_DASH = String.fromCharCode(0x2014);
 
 // [path, English phrase, French phrase, file whose absence makes it 503]
@@ -338,6 +339,54 @@ describe("tender notices", () => {
     // Without a province the box changes nothing, so the address leaves it out.
     expect(tenderQueryString(q("?national=0"))).toBe("");
     expect(tenderQueryString(q(""))).toBe("");
+  });
+
+  it("matches any value of a key given several, and every key given", () => {
+    const rows = openTenders as unknown as TenderRow[];
+    const q = (s: string) => readTenderQuery(new URL(`https://x/tenders${s}`));
+    const refs = (s: string) => filterTenders(rows, q(s), testClock).map((r) => r.reference);
+    // Within a key, the union: 82 is cb-100's segment, 72 one of cb-200's.
+    expect(refs("?segment=72&segment=82")).toEqual(["cb-100-10000001", "cb-200-20005019"]);
+    expect(refs("?category=GD&category=SRV")).toEqual(["cb-100-10000001", "cb-200-20005019", "cb-300-30000003"]);
+    expect(refs("?province=BC&province=ON&national=0")).toEqual(["cb-100-10000001", "cb-200-20005019"]);
+    // Across keys, the intersection: cb-200 alone has 72 or 82 and BC; cb-300 names no province, so it stays unless national=0.
+    expect(refs("?segment=72&segment=82&province=BC")).toEqual(["cb-200-20005019"]);
+    expect(refs("?segment=43&segment=82&province=QC&province=BC")).toEqual(["cb-100-10000001", "cb-300-30000003"]);
+    expect(refs("?segment=43&segment=82&province=QC&province=BC&national=0")).toEqual(["cb-100-10000001"]);
+    // Each value once, in the fixed order (categories GD, SRV, CNST, SRVTGD; segments and provinces by code); values the filter cannot use dropped.
+    const messy = q("?segment=82&province=qc&segment=43&province=BC&segment=82&segment=99&national=0&category=srv&category=GD&province=ZZ");
+    expect(messy.category).toEqual(["GD", "SRV"]);
+    expect(messy.segment).toEqual(["43", "82"]);
+    expect(messy.province).toEqual(["BC", "QC"]);
+    const written = tenderQueryString(messy);
+    expect(written).toBe("?category=GD&category=SRV&segment=43&segment=82&province=BC&province=QC&national=0");
+    // The address round-trips: read back, it is the same view and writes the same address.
+    expect(q(written)).toEqual(messy);
+    expect(tenderQueryString(q(written))).toBe(written);
+  });
+
+  it("renders a view with several values of a key: the union within it, a chip a value, the select saying how many", async () => {
+    const html = await text("/tenders?segment=82&segment=43&province=QC&province=BC");
+    expect(html).toContain("2 notices");
+    expect(html).toContain(">cb-100-10000001<");
+    expect(html).toContain(">cb-300-30000003<");
+    expect(html).not.toContain(">cb-200-20005019<");
+    // One chip a value, each linking to the view without that value alone.
+    const chips = [...html.matchAll(/<a class="fchip" href="([^"]*)"[^>]*><span>([^<]*)<\/span> <b>([^<]*)<\/b>/g)].map((m) => [decode(m[1]), m[2], m[3]]);
+    expect(chips).toEqual([
+      ["/tenders?segment=82&province=BC&province=QC", "UNSPSC segment", "43 Information Technology Broadcasting and Telecommunications"],
+      ["/tenders?segment=43&province=BC&province=QC", "UNSPSC segment", "82 Editorial and Design and Graphic and Fine Art Services"],
+      ["/tenders?segment=43&segment=82&province=QC", "Province of delivery", "British Columbia"],
+      ["/tenders?segment=43&segment=82&province=BC", "Province of delivery", "Quebec"],
+    ]);
+    expect(html).toContain('<summary class="btn" id="tender-fold">Filters (4 active)</summary>');
+    // The select reads "Several (2)", and the values ride as hidden fields so the form keeps them without the script.
+    expect(html).toContain('<select name="segment"><option value="" selected="" data-several="">Several (2)</option><option value="">All</option>');
+    expect(html).toContain('<input type="hidden" name="segment" value="43" data-several=""/><input type="hidden" name="segment" value="82" data-several=""/>');
+    expect(html).not.toMatch(/<option value="(43|82)" selected=""/);
+    // A key with one value keeps the plain select.
+    expect(await text("/tenders?segment=82")).toContain('<option value="82" selected="">');
+    expect(nbsp(await text("/tenders?province=QC&province=ON&lang=fr"))).toContain('<option value="" selected="" data-several="">Plusieurs (2)</option>');
   });
 
   it("lists the notices first seen on a day, the newest by default and any of the last 30 on request", async () => {

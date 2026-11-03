@@ -164,8 +164,8 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/alerts",
     name: "alerts.title",
     description: {
-      en: "Email alerts for new tender notices, contracts entering the ending-soon windows and new records of an organization are being built. Register an address now; one message will announce them.",
-      fr: "Les alertes par courriel sur les nouveaux avis d'appel d'offres, les contrats qui entrent dans les périodes de fin et les nouveaux dossiers d'une organisation sont en préparation. Inscrivez une adresse dès maintenant : un seul message les annoncera.",
+      en: "Join one email list or several: new federal tender notices, all or by category, segment and province, and contracts entering the 3-month window.",
+      fr: "Une ou plusieurs listes : nouveaux appels d'offres fédéraux, tous ou par catégorie, segment et province, et contrats qui entrent dans la période de 3 mois.",
     },
   },
   methodology: {

@@ -53,6 +53,7 @@ const PAGES: [string, string, string][] = [
   ["/rankings", `${O}/rankings`, "Rankings: Organizations by Federal Contracts and Grants | Award Watch"],
   ["/rankings/2026", `${O}/rankings/2026`, "Rankings for 2026 | Award Watch"],
   ["/feeds", `${O}/feeds`, "Atom Feeds | Award Watch"],
+  ["/alerts", `${O}/alerts`, "Email Lists | Award Watch"],
   ["/watchlist", `${O}/watchlist`, "Watchlist | Award Watch"],
   ["/methodology", `${O}/methodology`, "Methodology: Sources, Identity and Counting | Award Watch"],
   ["/data", `${O}/data`, "Data: Sources, Downloads, API and Licence | Award Watch"],
