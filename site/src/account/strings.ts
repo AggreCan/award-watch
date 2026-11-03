@@ -540,6 +540,7 @@ export const ACCOUNT_STRINGS = {
   "bugs.delete": {
     en: "Every bug report sent from the account.",
     fr: "Tous les rapports de bogue envoyés à partir du compte.",
+  },
 
   // -- operator console (src/account/admin.tsx) ---------------------------------------
   // Seen by the operator alone; the identifiers, times and event names in its
