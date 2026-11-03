@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
 import { testEnv } from "./assets";
-import { get, newEmail, nextIp, onEnv, post, signIn, useAccountsDb } from "./accounts-helpers";
+import { get, grantPro, newEmail, nextIp, onEnv, post, signIn, useAccountsDb } from "./accounts-helpers";
 
 useAccountsDb();
 
@@ -143,5 +143,19 @@ describe("with the switch on", () => {
     expect(res.status).toBe(404);
     expect(await res.text()).toContain("Page Not Found");
     expect((await post("/account/billing", {})).status).toBe(404);
+  });
+});
+
+describe("the plan subscript after the wordmark", () => {
+  it("names the signed-in reader's plan, free or pro, in both languages, and nothing while signed out", async () => {
+    const email = newEmail("badge");
+    const cookie = await signIn(email);
+    expect((await render("/", onEnv(), cookie)).body).toContain('<span class="brand-plan brand-plan-free">free</span>');
+    expect((await render("/?lang=fr", onEnv(), cookie)).body).toContain('<span class="brand-plan brand-plan-free">gratuit</span>');
+    await grantPro(email);
+    const pro = (await render("/", onEnv(), cookie)).body;
+    expect(pro).toContain('<span class="brand-plan brand-plan-pro">pro</span>');
+    expect(pro).not.toContain("brand-plan-free");
+    expect((await render("/", onEnv())).body).not.toContain("brand-plan");
   });
 });
