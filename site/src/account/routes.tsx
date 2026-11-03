@@ -121,8 +121,8 @@ function uaClass(c: Context<AppEnv>): UaClass | null {
   return deviceClass(c.req.header("user-agent"), c.req.header("sec-ch-ua-mobile")) || null;
 }
 
-// Where the message's link points: the request's own origin on a local run,
-// the site's address otherwise.
+// Where the message's link and its wordmark images point: the request's own
+// origin on a local run, the site's address otherwise.
 function siteBase(c: Context<AppEnv>): string {
   if (isLocalHost(c.req.url) || !c.env.SITE_URL) return new URL(c.req.url).origin;
   return c.env.SITE_URL.replace(/\/+$/, "");
@@ -157,9 +157,10 @@ account.post("/sign-in", async (c) => {
       return again(["account.err_limited"], 429, CODES_PER_HOUR);
     }
     await audit(c.env, issued.userId, "code_requested", null, now);
-    const link = `${siteBase(c)}/account/check?token=${issued.token}${lang === "fr" ? "&lang=fr" : ""}`;
+    const base = siteBase(c);
+    const link = `${base}/account/check?token=${issued.token}${lang === "fr" ? "&lang=fr" : ""}`;
     const sent = await senderFor(c.env, c.req.url)
-      .send(signInMessage(lang, email, issued.code, link, CODE_MINUTES))
+      .send(signInMessage(lang, email, issued.code, link, CODE_MINUTES, base))
       .catch(() => ({ sent: false, reason: "failed" }) as const);
     if (!sent.sent) {
       if (sent.reason === "failed") await audit(c.env, issued.userId, "mail_failed", null, now);

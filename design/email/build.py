@@ -171,7 +171,7 @@ def amber(text: str) -> str:
 
 TAGLINE = {
     "en": "Award Watch · Federal tenders, awards, contracts and grants, by organization.",
-    "fr": "Award Watch · Appels d'offres, attributions, contrats et subventions fédéraux, par organisation.",
+    "fr": "Award Watch · Appels d'offres, attributions, contrats et subventions du fédéral, par organisation.",
 }
 LANGQ = {"en": "", "fr": "/?lang=fr"}
 FOOT_SEARCH = {

@@ -32,7 +32,7 @@ describe("the sign-in request", () => {
     expect(html).toContain(`If <strong>${email}</strong> can receive mail`);
     expect(html).toContain('<meta name="robots" content="noindex"/>');
     const mail = await lastMail(email);
-    expect(mail?.subject).toBe("Your sign-in code for Award Watch");
+    expect(mail?.subject).toBe("Your Award Watch sign-in code");
     expect(mail?.subject).not.toMatch(/[0-9]{6}/);
     const { code, token } = { code: /([0-9]{6})/.exec(mail!.text)![1], token: /token=([0-9a-f.]+)/.exec(mail!.text)![1] };
     expect(mail?.text).toContain(`http://localhost/account/check?token=${token}`);
@@ -365,7 +365,7 @@ describe("the account pages in French", () => {
     await post("/account/sign-in", { email, lang: "fr" });
     const mail = await lastMail(email);
     expect(mail?.lang).toBe("fr");
-    expect(nbsp(mail!.text)).toMatch(/^Votre code de connexion : [0-9]{6}/);
+    expect(nbsp(mail!.text)).toMatch(/^Votre code de connexion\n\n[0-9]{6}\n/);
     expect(mail?.text).toMatch(/token=[0-9a-f.]+&lang=fr/);
     expect(mail?.html).not.toContain("<script");
   });

@@ -223,17 +223,36 @@ export const ACCOUNT_STRINGS = {
   },
   "account.home": { en: "Back to the home page", fr: "Retour à l'accueil" },
 
-  // -- the sign-in message ----------------------------------------------------------------
-  "account.mail_subject": { en: "Your sign-in code for Award Watch", fr: "Votre code de connexion à Award Watch" },
-  "account.mail_code": { en: "Your sign-in code: {code}", fr: "Votre code de connexion : {code}" },
-  "account.mail_link": { en: "Or open this link to sign in:", fr: "Ou ouvrez ce lien pour vous connecter :" },
-  "account.mail_expiry": {
-    en: "The code and the link work once, within {minutes} minutes.",
-    fr: "Le code et le lien fonctionnent une seule fois, dans les {minutes} minutes.",
+  // -- the sign-in message (src/account/sender.ts; design/email shows it) -----------------
+  // The subject and the preheader never carry the code. The footer's tagline
+  // is the site's own (site.name and site.tagline).
+  "account.mail_subject": { en: "Your Award Watch sign-in code", fr: "Votre code de connexion à Award Watch" },
+  "account.mail_preheader": {
+    en: "A sign-in was requested for this address on awardwatch.ca.",
+    fr: "Une connexion a été demandée pour cette adresse sur awardwatch.ca.",
   },
-  "account.mail_ignore": {
-    en: "If you did not ask to sign in, ignore this message. Nothing happens without the code.",
-    fr: "Si vous n'avez pas demandé à vous connecter, ignorez ce message. Rien ne se passe sans le code.",
+  "account.mail_heading": { en: "Your sign-in code", fr: "Votre code de connexion" },
+  "account.mail_lead": {
+    en: "Enter this code on the page where you asked for it, or use the button. Either one works once, within {minutes} minutes.",
+    fr: "Saisissez ce code sur la page où vous l'avez demandé, ou utilisez le bouton. L'un ou l'autre fonctionne une seule fois, pendant {minutes} minutes.",
+  },
+  "account.mail_button": { en: "Sign in to Award Watch", fr: "Se connecter à Award Watch" },
+  "account.mail_not_asked": {
+    en: "If you did not ask for this, ignore this message. Nothing happens without the code.",
+    fr: "Si vous n'avez rien demandé, ignorez ce message. Rien ne se passe sans le code.",
+  },
+  "account.mail_why": {
+    en: "This message was sent because this address was entered on awardwatch.ca.",
+    fr: "Ce message a été envoyé parce que cette adresse a été saisie sur awardwatch.ca.",
+  },
+  // The plain-text part has no button, so its two lines name the link instead.
+  "account.mail_text_link": {
+    en: "Enter it on the page where you asked for it, or open this link:",
+    fr: "Saisissez-le sur la page où vous l'avez demandé, ou ouvrez ce lien :",
+  },
+  "account.mail_text_expiry": {
+    en: "Either one works once, within {minutes} minutes.",
+    fr: "L'un ou l'autre fonctionne une seule fois, pendant {minutes} minutes.",
   },
 
   // -- the privacy page, while accounts are open ------------------------------------------

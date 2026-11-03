@@ -126,7 +126,28 @@ the name Award Watch. Replies go to the contact address the site's
 documents print, and the header `Auto-Submitted: auto-generated` keeps
 out-of-office replies from coming back. Each message has a plain-text and
 an HTML body, in the language of the page it was asked from; the code is in
-both bodies and never in the subject.
+both bodies and never in the subject or the preheader (the line an inbox
+lists after the subject).
+
+The template is `signInMessage()` in `site/src/account/sender.ts`, with its
+English and French strings under `account.mail_*` in
+`site/src/account/strings.ts`. It mirrors the sign-in prototype in
+`design/email/`: the same tables, inline styles and dark-mode rules, the
+code in a ruled band, a button carrying the link, and a footer with the
+reason for the message, the site's tagline and the contact address. The
+prototype's plain-text file is the shape of the plain-text part. A change to
+the message belongs in `design/email/build.py` as well; running
+`python design/email/build.py` regenerates the prototypes and the review
+sheet (`design/email/prototypes.html`, not tracked), so the sheet keeps
+showing what is sent.
+
+The HTML loads no web font, no script and no image but the wordmark,
+served from the site's `/brand/` as two PNGs at twice their displayed 142
+by 20 pixels: `wordmark.png` (ink on a white ground) and `wordmark-dark.png`
+(light ink on a transparent ground, which the clients that honour the dark
+query swap in). Both live in `site/public/brand/` and are drawn from
+`brand/wordmark.svg` by `python brand/make_wordmark_png.py`. On a local run
+the images and the link point at the local server instead.
 
 When the binding refuses a message (the domain is not onboarded, the
 recipient is on the suppression list, the daily limit is reached), the

@@ -4,7 +4,7 @@ The mark is lowercase "aw" set in Inter Bold, with the second v of the w carried
 past x-height as a check mark. A hairline cut along the check's left edge separates it
 from the w; in the two-tone version the check is emerald `#0f7b4f`. The a and the w
 are Inter's own glyphs (SIL Open Font License, `fonts/Inter-Bold.ttf`, the static file
-from the Inter release). The PNG and ICO files the site ships are generated from these
+from the Inter release). The icon PNG and ICO files the site ships are generated from these
 SVGs by `site/scripts/make-icons.py`.
 
 | File | Use |
@@ -16,6 +16,7 @@ SVGs by `site/scripts/make-icons.py`.
 | `wordmark.svg` | "award watch" with the check built into its own first two letters. |
 | `lockup.svg` | The mark beside "Award Watch". |
 | `make_mark.py` | Regenerates every file above. Run `python brand/make_mark.py`. |
+| `make_wordmark_png.py` | Renders `wordmark.svg` with Chrome headless as the sign-in message's two header images, `site/public/brand/wordmark.png` (ink on white) and `wordmark-dark.png` (light ink on transparent), 284 by 40 pixels each, and checks each file's size and ground. Run `python brand/make_wordmark_png.py` after changing the wordmark. |
 
 `explorations/` holds the directions tried on 2026-10-31 before this one (three grid
 pictograms, serif and sans monograms, a single-stroke AW with a kinked tail, and the

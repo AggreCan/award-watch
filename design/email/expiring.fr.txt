@@ -27,5 +27,5 @@ Ouvrir le radar : https://awardwatch.ca/expiring/3m?buyer=dnd-mdn&lang=fr
 La valeur d'un contrat est celle de sa plus récente modification. Rien n'est additionné entre les sources.
 
 Vous recevez ce message chaque semaine pour une recherche enregistrée dans votre compte. Recherches enregistrées et envoi : https://awardwatch.ca/account/searches?lang=fr
-Award Watch · Appels d'offres, attributions, contrats et subventions fédéraux, par organisation.
+Award Watch · Appels d'offres, attributions, contrats et subventions du fédéral, par organisation.
 contact@awardwatch.ca

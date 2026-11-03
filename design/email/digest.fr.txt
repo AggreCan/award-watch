@@ -22,5 +22,5 @@ Voir tous les avis ouverts : https://awardwatch.ca/tenders?segment=81&province=
 Les heures de clôture sont celles de l'acheteur, en heure de l'Est. Les jours restants se comptent à partir de la date des données.
 
 Vous recevez ce message chaque jour pour une recherche enregistrée dans votre compte. Recherches enregistrées et envoi : https://awardwatch.ca/account/searches?lang=fr
-Award Watch · Appels d'offres, attributions, contrats et subventions fédéraux, par organisation.
+Award Watch · Appels d'offres, attributions, contrats et subventions du fédéral, par organisation.
 contact@awardwatch.ca
