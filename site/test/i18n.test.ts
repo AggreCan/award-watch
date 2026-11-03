@@ -51,7 +51,7 @@ const SENTINELS = [
   "days left",
   "Individual, name withheld",
   "Amendments and value change",
-  "Get Alerts by Email",
+  "How email lists work",
   "Every new tender notice",
   "Contracts entering the",
 ];

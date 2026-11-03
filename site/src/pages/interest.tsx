@@ -1,6 +1,8 @@
-// The "Get alerts by email" block: interest in alerts that are not built
-// yet, kept in the forms database (the interest table of pipeline/schema.sql).
-// Nothing is sent from here.
+// The "Get alerts by email" block: a request for an email list, kept in the
+// forms database (the interest table of pipeline/schema.sql). Nothing is sent
+// from here. Email delivery is part of Pro once accounts open, and an account
+// made with the same address is offered the request as a saved search
+// (src/account/searches.ts, importInterest), so the block's note says both.
 //
 // The block saves the filter of the page it sits on. A page hands it the kind
 // and the path and query it answered; interestFilter keeps only the filter

@@ -363,9 +363,9 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
             </a>
           </li>
           <li>
-            {/* The Browse entry marks the current page; this one only says alerts are coming. */}
+            {/* The Browse entry marks the current page; this one says the lists come with Pro once accounts open. */}
             <a class="rail-item rail-later" href="/alerts">
-              <span class="rail-label">{t(lang, "rail.alerts_soon")}</span>
+              <span class="rail-label">{t(lang, "rail.lists_pro")}</span>
             </a>
           </li>
           {/* Accounts (src/account/): only while the switch is on, so the rail is unchanged while it is off. */}

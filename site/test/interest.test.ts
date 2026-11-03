@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import nightly from "../../.github/workflows/nightly.yml?raw";
 import { app } from "../src/index";
 import { bucketFor } from "../src/limits";
+import { allKeys, rawEntry } from "../src/i18n";
 import { normalizeEmail } from "../src/pages/interest";
 import { DESCRIPTION_MAX } from "../src/seo";
 import { routeTemplate } from "../src/views";
@@ -82,13 +83,14 @@ describe("the alerts block on each page", () => {
   it("saves the page's filter, canonical, with the label in the page's language", async () => {
     for (const [path, kind, params, en, fr] of CASES) {
       const english = await text(path);
-      expect(english, path).toContain('<h2>Get Alerts by Email</h2>');
+      expect(english, path).toContain('<h2>Email Lists</h2>');
       expect(hidden(english, "kind"), path).toBe(kind);
       expect(hidden(english, "params"), path).toBe(params);
       expect(hidden(english, "lang"), path).toBe("en");
       expect(label(english), path).toBe(en);
       const french = await text(`${path}${path.includes("?") ? "&" : "?"}lang=fr`);
-      expect(french, path).toContain("<h2>Recevoir des alertes par courriel</h2>");
+      expect(french, path).toContain("<h2>Listes de diffusion</h2>");
+      expect(french, path).toContain('<a href="/alerts">Comment fonctionnent les listes</a>');
       expect(hidden(french, "params"), path).toBe(params);
       expect(hidden(french, "lang"), path).toBe("fr");
       expect(label(french), path).toBe(fr);
@@ -110,9 +112,10 @@ describe("the alerts block on each page", () => {
     expect(block).toContain('<input name="website" type="text" tabindex="-1" autocomplete="off"/>');
     expect(block.match(/<button/g)).toHaveLength(1);
     expect(block.match(/<input name="email"/g)).toHaveLength(1);
-    expect(block).toContain("Alerts are being built. One message will announce them, with a link to unsubscribe; nothing else is sent.");
-    expect(block).toContain('<a href="/privacy#interest">Privacy</a>');
-    expect(block).toContain('<a href="/alerts">How alerts will work</a>');
+    expect(block).toContain(
+      'Email lists are part of Pro once accounts open, and your list will be waiting in your account; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+    );
+    expect(block).toContain('<a href="/alerts">How email lists work</a>');
     // The script only keeps the reader on the page; the form posts without it.
     expect(html).toContain('<script src="/interest.js" defer=""></script>');
     // Only the tender list follows the address the browser shows.
@@ -133,7 +136,7 @@ describe("POST /interest", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     const html = await res.text();
     // The line repeats the address as stored and the filter, so a mistyped address shows.
-    expect(html).toContain('<p class="interest-done" role="status">Noted: reader.one@example.ca, for contracts entering the 3-month window for National Defence. One message will announce the alerts.</p>');
+    expect(html).toContain('<p class="interest-done" role="status">Noted: reader.one@example.ca, for contracts entering the 3-month window for National Defence.</p>');
     expect(html).toContain('<a href="/expiring/3m?buyer=dnd-mdn" class="btn">Back to the page</a>');
     expect(html).not.toContain('name="email"');
     const [row] = await rows("reader.one@example.ca");
@@ -153,7 +156,7 @@ describe("POST /interest", () => {
   it("writes the label in the form's language", async () => {
     const res = await post({ email: "lectrice@example.ca", kind: "buyer", params: "/buyers/pwgsc-tpsgc", lang: "fr" });
     expect(res.status).toBe(200);
-    expect(nbsp(await res.text())).toContain("C’est noté : lectrice@example.ca, pour nouveaux avis d’attribution et contrats de Services publics et Approvisionnement Canada. Un seul message annoncera les alertes.");
+    expect(nbsp(await res.text())).toContain("C’est noté : lectrice@example.ca, pour nouveaux avis d’attribution et contrats de Services publics et Approvisionnement Canada.</p>");
     const [row] = await rows("lectrice@example.ca");
     expect(row.lang).toBe("fr");
     expect(row.label).toBe("Nouveaux avis d’attribution et contrats de Services publics et Approvisionnement Canada");
@@ -251,8 +254,10 @@ describe("POST /interest", () => {
     const html = await ok.text();
     expect(html.startsWith('<div class="interest-body" data-interest="">')).toBe(true);
     expect(html).not.toContain("<html");
-    expect(html).toContain("Noted: fragment@example.ca, for ");
-    expect(html).toContain("One message will announce the alerts.");
+    expect(html).toContain(
+      '<p class="interest-done" role="status">Noted: fragment@example.ca, for new tender notices and award notices in segment 82 Editorial and Design and Graphic and Fine Art Services.</p>',
+    );
+    expect(html).toContain("Email lists are part of Pro once accounts open, and your list will be waiting in your account;");
     const bad = await post({ email: "nope", kind: "segment", params: "/segments/82", lang: "en" }, { "x-interest-fragment": "1" });
     expect(bad.status).toBe(400);
     const again = await bad.text();
@@ -295,19 +300,28 @@ describe("the alerts page and the privacy page", () => {
     const html = await res.text();
     expect(html).toContain("<h1>Email Lists</h1>");
     expect(html).toContain("<title>Email Lists | Award Watch</title>");
-    expect(html).toContain("Join one list or several with one address.");
+    expect(decode(html)).toContain(
+      "Email lists are part of Pro, the site's paid plan, once accounts open. Sign up now and your lists will be waiting in your account. " +
+      "Nothing is sent before then except one message saying accounts are open.",
+    );
     // A few short sections: no contents box. The chooser comes first, the page's own action.
     expect(html).toContain('<div class="doc-layout doc-alone"><div class="doc"><h2 id="register">Choose Your Lists</h2>');
-    expect(html).toContain('<h2 id="cover">What Alerts Will Cover</h2>');
+    expect(html).toContain('<h2 id="cover">What Pro Delivers</h2>');
+    expect(html).toContain("On the Pro plan, each list is a saved search on your account, sent by email each day or each week with what is new in it.");
     expect(html).toContain("Contracts entering the 3-, 6- or 12-month window of contracts ending soon, for one buyer, one segment or every contract.");
     expect(html).toContain("New records naming an organization you watch: an award notice, a contract or a grant.");
-    expect(html).toContain("The form keeps the address and each list chosen.");
+    expect(html).toContain("The form keeps the address and each list chosen. When accounts open, one message will say so, with a link to unsubscribe. " +
+      "Create an account with the same address and the lists will be there, ready to add to its saved searches. The address is never shown or shared.");
+    // The chooser's note names the lists, several of them.
+    expect(html).toContain(
+      'Email lists are part of Pro once accounts open, and your lists will be waiting in your account; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+    );
     for (const href of ["/tenders", "/expiring", "/organizations", "/buyers", "/segments", "/privacy#interest"]) {
       expect(html, href).toContain(`<a href="${href}">`);
     }
-    // The Browse entry is named for the page and marks it; the "soon" item under Your lists stays a plain link.
+    // The Browse entry is named for the page and marks it; the Pro item under Your lists stays a plain link.
     expect(html).toContain('<a class="rail-item" href="/alerts" aria-current="page"><span class="rail-label">Email lists</span></a>');
-    expect(html).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Alerts: soon</span></a>');
+    expect(html).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Email lists: Pro</span></a>');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));
     // The footer names the page as the rail does.
     expect(footer).toContain('<a href="/feeds">Feeds</a><a href="/alerts">Email lists</a>');
@@ -316,11 +330,13 @@ describe("the alerts page and the privacy page", () => {
     const french = nbsp(await fr.text());
     expect(french).toContain("<h1>Listes de diffusion</h1>");
     expect(french).toContain("<title>Listes de diffusion | Award Watch</title>");
-    expect(french).toContain("Inscrivez une adresse à une liste ou à plusieurs.");
+    expect(french).toContain("Les listes de diffusion font partie de Pro, le forfait payant du site, dès l’ouverture des comptes.");
+    expect(french).toContain("D’ici là, rien n’est envoyé, sauf un message annonçant l’ouverture des comptes.");
+    expect(french).toContain('<h2 id="cover">Ce que Pro envoie</h2>');
     expect(french).toContain('<h2 id="register">Choisissez vos listes</h2>');
     expect(french).toContain("Rien n’est encore envoyé.");
     expect(french).toContain('<a class="rail-item" href="/alerts" aria-current="page"><span class="rail-label">Listes de diffusion</span></a>');
-    expect(french).toContain('<span class="rail-label">Alertes : bientôt</span>');
+    expect(french).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Listes de diffusion : Pro</span></a>');
     expect(french.slice(french.indexOf('<footer class="site-footer">'))).toContain('<a href="/alerts">Listes de diffusion</a>');
     // The description fits a result list in both languages.
     for (const page of [html, french]) {
@@ -335,15 +351,80 @@ describe("the alerts page and the privacy page", () => {
     expect(html).toContain('<h2 id="interest">Alert Interest</h2>');
     expect(html).toContain("The alerts form stores the email address, the saved filter and the site&#39;s wording of it, the language of the page, the time it was received and a random token for the links in later messages.");
     expect(html).toContain("It stores no IP address, browser identification or visitor code.");
-    expect(html).toContain("The address is used for one message announcing the alerts, with a link to unsubscribe, and then for the alerts asked for once they exist.");
+    expect(html).toContain("The address is used for one message saying accounts are open, with a link to unsubscribe, and nothing else is sent to it.");
+    expect(html).toContain("If an account is later made with the same address, the lists are offered to it as saved searches.");
     expect(html).toContain("The address is never shown or shared.");
     expect(html).toContain('To have it removed, use the unsubscribe link in that message or write to <a href="mailto:contact@awardwatch.ca">contact@awardwatch.ca</a>. Removal is free of charge.');
     // The sections already there stay.
     for (const id of ["accounts", "browser", "counting", "feeds", "forms", "third", "removal"]) expect(html, id).toContain(`<h2 id="${id}">`);
     const french = nbsp(await text("/privacy?lang=fr"));
     expect(french).toContain('<h2 id="interest">Intérêt pour les alertes</h2>');
+    expect(french).toContain("L’adresse sert à un seul message annonçant l’ouverture des comptes, avec un lien de désabonnement, et rien d’autre n’y est envoyé.");
     expect(french).toContain("L’adresse n’est jamais affichée ni communiquée.");
     expect(french).toContain("Le retrait est gratuit.");
+  });
+});
+
+describe("the email lists as part of Pro", () => {
+  // The wording from before the lists became part of Pro (operator, 2026-11-03): alerts as a
+  // feature being built, announced to every address. Compared without case, apostrophes
+  // straightened and no-break spaces as spaces, as a reader would search for it.
+  const OLD = [
+    "Alerts are being built", "are being built", "One message will announce them", "One message will announce the alerts", "Alerts: soon",
+    "Les alertes sont en préparation", "Un seul message les annoncera", "Un seul message annoncera les alertes", "Alertes : bientôt",
+  ].map((s) => s.toLowerCase());
+  const plain = (s: string) => nbsp(decode(s)).replace(/’/g, "'").toLowerCase();
+  const BLOCK_PAGES = ["/tenders", "/expiring", "/expiring/3m", "/organizations/org-a000000001", "/buyers/pwgsc-tpsgc", "/segments/82"];
+  const fr = (path: string) => `${path}${path.includes("?") ? "&" : "?"}lang=fr`;
+  const block = (html: string) => html.match(/<section class="panel interest">[\s\S]*?<\/section>/)?.[0] ?? "(no block)";
+
+  it("leaves the old wording on no page, in no answer and in no string, in either language", async () => {
+    for (const path of ["/", ...BLOCK_PAGES, "/alerts", "/privacy", "/watchlist"]) {
+      for (const p of [path, fr(path)]) {
+        const html = plain(await text(p));
+        for (const old of OLD) expect(html, `${p}: ${old}`).not.toContain(old);
+      }
+    }
+    // The answers to both forms, in both languages.
+    for (const lang of ["en", "fr"]) {
+      const one = plain(await (await post({ email: `old.words.${lang}@example.ca`, kind: "tenders", params: "/tenders", lang })).text());
+      const several = plain(await (await choose([["lang", lang], ["list", "tenders"], ["list", "expiring"], ["email", `old.lists.${lang}@example.ca`]])).text());
+      for (const old of OLD) {
+        expect(one, `${lang}: ${old}`).not.toContain(old);
+        expect(several, `${lang}: ${old}`).not.toContain(old);
+      }
+    }
+    for (const key of allKeys()) {
+      const { en, fr: french } = rawEntry(key);
+      for (const old of OLD) {
+        expect(en.toLowerCase(), key).not.toContain(old);
+        expect(french.toLowerCase(), key).not.toContain(old);
+      }
+    }
+  });
+
+  it("says Pro on the Email lists page, in the rail and under every page's form, in both languages, with no price", async () => {
+    const en = decode(await text("/alerts"));
+    expect(en).toContain("<p class=\"lead\">Email lists are part of Pro, the site's paid plan, once accounts open.");
+    expect(en).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Email lists: Pro</span></a>');
+    const french = nbsp(decode(await text("/alerts?lang=fr")));
+    expect(french).toContain("<p class=\"lead\">Les listes de diffusion font partie de Pro, le forfait payant du site, dès l’ouverture des comptes.");
+    expect(french).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Listes de diffusion : Pro</span></a>');
+    // The page names no price and promises no delivery without the plan.
+    for (const page of [en, french]) {
+      const main = page.match(/<main id="main">[\s\S]*?<\/main>/)?.[0] ?? "(no main)";
+      expect(main).not.toMatch(/\$\s?\d|\d\s?\$|CA\$|\bfree\b|gratuit/i);
+    }
+    // Every page's block says it in one sentence, the same in each place.
+    for (const path of BLOCK_PAGES) {
+      expect(block(await text(path)), path).toContain(
+        'Email lists are part of Pro once accounts open, and your list will be waiting in your account; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+      );
+      expect(nbsp(block(await text(fr(path)))), path).toContain(
+        "Les listes de diffusion font partie de Pro dès l’ouverture des comptes, et votre liste vous attendra dans votre compte; " +
+        'la page <a href="/privacy#interest">Confidentialité</a> indique ce que conserve le formulaire.',
+      );
+    }
   });
 });
 

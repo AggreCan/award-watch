@@ -1,9 +1,11 @@
 // /alerts, the Email lists page: a chooser where a reader joins one list or
-// several with one address, what the alerts will cover, and where the
-// one-list form sits on the other pages. Laid out like the Methodology page.
-// Nothing is sent yet; the chooser stores one row of the interest table per
-// list chosen, built by interestFilter (pages/interest.tsx) exactly as the
-// block on the list's own page would build it.
+// several with one address, what Pro delivers, and where the one-list form
+// sits on the other pages. Laid out like the Methodology page. The sign-up
+// is public, and email delivery is part of Pro once accounts open (operator,
+// 2026-11-03): nothing is sent yet; the chooser stores one row of the
+// interest table per list chosen, built by interestFilter (pages/interest.tsx)
+// exactly as the block on the list's own page would build it, and an account
+// made with the same address is offered those rows as saved searches.
 //
 // The lists: every new tender notice; the new notices matching any mix of
 // category, UNSPSC segment and province of delivery (one list, saved as the
@@ -211,7 +213,7 @@ export const ListsBody: FC<{ lang: Lang; data: ChooserData } & ListsState> = ({ 
           </div>
         </form>
       )}
-      <p class="interest-note">{tj(lang, "interest.note", { privacy: <a href="/privacy#interest">{t(lang, "footer.privacy")}</a> })}</p>
+      <p class="interest-note">{tj(lang, "lists.note", { privacy: <a href="/privacy#interest">{t(lang, "footer.privacy")}</a> })}</p>
     </div>
   );
 };

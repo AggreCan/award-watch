@@ -142,7 +142,7 @@ describe("every page", () => {
     expect(nav).not.toContain("aria-current");
     expect(nav).not.toContain("rail-ancestor");
     expect(nav).toContain('<span class="rail-n" data-watch-count="" hidden=""></span>');
-    expect(nav).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Alerts: soon</span></a>');
+    expect(nav).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Email lists: Pro</span></a>');
     // A page's own section is marked in the rail.
     expect(await text("/buyers")).toContain('<a class="rail-item" href="/buyers" aria-current="page">');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));

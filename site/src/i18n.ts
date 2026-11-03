@@ -57,7 +57,8 @@ const STRINGS = {
   "rail.browse": { en: "Browse", fr: "Parcourir" },
   "rail.lists": { en: "Your lists", fr: "Vos listes" },
   "rail.email_lists": { en: "Email lists", fr: "Listes de diffusion" },
-  "rail.alerts_soon": { en: "Alerts: soon", fr: "Alertes : bientôt" },
+  // Under Your lists: the email lists are part of Pro once accounts open (operator, 2026-11-03).
+  "rail.lists_pro": { en: "Email lists: Pro", fr: "Listes de diffusion : Pro" },
   "footer.sources": {
     en: "Records from CanadaBuys, open.canada.ca and the Registry of Lobbyists.",
     fr: "Dossiers d'AchatsCanada, d'ouvert.canada.ca et du Registre des lobbyistes.",
@@ -1712,18 +1713,18 @@ const STRINGS = {
   "form.thanks_correction": { en: "The correction was received and will be reviewed.", fr: "La correction a été reçue et sera examinée." },
 
   // -- interest in email alerts (pages/interest.tsx) and the alerts page --------------------------
-  "interest.title": { en: "Get Alerts by Email", fr: "Recevoir des alertes par courriel" },
-  "interest.about": { en: "How alerts will work", fr: "Fonctionnement des alertes" },
+  // The sign-up is public and stores requests; email delivery is part of Pro once accounts open,
+  // and a request waits in the account made with its address (operator, 2026-11-03). No price
+  // appears here, and no string promises delivery without the plan.
+  "interest.title": { en: "Email Lists", fr: "Listes de diffusion" },
+  "interest.about": { en: "How email lists work", fr: "Comment fonctionnent les listes" },
   "interest.email": { en: "Email address", fr: "Adresse courriel" },
   "interest.submit": { en: "Notify me", fr: "M'avertir" },
   "interest.note": {
-    en: "Alerts are being built. One message will announce them, with a link to unsubscribe; nothing else is sent. The address is kept for that only, as the {privacy} page says.",
-    fr: "Les alertes sont en préparation. Un seul message les annoncera, avec un lien de désabonnement; rien d'autre n'est envoyé. L'adresse est conservée à cette seule fin, comme l'indique la page {privacy}.",
+    en: "Email lists are part of Pro once accounts open, and your list will be waiting in your account; the {privacy} page says what the form keeps.",
+    fr: "Les listes de diffusion font partie de Pro dès l'ouverture des comptes, et votre liste vous attendra dans votre compte; la page {privacy} indique ce que conserve le formulaire.",
   },
-  "interest.done": {
-    en: "Noted: {email}, for {label}. One message will announce the alerts.",
-    fr: "C'est noté : {email}, pour {label}. Un seul message annoncera les alertes.",
-  },
+  "interest.done": { en: "Noted: {email}, for {label}.", fr: "C'est noté : {email}, pour {label}." },
   "interest.watch_note": {
     en: "For a list in this browser without email, use Add to watchlist.",
     fr: "Pour une liste conservée dans ce navigateur, sans courriel, utilisez Ajouter à la liste de suivi.",
@@ -1762,11 +1763,14 @@ const STRINGS = {
   },
   "alerts.title": { en: "Email Lists", fr: "Listes de diffusion" },
   "alerts.lead": {
-    en: "Join one list or several with one address. Alerts by email are being built, and one message will announce them.",
-    fr: "Inscrivez une adresse à une liste ou à plusieurs. Les alertes par courriel sont en préparation, et un seul message les annoncera.",
+    en: "Email lists are part of Pro, the site's paid plan, once accounts open. Sign up now and your lists will be waiting in your account. Nothing is sent before then except one message saying accounts are open.",
+    fr: "Les listes de diffusion font partie de Pro, le forfait payant du site, dès l'ouverture des comptes. Inscrivez-vous maintenant et vos listes vous attendront dans votre compte. D'ici là, rien n'est envoyé, sauf un message annonçant l'ouverture des comptes.",
   },
-  "alerts.toc_cover": { en: "What Alerts Will Cover", fr: "Ce que couvriront les alertes" },
-  "alerts.cover_intro": { en: "An alert follows one saved filter and reports what is new in it.", fr: "Une alerte suit un filtre enregistré et signale ce qui y est nouveau." },
+  "alerts.toc_cover": { en: "What Pro Delivers", fr: "Ce que Pro envoie" },
+  "alerts.cover_intro": {
+    en: "On the Pro plan, each list is a saved search on your account, sent by email each day or each week with what is new in it.",
+    fr: "Avec le forfait Pro, chaque liste est une recherche enregistrée de votre compte, envoyée par courriel chaque jour ou chaque semaine avec ce qui y est nouveau.",
+  },
   "alerts.cover_tenders": {
     en: "New tender notices: every one, or those matching the filters of the open notices list (words in the title, category, segment, province, buyer, notice type, procurement method).",
     fr: "Les nouveaux avis d'appel d'offres : tous, ou ceux qui correspondent aux filtres de la liste des avis ouverts (mots du titre, catégorie, segment, province, acheteur, type d'avis, méthode d'approvisionnement).",
@@ -1785,8 +1789,8 @@ const STRINGS = {
   },
   "alerts.toc_now": { en: "Until Then", fr: "D'ici là" },
   "alerts.now": {
-    en: "Nothing is sent yet. The form keeps the address and each list chosen. One message will announce the alerts, with a link to unsubscribe, and nothing else is sent before it. The address is never shown or shared.",
-    fr: "Rien n'est encore envoyé. Le formulaire conserve l'adresse et chaque liste choisie. Un seul message annoncera les alertes, avec un lien de désabonnement, et rien d'autre n'est envoyé d'ici là. L'adresse n'est jamais affichée ni communiquée.",
+    en: "Nothing is sent yet. The form keeps the address and each list chosen. When accounts open, one message will say so, with a link to unsubscribe. Create an account with the same address and the lists will be there, ready to add to its saved searches. The address is never shown or shared.",
+    fr: "Rien n'est encore envoyé. Le formulaire conserve l'adresse et chaque liste choisie. À l'ouverture des comptes, un seul message le signalera, avec un lien de désabonnement. Créez un compte avec la même adresse et les listes y seront, prêtes à être ajoutées à ses recherches enregistrées. L'adresse n'est jamais affichée ni communiquée.",
   },
   "alerts.privacy": {
     en: "The {privacy} page says what the form keeps and how to have the address removed.",
@@ -1831,6 +1835,11 @@ const STRINGS = {
   // Above the list of the lists saved, so a mistyped address shows.
   "lists.done": { en: "Saved for {email}:", fr: "C'est noté pour {email} :" },
   "lists.err_none": { en: "Choose at least one list.", fr: "Choisissez au moins une liste." },
+  // Under the chooser: interest.note for several lists.
+  "lists.note": {
+    en: "Email lists are part of Pro once accounts open, and your lists will be waiting in your account; the {privacy} page says what the form keeps.",
+    fr: "Les listes de diffusion font partie de Pro dès l'ouverture des comptes, et vos listes vous attendront dans votre compte; la page {privacy} indique ce que conserve le formulaire.",
+  },
 
   // -- citing -------------------------------------------------------------------------------------
   "cite.title": { en: "How to Cite", fr: "Comment citer" },
@@ -2040,8 +2049,8 @@ const STRINGS = {
     fr: "Le formulaire d'alertes conserve l'adresse courriel, le filtre enregistré et la formulation qu'en donne le site, la langue de la page, l'heure de réception et un jeton aléatoire pour les liens des messages à venir. Il ne conserve aucune adresse IP, identification de navigateur ni code de visiteur.",
   },
   "privacy.interest_use": {
-    en: "The address is used for one message announcing the alerts, with a link to unsubscribe, and then for the alerts asked for once they exist. Nothing else is sent to it.",
-    fr: "L'adresse sert à un seul message annonçant les alertes, avec un lien de désabonnement, puis aux alertes demandées une fois qu'elles existeront. Rien d'autre n'y est envoyé.",
+    en: "The address is used for one message saying accounts are open, with a link to unsubscribe, and nothing else is sent to it. If an account is later made with the same address, the lists are offered to it as saved searches.",
+    fr: "L'adresse sert à un seul message annonçant l'ouverture des comptes, avec un lien de désabonnement, et rien d'autre n'y est envoyé. Si un compte est ensuite créé avec la même adresse, les listes lui sont proposées comme recherches enregistrées.",
   },
   "privacy.interest_shown": { en: "The address is never shown or shared.", fr: "L'adresse n'est jamais affichée ni communiquée." },
   "privacy.interest_removal": {

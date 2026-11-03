@@ -56,7 +56,7 @@ describe("a profile", () => {
     const html = await text("/organizations/org-a000000001");
     expect(ascending(order(html, [
       '<section class="tiles"', '<h2 id="expiring">', '<h2 id="buyers">', '<h2 id="years">', '<h2 id="awards">', '<h2 id="contracts">',
-      '<h2 id="lobbying">', 'class="sources-line"', "Get Alerts by Email", "Addresses on the Records", "Corporate Registry",
+      '<h2 id="lobbying">', 'class="sources-line"', "<h2>Email Lists</h2>", "Addresses on the Records", "Corporate Registry",
       '<h2 id="responses">', '<h2 id="corrections">',
     ]))).toBe(true);
     // The alerts form follows the lists, with the quieter button.
@@ -90,7 +90,7 @@ describe("a buyer page", () => {
   it("leads with its contracts ending, then the largest values, the newest awards, the alerts form and the years", async () => {
     const html = await text("/buyers/pwgsc-tpsgc");
     expect(ascending(order(html, [
-      '<h2 id="expiring">', '<h2 id="top-awards">', "<h2>Newest Award Notices</h2>", "Get Alerts by Email", '<h2 id="years">',
+      '<h2 id="expiring">', '<h2 id="top-awards">', "<h2>Newest Award Notices</h2>", "<h2>Email Lists</h2>", '<h2 id="years">',
     ]))).toBe(true);
     // The span of its records, its feed buttons, and tiles that open the source's largest values.
     expect(html).toContain('<p class="page-note">Records from 2025 to 2026.</p>');
@@ -107,7 +107,7 @@ describe("the lists", () => {
       ["/segments/82", "<h2>Open Notices</h2>"],
     ]) {
       const html = await text(path);
-      expect(html.indexOf("Get Alerts by Email"), path).toBeGreaterThan(html.indexOf(list));
+      expect(html.indexOf("<h2>Email Lists</h2>"), path).toBeGreaterThan(html.indexOf(list));
       expect(html, path).toContain('<button type="submit" class="btn">Notify me</button>');
     }
     // On /alerts the chooser is the page's own action.

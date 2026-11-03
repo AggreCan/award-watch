@@ -164,8 +164,8 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/alerts",
     name: "alerts.title",
     description: {
-      en: "Join one email list or several: new federal tender notices, all or by category, segment and province, and contracts entering the 3-month window.",
-      fr: "Une ou plusieurs listes : nouveaux appels d'offres fédéraux, tous ou par catégorie, segment et province, et contrats qui entrent dans la période de 3 mois.",
+      en: "Email lists of new federal tender notices, by category, segment and province, and of contracts entering the 3-month window. Part of Pro once accounts open.",
+      fr: "Nouveaux appels d'offres fédéraux, par catégorie, segment et province, et contrats qui entrent dans la période de 3 mois. Avec Pro dès l'ouverture des comptes.",
     },
   },
   methodology: {
