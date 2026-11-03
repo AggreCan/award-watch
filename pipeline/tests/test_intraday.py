@@ -605,19 +605,200 @@ def test_the_workflow_runs_the_steps_in_order_on_the_right_conditions():
     assert "working-directory: site" in state
     fetch = step(text, "Fetch the new notices file when it changed")
     assert 'python -m awardwatch_pipeline.intraday fetch --state "$OUT/state.json" --out "$OUT"' in fetch
+    # The state read's own outcome, not the job's state: after a read that failed under continue-on-error the job
+    # is still a success, and nothing after the read may run.
+    assert "if: ${{ steps.gate.outputs.active == 'true' && steps.state.outcome == 'success' }}" in fetch
     lookup = step(text, "Fetch the buyer lookup from R2")
-    assert "if: ${{ steps.fetch.outputs.changed == 'true' }}" in lookup
+    assert "if: ${{ steps.gate.outputs.active == 'true' && steps.fetch.outputs.changed == 'true' }}" in lookup
     assert f'r2 object get --remote "$BUCKET/{intraday.LOOKUP_KEY}" --file "$OUT/lookup.json.gz"' in lookup
     assert 'grep -qi "specified key does not exist"' in lookup
     refresh = step(text, "Parse the notices and write the upserts")
-    assert "if: ${{ steps.fetch.outputs.changed == 'true' }}" in refresh
+    assert "if: ${{ steps.gate.outputs.active == 'true' && steps.fetch.outputs.changed == 'true' }}" in refresh
     assert "python -m awardwatch_pipeline.intraday refresh --csv \"$OUT/new.csv\" --lookup \"$OUT/lookup.json.gz\"" in refresh
     apply = step(text, "Apply the upserts to the search database")
-    assert "steps.fetch.outputs.changed == 'true' && steps.refresh.outputs.statements != '0'" in apply
+    # The parse's own outcome, not the job's state: after a parse that failed under continue-on-error the job is
+    # still a success, and a missing or partial batch must not be applied.
+    assert ("steps.fetch.outputs.changed == 'true' && steps.refresh.outcome == 'success' "
+            "&& steps.refresh.outputs.statements != '0'") in apply
     assert '"$WRANGLER" d1 execute awardwatch-search --remote --yes --file "$OUT/batch.sql"' in apply
     record = step(text, "Record the run")
-    assert "if: ${{ !cancelled() && steps.state.outcome == 'success' }}" in record
+    assert "if: ${{ !cancelled() && steps.gate.outputs.active == 'true' && steps.state.outcome == 'success' }}" in record
+    # By outcome: a step that failed under continue-on-error has the conclusion "success".
     for name in ("fetch", "lookup", "refresh", "apply"):
         assert f'--step "{name}=${{{{ steps.{name}.outcome }}}}"' in record, name
+    assert ".conclusion" not in text
     assert record.index("intraday record") < record.index('--file "$OUT/run.sql"')
     assert "RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}" in record
+
+
+# -- a failed cut is a row, not a red run; the gate on the paid plan -------------------------------------
+
+
+def steps_of(text: str) -> list[dict[str, str]]:
+    """The job's steps in order, each as its own keys (name or uses, id, if, continue-on-error), read at the
+    step's indentation so a comment or a line of a run block never counts."""
+    body = text.split("\n    steps:\n", 1)[1]
+    out = []
+    for chunk in ("\n" + body).split("\n      - ")[1:]:
+        first, *rest = chunk.splitlines()
+        key, _, value = first.partition(": ")
+        keys = {key: value}
+        for line in rest:
+            m = re.match(r"^        ([a-z-]+): (.+)$", line)
+            if m:
+                keys[m.group(1)] = m.group(2)
+        out.append(keys)
+    return out
+
+
+STATUS_CHECKS = ("!cancelled()", "always()", "success()")
+
+
+def holds(condition: str | None, job: dict) -> bool:
+    """A step's condition as GitHub evaluates the forms this workflow uses: terms joined by &&, each a status
+    check or steps.<id>.outcome or steps.<id>.outputs.<name> compared with == or != to a quoted text. With no
+    status check in it (or no condition), GitHub puts success() in front: no earlier step failed outside
+    continue-on-error. A form outside these fails the test, so the evaluator is extended rather than misread."""
+    if not condition:
+        return not job["failed"]
+    assert condition.startswith("${{ ") and condition.endswith(" }}"), condition
+    terms = [t.strip() for t in condition[4:-3].split("&&")]
+    if not any(t in STATUS_CHECKS for t in terms):
+        terms.insert(0, "success()")
+    for term in terms:
+        if term in ("!cancelled()", "always()"):
+            continue
+        if term == "success()":
+            if job["failed"]:
+                return False
+            continue
+        m = re.fullmatch(r"steps\.(\w+)\.(outcome|outputs\.(\w+)) (==|!=) '([^']*)'", term)
+        assert m, term
+        sid, what, output, op, want = m.groups()
+        have = job["outcomes"].get(sid, "") if what == "outcome" else job["outputs"].get(sid, {}).get(output, "")
+        if (have == want) != (op == "=="):
+            return False
+    return True
+
+
+def simulate(text: str, *, fail: tuple[str, ...] = (), active: bool = True, changed: str = "true",
+             statements: str = "2") -> dict:
+    """One run of the job: which steps run, each id's outcome, and whether the job ends red. A step in fail
+    (by id or name) fails; a step that succeeds sets the outputs the job reads (the gate's active, the fetch's
+    changed, the parse's statement count). A step that fails sets none, as the commands write theirs last."""
+    job = {"failed": False, "outcomes": {}, "outputs": {}, "ran": []}
+    sets = {"gate": {"active": "true"} if active else {}, "fetch": {"changed": changed},
+            "refresh": {"statements": statements}}
+    for s in steps_of(text):
+        label, sid = s.get("name") or s.get("uses"), s.get("id")
+        if not holds(s.get("if"), job):
+            if sid:
+                job["outcomes"][sid] = "skipped"
+            continue
+        job["ran"].append(label)
+        failed = sid in fail or label in fail
+        if sid:
+            job["outcomes"][sid] = "failure" if failed else "success"
+            if not failed:
+                job["outputs"][sid] = sets.get(sid, {})
+        if failed and s.get("continue-on-error") != "true":
+            job["failed"] = True
+    return job
+
+
+def recorded(job: dict) -> dict | None:
+    """The run row the record step writes for a simulated run, or None when it did not run."""
+    if "Record the run" not in job["ran"]:
+        return None
+    o = job["outcomes"]
+    fetched = {"changed": job["outputs"]["fetch"]["changed"] == "true", "etag": '"e"', "last_modified": "L"} \
+        if o.get("fetch") == "success" else None
+    refreshed = {"rows_read": 3, "rows_new": 1, "rows_updated": 2,
+                 "statements": int(job["outputs"]["refresh"]["statements"])} if o.get("refresh") == "success" else None
+    steps = {name: o.get(name, "") for name in ("fetch", "lookup", "refresh", "apply")}
+    return intraday.run_row("1-1", "2026-11-03T13:45:30Z", fetched, refreshed, steps)
+
+
+def test_a_failed_cut_is_a_row_and_the_run_stays_green():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    flagged = [s.get("id") or s.get("name") or s.get("uses") for s in steps_of(text) if s.get("continue-on-error") == "true"]
+    assert flagged == ["state", "fetch", "lookup", "refresh", "apply"]
+    clean = simulate(text)
+    assert not clean["failed"] and recorded(clean)["ok"] == 1
+    # Each of the four steps failing: green, the record still runs, ok 0 and the step named; the steps that
+    # need the failed one's output are skipped, the batch is never applied after a failed parse.
+    for name, detail, skipped in (
+        ("fetch", "the new notices file could not be fetched", {"lookup", "refresh", "apply"}),
+        ("lookup", "failed at lookup; the next run fetches the file again", set()),
+        ("refresh", "failed at refresh; the next run fetches the file again", {"apply"}),
+        ("apply", "failed at apply; the next run fetches the file again", set()),
+    ):
+        job = simulate(text, fail=(name,))
+        assert not job["failed"], name
+        assert {k for k, v in job["outcomes"].items() if v == "skipped"} == skipped, name
+        row = recorded(job)
+        assert row is not None and (row["ok"], row["detail"]) == (0, detail), name
+    # An unchanged file and an empty cut go through with nothing to apply.
+    for kw in ({"changed": "false"}, {"statements": "0"}):
+        job = simulate(text, **kw)
+        assert not job["failed"] and job["outcomes"]["apply"] == "skipped" and recorded(job)["ok"] == 1, kw
+    # The search database unreadable (down, or its binding wrong): green with no row, and nothing after the state
+    # read runs, the record included (a run that cannot read D1 cannot write its row there either).
+    labels = [s.get("name") or s.get("uses") for s in steps_of(text)]
+    after = labels[labels.index("Read the last run from the search database") + 1:]
+    job = simulate(text, fail=("state",))
+    assert not job["failed"] and recorded(job) is None
+    assert job["ran"] == labels[:len(labels) - len(after)] and not set(job["ran"]) & set(after)
+    assert {job["outcomes"][sid] for sid in ("fetch", "lookup", "refresh", "apply")} == {"skipped"}
+    # Red only when the run cannot run at all, and then no row: an install, the checkout, the secrets.
+    for name in ("Install the pipeline", "Install the site's tools", "actions/checkout@v4",
+                 "Check that the Cloudflare secrets exist"):
+        job = simulate(text, fail=(name,))
+        assert job["failed"] and recorded(job) is None, name
+    # A record that cannot be written is red too: it is the one place the failure would show.
+    assert simulate(text, fail=("Record the run",))["failed"]
+
+
+def test_the_refresh_runs_only_while_a_paid_plan_is_live():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    steps = steps_of(text)
+    labels = [s.get("name") or s.get("uses") for s in steps]
+    # Right after the secrets check (missing secrets stay a red run; read by the gate they would look like no
+    # plan), before the checkout and the installs, so a run for nobody costs seconds.
+    assert labels[:3] == ["Check that the Cloudflare secrets exist", "Check for a live paid plan", "actions/checkout@v4"]
+    assert steps[1]["id"] == "gate" and "if" not in steps[1] and "continue-on-error" not in steps[1]
+    for s in steps[2:]:
+        assert (s.get("if") or "").startswith("${{ ") and "steps.gate.outputs.active == 'true'" in s["if"], s
+    # No live plan, or a count that cannot be read (the gate writes no output either way): green, no row.
+    idle = simulate(text, active=False)
+    assert idle["ran"] == labels[:2] and not idle["failed"] and recorded(idle) is None
+    gate = step(text, "Check for a live paid plan")
+    code = "\n".join(line for line in gate.splitlines() if not line.lstrip().startswith("#"))
+    # The accounts database by the ACCOUNTS binding's id, through the D1 REST API with curl (no Wrangler yet).
+    wrangler = (REPO / "site" / "wrangler.jsonc").read_text(encoding="utf-8")
+    binding = re.search(r'"binding": "ACCOUNTS",\s*"database_name": "awardwatch-accounts",\s*"database_id": "([0-9a-f-]+)"',
+                        wrangler)
+    assert binding and f"      ACCOUNTS_DATABASE_ID: {binding.group(1)}\n" in text
+    assert ('"https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database/$ACCOUNTS_DATABASE_ID/query"'
+            in code)
+    assert '-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"' in code and "curl -s " in code and "WRANGLER" not in code
+    # The statement is the site's LIVE_PRO_SQL, planFromRows' window rule, word for word.
+    ts = (REPO / "site" / "src" / "account" / "entitlements.ts").read_text(encoding="utf-8")
+    live = re.search(r'export const LIVE_PRO_SQL =\s*"([^"]+)";', ts)
+    assert live and live.group(1) == ("SELECT COUNT(*) AS n FROM entitlements WHERE plan = 'pro' AND revoked_at IS NULL "
+                                      "AND starts_at <= ?1 AND (ends_at IS NULL OR ends_at > ?1)")
+    assert f'LIVE_PRO_SQL: "{live.group(1)}"' in gate
+    # The one parameter, the current UTC instant as toISOString writes it, since the rows' times compare as text.
+    assert "at=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)" in code
+    assert """jq -cn --arg sql "$LIVE_PRO_SQL" --arg at "$at" '{sql: $sql, params: [$at]}'""" in code
+    # A count above zero is the only way on; the step itself never fails, and the count is never printed (the
+    # run logs of a public repository are public).
+    assert code.count('echo "active=true" >> "$GITHUB_OUTPUT"') == 2 and "exit 1" not in code
+    assert not re.search(r"echo [^\n]*\$\{?n\b", code) and "cat " not in code
+    assert code.index('elif [ "$n" = "0" ]; then') < code.rindex('echo "active=true" >> "$GITHUB_OUTPUT"')
+    # A manual run can force it: a boolean input, off by default, read before the request.
+    dispatch = text.split("  workflow_dispatch:\n", 1)[1].split("\n\n", 1)[0]
+    assert dispatch.startswith("    inputs:\n      force:\n") and "type: boolean" in dispatch and "default: false" in dispatch
+    assert "FORCE: ${{ inputs.force }}" in gate
+    assert code.index('if [ "$FORCE" = "true" ]; then') < code.index('echo "active=true" >> "$GITHUB_OUTPUT"') \
+        < code.index("curl -s ")

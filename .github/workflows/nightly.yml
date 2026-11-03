@@ -466,7 +466,11 @@ jobs:
       # site has pages for; otherwise R2 keeps the lookup of the last good
       # deploy. The outcome reads "failed" until the file is in R2. A failure
       # is a notice in the run status (intraday_lookup), never an item needing
-      # attention: the intraday job keeps the lookup it has.
+      # attention: the intraday job keeps the lookup it has. Once the file is
+      # in R2 its size goes to lookup_bytes.txt and the log, and the run
+      # status records it (intraday_lookup_bytes); the site's daily check
+      # flags a lookup over 2,000,000 bytes, since every intraday run
+      # downloads and parses it (58,773 bytes on 2026-11-03).
       - name: Save the buyer lookup for the same-day refresh
         id: intraday_lookup
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}
@@ -480,6 +484,8 @@ jobs:
           for attempt in 1 2 3; do
             if "$WRANGLER" r2 object put --remote "$BUCKET/intraday/lookup.json.gz" --file "$out/lookup.json.gz"; then
               echo "saved" > "$out/lookup_outcome.txt"
+              wc -c < "$out/lookup.json.gz" > "$out/lookup_bytes.txt"
+              echo "buyer lookup saved to R2: $(cat "$out/lookup_bytes.txt") bytes"
               exit 0
             fi
             sleep $((20 * attempt))
@@ -924,9 +930,12 @@ jobs:
       # before it failed). intraday_lookup and intraday_prune are the same-day
       # refresh's two nightly steps ("saved" or "pruned", "failed", or "not
       # run"); a failed one is a notice, never an item needing attention.
-      # Written whatever happened above. The roll-up, Search Console, report,
-      # IndexNow, rollback and the two same-day steps write "failed" before
-      # they start, so a step stopped by its time limit still reads as failed.
+      # intraday_lookup_bytes is the size of the lookup saved tonight (null
+      # when none was), an integer beside the outcome string, which stays as
+      # it was. Written whatever happened above. The roll-up, Search Console,
+      # report, IndexNow, rollback and the two same-day steps write "failed"
+      # before they start, so a step stopped by its time limit still reads as
+      # failed.
       - name: Write the run status
         if: ${{ always() }}
         run: |
@@ -935,6 +944,7 @@ jobs:
             --views-outcome data/out/views/last_outcome.txt \
             --search-outcome data/out/search/last_outcome.txt \
             --intraday-lookup-outcome data/out/intraday/lookup_outcome.txt \
+            --intraday-lookup-bytes data/out/intraday/lookup_bytes.txt \
             --intraday-prune-outcome data/out/intraday/prune_outcome.txt \
             --indexnow-outcome data/out/indexnow/last_outcome.txt \
             --search-console-outcome data/out/search_console/last_outcome.txt \

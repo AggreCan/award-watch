@@ -27,10 +27,11 @@
     { "name": "AUTH_LIMIT", "namespace_id": "2006", "simple": { "limit": 5, "period": 60 } }
   ],
   // The daily check (src/watchdog.ts): 06:00 UTC, after the nightly run has had
-  // its window. It emails the operator through the email binding when the data,
-  // the backup, a stage, the audience roll-up or a rolled-back deploy needs
-  // attention. ALERT_EMAIL is a secret; the destination must be verified in the
-  // zone's Email Routing.
+  // its window and 2 h 15 after the same-day refresh's last cut. It emails the
+  // operator through the email binding when the data, the backup, a stage, the
+  // audience roll-up, a rolled-back deploy or the same-day refresh (its runs in
+  // SEARCH, the live paid plans in ACCOUNTS) needs attention. ALERT_EMAIL is a
+  // secret; the destination must be verified in the zone's Email Routing.
   "triggers": { "crons": ["0 6 * * *"] },
   // Aggregate counts of the responses the Worker serves (src/views.ts): route,
   // language, edge country, referring host, status, bot or human, device
@@ -70,7 +71,10 @@
       // The hosted search database: organizations and buyers by name, read by
       // /search with prepared statements only (src/search_db.ts). Written by
       // the nightly workflow's "Sync the search database" step alone, schema
-      // in pipeline/search_schema.sql (docs/hosted-search.md).
+      // in pipeline/search_schema.sql (docs/hosted-search.md). Its same-day
+      // tables (pipeline/intraday_schema.sql, docs/intraday.md) are the
+      // intraday workflow's, read by the paid band (src/intraday.ts) and the
+      // daily check (intraday_runs).
       "binding": "SEARCH",
       "database_name": "awardwatch-search",
       "database_id": "bd8f5b25-a9d6-423a-88bf-301c9a313820"
@@ -79,8 +83,13 @@
       // Accounts (src/account/, docs/accounts.md): users, sign-in codes,
       // sessions, saved searches, API keys, entitlements and the audit trail,
       // apart from the forms database on purpose. Schema in
-      // accounts_schema.sql, applied by hand. Read only while
-      // ACCOUNTS_ENABLED is "true".
+      // accounts_schema.sql, applied by hand. Pages read it only while
+      // ACCOUNTS_ENABLED is "true". Two readers count its live pro
+      // entitlements whatever the switch (LIVE_PRO_SQL in
+      // src/account/entitlements.ts): the daily check, through this binding,
+      // and the intraday workflow's gate, through the D1 REST API by the
+      // database_id below (ACCOUNTS_DATABASE_ID there; a test holds the two
+      // equal).
       "binding": "ACCOUNTS",
       "database_name": "awardwatch-accounts",
       "database_id": "c5e21d6e-fe3c-4a3a-8d82-96e809e273b1"

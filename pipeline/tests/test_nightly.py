@@ -394,6 +394,7 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
     make_db(db)
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
     assert set(status) == {"run_at", "stages", "steps", "search_sync", "intraday_lookup", "intraday_prune",
+                           "intraday_lookup_bytes",
                            "views_rollup", "search_console", "views_report", "indexnow", "interest", "restore",
                            "smoke", "smoke_detail", "version_before", "rollback", "deploy_rolled_back", "checks",
                            "notices", "ok"}
@@ -901,6 +902,38 @@ def test_the_same_day_steps_land_in_the_status_and_a_failure_is_a_notice(tmp_pat
     assert [n["source"] for n in status["notices"]] == ["intraday_prune"]
 
 
+def test_the_status_records_the_size_of_the_lookup_saved_tonight_and_only_that(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+
+    def status(**kw):
+        return nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"}, **kw)
+
+    # The integer sits beside the outcome string, which is unchanged.
+    saved = status(intraday_lookup="saved", intraday_lookup_bytes=58773)
+    assert (saved["intraday_lookup"], saved["intraday_lookup_bytes"]) == ("saved", 58773)
+    # No object saved tonight, no size: R2's lookup is an older one whose size this run did not see.
+    for outcome in ("failed", None):
+        assert status(intraday_lookup=outcome, intraday_lookup_bytes=58773)["intraday_lookup_bytes"] is None, outcome
+    for odd in (None, -1, True):
+        assert status(intraday_lookup="saved", intraday_lookup_bytes=odd)["intraday_lookup_bytes"] is None, odd
+    # The size never makes a notice or an item needing attention; the site's daily check owns the bound.
+    big = status(intraday_lookup="saved", intraday_lookup_bytes=5_000_000)
+    assert big["notices"] == [] and big["ok"] is True and resilience.attention_items(big) == []
+    # The command reads the file the step writes with `wc -c`.
+    outcome, size = tmp_path / "lookup_outcome.txt", tmp_path / "lookup_bytes.txt"
+    outcome.write_text("saved\n", encoding="utf-8")
+    out = tmp_path / "status.json"
+    for written, want in (("58773\n", 58773), ("  58773\n", 58773), ("", None), ("58,773", None), ("-5", None),
+                          ("5.0", None), ("٥", None)):
+        size.write_text(written, encoding="utf-8")
+        assert nightly.main(["status", "--db", str(db), "--intraday-lookup-outcome", str(outcome),
+                             "--intraday-lookup-bytes", str(size), "--out", str(out)]) == 0
+        assert json.loads(out.read_text(encoding="utf-8"))["intraday_lookup_bytes"] == want, written
+    assert nightly.read_byte_count(str(tmp_path / "missing.txt")) is None
+    assert nightly.read_byte_count(None) is None
+
+
 def test_the_workflow_saves_the_lookup_after_a_good_deploy_and_prunes_every_night():
     from awardwatch_pipeline import intraday
 
@@ -918,9 +951,12 @@ def test_the_workflow_saves_the_lookup_after_a_good_deploy_and_prunes_every_nigh
     assert ("python -m awardwatch_pipeline.intraday lookup --db data/awardwatch.sqlite --static data/out/static "
             '--out "$out/lookup.json.gz"') in lookup
     assert f'"$WRANGLER" r2 object put --remote "$BUCKET/{intraday.LOOKUP_KEY}" --file "$out/lookup.json.gz"' in lookup
-    # "failed" first, "saved" only once the file is in R2.
+    # "failed" first, "saved" only once the file is in R2, then its size recorded and printed (only a saved
+    # object has one: the status keeps the size beside "saved" alone).
+    size = 'wc -c < "$out/lookup.json.gz" > "$out/lookup_bytes.txt"'
     assert lookup.index('echo "failed" > "$out/lookup_outcome.txt"') < lookup.index("r2 object put") \
-        < lookup.index('echo "saved" > "$out/lookup_outcome.txt"')
+        < lookup.index('echo "saved" > "$out/lookup_outcome.txt"') < lookup.index(size)
+    assert lookup.index(size) < lookup.index('echo "buyer lookup saved to R2: $(cat "$out/lookup_bytes.txt") bytes"')
     prune = step(text, "Prune the same-day notices")
     assert "id: intraday_prune" in prune and "continue-on-error: true" in prune and "if: ${{ !cancelled() }}" in prune
     assert "working-directory: site" in prune
@@ -935,6 +971,7 @@ def test_the_workflow_saves_the_lookup_after_a_good_deploy_and_prunes_every_nigh
     # The run status reads both outcomes; the steps up to the deploy never wait on them.
     status = step(text, "Write the run status")
     assert "--intraday-lookup-outcome data/out/intraday/lookup_outcome.txt" in status
+    assert "--intraday-lookup-bytes data/out/intraday/lookup_bytes.txt" in status
     assert "--intraday-prune-outcome data/out/intraday/prune_outcome.txt" in status
     for name in ("Bundle the static data for the site", "Deploy the Worker with the new data as assets",
                  "Save the database to R2"):

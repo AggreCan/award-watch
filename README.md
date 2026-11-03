@@ -16,7 +16,7 @@ pipeline/schema.sql   the one schema both halves use
 brand/      the mark and the lockup
 data/       raw downloads and outputs (git-ignored)
 .github/workflows/nightly.yml   the one scheduled run that refreshes data and deploys
-.github/workflows/intraday.yml  the day's new tender notices, read every two hours (docs/intraday.md)
+.github/workflows/intraday.yml  the day's new tender notices, read every two hours while a paid plan is live (docs/intraday.md)
 ```
 
 The data ships as static assets with the Worker; the browser filters the list

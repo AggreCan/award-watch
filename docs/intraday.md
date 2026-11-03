@@ -7,7 +7,8 @@ workflow `.github/workflows/intraday.yml` reads it again after each cut and
 writes the notices it holds to the hosted search database (D1
 `awardwatch-search`, binding `SEARCH`). A paid request to `/tenders` or
 `/tenders/new` then shows those notices in a band above the list. Free pages
-are unchanged.
+are unchanged. The schedule does work only while a paid plan is live: with
+none, each run stops at its gate within seconds (see "Who it runs for").
 
 The code:
 
@@ -20,7 +21,9 @@ The code:
 | The nightly's two steps | "Save the buyer lookup for the same-day refresh" and "Prune the same-day notices" in `.github/workflows/nightly.yml` |
 | The query and the merge | `site/src/intraday.ts` |
 | The band | `site/src/pages/intraday.tsx` |
-| The plan gate | `site/src/plan.ts` |
+| The plan gate on a request | `site/src/plan.ts` |
+| The live paid plans the workflow's gate counts | `LIVE_PRO_SQL` in `site/src/account/entitlements.ts` |
+| Where a failure shows | the daily check, `site/src/watchdog.ts` |
 
 ## When it runs, and why those minutes
 
@@ -56,8 +59,57 @@ The workflow has a concurrency group of its own (`intraday`), so it never
 waits for the nightly and two of its runs never overlap. It can also be
 started by hand from the Actions tab (Run workflow).
 
+## Who it runs for
+
+The band is for the paid plan alone, so the refresh runs only while at least
+one pro entitlement is live in the accounts database (D1
+`awardwatch-accounts`, binding `ACCOUNTS`). Each run's second step, "Check for
+a live paid plan" (right after the check that the Cloudflare secrets exist),
+counts them before the checkout and the installs, with one `curl` request to
+the D1 REST API:
+
+```
+POST https://api.cloudflare.com/client/v4/accounts/<account id>/d1/database/<accounts database id>/query
+{"sql": "SELECT COUNT(*) AS n FROM entitlements WHERE plan = 'pro' AND revoked_at IS NULL AND starts_at <= ?1 AND (ends_at IS NULL OR ends_at > ?1)",
+ "params": ["<the current UTC instant, 2026-11-03T13:45:00.123Z>"]}
+```
+
+The statement is `LIVE_PRO_SQL` in `site/src/account/entitlements.ts`: the
+window rule of `planFromRows` (not revoked, started, not ended), counted over
+the pro rows. The workflow carries the same text, and
+`pipeline/tests/test_intraday.py` holds the two equal; change the rule and
+both change. The count does not apply the "newest row wins" half of
+`planFromRows`, so a user whose newest live row is free but who still holds
+an older live pro row is counted, and the refresh then runs for a user the
+site serves as free. The database is named by its id (the
+`ACCOUNTS` binding's `database_id` in `site/wrangler.jsonc`), in the job's
+`ACCOUNTS_DATABASE_ID`. The token is the nightly's `CLOUDFLARE_API_TOKEN`,
+whose D1 permission covers every database on the account.
+
+| The count | What the run does |
+|---|---|
+| above 0 | the refresh, as below |
+| 0 | one line ("No paid plan is live; no refresh this run."), then ends green with no run row |
+| not read (an HTTP error, an answer that is not a count) | one line naming the HTTP status, then ends green with no run row |
+
+The count is never printed: the repository and its run logs are public. A
+run for nobody costs the first two steps, a few seconds. A count that cannot
+be read is not a red run either: while a plan is live, the daily check names
+a refresh that has stopped going through (see "What a failure does").
+
+To run the refresh whatever the count (a test, or the first run after a
+schema change), start it by hand with the input set: Actions, intraday, Run
+workflow, tick "Run the refresh even when no paid plan is live", or from a
+shell:
+
+```
+gh workflow run intraday.yml -f force=true
+```
+
 ## What a run does
 
+0. Counts the live paid plans and stops, green and with no run row, when
+   there are none (see "Who it runs for").
 1. Reads, from D1, the file validators (ETag and Last-Modified) of the newest
    run that went through, and the versions `intraday_tenders` holds
    (`intraday.STATE_SQL`, one statement).
@@ -127,6 +179,23 @@ find broken, so the buyers it links have pages on the live site. When the
 step fails, R2 keeps the last good lookup, and the run status says
 `intraday_lookup: failed` with a notice.
 
+### Its size, and the bound
+
+Every refresh downloads the lookup from R2 and parses it whole, so its size
+is the cost of each cut. Measured 2026-11-03 00:35 UTC, after the 2026-11-02
+nightly: `intraday/lookup.json.gz` is 58,773 bytes gzipped. That needs no
+slimming.
+
+Once the file is in R2, the nightly's step prints its size ("buyer lookup
+saved to R2: <n> bytes") and the run status records it as
+`intraday_lookup_bytes`, an integer beside `intraday_lookup` (null on a night
+that saved none; `intraday_lookup` itself is unchanged). The site's daily
+check names a lookup over 2,000,000 bytes (`LOOKUP_MAX_BYTES` in
+`site/src/watchdog.ts`). Past that bound the lookup would keep only the
+spellings seen on a notice, award or contract in the last 24 months, the
+resolver's order unchanged, and `test_intraday.py` would still hold it to
+`buyers.resolve` on the probe spellings.
+
 ## The tables, and applying the schema
 
 `pipeline/intraday_schema.sql` creates two tables in `awardwatch-search`:
@@ -167,7 +236,9 @@ data date, so a prune that fails changes no page: the run status says
 
 ## Checking a run
 
-The Actions tab shows each run. Every run that could reach D1 leaves a row:
+The Actions tab shows each run. A run the gate stopped (no live paid plan)
+shows its first two steps and nothing else, and leaves no row. Every other
+run that could reach D1 leaves a row:
 
 ```
 cd site
@@ -187,26 +258,72 @@ The `detail` column reads one of:
 - `the new notices file could not be fetched`: the host answered with an
   error the client's retries did not clear (`ok` is 0).
 
-## What a failed run means
+## What a failure does
 
-A run fails (a red run in the Actions tab, and GitHub's email) when D1
-cannot be read or written, the file cannot be fetched, or the batch cannot
-be parsed or applied. It records a run row with `ok` 0 when D1 can still be
-written. The next run sends the validators of the last run that went
-through, so it downloads the file again and writes every row of the day; the
-file is cumulative, so the notices of a failed cut arrive with the next one.
-A notice the job never wrote comes with the next nightly, as it did before
-this job existed. A run that fails at "Read the last run from the search
-database" with "no such table" means the schema has not been applied.
+A failed cut is a row, not a red run. The fetch, the lookup, the parse and
+the apply carry `continue-on-error`, so when one fails the run goes on to
+"Record the run", which writes a row with `ok` 0 and the step that failed,
+and the run ends green: GitHub sends no email for it. The steps that need the
+failed step's output are skipped (after a failed fetch, the lookup, the parse
+and the apply; after a failed parse, the apply, which also checks the parse's
+own outcome, so a missing or partial batch is never applied).
+
+"Read the last run from the search database" carries `continue-on-error` as
+well. When it fails (the search database is down, or its binding is wrong),
+the run ends green with no row: the fetch runs only after a state read that
+worked, the lookup, the parse and the apply skip with the fetch, and the
+record needs the read too, since a run that cannot read D1 cannot write its
+row there either. Such a run shows its state step failed in the Actions tab
+("no such table" there means the schema has not been applied), and the
+daily check names it while a paid plan is live (no refresh gone through for
+4 hours, or the runs could not be read).
+
+The run goes red only when it cannot run at all, and then it leaves no row:
+
+- the Cloudflare secrets are missing;
+- the checkout or an install failed;
+- "Record the run" could not write the row.
+
+The next run sends the validators of the last run that went through, so it
+downloads the file again and writes every row of the day; the file is
+cumulative, so the notices of a failed cut arrive with the next one. A notice
+the job never wrote comes with the next nightly, as it did before this job
+existed.
+
+The site's daily check (the Worker's cron at 06:00 UTC, `site/src/watchdog.ts`,
+2 h 15 after the day's last cut) is where a failure shows. It reads
+`intraday_runs` with one prepared statement on the `SEARCH` binding (the
+newest run that went through, and over the 24 hours before the check the
+runs, those with `ok` 0, and the new versions the others wrote) and the count
+of live paid plans with `LIVE_PRO_SQL` on the `ACCOUNTS` binding. Its message
+can carry these items:
+
+| Item | When |
+|---|---|
+| "No same-day refresh has gone through since <time> UTC, more than 4 hours before this check, while a paid plan is live. Check the intraday workflow's runs." | a paid plan is live and the newest run that went through is more than 4 hours old (the 03:45 run did not) |
+| "No same-day refresh has gone through while a paid plan is live: the search database holds no run that did. Check the intraday workflow's runs." | a paid plan is live and `intraday_runs` holds no run that went through |
+| "<n> of <m> same-day refreshes failed since yesterday; the <k> that went through wrote <r> new notice versions. A later run writes the day's notices again; intraday_runs.detail names the step that failed." | any run in the last 24 hours has `ok` 0, plan or no plan |
+| "The same-day refresh runs could not be read from the search database (<code, phrase>)." | the read failed; the fault by its code only, never a thrown check. An answer that does not read, or no `SEARCH` binding, gives the same opening with that reason instead; this item then replaces the three above |
+| "The buyer lookup for the same-day refresh is <n> bytes, over the 2,000,000-byte bound; ..." | `intraday_lookup_bytes` in the run status is over 2,000,000 |
+
+A count of paid plans that cannot be read (or no `ACCOUNTS` binding) counts
+as no plan: the 4-hour item is left out, never reported as a fault, since the
+accounts may be switched off. The run status's two nightly steps come in the
+message's notices, one line each, when they read `failed`
+(`intraday_lookup: ...`, `intraday_prune: ...`), as the nightly words them.
+A day with nothing to say leaves the message exactly as it was.
 
 A failed run never touches the nightly: it writes nothing to `status.json`,
-opens no issue and changes no deploy.
+opens no issue and changes no deploy, and the nightly's attention issue
+leaves the intraday job alone.
 
 ## What the free and paid views show
 
-The plan gate is `requestPlan` in `site/src/plan.ts`. It answers "free" for
-every request until the accounts module replaces its body (its
-`allowed(plan, "intraday")` will carry the feature for the paid plan only).
+The plan gate on a request is `requestPlan` in `site/src/plan.ts`: the
+accounts module's `planOfRequest`, which answers "free" without reading
+anything while `ACCOUNTS_ENABLED` is off or the request has no session, and
+`allowed(plan, "intraday")`, which carries the feature for the paid plan
+only.
 
 - **Free**: the pages as before. A free request makes no D1 call and reads
   no file for the band, and its page is byte for byte the page without the

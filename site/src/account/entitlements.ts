@@ -52,6 +52,20 @@ export function planFromRows(rows: readonly EntitlementRow[], now: Date): { plan
   return top ? { plan: top.plan as Plan, until: top.ends_at } : { plan: "free", until: null };
 }
 
+// How many pro rows are live at an instant (?1, written as toISOString
+// writes it): the window rule of planFromRows above (not revoked, started,
+// not ended), counted over the pro rows. The same-day refresh runs only while
+// this is above zero: the gate in .github/workflows/intraday.yml sends this
+// exact text through the D1 REST API (pipeline/tests/test_intraday.py holds
+// the two equal), and the daily check (src/watchdog.ts) prepares it on the
+// ACCOUNTS binding. Change the window rule and this changes with it, in both
+// places. It does not apply the "latest row wins" half: a user
+// whose newest live row is free but who holds an older live pro row is
+// counted, and the refresh then runs for a user the site serves as free (a
+// minute of runner time; the opposite mistake would skip a paying user).
+export const LIVE_PRO_SQL =
+  "SELECT COUNT(*) AS n FROM entitlements WHERE plan = 'pro' AND revoked_at IS NULL AND starts_at <= ?1 AND (ends_at IS NULL OR ends_at > ?1)";
+
 export type PlanHolder = { id: string; plan: string; plan_until: string | null };
 
 // The last known plan from the cache columns: still the plan while its end

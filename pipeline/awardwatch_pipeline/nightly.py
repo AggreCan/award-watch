@@ -582,6 +582,7 @@ def run_status(
     indexnow_outcome: str | None = None, search_console: str | None = None, views_report: str | None = None,
     interest: dict[str, int] | None = None, interest_tried: bool = False,
     intraday_lookup: str | None = None, intraday_prune: str | None = None,
+    intraday_lookup_bytes: int | None = None,
 ) -> dict[str, Any]:
     """status.json for the site's daily check. Every input may be missing: the
     status then says what is missing rather than failing to be written.
@@ -608,7 +609,12 @@ def run_status(
     "saved"; the old rows deleted from the search database, "pruned"),
     "failed", or "not run". Recorded beside search_sync; a failed one adds a
     notice (INTRADAY_NOTICES), never an item needing attention, because
-    neither changes what the site publishes.
+    neither changes what the site publishes. intraday_lookup_bytes is the
+    size of the lookup the step saved (read_byte_count of the file the step
+    writes after the upload). The status records it only beside "saved",
+    null otherwise, so the field always describes the object this run put in
+    R2; intraday_lookup stays the string it was, so nothing that reads it
+    changes. The site's daily check flags a lookup over its bound.
 
     The resilience fields: steps (every workflow step's outcome, which the
     retry gate reads), restore (where the database came from), smoke (the
@@ -657,6 +663,9 @@ def run_status(
             if restore_info.get(key):
                 restored[key] = str(restore_info[key])
     intraday = {"intraday_lookup": intraday_lookup or "not run", "intraday_prune": intraday_prune or "not run"}
+    saved_bytes = intraday_lookup_bytes if intraday["intraday_lookup"] == "saved" else None
+    if not (isinstance(saved_bytes, int) and not isinstance(saved_bytes, bool) and saved_bytes >= 0):
+        saved_bytes = None
     return {
         "run_at": stamp,
         "stages": stages,
@@ -665,6 +674,9 @@ def run_status(
         # search database" step writes it (search_db.OUTCOME).
         "search_sync": search or "not run",
         **intraday,
+        # The bytes of the lookup saved tonight, beside intraday_lookup (the
+        # daily check's bound reads it); null when none was saved.
+        "intraday_lookup_bytes": saved_bytes,
         "views_rollup": views or "not run",
         "search_console": search_console or "not run",
         "views_report": views_report or "not run",
@@ -741,6 +753,16 @@ def read_interest(path: str | None) -> dict[str, int] | None:
     except ValueError:
         return None
     return interest_counts(data)
+
+
+def read_byte_count(path: str | None) -> int | None:
+    """The size the lookup step wrote after its upload (`wc -c`: digits, maybe
+    padded), or None when the file is missing or holds anything else."""
+    try:
+        text = _read(path)
+    except (OSError, UnicodeDecodeError):
+        return None
+    return int(text) if text and text.isascii() and text.isdigit() else None
 
 
 # -- pack -------------------------------------------------------------------
@@ -909,6 +931,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--verify", default=None)
     s.add_argument("--search-outcome", default=None, help="the search database sync's outcome file")
     s.add_argument("--intraday-lookup-outcome", default=None, help="the same-day refresh lookup's outcome file")
+    s.add_argument("--intraday-lookup-bytes", default=None, help="the file holding the saved lookup's size in bytes")
     s.add_argument("--intraday-prune-outcome", default=None, help="the same-day refresh prune's outcome file")
     s.add_argument("--views-outcome", default=None, help="the audience roll-up's outcome file")
     s.add_argument("--indexnow-outcome", default=None, help="the IndexNow submission's outcome file")
@@ -1111,7 +1134,8 @@ def _status(args: argparse.Namespace) -> int:
                         views_report=_read(args.views_report_outcome),
                         interest=read_interest(args.interest), interest_tried=args.interest is not None,
                         intraday_lookup=_read(args.intraday_lookup_outcome),
-                        intraday_prune=_read(args.intraday_prune_outcome))
+                        intraday_prune=_read(args.intraday_prune_outcome),
+                        intraday_lookup_bytes=read_byte_count(args.intraday_lookup_bytes))
     _write_json(Path(args.out), status)
     print(json.dumps(status, indent=1))
     return 0
