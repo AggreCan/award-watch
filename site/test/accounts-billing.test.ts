@@ -416,6 +416,7 @@ describe("checkout and the portal", () => {
       "line_items[0][quantity]": "1",
       client_reference_id: await userId(email),
       "subscription_data[metadata][user_id]": await userId(email),
+      "managed_payments[enabled]": "true",
       success_url: "http://localhost/account?billing=done",
       cancel_url: "http://localhost/account/billing",
       locale: "en",
@@ -436,8 +437,10 @@ describe("checkout and the portal", () => {
       success_url: "http://localhost/account?billing=done&lang=fr", cancel_url: "http://localhost/account/billing?lang=fr",
     });
     expect(form.customer_email).toBeUndefined();
-    // Managed Payments computes the tax itself: the two parameters it has no
-    // use for are never sent.
+    // Managed Payments is asked for on every session (it applies only to a
+    // session that asks); it computes the tax itself, so the two parameters
+    // it has no use for are never sent.
+    expect(form["managed_payments[enabled]"]).toBe("true");
     expect(form["automatic_tax[enabled]"]).toBeUndefined();
     expect(form["customer_update[address]"]).toBeUndefined();
     expect(JSON.stringify(form)).not.toContain(email);

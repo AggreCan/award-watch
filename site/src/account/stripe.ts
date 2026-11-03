@@ -332,10 +332,13 @@ export function stripeSource(env: Env): PaymentSource | null {
     // user id rides as client_reference_id (checkout.session.completed) and
     // in the subscription's metadata (every later invoice and subscription
     // notice), so a notice that arrives before the checkout's still finds
-    // its user. The account sells under Managed Payments, where the service
-    // computes and collects the tax itself from the address Checkout asks
-    // for: automatic_tax and customer_update[address] are among the
-    // parameters it has no use for, so neither is sent.
+    // its user. The account sells under Managed Payments, which applies to
+    // a session only when the request asks for it (a session without the
+    // flag is sold by the account itself, with no tax collected): the flag
+    // goes on every request. The service then computes and collects the tax
+    // from the address Checkout asks for, so automatic_tax and
+    // customer_update[address], which it lists among the parameters it has
+    // no use for, are not sent.
     async checkoutUrl(input: CheckoutInput): Promise<string | null | "busy"> {
       if (!offer) return null;
       const form: [string, string][] = [
@@ -344,6 +347,7 @@ export function stripeSource(env: Env): PaymentSource | null {
         ["line_items[0][quantity]", "1"],
         ["client_reference_id", input.userId],
         ["subscription_data[metadata][user_id]", input.userId],
+        ["managed_payments[enabled]", "true"],
         ["success_url", input.successUrl],
         ["cancel_url", input.cancelUrl],
         ["locale", CHECKOUT_LOCALE[input.lang]],

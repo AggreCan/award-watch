@@ -737,7 +737,15 @@ is deleted, tied to the id alone like the entitlement rows.
    says "Pro, paid until" a month ahead; an `entitlements` row with source
    `stripe` exists; the portal opens and a cancellation there leaves Pro to
    the period end; cancelling the subscription in the dashboard ends Pro at
-   once; deleting the account cancels its subscription.
+   once; deleting the account cancels its subscription. Two notes from the
+   first run of this test (2026-11-03): the sandbox honours
+   `managed_payments[enabled]` (the page says "Sold through Link", the tax
+   is computed from the address, the invoice carries GST and PST lines), and
+   without the Stripe CLI the events can be read from the sandbox's
+   `/v1/events` and posted to the local webhook with a signature made from
+   the `.dev.vars` secret (`t=<unix time>,v1=<HMAC-SHA256 of "t.payload">`).
+   The test runner reads `.dev.vars` too, so delete the file before running
+   the suite: with the keys present, the "without the keys" tests fail.
 10. **Before live payments:** the paid-tier Terms (`docs/terms-paid-draft.md`
     after review), About, Terms and Privacy naming Allwater Software Inc. as
     publisher and Link, operated by Stripe, as the merchant of record, and
