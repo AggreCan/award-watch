@@ -36,6 +36,7 @@ import { newTendersPage, tendersPage } from "./pages/tenders";
 import { watchlistPage } from "./pages/watchlist";
 import { llmsTxt, robotsTxt, sitemapFile } from "./seo";
 import { account } from "./account/routes";
+import { admin } from "./account/admin";
 import { DELIVERY_CRON, runDeliveries } from "./account/deliveries";
 import { billingFormAction } from "./account/stripe";
 
@@ -92,6 +93,7 @@ app.route("/api", api);
 // Accounts (src/account/routes.tsx): every route is the site's 404 while
 // ACCOUNTS_ENABLED is not "true".
 app.route("/account", account);
+app.route("/admin", admin);
 
 app.get("/", homePage);
 // The open notices, filtered in the browser after the first view; the

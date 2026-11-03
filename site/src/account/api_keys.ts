@@ -11,6 +11,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import type { AppEnv, Env } from "../env";
 import { t } from "../i18n";
+import { isBlocked } from "./admin_ops";
 import { type Feature, type Plan, allowed, lastKnownPlan, planFor } from "./entitlements";
 import { newId, randomHex, sameHash, sha256Hex } from "./secrets";
 import { OUTAGE_TRUST_MS } from "./session";
@@ -150,7 +151,8 @@ export function requireApiKey(feature: Feature = "api"): MiddlewareHandler<AppEn
       const same = sameHash(hash, row.key_hash);
       if (same && !found) found = row;
     }
-    if (!found || found.revoked_at || found.status !== "active") {
+    // A blocked account's keys (admin_ops.ts) answer as revoked ones do.
+    if (!found || found.revoked_at || found.status !== "active" || (await isBlocked(c.env, { id: found.user_id }))) {
       lastKnownKeys.delete(hash);
       return refuse(401, "account.api_key_invalid");
     }

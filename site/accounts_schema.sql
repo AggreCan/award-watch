@@ -226,3 +226,20 @@ CREATE TABLE IF NOT EXISTS bug_reports (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_bug_reports_user ON bug_reports(user_id, created_at);
+-- The operator console (src/account/admin.tsx, admin_ops.ts; docs/accounts.md,
+-- Operator console): an account the operator has blocked, one row while the
+-- block stands, deleted when it is lifted or the account is deleted (from the
+-- console, the only deletion a blocked account can reach). While it stands
+-- the account's sessions are revoked, its codes and links answer as stale
+-- ones do, its API keys answer 401, and the email delivery of its saved
+-- searches is off.
+-- paused lists the searches the block turned off ("<search id>:<daily|weekly>",
+-- comma-separated), turned back on when the block is lifted. reason is the
+-- operator's note, never an address; by_user_id is the operator's own user id.
+CREATE TABLE IF NOT EXISTS account_blocks (
+  user_id TEXT PRIMARY KEY REFERENCES users(id),
+  reason TEXT,
+  created_at TEXT NOT NULL,
+  by_user_id TEXT NOT NULL REFERENCES users(id),
+  paused TEXT
+);

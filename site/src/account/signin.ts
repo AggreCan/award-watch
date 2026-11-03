@@ -11,6 +11,7 @@
 
 import type { Env } from "../env";
 import type { Lang } from "../i18n";
+import { isBlocked } from "./admin_ops";
 import { AUDIT_DAYS, audit } from "./audit";
 import { newCode, newId, plusDays, plusMinutes, randomHex, sameHash, sha256Hex } from "./secrets";
 
@@ -65,6 +66,9 @@ type Live = { id: string; email: string; code_hash: string; link_hash: string; a
 // the same code cannot both sign in. Every other open request for the
 // address is closed with it.
 async function consume(env: Env, row: Live, now: Date): Promise<Checked> {
+  // A blocked account (admin_ops.ts) gets what a used or expired code gets,
+  // so the page says nothing about the block.
+  if (await isBlocked(env, { email: row.email })) return { ok: false, reason: "stale" };
   const at = now.toISOString();
   const res = await env.ACCOUNTS!.prepare(
     "UPDATE magic_codes SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ? AND attempts < ?",

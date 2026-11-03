@@ -759,3 +759,153 @@ their end.
   rest of the paid period by hand afterwards.
 - Prices change in Stripe (a new price, then the variables); existing
   subscriptions keep their price until moved in the dashboard.
+
+## Operator console
+
+`/admin` is where the operator looks an account up and acts on it. The
+code is `site/src/account/admin.tsx` (the routes and pages),
+`admin_ops.ts` (the database side), `admin_stripe.ts` (the Stripe calls)
+and `admin_access.ts` (the Cloudflare Access check); the tests are
+`site/test/accounts-admin.test.ts`.
+
+### Who gets in
+
+Every address under `/admin` answers the site's own 404, the page any
+unknown address gets, unless all of these hold:
+
+1. The accounts switch is on.
+2. The secret `OPERATOR_EMAILS` names at least one address.
+3. A session stands for one of those addresses, read from the database on
+   the request. A session remembered through a database outage does not
+   count.
+4. Once `ACCESS_AUD` is set: the request carries a Cloudflare Access token
+   in the `Cf-Access-Jwt-Assertion` header that verifies, and its `email`
+   claim is the session's address.
+
+The token is checked in the Worker, with no library: its RS256 signature
+against the team's keys from
+`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`, `iss` equal to
+that address without the path, `aud` holding `ACCESS_AUD`, and `exp` ahead
+of the clock. The keys are fetched at most once an hour, and again at most
+once a minute when a token names a key the cached set lacks. A missing
+token, one that fails any check, and a key set that cannot be fetched all
+get the 404.
+
+While `ACCESS_AUD` is unset the session alone admits. That is for the
+first days only, before Access is set up: until then a stolen session
+cookie of an operator address opens the console.
+
+### The secrets
+
+```
+cd site
+npx wrangler secret put OPERATOR_EMAILS
+npx wrangler secret put ACCESS_TEAM_DOMAIN
+npx wrangler secret put ACCESS_AUD
+```
+
+- `OPERATOR_EMAILS`: the addresses, comma-separated, read lower-cased.
+  Each signs in at `/account/sign-in` like any reader before the console
+  opens for it. All three are secrets and never variables in
+  `wrangler.jsonc`, because the repository is public and the addresses
+  must not appear in it. Deleting `OPERATOR_EMAILS` closes the console at
+  once.
+- `ACCESS_TEAM_DOMAIN`: the team's domain, `<team>.cloudflareaccess.com`
+  (the bare team name works too). Any other host is refused, so a wrong
+  value closes the console rather than fetching keys from elsewhere.
+- `ACCESS_AUD`: the Access application's AUD tag.
+
+### Setting up Access
+
+1. In the dashboard: Zero Trust, Access controls, Applications, Create new
+   application, Self-hosted and private.
+2. Add public hostnames for the domain `awardwatch.ca` with the path
+   `admin`, and again with the path `admin/*` (a wildcard path does not
+   cover its parent). The site also answers on `www.awardwatch.ca`; add
+   the same two paths for it, or leave it out, in which case the console
+   there answers 404 once `ACCESS_AUD` is set, since such a request
+   carries no token.
+3. A policy: action Allow, include Emails, the operator's addresses (the
+   same as `OPERATOR_EMAILS`).
+4. Login methods: One-time PIN, which mails a code to the address typed.
+5. Save. Under the application's Edit, Additional settings, copy the
+   Application Audience (AUD) Tag into `ACCESS_AUD`, and put the team
+   domain into `ACCESS_TEAM_DOMAIN`. Set `ACCESS_TEAM_DOMAIN` first: with
+   `ACCESS_AUD` set and the team missing, every request gets the 404.
+6. Open `/admin`. Access asks for the address and its PIN; then the site
+   needs its own session for the same address.
+
+### What each action does
+
+Every action is a POST, with the session's CSRF value and an `Origin`
+header naming the site (a post without one is refused here, unlike on the
+account pages). The buttons are on the account's page, `/admin/users/<id>`.
+The five marked "confirm" lead first to a page that says what will happen,
+and act only on the post from that page, its box ticked; a post without
+the box changes nothing. Each writes an audit row
+whose event starts `operator_` and whose detail is `by <operator's user
+id>`, never an address. The console refuses to block, re-address or
+delete the operator's own account.
+
+| Action | Effect |
+|---|---|
+| Grant Pro by hand | A `manual` entitlement row from now to the start of the end date given (UTC), or with no end. The reference is required: at most 120 characters, and any value holding `@` is refused, since a reference never holds an address. The same row as the insert under *Granting a plan by hand*. |
+| Revoke | Sets `revoked_at` on one row not yet revoked or ended. Revoking a Stripe row leaves the subscription billing, and its next paid invoice grants Pro again: cancel the subscription as well. |
+| Cancel the subscription (confirm) | At the period end (`POST /v1/subscriptions/<id>` with `cancel_at_period_end=true`): Pro runs to the end of the period paid, then Stripe's `customer.subscription.deleted` notice ends it. At once (`DELETE /v1/subscriptions/<id>`): Stripe ends it now and the stored row reads `canceled`; the same notice ends Pro, usually within a minute. Neither refunds anything. |
+| Refund the latest payment (confirm) | The page reads the latest paid invoices of the subscription (`GET /v1/invoices?subscription=<id>&status=paid&expand[]=data.payments`) and takes the newest that took money; its charge comes from the invoice's payments, or, for a payment through a PaymentIntent, from `GET /v1/charges?payment_intent=<id>`. It shows the invoice, the charge, the amount and what is refunded already. The post finds the charge again, refunds only if it is still the one shown, and calls `POST /v1/refunds` with `charge=<id>` and the header `Idempotency-Key: operator-refund-<charge id>`, so a second press or a retry within Stripe's 24 hours returns the first refund. Stripe's `charge.refunded` notice then ends the account's Stripe Pro (*What each notice does*). The subscription is not cancelled. |
+| Block (confirm) / Lift the block | A row in `account_blocks` with the reason (required, at most 200 characters, no `@`). In one batch: every session revoked, and email delivery turned off on every saved search that had it, the list kept in the row. While it stands, a code or a link for the address gets the "expired" answer any stale code gets, the sign-in page itself answering as for any address; the account's API keys answer 401; the delivery job, which reads only searches whose delivery is on, sends nothing. Lifting the block deletes the row and turns delivery back on for the searches it turned off that are still off. Entitlements and the subscription are left alone. |
+| Change the address (confirm) | The new address is normalized as sign-in does, at most 254 characters, and refused when any account holds it. The old address's open sign-in requests and wrong tries are deleted and every session is revoked. When mail can be sent (the `MAIL` binding and `MAIL_FROM`, or the log sender locally), the new address gets a plain message in the account's language saying the site's operator changed the account's address, with the sign-in page and the contact address. The old address is not written to, and can sign up again as a new account. |
+| Sign out everywhere | Every session of the account revoked. |
+| Delete (confirm) | Exactly the reader's own deletion (*Deletion*): the subscription cancelled first or nothing deleted, then the rows deleted and the address hashed, then every session revoked. A block ends with it. |
+
+### What the console shows
+
+- `/admin`: active, deleted and blocked accounts; signed-in browsers; the
+  accounts on Pro now by the source of the row that decides their plan
+  (by hand or through Stripe); subscriptions by their last notified
+  status; deliveries sent and not sent in the last 7 days; bug reports in
+  the last 7 days and in all, with the latest 10, once the `bug_reports`
+  table exists; sign-in codes issued today (UTC); the last 20 audit
+  events; and a search by user id or by address, exact or by its start.
+- `/admin/users/<id>`: the user row (address, created, last seen,
+  language, status, cached plan), the plan `planFor` computes, every
+  entitlement row with a revoke button on those not revoked or ended, the
+  `payment_customers` row and, with the Stripe keys set, the
+  subscription's status, period end and pending cancellation as Stripe
+  holds them now; sessions (signed in now, the newest use, device
+  classes); saved searches with their delivery and last delivery; API keys
+  (prefix, created, last used, revoked); the last 20 deliveries; the
+  account's bug reports; the last 50 audit rows; and whether it is
+  blocked, since when, by whom and why.
+
+The console never shows card data. The Stripe objects it reads are used
+for ids, statuses, dates, an amount and its currency, shown once and not
+kept; nothing from a charge's card or billing details is read into the
+page.
+
+### Stripe key permissions
+
+With the console, the restricted key of *Payments*, step 6, needs:
+Subscriptions write (cancelling, already needed for deletion), Refunds
+write, and Invoices and Charges read. Without the Stripe secrets the
+user page shows the stored row alone and offers no cancellation or
+refund.
+
+### The `account_blocks` table
+
+One row per blocked account, deleted when the block is lifted or the
+account is deleted: `user_id`, `reason` (the operator's note, never an
+address), `created_at`, `by_user_id` (the operator's user id) and
+`paused` (the searches whose delivery the block turned off). It is at
+the end of `accounts_schema.sql`; apply the schema again before deploying
+the console. Until it is applied no account can be blocked, and sign-in,
+keys and the console read every account as not blocked.
+
+### Known limits
+
+- A sign-in already past its code check when a block is written can start
+  a session just after the block revokes the account's sessions. The user
+  page then shows a signed-in browser; Sign out everywhere ends it, and
+  the next sign-in is refused.
+- A blocked account still holding Pro is counted by the same-day refresh's
+  gate (`LIVE_PRO_SQL`), as any live Pro row is.

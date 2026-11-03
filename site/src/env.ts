@@ -62,6 +62,17 @@ export interface Env {
   STOP_LIMIT?: RateLimit;
   // The payment service's webhook posts per address (wrangler.jsonc "ratelimits").
   WEBHOOK_LIMIT?: RateLimit;
+  // The operator console (src/account/admin.tsx; docs/accounts.md, Operator
+  // console). All three are secrets set with `wrangler secret put`, never
+  // variables: the repository is public. OPERATOR_EMAILS holds the
+  // comma-separated addresses whose sessions may open /admin; unset, /admin
+  // is the site's 404 for everyone. ACCESS_AUD is the Cloudflare Access
+  // application's AUD tag and ACCESS_TEAM_DOMAIN its team
+  // ("<team>.cloudflareaccess.com"); once ACCESS_AUD is set, a request must
+  // also carry an Access token for the same address.
+  OPERATOR_EMAILS?: string;
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
 
   // -- payments (src/account/stripe.ts and billing.tsx; docs/accounts.md) -----
   // Stripe's secret API key and the webhook endpoint's signing secret, set

@@ -15,6 +15,7 @@ Disallow: /search
 # Accounts: sign-in, a reader's own pages and the links in their messages.
 # Each also says noindex; this keeps crawlers from asking at all.
 Disallow: /account
+Disallow: /admin
 # A filtered tender list, a paged or filtered ranking, a day of new notices
 # and a correction form opened from a profile (?organization=) each name the
 # plain page as their canonical URL, so crawlers need not walk the query
@@ -38,6 +39,7 @@ Disallow: /api/
 Disallow: /organizations/*/respond
 Disallow: /search
 Disallow: /account
+Disallow: /admin
 Disallow: /tenders?
 Allow: /tenders?lang=fr$
 Disallow: /tenders/new?
