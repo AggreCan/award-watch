@@ -298,10 +298,13 @@ The test suite runs this same insert (`MANUAL_GRANT_SQL` in
   deletion revokes every session.
 - **Fail open to outages, closed to revocation.** When the database cannot
   be read, a session this Worker instance has already seen keeps its last
-  known state, plan included, until the session's own end; any other
-  request gets the free view (`planOfRequest` never throws on a public
-  page); and an API key request goes on marked unverified. When the database says a session, a
-  key or an entitlement is revoked or ended, it stops on that request.
+  known state until the session's own end, and its plan until the plan's
+  own end; any other request gets the free view (`planOfRequest` never
+  throws on a public page). An API key this instance has verified keeps its
+  last known answer the same way; any other key gets a 503, since a key of
+  the right shape proves nothing until the database has seen it. When the
+  database says a session, a key or an entitlement is revoked or ended, it
+  stops on that request. A response to a key is sent `private, no-store`.
 - **Stop links.** Each delivered search has a 16-byte random secret, the one
   secret kept in clear, because every message carries it in its stop link.
   It can turn that one search's delivery off and nothing else; a wrong or

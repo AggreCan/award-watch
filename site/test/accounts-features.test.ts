@@ -3,7 +3,7 @@
 // deletion, against the local accounts database with the switch on.
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
-import { apiKeyOf, requireApiKey } from "../src/account/api_keys";
+import { apiKeyOf, forgetKeys, requireApiKey } from "../src/account/api_keys";
 import { RULES, allowed, lastKnownPlan, planFor, planFromRows, type EntitlementRow } from "../src/account/entitlements";
 import { paymentSource } from "../src/account/payments";
 import { sha256Hex } from "../src/account/secrets";
@@ -260,12 +260,20 @@ describe("requireApiKey", () => {
     expect(await res.json()).toEqual({ error: "The plan of the key's account does not include the API." });
   });
 
-  it("lets a request through, unverified, when the database cannot be read", async () => {
-    const { key } = await proKey();
+  it("when the database cannot be read, keeps a key this instance verified and answers 503 for any other", async () => {
+    const { email, key } = await proKey();
     const broken = { prepare: () => { throw new Error("D1 down"); } } as unknown as D1Database;
+    // Never checked here: a key of the right shape proves nothing (test/hardening.test.ts has the rest).
+    forgetKeys();
+    const unseen = await call(onEnv({ ACCOUNTS: broken }), { authorization: `Bearer ${key}` });
+    expect(unseen.status).toBe(503);
+    // Checked once with the database up: the last known answer, marked stale.
+    expect((await call(onEnv(), { authorization: `Bearer ${key}` })).status).toBe(200);
     const res = await call(onEnv({ ACCOUNTS: broken }), { authorization: `Bearer ${key}` });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ holder: { userId: null, keyId: null, unverified: true } });
+    const holder = ((await res.json()) as { holder: { userId: string; stale?: boolean } }).holder;
+    expect(holder.userId).toBe(await userId(email));
+    expect(holder.stale).toBe(true);
   });
 
   it("gates nothing while the switch is off, and the site's own API asks for no key", async () => {

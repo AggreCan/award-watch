@@ -13,13 +13,13 @@
 // Fail open to outages, closed to revocation: a session the database says is
 // revoked, expired or unknown is signed out on that request; a database that
 // cannot answer leaves a session this isolate has already seen on its last
-// known state (plan included) until the session's own end.
+// known state until the session's own end, its plan until the plan's own end.
 
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv, Env } from "../env";
 import type { Lang } from "../i18n";
-import { type Plan, planFor } from "./entitlements";
+import { type Plan, lastKnownPlan, planFor } from "./entitlements";
 import { newId, plusDays, randomHex, sameHash, sha256Hex } from "./secrets";
 import { accountsEnabled } from "./switch";
 
@@ -149,7 +149,11 @@ async function lookup(c: Context<AppEnv>, touch: boolean): Promise<SessionRead> 
   } catch {
     const known = lastKnown.get(id);
     if (known && sameHash(known.tokenHash, tokenHash) && known.expiresAt > at) {
-      return { state: "ok", account: { ...known.account, stale: true } };
+      // The plan this isolate read still stands only until its own end, which
+      // is known here without the database (lastKnownPlan, as planFor uses on
+      // an outage): an entitlement that has ended is closed, outage or not.
+      const held = lastKnownPlan({ id: known.account.userId, plan: known.account.plan, plan_until: known.account.planUntil }, now);
+      return { state: "ok", account: { ...known.account, plan: held.plan, planUntil: held.until, stale: true } };
     }
     console.error("account session: database unreadable");
     return { state: "unavailable" };

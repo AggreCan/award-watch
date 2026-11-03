@@ -11,7 +11,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import type { AppEnv, Env } from "../env";
 import { t } from "../i18n";
-import { type Feature, allowed, planFor } from "./entitlements";
+import { type Feature, type Plan, allowed, lastKnownPlan, planFor } from "./entitlements";
 import { newId, randomHex, sameHash, sha256Hex } from "./secrets";
 import { accountsEnabled } from "./switch";
 
@@ -49,12 +49,13 @@ export async function revokeKey(env: Env, userId: string, id: string, now = new 
 
 // -- the middleware ---------------------------------------------------------------
 
-export type KeyHolder = { userId: string; keyId: string } | { userId: null; keyId: null; unverified: true };
+// stale: the database could not be read and this isolate's last check of the
+// key answered.
+export type KeyHolder = { userId: string; keyId: string; stale?: true };
 
 const holders = new WeakMap<Request, KeyHolder>();
 
 // Who a request's key belongs to, once requireApiKey has let it through.
-// unverified: the database could not be read and the request went on.
 export function apiKeyOf(c: Context<AppEnv>): KeyHolder | undefined {
   return holders.get(c.req.raw);
 }
@@ -69,20 +70,53 @@ export function presentedKey(headers: Headers): string | null {
 
 type Found = { id: string; key_hash: string; revoked_at: string | null; last_used_at: string | null; user_id: string; status: string; plan: string; plan_until: string | null };
 
+// What this isolate last read for each key it has checked, for the outage
+// case only, as session.ts keeps sessions: keyed by the key's hash (never the
+// key), bounded, the oldest first out, and dropped the moment a read refuses
+// the key.
+type KnownKey = { userId: string; keyId: string; plan: Plan; planUntil: string | null };
+const lastKnownKeys = new Map<string, KnownKey>();
+const LAST_KNOWN_KEYS_MAX = 500;
+
+function rememberKey(hash: string, known: KnownKey): void {
+  lastKnownKeys.delete(hash);
+  lastKnownKeys.set(hash, known);
+  if (lastKnownKeys.size > LAST_KNOWN_KEYS_MAX) lastKnownKeys.delete(lastKnownKeys.keys().next().value as string);
+}
+
+// For tests: forget what this isolate has checked.
+export function forgetKeys(): void {
+  lastKnownKeys.clear();
+}
+
 // requireApiKey(feature): a missing, malformed, unknown or revoked key gets a
 // 401; a key whose owner's plan does not allow the feature gets a 403. Fail
-// open to outages, closed to revocation: when the database cannot be read
-// the request goes on, marked unverified, while a key the database names as
-// revoked stops at once. While the switch is off it gates nothing: the
-// request passes untouched and nothing is read.
+// open to outages, closed to revocation: when the database cannot be read, a
+// key this isolate verified before keeps its last known answer (its plan
+// until the plan's own end), and any other key gets a 503, since a key that
+// looks right proves nothing until the database has seen it; a key the
+// database names as revoked stops at once. An answer to a key is for its
+// holder alone, so it goes out private and no-store whatever the route set
+// (the /api sub-app marks a response without a rule public for five
+// minutes). While the switch is off it gates nothing: the request passes
+// untouched and nothing is read.
 export function requireApiKey(feature: Feature = "api"): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     if (!accountsEnabled(c.env)) return next();
     const lang = c.get("lang") ?? "en";
-    const refuse = (status: 401 | 403, key: "account.api_key_missing" | "account.api_key_invalid" | "account.api_key_plan") => {
+    const refuse = (
+      status: 401 | 403 | 503,
+      key: "account.api_key_missing" | "account.api_key_invalid" | "account.api_key_plan" | "account.unavailable_text",
+    ) => {
       c.header("Cache-Control", "no-store");
       if (status === 401) c.header("WWW-Authenticate", 'Bearer realm="api"');
+      if (status === 503) c.header("Retry-After", "60");
       return c.json({ error: t(lang, key) }, status);
+    };
+    const pass = async (holder: KeyHolder) => {
+      holders.set(c.req.raw, holder);
+      await next();
+      c.header("Cache-Control", "private, no-store");
     };
     const raw = presentedKey(c.req.raw.headers);
     if (!raw) return refuse(401, "account.api_key_missing");
@@ -98,17 +132,28 @@ export function requireApiKey(feature: Feature = "api"): MiddlewareHandler<AppEn
       ).bind(m[1]).all<Found>();
       rows = res.results ?? [];
     } catch {
-      console.error("api key: database unreadable, request let through unverified");
-      holders.set(c.req.raw, { userId: null, keyId: null, unverified: true });
-      return next();
+      const known = lastKnownKeys.get(hash);
+      if (!known) {
+        console.error("api key: database unreadable, key not checked before on this instance");
+        return refuse(503, "account.unavailable_text");
+      }
+      console.error("api key: database unreadable, last known answer used");
+      if (!allowed(lastKnownPlan({ id: known.userId, plan: known.plan, plan_until: known.planUntil }, now), feature)) {
+        return refuse(403, "account.api_key_plan");
+      }
+      return pass({ userId: known.userId, keyId: known.keyId, stale: true });
     }
     let found: Found | null = null;
     for (const row of rows) {
       const same = sameHash(hash, row.key_hash);
       if (same && !found) found = row;
     }
-    if (!found || found.revoked_at || found.status !== "active") return refuse(401, "account.api_key_invalid");
+    if (!found || found.revoked_at || found.status !== "active") {
+      lastKnownKeys.delete(hash);
+      return refuse(401, "account.api_key_invalid");
+    }
     const plan = await planFor(c.env, { id: found.user_id, plan: found.plan, plan_until: found.plan_until }, now);
+    rememberKey(hash, { userId: found.user_id, keyId: found.id, plan: plan.plan, planUntil: plan.until });
     if (!allowed(plan, feature)) return refuse(403, "account.api_key_plan");
     if (!found.last_used_at || now.getTime() - Date.parse(found.last_used_at) > USE_WRITE_MS) {
       try {
@@ -117,7 +162,6 @@ export function requireApiKey(feature: Feature = "api"): MiddlewareHandler<AppEn
         // The last-use time lags; the key still stands.
       }
     }
-    holders.set(c.req.raw, { userId: found.user_id, keyId: found.id });
-    return next();
+    return pass({ userId: found.user_id, keyId: found.id });
   };
 }

@@ -24,20 +24,25 @@ export type Issued = { code: string; token: string; userId: string | null };
 
 // A new code and link for an address, or "limited" when the address has had
 // CODES_PER_HOUR of them in the last hour (whether or not it has an account,
-// so the answer says nothing about one).
+// so the answer says nothing about one). The count is taken inside the
+// insert: a count read first and an insert after let a burst of posts that
+// all counted before any inserted make many more codes (and messages) than
+// the cap, and each extra live code is one more target for every guess.
 export async function issueCode(env: Env, email: string, ip: string | null, now = new Date()): Promise<Issued | "limited"> {
   const db = env.ACCOUNTS!;
   const since = new Date(now.getTime() - 3_600_000).toISOString();
-  const recent = await db.prepare("SELECT COUNT(*) AS n FROM magic_codes WHERE email = ? AND created_at > ?")
-    .bind(email, since).first<{ n: number }>();
-  if ((recent?.n ?? 0) >= CODES_PER_HOUR) return "limited";
   const user = await db.prepare("SELECT id FROM users WHERE email = ? AND status = 'active'").bind(email).first<{ id: string }>();
   const id = newId();
   const code = newCode();
   const secret = randomHex(32);
-  await db.prepare(
-    "INSERT INTO magic_codes (id, user_id, email, code_hash, link_hash, created_at, expires_at, ip_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-  ).bind(id, user?.id ?? null, email, await codeHash(id, code), await sha256Hex(secret), now.toISOString(), plusMinutes(now, CODE_MINUTES), ip).run();
+  const res = await db.prepare(
+    "INSERT INTO magic_codes (id, user_id, email, code_hash, link_hash, created_at, expires_at, ip_hash) " +
+    "SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM magic_codes WHERE email = ? AND created_at > ?) < ?",
+  ).bind(
+    id, user?.id ?? null, email, await codeHash(id, code), await sha256Hex(secret), now.toISOString(), plusMinutes(now, CODE_MINUTES), ip,
+    email, since, CODES_PER_HOUR,
+  ).run();
+  if ((res.meta?.changes ?? 0) !== 1) return "limited";
   return { code, token: `${id}.${secret}`, userId: user?.id ?? null };
 }
 

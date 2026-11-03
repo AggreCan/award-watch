@@ -21,3 +21,10 @@ declare module "*?raw" {
   const content: string;
   export default content;
 }
+
+// Vite's import.meta.glob: the hardening test reads every source file and
+// every workflow as text with it, so a reader or a trigger added later is
+// covered without a list to keep.
+interface ImportMeta {
+  glob(pattern: string | string[], options?: { query?: string; import?: string; eager?: boolean }): Record<string, unknown>;
+}
