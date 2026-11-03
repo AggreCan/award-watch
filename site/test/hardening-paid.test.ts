@@ -1051,6 +1051,11 @@ describe("the webhook's rate-limit bucket", () => {
     expect(bucketFor("POST", "/account/billing/webhook")).toBe("hook");
     expect(bucketFor("GET", "/account/billing/webhook")).toBe("page");
     expect(bucketFor("POST", "/account/billing")).toBe("page");
+    // The two billing posts count with the forms: each opens a session with
+    // the payment service.
+    expect(bucketFor("POST", "/account/billing/checkout")).toBe("form");
+    expect(bucketFor("POST", "/account/billing/portal")).toBe("form");
+    expect(bucketFor("GET", "/account/billing/portal")).toBe("page");
     expect(wranglerConfig).toContain('{ "name": "WEBHOOK_LIMIT", "namespace_id": "2008", "simple": { "limit": 120, "period": 60 } }');
     const keys: string[] = [];
     const keeper = (ok: boolean) => ({ limit: async ({ key }: { key: string }) => (keys.push(key), { success: ok }) }) as unknown as RateLimit;
