@@ -187,6 +187,10 @@ kbd { display: inline-block; min-width: 20px; padding: 0 4px; border: 1px solid 
 .brand { display: inline-flex; align-items: center; flex: none; color: var(--ink); text-decoration: none; }
 .brand-lockup, .brand-wordmark { display: block; flex: none; width: auto; height: 24px; }
 .brand-mark { display: block; flex: none; width: 28px; height: 28px; color: var(--ink); }
+/* The signed-in reader's plan after the wordmark, set at its foot like a
+   subscript: muted for free, the accent for pro. */
+.brand-plan { flex: none; align-self: flex-end; margin: 0 0 1px 6px; font-size: 11px; line-height: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
+.brand-plan-pro { color: var(--accent); }
 .mark-check { fill: var(--check); }
 .topbar-meta { display: flex; align-items: center; gap: 8px 16px; margin-left: auto; font-size: 12px; line-height: 16px; color: var(--muted); }
 .asof { white-space: nowrap; }

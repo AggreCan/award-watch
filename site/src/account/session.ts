@@ -186,16 +186,17 @@ async function lookup(c: Context<AppEnv>, touch: boolean): Promise<SessionRead> 
 // What the rail shows in "Your lists": undefined while the switch is off (the
 // rail shows nothing and nothing is read); signed out without a cookie or
 // with one that does not stand; the email when signed in.
-export type RailAccount = { email: string | null };
+// The plan rides along for the badge after the wordmark (layout.tsx).
+export type RailAccount = { email: string | null; plan: Plan | null };
 
 export async function railAccount(c: Context<AppEnv>): Promise<RailAccount | undefined> {
   if (!accountsEnabled(c.env)) return undefined;
-  if (!getCookie(c, SESSION_COOKIE)) return { email: null };
+  if (!getCookie(c, SESSION_COOKIE)) return { email: null, plan: null };
   try {
     const read = await readSession(c);
-    return { email: read.state === "ok" ? read.account.email : null };
+    return read.state === "ok" ? { email: read.account.email, plan: read.account.plan } : { email: null, plan: null };
   } catch {
-    return { email: null };
+    return { email: null, plan: null };
   }
 }
 

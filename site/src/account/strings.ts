@@ -79,6 +79,9 @@ export const ACCOUNT_STRINGS = {
   "account.field_since": { en: "Member since", fr: "Membre depuis" },
   "account.field_sessions": { en: "Signed-in browsers", fr: "Navigateurs connectés" },
   "account.plan_free": { en: "Free", fr: "Gratuit" },
+  // The subscript after the wordmark for a signed-in reader.
+  "account.plan_tag_free": { en: "free", fr: "gratuit" },
+  "account.plan_tag_pro": { en: "pro", fr: "pro" },
   "account.plan_pro_open": { en: "Pro, no end date", fr: "Pro, sans date de fin" },
   "account.plan_pro_until": { en: "Pro, until {date}", fr: "Pro, jusqu'au {date}" },
   "account.searches": { en: "Saved searches", fr: "Recherches enregistrées" },

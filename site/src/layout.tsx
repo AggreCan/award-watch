@@ -383,7 +383,7 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 10;
+export const STYLES_VERSION = 11;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -424,6 +424,12 @@ export const Layout: FC<
         <header class="topbar">
           <a href="/" class="brand" aria-label={t(lang, "site.name")}>
             <BrandWordmark name={t(lang, "site.name")} />
+            {/* The signed-in reader's plan, a subscript after the wordmark (operator, 2026-11-03); nothing while signed out. */}
+            {shell?.account?.email && shell.account.plan ? (
+              <span class={`brand-plan brand-plan-${shell.account.plan}`}>
+                {t(lang, shell.account.plan === "pro" ? "account.plan_tag_pro" : "account.plan_tag_free")}
+              </span>
+            ) : null}
           </a>
           <TopbarSearch lang={lang} query={props.query} />
           <div class="topbar-meta">

@@ -1998,6 +1998,7 @@ type Vars = Record<string, string | number>;
 // spelled the same in both languages. The completeness test holds every other
 // key to a French string that differs from the English.
 export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
+  "account.plan_tag_pro", // the plan subscript after the wordmark reads the same in both
   "site.name",
   "nav.segments",
   "common.page_n",
