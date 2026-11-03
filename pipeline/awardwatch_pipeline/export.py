@@ -21,6 +21,9 @@ and the site serves only these names):
   expiring-12m.csv        the expiring-contracts radar: every contract ending within 365 days, listed
                           once across the three sources (expiring.py), soonest end first, with the
                           client department and the value flag
+  expiring-3m.csv         the same columns for the rows ending within the 3-month window of the data
+                          date (expiring.WINDOWS), as the site's 3-month list counts them: the file the
+                          site keeps free once the 6- and 12-month windows are part of its paid plan
   SHA256SUMS              sha256sum's format: "<hex>  <file>" per line, sorted by file name; every file
                           in it is one the Data page offers
 
@@ -56,7 +59,7 @@ import sqlite3
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from . import config
+from . import config, expiring
 from .db import log_run
 from .normalize import tender_status_on
 from .sources.buyers import public_spelling
@@ -151,7 +154,7 @@ def register_functions(conn: sqlite3.Connection) -> None:
 YEAR_RE = re.compile(r"^(awards|history)-(?:before-|after-)?\d{4}\.csv$")
 # The first year with a file of its own; earlier dates are typing errors in the source and share one file.
 FIRST_YEAR = {"awards": 2012, "history": 2009}
-FIXED_FILES = ("open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-12m.csv")
+FIXED_FILES = ("open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv", "expiring-12m.csv")
 
 OPEN_TENDERS = """
     SELECT t.reference, t.amendment, t.solicitation, t.title_en, t.title_fr, t.published, t.closing, t.amended,
@@ -197,12 +200,20 @@ ORGANIZATIONS = """
            total_awards, n_awards_no_value, n_history, total_history, n_history_no_value, n_contracts, total_contracts,
            n_contracts_no_value, n_grants, total_grants, n_grants_no_value, n_lobbying
     FROM organizations ORDER BY norm_name, id"""
-EXPIRING = """
+_EXPIRING_SELECT = """
     SELECT kind, reference, title_en, title_fr, organization_id, organization, supplier_withheld, buyer_id, buyer_en,
            buyer_fr, start, end, days_left, value, currency, competitive, method_en, instrument_en, n_amendments,
            value_growth, tender_reference, segments, provinces, client_buyer_id, client_buyer_name,
            client_buyer_name_fr, value_flag
-    FROM expiring_contracts ORDER BY end, source_key"""
+    FROM expiring_contracts"""
+EXPIRING = _EXPIRING_SELECT + " ORDER BY end, source_key"
+# The 3-month file: the rows that end on or after the data date and within the
+# 3-month window of it, the rule export_static.write_expiring applies to the
+# site's 3-month list (days_left counted again from the data date). It stays
+# free when the longer windows are part of the site's paid plan.
+EXPIRING_3M_DAYS = dict(expiring.WINDOWS)["3m"]
+EXPIRING_3M = (_EXPIRING_SELECT + " WHERE substr(end, 1, 10) BETWEEN :as_of AND date(:as_of, :span)"
+               " ORDER BY end, source_key")
 # A buyer is listed (buyers.csv, and buyers/, the rankings and stats.json in the
 # static export) when it has a record in a column the buyers list shows: an
 # open tender notice on the data date, an award notice, a contract history
@@ -322,6 +333,8 @@ def export_csv(conn: sqlite3.Connection, out_dir: Path | None = None, *, today: 
             counts[name] = _write(out / name, conn.execute(query, args))
     counts["organizations.csv"] = _write(out / "organizations.csv", conn.execute(ORGANIZATIONS))
     counts["buyers.csv"] = _write(out / "buyers.csv", conn.execute(BUYERS, {"as_of": as_of}))
+    counts["expiring-3m.csv"] = _write(out / "expiring-3m.csv", conn.execute(
+        EXPIRING_3M, {"as_of": as_of, "span": f"+{EXPIRING_3M_DAYS} days"}))
     counts["expiring-12m.csv"] = _write(out / "expiring-12m.csv", conn.execute(EXPIRING))
     # A yearly file from an earlier night whose year no longer has rows (a
     # date corrected upstream) would otherwise be uploaded again.

@@ -17,12 +17,14 @@ const section = (html: string, id: string) => {
 
 describe("data page", () => {
   it("lists the fixed downloads and allows the yearly files by name only", () => {
-    expect(DOWNLOADS.map((d) => d.file)).toEqual(["open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-12m.csv", "SHA256SUMS"]);
-    for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "expiring-12m.csv", "SHA256SUMS", "mirror/x.csv",
-      "awards-before-2012.csv", "awards-after-2026.csv", "history-before-2009.csv"]) {
+    expect(DOWNLOADS.map((d) => d.file)).toEqual([
+      "open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv", "expiring-12m.csv", "SHA256SUMS",
+    ]);
+    for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "expiring-3m.csv", "expiring-12m.csv", "SHA256SUMS",
+      "mirror/x.csv", "awards-before-2012.csv", "awards-after-2026.csv", "history-before-2009.csv"]) {
       expect(downloadAllowed(file), file).toBe(true);
     }
-    for (const file of ["awards-12.csv", "grants-2024.csv", "../stats.json", "awards-2024.csv.gz", "status.json", "mirror/../x", "expiring-3m.csv",
+    for (const file of ["awards-12.csv", "grants-2024.csv", "../stats.json", "awards-2024.csv.gz", "status.json", "mirror/../x", "expiring-6m.csv",
       "awards-later-2026.csv", "awards-before-.csv"]) {
       expect(downloadAllowed(file), file).toBe(false);
     }

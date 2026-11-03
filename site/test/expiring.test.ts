@@ -47,8 +47,9 @@ describe("/expiring", () => {
     expect(html).toContain('<a href="/expiring/12m?buyer=dnd-mdn">3</a>');
     expect(html).toContain('<a href="/segments/43">43 Information Technology Broadcasting and Telecommunications</a>');
     expect(html).toContain('<a href="/expiring/12m?segment=43">3</a>');
-    // The CSV and the feeds.
-    expect(html).toContain('<a href="/downloads/expiring-12m.csv" class="btn">Download contracts ending within 12 months (CSV)</a>');
+    // The CSV (the free 3-month file; the 12-month one is part of Pro once accounts open) and the feeds.
+    expect(html).toContain('<a href="/downloads/expiring-3m.csv" class="btn">Download contracts ending within 3 months (CSV)</a>');
+    expect(html).not.toContain("/downloads/expiring-12m.csv");
     expect(html).toContain('<a href="/data/feeds/canada/expiring.xml" class="btn">Atom feed of contracts entering the 3-month window</a>');
     expect(html).toContain('<a href="/feeds#expiring">Feeds by buyer and by segment</a>');
     expect(head(html)).toContain('<link rel="alternate" type="application/atom+xml" title="Contracts ending within 3 months (Atom feed)" href="/data/feeds/canada/expiring.xml"/>');
@@ -65,7 +66,7 @@ describe("/expiring", () => {
     expect(html).toContain("Particulier, nom non divulgué");
     expect(html).toContain("<h2>Contrats prenant fin d’ici 3 mois</h2>");
     expect(html).toContain('<a href="/buyers/dnd-mdn">Défense nationale</a>');
-    expect(html).toContain("Télécharger les contrats prenant fin d’ici 12 mois (CSV)");
+    expect(html).toContain("Télécharger les contrats prenant fin d’ici 3 mois (CSV)");
     expect(html).toContain('<a class="rail-item" href="/expiring" aria-current="page"><span class="rail-label">Contrats prenant fin</span>');
   });
 
@@ -75,7 +76,7 @@ describe("/expiring", () => {
     const noFeeds = await text("/expiring", testEnv(makeFakeAssets({}, { "feeds/index.json": feeds })));
     expect(noFeeds).not.toContain("/data/feeds/canada/expiring.xml");
     expect(noFeeds).not.toContain("/feeds#expiring");
-    expect(noFeeds).toContain("/downloads/expiring-12m.csv");
+    expect(noFeeds).toContain("/downloads/expiring-3m.csv");
     const missing = await get("/expiring", testEnv(assetsWithout("expiring/3m/1.json")));
     expect(missing.status).toBe(200);
     expect(await missing.text()).toContain("The list for this window is not published yet.");
@@ -120,8 +121,11 @@ describe("/expiring/:window", () => {
     // The source each row was kept from, on the line under the contract, so it shows while the Record column rests.
     expect(html).toMatch(/Translation standing offer, official languages<\/a><br\/><span class="mono id muted">[^<]+<\/span>[^]*?<br\/><span class="muted small">Award notice/);
     expect(html).toContain('<span class="muted small">Published contract');
-    // A line says where the resting columns are, shown only while they rest.
-    expect(html).toContain('<p class="rest-note muted small">Amendments, value changes and the source record of each contract are in <a href="/downloads/expiring-12m.csv">the 12-month CSV file</a>.</p>');
+    // A line says where the resting columns are, shown only while they rest:
+    // for the 3-month list, the free 3-month file, which the head offers too.
+    expect(html).toContain('<p class="rest-note muted small">Amendments, value changes and the source record of each contract are in <a href="/downloads/expiring-3m.csv">the 3-month CSV file</a>.</p>');
+    expect(html).toContain('<a href="/downloads/expiring-3m.csv" class="btn">Download contracts ending within 3 months (CSV)</a>');
+    expect(html).not.toContain("/downloads/expiring-12m.csv");
     // Organization, withheld wording, buyer, value, competition.
     expect(html).toContain('<td data-label="Supplier"><a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a></td>');
     expect(html).toContain('<td data-label="Supplier"><span class="muted">Individual, name withheld</span></td>');
@@ -313,11 +317,14 @@ describe("contracts ending on buyer pages and profiles", () => {
     expect(await text("/organizations/org-a000000002")).not.toContain('id="expiring"');
     const fr = nbsp(await text("/organizations/org-a000000001?lang=fr"));
     expect(fr).toContain('<h2 id="expiring">Contrats prenant fin</h2>');
-    // More rows than the part holds: the rest are in the CSV file.
+    // More rows than the part holds: the rest are in the 12-month list, linked
+    // as the window's page (its free view once the 12-month window is Pro).
     const profiles = clone(FILES["profiles/a00.json"]) as Record<string, any>;
     profiles["org-a000000001"].expiring.n = 30;
     const more = await text("/organizations/org-a000000001", testEnv(makeFakeAssets({}, { "profiles/a00.json": profiles })));
-    expect(more).toContain('The first 1 by end date are shown. The other 29 are in <a href="/downloads/expiring-12m.csv">the 12-month CSV file</a>.');
+    expect(more).toContain('The first 1 by end date are shown. The other 29 are in <a href="/expiring/12m">the 12-month list</a>.');
+    const moreFr = nbsp(await text("/organizations/org-a000000001?lang=fr", testEnv(makeFakeAssets({}, { "profiles/a00.json": profiles }))));
+    expect(moreFr).toContain('Les 29 autres se trouvent dans <a href="/expiring/12m">la liste de 12 mois</a>.');
     profiles["org-a000000001"].expiring.n = 2;
     expect(await text("/organizations/org-a000000001", testEnv(makeFakeAssets({}, { "profiles/a00.json": profiles }))))
       .toContain("The other one is in");
@@ -377,12 +384,16 @@ describe("home, feeds, methodology and the downloads", () => {
     expect(fr).toContain("Les périodes sont cumulatives : d’ici 3, 6 et 12 mois après la date des données.");
   });
 
-  it("allows the 12-month CSV, lists it on the Data page and names the routes by template", async () => {
+  it("allows the 3- and 12-month CSVs, lists them on the Data page and names the routes by template", async () => {
     expect(downloadAllowed("expiring-12m.csv")).toBe(true);
-    expect(downloadAllowed("expiring-3m.csv")).toBe(false);
+    expect(downloadAllowed("expiring-3m.csv")).toBe(true);
+    expect(downloadAllowed("expiring-6m.csv")).toBe(false);
     const data = await text("/data");
+    expect(data).toContain('<a href="/downloads/expiring-3m.csv" class="mono">expiring-3m.csv</a>');
+    expect(data).toContain("Every contract ending within 3 months of the data date, in the 12-month file&#39;s columns");
     expect(data).toContain('<a href="/downloads/expiring-12m.csv" class="mono">expiring-12m.csv</a>');
     expect(data).toContain("Every contract ending within 12 months of the data date");
+    expect(routeTemplate("GET", "/downloads/expiring-3m.csv")).toEqual({ route: "/downloads/expiring-3m.csv", kind: "download" });
     expect(routeTemplate("GET", "/expiring")).toEqual({ route: "/expiring", kind: "page" });
     expect(routeTemplate("GET", "/expiring/3m")).toEqual({ route: "/expiring/:window", kind: "page" });
     expect(routeTemplate("GET", "/expiring/whatever")).toEqual({ route: "/expiring/:window", kind: "page" });

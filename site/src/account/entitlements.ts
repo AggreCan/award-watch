@@ -17,18 +17,23 @@ export type Plan = (typeof PLANS)[number];
 // intraday: same-day tender notices, refreshed every two hours through the
 // Ottawa business day and merged into /tenders and /tenders/new for a
 // session whose plan allows it (rendered by the pages that use it, not here).
-export const FEATURES = ["saved_searches", "delivery", "api", "export_filtered", "intraday"] as const;
+// radar_depth: the full 6- and 12-month windows of contracts ending, their
+// pages and their files, once the switch is on; the 3-month window, the
+// overview and each window's count and total stay free (src/plan.ts).
+export const FEATURES = ["saved_searches", "delivery", "api", "export_filtered", "intraday", "radar_depth"] as const;
 export type Feature = (typeof FEATURES)[number];
 
 // The ceiling on saved searches whatever the plan (accounts_schema.sql says
 // the same).
 export const SAVED_SEARCH_MAX = 25;
 
-type Rules = { saved_searches: number; delivery: boolean; api: boolean; export_filtered: boolean; intraday: boolean };
+type Rules = {
+  saved_searches: number; delivery: boolean; api: boolean; export_filtered: boolean; intraday: boolean; radar_depth: boolean;
+};
 
 export const RULES: Readonly<Record<Plan, Rules>> = {
-  free: { saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false },
-  pro: { saved_searches: SAVED_SEARCH_MAX, delivery: true, api: true, export_filtered: true, intraday: true },
+  free: { saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false, radar_depth: false },
+  pro: { saved_searches: SAVED_SEARCH_MAX, delivery: true, api: true, export_filtered: true, intraday: true, radar_depth: true },
 };
 
 export const isPlan = (v: unknown): v is Plan => v === "free" || v === "pro";

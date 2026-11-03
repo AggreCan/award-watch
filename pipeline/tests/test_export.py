@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import re
+from datetime import date
 
 import pytest
 
@@ -22,7 +23,7 @@ def test_the_downloads_and_their_sums(conn, tmp_path):
     counts = export.run(conn, out)
     names = sorted(p.name for p in out.iterdir())
     assert names == ["SHA256SUMS", "awards-2024.csv", "awards-2025.csv", "awards-2026.csv", "buyers.csv",
-                     "expiring-12m.csv", "history-2026.csv", "open-tenders.csv", "organizations.csv"]
+                     "expiring-12m.csv", "expiring-3m.csv", "history-2026.csv", "open-tenders.csv", "organizations.csv"]
     assert all(export.YEAR_RE.match(n) for n in names if n.startswith(("awards-", "history-")))
     assert counts["open-tenders.csv"] == 4 and counts["awards-2026.csv"] == 4 and counts["organizations.csv"] == 3
     sums = (out / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
@@ -32,7 +33,29 @@ def test_the_downloads_and_their_sums(conn, tmp_path):
         assert hashlib.sha256((out / name).read_bytes()).hexdigest() == digest
     assert not list(out.glob("*.partial"))
     log = conn.execute("SELECT source, rows_new FROM sources_log").fetchall()
-    assert [tuple(r) for r in log] == [("export_csv", 8)]
+    assert [tuple(r) for r in log] == [("export_csv", 9)]
+
+
+def test_the_3_month_file_is_the_12_month_file_cut_to_the_3_month_window(conn, tmp_path):
+    """expiring-3m.csv, free on the site once the longer windows are part of the paid plan: the rows of
+    expiring-12m.csv that end on or after the data date and within 91 days of it, same columns, same order."""
+    seed(conn)
+    out = tmp_path / "csv"
+    counts = export.export_csv(conn, out, today=TODAY)
+    twelve, three = rows(out / "expiring-12m.csv"), rows(out / "expiring-3m.csv")
+    assert export.EXPIRING_3M_DAYS == 91
+    assert list(three[0]) == list(twelve[0])
+    assert [r["reference"] for r in three] == ["AW-5", "AW-2", "H-1"] and counts["expiring-3m.csv"] == 3
+    assert three == [r for r in twelve if TODAY.isoformat() <= r["end"][:10] <= "2027-01-30"]
+    # The edges: a contract ending 91 days after the data date is in, 92 days out; one that ended the day
+    # before the data date is out. H-1 ends on 2027-01-20, AW-5 on 2026-11-30.
+    edge = tmp_path / "edge"
+    for today, kept in (("2026-10-21", True), ("2026-10-20", False)):
+        export.export_csv(conn, edge, today=date.fromisoformat(today))
+        assert ("H-1" in [r["reference"] for r in rows(edge / "expiring-3m.csv")]) is kept, today
+    export.export_csv(conn, edge, today=date(2026, 12, 1))
+    refs = [r["reference"] for r in rows(edge / "expiring-3m.csv")]
+    assert "AW-5" not in refs and refs[:2] == ["AW-2", "H-1"]
 
 
 def test_nothing_private_goes_in_a_file(conn, tmp_path):

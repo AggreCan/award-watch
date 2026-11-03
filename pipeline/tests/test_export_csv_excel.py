@@ -78,7 +78,7 @@ def test_award_dates_after_the_data_year_share_one_file_and_every_file_is_offere
     assert "awards-after-2026.csv" in names and "awards-2027.csv" not in names and "awards-2040.csv" not in names
     assert [r["reference"] for r in read(out / "awards-after-2026.csv")] == ["LATE-1", "LATE-2"]
     assert counts["awards-before-2012.csv"] == 1
-    offered = re.compile(r"^(open-tenders|organizations|buyers|expiring-12m)\.csv$|^(awards|history)-(\d{4}|before-\d{4}|after-\d{4})\.csv$")
+    offered = re.compile(r"^(open-tenders|organizations|buyers|expiring-3m|expiring-12m)\.csv$|^(awards|history)-(\d{4}|before-\d{4}|after-\d{4})\.csv$")
     sums = [line.split("  ")[1] for line in (out / "SHA256SUMS").read_text(encoding="utf-8").splitlines()]
     assert sums and all(offered.match(n) for n in sums)
     assert all(int(m.group(1)) <= 2026 for n in sums if (m := re.match(r"^awards-(\d{4})\.csv$", n)))

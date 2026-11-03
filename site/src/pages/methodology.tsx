@@ -6,6 +6,7 @@ import type { AppEnv } from "../env";
 import { t, tj, type Key } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { pageSeo } from "../seo";
+import { EXPIRING_TEASER_ROWS } from "./expiring";
 
 // How the site reads its sources, merges organizations and buyers, counts
 // money and derives statuses and competitive flags. The "Counting money"
@@ -27,9 +28,10 @@ const TOC: [string, Key][] = [
   ["corrections", "methodology.toc_corrections"],
 ];
 
-const List = ({ keys, lang }: { keys: Key[]; lang: "en" | "fr" }) => (
+// vars fills a key's placeholders, for a figure the page takes from the code.
+const List = ({ keys, lang, vars }: { keys: Key[]; lang: "en" | "fr"; vars?: Partial<Record<Key, Record<string, number>>> }) => (
   <ul>
-    {keys.map((k) => <li>{t(lang, k)}</li>)}
+    {keys.map((k) => <li>{t(lang, k, vars?.[k])}</li>)}
   </ul>
 );
 
@@ -95,9 +97,9 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
 
           <h2 id="expiring">{t(lang, "methodology.toc_expiring")}</h2>
           <p>{t(lang, "methodology.expiring_intro")}</p>
-          <List lang={lang} keys={[
+          <List lang={lang} vars={{ "methodology.expiring_pro": { n: EXPIRING_TEASER_ROWS } }} keys={[
             "methodology.expiring_candidates", "methodology.expiring_once", "methodology.expiring_windows",
-            "methodology.expiring_growth", "methodology.expiring_value", "methodology.expiring_feeds",
+            "methodology.expiring_pro", "methodology.expiring_growth", "methodology.expiring_value", "methodology.expiring_feeds",
           ]} />
           <p>{t(lang, "methodology.expiring_claim")}</p>
 

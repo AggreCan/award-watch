@@ -13,18 +13,29 @@
 //
 // The buyer pages and the profiles carry the first 25 rows of their own
 // (ExpiringSection below) when their file has them.
+//
+// Once the accounts switch is on, the 6- and 12-month windows are part of
+// Pro (feature radar_depth, src/plan.ts): a request whose plan lacks it gets
+// the window's count and total and its first rows (expiringTeaser), and its
+// files under /data/expiring/ answer 404 (expiringFile). The overview and
+// the 3-month window never change. Until the switch, nothing does.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { type Feature, SAVED_SEARCH_MAX } from "../account/entitlements";
+import { railAccount } from "../account/session";
+import { accountsEnabled } from "../account/switch";
 import { type Rest, Table, restClass } from "../columns";
 import { SEGMENTS } from "../constants";
 import {
   BUYER_ID_RE, EXPIRING_KINDS, EXPIRING_WINDOWS, SEGMENT_RE, isExpiringWindow, loadExpiringIndex, loadExpiringPage,
-  loadExpiringWindow, loadStats, type ExpiringKind, type ExpiringPart, type ExpiringRow, type ExpiringWindow,
+  loadExpiringWindow, loadStats, type ExpiringKind, type ExpiringPart, type ExpiringRow, type ExpiringWindow, type ExpiringWindowIndex,
+  type Stats,
 } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoneyShort, numberLocale, pick, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
+import { radarWindowLocked } from "../plan";
 import { canonicalUrl, expiringWindowSeo, pageSeo } from "../seo";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
@@ -37,6 +48,9 @@ import {
 export const EXPIRING_FIRST = 50;
 // The rows in each page file of a window (expiring/<window>/<n>.json).
 export const EXPIRING_PAGE_ROWS = 500;
+// How many rows of a 6- or 12-month window a request without the paid
+// feature sees, once the accounts switch is on.
+export const EXPIRING_TEASER_ROWS = 10;
 // Each window in days from the data date, as the pipeline cuts them (expiring.py WINDOWS).
 export const WINDOW_DAYS: Record<ExpiringWindow, number> = { "3m": 91, "6m": 182, "12m": 365 };
 
@@ -45,7 +59,16 @@ export function windowOf(daysLeft: number): ExpiringWindow | null {
   if (daysLeft < 0) return null;
   return EXPIRING_WINDOWS.find((w) => daysLeft <= WINDOW_DAYS[w]) ?? null;
 }
+// The radar's two CSV files. The 12-month one is part of Pro once the
+// accounts switch is on (index.tsx refuses it as expiringFile refuses the
+// window files); the 3-month one stays free, so the overview, the 3-month
+// list and the free view of a deeper window link it.
 export const EXPIRING_CSV = "expiring-12m.csv";
+export const EXPIRING_CSV_3M = "expiring-3m.csv";
+type CsvWindow = "3m" | "12m";
+const CSV_FILE: Record<CsvWindow, string> = { "3m": EXPIRING_CSV_3M, "12m": EXPIRING_CSV };
+const CSV_DOWNLOAD: Record<CsvWindow, Key> = { "3m": "expiring.download_3m", "12m": "expiring.download" };
+const CSV_LINK: Record<CsvWindow, Key> = { "3m": "expiring.csv_link_3m", "12m": "expiring.csv_link" };
 export const EXPIRING_FEED = "feeds/canada/expiring.xml";
 
 const WINDOW_LABEL: Record<ExpiringWindow, Key> = { "3m": "expiring.window_3m", "6m": "expiring.window_6m", "12m": "expiring.window_12m" };
@@ -134,6 +157,9 @@ const FILTER_KEYS = ["buyer", "segment", "competitive", "value", "kind"] as cons
 const FILTER_LABEL: Record<(typeof FILTER_KEYS)[number], Key> = {
   buyer: "tenders.filter_buyer", segment: "tenders.filter_segment", competitive: "col.method", value: "expiring.filter_value", kind: "col.source",
 };
+
+// A window with nothing filtered: what a bare /expiring/<window> reads as.
+const NO_FILTERS: ExpiringQuery = { buyer: "", segment: "", competitive: "", value: "", kind: "", fye: true, sosa: true };
 
 export function isFiltered(q: ExpiringQuery): boolean {
   return FILTER_KEYS.some((k) => q[k] !== "") || !q.fye || !q.sosa;
@@ -249,10 +275,15 @@ const LATE_REST: Rest = "xl";
 
 // phonePages: a long list, 50 rows at a time on a phone (pages: the window's
 // server pages, which the phone pager steps through); phoneRows: a short
-// list on a profile or a buyer page, its first rows on a phone.
+// list on a profile or a buyer page, its first rows on a phone. csv: the
+// file the line under the table sends a reader to for the resting columns.
 export const ExpiringTable: FC<{
   lang: Lang; rows: readonly ExpiringRow[]; organization?: boolean; buyer?: boolean; phonePages?: boolean; pages?: ServerPages; phoneRows?: number;
-}> = ({ lang, rows, organization = true, buyer = true, phonePages = false, pages, phoneRows }) => (
+  // Which file the line under the table names, or "list" for the 12-month
+  // list itself: on profiles and buyer pages the 12-month file is part of Pro
+  // once accounts open, and the list shows a free reader the teaser instead.
+  csv?: CsvWindow | "list";
+}> = ({ lang, rows, organization = true, buyer = true, phonePages = false, pages, phoneRows, csv = "12m" }) => (
   <>
   <SegmentNote lang={lang} rows={rows} />
   <PhonePages lang={lang} on={phonePages} pages={pages} rows={phoneRows}>
@@ -326,7 +357,11 @@ export const ExpiringTable: FC<{
       says where they are; wider screens and phones show them. */}
   {rows.length ? (
     <p class="rest-note muted small">
-      {tj(lang, "expiring.rest_note", { csv: <a href={`/downloads/${EXPIRING_CSV}`}>{t(lang, "expiring.csv_link")}</a> })}
+      {tj(lang, "expiring.rest_note", {
+        csv: csv === "list"
+          ? <a href="/expiring/12m">{t(lang, "expiring.list_link_12m")}</a>
+          : <a href={`/downloads/${CSV_FILE[csv]}`}>{t(lang, CSV_LINK[csv])}</a>,
+      })}
     </p>
   ) : null}
   </>
@@ -352,7 +387,7 @@ export const ExpiringSection: FC<{
       ) : (
         <p>{tn(lang, "expiring.part_one", "expiring.part_many", part.n, { n: fmtInt(part.n, lang), total: money(lang, part.total) })}</p>
       )}
-      {rows.length ? <ExpiringTable lang={lang} rows={rows} organization={organization} buyer={buyer} phoneRows={phoneRows} /> : null}
+      {rows.length ? <ExpiringTable lang={lang} rows={rows} organization={organization} buyer={buyer} phoneRows={phoneRows} csv="list" /> : null}
       {rows.length < part.n ? (
         <p class="more-rows">{t(lang, "expiring.part_shown", { shown: fmtInt(rows.length, lang) })}{more ? <> {more as any}</> : null}</p>
       ) : null}
@@ -360,14 +395,17 @@ export const ExpiringSection: FC<{
   );
 };
 
-// The rest of a profile's rows are in the 12-month CSV file.
-export const MoreInCsv: FC<{ lang: Lang; part: ExpiringPart }> = ({ lang, part }) => {
+// The rest of a profile's rows are in the 12-month list. The link is the
+// window's page, not the 12-month CSV: once the accounts switch is on, a free
+// reader lands on its free view and what Pro adds rather than a 404, and a
+// Pro reader on the full window.
+export const MoreInWindow: FC<{ lang: Lang; part: ExpiringPart }> = ({ lang, part }) => {
   const more = part.n - part.rows.length;
   if (more <= 0) return null;
   return (
     <>
       {tj(lang, more === 1 ? "expiring.part_more_one" : "expiring.part_more_many", {
-        more: fmtInt(more, lang), csv: <a href={`/downloads/${EXPIRING_CSV}`}>{t(lang, "expiring.csv_link")}</a>,
+        more: fmtInt(more, lang), list: <a href="/expiring/12m">{t(lang, "expiring.list_link_12m")}</a>,
       })}
     </>
   );
@@ -421,7 +459,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
       <PageHead lang={lang} title={t(lang, "expiring.title")}
         lead={t(lang, "expiring.lead", { date: /^\d{4}-\d{2}-\d{2}/.test(idx.as_of) ? idx.as_of.slice(0, 10) : todayOf(stats.data_as_of) })}
         actions={<>
-          <a href={`/downloads/${EXPIRING_CSV}`} class="btn">{t(lang, "expiring.download")}</a>
+          <a href={`/downloads/${EXPIRING_CSV_3M}`} class="btn">{t(lang, "expiring.download_3m")}</a>
           {feeds.national ? <a href={`/data/${EXPIRING_FEED}`} class="btn">{t(lang, "expiring.feed")}</a> : null}
         </>} />
 
@@ -446,7 +484,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
         ) : shown.length ? (
           <>
             <p class="muted small">{t(lang, "expiring.first_note", { n: n(shown.length) })}</p>
-            <ExpiringTable lang={lang} rows={shown} />
+            <ExpiringTable lang={lang} rows={shown} csv="3m" />
           </>
         ) : (
           <p class="muted">{t(lang, "expiring.none_window")}</p>
@@ -567,6 +605,93 @@ const Select: FC<{ name: string; label: Key; any?: Key; opts: Option[]; value: s
   </label>
 );
 
+// The head of a window's page, the same on the full list and on the free
+// view: how many contracts the window holds, their value, and a CSV (the
+// 3-month file on the 3-month list and on the free view, else the 12-month).
+const WindowHead: FC<{
+  lang: Lang; crumbs: { name: string; path?: string }[]; title: string; idx: ExpiringWindowIndex; months: string; date: string; csv: CsvWindow;
+}> = ({ lang, crumbs, title, idx, months, date, csv }) => (
+  <PageHead lang={lang} crumbs={crumbs} title={title}
+    lead={<>
+      {tn(lang, "expiring.window_count_one", "expiring.window_count_many", idx.rows, { n: fmtInt(idx.rows, lang), months, date })}{" "}
+      {t(lang, "expiring.window_total", { total: money(lang, idx.total) })}
+    </>}
+    actions={<a href={`/downloads/${CSV_FILE[csv]}`} class="btn">{t(lang, CSV_DOWNLOAD[csv])}</a>} />
+);
+
+// What Pro adds, each line under the feature that carries it, so a test can
+// hold the list to the plans (test/radar-gate.test.ts). No price is named.
+export const PRO_INCLUDES: readonly (readonly [Feature, Key])[] = [
+  ["radar_depth", "expiring.pro_radar"],
+  ["radar_depth", "expiring.pro_csv"],
+  ["intraday", "expiring.pro_intraday"],
+  ["delivery", "expiring.pro_searches"],
+];
+
+const ProPanel: FC<{ lang: Lang; signedIn: boolean }> = ({ lang, signedIn }) => (
+  <Panel title={t(lang, "expiring.pro_title")}>
+    <p>{t(lang, "expiring.pro_text")}</p>
+    <p>{t(lang, "expiring.pro_includes")}</p>
+    <ul>
+      {PRO_INCLUDES.map(([, key]) => <li>{t(lang, key, { cap: fmtInt(SAVED_SEARCH_MAX, lang) })}</li>)}
+    </ul>
+    <p>{tj(lang, "expiring.pro_free", { list: <a href="/expiring/3m">{t(lang, "expiring.pro_free_list")}</a> })}</p>
+    <p>
+      <a href={signedIn ? "/account" : "/account/sign-in"} class="btn btn-primary">
+        {t(lang, signedIn ? "expiring.pro_account" : "expiring.pro_sign_in")}
+      </a>
+    </p>
+  </Panel>
+);
+
+// The free view of a 6- or 12-month window, once the accounts switch is on,
+// for a request whose plan lacks radar_depth (src/plan.ts): the head the full
+// list has, the window tabs, the first rows by end date, and what Pro adds.
+// It reads the window's index and its first page only. Filters and a page
+// number in the address are set aside (the note says so), and such an
+// address is not indexed. Without a session the page may be kept by public
+// caches; Vary: Cookie stops a browser from showing a kept copy after the
+// reader signs in. A signed-in reader's page is private (page()).
+async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats: Stats): Promise<Response> {
+  const lang = c.get("lang");
+  const idx = await loadExpiringWindow(c.env, window);
+  if (!idx) return noDataPage(c, "expiring.title");
+  const rows = idx.pages === 0 ? [] : await loadExpiringPage(c.env, window, 1);
+  if (!rows) return noDataPage(c, "expiring.title");
+  const shown = soonestFirst(rows).slice(0, EXPIRING_TEASER_ROWS);
+  const path = `/expiring/${window}`;
+  const asked = isFiltered(readExpiringQuery(new URL(c.req.url))) || c.req.query("page") !== undefined;
+  const date = todayOf(stats.data_as_of);
+  const months = t(lang, WINDOW_MONTHS[window]);
+  const title = t(lang, WINDOW_TITLE[window]);
+  const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "expiring.title"), path: "/expiring" }, { name: title }];
+  const account = await railAccount(c).catch(() => undefined);
+  c.header("Vary", "Cookie");
+
+  return page(
+    c,
+    <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/expiring"
+      seo={expiringWindowSeo(path, title, lang, crumbs, { n: idx.rows, months, date, noindex: asked })}>
+      <WindowHead lang={lang} crumbs={crumbs} title={title} idx={idx} months={months} date={date} csv="3m" />
+      <div class="toolbar">
+        <WindowLinks lang={lang} current={window} q={NO_FILTERS} />
+      </div>
+      <Panel title={t(lang, WINDOW_LABEL[window])} count={fmtInt(idx.rows, lang)} foot={shown.length ? <ExpiringNote lang={lang} /> : undefined}>
+        {asked ? <p class="muted small">{t(lang, "expiring.pro_asked")}</p> : null}
+        {shown.length ? (
+          <>
+            <p class="muted small">{t(lang, "expiring.first_note", { n: fmtInt(shown.length, lang) })}</p>
+            <ExpiringTable lang={lang} rows={shown} csv="3m" />
+          </>
+        ) : (
+          <p class="muted">{t(lang, "expiring.none_window")}</p>
+        )}
+      </Panel>
+      <ProPanel lang={lang} signedIn={!!account?.email} />
+    </Layout>,
+  );
+}
+
 export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
@@ -574,6 +699,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   if (!isExpiringWindow(raw)) return notFoundPage(c, stats?.data_as_of ?? null, "expiring.window_not_found", "/expiring", "expiring.back");
   if (!stats) return noDataPage(c, "expiring.title");
   const window = raw;
+  if (await radarWindowLocked(c, window)) return expiringTeaser(c, window, stats);
   const idx = await loadExpiringWindow(c.env, window);
   if (!idx) return noDataPage(c, "expiring.title");
   const path = `/expiring/${window}`;
@@ -603,6 +729,8 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   const serverPages: ServerPages | undefined = filtered ? undefined : {
     offset: (n - 1) * EXPIRING_PAGE_ROWS, total: idx.rows, prev: prevPath, next: nextPath, replaces: "radar-pager",
   };
+  // The 3-month list's own rows are all in the free 3-month file.
+  const csv: CsvWindow = window === "3m" ? "3m" : "12m";
 
   return page(
     c,
@@ -612,12 +740,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
         {prevPath ? <link rel="prev" href={canonicalUrl(prevPath, lang)} /> : null}
         {nextPath ? <link rel="next" href={canonicalUrl(nextPath, lang)} /> : null}
       </>}>
-      <PageHead lang={lang} crumbs={crumbs} title={title}
-        lead={<>
-          {tn(lang, "expiring.window_count_one", "expiring.window_count_many", idx.rows, { n: fmtInt(idx.rows, lang), months, date })}{" "}
-          {t(lang, "expiring.window_total", { total: money(lang, idx.total) })}
-        </>}
-        actions={<a href={`/downloads/${EXPIRING_CSV}`} class="btn">{t(lang, "expiring.download")}</a>} />
+      <WindowHead lang={lang} crumbs={crumbs} title={title} idx={idx} months={months} date={date} csv={csv} />
       <form method="get" action={path} class="toolbar">
         <WindowLinks lang={lang} current={window} q={q} />
         <FiltersFold lang={lang} active={active}>
@@ -688,7 +811,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
           </p>
         ) : null}
         {shown.length ? (
-          <ExpiringTable lang={lang} rows={shown} phonePages pages={serverPages} />
+          <ExpiringTable lang={lang} rows={shown} phonePages pages={serverPages} csv={csv} />
         ) : (
           <p class="muted">{t(lang, filtered ? "expiring.none_match" : "expiring.none_window")}</p>
         )}
@@ -697,4 +820,33 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
       <PhonePagerScript lang={lang} />
     </Layout>,
   );
+}
+
+// A file of the 6- or 12-month window under /data/expiring/, which
+// wrangler.jsonc sends through the Worker before the static layer; the
+// pages read the same files through the assets binding, which never comes
+// back through here. Once the accounts switch is on, a request whose plan
+// lacks radar_depth gets the site's 404, as for a file that does not exist,
+// and a Pro request gets the file marked private so no shared cache hands
+// it on. While the switch is off every request gets the file as the static
+// layer serves it: its headers as they are, and the reader's conditional
+// headers passed on, so a reader that holds the file gets a 304.
+export async function expiringFile(c: Context<AppEnv>, window: ExpiringWindow): Promise<Response> {
+  if (await radarWindowLocked(c, window)) return c.notFound();
+  if (!c.env.ASSETS) return c.notFound();
+  let res: Response;
+  try {
+    res = await c.env.ASSETS.fetch(c.req.raw);
+  } catch (e) {
+    console.error(`radar file ${c.req.path}: ${String(e).slice(0, 200)}`);
+    c.header("Retry-After", "300");
+    c.header("Cache-Control", "no-store");
+    return c.body(null, 503);
+  }
+  if (res.status === 404) return c.notFound();
+  // The binding's headers cannot be changed in place, and the middleware
+  // adds its own after this returns.
+  const headers = new Headers(res.headers);
+  if (accountsEnabled(c.env)) headers.set("Cache-Control", "private, no-store");
+  return new Response(res.body, { status: res.status, headers });
 }

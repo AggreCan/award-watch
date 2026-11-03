@@ -24,8 +24,9 @@ the schema is `site/accounts_schema.sql`; the tests are
   asks for one yet.
 - **Plans.** Each account is on a plan, Free or Pro, computed from the
   entitlements table. The plan sets how many saved searches the account
-  keeps and whether delivery, API keys, filtered exports and same-day tender
-  notices are open to it. A page learns the request's plan with
+  keeps and whether delivery, API keys, filtered exports, same-day tender
+  notices and the full 6- and 12-month windows of contracts ending
+  (`radar_depth`) are open to it. A page learns the request's plan with
   `planOfRequest(c)` (`site/src/account/session.ts`) and checks a feature
   with `allowed({ plan }, feature)` (`site/src/account/entitlements.ts`).
 - **Deletion.** The reader deletes the account from its own page.
@@ -112,6 +113,20 @@ With the switch on, the rail's "Your lists" group gains one item (the
 signed-in address, or "Sign in") and the privacy page's first section
 describes accounts; a page that shows a signed-in address is sent
 `Cache-Control: private, no-store`.
+
+The switch also starts the one paid gate on a public page, the radar's
+depth (`radar_depth`, `site/src/plan.ts` `radarWindowLocked`). For a request
+whose plan lacks it, `/expiring/6m` and `/expiring/12m` show the window's
+count and total, its first 10 contracts and what Pro includes, with no
+filters or pages; the files under `/data/expiring/6m/` and
+`/data/expiring/12m/` answer the site's 404, and `/downloads/expiring-12m.csv`
+the download route's 404. A Pro request gets the full pages and the files
+(marked `private, no-store`). The overview, the 3-month window, its CSV
+(`expiring-3m.csv`, which the overview, the 3-month list and the free view
+link) and the feeds (which carry the 3-month window only) stay free.
+`wrangler.jsonc` runs the Worker first for those two folders and the
+12-month CSV so it can refuse them; while the switch is off it passes them
+on as they are. `site/test/radar-gate.test.ts` proves both states.
 
 ## Sending mail
 

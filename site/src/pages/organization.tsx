@@ -18,7 +18,7 @@ import {
 } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { organizationSeo } from "../seo";
-import { ExpiringSection, MoreInCsv } from "./expiring";
+import { ExpiringSection, MoreInWindow } from "./expiring";
 import { InterestPanel, interestFilter } from "./interest";
 import {
   AwardTable, BuyerLink, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, contractSearchUrl, datasetUrl,
@@ -442,7 +442,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
 
       {profile.expiring ? (
         <ExpiringSection lang={lang} part={profile.expiring} heading="org.expiring" organization={false} phoneRows={PHONE_ROWS}
-          more={<MoreInCsv lang={lang} part={profile.expiring} />} />
+          more={<MoreInWindow lang={lang} part={profile.expiring} />} />
       ) : null}
 
       {/* The buyers under each source's own sub-head, so a source is named once. */}

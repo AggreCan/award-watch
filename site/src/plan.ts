@@ -11,9 +11,11 @@
 // (src/account/entitlements.ts).
 
 import type { Context } from "hono";
+import type { ExpiringWindow } from "./data";
 import type { AppEnv } from "./env";
 import { type Plan, allowed } from "./account/entitlements";
 import { planOfRequest } from "./account/session";
+import { accountsEnabled } from "./account/switch";
 
 export type { Plan };
 
@@ -27,4 +29,23 @@ export function requestPlan(c: Context<AppEnv>): Promise<Plan> {
 
 export function allowsIntraday(plan: Plan): boolean {
   return allowed({ plan }, INTRADAY);
+}
+
+// The full 6- and 12-month windows of contracts ending: their pages and their
+// files under /data/expiring/ (src/pages/expiring.tsx). The 3-month window,
+// the overview and every window's count and total stay free.
+export const RADAR_DEPTH = "radar_depth";
+export const DEEP_WINDOWS: readonly ExpiringWindow[] = ["6m", "12m"];
+
+export function allowsRadarDepth(plan: Plan): boolean {
+  return allowed({ plan }, RADAR_DEPTH);
+}
+
+// Whether a request gets the free view of a window. Never while the accounts
+// switch is off: the gate starts with the switch, so until then every window
+// is served as it always was, and planOfRequest's "free" for a switched-off
+// site must not close anything. The plan is read only for a deep window.
+export async function radarWindowLocked(c: Context<AppEnv>, window: string): Promise<boolean> {
+  if (!(DEEP_WINDOWS as readonly string[]).includes(window) || !accountsEnabled(c.env)) return false;
+  return !allowsRadarDepth(await requestPlan(c));
 }

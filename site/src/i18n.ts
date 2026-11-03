@@ -628,6 +628,10 @@ const STRINGS = {
     en: "Download contracts ending within 12 months (CSV)",
     fr: "Télécharger les contrats prenant fin d'ici 12 mois (CSV)",
   },
+  "expiring.download_3m": {
+    en: "Download contracts ending within 3 months (CSV)",
+    fr: "Télécharger les contrats prenant fin d'ici 3 mois (CSV)",
+  },
   "expiring.feed": {
     en: "Atom feed of contracts entering the 3-month window",
     fr: "Fil Atom des contrats qui entrent dans la période de 3 mois",
@@ -732,10 +736,48 @@ const STRINGS = {
     fr: "{n} contrats prennent fin dans les 12 mois suivant la date des données. Valeur : {total}.",
   },
   "expiring.part_shown": { en: "The first {shown} by end date are shown.", fr: "Les {shown} premiers par date de fin sont affichés." },
-  "expiring.part_more_one": { en: "The other one is in {csv}.", fr: "L'autre se trouve dans {csv}." },
-  "expiring.part_more_many": { en: "The other {more} are in {csv}.", fr: "Les {more} autres se trouvent dans {csv}." },
+  "expiring.part_more_one": { en: "The other one is in {list}.", fr: "L'autre se trouve dans {list}." },
+  "expiring.part_more_many": { en: "The other {more} are in {list}.", fr: "Les {more} autres se trouvent dans {list}." },
+  "expiring.list_link_12m": { en: "the 12-month list", fr: "la liste de 12 mois" },
   "expiring.csv_link": { en: "the 12-month CSV file", fr: "le fichier CSV de 12 mois" },
+  "expiring.csv_link_3m": { en: "the 3-month CSV file", fr: "le fichier CSV de 3 mois" },
   "expiring.see_all": { en: "All contracts ending soon", fr: "Tous les contrats prenant fin bientôt" },
+  // The 6- and 12-month windows for a request whose plan lacks radar_depth,
+  // once the accounts switch is on: the window's count and total, its first
+  // rows, then this panel. No price is ever named here.
+  "expiring.pro_asked": {
+    en: "Filters and later pages are part of Pro, so this address shows the window's first contracts.",
+    fr: "Les filtres et les pages suivantes font partie de Pro; cette adresse affiche donc les premiers contrats de la période.",
+  },
+  "expiring.pro_title": { en: "Part of Pro", fr: "Offert avec le forfait Pro" },
+  "expiring.pro_text": {
+    en: "The full list, with its filters and pages, is part of Pro, the site's paid plan.",
+    fr: "La liste complète, avec ses filtres et ses pages, fait partie de Pro, le forfait payant du site.",
+  },
+  "expiring.pro_includes": { en: "Pro includes:", fr: "Le forfait Pro comprend :" },
+  "expiring.pro_radar": {
+    en: "the full 6-month and 12-month lists of contracts ending, with every filter and page",
+    fr: "les listes complètes des contrats prenant fin d'ici 6 et 12 mois, avec tous leurs filtres et toutes leurs pages",
+  },
+  "expiring.pro_csv": {
+    en: "the 12-month CSV file of contracts ending",
+    fr: "le fichier CSV de 12 mois des contrats prenant fin",
+  },
+  "expiring.pro_intraday": {
+    en: "same-day tender notices on the tender lists, read from CanadaBuys every two hours",
+    fr: "les avis d'appel d'offres du jour même dans les listes d'appels d'offres, lus sur AchatsCanada toutes les deux heures",
+  },
+  "expiring.pro_searches": {
+    en: "up to {cap} saved searches, with email delivery",
+    fr: "jusqu'à {cap} recherches enregistrées, avec envoi par courriel",
+  },
+  "expiring.pro_free": {
+    en: "The {list}, its feeds and every window's count and total stay free.",
+    fr: "La {list}, ses fils ainsi que le nombre et le total de chaque période restent gratuits.",
+  },
+  "expiring.pro_free_list": { en: "3-month list", fr: "liste de 3 mois" },
+  "expiring.pro_sign_in": { en: "Sign in or create an account", fr: "Se connecter ou créer un compte" },
+  "expiring.pro_account": { en: "Your account", fr: "Votre compte" },
 
   // -- organization profile -------------------------------------------------------------
   "org.title": { en: "Organization", fr: "Organisation" },
@@ -1295,10 +1337,17 @@ const STRINGS = {
     fr: "Toutes les organisations avec leurs nombres et totaux par source",
   },
   "data.file.buyers": { en: "Every buyer with its counts and totals per source", fr: "Tous les acheteurs avec leurs nombres et totaux par source" },
+  "data.file.expiring_3m": {
+    en: "Every contract ending within 3 months of the data date, in the 12-month file's columns",
+    fr: "Tous les contrats prenant fin dans les 3 mois suivant la date des données, avec les colonnes du fichier de 12 mois",
+  },
   "data.file.expiring": {
     en: "Every contract ending within 12 months of the data date, one row each, listed once across sources",
     fr: "Tous les contrats prenant fin dans les 12 mois suivant la date des données, une ligne chacun, une seule fois toutes sources confondues",
   },
+  // Beside the 12-month file on the Data page: it is part of Pro from the
+  // accounts switch (index.tsx). No price is named.
+  "data.file.pro": { en: "Part of Pro once accounts open.", fr: "Fait partie de Pro dès l'ouverture des comptes." },
   "data.file.sums": { en: "SHA-256 checksums of the files above", fr: "Sommes de contrôle SHA-256 des fichiers ci-dessus" },
   "data.yearly_awards": { en: "Award Notices by Year of Award", fr: "Avis d'attribution par année d'attribution" },
   "data.yearly_history": { en: "PSPC Contract History by Year of Award", fr: "Historique des contrats de SPAC par année d'attribution" },
@@ -1551,6 +1600,10 @@ const STRINGS = {
   "methodology.expiring_windows": {
     en: "The windows are cumulative: within 3, 6 and 12 months of the data date. A contract ending within 3 months is also in the 6-month and 12-month lists.",
     fr: "Les périodes sont cumulatives : d'ici 3, 6 et 12 mois après la date des données. Un contrat qui prend fin d'ici 3 mois figure aussi dans les listes de 6 et de 12 mois.",
+  },
+  "methodology.expiring_pro": {
+    en: "Once accounts open, the full 6-month and 12-month lists and the 12-month CSV file are part of Pro, the site's paid plan; every reader still sees their counts, their totals and their first {n} contracts.",
+    fr: "Dès l'ouverture des comptes, les listes complètes de 6 et de 12 mois et le fichier CSV de 12 mois font partie de Pro, le forfait payant du site; chaque lecteur en voit toujours le nombre, le total et les {n} premiers contrats.",
   },
   "methodology.expiring_growth": {
     en: "Amendments counts the versions beyond the original. Value growth is the newest total value over the original amount, minus one, shown as a percentage. It is left blank when either figure is unknown.",

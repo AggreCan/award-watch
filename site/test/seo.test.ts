@@ -138,7 +138,8 @@ describe("page metadata", () => {
     expect(dataset["@type"]).toBe("Dataset");
     expect(dataset.license).toBe("https://open.canada.ca/en/open-government-licence-canada");
     expect(dataset.dateModified).toBe("2026-10-31");
-    expect(dataset.distribution.map((d: any) => d.name)).toEqual(DOWNLOADS.map((d) => d.file));
+    // The free files only: the paid 12-month radar file is left out.
+    expect(dataset.distribution.map((d: any) => d.name)).toEqual(DOWNLOADS.filter((d) => !d.paid).map((d) => d.file));
     for (const d of dataset.distribution) expect(d.contentUrl).toBe(`${O}/downloads/${d.name}`);
     expect(dataset.creator).toEqual({ "@type": "Organization", name: "Award Watch", url: `${O}/` });
   });

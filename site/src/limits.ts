@@ -9,8 +9,9 @@ import { accountsEnabled } from "./account/switch";
 // else (pages) gets a cap no reader reaches. The Atom feeds get a wide cap of
 // their own: one feed service polls many of the feeds for all its readers
 // from one address, and a 429 there would also hide those polls from the
-// counts (views.ts). Other static files are served before the Worker runs
-// and never arrive here.
+// counts (views.ts). The radar's 6- and 12-month window files, which the
+// Worker passes on (pages/expiring.tsx), count as pages. Other static files
+// are served before the Worker runs and never arrive here.
 //
 // The sign-in posts of the accounts module (the address and the code) get
 // the tightest cap of all, "auth", while the switch is on; while it is off

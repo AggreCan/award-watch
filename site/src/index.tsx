@@ -8,6 +8,8 @@ import { YEAR_RE, loadStats } from "./data";
 import type { AppEnv, Env } from "./env";
 import { throttle } from "./limits";
 import { measure } from "./views";
+import { DEEP_WINDOWS, radarWindowLocked } from "./plan";
+import { accountsEnabled } from "./account/switch";
 import { runWatchdog } from "./watchdog";
 import { langFrom, t, tj } from "./i18n";
 import { Layout, PageHead, page } from "./layout";
@@ -20,7 +22,7 @@ import { aboutPage, privacyPage, termsPage } from "./pages/docs";
 import { contractPage } from "./pages/contract";
 import { DOWNLOADS, YEARLY_DOWNLOAD, dataPage } from "./pages/data";
 import { directoryPage, organizationsIndex } from "./pages/directory";
-import { expiringPage, expiringWindowPage } from "./pages/expiring";
+import { EXPIRING_CSV, expiringFile, expiringPage, expiringWindowPage } from "./pages/expiring";
 import { feedsPage } from "./pages/feeds";
 import { correctionsForm, correctionsSubmit, respondPage, respondSubmit } from "./pages/forms";
 import { homePage } from "./pages/home";
@@ -188,6 +190,12 @@ app.get("/data/feeds/*", async (c) => {
   return new Response(res.body, { status: res.status, headers });
 });
 
+// The 6- and 12-month windows' files: wrangler.jsonc runs the Worker first
+// for these two folders, the radar's paid part once the accounts switch is
+// on (pages/expiring.tsx). Every other file under /data/ is served before
+// the Worker runs.
+for (const window of DEEP_WINDOWS) app.get(`/data/expiring/${window}/*`, (c) => expiringFile(c, window));
+
 // The CSV files in R2: a name on the Data page's list, a yearly file, or a
 // mirror file; nothing else is ever read from the bucket.
 export function downloadAllowed(file: string): boolean {
@@ -198,9 +206,17 @@ app.get("/downloads/:file{.+}", async (c) => {
   const file = c.req.param("file");
   // A HEAD reads the object's metadata only.
   const head = c.req.method === "HEAD";
+  // The 12-month radar file is part of Pro once the accounts switch is on,
+  // by the rule the 12-month window's files follow (pages/expiring.tsx): a
+  // request whose plan lacks it gets this route's 404, as for a file that is
+  // not there, and nothing is read from the bucket; a Pro request gets the
+  // file marked private, so no shared cache hands it on. While the switch is
+  // off it is served as every other file.
+  const gated = file === EXPIRING_CSV;
+  const locked = gated && (await radarWindowLocked(c, "12m"));
   let object: R2Object | R2ObjectBody | null = null;
   let unavailable = false;
-  if (downloadAllowed(file) && c.env.DATA) {
+  if (!locked && downloadAllowed(file) && c.env.DATA) {
     try {
       const key = file.startsWith("mirror/") ? file : `downloads/${file}`;
       object = head ? await c.env.DATA.head(key) : await c.env.DATA.get(key);
@@ -225,7 +241,7 @@ app.get("/downloads/:file{.+}", async (c) => {
   const headers = new Headers();
   headers.set("Content-Type", file.endsWith(".csv") ? "text/csv; charset=utf-8" : file === "SHA256SUMS" ? "text/plain; charset=utf-8" : "application/octet-stream");
   headers.set("Content-Disposition", `attachment; filename="${file.split("/").pop()}"`);
-  headers.set("Cache-Control", "public, max-age=3600");
+  headers.set("Cache-Control", gated && accountsEnabled(c.env) ? "private, no-store" : "public, max-age=3600");
   headers.set("Content-Length", String(object.size));
   return new Response(head ? null : (object as R2ObjectBody).body, { headers });
 });

@@ -344,6 +344,27 @@ def test_stats_carry_the_years_award_value_and_each_download_with_its_size_and_r
     assert load(out, "stats.json")["downloads"] == []
 
 
+def test_the_3_month_csv_holds_the_3_month_list_and_the_data_page_counts_it(conn, tmp_path):
+    """expiring-3m.csv lists the contracts the site's 3-month list shows, in its order, and stats.json gives the
+    Data page its rows as it does every other file's."""
+    import csv
+    from awardwatch_pipeline import export
+    seed(conn)
+    csv_dir = tmp_path / "csv"
+    written = export.export_csv(conn, csv_dir, today=TODAY)
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE, csv_dir=csv_dir, csv_rows=written)
+    shown = [r.get("reference_published", r["reference"]) for r in load(out, "expiring/3m/1.json")]
+    with (csv_dir / "expiring-3m.csv").open(encoding="utf-8-sig", newline="") as fh:
+        listed = [r["reference"] for r in csv.DictReader(fh)]
+    assert listed == shown == ["AW-5", "AW-2", "H-1"]
+    window = next(w for w in load(out, "expiring/index.json")["windows"] if w["window"] == "3m")
+    downloads = {d["file"]: d for d in load(out, "stats.json")["downloads"]}
+    assert downloads["expiring-3m.csv"]["rows"] == window["n"] == 3
+    assert downloads["expiring-3m.csv"]["bytes"] == (csv_dir / "expiring-3m.csv").stat().st_size
+    assert downloads["expiring-12m.csv"]["rows"] == 6
+
+
 def test_a_csv_record_holding_a_line_break_counts_once(tmp_path):
     (tmp_path / "a.csv").write_text('\ufeffid,text\n1,"two\nlines"\n2,plain\n', encoding="utf-8")
     (tmp_path / "notes.txt").write_text("not a download", encoding="utf-8")

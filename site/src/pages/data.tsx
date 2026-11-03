@@ -57,12 +57,16 @@ export function downloadSizes(stats: Stats): Map<string, { bytes: number; rows: 
 
 // The fixed CSV files in R2 (downloads/<file>), the only names the download
 // route serves besides the yearly files below. All of them are derived from
-// Open Government Licence material and carry that licence.
-export const DOWNLOADS: { file: string; contents: Key }[] = [
+// Open Government Licence material and carry that licence. note: a line
+// under the contents. paid: part of Pro once the accounts switch is on
+// (index.tsx serves the 12-month radar file by that rule), so the dataset
+// metadata for search engines leaves it out and a crawler never meets the gate.
+export const DOWNLOADS: { file: string; contents: Key; note?: Key; paid?: boolean }[] = [
   { file: "open-tenders.csv", contents: "data.file.open_tenders" },
   { file: "organizations.csv", contents: "data.file.organizations" },
   { file: "buyers.csv", contents: "data.file.buyers" },
-  { file: "expiring-12m.csv", contents: "data.file.expiring" },
+  { file: "expiring-3m.csv", contents: "data.file.expiring_3m" },
+  { file: "expiring-12m.csv", contents: "data.file.expiring", note: "data.file.pro", paid: true },
   { file: "SHA256SUMS", contents: "data.file.sums" },
 ];
 // One file per calendar year of award notices and of contract history, and
@@ -126,7 +130,9 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
   if (!stats) return noDataPage(c, "data.title");
   const lastYear = Number(todayOf(stats.data_as_of).slice(0, 4));
   const years = (from: number) => Array.from({ length: lastYear - from + 1 }, (_, i) => lastYear - i);
-  const downloads = DOWNLOADS.map((d) => ({ file: d.file, contents: t(lang, d.contents) }));
+  // The dataset metadata names the free files only: the 3-month radar file
+  // stands where the 12-month one would.
+  const downloads = DOWNLOADS.filter((d) => !d.paid).map((d) => ({ file: d.file, contents: t(lang, d.contents) }));
   const sizes = downloadSizes(stats);
   const sizeOf = (file: string) => sizes.get(file);
   // A yearly file's size and rows ride on its link's title.
@@ -210,7 +216,10 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                   return (
                     <tr>
                       <td data-label={t(lang, "data.col_file")}><a href={`/downloads/${d.file}`} class="mono">{d.file}</a></td>
-                      <td data-label={t(lang, "data.col_contents")}>{t(lang, d.contents)}</td>
+                      <td data-label={t(lang, "data.col_contents")}>
+                        {t(lang, d.contents)}
+                        {d.note ? <><br /><span class="muted small">{t(lang, d.note)}</span></> : null}
+                      </td>
                       {sizes.size > 0 ? <td data-label={t(lang, "data.col_size")} class="mono num">{size ? fileSize(lang, size.bytes) : ""}</td> : null}
                       {sizes.size > 0 ? (
                         <td data-label={t(lang, "data.col_rows")} class="mono num">{size && size.rows !== null ? fmtInt(size.rows, lang) : ""}</td>

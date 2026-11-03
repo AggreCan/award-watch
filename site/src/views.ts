@@ -36,6 +36,8 @@ import { DOWNLOADS, YEARLY_DOWNLOAD } from "./pages/data";
 // reader states in its user agent. A feed poll is always a bot: a reader
 // polls on a schedule whoever reads the result.
 //
+// The radar's 6- and 12-month window files pass through the Worker as well
+// (the paid part of the radar once accounts open) and are counted as files.
 // Other static files under /data/ and /fonts/ never reach the Worker, and a
 // request the per-address limits answer with 429 stops before this
 // middleware, so neither is counted. The plan's included data points match
@@ -94,6 +96,8 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   }
   if (FEED_PATH.test(path)) return { route: "/data/feeds/:file", kind: "feed" };
   if (path === "/data/feeds/index.json") return { route: path, kind: "file" };
+  const radar = /^\/data\/expiring\/(6m|12m)\/[^/]+$/.exec(path);
+  if (radar) return { route: `/data/expiring/${radar[1]}/:file`, kind: "file" };
   if (path === "/robots.txt" || path === "/llms.txt") return { route: path, kind: "file" };
   if (/^\/sitemap(?:-[0-9]+)?\.xml$/.test(path)) return { route: "/sitemap.xml", kind: "file" };
   return { route: "other", kind: "other" };
