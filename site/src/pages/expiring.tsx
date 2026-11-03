@@ -34,7 +34,7 @@ import {
 } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoneyShort, numberLocale, pick, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
-import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
+import { CompetitiveFlag, Layout, noDataPage, notFoundPage, page, PageHead, Panel, todayOf, varyOnCookie } from "../layout";
 import { radarWindowLocked } from "../plan";
 import { canonicalUrl, expiringWindowSeo, pageSeo } from "../seo";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
@@ -666,7 +666,7 @@ async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats:
   const title = t(lang, WINDOW_TITLE[window]);
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "expiring.title"), path: "/expiring" }, { name: title }];
   const account = await railAccount(c).catch(() => undefined);
-  c.header("Vary", "Cookie");
+  varyOnCookie(c); // once per request; page() adds the same for every page while the switch is on
 
   return page(
     c,
