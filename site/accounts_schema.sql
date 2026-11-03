@@ -11,7 +11,8 @@
 -- Datetimes are ISO in UTC with a trailing Z. Ids are 32 random hex
 -- characters (crypto.getRandomValues) unless a column says otherwise. No
 -- table holds a name, a postal address, a user agent or an IP address; no
--- token, code or key is stored, only its SHA-256 hash.
+-- token, code or key is stored, only its SHA-256 hash, apart from the stop
+-- secret of delivery_tokens (below), which every message must carry.
 
 -- One row per address that has signed in. The plan columns are a cache of
 -- the last plan computed from entitlements (src/account/entitlements.ts):
@@ -120,13 +121,28 @@ CREATE TABLE IF NOT EXISTS entitlements (
 );
 CREATE INDEX IF NOT EXISTS idx_entitlements_user ON entitlements(user_id);
 
--- Phase 2: one row per delivery of a saved search. Created now, unused.
+-- One row per delivery run of a saved search (src/account/deliveries.ts):
+-- sent (the message left), failed (the mail service refused it) or empty
+-- (nothing new, no message). sent_at is the run's time; items is how many
+-- records matched, past the 50 a message lists.
 CREATE TABLE IF NOT EXISTS deliveries (
   id INTEGER PRIMARY KEY,
   saved_search_id TEXT NOT NULL REFERENCES saved_searches(id) ON DELETE CASCADE,
   sent_at TEXT NOT NULL,
   items INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL                           -- sent | failed | empty
+);
+
+-- The secret behind a delivery's stop link (/account/stop?s=<search id>&t=
+-- <secret>, and the List-Unsubscribe header), made from 16 random bytes the
+-- first time the search is delivered. Kept in clear, unlike every other
+-- secret here, because each message carries it; it can do one thing, turn
+-- that search's delivery off. Goes with the search (the cascade, and the
+-- delete paths in routes.tsx and searches.ts).
+CREATE TABLE IF NOT EXISTS delivery_tokens (
+  search_id TEXT PRIMARY KEY REFERENCES saved_searches(id) ON DELETE CASCADE,
+  secret TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 
 -- What happened to an account, for the operator: an event name and a short

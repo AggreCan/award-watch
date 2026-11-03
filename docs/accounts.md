@@ -17,6 +17,9 @@ the schema is `site/accounts_schema.sql`; the tests are
   added by pasting a page's address; the site rebuilds the filter and writes
   its label, as the alerts form does. Requests made earlier through the
   alerts form are offered for import after sign-in.
+- **Delivery by email.** On the Pro plan, a tender list or a list of
+  contracts ending can be sent daily or weekly (*Phase 2: delivery*). Every
+  message carries a link that turns its delivery off without signing in.
 - **API keys.** Issued and revoked on the account; shown once. No endpoint
   asks for one yet.
 - **Plans.** Each account is on a plan, Free or Pro, computed from the
@@ -27,7 +30,8 @@ the schema is `site/accounts_schema.sql`; the tests are
   with `allowed({ plan }, feature)` (`site/src/account/entitlements.ts`).
 - **Deletion.** The reader deletes the account from its own page.
 
-Nothing is sent by email except the sign-in message, which goes out through
+Two kinds of message are sent by email: the sign-in message, and the
+saved-search deliveries a Pro account turns on. Both go out through
 Cloudflare Email Sending from the Worker's own binding once the domain is
 onboarded (see *Sending mail* and *Operator steps*).
 
@@ -45,7 +49,8 @@ Every datetime is ISO in UTC.
 | `saved_searches` | kind, filter (path and query as the site rebuilds it), the site's label, language, delivery (`daily`, `weekly`, `off`) | anything typed that the site did not rebuild |
 | `api_keys` | the user's name for the key, an 8-character prefix, SHA-256 of the key, created, last-used and revocation times | the key |
 | `entitlements` | plan, source (`manual` or `stripe`), start, end, revocation, a reference | an address, card details |
-| `deliveries` | phase 2: one row per delivery of a saved search (created now, unused) | the message |
+| `deliveries` | one row per delivery run of a saved search: the run's time, how many records matched, and `sent`, `failed` or `empty` | the message, the address |
+| `delivery_tokens` | the secret of each delivered search's stop link, made on its first delivery | anything else |
 | `audit` | user id, event name, time, a short fixed detail | an address, a code, a token, a key |
 
 Limits: at most 25 saved searches per account (Free keeps 3), at most 5 live
@@ -97,7 +102,8 @@ is anything but `"true"` (or the `ACCOUNTS` binding is missing):
 - the sign-in posts count as page requests;
 - `requireApiKey` gates nothing;
 - `planOfRequest` answers `free` for every request;
-- nothing reads the accounts database or the mail binding.
+- nothing reads the accounts database or the mail binding, and the hourly
+  delivery cron returns before reading anything.
 
 `site/test/accounts-switch.test.ts` proves each point, rendering the public
 pages with the switch off, with the module's bindings removed and with a
@@ -109,8 +115,8 @@ describes accounts; a page that shows a signed-in address is sent
 
 ## Sending mail
 
-Sign-in messages go through Cloudflare Email Sending from the Worker's
-`MAIL` binding (`site/wrangler.jsonc`). There is no outside mail service and
+Sign-in messages and saved-search deliveries go through Cloudflare Email
+Sending from the Worker's `MAIL` binding (`site/wrangler.jsonc`). There is no outside mail service and
 no key to store: the binding is the credential. `senderFor()` in
 `site/src/account/sender.ts` picks the sender for each request, in this
 order:
@@ -170,7 +176,10 @@ account's verified destination addresses, and any other address gets the
    npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
    ```
 
-   Every statement is idempotent. `npm run db:local` applies it to the local
+   Every statement is idempotent. Run it again whenever the file changes:
+   phase 2 added the `delivery_tokens` table, which deleting a search or an
+   account now clears, so the schema goes on before the switch is turned on
+   with the phase 2 code deployed. `npm run db:local` applies it to the local
    database, with `seed/accounts_dev.sql` (the development outbox, never
    applied on the account).
 2. **Onboard awardwatch.ca for Email Sending.** In the dashboard: Compute &
@@ -293,13 +302,19 @@ The test suite runs this same insert (`MANUAL_GRANT_SQL` in
   request gets the free view (`planOfRequest` never throws on a public
   page); and an API key request goes on marked unverified. When the database says a session, a
   key or an entitlement is revoked or ended, it stops on that request.
+- **Stop links.** Each delivered search has a 16-byte random secret, the one
+  secret kept in clear, because every message carries it in its stop link.
+  It can turn that one search's delivery off and nothing else; a wrong or
+  stale link is the site's 404.
 - **No PII in logs or audit.** Log lines and audit details name events and
   counts, never an address, a code, a token or a key.
 - **Prepared statements only.** Every query binds its values.
 
 ## What is deliberately not stored
 
-No names, postal addresses, phone numbers or passwords. No IP addresses: a
+No names, postal addresses, phone numbers or passwords. No copy of a
+delivered message: a delivery row keeps the time, the count and the status.
+No IP addresses: a
 sign-in request keeps, for one day, a hash of the address under a key that
 changes every UTC day (and nothing without `VIEWS_SALT_KEY`). No user agents:
 a session keeps the device class only. No codes, link secrets, session
@@ -308,8 +323,8 @@ secrets or API keys in clear. No payment details.
 ## Deletion
 
 `/account/delete` asks for a ticked box, then in one batch: revokes every
-session; deletes the saved searches (and their delivery rows), the API keys
-and the address's sign-in requests; and marks the user row deleted with its
+session; deletes the saved searches (with their delivery rows and stop
+links), the API keys and the address's sign-in requests; and marks the user row deleted with its
 email replaced by `deleted:` and SHA-256 of a random salt and the address,
 the salt thrown away. The row then proves nothing about which address it
 was, and the address can sign up again as a new account. The address's rows
@@ -318,17 +333,113 @@ to the user id alone, as the record of what was granted.
 
 ## Phase 2: delivery
 
-A scheduled handler (a second cron in `wrangler.jsonc`, after the nightly
-run's deploy) reads the saved searches whose delivery is due (`daily`, or
-`weekly` on the account's chosen day) for accounts whose plan allows
-delivery, runs each filter against the nightly export (the same static JSON
-the pages read: the day's new tender notices, the expiring windows, the
-profile, buyer and segment files), keeps the records first seen since
-`last_delivered_at`, and sends one message per account through the sender
-with an unsubscribe link per search. Each send writes a `deliveries` row and
-moves `last_delivered_at`; a search with nothing new writes an `empty` row
-and sends nothing. A failed send leaves `last_delivered_at` where it
-was, so the next run includes the missed items.
+The delivery job is `site/src/account/deliveries.ts`; the two messages are
+`site/src/account/digests.ts`, built on the approved designs in
+`design/email/` (the daily digest and the radar digest); the tests are
+`site/test/accounts-deliveries.test.ts`.
+
+### When it runs
+
+The Worker has two cron triggers (`site/wrangler.jsonc`): `0 6 * * *`, the
+daily check, and `0 15-20 * * *`, the deliveries. `index.tsx` sends the
+hourly trigger to the job and any other to the daily check. The nightly
+run publishes about 12:30 UTC (later on a retry), so the 15:00 run is
+normally the one that sends, and the hours after it cover a late nightly, a
+run cut short, or the rest after a sending limit.
+
+Each run does nothing unless all of these hold, in this order:
+
+1. `ACCOUNTS_ENABLED` is `"true"` with the `ACCOUNTS` binding, `MAIL` and
+   `MAIL_FROM` are set, and `SITE_URL` is an https address (the stop link in
+   `List-Unsubscribe` must be one).
+2. `stats.json` reads, and its `data_as_of` is today's UTC date: the
+   nightly has published today's files. A nightly that lands after the
+   20:00 UTC run sends nothing that day; the next day's delivery covers
+   both days.
+3. For each saved search, oldest first: delivery `daily` or `weekly`, a
+   kind the job can serve (below), an active account whose plan allows
+   `delivery` (`planFor`, so a lapsed or revoked plan stops at once), and
+   due: not delivered for this data date (the date of `last_delivered_at`
+   is earlier); for weekly, never delivered or last delivered seven or more
+   days before. A search whose message failed for this data date waits for
+   the next data date.
+
+### What each kind delivers
+
+The items are the records since the previous delivery's data date, at most
+seven days back; a first daily delivery covers the data date alone, a first
+weekly one the last seven days.
+
+| Kind | Read from | Items |
+|---|---|---|
+| `tenders` | `tenders/new/<day>.json` for each day after the previous delivery's data date up to today's | the notices first seen on those days that match the saved filter, read by the same parser as `/tenders` (`readTenderQuery`, `filterTenders`), still open at the run's time, soonest closing first; a notice closing within 7 days of the data date shows its time left in amber |
+| `expiring` | `expiring/<window>/index.json` and its pages, read from the last page back | the window's contracts whose end date is inside the window at today's data date and was outside it at the previous delivery's data date (the window's length is the radar's, 91, 182 or 365 days), filtered as the radar's form saved them (`readExpiringQuery`, `filterExpiring`), newest end first |
+| `organization`, `buyer`, `segment` | not delivered | the profile, buyer and segment files list award notices, contracts and grants without the date each record was first seen, so new records cannot be told from old ones; the searches page shows their delivery as off with a note, the job skips them, and the delivery post refuses to turn them on |
+
+A file that does not read (today's new-notice file, a window's index or
+page) ends the run with one log line naming it; the next hour tries again.
+
+### What it sends and writes
+
+- Nothing new: a `deliveries` row `empty`, no message, and
+  `last_delivered_at` moves to the run's time.
+- Otherwise one message per saved search, in the search's language, through
+  the accounts sender (`senderFor`, the `MAIL` binding), with the subject,
+  rows, button, note and footer of the design. A message lists at most 50
+  rows; past that, a line names how many more and links the page. A
+  `deliveries` row `sent` (with the number of records matched) moves
+  `last_delivered_at`; `failed` leaves it, so the next data date's delivery
+  covers what this one missed.
+- At most 300 messages a run. A refusal with `E_DAILY_LIMIT_EXCEEDED` or
+  `E_RATE_LIMIT_EXCEEDED` stops the run with no row for that search, and
+  the next hour goes on from there. Any other refusal is a `failed` row.
+- A fault reading or writing the accounts database logs one line and ends
+  the run. A second run in the same hour finds nothing due.
+- Log lines carry dates, counts and file names, never an address or a label.
+
+### Stopping a delivery
+
+Every message carries a stop link, in its footer ("Stop this delivery") and
+in its headers:
+
+```
+List-Unsubscribe: <mailto:contact@awardwatch.ca>, <https://awardwatch.ca/account/stop?s=<search id>&t=<secret>>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+```
+
+The secret is 16 random bytes in `delivery_tokens`, made the first time the
+search is delivered and kept until the search or the account is deleted.
+
+- `GET /account/stop?s=...&t=...` shows the search's label and one button;
+  opening the link changes nothing, so a mail scanner that follows it
+  stops nothing.
+- `POST /account/stop` with the same two values turns the search's
+  delivery off and says so.
+- The same `POST` with the body `List-Unsubscribe=One-Click` (RFC 8058, as
+  a mail client sends it) turns the delivery off and answers a line of
+  text, with no page.
+- A wrong, malformed or stale link (a deleted search or account) answers
+  the site's 404. No session and no `Origin` are asked for: the secret is
+  the proof, and it can only turn that one delivery off.
+
+A reply to the `mailto:` address reaches the contact inbox, where the
+operator turns the delivery off by hand.
+
+### The searches page
+
+Each search shows its newest delivery under its delivery select: when it
+ran and whether it was sent (with the number of records), found nothing new,
+or could not be sent. A kind the job cannot serve shows its delivery off and
+disabled, with a note.
+
+### Checking a run
+
+```
+npx wrangler d1 execute awardwatch-accounts --remote --command "SELECT substr(sent_at, 1, 10) AS day, status, COUNT(*) AS n, SUM(items) AS items FROM deliveries GROUP BY day, status ORDER BY day DESC LIMIT 20"
+```
+
+The Worker's logs hold one line per run: the data date and the counts sent,
+failed, with nothing new and not on a plan with delivery.
 
 ## Phase 3: payments and the metered API
 

@@ -92,7 +92,8 @@ describe("saved searches", () => {
     const email = newEmail();
     const cookie = await signIn(email);
     const token = await csrf(cookie, "/account/searches");
-    await post("/account/searches", { csrf: token, url: "/segments/82" }, { cookie });
+    // A tender list: a kind the delivery job serves (a segment page is not one yet).
+    await post("/account/searches", { csrf: token, url: "/tenders?segment=82" }, { cookie });
     const [row] = await searches(email);
     const free = await post(`/account/searches/${row.id}`, { csrf: token, deliver: "weekly" }, { cookie });
     expect(free.headers.get("location")).toBe("/account/searches?m=pro");

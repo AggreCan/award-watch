@@ -12,7 +12,7 @@ import { Layout, PageHead, Panel, page } from "../layout";
 import { EMAIL_MAX } from "../pages/interest";
 import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import { allowed } from "./entitlements";
-import { DELIVERY, type Delivery, type SavedSearch, type InterestRow } from "./searches";
+import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch, isDeliverable } from "./searches";
 import type { Account } from "./session";
 import { CODE_MINUTES } from "./signin";
 
@@ -189,9 +189,26 @@ export function overviewView(lang: Lang, account: Account, counts: { sessions: n
 
 const DELIVERY_KEY: Record<Delivery, Key> = { daily: "account.deliver_daily", weekly: "account.deliver_weekly", off: "account.deliver_off" };
 
+// "2026-11-03 15:02 UTC", the time of a delivery row.
+const stamp = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+
+// The newest delivery of a search, under its delivery select: when it ran
+// and what it did. Nothing for a search never delivered and switched off.
+const LastDeliveryLine: FC<{ lang: Lang; last: LastDelivery | null; deliver: Delivery }> = ({ lang, last, deliver }) => {
+  if (!last) return deliver === "off" ? null : <p class="muted small">{t(lang, "account.last_none")}</p>;
+  const time = stamp(last.sent_at);
+  const line = last.status === "sent"
+    ? t(lang, last.items === 1 ? "account.last_sent_one" : "account.last_sent_many", { time, n: fmtInt(last.items, lang) })
+    : last.status === "empty" ? t(lang, "account.last_empty", { time }) : t(lang, "account.last_failed", { time });
+  return <p class="muted small">{line}</p>;
+};
+
 export function searchesView(
   lang: Lang, account: Account,
-  state: { searches: SavedSearch[]; cap: number; pending: InterestRow[]; notice?: string | null; errors?: Key[]; url?: string },
+  state: {
+    searches: (SavedSearch & { last?: LastDelivery | null })[]; cap: number; pending: InterestRow[]; notice?: string | null;
+    errors?: Key[]; url?: string;
+  },
 ) {
   const { searches, cap, pending } = state;
   const canDeliver = allowed(account, "delivery");
@@ -199,7 +216,7 @@ export function searchesView(
   const capLine = t(lang, account.plan === "free" ? "account.cap_free" : "account.cap_pro", { cap: fmtInt(cap, lang) });
   return (
     <>
-      <PageHead lang={lang} title={t(lang, "account.searches_title")} lead={t(lang, "account.searches_lead")}
+      <PageHead lang={lang} title={t(lang, "account.searches_title")} lead={t(lang, "account.searches_lead_deliver")}
         actions={<a href="/account" class="btn">{t(lang, "account.title")}</a>} />
       <Notice message={state.notice} />
       {pending.length ? (
@@ -226,16 +243,34 @@ export function searchesView(
                   <tr>
                     <td data-label={t(lang, "account.col_search")}><a href={s.params}>{s.label}</a></td>
                     <td data-label={t(lang, "account.col_delivery")}>
-                      {canDeliver ? (
-                        <form method="post" action={`/account/searches/${s.id}`} class="account-inline">
-                          <Csrf account={account} />
-                          <select name="deliver" aria-label={t(lang, "account.col_delivery")}>
-                            {DELIVERY.map((d) => <option value={d} selected={d === s.deliver}>{t(lang, DELIVERY_KEY[d])}</option>)}
-                          </select>
-                          <button type="submit" class="btn">{t(lang, "account.deliver_save")}</button>
-                        </form>
+                      {!isDeliverable(s.kind) ? (
+                        // The published files cannot tell this kind's new records yet (searches.ts).
+                        <>
+                          {canDeliver ? (
+                            <div class="account-inline">
+                              <select aria-label={t(lang, "account.col_delivery")} disabled>
+                                <option value="off" selected>{t(lang, "account.deliver_off")}</option>
+                              </select>
+                            </div>
+                          ) : <span class="muted">{t(lang, "account.deliver_off")}</span>}
+                          <p class="muted small">{t(lang, "account.deliver_not_yet")}</p>
+                        </>
+                      ) : canDeliver ? (
+                        <>
+                          <form method="post" action={`/account/searches/${s.id}`} class="account-inline">
+                            <Csrf account={account} />
+                            <select name="deliver" aria-label={t(lang, "account.col_delivery")}>
+                              {DELIVERY.map((d) => <option value={d} selected={d === s.deliver}>{t(lang, DELIVERY_KEY[d])}</option>)}
+                            </select>
+                            <button type="submit" class="btn">{t(lang, "account.deliver_save")}</button>
+                          </form>
+                          <LastDeliveryLine lang={lang} last={s.last ?? null} deliver={s.deliver} />
+                        </>
                       ) : (
-                        <span class="muted">{t(lang, DELIVERY_KEY[s.deliver] ?? "account.deliver_off")}</span>
+                        <>
+                          <span class="muted">{t(lang, DELIVERY_KEY[s.deliver] ?? "account.deliver_off")}</span>
+                          {s.last ? <LastDeliveryLine lang={lang} last={s.last} deliver={s.deliver} /> : null}
+                        </>
                       )}
                     </td>
                     <td data-label={t(lang, "account.col_remove")}>
@@ -269,6 +304,43 @@ export function searchesView(
             <button type="submit" class="btn btn-primary">{t(lang, "account.add_button")}</button>
           </form>
         )}
+      </Panel>
+    </>
+  );
+}
+
+// -- stopping a delivery from its message ----------------------------------------------------------
+
+// The stop link's page: the search's label and one button that posts the
+// link's values back. No session is needed; the secret is the proof.
+export function stopView(lang: Lang, state: { searchId: string; secret: string; label: string; off: boolean }) {
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "account.stop_title")} lead={t(lang, "account.stop_lead")} />
+      <Panel title={t(lang, "account.stop_panel")} class="panel-form">
+        <p><strong>{state.label}</strong></p>
+        {state.off ? (
+          <p>{t(lang, "account.stop_already")}</p>
+        ) : (
+          <form method="post" action="/account/stop" class="stack">
+            <input type="hidden" name="s" value={state.searchId} />
+            <input type="hidden" name="t" value={state.secret} />
+            <input type="hidden" name="lang" value={lang} />
+            <button type="submit" class="btn btn-primary">{t(lang, "account.stop_button")}</button>
+          </form>
+        )}
+      </Panel>
+    </>
+  );
+}
+
+export function stoppedView(lang: Lang, label: string) {
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "account.stopped_title")} lead={t(lang, "account.stopped_lead")}
+        actions={<a href="/account/searches" class="btn">{t(lang, "account.searches_title")}</a>} />
+      <Panel title={t(lang, "account.stop_panel")}>
+        <p><strong>{label}</strong></p>
       </Panel>
     </>
   );

@@ -21,6 +21,15 @@ export const DELIVERY = ["daily", "weekly", "off"] as const;
 export type Delivery = (typeof DELIVERY)[number];
 export const isDelivery = (v: unknown): v is Delivery => typeof v === "string" && (DELIVERY as readonly string[]).includes(v);
 
+// The kinds the delivery job can serve (deliveries.ts). A tender list reads
+// each day's new notices, which carry the day they were first seen; the radar
+// reads its windows by end date. The organization, buyer and segment files
+// list award notices, contracts and grants with no date first seen, so "new
+// records naming it" cannot be told from records already there; those kinds
+// keep delivery off until the export dates them.
+export const DELIVERABLE_KINDS: readonly InterestKind[] = ["tenders", "expiring"];
+export const isDeliverable = (kind: string): boolean => (DELIVERABLE_KINDS as readonly string[]).includes(kind);
+
 export type SavedSearch = {
   id: string; kind: InterestKind; params: string; label: string; lang: Lang; created_at: string; deliver: Delivery;
 };
@@ -57,15 +66,37 @@ export async function addSearch(
   return same ? "exists" : "cap";
 }
 
+// Daily or weekly only for a kind the job can deliver; off for any.
 export async function setDelivery(env: Env, userId: string, id: string, deliver: Delivery): Promise<boolean> {
-  const res = await env.ACCOUNTS!.prepare("UPDATE saved_searches SET deliver = ? WHERE id = ? AND user_id = ?")
-    .bind(deliver, id, userId).run();
+  const kinds = DELIVERABLE_KINDS.map(() => "?").join(", ");
+  const res = await env.ACCOUNTS!.prepare(
+    `UPDATE saved_searches SET deliver = ? WHERE id = ? AND user_id = ? AND (? = 'off' OR kind IN (${kinds}))`,
+  ).bind(deliver, id, userId, deliver, ...DELIVERABLE_KINDS).run();
   return (res.meta?.changes ?? 0) === 1;
 }
 
+// The search with its stop link and its delivery rows, which the schema's
+// cascade removes too; named here so the delete does not lean on it.
 export async function deleteSearch(env: Env, userId: string, id: string): Promise<boolean> {
-  const res = await env.ACCOUNTS!.prepare("DELETE FROM saved_searches WHERE id = ? AND user_id = ?").bind(id, userId).run();
-  return (res.meta?.changes ?? 0) === 1;
+  const db = env.ACCOUNTS!;
+  const mine = "SELECT id FROM saved_searches WHERE id = ? AND user_id = ?";
+  const res = await db.batch([
+    db.prepare(`DELETE FROM delivery_tokens WHERE search_id IN (${mine})`).bind(id, userId),
+    db.prepare(`DELETE FROM deliveries WHERE saved_search_id IN (${mine})`).bind(id, userId),
+    db.prepare("DELETE FROM saved_searches WHERE id = ? AND user_id = ?").bind(id, userId),
+  ]);
+  return (res[2]?.meta?.changes ?? 0) === 1;
+}
+
+// The newest delivery row of each of the user's searches, by search id.
+export type LastDelivery = { sent_at: string; items: number; status: string };
+
+export async function lastDeliveries(env: Env, userId: string): Promise<Map<string, LastDelivery>> {
+  const res = await env.ACCOUNTS!.prepare(
+    "SELECT d.saved_search_id, d.sent_at, d.items, d.status FROM deliveries d WHERE d.id IN (" +
+    "SELECT MAX(x.id) FROM deliveries x JOIN saved_searches s ON s.id = x.saved_search_id WHERE s.user_id = ? GROUP BY x.saved_search_id)",
+  ).bind(userId).all<LastDelivery & { saved_search_id: string }>();
+  return new Map((res.results ?? []).map(({ saved_search_id, ...last }) => [saved_search_id, last]));
 }
 
 // -- the alerts form's rows ------------------------------------------------------

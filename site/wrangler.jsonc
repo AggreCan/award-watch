@@ -32,7 +32,11 @@
   // audience roll-up, a rolled-back deploy or the same-day refresh (its runs in
   // SEARCH, the live paid plans in ACCOUNTS) needs attention. ALERT_EMAIL is a
   // secret; the destination must be verified in the zone's Email Routing.
-  "triggers": { "crons": ["0 6 * * *"] },
+  // Saved-search deliveries (src/account/deliveries.ts): hourly from 15:00 to
+  // 20:00 UTC, after the 12:30 UTC nightly; a run sends only once stats.json's
+  // data date is today's, so the later hours cover a late nightly. While
+  // ACCOUNTS_ENABLED is not "true" a run returns before reading anything.
+  "triggers": { "crons": ["0 6 * * *", "0 15-20 * * *"] },
   // Aggregate counts of the responses the Worker serves (src/views.ts): route,
   // language, edge country, referring host, status, bot or human, device
   // class, and for a human a daily visitor code hashed under the secret
@@ -42,11 +46,12 @@
   "send_email": [
     { "name": "ALERTS" },
     // The accounts module's sender (src/account/sender.ts): sign-in messages
-    // go out from MAIL_FROM through Cloudflare Email Sending, once the
-    // operator has onboarded awardwatch.ca for it (that onboarding adds the
-    // SPF and DKIM records; docs/accounts.md). A binding rather than a mail
-    // service's API, so there is no key to hold. allowed_sender_addresses
-    // locks the binding to MAIL_FROM, so a mistake cannot send as anyone else.
+    // and saved-search deliveries go out from MAIL_FROM through Cloudflare
+    // Email Sending, once the operator has onboarded awardwatch.ca for it
+    // (that onboarding adds the SPF and DKIM records; docs/accounts.md). A
+    // binding rather than a mail service's API, so there is no key to hold.
+    // allowed_sender_addresses locks the binding to MAIL_FROM, so a mistake
+    // cannot send as anyone else.
     { "name": "MAIL", "allowed_sender_addresses": ["alerts@awardwatch.ca"] }
   ],
   "assets": {
@@ -106,8 +111,8 @@
   // is set by the operator once the repository exists (empty leaves the line
   // out). ACCOUNTS_ENABLED is the accounts switch: "false" keeps every
   // /account route a 404 and every public page as it was (docs/accounts.md).
-  // MAIL_FROM is the sign-in messages' sender on the zone, sent through the
-  // MAIL binding.
+  // MAIL_FROM is the sender of the accounts' messages (sign-in codes and
+  // saved-search deliveries) on the zone, sent through the MAIL binding.
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",

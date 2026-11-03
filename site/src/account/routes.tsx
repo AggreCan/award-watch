@@ -17,13 +17,15 @@
 //   POST /account/keys/:id/revoke      revoke one                                     (session, CSRF)
 //   GET  /account/delete               what deleting removes                          (session)
 //   POST /account/delete               delete                                         (session, CSRF)
+//   GET  /account/stop?s=&t=           a delivery's stop page, from its message       (the link's secret)
+//   POST /account/stop?s=&t=           turn that delivery off; also RFC 8058 one-click (the link's secret)
 //   *    /account/billing              404 until a payments source exists (payments.ts)
 //
-// Every POST is refused with a 403 when its Origin names another site (or
-// "null"); a client that sends no Origin is let through, as interest.tsx
-// does, since a browser always sends one with a form post. The two sign-in
-// posts are capped per address by AUTH_LIMIT (limits.ts); the codes per
-// address are capped in the database (signin.ts). Every response is
+// Every POST but the stop link's is refused with a 403 when its Origin names
+// another site (or "null"); a client that sends no Origin is let through, as
+// interest.tsx does, since a browser always sends one with a form post. The
+// two sign-in posts are capped per address by AUTH_LIMIT (limits.ts); the
+// codes per address are capped in the database (signin.ts). Every response is
 // no-store and noindex. The site's referrer policy already keeps a link's
 // token off any request to another site.
 
@@ -39,10 +41,13 @@ import { KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
 import { audit } from "./audit";
 import { allowed } from "./entitlements";
 import {
-  accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView, signInView, unavailableView,
+  accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView, signInView, stopView, stoppedView,
+  unavailableView,
 } from "./pages";
-import { addSearch, capFor, deleteSearch, importInterest, isDelivery, listSearches, pendingInterest, setDelivery } from "./searches";
-import { randomHex, sha256Hex, ipHash } from "./secrets";
+import {
+  addSearch, capFor, deleteSearch, importInterest, isDelivery, lastDeliveries, listSearches, pendingInterest, setDelivery,
+} from "./searches";
+import { randomHex, sameHash, sha256Hex, ipHash } from "./secrets";
 import { isLocalHost, senderFor, signInMessage } from "./sender";
 import {
   type Account, type UaClass, SESSION_COOKIE, clearSessionCookie, csrfValid, markSignedOut, readSession, revokeAllSessions,
@@ -270,8 +275,10 @@ async function labelIn(c: Context<AppEnv>, lang: Lang, row: { kind: string; para
 
 async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: Key[]; url?: string; status?: number } = {}) {
   const lang = c.get("lang");
-  const [stored, waiting] = await Promise.all([listSearches(c.env, who.userId), pendingInterest(c.env, who.email, who.userId)]);
-  const searches = await Promise.all(stored.map(async (s) => ({ ...s, label: await labelIn(c, lang, s) })));
+  const [stored, waiting, last] = await Promise.all([
+    listSearches(c.env, who.userId), pendingInterest(c.env, who.email, who.userId), lastDeliveries(c.env, who.userId),
+  ]);
+  const searches = await Promise.all(stored.map(async (s) => ({ ...s, label: await labelIn(c, lang, s), last: last.get(s.id) ?? null })));
   const pending = await Promise.all(waiting.map(async (r) => ({ ...r, label: await labelIn(c, lang, r) })));
   const cap = capFor(who);
   const m = c.req.query("m") ?? "";
@@ -346,8 +353,67 @@ account.post("/searches/:id", async (c) => {
   if (!isDelivery(deliver)) return c.text(t(c.get("lang"), "form.rejected"), 400);
   if (deliver !== "off" && !allowed(who, "delivery")) return c.redirect("/account/searches?m=pro", 303);
   return guarded(c, async () => {
-    if (await setDelivery(c.env, who.userId, c.req.param("id") ?? "", deliver)) await audit(c.env, who.userId, "search_changed", deliver);
+    // Nothing changes for a search of a kind that cannot be delivered yet (searches.ts).
+    if (!(await setDelivery(c.env, who.userId, c.req.param("id") ?? "", deliver))) return c.redirect("/account/searches", 303);
+    await audit(c.env, who.userId, "search_changed", deliver);
     return c.redirect("/account/searches?m=changed", 303);
+  });
+});
+
+// -- stopping a delivery from its message ------------------------------------------------------
+
+// Each message carries a stop link, /account/stop?s=<search id>&t=<secret>,
+// in its footer and in its List-Unsubscribe header (deliveries.ts). The
+// secret is the credential, so no session is asked for; the GET only shows
+// the page (a mail scanner that opens the link changes nothing), and a POST
+// turns the delivery off. A mail client's one-click POST (RFC 8058, the body
+// List-Unsubscribe=One-Click) comes from the mail provider's servers with no
+// page and no Origin of the site, so neither is asked for: a post from
+// anywhere that holds the secret may turn that one delivery off, and no
+// more. A link that matches nothing is the site's 404.
+const STOP_VALUE_RE = /^[0-9a-f]{32}$/;
+
+type StopRow = { id: string; user_id: string; kind: string; params: string; label: string; lang: string; deliver: string; secret: string };
+
+async function stopTarget(c: Context<AppEnv>, searchId: string, secret: string): Promise<StopRow | null> {
+  if (!STOP_VALUE_RE.test(searchId) || !STOP_VALUE_RE.test(secret)) return null;
+  const row = await c.env.ACCOUNTS!.prepare(
+    "SELECT s.id, s.user_id, s.kind, s.params, s.label, s.lang, s.deliver, k.secret FROM delivery_tokens k " +
+    "JOIN saved_searches s ON s.id = k.search_id JOIN users u ON u.id = s.user_id WHERE k.search_id = ? AND u.status = 'active'",
+  ).bind(searchId).first<StopRow>();
+  return row && sameHash(row.secret, secret) ? row : null;
+}
+
+account.get("/stop", async (c) => {
+  const lang = c.get("lang");
+  const searchId = c.req.query("s") ?? "";
+  const secret = c.req.query("t") ?? "";
+  return guarded(c, async () => {
+    const row = await stopTarget(c, searchId, secret);
+    if (!row) return c.notFound();
+    return accountPage(c, t(lang, "account.stop_title"),
+      stopView(lang, { searchId, secret, label: await labelIn(c, lang, row), off: row.deliver === "off" }));
+  });
+});
+
+account.post("/stop", async (c) => {
+  const form = await readForm(c);
+  if (!form.ok) return c.text(t(c.get("lang"), "form.rejected"), form.status);
+  const fields = form.fields;
+  if (fields.lang === "en" || fields.lang === "fr") c.set("lang", fields.lang);
+  const lang = c.get("lang");
+  const searchId = clean(fields, "s", 64) || (c.req.query("s") ?? "");
+  const secret = clean(fields, "t", 64) || (c.req.query("t") ?? "");
+  const oneClick = fields["List-Unsubscribe"] === "One-Click";
+  return guarded(c, async () => {
+    const row = await stopTarget(c, searchId, secret);
+    if (!row) return c.notFound();
+    if (row.deliver !== "off") {
+      await c.env.ACCOUNTS!.prepare("UPDATE saved_searches SET deliver = 'off' WHERE id = ?").bind(row.id).run();
+      await audit(c.env, row.user_id, "delivery_stopped", oneClick ? "one_click" : "link");
+    }
+    if (oneClick) return c.text(t(lang, "account.stopped_one_click"), 200);
+    return accountPage(c, t(lang, "account.stopped_title"), stoppedView(lang, await labelIn(c, lang, row)));
   });
 });
 
@@ -409,16 +475,17 @@ account.get("/delete", async (c) => {
 // The user row stays, marked deleted, its email replaced by "deleted:" and
 // SHA-256 of a random salt and the address, the salt thrown away: the row
 // cannot be matched to the address, and the address can sign up afresh.
-// Sessions are revoked; saved searches, keys and sign-in requests are
-// deleted; so are the address's rows in the alerts form's table. The
-// entitlement rows stay, tied to the id alone, as the record of what was
-// granted.
+// Sessions are revoked; saved searches (with their stop links and delivery
+// rows), keys and sign-in requests are deleted; so are the address's rows in
+// the alerts form's table. The entitlement rows stay, tied to the id alone,
+// as the record of what was granted.
 export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new Date()): Promise<void> {
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
   const tomb = `deleted:${await sha256Hex(`${randomHex(32)}\n${who.email}`)}`;
   await db.batch([
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, who.userId),
+    db.prepare("DELETE FROM delivery_tokens WHERE search_id IN (SELECT id FROM saved_searches WHERE user_id = ?)").bind(who.userId),
     db.prepare("DELETE FROM deliveries WHERE saved_search_id IN (SELECT id FROM saved_searches WHERE user_id = ?)").bind(who.userId),
     db.prepare("DELETE FROM saved_searches WHERE user_id = ?").bind(who.userId),
     db.prepare("DELETE FROM api_keys WHERE user_id = ?").bind(who.userId),

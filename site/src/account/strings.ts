@@ -101,10 +101,6 @@ export const ACCOUNT_STRINGS = {
 
   // -- saved searches -------------------------------------------------------------------
   "account.searches_title": { en: "Saved Searches", fr: "Recherches enregistrées" },
-  "account.searches_lead": {
-    en: "Filters you follow, saved from the site's lists and pages. Nothing is sent by email yet.",
-    fr: "Les filtres que vous suivez, enregistrés à partir des listes et des pages du site. Rien n'est encore envoyé par courriel.",
-  },
   "account.panel_import": { en: "From Your Alert Requests", fr: "À partir de vos demandes d'alertes" },
   "account.import_text": {
     en: "Before it had an account, this address asked for alerts on these searches.",
@@ -276,4 +272,114 @@ export const ACCOUNT_STRINGS = {
     en: "Deleting the account from its own page removes its saved searches, keys and sessions and replaces the email address with a hash that cannot be matched to it.",
     fr: "La suppression du compte, depuis sa propre page, retire ses recherches enregistrées, ses clés et ses sessions et remplace l'adresse courriel par un hachage qui ne peut pas lui être rapproché.",
   },
+
+  // -- deliveries (phase 2: src/account/deliveries.ts, digests.ts, the stop page) --------
+  "account.searches_lead_deliver": {
+    en: "Filters you follow, saved from the site's lists and pages. On the Pro plan, tender lists and contracts ending can be delivered by email, each day or each week.",
+    fr: "Les filtres que vous suivez, enregistrés à partir des listes et des pages du site. Avec le forfait Pro, les listes d'appels d'offres et de contrats prenant fin peuvent être envoyées par courriel, chaque jour ou chaque semaine.",
+  },
+  "account.deliver_not_yet": {
+    en: "Email delivery is not offered for this kind of search yet.",
+    fr: "L'envoi par courriel n'est pas encore offert pour ce type de recherche.",
+  },
+  "account.last_none": { en: "Not delivered yet.", fr: "Pas encore envoyée." },
+  "account.last_sent_one": { en: "Last sent {time}, 1 item.", fr: "Dernier envoi le {time}, 1 élément." },
+  "account.last_sent_many": { en: "Last sent {time}, {n} items.", fr: "Dernier envoi le {time}, {n} éléments." },
+  "account.last_empty": { en: "Checked {time}, nothing new.", fr: "Vérifiée le {time}, rien de nouveau." },
+  "account.last_failed": {
+    en: "Not sent {time}. The next delivery includes what it missed.",
+    fr: "Non envoyée le {time}. Le prochain envoi comprendra ce qui a manqué.",
+  },
+  "account.stop_title": { en: "Stop This Delivery", fr: "Arrêter cet envoi" },
+  "account.stop_lead": {
+    en: "The saved search below is delivered by email. Stopping turns its delivery off; the search stays in the account.",
+    fr: "La recherche enregistrée ci-dessous est envoyée par courriel. L'arrêt désactive son envoi; la recherche reste dans le compte.",
+  },
+  "account.stop_panel": { en: "Saved Search", fr: "Recherche enregistrée" },
+  "account.stop_button": { en: "Stop the delivery", fr: "Arrêter l'envoi" },
+  "account.stop_already": { en: "This delivery is already off.", fr: "Cet envoi est déjà désactivé." },
+  "account.stopped_title": { en: "Delivery Stopped", fr: "Envoi arrêté" },
+  "account.stopped_lead": {
+    en: "This search is no longer sent by email. It stays in the account, where its delivery can be turned back on.",
+    fr: "Cette recherche n'est plus envoyée par courriel. Elle reste dans le compte, où son envoi peut être réactivé.",
+  },
+  "account.stopped_one_click": { en: "The delivery is off.", fr: "L'envoi est désactivé." },
+  "account.privacy_mail": {
+    en: "The email address is handed to Cloudflare's email service to deliver the site's messages: the sign-in code, and the saved searches whose delivery is on. It is used for nothing else.",
+    fr: "L'adresse courriel est transmise au service de courriel de Cloudflare pour livrer les messages du site : le code de connexion et les recherches enregistrées dont l'envoi est activé. Elle ne sert à rien d'autre.",
+  },
+  "digest.tenders_title": { en: "New tender notices", fr: "Nouveaux avis d'appel d'offres" },
+  "digest.tenders_subject_one": { en: "1 new tender notice: {scope}", fr: "1 nouvel avis d'appel d'offres : {scope}" },
+  "digest.tenders_subject_many": { en: "{n} new tender notices: {scope}", fr: "{n} nouveaux avis d'appel d'offres : {scope}" },
+  "digest.tenders_subject_all_one": { en: "1 new tender notice", fr: "1 nouvel avis d'appel d'offres" },
+  "digest.tenders_subject_all_many": { en: "{n} new tender notices", fr: "{n} nouveaux avis d'appel d'offres" },
+  "digest.tenders_intro_one": {
+    en: "1 notice published since {since} matches your saved search {label}. Data date {date}.",
+    fr: "1 avis publié depuis {since} correspond à votre recherche enregistrée {label}. Date des données : {date}.",
+  },
+  "digest.tenders_intro_many": {
+    en: "{n} notices published since {since} match your saved search {label}. Data date {date}.",
+    fr: "{n} avis publiés depuis {since} correspondent à votre recherche enregistrée {label}. Date des données : {date}.",
+  },
+  "digest.since_yesterday": { en: "yesterday's refresh", fr: "la mise à jour d'hier" },
+  "digest.since_day": { en: "the refresh of {date}", fr: "la mise à jour du {date}" },
+  "digest.closes": { en: "Closes {day} {time}", fr: "Ferme le {day} à {time}" },
+  "digest.closes_day": { en: "Closes {day}", fr: "Ferme le {day}" },
+  "digest.closes_today": { en: "closes today", fr: "ferme aujourd'hui" },
+  "digest.tenders_button": { en: "See all open notices", fr: "Voir tous les avis ouverts" },
+  "digest.tenders_note": {
+    en: "Closing times are the buyer's, shown in Eastern time. Days left count from the data date.",
+    fr: "Les heures de clôture sont celles de l'acheteur, en heure de l'Est. Les jours restants se comptent à partir de la date des données.",
+  },
+  "digest.scope_words": { en: "title words", fr: "mots du titre" },
+  "digest.scope_code": { en: "UNSPSC code {code}", fr: "code UNSPSC {code}" },
+  "digest.expiring_title": { en: "Contracts ending within {n} months", fr: "Contrats prenant fin d'ici {n} mois" },
+  "digest.expiring_subject_one": {
+    en: "1 contract entering the {months}-month window: {scope}",
+    fr: "1 contrat entrant dans la fenêtre de {months} mois : {scope}",
+  },
+  "digest.expiring_subject_many": {
+    en: "{n} contracts entering the {months}-month window: {scope}",
+    fr: "{n} contrats entrant dans la fenêtre de {months} mois : {scope}",
+  },
+  "digest.expiring_subject_all_one": {
+    en: "1 contract entering the {months}-month window",
+    fr: "1 contrat entrant dans la fenêtre de {months} mois",
+  },
+  "digest.expiring_subject_all_many": {
+    en: "{n} contracts entering the {months}-month window",
+    fr: "{n} contrats entrant dans la fenêtre de {months} mois",
+  },
+  "digest.expiring_intro_one": {
+    en: "1 contract whose end date now falls within {months} months of the data date, under your saved search {label}. {cadence} Data date {date}.",
+    fr: "1 contrat dont la date de fin tombe désormais dans les {months} mois suivant la date des données, sous votre recherche enregistrée {label}. {cadence} Date des données : {date}.",
+  },
+  "digest.expiring_intro_many": {
+    en: "{n} contracts whose end date now falls within {months} months of the data date, under your saved search {label}. {cadence} Data date {date}.",
+    fr: "{n} contrats dont la date de fin tombe désormais dans les {months} mois suivant la date des données, sous votre recherche enregistrée {label}. {cadence} Date des données : {date}.",
+  },
+  "digest.cadence_daily": { en: "Daily.", fr: "Chaque jour." },
+  "digest.cadence_weekly": { en: "Weekly.", fr: "Chaque semaine." },
+  "digest.ends": { en: "Ends {date}", fr: "Prend fin le {date}" },
+  "digest.expiring_button": { en: "Open the radar", fr: "Ouvrir le radar" },
+  "digest.expiring_note": {
+    en: "A contract's value is the one on its newest amendment. Nothing is summed across sources.",
+    fr: "La valeur d'un contrat est celle de sa plus récente modification. Rien n'est additionné entre les sources.",
+  },
+  "digest.more_one": { en: "And 1 more on the site", fr: "Et 1 autre sur le site" },
+  "digest.more_many": { en: "And {n} more on the site", fr: "Et {n} autres sur le site" },
+  "digest.pre_more_one": { en: "{first}, and 1 more.", fr: "{first}, et 1 autre." },
+  "digest.pre_more_many": { en: "{first}, and {n} more.", fr: "{first}, et {n} autres." },
+  "digest.why_daily": {
+    en: "You receive this each day for a saved search in your account.",
+    fr: "Vous recevez ce message chaque jour pour une recherche enregistrée dans votre compte.",
+  },
+  "digest.why_weekly": {
+    en: "You receive this each week for a saved search in your account.",
+    fr: "Vous recevez ce message chaque semaine pour une recherche enregistrée dans votre compte.",
+  },
+  "digest.searches_link": { en: "Saved searches", fr: "Recherches enregistrées" },
+  "digest.stop_link": { en: "Stop this delivery", fr: "Arrêter cet envoi" },
+  "digest.text_searches": { en: "Saved searches and delivery", fr: "Recherches enregistrées et envoi" },
+  "digest.text_link": { en: "{label}: {url}", fr: "{label} : {url}" },
 } as const satisfies Record<string, { en: string; fr: string }>;

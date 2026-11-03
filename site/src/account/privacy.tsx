@@ -7,6 +7,7 @@ import { t, type Lang } from "../i18n";
 export const AccountsPrivacy: FC<{ lang: Lang }> = ({ lang }) => (
   <>
     <p>{t(lang, "account.privacy_kept")}</p>
+    <p>{t(lang, "account.privacy_mail")}</p>
     <p>{t(lang, "account.privacy_secrets")}</p>
     <p>{t(lang, "account.privacy_not_kept")}</p>
     <p>{t(lang, "account.privacy_delete")}</p>

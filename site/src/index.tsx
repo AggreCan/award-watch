@@ -34,6 +34,7 @@ import { newTendersPage, tendersPage } from "./pages/tenders";
 import { watchlistPage } from "./pages/watchlist";
 import { llmsTxt, robotsTxt, sitemapFile } from "./seo";
 import { account } from "./account/routes";
+import { DELIVERY_CRON, runDeliveries } from "./account/deliveries";
 
 const app = new Hono<AppEnv>();
 
@@ -257,8 +258,12 @@ export { app };
 
 export default {
   fetch: app.fetch,
-  // The cron trigger from wrangler.jsonc: the daily check.
-  scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): void {
-    ctx.waitUntil(runWatchdog(env));
+  // The cron triggers from wrangler.jsonc: the hourly one from 15:00 to 20:00
+  // UTC delivers saved searches (src/account/deliveries.ts, which does
+  // nothing while the accounts switch is off); any other is the daily check,
+  // as every trigger was before deliveries existed.
+  scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): void {
+    if (event.cron === DELIVERY_CRON) ctx.waitUntil(runDeliveries(env).then(() => undefined));
+    else ctx.waitUntil(runWatchdog(env));
   },
 };
