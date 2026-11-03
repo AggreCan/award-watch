@@ -11,6 +11,7 @@ import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { EMAIL_MAX } from "../pages/interest";
 import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
+import type { BillingLine } from "./billing";
 import { allowed } from "./entitlements";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch, isDeliverable } from "./searches";
 import type { Account } from "./session";
@@ -139,14 +140,30 @@ export function planLabel(lang: Lang, account: Pick<Account, "plan" | "planUntil
   return account.planUntil ? t(lang, "account.plan_pro_until", { date: day(account.planUntil) }) : t(lang, "account.plan_pro_open");
 }
 
-export function overviewView(lang: Lang, account: Account, counts: { sessions: number; searches: number; cap: number; keys: number }) {
+// The plan as the overview and the billing page state it: a live Stripe
+// subscription names the end of the period paid (billing.tsx), not the end
+// of its grace; any other plan reads as planLabel.
+export function planLine(lang: Lang, account: Pick<Account, "plan" | "planUntil">, billing?: BillingLine | null): string {
+  if (billing?.stripe && account.plan === "pro") return t(lang, "billing.plan_stripe", { date: day(billing.periodEnd ?? account.planUntil) });
+  return planLabel(lang, account);
+}
+
+export function overviewView(
+  lang: Lang, account: Account, counts: { sessions: number; searches: number; cap: number; keys: number },
+  extra: { billing?: BillingLine | null; notice?: string | null } = {},
+) {
+  const stripe = extra.billing?.stripe && account.plan === "pro";
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.title")} lead={t(lang, "account.lead", { email: account.email })} />
+      <Notice message={extra.notice} />
       <Panel title={t(lang, "account.panel_account")}>
         <dl class="wide">
           <dt>{t(lang, "account.field_email")}</dt><dd>{account.email}</dd>
-          <dt>{t(lang, "account.field_plan")}</dt><dd>{planLabel(lang, account)}</dd>
+          <dt>{t(lang, "account.field_plan")}</dt>
+          <dd>{planLine(lang, account, extra.billing)}</dd>
+          <dt>{t(lang, "billing.field")}</dt>
+          <dd><a href="/account/billing">{t(lang, stripe ? "billing.manage" : "billing.link_plans")}</a></dd>
           <dt>{t(lang, "account.field_since")}</dt><dd class="mono">{day(account.createdAt)}</dd>
           <dt>{t(lang, "account.field_sessions")}</dt><dd>{fmtInt(counts.sessions, lang)}</dd>
         </dl>

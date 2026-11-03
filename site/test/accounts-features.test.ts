@@ -353,14 +353,16 @@ describe("entitlements", () => {
     expect(await (await get("/tenders", { cookie, env: onEnv({ ACCOUNTS: broken }) })).text()).not.toContain(email);
   });
 
-  it("take no payment: the source is the stub and /account/billing is a 404", async () => {
+  it("take no payment without Stripe's keys: the source is the stub and /account/billing says so (accounts-billing.test.ts has the rest)", async () => {
     const source = paymentSource(onEnv() as never);
     expect(source.kind).toBe("stub");
     expect(source.available()).toBe(false);
-    expect(await source.checkoutUrl({ userId: "u", plan: "pro", returnUrl: "/" })).toBeNull();
+    expect(await source.checkoutUrl({
+      userId: "u", email: "u@example.com", interval: "monthly", lang: "en", customerId: null, successUrl: "/", cancelUrl: "/",
+    })).toBeNull();
     expect(await source.readNotice(new Request("https://x.invalid/", { method: "POST", body: "{}" }))).toEqual({ ok: false });
     const cookie = await signIn(newEmail());
-    expect((await get("/account/billing", { cookie })).status).toBe(404);
+    expect(await (await get("/account/billing", { cookie })).text()).toContain("Paying for Pro is not available yet.");
     expect((await post("/account/billing", {}, { cookie })).status).toBe(404);
   });
 });

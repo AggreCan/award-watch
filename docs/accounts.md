@@ -329,7 +329,9 @@ email replaced by `deleted:` and SHA-256 of a random salt and the address,
 the salt thrown away. The row then proves nothing about which address it
 was, and the address can sign up again as a new account. The address's rows
 in the alerts form's table are deleted too. The entitlement rows stay, tied
-to the user id alone, as the record of what was granted.
+to the user id alone, as the record of what was granted. A Pro subscription
+that can still bill is cancelled at Stripe before any of this, and the
+account is kept if Stripe cannot confirm it (*Payments*).
 
 ## Phase 2: delivery
 
@@ -443,13 +445,200 @@ failed, with nothing new and not on a plan with delivery.
 
 ## Phase 3: payments and the metered API
 
-A payments source implements `PaymentSource` in
-`site/src/account/payments.ts`: an address to pay for a plan, an address to
-manage it, and a signed-notice reader that turns the service's notices into
-`entitlements` rows with source `stripe` (one per paid period, the reference
-the service's own id) and revokes rows on refunds or disputes.
-`/account/billing` answers 404 until then. The metered API mounts
+Payments are built: see *Payments* below. The metered API mounts
 `requireApiKey("api")` on new endpoints registered only while the switch is
 on, counts requests per key in a rate limiter keyed on the key's id, and
 records usage by key for the account page. The existing `/api` endpoints
 stay open without a key.
+
+## Payments
+
+Pro is sold as a subscription through Stripe, monthly or yearly, with
+Allwater Software Inc. as the merchant. The site never sees a card: the
+user pays on Stripe's Checkout page and manages the subscription on Stripe's
+customer portal, and Stripe tells the site what happened through a signed
+webhook. The code is `site/src/account/stripe.ts` (the Stripe calls and the
+signature), `site/src/account/billing.tsx` (the pages, the webhook and what
+each notice does to the entitlements) and `site/src/account/payments.ts`
+(the interface between them). There is no Stripe SDK: the Worker calls
+Stripe's API with `fetch`, a Bearer key, form-encoded bodies and a pinned
+API version (`STRIPE_VERSION`, `2026-10-28.endive`).
+
+### Routes
+
+| Route | Guards | What it does |
+|---|---|---|
+| `GET /account/billing` | session | The plan today. Without a subscription: what Pro includes, a monthly and a yearly button with the configured prices and "Taxes added at checkout". With one: its status, the end of the period paid and a button to Stripe's portal. Without the keys or the prices: "Paying for Pro is not available yet." |
+| `POST /account/billing/checkout` | session, CSRF, Origin | Creates a Checkout Session and redirects (303) to it. A user whose subscription can still bill goes back to the billing page instead. |
+| `POST /account/billing/portal` | session, CSRF, Origin | Creates a portal session for the stored customer and redirects (303) to it. |
+| `POST /account/billing/webhook` | Stripe's signature | Takes Stripe's notices. |
+
+All four are the site's 404 while the accounts switch is off. The overview
+(`/account`) shows "Pro, paid until <date>" when a live Stripe row decides
+the plan, the date being the end of the period paid, and links the billing
+page in either case.
+
+The Checkout Session is `mode=subscription` with the chosen price and
+quantity 1, `client_reference_id` and `subscription_data[metadata][user_id]`
+set to the user id, `automatic_tax[enabled]=true`, the user's address in
+`customer_email` (or, for a returning subscriber, the stored `customer` with
+`customer_update[address]=auto`), `success_url` `/account?billing=done`,
+`cancel_url` `/account/billing`, and `locale` `en` or `fr-CA` from the page
+language. The portal session names the stored customer, returns to
+`/account/billing` and opens in `en-CA` or `fr-CA`.
+
+The site's Content-Security-Policy keeps `form-action 'self'` on every page,
+except that the billing pages also allow `https://checkout.stripe.com` and
+`https://billing.stripe.com` while the switch is on and the keys are set: a
+browser applies `form-action` to the redirect after a form post, so without
+them the 303 to Stripe would be blocked. A custom Checkout domain in Stripe
+would need its host added there (`site/src/account/stripe.ts`); a session
+URL on any other host is refused with the "could not be reached" page.
+
+### What each notice does
+
+Every change goes through the `entitlements` table, source `stripe`, the
+reference being the subscription id; `planFor` then brings the cached plan
+on `users` up to date. `payment_customers` (one row per user: Stripe's
+customer id, the latest subscription id, its status and the end of the
+period paid) records only which subscription belongs to whom. Each change
+writes an audit row, event `plan_changed`, with a fixed detail ("stripe
+checkout, granted", "stripe renewed, extended", "stripe ended, canceled",
+"stripe status past_due"); no amount and no address.
+
+| Event | Effect |
+|---|---|
+| `checkout.session.completed` | Binds the customer and subscription to the user named by `client_reference_id`, reads the subscription from Stripe for its status and period end, and, when the session is paid and the subscription active, writes a Pro row from now to the period end plus 3 days of grace. A session still unpaid (a bank debit clearing) grants nothing; its `invoice.paid` grants. An account deleted while Stripe's page was open has the new subscription cancelled at once. |
+| `invoice.paid` | Extends the subscription's live row to the paid period's end plus 3 days (never shortening it), or writes a row when none is live (a first period whose checkout notice has not arrived, a renewal paid after a lapse). Nothing for a subscription already canceled or expired. |
+| `customer.subscription.updated` | Records the status and the period end. `canceled`, `unpaid` or `incomplete_expired` sets the live row's end to now. `past_due` changes nothing: Pro runs to the end of the grace while Stripe retries the card. |
+| `customer.subscription.deleted` | Sets the live row's end to now. |
+| any other type | Recorded and answered 200; nothing changes. |
+
+The user is found by the subscription or customer already bound, and
+otherwise by the `user_id` in the subscription's metadata, so notices may
+arrive in any order (Stripe does not keep one). A notice for no known
+account changes nothing and is logged without detail.
+
+Every notice is checked before anything in it is read: the `Stripe-Signature`
+header's `t` and each `v1` (HMAC-SHA256 under the endpoint's signing secret,
+over `t`, a full stop and the raw body), compared in constant time, with `t`
+within 5 minutes of the Worker's clock. An unverified post answers 400 and
+writes nothing. A verified notice is claimed in `payment_events` by its
+event id before it is applied, so a notice delivered twice (Stripe retries
+until it gets a 2xx) answers 200 the second time and changes nothing.
+`payment_events` rows go after 90 days.
+
+### Fail open, fail closed
+
+- **Outages fail open.** A notice the database cannot take, or one whose
+  subscription cannot be read from Stripe, answers 5xx with its claim
+  released, and Stripe sends it again for up to three days. The 3 days of
+  grace past each paid period cover a renewal whose notice arrives late. A
+  session already verified keeps its last known plan through a database
+  outage (`planFor`, unchanged). The overview shows the plan without the
+  billing line if the payment tables cannot be read.
+- **Ends fail closed.** `canceled`, `unpaid`, `incomplete_expired` and every
+  deletion end Pro on that notice, and a late `invoice.paid` for a
+  subscription already ended grants nothing. A refund or a dispute is not
+  read from Stripe: when one should end Pro, cancel the subscription in
+  Stripe (its deletion notice ends the row) or revoke the row by hand
+  (*Granting a plan by hand*).
+- **Deleting an account cancels its subscription first.** `POST
+  /account/delete` cancels a subscription that can still bill (immediately,
+  no refund) before anything is deleted; if Stripe cannot confirm it, the
+  account is kept and the page says to try again, so a deleted account is
+  never charged again.
+
+### What is kept
+
+`payment_customers` holds Stripe's ids, the subscription's status and the
+end of the period paid; `payment_events` holds Stripe's event ids and types.
+No card details, billing address, tax number or amount is kept on the site;
+Stripe holds those as the payment processor. The rows stay when an account
+is deleted, tied to the id alone like the entitlement rows.
+
+### Operator steps
+
+1. **A Stripe account in the merchant's name.** Allwater Software Inc., a
+   British Columbia corporation: business details, the payout bank account,
+   a statement descriptor that names Award Watch, and contact@awardwatch.ca
+   as the support address shown on receipts. In Settings, Customer emails,
+   turn on receipts for successful payments; in the Billing settings, turn
+   on Stripe's emails for failed payments and expiring cards, with a link
+   to the portal. The site sends no billing mail of its own.
+2. **The product and its two prices.** One product, Award Watch Pro, with
+   a software-as-a-service tax code, and two recurring prices in CAD:
+   CA$19 monthly and CA$190 yearly, each with tax behaviour "exclusive"
+   (taxes added at checkout). Note the two price ids (`price_...`).
+3. **Stripe Tax.** Turn it on, set the origin address, and add a
+   registration for each place Allwater is registered to collect (GST/HST,
+   and the provincial taxes it registers for). Stripe Tax collects nothing
+   where no registration exists; whether and where to register is the
+   merchant's decision with its accountant.
+4. **The customer portal** (Settings, Billing, Customer portal): allow
+   updating the payment method, viewing invoice history, switching between
+   the two prices of the one product, and cancelling at the end of the
+   billing period (not immediately). Add the site's Terms and Privacy
+   addresses.
+5. **The webhook endpoint** (Workbench, Webhooks, Create an event
+   destination): your account, payload **Snapshot**, API version
+   `2026-10-28.endive`, the events `checkout.session.completed`,
+   `invoice.paid`, `customer.subscription.updated` and
+   `customer.subscription.deleted`, endpoint URL
+   `https://awardwatch.ca/account/billing/webhook`. Reveal the signing secret
+   (`whsec_...`).
+6. **The two secrets**, from `site/`:
+
+   ```
+   npx wrangler secret put STRIPE_SECRET_KEY
+   npx wrangler secret put STRIPE_WEBHOOK_SECRET
+   ```
+
+   A restricted key (`rk_live_...`) with write access to Checkout Sessions,
+   the customer portal and Subscriptions is enough, and holds less than the
+   account's full secret key.
+7. **The four variables** in `site/wrangler.jsonc`: `STRIPE_PRICE_MONTHLY`
+   and `STRIPE_PRICE_YEARLY` (the price ids), `PRICE_MONTHLY_CAD` `"19"` and
+   `PRICE_YEARLY_CAD` `"190"` (shown on the billing page as CA$19 and
+   CA$190). A figure is digits with optional cents (`"19.00"`); anything
+   else, or any of the four left empty, keeps the page at "not available
+   yet". The figures must match the Stripe prices; nothing checks that for
+   you.
+8. **Apply the schema** again (the payment tables are at the end of
+   `accounts_schema.sql`; every statement is idempotent):
+
+   ```
+   npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+   ```
+
+9. **A test in Stripe's test mode, locally.** Never put test keys on the
+   deployed site: with the switch on, anyone could take Pro with a test
+   card. In `site/.dev.vars` (git-ignored) set `STRIPE_SECRET_KEY` to the
+   sandbox's `sk_test_...` key, and the four variables to the sandbox's
+   price ids and the figures. Run `stripe listen --forward-to
+   localhost:8787/account/billing/webhook` with the Stripe CLI and put the
+   `whsec_...` it prints in `.dev.vars` as `STRIPE_WEBHOOK_SECRET`. Start
+   the site as in the local run above, sign in, open `/account/billing`,
+   subscribe with the card 4242 4242 4242 4242, and check: the overview
+   says "Pro, paid until" a month ahead; an `entitlements` row with source
+   `stripe` exists; the portal opens and a cancellation there leaves Pro to
+   the period end; cancelling the subscription in the dashboard ends Pro at
+   once; deleting the account cancels its subscription.
+10. **Before live payments:** the paid-tier Terms (`docs/terms-paid-draft.md`
+    after review), About, Terms and Privacy naming Allwater Software Inc. as
+    publisher and merchant, and the Privacy page saying that payments are
+    processed by Stripe; then the live keys, then the switch.
+
+Removing either secret turns payments off at once: the billing page says
+Pro is not available yet and the webhook refuses every notice (Stripe keeps
+retrying for three days). Entitlement rows already written keep running to
+their end.
+
+### Known limits
+
+- Two checkouts started in two tabs before either finishes make two
+  subscriptions. The second is bound only if the first has ended; the audit
+  records "stripe second subscription". Refund and cancel the extra one in
+  the dashboard.
+- Prices change in Stripe (a new price, then the variables); existing
+  subscriptions keep their price until moved in the dashboard.

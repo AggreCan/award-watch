@@ -35,6 +35,7 @@ import { watchlistPage } from "./pages/watchlist";
 import { llmsTxt, robotsTxt, sitemapFile } from "./seo";
 import { account } from "./account/routes";
 import { DELIVERY_CRON, runDeliveries } from "./account/deliveries";
+import { billingFormAction } from "./account/stripe";
 
 const app = new Hono<AppEnv>();
 
@@ -57,7 +58,10 @@ app.use(
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
-      formAction: ["'self'"],
+      // 'self' on every page; the billing pages add Stripe's checkout and
+      // portal hosts while payments are set up, since a browser applies
+      // form-action to the redirect after a form post (account/stripe.ts).
+      formAction: [billingFormAction],
       baseUri: ["'self'"],
     },
     referrerPolicy: "strict-origin-when-cross-origin",

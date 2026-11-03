@@ -16,13 +16,17 @@
 //   POST /account/keys                 create one, shown once                         (session, CSRF, plan)
 //   POST /account/keys/:id/revoke      revoke one                                     (session, CSRF)
 //   GET  /account/delete               what deleting removes                          (session)
-//   POST /account/delete               delete                                         (session, CSRF)
+//   POST /account/delete               delete, after cancelling a subscription        (session, CSRF)
 //   GET  /account/stop?s=&t=           a delivery's stop page, from its message       (the link's secret)
 //   POST /account/stop?s=&t=           turn that delivery off; also RFC 8058 one-click (the link's secret)
-//   *    /account/billing              404 until a payments source exists (payments.ts)
+//   GET  /account/billing              the plan, the prices or the subscription       (session)
+//   POST /account/billing/checkout     to the payment service's checkout              (session, CSRF)
+//   POST /account/billing/portal       to the payment service's portal                (session, CSRF)
+//   POST /account/billing/webhook      the payment service's notices                  (signature only)
 //
-// Every POST but the stop link's is refused with a 403 when its Origin names
-// another site (or "null"); a client that sends no Origin is let through, as
+// Every POST but the stop link's and the webhook's (which Stripe sends,
+// signed; billing.tsx) is refused with a 403 when its Origin names another
+// site (or "null"); a client that sends no Origin is let through, as
 // interest.tsx does, since a browser always sends one with a form post. The
 // two sign-in posts are capped per address by AUTH_LIMIT (limits.ts); the
 // codes per address are capped in the database (signin.ts). Every response is
@@ -39,6 +43,7 @@ import { EMAIL_MAX, interestFilter, kindOfPath, normalizeEmail } from "../pages/
 import { deviceClass } from "../views";
 import { KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
 import { audit } from "./audit";
+import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, startCheckout } from "./billing";
 import { allowed } from "./entitlements";
 import {
   accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView, signInView, stopView, stoppedView,
@@ -253,6 +258,10 @@ account.get("/", async (c) => {
     ).bind(who.userId, new Date().toISOString()).first<{ sessions: number; searches: number; keys: number }>();
     return accountPage(c, t(lang, "account.title"), overviewView(lang, who, {
       sessions: counts?.sessions ?? 0, searches: counts?.searches ?? 0, cap: capFor(who), keys: counts?.keys ?? 0,
+    }, {
+      billing: await billingLine(c.env, who.userId),
+      // Stripe's checkout returns here; the plan changes when its notice lands, often a moment later.
+      notice: c.req.query("billing") === "done" ? t(lang, "billing.msg_done") : null,
     }));
   });
 });
@@ -509,6 +518,10 @@ account.post("/delete", async (c) => {
   const lang = c.get("lang");
   if (fields.confirm !== "yes") return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["account.err_confirm"]), 400);
   return guarded(c, async () => {
+    // A deleted account must not be charged again: its subscription is cancelled first, or nothing is deleted.
+    if (!(await endForDeletion(c.env, who.userId))) {
+      return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["billing.err_delete"]), 503);
+    }
     await deleteAccount(c, who);
     await revokeAllSessions(c.env, who.userId);
     clearSessionCookie(c);
@@ -517,5 +530,25 @@ account.post("/delete", async (c) => {
   });
 });
 
-// Payments are phase 3 (payments.ts); until a source exists this is the site's 404.
-account.all("/billing", (c) => c.notFound());
+// -- billing (billing.tsx) ------------------------------------------------------------------
+
+account.get("/billing", async (c) => {
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => billingPage(c, who));
+});
+
+account.post("/billing/checkout", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => startCheckout(c, post.account, post.fields, siteBase(c)));
+});
+
+account.post("/billing/portal", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => openPortal(c, post.account, siteBase(c)));
+});
+
+// Stripe posts here: no session, no Origin, no form; the signature decides.
+account.post("/billing/webhook", (c) => billingWebhook(c));

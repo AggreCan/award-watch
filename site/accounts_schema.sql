@@ -156,3 +156,31 @@ CREATE TABLE IF NOT EXISTS audit (
   detail TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit(at);
+
+-- Payments (src/account/billing.tsx, stripe.ts; docs/accounts.md, Payments):
+-- the Stripe customer and subscription behind an account, one row per user,
+-- written only by the webhook. status is Stripe's subscription status as
+-- last reported (active, past_due, canceled and so on); current_period_end
+-- is the end of the period paid for. The plan is still decided by the
+-- entitlements rows; this row tells the billing page what to offer and the
+-- webhook which user a notice is about. No card, no address, no amount.
+CREATE TABLE IF NOT EXISTS payment_customers (
+  user_id TEXT PRIMARY KEY REFERENCES users(id),
+  customer_id TEXT NOT NULL,                     -- Stripe's cus_ id
+  subscription_id TEXT,                          -- Stripe's sub_ id, the latest one bound
+  status TEXT,
+  current_period_end TEXT,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_customers_subscription ON payment_customers(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_payment_customers_customer ON payment_customers(customer_id);
+
+-- Every Stripe notice the webhook has taken, by Stripe's event id, so a
+-- notice sent twice (Stripe retries until it gets a 2xx) changes nothing the
+-- second time. Unknown types are recorded too. Rows go after 90 days.
+CREATE TABLE IF NOT EXISTS payment_events (
+  id TEXT PRIMARY KEY,                           -- Stripe's evt_ id
+  type TEXT NOT NULL,
+  received_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_events_received ON payment_events(received_at);

@@ -382,4 +382,82 @@ export const ACCOUNT_STRINGS = {
   "digest.stop_link": { en: "Stop this delivery", fr: "Arrêter cet envoi" },
   "digest.text_searches": { en: "Saved searches and delivery", fr: "Recherches enregistrées et envoi" },
   "digest.text_link": { en: "{label}: {url}", fr: "{label} : {url}" },
+  // -- billing (src/account/billing.tsx) ----------------------------------------------
+  // The prices are never written here: {price} is the operator's figure from
+  // wrangler.jsonc (PRICE_MONTHLY_CAD, PRICE_YEARLY_CAD).
+  "billing.title": { en: "Plan and Billing", fr: "Forfait et facturation" },
+  "billing.lead": { en: "Your plan today: {plan}.", fr: "Votre forfait actuel : {plan}." },
+  "billing.unavailable": {
+    en: "Paying for Pro is not available yet. Every page of the site stays free to read, with or without an account.",
+    fr: "Le paiement du forfait Pro n'est pas encore offert. Toutes les pages du site restent gratuites, avec ou sans compte.",
+  },
+  "billing.panel_pro": { en: "What Pro Includes", fr: "Ce que comprend Pro" },
+  "billing.pro_searches": {
+    en: "Up to {n} saved searches; the Free plan keeps {free}.",
+    fr: "Jusqu'à {n} recherches enregistrées; le forfait Gratuit en conserve {free}.",
+  },
+  "billing.pro_delivery": {
+    en: "Saved searches sent by email, daily or weekly.",
+    fr: "L'envoi des recherches enregistrées par courriel, chaque jour ou chaque semaine.",
+  },
+  "billing.pro_intraday": {
+    en: "Same-day tender notices on the tender lists, refreshed every two hours through the business day.",
+    fr: "Les avis d'appel d'offres du jour dans les listes d'appels d'offres, actualisés toutes les deux heures pendant la journée de travail.",
+  },
+  "billing.panel_subscribe": { en: "Subscribe to Pro", fr: "S'abonner à Pro" },
+  "billing.monthly": { en: "Monthly, CA${price} a month", fr: "Mensuel, {price} $ CA par mois" },
+  "billing.yearly": { en: "Yearly, CA${price} a year", fr: "Annuel, {price} $ CA par année" },
+  "billing.taxes": {
+    en: "Prices in Canadian dollars. Taxes added at checkout.",
+    fr: "Prix en dollars canadiens. Taxes ajoutées au paiement.",
+  },
+  "billing.processor": {
+    en: "Payment is taken on Stripe's page. Card details go to Stripe and never reach this site. The merchant is Allwater Software Inc., which publishes Award Watch; its name is the one on the card statement.",
+    fr: "Le paiement se fait sur la page de Stripe. Les données de carte vont à Stripe et n'atteignent jamais ce site. Le marchand est Allwater Software Inc., qui publie Award Watch; son nom figure sur le relevé de carte.",
+  },
+  "billing.renewal": {
+    en: "The subscription renews at the end of each period until it is cancelled. A cancellation takes effect at the end of the period already paid, which is not refunded.",
+    fr: "L'abonnement se renouvelle à la fin de chaque période jusqu'à son annulation. Une annulation prend effet à la fin de la période déjà payée, qui n'est pas remboursée.",
+  },
+  "billing.terms": { en: "Subscribing accepts the {terms}.", fr: "S'abonner vaut acceptation des {terms}." },
+  "billing.panel_subscription": { en: "Your Subscription", fr: "Votre abonnement" },
+  "billing.field_status": { en: "Status", fr: "État" },
+  "billing.field_period": { en: "Current period ends", fr: "Fin de la période en cours" },
+  "billing.status_active": { en: "Active", fr: "Actif" },
+  "billing.status_trialing": { en: "Trial", fr: "Essai" },
+  "billing.status_past_due": { en: "Renewal payment overdue", fr: "Paiement de renouvellement en retard" },
+  "billing.status_unpaid": { en: "Unpaid", fr: "Impayé" },
+  "billing.status_incomplete": { en: "Waiting for the first payment", fr: "En attente du premier paiement" },
+  "billing.status_paused": { en: "Paused", fr: "En pause" },
+  "billing.status_other": { en: "Being confirmed", fr: "En cours de confirmation" },
+  "billing.past_due_note": {
+    en: "The last renewal payment did not go through. Update the card on Stripe's page to keep Pro.",
+    fr: "Le dernier paiement de renouvellement n'est pas passé. Mettez la carte à jour sur la page de Stripe pour conserver Pro.",
+  },
+  "billing.manage_text": {
+    en: "Stripe's page switches between monthly and yearly, updates the card, lists the receipts and cancels the subscription.",
+    fr: "La page de Stripe permet de passer du mensuel à l'annuel, de mettre la carte à jour, de consulter les reçus et d'annuler l'abonnement.",
+  },
+  "billing.manage": { en: "Manage the subscription", fr: "Gérer l'abonnement" },
+  "billing.panel_receipts": { en: "Earlier Receipts", fr: "Reçus antérieurs" },
+  "billing.receipts_text": {
+    en: "The receipts of an earlier subscription are on Stripe's page.",
+    fr: "Les reçus d'un abonnement antérieur se trouvent sur la page de Stripe.",
+  },
+  "billing.receipts": { en: "See the receipts", fr: "Voir les reçus" },
+  "billing.err_service": {
+    en: "The payment service could not be reached. Nothing was charged. Try again in a few minutes.",
+    fr: "Le service de paiement est injoignable. Rien n'a été facturé. Réessayez dans quelques minutes.",
+  },
+  "billing.err_delete": {
+    en: "The Pro subscription could not be cancelled, so the account was not deleted. Try again in a few minutes.",
+    fr: "L'abonnement Pro n'a pas pu être annulé, donc le compte n'a pas été supprimé. Réessayez dans quelques minutes.",
+  },
+  "billing.msg_done": {
+    en: "Thank you. Pro starts once Stripe confirms the payment, usually within a minute. Reload this page to see it.",
+    fr: "Merci. Pro commence dès que Stripe confirme le paiement, en général en moins d'une minute. Rechargez cette page pour le voir.",
+  },
+  "billing.field": { en: "Billing", fr: "Facturation" },
+  "billing.link_plans": { en: "Plans and prices", fr: "Forfaits et prix" },
+  "billing.plan_stripe": { en: "Pro, paid until {date}", fr: "Pro, payé jusqu'au {date}" },
 } as const satisfies Record<string, { en: string; fr: string }>;

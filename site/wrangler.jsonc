@@ -112,13 +112,22 @@
   // out). ACCOUNTS_ENABLED is the accounts switch: "false" keeps every
   // /account route a 404 and every public page as it was (docs/accounts.md).
   // MAIL_FROM is the sender of the accounts' messages (sign-in codes and
-  // saved-search deliveries) on the zone, sent through the MAIL binding.
+  // saved-search deliveries) on the zone, sent through the MAIL binding. The four payment variables (src/account/stripe.ts) stay
+  // empty until the operator's Stripe account exists: the Stripe price ids
+  // for Pro monthly and yearly, and the figures the billing page prints
+  // beside them in Canadian dollars (digits, cents optional). Empty, the billing page
+  // says Pro is not available yet. The two Stripe secrets are set with
+  // `wrangler secret put`, never here (docs/accounts.md, Payments).
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
     "SITE_URL": "https://awardwatch.ca",
     "ACCOUNTS_ENABLED": "false",
-    "MAIL_FROM": "alerts@awardwatch.ca"
+    "MAIL_FROM": "alerts@awardwatch.ca",
+    "STRIPE_PRICE_MONTHLY": "",
+    "STRIPE_PRICE_YEARLY": "",
+    "PRICE_MONTHLY_CAD": "",
+    "PRICE_YEARLY_CAD": ""
   },
   "observability": {
     "enabled": true

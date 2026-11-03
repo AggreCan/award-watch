@@ -58,6 +58,22 @@ export interface Env {
   MAIL_FROM?: string;
   // Sign-in and code posts per address (wrangler.jsonc "ratelimits").
   AUTH_LIMIT?: RateLimit;
+
+  // -- payments (src/account/stripe.ts and billing.tsx; docs/accounts.md) -----
+  // Stripe's secret API key and the webhook endpoint's signing secret, set
+  // with `wrangler secret put`. Both set: payments go through Stripe. Either
+  // missing: the stub source, and the billing page says Pro is not available
+  // yet.
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  // The two Stripe price ids for Pro (variables in wrangler.jsonc).
+  STRIPE_PRICE_MONTHLY?: string;
+  STRIPE_PRICE_YEARLY?: string;
+  // The figures the billing page shows beside them, in Canadian dollars, as
+  // text (digits, cents optional); the code holds no price. A checkout is offered
+  // only while both price ids and both figures are set.
+  PRICE_MONTHLY_CAD?: string;
+  PRICE_YEARLY_CAD?: string;
 }
 
 export type AppEnv = {
