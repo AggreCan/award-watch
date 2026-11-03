@@ -68,7 +68,9 @@
   --chart-bar: #334155;
   --chart-bar-light: #cbd5e1;
   --topbar: 56px;
-  --rail: 240px;
+  /* Wide enough for the longest label and its count on one line in both
+     languages (measured: 256 px is the floor at 1440; 264 leaves margin). */
+  --rail: 264px;
   --gutter: 24px;
   /* A document's measure: every block in it runs this wide. */
   --measure: 880px;
