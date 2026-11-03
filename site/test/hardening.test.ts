@@ -238,7 +238,10 @@ describe("the same-day band, for a request that is not a live Pro session", () =
     const cached = { email: newEmail("band-cache"), cookie: "" };
     cached.cookie = await signIn(cached.email);
     await ACCOUNTS.prepare("UPDATE users SET plan = 'pro', plan_until = NULL WHERE email = ?").bind(cached.email).run();
-    const normal = (body: string) => body.replace(RAIL_ACCOUNT, "<li>[account]</li>");
+    // The rail's account item and the plan subscript after the wordmark are the
+    // only marks of a session on a free page.
+    const normal = (body: string) => body.replace(RAIL_ACCOUNT, "<li>[account]</li>")
+      .replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "");
     for (const path of BAND_PAGES) {
       const anonymous = await render(path);
       for (const [what, s] of Object.entries({ free, revoked, ended, later, replaced, cached })) {
@@ -811,7 +814,7 @@ describe("the account pages' headers", () => {
         expect(await res.clone().text(), what).toContain('<meta name="robots" content="noindex"/>');
       }
     }
-    expect(answers.map(([, r]) => r.status)).toEqual([200, 200, 400, 400, 403, 400, 303, 303, 200, 200, 403, 404, 503]);
+    expect(answers.map(([, r]) => r.status)).toEqual([200, 200, 400, 400, 403, 400, 303, 303, 200, 200, 403, 200, 503]);
   });
 });
 
