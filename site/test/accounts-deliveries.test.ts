@@ -732,11 +732,11 @@ describe("the searches page", () => {
 });
 
 describe("the privacy page", () => {
-  it("says the address goes to Cloudflare's email service for the site's messages alone, while the switch is on", async () => {
+  it("says the address goes to Cloudflare's email service for the site's messages, and otherwise only to the checkout, while the switch is on", async () => {
     const on = decode(await (await get("/privacy")).text());
-    expect(on).toContain("The email address is handed to Cloudflare's email service to deliver the site's messages: the sign-in code, and the saved searches whose delivery is on. It is used for nothing else.");
+    expect(on).toContain("The email address is handed to Cloudflare's email service to deliver the site's messages: the sign-in code, and the saved searches whose delivery is on. Apart from the checkout described under Payments, it is used for nothing else.");
     const fr = nbsp(decode(await (await get("/privacy?lang=fr")).text()));
-    expect(fr).toContain("L’adresse courriel est transmise au service de courriel de Cloudflare pour livrer les messages du site : le code de connexion et les recherches enregistrées dont l’envoi est activé. Elle ne sert à rien d’autre.");
+    expect(fr).toContain("L’adresse courriel est transmise au service de courriel de Cloudflare pour livrer les messages du site : le code de connexion et les recherches enregistrées dont l’envoi est activé. Hormis le paiement décrit à la section Paiements, elle ne sert à rien d’autre.");
     const off = decode(await (await get("/privacy", { env: offEnv() })).text());
     expect(off).not.toContain("Cloudflare's email service");
   });

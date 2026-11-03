@@ -143,7 +143,7 @@
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
     "SITE_URL": "https://awardwatch.ca",
-    "ACCOUNTS_ENABLED": "false",
+    "ACCOUNTS_ENABLED": "true",
     "MAIL_FROM": "alerts@awardwatch.ca",
     "STRIPE_PRICE_MONTHLY": "price_1UXYvRIP2lpoGRa5a16fcVV9",
     "STRIPE_PRICE_YEARLY": "price_1UXYvRIP2lpoGRa5COYxUqDM",

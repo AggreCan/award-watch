@@ -1,6 +1,6 @@
 // /about, /terms and /privacy: three short documents on the same layout as
-// the Methodology page. The publisher is named as the project only ("Award
-// Watch, an independent Canadian project"); no person or company appears.
+// the Methodology page. The publisher is named as the company that sells Pro,
+// Allwater Software Inc.; no person appears.
 // The request limits /terms quotes are wrangler.jsonc's (a test holds the
 // two together), and /privacy states what views.ts, forms.tsx and
 // interest.tsx keep, in the words of their own comments.
@@ -12,7 +12,7 @@ import type { AppEnv } from "../env";
 import { t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { OGL_URL, pageSeo, type PageKey } from "../seo";
-import { AccountsPrivacy } from "../account/privacy";
+import { AccountsPrivacy, PaymentsPrivacy } from "../account/privacy";
 import { accountsEnabled } from "../account/switch";
 
 export const CONTACT_EMAIL = "contact@awardwatch.ca";
@@ -27,7 +27,8 @@ const Mail: FC = () => <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>;
 const link = (href: string, text: string) => <a href={href}>{text}</a>;
 
 // toc: the contents box, left out of a page shorter than about two screens
-// (all three are, at 1440 px: 1,289 to 1,883 px tall).
+// (About and Privacy are, at 1440 px: 1,289 to 1,883 px tall). Terms has
+// one since the paid plan's section nearly quadrupled its text.
 async function doc(
   c: Context<AppEnv>, key: PageKey, title: Key, lead: Key, sections: (lang: Lang) => Section[], toc = false,
 ): Promise<Response> {
@@ -94,6 +95,19 @@ export function aboutPage(c: Context<AppEnv>): Promise<Response> {
   ]);
 }
 
+// The paid plan's parts after "Who Sells It", each a heading and a paragraph
+// with no link in it.
+const PRO_TERMS: [Key, Key][] = [
+  ["terms.pro_includes_title", "terms.pro_includes"],
+  ["terms.pro_prices_title", "terms.pro_prices"],
+  ["terms.pro_renewal_title", "terms.pro_renewal"],
+  ["terms.pro_cancel_title", "terms.pro_cancel"],
+  ["terms.pro_failed_title", "terms.pro_failed"],
+  ["terms.pro_abuse_title", "terms.pro_abuse"],
+  ["terms.pro_law_title", "terms.pro_law"],
+  ["terms.pro_changes_title", "terms.pro_changes"],
+];
+
 export function termsPage(c: Context<AppEnv>): Promise<Response> {
   return doc(c, "terms", "terms.title", "terms.lead", (lang) => [
     { id: "use", title: "terms.toc_use", body: <p>{t(lang, "terms.use")}</p> },
@@ -126,16 +140,35 @@ export function termsPage(c: Context<AppEnv>): Promise<Response> {
       ),
     },
     { id: "code", title: "terms.toc_code", body: <p>{tj(lang, "terms.code", { about: link("/about#licences", t(lang, "footer.about")) })}</p> },
-  ]);
+    {
+      // The billing page is named in words only: with the switch off no
+      // public page may link to /account (test/accounts-switch.test.ts).
+      id: "pro", title: "terms.toc_pro", body: (
+        <>
+          <p>{tj(lang, "terms.pro_intro", { warranty: link("#warranty", t(lang, "terms.toc_warranty")) })}</p>
+          <h3>{t(lang, "terms.pro_seller_title")}</h3>
+          <p>{tj(lang, "terms.pro_seller", { email: <Mail /> })}</p>
+          {PRO_TERMS.map(([title, body]) => (
+            <>
+              <h3>{t(lang, title)}</h3>
+              <p>{t(lang, body)}</p>
+            </>
+          ))}
+        </>
+      ),
+    },
+  ], true);
 }
 
 export function privacyPage(c: Context<AppEnv>): Promise<Response> {
-  // While accounts are open (src/account/switch.ts) the first section says what an account keeps.
+  // While accounts are open (src/account/switch.ts) the first section says what an account keeps,
+  // and the second what paying for Pro gives Stripe and leaves on the site.
   const accounts = accountsEnabled(c.env);
   return doc(c, "privacy", "privacy.title", "privacy.lead", (lang) => [
     accounts
       ? { id: "accounts", title: "account.privacy_toc", body: <AccountsPrivacy lang={lang} /> }
       : { id: "accounts", title: "privacy.toc_accounts", body: <p>{t(lang, "privacy.accounts")}</p> },
+    ...(accounts ? [{ id: "payments", title: "billing.privacy_toc", body: <PaymentsPrivacy lang={lang} /> } satisfies Section] : []),
     { id: "browser", title: "privacy.toc_browser", body: <p>{t(lang, "privacy.cookie")}</p> },
     {
       id: "counting", title: "privacy.toc_counting", body: (

@@ -276,22 +276,69 @@ describe("the about, terms and privacy pages", () => {
     ["/privacy", "<h1>Privacy</h1>", "<h1>Confidentialité</h1>"],
   ];
 
-  it("answer in both languages and name the publisher as the project only", async () => {
+  it("answer in both languages and name the publisher, the company that sells Pro", async () => {
     for (const [path, en, fr] of PAGES) {
       const english = await get(path);
       expect(english.status, path).toBe(200);
       const html = await english.text();
       expect(html, path).toContain(en);
-      expect(html, path).toContain("Published by Award Watch, an independent Canadian project.");
-      // Each is shorter than about two screens: no contents box.
-      expect(html, path).toContain('<div class="doc-layout doc-alone"><div class="doc">');
-      expect(html, path).not.toContain('<nav class="toc"');
+      expect(html, path).toContain("Published by Allwater Software Inc., a British Columbia corporation.");
+      if (path === "/terms") {
+        // The paid plan made Terms longer than about two screens: a contents box.
+        expect(html, path).toContain('<div class="doc-layout"><nav class="toc"');
+        expect(html, path).toContain('<a href="#pro">Paid Plan (Pro)</a>');
+      } else {
+        // About and Privacy are shorter than about two screens: no contents box.
+        expect(html, path).toContain('<div class="doc-layout doc-alone"><div class="doc">');
+        expect(html, path).not.toContain('<nav class="toc"');
+      }
       const french = await get(`${path}?lang=fr`);
       expect(french.status, path).toBe(200);
       const page = nbsp(await french.text());
       expect(page, path).toContain(fr);
-      expect(page, path).toContain("Publié par Award Watch, un projet canadien indépendant.");
+      expect(page, path).toContain("Publié par Allwater Software Inc., une société de la Colombie-Britannique.");
     }
+  });
+
+  it("name Allwater Software Inc. on all three in both languages, Link as the merchant of record on Terms, and carry no em-dash", async () => {
+    const EM_DASH = String.fromCharCode(0x2014);
+    for (const [path] of PAGES) {
+      for (const lang of ["en", "fr"]) {
+        const html = nbsp(await text(`${path}?lang=${lang}`));
+        expect(html, `${path} ${lang}`).toContain("Allwater Software Inc.");
+        expect(html, `${path} ${lang}`).not.toContain(EM_DASH);
+      }
+    }
+    const about = await text("/about");
+    expect(about).toContain("Award Watch is published by Allwater Software Inc., a British Columbia corporation. It is not affiliated with any government body, supplier or buyer.");
+    expect(nbsp(await text("/about?lang=fr"))).toContain("Award Watch est publié par Allwater Software Inc., une société de la Colombie-Britannique.");
+
+    const terms = (await text("/terms")).replace(/&#39;/g, "'");
+    const pro = terms.slice(terms.indexOf('<h2 id="pro">'), terms.indexOf("</main>"));
+    expect(pro).toContain("<h2 id=\"pro\">Paid Plan (Pro)</h2>");
+    expect(pro).toContain("Link, the merchant of record operated by Stripe");
+    expect(pro).toContain("reads LINK.COM followed by Allwater's name");
+    expect(pro).toContain("The site never receives card details.");
+    expect(pro).toContain('Questions about a charge go to <a href="mailto:contact@awardwatch.ca">contact@awardwatch.ca</a> or to Link');
+    expect(pro).toContain('The <a href="#warranty">No Warranty</a> terms above, liability included, apply to Pro');
+    expect(pro).toContain("The prices are shown on the site, on the account's billing page, in Canadian dollars.");
+    expect(pro).toContain("at least 30 days after notice by email to the account's address");
+    expect(pro).toContain("The current period is not refunded, in whole or in part, except where the law requires a refund.");
+    expect(pro).toContain("If Allwater ends Pro for any other reason, it refunds the unused part of the current period.");
+    expect(pro).toContain("Deleting the account cancels the subscription at once, without refund.");
+    // The prices live on the billing page: the only figure in the section is the notice period.
+    expect(pro).not.toContain("$");
+    expect([...pro.replace(/<[^>]+>/g, "").matchAll(/\d+/g)].map((m) => m[0])).toEqual(["30", "30"]);
+    // The billing page is named, never linked: no public page links to /account while the switch is off.
+    expect(pro).not.toContain("/account");
+    // The sections that were there stay, the paid plan last.
+    expect([...terms.matchAll(/<h2 id="(\w+)">/g)].map((m) => m[1])).toEqual(["use", "files", "authority", "warranty", "changes", "automated", "code", "pro"]);
+
+    const termsFr = nbsp(await text("/terms?lang=fr"));
+    expect(termsFr).toContain("<h2 id=\"pro\">Forfait payant (Pro)</h2>");
+    expect(termsFr).toContain("Link, le marchand officiel exploité par Stripe");
+    expect(termsFr).toContain("La suppression du compte annule l’abonnement immédiatement, sans remboursement.");
+    expect(termsFr).toContain('<a href="#warranty">Aucune garantie</a>');
   });
 
   it("say what the about page promises: the contact, the turnaround and the licences", async () => {

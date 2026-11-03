@@ -4,7 +4,7 @@
 // records every request and answers from a table; the webhook's notices are
 // signed here with WebCrypto, independently of the code under test.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GRACE_DAYS } from "../src/account/billing";
+import { EVENT_DAYS, GRACE_DAYS } from "../src/account/billing";
 import { planFor } from "../src/account/entitlements";
 import { STRIPE_VERSION, readEvent, signatureValid } from "../src/account/stripe";
 import { app } from "../src/index";
@@ -584,6 +584,32 @@ describe("the billing page", () => {
     for (const [path, env] of [["/account", payEnv()], ["/tenders", payEnv()], ["/account/billing", onEnv()], ["/account/billing", { ...testEnv(), ...KEYS }]] as const) {
       expect(await csp(path, env), path).toContain("form-action 'self';");
     }
+  });
+});
+
+describe("the privacy page's Payments section", () => {
+  it("names Stripe, Link as the merchant of record and Allwater, and what a paid plan keeps, in both languages, only while the switch is on", async () => {
+    const EM_DASH = String.fromCharCode(0x2014);
+    const html = decode(await (await get("/privacy")).text());
+    const section = html.slice(html.indexOf('<h2 id="payments">'), html.indexOf("<h2", html.indexOf('<h2 id="payments">') + 4));
+    // Right after what an account keeps.
+    expect(html.indexOf('<h2 id="accounts">Accounts</h2>')).toBeLessThan(html.indexOf('<h2 id="payments">Payments</h2>'));
+    expect(section).toContain("Card details go to Stripe and never reach this site.");
+    expect(section).toContain("Pro is sold through Link, the merchant of record operated by Stripe, on behalf of Allwater Software Inc., and Link sends the receipts.");
+    expect(section).toContain("the site gives Stripe the account's id and, the first time, its email address");
+    expect(section).toContain("the plan with its start and end dates, Stripe's customer and subscription identifiers, and the subscription's status");
+    expect(section).toContain(`Stripe's identifier for the charge for ${EVENT_DAYS} days`);
+    expect(section).toContain("It keeps no card details, billing address, tax number or amount.");
+    expect(section).toContain("Deleting the account cancels the subscription at Stripe first, without refund.");
+    expect(html).not.toContain(EM_DASH);
+    const fr = nbsp(decode(await (await get("/privacy?lang=fr")).text()));
+    expect(fr).toContain('<h2 id="payments">Paiements</h2>');
+    expect(fr).toContain("Link, le marchand officiel exploité par Stripe, pour le compte d’Allwater Software Inc.");
+    expect(fr).toContain(`pendant ${EVENT_DAYS} jours`);
+    expect(fr).not.toContain(EM_DASH);
+    const off = await (await get("/privacy", { env: testEnv() })).text();
+    expect(off).not.toContain('id="payments"');
+    expect(off).toContain("Allwater Software Inc.");
   });
 });
 

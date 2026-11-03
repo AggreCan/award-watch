@@ -148,8 +148,8 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/terms",
     name: { en: "Terms of Use", fr: "Conditions d'utilisation" },
     description: {
-      en: "The terms for reading Award Watch and reusing its files under the Open Government Licence, Canada.",
-      fr: "Les conditions de lecture d'Award Watch et de réutilisation de ses fichiers sous la Licence du gouvernement ouvert, Canada.",
+      en: "The terms for reading Award Watch, reusing its files under the Open Government Licence, Canada, and subscribing to Pro.",
+      fr: "Les conditions de lecture d'Award Watch, de réutilisation de ses fichiers sous la Licence du gouvernement ouvert, Canada, et d'abonnement à Pro.",
     },
   },
   privacy: {

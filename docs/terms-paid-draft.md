@@ -1,11 +1,11 @@
 # Paid-tier Terms: draft for review
 
 A draft of the additions the Terms of Use need before the site takes
-payment for Pro. It is not wired into the site: the Terms page
-(`site/src/pages/docs.tsx`, strings `terms.*` in `site/src/i18n.ts`) is
-unchanged. At the paid switch, the reviewed text goes into the Terms page
-in both languages, in the same change as About and Privacy naming
-Allwater Software Inc. (docs/accounts.md, Payments, step 10).
+payment for Pro. The reviewed text is now on the Terms page in both
+languages (section "Paid Plan (Pro)", strings `terms.toc_pro` and
+`terms.pro_*` in `site/src/i18n.ts`, with one opening paragraph added that
+applies the No Warranty and liability terms to Pro), so this file stays as
+the record of the draft.
 
 Points for the reviewer, each a decision this draft makes and counsel
 should confirm:

@@ -1,5 +1,5 @@
 // The accounts switch (ACCOUNTS_ENABLED, src/account/switch.ts). Off, as
-// wrangler.jsonc ships it: every /account route is the site's own 404, no
+// vitest.config.ts holds it under test: every /account route is the site's own 404, no
 // public page links to an account or changes in any byte, the sign-in posts
 // count as pages, the API keys gate nothing, and neither the accounts
 // database nor the mail binding is read (bindings that record and throw on

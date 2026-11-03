@@ -320,8 +320,8 @@ export const ACCOUNT_STRINGS = {
   },
   "account.stopped_one_click": { en: "The delivery is off.", fr: "L'envoi est désactivé." },
   "account.privacy_mail": {
-    en: "The email address is handed to Cloudflare's email service to deliver the site's messages: the sign-in code, and the saved searches whose delivery is on. It is used for nothing else.",
-    fr: "L'adresse courriel est transmise au service de courriel de Cloudflare pour livrer les messages du site : le code de connexion et les recherches enregistrées dont l'envoi est activé. Elle ne sert à rien d'autre.",
+    en: "The email address is handed to Cloudflare's email service to deliver the site's messages: the sign-in code, and the saved searches whose delivery is on. Apart from the checkout described under Payments, it is used for nothing else.",
+    fr: "L'adresse courriel est transmise au service de courriel de Cloudflare pour livrer les messages du site : le code de connexion et les recherches enregistrées dont l'envoi est activé. Hormis le paiement décrit à la section Paiements, elle ne sert à rien d'autre.",
   },
   "digest.tenders_title": { en: "New tender notices", fr: "Nouveaux avis d'appel d'offres" },
   "digest.tenders_subject_one": { en: "1 new tender notice: {scope}", fr: "1 nouvel avis d'appel d'offres : {scope}" },
@@ -419,6 +419,11 @@ export const ACCOUNT_STRINGS = {
     en: "Same-day tender notices on the tender lists, refreshed every two hours through the business day.",
     fr: "Les avis d'appel d'offres du jour dans les listes d'appels d'offres, actualisés toutes les deux heures pendant la journée de travail.",
   },
+  // The radar's deeper windows (pages/expiring.tsx, plan.ts allowsRadarDepth).
+  "billing.pro_radar": {
+    en: "The 6-month and 12-month lists of contracts ending, with their CSV file; the Free plan keeps the 3-month list.",
+    fr: "Les listes des contrats prenant fin d'ici 6 et 12 mois, avec leur fichier CSV; le forfait Gratuit conserve la liste à 3 mois.",
+  },
   // The bug report form (bugs.tsx); the line keeps the page's no-reply promise.
   "billing.pro_bugs": {
     en: "A form under the account to report a bug. No reply is promised; fixes show up on the site.",
@@ -440,6 +445,26 @@ export const ACCOUNT_STRINGS = {
     fr: "L'abonnement se renouvelle à la fin de chaque période jusqu'à son annulation. Une annulation prend effet à la fin de la période déjà payée, qui n'est pas remboursée.",
   },
   "billing.terms": { en: "Subscribing accepts the {terms}.", fr: "S'abonner vaut acceptation des {terms}." },
+  // The privacy page's Payments section while accounts are open (privacy.tsx):
+  // what Stripe gets, and what payment_customers, payment_reversals and the
+  // entitlements keep (accounts_schema.sql).
+  "billing.privacy_toc": { en: "Payments", fr: "Paiements" },
+  "billing.privacy_processor": {
+    en: "Pro is paid for on Stripe's own pages: the checkout, and the portal where a subscription is changed or cancelled. Card details go to Stripe and never reach this site. Pro is sold through Link, the merchant of record operated by Stripe, on behalf of Allwater Software Inc., and Link sends the receipts.",
+    fr: "Pro se paie sur les pages de Stripe : la page de paiement et le portail où un abonnement est modifié ou annulé. Les données de carte vont à Stripe et n'atteignent jamais ce site. Pro est vendu par l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le compte d'Allwater Software Inc., et Link envoie les reçus.",
+  },
+  "billing.privacy_sent": {
+    en: "When a checkout starts, the site gives Stripe the account's id and, the first time, its email address, so that the payment is tied to the account.",
+    fr: "Au début d'un paiement, le site transmet à Stripe l'identifiant du compte et, la première fois, son adresse courriel, pour que le paiement soit rattaché au compte.",
+  },
+  "billing.privacy_kept": {
+    en: "For a paid plan, the site keeps the plan with its start and end dates, Stripe's customer and subscription identifiers, and the subscription's status. For a payment refunded in full or disputed, it keeps Stripe's identifier for the charge for {days} days. It keeps no card details, billing address, tax number or amount.",
+    fr: "Pour un forfait payant, le site conserve le forfait avec ses dates de début et de fin, les identifiants de client et d'abonnement de Stripe et l'état de l'abonnement. Pour un paiement remboursé en entier ou contesté, il conserve l'identifiant de Stripe pour ce débit pendant {days} jours. Il ne conserve aucune donnée de carte, adresse de facturation, numéro de taxe ni montant.",
+  },
+  "billing.privacy_delete": {
+    en: "Deleting the account cancels the subscription at Stripe first, without refund. What the site keeps for the plan and its payments stays as the record of what was paid, under the account's id and Stripe's identifiers, without the email address.",
+    fr: "La suppression du compte annule d'abord l'abonnement chez Stripe, sans remboursement. Ce que le site conserve du forfait et de ses paiements reste comme trace de ce qui a été payé, sous l'identifiant du compte et les identifiants de Stripe, sans l'adresse courriel.",
+  },
   "billing.panel_subscription": { en: "Your Subscription", fr: "Votre abonnement" },
   "billing.field_status": { en: "Status", fr: "État" },
   "billing.field_period": { en: "Current period ends", fr: "Fin de la période en cours" },

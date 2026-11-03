@@ -1906,8 +1906,8 @@ const STRINGS = {
   "citepage.copied": { en: "Copied", fr: "Copié" },
 
   "docs.publisher": {
-    en: "Published by Award Watch, an independent Canadian project.",
-    fr: "Publié par Award Watch, un projet canadien indépendant.",
+    en: "Published by Allwater Software Inc., a British Columbia corporation.",
+    fr: "Publié par Allwater Software Inc., une société de la Colombie-Britannique.",
   },
   "about.title": { en: "About Award Watch", fr: "À propos d'Award Watch" },
   "about.lead": {
@@ -1921,8 +1921,8 @@ const STRINGS = {
   },
   "about.toc_who": { en: "Who Publishes It", fr: "Qui le publie" },
   "about.who": {
-    en: "Award Watch is an independent Canadian project. It is not affiliated with any government body, supplier or buyer.",
-    fr: "Award Watch est un projet canadien indépendant. Il n'est affilié à aucun organisme gouvernemental, fournisseur ou acheteur.",
+    en: "Award Watch is published by Allwater Software Inc., a British Columbia corporation. It is not affiliated with any government body, supplier or buyer.",
+    fr: "Award Watch est publié par Allwater Software Inc., une société de la Colombie-Britannique. Il n'est affilié à aucun organisme gouvernemental, fournisseur ou acheteur.",
   },
   "about.toc_data": { en: "Data and Methods", fr: "Données et méthodes" },
   "about.data": {
@@ -1964,8 +1964,8 @@ const STRINGS = {
   },
   "terms.title": { en: "Terms of Use", fr: "Conditions d'utilisation" },
   "terms.lead": {
-    en: "The terms for reading the site and reusing its files.",
-    fr: "Les conditions de lecture du site et de réutilisation de ses fichiers.",
+    en: "The terms for reading the site, reusing its files and subscribing to Pro.",
+    fr: "Les conditions de lecture du site, de réutilisation de ses fichiers et d'abonnement à Pro.",
   },
   "terms.toc_use": { en: "Using the Site", fr: "Utilisation du site" },
   "terms.use": { en: "The site is free to read. No account is needed.", fr: "La lecture du site est gratuite. Aucun compte n'est requis." },
@@ -2002,6 +2002,58 @@ const STRINGS = {
   "terms.code": {
     en: "The site's code is under its own source-available licence, described on the {about} page.",
     fr: "Le code du site relève de sa propre licence de source disponible, décrite à la page {about}.",
+  },
+  // The paid plan, from docs/terms-paid-draft.md as reviewed. No price is
+  // written here: the billing page shows them, from wrangler.jsonc.
+  "terms.toc_pro": { en: "Paid Plan (Pro)", fr: "Forfait payant (Pro)" },
+  "terms.pro_intro": {
+    en: "These terms apply to the Pro plan, in addition to the terms above. The {warranty} terms above, liability included, apply to Pro as they do to the rest of the site.",
+    fr: "Ces conditions s'appliquent au forfait Pro, en plus des conditions ci-dessus. Les conditions de la section {warranty} ci-dessus, responsabilité comprise, s'appliquent à Pro comme au reste du site.",
+  },
+  "terms.pro_seller_title": { en: "Who Sells It", fr: "Qui le vend" },
+  "terms.pro_seller": {
+    en: "Award Watch is published by Allwater Software Inc., a British Columbia corporation. Pro subscriptions are sold through Link, the merchant of record operated by Stripe, on Allwater's behalf: the charge on the card statement reads LINK.COM followed by Allwater's name, Link sends the receipts, and refunds and disputes are handled through Link's support, with Allwater able to refund as well. The site never receives card details. Questions about a charge go to {email} or to Link's support.",
+    fr: "Award Watch est publié par Allwater Software Inc., une société de la Colombie-Britannique. Les abonnements Pro sont vendus par l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le compte d'Allwater : le débit sur le relevé de carte indique LINK.COM suivi du nom d'Allwater, Link envoie les reçus, et les remboursements et les litiges passent par le soutien de Link, Allwater pouvant aussi rembourser. Le site ne reçoit jamais les données de carte. Les questions sur un débit s'adressent à {email} ou au soutien de Link.",
+  },
+  "terms.pro_includes_title": { en: "What Pro Includes", fr: "Ce que comprend Pro" },
+  "terms.pro_includes": {
+    en: "Pro is a plan on an Award Watch account. It includes more saved searches than the Free plan, email delivery of saved searches, and same-day tender notices on the tender lists, as described on the account's billing page. Every public page of the site stays free to read without an account. Allwater may add to Pro at any time; a change that takes something away from Pro applies from the first renewal after notice.",
+    fr: "Pro est un forfait d'un compte Award Watch. Il comprend plus de recherches enregistrées que le forfait Gratuit, l'envoi des recherches enregistrées par courriel et les avis d'appel d'offres du jour dans les listes d'appels d'offres, comme le décrit la page de facturation du compte. Toutes les pages publiques du site restent gratuites, sans compte. Allwater peut ajouter à Pro en tout temps; un changement qui retire quelque chose à Pro s'applique à compter du premier renouvellement suivant un avis.",
+  },
+  "terms.pro_prices_title": { en: "Prices and Taxes", fr: "Prix et taxes" },
+  "terms.pro_prices": {
+    en: "The prices are shown on the site, on the account's billing page, in Canadian dollars. Taxes are added at checkout according to the buyer's location. Allwater may change the prices; a new price applies from the first renewal at least 30 days after notice by email to the account's address, and a subscription can be cancelled before then.",
+    fr: "Les prix sont affichés sur le site, à la page de facturation du compte, en dollars canadiens. Les taxes sont ajoutées au paiement selon le lieu de l'acheteur. Allwater peut modifier les prix; un nouveau prix s'applique à compter du premier renouvellement survenant au moins 30 jours après un avis envoyé par courriel à l'adresse du compte, et l'abonnement peut être annulé avant cette date.",
+  },
+  "terms.pro_renewal_title": { en: "Term and Renewal", fr: "Durée et renouvellement" },
+  "terms.pro_renewal": {
+    en: "A subscription is monthly or yearly and starts when the first payment is made. It renews automatically at the end of each period, at the price then in effect, until it is cancelled. The payment method on file is charged at each renewal.",
+    fr: "Un abonnement est mensuel ou annuel et commence au premier paiement. Il se renouvelle automatiquement à la fin de chaque période, au prix alors en vigueur, jusqu'à son annulation. Le moyen de paiement enregistré est débité à chaque renouvellement.",
+  },
+  "terms.pro_cancel_title": { en: "Cancellation", fr: "Annulation" },
+  "terms.pro_cancel": {
+    en: "A subscription can be cancelled at any time from the account's billing page. The cancellation takes effect at the end of the period already paid, and Pro continues until then. The current period is not refunded, in whole or in part, except where the law requires a refund. Deleting the account cancels the subscription at once, without refund.",
+    fr: "Un abonnement peut être annulé en tout temps depuis la page de facturation du compte. L'annulation prend effet à la fin de la période déjà payée, et Pro continue jusque-là. La période en cours n'est pas remboursée, en tout ou en partie, sauf si la loi exige un remboursement. La suppression du compte annule l'abonnement immédiatement, sans remboursement.",
+  },
+  "terms.pro_failed_title": { en: "Failed Payments", fr: "Paiements refusés" },
+  "terms.pro_failed": {
+    en: "If a renewal payment fails, the payment is retried and Pro continues for a short grace period. If it does not go through, the account returns to the Free plan: email delivery and same-day notices stop, and saved searches are kept.",
+    fr: "Si un paiement de renouvellement échoue, il est tenté de nouveau et Pro continue pendant une courte période de grâce. S'il ne passe pas, le compte revient au forfait Gratuit : l'envoi par courriel et les avis du jour cessent, et les recherches enregistrées sont conservées.",
+  },
+  "terms.pro_abuse_title": { en: "Ending Service for Abuse", fr: "Fin du service en cas d'abus" },
+  "terms.pro_abuse": {
+    en: "Allwater may suspend or end an account and its subscription for abuse, including breaking these Terms, automated access beyond the published limits, sharing or reselling an account, getting around a limit or a payment, or use that harms the site or other people. When service ends for abuse, the current period is not refunded. If Allwater ends Pro for any other reason, it refunds the unused part of the current period.",
+    fr: "Allwater peut suspendre ou fermer un compte et son abonnement en cas d'abus, notamment le non-respect des présentes conditions, un accès automatisé au-delà des limites publiées, le partage ou la revente d'un compte, le contournement d'une limite ou d'un paiement, ou un usage qui nuit au site ou à autrui. Lorsque le service prend fin pour abus, la période en cours n'est pas remboursée. Si Allwater met fin à Pro pour toute autre raison, elle rembourse la partie inutilisée de la période en cours.",
+  },
+  "terms.pro_law_title": { en: "Governing Law", fr: "Droit applicable" },
+  "terms.pro_law": {
+    en: "These Terms are governed by the laws of British Columbia and the federal laws of Canada that apply there, and disputes go to the courts of British Columbia. Nothing in these Terms limits a right that consumer protection law gives a buyer where they live.",
+    fr: "Les présentes conditions sont régies par les lois de la Colombie-Britannique et les lois fédérales du Canada qui s'y appliquent, et les litiges relèvent des tribunaux de la Colombie-Britannique. Rien dans les présentes conditions ne limite un droit que la loi sur la protection du consommateur accorde à l'acheteur là où il réside.",
+  },
+  "terms.pro_changes_title": { en: "Changes to These Terms", fr: "Modifications des présentes conditions" },
+  "terms.pro_changes": {
+    en: "A change to these paid-plan terms applies to a subscription from its first renewal at least 30 days after notice by email to the account's address.",
+    fr: "Une modification des conditions du forfait payant s'applique à un abonnement à compter de son premier renouvellement survenant au moins 30 jours après un avis envoyé par courriel à l'adresse du compte.",
   },
   "privacy.title": { en: "Privacy", fr: "Confidentialité" },
   "privacy.lead": {
