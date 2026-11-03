@@ -145,8 +145,8 @@
     "SITE_URL": "https://awardwatch.ca",
     "ACCOUNTS_ENABLED": "false",
     "MAIL_FROM": "alerts@awardwatch.ca",
-    "STRIPE_PRICE_MONTHLY": "price_1UXYgUIuriRWUbRJrdi3g2T0",
-    "STRIPE_PRICE_YEARLY": "price_1UXYgUIuriRWUbRJt0429luJ",
+    "STRIPE_PRICE_MONTHLY": "price_1UXYvRIP2lpoGRa5a16fcVV9",
+    "STRIPE_PRICE_YEARLY": "price_1UXYvRIP2lpoGRa5COYxUqDM",
     "PRICE_MONTHLY_CAD": "19",
     "PRICE_YEARLY_CAD": "190"
   },
