@@ -22,7 +22,7 @@ import type { AppEnv } from "../env";
 import { fmtInt, pick, t, tn, type Key, type Lang } from "../i18n";
 import { type IntradayView, loadIntraday, mergeIntraday } from "../intraday";
 import { Panel, StatusBadge } from "../layout";
-import { requestPlan } from "../plan";
+import { allowsIntraday, requestPlan } from "../plan";
 import { faultSummary } from "../search_db";
 import { BuyerLink, SegmentChips, provincesText, tenderColumns, tenderNoticeUrl } from "./shared";
 
@@ -72,7 +72,7 @@ export const IntradayBand: FC<{ lang: Lang; rows: readonly IntradayView[]; clock
 // through the parsed-file cache. The full open list (tenders/open.json,
 // about 1 MB) stays the browser's: the Worker never parses it.
 export async function intradayBand(c: Context<AppEnv>, dataAsOf: string | null | undefined, clock: Clock): Promise<Child> {
-  if ((await requestPlan(c)) !== "pro") return null;
+  if (!allowsIntraday(await requestPlan(c))) return null;
   const db = c.env.SEARCH;
   if (!db || !dataAsOf || !DAY_RE.test(dataAsOf)) return null;
   let rows;
