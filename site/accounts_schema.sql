@@ -210,3 +210,19 @@ CREATE TABLE IF NOT EXISTS payment_reversals (
   at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_payment_reversals_customer ON payment_reversals(customer_id, at);
+
+-- A bug report from a Pro account (src/account/bugs.tsx): the page it names,
+-- a path on the site, or NULL when none was given; what happened; what was
+-- expected, or NULL. Kept as typed (control characters dropped) and sent to
+-- the operator's inbox with the plan and the user id, never the address. At
+-- most five per user in any 24 hours, counted inside the insert. Rows go
+-- after 180 days (signin.ts, sweep), and with the account.
+CREATE TABLE IF NOT EXISTS bug_reports (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  page TEXT,                                     -- at most 300 characters
+  text TEXT NOT NULL,                            -- at most 2,000 characters
+  expected TEXT,                                 -- at most 1,000 characters
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_user ON bug_reports(user_id, created_at);

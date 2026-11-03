@@ -166,6 +166,13 @@ export function overviewView(
           <dd><a href="/account/billing">{t(lang, stripe ? "billing.manage" : "billing.link_plans")}</a></dd>
           <dt>{t(lang, "account.field_since")}</dt><dd class="mono">{day(account.createdAt)}</dd>
           <dt>{t(lang, "account.field_sessions")}</dt><dd>{fmtInt(counts.sessions, lang)}</dd>
+          {/* Pro only (bugs.tsx); a Free account has no row here. */}
+          {allowed(account, "bug_reports") ? (
+            <>
+              <dt>{t(lang, "bugs.field")}</dt>
+              <dd><a href="/account/bug">{t(lang, "bugs.link")}</a></dd>
+            </>
+          ) : null}
         </dl>
       </Panel>
       <Panel title={t(lang, "rail.lists")}>
@@ -449,6 +456,7 @@ export function deleteView(lang: Lang, account: Account, errors?: Key[]) {
         <ul class="account-list">
           <li>{t(lang, "account.delete_subscription")}</li>
           <li>{t(lang, "account.delete_searches")}</li>
+          <li>{t(lang, "bugs.delete")}</li>
           <li>{t(lang, "account.delete_sessions")}</li>
           <li>{t(lang, "account.delete_interest")}</li>
           <li>{t(lang, "account.delete_email")}</li>

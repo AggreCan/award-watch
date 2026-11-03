@@ -22,6 +22,8 @@ import { accountsEnabled } from "./account/switch";
 // pages' and the sign-in's. The payment service's webhook gets "hook" on the
 // same terms: its posts come from the service's few addresses, which retry
 // after a 429, and anything else posting there is refused at the signature.
+// The bug report post of a Pro account (/account/bug) writes a row and sends
+// a message, so it counts with the forms, on the same terms.
 export type Bucket = "page" | "api" | "download" | "form" | "feed" | "auth" | "stop" | "hook";
 
 // A HEAD request for a download (a link checker, a client asking a file's
@@ -34,6 +36,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
   if (path === "/account/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";
+  if (method === "POST" && path === "/account/bug") return "form";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
     return "form";
   }
@@ -53,7 +56,8 @@ export function clientKey(c: Context<AppEnv>): string {
 
 export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response | void> {
   let bucket = bucketFor(c.req.method, c.req.path);
-  if ((bucket === "auth" || bucket === "stop" || bucket === "hook") && !accountsEnabled(c.env)) bucket = "page";
+  const accountsOnly = bucket === "auth" || bucket === "stop" || bucket === "hook" || c.req.path === "/account/bug";
+  if (accountsOnly && !accountsEnabled(c.env)) bucket = "page";
   const limiter = c.env[BINDING[bucket]] as RateLimit | undefined;
   if (!limiter) return next();
   let allowed = true;

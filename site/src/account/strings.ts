@@ -419,6 +419,11 @@ export const ACCOUNT_STRINGS = {
     en: "Same-day tender notices on the tender lists, refreshed every two hours through the business day.",
     fr: "Les avis d'appel d'offres du jour dans les listes d'appels d'offres, actualisés toutes les deux heures pendant la journée de travail.",
   },
+  // The bug report form (bugs.tsx); the line keeps the page's no-reply promise.
+  "billing.pro_bugs": {
+    en: "A form under the account to report a bug. No reply is promised; fixes show up on the site.",
+    fr: "Un formulaire dans le compte pour signaler un bogue. Aucune réponse n'est promise; les correctifs apparaissent sur le site.",
+  },
   "billing.panel_subscribe": { en: "Subscribe to Pro", fr: "S'abonner à Pro" },
   "billing.monthly": { en: "Monthly, CA${price} a month", fr: "Mensuel, {price} $ CA par mois" },
   "billing.yearly": { en: "Yearly, CA${price} a year", fr: "Annuel, {price} $ CA par année" },
@@ -479,4 +484,61 @@ export const ACCOUNT_STRINGS = {
   "billing.field": { en: "Billing", fr: "Facturation" },
   "billing.link_plans": { en: "Plans and prices", fr: "Forfaits et prix" },
   "billing.plan_stripe": { en: "Pro, paid until {date}", fr: "Pro, payé jusqu'au {date}" },
+  // -- bug reports (src/account/bugs.tsx) ---------------------------------------------
+  // A Pro feature. The site offers self-service and no support line, so the
+  // page promises no reply; the corrections page stays the place for data.
+  "bugs.link": { en: "Report a bug", fr: "Signaler un bogue" },
+  "bugs.title": { en: "Report a Bug", fr: "Signaler un bogue" },
+  "bugs.field": { en: "Bug reports", fr: "Rapports de bogue" },
+  "bugs.lead": {
+    en: "Describe something on the site that did not work as it should.",
+    fr: "Décrivez ce qui, sur le site, n'a pas fonctionné comme il le devrait.",
+  },
+  "bugs.no_reply": {
+    en: "No reply is promised. Fixes show up on the site.",
+    fr: "Aucune réponse n'est promise. Les correctifs apparaissent sur le site.",
+  },
+  "bugs.corrections": {
+    en: "For a record or a figure that looks wrong, use the {form}.",
+    fr: "Pour un dossier ou un chiffre qui semble erroné, utilisez la {form}.",
+  },
+  "bugs.corrections_link": { en: "corrections page", fr: "page des corrections" },
+  "bugs.panel": { en: "The Report", fr: "Le rapport" },
+  "bugs.page": { en: "Page address", fr: "Adresse de la page" },
+  "bugs.page_note": {
+    en: "The page on this site where it happened, as a path or a full address.",
+    fr: "La page de ce site où c'est arrivé, sous forme de chemin ou d'adresse complète.",
+  },
+  "bugs.text": { en: "What happened", fr: "Ce qui s'est passé" },
+  "bugs.expected": { en: "What you expected (optional)", fr: "Ce que vous attendiez (facultatif)" },
+  "bugs.send": { en: "Send the report", fr: "Envoyer le rapport" },
+  "bugs.kept": {
+    en: "The report is kept for {days} days with the account and sent to the site's inbox without your email address.",
+    fr: "Le rapport est conservé {days} jours avec le compte et transmis à la boîte de réception du site sans votre adresse courriel.",
+  },
+  "bugs.pro_title": { en: "Part of Pro", fr: "Offert avec le forfait Pro" },
+  "bugs.pro_text": {
+    en: "Bug reports are part of Pro, the site's paid plan.",
+    fr: "Les rapports de bogue font partie de Pro, le forfait payant du site.",
+  },
+  "bugs.err_page": {
+    en: "The page address must be a page on this site, at most {max} characters.",
+    fr: "L'adresse de la page doit désigner une page de ce site et compter au plus {max} caractères.",
+  },
+  "bugs.err_text": { en: "Describe what happened.", fr: "Décrivez ce qui s'est passé." },
+  "bugs.err_limited": {
+    en: "This account has sent {n} bug reports in the last 24 hours, the most a day allows. Try again later.",
+    fr: "Ce compte a envoyé {n} rapports de bogue au cours des dernières 24 heures, le maximum permis par jour. Réessayez plus tard.",
+  },
+  "bugs.sent_title": { en: "Report Received", fr: "Rapport reçu" },
+  "bugs.sent_lead": { en: "Thank you. The report was received.", fr: "Merci. Le rapport a été reçu." },
+  // The privacy page's accounts section and the delete page's list (privacy.tsx, pages.tsx).
+  "bugs.privacy": {
+    en: "A bug report sent from a Pro account keeps the page address and what was typed into the form for {days} days, and is sent by email to the site's inbox without the account's email address.",
+    fr: "Un rapport de bogue envoyé d'un compte Pro conserve l'adresse de la page et ce qui a été saisi dans le formulaire pendant {days} jours; il est transmis par courriel à la boîte de réception du site sans l'adresse courriel du compte.",
+  },
+  "bugs.delete": {
+    en: "Every bug report sent from the account.",
+    fr: "Tous les rapports de bogue envoyés à partir du compte.",
+  },
 } as const satisfies Record<string, { en: string; fr: string }>;

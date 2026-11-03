@@ -15,6 +15,8 @@ import { AUDIT_DAYS, audit } from "./audit";
 import { newCode, newId, plusDays, plusMinutes, randomHex, sameHash, sha256Hex } from "./secrets";
 
 export const CODE_MINUTES = 15;
+// How long a bug report is kept (bugs.tsx); sweep() removes it after.
+export const BUG_REPORT_DAYS = 180;
 // Wrong codes (or wrong link secrets) an address may have in an hour, across
 // all its requests.
 export const CODE_TRIES = 5;
@@ -180,8 +182,9 @@ export async function findOrCreateUser(env: Env, email: string, lang: Lang, now 
 }
 
 // Rows past their keeping: sign-in requests and wrong tries after a day, sessions 90 days
-// after they ended, the audit trail after 90 days. Run with each sign-in
-// request, so the tables stay small without a schedule of their own.
+// after they ended, the audit trail after 90 days, bug reports after
+// BUG_REPORT_DAYS. Run with each sign-in request, so the tables stay small
+// without a schedule of their own.
 export async function sweep(env: Env, now = new Date()): Promise<void> {
   const db = env.ACCOUNTS!;
   const day = plusDays(now, -1);
@@ -195,5 +198,12 @@ export async function sweep(env: Env, now = new Date()): Promise<void> {
     ]);
   } catch {
     console.error("account sweep: not run");
+  }
+  // Apart from the batch: a database the bug_reports table has not reached
+  // yet must not stop the sweeps above.
+  try {
+    await db.prepare("DELETE FROM bug_reports WHERE created_at < ?").bind(plusDays(now, -BUG_REPORT_DAYS)).run();
+  } catch {
+    console.error("account sweep: bug reports not swept");
   }
 }

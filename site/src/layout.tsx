@@ -6,6 +6,7 @@ import { type Competitive, type RailCounts, competitiveOf, loadRail } from "./da
 import type { AppEnv } from "./env";
 import { competitiveLabel, fmtInt, statusLabel, t, type Key, type Lang } from "./i18n";
 import { type Seo, absoluteUrl, alternates, canonicalUrl, defaultDescription, pageTitle } from "./seo";
+import { allowed } from "./account/entitlements";
 import { type RailAccount, railAccount } from "./account/session";
 import { accountsEnabled } from "./account/switch";
 
@@ -463,6 +464,10 @@ export const Layout: FC<
                   <a href="/alerts">{t(lang, "rail.email_lists")}</a>
                   <a href="/watchlist">{t(lang, "footer.watchlist")}</a>
                   <a href="/corrections">{t(lang, "footer.corrections")}</a>
+                  {/* A signed-in Pro reader only (src/account/bugs.tsx); nothing for anyone else, so public pages keep every byte. */}
+                  {shell?.account?.email && shell.account.plan && allowed({ plan: shell.account.plan }, "bug_reports") ? (
+                    <a href="/account/bug">{t(lang, "bugs.link")}</a>
+                  ) : null}
                   <a href="/cite">{t(lang, "footer.cite")}</a>
                   <a href="/about">{t(lang, "footer.about")}</a>
                   <a href="/terms">{t(lang, "footer.terms")}</a>

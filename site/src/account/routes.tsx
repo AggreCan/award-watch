@@ -15,6 +15,8 @@
 //   GET  /account/keys                 API keys                                       (session)
 //   POST /account/keys                 create one, shown once                         (session, CSRF, plan)
 //   POST /account/keys/:id/revoke      revoke one                                     (session, CSRF)
+//   GET  /account/bug                  the bug report form, or Pro's notice           (session)
+//   POST /account/bug                  store a report, send it to the operator        (session, CSRF, plan, FORM_LIMIT)
 //   GET  /account/delete               what deleting removes                          (session)
 //   POST /account/delete               delete, after cancelling a subscription        (session, CSRF)
 //   GET  /account/stop?s=&t=           a delivery's stop page, from its message       (the link's secret)
@@ -44,6 +46,7 @@ import { deviceClass } from "../views";
 import { KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
 import { audit } from "./audit";
 import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, startCheckout } from "./billing";
+import { bugPage, fileBug } from "./bugs";
 import { allowed } from "./entitlements";
 import {
   accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView, signInView, stopView, stoppedView,
@@ -482,6 +485,20 @@ account.post("/keys/:id/revoke", async (c) => {
   });
 });
 
+// -- bug reports (bugs.tsx) ------------------------------------------------------------------
+
+account.get("/bug", async (c) => {
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => bugPage(c, who));
+});
+
+account.post("/bug", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => fileBug(c, post.account, post.fields));
+});
+
 // -- deletion ----------------------------------------------------------------------------------------
 
 account.get("/delete", async (c) => {
@@ -495,9 +512,9 @@ account.get("/delete", async (c) => {
 // SHA-256 of a random salt and the address, the salt thrown away: the row
 // cannot be matched to the address, and the address can sign up afresh.
 // Sessions are revoked; saved searches (with their stop links and delivery
-// rows), keys and sign-in requests are deleted; so are the address's rows in
-// the alerts form's table. The entitlement rows stay, tied to the id alone,
-// as the record of what was granted.
+// rows), keys, bug reports and sign-in requests are deleted; so are the
+// address's rows in the alerts form's table. The entitlement rows stay,
+// tied to the id alone, as the record of what was granted.
 export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new Date()): Promise<void> {
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
@@ -508,6 +525,7 @@ export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new 
     db.prepare("DELETE FROM deliveries WHERE saved_search_id IN (SELECT id FROM saved_searches WHERE user_id = ?)").bind(who.userId),
     db.prepare("DELETE FROM saved_searches WHERE user_id = ?").bind(who.userId),
     db.prepare("DELETE FROM api_keys WHERE user_id = ?").bind(who.userId),
+    db.prepare("DELETE FROM bug_reports WHERE user_id = ?").bind(who.userId),
     db.prepare("DELETE FROM magic_codes WHERE user_id = ? OR email = ?").bind(who.userId, who.email),
     db.prepare("DELETE FROM code_misses WHERE email = ?").bind(who.email),
     db.prepare(

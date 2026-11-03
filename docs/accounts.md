@@ -29,6 +29,8 @@ the schema is `site/accounts_schema.sql`; the tests are
   (`radar_depth`) are open to it. A page learns the request's plan with
   `planOfRequest(c)` (`site/src/account/session.ts`) and checks a feature
   with `allowed({ plan }, feature)` (`site/src/account/entitlements.ts`).
+- **Bug reports.** On the Pro plan, a form under the account stores a
+  report and sends it to the operator's inbox (*Bug reports*).
 - **Deletion.** The reader deletes the account from its own page.
 
 Two kinds of message are sent by email: the sign-in message, and the
@@ -54,14 +56,17 @@ Every datetime is ISO in UTC.
 | `delivery_tokens` | the secret of each delivered search's stop link, made on its first delivery | anything else |
 | `code_misses` | one row per wrong code or link tried for an address: the address and the time, for the hour's count | the code tried, the IP address |
 | `audit` | user id, event name, time, a short fixed detail | an address, a code, a token, a key |
+| `bug_reports` | one row per bug report from a Pro account: the page (a path on the site), what happened, what was expected, the time | the address |
 
 Limits: at most 25 saved searches per account (Free keeps 3), at most 5 live
 API keys, at most 5 sign-in requests per address per hour, at most 5 wrong
-codes per address per hour across all its requests.
+codes per address per hour across all its requests, at most 5 bug reports
+per account in any 24 hours.
 
 Retention: sign-in requests and wrong tries are deleted after a day (and
 with the account); sessions 90 days after they end; audit rows after 90
-days. The sweep runs with each sign-in request.
+days; bug reports after 180 days (and with the account). The sweep runs
+with each sign-in request.
 
 ## Sign-in flow
 
@@ -374,7 +379,7 @@ secrets or API keys in clear. No payment details.
 
 `/account/delete` asks for a ticked box, then in one batch: revokes every
 session; deletes the saved searches (with their delivery rows and stop
-links), the API keys and the address's sign-in requests; and marks the user row deleted with its
+links), the API keys, the bug reports and the address's sign-in requests; and marks the user row deleted with its
 email replaced by `deleted:` and SHA-256 of a random salt and the address,
 the salt thrown away. The row then proves nothing about which address it
 was, and the address can sign up again as a new account. The address's rows
@@ -382,6 +387,44 @@ in the alerts form's table are deleted too. The entitlement rows stay, tied
 to the user id alone, as the record of what was granted. A Pro subscription
 that can still bill is cancelled at Stripe before any of this, and the
 account is kept if Stripe cannot confirm it (*Payments*).
+
+## Bug reports
+
+A Pro account can report a bug at `/account/bug` (feature `bug_reports`;
+the code is `site/src/account/bugs.tsx`). The account overview has a row for
+it and the footer of every page has a "Report a bug" link, both only for a
+signed-in Pro reader, so public pages stay as they are for everyone else. A
+Free account that opens the page is told the form is part of Pro, with the
+link to the plans; its post is refused with a 403. The billing page lists
+the form among what Pro includes.
+
+The form asks for the page address (filled in from the Referer when it is
+one of the site's own pages; optional; a path on the site, or a full
+address on its host, at most 300 characters), what happened (required, at
+most 2,000 characters) and what was expected (optional, at most 1,000). An
+address under `/account` keeps its path alone, so a sign-in token or a stop
+link's secret never lands in a report. The page says no reply is promised
+and that fixes show up on the site, and points data questions to the
+corrections page.
+
+A post passes the usual guards (session, CSRF, `Origin`) and counts against
+`FORM_LIMIT` with the other forms (`bucketFor` in `site/src/limits.ts`; while
+the switch is off it counts as a page, as any unknown path does). It stores the row (at most 5 per account
+in any 24 hours, counted inside the insert; a sixth answers the form with a
+message, 429), then sends the operator a plain-text message through the
+daily check's path: the `ALERTS` binding, from `ALERT_FROM` to
+`ALERT_EMAIL`. `MAIL` is never used for it. The subject is "Bug report from
+a Pro account"; the body (base64, since a report can hold accents and long
+lines) carries the report's id, the page, the plan, the user id, the
+language, what happened and what was expected, never the address. A
+message that cannot be sent leaves the report stored and a log line with
+the binding's error code alone. The audit row `bug_reported` records the
+outcome as its detail: `sent`, `failed` or `not_configured`.
+
+The `bug_reports` table must be on the remote database before the switch
+is turned on with this code: deleting an account clears it in the same
+batch as the rest, so without it the deletion answers 503. Re-applying
+`accounts_schema.sql` adds it (*Operator steps*, step 1).
 
 ## Phase 2: delivery
 

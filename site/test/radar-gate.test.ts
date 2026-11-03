@@ -134,10 +134,11 @@ async function sessions(): Promise<void> {
 
 const html = async (path: string, env: object, cookie?: string) => (await get(path, { env, cookie })).text();
 // Once the switch is on, the rail carries the signed-in address (or "Sign
-// in") and the wordmark a signed-in reader's plan; the rest of the page is
-// what is compared.
+// in"), the wordmark a signed-in reader's plan and the footer a Pro reader's
+// bug report link; the rest of the page is what is compared.
 const noRail = (page: string) =>
-  page.replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "");
+  page.replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "")
+    .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "");
 const pageHead = (page: string) => /<header class="page-head">[\s\S]*?<\/header>/.exec(page)?.[0] ?? "";
 // The head without its CSV button, which names the file each view links.
 const headText = (page: string) => pageHead(page).replace(/<div class="page-actions">[\s\S]*?<\/div>/, "");
