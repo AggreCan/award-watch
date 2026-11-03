@@ -554,8 +554,10 @@ stay open without a key.
 
 ## Payments
 
-Pro is sold as a subscription through Stripe, monthly or yearly, with
-Allwater Software Inc. as the merchant. The site never sees a card: the
+Pro is sold as a subscription through Stripe, monthly or yearly, under
+Stripe's Managed Payments: Link, operated by Stripe, is the merchant of
+record, selling on behalf of Allwater Software Inc., which provides the
+service. The site never sees a card: the
 user pays on Stripe's Checkout page and manages the subscription on Stripe's
 customer portal, and Stripe tells the site what happened through a signed
 webhook. The code is `site/src/account/stripe.ts` (the Stripe calls and the
@@ -668,20 +670,20 @@ is deleted, tied to the id alone like the entitlement rows.
 
 1. **A Stripe account in the merchant's name.** Allwater Software Inc., a
    British Columbia corporation: business details, the payout bank account,
-   a statement descriptor that names Award Watch, and contact@awardwatch.ca
-   as the support address shown on receipts. In Settings, Customer emails,
-   turn on receipts for successful payments; in the Billing settings, turn
-   on Stripe's emails for failed payments and expiring cards, with a link
-   to the portal. The site sends no billing mail of its own.
+   and the statement descriptor (statements read LINK.COM followed by it).
+   Under Managed Payments, Link sends the receipts, invoices and refund
+   notices itself, so the dashboard's customer-email settings do not apply,
+   and the support email in the dashboard is where Stripe reaches the
+   business for product input, not an address shown to customers. The site
+   sends no billing mail of its own.
 2. **The product and its two prices.** One product, Award Watch Pro, with
    a software-as-a-service tax code, and two recurring prices in CAD:
    CA$19 monthly and CA$190 yearly, each with tax behaviour "exclusive"
    (taxes added at checkout). Note the two price ids (`price_...`).
-3. **Stripe Tax.** Turn it on, set the origin address, and add a
-   registration for each place Allwater is registered to collect (GST/HST,
-   and the provincial taxes it registers for). Stripe Tax collects nothing
-   where no registration exists; whether and where to register is the
-   merchant's decision with its accountant.
+3. **Taxes.** Under Managed Payments Stripe calculates, collects, files
+   and remits the indirect taxes on these sales, Canadian GST/HST included,
+   as the merchant of record; no Stripe Tax registration is needed for them.
+   The corporation's own filings are its accountant's call.
 4. **The customer portal** (Settings, Billing, Customer portal): allow
    updating the payment method, viewing invoice history, switching between
    the two prices of the one product, and cancelling at the end of the
@@ -735,8 +737,9 @@ is deleted, tied to the id alone like the entitlement rows.
    once; deleting the account cancels its subscription.
 10. **Before live payments:** the paid-tier Terms (`docs/terms-paid-draft.md`
     after review), About, Terms and Privacy naming Allwater Software Inc. as
-    publisher and merchant, and the Privacy page saying that payments are
-    processed by Stripe; then the live keys, then the switch.
+    publisher and Link, operated by Stripe, as the merchant of record, and
+    the Privacy page saying that payments are processed by Stripe; then the
+    live keys, then the switch.
 
 Removing either secret turns payments off at once: the billing page says
 Pro is not available yet and the webhook refuses every notice (Stripe keeps

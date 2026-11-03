@@ -432,8 +432,8 @@ export const ACCOUNT_STRINGS = {
     fr: "Prix en dollars canadiens. Taxes ajoutées au paiement.",
   },
   "billing.processor": {
-    en: "Payment is taken on Stripe's page. Card details go to Stripe and never reach this site. The merchant is Allwater Software Inc., which publishes Award Watch; its name is the one on the card statement.",
-    fr: "Le paiement se fait sur la page de Stripe. Les données de carte vont à Stripe et n'atteignent jamais ce site. Le marchand est Allwater Software Inc., qui publie Award Watch; son nom figure sur le relevé de carte.",
+    en: "Payment is taken on Stripe's page. Card details go to Stripe and never reach this site. Pro is sold through Link, the merchant of record run by Stripe, on behalf of Allwater Software Inc., which publishes Award Watch. The card statement reads LINK.COM followed by Allwater's name; Link sends the receipts and handles refunds and the applicable sales taxes.",
+    fr: "Le paiement se fait sur la page de Stripe. Les données de carte vont à Stripe et n'atteignent jamais ce site. Pro est vendu par l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le compte d'Allwater Software Inc., qui publie Award Watch. Le relevé de carte indique LINK.COM suivi du nom d'Allwater; Link envoie les reçus et s'occupe des remboursements et des taxes de vente applicables.",
   },
   "billing.renewal": {
     en: "The subscription renews at the end of each period until it is cancelled. A cancellation takes effect at the end of the period already paid, which is not refunded.",

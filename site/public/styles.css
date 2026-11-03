@@ -726,6 +726,8 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .stack { display: flex; flex-direction: column; gap: 16px; max-width: 640px; }
 .stack label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 20px; font-weight: 500; }
 .stack input, .stack textarea { width: 100%; font-weight: 400; }
+/* A confirm box keeps its own size: the full-width rule above is for fields. */
+.stack label.account-check input { width: auto; flex: none; }
 .stack .btn { align-self: flex-start; }
 .hp { position: absolute; left: -9999px; }
 

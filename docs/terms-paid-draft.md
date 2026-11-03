@@ -34,10 +34,12 @@ billing page shows them.
 ### Paid Plan (Pro)
 
 **Who sells it.** Award Watch is published by Allwater Software Inc., a
-British Columbia corporation. Allwater is the merchant for Pro
-subscriptions: the charge on the card statement is in its name. Payments are
-processed by Stripe; the site never receives card details. Questions about a
-charge go to contact@awardwatch.ca.
+British Columbia corporation. Pro subscriptions are sold through Link, the
+merchant of record operated by Stripe, on Allwater's behalf: the charge on
+the card statement reads LINK.COM followed by Allwater's name, Link sends the
+receipts, and refunds and disputes are handled through Link's support, with
+Allwater able to refund as well. The site never receives card details.
+Questions about a charge go to contact@awardwatch.ca or to Link's support.
 
 **What Pro includes.** Pro is a plan on an Award Watch account. It includes
 more saved searches than the Free plan, email delivery of saved searches,
@@ -92,10 +94,13 @@ to the account's address.
 ### Forfait payant (Pro)
 
 **Qui le vend.** Award Watch est publié par Allwater Software Inc., une
-société de la Colombie-Britannique. Allwater est le marchand des
-abonnements Pro : le débit figure à son nom sur le relevé de carte. Les
-paiements sont traités par Stripe; le site ne reçoit jamais les données de
-carte. Les questions sur un débit s'adressent à contact@awardwatch.ca.
+société de la Colombie-Britannique. Les abonnements Pro sont vendus par
+l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le
+compte d'Allwater : le débit sur le relevé de carte indique LINK.COM suivi du
+nom d'Allwater, Link envoie les reçus, et les remboursements et les litiges
+passent par le soutien de Link, Allwater pouvant aussi rembourser. Le site ne
+reçoit jamais les données de carte. Les questions sur un débit s'adressent à
+contact@awardwatch.ca ou au soutien de Link.
 
 **Ce que comprend Pro.** Pro est un forfait d'un compte Award Watch. Il
 comprend plus de recherches enregistrées que le forfait Gratuit, l'envoi
