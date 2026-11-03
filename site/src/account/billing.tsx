@@ -191,8 +191,9 @@ export async function billingPage(c: Context<AppEnv>, who: Account, extra: { err
 // -- checkout and the portal ------------------------------------------------------------
 
 // POST /account/billing/checkout (session, CSRF and Origin already checked).
-// A user whose subscription can still bill goes back to the page, where the
-// portal changes it: a second checkout would start a second subscription.
+// A user whose subscription can still bill goes to the portal, where it is
+// changed: a second checkout would start a second subscription (a page left
+// open from before the first one, say).
 export async function startCheckout(c: Context<AppEnv>, who: Account, fields: Record<string, string>, base: string): Promise<Response> {
   const lang = c.get("lang");
   const interval = fields.interval;
@@ -200,7 +201,7 @@ export async function startCheckout(c: Context<AppEnv>, who: Account, fields: Re
   const source = paymentSource(c.env);
   if (!source.available()) return c.redirect("/account/billing", 303);
   const row = await paymentRow(c.env, who.userId);
-  if (liveSubscription(row)) return c.redirect("/account/billing", 303);
+  if (liveSubscription(row)) return openPortal(c, who, base);
   const url = await source.checkoutUrl({
     userId: who.userId, email: who.email, interval, lang, customerId: row?.customer_id ?? null,
     successUrl: `${base}/account?billing=done${langQuery(lang, "&")}`,
@@ -280,6 +281,7 @@ function apply(run: Run, notice: Notice): Promise<void> {
   if (notice.kind === "checkout") return onCheckout(run, notice);
   if (notice.kind === "period_paid") return onPeriodPaid(run, notice);
   if (notice.kind === "subscription") return onSubscription(run, notice.subscription, notice.deleted);
+  if (notice.kind === "reversed") return onReversed(run, notice);
   return Promise.resolve();
 }
 
@@ -392,6 +394,36 @@ async function onPeriodPaid(run: Run, n: Extract<Notice, { kind: "period_paid" }
   const periodEnd = n.periodEnd && (!kept || n.periodEnd > kept) ? n.periodEnd : kept;
   await bind(run, user.id, { customerId: n.customerId, subscriptionId: n.subscriptionId, status: same ? row!.status : null, periodEnd });
   if (n.periodEnd) await grant(run, user, n.subscriptionId, graceAfter(n.periodEnd), "renewed");
+}
+
+// charge.refunded (in full) and charge.dispute.created: the money for a
+// period went back, or is being taken back, so the Stripe Pro of the account
+// bound to the charge's customer ends now, every live Stripe row of it: a
+// charge no longer names its subscription. The subscription itself is left
+// as it is (the operator cancels it in the dashboard when it should not bill
+// again), and a later invoice.paid grants again, being a new payment. A
+// dispute's charge is read for its customer; a failed read answers 500, so
+// the notice comes again.
+async function onReversed(run: Run, n: Extract<Notice, { kind: "reversed" }>): Promise<void> {
+  const type = n.why === "refunded" ? "charge.refunded" : "charge.dispute.created";
+  let customerId = n.customerId;
+  if (!customerId) {
+    const read = await run.source.chargeCustomer(n.chargeId);
+    if (read === null) throw new Error("charge unreadable");
+    if (read === "missing") return unmatched(type);
+    customerId = read;
+  }
+  const bound = await run.db.prepare("SELECT user_id FROM payment_customers WHERE customer_id = ? LIMIT 1")
+    .bind(customerId).first<{ user_id: string }>();
+  const user = bound ? await userById(run.db, bound.user_id) : null;
+  if (!user) return unmatched(type);
+  const res = await run.db.prepare(
+    "UPDATE entitlements SET ends_at = ?1 WHERE user_id = ?2 AND source = 'stripe' AND revoked_at IS NULL " +
+    "AND (ends_at IS NULL OR ends_at > ?1)",
+  ).bind(run.at, user.id).run();
+  if (!res.meta?.changes) return;
+  await audit(run.env, user.id, "plan_changed", `stripe ended, ${n.why}`, run.now);
+  await planFor(run.env, user, run.now);
 }
 
 // customer.subscription.updated and .deleted: the status and period end are

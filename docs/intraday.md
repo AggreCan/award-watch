@@ -338,7 +338,9 @@ only.
   or a higher amendment is left out. The title opens the notice on
   CanadaBuys, since the site has no page for it until the next nightly. A
   buyer the lookup did not match shows its name as published, without a
-  link. Nothing is added to the home page, the feeds or search.
+  link. Nothing is added to the home page, the feeds or search. A page with
+  the band is a signed-in reader's, so it goes out `Cache-Control: private,
+  no-store` and no shared cache keeps it (`site/test/hardening.test.ts`).
 
 The band sets the D1 rows against the nightly's notices first seen on its
 data date (`tenders/new/<date>.json`) and its first open notices

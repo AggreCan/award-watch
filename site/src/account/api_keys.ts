@@ -13,6 +13,7 @@ import type { AppEnv, Env } from "../env";
 import { t } from "../i18n";
 import { type Feature, type Plan, allowed, lastKnownPlan, planFor } from "./entitlements";
 import { newId, randomHex, sameHash, sha256Hex } from "./secrets";
+import { OUTAGE_TRUST_MS } from "./session";
 import { accountsEnabled } from "./switch";
 
 export const KEY_RE = /^aw_([0-9a-f]{8})_([0-9a-f]{64})$/;
@@ -74,7 +75,7 @@ type Found = { id: string; key_hash: string; revoked_at: string | null; last_use
 // case only, as session.ts keeps sessions: keyed by the key's hash (never the
 // key), bounded, the oldest first out, and dropped the moment a read refuses
 // the key.
-type KnownKey = { userId: string; keyId: string; plan: Plan; planUntil: string | null };
+type KnownKey = { userId: string; keyId: string; plan: Plan; planUntil: string | null; verifiedAt: number };
 const lastKnownKeys = new Map<string, KnownKey>();
 const LAST_KNOWN_KEYS_MAX = 500;
 
@@ -92,10 +93,10 @@ export function forgetKeys(): void {
 // requireApiKey(feature): a missing, malformed, unknown or revoked key gets a
 // 401; a key whose owner's plan does not allow the feature gets a 403. Fail
 // open to outages, closed to revocation: when the database cannot be read, a
-// key this isolate verified before keeps its last known answer (its plan
-// until the plan's own end), and any other key gets a 503, since a key that
-// looks right proves nothing until the database has seen it; a key the
-// database names as revoked stops at once. An answer to a key is for its
+// key this isolate verified within the last hour keeps its last known answer
+// (its plan until the plan's own end), and any other key gets a 503, since a
+// key that looks right proves nothing until the database has seen it; a key
+// the database names as revoked stops at once. An answer to a key is for its
 // holder alone, so it goes out private and no-store whatever the route set
 // (the /api sub-app marks a response without a rule public for five
 // minutes). While the switch is off it gates nothing: the request passes
@@ -133,7 +134,8 @@ export function requireApiKey(feature: Feature = "api"): MiddlewareHandler<AppEn
       rows = res.results ?? [];
     } catch {
       const known = lastKnownKeys.get(hash);
-      if (!known) {
+      // Within an hour of its last check, as a remembered session (session.ts).
+      if (!known || now.getTime() - known.verifiedAt > OUTAGE_TRUST_MS) {
         console.error("api key: database unreadable, key not checked before on this instance");
         return refuse(503, "account.unavailable_text");
       }
@@ -153,7 +155,7 @@ export function requireApiKey(feature: Feature = "api"): MiddlewareHandler<AppEn
       return refuse(401, "account.api_key_invalid");
     }
     const plan = await planFor(c.env, { id: found.user_id, plan: found.plan, plan_until: found.plan_until }, now);
-    rememberKey(hash, { userId: found.user_id, keyId: found.id, plan: plan.plan, planUntil: plan.until });
+    rememberKey(hash, { userId: found.user_id, keyId: found.id, plan: plan.plan, planUntil: plan.until, verifiedAt: now.getTime() });
     if (!allowed(plan, feature)) return refuse(403, "account.api_key_plan");
     if (!found.last_used_at || now.getTime() - Date.parse(found.last_used_at) > USE_WRITE_MS) {
       try {

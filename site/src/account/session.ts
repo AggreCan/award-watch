@@ -1,4 +1,4 @@
-// Browser sessions. The cookie aw_session carries "<id>.<secret>": 16 random
+// Browser sessions. The cookie __Host-aw_session carries "<id>.<secret>": 16 random
 // bytes naming the row and 32 more that prove it, both hex. The row holds the
 // id and SHA-256 of the secret; the secret itself is never stored, so a copy
 // of the database signs no one in. A lookup reads the row by id and compares
@@ -6,14 +6,18 @@
 //
 // The cookie is HttpOnly (no script reads it), Secure, SameSite=Lax (another
 // site's form post does not carry it) and lasts 30 days, extended on use (at
-// most once an hour, so a page view is not a write). Every form a session
+// most once an hour, so a page view is not a write). The __Host- prefix makes
+// a browser refuse it unless it is Secure, on Path=/ and without a Domain, so
+// no other host under the domain can set or shadow it. Every form a session
 // posts also carries a CSRF value derived from the cookie's secret, which a
 // page on another site cannot read.
 //
 // Fail open to outages, closed to revocation: a session the database says is
 // revoked, expired or unknown is signed out on that request; a database that
-// cannot answer leaves a session this isolate has already seen on its last
-// known state until the session's own end, its plan until the plan's own end.
+// cannot answer leaves a session this isolate has verified within the last
+// hour on its last known state, its plan until the plan's own end. Past that
+// hour the request is treated as one the database cannot answer: a
+// revocation made through another isolate stands at most an hour unseen.
 
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -23,7 +27,7 @@ import { type Plan, lastKnownPlan, planFor } from "./entitlements";
 import { newId, plusDays, randomHex, sameHash, sha256Hex } from "./secrets";
 import { accountsEnabled } from "./switch";
 
-export const SESSION_COOKIE = "aw_session";
+export const SESSION_COOKIE = "__Host-aw_session";
 export const SESSION_DAYS = 30;
 const TOUCH_MS = 60 * 60 * 1000;
 
@@ -91,8 +95,11 @@ export async function revokeAllSessions(env: Env, userId: string, now = new Date
 // -- reading the cookie ---------------------------------------------------------
 
 // What this isolate last read for each session it has seen, for the outage
-// case only. Bounded; the oldest entries go first.
-type Known = { account: Omit<Account, "stale">; tokenHash: string; expiresAt: string };
+// case only, and when (verifiedAt, ms). Bounded; the oldest entries go first.
+type Known = { account: Omit<Account, "stale">; tokenHash: string; expiresAt: string; verifiedAt: number };
+// How long after its last verification a remembered session still answers
+// through an outage.
+export const OUTAGE_TRUST_MS = 60 * 60 * 1000;
 const lastKnown = new Map<string, Known>();
 const LAST_KNOWN_MAX = 500;
 
@@ -148,7 +155,7 @@ async function lookup(c: Context<AppEnv>, touch: boolean): Promise<SessionRead> 
     ).bind(id).first<Row>();
   } catch {
     const known = lastKnown.get(id);
-    if (known && sameHash(known.tokenHash, tokenHash) && known.expiresAt > at) {
+    if (known && sameHash(known.tokenHash, tokenHash) && known.expiresAt > at && now.getTime() - known.verifiedAt <= OUTAGE_TRUST_MS) {
       // The plan this isolate read still stands only until its own end, which
       // is known here without the database (lastKnownPlan, as planFor uses on
       // an outage): an entitlement that has ended is closed, outage or not.
@@ -181,7 +188,7 @@ async function lookup(c: Context<AppEnv>, touch: boolean): Promise<SessionRead> 
     }
   }
   const { stale: _stale, ...kept } = account;
-  remember(id, { account: kept, tokenHash, expiresAt });
+  remember(id, { account: kept, tokenHash, expiresAt, verifiedAt: now.getTime() });
   return { state: "ok", account };
 }
 

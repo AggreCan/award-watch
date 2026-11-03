@@ -25,7 +25,12 @@
     { "name": "FEED_LIMIT", "namespace_id": "2005", "simple": { "limit": 600, "period": 60 } },
     // Accounts: posts of an address or a code to /account/sign-in and
     // /account/check, only while ACCOUNTS_ENABLED is "true" (src/account/).
-    { "name": "AUTH_LIMIT", "namespace_id": "2006", "simple": { "limit": 5, "period": 60 } }
+    { "name": "AUTH_LIMIT", "namespace_id": "2006", "simple": { "limit": 5, "period": 60 } },
+    // A delivery's stop link (/account/stop, GET and POST), only while
+    // ACCOUNTS_ENABLED is "true": each request reads the accounts database,
+    // and one-click posts arrive from mail providers' servers, many readers
+    // to one address.
+    { "name": "STOP_LIMIT", "namespace_id": "2007", "simple": { "limit": 20, "period": 60 } }
   ],
   // The daily check (src/watchdog.ts): 06:00 UTC, after the nightly run has had
   // its window and 2 h 15 after the same-day refresh's last cut. It emails the
@@ -141,7 +146,12 @@
     "PRICE_MONTHLY_CAD": "",
     "PRICE_YEARLY_CAD": ""
   },
+  // Workers Logs keeps the console lines (which name events and counts, never
+  // an address, a code or a token) and not the per-request invocation log,
+  // which records each request's URL: the sign-in link's token and a
+  // delivery's stop secret travel in a query string.
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": { "invocation_logs": false }
   }
 }

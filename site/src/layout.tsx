@@ -7,6 +7,7 @@ import type { AppEnv } from "./env";
 import { competitiveLabel, fmtInt, statusLabel, t, type Key, type Lang } from "./i18n";
 import { type Seo, absoluteUrl, alternates, canonicalUrl, defaultDescription, pageTitle } from "./seo";
 import { type RailAccount, railAccount } from "./account/session";
+import { accountsEnabled } from "./account/switch";
 
 // The formatting helpers live with the dictionary; pages import them from here.
 export { fmtInt, fmtMoney, fmtMoneyShort, pick } from "./i18n";
@@ -476,6 +477,19 @@ export const Layout: FC<
   );
 };
 
+// While accounts are on, one address renders differently with a session and
+// without one (the rail's item, the plan after the wordmark, a paid band), so
+// any cache that keeps a page must keep one per cookie: Vary: Cookie, added
+// once per response, after any Vary already set. While the switch is off
+// nothing is added and every page keeps its headers as they were.
+const varied = new WeakSet<Request>();
+
+export function varyOnCookie(c: Context<AppEnv>): void {
+  if (!accountsEnabled(c.env) || varied.has(c.req.raw)) return;
+  varied.add(c.req.raw);
+  c.header("Vary", "Cookie", { append: true });
+}
+
 // Every page goes out through here: the rail's counts are loaded once and
 // handed to the shell, with the page's own address, through RailContext
 // while the page renders. A failure to read them leaves the rail's links
@@ -490,6 +504,7 @@ export async function page(c: Context<AppEnv>, body: unknown, status = 200): Pro
   const url = new URL(c.req.url);
   const shell: Shell = { rail, here: viewKey(`${url.pathname}${url.search}`) };
   c.header("Cache-Control", status === 200 ? "public, max-age=300" : "no-store");
+  varyOnCookie(c);
   // Accounts: undefined while the switch is off, and nothing is read. A page
   // that names the signed-in address is never stored by a shared cache.
   const account = await railAccount(c).catch(() => undefined);

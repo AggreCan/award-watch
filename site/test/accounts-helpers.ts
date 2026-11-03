@@ -77,7 +77,7 @@ export const tokenIn = (text: string) => /token=([0-9a-f]{32}\.[0-9a-f]{64})/.ex
 
 // The cookie a response sets, as a request would send it back.
 export function sessionCookie(res: Response): string {
-  const set = res.headers.getSetCookie().find((s) => s.startsWith("aw_session="));
+  const set = res.headers.getSetCookie().find((s) => s.startsWith("__Host-aw_session="));
   return set ? set.split(";")[0] : "";
 }
 

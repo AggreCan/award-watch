@@ -62,7 +62,18 @@ export const ACCOUNT_STRINGS = {
     en: "That code does not match. Check the message and try again.",
     fr: "Ce code ne correspond pas. Vérifiez le message et réessayez.",
   },
-  "account.err_locked": { en: "Too many wrong codes. Ask for a new one.", fr: "Trop de codes erronés. Demandez-en un nouveau." },
+  "account.err_code_two": {
+    en: "That code does not match. Two tries remain this hour.",
+    fr: "Ce code ne correspond pas. Il reste deux essais pour cette heure.",
+  },
+  "account.err_code_one": {
+    en: "That code does not match. One try remains this hour.",
+    fr: "Ce code ne correspond pas. Il reste un essai pour cette heure.",
+  },
+  "account.err_locked": {
+    en: "Too many wrong codes for this address. Try again in an hour.",
+    fr: "Trop de codes erronés pour cette adresse. Réessayez dans une heure.",
+  },
   "account.err_stale": {
     en: "This code or link has expired or was already used. Ask for a new one.",
     fr: "Ce code ou ce lien a expiré ou a déjà servi. Demandez-en un nouveau.",
@@ -192,6 +203,10 @@ export const ACCOUNT_STRINGS = {
   "account.delete_title": { en: "Delete the Account", fr: "Supprimer le compte" },
   "account.delete_lead": { en: "Deleting the account cannot be undone.", fr: "La suppression du compte est définitive." },
   "account.panel_delete_what": { en: "What Is Removed", fr: "Ce qui est retiré" },
+  "account.delete_subscription": {
+    en: "A Pro subscription, if there is one, is cancelled first, at once: it is not charged again, and the period already paid is not refunded.",
+    fr: "Un abonnement Pro, s'il y en a un, est d'abord annulé, immédiatement : il n'est plus facturé, et la période déjà payée n'est pas remboursée.",
+  },
   "account.delete_searches": {
     en: "Every saved search and every API key.",
     fr: "Toutes les recherches enregistrées et toutes les clés d'API.",
@@ -261,8 +276,8 @@ export const ACCOUNT_STRINGS = {
     fr: "La connexion est facultative; toutes les pages fonctionnent sans compte. Un compte conserve l'adresse courriel, la langue, sa date de création et de dernière utilisation, son forfait, ses recherches enregistrées et les noms de ses clés d'API.",
   },
   "account.privacy_secrets": {
-    en: "There are no passwords. Sign-in codes, sign-in links, the session and API keys are stored only as one-way hashes. A signed-in browser holds a second cookie, aw_session, which keeps the session for 30 days after its last use.",
-    fr: "Il n'y a pas de mot de passe. Les codes et liens de connexion, la session et les clés d'API ne sont conservés que sous forme de hachages à sens unique. Un navigateur connecté détient un second témoin, aw_session, qui conserve la session pendant 30 jours après sa dernière utilisation.",
+    en: "There are no passwords. Sign-in codes, sign-in links, the session and API keys are stored only as one-way hashes. A signed-in browser holds a second cookie, __Host-aw_session, which keeps the session for 30 days after its last use.",
+    fr: "Il n'y a pas de mot de passe. Les codes et liens de connexion, la session et les clés d'API ne sont conservés que sous forme de hachages à sens unique. Un navigateur connecté détient un second témoin, __Host-aw_session, qui conserve la session pendant 30 jours après sa dernière utilisation.",
   },
   "account.privacy_not_kept": {
     en: "An account keeps no name, postal address, IP address or browser identification. A sign-in request keeps, for one day, a hash of the IP address under a key that changes every day.",

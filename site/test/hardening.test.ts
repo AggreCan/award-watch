@@ -178,7 +178,7 @@ describe("the same-day band, for a request that is not a live Pro session", () =
       ["upper-case hex", `${SESSION_COOKIE}=${id.toUpperCase()}.${secret.toUpperCase()}`],
       ["a trailing extra", `${SESSION_COOKIE}=${id}.${secret}.x`],
       ["the CSRF value as a cookie", `${SESSION_COOKIE}=${await csrf(pro.cookie)}`],
-      ["another cookie name", `aw_session_x=${id}.${secret}`],
+      ["the name before the prefix", `aw_session=${id}.${secret}`],
       ["empty", `${SESSION_COOKIE}=`],
     ];
     for (const path of BAND_PAGES) {
@@ -257,7 +257,8 @@ describe("the same-day band, for a request that is not a live Pro session", () =
 
   it("through an outage keeps a session this isolate verified, never one it did not, and never a plan past its end", async () => {
     forgetSessions();
-    const ends = new Date(Date.now() + 3_600_000).toISOString();
+    // Inside the hour a remembered session is trusted through an outage.
+    const ends = new Date(Date.now() + 30 * 60_000).toISOString();
     const { email, cookie } = await proSession("band-outage", ends);
     const down = { ACCOUNTS: broken };
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -278,7 +279,7 @@ describe("the same-day band, for a request that is not a live Pro session", () =
       expect(forged.sql).toEqual([]);
       // Past the entitlement's own end, which this isolate knows without the database: free.
       vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(Date.parse(ends) + 3_600_000);
+      vi.setSystemTime(Date.parse(ends) + 60_000);
       const ended = await render("/tenders", cookie, down);
       expect(ended.body).toContain(`<span class="rail-label">${email}</span>`);
       expect(showsPaid(ended.body)).toBe(false);
@@ -677,7 +678,8 @@ describe("API keys", () => {
 
   it("keep a key this isolate verified through an outage, until a read refuses it or its plan ends", async () => {
     forgetKeys();
-    const ends = new Date(Date.now() + 3_600_000).toISOString();
+    // Inside the hour a remembered key is trusted through an outage.
+    const ends = new Date(Date.now() + 30 * 60_000).toISOString();
     const { email, key } = await proKey("key-known", ends);
     const headers = { authorization: `Bearer ${key}` };
     const error = vi.spyOn(console, "error").mockImplementation(() => {});

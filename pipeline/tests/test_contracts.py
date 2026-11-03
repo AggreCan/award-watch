@@ -299,7 +299,7 @@ def test_a_copy_refused_for_its_layout_is_not_downloaded_again_until_it_changes(
 
 def test_a_vendor_named_by_an_email_address_is_withheld_like_a_person(conn, fixtures, tmp_path, out_dir):
     header, rows = read_csv(fixtures / FIXTURE)
-    rows[0]["vendor_name"] = "Canada@carahsoft.com"
+    rows[0]["vendor_name"] = "Canada@softreseller.example.invalid"
     reference = rows[0]["reference_number"]
     samples = tmp_path / "s"
     samples.mkdir()
@@ -310,8 +310,8 @@ def test_a_vendor_named_by_an_email_address_is_withheld_like_a_person(conn, fixt
         (None, None, None, 1)
     assert row["buyer_id"] and row["value"] is not None
     for table, column in (("organizations", "display_name"), ("organization_names", "raw_name")):
-        assert conn.execute(f"SELECT 1 FROM {table} WHERE {column} LIKE '%carahsoft%'").fetchone() is None
+        assert conn.execute(f"SELECT 1 FROM {table} WHERE {column} LIKE '%softreseller%'").fetchone() is None
     review = (out_dir / "review" / "contracts-persons.txt").read_text(encoding="utf-8").splitlines()
-    assert "Canada@carahsoft.com" in review
+    assert "Canada@softreseller.example.invalid" in review
     log = conn.execute("SELECT detail, notice FROM sources_log").fetchone()
-    assert "carahsoft" not in log["notice"] and "carahsoft" not in log["detail"]
+    assert "softreseller" not in log["notice"] and "softreseller" not in log["detail"]

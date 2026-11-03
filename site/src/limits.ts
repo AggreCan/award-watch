@@ -15,8 +15,12 @@ import { accountsEnabled } from "./account/switch";
 //
 // The sign-in posts of the accounts module (the address and the code) get
 // the tightest cap of all, "auth", while the switch is on; while it is off
-// they are unknown paths and count as pages, as they did before.
-export type Bucket = "page" | "api" | "download" | "form" | "feed" | "auth";
+// they are unknown paths and count as pages, as they did before. The stop
+// link of a delivery (/account/stop, both methods) gets "stop" on the same
+// terms: every request there reads the accounts database, and its one-click
+// posts come from mail providers' servers, so the cap sits between the
+// pages' and the sign-in's.
+export type Bucket = "page" | "api" | "download" | "form" | "feed" | "auth" | "stop";
 
 // A HEAD request for a download (a link checker, a client asking a file's
 // size before fetching it) moves no file, so it is not counted against the
@@ -26,6 +30,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/api/")) return "api";
   if (path.startsWith("/downloads/")) return method === "HEAD" ? "page" : "download";
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
+  if (path === "/account/stop") return "stop";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
     return "form";
   }
@@ -34,6 +39,7 @@ export function bucketFor(method: string, path: string): Bucket {
 
 const BINDING: Record<Bucket, keyof Env> = {
   page: "PAGE_LIMIT", api: "API_LIMIT", download: "DOWNLOAD_LIMIT", form: "FORM_LIMIT", feed: "FEED_LIMIT", auth: "AUTH_LIMIT",
+  stop: "STOP_LIMIT",
 };
 
 // The address Cloudflare saw. The edge sets this header itself and drops any
@@ -44,7 +50,7 @@ export function clientKey(c: Context<AppEnv>): string {
 
 export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response | void> {
   let bucket = bucketFor(c.req.method, c.req.path);
-  if (bucket === "auth" && !accountsEnabled(c.env)) bucket = "page";
+  if ((bucket === "auth" || bucket === "stop") && !accountsEnabled(c.env)) bucket = "page";
   const limiter = c.env[BINDING[bucket]] as RateLimit | undefined;
   if (!limiter) return next();
   let allowed = true;

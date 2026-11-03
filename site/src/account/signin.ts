@@ -1,7 +1,9 @@
 // Sign-in by a code sent to the address: no password exists anywhere. A
 // request makes a 6-digit code and a link token together; both are random,
 // both are stored only as SHA-256 hashes, either one works once, and both
-// end 15 minutes after the request. Five wrong codes lock the request.
+// end 15 minutes after the request. Five wrong codes in an hour lock the
+// address for the rest of the hour, whatever requests it holds: a new
+// request is made and sent as usual, and does not reset the count.
 //
 // Nothing here tells a known address from an unknown one: a request for any
 // address makes the same row and the same message, and the user row is
@@ -13,8 +15,11 @@ import { AUDIT_DAYS, audit } from "./audit";
 import { newCode, newId, plusDays, plusMinutes, randomHex, sameHash, sha256Hex } from "./secrets";
 
 export const CODE_MINUTES = 15;
+// Wrong codes (or wrong link secrets) an address may have in an hour, across
+// all its requests.
 export const CODE_TRIES = 5;
 export const CODES_PER_HOUR = 5;
+const HOUR_MS = 3_600_000;
 const CODE_RE = /^[0-9]{6}$/;
 const TOKEN_RE = /^([0-9a-f]{32})\.([0-9a-f]{64})$/;
 
@@ -46,9 +51,11 @@ export async function issueCode(env: Env, email: string, ip: string | null, now 
   return { code, token: `${id}.${secret}`, userId: user?.id ?? null };
 }
 
+// left: the wrong tries the address has left this hour, after this one.
 export type Checked =
   | { ok: true; email: string }
-  | { ok: false; reason: "wrong" | "locked" | "stale" };
+  | { ok: false; reason: "wrong"; left: number }
+  | { ok: false; reason: "locked" | "stale" };
 
 type Live = { id: string; email: string; code_hash: string; link_hash: string; attempts: number };
 
@@ -65,19 +72,49 @@ async function consume(env: Env, row: Live, now: Date): Promise<Checked> {
   return { ok: true, email: row.email };
 }
 
+// -- the hour's wrong tries per address -----------------------------------------------
+
+// A try is claimed before it is compared: a row in code_misses, written only
+// while the address has fewer than CODE_TRIES rows in the last hour, in one
+// statement, so tries sent at the same moment cannot pass the cap together.
+// The row stays as the miss when the try is wrong, and goes when it matches
+// or finds nothing live to compare. Null: the address is locked.
+async function claimTry(env: Env, email: string, now: Date): Promise<string | null> {
+  const id = newId();
+  const res = await env.ACCOUNTS!.prepare(
+    "INSERT INTO code_misses (id, email, at) SELECT ?, ?, ? WHERE (SELECT COUNT(*) FROM code_misses WHERE email = ? AND at > ?) < ?",
+  ).bind(id, email, now.toISOString(), email, new Date(now.getTime() - HOUR_MS).toISOString(), CODE_TRIES).run();
+  return (res.meta?.changes ?? 0) === 1 ? id : null;
+}
+
+async function release(env: Env, claim: string): Promise<void> {
+  await env.ACCOUNTS!.prepare("DELETE FROM code_misses WHERE id = ?").bind(claim).run();
+}
+
+async function triesLeft(env: Env, email: string, now: Date): Promise<number> {
+  const row = await env.ACCOUNTS!.prepare("SELECT COUNT(*) AS n FROM code_misses WHERE email = ? AND at > ?")
+    .bind(email, new Date(now.getTime() - HOUR_MS).toISOString()).first<{ n: number }>();
+  return Math.max(0, CODE_TRIES - (row?.n ?? 0));
+}
+
 // A typed code against every live request for the address (at most
 // CODES_PER_HOUR). Each hash is compared in full, whatever matched before. A
-// wrong code counts against every live request, so the guesses an address
-// can take are CODE_TRIES per request, whichever request they aim at.
+// wrong code is one of the address's CODE_TRIES for the hour, whichever
+// request it aimed at; it also counts against each live request.
 export async function checkCode(env: Env, email: string, code: string, now = new Date()): Promise<Checked> {
   const db = env.ACCOUNTS!;
   const at = now.toISOString();
+  const claim = await claimTry(env, email, now);
+  if (!claim) return { ok: false, reason: "locked" };
   const res = await db.prepare(
     "SELECT id, email, code_hash, link_hash, attempts FROM magic_codes " +
     "WHERE email = ? AND used_at IS NULL AND expires_at > ? AND attempts < ? ORDER BY created_at DESC LIMIT ?",
   ).bind(email, at, CODE_TRIES, CODES_PER_HOUR).all<Live>();
   const live = res.results ?? [];
-  if (!live.length) return { ok: false, reason: "stale" };
+  if (!live.length) {
+    await release(env, claim);
+    return { ok: false, reason: "stale" };
+  }
   let match: Live | null = null;
   if (CODE_RE.test(code)) {
     for (const row of live) {
@@ -85,15 +122,20 @@ export async function checkCode(env: Env, email: string, code: string, now = new
       if (same && !match) match = row;
     }
   }
-  if (match) return consume(env, match, now);
+  if (match) {
+    const done = await consume(env, match, now);
+    await release(env, claim);
+    return done;
+  }
   await db.batch(live.map((row) => db.prepare("UPDATE magic_codes SET attempts = attempts + 1 WHERE id = ?").bind(row.id)));
-  const locked = live.every((row) => row.attempts + 1 >= CODE_TRIES);
-  await audit(env, null, locked ? "code_locked" : "code_wrong", null, now);
-  return { ok: false, reason: locked ? "locked" : "wrong" };
+  const left = await triesLeft(env, email, now);
+  await audit(env, null, left === 0 ? "code_locked" : "code_wrong", null, now);
+  return left === 0 ? { ok: false, reason: "locked" } : { ok: false, reason: "wrong", left };
 }
 
-// The link's token: the request's id and its secret. A token that names a
-// live request with the wrong secret counts as a wrong try against it.
+// The link's token: the request's id and its secret. While the address is
+// locked a link answers locked too; a wrong secret for a live request is one
+// of the address's wrong tries, and answers as a stale link does.
 export async function checkLink(env: Env, token: string, now = new Date()): Promise<Checked> {
   const m = TOKEN_RE.exec(token);
   if (!m) return { ok: false, reason: "stale" };
@@ -104,12 +146,19 @@ export async function checkLink(env: Env, token: string, now = new Date()): Prom
     "SELECT id, email, code_hash, link_hash, attempts FROM magic_codes WHERE id = ? AND used_at IS NULL AND expires_at > ?",
   ).bind(id, at).first<Live>();
   if (!row) return { ok: false, reason: "stale" };
-  if (row.attempts >= CODE_TRIES) return { ok: false, reason: "locked" };
+  const claim = await claimTry(env, row.email, now);
+  if (!claim) return { ok: false, reason: "locked" };
+  if (row.attempts >= CODE_TRIES) {
+    await release(env, claim);
+    return { ok: false, reason: "locked" };
+  }
   if (!sameHash(await sha256Hex(secret), row.link_hash)) {
     await db.prepare("UPDATE magic_codes SET attempts = attempts + 1 WHERE id = ?").bind(id).run();
     return { ok: false, reason: "stale" };
   }
-  return consume(env, row, now);
+  const done = await consume(env, row, now);
+  await release(env, claim);
+  return done;
 }
 
 // The user for an address that has just proved it: the existing active row,
@@ -130,7 +179,7 @@ export async function findOrCreateUser(env: Env, email: string, lang: Lang, now 
   return { id: user.id, created: (res.meta?.changes ?? 0) === 1 };
 }
 
-// Rows past their keeping: sign-in requests after a day, sessions 90 days
+// Rows past their keeping: sign-in requests and wrong tries after a day, sessions 90 days
 // after they ended, the audit trail after 90 days. Run with each sign-in
 // request, so the tables stay small without a schedule of their own.
 export async function sweep(env: Env, now = new Date()): Promise<void> {
@@ -140,6 +189,7 @@ export async function sweep(env: Env, now = new Date()): Promise<void> {
   try {
     await db.batch([
       db.prepare("DELETE FROM magic_codes WHERE created_at < ?").bind(day),
+      db.prepare("DELETE FROM code_misses WHERE at < ?").bind(day),
       db.prepare("DELETE FROM sessions WHERE expires_at < ? OR (revoked_at IS NOT NULL AND revoked_at < ?)").bind(old, old),
       db.prepare("DELETE FROM audit WHERE at < ?").bind(old),
     ]);

@@ -58,7 +58,7 @@ import {
   type Account, type UaClass, SESSION_COOKIE, clearSessionCookie, csrfValid, markSignedOut, readSession, revokeAllSessions,
   revokeSession, startSession,
 } from "./session";
-import { CODE_MINUTES, CODES_PER_HOUR, type Checked, checkCode, checkLink, findOrCreateUser, issueCode, sweep } from "./signin";
+import { CODE_MINUTES, CODES_PER_HOUR, CODE_TRIES, type Checked, checkCode, checkLink, findOrCreateUser, issueCode, sweep } from "./signin";
 import { accountsEnabled } from "./switch";
 
 export const account = new Hono<AppEnv>();
@@ -212,16 +212,26 @@ account.post("/check", async (c) => {
       checked = await checkLink(c.env, token, now);
     } else {
       email = normalizeEmail(typed);
-      checked = email ? await checkCode(c.env, email, clean(fields, "code", 20).replace(/\s+/g, ""), now) : { ok: false, reason: "wrong" };
+      checked = email ? await checkCode(c.env, email, clean(fields, "code", 20).replace(/\s+/g, ""), now) : { ok: false, reason: "wrong", left: CODE_TRIES };
     }
     if (!checked.ok) {
-      const errors = [CHECK_ERROR[checked.reason]];
+      // The third and fourth wrong codes of the hour say how many tries are left.
+      const left = checked.reason === "wrong" ? checked.left : null;
+      const errors: Key[] = [left === 2 ? "account.err_code_two" : left === 1 ? "account.err_code_one" : CHECK_ERROR[checked.reason]];
       if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors), 400);
       const title = t(lang, sentForm ? "account.check_title" : "account.enter_title");
       return accountPage(c, title, codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors }), 400);
     }
     const user = await findOrCreateUser(c.env, checked.email, lang, now);
     if (user.created) await audit(c.env, user.id, "user_created", null, now);
+    // The session this browser held until now (the same account or another)
+    // ends here rather than living on unseen until its 30 days run out: its
+    // cookie is about to be replaced.
+    const before = await readSession(c);
+    if (before.state === "ok") {
+      await revokeSession(c.env, before.account.sessionId, now);
+      await audit(c.env, before.account.userId, "signed_out", "replaced", now);
+    }
     await startSession(c, user.id, uaClass(c), now);
     await audit(c.env, user.id, "signed_in", token ? "link" : "code", now);
     const pending = await pendingInterest(c.env, checked.email, user.id).catch(() => []);
@@ -499,6 +509,7 @@ export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new 
     db.prepare("DELETE FROM saved_searches WHERE user_id = ?").bind(who.userId),
     db.prepare("DELETE FROM api_keys WHERE user_id = ?").bind(who.userId),
     db.prepare("DELETE FROM magic_codes WHERE user_id = ? OR email = ?").bind(who.userId, who.email),
+    db.prepare("DELETE FROM code_misses WHERE email = ?").bind(who.email),
     db.prepare(
       "UPDATE users SET email = ?, status = 'deleted', deleted_at = ?, last_seen_at = NULL, plan = 'free', plan_until = NULL WHERE id = ?",
     ).bind(tomb, at, who.userId),

@@ -116,8 +116,8 @@ GIVEN_NAMES_PATH = config.PACKAGE_DATA / "given_names.txt"
 # an email address is withheld too), so that the next run reads every file
 # again and recomputes the withheld rows (refresh_person_test).
 PERSON_TEST_VERSION = 6
-# An email address written in a name field ("chemistryanalyzer@outlook.com",
-# "Canada@carahsoft.com"): a contact detail, often a person's, withheld like a
+# An email address written in a name field ("labanalyzer@example.invalid",
+# "Canada@softreseller.example.invalid"): a contact detail, often a person's, withheld like a
 # person's name.
 EMAIL_IN_NAME_RE = re.compile(r"[\w.+%'-]+@[\w-]+(?:\.[\w-]+)+")
 PERSON_TEST_KEY = "person_test_version"

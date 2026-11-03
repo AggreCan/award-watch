@@ -44,6 +44,10 @@ export type Notice =
   | { kind: "checkout"; userId: string; customerId: string; subscriptionId: string; paid: boolean }
   | { kind: "period_paid"; subscriptionId: string; customerId: string; userId: string | null; periodEnd: string | null }
   | { kind: "subscription"; subscription: SubscriptionState; deleted: boolean }
+  // A charge refunded in full, or disputed: the money for a period went back
+  // or is being taken back. customerId is null when the notice does not name
+  // it (a dispute), and the charge is read for it.
+  | { kind: "reversed"; chargeId: string; customerId: string | null; why: "refunded" | "disputed" }
   | { kind: "other" };
 
 export type NoticeResult = { ok: true; id: string; type: string; notice: Notice } | { ok: false };
@@ -66,6 +70,9 @@ export interface PaymentSource {
   // "missing" when the service has no such subscription; null when it could
   // not be asked.
   subscription(id: string): Promise<ReadSubscription>;
+  // The customer a charge was made to: "missing" when the service has no
+  // such charge or it names no customer; null when it could not be asked.
+  chargeCustomer(id: string): Promise<string | "missing" | null>;
   // Ends a subscription at once; true when it is ended (or already was).
   cancel(id: string): Promise<boolean>;
 }
@@ -78,6 +85,7 @@ export const stubPayments: PaymentSource = {
   portalUrl: async () => null,
   readNotice: async () => ({ ok: false }),
   subscription: async () => null,
+  chargeCustomer: async () => null,
   cancel: async () => false,
 };
 

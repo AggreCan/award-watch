@@ -54,7 +54,20 @@ CREATE TABLE IF NOT EXISTS magic_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_magic_codes_email ON magic_codes(email, created_at);
 
--- A signed-in browser. The cookie aw_session holds "<id>.<secret>"; the row
+-- A wrong code or link tried for an address: at most five in an hour per
+-- address, across all its sign-in requests (src/account/signin.ts). A row is
+-- written before the try is compared, in one statement with the hour's
+-- count, and removed when the try matches or finds nothing to compare, so
+-- tries sent at the same moment cannot pass the cap. A new sign-in request
+-- does not clear them. Rows go after a day, and with the account.
+CREATE TABLE IF NOT EXISTS code_misses (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_code_misses_email ON code_misses(email, at);
+
+-- A signed-in browser. The cookie __Host-aw_session holds "<id>.<secret>"; the row
 -- holds the id and SHA-256 of the secret, never the secret. 30 days,
 -- extended on use. ua_class is the device class views.ts reads from the user
 -- agent, never the user agent itself. Rows go 90 days after they end.

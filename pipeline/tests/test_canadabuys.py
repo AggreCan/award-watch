@@ -434,13 +434,13 @@ def test_a_buyer_spelling_that_names_no_institution_is_listed_for_review_never_l
 
 
 def test_a_supplier_named_by_an_email_address_is_withheld_like_a_person(conn, fixtures, tmp_path, out_dir):
-    """Five supplier names in the files are email addresses ("chemistryanalyzer@outlook.com"). They are
+    """Five supplier names in the files are email addresses ("labanalyzer@example.invalid"). They are
     withheld at load like a person's name: the record stays, nothing names the supplier, and the spelling
     goes to the review file only."""
     header, rows = read_csv(fixtures / FILES["awards"])
     row = dict(next(r for r in rows if r["referenceNumber-numeroReference"] == "cb-537-68386900"))
     for column in ("supplierLegalName-nomLegalFournisseur-eng", "supplierLegalName-nomLegalFournisseur-fra"):
-        row[column] = "chemistryanalyzer@outlook.com"
+        row[column] = "labanalyzer@example.invalid"
     (tmp_path / "s").mkdir()
     write_csv(tmp_path / "s" / "2026-2027-awardNotice.csv", header, [row])
     canadabuys.run(conn, None, "awards", now=DAY1, samples=tmp_path / "s")
@@ -450,6 +450,6 @@ def test_a_supplier_named_by_an_email_address_is_withheld_like_a_person(conn, fi
     for table, column in (("organizations", "display_name"), ("organization_names", "raw_name")):
         assert conn.execute(f"SELECT 1 FROM {table} WHERE {column} LIKE '%@%'").fetchone() is None
     review = (out_dir / "review" / "awards-persons.txt").read_text(encoding="utf-8")
-    assert "chemistryanalyzer@outlook.com" in review.splitlines()
+    assert "labanalyzer@example.invalid" in review.splitlines()
     log = conn.execute("SELECT detail, notice FROM sources_log WHERE source = 'awards'").fetchone()
     assert "@" not in log["notice"] and "@" not in log["detail"] and "withheld=1" in log["detail"]

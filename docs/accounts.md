@@ -52,14 +52,16 @@ Every datetime is ISO in UTC.
 | `entitlements` | plan, source (`manual` or `stripe`), start, end, revocation, a reference | an address, card details |
 | `deliveries` | one row per delivery run of a saved search: the run's time, how many records matched, and `sent`, `failed` or `empty` | the message, the address |
 | `delivery_tokens` | the secret of each delivered search's stop link, made on its first delivery | anything else |
+| `code_misses` | one row per wrong code or link tried for an address: the address and the time, for the hour's count | the code tried, the IP address |
 | `audit` | user id, event name, time, a short fixed detail | an address, a code, a token, a key |
 
 Limits: at most 25 saved searches per account (Free keeps 3), at most 5 live
 API keys, at most 5 sign-in requests per address per hour, at most 5 wrong
-codes per request.
+codes per address per hour across all its requests.
 
-Retention: sign-in requests are deleted after a day; sessions 90 days after
-they end; audit rows after 90 days. The sweep runs with each sign-in request.
+Retention: sign-in requests and wrong tries are deleted after a day (and
+with the account); sessions 90 days after they end; audit rows after 90
+days. The sweep runs with each sign-in request.
 
 ## Sign-in flow
 
@@ -76,15 +78,26 @@ they end; audit rows after 90 days. The sweep runs with each sign-in request.
 4. `POST /account/check` with the address and the code, or with the link's
    token. `GET /account/check?token=...` (the link) shows a button that posts
    the token, so a mail scanner that opens the link uses nothing up. The
-   hashes are compared in constant time. A wrong code counts against every
-   open request for the address; the fifth wrong code locks the request.
-   A code or link is single use, and using one closes the address's other
+   hashes are compared in constant time. An address has five wrong tries
+   an hour, across all its requests (a link with a wrong secret is one):
+   after the third wrong code the page says two tries remain this hour,
+   after the fourth one, and the fifth locks the address until an hour has
+   passed since the first of them, when a code or a link answers "Too many
+   wrong codes for this address. Try again in an hour." A new request
+   during the lock is made and sent as usual and changes nothing about it.
+   Each try is counted before it is compared, in one statement with the
+   hour's count, so tries sent at the same moment cannot pass the five. A
+   code or link is single use, and using one closes the address's other
    open requests.
 5. On a match the site creates the user on first sign-in, creates a session
-   and sets the cookie `aw_session` (`HttpOnly`, `Secure`, `SameSite=Lax`,
+   and sets the cookie `__Host-aw_session` (`HttpOnly`, `Secure`, `SameSite=Lax`,
    `Path=/`, 30 days). The cookie holds the session id and a 32-byte
    secret; the row holds the secret's hash. The session is extended to 30
-   days from the last use, at most once an hour.
+   days from the last use, at most once an hour. The `__Host-` prefix makes
+   a browser refuse the cookie unless it is `Secure`, on `Path=/` and
+   without a `Domain`, so no other host under the domain can set or shadow
+   it. A session the browser already held, for this account or another,
+   is revoked when the new one starts.
 6. `POST /account/sign-out` ends the session on this browser, or on every
    browser (`scope=all`).
 
@@ -112,7 +125,9 @@ valid session cookie, and requiring the three to be identical byte for byte.
 With the switch on, the rail's "Your lists" group gains one item (the
 signed-in address, or "Sign in") and the privacy page's first section
 describes accounts; a page that shows a signed-in address is sent
-`Cache-Control: private, no-store`.
+`Cache-Control: private, no-store`; and every HTML page carries `Vary:
+Cookie`, since one address renders differently with a session and without
+one. `/robots.txt` disallows `/account` whatever the switch.
 
 The switch also starts the one paid gate on a public page, the radar's
 depth (`radar_depth`, `site/src/plan.ts` `radarWindowLocked`). For a request
@@ -300,7 +315,8 @@ The test suite runs this same insert (`MANUAL_GRANT_SQL` in
 - **Hashes only.** Codes, link secrets, session secrets and API keys are
   stored as SHA-256 hashes and compared in constant time. A copy of the
   database signs no one in and holds no usable key.
-- **Short-lived, single-use codes.** 15 minutes, one use, 5 wrong tries.
+- **Short-lived, single-use codes.** 15 minutes, one use, 5 wrong tries an
+  hour per address, whatever requests it holds.
 - **Rate limits per address and per email.** `AUTH_LIMIT` (5 a minute per
   IP address) on both sign-in posts; 5 requests an hour per email in the
   database.
@@ -312,12 +328,16 @@ The test suite runs this same insert (`MANUAL_GRANT_SQL` in
 - **Sessions are revocable.** Sign out on one browser or on all of them;
   deletion revokes every session.
 - **Fail open to outages, closed to revocation.** When the database cannot
-  be read, a session this Worker instance has already seen keeps its last
-  known state until the session's own end, and its plan until the plan's
-  own end; any other request gets the free view (`planOfRequest` never
-  throws on a public page). An API key this instance has verified keeps its
-  last known answer the same way; any other key gets a 503, since a key of
-  the right shape proves nothing until the database has seen it. When the
+  be read, a session this Worker instance verified within the last hour
+  keeps its last known state, its plan until the plan's own end; past that
+  hour, or for a session the instance never verified, the request is
+  treated as one the database cannot answer (the free view on a public page,
+  since `planOfRequest` never throws; the "cannot be reached" page on an
+  account page). A revocation made through another instance is therefore
+  unseen for at most an hour. An API key this instance verified within the
+  hour keeps its last known answer the same way; any other key gets a 503,
+  since a key of the right shape proves nothing until the database has
+  seen it. When the
   database says a session, a key or an entitlement is revoked or ended, it
   stops on that request. A response to a key is sent `private, no-store`.
 - **Stop links.** Each delivered search has a 16-byte random secret, the one
@@ -325,7 +345,11 @@ The test suite runs this same insert (`MANUAL_GRANT_SQL` in
   It can turn that one search's delivery off and nothing else; a wrong or
   stale link is the site's 404.
 - **No PII in logs or audit.** Log lines and audit details name events and
-  counts, never an address, a code, a token or a key.
+  counts, never an address, a code, a token or a key. Workers invocation
+  logs are off (`observability.logs.invocation_logs` in `wrangler.jsonc`):
+  they record each request's URL, and the sign-in link's token and a
+  delivery's stop secret travel in a query string. The console lines are
+  kept.
 - **Prepared statements only.** Every query binds its values.
 
 ## What is deliberately not stored
@@ -441,6 +465,9 @@ search is delivered and kept until the search or the account is deleted.
 - A wrong, malformed or stale link (a deleted search or account) answers
   the site's 404. No session and no `Origin` are asked for: the secret is
   the proof, and it can only turn that one delivery off.
+- Both methods count against `STOP_LIMIT` (20 a minute per IP address)
+  while the switch is on: each request reads the database, and one-click
+  posts come from the mail providers' servers.
 
 A reply to the `mailto:` address reaches the contact inbox, where the
 operator turns the delivery off by hand.
@@ -487,7 +514,7 @@ API version (`STRIPE_VERSION`, `2026-10-28.endive`).
 | Route | Guards | What it does |
 |---|---|---|
 | `GET /account/billing` | session | The plan today. Without a subscription: what Pro includes, a monthly and a yearly button with the configured prices and "Taxes added at checkout". With one: its status, the end of the period paid and a button to Stripe's portal. Without the keys or the prices: "Paying for Pro is not available yet." |
-| `POST /account/billing/checkout` | session, CSRF, Origin | Creates a Checkout Session and redirects (303) to it. A user whose subscription can still bill goes back to the billing page instead. |
+| `POST /account/billing/checkout` | session, CSRF, Origin | Creates a Checkout Session and redirects (303) to it. A user whose subscription can still bill is sent to Stripe's portal instead (a billing page left open from before the subscription would otherwise start a second one). |
 | `POST /account/billing/portal` | session, CSRF, Origin | Creates a portal session for the stored customer and redirects (303) to it. |
 | `POST /account/billing/webhook` | Stripe's signature | Takes Stripe's notices. |
 
@@ -530,6 +557,8 @@ checkout, granted", "stripe renewed, extended", "stripe ended, canceled",
 | `invoice.paid` | Extends the subscription's live row to the paid period's end plus 3 days (never shortening it), or writes a row when none is live (a first period whose checkout notice has not arrived, a renewal paid after a lapse). Nothing for a subscription already canceled or expired. |
 | `customer.subscription.updated` | Records the status and the period end. `canceled`, `unpaid` or `incomplete_expired` sets the live row's end to now. `past_due` changes nothing: Pro runs to the end of the grace while Stripe retries the card. |
 | `customer.subscription.deleted` | Sets the live row's end to now. |
+| `charge.refunded` | When the charge is refunded in full (`refunded` true, or `amount_refunded` reaching `amount`): sets the end of every live Stripe row of the account bound to the charge's customer to now. A partial refund changes nothing. |
+| `charge.dispute.created` | The same as a full refund, for the account bound to the disputed charge's customer (the charge is read from Stripe for it; a failed read answers 500 and the notice comes again). |
 | any other type | Recorded and answered 200; nothing changes. |
 
 The user is found by the subscription or customer already bound, and
@@ -557,10 +586,12 @@ until it gets a 2xx) answers 200 the second time and changes nothing.
   billing line if the payment tables cannot be read.
 - **Ends fail closed.** `canceled`, `unpaid`, `incomplete_expired` and every
   deletion end Pro on that notice, and a late `invoice.paid` for a
-  subscription already ended grants nothing. A refund or a dispute is not
-  read from Stripe: when one should end Pro, cancel the subscription in
-  Stripe (its deletion notice ends the row) or revoke the row by hand
-  (*Granting a plan by hand*).
+  subscription already ended grants nothing. A full refund or a dispute
+  ends the account's Stripe Pro on its notice. Neither cancels the
+  subscription: cancel it in the dashboard when it should not bill again,
+  since its next paid invoice grants Pro again. A dispute that is won does
+  not bring Pro back; grant the rest of the period by hand (*Granting a
+  plan by hand*).
 - **Deleting an account cancels its subscription first.** `POST
   /account/delete` cancels a subscription that can still bill (immediately,
   no refund) before anything is deleted; if Stripe cannot confirm it, the
@@ -601,8 +632,9 @@ is deleted, tied to the id alone like the entitlement rows.
 5. **The webhook endpoint** (Workbench, Webhooks, Create an event
    destination): your account, payload **Snapshot**, API version
    `2026-10-28.endive`, the events `checkout.session.completed`,
-   `invoice.paid`, `customer.subscription.updated` and
-   `customer.subscription.deleted`, endpoint URL
+   `invoice.paid`, `customer.subscription.updated`,
+   `customer.subscription.deleted`, `charge.refunded` and
+   `charge.dispute.created`, endpoint URL
    `https://awardwatch.ca/account/billing/webhook`. Reveal the signing secret
    (`whsec_...`).
 6. **The two secrets**, from `site/`:
@@ -613,8 +645,9 @@ is deleted, tied to the id alone like the entitlement rows.
    ```
 
    A restricted key (`rk_live_...`) with write access to Checkout Sessions,
-   the customer portal and Subscriptions is enough, and holds less than the
-   account's full secret key.
+   the customer portal and Subscriptions, and read access to Charges (a
+   dispute names its charge, which is read for the customer), is enough,
+   and holds less than the account's full secret key.
 7. **The four variables** in `site/wrangler.jsonc`: `STRIPE_PRICE_MONTHLY`
    and `STRIPE_PRICE_YEARLY` (the price ids), `PRICE_MONTHLY_CAD` `"19"` and
    `PRICE_YEARLY_CAD` `"190"` (shown on the billing page as CA$19 and
@@ -655,8 +688,12 @@ their end.
 ### Known limits
 
 - Two checkouts started in two tabs before either finishes make two
-  subscriptions. The second is bound only if the first has ended; the audit
-  records "stripe second subscription". Refund and cancel the extra one in
-  the dashboard.
+  subscriptions (once one is bound, the checkout button sends the user to
+  the portal instead). The second is bound only if the first has ended; the
+  audit records "stripe second subscription". Cancel the extra one in the
+  dashboard, then refund it. A full refund ends every live Stripe row of
+  the account bound to the charge's customer, whichever subscription the
+  charge paid for: when both subscriptions share the customer, grant the
+  rest of the paid period by hand afterwards.
 - Prices change in Stripe (a new price, then the variables); existing
   subscriptions keep their price until moved in the dashboard.

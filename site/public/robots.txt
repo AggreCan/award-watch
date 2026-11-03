@@ -12,6 +12,9 @@ Disallow: /organizations/*/respond
 # Search results: every query would be a page, and each one reads the search
 # database. The directory and the sitemaps reach every profile.
 Disallow: /search
+# Accounts: sign-in, a reader's own pages and the links in their messages.
+# Each also says noindex; this keeps crawlers from asking at all.
+Disallow: /account
 # A filtered tender list, a paged or filtered ranking, a day of new notices
 # and a correction form opened from a profile (?organization=) each name the
 # plain page as their canonical URL, so crawlers need not walk the query
@@ -34,6 +37,7 @@ Allow: /
 Disallow: /api/
 Disallow: /organizations/*/respond
 Disallow: /search
+Disallow: /account
 Disallow: /tenders?
 Allow: /tenders?lang=fr$
 Disallow: /tenders/new?

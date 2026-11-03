@@ -426,7 +426,7 @@ describe("deletion", () => {
     await addInterest(email, "segment", "/segments/43", "label");
     const res = await post("/account/delete", { csrf: token, confirm: "yes" }, { cookie });
     expect(res.status).toBe(200);
-    expect(res.headers.getSetCookie().join("\n")).toMatch(/aw_session=;.*Max-Age=0/);
+    expect(res.headers.getSetCookie().join("\n")).toMatch(/__Host-aw_session=;.*Max-Age=0/);
     const html = await res.text();
     expect(html).toContain("<h1>Account Deleted</h1>");
     expect(html).not.toContain(email);
@@ -502,8 +502,8 @@ describe("planOfRequest", () => {
     expect(await ask(onEnv({ ACCOUNTS: db }))).toBe("free");
     expect(await ask(onEnv({ ACCOUNTS: db }), "lang=fr")).toBe("free");
     expect(used).toEqual([]);
-    expect(await ask(onEnv(), `aw_session=${"a".repeat(32)}.${"b".repeat(64)}`)).toBe("free");
-    expect(await ask(onEnv(), "aw_session=junk")).toBe("free");
+    expect(await ask(onEnv(), `__Host-aw_session=${"a".repeat(32)}.${"b".repeat(64)}`)).toBe("free");
+    expect(await ask(onEnv(), "__Host-aw_session=junk")).toBe("free");
     const email = newEmail("plan-revoked");
     const cookie = await signIn(email);
     await grantPro(email);

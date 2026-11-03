@@ -240,11 +240,11 @@ describe("the webhook's notices", () => {
   });
 
   it("record an unknown type and answer 200", async () => {
-    const unknown = event("charge.refunded", { id: "ch_1", object: "charge" });
+    const unknown = event("payment_intent.created", { id: "pi_1", object: "payment_intent" });
     const res = await deliver(unknown);
     expect(res.status).toBe(200);
     expect(await eventsNamed(unknown.id)).toBe(1);
-    expect(await ACCOUNTS.prepare("SELECT type FROM payment_events WHERE id = ?").bind(unknown.id).first()).toEqual({ type: "charge.refunded" });
+    expect(await ACCOUNTS.prepare("SELECT type FROM payment_events WHERE id = ?").bind(unknown.id).first()).toEqual({ type: "payment_intent.created" });
   });
 
   it("checkout.session.completed: binds the customer and grants Pro to the period end plus the grace", async () => {
@@ -454,13 +454,15 @@ describe("checkout and the portal", () => {
     expect(sent).toEqual([]);
   });
 
-  it("sends a subscriber back to the page instead of starting a second subscription", async () => {
-    const { cookie } = await subscriber("no-second");
+  it("sends a subscriber to the portal instead of starting a second subscription", async () => {
+    const { cookie, cus } = await subscriber("no-second");
     sent = [];
     const token = await csrf(cookie, "/account/billing", { env: payEnv() });
     const res = await post("/account/billing/checkout", { csrf: token, interval: "monthly" }, { cookie, env: payEnv() });
-    expect(res.headers.get("location")).toBe("/account/billing");
-    expect(sent).toEqual([]);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("https://billing.stripe.com/p/session/test_1");
+    expect(sent.map((s) => `${s.method} ${s.url}`)).toEqual(["POST https://api.stripe.com/v1/billing_portal/sessions"]);
+    expect(sent[0].form.get("customer")).toBe(cus);
   });
 
   it("says the payment service could not be reached when Stripe fails, and offers no checkout without the prices", async () => {

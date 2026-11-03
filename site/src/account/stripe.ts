@@ -180,6 +180,25 @@ function readInvoice(o: J): Notice {
   return { kind: "period_paid", subscriptionId, customerId, userId, periodEnd };
 }
 
+// A Charge refunded in full: refunded true, or the amount refunded reaching
+// the amount charged. A partial refund changes nothing. The charge names its
+// customer; it no longer names its invoice in current versions.
+function readRefund(o: J): Notice {
+  const chargeId = str(o.id);
+  const amount = typeof o.amount === "number" ? o.amount : null;
+  const back = typeof o.amount_refunded === "number" ? o.amount_refunded : null;
+  const full = o.refunded === true || (amount !== null && amount > 0 && back !== null && back >= amount);
+  if (!chargeId || !full) return { kind: "other" };
+  return { kind: "reversed", chargeId, customerId: idOf(o.customer), why: "refunded" };
+}
+
+// A Dispute names its charge but not the customer, which billing.tsx reads
+// from the charge.
+function readDispute(o: J): Notice {
+  const chargeId = idOf(o.charge);
+  return chargeId ? { kind: "reversed", chargeId, customerId: null, why: "disputed" } : { kind: "other" };
+}
+
 export function readEvent(event: unknown): NoticeResult {
   const e = obj(event);
   const id = str(e?.id);
@@ -193,7 +212,8 @@ export function readEvent(event: unknown): NoticeResult {
     else if (type === "customer.subscription.updated" || type === "customer.subscription.deleted") {
       const subscription = readSubscription(o);
       if (subscription) notice = { kind: "subscription", subscription, deleted: type === "customer.subscription.deleted" };
-    }
+    } else if (type === "charge.refunded") notice = readRefund(o);
+    else if (type === "charge.dispute.created") notice = readDispute(o);
   }
   return { ok: true, id, type, notice };
 }
@@ -328,6 +348,12 @@ export function stripeSource(env: Env): PaymentSource | null {
     },
 
     subscription,
+
+    async chargeCustomer(id: string): Promise<string | "missing" | null> {
+      const res = await call<J>(key, "GET", `/charges/${encodeURIComponent(id)}`, "charge read");
+      if (!res.ok) return res.status === 404 ? "missing" : null;
+      return idOf(res.body.customer) ?? "missing";
+    },
 
     // An immediate cancellation: no further charge, no refund (Stripe
     // prorates nothing unless asked). When the call fails, the subscription

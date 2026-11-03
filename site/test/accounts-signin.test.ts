@@ -26,7 +26,7 @@ describe("the sign-in request", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
-    expect(res.headers.getSetCookie().some((c) => c.startsWith("aw_session="))).toBe(false);
+    expect(res.headers.getSetCookie().some((c) => c.startsWith("__Host-aw_session="))).toBe(false);
     const html = await res.text();
     expect(html).toContain("<h1>Check Your Email</h1>");
     expect(html).toContain(`If <strong>${email}</strong> can receive mail`);
@@ -147,8 +147,8 @@ describe("the code", () => {
     const res = await post("/account/check", { email, code, sent: "1", lang: "fr" });
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe("/account");
-    const set = res.headers.getSetCookie().find((c) => c.startsWith("aw_session="))!;
-    expect(set).toMatch(/^aw_session=[0-9a-f]{32}\.[0-9a-f]{64};/);
+    const set = res.headers.getSetCookie().find((c) => c.startsWith("__Host-aw_session="))!;
+    expect(set).toMatch(/^__Host-aw_session=[0-9a-f]{32}\.[0-9a-f]{64};/);
     expect(set).toContain("Max-Age=2592000");
     expect(set).toContain("Path=/");
     expect(set).toContain("HttpOnly");
@@ -156,7 +156,7 @@ describe("the code", () => {
     expect(set).toContain("SameSite=Lax");
     const user = await ACCOUNTS.prepare("SELECT * FROM users WHERE email = ?").bind(email).first<Record<string, string>>();
     expect(user).toMatchObject({ status: "active", plan: "free", lang: "fr" });
-    const [, id, secret] = /^aw_session=([0-9a-f]{32})\.([0-9a-f]{64})/.exec(set)!;
+    const [, id, secret] = /^__Host-aw_session=([0-9a-f]{32})\.([0-9a-f]{64})/.exec(set)!;
     const session = await ACCOUNTS.prepare("SELECT * FROM sessions WHERE id = ?").bind(id).first<Record<string, string | null>>();
     expect(session?.user_id).toBe(user!.id);
     expect(session?.token_hash).toBe(await sha256Hex(secret));
@@ -207,14 +207,14 @@ describe("the code", () => {
     }
   });
 
-  it("locks a request after 5 wrong codes, so even the right one then fails", async () => {
+  it("locks the address after 5 wrong codes in an hour, so even the right one then fails", async () => {
     const email = newEmail();
     const { code } = await requestCode(email);
     const wrong = code === "123456" ? "654321" : "123456";
     const texts: string[] = [];
     for (let i = 0; i < CODE_TRIES; i++) texts.push(await (await post("/account/check", { email, code: wrong, sent: "1" })).text());
     expect(texts[3]).toContain("That code does not match.");
-    expect(texts[4]).toContain("Too many wrong codes. Ask for a new one.");
+    expect(texts[4]).toContain("Too many wrong codes for this address. Try again in an hour.");
     const res = await post("/account/check", { email, code, sent: "1" });
     expect(res.status).toBe(400);
     expect(sessionCookie(res)).toBe("");
@@ -237,12 +237,12 @@ describe("the link", () => {
     const { token } = await requestCode(email);
     const page = await get(`/account/check?token=${token}`);
     expect(page.status).toBe(200);
-    expect(page.headers.getSetCookie().some((c) => c.startsWith("aw_session="))).toBe(false);
+    expect(page.headers.getSetCookie().some((c) => c.startsWith("__Host-aw_session="))).toBe(false);
     expect(await page.text()).toContain(`<input type="hidden" name="token" value="${token}"/>`);
     expect((await codeRows(email))[0].used_at).toBeNull();
     const res = await post("/account/check", { token });
     expect(res.status).toBe(303);
-    expect(sessionCookie(res)).toMatch(/^aw_session=/);
+    expect(sessionCookie(res)).toMatch(/^__Host-aw_session=/);
     const again = await post("/account/check", { token });
     expect(again.status).toBe(400);
     expect(await again.text()).toContain("has expired or was already used");
@@ -266,22 +266,22 @@ describe("sessions", () => {
       expect(res.status, path).toBe(303);
       expect(res.headers.get("location"), path).toBe("/account/sign-in");
     }
-    const forged = await get("/account", { cookie: `aw_session=${"a".repeat(32)}.${"b".repeat(64)}` });
+    const forged = await get("/account", { cookie: `__Host-aw_session=${"a".repeat(32)}.${"b".repeat(64)}` });
     expect(forged.status).toBe(303);
-    expect(forged.headers.getSetCookie().join("\n")).toMatch(/aw_session=;.*Max-Age=0/);
+    expect(forged.headers.getSetCookie().join("\n")).toMatch(/__Host-aw_session=;.*Max-Age=0/);
   });
 
   it("end at their expiry or revocation, and extend on use", async () => {
     const email = newEmail();
     const cookie = await signIn(email);
-    const id = /aw_session=([0-9a-f]{32})/.exec(cookie)![1];
+    const id = /__Host-aw_session=([0-9a-f]{32})/.exec(cookie)![1];
     // Last used two hours ago: the visit extends the session and re-sends the cookie.
     const twoHours = new Date(Date.now() - 2 * 3_600_000).toISOString();
     await ACCOUNTS.prepare("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?")
       .bind(twoHours, new Date(Date.now() + 86_400_000).toISOString(), id).run();
     const res = await get("/account", { cookie });
     expect(res.status).toBe(200);
-    expect(res.headers.getSetCookie().find((c) => c.startsWith("aw_session="))).toContain("Max-Age=2592000");
+    expect(res.headers.getSetCookie().find((c) => c.startsWith("__Host-aw_session="))).toContain("Max-Age=2592000");
     const row = await ACCOUNTS.prepare("SELECT expires_at FROM sessions WHERE id = ?").bind(id).first<{ expires_at: string }>();
     expect(Date.parse(row!.expires_at) - Date.now()).toBeGreaterThan(29 * 86_400_000);
     // Expired.
@@ -289,7 +289,7 @@ describe("sessions", () => {
     expect((await get("/account", { cookie })).status).toBe(303);
     // A fresh one, revoked.
     const other = await signIn(email);
-    await ACCOUNTS.prepare("UPDATE sessions SET revoked_at = ? WHERE id = ?").bind(new Date().toISOString(), /aw_session=([0-9a-f]{32})/.exec(other)![1]).run();
+    await ACCOUNTS.prepare("UPDATE sessions SET revoked_at = ? WHERE id = ?").bind(new Date().toISOString(), /__Host-aw_session=([0-9a-f]{32})/.exec(other)![1]).run();
     expect((await get("/account", { cookie: other })).status).toBe(303);
   });
 
@@ -301,7 +301,7 @@ describe("sessions", () => {
     const one = await post("/account/sign-out", { csrf: await csrf(a) }, { cookie: a });
     expect(one.status).toBe(303);
     expect(one.headers.get("location")).toBe("/account/sign-in?m=out");
-    expect(one.headers.getSetCookie().join("\n")).toMatch(/aw_session=;.*Max-Age=0/);
+    expect(one.headers.getSetCookie().join("\n")).toMatch(/__Host-aw_session=;.*Max-Age=0/);
     expect((await get("/account", { cookie: a })).status).toBe(303);
     expect((await get("/account", { cookie: b })).status).toBe(200);
     const all = await post("/account/sign-out", { csrf: await csrf(b), scope: "all" }, { cookie: b });

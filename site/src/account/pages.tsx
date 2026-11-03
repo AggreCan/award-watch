@@ -447,6 +447,7 @@ export function deleteView(lang: Lang, account: Account, errors?: Key[]) {
       <Panel title={t(lang, "account.panel_delete_what")} class="panel-form">
         <Errors lang={lang} errors={errors} />
         <ul class="account-list">
+          <li>{t(lang, "account.delete_subscription")}</li>
           <li>{t(lang, "account.delete_searches")}</li>
           <li>{t(lang, "account.delete_sessions")}</li>
           <li>{t(lang, "account.delete_interest")}</li>
