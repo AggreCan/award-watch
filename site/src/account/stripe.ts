@@ -34,6 +34,16 @@ export const SIGNATURE_TOLERANCE_S = 300;
 // Worker hold a large body before the signature is checked.
 export const NOTICE_MAX_BYTES = 1024 * 1024;
 const CALL_TIMEOUT_MS = 10_000;
+// Checkout sessions are created under an Idempotency-Key naming the user and
+// the ten minutes the request falls in: two checkouts started together (two
+// tabs, a double click) get the one session Stripe made for the first, so
+// they cannot start two subscriptions. A second request in the same minutes
+// with other parameters (the other interval, the other language) is refused
+// by Stripe and answered "busy"; one still in flight at Stripe answers 409
+// and is asked again shortly.
+export const CHECKOUT_WINDOW_MS = 10 * 60_000;
+const IN_FLIGHT_TRIES = 3;
+const IN_FLIGHT_WAIT_MS = 400;
 
 // Where checkout and the portal live. The billing page's forms redirect
 // there, so the page's Content-Security-Policy names them (billingFormAction);
@@ -87,10 +97,15 @@ export function billingFormAction(c: Context): string {
 
 // -- the API ------------------------------------------------------------------------
 
-type Call<T> = { ok: true; body: T } | { ok: false; status: number };
+// errorType: Stripe's error.type on a refusal (idempotency_error and the
+// like), read for the caller and never logged.
+type Call<T> = { ok: true; body: T } | { ok: false; status: number; errorType: string | null };
 
-async function call<T>(key: string, method: "GET" | "POST" | "DELETE", path: string, label: string, form?: [string, string][]): Promise<Call<T>> {
+async function call<T>(
+  key: string, method: "GET" | "POST" | "DELETE", path: string, label: string, form?: [string, string][], idempotencyKey?: string,
+): Promise<Call<T>> {
   const headers: Record<string, string> = { authorization: `Bearer ${key}`, "stripe-version": STRIPE_VERSION };
+  if (idempotencyKey) headers["idempotency-key"] = idempotencyKey;
   let body: string | undefined;
   if (form) {
     headers["content-type"] = "application/x-www-form-urlencoded";
@@ -100,13 +115,15 @@ async function call<T>(key: string, method: "GET" | "POST" | "DELETE", path: str
     const res = await fetch(`${STRIPE_API}${path}`, { method, headers, body, signal: AbortSignal.timeout(CALL_TIMEOUT_MS) });
     if (!res.ok) {
       console.error(`stripe: ${label} answered ${res.status}`);
-      await res.body?.cancel().catch(() => undefined);
-      return { ok: false, status: res.status };
+      const refusal = res.status === 400 || res.status === 409 ? await res.json().catch(() => null) : null;
+      if (!refusal) await res.body?.cancel().catch(() => undefined);
+      const type = obj(obj(refusal)?.error)?.type;
+      return { ok: false, status: res.status, errorType: typeof type === "string" && /^[a-z_]{1,64}$/.test(type) ? type : null };
     }
     return { ok: true, body: (await res.json()) as T };
   } catch {
     console.error(`stripe: ${label} unreachable`);
-    return { ok: false, status: 0 };
+    return { ok: false, status: 0, errorType: null };
   }
 }
 
@@ -154,6 +171,11 @@ export function readSubscription(o: J): SubscriptionState | null {
   return { id, customerId, status, periodEnd, userId: userHint(o.metadata) };
 }
 
+const isoOf = (v: unknown): string | null => {
+  const s = secs(v);
+  return s === null ? null : new Date(s * 1000).toISOString();
+};
+
 function readCheckout(o: J): Notice {
   const userId = str(o.client_reference_id);
   const customerId = idOf(o.customer);
@@ -162,7 +184,7 @@ function readCheckout(o: J): Notice {
   // An unpaid session (a bank debit still clearing) binds the customer and
   // grants nothing; the invoice.paid that follows grants.
   const paid = o.payment_status === "paid" || o.payment_status === "no_payment_required";
-  return { kind: "checkout", userId, customerId, subscriptionId, paid };
+  return { kind: "checkout", userId, customerId, subscriptionId, paid, createdAt: isoOf(o.created) };
 }
 
 // An Invoice: the subscription under parent.subscription_details in current
@@ -177,7 +199,12 @@ function readInvoice(o: J): Notice {
   const userId = userHint(parent?.metadata) ?? userHint(obj(o.subscription_details)?.metadata) ??
     lines.map((l) => userHint(l.metadata)).find((u) => u !== null) ?? null;
   const periodEnd = latest(lines.map((l) => secs(obj(l.period)?.end)));
-  return { kind: "period_paid", subscriptionId, customerId, userId, periodEnd };
+  // The charge that paid it: named on the invoice in older versions, in its
+  // payments list when Stripe includes it; often neither in current ones,
+  // where the time it was paid stands in (billing.tsx, reversed).
+  const chargeId = idOf(o.charge) ?? listData(o.payments).map((p) => idOf(obj(p.payment)?.charge)).find((c) => c !== null) ?? null;
+  const paidAt = isoOf(obj(o.status_transitions)?.paid_at);
+  return { kind: "period_paid", subscriptionId, customerId, userId, periodEnd, chargeId, paidAt };
 }
 
 // A Charge refunded in full: refunded true, or the amount refunded reaching
@@ -307,7 +334,7 @@ export function stripeSource(env: Env): PaymentSource | null {
     // notice), so a notice that arrives before the checkout's still finds
     // its user. Stripe Tax computes the tax from the address Checkout asks
     // for; a returning customer's address may be updated there.
-    async checkoutUrl(input: CheckoutInput): Promise<string | null> {
+    async checkoutUrl(input: CheckoutInput): Promise<string | null | "busy"> {
       if (!offer) return null;
       const form: [string, string][] = [
         ["mode", "subscription"],
@@ -322,8 +349,14 @@ export function stripeSource(env: Env): PaymentSource | null {
       ];
       if (input.customerId) form.push(["customer", input.customerId], ["customer_update[address]", "auto"]);
       else form.push(["customer_email", input.email]);
-      const res = await call<J>(key, "POST", "/checkout/sessions", "checkout session", form);
-      return res.ok ? onHost(res.body.url, CHECKOUT_HOST) : null;
+      const idempotencyKey = `checkout-${input.userId}-${Math.floor(Date.now() / CHECKOUT_WINDOW_MS)}`;
+      let res = await call<J>(key, "POST", "/checkout/sessions", "checkout session", form, idempotencyKey);
+      for (let tries = 1; !res.ok && res.status === 409 && tries < IN_FLIGHT_TRIES; tries++) {
+        await new Promise((resolve) => setTimeout(resolve, IN_FLIGHT_WAIT_MS));
+        res = await call<J>(key, "POST", "/checkout/sessions", "checkout session", form, idempotencyKey);
+      }
+      if (!res.ok) return res.errorType === "idempotency_error" ? "busy" : null;
+      return onHost(res.body.url, CHECKOUT_HOST);
     },
 
     async portalUrl(input: PortalInput): Promise<string | null> {

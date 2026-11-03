@@ -41,8 +41,14 @@ export type SubscriptionState = { id: string; customerId: string; status: string
 // subscription carries in its metadata (set at checkout), used only when the
 // stored binding does not name the user already.
 export type Notice =
-  | { kind: "checkout"; userId: string; customerId: string; subscriptionId: string; paid: boolean }
-  | { kind: "period_paid"; subscriptionId: string; customerId: string; userId: string | null; periodEnd: string | null }
+  // createdAt: when the session was made; paidAt: when the invoice was paid;
+  // chargeId: the charge that paid it, when the invoice names one. Read
+  // against the reversals already taken (billing.tsx).
+  | { kind: "checkout"; userId: string; customerId: string; subscriptionId: string; paid: boolean; createdAt: string | null }
+  | {
+    kind: "period_paid"; subscriptionId: string; customerId: string; userId: string | null; periodEnd: string | null;
+    chargeId: string | null; paidAt: string | null;
+  }
   | { kind: "subscription"; subscription: SubscriptionState; deleted: boolean }
   // A charge refunded in full, or disputed: the money for a period went back
   // or is being taken back. customerId is null when the notice does not name
@@ -62,7 +68,9 @@ export interface PaymentSource {
   // The two prices as the page shows them (text in Canadian dollars), or
   // null while not available.
   offer(): Readonly<Record<Interval, string>> | null;
-  checkoutUrl(input: CheckoutInput): Promise<string | null>;
+  // "busy": a checkout with other choices was started for the user moments
+  // ago, and a second subscription is not started beside it.
+  checkoutUrl(input: CheckoutInput): Promise<string | null | "busy">;
   portalUrl(input: PortalInput): Promise<string | null>;
   // A notice from the service, checked against its signature before
   // anything in it is read. Never trusts an unsigned body.

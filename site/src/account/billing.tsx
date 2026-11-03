@@ -207,6 +207,7 @@ export async function startCheckout(c: Context<AppEnv>, who: Account, fields: Re
     successUrl: `${base}/account?billing=done${langQuery(lang, "&")}`,
     cancelUrl: `${base}/account/billing${langQuery(lang, "?")}`,
   });
+  if (url === "busy") return billingPage(c, who, { errors: ["billing.err_busy"], status: 409 });
   if (!url) return billingPage(c, who, { errors: ["billing.err_service"], status: 503 });
   return c.redirect(url, 303);
 }
@@ -270,7 +271,10 @@ export async function billingWebhook(c: Context<AppEnv>): Promise<Response> {
     await db.prepare("DELETE FROM payment_events WHERE id = ?").bind(read.id).run().catch(() => undefined);
     return c.text("Try again.", 500);
   }
-  await db.prepare("DELETE FROM payment_events WHERE received_at < ?").bind(plusDays(now, -EVENT_DAYS)).run().catch(() => undefined);
+  await db.batch([
+    db.prepare("DELETE FROM payment_events WHERE received_at < ?").bind(plusDays(now, -EVENT_DAYS)),
+    db.prepare("DELETE FROM payment_reversals WHERE at < ?").bind(plusDays(now, -EVENT_DAYS)),
+  ]).catch(() => undefined);
   return c.text("Received.", 200);
 }
 
@@ -353,6 +357,18 @@ async function endNow(run: Run, user: UserRow, subscriptionId: string, status: s
   await planFor(run.env, user, run.now);
 }
 
+// Whether a payment was taken back: its charge is a recorded reversal, or the
+// customer has a reversal taken at or after the moment it was paid, which is
+// how a notice delayed past its own refund reads when it names no charge
+// (current invoices do not). A payment made after the reversal was taken (the
+// next period's) is not caught by it.
+async function reversed(run: Run, customerId: string, chargeId: string | null, paidAt: string | null): Promise<boolean> {
+  const row = await run.db.prepare(
+    "SELECT 1 AS x FROM payment_reversals WHERE charge_id = ?1 OR (customer_id = ?2 AND ?3 IS NOT NULL AND at >= ?3) LIMIT 1",
+  ).bind(chargeId, customerId, paidAt).first();
+  return row !== null;
+}
+
 // checkout.session.completed: bind the customer and subscription to the
 // user named by client_reference_id, and, once paid, grant Pro to the end of
 // the subscription's current period plus the grace. The session names the
@@ -374,6 +390,10 @@ async function onCheckout(run: Run, n: Extract<Notice, { kind: "checkout" }>): P
   const { bound } = await bind(run, user.id, { customerId: n.customerId, subscriptionId: n.subscriptionId, status, periodEnd });
   if (!bound) await audit(run.env, user.id, "plan_changed", "stripe second subscription", run.now);
   if (n.paid && (status === "active" || status === "trialing") && periodEnd) {
+    if (await reversed(run, n.customerId, null, n.createdAt)) {
+      await audit(run.env, user.id, "plan_changed", "stripe payment reversed, not granted", run.now);
+      return;
+    }
     await grant(run, user, n.subscriptionId, graceAfter(periodEnd), "checkout");
   } else {
     await audit(run.env, user.id, "plan_changed", "stripe checkout, awaiting payment", run.now);
@@ -393,7 +413,13 @@ async function onPeriodPaid(run: Run, n: Extract<Notice, { kind: "period_paid" }
   const kept = same ? row!.current_period_end : null;
   const periodEnd = n.periodEnd && (!kept || n.periodEnd > kept) ? n.periodEnd : kept;
   await bind(run, user.id, { customerId: n.customerId, subscriptionId: n.subscriptionId, status: same ? row!.status : null, periodEnd });
-  if (n.periodEnd) await grant(run, user, n.subscriptionId, graceAfter(n.periodEnd), "renewed");
+  if (!n.periodEnd) return;
+  // A notice delayed past the refund or dispute of the payment it reports.
+  if (await reversed(run, n.customerId, n.chargeId, n.paidAt)) {
+    await audit(run.env, user.id, "plan_changed", "stripe payment reversed, not granted", run.now);
+    return;
+  }
+  await grant(run, user, n.subscriptionId, graceAfter(n.periodEnd), "renewed");
 }
 
 // charge.refunded (in full) and charge.dispute.created: the money for a
@@ -413,6 +439,10 @@ async function onReversed(run: Run, n: Extract<Notice, { kind: "reversed" }>): P
     if (read === "missing") return unmatched(type);
     customerId = read;
   }
+  // Kept whether or not an account is bound yet, so a checkout or invoice
+  // notice that arrives after it grants nothing for the charge.
+  await run.db.prepare("INSERT INTO payment_reversals (charge_id, customer_id, why, at) VALUES (?, ?, ?, ?) ON CONFLICT(charge_id) DO NOTHING")
+    .bind(n.chargeId, customerId, n.why, run.at).run();
   const bound = await run.db.prepare("SELECT user_id FROM payment_customers WHERE customer_id = ? LIMIT 1")
     .bind(customerId).first<{ user_id: string }>();
   const user = bound ? await userById(run.db, bound.user_id) : null;

@@ -30,7 +30,11 @@
     // ACCOUNTS_ENABLED is "true": each request reads the accounts database,
     // and one-click posts arrive from mail providers' servers, many readers
     // to one address.
-    { "name": "STOP_LIMIT", "namespace_id": "2007", "simple": { "limit": 20, "period": 60 } }
+    { "name": "STOP_LIMIT", "namespace_id": "2007", "simple": { "limit": 20, "period": 60 } },
+    // Stripe's webhook (/account/billing/webhook), only while ACCOUNTS_ENABLED
+    // is "true". Stripe posts from a few addresses and retries a 429 later;
+    // two a second each is far past this site's notices.
+    { "name": "WEBHOOK_LIMIT", "namespace_id": "2008", "simple": { "limit": 120, "period": 60 } }
   ],
   // The daily check (src/watchdog.ts): 06:00 UTC, after the nightly run has had
   // its window and 2 h 15 after the same-day refresh's last cut. It emails the

@@ -197,3 +197,16 @@ CREATE TABLE IF NOT EXISTS payment_events (
   received_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_payment_events_received ON payment_events(received_at);
+
+-- A charge refunded in full or disputed (charge.refunded, charge.dispute.created;
+-- billing.tsx): Stripe's charge id, its customer, why, and when the notice was
+-- taken. A paid invoice for the same charge, or one paid before the reversal
+-- was taken (a notice delayed past its refund), grants nothing; so does a
+-- checkout made before it. Rows go after 90 days.
+CREATE TABLE IF NOT EXISTS payment_reversals (
+  charge_id TEXT PRIMARY KEY,                    -- Stripe's ch_ id
+  customer_id TEXT NOT NULL,                     -- Stripe's cus_ id
+  why TEXT NOT NULL CHECK (why IN ('refunded', 'disputed')),
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_reversals_customer ON payment_reversals(customer_id, at);

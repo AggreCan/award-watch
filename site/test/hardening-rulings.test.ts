@@ -325,5 +325,13 @@ describe("logs and test data", () => {
       const addresses = text.match(/[\w.+%'-]+@[\w-]+(?:\.[\w-]+)+/g) ?? [];
       for (const a of addresses) expect(a.endsWith("example.invalid"), `${file}: ${a.replace(/^[^@]+/, "...")}`).toBe(true);
     }
+    // The officials named in the notices' free text are invented people now,
+    // with numbers in the 555 range, in the shapes the scrubber's tests read.
+    const tenders = files["../../pipeline/tests/fixtures/canadabuys_tenders_new.csv"];
+    const awards = files["../../pipeline/tests/fixtures/canadabuys_awards.csv"];
+    for (const invented of ["Dana Whitlow", "Robin Tessier", "Morgan Ellery", "506-555-0142", "(204) 555-0187 ext 4021", "(204) 555-0187, poste 4021"]) {
+      expect(tenders, invented).toContain(invented);
+    }
+    expect(awards).toContain("613-555-0119");
   });
 });

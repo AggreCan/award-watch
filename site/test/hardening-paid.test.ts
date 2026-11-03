@@ -61,8 +61,14 @@ const KEYS = {
 };
 const payEnv = (extra: Record<string, unknown> = {}) => onEnv({ ...KEYS, ...extra });
 
-type Sent = { method: string; path: string; form: URLSearchParams };
+type Sent = { method: string; path: string; form: URLSearchParams; idempotencyKey: string | null };
 let sent: Sent[] = [];
+// Stripe's idempotency, as documented: the first request's answer is kept
+// under its key and given again to the same request; the same key with other
+// parameters is an idempotency_error; one still being handled answers 409.
+let keyed = new Map<string, { form: string; reply: { status?: number; body?: unknown } }>();
+let inFlightOnce = new Set<string>();
+let sessions = 0;
 let subs = new Map<string, Record<string, unknown>>();
 let charges = new Map<string, Record<string, unknown>>();
 let failing = new Set<string>();
@@ -82,7 +88,10 @@ function answer(method: string, path: string): { status?: number; body?: unknown
   const last = path.split("/").pop() ?? "";
   const key = `${method} ${/^(sub|ch)_/.test(last) ? path.replace(/[^/]+$/, ":id") : path}`;
   if (failing.has(key)) return { status: 500, body: {} };
-  if (key === "POST /v1/checkout/sessions") return { body: { id: "cs_h", url: "https://checkout.stripe.com/c/pay/cs_h" } };
+  if (key === "POST /v1/checkout/sessions") {
+    sessions++;
+    return { body: { id: `cs_h${sessions}`, url: `https://checkout.stripe.com/c/pay/cs_h${sessions}` } };
+  }
   if (key === "POST /v1/billing_portal/sessions") return { body: { id: "bps_h", url: "https://billing.stripe.com/p/session/h" } };
   if (key === "GET /v1/subscriptions/:id") return subs.has(last) ? { body: subs.get(last) } : { status: 404, body: {} };
   if (key === "GET /v1/charges/:id") return charges.has(last) ? { body: charges.get(last) } : { status: 404, body: {} };
@@ -100,14 +109,31 @@ beforeEach(() => {
   subs = new Map();
   charges = new Map();
   failing = new Set();
+  keyed = new Map();
+  inFlightOnce = new Set();
+  sessions = 0;
   const real = globalThis.fetch;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (!url.startsWith("https://api.stripe.com/")) return real(input, init);
     const method = init?.method ?? "GET";
     const path = new URL(url).pathname;
-    sent.push({ method, path, form: new URLSearchParams(typeof init?.body === "string" ? init.body : "") });
-    const reply = answer(method, path);
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    const idempotencyKey = headers["idempotency-key"] ?? null;
+    const form = typeof init?.body === "string" ? init.body : "";
+    sent.push({ method, path, form: new URLSearchParams(form), idempotencyKey });
+    let reply: { status?: number; body?: unknown };
+    const kept = idempotencyKey ? keyed.get(idempotencyKey) : undefined;
+    if (idempotencyKey && inFlightOnce.delete(idempotencyKey)) {
+      reply = { status: 409, body: { error: { type: "idempotency_error", message: "in flight" } } };
+    } else if (kept && kept.form !== form) {
+      reply = { status: 400, body: { error: { type: "idempotency_error", message: "other parameters" } } };
+    } else if (kept) {
+      reply = kept.reply;
+    } else {
+      reply = answer(method, path);
+      if (idempotencyKey) keyed.set(idempotencyKey, { form, reply });
+    }
     return new Response(JSON.stringify(reply.body ?? {}), { status: reply.status ?? 200, headers: { "content-type": "application/json" } });
   });
 });
@@ -439,7 +465,7 @@ describe("checkout for a subscriber, and the delete page", () => {
     sent = [];
     const token = await csrf(s.cookie, "/account/billing", { env: payEnv() });
     const res = await post("/account/billing/checkout", { csrf: token, interval: "monthly" }, { cookie: s.cookie, env: payEnv() });
-    expect(res.headers.get("location")).toBe("https://checkout.stripe.com/c/pay/cs_h");
+    expect(res.headers.get("location")).toMatch(/^https:\/\/checkout\.stripe\.com\/c\/pay\/cs_h\d+$/);
     expect(sent.map((x) => `${x.method} ${x.path}`)).toEqual(["POST /v1/checkout/sessions"]);
   });
 
@@ -873,5 +899,171 @@ describe("the paid view, keys and caching, with the rows the webhook writes", ()
       vi.useRealTimers();
       quiet.mockRestore();
     }
+  });
+});
+
+
+// =========================================================================================
+// Third pass: overlapping runs, the checkout key, reversals before their invoice, the webhook's bucket
+// =========================================================================================
+
+describe("two delivery runs at the same moment", () => {
+  it("send each search once: the search is claimed for the data date before its message goes", async () => {
+    const mail = fakeMail();
+    const s = await subscriber("overlap", nowS() + 60 * DAY_S);
+    const id = await savedSearch(s.user, "/tenders?segment=72");
+    const quiet = vi.spyOn(console, "log").mockImplementation(() => {});
+    const env = runEnv(mail.binding, [s.user]);
+    const reports = await Promise.all([run(env), run(env), run(env)]);
+    quiet.mockRestore();
+    expect(mail.handed).toHaveLength(1);
+    expect(reports.map((r) => r.sent).sort()).toEqual([0, 0, 1]);
+    expect((await ACCOUNTS.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE saved_search_id = ?").bind(id).first<{ n: number }>())?.n).toBe(1);
+  });
+
+  it("give the claim back when the send does not go: the next hour sends after a daily limit, the next data date after a refusal", async () => {
+    const s = await subscriber("overlap-release", nowS() + 60 * DAY_S);
+    const limited = await savedSearch(s.user, "/tenders?segment=72");
+    const before = async (id: string) =>
+      (await ACCOUNTS.prepare("SELECT last_delivered_at FROM saved_searches WHERE id = ?").bind(id).first<{ last_delivered_at: string | null }>())?.last_delivered_at;
+    const refuse = (code: string) => ({
+      async send() { throw Object.assign(new Error("refused"), { code }); },
+    }) as unknown as SendEmail;
+    const quiet = vi.spyOn(console, "log").mockImplementation(() => {});
+    const quietErr = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const r1 = await run(runEnv(refuse("E_DAILY_LIMIT_EXCEEDED"), [s.user]));
+      expect(r1.outcome).toBe("limited");
+      expect(await before(limited)).toBe(LAST);
+      const mail = fakeMail();
+      const r2 = await run(runEnv(mail.binding, [s.user]));
+      expect(r2.sent).toBe(1);
+      expect(mail.handed).toHaveLength(1);
+      // Another refusal: a failed row, last_delivered_at as it was, nothing more that data date.
+      const other = await subscriber("overlap-failed", nowS() + 60 * DAY_S);
+      const failed = await savedSearch(other.user, "/tenders?segment=72");
+      const r3 = await run(runEnv(refuse("E_RECIPIENT_SUPPRESSED"), [other.user]));
+      expect(r3.failed).toBe(1);
+      expect(await before(failed)).toBe(LAST);
+      const again = fakeMail();
+      await run(runEnv(again.binding, [other.user]));
+      expect(again.handed).toHaveLength(0);
+    } finally {
+      quiet.mockRestore();
+      quietErr.mockRestore();
+    }
+  });
+});
+
+describe("the checkout's idempotency key", () => {
+  async function buyer(label: string) {
+    const email = newEmail(label);
+    const cookie = await signIn(email, { env: payEnv() });
+    return { email, cookie, user: await userId(email), token: await csrf(cookie, "/account/billing", { env: payEnv() }) };
+  }
+  const checkout = (b: { cookie: string; token: string }, interval: string, lang = "en") =>
+    post("/account/billing/checkout", { csrf: b.token, interval, lang }, { cookie: b.cookie, env: payEnv() });
+
+  it("gives two checkouts started together the one session, under a key naming the user and the ten minutes", async () => {
+    const b = await buyer("idem-same");
+    const [one, two] = await Promise.all([checkout(b, "monthly"), checkout(b, "monthly")]);
+    expect([one.status, two.status]).toEqual([303, 303]);
+    expect(one.headers.get("location")).toBe(two.headers.get("location"));
+    expect(sessions).toBe(1);
+    const keys = sent.filter((x) => x.path === "/v1/checkout/sessions").map((x) => x.idempotencyKey);
+    expect(new Set(keys).size).toBe(1);
+    expect(keys[0]).toBe(`checkout-${b.user}-${Math.floor(Date.now() / (10 * 60_000))}`);
+    // Another user at the same moment has a session of their own.
+    const c = await buyer("idem-other");
+    expect((await checkout(c, "monthly")).headers.get("location")).not.toBe(one.headers.get("location"));
+    expect(sessions).toBe(2);
+  });
+
+  it("refuses a second checkout with other choices in the same minutes, starting nothing", async () => {
+    const b = await buyer("idem-busy");
+    expect((await checkout(b, "monthly")).status).toBe(303);
+    for (const [interval, lang] of [["yearly", "en"], ["monthly", "fr"]]) {
+      const res = await checkout(b, interval, lang);
+      expect(res.status, `${interval} ${lang}`).toBe(409);
+      const page = nbsp((await res.text()).replace(/&#39;|’/g, "'"));
+      expect(page).toContain(lang === "fr"
+        ? "Un paiement avec d'autres choix a été commencé depuis ce compte il y a un instant"
+        : "A checkout with other choices was started from this account a moment ago");
+    }
+    expect(sessions).toBe(1);
+  });
+
+  it("asks again when Stripe is still handling the first request, and gets its session", async () => {
+    const b = await buyer("idem-flight");
+    expect((await checkout(b, "monthly")).status).toBe(303);
+    inFlightOnce.add(`checkout-${b.user}-${Math.floor(Date.now() / (10 * 60_000))}`);
+    const res = await checkout(b, "monthly");
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("https://checkout.stripe.com/c/pay/cs_h1");
+    expect(sent.filter((x) => x.path === "/v1/checkout/sessions")).toHaveLength(3);
+    expect(sessions).toBe(1);
+  });
+});
+
+describe("a reversal taken before its payment's notice", () => {
+  it("leaves a delayed invoice.paid for the refunded charge, or paid before the refund, granting nothing; a later one grants", async () => {
+    const s = await subscriber("late-invoice");
+    const paidAt = nowS() - 120;
+    const ch = `ch_l${s.sub}`;
+    expect((await deliver(chargeRefunded(ch, s.cus, 1900, 1900))).status).toBe(200);
+    expect(await liveStripe(s.user)).toEqual([]);
+    expect(await ACCOUNTS.prepare("SELECT customer_id, why FROM payment_reversals WHERE charge_id = ?").bind(ch).first())
+      .toEqual({ customer_id: s.cus, why: "refunded" });
+    // Its own invoice.paid, delayed: by the charge it names (older versions)...
+    expect((await deliver(invoicePaid(s.sub, s.cus, nowS() + 30 * DAY_S, s.user, { charge: ch, status_transitions: { paid_at: paidAt } }))).status).toBe(200);
+    expect(await liveStripe(s.user)).toEqual([]);
+    // ...and by the time it was paid, when it names none (current versions).
+    expect((await deliver(invoicePaid(s.sub, s.cus, nowS() + 31 * DAY_S, s.user, { status_transitions: { paid_at: paidAt } }))).status).toBe(200);
+    expect(await liveStripe(s.user)).toEqual([]);
+    expect((await audits(s.user)).filter((d) => d === "stripe payment reversed, not granted")).toHaveLength(2);
+    // The next period, paid after the reversal was taken: Pro again.
+    expect((await deliver(invoicePaid(s.sub, s.cus, nowS() + 60 * DAY_S, s.user, { status_transitions: { paid_at: nowS() + 5 } }))).status).toBe(200);
+    expect(await liveStripe(s.user)).toHaveLength(1);
+  });
+
+  it("leaves a checkout whose payment was disputed before its notice arrived granting nothing", async () => {
+    const email = newEmail("late-checkout");
+    await signIn(email, { env: payEnv() });
+    const user = await userId(email);
+    const t = tag();
+    const sub = `sub_c${t}`;
+    const cus = `cus_c${t}`;
+    subs.set(sub, subscriptionObject(sub, cus, "active", nowS() + 30 * DAY_S, user));
+    charges.set(`ch_c${t}`, { id: `ch_c${t}`, object: "charge", customer: cus });
+    // The dispute arrives first; no account is bound to the customer yet.
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await deliver(disputeCreated(`ch_c${t}`))).status).toBe(200);
+    quiet.mockRestore();
+    expect(await ACCOUNTS.prepare("SELECT why FROM payment_reversals WHERE charge_id = ?").bind(`ch_c${t}`).first()).toEqual({ why: "disputed" });
+    expect((await deliver(checkoutCompleted(user, sub, cus, { created: nowS() - 300 }))).status).toBe(200);
+    expect(await stripeRows(user)).toEqual([]);
+    expect(await audits(user)).toContain("stripe payment reversed, not granted");
+  });
+});
+
+describe("the webhook's rate-limit bucket", () => {
+  it("is its own while the switch is on, and a page while it is off", async () => {
+    expect(bucketFor("POST", "/account/billing/webhook")).toBe("hook");
+    expect(bucketFor("GET", "/account/billing/webhook")).toBe("page");
+    expect(bucketFor("POST", "/account/billing")).toBe("page");
+    expect(wranglerConfig).toContain('{ "name": "WEBHOOK_LIMIT", "namespace_id": "2008", "simple": { "limit": 120, "period": 60 } }');
+    const keys: string[] = [];
+    const keeper = (ok: boolean) => ({ limit: async ({ key }: { key: string }) => (keys.push(key), { success: ok }) }) as unknown as RateLimit;
+    const probe = new Hono<AppEnv>();
+    probe.use("*", async (c, next) => { c.set("lang", "en"); await next(); });
+    probe.use("*", throttle);
+    probe.post("/account/billing/webhook", (c) => c.text("through"));
+    const ip = "203.0.113.88";
+    const call = (e: object) => probe.request("/account/billing/webhook", { method: "POST", headers: { "cf-connecting-ip": ip } }, e);
+    await call({ ...payEnv(), PAGE_LIMIT: keeper(true), WEBHOOK_LIMIT: keeper(true) });
+    await call({ ...payEnv(), ACCOUNTS_ENABLED: "false", PAGE_LIMIT: keeper(true), WEBHOOK_LIMIT: keeper(true) });
+    expect(keys).toEqual([`hook:${ip}`, `page:${ip}`]);
+    const refused = await call({ ...payEnv(), WEBHOOK_LIMIT: keeper(false) });
+    expect([refused.status, refused.headers.get("retry-after"), refused.headers.get("cache-control")]).toEqual([429, "60", "no-store"]);
   });
 });

@@ -60,6 +60,8 @@ export interface Env {
   AUTH_LIMIT?: RateLimit;
   // A delivery's stop link, both methods, per address (wrangler.jsonc "ratelimits").
   STOP_LIMIT?: RateLimit;
+  // The payment service's webhook posts per address (wrangler.jsonc "ratelimits").
+  WEBHOOK_LIMIT?: RateLimit;
 
   // -- payments (src/account/stripe.ts and billing.tsx; docs/accounts.md) -----
   // Stripe's secret API key and the webhook endpoint's signing secret, set

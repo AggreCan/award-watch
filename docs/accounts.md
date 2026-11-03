@@ -269,7 +269,15 @@ account's verified destination addresses, and any other address gets the
    asked for through Cloudflare's limit increase form.
 6. **Turn the switch on**: set `"ACCOUNTS_ENABLED": "true"` in
    `site/wrangler.jsonc` and deploy. Turning it back off hides everything
-   again at once; the data stays.
+   again at once; the data stays. Before it, check:
+   - `accounts_schema.sql` applied again on the account (step 1), so the
+     tables added since the first application exist: `code_misses` (the
+     hour's wrong codes; without it every code check answers "cannot be
+     reached"), `delivery_tokens`, `payment_customers`, `payment_events`
+     and `payment_reversals`;
+   - with payments set up (*Payments*, *Operator steps*): the webhook
+     endpoint's six events, `charge.refunded` and `charge.dispute.created`
+     among them, and read access to Charges on the restricted key.
 
 Local run with the switch on and the development outbox:
 
@@ -439,6 +447,11 @@ page) ends the run with one log line naming it; the next hour tries again.
   the next hour goes on from there. Any other refusal is a `failed` row.
 - A fault reading or writing the accounts database logs one line and ends
   the run. A second run in the same hour finds nothing due.
+- Each search is claimed for the data date before its message goes: one
+  statement sets `last_delivered_at` to the run's time only while no run has
+  delivered it for that date, so two runs at the same moment (a trigger
+  fired twice) send it once. A send that does not go, or a fault after the
+  claim, gives `last_delivered_at` back as it was.
 - Log lines carry dates, counts and file names, never an address or a label.
 
 ### Stopping a delivery
@@ -514,9 +527,9 @@ API version (`STRIPE_VERSION`, `2026-10-28.endive`).
 | Route | Guards | What it does |
 |---|---|---|
 | `GET /account/billing` | session | The plan today. Without a subscription: what Pro includes, a monthly and a yearly button with the configured prices and "Taxes added at checkout". With one: its status, the end of the period paid and a button to Stripe's portal. Without the keys or the prices: "Paying for Pro is not available yet." |
-| `POST /account/billing/checkout` | session, CSRF, Origin | Creates a Checkout Session and redirects (303) to it. A user whose subscription can still bill is sent to Stripe's portal instead (a billing page left open from before the subscription would otherwise start a second one). |
+| `POST /account/billing/checkout` | session, CSRF, Origin | Creates a Checkout Session and redirects (303) to it, under an `Idempotency-Key` naming the user and the ten minutes the request falls in: two checkouts started together get the one session, and one with other choices (the other interval, the other language) in the same minutes gets "A checkout with other choices was started from this account a moment ago" (409). A user whose subscription can still bill is sent to Stripe's portal instead (a billing page left open from before the subscription would otherwise start a second one). |
 | `POST /account/billing/portal` | session, CSRF, Origin | Creates a portal session for the stored customer and redirects (303) to it. |
-| `POST /account/billing/webhook` | Stripe's signature | Takes Stripe's notices. |
+| `POST /account/billing/webhook` | Stripe's signature; `WEBHOOK_LIMIT`, 120 a minute per address, while the switch is on (Stripe retries a 429) | Takes Stripe's notices. |
 
 All four are the site's 404 while the accounts switch is off. The overview
 (`/account`) shows "Pro, paid until <date>" when a live Stripe row decides
@@ -554,10 +567,10 @@ checkout, granted", "stripe renewed, extended", "stripe ended, canceled",
 | Event | Effect |
 |---|---|
 | `checkout.session.completed` | Binds the customer and subscription to the user named by `client_reference_id`, reads the subscription from Stripe for its status and period end, and, when the session is paid and the subscription active, writes a Pro row from now to the period end plus 3 days of grace. A session still unpaid (a bank debit clearing) grants nothing; its `invoice.paid` grants. An account deleted while Stripe's page was open has the new subscription cancelled at once. |
-| `invoice.paid` | Extends the subscription's live row to the paid period's end plus 3 days (never shortening it), or writes a row when none is live (a first period whose checkout notice has not arrived, a renewal paid after a lapse). Nothing for a subscription already canceled or expired. |
+| `invoice.paid` | Extends the subscription's live row to the paid period's end plus 3 days (never shortening it), or writes a row when none is live (a first period whose checkout notice has not arrived, a renewal paid after a lapse). Nothing for a subscription already canceled or expired, nor for a payment already reversed: its charge is in `payment_reversals`, or the customer has a reversal taken at or after the invoice was paid (a notice delayed past its refund names no charge in current API versions). A checkout made before a reversal of its customer grants nothing either. |
 | `customer.subscription.updated` | Records the status and the period end. `canceled`, `unpaid` or `incomplete_expired` sets the live row's end to now. `past_due` changes nothing: Pro runs to the end of the grace while Stripe retries the card. |
 | `customer.subscription.deleted` | Sets the live row's end to now. |
-| `charge.refunded` | When the charge is refunded in full (`refunded` true, or `amount_refunded` reaching `amount`): sets the end of every live Stripe row of the account bound to the charge's customer to now. A partial refund changes nothing. |
+| `charge.refunded` | When the charge is refunded in full (`refunded` true, or `amount_refunded` reaching `amount`): records the charge in `payment_reversals` and sets the end of every live Stripe row of the account bound to the charge's customer to now. A partial refund changes nothing. |
 | `charge.dispute.created` | The same as a full refund, for the account bound to the disputed charge's customer (the charge is read from Stripe for it; a failed read answers 500 and the notice comes again). |
 | any other type | Recorded and answered 200; nothing changes. |
 
@@ -573,7 +586,7 @@ within 5 minutes of the Worker's clock. An unverified post answers 400 and
 writes nothing. A verified notice is claimed in `payment_events` by its
 event id before it is applied, so a notice delivered twice (Stripe retries
 until it gets a 2xx) answers 200 the second time and changes nothing.
-`payment_events` rows go after 90 days.
+`payment_events` and `payment_reversals` rows go after 90 days.
 
 ### Fail open, fail closed
 
@@ -601,7 +614,9 @@ until it gets a 2xx) answers 200 the second time and changes nothing.
 ### What is kept
 
 `payment_customers` holds Stripe's ids, the subscription's status and the
-end of the period paid; `payment_events` holds Stripe's event ids and types.
+end of the period paid; `payment_events` holds Stripe's event ids and types;
+`payment_reversals` holds the charges refunded in full or disputed, with
+their customer ids.
 No card details, billing address, tax number or amount is kept on the site;
 Stripe holds those as the payment processor. The rows stay when an account
 is deleted, tied to the id alone like the entitlement rows.
@@ -687,11 +702,15 @@ their end.
 
 ### Known limits
 
-- Two checkouts started in two tabs before either finishes make two
-  subscriptions (once one is bound, the checkout button sends the user to
-  the portal instead). The second is bound only if the first has ended; the
-  audit records "stripe second subscription". Cancel the extra one in the
-  dashboard, then refund it. A full refund ends every live Stripe row of
+- Two checkouts started together share one session through the
+  idempotency key, and once a subscription is bound the checkout button
+  sends the user to the portal. Two subscriptions can still come from
+  checkouts started either side of a ten-minute boundary, or one finished
+  and one started before its notice arrived. The second is bound only if
+  the first has ended; the audit records "stripe second subscription".
+  Cancel the extra one in the dashboard, then refund it. A Stripe failure
+  is kept under the same key, so a checkout that failed answers the same
+  way until the ten minutes have passed. A full refund ends every live Stripe row of
   the account bound to the charge's customer, whichever subscription the
   charge paid for: when both subscriptions share the customer, grant the
   rest of the paid period by hand afterwards.

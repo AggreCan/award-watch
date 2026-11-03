@@ -25,7 +25,9 @@
 // messages a run; a daily-limit or rate-limit refusal stops the run and the
 // next hour goes on from there. A file or the database failing logs one line
 // and ends the run; the next hour tries again. A second run in the same hour
-// finds nothing due.
+// finds nothing due, and two runs at the same moment (a trigger fired twice)
+// send each search once: a run claims a search for the data date before
+// sending (claim), and gives it back when the send does not go (release).
 //
 // Log lines name counts and dates only, never an address or a label.
 
@@ -250,6 +252,23 @@ async function record(env: Env, searchId: string, status: "sent" | "failed" | "e
   await db.batch(statements);
 }
 
+// A search taken for the data date by this run: last_delivered_at set to the
+// run's time in one statement that holds only while no run has delivered it
+// for this data date, so of two runs at once exactly one goes on.
+async function claim(env: Env, searchId: string, dataDate: string, now: Date): Promise<boolean> {
+  const res = await env.ACCOUNTS!.prepare(
+    "UPDATE saved_searches SET last_delivered_at = ? WHERE id = ? AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?)",
+  ).bind(now.toISOString(), searchId, dataDate).run();
+  return (res.meta?.changes ?? 0) === 1;
+}
+
+// A claim given back: last_delivered_at as it was before, if this run's claim
+// still stands, so the next delivery covers what this one did not send.
+async function release(env: Env, searchId: string, before: string | null, now: Date): Promise<void> {
+  await env.ACCOUNTS!.prepare("UPDATE saved_searches SET last_delivered_at = ? WHERE id = ? AND last_delivered_at = ?")
+    .bind(before, searchId, now.toISOString()).run();
+}
+
 // -- sending ---------------------------------------------------------------------------------
 
 // The accounts sender (sender.ts) adds its own headers and reports a refusal
@@ -322,6 +341,9 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   const files = publishedFiles(env);
   const plans = new Map<string, Plan>();
   let stop: string | null = null;
+  // The search this run has claimed and not yet recorded or given back: a
+  // fault in between gives it back too, so the next hour covers it.
+  let held: { id: string; before: string | null } | null = null;
   try {
     for (const s of await candidates(env, dataDate)) {
       if (!isDue(s.deliver, s.last_delivered_at, dataDate)) continue;
@@ -343,7 +365,10 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
       else if (win && isExpiringWindow(win)) items = await expiringItems(files, win, s.params, start, dataDate);
       else continue;
       if (items.length === 0) {
+        if (!(await claim(env, s.id, dataDate, now))) continue;
+        held = { id: s.id, before: s.last_delivered_at };
         await record(env, s.id, "empty", 0, now);
+        held = null;
         report.empty++;
         continue;
       }
@@ -352,8 +377,15 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         report.outcome = "capped";
         break;
       }
+      // Another run at the same moment has it: that run sends it.
+      if (!(await claim(env, s.id, dataDate, now))) continue;
+      held = { id: s.id, before: s.last_delivered_at };
       const secret = s.secret ?? (await stopSecret(env, s.id, now));
-      if (!secret) continue;
+      if (!secret) {
+        await release(env, s.id, s.last_delivered_at, now);
+        held = null;
+        continue;
+      }
       const stopUrl = siteLink(site, `/account/stop?s=${s.id}&t=${secret}`, lang);
       const base = { lang, to: s.email, site, label: s.label, params: s.params, cadence, dataDate, stopUrl, total: items.length };
       const message = s.kind === "tenders"
@@ -364,18 +396,25 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         });
       const result = await send(env, site, message);
       if (result.sent) {
+        // Sent: the claim stands, whatever happens to the row that records it.
+        held = null;
         await record(env, s.id, "sent", items.length, now);
         report.sent++;
       } else if (result.code && STOP_CODES.has(result.code)) {
+        await release(env, s.id, s.last_delivered_at, now);
+        held = null;
         stop = result.code;
         report.outcome = "limited";
         break;
       } else {
+        await release(env, s.id, s.last_delivered_at, now);
+        held = null;
         await record(env, s.id, "failed", items.length, now);
         report.failed++;
       }
     }
   } catch (e) {
+    if (held) await release(env, held.id, held.before, now).catch(() => undefined);
     const why = e instanceof Fault ? e.message : "the accounts database could not be read or written; the next hour tries again";
     log(`${dataDate}: ${why} (${counts(report)} before it)`);
     return { ...report, outcome: "fault" };

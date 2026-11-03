@@ -464,6 +464,10 @@ export const ACCOUNT_STRINGS = {
     en: "The payment service could not be reached. Nothing was charged. Try again in a few minutes.",
     fr: "Le service de paiement est injoignable. Rien n'a été facturé. Réessayez dans quelques minutes.",
   },
+  "billing.err_busy": {
+    en: "A checkout with other choices was started from this account a moment ago, in another page or tab. Finish it there, or start again in ten minutes.",
+    fr: "Un paiement avec d'autres choix a été commencé depuis ce compte il y a un instant, dans une autre page ou un autre onglet. Terminez-le là, ou recommencez dans dix minutes.",
+  },
   "billing.err_delete": {
     en: "The Pro subscription could not be cancelled, so the account was not deleted. Try again in a few minutes.",
     fr: "L'abonnement Pro n'a pas pu être annulé, donc le compte n'a pas été supprimé. Réessayez dans quelques minutes.",
