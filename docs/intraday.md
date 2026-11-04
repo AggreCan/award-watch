@@ -21,6 +21,7 @@ The code:
 | The nightly's two steps | "Save the buyer lookup for the same-day refresh" and "Prune the same-day notices" in `.github/workflows/nightly.yml` |
 | The query and the merge | `site/src/intraday.ts` |
 | The band | `site/src/pages/intraday.tsx` |
+| The page `/tenders/same-day`, and the line in the tender lists' head | `site/src/pages/same_day.tsx` |
 | The plan gate on a request | `site/src/plan.ts` |
 | The live paid plans the workflow's gate counts | `LIVE_PRO_SQL` in `site/src/account/entitlements.ts` |
 | Where a failure shows | the daily check, `site/src/watchdog.ts` |
@@ -327,7 +328,11 @@ only.
 
 - **Free**: the pages as before. A free request makes no D1 call and reads
   no file for the band, and its page is byte for byte the page without the
-  feature (`site/test/intraday.test.ts`).
+  feature (`site/test/intraday.test.ts`), with one exception while the
+  accounts switch is on: the head of `/tenders` and `/tenders/new` carries
+  one line marked with the Pro chip, "Same-day notices: the notices
+  CanadaBuys posts during the day show above this list, read every two
+  hours.", linking `/tenders/same-day`. The line reads nothing either.
 - **Paid**: a band above the list on `/tenders`, and on `/tenders/new` for
   the newest day, headed "n notices posted since this morning's refresh"
   ("n avis publiés depuis la mise à jour de ce matin"). It lists the notices
@@ -341,6 +346,17 @@ only.
   link. Nothing is added to the home page, the feeds or search. A page with
   the band is a signed-in reader's, so it goes out `Cache-Control: private,
   no-store` and no shared cache keeps it (`site/test/hardening.test.ts`).
+
+`/tenders/same-day` is the feature's own address, listed in the rail under
+"Open tender notices" with the Pro chip and no count (a count would read D1
+on every page). For a paid request it shows the band, or a line saying no
+notice posted since the morning refresh has been read yet. Any other
+request gets the page's head, the cadence line and the Pro panel (what Pro
+includes, what stays free, the price named from `PRICE_MONTHLY_CAD` and
+`PRICE_YEARLY_CAD` with taxes added at checkout, one button to sign in or
+to the account); that view makes no D1 call. While the accounts switch is
+off the address answers the site's 404 and nothing links to it
+(`site/test/pro-mark.test.ts`).
 
 The band sets the D1 rows against the nightly's notices first seen on its
 data date (`tenders/new/<date>.json`) and its first open notices

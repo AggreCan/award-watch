@@ -18,11 +18,12 @@
 // Pro (feature radar_depth, src/plan.ts): a request whose plan lacks it gets
 // the window's count and total and its first rows (expiringTeaser), and its
 // files under /data/expiring/ answer 404 (expiringFile). The overview and
-// the 3-month window never change. Until the switch, nothing does.
+// the 3-month window never change. Until the switch, nothing does. While it
+// is on, the tabs and tiles that lead to a deep window, and the links to the
+// 12-month list, carry the Pro chip (src/pro.tsx) for every reader.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
-import { type Feature, SAVED_SEARCH_MAX } from "../account/entitlements";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
 import { type Rest, Table, restClass } from "../columns";
@@ -35,7 +36,8 @@ import {
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoneyShort, numberLocale, pick, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, noDataPage, notFoundPage, page, PageHead, Panel, todayOf, varyOnCookie } from "../layout";
-import { radarWindowLocked } from "../plan";
+import { DEEP_WINDOWS, radarWindowLocked } from "../plan";
+import { ProPanel, ProTag, proPrice } from "../pro";
 import { canonicalUrl, expiringWindowSeo, pageSeo } from "../seo";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
@@ -398,14 +400,16 @@ export const ExpiringSection: FC<{
 // The rest of a profile's rows are in the 12-month list. The link is the
 // window's page, not the 12-month CSV: once the accounts switch is on, a free
 // reader lands on its free view and what Pro adds rather than a 404, and a
-// Pro reader on the full window.
-export const MoreInWindow: FC<{ lang: Lang; part: ExpiringPart }> = ({ lang, part }) => {
+// Pro reader on the full window. pro: the accounts switch is on, so the link
+// carries the chip.
+export const MoreInWindow: FC<{ lang: Lang; part: ExpiringPart; pro?: boolean }> = ({ lang, part, pro = false }) => {
   const more = part.n - part.rows.length;
   if (more <= 0) return null;
   return (
     <>
       {tj(lang, more === 1 ? "expiring.part_more_one" : "expiring.part_more_many", {
-        more: fmtInt(more, lang), list: <a href="/expiring/12m">{t(lang, "expiring.list_link_12m")}</a>,
+        more: fmtInt(more, lang),
+        list: <a href="/expiring/12m">{t(lang, "expiring.list_link_12m")}{pro ? <>{" "}<ProTag lang={lang} /></> : null}</a>,
       })}
     </>
   );
@@ -424,11 +428,14 @@ const FeedLink: FC<{ lang: Lang }> = ({ lang }) => (
   <link rel="alternate" type="application/atom+xml" title={t(lang, "feeds.link_title", { event: t(lang, "feeds.ev.expiring") })} href={`/data/${EXPIRING_FEED}`} />
 );
 
-// The windows as tabs, the current one underlined.
-const WindowLinks: FC<{ lang: Lang; current: ExpiringWindow; q: ExpiringQuery }> = ({ lang, current, q }) => (
+// The windows as tabs, the current one underlined. pro: the accounts switch
+// is on, so the deep windows' tabs carry the chip, whatever the reader's plan.
+const WindowLinks: FC<{ lang: Lang; current: ExpiringWindow; q: ExpiringQuery; pro: boolean }> = ({ lang, current, q, pro }) => (
   <nav aria-label={t(lang, "expiring.windows_nav")} class="tabs toolbar-row">
     {EXPIRING_WINDOWS.map((w) => (
-      <a href={`/expiring/${w}${expiringQueryString(q)}`} aria-current={w === current ? "page" : undefined}>{t(lang, WINDOW_LABEL[w])}</a>
+      <a href={`/expiring/${w}${expiringQueryString(q)}`} aria-current={w === current ? "page" : undefined}>
+        {t(lang, WINDOW_LABEL[w])}{pro && DEEP_WINDOWS.includes(w) ? <>{" "}<ProTag lang={lang} /></> : null}
+      </a>
     ))}
   </nav>
 );
@@ -451,6 +458,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
   const shown = first ? soonestFirst(first).slice(0, EXPIRING_FIRST) : [];
   const n = (v: number) => fmtInt(v, lang);
   const byBuyerName = (b: (typeof idx.by_buyer)[number]) => pick(lang, b.buyer_en, b.buyer_fr) ?? b.buyer_id ?? t(lang, "common.not_stated");
+  const pro = accountsEnabled(c.env);
 
   return page(
     c,
@@ -467,7 +475,9 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
         <section class="tiles" aria-label={t(lang, "expiring.tiles_label")}>
           {windows.map((w) => (
             <a class="tile" href={`/expiring/${w.window}`}>
-              <span class="tile-label">{t(lang, WINDOW_LABEL[w.window])}</span>
+              <span class="tile-label">
+                {t(lang, WINDOW_LABEL[w.window])}{pro && DEEP_WINDOWS.includes(w.window) ? <>{" "}<ProTag lang={lang} /></> : null}
+              </span>
               <span class="tile-value">{n(w.n)}</span>
               <span class="tile-note">
                 {t(lang, "expiring.tile_total", { total: w.total === null ? t(lang, "common.not_stated") : fmtMoneyShort(w.total, lang) })}
@@ -619,31 +629,6 @@ const WindowHead: FC<{
     actions={<a href={`/downloads/${CSV_FILE[csv]}`} class="btn">{t(lang, CSV_DOWNLOAD[csv])}</a>} />
 );
 
-// What Pro adds, each line under the feature that carries it, so a test can
-// hold the list to the plans (test/radar-gate.test.ts). No price is named.
-export const PRO_INCLUDES: readonly (readonly [Feature, Key])[] = [
-  ["radar_depth", "expiring.pro_radar"],
-  ["radar_depth", "expiring.pro_csv"],
-  ["intraday", "expiring.pro_intraday"],
-  ["delivery", "expiring.pro_searches"],
-];
-
-const ProPanel: FC<{ lang: Lang; signedIn: boolean }> = ({ lang, signedIn }) => (
-  <Panel title={t(lang, "expiring.pro_title")}>
-    <p>{t(lang, "expiring.pro_text")}</p>
-    <p>{t(lang, "expiring.pro_includes")}</p>
-    <ul>
-      {PRO_INCLUDES.map(([, key]) => <li>{t(lang, key, { cap: fmtInt(SAVED_SEARCH_MAX, lang) })}</li>)}
-    </ul>
-    <p>{tj(lang, "expiring.pro_free", { list: <a href="/expiring/3m">{t(lang, "expiring.pro_free_list")}</a> })}</p>
-    <p>
-      <a href={signedIn ? "/account" : "/account/sign-in"} class="btn btn-primary">
-        {t(lang, signedIn ? "expiring.pro_account" : "expiring.pro_sign_in")}
-      </a>
-    </p>
-  </Panel>
-);
-
 // The free view of a 6- or 12-month window, once the accounts switch is on,
 // for a request whose plan lacks radar_depth (src/plan.ts): the head the full
 // list has, the window tabs, the first rows by end date, and what Pro adds.
@@ -674,7 +659,7 @@ async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats:
       seo={expiringWindowSeo(path, title, lang, crumbs, { n: idx.rows, months, date, noindex: asked })}>
       <WindowHead lang={lang} crumbs={crumbs} title={title} idx={idx} months={months} date={date} csv="3m" />
       <div class="toolbar">
-        <WindowLinks lang={lang} current={window} q={NO_FILTERS} />
+        <WindowLinks lang={lang} current={window} q={NO_FILTERS} pro />
       </div>
       <Panel title={t(lang, WINDOW_LABEL[window])} count={fmtInt(idx.rows, lang)} foot={shown.length ? <ExpiringNote lang={lang} /> : undefined}>
         {asked ? <p class="muted small">{t(lang, "expiring.pro_asked")}</p> : null}
@@ -687,7 +672,8 @@ async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats:
           <p class="muted">{t(lang, "expiring.none_window")}</p>
         )}
       </Panel>
-      <ProPanel lang={lang} signedIn={!!account?.email} />
+      <ProPanel lang={lang} signedIn={!!account?.email} price={proPrice(c.env)} text={t(lang, "expiring.pro_text")}
+        free={tj(lang, "expiring.pro_free", { list: <a href="/expiring/3m">{t(lang, "expiring.pro_free_list")}</a> })} />
     </Layout>,
   );
 }
@@ -742,7 +728,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
       </>}>
       <WindowHead lang={lang} crumbs={crumbs} title={title} idx={idx} months={months} date={date} csv={csv} />
       <form method="get" action={path} class="toolbar">
-        <WindowLinks lang={lang} current={window} q={q} />
+        <WindowLinks lang={lang} current={window} q={q} pro={accountsEnabled(c.env)} />
         <FiltersFold lang={lang} active={active}>
         <div class="toolbar-fields">
           <Select name="buyer" label="tenders.filter_buyer" opts={opts.buyer} value={q.buyer} lang={lang} />

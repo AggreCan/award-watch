@@ -19,7 +19,7 @@
 
 import type { Context } from "hono";
 import type { AppEnv, Env } from "../env";
-import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
+import { decimal, fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
 import { audit } from "./audit";
 import { RULES, planFor } from "./entitlements";
@@ -86,8 +86,10 @@ export async function billingLine(env: Env, userId: string, now = new Date()): P
 
 // -- the page ---------------------------------------------------------------------------
 
-// The figure as the operator wrote it, with a decimal comma in French.
-const figure = (lang: Lang, text: string) => (lang === "fr" ? text.replace(".", ",") : text);
+// The figure as the operator wrote it, with a decimal comma in French: the
+// same helper as the Pro tease panels' price line (src/pro.tsx), so the two
+// pages can never print one figure two ways.
+const figure = decimal;
 
 // What every billing form carries: the session's CSRF value, and the page's
 // language, which sets the language of Stripe's page too.

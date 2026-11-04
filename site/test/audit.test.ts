@@ -245,7 +245,8 @@ describe("the rail's overview", () => {
     }
     const fr = nbsp(rail(await text("/expiring/3m?lang=fr")));
     expect(fr).toContain('<span class="rail-label">Contrats prenant fin</span>');
-    expect(fr).toContain('<span class="rail-short">D’ici 3 mois</span><span class="rail-full">Fin d’ici 3 mois</span>');
+    expect(fr).toContain('<span class="rail-short">3 mois</span><span class="rail-full">Fin d’ici 3 mois</span>');
+    expect(fr).toContain('<span class="rail-short">12 mois</span><span class="rail-full">Fin d’ici 12 mois</span>');
     expect(fr).toContain('<span class="rail-short">En 2026</span><span class="rail-full">Avis d’attribution en 2026</span>');
   });
 

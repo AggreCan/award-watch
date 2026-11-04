@@ -1197,6 +1197,7 @@ export interface RailCounts {
   newToday?: number;
   closingSoon?: number;
   ending3m?: number;
+  ending6m?: number;
   ending12m?: number;
   awards?: number;
   awardsYear?: number;
@@ -1238,6 +1239,7 @@ export async function loadRail(env: Env): Promise<RailCounts | null> {
     newToday: counts.tenders_new_today,
     closingSoon,
     ending3m: expiring?.windows.find((w) => w.window === "3m")?.n,
+    ending6m: expiring?.windows.find((w) => w.window === "6m")?.n,
     ending12m: expiring?.windows.find((w) => w.window === "12m")?.n,
     awards: counts.awards,
     awardsYear: counts.awards_year ?? awardYear?.rows,

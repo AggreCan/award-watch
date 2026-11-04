@@ -9,6 +9,7 @@ import { type Seo, absoluteUrl, alternates, canonicalUrl, defaultDescription, pa
 import { allowed } from "./account/entitlements";
 import { type RailAccount, railAccount } from "./account/session";
 import { accountsEnabled } from "./account/switch";
+import { ProTag } from "./pro";
 
 // The formatting helpers live with the dictionary; pages import them from here.
 export { fmtInt, fmtMoney, fmtMoneyShort, pick } from "./i18n";
@@ -251,8 +252,10 @@ export function viewKey(pathAndQuery: string): string {
 // `section` is the Layout `active` value of the pages under it. `short` is a
 // child's label under its parent in the tree ("In 2026"); below 1000 px the
 // tree flattens into a wrap of items, where the full label stands alone.
+// `pro`: the entry leads to a page that comes with Pro, so it carries the
+// chip in its count's slot (src/pro.tsx).
 type RailEntry = {
-  href: string; label: string; short?: string; n?: number; section?: string; soon?: boolean; children?: RailEntry[];
+  href: string; label: string; short?: string; n?: number; section?: string; soon?: boolean; pro?: boolean; children?: RailEntry[];
 };
 type RailState = "current" | "ancestor" | null;
 
@@ -262,6 +265,7 @@ const RailLink: FC<{ lang: Lang; e: RailEntry; state: RailState; child?: boolean
     <span class="rail-label">
       {e.short ? <><span class="rail-short">{e.short}</span><span class="rail-full">{e.label}</span></> : e.label}
     </span>
+    {e.pro ? <ProTag lang={lang} /> : null}
     {/* The closing-soon count goes down as public/countdown.js sees a notice on the page close. */}
     {e.n !== undefined ? <span class="rail-n" data-soon-count={e.soon ? "" : undefined}>{fmtInt(e.n, lang)}</span> : null}
   </a>
@@ -299,12 +303,17 @@ export function railStates(entries: readonly RailEntry[], here: string, section?
 const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: string; account?: RailAccount }> = ({ lang, active, rail, here, account }) => {
   const year = rail?.year ?? new Date().toISOString().slice(0, 4);
   const expiring = rail?.ending12m !== undefined || rail?.ending3m !== undefined;
+  // Pro exists only while the accounts switch is on, which is when the shell
+  // carries an account (signed in or not); until then no entry is marked.
+  const paid = account !== undefined;
   const index: RailEntry[] = [
     {
       href: "/tenders", label: t(lang, "rail.open"), n: rail?.open, section: "/tenders",
       children: [
         { href: "/tenders/new", label: t(lang, "rail.new"), n: rail?.newToday },
         { href: "/tenders?closing=7", label: t(lang, "rail.closing", { n: CLOSING_SOON_DAYS }), n: rail?.closingSoon, soon: true },
+        // No count: it would read the same-day table on every page, for every reader.
+        ...(paid ? [{ href: "/tenders/same-day", short: t(lang, "rail.same_day"), label: t(lang, "rail.same_day_full"), pro: true }] : []),
       ],
     },
     {
@@ -314,8 +323,13 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
       }],
     },
     ...(expiring ? [{
-      href: "/expiring", label: t(lang, "rail.expiring"), n: rail?.ending12m, section: "/expiring",
-      children: [{ href: "/expiring/3m", short: t(lang, "expiring.window_3m"), label: t(lang, "rail.ending_3m_full"), n: rail?.ending3m }],
+      // The parent has no count of its own: each window's child carries one.
+      href: "/expiring", label: t(lang, "rail.expiring"), section: "/expiring",
+      children: [
+        { href: "/expiring/3m", short: t(lang, "expiring.months_3m"), label: t(lang, "rail.ending_3m_full"), n: rail?.ending3m },
+        { href: "/expiring/6m", short: t(lang, "expiring.months_6m"), label: t(lang, "rail.ending_6m_full"), n: rail?.ending6m, pro: paid },
+        { href: "/expiring/12m", short: t(lang, "expiring.months_12m"), label: t(lang, "rail.ending_12m_full"), n: rail?.ending12m, pro: paid },
+      ],
     }] : []),
     { href: "/organizations", label: t(lang, "nav.organizations"), n: rail?.organizations, section: "/organizations" },
     { href: "/buyers", label: t(lang, "nav.buyers"), n: rail?.buyers, section: "/buyers" },
@@ -363,9 +377,10 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
             </a>
           </li>
           <li>
-            {/* The Browse entry marks the current page; this one says the lists come with Pro once accounts open. */}
-            <a class="rail-item rail-later" href="/alerts">
-              <span class="rail-label">{t(lang, "rail.lists_pro")}</span>
+            {/* The Browse entry marks the current page; this one carries the chip, since delivery comes with Pro. */}
+            <a class="rail-item" href="/alerts">
+              <span class="rail-label">{t(lang, "rail.email_lists")}</span>
+              {paid ? <ProTag lang={lang} /> : null}
             </a>
           </li>
           {/* Accounts (src/account/): only while the switch is on, so the rail is unchanged while it is off. */}
@@ -385,7 +400,7 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 14;
+export const STYLES_VERSION = 15;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one

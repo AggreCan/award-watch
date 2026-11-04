@@ -31,6 +31,7 @@ import { interestSubmit, readInterestPost } from "./pages/interest";
 import { methodologyPage } from "./pages/methodology";
 import { organizationPage } from "./pages/organization";
 import { rankingsPage } from "./pages/rankings";
+import { sameDayPage } from "./pages/same_day";
 import { searchPage } from "./pages/search";
 import { tenderPage } from "./pages/tender";
 import { newTendersPage, tendersPage } from "./pages/tenders";
@@ -102,6 +103,7 @@ app.get("/", homePage);
 // before /tenders/:reference, which would read "new" as a reference.
 app.get("/tenders", tendersPage);
 app.get("/tenders/new", newTendersPage);
+app.get("/tenders/same-day", sameDayPage);
 app.get("/tenders/:reference", tenderPage);
 // /awards/2026 is a year; anything else after /awards/ is a reference.
 app.get("/awards", awardsPage);

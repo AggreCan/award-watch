@@ -5,6 +5,7 @@
 // column; nothing adds two sources together.
 
 import type { Context } from "hono";
+import { accountsEnabled } from "../account/switch";
 import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
 import { Table } from "../columns";
 import { MONEY_SOURCES } from "../constants";
@@ -12,8 +13,8 @@ import { BUYER_ID_RE, loadBuyer, loadBuyerAlias, loadBuyers, loadStats, type Buy
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoney, fmtMoneyShort, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
+import { ProTag } from "../pro";
 import { buyerSeo, pageSeo } from "../seo";
-import { accountsEnabled } from "../account/switch";
 import { newestFirst } from "./awards";
 import { ExpiringSection } from "./expiring";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
@@ -199,7 +200,9 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
 
       {b.expiring ? (
         <ExpiringSection lang={lang} part={b.expiring} heading="buyer.expiring" buyer={false} phoneRows={PHONE_ROWS}
-          link={<a href={`/expiring/12m?buyer=${b.buyer.id}`}>{t(lang, "buyer.expiring_all")}</a>} />
+          link={<a href={`/expiring/12m?buyer=${b.buyer.id}`}>
+            {t(lang, "buyer.expiring_all")}{accountsEnabled(c.env) ? <>{" "}<ProTag lang={lang} /></> : null}
+          </a>} />
       ) : null}
 
       <div class="panel-grid">

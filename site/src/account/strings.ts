@@ -143,6 +143,12 @@ export const ACCOUNT_STRINGS = {
     fr: "Le forfait Gratuit conserve jusqu'à {cap} recherches enregistrées.",
   },
   "account.cap_pro": { en: "An account keeps up to {cap} saved searches.", fr: "Un compte conserve jusqu'à {cap} recherches enregistrées." },
+  // A Free account's gate notes on the searches page, each with the Pro chip (src/pro.tsx).
+  "account.cap_note": {
+    en: "This account holds {n} of {cap} saved searches. Pro holds up to {max} and sends them by email, daily or weekly.",
+    fr: "Recherches enregistrées de ce compte : {n} sur {cap}. Pro en conserve jusqu'à {max} et les envoie par courriel, chaque jour ou chaque semaine.",
+  },
+  "account.deliver_gate": { en: "Off. Email delivery is part of Pro.", fr: "Désactivé. L'envoi par courriel fait partie de Pro." },
   "account.msg_added": { en: "The search is saved.", fr: "La recherche est enregistrée." },
   "account.msg_exists": { en: "That search is already saved.", fr: "Cette recherche est déjà enregistrée." },
   "account.msg_deleted": { en: "The search is deleted.", fr: "La recherche est supprimée." },

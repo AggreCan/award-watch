@@ -25,6 +25,7 @@ import { isOwnAddress } from "../api";
 import type { AppEnv, Env } from "../env";
 import { t, tj, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
+import { PriceLine, ProTag, type ProPrice, proPrice } from "../pro";
 import { audit } from "./audit";
 import { allowed } from "./entitlements";
 import { accountPage } from "./pages";
@@ -99,13 +100,15 @@ const Corrections: FC<{ lang: Lang }> = ({ lang }) => (
   <p class="muted small">{tj(lang, "bugs.corrections", { form: <a href="/corrections">{t(lang, "bugs.corrections_link")}</a> })}</p>
 );
 
-// A Free account: what the form is part of, and the billing page's link.
-export function proView(lang: Lang) {
+// A Free account: what the form is part of, with the Pro chip and the price,
+// and the billing page's link.
+export function proView(lang: Lang, price: ProPrice | null) {
   return (
     <>
       <PageHead lang={lang} title={t(lang, "bugs.title")} actions={<AccountButton lang={lang} />} />
-      <Panel title={t(lang, "bugs.pro_title")}>
+      <Panel title={t(lang, "bugs.pro_title")} class="pro-panel" tools={<ProTag lang={lang} />}>
         <p>{t(lang, "bugs.pro_text")}</p>
+        <PriceLine lang={lang} price={price} />
         <p><a href="/account/billing">{t(lang, "billing.link_plans")}</a></p>
         <Corrections lang={lang} />
       </Panel>
@@ -237,13 +240,13 @@ async function sendToOperator(env: Env, r: BugReport, now: Date): Promise<Sent> 
 
 export function bugPage(c: Context<AppEnv>, who: Account): Promise<Response> {
   const lang = c.get("lang");
-  if (!allowed(who, "bug_reports")) return accountPage(c, t(lang, "bugs.title"), proView(lang));
+  if (!allowed(who, "bug_reports")) return accountPage(c, t(lang, "bugs.title"), proView(lang, proPrice(c.env)));
   return accountPage(c, t(lang, "bugs.title"), formView(lang, who, { page: refererPage(c), text: "", expected: "" }));
 }
 
 export async function fileBug(c: Context<AppEnv>, who: Account, fields: Record<string, string>): Promise<Response> {
   const lang = c.get("lang");
-  if (!allowed(who, "bug_reports")) return accountPage(c, t(lang, "bugs.title"), proView(lang), 403);
+  if (!allowed(who, "bug_reports")) return accountPage(c, t(lang, "bugs.title"), proView(lang, proPrice(c.env)), 403);
   const typedPage = typed(fields, "page", PAGE_TYPED_MAX);
   const values: Values = { page: typedPage, text: typed(fields, "text", BUG_TEXT_MAX), expected: typed(fields, "expected", BUG_EXPECTED_MAX) };
   const page = typedPage ? pagePath(typedPage, c.req.url) : null;

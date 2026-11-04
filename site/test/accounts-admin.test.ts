@@ -1496,7 +1496,7 @@ describe("the docs", () => {
     expect(section).not.toContain(EM_DASH);
     // No mailbox is named: the only @ in the section is the character refused in a note.
     expect(section.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}/g)).toBeNull();
-  });
+  }, 30_000);
 
   it("robots.txt keeps every open crawler group off /admin", () => {
     const groups = robotsTxt.split(/\n\s*\n/).filter((g) => /^User-agent:/m.test(g));

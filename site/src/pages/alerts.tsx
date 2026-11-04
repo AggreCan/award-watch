@@ -21,11 +21,13 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { accountsEnabled } from "../account/switch";
 import { PROVINCES, SEGMENTS, SEGMENT_CODES } from "../constants";
 import { loadOpenFirst, loadStats } from "../data";
 import type { AppEnv, Env } from "../env";
 import { categoryLabel, fmtInt, provinceName, segmentLabel, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
+import { ProNote, ProTag } from "../pro";
 import { pageSeo } from "../seo";
 import {
   EMAIL_MAX, INSERT_INTEREST, type InterestFilter, type InterestPost, LIST_CATEGORIES, field, interestFilter, newToken, normalizeEmail,
@@ -125,12 +127,14 @@ async function chooserData(env: Env, lang: Lang): Promise<ChooserData> {
   };
 }
 
-export type ListsState = { choice?: ListsChoice; email?: string; errors?: Key[]; saved?: InterestFilter[] };
+// pro: the accounts switch is on, so the lists saved are followed by a line
+// saying delivery comes with Pro.
+export type ListsState = { choice?: ListsChoice; email?: string; errors?: Key[]; saved?: InterestFilter[]; pro?: boolean };
 
 // The block: error lines, then the chooser, or the lists saved once it has
 // gone through; the note on what the address is for stays under either.
 // After an error the chooser comes back as it was sent.
-export const ListsBody: FC<{ lang: Lang; data: ChooserData } & ListsState> = ({ lang, data, choice = NOTHING, email, errors = [], saved }) => {
+export const ListsBody: FC<{ lang: Lang; data: ChooserData } & ListsState> = ({ lang, data, choice = NOTHING, email, errors = [], saved, pro }) => {
   const ticked = (name: ListName) => choice.lists.includes(name);
   // A row per option: up to ten of the segments (about fifty in a full list), and every province, so none
   // of the thirteen hides below its box.
@@ -147,6 +151,11 @@ export const ListsBody: FC<{ lang: Lang; data: ChooserData } & ListsState> = ({ 
         <div class="interest-done" role="status">
           <p>{t(lang, "lists.done", { email: email ?? "" })}</p>
           <ul class="lists-saved">{saved.map((f) => <li>{f.label}</li>)}</ul>
+          {pro ? (
+            <ProNote lang={lang}>
+              {tj(lang, "lists.done_pro", { link: <a href="/account/sign-in">{t(lang, "lists.done_sign_in")}</a> })}
+            </ProNote>
+          ) : null}
         </div>
       ) : (
         <form method="post" action="/interest" class="lists-form" data-interest-form="" data-lists="">
@@ -236,7 +245,7 @@ async function alertsView(c: Context<AppEnv>, state: ListsState, status: 200 | 4
           <p>{t(lang, "alerts.register_intro")}</p>
           <ListsBody lang={lang} data={data} {...state} />
 
-          <h2 id="cover">{t(lang, "alerts.toc_cover")}</h2>
+          <h2 id="cover">{t(lang, "alerts.toc_cover")}{accountsEnabled(c.env) ? <>{" "}<ProTag lang={lang} /></> : null}</h2>
           <p>{t(lang, "alerts.cover_intro")}</p>
           <ul>
             <li>{t(lang, "alerts.cover_tenders")}</li>
@@ -309,5 +318,5 @@ export async function listsSubmit(c: Context<AppEnv>, post: InterestPost): Promi
     return listsAnswer(c, post, { choice, email, errors: ["form.err_unavailable"] }, 503);
   }
   // The answer names the address and every list saved, so a mistyped address or a wrong box shows.
-  return listsAnswer(c, post, { choice, email, saved: filters }, 200);
+  return listsAnswer(c, post, { choice, email, saved: filters, pro: accountsEnabled(c.env) }, 200);
 }

@@ -3,6 +3,7 @@
 // government's own record of each row.
 
 import type { FC, PropsWithChildren } from "hono/jsx";
+import { ProTag } from "../pro";
 import { type Column, type MaybeColumn, type Rest, Table, restClass } from "../columns";
 import { MONEY_SOURCES, type MoneySource } from "../constants";
 import { type AwardRow, type OrgTotal, type TenderRow, type YearFigure, publishedReference } from "../data";
@@ -174,7 +175,7 @@ export const SegmentNote: FC<{ lang: Lang; rows: readonly { segments: readonly s
 // nothing while they are off, when the view does not exist. nofollow, since
 // the view is not a page to index.
 export const AnalyticsLink: FC<{ lang: Lang; href: string; on: boolean }> = ({ lang, href, on }) =>
-  on ? <a href={href} class="btn" rel="nofollow">{t(lang, "analytics.link")}<span class="pro-tag">{t(lang, "analytics.pro")}</span></a> : null;
+  on ? <a href={href} class="btn" rel="nofollow">{t(lang, "analytics.link")}<ProTag lang={lang} /></a> : null;
 
 export const SourcesSeparate: FC<{ lang: Lang }> = ({ lang }) => (
   <>{tj(lang, "common.sources_separate", { methodology: <a href="/methodology#counting">{t(lang, "nav.methodology")}</a> })}</>

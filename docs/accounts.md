@@ -160,6 +160,21 @@ three fiscal years and a line on each other chart, with a link to
 404 to it. `site/test/analytics.test.ts` proves both states
 (`docs/analytics.md`).
 
+While the switch is on, whatever leads to a page that comes with Pro
+carries the Pro chip (`site/src/pro.tsx`), for every reader: the rail's
+entries for the 6- and 12-month windows (each with its own count; the
+"Contracts ending" parent has none), for `/tenders/same-day` and for the
+Email lists, the radar's 6- and 12-month tabs and overview tiles, and the
+links to the 12-month list on profiles and buyer pages. The free view's
+panel names the price from `PRICE_MONTHLY_CAD` and `PRICE_YEARLY_CAD`,
+taxes added at checkout, and leaves the line out when the checkout would
+offer no price. On the Data page the 12-month file's row carries the chip
+and, for a request without the feature, leads to the 12-month list's free
+view; the file's own address still answers 404. A Free account's overview
+lists API keys and bug reports with the chip, and its saved searches carry
+one-line notes at the cap and in the delivery column.
+`site/test/pro-mark.test.ts` holds the placements and the chip's styles.
+
 ## Sending mail
 
 Sign-in messages and saved-search deliveries go through Cloudflare Email

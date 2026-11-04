@@ -10,9 +10,10 @@ import type { AppEnv } from "../env";
 import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { EMAIL_MAX } from "../pages/interest";
+import { ProNote, ProTag } from "../pro";
 import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { BillingLine } from "./billing";
-import { allowed } from "./entitlements";
+import { SAVED_SEARCH_MAX, allowed } from "./entitlements";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch, isDeliverable } from "./searches";
 import type { Account } from "./session";
 import { CODE_MINUTES } from "./signin";
@@ -166,13 +167,13 @@ export function overviewView(
           <dd><a href="/account/billing">{t(lang, stripe ? "billing.manage" : "billing.link_plans")}</a></dd>
           <dt>{t(lang, "account.field_since")}</dt><dd class="mono">{day(account.createdAt)}</dd>
           <dt>{t(lang, "account.field_sessions")}</dt><dd>{fmtInt(counts.sessions, lang)}</dd>
-          {/* Pro only (bugs.tsx); a Free account has no row here. */}
-          {allowed(account, "bug_reports") ? (
-            <>
-              <dt>{t(lang, "bugs.field")}</dt>
-              <dd><a href="/account/bug">{t(lang, "bugs.link")}</a></dd>
-            </>
-          ) : null}
+          {/* A Free account sees the row too, with the Pro chip, leading to the page's notice (bugs.tsx). */}
+          <dt>{t(lang, "bugs.field")}</dt>
+          <dd>
+            <a href="/account/bug">
+              {t(lang, "bugs.link")}{allowed(account, "bug_reports") ? null : <>{" "}<ProTag lang={lang} /></>}
+            </a>
+          </dd>
         </dl>
       </Panel>
       <Panel title={t(lang, "rail.lists")}>
@@ -182,7 +183,7 @@ export function overviewView(
             <span class="num">{t(lang, "account.searches_n", { n: fmtInt(counts.searches, lang), cap: fmtInt(counts.cap, lang) })}</span>
           </li>
           <li>
-            <a href="/account/keys">{t(lang, "account.keys")}</a>
+            <a href="/account/keys">{t(lang, "account.keys")}{allowed(account, "api") ? null : <>{" "}<ProTag lang={lang} /></>}</a>
             <span class="num">{fmtInt(counts.keys, lang)}</span>
           </li>
         </ul>
@@ -227,6 +228,15 @@ const LastDeliveryLine: FC<{ lang: Lang; last: LastDelivery | null; deliver: Del
   return <p class="muted small">{line}</p>;
 };
 
+// The foot of a Free account's searches: how many it holds of its cap, what
+// Pro holds and sends, and the billing page.
+const CapNote: FC<{ lang: Lang; n: number; cap: number }> = ({ lang, n, cap }) => (
+  <ProNote lang={lang}>
+    {t(lang, "account.cap_note", { n: fmtInt(n, lang), cap: fmtInt(cap, lang), max: fmtInt(SAVED_SEARCH_MAX, lang) })}{" "}
+    <a href="/account/billing">{t(lang, "billing.link_plans")}</a>
+  </ProNote>
+);
+
 export function searchesView(
   lang: Lang, account: Account,
   state: {
@@ -255,7 +265,7 @@ export function searchesView(
       ) : null}
       <Panel title={t(lang, "account.searches_title")}
         count={t(lang, "account.searches_n", { n: fmtInt(searches.length, lang), cap: fmtInt(cap, lang) })}
-        foot={<p>{canDeliver ? capLine : `${capLine} ${t(lang, "account.deliver_pro")}`}</p>}>
+        foot={canDeliver ? <p>{capLine}</p> : <CapNote lang={lang} n={searches.length} cap={cap} />}>
         {searches.length ? (
           <div class="table-wrap">
             <table class="restack">
@@ -291,8 +301,9 @@ export function searchesView(
                           <LastDeliveryLine lang={lang} last={s.last ?? null} deliver={s.deliver} />
                         </>
                       ) : (
+                        // A Free account: delivery reads "Off" in a gate note, not a disabled select.
                         <>
-                          <span class="muted">{t(lang, DELIVERY_KEY[s.deliver] ?? "account.deliver_off")}</span>
+                          <ProNote lang={lang}>{t(lang, "account.deliver_gate")} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></ProNote>
                           {s.last ? <LastDeliveryLine lang={lang} last={s.last} deliver={s.deliver} /> : null}
                         </>
                       )}
@@ -386,10 +397,10 @@ export function keysView(lang: Lang, account: Account, state: { keys: KeyRow[]; 
           <pre class="cite-block account-key">{state.created}</pre>
         </Panel>
       ) : null}
-      <Panel title={t(lang, "account.panel_create_key")} class="panel-form">
+      <Panel title={t(lang, "account.panel_create_key")} class="panel-form" tools={canCreate ? undefined : <ProTag lang={lang} />}>
         <Errors lang={lang} errors={state.errors} />
         {!canCreate ? (
-          <p>{t(lang, "account.keys_pro")}</p>
+          <p>{t(lang, "account.keys_pro")} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></p>
         ) : live >= KEYS_MAX ? (
           <p>{t(lang, "account.keys_limit", { n: KEYS_MAX })}</p>
         ) : (

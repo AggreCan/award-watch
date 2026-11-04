@@ -204,7 +204,8 @@ describe("the pages that link a view, switch on", () => {
     for (const [path, view] of [["/buyers/pwgsc-tpsgc", VIEWS[0]], [`/organizations/${A1}`, VIEWS[1]], ["/segments/82", VIEWS[2]]]) {
       for (const cookie of [undefined, freeCookie, proCookie]) {
         const html = await (await get(path, { cookie, env: onEnv({ RECORDS: rec.binding }) })).text();
-        expect(html, path).toContain(`<a href="${view}" class="btn" rel="nofollow">Analytics<span class="pro-tag">Pro</span></a>`);
+        // The link ends in the shared chip (src/pro.tsx), whose markup test/pro-mark.test.ts holds.
+        expect(html, path).toContain(`<a href="${view}" class="btn" rel="nofollow">Analytics<span class="pro-tag">`);
       }
     }
     expect(rec.batches).toEqual([]);
@@ -235,7 +236,7 @@ describe("the free view", () => {
         expect(html, who).toContain('class="chart-stack"');
         expect(html, who).not.toContain("<table");
         expect(html, who).not.toContain(".csv");
-        for (const title of locked[view]) expect(decode(html), who).toContain(`${title}<span class="pro-tag">Pro</span>`);
+        for (const title of locked[view]) expect(decode(html), who).toContain(`${title}<span class="pro-tag">`);
         expect(html, who).toContain('class="pro-note"');
         expect(html, who).toContain(cookie ? 'href="/account/billing">See the Pro plan on the billing page' : 'href="/account/sign-in">Sign in to subscribe to Pro');
         expect(html, who).toContain('<meta name="robots" content="noindex"/>');

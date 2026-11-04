@@ -331,14 +331,14 @@ const WORKFLOWS = import.meta.glob("../../.github/workflows/*.yml", { query: "?r
 const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
 describe("the paid rows have one reader", () => {
-  it("only src/intraday.ts names the table, only the band loads it, and only the two tender pages draw the band", () => {
+  it("only src/intraday.ts names the table, only the band loads it, and only the two tender pages and the same-day page draw the band", () => {
     expect(Object.keys(SOURCES).length).toBeGreaterThan(30);
     const naming = Object.keys(SOURCES).filter((f) => code(SOURCES[f]).includes("intraday_tenders"));
     expect(naming).toEqual(["../src/intraday.ts"]);
     const loading = Object.keys(SOURCES).filter((f) => /\bloadIntraday\(/.test(code(SOURCES[f])) && f !== "../src/intraday.ts");
     expect(loading).toEqual(["../src/pages/intraday.tsx"]);
     const drawing = Object.keys(SOURCES).filter((f) => /\bintradayBand\(/.test(code(SOURCES[f])) && f !== "../src/pages/intraday.tsx");
-    expect(drawing).toEqual(["../src/pages/tenders.tsx"]);
+    expect(drawing).toEqual(["../src/pages/same_day.tsx", "../src/pages/tenders.tsx"]);
     // The band asks the plan before it touches the binding.
     const band = SOURCES["../src/pages/intraday.tsx"];
     const fn = band.slice(band.indexOf("export async function intradayBand"));

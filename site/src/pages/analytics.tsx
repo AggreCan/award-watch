@@ -28,6 +28,7 @@
 // robots.txt keeps crawlers off them, so a crawl never becomes D1 reads.
 
 import type { Context } from "hono";
+import { ProTag } from "../pro";
 import type { FC } from "hono/jsx";
 import { ChartStack, RankedBars, barGap, fiscalAxis, type Panel as ChartPanel, type RankedBar } from "../chart";
 import { Table } from "../columns";
@@ -131,7 +132,6 @@ function segmentLink(lang: Lang, sid: number) {
 
 // -- the pieces every view shares ---------------------------------------------------
 
-const ProTag: FC<{ lang: Lang }> = ({ lang }) => <span class="pro-tag">{t(lang, "analytics.pro")}</span>;
 
 // Where a reader without the feature goes for it: the billing page, or the
 // sign-in page while signed out.

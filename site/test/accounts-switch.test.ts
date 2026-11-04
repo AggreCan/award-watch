@@ -119,12 +119,18 @@ describe("with the switch off", () => {
 });
 
 describe("with the switch on", () => {
-  // A page an analytics view charts also gains the link to it, marked Pro
-  // (nothing a free reader is offered is hidden; operator's ruling of
-  // 2026-11-03, docs/analytics.md); nothing else changes.
-  it("opens the routes and adds one item to the rail, and on a profile the analytics link, and nothing else on a public page", async () => {
+  // Besides the account item, the switch brings the Pro marks (src/pro.tsx):
+  // the chip on the rail's Pro entries, the rail's same-day entry, the gate
+  // note in the tender list's head, and on a profile the link to its
+  // analytics view, marked Pro (nothing a free reader is offered is hidden;
+  // operator's ruling of 2026-11-03, docs/analytics.md). Nothing else changes.
+  const CHIP = / ?<span class="pro-tag">[\s\S]*?<\/span><\/span>/g;
+  const SAME_DAY_ITEM = /<li><a class="rail-item rail-child" href="\/tenders\/same-day">[\s\S]*?<\/a><\/li>/;
+  const NOTE = /<p class="pro-note">[\s\S]*?<\/p>/;
+  const ANALYTICS = /<a href="\/organizations\/org-a000000001\/analytics" class="btn" rel="nofollow">Analytics<\/a>/;
+
+  it("opens the routes and adds the account item, the Pro marks and a profile's analytics link, and nothing else on a public page", async () => {
     expect((await get("/account/sign-in")).status).toBe(200);
-    const analytics = '<a href="/organizations/org-a000000001/analytics" class="btn" rel="nofollow">Analytics<span class="pro-tag">Pro</span></a>';
     for (const path of ["/", "/tenders", "/organizations/org-a000000001", "/nothing-here"]) {
       const on = await render(path, onEnv());
       const off = await render(path, testEnv());
@@ -132,9 +138,15 @@ describe("with the switch on", () => {
       expect(on.cache, path).toBe(off.cache);
       const item = '<li><a class="rail-item rail-account" href="/account/sign-in"><span class="rail-label">Sign in</span></a></li>';
       expect(on.body, path).toContain(item);
-      expect(on.body.includes(analytics), path).toBe(path.startsWith("/organizations/"));
+      const rail = /<nav class="rail"[\s\S]*?<\/nav>/.exec(on.body)?.[0] ?? "";
+      expect(rail.match(/class="pro-tag"/g), path).toHaveLength(4);
+      expect(rail, path).toMatch(SAME_DAY_ITEM);
+      expect(NOTE.test(on.body), path).toBe(path === "/tenders");
+      const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(NOTE, "");
+      expect(ANALYTICS.test(stripped), path).toBe(path.startsWith("/organizations/"));
+      expect(off.body, path).not.toContain("pro-tag");
       expect(off.body, path).not.toContain("/analytics");
-      expect(on.body.replace(item, "").replace(analytics, ""), path).toBe(off.body);
+      expect(stripped.replace(ANALYTICS, ""), path).toBe(off.body);
     }
   });
 

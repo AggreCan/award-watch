@@ -57,8 +57,10 @@ const STRINGS = {
   "rail.browse": { en: "Browse", fr: "Parcourir" },
   "rail.lists": { en: "Your lists", fr: "Vos listes" },
   "rail.email_lists": { en: "Email lists", fr: "Listes de diffusion" },
-  // Under Your lists: the email lists are part of Pro once accounts open (operator, 2026-11-03).
-  "rail.lists_pro": { en: "Email lists: Pro", fr: "Listes de diffusion : Pro" },
+  "rail.ending_6m_full": { en: "Ending within 6 months", fr: "Fin d'ici 6 mois" },
+  "rail.ending_12m_full": { en: "Ending within 12 months", fr: "Fin d'ici 12 mois" },
+  "rail.same_day": { en: "Same-day", fr: "Du jour" },
+  "rail.same_day_full": { en: "Same-day notices", fr: "Avis du jour" },
   "footer.sources": {
     en: "Records from CanadaBuys, open.canada.ca and the Registry of Lobbyists.",
     fr: "Dossiers d'AchatsCanada, d'ouvert.canada.ca et du Registre des lobbyistes.",
@@ -451,6 +453,34 @@ const STRINGS = {
   },
   "intraday.new": { en: "same day", fr: "le jour même" },
   "intraday.amended": { en: "amended today", fr: "modifié aujourd'hui" },
+  // The same-day notices' own page (src/pages/same_day.tsx) and the line in the tender lists' head.
+  "sameday.title": { en: "Same-day Tender Notices", fr: "Avis d'appel d'offres du jour" },
+  "sameday.lead": {
+    en: "The notices CanadaBuys posts after the morning refresh, read every two hours through the Ottawa business day.",
+    fr: "Les avis publiés sur AchatsCanada après la mise à jour du matin, lus toutes les deux heures pendant la journée de travail à Ottawa.",
+  },
+  "sameday.description": {
+    en: "Federal tender notices CanadaBuys posts during the day, read every two hours until the next morning's refresh adds them to the lists.",
+    fr: "Les avis d'appel d'offres fédéraux publiés sur AchatsCanada pendant la journée, lus toutes les deux heures jusqu'à la mise à jour du lendemain.",
+  },
+  "sameday.pro_text": {
+    en: "With Pro, this page lists them as they are read, and the same notices show above the tender lists until the next morning's refresh adds them there.",
+    fr: "Avec Pro, cette page les présente à mesure qu'ils sont lus, et les mêmes avis paraissent au-dessus des listes d'appels d'offres jusqu'à ce que la mise à jour du lendemain matin les y ajoute.",
+  },
+  "sameday.free": {
+    en: "The {open}, the {new} and their feeds stay free, refreshed every morning.",
+    fr: "La {open}, les {new} et leurs fils restent gratuits, mis à jour chaque matin.",
+  },
+  "sameday.free_open": { en: "list of open notices", fr: "liste des avis ouverts" },
+  "sameday.free_new": { en: "new notices by day", fr: "nouveaux avis par jour" },
+  "sameday.none": {
+    en: "No notice posted since this morning's refresh has been read yet.",
+    fr: "Aucun avis publié depuis la mise à jour de ce matin n'a encore été lu.",
+  },
+  "sameday.tenders_note": {
+    en: "{link}: the notices CanadaBuys posts during the day show above this list, read every two hours.",
+    fr: "{link} : les avis publiés sur AchatsCanada pendant la journée paraissent au-dessus de cette liste, lus toutes les deux heures.",
+  },
 
   // -- one tender notice -----------------------------------------------------------------
   "tender.title": { en: "Tender Notice", fr: "Avis d'appel d'offres" },
@@ -779,6 +809,15 @@ const STRINGS = {
   "expiring.pro_free_list": { en: "3-month list", fr: "liste de 3 mois" },
   "expiring.pro_sign_in": { en: "Sign in or create an account", fr: "Se connecter ou créer un compte" },
   "expiring.pro_account": { en: "Your account", fr: "Votre compte" },
+  // The Pro mark and the tease panel (src/pro.tsx). {monthly} and {yearly}
+  // are the operator's figures from wrangler.jsonc, never written here.
+  "pro.tag": { en: "Pro", fr: "Pro" },
+  "pro.tag_hidden": { en: "(paid plan)", fr: "(forfait payant)" },
+  "pro.price": {
+    en: "Pro is CA${monthly} a month or CA${yearly} a year, taxes added at checkout.",
+    fr: "Pro coûte {monthly} $ CA par mois ou {yearly} $ CA par année, taxes ajoutées au paiement.",
+  },
+  "pro.include_bugs": { en: "a form under the account to report a bug", fr: "un formulaire dans le compte pour signaler un bogue" },
 
   // -- analytics (src/pages/analytics.tsx, docs/analytics.md) ---------------------------
   "analytics.title": { en: "Analytics", fr: "Analyses" },
@@ -787,7 +826,6 @@ const STRINGS = {
   "analytics.eyebrow": { en: "Analytics", fr: "Analyses" },
   "analytics.link": { en: "Analytics", fr: "Analyses" },
   // The word on the Pro mark (class pro-tag): the plan's name in both languages.
-  "analytics.pro": { en: "Pro", fr: "Pro" },
   "analytics.description_buyer": {
     en: "Charts of the federal records of {name} by fiscal year: value by quarter and by segment, the non-competitive share and the largest organizations.",
     fr: "Graphiques des dossiers fédéraux de {name} par exercice : valeur par trimestre et par segment, part non concurrentielle et principales organisations.",
@@ -1556,6 +1594,13 @@ const STRINGS = {
     en: "Each address may make 60 API requests a minute. Bulk use should start from the CSV files.",
     fr: "Chaque adresse peut faire 60 requêtes à l'API par minute. Un usage en vrac devrait partir des fichiers CSV.",
   },
+  // While the accounts switch is on: the 12-month file's note and the line on keys, each with the Pro chip.
+  "data.file.pro_on": { en: "Part of Pro. The 3-month file is free.", fr: "Fait partie de Pro. Le fichier de 3 mois est gratuit." },
+  "data.api_keys": {
+    en: "{keys} come with Pro. No endpoint asks for one yet.",
+    fr: "Les {keys} sont offertes avec le forfait Pro. Aucun point d'accès n'en demande encore.",
+  },
+  "data.api_keys_link": { en: "API keys", fr: "clés d'API" },
   "data.licence_text": {
     en: "Every source but the Registry of Lobbyists is published under the {ogl}, and so are the site's files. Reuse them freely with the attribution below. The registry's reports come under the Commissioner of Lobbying's own {odla}, which the site will follow once it reads them.",
     fr: "Chaque source, sauf le Registre des lobbyistes, est publiée sous la {ogl}, tout comme les fichiers du site. Réutilisez-les librement avec la mention ci-dessous. Les rapports du registre relèvent de l'{odla} du commissaire au lobbying, que le site suivra lorsqu'il les lira.",
@@ -2056,6 +2101,12 @@ const STRINGS = {
   "lists.submit": { en: "Sign me up", fr: "Inscrivez-moi" },
   // Above the list of the lists saved, so a mistyped address shows.
   "lists.done": { en: "Saved for {email}:", fr: "C'est noté pour {email} :" },
+  // Under the lists saved, while the accounts switch is on.
+  "lists.done_pro": {
+    en: "Delivery is part of Pro. {link} with this address to start it.",
+    fr: "L'envoi fait partie de Pro. {link} avec cette adresse pour le lancer.",
+  },
+  "lists.done_sign_in": { en: "Sign in", fr: "Connectez-vous" },
   "lists.err_none": { en: "Choose at least one list.", fr: "Choisissez au moins une liste." },
   // Under the chooser: interest.note for several lists.
   "lists.note": {
@@ -2355,7 +2406,7 @@ type Vars = Record<string, string | number>;
 // key to a French string that differs from the English.
 export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "account.plan_tag_pro", // the plan subscript after the wordmark reads the same in both
-  "analytics.pro", // the word on the Pro mark, the plan's name
+  "pro.tag", // the plan's name on the Pro chip
   "site.name",
   "nav.segments",
   "common.page_n",

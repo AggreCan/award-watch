@@ -55,6 +55,8 @@ const PAGES = new Set([
   "/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments", "/categories", "/rankings",
   "/feeds", "/watchlist", "/data", "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy",
   "/alerts", "/interest",
+  // The same-day notices' page (src/pages/same_day.tsx), which /tenders/:reference would otherwise count.
+  "/tenders/same-day",
   // The search page: its query string is never stored, only the route.
   "/search",
 ]);

@@ -7,6 +7,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { accountsEnabled } from "../account/switch";
 import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
 import { Table, restClass } from "../columns";
 import { MONEY_SOURCES, PROVINCES, type MoneySource, type SourceKey } from "../constants";
@@ -18,7 +19,6 @@ import {
 } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { organizationSeo } from "../seo";
-import { accountsEnabled } from "../account/switch";
 import { ExpiringSection, MoreInWindow } from "./expiring";
 import { InterestPanel, interestFilter } from "./interest";
 import {
@@ -444,7 +444,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
 
       {profile.expiring ? (
         <ExpiringSection lang={lang} part={profile.expiring} heading="org.expiring" organization={false} phoneRows={PHONE_ROWS}
-          more={<MoreInWindow lang={lang} part={profile.expiring} />} />
+          more={<MoreInWindow lang={lang} part={profile.expiring} pro={accountsEnabled(c.env)} />} />
       ) : null}
 
       {/* The buyers under each source's own sub-head, so a source is named once. */}

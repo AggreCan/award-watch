@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { accountsEnabled } from "../account/switch";
 import { HowToCite } from "../cite";
 import { Table } from "../columns";
 import { FIRST_AWARD_YEAR } from "../constants";
@@ -6,6 +7,8 @@ import { loadStats, type Stats } from "../data";
 import type { AppEnv } from "../env";
 import { decimal, fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, noDataPage, page, todayOf } from "../layout";
+import { allowsRadarDepth, requestPlan } from "../plan";
+import { ProNote, ProTag } from "../pro";
 import { ODLA_URL, OGL_URL, datasetJsonLd, pageSeo } from "../seo";
 import { datasetUrl } from "./shared";
 
@@ -142,6 +145,13 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
     return s.rows === null ? fileSize(lang, s.bytes) : t(lang, "data.size_rows", { size: fileSize(lang, s.bytes), n: fmtInt(s.rows, lang) });
   };
   const changes = changelog();
+  // While the switch is on, the 12-month file's row and the line on API keys
+  // carry the Pro chip, and a reader without the radar's depth follows the
+  // file's name to the 12-month list's free view rather than to the file's
+  // 404 (the file's own address still answers 404 to such a request).
+  const pro = accountsEnabled(c.env);
+  const deepFile = pro && allowsRadarDepth(await requestPlan(c));
+  const fileHref = (d: (typeof DOWNLOADS)[number]) => (d.paid && pro && !deepFile ? "/expiring/12m" : `/downloads/${d.file}`);
   const toc: [string, Key][] = [
     ["sources", "data.toc_sources"],
     ["downloads", "data.toc_downloads"],
@@ -215,10 +225,11 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                   const size = sizeOf(d.file);
                   return (
                     <tr>
-                      <td data-label={t(lang, "data.col_file")}><a href={`/downloads/${d.file}`} class="mono">{d.file}</a></td>
+                      <td data-label={t(lang, "data.col_file")}><a href={fileHref(d)} class="mono">{d.file}</a></td>
                       <td data-label={t(lang, "data.col_contents")}>
                         {t(lang, d.contents)}
-                        {d.note ? <><br /><span class="muted small">{t(lang, d.note)}</span></> : null}
+                        {d.paid && pro ? <>{" "}<ProTag lang={lang} /><br /><span class="muted small">{t(lang, "data.file.pro_on")}</span></> : null}
+                        {d.note && !(d.paid && pro) ? <><br /><span class="muted small">{t(lang, d.note)}</span></> : null}
                       </td>
                       {sizes.size > 0 ? <td data-label={t(lang, "data.col_size")} class="mono num">{size ? fileSize(lang, size.bytes) : ""}</td> : null}
                       {sizes.size > 0 ? (
@@ -268,6 +279,9 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
             </Table>
           </div>
           <p class="muted small">{t(lang, "data.api_limits")}</p>
+          {pro ? (
+            <ProNote lang={lang}>{tj(lang, "data.api_keys", { keys: <a href="/account/keys">{t(lang, "data.api_keys_link")}</a> })}</ProNote>
+          ) : null}
 
           <h2 id="licence">{t(lang, "data.toc_licence")}</h2>
           <p>{tj(lang, "data.licence_text", { ogl: <a href={OGL_URL[lang]}>{t(lang, "data.ogl")}</a>, odla: <a href={ODLA_URL}>{t(lang, "data.odla")}</a> })}</p>

@@ -360,10 +360,21 @@ describe("where the form is linked", () => {
     expect(await (await get("/?lang=fr", { cookie })).text()).toContain('<a href="/account/bug">Signaler un bogue</a>');
   });
 
-  it("nowhere for a Free reader, a signed-out reader, or anyone while the switch is off", async () => {
+  it("on a Free account's overview with the Pro chip, leading to the notice", async () => {
+    const email = newEmail("bugs-freerow");
+    const cookie = await signIn(email);
+    for (const [lang, field, link, hidden] of [
+      ["en", "Bug reports", "Report a bug", "(paid plan)"], ["fr", "Rapports de bogue", "Signaler un bogue", "(forfait payant)"],
+    ] as const) {
+      const overview = nbsp(decode(await (await get(`/account?lang=${lang}`, { cookie })).text()));
+      const row = new RegExp(`<dt>${field}</dt><dd><a href="/account/bug">${link} <span class="pro-tag"><svg [^>]*><path [^>]*></path></svg>Pro<span class="visually-hidden"> \\${hidden.slice(0, -1)}\\)</span></span></a></dd>`);
+      expect(overview, lang).toMatch(row);
+    }
+  });
+
+  it("nowhere else for a Free reader, a signed-out reader, or anyone while the switch is off", async () => {
     const email = newEmail("bugs-nolinks");
     const cookie = await signIn(email);
-    expect(await (await get("/account", { cookie })).text()).not.toContain("/account/bug");
     for (const path of ["/", "/tenders"]) {
       expect(await (await get(path, { cookie })).text(), path).not.toContain("/account/bug");
       expect(await (await get(path)).text(), path).not.toContain("/account/bug");

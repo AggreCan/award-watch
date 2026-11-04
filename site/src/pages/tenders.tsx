@@ -30,6 +30,7 @@ import { pageSeo } from "../seo";
 import { FeedLinks, nationalFeedPath } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
 import { intradayBand } from "./intraday";
+import { SameDayNote, sameDayNoted } from "./same_day";
 import { CountdownScript, FiltersFold, SegmentNote, TenderTable, tenderColumns } from "./shared";
 
 export const TENDER_PAGE_SIZE = 50;
@@ -301,6 +302,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const empty = !waiting && shown.length === 0;
   // The same-day notices for a paid request; null (nothing read) on the free plan.
   const intraday = await intradayBand(c, stats.data_as_of, clock);
+  const sameDay = await sameDayNoted(c);
 
   return page(
     c,
@@ -312,6 +314,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
           <a href={`/data/${nationalFeedPath("tenders")}`} class="btn">{t(lang, "feeds.button_tenders")}</a>
         </>}>
         <p class="page-note">{t(lang, "tenders.contact_note")}</p>
+        {sameDay ? <SameDayNote lang={lang} /> : null}
       </PageHead>
 
       <form method="get" action="/tenders" class="toolbar" id="tender-filters">
@@ -449,6 +452,7 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
   const rows = loaded ? [...loaded.filter((r) => !passed(r)), ...loaded.filter(passed)] : null;
   // The same-day notices for a paid request, on the newest day's view only.
   const intraday = day === latest ? await intradayBand(c, stats.data_as_of, clock) : null;
+  const sameDay = await sameDayNoted(c);
   const title = t(lang, "tenders.new_title");
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: title }];
   // Day views other than the newest are views of the same page.
@@ -457,7 +461,9 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/tenders" seo={seo} head={<FeedLinks lang={lang} />}>
       <PageHead lang={lang} title={title} crumbs={crumbs} lead={t(lang, "tenders.new_lead", { days: NEW_DAYS })}
-        actions={<a href={`/data/${nationalFeedPath("tenders")}`} class="btn">{t(lang, "feeds.button_tenders")}</a>} />
+        actions={<a href={`/data/${nationalFeedPath("tenders")}`} class="btn">{t(lang, "feeds.button_tenders")}</a>}>
+        {sameDay ? <SameDayNote lang={lang} /> : null}
+      </PageHead>
       <nav class="toolbar" aria-label={t(lang, "tenders.new_days")}>
         <span class="toolbar-label">{t(lang, "tenders.new_days")}</span>
         <ul class="quick-links day-list">

@@ -319,9 +319,11 @@ describe("the alerts page and the privacy page", () => {
     for (const href of ["/tenders", "/expiring", "/organizations", "/buyers", "/segments", "/privacy#interest"]) {
       expect(html, href).toContain(`<a href="${href}">`);
     }
-    // The Browse entry is named for the page and marks it; the Pro item under Your lists stays a plain link.
+    // The Browse entry is named for the page and marks it; the item under Your
+    // lists stays a plain link, with the Pro chip only while the accounts
+    // switch is on (test/pro-mark.test.ts).
     expect(html).toContain('<a class="rail-item" href="/alerts" aria-current="page"><span class="rail-label">Email lists</span></a>');
-    expect(html).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Email lists: Pro</span></a>');
+    expect(html).toContain('<a class="rail-item" href="/alerts"><span class="rail-label">Email lists</span></a>');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));
     // The footer names the page as the rail does.
     expect(footer).toContain('<a href="/feeds">Feeds</a><a href="/alerts">Email lists</a>');
@@ -336,7 +338,7 @@ describe("the alerts page and the privacy page", () => {
     expect(french).toContain('<h2 id="register">Choisissez vos listes</h2>');
     expect(french).toContain("Rien n’est encore envoyé.");
     expect(french).toContain('<a class="rail-item" href="/alerts" aria-current="page"><span class="rail-label">Listes de diffusion</span></a>');
-    expect(french).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Listes de diffusion : Pro</span></a>');
+    expect(french).toContain('<a class="rail-item" href="/alerts"><span class="rail-label">Listes de diffusion</span></a>');
     expect(french.slice(french.indexOf('<footer class="site-footer">'))).toContain('<a href="/alerts">Listes de diffusion</a>');
     // The description fits a result list in both languages.
     for (const page of [html, french]) {
@@ -406,10 +408,11 @@ describe("the email lists as part of Pro", () => {
   it("says Pro on the Email lists page, in the rail and under every page's form, in both languages, with no price", async () => {
     const en = decode(await text("/alerts"));
     expect(en).toContain("<p class=\"lead\">Email lists are part of Pro, the site's paid plan, once accounts open.");
-    expect(en).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Email lists: Pro</span></a>');
+    // The rail's item under Your lists carries the Pro chip once the switch is on (test/pro-mark.test.ts).
+    expect(en).toContain('<a class="rail-item" href="/alerts"><span class="rail-label">Email lists</span></a>');
     const french = nbsp(decode(await text("/alerts?lang=fr")));
     expect(french).toContain("<p class=\"lead\">Les listes de diffusion font partie de Pro, le forfait payant du site, dès l’ouverture des comptes.");
-    expect(french).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Listes de diffusion : Pro</span></a>');
+    expect(french).toContain('<a class="rail-item" href="/alerts"><span class="rail-label">Listes de diffusion</span></a>');
     // The page names no price and promises no delivery without the plan.
     for (const page of [en, french]) {
       const main = page.match(/<main id="main">[\s\S]*?<\/main>/)?.[0] ?? "(no main)";

@@ -129,20 +129,25 @@ describe("every page", () => {
     // The rail: the live index with its counts, the browse links, the reader's lists.
     const nav = html.match(/<nav class="rail" aria-label="Main">[\s\S]*?<\/nav>/)?.[0] ?? "";
     expect([...nav.matchAll(/<a class="rail-item[^"]*" href="([^"]+)"/g)].map((m) => m[1])).toEqual([
-      "/tenders", "/tenders/new", "/tenders?closing=7", "/awards", "/awards/2026", "/expiring", "/expiring/3m", "/organizations",
+      "/tenders", "/tenders/new", "/tenders?closing=7", "/awards", "/awards/2026", "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m", "/organizations",
       "/buyers", "/segments", "/rankings", "/feeds", "/alerts", "/data", "/methodology", "/watchlist", "/alerts",
     ]);
     expect(nav).toContain('<a class="rail-item" href="/tenders"><span class="rail-label">Open tender notices</span><span class="rail-n">3</span></a>');
     expect(nav).toContain('<a class="rail-item rail-child soon" href="/tenders?closing=7"><span class="rail-label">Closing within 7 days</span><span class="rail-n" data-soon-count="">1</span></a>');
     expect(nav).toContain('<a class="rail-item" href="/awards"><span class="rail-label">Award notices</span><span class="rail-n">5,883</span></a>');
     expect(nav).toContain('<a class="rail-item rail-child" href="/awards/2026"><span class="rail-label"><span class="rail-short">In 2026</span><span class="rail-full">Award notices in 2026</span></span><span class="rail-n">3</span></a>');
-    expect(nav).toContain('<a class="rail-item" href="/expiring"><span class="rail-label">Contracts ending</span><span class="rail-n">8</span></a>');
-    expect(nav).toContain('<a class="rail-item rail-child" href="/expiring/3m"><span class="rail-label"><span class="rail-short">Within 3 months</span><span class="rail-full">Ending within 3 months</span></span><span class="rail-n">3</span></a>');
+    // Contracts ending: the parent without a count, each window with its own.
+    expect(nav).toContain('<a class="rail-item" href="/expiring"><span class="rail-label">Contracts ending</span></a>');
+    expect(nav).toContain('<a class="rail-item rail-child" href="/expiring/3m"><span class="rail-label"><span class="rail-short">3 months</span><span class="rail-full">Ending within 3 months</span></span><span class="rail-n">3</span></a>');
+    expect(nav).toContain('<a class="rail-item rail-child" href="/expiring/6m"><span class="rail-label"><span class="rail-short">6 months</span><span class="rail-full">Ending within 6 months</span></span><span class="rail-n">5</span></a>');
+    expect(nav).toContain('<a class="rail-item rail-child" href="/expiring/12m"><span class="rail-label"><span class="rail-short">12 months</span><span class="rail-full">Ending within 12 months</span></span><span class="rail-n">8</span></a>');
     // The home page is none of the rail's items.
     expect(nav).not.toContain("aria-current");
     expect(nav).not.toContain("rail-ancestor");
     expect(nav).toContain('<span class="rail-n" data-watch-count="" hidden=""></span>');
-    expect(nav).toContain('<a class="rail-item rail-later" href="/alerts"><span class="rail-label">Email lists: Pro</span></a>');
+    // While the accounts switch is off nothing is Pro, so nothing carries the chip.
+    expect(nav).toContain('<a class="rail-item" href="/alerts"><span class="rail-label">Email lists</span></a>');
+    expect(nav).not.toContain("pro-tag");
     // A page's own section is marked in the rail.
     expect(await text("/buyers")).toContain('<a class="rail-item" href="/buyers" aria-current="page">');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));

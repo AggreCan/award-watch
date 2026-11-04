@@ -24,8 +24,9 @@ import type { ExpiringRow } from "../src/data";
 import { t } from "../src/i18n";
 import { app } from "../src/index";
 import { bucketFor } from "../src/limits";
-import { EXPIRING_TEASER_ROWS, PRO_INCLUDES } from "../src/pages/expiring";
+import { EXPIRING_TEASER_ROWS } from "../src/pages/expiring";
 import { DEEP_WINDOWS, allowsRadarDepth } from "../src/plan";
+import { PRO_INCLUDES } from "../src/pro";
 import { routeTemplate } from "../src/views";
 import { get, grantPro, nbsp, newEmail, nextIp, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { contentEtag, makeFakeAssets, testEnv } from "./assets";
@@ -134,18 +135,25 @@ async function sessions(): Promise<void> {
 
 const html = async (path: string, env: object, cookie?: string) => (await get(path, { env, cookie })).text();
 // Once the switch is on, the rail carries the signed-in address (or "Sign
-// in"), the wordmark a signed-in reader's plan and the footer a Pro reader's
-// bug report link; the rest of the page is what is compared.
+// in"), the wordmark a signed-in reader's plan, the footer a Pro reader's
+// bug report link, and the tabs and tiles of the deep windows the Pro chip
+// (for every reader); the rest of the page is what is compared.
+const CHIP = / <span class="pro-tag"><svg[^>]*><path[^>]*><\/path><\/svg>Pro<span class="visually-hidden"> \((?:paid plan|forfait payant)\)<\/span><\/span>/g;
 const noRail = (page: string) =>
   page.replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "")
-    .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "");
+    .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(CHIP, "");
 const pageHead = (page: string) => /<header class="page-head">[\s\S]*?<\/header>/.exec(page)?.[0] ?? "";
 // The head without its CSV button, which names the file each view links.
 const headText = (page: string) => pageHead(page).replace(/<div class="page-actions">[\s\S]*?<\/div>/, "");
 const csvButton = (page: string) => /<div class="page-actions">([\s\S]*?)<\/div>/.exec(pageHead(page))?.[1] ?? "";
 // The references the radar table shows, in order.
 const shownRefs = (page: string) => [...page.matchAll(/<span class="mono id muted">([^<]+)<\/span>/g)].map((m) => m[1]);
-const proPanel = (page: string) => /<section class="panel"><div class="panel-head"><h2>(?:Part of Pro|Offert avec le forfait Pro)<\/h2>[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
+const proPanel = (page: string) =>
+  /<section class="panel pro-panel"><div class="panel-head"><h2>(?:Part of Pro|Offert avec le forfait Pro)<\/h2>[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
+// The price as the panel names it: the two figures wrangler.jsonc carries,
+// whatever they are, never a figure written in the code.
+const PRICE = /"PRICE_MONTHLY_CAD":\s*"([0-9.]+)"[\s\S]*?"PRICE_YEARLY_CAD":\s*"([0-9.]+)"/.exec(wrangler) ?? ["", "", ""];
+const [MONTHLY, YEARLY] = [PRICE[1], PRICE[2]];
 const hasHidden = (body: string) => HIDDEN.filter((ref) => body.toLowerCase().includes(ref.toLowerCase()));
 
 const PAGES = [
@@ -253,16 +261,27 @@ describe("with the switch on and no session", () => {
       expect(page, path).not.toContain("?page=2");
       expect(page, path).not.toContain('rel="next"');
       expect(page, path).toContain('<nav aria-label="Windows" class="tabs toolbar-row"><a href="/expiring/3m">Within 3 months</a>');
-      // What Pro adds, and where to sign in. No price anywhere.
+      // What Pro adds, its price and where to sign in.
       const panel = proPanel(page);
       expect(panel, path).toContain("<p>The full list, with its filters and pages, is part of Pro, the site&#39;s paid plan.</p>");
       expect(panel, path).toContain("<li>the full 6-month and 12-month lists of contracts ending, with every filter and page</li>");
       expect(panel, path).toContain("<li>the 12-month CSV file of contracts ending</li>");
       expect(panel, path).toContain("<li>same-day tender notices on the tender lists, read from CanadaBuys every two hours</li>");
       expect(panel, path).toContain("<li>up to 25 saved searches, with email delivery</li>");
+      expect(panel, path).toContain("<li>a form under the account to report a bug</li>");
       expect(panel, path).toContain('<p>The <a href="/expiring/3m">3-month list</a>, its feeds and every window&#39;s count and total stay free.</p>');
       expect(panel, path).toContain('<a href="/account/sign-in" class="btn btn-primary">Sign in or create an account</a>');
-      expect(panel, path).not.toMatch(/\$|price|per month|a month|a year/i);
+      // The chip in the head's tools, beside the title, and only there.
+      expect(panel, path).toContain('<h2>Part of Pro</h2><div class="panel-tools"><span class="pro-tag">');
+      expect(panel.match(/class="pro-tag"/g), path).toHaveLength(1);
+      // The price, from the two figures in wrangler.jsonc, with the taxes named
+      // beside it, after the list of what Pro includes and before the button.
+      expect(MONTHLY).toMatch(/^[0-9]+\.[0-9]{2}$/);
+      const price = `<p class="pro-price">Pro is CA$${MONTHLY} a month or CA$${YEARLY} a year, taxes added at checkout.</p>`;
+      expect(panel, path).toContain(price);
+      expect(panel.indexOf(price), path).toBeGreaterThan(panel.indexOf("</ul>"));
+      expect(panel.indexOf(price), path).toBeLessThan(panel.indexOf("btn-primary"));
+      expect(panel.match(/CA\$/g), path).toHaveLength(2);
       expect(page, path).not.toContain(EM_DASH);
       // The rows' panel comes before the Pro panel.
       expect(page.indexOf("<h2>Part of Pro</h2>"), path).toBeGreaterThan(page.indexOf('<span class="mono id muted">'));
@@ -284,7 +303,11 @@ describe("with the switch on and no session", () => {
       expect(panel).toContain("<li>le fichier CSV de 12 mois des contrats prenant fin</li>");
       expect(panel).toContain('<a href="/expiring/3m">liste de 3 mois</a>');
       expect(panel).toContain('<a href="/account/sign-in" class="btn btn-primary">Se connecter ou créer un compte</a>');
-      expect(panel).not.toMatch(/\$|prix|par mois|par année/i);
+      expect(panel).toContain("<li>un formulaire dans le compte pour signaler un bogue</li>");
+      // The figures with a decimal comma, as the billing page prints them.
+      const fr = (s: string) => s.replace(".", ",");
+      expect(panel).toContain(`<p class="pro-price">Pro coûte ${fr(MONTHLY)} $ CA par mois ou ${fr(YEARLY)} $ CA par année, taxes ajoutées au paiement.</p>`);
+      expect(panel).toContain('<span class="visually-hidden"> (forfait payant)</span>');
       expect(page).not.toContain("Part of Pro");
       expect(page).not.toContain(EM_DASH);
     }
