@@ -7,6 +7,8 @@
 // or a line saying none has been read yet. Any other request gets the head,
 // the cadence line and what Pro adds with its price (src/pro.tsx); that view
 // reads nothing past what every page reads: no D1 query and no notice file.
+// Every view ends on the legend of the same-day mark, the bolt on the band's
+// rows, so the page explains it to a reader who has not met it yet.
 // While the accounts switch is off the address is the site's 404, since
 // nothing is Pro then and nothing links here.
 
@@ -20,7 +22,7 @@ import type { AppEnv } from "../env";
 import { t, tj, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, noDataPage, page } from "../layout";
 import { allowsIntraday, requestPlan } from "../plan";
-import { ProNote, ProPanel, proPrice } from "../pro";
+import { ProNote, ProPanel, SameDayLegend, proPrice } from "../pro";
 import { sectionSeo } from "../seo";
 import { intradayBand } from "./intraday";
 
@@ -52,7 +54,7 @@ export async function sameDayPage(c: Context<AppEnv>): Promise<Response> {
   if (allowsIntraday(await requestPlan(c))) {
     const band = await intradayBand(c, stats.data_as_of, clockOf(c.env));
     body = band ?? (
-      <Panel title={t(lang, "rail.same_day_full")}>
+      <Panel title={t(lang, "rail.same_day_full")} foot={<SameDayLegend lang={lang} />}>
         <p class="muted">{t(lang, "sameday.none")}</p>
       </Panel>
     );
@@ -60,6 +62,7 @@ export async function sameDayPage(c: Context<AppEnv>): Promise<Response> {
     const account = await railAccount(c).catch(() => undefined);
     body = (
       <ProPanel lang={lang} signedIn={!!account?.email} price={proPrice(c.env)} text={t(lang, "sameday.pro_text")}
+        foot={<SameDayLegend lang={lang} />}
         free={tj(lang, "sameday.free", {
           open: <a href="/tenders">{t(lang, "sameday.free_open")}</a>,
           new: <a href="/tenders/new">{t(lang, "sameday.free_new")}</a>,

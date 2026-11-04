@@ -3,7 +3,7 @@
 // government's own record of each row.
 
 import type { FC, PropsWithChildren } from "hono/jsx";
-import { ProTag } from "../pro";
+import { ProTag, SameDayMark } from "../pro";
 import { type Column, type MaybeColumn, type Rest, Table, restClass } from "../columns";
 import { METHOD_SHORT, MONEY_SOURCES, NOTICE_TYPE_SHORT, type MoneySource } from "../constants";
 import { type AwardRow, type OrgTotal, type TenderRow, type YearFigure, publishedReference } from "../data";
@@ -383,7 +383,9 @@ export function methodShort(lang: Lang, en: string | null, fr: string | null, ty
 // timeLeft: a list sorted by closing date, where every row near the top would
 // carry the same closing-soon chip, shows the time left in its place (the
 // chip waits hidden for public/countdown.js, which turns it on when the time
-// comes). omit: the page's own segment, left out of the chips.
+// comes). omit: the page's own segment, left out of the chips. marked: the
+// references (lower case) of the same-day band above the list on
+// /tenders/new, whose rows here carry its mark too.
 // variant "home": the home lists' columns (homeTenderColumns). Every row
 // with a closing time says how long is left: amber and kept live by the
 // countdown within the closing-soon window, a static day count beyond it,
@@ -391,8 +393,8 @@ export function methodShort(lang: Lang, en: string | null, fr: string | null, ty
 // the chip of a notice whose closing time has passed stays.
 export const TenderTable: FC<{
   lang: Lang; rows: readonly TenderRow[]; clock: Clock; status?: boolean; selectable?: boolean; note?: boolean; timeLeft?: boolean; omit?: string;
-  variant?: "home";
-}> = ({ lang, rows, clock, status, selectable, note = true, timeLeft = false, omit, variant }) => {
+  variant?: "home"; marked?: ReadonlySet<string>;
+}> = ({ lang, rows, clock, status, selectable, note = true, timeLeft = false, omit, variant, marked }) => {
   const home = variant === "home";
   return (
   <>
@@ -410,6 +412,7 @@ export const TenderTable: FC<{
           return (
             <tr data-ref={selectable ? r.reference.toLowerCase() : undefined}>
               <td data-label={t(lang, "col.notice")} class="c-notice">
+                {marked?.has(r.reference.toLowerCase()) ? <SameDayMark lang={lang} /> : null}
                 <a href={`/tenders/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? publishedReference(r)}</a>
                 <br />
                 <span class="mono id muted">{publishedReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} omit={omit} />

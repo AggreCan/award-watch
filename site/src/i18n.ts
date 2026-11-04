@@ -2432,6 +2432,20 @@ const STRINGS = {
     en: "To ask for something to be removed, use the {form} or write to {email}. A removal request is never charged for.",
     fr: "Pour demander un retrait, utilisez le {form} ou écrivez à {email}. Une demande de retrait n'est jamais facturée.",
   },
+
+  // -- the same-day mark (src/pro.tsx: SameDayMark, SameDayLegend) ---------------------
+  // The words assistive technology reads in place of the bolt on a same-day row.
+  "sameday.mark": { en: "Same-day notice", fr: "Avis du jour" },
+  // Under the band, and on /tenders/same-day for every reader.
+  "sameday.legend": {
+    en: "A bolt marks a notice from today's same-day refresh, part of Pro.",
+    fr: "Un éclair marque un avis de l'actualisation du jour, offerte avec Pro.",
+  },
+  // The Methodology page's list of sources, after the tender notices.
+  "methodology.src_same_day": {
+    en: "Same-day tender notices, part of Pro: CanadaBuys' file of the day's new notices, read every two hours through the Ottawa business day. They show above the tender lists, each marked with a bolt, until the next morning's refresh adds them there.",
+    fr: "Avis d'appel d'offres du jour, offerts avec Pro : le fichier des nouveaux avis du jour d'AchatsCanada, lu toutes les deux heures pendant la journée de travail à Ottawa. Ils paraissent au-dessus des listes d'appels d'offres, chacun marqué d'un éclair, jusqu'à ce que la mise à jour du lendemain matin les y ajoute.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

@@ -337,11 +337,13 @@ describe("the paid rows have one reader", () => {
     expect(naming).toEqual(["../src/intraday.ts"]);
     const loading = Object.keys(SOURCES).filter((f) => /\bloadIntraday\(/.test(code(SOURCES[f])) && f !== "../src/intraday.ts");
     expect(loading).toEqual(["../src/pages/intraday.tsx"]);
-    const drawing = Object.keys(SOURCES).filter((f) => /\bintradayBand\(/.test(code(SOURCES[f])) && f !== "../src/pages/intraday.tsx");
+    const drawing = Object.keys(SOURCES).filter((f) => /\b(intradayBand|sameDayView)\(/.test(code(SOURCES[f])) && f !== "../src/pages/intraday.tsx");
     expect(drawing).toEqual(["../src/pages/same_day.tsx", "../src/pages/tenders.tsx"]);
-    // The band asks the plan before it touches the binding.
+    // The band asks the plan before it touches the binding: sameDayView loads it, and
+    // intradayBand is sameDayView's band alone.
     const band = SOURCES["../src/pages/intraday.tsx"];
-    const fn = band.slice(band.indexOf("export async function intradayBand"));
+    const fn = band.slice(band.indexOf("export async function sameDayView"), band.indexOf("export async function intradayBand"));
+    expect(band.slice(band.indexOf("export async function intradayBand"))).toContain("return (await sameDayView(c, dataAsOf, clock))?.band ?? null;");
     expect(fn.indexOf("allowsIntraday(await requestPlan(c))")).toBeGreaterThan(-1);
     expect(fn.indexOf("allowsIntraday(await requestPlan(c))")).toBeLessThan(fn.indexOf("c.env.SEARCH"));
   });

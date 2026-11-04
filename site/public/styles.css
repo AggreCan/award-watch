@@ -1042,3 +1042,14 @@ td.c-type .type-method { display: block; font-size: 12px; line-height: 16px; col
 a.refresh { color: inherit; text-decoration: none; }
 a.refresh:hover { color: var(--ink); }
 a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offset: 2px; }
+
+/* -- the same-day mark (src/pro.tsx, SameDayMark) ------------------------------
+   A bolt before the title of each notice from the day's same-day refresh:
+   the inline SVG at 11 px on the text's baseline, filled through
+   currentColor in the accent, 4 px before the title. The shape and the
+   hidden words carry the meaning with the colour, and the legend at the
+   band's foot names it. The tokens swap with the theme, so there is no dark
+   rule. The title after the mark is no longer its cell's first child, so it
+   keeps the weight the notice cell gives a first link here. */
+.same-day-mark { margin-right: 4px; color: var(--accent); fill: currentColor; }
+.same-day-mark + a { font-weight: 500; }

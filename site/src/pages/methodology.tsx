@@ -55,8 +55,8 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           <h2 id="sources">{t(lang, "methodology.toc_sources")}</h2>
           <p>{t(lang, "methodology.sources_text")}</p>
           <List lang={lang} keys={[
-            "methodology.src_tenders", "methodology.src_awards", "methodology.src_history", "methodology.src_contracts",
-            "methodology.src_grants", "methodology.src_lobbying", "methodology.src_registry",
+            "methodology.src_tenders", "methodology.src_same_day", "methodology.src_awards", "methodology.src_history",
+            "methodology.src_contracts", "methodology.src_grants", "methodology.src_lobbying", "methodology.src_registry",
           ]} />
           <p>{tj(lang, "methodology.sources_more", { data: <a href="/data#sources">{t(lang, "nav.data")}</a> })}</p>
 

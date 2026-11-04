@@ -29,7 +29,7 @@ import { ClientData, Layout, PageHead, Panel, addDays, noDataPage, page, todayOf
 import { pageSeo } from "../seo";
 import { FeedLinks, nationalFeedPath } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
-import { intradayBand } from "./intraday";
+import { intradayBand, sameDayView } from "./intraday";
 import { SameDayNote, sameDayNoted } from "./same_day";
 import { CountdownScript, FiltersFold, SegmentNote, TenderTable, tenderColumns } from "./shared";
 
@@ -450,8 +450,9 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
   const clock = clockOf(c.env);
   const passed = (r: TenderRow) => r.status === "closed" || (r.status === "open" && closingPassed(r.closing, clock));
   const rows = loaded ? [...loaded.filter((r) => !passed(r)), ...loaded.filter(passed)] : null;
-  // The same-day notices for a paid request, on the newest day's view only.
-  const intraday = day === latest ? await intradayBand(c, stats.data_as_of, clock) : null;
+  // The same-day notices for a paid request, on the newest day's view only;
+  // a notice of the band that the day's list holds too carries its mark there.
+  const intraday = day === latest ? await sameDayView(c, stats.data_as_of, clock) : null;
   const sameDay = await sameDayNoted(c);
   const title = t(lang, "tenders.new_title");
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: title }];
@@ -474,7 +475,7 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
           ))}
         </ul>
       </nav>
-      {intraday}
+      {intraday?.band}
       <Panel title={t(lang, "tenders.new_day", { day })}
         count={rows && rows.length ? tn(lang, "tenders.count_one", "tenders.count_many", rows.length, { n: fmtInt(rows.length, lang) }) : undefined}>
         {rows === null ? (
@@ -482,7 +483,7 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
         ) : rows.length === 0 ? (
           <p class="muted">{t(lang, "tenders.new_none")}</p>
         ) : (
-          <TenderTable lang={lang} rows={rows} clock={clock} status />
+          <TenderTable lang={lang} rows={rows} clock={clock} status marked={intraday?.marked} />
         )}
       </Panel>
       {rows?.some((r) => tenderState(r.status ?? "open", r.closing, clock) === "closing") ? <CountdownScript lang={lang} /> : null}
