@@ -19,6 +19,19 @@ values read from summary rows rather than computed at request time
 ending in each of the next eight fiscal quarters by the radar's rules
 (rec_due). Grants whose recipient reads as a person are left out entirely.
 
+Three more tables serve the record tables, the earlier awards on a tender,
+the per-organization feeds and the radar's filters (site/src/records_tables.ts):
+rec_details (each record's date, reference and title beside its figures),
+rec_classes (the UNSPSC classes of each notice and history record) and
+rec_expiring (the radar's 12-month window, read from the static export's
+window files so the site's two views of the radar cannot disagree).
+
+Two serve the page of each published contract (/contracts/<department>/
+<reference>, site/src/pages/published.tsx): rec_contracts (every field the
+page shows of a published contract row) and rec_gsin (the names of the GSIN
+codes those rows carry). The asset count is why these live here rather than
+in static shards: a page per published contract would be 1.3 million files.
+
 The sync is the search sync's (search_db.py) with three changes, because the
 records table is about a hundred times larger:
 
@@ -62,7 +75,7 @@ from pathlib import Path
 from . import config, expiring, organizations
 from .db import connect, get_meta, now_iso, set_meta, today_iso
 from .export import scrub
-from .export_static import BUYER_ID_RE, ORG_ID_RE, RefMap, read_segments
+from .export_static import BUYER_ID_RE, ORG_ID_RE, RefMap, read_segments, url_reference
 from .indicators import RULES_VERSION
 from .search_db import (
     MAX_BATCH_BYTES, MAX_BATCH_STATEMENTS, MAX_KEYS_PER_DELETE, MAX_STATEMENT_BYTES, _BatchWriter, _grouped, sql_literal,
@@ -97,13 +110,25 @@ SEGMENT_YEARS = Table(5, "rec_segment_years", "k", ("sid", "src", "fy", "n", "ce
                                                     "n_pos", "pos", "med"))
 BUYER_YEARS = Table(6, "rec_buyer_years", "k", ("bid", "src", "fy", "n_pos", "pos", "med"))
 DUE = Table(7, "rec_due", "k", ("bid", "sid", "fy", "fq", "n", "cents", "n_no_value"))
-TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE)
+DETAILS = Table(8, "rec_details", "k", ("src", "day", "bid", "oid", "cents", "vnote", "comp", "meth", "ref", "title_en", "title_fr"))
+CLASSES = Table(9, "rec_classes", "k", ("rk", "cls", "bid", "day"))
+EXPIRING = Table(10, "rec_expiring", "k", ("endd", "oid", "buyer", "client", "segs", "kind", "comp", "cad", "cents", "nv", "so",
+                                          "m31", "j"))
+CONTRACTS = Table(11, "rec_contracts", "k", ("dept", "ref", "pid", "bid", "oid", "wh", "cdate", "start", "endd", "value", "orig",
+                                            "amend", "proc", "comp", "ctype", "gsin", "agr", "trade", "ltr", "inst", "period",
+                                            "bids", "so_no", "desc_en", "desc_fr", "com_en", "com_fr"))
+GSIN = Table(12, "rec_gsin", "k", ("code", "desc_en", "desc_fr"))
+TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE, DETAILS, CLASSES, EXPIRING, CONTRACTS, GSIN)
 BY_CODE = {t.code: t for t in TABLES}
 
 # The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
 # so); 2: the amendment, reference and title columns, the median columns and
 # rec_buyer_years, rec_due. Recorded in meta (META_LAYOUT) by the full load
-# that wrote it; a sync that finds another reloads in full by itself.
+# that wrote it; a sync that finds another reloads in full by itself. The
+# tables added beside them (rec_details to rec_gsin) leave it at 2: no table
+# D1 holds changed form, the nightly schema creates a missing table, and its
+# rows are all new to the ledger, so the ordinary changes fill it. A column
+# added to any of the twelve raises it.
 LAYOUT = 2
 
 # The source numbers the site's records_db.ts SOURCE_NUMBER repeats.
@@ -368,6 +393,231 @@ def record_rows(conn: sqlite3.Connection, counts: _Counts | None = None) -> Iter
                        ref, title)
 
 
+# -- the text beside the figures (rec_details, rec_classes) ---------------------
+
+# The same records as RECORD_SQL, keyed the same way, with what a table of
+# records shows: the date the fiscal year is read from, the reference, the
+# title and the newest version's UNSPSC codes. Kept apart from RECORD_SQL so
+# the figures' rows and their hashes stay as they are.
+TEXT_SQL = {
+    "awards": (
+        f"WITH newest AS ({_A._newest_by_reference('awards', ('reference',))}) "
+        "SELECT 'award:' || reference AS key, reference AS ref, awarded AS day, title_en, title_fr, "
+        "(SELECT group_concat(c.unspsc, ' ') FROM award_codes c WHERE c.reference = newest.reference "
+        "AND c.amendment = newest.amendment) AS codes FROM newest"
+    ),
+    "history": (
+        f"WITH newest AS ({_A._newest_by_reference('contract_history', ('reference',))}) "
+        "SELECT 'history:' || reference AS key, reference AS ref, awarded AS day, title_en, title_fr, "
+        "(SELECT group_concat(c.unspsc, ' ') FROM history_codes c WHERE c.reference = newest.reference "
+        "AND c.amendment = newest.amendment) AS codes FROM newest"
+    ),
+    "contracts": (
+        "SELECT 'contract:' || owner_org || ':' || reference AS key, owner_org || ':' || reference AS ref, "
+        "contract_date AS day, description_en AS title_en, description_fr AS title_fr, NULL AS codes FROM contracts"
+    ),
+    "grants": (
+        f"WITH newest AS ({_A._newest_by_reference('grants', ('owner_org', 'reference'))}) "
+        "SELECT 'grant:' || owner_org || ':' || reference AS key, owner_org || ':' || reference AS ref, start AS day, "
+        "COALESCE(NULLIF(TRIM(title_en), ''), program_en) AS title_en, COALESCE(NULLIF(TRIM(title_fr), ''), program_fr) AS title_fr, "
+        "NULL AS codes FROM newest"
+    ),
+}
+
+# A title longer than this is cut: the tables show a line or two of it, and
+# the cap keeps a row and its upsert statement small.
+TITLE_MAX = 200
+# The sources whose rows carry UNSPSC codes, and so classes.
+CLASS_SOURCES = (SOURCES["awards"], SOURCES["history"])
+
+
+def day_of(value: object) -> str | None:
+    """The ISO date at the start of a date or datetime, or None when it is not one."""
+    m = _DAY.match(str(value or ""))
+    if not m:
+        return None
+    try:
+        return date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
+    except ValueError:
+        return None
+
+
+def title_text(value: object, lang: str) -> str | None:
+    """A publisher's title as the exports print it: scrubbed of addresses and numbers, one line, capped."""
+    text = re.sub(r"\s+", " ", str(scrub(value, lang) or "")).strip()
+    if len(text) > TITLE_MAX:
+        text = text[:TITLE_MAX - 1].rstrip() + "…"
+    return text or None
+
+
+def text_rows(conn: sqlite3.Connection, segments: set[str] | None = None) -> Iterator[tuple]:
+    """(key, day, ref, title_en, title_fr, classes) for every record that has a date.
+
+    An award or history reference takes its URL form (the site's /awards/ and
+    /history/ addresses); the classes are the newest version's distinct
+    six-digit UNSPSC classes within the 57 segments, space-separated.
+    """
+    segments = segments if segments is not None else set(read_segments())
+    for source, sql in TEXT_SQL.items():
+        for r in conn.execute(sql):
+            day = day_of(r["day"])
+            if day is None:
+                continue
+            ref = url_reference(r["ref"]) if source in ("awards", "history") else str(r["ref"])[:200]
+            if not ref:
+                continue
+            classes = sorted({c[:6] for c in str(r["codes"] or "").split() if len(c) >= 6 and c[:6].isdigit() and c[:2] in segments})
+            yield (key_of(r["key"]), day, ref, title_text(r["title_en"], "en"), title_text(r["title_fr"], "fr"),
+                   " ".join(classes) or None)
+
+
+# -- the radar's window (rec_expiring) ----------------------------------------------
+
+EXPIRING_KINDS = {"award": SOURCES["awards"], "history": SOURCES["history"], "contract": SOURCES["contracts"]}
+# CanadaBuys' instrument types, and the published contracts' "Standing offer
+# or supply arrangement": the rule the site's standingOffer() applies.
+_STANDING = re.compile(r"^(standing offer|supply arrangement)", re.IGNORECASE)
+
+
+def expiring_rows(static_dir: Path) -> Iterator[tuple]:
+    """The rows of the static export's 12-month window (expiring/12m/<n>.json), as rec_expiring holds them.
+
+    No window index (the radar was not written tonight) gives no rows, as the
+    site then has no radar to show; an index naming a page that is missing or
+    is not a list is an export that cannot be trusted, and stops the sync.
+    """
+    folder = static_dir / "expiring" / "12m"
+    try:
+        index = json.loads((folder / "index.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    pages = index.get("pages") if isinstance(index, dict) else None
+    if not isinstance(pages, int) or isinstance(pages, bool) or pages < 0:
+        return
+    for n in range(1, pages + 1):
+        rows = json.loads((folder / f"{n}.json").read_text(encoding="utf-8"))
+        if not isinstance(rows, list):
+            raise ValueError(f"expiring/12m/{n}.json is not a list of rows")
+        for r in rows:
+            row = expiring_row(r)
+            if row is not None:
+                yield row
+
+
+def expiring_row(r: object) -> tuple | None:
+    """One window row in EXPIRING.written order, or None for a row without a kind, a reference or an end date."""
+    if not isinstance(r, dict) or r.get("kind") not in EXPIRING_KINDS or not isinstance(r.get("reference"), str):
+        return None
+    end = day_of(r.get("end"))
+    if end is None:
+        return None
+
+    def buyer(v: object) -> str | None:
+        return v if isinstance(v, str) and BUYER_ID_RE.match(v) and len(v) <= 80 else None
+
+    segments = sorted({s for s in r.get("segments") or [] if isinstance(s, str) and re.fullmatch(r"\d{2}", s)})
+    currency = str(r.get("currency") or "").strip().upper()
+    cad = cents_of(r.get("value")) if currency in ("", "CAD") else None
+    comp = r.get("competitive")
+    comp = 1 if comp in (True, 1) else 0 if comp in (False, 0) else None
+    kept = {k: v for k, v in r.items() if k != "days_left"}
+    return (
+        key_of(f"expiring:{r['kind']}:{r['reference']}"), end, None if r.get("supplier_withheld") else org_number(r.get("organization_id")),
+        buyer(r.get("buyer_id")), buyer(r.get("client_buyer_id")), f" {' '.join(segments)} " if segments else "",
+        EXPIRING_KINDS[r["kind"]], comp, cad, None if r.get("value_flag") else cad, 1 if r.get("value") is None else 0,
+        1 if _STANDING.match(str(r.get("instrument_en") or "").strip()) else 0, 1 if end[5:10] == "03-31" else 0,
+        json.dumps(kept, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False),
+    )
+
+
+# -- the published contracts' pages (rec_contracts, rec_gsin) -----------------------
+
+# One row per row of the contracts table, keyed as its records row is
+# ('contract:<owner_org>:<reference>'), so the page reads the counted value
+# from records by the same key. Everything the page shows of the row and
+# nothing more: loaded_at changes every week for every row, so it stays out
+# (the page names the file's last read from stats.json), and the contact
+# columns were never stored.
+PUBLISHED_SQL = (
+    "SELECT owner_org, reference, NULLIF(TRIM(procurement_id), '') AS pid, buyer_id, organization_id, vendor_withheld, "
+    "contract_date, period_start, delivery_date, value, original_value, amendment_value, solicitation_procedure, competitive, "
+    "commodity_type, commodity_code, agreement_type, trade_agreement, limited_tendering_reason, instrument_type, "
+    "reporting_period, number_of_bids, standing_offer_number, description_en, description_fr, comments_en, comments_fr "
+    "FROM contracts"
+)
+# The site's address takes a reference of at most this many characters (pages/published.tsx REF_MAX).
+REF_MAX = 200
+# A code, a code list or a short field longer than this is cut.
+SHORT_MAX = 120
+# The loader cuts the description and comments at 600 characters (sources/contracts.TEXT_MAX); this holds them to it.
+LONG_MAX = 600
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+# What no SQL literal can carry (a NUL) or no page should print, line breaks aside.
+_STRAY = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _short(value: object, limit: int = SHORT_MAX) -> str | None:
+    text = re.sub(r"\s+", " ", _STRAY.sub(" ", str(value or ""))).strip()
+    return text[:limit].rstrip() or None
+
+
+def _codes(value: object) -> str | None:
+    """A JSON list of codes as the loader stores it (code_list) as "CA, CL", or the text as given when it is not one."""
+    try:
+        items = json.loads(value) if isinstance(value, str) else None
+    except ValueError:
+        items = None
+    if isinstance(items, list):
+        return _short(", ".join(str(i) for i in items if str(i).strip()))
+    return _short(value)
+
+
+def _long(value: object, lang: str) -> str | None:
+    """A description or comment as the page prints it: scrubbed as the exports are, line breaks kept, capped."""
+    text = _STRAY.sub(" ", str(scrub(value, lang) or "").replace("\r\n", "\n").replace("\r", "\n")).strip()
+    return text[:LONG_MAX].rstrip() or None
+
+
+def published_rows(conn: sqlite3.Connection, tally: dict | None = None) -> Iterator[tuple]:
+    """Every published contract row in CONTRACTS.written order.
+
+    A row the site cannot address (a department that is not a buyer id, a
+    reference longer than REF_MAX or holding a control character) is left
+    out and counted in tally["contracts_unaddressable"].
+    """
+    left = tally if tally is not None else {}
+    left.setdefault("contracts_unaddressable", 0)
+    for r in conn.execute(PUBLISHED_SQL):
+        dept, ref = str(r["owner_org"] or ""), str(r["reference"] or "")
+        if not (BUYER_ID_RE.match(dept) and len(dept) <= 80) or not ref or len(ref) > REF_MAX or _CONTROL.search(ref):
+            left["contracts_unaddressable"] += 1
+            continue
+        buyer = r["buyer_id"]
+        bid = buyer_number(buyer) if isinstance(buyer, str) and BUYER_ID_RE.match(buyer) and len(buyer) <= 80 else None
+        withheld = 1 if r["vendor_withheld"] else 0
+        comp = r["competitive"] if r["competitive"] in (0, 1) else None
+        bids = r["number_of_bids"]
+        bids = bids if isinstance(bids, int) and not isinstance(bids, bool) and bids >= 0 else None
+        yield (
+            key_of(f"contract:{dept}:{ref}"), dept, ref, _short(r["pid"], REF_MAX), bid,
+            None if withheld else org_number(r["organization_id"]), withheld,
+            day_of(r["contract_date"]), day_of(r["period_start"]), day_of(r["delivery_date"]),
+            cents_of(r["value"]), cents_of(r["original_value"]), cents_of(r["amendment_value"]),
+            _short(r["solicitation_procedure"], 8), comp, _short(r["commodity_type"], 8), _short(r["commodity_code"], 20),
+            _short(r["agreement_type"], 40), _codes(r["trade_agreement"]), _codes(r["limited_tendering_reason"]),
+            _short(r["instrument_type"], 8), _short(r["reporting_period"], 20), bids, _short(r["standing_offer_number"]),
+            _long(r["description_en"], "en"), _long(r["description_fr"], "fr"), _long(r["comments_en"], "en"),
+            _long(r["comments_fr"], "fr"),
+        )
+
+
+def gsin_rows(conn: sqlite3.Connection, codes: set[str]) -> Iterator[tuple]:
+    """The names of the GSIN codes the published contracts carry, in GSIN.written order."""
+    for code, en, fr in conn.execute("SELECT code, desc_en, desc_fr FROM gsin_codes ORDER BY code"):
+        if code in codes:
+            yield (key_of(f"gsin:{code}"), code, _short(en, 200), _short(fr, 200))
+
+
 # -- tonight's rows, in temporary tables ----------------------------------------
 
 
@@ -458,10 +708,12 @@ def due_rows(conn: sqlite3.Connection, day: date, tally: _Counts) -> Iterator[tu
                y, q, n, cents, no_value)
 
 
-def build(conn: sqlite3.Connection, today: date | None = None) -> dict:
+def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path | None = None) -> dict:
     """Fill a temporary table per D1 table with tonight's rows and their hashes; return what was left out.
 
     today is the data date the contracts ending are counted from (the radar's day).
+    static_dir is the static export (default data/out/static), whose 12-month
+    radar window becomes rec_expiring.
     """
     for t in TABLES:
         conn.execute(f"DROP TABLE IF EXISTS temp.{_now(t)}")
@@ -519,7 +771,43 @@ def build(conn: sqlite3.Connection, today: date | None = None) -> dict:
         en, fr = names.get(text, (None, None))
         buyers.append((bid, text, en or text, fr))
     fill(BUYERS, iter(buyers))
-    return {"grants_withheld": counts.grants_withheld, "bad_buyers": counts.bad_buyers}
+
+    # The text beside each record's figures, joined to tonight's row of the
+    # record by its key, so the copied figures are the charts' own. A record
+    # with no date, or naming neither a buyer nor an organization, is in no
+    # table a page reads, and is left out.
+    conn.execute("DROP TABLE IF EXISTS temp.records_text_now")
+    conn.execute("CREATE TEMP TABLE records_text_now (k INTEGER PRIMARY KEY, day TEXT, ref TEXT, title_en TEXT, title_fr TEXT, "
+                 "classes TEXT)")
+    try:
+        conn.executemany("INSERT INTO temp.records_text_now VALUES (?, ?, ?, ?, ?, ?)", text_rows(conn))
+    except sqlite3.IntegrityError:
+        raise ValueError("two records have the same key; key_of needs more bits") from None
+    joined = (f"FROM temp.{now} r JOIN temp.records_text_now t ON t.k = r.k WHERE r.extra = 0 "
+              "AND (r.bid IS NOT NULL OR r.oid IS NOT NULL)")
+    fill(DETAILS, (tuple(r) for r in conn.execute(
+        f"SELECT r.k, r.src, t.day, r.bid, r.oid, r.cents, r.vnote, r.comp, r.meth, t.ref, t.title_en, t.title_fr {joined}")))
+    sources = ", ".join(str(s) for s in CLASS_SOURCES)
+    fill(CLASSES, (
+        (key_of(f"class:{k}:{cls}"), k, int(cls), bid, day) for k, bid, day, classes in conn.execute(
+            f"SELECT r.k, r.bid, t.day, t.classes {joined} AND r.bid IS NOT NULL AND r.src IN ({sources}) "
+            "AND t.classes IS NOT NULL")
+        for cls in classes.split()))
+    conn.execute("DROP TABLE IF EXISTS temp.records_text_now")
+    window = list(expiring_rows(static_dir or config.OUT_DIR / "static"))
+    if len({r[0] for r in window}) != len(window):
+        raise ValueError("two rows of the radar's window have the same kind and reference")
+    fill(EXPIRING, iter(window))
+
+    # The published contracts' pages, and the names of the GSIN codes they carry.
+    left_out = {"grants_withheld": counts.grants_withheld, "bad_buyers": counts.bad_buyers}
+    try:
+        fill(CONTRACTS, published_rows(conn, left_out))
+    except sqlite3.IntegrityError:
+        raise ValueError("two published contracts have the same key; key_of needs more bits") from None
+    codes = {r[0] for r in conn.execute(f"SELECT DISTINCT gsin FROM temp.{_now(CONTRACTS)} WHERE gsin IS NOT NULL")}
+    fill(GSIN, gsin_rows(conn, codes))
+    return left_out
 
 
 # -- the plan --------------------------------------------------------------------
@@ -664,7 +952,8 @@ def write_batches(conn: sqlite3.Connection, out_dir: Path, *, full: bool, max_by
     return writer
 
 
-def sync(conn: sqlite3.Connection, out_dir: Path | None = None, *, full: bool = False, today: str | None = None) -> dict:
+def sync(conn: sqlite3.Connection, out_dir: Path | None = None, *, full: bool = False, today: str | None = None,
+         static_dir: Path | None = None) -> dict:
     """Build, stage and write tonight's sync (the records-sync command); return the manifest.
 
     The ledger is not touched. The manifest, written last and in one step,
@@ -677,7 +966,7 @@ def sync(conn: sqlite3.Connection, out_dir: Path | None = None, *, full: bool = 
         (out / name).unlink(missing_ok=True)
     as_of = (get_meta(conn, "data_as_of") or today or today_iso())[:10]
     finish = finish_sql(as_of)
-    left_out = build(conn, date.fromisoformat(as_of))
+    left_out = build(conn, date.fromisoformat(as_of), static_dir)
     ledger_empty = conn.execute("SELECT NOT EXISTS (SELECT 1 FROM records_ledger)").fetchone()[0] == 1
     reason = full_reason(conn, requested=full, ledger_empty=ledger_empty, today=today)
     staged = stage(conn, reason)
@@ -817,6 +1106,8 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     rs.add_argument("--db", default=None, help="SQLite path (default data/awardwatch.sqlite)")
     rs.add_argument("--out", default=None, help="folder for the batches and manifest.json (default data/out/records)")
     rs.add_argument("--full", action="store_true", help="a full reload: drop and recreate the tables, then send every row")
+    rs.add_argument("--static", default=None,
+                    help="the static export, for the radar's 12-month window (default data/out/static)")
     rc = sub.add_parser("records-check", help="compare the row counts read back from D1 with the manifest")
     rc.add_argument("--manifest", required=True)
     rc.add_argument("--counts", required=True, help="Wrangler's --json answer to the count statement (COUNT_SQL)")
@@ -844,7 +1135,8 @@ def command(args: argparse.Namespace) -> int:
     conn = connect(args.db)
     try:
         if args.command == "records-sync":
-            manifest = sync(conn, Path(args.out) if args.out else None, full=args.full)
+            manifest = sync(conn, Path(args.out) if args.out else None, full=args.full,
+                            static_dir=Path(args.static) if args.static else None)
             kind = f"full reload ({manifest['reason']})" if manifest["full"] else "changes only"
             summary = (f"records-sync: {kind}: upserts {manifest['upserts']}, deletes {manifest['deletes']}, "
                        f"{len(manifest['batches'])} batches, {manifest['bytes']} bytes, {manifest['statements']} "

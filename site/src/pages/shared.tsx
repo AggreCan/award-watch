@@ -71,6 +71,13 @@ export function contractSearchUrl(reference: string): string {
   return `https://search.open.canada.ca/contracts/?search_text=${encodeURIComponent(reference)}`;
 }
 
+// A published contract's page on this site (pages/published.tsx): the
+// department (owner_org), since a reference is unique within one department
+// only, then the reference as published, escaped as one path segment.
+export function contractPath(dept: string, reference: string): string {
+  return `/contracts/${encodeURIComponent(dept)}/${encodeURIComponent(reference)}`;
+}
+
 // A grant or contribution: the record page in the government's grants
 // search, in the form its own result links use: department, reference number
 // and "current" (the agreement as last amended), joined by commas as one path

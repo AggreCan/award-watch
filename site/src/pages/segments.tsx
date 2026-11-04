@@ -18,6 +18,7 @@ import { clockOf, closingPassed, tenderState } from "../closing";
 import { Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { pageSeo, segmentSeo } from "../seo";
 import { accountsEnabled } from "../account/switch";
+import { IncumbentsPanel, loadIncumbents } from "./backbone";
 import { InterestPanel, interestFilter } from "./interest";
 import { AnalyticsLink, Count, CountdownScript, OrgTotalTable, TenderTable, money } from "./shared";
 
@@ -176,10 +177,11 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
   // An open list: a notice whose closing time has passed goes after the ones still open.
   const open = [...seg.open_tenders.filter((r) => !closingPassed(r.closing, clock)), ...seg.open_tenders.filter((r) => closingPassed(r.closing, clock))];
   const shown = open.slice(0, SEGMENT_OPEN_ROWS);
-  const [interest, expiring, openLevels] = await Promise.all([
+  const [interest, expiring, openLevels, incumbents] = await Promise.all([
     interestFilter(c.env, lang, "segment", `/segments/${code}`),
     loadExpiringIndex(c.env).catch(() => null),
     loadOpenLevels(c.env).catch(() => null),
+    loadIncumbents(c, "segment", code, todayOf(stats.data_as_of)),
   ]);
   // An export without the levels file shows no levels panel.
   const levels = openLevels ? segmentLevels(openLevels, code) : null;
@@ -213,6 +215,9 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
       {levels && levels.families.length ? <SegmentLevels lang={lang} families={levels.families} total={levels.total} /> : null}
 
       <InterestPanel lang={lang} filter={interest} />
+
+      {/* The incumbents: who holds the segment's contracts ending within 12 months (pages/backbone.tsx). */}
+      <IncumbentsPanel lang={lang} inc={incumbents} />
 
       <div class="panel-grid">
       <Panel title={t(lang, "segment.top")}>

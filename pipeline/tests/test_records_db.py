@@ -412,14 +412,15 @@ def test_statements_and_batches_respect_their_caps(seeded, tmp_path):
     out = tmp_path / "records"
     rd.build(conn)
     rd.stage(conn, "requested")
-    # Every row staged, without the reset batch (whose schema is one statement of its own).
-    writer = rd.write_batches(conn, out, full=False, max_bytes=2_000, max_rows_per_upsert=3, max_statement_bytes=1_000)
+    # Every row staged, without the reset batch (whose schema is one statement of its own). A
+    # published contract's row, with its 27 columns named twice, is the widest statement.
+    writer = rd.write_batches(conn, out, full=False, max_bytes=3_000, max_rows_per_upsert=3, max_statement_bytes=1_500)
     assert len(writer.files) > 3
     for name in writer.files:
         data = (out / name).read_bytes()
-        assert len(data) <= 2_000
+        assert len(data) <= 3_000
         for statement in data.decode("utf-8").splitlines():
-            assert len(statement.encode("utf-8")) <= 1_000 and statement.count("), (") <= 2
+            assert len(statement.encode("utf-8")) <= 1_500 and statement.count("), (") <= 2
     with pytest.raises(ValueError, match="NUL"):
         list(rd.upsert_statements(rd.ORGS, [(1, "A\x00B")]))
     with pytest.raises(ValueError, match="not a date"):
@@ -531,14 +532,14 @@ def test_the_workflow_syncs_the_records_database_before_the_save_and_never_holds
     assert names[at - 1] == "Sync the search database" and names[at + 1] == "Bundle the static data for the site"
     assert at < names.index("Deploy the Worker with the new data as assets") < names.index("Save the database to R2")
     sync = step(text, "Sync the records database")
-    assert "id: records" in sync and "continue-on-error: true" in sync and "timeout-minutes: 150" in sync
+    assert "id: records" in sync and "continue-on-error: true" in sync and "timeout-minutes: 300" in sync
     assert "steps.verify.outputs.export_ok == 'true' && steps.verify.outputs.db_ok == 'true'" in sync
     # The placeholder first (no database: a notice, nothing sent), then plan, schema, batches, counts, check,
     # finish and ledger, in that order.
     order = [
         "if grep -q '\"database_id\": \"00000000-0000-0000-0000-000000000000\"' wrangler.jsonc; then",
         "printf 'no database\\n' > \"$out/last_outcome.txt\"",
-        'awardwatch_pipeline records-sync --db ../data/awardwatch.sqlite --out "$out"',
+        'awardwatch_pipeline records-sync --db ../data/awardwatch.sqlite --static ../data/out/static --out "$out"',
         '"$WRANGLER" d1 execute awardwatch-records --remote --yes --file ../pipeline/records_schema.sql',
         'for batch in $(cat "$out/batches.txt"); do',
         '"$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/$batch"',
@@ -572,7 +573,7 @@ def test_the_binding_the_site_reads_is_the_database_the_step_writes():
 
 
 def test_the_site_reads_the_numbers_the_sync_writes():
-    ts = (REPO / "site" / "src" / "records_db.ts").read_text(encoding="utf-8")
+    ts = "\n".join((REPO / "site" / "src" / name).read_text(encoding="utf-8") for name in ("records_db.ts", "records_tables.ts"))
     numbers = re.search(r"export const SOURCE_NUMBER[^=]*=\s*\{([^}]*)\}", ts)
     assert numbers and dict(re.findall(r"(\w+): (\d)", numbers.group(1))) == {k: str(v) for k, v in rd.SOURCES.items()}
     # Every table and column the site names is one the schema creates.
@@ -580,3 +581,123 @@ def test_the_site_reads_the_numbers_the_sync_writes():
     columns = {t: {r[1] for r in db.execute(f"PRAGMA table_info({t})")} for t in [t.name for t in rd.TABLES] + ["rec_meta"]}
     for table in set(re.findall(r"\b(?:FROM|JOIN) (rec_\w+|records)\b", ts)):
         assert table in columns, table
+    # The columns the record statements name by alias (c.dept, d.day, ...) are each in the alias's table.
+    aliases = {"c": "rec_contracts", "d": "rec_details", "b": "rec_buyers", "o": "rec_orgs", "g": "rec_gsin", "r": "records"}
+    tables_ts = (REPO / "site" / "src" / "records_tables.ts").read_text(encoding="utf-8")
+    for alias, column in set(re.findall(r"\b([cdbogr])\.([a-z_]+)\b", tables_ts)):
+        if alias == "c" and column in ("rk", "cls", "bid", "day") and "rec_classes c" in tables_ts:
+            assert column in columns["rec_classes"] | columns["rec_contracts"], column
+            continue
+        assert column in columns[aliases[alias]], f"{alias}.{column}"
+    # The radar's kind numbers are the sources' (pages/expiring.tsx KIND_NUMBER).
+    expiring_ts = (REPO / "site" / "src" / "pages" / "expiring.tsx").read_text(encoding="utf-8")
+    kinds = re.search(r"KIND_NUMBER[^=]*=\s*\{([^}]*)\}", expiring_ts)
+    assert kinds and dict(re.findall(r"(\w+): (\d)", kinds.group(1))) == {k: str(v) for k, v in rd.EXPIRING_KINDS.items()}
+
+
+# -- the published contracts' pages ---------------------------------------------------
+
+def test_each_published_contract_has_a_page_row_scrubbed_grouped_and_keyed_as_its_record(seeded, tmp_path):
+    conn, _ = seeded
+    conn.execute("UPDATE contracts SET commodity_type = 'S', commodity_code = 'R019BF', trade_agreement = '[\"CA\", \"WT\"]', "
+                 "number_of_bids = 3, comments_fr = 'Écrire à agent@example.gc.ca' WHERE reference = 'C-2'")
+    conn.execute("INSERT INTO gsin_codes (code, desc_en, desc_fr) VALUES ('R019BF', 'Translation services', "
+                 "'Services de traduction'), ('Z999', 'Not used', NULL)")
+    # A department that is not a buyer id, and a reference with a control character: no address takes them.
+    conn.execute("INSERT INTO contracts (owner_org, reference, loaded_at) VALUES ('Not An Id', 'Z-1', '2026-11-01')")
+    conn.execute("INSERT INTO contracts (owner_org, reference, loaded_at) VALUES ('dnd-mdn', 'Z\x072', '2026-11-01')")
+    out = tmp_path / "records"
+    db = d1()
+    manifest = night(conn, out, db)
+    assert manifest["left_out"]["contracts_unaddressable"] == 2
+    assert manifest["expected"]["rec_contracts"] == 2 and manifest["expected"]["rec_gsin"] == 1
+    cols = ("dept", "ref", "pid", "oid", "wh", "cdate", "endd", "value", "orig", "amend", "proc", "comp", "ctype", "gsin",
+            "trade", "inst", "period", "bids", "desc_en", "com_fr")
+    rows = {r[1]: dict(zip(cols, r)) for r in db.execute(f"SELECT {', '.join(cols)} FROM rec_contracts ORDER BY ref")}
+    org = conn.execute("SELECT organization_id FROM contracts WHERE reference = 'C-1'").fetchone()[0]
+    assert rows["C-1"] | {"desc_en": None} == {
+        "dept": "dnd-mdn", "ref": "C-1", "pid": "PROC-1", "oid": rd.org_number(org), "wh": 0, "cdate": "2025-11-12",
+        "endd": "2027-03-31", "value": 10_000_000, "orig": 10_000_000, "amend": None, "proc": "TN", "comp": 0, "ctype": None,
+        "gsin": None, "trade": None, "inst": "C", "period": "2025-2026-Q3", "bids": None, "desc_en": None, "com_fr": None,
+    }
+    # The exports' scrub: a telephone or fax number and an email address never reach the page.
+    assert "555" not in rows["C-1"]["desc_en"] and rows["C-1"]["desc_en"].startswith("Translation.")
+    assert "@" not in rows["C-2"]["com_fr"] and rows["C-2"]["com_fr"].startswith("Écrire à")
+    assert (rows["C-2"]["value"], rows["C-2"]["amend"], rows["C-2"]["trade"], rows["C-2"]["bids"]) == (13_000_000, 3_000_000, "CA, WT", 3)
+    # One contract's rows share the department and procurement_id; the key is the record's, so the counted value joins.
+    assert db.execute("SELECT r.cents FROM rec_contracts c JOIN records r ON r.k = c.k WHERE c.ref = 'C-2'").fetchone() == (3_000_000,)
+    assert db.execute("SELECT code, desc_fr FROM rec_gsin").fetchall() == [("R019BF", "Services de traduction")]
+    # Nothing changed, nothing sent: no field that moves every week (loaded_at) is in the row.
+    conn.execute("UPDATE contracts SET loaded_at = '2026-11-08'")
+    assert night(conn, out, db)["batches"] == []
+
+
+
+# -- the record tables, the earlier awards and the radar's window -----------------------
+
+def test_the_record_tables_rows_carry_each_counted_records_date_reference_and_title(seeded, tmp_path):
+    conn, _ = seeded
+    db = d1()
+    night(conn, tmp_path / "records", db)
+    # One row per counted record with a date and a party, its figures the records row's own.
+    assert db.execute(
+        "SELECT COUNT(*) FROM rec_details d LEFT JOIN records r ON r.k = d.k AND r.extra = 0 WHERE r.k IS NULL OR r.src != d.src "
+        "OR r.cents IS NOT d.cents OR r.bid IS NOT d.bid OR r.oid IS NOT d.oid OR r.comp IS NOT d.comp OR r.meth IS NOT d.meth "
+        "OR r.vnote != d.vnote").fetchone() == (0,)
+    assert db.execute("SELECT COUNT(*) FROM rec_details").fetchone() == db.execute(
+        "SELECT COUNT(*) FROM records WHERE extra = 0 AND fy IS NOT NULL AND (bid IS NOT NULL OR oid IS NOT NULL)").fetchone()
+    # A published contract by department and reference, its title scrubbed as the exports are.
+    day, title = db.execute("SELECT day, title_en FROM rec_details WHERE ref = 'dnd-mdn:C-1'").fetchone()
+    assert day == "2025-11-12" and title.startswith("Translation.") and "555" not in title
+    # An award reference the site cannot take as it is goes in its URL form.
+    from awardwatch_pipeline.export_static import url_reference
+    from export_seed import SLASH_REF
+    if conn.execute("SELECT 1 FROM awards WHERE reference = ?", (SLASH_REF,)).fetchone():
+        assert db.execute("SELECT COUNT(*) FROM rec_details WHERE ref = ?", (url_reference(SLASH_REF),)).fetchone() == (1,)
+    # Every class is a six-digit UNSPSC class of a notice or history record that names a buyer, dated as it is.
+    assert db.execute("SELECT COUNT(*) FROM rec_classes").fetchone()[0] > 0
+    assert db.execute(
+        "SELECT COUNT(*) FROM rec_classes c LEFT JOIN rec_details d ON d.k = c.rk WHERE d.k IS NULL OR d.src NOT IN (1, 2) "
+        "OR c.cls < 100000 OR c.cls > 999999 OR c.bid IS NOT d.bid OR c.day != d.day").fetchone() == (0,)
+
+
+def _window(static: Path, rows: object, pages: object = 1) -> None:
+    folder = static / "expiring" / "12m"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "index.json").write_text(json.dumps({"window": "12m", "pages": pages, "rows": 3, "total": None}), encoding="utf-8")
+    (folder / "1.json").write_text(json.dumps(rows), encoding="utf-8")
+
+
+def test_the_radars_window_is_read_from_the_static_export_without_its_day_count(seeded, tmp_path):
+    conn, ids = seeded
+    static = tmp_path / "static"
+    base = {"title_en": "T", "title_fr": None, "organization": None, "buyer_en": None, "buyer_fr": None, "start": None, "days_left": 9,
+            "method_en": None, "method_fr": None, "instrument_fr": None, "n_amendments": 0, "value_growth": None, "provinces": []}
+    _window(static, [
+        {**base, "kind": "contract", "reference": "dnd-mdn:C-1", "end": "2027-03-31", "organization_id": ids[NORTH], "buyer_id": "dnd-mdn",
+         "client_buyer_id": "dnd-mdn", "value": 130000.0, "currency": None, "competitive": 0, "instrument_en": "Standing offer",
+         "segments": []},
+        {**base, "kind": "award", "reference": "AW-9", "end": "2026-12-15", "organization_id": None, "supplier_withheld": True,
+         "buyer_id": "pwgsc-tpsgc", "value": 5000.0, "currency": "USD", "competitive": True, "instrument_en": "Contract",
+         "segments": ["82", "43"], "value_flag": None},
+        {**base, "kind": "award", "reference": None, "end": "2026-12-15"},
+    ])
+    db = d1()
+    manifest = night(conn, tmp_path / "records", db, static_dir=static)
+    assert manifest["expected"]["rec_expiring"] == 2
+    rows = {json.loads(j)["reference"]: (endd, oid, buyer, client, segs, kind, comp, cad, cents, nv, so, m31, json.loads(j))
+            for endd, oid, buyer, client, segs, kind, comp, cad, cents, nv, so, m31, j in db.execute(
+                "SELECT endd, oid, buyer, client, segs, kind, comp, cad, cents, nv, so, m31, j FROM rec_expiring")}
+    contract = rows["dnd-mdn:C-1"]
+    assert contract[:12] == ("2027-03-31", rd.org_number(ids[NORTH]), "dnd-mdn", "dnd-mdn", "", 3, 0, 13_000_000, 13_000_000, 0, 1, 1)
+    assert "days_left" not in contract[12]
+    award = rows["AW-9"]
+    # Another currency has no Canadian value to add or band; a withheld supplier names no one; segments between spaces.
+    assert award[:12] == ("2026-12-15", None, "pwgsc-tpsgc", None, " 43 82 ", 1, 1, None, None, 0, 0, 0)
+    # A day count that moves every night changes nothing sent.
+    _window(static, [{**r[12], "days_left": 1} for r in rows.values()])
+    assert night(conn, tmp_path / "records", db, static_dir=static)["upserts"]["rec_expiring"] == 0
+    # A window index naming a page that is not a list stops the sync.
+    _window(static, {"rows": []})
+    with pytest.raises(ValueError, match="not a list"):
+        rd.sync(conn, tmp_path / "records", static_dir=static)

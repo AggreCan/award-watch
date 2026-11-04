@@ -35,6 +35,9 @@ export type Bucket = "page" | "api" | "download" | "form" | "feed" | "auth" | "s
 
 // A table of an analytics view as CSV (pages/analytics.tsx, analyticsCsv).
 export const ANALYTICS_CSV = /^\/(?:buyers|organizations|segments)\/[^/]+\/analytics\/[a-z]+\.csv$/;
+// A file of records from the records database (src/records_tables.ts): a
+// filtered radar window's matches, a profile's or a buyer's record table.
+export const RECORDS_CSV = /^\/(?:expiring\/(?:3m|6m|12m)\/rows|(?:buyers|organizations)\/[^/]+\/records)\.csv$/;
 
 // A HEAD request for a download (a link checker, a client asking a file's
 // size before fetching it) moves no file, so it is not counted against the
@@ -43,7 +46,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/data/feeds/")) return "feed";
   if (path.startsWith("/api/")) return "api";
   if (path.startsWith("/downloads/")) return method === "HEAD" ? "page" : "download";
-  if (ANALYTICS_CSV.test(path)) return method === "HEAD" ? "page" : "download";
+  if (ANALYTICS_CSV.test(path) || RECORDS_CSV.test(path)) return method === "HEAD" ? "page" : "download";
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
   if (path === "/account/stop" || path === "/interest/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";

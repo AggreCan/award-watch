@@ -367,8 +367,8 @@ jobs:
       # The records database, D1 awardwatch-records (docs/analytics.md), the
       # analytics views' data: the search sync's shape. records-sync stages
       # tonight's changed rows in the pipeline database and writes them as SQL
-      # batches; Wrangler applies the schema and each batch, then reads the
-      # seven row counts back; records-check compares them with the manifest;
+      # batches; Wrangler applies the schema and each batch, then reads each
+      # table's row count back; records-check compares them with the manifest;
       # only then does Wrangler apply finish.sql (the database is ready and
       # describes tonight's data date) and records-synced record the ledger,
       # which travels with the database, so this runs before the save. While
@@ -377,14 +377,16 @@ jobs:
       # and records-synced replaces it, so a step stopped anywhere reads as
       # failed: an item needing attention (records_sync in the run status)
       # that stops nothing; the views answer from what D1 already holds and
-      # the next night sends the same changes again. A first load is about 60
-      # batches, hence the longer limit; the batch files go once applied, to
-      # spare the runner's disk.
+      # the next night sends the same changes again. A full load runs to
+      # hundreds of batches, hence the longer limit; the batch files go once
+      # applied, to spare the runner's disk. The static export gives the
+      # radar's 12-month window (rec_expiring), so this runs after it.
       - name: Sync the records database
         id: records
         if: ${{ !cancelled() && steps.verify.outputs.export_ok == 'true' && steps.verify.outputs.db_ok == 'true' }}
         continue-on-error: true
-        timeout-minutes: 150
+        # The first night after the record tables land writes them and the published contracts' pages (about 1.1 GB of SQL in about 230 batches); a timeout records nothing, so the next night would resend it all.
+        timeout-minutes: 300
         working-directory: site
         run: |
           out=../data/out/records
@@ -394,14 +396,14 @@ jobs:
             printf 'no database\n' > "$out/last_outcome.txt"
             exit 0
           fi
-          python -m awardwatch_pipeline records-sync --db ../data/awardwatch.sqlite --out "$out"
+          python -m awardwatch_pipeline records-sync --db ../data/awardwatch.sqlite --static ../data/out/static --out "$out"
           "$WRANGLER" d1 execute awardwatch-records --remote --yes --file ../pipeline/records_schema.sql
           for batch in $(cat "$out/batches.txt"); do
             echo "Applying $batch"
             "$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/$batch"
             rm -f "$out/$batch"
           done
-          "$WRANGLER" d1 execute awardwatch-records --remote --json --command "SELECT (SELECT COUNT(*) FROM records) AS records, (SELECT COUNT(*) FROM rec_orgs) AS rec_orgs, (SELECT COUNT(*) FROM rec_buyers) AS rec_buyers, (SELECT COUNT(*) FROM rec_buyer_quarters) AS rec_buyer_quarters, (SELECT COUNT(*) FROM rec_segment_years) AS rec_segment_years, (SELECT COUNT(*) FROM rec_buyer_years) AS rec_buyer_years, (SELECT COUNT(*) FROM rec_due) AS rec_due" > "$out/count.json"
+          "$WRANGLER" d1 execute awardwatch-records --remote --json --command "SELECT (SELECT COUNT(*) FROM records) AS records, (SELECT COUNT(*) FROM rec_orgs) AS rec_orgs, (SELECT COUNT(*) FROM rec_buyers) AS rec_buyers, (SELECT COUNT(*) FROM rec_buyer_quarters) AS rec_buyer_quarters, (SELECT COUNT(*) FROM rec_segment_years) AS rec_segment_years, (SELECT COUNT(*) FROM rec_buyer_years) AS rec_buyer_years, (SELECT COUNT(*) FROM rec_due) AS rec_due, (SELECT COUNT(*) FROM rec_details) AS rec_details, (SELECT COUNT(*) FROM rec_classes) AS rec_classes, (SELECT COUNT(*) FROM rec_expiring) AS rec_expiring, (SELECT COUNT(*) FROM rec_contracts) AS rec_contracts, (SELECT COUNT(*) FROM rec_gsin) AS rec_gsin" > "$out/count.json"
           python -m awardwatch_pipeline records-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --counts "$out/count.json"
           "$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/finish.sql"
           python -m awardwatch_pipeline records-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"

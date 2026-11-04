@@ -9,14 +9,20 @@ file of each table. Phase 2 added periods chosen by their first and last
 fiscal year, the average and median value by fiscal year, the ten largest
 records with their references and titles, the change in value through
 amendments, the contracts ending in each of the next eight fiscal quarters,
-and a line in the daily check's email for a failed sync. What is left is
-listed under *Phase 3* at the end.
+and a line in the daily check's email for a failed sync. The same database
+serves a page per published contract, the record tables, the radar over its
+whole window, the earlier awards on a tender, the incumbents and the
+organization feeds (sections below). What is left is listed under *Phase 3*
+at the end.
 
 The code is `pipeline/awardwatch_pipeline/records_db.py` (the rows and the
 sync), `pipeline/records_schema.sql` (the schema), the step "Sync the records
 database" in `.github/workflows/nightly.yml`, and on the site
 `site/src/records_db.ts` (the queries), `site/src/pages/analytics.tsx` (the
-pages and the CSV files) and `site/src/watchdog.ts` (the daily check's line).
+pages and the CSV files) and `site/src/watchdog.ts` (the daily check's line);
+for the record pages, `site/src/records_tables.ts` (their statements) and
+`site/src/pages/published.tsx`, `records.tsx`, `backbone.tsx` and
+`expiring.tsx`.
 
 ## The database
 
@@ -34,6 +40,11 @@ reads it, with prepared statements.
 | `rec_segment_years` | segment, source and fiscal year: count, value, buyers, organizations, and the count, sum and median of the values above zero | about 2,000 |
 | `rec_buyer_years` | buyer, source and fiscal year with a value above zero: the count, sum and median of those values | about 15,000 at most |
 | `rec_due` | buyer or segment, and fiscal quarter (the eight from the data date's): the contracts ending, their value, the count without a value | a few thousand |
+| `rec_details` | counted record with a date that names a buyer or an organization: its date, reference and title beside its figures (the record tables, the feeds) | about 2.4 million |
+| `rec_classes` | UNSPSC class of an award notice or history record that names a buyer (the earlier awards on a tender) | about 1.5 million |
+| `rec_expiring` | row of the radar's 12-month window, as the static export writes it | about 20,000 |
+| `rec_contracts` | published contract row: every field its page shows (`/contracts/<department>/<reference>`) | about 1.34 million |
+| `rec_gsin` | GSIN code a published contract carries: its names | about 10,000 at most |
 | `rec_meta` | key: `state` (`loading` or `ready`), `as_of` (the data date the rows describe), `rules` | 3 |
 
 A row of `records` is one record as the profiles count it (*Counting money*
@@ -104,8 +115,10 @@ index entry; `rec_buyers (id)`; `rec_buyer_quarters (bid, src, fy)`;
 `rec_segment_years (sid, src, fy)`; `rec_buyer_years (bid, src, fy)`;
 `rec_due (bid, fy, fq)` and `rec_due (sid, fy, fq)`, each partial. No index
 holds `ref` or `title`: a statement reads them only for the ten rows it
-keeps. Every statement the site sends names one of the indexes
-(`site/test/analytics.test.ts` reads each query plan).
+keeps. The record tables' indexes are named in their sections below. Every
+statement the site sends names one of the indexes (`site/test/analytics.test.ts`
+and `site/test/records-tables.test.ts` read each query plan, and
+`site/test/accounts-records-deliveries.test.ts` those of the deliveries).
 
 ### The summary rows of phase 2
 
@@ -130,10 +143,6 @@ dollars and not flagged; `n_no_value` counts the contracts whose source
 published none. The table is rebuilt from the data date every night, so a
 quarter behind it drops out.
 
-`rec_segment_years (sid, src, fy)`. Every statement the site sends names one
-of them (`site/test/analytics.test.ts` reads each query plan, and
-`site/test/accounts-records-deliveries.test.ts` those of the deliveries).
-
 ## The nightly sync
 
 Modelled on the search sync (`docs/hosted-search.md`), with three changes for
@@ -150,7 +159,7 @@ a table a hundred times larger.
    and `manifest.json` under `data/out/records/`, and `failed` to
    `last_outcome.txt` before it starts.
 2. Wrangler applies `records_schema.sql` (every statement `IF NOT EXISTS`)
-   and each batch in order, then reads the seven row counts back;
+   and each batch in order, then reads each table's row count back;
    `records-check` compares them with the manifest.
 3. Only then does Wrangler apply `finish.sql`, which sets `state` to `ready`
    and `as_of` to tonight's data date, and `records-synced` moves the staged
@@ -164,9 +173,10 @@ again; the manifest carries a plan number that `records-synced` holds against
 the staged rows, so an old manifest records nothing. A night that stops
 leaves its staged rows in the pipeline database (and so in that night's
 backup) until the next `records-sync` empties the table; after a failed first
-load that is about 3 million small rows.
+load that is about 3 million small rows, and about 5.3 million after a failed
+first night of the record tables.
 
-A full reload drops the seven tables, applies the schema, sets `state` to
+A full reload drops the tables, applies the schema, sets `state` to
 `loading`, and sends every row. The pages answer "being loaded" until
 `finish.sql` sets it back, so no reader sees half a load. The sync makes one
 by itself on an empty ledger and after a count read back disagreed, but not
@@ -176,8 +186,9 @@ a fifth of the plan's monthly allowance).
 It also makes one, whatever the days, when the tables changed form. D1
 creates a table only when it is missing, so a new column reaches a database
 that has the table only through the drop. `records_db.LAYOUT` names the form
-`records_schema.sql` creates (1 for phase 1, 2 since phase 2 added the
-columns and tables above); `records-synced` records it in the pipeline
+`records_schema.sql` creates (1 for phase 1, 2 since phase 2 added its
+columns and tables; the record tables, new tables beside them, left it at
+2); `records-synced` records it in the pipeline
 database's meta (`records_layout`) after a full load, and a sync that finds
 another value, or none (a database last loaded by phase 1), reloads in full.
 A reload that stops records nothing, so the next night reloads again. A
@@ -200,11 +211,11 @@ the measured figures.
 
 | | Estimate |
 |---|---|
-| A first load or full reload | about 500 MB of SQL in about 100 batches (phase 1: 290 MB in about 60); about 3.2 million rows and 9 million index entries written |
-| A night | the records whose figures, organization, buyer, flag, reference or title changed, and the `rec_due` rows that moved: thousands to tens of thousands of rows, one or two batches |
-| The count check | one count of each of the seven tables, about 3.2 million rows read a night |
-| Database size | about 600 MB (phase 1: about 400 MB) |
-| The ledger in the pipeline database | about 3.2 million rows, about 70 MB (a row's hash covers its new columns, so the ledger does not grow) |
+| A first load or full reload | about 500 MB of SQL in about 100 batches for the analytics tables (phase 1: 290 MB in about 60); about 3.2 million rows and 9 million index entries written. The record tables and the published contracts' pages add about 1.1 GB in about 230 batches and 5.3 million rows, sent as ordinary changes on their first night; a full reload after that sends both, about 1.6 GB in about 330 batches |
+| A night | the records whose figures, organization, buyer, flag, reference or title changed, the `rec_due` rows that moved, and the record-table, radar-window and published-contract rows that changed: thousands to tens of thousands of rows, one or two batches |
+| The count check | one count of each table: about 3.2 million rows read a night for the analytics tables, about 8.5 million with the rest |
+| Database size | about 600 MB for the analytics tables (phase 1: about 400 MB); about 2 GB with the record tables and the published contracts' pages |
+| The ledger in the pipeline database | about 3.2 million rows, about 70 MB, for the analytics tables (a row's hash covers phase 2's new columns, so they did not grow it); the record tables and the published contracts' pages add about 5.3 million rows |
 
 ## The views
 
@@ -319,12 +330,13 @@ No `RECORDS` binding, a database without the tables, `state` other than
 `ready`, or a failed statement: the view answers "Analytics are not available
 right now" with status 503, `Cache-Control: no-store` and a link back to the
 entity page; a CSV answers the same status. A failure is logged as a D1 code
-and a fixed phrase. The one other reader is the email delivery of
-organization, buyer and segment saved searches (`docs/accounts.md`, *What
-each kind delivers*; statements in `site/src/account/records_deliveries.ts`),
-which reads the counts by source and fiscal year of one entity a search, and
-waits, sending nothing for those kinds, while the database is missing,
-loading, failing or not at the data date.
+and a fixed phrase. The other readers answer the same states their own way:
+the email delivery of organization, buyer and segment saved searches
+(`docs/accounts.md`, *What each kind delivers*; statements in
+`site/src/account/records_deliveries.ts`), which reads the counts by source
+and fiscal year of one entity a search, and waits, sending nothing for those
+kinds, while the database is missing, loading, failing or not at the data
+date; and the pages and panels below.
 
 A Worker newer than the database's tables (deployed before the night that
 reloads them for a new `LAYOUT`) sends statements naming columns and tables
@@ -332,6 +344,142 @@ the database lacks: D1 refuses the batch and the full views answer the same
 503 until the reload finishes. The free views read only phase 1's tables and
 keep working. The nightly syncs the records before it deploys, so a change
 left to the nightly never shows this.
+
+The record tables (`rec_details` to `rec_gsin`) arrive as ordinary changes,
+not through a reload, so `state` stays `ready` through the night that first
+sends them. A Worker deployed before that night answers their pages and
+panels as for a missing database until the tables exist, then reads them
+while they fill; left to the nightly, the Worker reading them goes live only
+after the sync, unless that sync stops short.
+
+## A page per published contract
+
+`/contracts/<department>/<reference>` (`site/src/pages/published.tsx`): one
+row of the proactive disclosure of contracts over $10,000. The department is
+the dataset's `owner_org` (`dnd-mdn`), since a reference number is unique
+within one department only; the reference is as published, escaped as one
+path segment (`W8486-123456%2F001%2FZM`), at most 200 characters. A
+department in capitals is sent to its lower-case address. The radar's rows,
+the profiles' published contracts and the record tables link their titles
+here; the government's contracts search, which often lists nothing yet for
+a new quarter, stays linked as the source.
+
+The page is one D1 batch of two statements: the state row and
+`PUBLISHED_CONTRACT_SQL` (`site/src/records_tables.ts`), which reads the row
+through `rec_contracts_ref (dept, ref)` and up to 51 other rows of the same
+contract (the rows sharing the department and `procurement_id`, as the radar
+groups them) through `rec_contracts_group (dept, pid, cdate)`, with the
+names, the counted value (`records` by the same key) and the GSIN names
+joined by key. It shows the department, the organization (or that the
+supplier is a person, withheld), the description, the contract, original and
+amendment values, the value counted by the counting rules and, when every
+version is listed, their sum (the radar's value), the dates and the radar
+window of the contract's newest version, the solicitation procedure and the
+competitive flag, the instrument, the commodity type and GSIN, the agreement
+and trade agreement codes, the limited tendering reason, the number of bids,
+the comments, and the provenance: the dataset, its file and last read
+(`stats.json` `sources`), and the records' data date.
+
+`rec_contracts` leaves out `loaded_at`, which changes for every row each
+time the file is read, so a night sends only the rows that changed. Rows the
+address cannot carry (a department that is not a buyer id, a reference over
+200 characters or with a control character) are left out and counted in the
+manifest's `left_out.contracts_unaddressable`.
+
+The database missing, loading or failing answers 503 (`no-store`,
+`Retry-After: 3600`) with the search; a row it does not hold answers 404 with
+the same link. The page is cached like the other record pages
+(`public, max-age=300`) and is not in the sitemaps.
+
+## Record tables
+
+`/organizations/<id>/records` and `/buyers/<id>/records`
+(`site/src/pages/records.tsx`), linked from the profile and the buyer page:
+every award notice, contract history record, published contract and grant
+naming the organization or of the buyer over the ten fiscal years ending
+with the data date's, from `rec_details` (one row per counted record, with
+its date, reference, title and the figures the charts count). Newest first
+or largest value first (`sort=largest`), 50 to a page (`page=`), filtered by
+fiscal year (`year=2025`), the other party (`buyer=<id>` on a profile,
+`organization=<id>` on a buyer page), source (`source=`) and method
+(`method=OB|TC|ST|TN|AC`). Each title opens the record's page on the site
+(award notices, history records, published contracts) or the government's
+record of a grant. `<address>.csv` with the same query sends the matches
+(at most 10,000).
+
+Every statement reads through `rec_details_org (oid, day)` or
+`rec_details_buyer (bid, day)`, held to a span within ten fiscal years: the
+page, the count and total, and the other party's 100 most frequent (a
+profile's buyers) or largest (a buyer's organizations), in one batch.
+
+Once the accounts switch is on, the filters, the order, later pages and
+the counts are part of Pro (`analytics`), and the file too
+(`export_filtered`); a reader without them gets the newest 50 records (one
+statement beside the state row) and a note marked Pro, and the file is the
+site's 404. While the switch is off every reader gets the whole table and no
+file. The pages are `noindex`, their links `nofollow`; the database missing
+or loading answers 503 as the analytics views do.
+
+## The radar over its whole window
+
+`/expiring/3m`, `/6m` and `/12m` read the static window files while nothing
+is filtered or sorted. A filter (buyer, client department `client=`,
+organization `supplier=`, segment, competitive flag, value band, source, the
+March 31 mark `fye=0`, the standing offer mark `sosa=0`) or `sort=value`
+reads `rec_expiring` instead (`site/src/records_tables.ts`): one batch of the
+state row, a page of 100 matches (`page=` counts the matches' pages), their
+count, total and the number with no value, and the form's choices from the
+whole window (its buyers, client departments and 200 largest
+organizations, and its counts by flag, source, band and mark). Every
+statement is bounded by the window's end dates through `rec_expiring_end`,
+so none reads more than the 12-month window's rows (about 20,000). Such an
+address is `noindex`.
+
+`/expiring/<window>/rows.csv` with the same query sends the matches (at most
+10,000, in the order shown) as CSV: Pro's (`export_filtered`, and
+`radar_depth` for a deep window) once the accounts switch is on, the site's
+404 otherwise and while the switch is off. It counts as a download for the
+per-address limit and is sent `private, no-store`. A free reader of the
+3-month window filters the whole window and sees the file marked Pro; the
+deeper windows keep their ten-row tease without Pro.
+
+`rec_expiring` is written from the static export's 12-month window files by
+the same nightly sync (`records-sync --static`), so the two views of the
+radar never disagree. When the records database is missing, loading or
+failing, a filtered view filters the window file's page as before and says
+so.
+
+## Earlier awards, incumbents and organization feeds
+
+Three panels and a feed read one statement each beside the state row
+(`site/src/records_tables.ts`, rendered by `site/src/pages/backbone.tsx`);
+a database that cannot answer leaves a one-line note and the page stands.
+
+- **Earlier awards on an open tender** (`/tenders/<reference>` while the
+  notice is open, for every reader): the records of the notice's buyer from
+  the last ten fiscal years that share a UNSPSC class (a code's first six
+  digits) with the notice, through `rec_classes_class (cls, bid, day)`. The
+  statement returns the 50 sharing the most classes, newest first; the page
+  ranks them by the words of four letters or more their titles share with
+  the notice's title (either language) and shows ten.
+- **Who holds the contracts ending within 12 months**, on each buyer page and
+  segment page: the radar's 12-month window (`rec_expiring`) grouped by
+  organization, the largest value first, at most 25, with each
+  organization's count (linked to the radar filtered to it), counted value
+  and soonest end. A buyer's rows are those naming it as the buyer or as the
+  client department. Once the accounts switch is on, a reader without
+  `radar_depth` sees the first three and a note marked Pro.
+- **An organization's records feed**,
+  `/data/feeds/organizations/<id>.xml` (linked from the profile): the 50
+  newest records naming the organization within ten fiscal years, as Atom,
+  each entry linking the record's page. The feed bucket's rate limit applies;
+  the answer is `public, max-age=3600` and kept an hour in the edge's cache,
+  so a poller costs one D1 read an hour. An id with no profile is the site's
+  404; the database unable to answer gives 503.
+
+With these, the buyer and segment pages read the records database once
+each (the incumbents); the profile reads it only through its record table
+and feed addresses.
 
 ## Local development
 
@@ -365,12 +513,9 @@ their units differ. The ten largest records are a table only.
 
 - Saved views: a view's address, period included, kept as a saved search in
   the account.
-- Price benchmarks from comparable awards. The records carry the UNSPSC
-  segment only, so this needs the class (a new column, and a reload by the
-  `LAYOUT` rule) and a rule for "comparable" that holds up on the titles.
-- Record tables with filters, paging and export on profiles and buyer pages
-  (the records backbone's own build). They read the `ref` and `title`
-  columns phase 2 added, so they need no further reload.
+- Price benchmarks from comparable awards. `rec_classes` now carries each
+  award notice's and history record's UNSPSC classes, so what is left is a
+  rule for "comparable" that holds up on the titles.
 - The corporate family, left out because the data does not support it. No
   source the pipeline reads says who owns whom. An organization is one
   normalized legal name (`merges.py` joins spellings of one business on a

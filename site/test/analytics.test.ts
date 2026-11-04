@@ -262,7 +262,7 @@ describe("with the switch off", () => {
 });
 
 describe("the pages that link a view, switch on", () => {
-  it("list it for every reader, marked Pro, and read nothing from the records database", async () => {
+  it("list it for every reader, marked Pro, and read from the records database only the incumbents' one statement", async () => {
     await sessions();
     const rec = recording(RECORDS);
     for (const [path, view] of [["/buyers/pwgsc-tpsgc", VIEWS[0]], [`/organizations/${A1}`, VIEWS[1]], ["/segments/82", VIEWS[2]]]) {
@@ -272,7 +272,14 @@ describe("the pages that link a view, switch on", () => {
         expect(html, path).toContain(`<a href="${view}" class="btn" rel="nofollow">Analytics<span class="pro-tag">`);
       }
     }
-    expect(rec.batches).toEqual([]);
+    // The profile reads nothing; a buyer and a segment page read the state row and
+    // their incumbents (src/pages/backbone.tsx), one batch a page.
+    expect(rec.batches).toHaveLength(6);
+    for (const batch of rec.batches) {
+      expect(batch[0]).toBe(STATE_SQL);
+      expect(batch).toHaveLength(2);
+      expect(batch[1]).toMatch(/FROM rec_expiring WHERE (\(buyer = \?1 OR client = \?1\)|instr\(segs, \?1\) > 0)/);
+    }
   });
 });
 

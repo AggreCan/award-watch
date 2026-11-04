@@ -113,11 +113,11 @@ describe("/expiring/:window", () => {
     expect(html).toContain('<a href="/awards/cb-400-40000004">Translation standing offer, official languages</a>');
     expect(html).toContain('<a href="/history/w8472-000777">Diesel engine overhaul, patrol vessel</a>');
     expect(html).not.toContain('href="/awards/dnd-mdn');
-    // A published contract has no page here: its title opens the same record as
-    // its Record link (the contracts search), so it keeps a link out at every width.
-    expect(html).toContain('<td data-label="Contract" class="lead-cell"><a href="https://search.open.canada.ca/contracts/?search_text=C-2026-0042" rel="nofollow noopener">Satellite communications terminal maintenance</a>');
+    // A published contract's title opens its page here (pages/published.tsx),
+    // by department and reference; its Record link stays the contracts search.
+    expect(html).toContain('<td data-label="Contract" class="lead-cell"><a href="/contracts/dnd-mdn/C-2026-0042">Satellite communications terminal maintenance</a>');
     const fr = await text("/expiring/3m?lang=fr");
-    expect(fr).toContain('<td data-label="Contrat" class="lead-cell"><a href="https://search.open.canada.ca/contracts/?search_text=C-2026-0042" rel="nofollow noopener">Entretien de terminaux de communication par satellite</a>');
+    expect(fr).toContain('<td data-label="Contrat" class="lead-cell"><a href="/contracts/dnd-mdn/C-2026-0042">Entretien de terminaux de communication par satellite</a>');
     // The source each row was kept from, on the line under the contract, so it shows while the Record column rests.
     expect(html).toMatch(/Translation standing offer, official languages<\/a><br\/><span class="mono id muted">[^<]+<\/span>[^]*?<br\/><span class="muted small">Award notice/);
     expect(html).toContain('<span class="muted small">Published contract');

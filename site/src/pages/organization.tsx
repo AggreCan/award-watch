@@ -22,7 +22,7 @@ import { organizationSeo } from "../seo";
 import { ExpiringSection, MoreInWindow } from "./expiring";
 import { InterestPanel, interestFilter } from "./interest";
 import {
-  AnalyticsLink, AwardTable, BuyerLink, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, contractSearchUrl, datasetUrl,
+  AnalyticsLink, AwardTable, BuyerLink, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, contractPath, contractSearchUrl, datasetUrl,
   grantUrl, lobbyUrl, money, orList, shareText,
 } from "./shared";
 import { WATCH_MAX } from "./watchlist";
@@ -301,7 +301,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                   <tr>
                     <td data-label={t(lang, "col.date")} class="mono">{r.contract_date ?? ""}</td>
                     <td data-label={t(lang, "col.description")} class="lead-cell">
-                      {pick(lang, r.description_en, r.description_fr) ?? t(lang, "common.not_stated")}
+                      <a href={contractPath(r.owner_org, r.reference)}>{pick(lang, r.description_en, r.description_fr) ?? r.reference}</a>
                       {r.reporting_period ? <><br /><span class="muted small">{t(lang, "org.reporting_period", { period: r.reporting_period })}</span></> : null}
                     </td>
                     <td data-label={t(lang, "col.buyer")} class="mdh"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
@@ -411,6 +411,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           <a href={`/organizations/${o.id}/respond`} class="btn">{t(lang, "org.respond")}</a>
           <a href={`/corrections?organization=${o.id}`} class="btn">{t(lang, "org.correct")}</a>
           <AnalyticsLink lang={lang} href={`/organizations/${o.id}/analytics`} on={accountsEnabled(c.env)} />
+          <a href={`/organizations/${o.id}/records`} class="btn" rel="nofollow">{t(lang, "records.link")}</a>
+          <a href={`/data/feeds/organizations/${o.id}.xml`} class="btn" rel="nofollow">{t(lang, "orgfeed.button")}</a>
         </>}>
         {otherNames.length ? <p class="page-note">{t(lang, "org.also_recorded")} {otherNames.join(" · ")}</p> : null}
         <p class="page-note">

@@ -24,13 +24,16 @@ import { aboutPage, privacyPage, termsPage } from "./pages/docs";
 import { contractPage } from "./pages/contract";
 import { DOWNLOADS, YEARLY_DOWNLOAD, dataPage } from "./pages/data";
 import { directoryPage, organizationsIndex } from "./pages/directory";
-import { EXPIRING_CSV, expiringFile, expiringPage, expiringWindowPage } from "./pages/expiring";
+import { EXPIRING_CSV, expiringFile, expiringPage, expiringRowsCsv, expiringWindowPage } from "./pages/expiring";
 import { feedsPage } from "./pages/feeds";
 import { correctionsForm, correctionsSubmit, respondPage, respondSubmit } from "./pages/forms";
 import { homePage } from "./pages/home";
 import { interestSubmit, readInterestPost } from "./pages/interest";
 import { methodologyPage } from "./pages/methodology";
 import { organizationPage } from "./pages/organization";
+import { publishedContractPage } from "./pages/published";
+import { orgFeed } from "./pages/backbone";
+import { buyerRecords, buyerRecordsCsv, organizationRecords, organizationRecordsCsv } from "./pages/records";
 import { rankingsPage } from "./pages/rankings";
 import { sameDayPage } from "./pages/same_day";
 import { searchPage } from "./pages/search";
@@ -117,10 +120,17 @@ app.get("/awards/:key", (c) => {
   return YEAR_RE.test(key) ? awardsYearPage(c, key) : contractPage(c, "award", key);
 });
 app.get("/history/:reference", (c) => contractPage(c, "history", c.req.param("reference") ?? ""));
+// One published contract, from the records database (pages/published.tsx):
+// the department, then the reference as published, which may hold an
+// escaped slash, hence the pattern.
+app.get("/contracts/:dept/:reference{.+}", publishedContractPage);
 // Contracts ending within 3, 6 and 12 months of the data date; anything
 // after /expiring/ that is not a window is a 404.
 app.get("/expiring", expiringPage);
 app.get("/expiring/:window", (c) => expiringWindowPage(c, c.req.param("window") ?? ""));
+// A filtered window's matches as CSV, from the records database: Pro's
+// (export_filtered) once the accounts switch is on, the site's 404 otherwise.
+app.get("/expiring/:window/rows.csv", expiringRowsCsv);
 // The directory's routes come before the profile's, which would read
 // "directory" as an id.
 app.get("/organizations", organizationsIndex);
@@ -128,6 +138,12 @@ app.get("/organizations/directory", (c) => c.redirect("/organizations", 301));
 app.get("/organizations/directory/:code", directoryPage);
 app.get("/organizations/directory/:code/:page", directoryPage);
 app.get("/organizations/:id", organizationPage);
+// The record tables (pages/records.tsx, docs/analytics.md) and their CSV
+// files, from the records database.
+app.get("/organizations/:id/records", organizationRecords);
+app.get("/organizations/:id/records.csv", organizationRecordsCsv);
+app.get("/buyers/:id/records", buyerRecords);
+app.get("/buyers/:id/records.csv", buyerRecordsCsv);
 // The analytics views (pages/analytics.tsx, docs/analytics.md) and the CSV
 // file of each of their tables: the site's 404 while the accounts switch is
 // off; with it on, in full for Pro and the first chart for anyone else.
@@ -194,6 +210,9 @@ app.get("/:file{sitemap(?:-[0-9]+)?\\.xml}", sitemapFile);
 // short cache added. A path with no file gets the site's 404 page, as it did
 // when such a request fell through to the Worker.
 const FEED_CACHE = "public, max-age=300";
+// An organization's records feed is made here from the records database
+// (pages/backbone.tsx), in the same feed bucket.
+app.get("/data/feeds/organizations/:file{org-[0-9a-f]{10}\\.xml}", orgFeed);
 app.get("/data/feeds/*", async (c) => {
   if (!c.env.ASSETS) return c.notFound();
   let res: Response;

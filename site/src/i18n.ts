@@ -2703,6 +2703,170 @@ const STRINGS = {
     en: "For example, the open notices for Ontario that close within 7 days:",
     fr: "Par exemple, les avis ouverts pour l'Ontario dont la clôture tombe dans les 7 jours :",
   },
+
+  // -- a published contract (src/pages/published.tsx) ----------------------------------
+  "published.title": { en: "Published Contract", fr: "Contrat publié" },
+  "published.not_found": { en: "Published Contract Not Found", fr: "Contrat publié introuvable" },
+  "published.not_found_text": {
+    en: "The site holds no published contract {reference} for this department as of its last read of the file. The {search} may list it.",
+    fr: "Le site ne détient aucun contrat publié {reference} pour ce ministère à sa dernière lecture du fichier. La {search} pourrait le présenter.",
+  },
+  "published.unavailable": {
+    en: "This page is not available right now. The government's contracts search holds the record.",
+    fr: "Cette page n'est pas disponible pour le moment. La recherche de contrats du gouvernement présente le dossier.",
+  },
+  "published.search": { en: "Contracts search on open.canada.ca", fr: "Recherche de contrats sur ouvert.canada.ca" },
+  "published.description": {
+    en: "Published contract {reference}: {supplier}, contracted by {buyer} on {date}. Values, procedure, amendments and comments as published.",
+    fr: "Contrat publié {reference} : {supplier}, conclu par {buyer} le {date}. Valeurs, mode d'invitation, modifications et commentaires tels que publiés.",
+  },
+  "published.value": { en: "Contract value", fr: "Valeur du contrat" },
+  "published.original": { en: "Original value", fr: "Valeur initiale" },
+  "published.amendment": { en: "Amendment value", fr: "Valeur de la modification" },
+  "published.counted_flagged": {
+    en: "Flagged for checking, left out of totals",
+    fr: "Signalée pour vérification, exclue des totaux",
+  },
+  "published.group_total": { en: "Value counted, all versions", fr: "Valeur retenue, toutes les versions" },
+  "published.value_note": {
+    en: "The value counted is the row's own value by the {rules}: the amendment value on an amendment, else the original value, else the contract value. The versions' own values add up to the contract's.",
+    fr: "La valeur retenue est la valeur propre de la ligne selon les {rules} : la valeur de la modification pour une modification, sinon la valeur initiale, sinon la valeur du contrat. Les valeurs propres des versions s'additionnent pour donner celle du contrat.",
+  },
+  "published.contract_date": { en: "Contract date", fr: "Date du contrat" },
+  "published.period": { en: "Reporting period", fr: "Période de déclaration" },
+  "published.window_newest": {
+    en: "The radar reads a contract's end from its newest version, listed below.",
+    fr: "Le radar lit la fin d'un contrat dans sa version la plus récente, présentée ci-dessous.",
+  },
+  "published.procedure": { en: "Solicitation procedure", fr: "Mode d'invitation" },
+  "published.commodity": { en: "Commodity type", fr: "Type de marchandise" },
+  "published.agreement": { en: "Agreement type", fr: "Type d'accord" },
+  "published.limited_reason": { en: "Limited tendering reason", fr: "Raison de l'appel d'offres limité" },
+  "published.bids": { en: "Number of bids", fr: "Nombre de soumissions" },
+  "published.standing_offer": { en: "Standing offer number", fr: "Numéro de l'offre à commandes" },
+  "published.codes_note": {
+    en: "Codes as the department published them, from the Treasury Board's reporting guide.",
+    fr: "Codes tels que le ministère les a publiés, selon le guide de déclaration du Conseil du Trésor.",
+  },
+  "published.inst_C": { en: "Contract", fr: "Contrat" },
+  "published.inst_A": { en: "Amendment", fr: "Modification" },
+  "published.inst_SO": { en: "Standing offer", fr: "Offre à commandes" },
+  "published.inst_SA": { en: "Supply arrangement", fr: "Arrangement en matière d'approvisionnement" },
+  "published.comments": { en: "Comments as Published", fr: "Commentaires publiés" },
+  "published.versions": { en: "Versions of This Contract", fr: "Versions de ce contrat" },
+  "published.versions_more": { en: "{n} or more", fr: "{n} ou plus" },
+  "published.versions_cut": {
+    en: "The first {n} other rows with this procurement number, oldest first.",
+    fr: "Les {n} premières autres lignes portant ce numéro d'approvisionnement, de la plus ancienne à la plus récente.",
+  },
+  "published.newest": { en: "Newest", fr: "Plus récente" },
+  "published.provenance": {
+    en: "Read from {file} in the {dataset}, last read {read}; this page as of the records of {as_of} (see {data}).",
+    fr: "Lu dans {file} du jeu {dataset}, lu pour la dernière fois le {read}; cette page selon les dossiers du {as_of} (voir {data}).",
+  },
+
+  // -- the radar over its whole window (src/pages/expiring.tsx, src/records_tables.ts) ----
+  "expiring.sort_end": { en: "End date, soonest first", fr: "Date de fin, la plus proche d'abord" },
+  "expiring.sort_value": { en: "Value, largest first", fr: "Valeur, la plus élevée d'abord" },
+  "expiring.whole_match_one": { en: "{n} contract matches", fr: "{n} contrat correspond" },
+  "expiring.whole_match_many": { en: "{n} contracts match", fr: "{n} contrats correspondent" },
+  "expiring.whole_note": {
+    en: "The filters and the order apply to the whole window: {n} of its {rows} contracts, worth {total}.",
+    fr: "Les filtres et l'ordre s'appliquent à toute la période : {n} de ses {rows} contrats, d'une valeur de {total}.",
+  },
+  "expiring.whole_no_value": {
+    en: "{n} of them published no value, which the total leaves out.",
+    fr: "{n} d'entre eux n'ont publié aucune valeur, ce que le total exclut.",
+  },
+  "expiring.whole_none": { en: "No contract in the window matches these filters.", fr: "Aucun contrat de la période ne correspond à ces filtres." },
+  "expiring.csv_filtered": { en: "Download these contracts (CSV)", fr: "Télécharger ces contrats (CSV)" },
+  "expiring.csv_cut": { en: "The file holds the first {n}.", fr: "Le fichier contient les {n} premiers." },
+  "methodology.expiring_filters": {
+    en: "The filters (buyer, client department, organization, segment, method, value band, source, the March 31 and standing offer marks) and the order by value apply to the whole window. The matches as a CSV file are part of Pro.",
+    fr: "Les filtres (acheteur, ministère client, organisation, segment, méthode, tranche de valeur, source, les marques du 31 mars et des offres à commandes) et l'ordre par valeur s'appliquent à toute la période. Les contrats retenus en fichier CSV font partie de Pro.",
+  },
+  "expiring.csv_filtered_pro": {
+    en: "These contracts as a CSV file, in the order shown, are part of Pro.",
+    fr: "Ces contrats en fichier CSV, dans l'ordre affiché, sont offerts avec Pro.",
+  },
+
+  // -- the record tables (src/pages/records.tsx) ----------------------------------------
+  "records.title": { en: "Records", fr: "Dossiers" },
+  "records.title_of": { en: "Records of {name}", fr: "Dossiers de {name}" },
+  "records.crumb": { en: "Records", fr: "Dossiers" },
+  "records.eyebrow": { en: "Record table", fr: "Tableau des dossiers" },
+  "records.link": { en: "Record table", fr: "Tableau des dossiers" },
+  "records.description_organization": {
+    en: "Every award notice, contract history record, published contract and grant naming {name}, newest first, with filters.",
+    fr: "Chaque avis d'attribution, dossier de l'historique des contrats, contrat publié et subvention nommant {name}, du plus récent au plus ancien, avec des filtres.",
+  },
+  "records.description_buyer": {
+    en: "Every award notice, contract history record, published contract and grant of {name}, newest first, with filters.",
+    fr: "Chaque avis d'attribution, dossier de l'historique des contrats, contrat publié et subvention de {name}, du plus récent au plus ancien, avec des filtres.",
+  },
+  "records.lead_organization": {
+    en: "Award notices, contract history records, published contracts and grants naming this organization, fiscal years {first} to {last}.",
+    fr: "Avis d'attribution, dossiers de l'historique des contrats, contrats publiés et subventions nommant cette organisation, exercices {first} à {last}.",
+  },
+  "records.lead_buyer": {
+    en: "Award notices, contract history records, published contracts and grants of this buyer, fiscal years {first} to {last}.",
+    fr: "Avis d'attribution, dossiers de l'historique des contrats, contrats publiés et subventions de cet acheteur, exercices {first} à {last}.",
+  },
+  "records.back_organization": { en: "Back to the profile", fr: "Retour au profil" },
+  "records.back_buyer": { en: "Back to the buyer page", fr: "Retour à la page de l'acheteur" },
+  "records.year": { en: "Fiscal year", fr: "Exercice" },
+  "records.year_all": { en: "All {n} years", fr: "Les {n} exercices" },
+  "records.sort_newest": { en: "Newest first", fr: "Les plus récents d'abord" },
+  "records.heading": { en: "Records", fr: "Dossiers" },
+  "records.count_one": { en: "{n} record", fr: "{n} dossier" },
+  "records.count_many": { en: "{n} records", fr: "{n} dossiers" },
+  "records.free_asked": { en: "The filters and later pages are set aside here.", fr: "Les filtres et les pages suivantes sont mis de côté ici." },
+  "records.free_note": {
+    en: "These are the newest {n} records. The filters by year, party, source and method, the order by value, every later page and the CSV file are part of Pro.",
+    fr: "Voici les {n} dossiers les plus récents. Les filtres par exercice, partie, source et méthode, l'ordre par valeur, les pages suivantes et le fichier CSV font partie de Pro.",
+  },
+  "records.total": { en: "Value counted: {total}.", fr: "Valeur retenue : {total}." },
+  "records.csv": { en: "Download these records (CSV)", fr: "Télécharger ces dossiers (CSV)" },
+  "records.csv_pro": { en: "These records as a CSV file are part of Pro.", fr: "Ces dossiers en fichier CSV font partie de Pro." },
+  "records.none": { en: "No record matches.", fr: "Aucun dossier ne correspond." },
+  "records.note": {
+    en: "Records as of {as_of}, each counted once by the rules on the Methodology page. A value in another currency, not published or flagged for checking reads as not stated and stays out of the total.",
+    fr: "Dossiers au {as_of}, chacun compté une fois selon les règles de la page Méthodologie. Une valeur en une autre devise, non publiée ou signalée pour vérification se lit comme non indiquée et reste hors du total.",
+  },
+
+  // -- the records backbone on the tender, buyer, segment and profile pages (src/pages/backbone.tsx)
+  "earlier.heading": { en: "Earlier Awards Like This One", fr: "Attributions antérieures semblables" },
+  "earlier.unavailable": { en: "Earlier awards are not available right now.", fr: "Les attributions antérieures ne sont pas disponibles pour le moment." },
+  "earlier.note": {
+    en: "Up to {n} records of this buyer from the last {years} fiscal years that share a UNSPSC class with this notice, the closest titles first.",
+    fr: "Jusqu'à {n} dossiers de cet acheteur des {years} derniers exercices qui partagent une classe UNSPSC avec cet avis, les titres les plus proches d'abord.",
+  },
+  "earlier.none": {
+    en: "No record of this buyer in the last {years} fiscal years shares a UNSPSC class with this notice.",
+    fr: "Aucun dossier de cet acheteur des {years} derniers exercices ne partage de classe UNSPSC avec cet avis.",
+  },
+  "incumbents.heading": { en: "Who Holds the Contracts Ending Within 12 Months", fr: "Qui détient les contrats qui prennent fin d'ici 12 mois" },
+  "incumbents.unavailable": { en: "This list is not available right now.", fr: "Cette liste n'est pas disponible pour le moment." },
+  "incumbents.none": { en: "No contract naming an organization ends within 12 months.", fr: "Aucun contrat nommant une organisation ne prend fin d'ici 12 mois." },
+  "incumbents.note_one": {
+    en: "{n} organization holds the contracts ending within 12 months, from the radar; the largest values first, up to {max}.",
+    fr: "{n} organisation détient les contrats qui prennent fin d'ici 12 mois, selon le radar; les valeurs les plus élevées d'abord, jusqu'à {max}.",
+  },
+  "incumbents.note_many": {
+    en: "{n} organizations hold the contracts ending within 12 months, from the radar; the largest values first, up to {max}.",
+    fr: "{n} organisations détiennent les contrats qui prennent fin d'ici 12 mois, selon le radar; les valeurs les plus élevées d'abord, jusqu'à {max}.",
+  },
+  "incumbents.soonest": { en: "Soonest end", fr: "Fin la plus proche" },
+  "incumbents.pro": {
+    en: "The first {n} are shown. The whole list is part of Pro.",
+    fr: "Les {n} premières sont affichées. La liste complète fait partie de Pro.",
+  },
+  "orgfeed.title": { en: "Records", fr: "Dossiers" },
+  "orgfeed.subtitle": {
+    en: "The newest 50 award notices, contract history records, published contracts and grants naming the organization.",
+    fr: "Les 50 avis d'attribution, dossiers de l'historique des contrats, contrats publiés et subventions les plus récents nommant l'organisation.",
+  },
+  "orgfeed.button": { en: "Records feed", fr: "Fil des dossiers" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

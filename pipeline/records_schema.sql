@@ -138,3 +138,115 @@ CREATE TABLE IF NOT EXISTS rec_meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- The record tables, the earlier awards on a tender and the per-organization
+-- feeds (site/src/records_tables.ts): one row per counted record (its row of
+-- records with extra = 0) that has a date and names a buyer or an
+-- organization, with what a table of records shows. A table of its own
+-- rather than columns of records: the charts keep reading narrow rows, and a
+-- new table reaches the live database through the nightly sync's ordinary
+-- changes (its rows are all new to the ledger), with no full reload.
+CREATE TABLE IF NOT EXISTS rec_details (
+  k INTEGER PRIMARY KEY,                         -- the record's own key: records.k of its row with extra = 0
+  src INTEGER NOT NULL,                          -- records.src
+  day TEXT NOT NULL,                             -- YYYY-MM-DD: the date records.fy is read from
+  bid INTEGER,                                   -- records.bid
+  oid INTEGER,                                   -- records.oid
+  cents INTEGER,                                 -- records.cents
+  vnote INTEGER NOT NULL DEFAULT 0,              -- records.vnote
+  comp INTEGER,                                  -- records.comp
+  meth TEXT,                                     -- records.meth
+  ref TEXT NOT NULL,                             -- an award or history reference in its URL form; "<department>:<reference>" otherwise
+  title_en TEXT,                                 -- the title: a published contract's description, a grant's title or program
+  title_fr TEXT
+);
+-- Newest first through either index, so the first page of a table reads its
+-- own rows and no more.
+CREATE INDEX IF NOT EXISTS rec_details_org ON rec_details (oid, day) WHERE oid IS NOT NULL;
+CREATE INDEX IF NOT EXISTS rec_details_buyer ON rec_details (bid, day) WHERE bid IS NOT NULL;
+
+-- One row per UNSPSC class (a code's first six digits, within the 57
+-- segments) of an award notice or a contract history record that names a
+-- buyer and has a date: what a tender's earlier awards are found by.
+CREATE TABLE IF NOT EXISTS rec_classes (
+  k INTEGER PRIMARY KEY,
+  rk INTEGER NOT NULL,                           -- rec_details.k
+  cls INTEGER NOT NULL,                          -- 801016 for the codes 80101600 to 80101699
+  bid INTEGER NOT NULL,
+  day TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rec_classes_class ON rec_classes (cls, bid, day);
+
+-- The radar's 12-month window as the static export writes it
+-- (expiring/12m/<n>.json), one row per contract, so its filters, sorts and
+-- totals run over the whole window. The columns a statement filters or adds
+-- by, then the row itself as JSON for the table and the CSV file. days_left
+-- is left out of it (the site counts it from the data date), so a row is
+-- sent again only when the contract changes.
+CREATE TABLE IF NOT EXISTS rec_expiring (
+  k INTEGER PRIMARY KEY,
+  endd TEXT NOT NULL,                            -- the end date, YYYY-MM-DD
+  oid INTEGER,                                   -- the organization's number; NULL when withheld
+  buyer TEXT,                                    -- the row's buyer id
+  client TEXT,                                   -- the client department's buyer id (client_buyer_id)
+  segs TEXT NOT NULL DEFAULT '',                 -- its segments, each between spaces: ' 43 82 '
+  kind INTEGER NOT NULL,                         -- 1 award notice, 2 contract history, 3 published contract (records.src)
+  comp INTEGER,                                  -- 1 competitive, 0 non-competitive, NULL not stated
+  cad INTEGER,                                   -- its value in cents when in Canadian dollars: the bands and the sort
+  cents INTEGER,                                 -- the value the totals add: cad unless the value is flagged
+  nv INTEGER NOT NULL DEFAULT 0,                 -- 1 when the source published no value
+  so INTEGER NOT NULL DEFAULT 0,                 -- 1 for a standing offer or supply arrangement
+  m31 INTEGER NOT NULL DEFAULT 0,                -- 1 when it ends on March 31, a fiscal year end
+  j TEXT NOT NULL                                -- the row as the window file holds it, without days_left
+);
+CREATE INDEX IF NOT EXISTS rec_expiring_end ON rec_expiring (endd);
+CREATE INDEX IF NOT EXISTS rec_expiring_buyer ON rec_expiring (buyer, endd) WHERE buyer IS NOT NULL;
+CREATE INDEX IF NOT EXISTS rec_expiring_client ON rec_expiring (client, endd) WHERE client IS NOT NULL;
+
+-- The page of each published contract (/contracts/<department>/<reference>,
+-- site/src/pages/published.tsx): one row per row of the contracts table,
+-- keyed as its row of records is, with every field the page shows. A
+-- reference is unique within its department only, so the page finds a row
+-- by both (rec_contracts_ref); the rows of one contract (its amendments)
+-- share the department and procurement_id (rec_contracts_group). Values in
+-- cents as published: the page reads the counted value from records by k.
+CREATE TABLE IF NOT EXISTS rec_contracts (
+  k INTEGER PRIMARY KEY,                         -- records.k of the same contract
+  dept TEXT NOT NULL,                            -- owner_org, the department that published it (dnd-mdn)
+  ref TEXT NOT NULL,                             -- reference_number as published
+  pid TEXT,                                      -- procurement_id; NULL when blank
+  bid INTEGER,                                   -- rec_buyers.bid of the department
+  oid INTEGER,                                   -- the organization's number; NULL when withheld or not named
+  wh INTEGER NOT NULL DEFAULT 0,                 -- 1 when the vendor reads as a person and is withheld
+  cdate TEXT,                                    -- contract_date
+  start TEXT,                                    -- contract_period_start
+  endd TEXT,                                     -- delivery_date: the end the radar reads
+  value INTEGER,                                 -- contract_value in cents: the total including this amendment
+  orig INTEGER,                                  -- original_value in cents
+  amend INTEGER,                                 -- amendment_value in cents
+  proc TEXT,                                     -- solicitation_procedure: OB TC ST TN AC
+  comp INTEGER,                                  -- 1 competitive, 0 non-competitive, NULL not stated
+  ctype TEXT,                                    -- commodity_type: G goods, S services, C construction
+  gsin TEXT,                                     -- commodity_code (rec_gsin.code)
+  agr TEXT,                                      -- agreement_type_code as published
+  trade TEXT,                                    -- trade_agreement codes, comma-separated
+  ltr TEXT,                                      -- limited_tendering_reason codes, comma-separated
+  inst TEXT,                                     -- instrument_type: C contract, A amendment, SO, SA
+  period TEXT,                                   -- reporting_period (2025-2026-Q2)
+  bids INTEGER,                                  -- number_of_bids
+  so_no TEXT,                                    -- standing_offer_number
+  desc_en TEXT,
+  desc_fr TEXT,
+  com_en TEXT,                                   -- comments
+  com_fr TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS rec_contracts_ref ON rec_contracts (dept, ref);
+CREATE INDEX IF NOT EXISTS rec_contracts_group ON rec_contracts (dept, pid, cdate) WHERE pid IS NOT NULL;
+
+-- The names of the GSIN codes the published contracts carry.
+CREATE TABLE IF NOT EXISTS rec_gsin (
+  k INTEGER PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  desc_en TEXT,
+  desc_fr TEXT
+);

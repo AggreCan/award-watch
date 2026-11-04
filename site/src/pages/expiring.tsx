@@ -8,8 +8,13 @@
 // /expiring/:window: one window, read one page at a time
 // (expiring/<window>/<n>.json, 500 rows each, soonest end first) with
 // expiring/<window>/index.json for the page count, so no request parses a
-// whole window. The filters in the URL (buyer, segment, competitive, value
-// band, source) apply to the page loaded, and the page says so.
+// whole window. The filters in the URL (buyer, client department,
+// organization, segment, competitive, value band, source, the two marks)
+// and the order by value apply to the whole window, read from the records
+// database (rec_expiring, src/records_tables.ts), RADAR_PAGE_ROWS to a page,
+// with the matches' count and total; the matches as CSV are Pro's
+// (export_filtered). Without the database they apply to the page loaded, as
+// before, and the page says so.
 //
 // The buyer pages and the profiles carry the first 25 rows of their own
 // (ExpiringSection below) when their file has them.
@@ -24,26 +29,30 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { allowed } from "../account/entitlements";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
 import { type Rest, Table, restClass } from "../columns";
 import { SEGMENTS } from "../constants";
 import {
-  BUYER_ID_RE, EXPIRING_KINDS, EXPIRING_WINDOWS, SEGMENT_RE, isExpiringWindow, loadExpiringIndex, loadExpiringPage,
+  BUYER_ID_RE, EXPIRING_KINDS, EXPIRING_WINDOWS, ORG_ID_RE, SEGMENT_RE, isExpiringRow, isExpiringWindow, loadExpiringIndex, loadExpiringPage,
   loadExpiringWindow, loadStats, type ExpiringKind, type ExpiringPart, type ExpiringRow, type ExpiringWindow, type ExpiringWindowIndex,
   type Stats,
 } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoneyShort, numberLocale, pick, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
-import { CompetitiveFlag, Layout, noDataPage, notFoundPage, page, PageHead, Panel, todayOf, varyOnCookie } from "../layout";
-import { DEEP_WINDOWS, radarWindowLocked } from "../plan";
-import { ProPanel, ProTag, proPrice } from "../pro";
+import { CompetitiveFlag, Layout, addDays, noDataPage, notFoundPage, page, PageHead, Panel, todayOf, varyOnCookie } from "../layout";
+import { DEEP_WINDOWS, radarWindowLocked, requestPlan } from "../plan";
+import { dollars, num, orgIdOf, orgNumber } from "../records_db";
+import { RADAR_CSV_MAX, RADAR_PAGE_ROWS, type RadarParams, type Read, type Row, readRadar, readRadarCsv } from "../records_tables";
+import { csvCell } from "./analytics";
+import { ProNote, ProPanel, ProTag, proPrice } from "../pro";
 import { canonicalUrl, expiringWindowSeo, pageSeo } from "../seo";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
 import {
-  BuyerLink, FiltersFold, PhonePagerScript, PhonePages, SegmentChips, SegmentNote, type ServerPages, awardNoticeUrl, contractSearchUrl,
-  datasetUrl, instrumentText, money,
+  BuyerLink, FiltersFold, PhonePagerScript, PhonePages, SegmentChips, SegmentNote, type ServerPages, awardNoticeUrl, contractPath,
+  contractSearchUrl, datasetUrl, instrumentText, money,
 } from "./shared";
 
 // How many rows of the 3-month list the overview shows.
@@ -110,10 +119,15 @@ export interface ExpiringQuery {
   competitive: CompetitiveFilter | "";
   value: ValueBand | "";
   kind: ExpiringKind | "";
+  // The organization (an id) and the client department (a buyer id).
+  supplier: string;
+  client: string;
   // Whether contracts ending on March 31 and standing offers and supply
   // arrangements stay in the list: on unless the address says fye=0 or sosa=0.
   fye: boolean;
   sosa: boolean;
+  // "value": the largest value first; otherwise the soonest end first.
+  sort: "" | "value";
 }
 
 // A contract ending on March 31, the last day of the federal fiscal year.
@@ -137,6 +151,8 @@ export function readExpiringQuery(url: URL): ExpiringQuery {
   const competitive = get("competitive").toLowerCase();
   const value = get("value").toLowerCase();
   const kind = get("kind").toLowerCase();
+  const supplier = get("supplier").toLowerCase();
+  const client = get("client").toLowerCase();
   // The form sends 0 from a hidden field and 1 from a ticked box, so a 1 or
   // no value at all keeps the rows in.
   const kept = (k: string) => {
@@ -151,17 +167,23 @@ export function readExpiringQuery(url: URL): ExpiringQuery {
     competitive: (COMPETITIVE_FILTERS as readonly string[]).includes(competitive) ? (competitive as CompetitiveFilter) : "",
     value: (VALUE_BANDS as readonly string[]).includes(value) ? (value as ValueBand) : "",
     kind: (EXPIRING_KINDS as readonly string[]).includes(kind) ? (kind as ExpiringKind) : "",
+    supplier: ORG_ID_RE.test(supplier) ? supplier : "",
+    client: BUYER_ID_RE.test(client) && client.length <= 80 ? client : "",
+    sort: get("sort").toLowerCase() === "value" ? "value" : "",
   };
 }
 
-const FILTER_KEYS = ["buyer", "segment", "competitive", "value", "kind"] as const;
+const FILTER_KEYS = ["buyer", "client", "supplier", "segment", "competitive", "value", "kind"] as const;
 // The toolbar's name for each filter, on its chip.
 const FILTER_LABEL: Record<(typeof FILTER_KEYS)[number], Key> = {
   buyer: "tenders.filter_buyer", segment: "tenders.filter_segment", competitive: "col.method", value: "expiring.filter_value", kind: "col.source",
+  supplier: "col.supplier", client: "col.client",
 };
 
 // A window with nothing filtered: what a bare /expiring/<window> reads as.
-const NO_FILTERS: ExpiringQuery = { buyer: "", segment: "", competitive: "", value: "", kind: "", fye: true, sosa: true };
+const NO_FILTERS: ExpiringQuery = {
+  buyer: "", segment: "", competitive: "", value: "", kind: "", supplier: "", client: "", fye: true, sosa: true, sort: "",
+};
 
 export function isFiltered(q: ExpiringQuery): boolean {
   return FILTER_KEYS.some((k) => q[k] !== "") || !q.fye || !q.sosa;
@@ -173,6 +195,7 @@ export function expiringQueryString(q: ExpiringQuery, pageNo = 1): string {
   for (const k of FILTER_KEYS) if (q[k]) p.set(k, q[k]);
   if (!q.fye) p.set("fye", "0");
   if (!q.sosa) p.set("sosa", "0");
+  if (q.sort) p.set("sort", q.sort);
   if (pageNo > 1) p.set("page", String(pageNo));
   const s = p.toString();
   return s ? `?${s}` : "";
@@ -206,6 +229,31 @@ export function soonestFirst(rows: readonly ExpiringRow[]): ExpiringRow[] {
   });
 }
 
+// The client department a row names (the export writes it; the row type
+// leaves it out, as the tables never show it).
+function clientOf(r: ExpiringRow): string | null {
+  const v = (r as { client_buyer_id?: unknown }).client_buyer_id;
+  return typeof v === "string" ? v : null;
+}
+
+function clientName(lang: Lang, r: ExpiringRow): string | null {
+  const x = r as { client_buyer_name?: unknown; client_buyer_name_fr?: unknown };
+  return pick(lang, typeof x.client_buyer_name === "string" ? x.client_buyer_name : null,
+    typeof x.client_buyer_name_fr === "string" ? x.client_buyer_name_fr : null);
+}
+
+// The largest Canadian value first; a row with no value, or one in another
+// currency, after them; the end date breaks ties.
+export function largestFirst(rows: readonly ExpiringRow[]): ExpiringRow[] {
+  const cad = (r: ExpiringRow) => (valueBand(r) === null ? null : r.value);
+  return [...rows].sort((a, b) => {
+    const x = cad(a);
+    const y = cad(b);
+    if (x !== y) return x === null ? 1 : y === null ? -1 : y - x;
+    return a.end < b.end ? -1 : a.end > b.end ? 1 : 0;
+  });
+}
+
 export function filterExpiring(rows: readonly ExpiringRow[], q: ExpiringQuery): ExpiringRow[] {
   return rows.filter((r) => {
     if (q.buyer && r.buyer_id !== q.buyer) return false;
@@ -213,6 +261,8 @@ export function filterExpiring(rows: readonly ExpiringRow[], q: ExpiringQuery): 
     if (q.competitive && competitiveOfRow(r) !== q.competitive) return false;
     if (q.value && valueBand(r) !== q.value) return false;
     if (q.kind && r.kind !== q.kind) return false;
+    if (q.supplier && r.organization_id !== q.supplier) return false;
+    if (q.client && clientOf(r) !== q.client) return false;
     if (!q.fye && fiscalYearEnd(r)) return false;
     if (!q.sosa && standingOffer(r)) return false;
     return true;
@@ -253,11 +303,14 @@ const RECORD_LABEL: Record<ExpiringKind, Key> = {
   award: "expiring.record_award", history: "expiring.record_history", contract: "expiring.record_contract",
 };
 
-// The site's own page for the row, where it has one.
-function sitePath(r: ExpiringRow): string | null {
+// The site's own page for the row: an award notice's, a PSPC record's, or a
+// published contract's (pages/published.tsx), whose reference here is
+// "owner_org:reference".
+export function sitePath(r: Pick<ExpiringRow, "kind" | "reference">): string {
   if (r.kind === "award") return `/awards/${r.reference.toLowerCase()}`;
   if (r.kind === "history") return `/history/${r.reference.toLowerCase()}`;
-  return null;
+  const at = r.reference.indexOf(":");
+  return at > 0 ? contractPath(r.reference.slice(0, at), r.reference.slice(at + 1)) : contractSearchUrl(r.reference);
 }
 
 const Organization: FC<{ lang: Lang; r: ExpiringRow }> = ({ lang, r }) => {
@@ -268,7 +321,7 @@ const Organization: FC<{ lang: Lang; r: ExpiringRow }> = ({ lang, r }) => {
 
 // The widest table on the site. The buyer is the column a reader filters on,
 // so it shows from 1280 px of viewport; the record links (the title opens
-// the site's own page, or for a published contract the contracts search)
+// the site's own page, the Record column the government's record)
 // and amendments and growth rest below 1600 px. The same order holds on a profile and a buyer page, which
 // drop one of the two parties. No range scrolls from 1280 px up
 // (src/columns.tsx).
@@ -316,10 +369,9 @@ export const ExpiringTable: FC<{
                 </span>
               </td>
               <td data-label={t(lang, "col.contract")} class="lead-cell">
-                {/* A published contract has no page here: its title opens the
-                    government record the Record column links, so the row keeps
-                    a link out while that column rests. */}
-                {path ? <a href={path}>{title}</a> : <a href={expiringRecordUrl(r, lang)} rel="nofollow noopener">{title}</a>}
+                {/* The title opens the site's own page of the row; the Record
+                    column links the government's own record. */}
+                <a href={path}>{title}</a>
                 <br />
                 <span class="mono id muted">{contractReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} />
                 {/* The source the row was kept from, then the instrument; a
@@ -571,7 +623,7 @@ function pageOf(c: Context<AppEnv>): number | null {
   return /^[0-9]{1,6}$/.test(raw) && n >= 1 ? n : null;
 }
 
-type Option = { value: string; label: string; n: number };
+type Option = { value: string; label: string; n: number | null };
 
 // Each select lists the values the loaded page carries, with how many of its
 // rows carry each, plus the value the link asks for when the page has none.
@@ -580,7 +632,7 @@ function options(rows: readonly ExpiringRow[], q: ExpiringQuery, lang: Lang) {
     const seen = new Map<string, Option>();
     for (const [value, label] of pairs) {
       const o = seen.get(value);
-      if (o) o.n++;
+      if (o) o.n = (o.n ?? 0) + 1;
       else seen.set(value, { value, label, n: 1 });
     }
     if (current && !seen.has(current)) seen.set(current, { value: current, label: fallback(current), n: 0 });
@@ -599,7 +651,152 @@ function options(rows: readonly ExpiringRow[], q: ExpiringQuery, lang: Lang) {
     competitive: fixed(COMPETITIVE_FILTERS, (v) => t(lang, COMPETITIVE_LABEL[v]), competitiveOfRow),
     value: fixed(VALUE_BANDS, (v) => t(lang, BAND_LABEL[v]), valueBand),
     kind: fixed(EXPIRING_KINDS, (v) => sourceLabel(lang, KIND_SOURCE[v]), (r) => r.kind),
+    supplier: tally(
+      rows.filter((r) => r.organization_id).map((r): [string, string] => [r.organization_id!, r.organization ?? r.organization_id!]),
+      q.supplier, (v) => v,
+    ).sort(byLabel),
+    client: tally(
+      rows.filter((r) => clientOf(r)).map((r): [string, string] => [clientOf(r)!, clientName(lang, r) ?? clientOf(r)!]),
+      q.client, (v) => v,
+    ).sort(byLabel),
+    fye: rows.filter(fiscalYearEnd).length,
+    sosa: rows.filter(standingOffer).length,
   };
+}
+
+// -- the whole window, from the records database ------------------------------------
+
+const KIND_NUMBER: Record<ExpiringKind, number> = { award: 1, history: 2, contract: 3 };
+const COMP_NUMBER: Record<CompetitiveFilter, number> = { yes: 1, no: 0, unstated: 2 };
+// The bands in cents; the open ends as far as a JavaScript number reaches exactly.
+const BAND_CENTS: Record<ValueBand, [number, number]> = {
+  "under-100k": [-Number.MAX_SAFE_INTEGER, 10_000_000],
+  "100k-1m": [10_000_000, 100_000_000],
+  "1m-10m": [100_000_000, 1_000_000_000],
+  "over-10m": [1_000_000_000, Number.MAX_SAFE_INTEGER],
+};
+
+export function radarParams(window: ExpiringWindow, today: string, q: ExpiringQuery): RadarParams {
+  return {
+    first: today, last: addDays(today, WINDOW_DAYS[window]), buyer: q.buyer, client: q.client,
+    oid: q.supplier ? orgNumber(q.supplier) ?? -1 : -1, segment: q.segment,
+    comp: q.competitive ? COMP_NUMBER[q.competitive] : -1, band: q.value ? BAND_CENTS[q.value] : null,
+    kind: q.kind ? KIND_NUMBER[q.kind] : 0, fye: q.fye, sosa: q.sosa,
+  };
+}
+
+// A row as rec_expiring holds it (the window file's row without days_left),
+// with days_left counted from the data date again; null for one that does
+// not read as a radar row.
+export function radarRow(r: Row, today: string): ExpiringRow | null {
+  if (typeof r.j !== "string") return null;
+  let row: unknown;
+  try {
+    row = JSON.parse(r.j);
+  } catch {
+    return null;
+  }
+  if (typeof row !== "object" || row === null || typeof r.endd !== "string") return null;
+  const days = Math.round((Date.parse(`${r.endd}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+  const out = { ...(row as object), days_left: days };
+  return isExpiringRow(out) ? out : null;
+}
+
+type Whole = { rows: ExpiringRow[]; n: number; total: number | null; noValue: number; opts: ReturnType<typeof options> };
+
+// The form's choices from the whole window: the buyers, clients and
+// organizations the window names, and the window's counts by flag, source,
+// band and mark; the segments are the ones the page's rows carry.
+function wholeOptions(read: Extract<Read, { state: "ready" }>, page: ReturnType<typeof options>, q: ExpiringQuery, lang: Lang) {
+  const [facetRows, buyerRows, clientRows, supplierRows] = read.rows.slice(2, 6);
+  const f = facetRows?.[0] ?? {};
+  const count = (k: string) => num(f[k]) ?? 0;
+  const named = (rows: Row[] | undefined, current: string): Option[] => {
+    const out: Option[] = (rows ?? []).map((r) => ({
+      value: String(r.id), label: pick(lang, typeof r.name_en === "string" ? r.name_en : null, typeof r.name_fr === "string" ? r.name_fr : null) ?? String(r.id),
+      n: num(r.n),
+    }));
+    if (current && !out.some((o) => o.value === current)) out.push({ value: current, label: current, n: null });
+    return out.sort((a, b) => a.label.localeCompare(b.label, numberLocale(lang)));
+  };
+  const suppliers: Option[] = (supplierRows ?? []).map((r) => {
+    const id = orgIdOf(num(r.oid) ?? 0);
+    return { value: id, label: typeof r.name === "string" ? r.name : id, n: num(r.n) };
+  });
+  if (q.supplier && !suppliers.some((o) => o.value === q.supplier)) suppliers.push({ value: q.supplier, label: q.supplier, n: null });
+  suppliers.sort((a, b) => a.label.localeCompare(b.label, numberLocale(lang)));
+  return {
+    buyer: named(buyerRows, q.buyer),
+    client: named(clientRows, q.client),
+    supplier: suppliers,
+    segment: page.segment.map((o) => ({ ...o, n: null })),
+    competitive: COMPETITIVE_FILTERS.map((v) => ({ value: v, label: t(lang, COMPETITIVE_LABEL[v]), n: count(`c${COMP_NUMBER[v]}`) })),
+    value: VALUE_BANDS.map((v, i) => ({ value: v, label: t(lang, BAND_LABEL[v]), n: count(`b${i + 1}`) })),
+    kind: EXPIRING_KINDS.map((v) => ({ value: v, label: sourceLabel(lang, KIND_SOURCE[v]), n: count(`k${KIND_NUMBER[v]}`) })),
+    fye: count("m31"),
+    sosa: count("so"),
+  };
+}
+
+// A page of the matches over the whole window, or null when the records
+// database cannot answer (the page then filters its own rows, as before).
+async function wholeWindow(c: Context<AppEnv>, window: ExpiringWindow, today: string, q: ExpiringQuery, pageNo: number,
+  page: ReturnType<typeof options>, lang: Lang): Promise<Whole | null> {
+  const read = await readRadar(c.env, radarParams(window, today, q), q.sort === "value" ? "value" : "end", (pageNo - 1) * RADAR_PAGE_ROWS);
+  if (read.state !== "ready") return null;
+  const total = read.rows[1]?.[0] ?? {};
+  return {
+    rows: (read.rows[0] ?? []).map((r) => radarRow(r, today)).filter((r): r is ExpiringRow => r !== null),
+    n: num(total.n) ?? 0, total: dollars(total.cents), noValue: num(total.n_no_value) ?? 0,
+    opts: wholeOptions(read, page, q, lang),
+  };
+}
+
+// The matches as a file (/expiring/<window>/rows.csv with the window's
+// query): part of Pro (export_filtered, and radar_depth for a deep window)
+// once the accounts switch is on; the site's 404 otherwise, and while the
+// switch is off, as for the analytics files. Sent private, never kept.
+export const RADAR_CSV_COLUMNS = [
+  "kind", "reference", "title_en", "title_fr", "organization_id", "organization", "buyer_id", "buyer_en", "buyer_fr", "client_buyer_id",
+  "client_buyer_name", "start", "end", "days_left", "value", "currency", "competitive", "method_en", "instrument_en", "n_amendments",
+  "value_growth", "segments", "provinces", "value_flag",
+] as const;
+
+export async function filteredCsvAllowed(c: Context<AppEnv>, window: ExpiringWindow): Promise<boolean> {
+  if (!accountsEnabled(c.env)) return false;
+  return allowed({ plan: await requestPlan(c) }, "export_filtered") && !(await radarWindowLocked(c, window));
+}
+
+export async function expiringRowsCsv(c: Context<AppEnv>): Promise<Response> {
+  const window = c.req.param("window") ?? "";
+  if (!isExpiringWindow(window) || !(await filteredCsvAllowed(c, window))) return c.notFound();
+  const lang = c.get("lang");
+  const stats = await loadStats(c.env);
+  if (!stats) return noDataPage(c, "expiring.title");
+  const today = todayOf(stats.data_as_of);
+  const q = readExpiringQuery(new URL(c.req.url));
+  const read = await readRadarCsv(c.env, radarParams(window, today, q), q.sort === "value" ? "value" : "end");
+  if (read.state !== "ready") {
+    c.header("Retry-After", "3600");
+    c.header("Cache-Control", "no-store");
+    return c.text(t(lang, read.state === "loading" ? "analytics.unavailable_loading" : "analytics.unavailable_text"), 503);
+  }
+  const rows = (read.rows[0] ?? []).map((r) => radarRow(r, today)).filter((r): r is ExpiringRow => r !== null);
+  const cell = (r: ExpiringRow, k: (typeof RADAR_CSV_COLUMNS)[number]): unknown => {
+    const v = (r as unknown as Record<string, unknown>)[k];
+    if (k === "reference") return contractReference(r);
+    if (Array.isArray(v)) return v.join(" ");
+    if (k === "competitive") return v === true || v === 1 ? 1 : v === false || v === 0 ? 0 : null;
+    return v;
+  };
+  const body = [RADAR_CSV_COLUMNS.join(","), ...rows.map((r) => RADAR_CSV_COLUMNS.map((k) => csvCell(cell(r, k))).join(","))].join("\r\n") + "\r\n";
+  return new Response(body, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="expiring-${window}-filtered-${today}.csv"`,
+      "Cache-Control": "private, no-store",
+    },
+  });
 }
 
 // any is the "All" that agrees with the filter's noun in French.
@@ -609,7 +806,7 @@ const Select: FC<{ name: string; label: Key; any?: Key; opts: Option[]; value: s
     <select name={name}>
       <option value="">{t(lang, any)}</option>
       {opts.map((o) => (
-        <option value={o.value} selected={o.value === value}>{`${o.label} (${fmtInt(o.n, lang)})`}</option>
+        <option value={o.value} selected={o.value === value}>{o.n === null ? o.label : `${o.label} (${fmtInt(o.n, lang)})`}</option>
       ))}
     </select>
   </label>
@@ -690,31 +887,53 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   if (!idx) return noDataPage(c, "expiring.title");
   const path = `/expiring/${window}`;
   const n = pageOf(c);
-  if (n === null || (n > 1 && n > idx.pages)) return notFoundPage(c, stats.data_as_of, "expiring.page_not_found", path, "expiring.back_window");
-  const rows = idx.pages === 0 ? [] : await loadExpiringPage(c.env, window, n);
-  if (!rows) return noDataPage(c, "expiring.title");
   const url = new URL(c.req.url);
   const q = readExpiringQuery(url);
   const filtered = isFiltered(q);
+  const date = todayOf(stats.data_as_of);
+  if (n === null) return notFoundPage(c, stats.data_as_of, "expiring.page_not_found", path, "expiring.back_window");
+  // A filtered or sorted view reads the whole window from the records
+  // database; its page numbers count the matches, RADAR_PAGE_ROWS at a time.
+  // Without the database it filters the window file's page, as before. The
+  // form's choices come from the window file's first page either way.
+  const viewOnly = filtered || q.sort !== "";
+  const first = idx.pages === 0 ? [] : await loadExpiringPage(c.env, window, viewOnly ? 1 : Math.min(n, Math.max(1, idx.pages)));
+  if (!first) return noDataPage(c, "expiring.title");
+  const pageOpts = options(soonestFirst(first), q, lang);
+  const whole = viewOnly ? await wholeWindow(c, window, date, q, n, pageOpts, lang) : null;
+  const wholePages = whole ? Math.max(1, Math.ceil(whole.n / RADAR_PAGE_ROWS)) : 0;
+  if (whole ? n > wholePages : n > 1 && n > idx.pages) {
+    return notFoundPage(c, stats.data_as_of, "expiring.page_not_found", path, "expiring.back_window");
+  }
+  // Unfiltered, first is already page n; filtered without the database, the
+  // page asked for is filtered, as before.
+  const rows = !viewOnly || whole || n === 1 ? first : await loadExpiringPage(c.env, window, n);
+  if (!rows) return noDataPage(c, "expiring.title");
   const interest = await interestFilter(c.env, lang, "expiring", `${path}${url.search}`);
   const sorted = soonestFirst(rows);
-  const shown = filtered ? filterExpiring(sorted, q) : sorted;
-  const pages = Math.max(1, idx.pages);
-  const date = todayOf(stats.data_as_of);
+  const local = filtered ? filterExpiring(sorted, q) : sorted;
+  const shown = whole ? whole.rows : q.sort === "value" ? largestFirst(local) : local;
+  const pages = whole ? wholePages : Math.max(1, idx.pages);
+  const csvAllowed = whole ? await filteredCsvAllowed(c, window) : false;
+  const account = whole && accountsEnabled(c.env) && !csvAllowed ? await railAccount(c).catch(() => undefined) : undefined;
   const months = t(lang, WINDOW_MONTHS[window]);
   const title = t(lang, WINDOW_TITLE[window]);
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "expiring.title"), path: "/expiring" }, { name: title }];
   const prevPath = n > 1 ? `${path}${expiringQueryString(q, n - 1)}` : null;
   const nextPath = n < pages ? `${path}${expiringQueryString(q, n + 1)}` : null;
-  // A filtered or later view is a view of the window's first page.
-  const noindex = filtered || c.req.query("page") !== undefined;
-  const opts = options(sorted, q, lang);
+  // A filtered, sorted or later view is a view of the window's first page.
+  const noindex = viewOnly || c.req.query("page") !== undefined;
+  const opts = whole ? whole.opts : viewOnly ? options(sorted, q, lang) : pageOpts;
   const active = FILTER_KEYS.filter((k) => q[k]).length + (q.fye ? 0 : 1) + (q.sosa ? 0 : 1);
   // Unfiltered, the phone pager counts the window's contracts and steps
-  // through its server pages; filtered, it counts the page's matches.
-  const serverPages: ServerPages | undefined = filtered ? undefined : {
-    offset: (n - 1) * EXPIRING_PAGE_ROWS, total: idx.rows, prev: prevPath, next: nextPath, replaces: "radar-pager",
-  };
+  // through its server pages; over the whole window, the matches; filtered
+  // within a page, the page's matches.
+  const serverPages: ServerPages | undefined = whole
+    ? { offset: (n - 1) * RADAR_PAGE_ROWS, total: whole.n, prev: prevPath, next: nextPath, replaces: "radar-pager" }
+    : viewOnly ? undefined : {
+      offset: (n - 1) * EXPIRING_PAGE_ROWS, total: idx.rows, prev: prevPath, next: nextPath, replaces: "radar-pager",
+    };
+  const csvPath = `${path}/rows.csv${expiringQueryString(q)}`;
   // The 3-month list's own rows are all in the free 3-month file.
   const csv: CsvWindow = window === "3m" ? "3m" : "12m";
 
@@ -722,7 +941,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/expiring"
       seo={expiringWindowSeo(path, title, lang, crumbs, { n: idx.rows, months, date, noindex })}
-      head={filtered ? null : <>
+      head={viewOnly ? null : <>
         {prevPath ? <link rel="prev" href={canonicalUrl(prevPath, lang)} /> : null}
         {nextPath ? <link rel="next" href={canonicalUrl(nextPath, lang)} /> : null}
       </>}>
@@ -732,27 +951,37 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
         <FiltersFold lang={lang} active={active}>
         <div class="toolbar-fields">
           <Select name="buyer" label="tenders.filter_buyer" opts={opts.buyer} value={q.buyer} lang={lang} />
+          <Select name="client" label="col.client" opts={opts.client} value={q.client} lang={lang} />
+          <Select name="supplier" label="col.supplier" opts={opts.supplier} value={q.supplier} lang={lang} />
           <Select name="segment" label="tenders.filter_segment" opts={opts.segment} value={q.segment} lang={lang} />
           <Select name="competitive" label="col.method" any="tenders.any_f" opts={opts.competitive} value={q.competitive} lang={lang} />
           <Select name="value" label="expiring.filter_value" any="tenders.any_f" opts={opts.value} value={q.value} lang={lang} />
           <Select name="kind" label="col.source" any="tenders.any_f" opts={opts.kind} value={q.kind} lang={lang} />
+          <label class="field">
+            <span class="field-label">{t(lang, "tenders.sort")}</span>
+            <select name="sort">
+              <option value="">{t(lang, "expiring.sort_end")}</option>
+              <option value="value" selected={q.sort === "value"}>{t(lang, "expiring.sort_value")}</option>
+            </select>
+          </label>
           <div class="toolbar-actions">
             <button type="submit" class="btn btn-primary">{t(lang, "tenders.apply")}</button>
             <a href={path} class="btn">{t(lang, "tenders.reset")}</a>
           </div>
         </div>
-        {/* Two kinds of rows, in by default; the counts are the loaded page's, as the selects' are. */}
+        {/* Two kinds of rows, in by default; the counts are the window's over the
+            records database, else the loaded page's, as the selects' are. */}
         <div class="toolbar-row" role="group" aria-labelledby="radar-include">
           <span class="toolbar-label" id="radar-include">{t(lang, "expiring.filter_include")}</span>
           <label class="check">
             <input type="hidden" name="fye" value="0" />
             <input type="checkbox" name="fye" value="1" checked={q.fye} />
-            <span>{t(lang, "expiring.filter_fye", { n: fmtInt(sorted.filter(fiscalYearEnd).length, lang) })}</span>
+            <span>{t(lang, "expiring.filter_fye", { n: fmtInt(opts.fye, lang) })}</span>
           </label>
           <label class="check">
             <input type="hidden" name="sosa" value="0" />
             <input type="checkbox" name="sosa" value="1" checked={q.sosa} />
-            <span>{t(lang, "expiring.filter_sosa", { n: fmtInt(sorted.filter(standingOffer).length, lang) })}</span>
+            <span>{t(lang, "expiring.filter_sosa", { n: fmtInt(opts.sosa, lang) })}</span>
           </label>
         </div>
         <p class="toolbar-note">{t(lang, "expiring.band_note")}</p>
@@ -780,7 +1009,8 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
         ) : null}
       </form>
       <Panel title={t(lang, WINDOW_LABEL[window])}
-        count={filtered ? tn(lang, "expiring.match_one", "expiring.match_many", shown.length, { n: fmtInt(shown.length, lang) }) : fmtInt(idx.rows, lang)}
+        count={whole ? tn(lang, "expiring.whole_match_one", "expiring.whole_match_many", whole.n, { n: fmtInt(whole.n, lang) })
+          : filtered ? tn(lang, "expiring.match_one", "expiring.match_many", shown.length, { n: fmtInt(shown.length, lang) }) : fmtInt(idx.rows, lang)}
         foot={<>
           {shown.length ? <ExpiringNote lang={lang} /> : null}
           <nav aria-label={t(lang, "common.pagination")} class="pagination" id="radar-pager">
@@ -791,15 +1021,38 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
             </span>
           </nav>
         </>}>
-        {filtered ? (
+        {whole ? (
+          <p class="muted small" aria-live="polite">
+            {t(lang, "expiring.whole_note", {
+              n: fmtInt(whole.n, lang), rows: fmtInt(idx.rows, lang),
+              total: whole.total === null ? t(lang, "common.not_stated") : money(lang, whole.total),
+            })}
+            {whole.noValue ? <> {t(lang, "expiring.whole_no_value", { n: fmtInt(whole.noValue, lang) })}</> : null}
+          </p>
+        ) : viewOnly ? (
           <p class="muted small" aria-live="polite">
             {t(lang, "expiring.filter_note", { rows: fmtInt(sorted.length, lang), page: fmtInt(n, lang), pages: fmtInt(pages, lang) })}
           </p>
         ) : null}
+        {whole && whole.n > 0 ? (
+          csvAllowed ? (
+            <p class="small">
+              <a href={csvPath} rel="nofollow">{t(lang, "expiring.csv_filtered")}</a>
+              {whole.n > RADAR_CSV_MAX ? <> {t(lang, "expiring.csv_cut", { n: fmtInt(RADAR_CSV_MAX, lang) })}</> : null}
+            </p>
+          ) : accountsEnabled(c.env) ? (
+            <ProNote lang={lang}>
+              {t(lang, "expiring.csv_filtered_pro")}{" "}
+              <a href={account?.email ? "/account/billing" : "/account/sign-in"}>
+                {t(lang, account?.email ? "analytics.pro_billing" : "analytics.pro_sign_in")}
+              </a>
+            </ProNote>
+          ) : null
+        ) : null}
         {shown.length ? (
           <ExpiringTable lang={lang} rows={shown} phonePages pages={serverPages} csv={csv} />
         ) : (
-          <p class="muted">{t(lang, filtered ? "expiring.none_match" : "expiring.none_window")}</p>
+          <p class="muted">{t(lang, whole ? "expiring.whole_none" : filtered ? "expiring.none_match" : "expiring.none_window")}</p>
         )}
       </Panel>
       <InterestPanel lang={lang} filter={interest} />

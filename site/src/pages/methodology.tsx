@@ -102,7 +102,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           <p>{t(lang, "methodology.expiring_intro")}</p>
           <List lang={lang} vars={{ "methodology.expiring_pro": { n: EXPIRING_TEASER_ROWS } }} keys={[
             "methodology.expiring_candidates", "methodology.expiring_once", "methodology.expiring_windows",
-            "methodology.expiring_pro", "methodology.expiring_growth", "methodology.expiring_value", "methodology.expiring_feeds",
+            "methodology.expiring_pro", "methodology.expiring_filters", "methodology.expiring_growth", "methodology.expiring_value", "methodology.expiring_feeds",
           ]} />
           <p>{t(lang, "methodology.expiring_claim")}</p>
 

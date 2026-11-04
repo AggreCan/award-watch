@@ -12,7 +12,8 @@ import { buyerPath } from "../crosslinks";
 import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, segmentLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { clockOf, closesAtUtc, closingTime, tenderState } from "../closing";
-import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page } from "../layout";
+import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
+import { EarlierAwards, loadEarlierAwards } from "./backbone";
 import { tenderSeo } from "../seo";
 import {
   BuyerLink, CountdownScript, closingHasZone, closingText, money, otherLanguageMark, provincesText, sourceFileText, tenderNoticeUrl,
@@ -54,6 +55,8 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
 
   const clock = clockOf(c.env);
   const state = tenderState(d.status, d.closing, clock);
+  // The buyer's earlier records like this notice, while it is open (records database).
+  const earlier = await loadEarlierAwards(c.env, d, state === "open" || state === "closing", todayOf(stats.data_as_of));
   // A notice closing soon: the countdown goes under its closing time.
   const closes = state === "closing" ? closesAtUtc(d.closing) : null;
   const notice = closes ? d.reference.toLowerCase() : undefined;
@@ -232,6 +235,8 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         <p class="muted">{t(lang, "tender.related_none")}</p>
       )}
       </Panel>
+
+      <EarlierAwards lang={lang} earlier={earlier} />
 
       <p class="page-foot-note">
         {tj(lang, "tender.provenance", {

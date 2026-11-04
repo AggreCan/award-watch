@@ -16,6 +16,7 @@ import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page,
 import { ProTag } from "../pro";
 import { buyerSeo, pageSeo } from "../seo";
 import { newestFirst } from "./awards";
+import { IncumbentsPanel, loadIncumbents } from "./backbone";
 import { ExpiringSection } from "./expiring";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
@@ -153,9 +154,10 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   const upTo = known.filter((y) => y <= dataYear);
   const span = known.length ? { first: Math.min(...known), last: upTo.length ? Math.max(...upTo) : Math.max(...known) } : null;
   const ranked = MONEY_SOURCES.filter((s) => (b.top_organizations[s] ?? []).length);
-  const [interest, feedIndex] = await Promise.all([
+  const [interest, feedIndex, incumbents] = await Promise.all([
     interestFilter(c.env, lang, "buyer", `/buyers/${b.buyer.id}`, { name }),
     loadFeedIndex(c).catch(() => null),
+    loadIncumbents(c, "buyer", b.buyer.id, todayOf(stats.data_as_of)),
   ]);
   const feeds = feedIndex?.feeds.filter((f) => f.scope === "buyer" && f.key === b.buyer.id) ?? [];
   const feed = (event: string) => feeds.find((f) => f.event === event);
@@ -179,6 +181,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
             return f ? <a href={`/data/${f.path}`} class="btn">{t(lang, key)}</a> : null;
           })}
           <AnalyticsLink lang={lang} href={`/buyers/${b.buyer.id}/analytics`} on={accountsEnabled(c.env)} />
+          <a href={`/buyers/${b.buyer.id}/records`} class="btn" rel="nofollow">{t(lang, "records.link")}</a>
         </>}>
         {span ? <p class="page-note">{t(lang, "buyer.seen", { first: String(span.first), last: String(span.last) })}</p> : null}
       </PageHead>
@@ -204,6 +207,8 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
             {t(lang, "buyer.expiring_all")}{accountsEnabled(c.env) ? <>{" "}<ProTag lang={lang} /></> : null}
           </a>} />
       ) : null}
+
+      <IncumbentsPanel lang={lang} inc={incumbents} />
 
       <div class="panel-grid">
         {ranked.map((s) => (
