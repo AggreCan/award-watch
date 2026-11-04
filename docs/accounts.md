@@ -17,9 +17,11 @@ the schema is `site/accounts_schema.sql`; the tests are
   added by pasting a page's address; the site rebuilds the filter and writes
   its label, as the alerts form does. Requests made earlier through the
   alerts form are offered for import after sign-in.
-- **Delivery by email.** On the Pro plan, a tender list or a list of
-  contracts ending can be sent daily or weekly (*Phase 2: delivery*). Every
-  message carries a link that turns its delivery off without signing in.
+- **Delivery by email.** On the Pro plan, any saved search can be sent
+  daily or weekly: a tender list, a list of contracts ending, or the new
+  records of an organization, a buyer or a segment (*Phase 2: delivery*).
+  Every message carries a link that turns its delivery off without signing
+  in.
 - **API keys.** Issued and revoked on the account; shown once. A key of a
   Pro account opens the keyed API under `/api/v1` (*The keyed API*); the
   keys page shows each key's requests today and over 30 days.
@@ -35,10 +37,12 @@ the schema is `site/accounts_schema.sql`; the tests are
   report and sends it to the operator's inbox (*Bug reports*).
 - **Deletion.** The reader deletes the account from its own page.
 
-Two kinds of message are sent by email: the sign-in message, and the
-saved-search deliveries a Pro account turns on. Both go out through
-Cloudflare Email Sending from the Worker's own binding once the domain is
-onboarded (see *Sending mail* and *Operator steps*).
+Three kinds of message are sent by email: the sign-in message, the
+saved-search deliveries a Pro account turns on, and, once, the message
+telling the email lists' sign-ups that accounts are open (*The accounts-open
+message*). All go out through Cloudflare Email Sending from the Worker's
+own binding once the domain is onboarded (see *Sending mail* and *Operator
+steps*).
 
 ## Data model
 
@@ -56,6 +60,7 @@ Every datetime is ISO in UTC.
 | `entitlements` | plan, source (`manual` or `stripe`), start, end, revocation, a reference | an address, card details |
 | `deliveries` | one row per delivery run of a saved search: the run's time, how many records matched, and `sent`, `failed` or `empty` | the message, the address |
 | `delivery_tokens` | the secret of each delivered search's stop link, made on its first delivery | anything else |
+| `delivery_marks` | for an organization, buyer or segment search: the records database's counts by source and fiscal year at its last delivery, and that database's data date then | the message, anything about the reader |
 | `code_misses` | one row per wrong code or link tried for an address: the address and the time, for the hour's count | the code tried, the IP address |
 | `audit` | user id, event name, time, a short fixed detail | an address, a code, a token, a key |
 | `bug_reports` | one row per bug report from a Pro account: the page (a path on the site), what happened, what was expected, the time | the address |
@@ -243,11 +248,13 @@ account's verified destination addresses, and any other address gets the
    ```
 
    Every statement is idempotent. Run it again whenever the file changes:
-   phase 2 added the `delivery_tokens` table, which deleting a search or an
-   account now clears, so the schema goes on before the switch is turned on
-   with the phase 2 code deployed. `npm run db:local` applies it to the local
-   database, with `seed/accounts_dev.sql` (the development outbox, never
-   applied on the account).
+   phase 2 added the `delivery_tokens` table, and the records deliveries the
+   `delivery_marks` table, both of which deleting a search or an account now
+   clears, so the schema goes on before the code that names them is deployed
+   (without `delivery_marks`, deleting a search or an account answers 503).
+   `npm run db:local` applies it to the local database, with
+   `seed/accounts_dev.sql` (the development outbox, never applied on the
+   account).
 2. **Onboard awardwatch.ca for Email Sending.** In the dashboard: Compute &
    AI (Compute on some dashboards), Email Service, Email Sending, Onboard
    Domain; pick awardwatch.ca, review the records it lists and confirm with
@@ -309,11 +316,15 @@ account's verified destination addresses, and any other address gets the
    - `accounts_schema.sql` applied again on the account (step 1), so the
      tables added since the first application exist: `code_misses` (the
      hour's wrong codes; without it every code check answers "cannot be
-     reached"), `delivery_tokens`, `payment_customers`, `payment_events`
-     and `payment_reversals`;
+     reached"), `delivery_tokens`, `delivery_marks`, `payment_customers`,
+     `payment_events` and `payment_reversals`;
    - with payments set up (*Payments*, *Operator steps*): the webhook
      endpoint's six events, `charge.refunded` and `charge.dispute.created`
      among them, and read access to Charges on the restricted key.
+7. **Tell the email lists' sign-ups**, once the switch is on and sending
+   works: add `notice_at` to the forms database's `interest` table, then
+   run the accounts-open message from the console (*The accounts-open
+   message*).
 
 Local run with the switch on and the development outbox:
 
@@ -413,9 +424,9 @@ logs name no key.
 ## Deletion
 
 `/account/delete` asks for a ticked box, then in one batch: revokes every
-session; deletes the saved searches (with their delivery rows and stop
-links), the API keys (their daily counts go with them, by the cascade on
-`api_usage`), the bug reports and the address's sign-in requests; and marks the user row deleted with its
+session; deletes the saved searches (with their delivery rows, stop links
+and records marks), the API keys (their daily counts go with them, by the
+cascade on `api_usage`), the bug reports and the address's sign-in requests; and marks the user row deleted with its
 email replaced by `deleted:` and SHA-256 of a random salt and the address,
 the salt thrown away. The row then proves nothing about which address it
 was, and the address can sign up again as a new account. The address's rows
@@ -464,10 +475,13 @@ batch as the rest, so without it the deletion answers 503. Re-applying
 
 ## Phase 2: delivery
 
-The delivery job is `site/src/account/deliveries.ts`; the two messages are
+The delivery job is `site/src/account/deliveries.ts`; the messages are
 `site/src/account/digests.ts`, built on the approved designs in
-`design/email/` (the daily digest and the radar digest); the tests are
-`site/test/accounts-deliveries.test.ts`.
+`design/email/` (the daily digest and the radar digest; the records digest
+uses the same shell and rows); the records side of the organization, buyer
+and segment kinds is `site/src/account/records_deliveries.ts`; the tests are
+`site/test/accounts-deliveries.test.ts` and
+`site/test/accounts-records-deliveries.test.ts`.
 
 ### When it runs
 
@@ -487,8 +501,8 @@ Each run does nothing unless all of these hold, in this order:
    nightly has published today's files. A nightly that lands after the
    20:00 UTC run sends nothing that day; the next day's delivery covers
    both days.
-3. For each saved search, oldest first: delivery `daily` or `weekly`, a
-   kind the job can serve (below), an active account whose plan allows
+3. For each saved search, oldest first: delivery `daily` or `weekly` (every
+   kind can be delivered, below), an active account whose plan allows
    `delivery` (`planFor`, so a lapsed or revoked plan stops at once), and
    due: not delivered for this data date (the date of `last_delivered_at`
    is earlier); for weekly, never delivered or last delivered seven or more
@@ -497,18 +511,71 @@ Each run does nothing unless all of these hold, in this order:
 
 ### What each kind delivers
 
-The items are the records since the previous delivery's data date, at most
-seven days back; a first daily delivery covers the data date alone, a first
-weekly one the last seven days.
+For the tender and radar kinds the items are the records since the previous
+delivery's data date, at most seven days back; a first daily delivery covers
+the data date alone, a first weekly one the last seven days.
 
 | Kind | Read from | Items |
 |---|---|---|
 | `tenders` | `tenders/new/<day>.json` for each day after the previous delivery's data date up to today's | the notices first seen on those days that match the saved filter, read by the same parser as `/tenders` (`readTenderQuery`, `filterTenders`), still open at the run's time, soonest closing first; a notice closing within 7 days of the data date shows its time left in amber |
 | `expiring` | `expiring/<window>/index.json` and its pages, read from the last page back | the window's contracts whose end date is inside the window at today's data date and was outside it at the previous delivery's data date (the window's length is the radar's, 91, 182 or 365 days), filtered as the radar's form saved them (`readExpiringQuery`, `filterExpiring`), newest end first |
-| `organization`, `buyer`, `segment` | not delivered | the profile, buyer and segment files list award notices, contracts and grants without the date each record was first seen, so new records cannot be told from old ones; the searches page shows their delivery as off with a note, the job skips them, and the delivery post refuses to turn them on |
+| `organization` | the records database (`RECORDS`): `records` through `records_org`, rows with `extra = 0` | award notices, PSPC contract history, published contracts and grants naming the organization: each source and fiscal year whose count rose since the last delivery |
+| `buyer` | the records database: `rec_buyer_quarters` | the buyer's award notices, contract history and published contracts (its label names no grants), the same way |
+| `segment` | the records database: `rec_segment_years`; and `tenders/new/<day>.json` as for a tender search on `/tenders?segment=<nn>` | award notices and contract history in the segment, the same way, and the segment's new tender notices, which its label names too |
 
 A file that does not read (today's new-notice file, a window's index or
 page) ends the run with one log line naming it; the next hour tries again.
+
+#### Organizations, buyers and segments
+
+The records database holds one row per counted record with its source and
+fiscal year, but no day the record was first seen, no title and no
+reference, and no published file dates a record's first sighting either. So
+these kinds cannot list the records added since the last delivery one by
+one. What the database can say exactly is how many records each source
+holds in each fiscal year for one organization, buyer or segment, and that
+is what is delivered:
+
+- Each delivery reads those counts for the ten fiscal years ending with the
+  data date's (one D1 batch: the state row, the counts and the name; every
+  statement a constant in `records_deliveries.ts`, bound to a checked id and
+  the fiscal years, ending in a `LIMIT` of 40, 30 or 20 rows, and read
+  through `records_org`, `rec_buyer_quarters_buyer` or
+  `rec_segment_years_segment`; the tests read each plan).
+- It compares them with the counts its previous delivery kept, the search's
+  row in `delivery_marks`, and lists each source and fiscal year whose count
+  rose: by how many, the count now, and the counted value now, newest year
+  first, each row linking the entity's analytics view on that source. The
+  subject names how many more records in all. A count that fell (a record
+  withdrawn) is not reported. A year the previous counts did not read (the
+  window moved at the turn of a fiscal year) is not compared.
+- A first delivery has nothing to compare with: it keeps the counts and
+  writes an `empty` row; the next delivery reports what rose since. So does
+  a delivery after the records' counting rules changed (`rec_meta.rules`),
+  since a reload under new rules moves counts that were never new.
+- A rise means a record was added to that source and year, or a correction
+  moved one into it (a new buyer, organization, segment or date); the
+  message's note says so and points to the page, which lists each record.
+- The mark is written in the same batch as the `sent` or `empty` row. A
+  `failed` row keeps the old mark, so the next delivery reports the same
+  rise.
+- A segment search also lists the segment's new tender notices since the
+  previous delivery, as a tender search would; the message then has two
+  parts, the notices first. A first delivery sends them. At most 50 rows in
+  all: the counts (20 at most for a segment) first, then the notices, with a
+  line linking `/tenders?segment=<nn>` for the rest.
+
+Until the records database is ready at today's data date, these searches
+wait: no row is written, nothing is claimed, and the next hour reads the
+database again. The run's report (`records`, `waiting`) and its log line
+say why, once a run: no `RECORDS` binding (`absent`), a load under way
+(`loading`), a statement that failed (`failed`, logged as a D1 code), a
+database whose `as_of` is not the data date because tonight's sync did not
+finish (`stale`), or an accounts database without the `delivery_marks`
+table (`no_marks`). The tender and radar searches of the run go on as
+usual. A nightly whose records sync fails leaves these searches undelivered
+that day; the next day's delivery compares with the same previous counts,
+so it covers both days.
 
 ### What it sends and writes
 
@@ -518,7 +585,8 @@ page) ends the run with one log line naming it; the next hour tries again.
   the accounts sender (`senderFor`, the `MAIL` binding), with the subject,
   rows, button, note and footer of the design. A message lists at most 50
   rows; past that, a line names how many more and links the page. A
-  `deliveries` row `sent` (with the number of records matched) moves
+  `deliveries` row `sent` (with the number of records matched; for the
+  records kinds, the records added plus the notices) moves
   `last_delivered_at`; `failed` leaves it, so the next data date's delivery
   covers what this one missed.
 - At most 300 messages a run. A refusal with `E_DAILY_LIMIT_EXCEEDED` or
@@ -568,8 +636,7 @@ operator turns the delivery off by hand.
 
 Each search shows its newest delivery under its delivery select: when it
 ran and whether it was sent (with the number of records), found nothing new,
-or could not be sent. A kind the job cannot serve shows its delivery off and
-disabled, with a note.
+or could not be sent. Every kind has the select.
 
 ### Checking a run
 
@@ -578,7 +645,112 @@ npx wrangler d1 execute awardwatch-accounts --remote --command "SELECT substr(se
 ```
 
 The Worker's logs hold one line per run: the data date and the counts sent,
-failed, with nothing new and not on a plan with delivery.
+failed, with nothing new and not on a plan with delivery, and, when the
+records database kept some waiting, how many organization, buyer or segment
+searches wait and why.
+
+The records kinds' marks:
+
+```
+npx wrangler d1 execute awardwatch-accounts --remote --command "SELECT as_of, COUNT(*) AS n FROM delivery_marks GROUP BY as_of ORDER BY as_of DESC LIMIT 10"
+```
+
+## The accounts-open message
+
+The Email lists page and the privacy page promise each address on the email
+lists one message when accounts open, with a link to leave the lists. That
+message is a job the operator starts by hand from the console, at
+`/admin/announce`; nothing sends it on a schedule. The code is
+`site/src/account/announce.tsx` (the run, the message and the leaving
+link) and `admin.tsx` (the console page); the tests are
+`site/test/accounts-announce.test.ts`.
+
+### Who gets it
+
+Each address in the forms database's `interest` table with a row not
+unsubscribed and no row marked `notice_at`, in address order. An address
+that holds an active account (`users` in the accounts database, the same
+lower-cased address) is passed over: its lists were offered to it when it
+signed in. A run sends at most 300 messages and stops there; the next run
+goes on from the addresses still waiting, so the job is run again until
+the page's count of addresses that have not had it is down to the account
+holders. An address is sent the message once:
+
+- Before its message goes, the address is claimed: one statement sets
+  `notice_at` on its rows only while none of its rows has it, so two runs at
+  once (a second press) send it once.
+- A send that does not go gives the claim back. A refusal for that address
+  alone (a suppressed address) is counted as not sent and the address
+  waits for the next run; `E_DAILY_LIMIT_EXCEEDED` or
+  `E_RATE_LIMIT_EXCEEDED` ends the run there, and the page says so.
+- A list the address joins after its message went does not bring the
+  message back: the address has a marked row.
+
+### The message
+
+Plain text and plain HTML (no design shell), in the language of the
+address's first sign-up, through the accounts sender (the `MAIL` binding;
+the log sender on a local run): accounts are open; the lists the address
+signed up for (their labels as the site wrote them, ten at most and a line
+for the rest); that signing in with the address offers each list to the
+account as a saved search, and that email delivery of a saved search is
+part of Pro (no price); the sign-in page's address; that this is the only
+message about the lists, with the link to leave them; why it came, the
+tagline and the contact address. The links are the site's (`SITE_URL`, or
+the request's own origin locally). With an https link the message carries
+the same `List-Unsubscribe` pair as a delivery, naming the leaving link.
+
+### Leaving the lists
+
+`/interest/stop?t=<token>`, the token being that of the address's first
+row. It works whatever the accounts switch says.
+
+- `GET` shows the address's lists and one button, and changes nothing, so a
+  mail scanner that opens the link removes nothing.
+- `POST` with the token (or the one-click body `List-Unsubscribe=One-Click`
+  from a mail client, the token in the address, answered with a line of
+  text) marks every row of the address unsubscribed and replaces the
+  address on them with `removed:` and SHA-256 of a random salt and the
+  address, the salt thrown away: the rows still count in the nightly's
+  totals, prove nothing about whose they were, and are no longer offered to
+  an account. Any row's token takes the whole address off.
+- A token that matches no row, or is not 32 hex characters, answers the
+  site's 404. No session and no `Origin` are asked for: the token is the
+  proof, and it can only take that one address off.
+- Both methods count against `STOP_LIMIT` while the switch is on.
+
+### The console page
+
+`/admin/announce`, linked from the overview, behind the console's guards.
+It shows how many addresses have not had the message (account holders
+included, since telling them apart reads the accounts database address by
+address) and how many it went to, what a run does, the confirm box and
+button, and the message in English and in French as an address with one
+list would get it. The page offers no form while mail cannot leave (the
+stub sender) or while the `interest` table has no `notice_at` column. A
+run writes the audit row `operator_announced` with no user id and the
+detail `by <operator's user id>, <n> sent, <n> not sent, <n> holding an
+account, <n> left`, and the page shows the same figures after it.
+
+### Operator steps
+
+1. Add the column to the forms database, once (the schema file has it for
+   a new database; on the existing one the statement is not idempotent, and
+   a second run only answers "duplicate column name"):
+
+   ```
+   cd site
+   npx wrangler d1 execute award-watch --remote --command "ALTER TABLE interest ADD COLUMN notice_at TEXT"
+   ```
+
+2. With the switch on and sending proved (*Operator steps* above), open
+   `/admin/announce`, read the preview, tick the box and send. Run it again
+   until no address but the account holders is left.
+3. Check what went:
+
+   ```
+   npx wrangler d1 execute award-watch --remote --command "SELECT COUNT(DISTINCT email) AS sent FROM interest WHERE notice_at IS NOT NULL"
+   ```
 
 ## Phase 3: payments and the metered API
 

@@ -127,8 +127,9 @@
     },
     {
       // The records database: one row per counted record of the four money
-      // sources, read by the analytics views with prepared statements only
-      // (src/records_db.ts). Written by the nightly workflow's "Sync the
+      // sources, read by the analytics views and the organization, buyer and
+      // segment deliveries with prepared statements only (src/records_db.ts,
+      // src/account/records_deliveries.ts). Written by the nightly workflow's "Sync the
       // records database" step alone, schema in pipeline/records_schema.sql
       // (docs/analytics.md). Created 2026-11-04 with `wrangler d1 create
       // awardwatch-records` on the project account. While the id were the

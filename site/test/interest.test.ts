@@ -141,7 +141,7 @@ describe("POST /interest", () => {
     expect(html).not.toContain('name="email"');
     const [row] = await rows("reader.one@example.ca");
     expect(Object.keys(row).sort()).toEqual(
-      ["confirmed_at", "created_at", "email", "id", "kind", "label", "lang", "params", "token", "unsubscribed_at"],
+      ["confirmed_at", "created_at", "email", "id", "kind", "label", "lang", "notice_at", "params", "token", "unsubscribed_at"],
     );
     expect(row.kind).toBe("expiring");
     expect(row.params).toBe("/expiring/3m?buyer=dnd-mdn");
@@ -151,6 +151,8 @@ describe("POST /interest", () => {
     expect(row.token).toMatch(/^[0-9a-f]{32}$/);
     expect(row.confirmed_at).toBeNull();
     expect(row.unsubscribed_at).toBeNull();
+    // Set only when the accounts-open message goes (account/announce.tsx).
+    expect(row.notice_at).toBeNull();
   });
 
   it("writes the label in the form's language", async () => {
@@ -352,6 +354,7 @@ describe("the alerts page and the privacy page", () => {
     const html = await text("/privacy");
     expect(html).toContain('<h2 id="interest">Alert Interest</h2>');
     expect(html).toContain("The alerts form stores the email address, the saved filter and the site&#39;s wording of it, the language of the page, the time it was received and a random token for the links in later messages.");
+    expect(html).toContain("Once the message saying accounts are open has gone to the address, it stores when.");
     expect(html).toContain("It stores no IP address, browser identification or visitor code.");
     expect(html).toContain("The address is used for one message saying accounts are open, with a link to unsubscribe, and nothing else is sent to it.");
     expect(html).toContain("If an account is later made with the same address, the lists are offered to it as saved searches.");

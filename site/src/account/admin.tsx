@@ -20,6 +20,8 @@
 //   POST /admin/users/:id/unblock                      lift a block
 //   GET  /admin/users/:id/block | email | cancel | refund | delete   what the action will do (confirm page)
 //   POST /admin/users/:id/block | email | cancel | refund | delete   do it (confirm=yes from that page)
+//   GET  /admin/announce                               the accounts-open message: counts, preview, confirm form
+//   POST /admin/announce                               send the next run of it (confirm=yes; announce.tsx)
 //
 // Every POST needs an Origin header naming the site (a browser always sends
 // one with a form post, so a post without one is refused here, unlike the
@@ -39,6 +41,7 @@ import { Layout, PageHead, Panel, page } from "../layout";
 import { CONTACT_EMAIL } from "../pages/docs";
 import { EMAIL_MAX, normalizeEmail } from "../pages/interest";
 import { accessEmail, accessRequired } from "./admin_access";
+import { ANNOUNCE_MAX, type AnnounceCounts, accountsOpenMessage, announceCounts, announceLinks, missingColumn, runAnnouncement } from "./announce";
 import {
   type AccountFilter, type AccountListRow, type AccountQuery, type AccountSort, type AccountsPage, type BlockRow, type Overview,
   type UserDetail, type UserHit, type UserRow, ACCOUNT_CSV_ROWS, ACCOUNT_FILTERS, ACCOUNT_FILTER_NAMES, ACCOUNT_MAX_PAGE,
@@ -139,9 +142,9 @@ async function guarded(c: Context<AppEnv>, run: () => Promise<Response>): Promis
 
 type Post = { op: Account; fields: Record<string, string>; user: UserRow };
 
-// A POST: its Origin, its body, the session's CSRF value, then the account
-// it is about. A refusal is a 403 with one line; an unknown account the 404.
-async function operatorPost(c: Context<AppEnv>): Promise<Post | Response> {
+// A POST: its Origin, its body and the session's CSRF value. A refusal is a
+// 403 with one line.
+async function operatorForm(c: Context<AppEnv>): Promise<{ op: Account; fields: Record<string, string> } | Response> {
   const lang = c.get("lang");
   const origin = c.req.header("origin");
   if (!origin || !isOwnAddress(origin, c.req.url)) return c.text(t(lang, "form.rejected"), 403);
@@ -151,6 +154,14 @@ async function operatorPost(c: Context<AppEnv>): Promise<Post | Response> {
   if (asked === "en" || asked === "fr") c.set("lang", asked);
   const op = operatorOf(c);
   if (!csrfValid(op, form.fields.csrf)) return c.text(t(c.get("lang"), "form.rejected"), 403);
+  return { op, fields: form.fields };
+}
+
+// operatorForm, then the account the post is about; an unknown account is the 404.
+async function operatorPost(c: Context<AppEnv>): Promise<Post | Response> {
+  const form = await operatorForm(c);
+  if (form instanceof Response) return form;
+  const { op } = form;
   let user: UserRow | null;
   try {
     user = await target(c);
@@ -237,7 +248,10 @@ function overviewView(lang: Lang, o: Overview, search: { q: string; hits: UserHi
   return (
     <>
       <PageHead lang={lang} title={t(lang, "admin.title")} lead={t(lang, "admin.lead")}
-        actions={<a href="/admin/accounts" class="btn">{t(lang, "admin.accounts_link")}</a>} />
+        actions={<>
+          <a href="/admin/accounts" class="btn">{t(lang, "admin.accounts_link")}</a>
+          <a href="/admin/announce" class="btn">{t(lang, "admin.announce_link")}</a>
+        </>} />
       <Panel title={t(lang, "admin.panel_find")} class="panel-form">
         <form method="get" action="/admin" class="stack" role="search">
           <label>
@@ -1137,5 +1151,100 @@ admin.post("/users/:id/delete", async (c) => {
     if (blocked) await c.env.ACCOUNTS!.prepare("DELETE FROM account_blocks WHERE user_id = ?").bind(user.id).run();
     await operatorAudit(c.env, user.id, "operator_deleted", op.userId);
     return c.redirect(userPath(user.id, "deleted"), 303);
+  });
+});
+
+// -- the accounts-open message (announce.tsx) -----------------------------------------------------
+
+type AnnounceState = { counts: AnnounceCounts | null; refusal: Key | null; errors?: Key[]; notice?: string | null };
+
+// Mail that cannot leave (the stub sender) and a forms database without
+// notice_at are refusals: the page says so and offers no form.
+async function announceState(c: Context<AppEnv>): Promise<AnnounceState> {
+  let counts: AnnounceCounts;
+  try {
+    counts = await announceCounts(c.env);
+  } catch (e) {
+    if (missingColumn(e)) return { counts: null, refusal: "admin.announce_no_column" };
+    throw e;
+  }
+  return { counts, refusal: mailOn(c) ? null : "admin.announce_no_mail" };
+}
+
+// What a run will do, the counts, the form, and the message as an address
+// with one list would get it, in both languages.
+function announceView(lang: Lang, op: Account, base: string, s: AnnounceState) {
+  const n = (v: number) => fmtInt(v, lang);
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "admin.announce_title")} lead={t(lang, "admin.announce_lead", { n: n(ANNOUNCE_MAX) })}
+        actions={<a href="/admin" class="btn">{t(lang, "admin.title")}</a>} />
+      <Notice message={s.notice} />
+      <Panel title={t(lang, "admin.panel_what")} class="panel-form">
+        <Errors lang={lang} errors={s.refusal ? [s.refusal] : s.errors} />
+        {s.counts ? (
+          <ul class="account-list">
+            <li>{t(lang, "admin.announce_waiting", { n: n(s.counts.waiting) })}</li>
+            <li>{t(lang, "admin.announce_sent", { n: n(s.counts.sent) })}</li>
+            <li>{t(lang, "admin.announce_mark")}</li>
+            <li>{t(lang, "admin.announce_limit")}</li>
+          </ul>
+        ) : null}
+        {s.refusal ? null : (
+          <form method="post" action="/admin/announce" class="stack">
+            <Csrf op={op} />
+            <ConfirmBox lang={lang} />
+            <button type="submit" class="btn btn-primary">{t(lang, "admin.announce_button", { n: n(ANNOUNCE_MAX) })}</button>
+          </form>
+        )}
+      </Panel>
+      {(["en", "fr"] as const).map((l) => {
+        // The preview shows the subject and the text, never a recipient.
+        const m = accountsOpenMessage(l, "", [t(l, "interest.label_tenders_all")], announceLinks(base, l, "0".repeat(32)));
+        return (
+          <Panel title={t(lang, "admin.announce_preview", { lang: t(lang, l === "fr" ? "admin.lang_fr" : "admin.lang_en") })}>
+            <p><strong>{m.subject}</strong></p>
+            <pre class="cite-block">{m.text}</pre>
+          </Panel>
+        );
+      })}
+    </>
+  );
+}
+
+const STOP_CODE_RE = /^[A-Z0-9_]{1,64}$/;
+
+// The last run's figures come back in the address of the redirect after it.
+function announceNotice(c: Context<AppEnv>, lang: Lang): string | null {
+  if (c.req.query("m") !== "done") return null;
+  const count = (k: string) => fmtInt(Math.max(0, Math.trunc(Number(c.req.query(k) ?? "0")) || 0), lang);
+  const done = t(lang, "admin.announce_done", { sent: count("sent"), failed: count("failed"), accounts: count("accounts"), left: count("left") });
+  const code = c.req.query("stopped") ?? "";
+  return STOP_CODE_RE.test(code) ? `${done} ${t(lang, "admin.announce_stopped", { code })}` : done;
+}
+
+admin.get("/announce", (c) =>
+  guarded(c, async () => {
+    const lang = c.get("lang");
+    const s = await announceState(c);
+    return adminPage(c, t(lang, "admin.announce_title"), announceView(lang, operatorOf(c), siteBase(c), { ...s, notice: announceNotice(c, lang) }));
+  }));
+
+admin.post("/announce", async (c) => {
+  const form = await operatorForm(c);
+  if (form instanceof Response) return form;
+  const { op, fields } = form;
+  const lang = c.get("lang");
+  return guarded(c, async () => {
+    const s = await announceState(c);
+    const again = (errors: Key[]) => adminPage(c, t(lang, "admin.announce_title"), announceView(lang, op, siteBase(c), { ...s, errors }), 400);
+    if (s.refusal) return again([]);
+    if (!confirmed(fields)) return again(["admin.err_confirm"]);
+    const r = await runAnnouncement(c.env, siteBase(c), c.req.url);
+    await operatorAudit(c.env, null, "operator_announced", op.userId,
+      `${r.sent} sent, ${r.failed} not sent, ${r.accounts} holding an account, ${r.left} left${r.stopped ? ", stopped at a limit" : ""}`);
+    const p = new URLSearchParams({ m: "done", sent: String(r.sent), failed: String(r.failed), accounts: String(r.accounts), left: String(r.left) });
+    if (r.stopped) p.set("stopped", r.stopped);
+    return c.redirect(`/admin/announce?${p}`, 303);
   });
 });

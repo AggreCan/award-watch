@@ -2407,8 +2407,8 @@ const STRINGS = {
   "privacy.form_review": { en: "Both are reviewed before anything is published.", fr: "Les deux sont examinés avant toute publication." },
   "privacy.toc_interest": { en: "Alert Interest", fr: "Intérêt pour les alertes" },
   "privacy.interest_kept": {
-    en: "The alerts form stores the email address, the saved filter and the site's wording of it, the language of the page, the time it was received and a random token for the links in later messages. It stores no IP address, browser identification or visitor code.",
-    fr: "Le formulaire d'alertes conserve l'adresse courriel, le filtre enregistré et la formulation qu'en donne le site, la langue de la page, l'heure de réception et un jeton aléatoire pour les liens des messages à venir. Il ne conserve aucune adresse IP, identification de navigateur ni code de visiteur.",
+    en: "The alerts form stores the email address, the saved filter and the site's wording of it, the language of the page, the time it was received and a random token for the links in later messages. Once the message saying accounts are open has gone to the address, it stores when. It stores no IP address, browser identification or visitor code.",
+    fr: "Le formulaire d'alertes conserve l'adresse courriel, le filtre enregistré et la formulation qu'en donne le site, la langue de la page, l'heure de réception et un jeton aléatoire pour les liens des messages à venir. Une fois le message annonçant l'ouverture des comptes envoyé à l'adresse, il en conserve le moment. Il ne conserve aucune adresse IP, identification de navigateur ni code de visiteur.",
   },
   "privacy.interest_use": {
     en: "The address is used for one message saying accounts are open, with a link to unsubscribe, and nothing else is sent to it. If an account is later made with the same address, the lists are offered to it as saved searches.",

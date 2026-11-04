@@ -1,10 +1,12 @@
-// The two delivery messages of phase 2, built from design/email (build.py and
+// The delivery messages of phase 2, built from design/email (build.py and
 // its digest and expiring templates, approved by the operator): the saved
-// search's new tender notices, and the contracts that entered a radar window.
-// Each message has an HTML part laid out the way that design lays it out (a
-// 600 px column of tables, every style inline, the two hosted wordmarks,
-// dark rules under a media query) and a plain-text part shaped like its .txt
-// files. Every string is in the dictionary, in the saved search's language.
+// search's new tender notices, the contracts that entered a radar window,
+// and, in the same shell, the records counts that rose for an organization,
+// a buyer or a segment (with a segment's new tender notices). Each message
+// has an HTML part laid out the way that design lays it out (a 600 px column
+// of tables, every style inline, the two hosted wordmarks, dark rules under a
+// media query) and a plain-text part shaped like its .txt files. Every string
+// is in the dictionary, in the saved search's language.
 //
 // Nothing here reads a file or a database: deliveries.ts hands over the rows
 // it chose and the links it made, so the messages can be tested on their own.
@@ -13,11 +15,13 @@ import { addDays, closingParts } from "../../public/closing.js";
 import { closingTime } from "../closing";
 import { CATEGORIES, PROVINCES, SEGMENTS } from "../constants";
 import { type ExpiringRow, type TenderRow, publishedReference } from "../data";
-import { categoryLabel, fmtInt, fmtMoney, pick, provinceName, segmentShort, t, tn, type Key, type Lang } from "../i18n";
+import { categoryLabel, fmtInt, fmtMoney, pick, provinceName, segmentShort, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { CONTACT_EMAIL } from "../pages/docs";
 import { type ExpiringQuery, contractReference } from "../pages/expiring";
 import { contractSearchUrl } from "../pages/shared";
 import { CODE_RE } from "../pages/tenders";
+import { fiscalLabel } from "../records_db";
+import type { RecordsKind, Rise } from "./records_deliveries";
 import type { MailMessage } from "./sender";
 
 // A message and the headers it goes out with (List-Unsubscribe and its
@@ -182,6 +186,11 @@ function shell(o: { lang: Lang; site: string; subject: string; preheader: string
 
 function h1(text: string): string {
   return `<h1 class="ink" style="margin:0 0 12px 0;font:700 20px/1.3 ${FONT};color:${C.ink};">${escapeHtml(text)}</h1>`;
+}
+
+// A part's heading inside one message (the records digest's two parts).
+function h2(text: string): string {
+  return `<h2 class="ink" style="margin:18px 0 6px 0;font:700 16px/1.3 ${FONT};color:${C.ink};">${escapeHtml(text)}</h2>`;
 }
 
 // html is markup already escaped.
@@ -455,4 +464,106 @@ export function expiringDigest(o: ExpiringDigest): DigestMessage {
     `${footer.text}\n${textFooter(lang)}`,
   ].join("\n\n");
   return { to: o.to, subject, text, html, lang, headers: deliveryHeaders(o.stopUrl) };
+}
+
+// -- records counts: an organization, a buyer, a segment -----------------------------------------
+
+export interface RecordsDigest extends DigestBase {
+  kind: RecordsKind;
+  // Who or what the search follows, in the message's language: the
+  // organization's or the buyer's name, or "43 IT and telecom".
+  name: string;
+  // The counts that rose (records_deliveries.ts rises), at most ROWS_MAX.
+  rows: readonly Rise[];
+  // Records added across every source and year.
+  more: number;
+  // The data date of the counts compared with.
+  since: string;
+  // A segment's new tender notices since tenderSince (deliveries.ts
+  // tenderItems), at most ROWS_MAX; empty for the other kinds.
+  tenders: readonly TenderRow[];
+  tenderTotal: number;
+  tenderSince: string;
+}
+
+const RECORDS_TITLE: Record<RecordsKind, Key> = {
+  organization: "digest.records_title_organization", buyer: "digest.records_title_buyer", segment: "digest.records_title_segment",
+};
+const RECORDS_BUTTON: Record<RecordsKind, Key> = {
+  organization: "digest.records_button_organization", buyer: "digest.records_button_buyer", segment: "digest.records_button_segment",
+};
+
+const sinceText = (lang: Lang, since: string, dataDate: string) =>
+  since === addDays(dataDate, -1) ? t(lang, "digest.since_yesterday") : t(lang, "digest.since_day", { date: since });
+
+// A source and fiscal year as the analytics view of the same entity names
+// them; the row's title links that view on the source.
+function riseLines(lang: Lang, r: Rise) {
+  return {
+    title: `${sourceLabel(lang, r.src)}, ${fiscalLabel(lang, r.fy)}`,
+    line2: t(lang, "digest.records_row", { more: fmtInt(r.more, lang), n: fmtInt(r.n, lang) }),
+    line3: r.cents === null ? t(lang, "digest.records_no_value") : t(lang, "digest.records_value", { value: fmtMoney(r.cents / 100, lang) }),
+  };
+}
+
+const analyticsLink = (o: { site: string; lang: Lang; params: string }, r: Rise) =>
+  siteLink(o.site, `${o.params}/analytics?source=${r.src}`, o.lang);
+
+export function recordsDigest(o: RecordsDigest): DigestMessage {
+  const { lang } = o;
+  const what: string[] = [];
+  if (o.tenderTotal) {
+    what.push(tn(lang, "digest.tenders_subject_all_one", "digest.tenders_subject_all_many", o.tenderTotal, { n: fmtInt(o.tenderTotal, lang) }));
+  }
+  if (o.more) what.push(tn(lang, "digest.records_subject_one", "digest.records_subject_many", o.more, { n: fmtInt(o.more, lang) }));
+  const subject = t(lang, "digest.records_subject", { what: what.join(", "), scope: o.name });
+  const title = t(lang, RECORDS_TITLE[o.kind], { name: o.name });
+  const lead = (label: string) => t(lang, "digest.records_lead", { label, date: o.dataDate });
+  const page = siteLink(o.site, o.params, lang);
+  const footer = why(o);
+  const html: string[] = [h1(title), para(withMarkup(lead, `<b>${escapeHtml(o.label)}</b>`))];
+  const text: string[] = [title, lead(o.label)];
+
+  if (o.tenderTotal) {
+    const intro = tn(lang, "digest.records_tenders_one", "digest.records_tenders_many", o.tenderTotal, {
+      n: fmtInt(o.tenderTotal, lang), since: sinceText(lang, o.tenderSince, o.dataDate),
+    });
+    const list = siteLink(o.site, `/tenders?segment=${o.params.slice("/segments/".length)}`, lang);
+    const more = moreLine(lang, o.tenders.length, o.tenderTotal, list);
+    html.push(h2(t(lang, "digest.tenders_title")), para(escapeHtml(intro)), rows(o.tenders.map((r, i) => {
+      const l = tenderLines(lang, r, o.dataDate);
+      const leftHtml = l.left ? (l.left.days <= AMBER_DAYS ? amber(escapeHtml(l.left.text)) : escapeHtml(l.left.text)) : "";
+      return row(l.title, tenderLink(o, r), escapeHtml(l.line2), [l.closes ? escapeHtml(l.closes) : "", leftHtml].filter(Boolean).join(" · "), i === 0);
+    })), more?.html ?? "");
+    text.push(t(lang, "digest.tenders_title"), intro, o.tenders.map((r) => {
+      const l = tenderLines(lang, r, o.dataDate);
+      return `- ${l.title}\n  ${l.line2}\n  ${[l.closes, l.left?.text].filter(Boolean).join(", ")}\n  ${tenderLink(o, r)}`;
+    }).join("\n\n"), ...(more ? [more.text] : []));
+  }
+
+  if (o.more) {
+    const intro = tn(lang, "digest.records_more_one", "digest.records_more_many", o.more, {
+      n: fmtInt(o.more, lang), since: sinceText(lang, o.since, o.dataDate),
+    });
+    html.push(h2(t(lang, "digest.records_counted")), para(escapeHtml(intro)), rows(o.rows.map((r, i) => {
+      const l = riseLines(lang, r);
+      return row(l.title, analyticsLink(o, r), escapeHtml(l.line2), escapeHtml(l.line3), i === 0);
+    })));
+    text.push(t(lang, "digest.records_counted"), intro, o.rows.map((r) => {
+      const l = riseLines(lang, r);
+      return `- ${l.title}\n  ${l.line2}\n  ${l.line3}\n  ${analyticsLink(o, r)}`;
+    }).join("\n\n"));
+  }
+
+  const label = t(lang, RECORDS_BUTTON[o.kind]);
+  html.push(button(page, label), para(escapeHtml(t(lang, "digest.records_note")), true));
+  text.push(t(lang, "digest.text_link", { label, url: page }), t(lang, "digest.records_note"), `${footer.text}\n${textFooter(lang)}`);
+  const titles = [
+    ...o.tenders.map((r) => pick(lang, r.title_en, r.title_fr) ?? publishedReference(r)),
+    ...o.rows.map((r) => riseLines(lang, r).title),
+  ];
+  return {
+    to: o.to, subject, lang, headers: deliveryHeaders(o.stopUrl), text: text.join("\n\n"),
+    html: shell({ lang, site: o.site, subject, preheader: preheader(lang, titles, titles.length), body: html.join(""), why: footer.html }),
+  };
 }

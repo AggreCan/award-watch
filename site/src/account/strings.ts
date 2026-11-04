@@ -312,12 +312,8 @@ export const ACCOUNT_STRINGS = {
 
   // -- deliveries (phase 2: src/account/deliveries.ts, digests.ts, the stop page) --------
   "account.searches_lead_deliver": {
-    en: "Filters you follow, saved from the site's lists and pages. On the Pro plan, tender lists and contracts ending can be delivered by email, each day or each week.",
-    fr: "Les filtres que vous suivez, enregistrés à partir des listes et des pages du site. Avec le forfait Pro, les listes d'appels d'offres et de contrats prenant fin peuvent être envoyées par courriel, chaque jour ou chaque semaine.",
-  },
-  "account.deliver_not_yet": {
-    en: "Email delivery is not offered for this kind of search yet.",
-    fr: "L'envoi par courriel n'est pas encore offert pour ce type de recherche.",
+    en: "Filters you follow, saved from the site's lists and pages. On the Pro plan, each one can be delivered by email, each day or each week.",
+    fr: "Les filtres que vous suivez, enregistrés à partir des listes et des pages du site. Avec le forfait Pro, chacun peut être envoyé par courriel, chaque jour ou chaque semaine.",
   },
   "account.last_none": { en: "Not delivered yet.", fr: "Pas encore envoyée." },
   "account.last_sent_one": { en: "Last sent {time}, 1 item.", fr: "Dernier envoi le {time}, 1 élément." },
@@ -419,6 +415,40 @@ export const ACCOUNT_STRINGS = {
   "digest.stop_link": { en: "Stop this delivery", fr: "Arrêter cet envoi" },
   "digest.text_searches": { en: "Saved searches and delivery", fr: "Recherches enregistrées et envoi" },
   "digest.text_link": { en: "{label}: {url}", fr: "{label} : {url}" },
+  // The organization, buyer and segment deliveries (records_deliveries.ts,
+  // digests.ts recordsDigest): counts by source and fiscal year that rose,
+  // and a segment's new tender notices. "Records" as the alerts page says it.
+  "digest.records_title_organization": { en: "New records naming {name}", fr: "Nouveaux dossiers qui nomment {name}" },
+  "digest.records_title_buyer": { en: "New records from {name}", fr: "Nouveaux dossiers de {name}" },
+  "digest.records_title_segment": { en: "New in segment {name}", fr: "Nouveautés du segment {name}" },
+  "digest.records_subject": { en: "{what}: {scope}", fr: "{what} : {scope}" },
+  "digest.records_subject_one": { en: "1 more record", fr: "1 dossier de plus" },
+  "digest.records_subject_many": { en: "{n} more records", fr: "{n} dossiers de plus" },
+  "digest.records_lead": {
+    en: "Your saved search {label}. Data date {date}.",
+    fr: "Votre recherche enregistrée {label}. Date des données : {date}.",
+  },
+  "digest.records_tenders_one": { en: "1 notice published since {since}.", fr: "1 avis publié depuis {since}." },
+  "digest.records_tenders_many": { en: "{n} notices published since {since}.", fr: "{n} avis publiés depuis {since}." },
+  "digest.records_counted": { en: "Records counted", fr: "Dossiers comptés" },
+  "digest.records_more_one": {
+    en: "1 more record than at {since}, by source and federal fiscal year.",
+    fr: "1 dossier de plus qu'à {since}, par source et par exercice financier fédéral.",
+  },
+  "digest.records_more_many": {
+    en: "{n} more records than at {since}, by source and federal fiscal year.",
+    fr: "{n} dossiers de plus qu'à {since}, par source et par exercice financier fédéral.",
+  },
+  "digest.records_row": { en: "{more} more, {n} in all", fr: "{more} de plus, {n} au total" },
+  "digest.records_value": { en: "Counted value {value}", fr: "Valeur comptée : {value}" },
+  "digest.records_no_value": { en: "No counted value", fr: "Aucune valeur comptée" },
+  "digest.records_button_organization": { en: "Open the profile", fr: "Ouvrir le profil" },
+  "digest.records_button_buyer": { en: "Open the buyer page", fr: "Ouvrir la page de l'acheteur" },
+  "digest.records_button_segment": { en: "Open the segment page", fr: "Ouvrir la page du segment" },
+  "digest.records_note": {
+    en: "The records database counts each source by federal fiscal year, as the analytics views do. A count rises when a record is added to it, or when a correction moves one into it. The page lists each record.",
+    fr: "La base des dossiers compte chaque source par exercice financier fédéral, comme les vues analytiques. Un compte augmente quand un dossier s'y ajoute, ou quand une correction l'y déplace. La page énumère chaque dossier.",
+  },
   // -- billing (src/account/billing.tsx) ----------------------------------------------
   // The prices are never written here: {price} is the operator's figure from
   // wrangler.jsonc (PRICE_MONTHLY_CAD, PRICE_YEARLY_CAD).
@@ -964,4 +994,73 @@ export const ACCOUNT_STRINGS = {
     en: "Only the first {n} can be paged through; filter to see the rest.",
     fr: "Seuls les {n} premiers peuvent être parcourus; filtrez pour voir les autres.",
   },
+  // The accounts-open message (/admin/announce; src/account/announce.tsx).
+  "admin.announce_link": { en: "Accounts-open message", fr: "Message d'ouverture des comptes" },
+  "admin.announce_title": { en: "Accounts-Open Message", fr: "Message d'ouverture des comptes" },
+  "admin.announce_lead": {
+    en: "One plain message to each address on the email lists that holds no account and has not had it, in the language of its first sign-up: accounts are open, and its lists become saved searches when it signs in. At most {n} a run; run it again to go on.",
+    fr: "Un message simple à chaque adresse des listes de diffusion qui n'a pas de compte et ne l'a pas encore reçu, dans la langue de sa première inscription : les comptes sont ouverts, et ses listes deviennent des recherches enregistrées à la connexion. Au plus {n} par passage; relancez-le pour continuer.",
+  },
+  "admin.announce_waiting": {
+    en: "Addresses that have not had it: {n}. Those holding an account are passed over when the run meets them.",
+    fr: "Adresses qui ne l'ont pas reçu : {n}. Celles qui ont un compte sont écartées quand le passage les rencontre.",
+  },
+  "admin.announce_sent": { en: "Addresses it went to so far: {n}.", fr: "Adresses auxquelles il est parti jusqu'ici : {n}." },
+  "admin.announce_mark": {
+    en: "Each address is marked when its message goes, so no run sends it twice. An address the mail service refuses stays unmarked for the next run.",
+    fr: "Chaque adresse est marquée quand son message part, de sorte qu'aucun passage ne l'envoie deux fois. Une adresse que le service de courriel refuse reste non marquée pour le passage suivant.",
+  },
+  "admin.announce_limit": {
+    en: "A daily or rate limit of the mail service ends the run; the next run goes on from there.",
+    fr: "Une limite quotidienne ou de débit du service de courriel arrête le passage; le suivant reprend à partir de là.",
+  },
+  "admin.announce_preview": { en: "The message, with one list: {lang}", fr: "Le message, avec une liste : {lang}" },
+  "admin.announce_button": { en: "Send up to {n} messages", fr: "Envoyer jusqu'à {n} messages" },
+  "admin.announce_done": {
+    en: "Messages sent: {sent}. Not sent: {failed}. Passed over, holding an account: {accounts}. Addresses that have not had it: {left}.",
+    fr: "Messages envoyés : {sent}. Non envoyés : {failed}. Adresses écartées, qui ont un compte : {accounts}. Adresses qui ne l'ont pas reçu : {left}.",
+  },
+  "admin.announce_stopped": {
+    en: "The run stopped at the mail service's limit ({code}); run it again later.",
+    fr: "Le passage s'est arrêté à la limite du service de courriel ({code}); relancez-le plus tard.",
+  },
+  "admin.announce_no_mail": {
+    en: "Mail cannot be sent from here: the MAIL binding or MAIL_FROM is missing.",
+    fr: "Aucun courriel ne peut partir d'ici : la liaison MAIL ou MAIL_FROM manque.",
+  },
+  "admin.announce_no_column": {
+    en: "The interest table has no notice_at column yet. Add it first, as docs/accounts.md says under The accounts-open message.",
+    fr: "La table interest n'a pas encore de colonne notice_at. Ajoutez-la d'abord, comme l'indique docs/accounts.md sous The accounts-open message.",
+  },
+  // The message itself, in the language of the address's first sign-up, and
+  // the page its link opens (/interest/stop?t=), which takes the address off
+  // the lists. No price, and nothing promised without the plan.
+  "announce.subject": { en: "Award Watch accounts are open", fr: "Les comptes Award Watch sont ouverts" },
+  "announce.lead": { en: "Accounts are open on Award Watch.", fr: "Les comptes sont ouverts sur Award Watch." },
+  "announce.lists": { en: "This address is signed up for these email lists:", fr: "Cette adresse est inscrite à ces listes de diffusion :" },
+  "announce.lists_more_one": { en: "And 1 more.", fr: "Et 1 autre." },
+  "announce.lists_more_many": { en: "And {n} more.", fr: "Et {n} autres." },
+  "announce.saved": {
+    en: "Sign in with this address and each list is offered to the account as a saved search. Email delivery of a saved search is part of the Pro plan.",
+    fr: "Connectez-vous avec cette adresse et chaque liste est proposée au compte comme recherche enregistrée. L'envoi par courriel d'une recherche enregistrée fait partie du forfait Pro.",
+  },
+  "announce.only": { en: "This is the only message about these lists.", fr: "C'est le seul message au sujet de ces listes." },
+  "announce.stop_link": { en: "Take this address off the lists", fr: "Retirer cette adresse des listes" },
+  "announce.why": {
+    en: "You receive this because the address was entered on the site's email lists form.",
+    fr: "Vous recevez ce message parce que l'adresse a été inscrite au formulaire des listes de diffusion du site.",
+  },
+  "announce.stop_title": { en: "Leave the Email Lists", fr: "Quitter les listes de diffusion" },
+  "announce.stop_lead": {
+    en: "The address this link was sent to is on the lists below. Taking it off removes the address from them: nothing more is sent to it, and the lists are not offered to an account.",
+    fr: "L'adresse à laquelle ce lien a été envoyé figure sur les listes ci-dessous. La retirer l'efface de ces listes : rien de plus ne lui est envoyé, et les listes ne sont pas proposées à un compte.",
+  },
+  "announce.stop_panel": { en: "Lists", fr: "Listes" },
+  "announce.stop_button": { en: "Take the address off", fr: "Retirer l'adresse" },
+  "announce.stopped_title": { en: "Address Removed", fr: "Adresse retirée" },
+  "announce.stopped_lead": {
+    en: "The address is off the email lists and no longer kept with them. Nothing more is sent to it.",
+    fr: "L'adresse a été retirée des listes de diffusion et n'est plus conservée avec elles. Rien de plus ne lui est envoyé.",
+  },
+  "announce.stopped_one_click": { en: "The address is off the email lists.", fr: "L'adresse a été retirée des listes de diffusion." },
 } as const satisfies Record<string, { en: string; fr: string }>;

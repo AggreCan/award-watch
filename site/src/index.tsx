@@ -40,6 +40,7 @@ import { watchlistPage } from "./pages/watchlist";
 import { llmsTxt, robotsTxt, sitemapFile } from "./seo";
 import { account } from "./account/routes";
 import { admin } from "./account/admin";
+import { interestStopPage, interestStopPost } from "./account/announce";
 import { DELIVERY_CRON, runDeliveries } from "./account/deliveries";
 import { billingFormAction } from "./account/stripe";
 
@@ -169,6 +170,10 @@ app.post("/interest", async (c) => {
   return post.place === "lists" ? listsSubmit(c, post) : interestSubmit(c, post);
 });
 app.get("/interest", (c) => c.redirect("/alerts", 302));
+// The link in the accounts-open message that takes an address off the email
+// lists (account/announce.tsx): open whatever the accounts switch says.
+app.get("/interest/stop", interestStopPage);
+app.post("/interest/stop", interestStopPost);
 app.get("/data", dataPage);
 app.get("/methodology", methodologyPage);
 app.get("/cite", citePage);

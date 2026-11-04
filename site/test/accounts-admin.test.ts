@@ -194,11 +194,12 @@ const withToken = (jwt: string) => ({ "cf-access-jwt-assertion": jwt });
 const getPaths = (id: string) => [
   "/admin", "/admin?q=example", "/admin/accounts", "/admin/accounts?plan=pro&sort=address&page=2", "/admin/accounts.csv",
   `/admin/users/${id}`, `/admin/users/${id}/block`, `/admin/users/${id}/email`, `/admin/users/${id}/cancel`,
-  `/admin/users/${id}/refund`, `/admin/users/${id}/delete`, "/admin/nothing",
+  `/admin/users/${id}/refund`, `/admin/users/${id}/delete`, "/admin/nothing", "/admin/announce",
 ];
 const postPaths = (id: string) => [
   `/admin/users/${id}/grant`, `/admin/users/${id}/entitlements/${id}/revoke`, `/admin/users/${id}/sign-out`, `/admin/users/${id}/unblock`,
   `/admin/users/${id}/block`, `/admin/users/${id}/email`, `/admin/users/${id}/cancel`, `/admin/users/${id}/refund`, `/admin/users/${id}/delete`,
+  "/admin/announce",
 ];
 
 // Every console address answers exactly as an unknown address does for the

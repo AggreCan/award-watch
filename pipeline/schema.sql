@@ -783,11 +783,19 @@ CREATE INDEX IF NOT EXISTS idx_corrections_org ON corrections(organization_id, p
 -- (site/src/pages/interest.tsx) and the Email lists page, which saves one row
 -- per list ticked (site/src/pages/alerts.tsx): one row per address and saved
 -- filter. No
--- alert is sent yet. One message will announce the alerts, with an
--- unsubscribe link built from the token; the confirmation link at launch is
--- built from it too. No IP address, user agent or visitor code is kept, and
--- the address is never shown. The nightly run reads the two counts only
--- (rows, and rows not unsubscribed).
+-- alert is sent from here. One message says accounts are open (the
+-- operator's job in site/src/account/announce.tsx), with an unsubscribe link
+-- built from the token of the address's first row; notice_at marks the
+-- address's rows when it went, so the job sends it once. The link takes the
+-- address off: every row of it is marked unsubscribed and its email replaced
+-- by "removed:" and a hash under a random salt that is thrown away. No IP
+-- address, user agent or visitor code is kept, and the address is never
+-- shown. The nightly run reads the two counts only (rows, and rows not
+-- unsubscribed).
+--
+-- notice_at came after the table: on a database made before it, add it once
+-- (docs/accounts.md, The accounts-open message):
+--   ALTER TABLE interest ADD COLUMN notice_at TEXT
 CREATE TABLE IF NOT EXISTS interest (
   id INTEGER PRIMARY KEY,
   email TEXT NOT NULL,                           -- trimmed and lower-cased, at most 254 characters
@@ -804,5 +812,6 @@ CREATE TABLE IF NOT EXISTS interest (
   token TEXT NOT NULL,                           -- 32 random hex characters, for the confirmation and unsubscribe links
   confirmed_at TEXT,                             -- when the address confirmed (the confirmation ships with the alerts)
   unsubscribed_at TEXT,
+  notice_at TEXT,                                -- when the accounts-open message went to the address, on the rows it had then
   UNIQUE (email, kind, params)
 );

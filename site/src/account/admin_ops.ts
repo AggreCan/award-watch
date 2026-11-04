@@ -29,13 +29,14 @@ export function operatorEmails(env: Pick<Env, "OPERATOR_EMAILS">): Set<string> {
 
 export type OperatorEvent =
   | "operator_granted" | "operator_revoked" | "operator_cancelled" | "operator_refunded" | "operator_blocked"
-  | "operator_unblocked" | "operator_email_changed" | "operator_signed_out" | "operator_deleted";
+  | "operator_unblocked" | "operator_email_changed" | "operator_signed_out" | "operator_deleted" | "operator_announced";
 
 // The audit table of audit.ts, with its rule: a failure to write is logged
 // without detail and never fails the action that was taken. note is a short
-// fixed phrase chosen by the code.
+// fixed phrase chosen by the code. userId is null for an action on no one
+// account (the accounts-open message).
 export async function operatorAudit(
-  env: Env, userId: string, event: OperatorEvent, operatorId: string, note: string | null = null, now = new Date(),
+  env: Env, userId: string | null, event: OperatorEvent, operatorId: string, note: string | null = null, now = new Date(),
 ): Promise<void> {
   const detail = `by ${operatorId}${note ? `, ${note}` : ""}`.slice(0, 120);
   try {

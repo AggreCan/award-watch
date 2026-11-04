@@ -130,6 +130,10 @@ dollars and not flagged; `n_no_value` counts the contracts whose source
 published none. The table is rebuilt from the data date every night, so a
 quarter behind it drops out.
 
+`rec_segment_years (sid, src, fy)`. Every statement the site sends names one
+of them (`site/test/analytics.test.ts` reads each query plan, and
+`site/test/accounts-records-deliveries.test.ts` those of the deliveries).
+
 ## The nightly sync
 
 Modelled on the search sync (`docs/hosted-search.md`), with three changes for
@@ -315,7 +319,12 @@ No `RECORDS` binding, a database without the tables, `state` other than
 `ready`, or a failed statement: the view answers "Analytics are not available
 right now" with status 503, `Cache-Control: no-store` and a link back to the
 entity page; a CSV answers the same status. A failure is logged as a D1 code
-and a fixed phrase. Nothing else on the site reads the records database.
+and a fixed phrase. The one other reader is the email delivery of
+organization, buyer and segment saved searches (`docs/accounts.md`, *What
+each kind delivers*; statements in `site/src/account/records_deliveries.ts`),
+which reads the counts by source and fiscal year of one entity a search, and
+waits, sending nothing for those kinds, while the database is missing,
+loading, failing or not at the data date.
 
 A Worker newer than the database's tables (deployed before the night that
 reloads them for a new `LAYOUT`) sends statements naming columns and tables

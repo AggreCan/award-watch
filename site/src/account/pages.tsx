@@ -16,7 +16,7 @@ import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
 import { SAVED_SEARCH_MAX, allowed } from "./entitlements";
-import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch, isDeliverable } from "./searches";
+import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch } from "./searches";
 import type { Account } from "./session";
 import { CODE_MINUTES } from "./signin";
 
@@ -279,19 +279,7 @@ export function searchesView(
                   <tr>
                     <td data-label={t(lang, "account.col_search")}><a href={s.params}>{s.label}</a></td>
                     <td data-label={t(lang, "account.col_delivery")}>
-                      {!isDeliverable(s.kind) ? (
-                        // The published files cannot tell this kind's new records yet (searches.ts).
-                        <>
-                          {canDeliver ? (
-                            <div class="account-inline">
-                              <select aria-label={t(lang, "account.col_delivery")} disabled>
-                                <option value="off" selected>{t(lang, "account.deliver_off")}</option>
-                              </select>
-                            </div>
-                          ) : <span class="muted">{t(lang, "account.deliver_off")}</span>}
-                          <p class="muted small">{t(lang, "account.deliver_not_yet")}</p>
-                        </>
-                      ) : canDeliver ? (
+                      {canDeliver ? (
                         <>
                           <form method="post" action={`/account/searches/${s.id}`} class="account-inline">
                             <Csrf account={account} />

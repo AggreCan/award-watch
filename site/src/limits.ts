@@ -19,7 +19,9 @@ import { accountsEnabled } from "./account/switch";
 // link of a delivery (/account/stop, both methods) gets "stop" on the same
 // terms: every request there reads the accounts database, and its one-click
 // posts come from mail providers' servers, so the cap sits between the
-// pages' and the sign-in's. The payment service's webhook gets "hook" on the
+// pages' and the sign-in's. The accounts-open message's link off the email
+// lists (/interest/stop, both methods) is the same kind of link and gets
+// "stop" too. The payment service's webhook gets "hook" on the
 // same terms: its posts come from the service's few addresses, which retry
 // after a 429, and anything else posting there is refused at the signature.
 // The bug report post of a Pro account (/account/bug) writes a row and sends
@@ -43,7 +45,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/downloads/")) return method === "HEAD" ? "page" : "download";
   if (ANALYTICS_CSV.test(path)) return method === "HEAD" ? "page" : "download";
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
-  if (path === "/account/stop") return "stop";
+  if (path === "/account/stop" || path === "/interest/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";
   if (method === "POST" && (path === "/account/bug" || path === "/account/billing/checkout" || path === "/account/billing/portal")) return "form";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {

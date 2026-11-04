@@ -179,6 +179,23 @@ CREATE TABLE IF NOT EXISTS delivery_tokens (
   created_at TEXT NOT NULL
 );
 
+-- Where the records counts of an organization, buyer or segment search stood
+-- at its last delivery (src/account/records_deliveries.ts): the records
+-- database names no day a record was first seen, so a delivery compares the
+-- counts by source and fiscal year with these and reports the ones that
+-- rose. as_of is the records database's data date when they were read;
+-- counts is the JSON records_deliveries.ts writes (the counting rules'
+-- version, the fiscal years read, and the count and counted cents of each
+-- source and year): public figures, nothing about the reader. Written with
+-- each delivery that is sent or finds nothing new; goes with the search
+-- (the cascade, and the delete paths in routes.tsx and searches.ts).
+CREATE TABLE IF NOT EXISTS delivery_marks (
+  search_id TEXT PRIMARY KEY REFERENCES saved_searches(id) ON DELETE CASCADE,
+  as_of TEXT NOT NULL,
+  counts TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- What happened to an account, for the operator: an event name and a short
 -- detail that never holds an address, a code, a token or a key. Rows go
 -- after 90 days.

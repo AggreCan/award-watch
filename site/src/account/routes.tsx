@@ -514,10 +514,11 @@ account.get("/delete", async (c) => {
 // The user row stays, marked deleted, its email replaced by "deleted:" and
 // SHA-256 of a random salt and the address, the salt thrown away: the row
 // cannot be matched to the address, and the address can sign up afresh.
-// Sessions are revoked; saved searches (with their stop links and delivery
-// rows), keys, bug reports and sign-in requests are deleted; so are the
-// address's rows in the alerts form's table. The entitlement rows stay,
-// tied to the id alone, as the record of what was granted.
+// Sessions are revoked; saved searches (with their stop links, delivery
+// rows and records marks), keys, bug reports and sign-in requests are
+// deleted; so are the address's rows in the alerts form's table. The
+// entitlement rows stay, tied to the id alone, as the record of what was
+// granted.
 export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new Date()): Promise<void> {
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
@@ -526,6 +527,7 @@ export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new 
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, who.userId),
     db.prepare("DELETE FROM delivery_tokens WHERE search_id IN (SELECT id FROM saved_searches WHERE user_id = ?)").bind(who.userId),
     db.prepare("DELETE FROM deliveries WHERE saved_search_id IN (SELECT id FROM saved_searches WHERE user_id = ?)").bind(who.userId),
+    db.prepare("DELETE FROM delivery_marks WHERE search_id IN (SELECT id FROM saved_searches WHERE user_id = ?)").bind(who.userId),
     db.prepare("DELETE FROM saved_searches WHERE user_id = ?").bind(who.userId),
     db.prepare("DELETE FROM api_keys WHERE user_id = ?").bind(who.userId),
     db.prepare("DELETE FROM bug_reports WHERE user_id = ?").bind(who.userId),

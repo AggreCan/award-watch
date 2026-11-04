@@ -9,16 +9,25 @@
 //      SITE_URL is an https address (the messages' links are the site's);
 //   2. stats.json reads and its data date is today's UTC date, so the nightly
 //      has published today's files;
-//   3. each saved search with delivery daily or weekly, of a kind the
-//      published files can serve (DELIVERABLE_KINDS), whose owner's plan
-//      allows delivery, and that is due: not delivered for this data date,
-//      and for weekly, never delivered or delivered seven or more days ago;
-//      one that failed once for this data date waits for the next one.
+//   3. each saved search with delivery daily or weekly (DELIVERABLE_KINDS
+//      holds every kind), whose owner's plan allows delivery, and that is
+//      due: not delivered for this data date, and for weekly, never
+//      delivered or delivered seven or more days ago; one that failed once
+//      for this data date waits for the next one.
 //
-// A search's items are the records since the previous delivery's data date,
-// at most SPAN_DAYS_MAX days back (one day for a first daily delivery, seven
-// for a first weekly one). Nothing new writes an "empty" row and sends
-// nothing. Otherwise one message, in the search's language, goes through the
+// A tender or radar search's items are the records since the previous
+// delivery's data date, at most SPAN_DAYS_MAX days back (one day for a first
+// daily delivery, seven for a first weekly one), read from the published
+// files. An organization, buyer or segment search reads the records database
+// instead (records_deliveries.ts): the sources and fiscal years whose count
+// rose since the counts its previous delivery kept, plus, for a segment, the
+// segment's new tender notices from the files. Until that database is ready
+// at today's data date (no binding, a load under way, a failed statement, a
+// sync that did not finish tonight), those searches wait, unclaimed, and the
+// run's report and log line say why; the next hour reads it again.
+//
+// Nothing new writes an "empty" row and sends nothing. Otherwise one
+// message, in the search's language, goes through the
 // accounts sender, and a "sent" or "failed" row is written; "sent" and
 // "empty" move last_delivered_at to the run's time, "failed" leaves it, so
 // the next delivery covers what this one missed. At most RUN_MESSAGES_MAX
@@ -37,14 +46,18 @@ import {
   type ExpiringRow, type ExpiringWindow, type TenderRow, isExpiringWindow, loadExpiringPage, loadExpiringWindow, loadNewTenders, loadStats,
 } from "../data";
 import type { Env } from "../env";
-import type { Lang } from "../i18n";
+import { pick, segmentShort, type Lang } from "../i18n";
 import { WINDOW_DAYS, filterExpiring, readExpiringQuery } from "../pages/expiring";
 import { filterTenders, readTenderQuery } from "../pages/tenders";
-import { type Cadence, type DigestMessage, expiringDigest, siteLink, tenderDigest } from "./digests";
+import { type Cadence, type DigestMessage, expiringDigest, recordsDigest, siteLink, tenderDigest } from "./digests";
 import { allowed, planFor, type Plan } from "./entitlements";
+import {
+  type Entity, type Mark, type RecordsWait, type Rise, MARK_WRITE_SQL, entityOf, isRecordsKind, loadMark, markText, missingTable, readCounts,
+  rises,
+} from "./records_deliveries";
 import { DELIVERABLE_KINDS } from "./searches";
 import { randomHex } from "./secrets";
-import { senderFor } from "./sender";
+import { type MailMessage, senderFor } from "./sender";
 import { accountsEnabled } from "./switch";
 
 // The hourly trigger in wrangler.jsonc; any other trigger is the daily check.
@@ -73,6 +86,12 @@ export interface RunReport {
   empty: number;
   // Due searches whose owner's plan does not allow delivery.
   skipped: number;
+  // Organization, buyer and segment searches left for a later run, and why
+  // (records): the records database was not ready at today's data date, or
+  // the accounts database lacks delivery_marks ("no_marks", the schema not
+  // yet applied again); records is null when none waited.
+  waiting: number;
+  records: RecordsWait | "no_marks" | null;
 }
 
 // A file or the database could not be read: the message is the run's one log line.
@@ -220,6 +239,39 @@ export async function expiringItems(files: Files, window: ExpiringWindow, params
   });
 }
 
+// What an organization, buyer or segment search delivers this run: the
+// counts that rose since its mark (none on a first delivery, or after the
+// counting rules changed: the counts read become the mark), a segment's new
+// tender notices since `start` (read as a tender search on /tenders?segment=
+// reads them), and the counts to keep as the next mark. A wait when the
+// records database is not ready at the data date, or the accounts database
+// has no delivery_marks table; null for a search whose page no longer reads
+// as one (it is passed over, as a kind the job cannot serve was).
+export type RecordsItems = {
+  entity: Entity; name: string; rises: Rise[]; since: string; tenders: TenderRow[]; mark: Mark;
+};
+
+export async function recordsItems(
+  env: Env, files: Files, s: { id: string; kind: string; params: string }, lang: Lang, start: string, dataDate: string, clock: Clock,
+): Promise<RecordsItems | { wait: RecordsWait | "no_marks" } | null> {
+  const entity = entityOf(s.kind, s.params);
+  if (!entity) return null;
+  const read = await readCounts(env, entity, dataDate);
+  if (read.state !== "ready") return { wait: read.state };
+  let prev: Mark | null;
+  try {
+    prev = await loadMark(env, s.id);
+  } catch (e) {
+    if (missingTable(e)) return { wait: "no_marks" };
+    throw e;
+  }
+  const name = entity.kind === "segment"
+    ? `${entity.id} ${segmentShort(lang, entity.id)}`
+    : (read.name ? pick(lang, read.name.en, read.name.fr) : null) ?? entity.id;
+  const tenders = entity.kind === "segment" ? await tenderItems(files, `/tenders?segment=${entity.id}`, start, dataDate, clock) : [];
+  return { entity, name, rises: rises(prev, read.mark) ?? [], since: prev?.asOf ?? dataDate, tenders, mark: read.mark };
+}
+
 // -- writing what happened -----------------------------------------------------------------
 
 // The stop link's secret for a search, made on its first delivery; null when
@@ -237,9 +289,13 @@ async function stopSecret(env: Env, searchId: string, now: Date): Promise<string
 }
 
 // One deliveries row, and for "sent" and "empty" the search's
-// last_delivered_at. Written only while the search exists, so a search
-// deleted during the run is passed over rather than failing it.
-async function record(env: Env, searchId: string, status: "sent" | "failed" | "empty", items: number, now: Date): Promise<void> {
+// last_delivered_at and, for a records search, its new mark, in one batch.
+// Written only while the search exists, so a search deleted during the run
+// is passed over rather than failing it. A "failed" row keeps the old mark,
+// so the next delivery reports what this one did not send.
+async function record(
+  env: Env, searchId: string, status: "sent" | "failed" | "empty", items: number, now: Date, mark: Mark | null = null,
+): Promise<void> {
   const db = env.ACCOUNTS!;
   const at = now.toISOString();
   const statements = [
@@ -248,7 +304,10 @@ async function record(env: Env, searchId: string, status: "sent" | "failed" | "e
       "WHERE EXISTS (SELECT 1 FROM saved_searches WHERE id = ?1)",
     ).bind(searchId, at, items, status),
   ];
-  if (status !== "failed") statements.push(db.prepare("UPDATE saved_searches SET last_delivered_at = ? WHERE id = ?").bind(at, searchId));
+  if (status !== "failed") {
+    statements.push(db.prepare("UPDATE saved_searches SET last_delivered_at = ? WHERE id = ?").bind(at, searchId));
+    if (mark) statements.push(db.prepare(MARK_WRITE_SQL).bind(searchId, mark.asOf, markText(mark), at));
+  }
   await db.batch(statements);
 }
 
@@ -290,12 +349,20 @@ function bindingWith(mail: SendEmail, headers: Record<string, string>, refused: 
   } as SendEmail;
 }
 
-async function send(env: Env, site: string, message: DigestMessage): Promise<{ sent: boolean; code: string | null }> {
+// Also the accounts-open message's path (announce.tsx), whose requestUrl is
+// the console's own, so a local run with MAIL_SENDER=log writes to the
+// development outbox as the sign-in message does.
+export async function sendWithHeaders(
+  env: Env, requestUrl: string, message: MailMessage & { headers: Record<string, string> },
+): Promise<{ sent: boolean; code: string | null }> {
   const refused = { code: null as string | null };
-  const sender = senderFor({ ...env, MAIL: bindingWith(env.MAIL!, message.headers, refused) }, site);
+  const mail = env.MAIL ? bindingWith(env.MAIL, message.headers, refused) : undefined;
+  const sender = senderFor({ ...env, MAIL: mail }, requestUrl);
   const result = await sender.send(message).catch(() => ({ sent: false }) as const);
   return { sent: result.sent, code: refused.code };
 }
+
+const send = (env: Env, site: string, message: DigestMessage) => sendWithHeaders(env, site, message);
 
 // -- the run ---------------------------------------------------------------------------------
 
@@ -322,7 +389,7 @@ function siteOf(env: Env): string | null {
 }
 
 export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<RunReport> {
-  const report: RunReport = { outcome: "done", dataDate: null, sent: 0, failed: 0, empty: 0, skipped: 0 };
+  const report: RunReport = { outcome: "done", dataDate: null, sent: 0, failed: 0, empty: 0, skipped: 0, waiting: 0, records: null };
   if (!accountsEnabled(env)) return { ...report, outcome: "off" };
   const site = siteOf(env);
   if (!env.MAIL || !env.MAIL_FROM?.trim() || !site) return { ...report, outcome: "no_mail" };
@@ -360,14 +427,33 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
       const lang = asLang(s.lang);
       const start = spanStart(cadence, s.last_delivered_at, dataDate);
       const win = s.kind === "expiring" ? /^\/expiring\/(3m|6m|12m)(?:\?|$)/.exec(s.params)?.[1] : null;
-      let items: TenderRow[] | ExpiringRow[];
+      let items: TenderRow[] | ExpiringRow[] = [];
+      let found: RecordsItems | null = null;
       if (s.kind === "tenders") items = await tenderItems(files, s.params, start, dataDate, clock);
       else if (win && isExpiringWindow(win)) items = await expiringItems(files, win, s.params, start, dataDate);
-      else continue;
-      if (items.length === 0) {
+      else if (isRecordsKind(s.kind)) {
+        // Once the records database (or the marks table) is found wanting, the
+        // run's other records searches wait without asking it again.
+        if (report.records) {
+          report.waiting++;
+          continue;
+        }
+        const got = await recordsItems(env, files, s, lang, start, dataDate, clock);
+        if (!got) continue;
+        if ("wait" in got) {
+          report.records = got.wait;
+          report.waiting++;
+          continue;
+        }
+        found = got;
+      } else continue;
+      const more = found ? found.rises.reduce((n, r) => n + r.more, 0) : 0;
+      const total = found ? more + found.tenders.length : items.length;
+      const mark = found?.mark ?? null;
+      if (total === 0) {
         if (!(await claim(env, s.id, dataDate, now))) continue;
         held = { id: s.id, before: s.last_delivered_at };
-        await record(env, s.id, "empty", 0, now);
+        await record(env, s.id, "empty", 0, now, mark);
         held = null;
         report.empty++;
         continue;
@@ -387,18 +473,29 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         continue;
       }
       const stopUrl = siteLink(site, `/account/stop?s=${s.id}&t=${secret}`, lang);
-      const base = { lang, to: s.email, site, label: s.label, params: s.params, cadence, dataDate, stopUrl, total: items.length };
-      const message = s.kind === "tenders"
-        ? tenderDigest({ ...base, rows: (items as TenderRow[]).slice(0, ROWS_MAX), since: start })
-        : expiringDigest({
+      const base = { lang, to: s.email, site, label: s.label, params: s.params, cadence, dataDate, stopUrl, total };
+      let message: DigestMessage;
+      if (found) {
+        // At most ROWS_MAX rows in all: the counts (40 at most) first, then the
+        // segment's notices, whose rest a line links.
+        const rows = found.rises.slice(0, ROWS_MAX);
+        message = recordsDigest({
+          ...base, kind: found.entity.kind, name: found.name, rows, more, since: found.since,
+          tenders: found.tenders.slice(0, ROWS_MAX - rows.length), tenderTotal: found.tenders.length, tenderSince: start,
+        });
+      } else if (s.kind === "tenders") {
+        message = tenderDigest({ ...base, rows: (items as TenderRow[]).slice(0, ROWS_MAX), since: start });
+      } else {
+        message = expiringDigest({
           ...base, rows: (items as ExpiringRow[]).slice(0, ROWS_MAX), months: WINDOW_MONTHS[win as ExpiringWindow],
           query: readExpiringQuery(new URL(s.params, BASE)),
         });
+      }
       const result = await send(env, site, message);
       if (result.sent) {
         // Sent: the claim stands, whatever happens to the row that records it.
         held = null;
-        await record(env, s.id, "sent", items.length, now);
+        await record(env, s.id, "sent", total, now, mark);
         report.sent++;
       } else if (result.code && STOP_CODES.has(result.code)) {
         await release(env, s.id, s.last_delivered_at, now);
@@ -409,7 +506,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
       } else {
         await release(env, s.id, s.last_delivered_at, now);
         held = null;
-        await record(env, s.id, "failed", items.length, now);
+        await record(env, s.id, "failed", total, now);
         report.failed++;
       }
     }
@@ -423,5 +520,14 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   return report;
 }
 
+const WAIT_WHY: Record<RecordsWait | "no_marks", string> = {
+  absent: "the records database is not bound",
+  loading: "the records database is loading",
+  failed: "the records database could not be read",
+  stale: "the records database is not at today's data date",
+  no_marks: "the accounts database has no delivery_marks table (apply accounts_schema.sql)",
+};
+
 const counts = (r: RunReport) =>
-  `${r.sent} sent, ${r.failed} failed, ${r.empty} with nothing new, ${r.skipped} not on a plan with delivery`;
+  `${r.sent} sent, ${r.failed} failed, ${r.empty} with nothing new, ${r.skipped} not on a plan with delivery` +
+  (r.records ? `, ${r.waiting} organization, buyer or segment searches waiting: ${WAIT_WHY[r.records]}` : "");

@@ -187,10 +187,15 @@ describe("what is due", () => {
       deletedUser: await addSaved(g, "/tenders"),
       organization: await addSaved(p, "/organizations/org-a000000001", { kind: "organization" }),
     };
-    const report = await runDeliveries(jobEnv(mail.binding, files));
+    // No records database here: the organization search waits, unclaimed
+    // (accounts-records-deliveries.test.ts delivers one).
+    const report = await runDeliveries(jobEnv(mail.binding, files, { RECORDS: undefined }));
     expect(report.outcome).toBe("done");
     expect(report.dataDate).toBe(DAY);
     expect(report.skipped).toBeGreaterThanOrEqual(1);
+    expect(report.records).toBe("absent");
+    expect(report.waiting).toBeGreaterThanOrEqual(1);
+    expect((await searchRow(s.organization))?.last_delivered_at).toBeNull();
     expect((await deliveriesOf(s.dailyNew)).map((d) => d.status)).toEqual(["sent"]);
     expect((await deliveriesOf(s.dailyYesterday)).map((d) => d.status)).toEqual(["sent"]);
     expect((await deliveriesOf(s.weeklyDue)).map((d) => d.status)).toEqual(["sent"]);
@@ -702,7 +707,7 @@ describe("the stop link", () => {
 // -- the searches page and the privacy page -------------------------------------------------------
 
 describe("the searches page", () => {
-  it("shows each search's last delivery beside its select, and no select for a kind not delivered yet", async () => {
+  it("shows each search's last delivery beside its select, every kind with one", async () => {
     const email = newEmail("page");
     const cookie = await signIn(email);
     const id = await userId(email);
@@ -711,23 +716,28 @@ describe("the searches page", () => {
     const emptyOne = await addSaved(id, "/expiring/3m", { deliver: "weekly" });
     await addSaved(id, "/tenders?province=ON", { deliver: "daily" });
     const org = await addSaved(id, "/organizations/org-a000000001", { kind: "organization", deliver: "off" });
+    const buyer = await addSaved(id, "/buyers/dnd-mdn", { kind: "buyer", deliver: "off", label: "New award notices and contracts from National Defence" });
+    const segment = await addSaved(id, "/segments/43", { kind: "segment", deliver: "off", label: "New tender notices and award notices in segment 43" });
     await ACCOUNTS.prepare("INSERT INTO deliveries (saved_search_id, sent_at, items, status) VALUES (?, '2026-10-30T15:01:00.000Z', 3, 'failed'), (?, '2026-10-31T15:02:00.000Z', 12, 'sent'), (?, '2026-10-31T15:02:00.000Z', 0, 'empty')")
       .bind(sentOne, sentOne, emptyOne).run();
     const html = decode(await (await get("/account/searches", { cookie })).text());
-    expect(html).toContain("On the Pro plan, tender lists and contracts ending can be delivered by email, each day or each week.");
+    expect(html).toContain("On the Pro plan, each one can be delivered by email, each day or each week.");
     expect(html).toContain('<p class="muted small">Last sent 2026-10-31 15:02 UTC, 12 items.</p>');
     expect(html).toContain('<p class="muted small">Checked 2026-10-31 15:02 UTC, nothing new.</p>');
     expect(html).toContain('<p class="muted small">Not delivered yet.</p>');
-    expect(html).toContain('<p class="muted small">Email delivery is not offered for this kind of search yet.</p>');
-    expect(html).toContain("disabled");
-    expect(html).not.toContain(`action="/account/searches/${org}"`);
-    // A crafted post cannot turn it on either.
-    const res = await post(`/account/searches/${org}`, { csrf: await csrf(cookie, "/account/searches"), deliver: "daily" }, { cookie });
-    expect(res.headers.get("location")).toBe("/account/searches");
-    expect((await searchRow(org))?.deliver).toBe("off");
+    expect(html).not.toContain("not offered for this kind");
+    expect(html).not.toContain("disabled");
+    // An organization, a buyer and a segment search turn on like any other.
+    const token = await csrf(cookie, "/account/searches");
+    for (const search of [org, buyer, segment]) {
+      expect(html).toContain(`action="/account/searches/${search}"`);
+      const res = await post(`/account/searches/${search}`, { csrf: token, deliver: "weekly" }, { cookie });
+      expect(res.headers.get("location")).toBe("/account/searches?m=changed");
+      expect((await searchRow(search))?.deliver).toBe("weekly");
+    }
     const french = nbsp(decode(await (await get("/account/searches?lang=fr", { cookie })).text()));
     expect(french).toContain("Dernier envoi le 2026-10-31 15:02 UTC, 12 éléments.");
-    expect(french).toContain("L’envoi par courriel n’est pas encore offert pour ce type de recherche.");
+    expect(french).toContain("Avec le forfait Pro, chacun peut être envoyé par courriel, chaque jour ou chaque semaine.");
   });
 });
 
