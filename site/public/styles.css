@@ -35,24 +35,27 @@
 }
 
 /* -- tokens ------------------------------------------------------------------
-   Light by default. Text contrast on the page, panel and selected-row grounds:
-   ink 17.9 to 16.3, secondary 10.4 to 9.5, muted 5.4 to 5.0, amber 5.0 to
-   4.6; white on the amber chip 5.0. Emerald (5.3 to 4.8) carries no text. */
+   Light by default: an off-white slate page under white panels (operator,
+   2026-11-04: the near-white page read as flat), the same family as the dark
+   scheme. Text contrast on the page, panel and selected-row grounds: ink 17.9
+   to 15.9, secondary 10.4 to 9.2, muted 5.9 to 5.1 (4.85 on the head band),
+   amber 5.0 to 4.5; white on the amber chip 5.0. Emerald (5.3 to 4.7) carries
+   no text. */
 :root {
-  --page: #f8fafc;
+  --page: #eef2f6;
   --panel: #ffffff;
-  --band: #f8fafc;
+  --band: #f3f6f9;
   /* The head band of a panel, a document section and the contents box: a
      shade clearly off the white panel, under ink labels (15.9:1) and the
      muted counts beside them (4.8:1). */
-  --head: #eef2f7;
-  --border: #e2e8f0;
-  --border-2: #cbd5e1;
+  --head: #e4eaf1;
+  --border: #d8dfe8;
+  --border-2: #bfcad7;
   --ink: #0f172a;
   --ink-2: #334155;
-  --muted: #5b6b80;
-  --hover: #f8fafc;
-  --sel: #f1f5f9;
+  --muted: #55667b;
+  --hover: #f4f7fa;
+  --sel: #e9eef4;
   --accent: #0f7b4f;
   --amber: #b45309;
   --on-amber: #ffffff;
