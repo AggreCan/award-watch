@@ -20,7 +20,7 @@ def rows(path):
 def test_the_downloads_and_their_sums(conn, tmp_path):
     seed(conn)
     out = tmp_path / "csv"
-    counts = export.run(conn, out)
+    counts = export.run(conn, out, today=TODAY)
     names = sorted(p.name for p in out.iterdir())
     assert names == ["SHA256SUMS", "awards-2024.csv", "awards-2025.csv", "awards-2026.csv", "buyers.csv",
                      "expiring-12m.csv", "expiring-3m.csv", "history-2026.csv", "open-tenders.csv", "organizations.csv"]

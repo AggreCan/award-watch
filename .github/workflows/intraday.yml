@@ -8,7 +8,10 @@
 # its gate only while a pro entitlement is live in the accounts database
 # (D1 awardwatch-accounts). The gate counts them with one request to the D1
 # REST API, before the checkout and the installs, so a run for nobody costs
-# seconds. No live plan, or a count that cannot be read, ends the run there:
+# seconds. The schedule itself is enabled or disabled by the nightly's step
+# "Schedule the same-day refresh only while a paid plan is live" from the
+# same count, so with no plan there are no runs at all; this gate stays for
+# the cuts after a plan ends. No live plan, or a count that cannot be read, ends the run there:
 # green, one line in the log, no run row. There is nothing to refresh for
 # nobody, and while a plan is live the site's daily check names a refresh
 # that has stopped going through. A manual run with the input "force" set

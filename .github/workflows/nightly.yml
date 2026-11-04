@@ -131,6 +131,8 @@ on:
 permissions:
   contents: write
   issues: write
+  # To enable or disable the same-day refresh's schedule (intraday.yml).
+  actions: write
 
 # Never let two runs overlap, even if one is delayed past the next schedule.
 # A retry queued behind a long run waits for it, then its gate reads the
@@ -1083,6 +1085,35 @@ jobs:
       # time, so nothing has to be set up by hand. PYTHONPATH lets the helper
       # run even if the pipeline install failed. The run's notices are printed
       # in the step's log and never counted: they neither fail the step nor
+      # The same-day refresh (intraday.yml) is worth running only while a
+      # paid plan is live, and a scheduled workflow fires whatever its gate
+      # decides, so the schedule itself is switched here: enabled when the
+      # accounts database holds a live Pro row, disabled when it holds none
+      # (the gate inside intraday.yml stays, for the first cuts after a plan
+      # ends). A read that fails leaves the schedule as it is. A plan bought
+      # during the day waits for this run to switch the schedule on.
+      - name: Schedule the same-day refresh only while a paid plan is live
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACCOUNTS_DATABASE_ID: c5e21d6e-fe3c-4a3a-8d82-96e809e273b1
+          LIVE_PRO_SQL: "SELECT COUNT(*) AS n FROM entitlements WHERE plan = 'pro' AND revoked_at IS NULL AND starts_at <= ?1 AND (ends_at IS NULL OR ends_at > ?1)"
+        run: |
+          at=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+          body=$(jq -cn --arg sql "$LIVE_PRO_SQL" --arg at "$at" '{sql: $sql, params: [$at]}')
+          code=$(curl -s -o "$RUNNER_TEMP/pro.json" -w "%{http_code}" --max-time 30 --retry 2 -X POST             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database/$ACCOUNTS_DATABASE_ID/query"             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" --data "$body") || code="none"
+          n=$(jq -r 'if .success == true then (.result[0].results[0].n | numbers | tostring) else empty end' "$RUNNER_TEMP/pro.json" 2>/dev/null || true)
+          if [ "$code" != "200" ] || ! [[ "$n" =~ ^[0-9]+$ ]]; then
+            echo "The count of live paid plans could not be read (HTTP $code); the same-day schedule stays as it is."
+          elif [ "$n" = "0" ]; then
+            echo "No paid plan is live: the same-day refresh's schedule is disabled."
+            gh workflow disable intraday.yml
+          else
+            echo "$n paid plan(s) live: the same-day refresh's schedule is enabled."
+            gh workflow enable intraday.yml
+          fi
+
       # open the issue.
       - name: Items needing attention
         if: ${{ always() }}

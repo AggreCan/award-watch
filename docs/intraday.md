@@ -106,6 +106,15 @@ shell:
 gh workflow run intraday.yml -f force=true
 ```
 
+The schedule itself is switched too. A scheduled workflow fires whatever its
+gate decides, so the nightly's step "Schedule the same-day refresh only while
+a paid plan is live" counts the live paid plans the same way and enables the
+workflow when there is at least one, or disables it when there is none; the
+gate inside each run stays, for the cuts after a plan ends. A plan bought
+during the day waits for that night's run to switch the schedule on, so its
+same-day notices start the next business day. A manual run (the `force`
+input) works whether the schedule is enabled or not.
+
 ## What a run does
 
 0. Counts the live paid plans and stops, green and with no run row, when

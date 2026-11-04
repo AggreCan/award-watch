@@ -7,7 +7,7 @@ import re
 from datetime import date
 
 from awardwatch_pipeline import export
-from export_seed import seed
+from export_seed import TODAY, seed
 
 
 def read(path):
@@ -33,7 +33,7 @@ def test_a_list_field_is_its_values_joined_by_a_semicolon(conn, tmp_path):
     seed(conn)
     conn.execute("UPDATE tenders SET provinces = '[\"SK\", \"MB\"]', category = '[\"SRV\"]' WHERE reference = 'cb-200-2'")
     out = tmp_path / "csv"
-    export.export_csv(conn, out)
+    export.export_csv(conn, out, today=TODAY)
     tender = next(r for r in read(out / "open-tenders.csv") if r["reference"] == "cb-200-2")
     assert (tender["provinces"], tender["category"]) == ("SK; MB", "SRV")
     radar = next(r for r in read(out / "expiring-12m.csv") if r["reference"] == "AW-1")
