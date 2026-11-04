@@ -24,8 +24,10 @@ pages; a D1 database of its own answers the search field on every page, which
 finds an organization by any spelling on its records or its business number,
 and a buyer by name or acronym (`docs/hosted-search.md`), and holds the day's
 new tender notices between two nightly runs for the paid view
-(`docs/intraday.md`); another holds only what visitors submit; object storage
-holds the downloads.
+(`docs/intraday.md`); another holds the records themselves, reduced to
+figures, for the analytics views of buyers, organizations and segments
+(`docs/analytics.md`); another holds only what visitors submit; object
+storage holds the downloads.
 
 Accounts (sign-in by an emailed code, saved searches, API keys) are built but
 not yet open; the switch `ACCOUNTS_ENABLED` keeps them off (`docs/accounts.md`).

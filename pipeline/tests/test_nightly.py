@@ -393,7 +393,7 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
     db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
-    assert set(status) == {"run_at", "stages", "steps", "search_sync", "intraday_lookup", "intraday_prune",
+    assert set(status) == {"run_at", "stages", "steps", "search_sync", "records_sync", "intraday_lookup", "intraday_prune",
                            "intraday_lookup_bytes",
                            "views_rollup", "search_console", "views_report", "indexnow", "interest", "restore",
                            "smoke", "smoke_detail", "version_before", "rollback", "deploy_rolled_back", "checks",
@@ -772,7 +772,9 @@ def test_the_workflow_syncs_the_search_database_before_the_deploy_and_never_hold
     text = WORKFLOW.read_text(encoding="utf-8")
     names = [line.strip()[len("- name: "):] for line in text.splitlines() if line.strip().startswith("- name: ")]
     at = names.index("Sync the search database")
-    assert names[at - 1] == "Check the database and the export" and names[at + 1] == "Bundle the static data for the site"
+    # The records database's sync follows it, in the same shape (test_records_db.py).
+    assert names[at - 1] == "Check the database and the export" and names[at + 1] == "Sync the records database"
+    assert names[at + 2] == "Bundle the static data for the site"
     assert at < names.index("Deploy the Worker with the new data as assets") < names.index("Save the database to R2")
     sync = step(text, "Sync the search database")
     assert "id: search" in sync and "continue-on-error: true" in sync and "timeout-minutes: 60" in sync

@@ -25,8 +25,14 @@ import { accountsEnabled } from "./account/switch";
 // The bug report post of a Pro account (/account/bug) writes a row and sends
 // a message, so it counts with the forms, on the same terms; so do the two
 // billing posts (checkout and portal), each of which opens a session with
-// the payment service, which no reader does five times a minute.
+// the payment service, which no reader does five times a minute. The CSV
+// files of the analytics views are downloads: each reads the records
+// database, so a script asking for every table of every buyer meets the
+// download cap rather than the pages'.
 export type Bucket = "page" | "api" | "download" | "form" | "feed" | "auth" | "stop" | "hook";
+
+// A table of an analytics view as CSV (pages/analytics.tsx, analyticsCsv).
+export const ANALYTICS_CSV = /^\/(?:buyers|organizations|segments)\/[^/]+\/analytics\/[a-z]+\.csv$/;
 
 // A HEAD request for a download (a link checker, a client asking a file's
 // size before fetching it) moves no file, so it is not counted against the
@@ -35,6 +41,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/data/feeds/")) return "feed";
   if (path.startsWith("/api/")) return "api";
   if (path.startsWith("/downloads/")) return method === "HEAD" ? "page" : "download";
+  if (ANALYTICS_CSV.test(path)) return method === "HEAD" ? "page" : "download";
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
   if (path === "/account/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";

@@ -13,6 +13,7 @@ import { accountsEnabled } from "./account/switch";
 import { runWatchdog } from "./watchdog";
 import { langFrom, t, tj } from "./i18n";
 import { Layout, PageHead, page } from "./layout";
+import { analyticsCsv, buyerAnalytics, organizationAnalytics, segmentAnalytics } from "./pages/analytics";
 import { awardsPage, awardsYearPage } from "./pages/awards";
 import { buyerPage, buyersIndex } from "./pages/buyers";
 import { segmentPage, segmentsIndex } from "./pages/segments";
@@ -120,13 +121,22 @@ app.get("/organizations/directory", (c) => c.redirect("/organizations", 301));
 app.get("/organizations/directory/:code", directoryPage);
 app.get("/organizations/directory/:code/:page", directoryPage);
 app.get("/organizations/:id", organizationPage);
+// The analytics views (pages/analytics.tsx, docs/analytics.md) and the CSV
+// file of each of their tables: the site's 404 while the accounts switch is
+// off; with it on, in full for Pro and the first chart for anyone else.
+app.get("/organizations/:id/analytics", organizationAnalytics);
+app.get("/organizations/:id/analytics/:table{[a-z]+\\.csv}", (c) => analyticsCsv(c, "organization"));
 // A browser only: a plain HTTP client gets a 403 naming the profile (forms.tsx).
 app.get("/organizations/:id/respond", respondPage);
 app.post("/organizations/:id/respond", respondSubmit);
 app.get("/buyers", buyersIndex);
 app.get("/buyers/:id", buyerPage);
+app.get("/buyers/:id/analytics", buyerAnalytics);
+app.get("/buyers/:id/analytics/:table{[a-z]+\\.csv}", (c) => analyticsCsv(c, "buyer"));
 app.get("/segments", segmentsIndex);
 app.get("/segments/:nn", segmentPage);
+app.get("/segments/:nn/analytics", segmentAnalytics);
+app.get("/segments/:nn/analytics/:table{[a-z]+\\.csv}", (c) => analyticsCsv(c, "segment"));
 // The UNSPSC segment pages were /categories until "category" was kept for
 // the CanadaBuys field alone; old links move for good, the query kept.
 app.get("/categories", (c) => movedTo(c, "/segments"));

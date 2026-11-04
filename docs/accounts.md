@@ -25,8 +25,9 @@ the schema is `site/accounts_schema.sql`; the tests are
 - **Plans.** Each account is on a plan, Free or Pro, computed from the
   entitlements table. The plan sets how many saved searches the account
   keeps and whether delivery, API keys, filtered exports, same-day tender
-  notices and the full 6- and 12-month windows of contracts ending
-  (`radar_depth`) are open to it. A page learns the request's plan with
+  notices, the full 6- and 12-month windows of contracts ending
+  (`radar_depth`) and the analytics views in full (`analytics`,
+  `docs/analytics.md`) are open to it. A page learns the request's plan with
   `planOfRequest(c)` (`site/src/account/session.ts`) and checks a feature
   with `allowed({ plan }, feature)` (`site/src/account/entitlements.ts`).
 - **Bug reports.** On the Pro plan, a form under the account stores a
@@ -147,6 +148,17 @@ link) and the feeds (which carry the 3-month window only) stay free.
 `wrangler.jsonc` runs the Worker first for those two folders and the
 12-month CSV so it can refuse them; while the switch is off it passes them
 on as they are. `site/test/radar-gate.test.ts` proves both states.
+
+The analytics views (`/buyers/<id>/analytics`, `/organizations/<id>/analytics`,
+`/segments/<nn>/analytics`, feature `analytics`, `site/src/plan.ts`
+`analyticsAccess`) exist only while the switch is on: off, each address and
+each of their CSV files is the site's 404 and no page links them. On, the
+buyer, profile and segment pages link them with the word Pro marked, and a
+request without the feature sees each view's first chart for the latest
+three fiscal years and a line on each other chart, with a link to
+`/account/billing` (signed out, `/account/sign-in`); the CSV files answer
+404 to it. `site/test/analytics.test.ts` proves both states
+(`docs/analytics.md`).
 
 ## Sending mail
 

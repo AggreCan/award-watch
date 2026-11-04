@@ -750,6 +750,8 @@ def attention_items(status: Any) -> list[str]:
              if isinstance(x, dict) and not x.get("ok")]
     if status.get("search_sync") == "failed":
         items.append("Search database sync: failed (sent again next run)")
+    if status.get("records_sync") == "failed":
+        items.append("Records database sync: failed (sent again next run)")
     if status.get("views_rollup") == "failed":
         items.append("Audience roll-up: failed (caught up next run)")
     if status.get("search_console") == "failed":

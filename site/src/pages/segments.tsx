@@ -16,8 +16,9 @@ import { fmtInt, segmentLabel, t, tn } from "../i18n";
 import { clockOf, closingPassed, tenderState } from "../closing";
 import { Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { pageSeo, segmentSeo } from "../seo";
+import { accountsEnabled } from "../account/switch";
 import { InterestPanel, interestFilter } from "./interest";
-import { Count, CountdownScript, OrgTotalTable, TenderTable, money } from "./shared";
+import { AnalyticsLink, Count, CountdownScript, OrgTotalTable, TenderTable, money } from "./shared";
 
 // How many open notices a segment page lists, the soonest to close; the
 // tender list filtered to the segment has them all.
@@ -120,6 +121,7 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
         actions={<>
           {ending > 0 ? <a href={`/expiring/12m?segment=${code}`} class="btn">{t(lang, "segment.expiring", { n: n(ending) })}</a> : null}
           <a href={`/data/feeds/segment/${code}/tenders.xml`} class="btn">{t(lang, "feeds.button_tenders")}</a>
+          <AnalyticsLink lang={lang} href={`/segments/${code}/analytics`} on={accountsEnabled(c.env)} />
         </>} />
 
       <Panel title={t(lang, "segment.open")} count={n(seg.open_tenders.length)}

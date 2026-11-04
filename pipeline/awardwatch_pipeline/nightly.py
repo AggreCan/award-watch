@@ -145,6 +145,10 @@ NOTICE_PART_MAX = 1200
 # The notice for a night the alert sign-ups were not counted.
 INTEREST_NOTICE = "the alert sign-ups were not counted tonight (the D1 query failed or did not run); the next run counts again"
 
+# The notice for a night the records database was not synced because it does
+# not exist yet: wrangler.jsonc still holds the placeholder id (docs/analytics.md).
+RECORDS_NOTICE = "the records database is not created yet, so the analytics views answer unavailable; docs/analytics.md has the steps"
+
 # The notices for a night one of the same-day refresh's steps failed (docs/intraday.md).
 INTRADAY_NOTICES = {
     "intraday_lookup": "the buyer lookup for the same-day refresh was not saved; the intraday job keeps the one R2 has",
@@ -576,7 +580,7 @@ def verify(db: Path, static: Path, started: float | None, before: dict[str, int]
 
 def run_status(
     db: Path, started: str | None, verify_result: dict[str, Any] | None, steps: dict[str, str],
-    now: datetime | None = None, *, search: str | None = None, views: str | None = None,
+    now: datetime | None = None, *, search: str | None = None, records: str | None = None, views: str | None = None,
     restore_info: dict[str, Any] | None = None, smoke: dict[str, Any] | None = None,
     rollback: str | None = None, version_before: str | None = None, checks: dict[str, Any] | None = None,
     indexnow_outcome: str | None = None, search_console: str | None = None, views_report: str | None = None,
@@ -621,7 +625,12 @@ def run_status(
     check of the live site after the deploy), rollback and deploy_rolled_back
     (what was done about a broken deploy) and checks (the monthly expiry
     checks). A broken deploy marks the run not ok whether or not it was
-    rolled back, so a retry trigger the same day deploys again."""
+    rolled back, so a retry trigger the same day deploys again.
+
+    records is the records database sync's outcome (records_db.py: "synced",
+    "nothing to send", "failed", or "no database" while wrangler.jsonc holds
+    the placeholder id); "not run" when the step did not run. A failure is an
+    item needing attention, as for the search sync; "no database" a notice."""
     stages: list[dict[str, Any]] = []
     notices: list[dict[str, str]] = []
     for name, result in steps.items():
@@ -673,6 +682,8 @@ def run_status(
         # The site's daily check reads this field; the workflow's "Sync the
         # search database" step writes it (search_db.OUTCOME).
         "search_sync": search or "not run",
+        # The records database's sync (records_db.OUTCOME), the analytics views' data.
+        "records_sync": records or "not run",
         **intraday,
         # The bytes of the lookup saved tonight, beside intraday_lookup (the
         # daily check's bound reads it); null when none was saved.
@@ -694,7 +705,8 @@ def run_status(
         # daily check's email, never an item needing attention, and the run
         # stays ok.
         "notices": notices + ([{"source": "interest", "detail": INTEREST_NOTICE}] if interest_tried and not interest else [])
-        + [{"source": name, "detail": text} for name, text in INTRADAY_NOTICES.items() if intraday[name] == "failed"],
+        + [{"source": name, "detail": text} for name, text in INTRADAY_NOTICES.items() if intraday[name] == "failed"]
+        + ([{"source": "records_sync", "detail": RECORDS_NOTICE}] if records == "no database" else []),
         "ok": all(s["ok"] for s in stages) and verdict != "broken",
     }
 
@@ -930,6 +942,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--started-file", default=None)
     s.add_argument("--verify", default=None)
     s.add_argument("--search-outcome", default=None, help="the search database sync's outcome file")
+    s.add_argument("--records-outcome", default=None, help="the records database sync's outcome file")
     s.add_argument("--intraday-lookup-outcome", default=None, help="the same-day refresh lookup's outcome file")
     s.add_argument("--intraday-lookup-bytes", default=None, help="the file holding the saved lookup's size in bytes")
     s.add_argument("--intraday-prune-outcome", default=None, help="the same-day refresh prune's outcome file")
@@ -1126,7 +1139,8 @@ def _status(args: argparse.Namespace) -> int:
         verify_result = {"problems": ["the check results could not be read"]}
     steps = dict(item.split("=", 1) for item in args.step if "=" in item)
     status = run_status(Path(args.db), _read(args.started_file), verify_result, steps,
-                        search=_read(args.search_outcome), views=_read(args.views_outcome),
+                        search=_read(args.search_outcome), records=_read(args.records_outcome),
+                        views=_read(args.views_outcome),
                         restore_info=_read_json(args.restore), smoke=_read_json(args.smoke),
                         rollback=_read(args.rollback_outcome), version_before=_read(args.version_before),
                         checks=_read_json(args.checks), indexnow_outcome=_read(args.indexnow_outcome),

@@ -138,6 +138,7 @@ export function billingView(
           <li>{t(lang, "billing.pro_delivery")}</li>
           <li>{t(lang, "billing.pro_intraday")}</li>
           <li>{t(lang, "billing.pro_radar")}</li>
+          <li>{t(lang, "billing.pro_analytics")}</li>
           <li>{t(lang, "billing.pro_bugs")}</li>
         </ul>
       </Panel>

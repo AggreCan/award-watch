@@ -424,6 +424,11 @@ export const ACCOUNT_STRINGS = {
     en: "The 6-month and 12-month lists of contracts ending, with their CSV file; the Free plan keeps the 3-month list.",
     fr: "Les listes des contrats prenant fin d'ici 6 et 12 mois, avec leur fichier CSV; le forfait Gratuit conserve la liste à 3 mois.",
   },
+  // The analytics views (pages/analytics.tsx, plan.ts allowsAnalytics).
+  "billing.pro_analytics": {
+    en: "Analytics of each buyer, organization and segment over up to ten fiscal years, with a CSV file of each table; the Free plan sees each view's first chart for three fiscal years.",
+    fr: "Les analyses de chaque acheteur, organisation et segment sur jusqu'à dix exercices, avec un fichier CSV de chaque tableau; le forfait Gratuit voit le premier graphique de chaque vue pour trois exercices.",
+  },
   // The bug report form (bugs.tsx); the line keeps the page's no-reply promise.
   "billing.pro_bugs": {
     en: "A form under the account to report a bug. No reply is promised; fixes show up on the site.",

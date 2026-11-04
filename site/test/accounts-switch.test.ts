@@ -119,8 +119,12 @@ describe("with the switch off", () => {
 });
 
 describe("with the switch on", () => {
-  it("opens the routes and adds one item to the rail, and nothing else on a public page", async () => {
+  // A page an analytics view charts also gains the link to it, marked Pro
+  // (nothing a free reader is offered is hidden; operator's ruling of
+  // 2026-11-03, docs/analytics.md); nothing else changes.
+  it("opens the routes and adds one item to the rail, and on a profile the analytics link, and nothing else on a public page", async () => {
     expect((await get("/account/sign-in")).status).toBe(200);
+    const analytics = '<a href="/organizations/org-a000000001/analytics" class="btn" rel="nofollow">Analytics<span class="pro-tag">Pro</span></a>';
     for (const path of ["/", "/tenders", "/organizations/org-a000000001", "/nothing-here"]) {
       const on = await render(path, onEnv());
       const off = await render(path, testEnv());
@@ -128,7 +132,9 @@ describe("with the switch on", () => {
       expect(on.cache, path).toBe(off.cache);
       const item = '<li><a class="rail-item rail-account" href="/account/sign-in"><span class="rail-label">Sign in</span></a></li>';
       expect(on.body, path).toContain(item);
-      expect(on.body.replace(item, ""), path).toBe(off.body);
+      expect(on.body.includes(analytics), path).toBe(path.startsWith("/organizations/"));
+      expect(off.body, path).not.toContain("/analytics");
+      expect(on.body.replace(item, "").replace(analytics, ""), path).toBe(off.body);
     }
   });
 

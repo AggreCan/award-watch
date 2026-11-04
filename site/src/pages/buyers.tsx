@@ -13,12 +13,13 @@ import type { AppEnv } from "../env";
 import { fmtInt, fmtMoney, fmtMoneyShort, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { buyerSeo, pageSeo } from "../seo";
+import { accountsEnabled } from "../account/switch";
 import { newestFirst } from "./awards";
 import { ExpiringSection } from "./expiring";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
 import {
-  AwardTable, BUYER_SOURCE_RESTS, Count, OrgTotalTable, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, money,
+  AnalyticsLink, AwardTable, BUYER_SOURCE_RESTS, Count, OrgTotalTable, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, money,
   shareText, sourceCellClass, sourceColumns,
 } from "./shared";
 
@@ -176,6 +177,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
             const f = feed(event);
             return f ? <a href={`/data/${f.path}`} class="btn">{t(lang, key)}</a> : null;
           })}
+          <AnalyticsLink lang={lang} href={`/buyers/${b.buyer.id}/analytics`} on={accountsEnabled(c.env)} />
         </>}>
         {span ? <p class="page-note">{t(lang, "buyer.seen", { first: String(span.first), last: String(span.last) })}</p> : null}
       </PageHead>

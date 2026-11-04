@@ -18,10 +18,11 @@ import {
 } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { organizationSeo } from "../seo";
+import { accountsEnabled } from "../account/switch";
 import { ExpiringSection, MoreInWindow } from "./expiring";
 import { InterestPanel, interestFilter } from "./interest";
 import {
-  AwardTable, BuyerLink, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, contractSearchUrl, datasetUrl,
+  AnalyticsLink, AwardTable, BuyerLink, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, contractSearchUrl, datasetUrl,
   grantUrl, lobbyUrl, money, orList, shareText,
 } from "./shared";
 import { WATCH_MAX } from "./watchlist";
@@ -409,6 +410,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           </button>
           <a href={`/organizations/${o.id}/respond`} class="btn">{t(lang, "org.respond")}</a>
           <a href={`/corrections?organization=${o.id}`} class="btn">{t(lang, "org.correct")}</a>
+          <AnalyticsLink lang={lang} href={`/organizations/${o.id}/analytics`} on={accountsEnabled(c.env)} />
         </>}>
         {otherNames.length ? <p class="page-note">{t(lang, "org.also_recorded")} {otherNames.join(" · ")}</p> : null}
         <p class="page-note">

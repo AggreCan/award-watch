@@ -622,6 +622,36 @@ CREATE TABLE IF NOT EXISTS search_ledger (
   hash TEXT NOT NULL                             -- search_db.row_hash
 );
 
+-- The records database (D1 awardwatch-records, pipeline/records_schema.sql,
+-- records_db.py, docs/analytics.md). The ledger holds the table, key and
+-- hash of every row as last confirmed in D1, integers only, since it holds
+-- about three million rows; nothing but records-synced writes it.
+-- records_staged holds tonight's differences between records-sync and
+-- records-synced (h NULL: a delete), which would make the manifest a hundred
+-- megabytes on a first load; records-synced empties it. records_sync logs
+-- each sync recorded, as search_sync does.
+CREATE TABLE IF NOT EXISTS records_ledger (
+  t INTEGER NOT NULL,                            -- records_db.Table.code
+  k INTEGER NOT NULL,                            -- the row's key in that table
+  h INTEGER NOT NULL,                            -- records_db.row_hash
+  PRIMARY KEY (t, k)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS records_staged (
+  t INTEGER NOT NULL,
+  k INTEGER NOT NULL,
+  h INTEGER,
+  PRIMARY KEY (t, k)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS records_sync (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_at TEXT NOT NULL,
+  manifest TEXT NOT NULL,
+  rows INTEGER NOT NULL,
+  full INTEGER NOT NULL
+);
+
 -- The organization directory's pages (directory.py) as last exported, by
 -- path, each with a hash of its rows and the data date on which that hash last
 -- changed. The sitemap gives that date as the page's lastmod, so a page whose

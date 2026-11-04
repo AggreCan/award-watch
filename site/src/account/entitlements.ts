@@ -22,7 +22,13 @@ export type Plan = (typeof PLANS)[number];
 // overview and each window's count and total stay free (src/plan.ts).
 // bug_reports: the form under the account that stores a report and sends it
 // to the operator's inbox (src/account/bugs.tsx).
-export const FEATURES = ["saved_searches", "delivery", "api", "export_filtered", "intraday", "radar_depth", "bug_reports"] as const;
+// analytics: the buyer, organization and segment views over the records
+// database in full, and their CSV files; a request without it sees each
+// view's first chart for three fiscal years and what the rest holds
+// (src/pages/analytics.tsx, docs/analytics.md).
+export const FEATURES = [
+  "saved_searches", "delivery", "api", "export_filtered", "intraday", "radar_depth", "bug_reports", "analytics",
+] as const;
 export type Feature = (typeof FEATURES)[number];
 
 // The ceiling on saved searches whatever the plan (accounts_schema.sql says
@@ -31,13 +37,17 @@ export const SAVED_SEARCH_MAX = 25;
 
 type Rules = {
   saved_searches: number; delivery: boolean; api: boolean; export_filtered: boolean; intraday: boolean; radar_depth: boolean;
-  bug_reports: boolean;
+  bug_reports: boolean; analytics: boolean;
 };
 
 export const RULES: Readonly<Record<Plan, Rules>> = {
-  free: { saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false, radar_depth: false, bug_reports: false },
+  free: {
+    saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false, radar_depth: false, bug_reports: false,
+    analytics: false,
+  },
   pro: {
     saved_searches: SAVED_SEARCH_MAX, delivery: true, api: true, export_filtered: true, intraday: true, radar_depth: true, bug_reports: true,
+    analytics: true,
   },
 };
 

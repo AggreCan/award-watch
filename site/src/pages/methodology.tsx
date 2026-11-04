@@ -6,6 +6,7 @@ import type { AppEnv } from "../env";
 import { t, tj, type Key } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { pageSeo } from "../seo";
+import { ENTRANT_LOOKBACK, FREE_YEARS } from "../records_db";
 import { EXPIRING_TEASER_ROWS } from "./expiring";
 
 // How the site reads its sources, merges organizations and buyers, counts
@@ -13,7 +14,8 @@ import { EXPIRING_TEASER_ROWS } from "./expiring";
 // section states the rules in the words the pipeline follows
 // (CLAUDE.md "Counting money"); change the code and this page together. The
 // "Contracts ending soon" section states the radar's rules the same way
-// (CLAUDE.md "Expiring-contracts radar").
+// (CLAUDE.md "Expiring-contracts radar"). The "Analytics" section states the
+// rules the analytics views count by (src/records_db.ts, docs/analytics.md).
 
 const TOC: [string, Key][] = [
   ["sources", "methodology.toc_sources"],
@@ -23,6 +25,7 @@ const TOC: [string, Key][] = [
   ["competitive", "methodology.toc_competitive"],
   ["statuses", "methodology.toc_statuses"],
   ["expiring", "methodology.toc_expiring"],
+  ["analytics", "methodology.toc_analytics"],
   ["people", "methodology.toc_people"],
   ["claims", "methodology.toc_claims"],
   ["corrections", "methodology.toc_corrections"],
@@ -102,6 +105,14 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
             "methodology.expiring_pro", "methodology.expiring_growth", "methodology.expiring_value", "methodology.expiring_feeds",
           ]} />
           <p>{t(lang, "methodology.expiring_claim")}</p>
+
+          <h2 id="analytics">{t(lang, "methodology.toc_analytics")}</h2>
+          <p>{t(lang, "methodology.analytics_intro")}</p>
+          <List lang={lang} vars={{ "methodology.analytics_entrants": { n: ENTRANT_LOOKBACK }, "methodology.analytics_pro": { n: FREE_YEARS } }} keys={[
+            "methodology.analytics_fiscal", "methodology.analytics_counting", "methodology.analytics_sources", "methodology.analytics_segments",
+            "methodology.analytics_shares", "methodology.analytics_entrants", "methodology.analytics_people", "methodology.analytics_pro",
+            "methodology.analytics_date",
+          ]} />
 
           <h2 id="people">{t(lang, "methodology.toc_people")}</h2>
           <List lang={lang} keys={["methodology.people_individuals", "methodology.people_contacts", "methodology.people_officials"]} />

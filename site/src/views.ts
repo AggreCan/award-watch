@@ -74,6 +74,14 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   if (/^\/organizations\/directory\/[^/]+\/[^/]+$/.test(path)) return { route: "/organizations/directory/:code/:page", kind: "page" };
   if (/^\/organizations\/[^/]+$/.test(path)) return { route: "/organizations/:id", kind: "page" };
   if (/^\/organizations\/[^/]+\/respond$/.test(path)) return { route: "/organizations/:id/respond", kind: method === "POST" ? "form" : "page" };
+  // The analytics views and their CSV files (pages/analytics.tsx).
+  const analytics = /^\/(buyers|organizations|segments)\/[^/]+\/analytics(\/[a-z]+\.csv)?$/.exec(path);
+  if (analytics) {
+    const param = analytics[1] === "segments" ? ":nn" : ":id";
+    return analytics[2]
+      ? { route: `/${analytics[1]}/${param}/analytics/:table.csv`, kind: "download" }
+      : { route: `/${analytics[1]}/${param}/analytics`, kind: "page" };
+  }
   if (/^\/buyers\/[^/]+$/.test(path)) return { route: "/buyers/:id", kind: "page" };
   if (/^\/segments\/[^/]+$/.test(path)) return { route: "/segments/:nn", kind: "page" };
   if (/^\/categories\/[^/]+$/.test(path)) return { route: "/categories/:nn", kind: "page" };

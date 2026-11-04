@@ -49,3 +49,20 @@ export async function radarWindowLocked(c: Context<AppEnv>, window: string): Pro
   if (!(DEEP_WINDOWS as readonly string[]).includes(window) || !accountsEnabled(c.env)) return false;
   return !allowsRadarDepth(await requestPlan(c));
 }
+
+// The analytics views (src/pages/analytics.tsx, docs/analytics.md): in full
+// with the feature, the first chart for FREE_YEARS fiscal years without it.
+export const ANALYTICS = "analytics";
+
+export function allowsAnalytics(plan: Plan): boolean {
+  return allowed({ plan }, ANALYTICS);
+}
+
+// How a request may see an analytics view: null while the accounts switch is
+// off (the views belong to the paid tier, which does not exist then, so their
+// addresses are the site's 404 and no page links them), else "pro" or
+// "free". The plan is read only once the switch is on.
+export async function analyticsAccess(c: Context<AppEnv>): Promise<"pro" | "free" | null> {
+  if (!accountsEnabled(c.env)) return null;
+  return allowsAnalytics(await requestPlan(c)) ? "pro" : "free";
+}

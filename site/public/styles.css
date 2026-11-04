@@ -843,6 +843,35 @@ tr[data-phone-cut] { display: none !important; }
 .chart-legend .legend-line { display: block; }
 .chart-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 0 var(--gutter); }
 
+/* Ranked bars (chart.tsx RankedBars): a name, a bar from one baseline in the
+   chart hue, its rounded end the data end, and the figure in text ink. On a
+   phone the name takes its own line above the bar. */
+.rank-bars { list-style: none; padding: 0; display: grid; gap: 8px; }
+.rank-bars li { display: grid; grid-template-columns: minmax(0, 16rem) minmax(0, 1fr) minmax(7rem, auto); align-items: center; column-gap: 12px; font-size: 13px; line-height: 20px; }
+.rank-label { min-width: 0; overflow-wrap: anywhere; }
+.rank-track { position: relative; height: 12px; border-left: 1px solid var(--ink-2); }
+.rank-bar { position: absolute; top: 0; bottom: 0; left: 0; background: var(--chart-bar); border-radius: 0 4px 4px 0; }
+.rank-value { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 699px) {
+  .rank-bars li { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
+  .rank-label { grid-column: 1 / -1; }
+}
+/* The analytics views' figures beside a chart: shares held by the largest. */
+.figures { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 13px; line-height: 20px; color: var(--ink-2); }
+.figures b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* The Pro mark, defined once: pro-tag on the word Pro wherever a paid part is
+   named, pro-note on the short tease of what a locked part holds. The mark's
+   final look is still to be decided site-wide; it changes here and nowhere
+   else. The word itself carries the meaning, so colour is never the only
+   signal; both rules read their colours from the tokens, so they hold in the
+   light and the dark scheme alike. */
+.pro-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border: 1px solid var(--border-2); background: var(--head); color: var(--ink); font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.02em; text-transform: none; white-space: nowrap; vertical-align: middle; }
+.btn .pro-tag, h2 .pro-tag, .eyebrow .pro-tag, .tabs .pro-tag { margin-left: 6px; }
+.pro-note { padding: 12px 16px; border-left: 2px solid var(--border-2); background: var(--band); color: var(--ink-2); font-size: 13px; line-height: 20px; }
+.pro-note p { margin: 0 0 8px; }
+.pro-note p:last-child { margin-bottom: 0; }
+
 /* -- phones: one column, labelled blocks, 16 px gutter --------------------- */
 @media (max-width: 699px) {
   :root { --gutter: 16px; }

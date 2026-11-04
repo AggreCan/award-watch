@@ -118,6 +118,19 @@
       "binding": "ACCOUNTS",
       "database_name": "awardwatch-accounts",
       "database_id": "c5e21d6e-fe3c-4a3a-8d82-96e809e273b1"
+    },
+    {
+      // The records database: one row per counted record of the four money
+      // sources, read by the analytics views with prepared statements only
+      // (src/records_db.ts). Written by the nightly workflow's "Sync the
+      // records database" step alone, schema in pipeline/records_schema.sql
+      // (docs/analytics.md). Created 2026-11-04 with `wrangler d1 create
+      // awardwatch-records` on the project account. While the id were the
+      // placeholder zeros, the nightly step would send nothing and report
+      // "no database".
+      "binding": "RECORDS",
+      "database_name": "awardwatch-records",
+      "database_id": "b5db88f1-51e9-4dd5-bd48-b939315a56b7"
     }
   ],
   "r2_buckets": [

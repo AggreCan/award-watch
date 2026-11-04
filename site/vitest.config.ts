@@ -20,6 +20,8 @@ export default defineConfig({
           SEARCH_SCHEMA_SQL: readFileSync("../pipeline/search_schema.sql", "utf8"),
           // The same-day notices' tables in that database; test/intraday.test.ts applies them.
           INTRADAY_SCHEMA_SQL: readFileSync("../pipeline/intraday_schema.sql", "utf8"),
+          // The records database's schema; test/analytics.test.ts applies it.
+          RECORDS_SCHEMA_SQL: readFileSync("../pipeline/records_schema.sql", "utf8"),
           // The accounts switch starts off under test whatever wrangler.jsonc
           // ships, so the "switch off" tests hold while the site runs with it
           // on; the "switch on" tests set it themselves (test/accounts-helpers.ts).

@@ -194,7 +194,11 @@ export const ChartStack: FC<{
   aria: string;
   // One scale for every panel (the same unit side by side); otherwise each panel has its own.
   shared?: boolean;
-}> = ({ domain, panels, height, xLabels, grid = [], markers = [], fmt, aria, shared }) => {
+  // The space left on each side of a bar, in axis units; by default a thin
+  // gap between bars that fill their slot. A chart of few slots passes more,
+  // so a bar stays a thin mark rather than a block (barGap).
+  gap?: number;
+}> = ({ domain, panels, height, xLabels, grid = [], markers = [], fmt, aria, shared, gap: barGapUnits }) => {
   const span = domain[1] - domain[0];
   const sx = (x: number) => ((x - domain[0]) / span) * W;
   const pct = (x: number) => ((x - domain[0]) / span) * 100;
@@ -229,7 +233,7 @@ export const ChartStack: FC<{
       {panels.map((p, i) => {
         const ticks = sharedTicks ?? niceTicks(peak(p));
         const top = ticks[ticks.length - 1] || 1;
-        const gap = Math.min(0.12, span / 400);
+        const gap = barGapUnits ?? Math.min(0.12, span / 400);
         return (
           <>
             <div class="chart-row">
@@ -290,3 +294,64 @@ export function yearAxis(domain: [number, number]): { labels: AxisLabel[]; grid:
   }
   return { labels, grid };
 }
+
+// One label per fiscal year (text from the caller: "2025-26", "2025-2026"),
+// at the middle of its span on an axis measured in `per` units a year (1 for
+// yearly bars, 4 for quarters), and on a quarterly axis a gridline at each
+// year's start after the first. A fiscal label is wider than a calendar
+// year's, so every other one rests below 1200 px past six years and a phone
+// shows the first and the last past four.
+export function fiscalAxis(first: number, last: number, label: (fy: number) => string, per = 1): { labels: AxisLabel[]; grid: number[] } {
+  const labels: AxisLabel[] = [];
+  const grid: number[] = [];
+  const span = last - first + 1;
+  for (let fy = first; fy <= last; fy++) {
+    if (fy > first) grid.push(fy * per);
+    labels.push({
+      x: fy * per + per / 2, text: label(fy),
+      minor: span > 6 && (last - fy) % 2 === 1,
+      phone: span <= 4 || fy === first || fy === last,
+    });
+  }
+  return { labels, grid: per > 1 ? grid : [] };
+}
+
+// The gap that keeps a bar near `px` pixels wide on a plot about `plot`
+// pixels wide holding `slots` one-unit slots (thinner on a phone, where the
+// plot is narrower), never less than the default gap and never closing the
+// bar entirely.
+export function barGap(slots: number, px = 24, plot = 720): number {
+  return Math.min(0.46, Math.max(0.12, (1 - (px / plot) * slots) / 2));
+}
+
+export interface RankedBar {
+  label: unknown;
+  value: number;
+  // The figure printed at the bar's end; title is the line a hover shows.
+  text: string;
+  title: string;
+  note?: string;
+}
+
+// Ranked horizontal bars, largest first, one hue, for comparing the parts of
+// a whole: the label, a bar on one baseline scaled to the largest value, and
+// the figure at its end in text ink. HTML rather than SVG, so a long name
+// wraps and the type keeps its size at any width. A value at or below zero
+// draws no bar and keeps its figure. The table under the chart carries every
+// value, so the hover line is never the only way to read one.
+export const RankedBars: FC<{ rows: readonly RankedBar[]; aria: string }> = ({ rows, aria }) => {
+  const top = Math.max(0, ...rows.map((r) => r.value));
+  return (
+    <ol class="rank-bars" aria-label={aria}>
+      {rows.map((r) => (
+        <li title={r.title}>
+          <span class="rank-label">{r.label as any}</span>
+          <span class="rank-track" aria-hidden="true">
+            {r.value > 0 && top > 0 ? <span class="rank-bar" style={`width:${f(Math.max(0.5, (r.value / top) * 100))}%`}></span> : null}
+          </span>
+          <span class="rank-value">{r.text}{r.note ? <span class="muted"> {r.note}</span> : null}</span>
+        </li>
+      ))}
+    </ol>
+  );
+};

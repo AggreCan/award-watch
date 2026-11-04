@@ -16,6 +16,11 @@ Disallow: /search
 # Each also says noindex; this keeps crawlers from asking at all.
 Disallow: /account
 Disallow: /admin
+# The analytics views: each reads the records database, they say noindex,
+# and the buyer, organization and segment pages they chart stay open.
+Disallow: /buyers/*/analytics
+Disallow: /organizations/*/analytics
+Disallow: /segments/*/analytics
 # A filtered tender list, a paged or filtered ranking, a day of new notices
 # and a correction form opened from a profile (?organization=) each name the
 # plain page as their canonical URL, so crawlers need not walk the query
@@ -40,6 +45,9 @@ Disallow: /organizations/*/respond
 Disallow: /search
 Disallow: /account
 Disallow: /admin
+Disallow: /buyers/*/analytics
+Disallow: /organizations/*/analytics
+Disallow: /segments/*/analytics
 Disallow: /tenders?
 Allow: /tenders?lang=fr$
 Disallow: /tenders/new?

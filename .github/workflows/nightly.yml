@@ -21,7 +21,8 @@
 # lobbying communications, the federal corporations registry, then the
 # organizations, the yearly figures and the export), check the database and
 # the export, sync the hosted search database (D1, the changed rows only),
-# record the Worker version serving traffic, deploy the Worker
+# sync the records database the analytics views read (D1, the changed rows
+# only), record the Worker version serving traffic, deploy the Worker
 # with that data as its assets, check the live site and roll the Worker back
 # when the deploy broke it, save the buyer lookup the same-day refresh reads
 # and prune that refresh's old rows (docs/intraday.md), tell IndexNow which
@@ -67,6 +68,10 @@
 #   item needing attention) and stops nothing: the deploy goes ahead, the
 #   search page answers from what D1 already holds, and the next night sends
 #   the same changes again.
+# - A records database sync that fails is reported the same way (records_sync:
+#   failed, an item needing attention) and stops nothing: the analytics views
+#   answer from what D1 already holds. While the database is not created yet
+#   the step writes "no database", a notice.
 # - An IndexNow submission that fails is reported (indexnow in the run status)
 #   and never stops the run; only a rejection (the key file or the payload is
 #   wrong) is an item needing attention.
@@ -352,6 +357,48 @@ jobs:
           "$WRANGLER" d1 execute awardwatch-search --remote --json --command "SELECT (SELECT COUNT(*) FROM search_orgs) AS orgs, (SELECT COUNT(*) FROM search_buyers) AS buyers" > "$out/count.json"
           python -m awardwatch_pipeline search-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --counts "$out/count.json"
           python -m awardwatch_pipeline search-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"
+
+      # The records database, D1 awardwatch-records (docs/analytics.md), the
+      # analytics views' data: the search sync's shape. records-sync stages
+      # tonight's changed rows in the pipeline database and writes them as SQL
+      # batches; Wrangler applies the schema and each batch, then reads the
+      # five row counts back; records-check compares them with the manifest;
+      # only then does Wrangler apply finish.sql (the database is ready and
+      # describes tonight's data date) and records-synced record the ledger,
+      # which travels with the database, so this runs before the save. While
+      # wrangler.jsonc still holds the placeholder id the step sends nothing
+      # and writes "no database", a notice. records-sync writes "failed" first
+      # and records-synced replaces it, so a step stopped anywhere reads as
+      # failed: an item needing attention (records_sync in the run status)
+      # that stops nothing; the views answer from what D1 already holds and
+      # the next night sends the same changes again. A first load is about 60
+      # batches, hence the longer limit; the batch files go once applied, to
+      # spare the runner's disk.
+      - name: Sync the records database
+        id: records
+        if: ${{ !cancelled() && steps.verify.outputs.export_ok == 'true' && steps.verify.outputs.db_ok == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 150
+        working-directory: site
+        run: |
+          out=../data/out/records
+          mkdir -p "$out"
+          if grep -q '"database_id": "00000000-0000-0000-0000-000000000000"' wrangler.jsonc; then
+            echo "The records database is not created yet (wrangler.jsonc holds the placeholder id); nothing sent"
+            printf 'no database\n' > "$out/last_outcome.txt"
+            exit 0
+          fi
+          python -m awardwatch_pipeline records-sync --db ../data/awardwatch.sqlite --out "$out"
+          "$WRANGLER" d1 execute awardwatch-records --remote --yes --file ../pipeline/records_schema.sql
+          for batch in $(cat "$out/batches.txt"); do
+            echo "Applying $batch"
+            "$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/$batch"
+            rm -f "$out/$batch"
+          done
+          "$WRANGLER" d1 execute awardwatch-records --remote --json --command "SELECT (SELECT COUNT(*) FROM records) AS records, (SELECT COUNT(*) FROM rec_orgs) AS rec_orgs, (SELECT COUNT(*) FROM rec_buyers) AS rec_buyers, (SELECT COUNT(*) FROM rec_buyer_quarters) AS rec_buyer_quarters, (SELECT COUNT(*) FROM rec_segment_years) AS rec_segment_years" > "$out/count.json"
+          python -m awardwatch_pipeline records-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --counts "$out/count.json"
+          "$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/finish.sql"
+          python -m awardwatch_pipeline records-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"
 
       - name: Bundle the static data for the site
         id: bundle
@@ -927,7 +974,8 @@ jobs:
       # the database came from (restore), the smoke test and any rollback, and
       # the expiry checks. search_sync is the search database sync's outcome
       # ("synced", "nothing to send", "failed", or "not run" when the checks
-      # before it failed). intraday_lookup and intraday_prune are the same-day
+      # before it failed); records_sync the records database sync's, the same
+      # words or "no database" while the database is not created yet. intraday_lookup and intraday_prune are the same-day
       # refresh's two nightly steps ("saved" or "pruned", "failed", or "not
       # run"); a failed one is a notice, never an item needing attention.
       # intraday_lookup_bytes is the size of the lookup saved tonight (null
@@ -942,7 +990,7 @@ jobs:
           python -m awardwatch_pipeline.nightly status --db data/awardwatch.sqlite \
             --started-file data/out/run_started.txt --verify data/out/verify.json \
             --views-outcome data/out/views/last_outcome.txt \
-            --search-outcome data/out/search/last_outcome.txt \
+            --search-outcome data/out/search/last_outcome.txt             --records-outcome data/out/records/last_outcome.txt \
             --intraday-lookup-outcome data/out/intraday/lookup_outcome.txt \
             --intraday-lookup-bytes data/out/intraday/lookup_bytes.txt \
             --intraday-prune-outcome data/out/intraday/prune_outcome.txt \
@@ -1000,6 +1048,10 @@ jobs:
           if [ -f data/out/search/last_outcome.txt ]; then
             echo "" >> LAST_RUN.md
             echo "Search database: $(cat data/out/search/last_outcome.txt)" >> LAST_RUN.md
+          fi
+          if [ -f data/out/records/last_outcome.txt ]; then
+            echo "" >> LAST_RUN.md
+            echo "Records database: $(cat data/out/records/last_outcome.txt)" >> LAST_RUN.md
           fi
           # The run's notices, one per line with its full text (nothing when
           # there are none); a fault here leaves them out of the record only.

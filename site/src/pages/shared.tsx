@@ -168,6 +168,14 @@ export const SegmentNote: FC<{ lang: Lang; rows: readonly { segments: readonly s
 
 // The page's one statement that the sources are never added together, with
 // the counting rules linked.
+// The way from a buyer, an organization or a segment to its analytics view
+// (pages/analytics.tsx): listed for every reader once accounts are open and
+// marked Pro, since a reader without Pro still opens the view's first chart;
+// nothing while they are off, when the view does not exist. nofollow, since
+// the view is not a page to index.
+export const AnalyticsLink: FC<{ lang: Lang; href: string; on: boolean }> = ({ lang, href, on }) =>
+  on ? <a href={href} class="btn" rel="nofollow">{t(lang, "analytics.link")}<span class="pro-tag">{t(lang, "analytics.pro")}</span></a> : null;
+
 export const SourcesSeparate: FC<{ lang: Lang }> = ({ lang }) => (
   <>{tj(lang, "common.sources_separate", { methodology: <a href="/methodology#counting">{t(lang, "nav.methodology")}</a> })}</>
 );

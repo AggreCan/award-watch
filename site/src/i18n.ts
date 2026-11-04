@@ -780,6 +780,187 @@ const STRINGS = {
   "expiring.pro_sign_in": { en: "Sign in or create an account", fr: "Se connecter ou créer un compte" },
   "expiring.pro_account": { en: "Your account", fr: "Votre compte" },
 
+  // -- analytics (src/pages/analytics.tsx, docs/analytics.md) ---------------------------
+  "analytics.title": { en: "Analytics", fr: "Analyses" },
+  "analytics.title_of": { en: "Analytics: {name}", fr: "Analyses : {name}" },
+  "analytics.crumb": { en: "Analytics", fr: "Analyses" },
+  "analytics.eyebrow": { en: "Analytics", fr: "Analyses" },
+  "analytics.link": { en: "Analytics", fr: "Analyses" },
+  // The word on the Pro mark (class pro-tag): the plan's name in both languages.
+  "analytics.pro": { en: "Pro", fr: "Pro" },
+  "analytics.description_buyer": {
+    en: "Charts of the federal records of {name} by fiscal year: value by quarter and by segment, the non-competitive share and the largest organizations.",
+    fr: "Graphiques des dossiers fédéraux de {name} par exercice : valeur par trimestre et par segment, part non concurrentielle et principales organisations.",
+  },
+  "analytics.description_organization": {
+    en: "Charts of the federal records of {name} by fiscal year: value, the largest buyers and segments, and its share of a segment.",
+    fr: "Graphiques des dossiers fédéraux de {name} par exercice : valeur, principaux acheteurs et segments, et sa part d'un segment.",
+  },
+  "analytics.description_segment": {
+    en: "Charts of the UNSPSC segment {name} by fiscal year: buyers and organizations with a record, the largest of each, and the organizations new to it.",
+    fr: "Graphiques du segment UNSPSC {name} par exercice : acheteurs et organisations ayant un dossier, les principaux de chacun et les organisations nouvelles.",
+  },
+  "analytics.lead": { en: "{source}, federal fiscal years {first} to {last}.", fr: "{source}, exercices fédéraux {first} à {last}." },
+  "analytics.note_sources": {
+    en: "One source at a time: a contract can appear in several sources, so no figure adds two of them.",
+    fr: "Une source à la fois : un contrat peut figurer dans plusieurs sources, et aucun chiffre n'en additionne deux.",
+  },
+  "analytics.note_fiscal": {
+    en: "A fiscal year runs from April 1 to March 31; the current one is counted up to the data date.",
+    fr: "Un exercice va du 1er avril au 31 mars; l'exercice en cours est compté jusqu'à la date des données.",
+  },
+  "analytics.back_buyer": { en: "Back to the buyer", fr: "Retour à l'acheteur" },
+  "analytics.back_organization": { en: "Back to the profile", fr: "Retour au profil" },
+  "analytics.back_segment": { en: "Back to the segment", fr: "Retour au segment" },
+  "analytics.sources_nav": { en: "Source shown", fr: "Source affichée" },
+  "analytics.period_nav": { en: "Period", fr: "Période" },
+  "analytics.period": { en: "{n} fiscal years", fr: "{n} exercices" },
+  "analytics.csv": { en: "CSV file", fr: "Fichier CSV" },
+  "analytics.unavailable_title": { en: "Analytics Are Not Available Right Now", fr: "Analyses non disponibles pour le moment" },
+  "analytics.unavailable_text": {
+    en: "The records database could not be read. Try again later; the rest of the site works as usual.",
+    fr: "La base des dossiers n'a pas pu être lue. Réessayez plus tard; le reste du site fonctionne comme d'habitude.",
+  },
+  "analytics.unavailable_loading": {
+    en: "The records database is being loaded again. The analytics return when the load is finished.",
+    fr: "La base des dossiers est en cours de rechargement. Les analyses reviendront une fois le chargement terminé.",
+  },
+  "analytics.as_of": { en: "Records as of {date}.", fr: "Dossiers en date du {date}." },
+  "analytics.rules": { en: "How the figures are counted: {methodology}.", fr: "Méthode de calcul des chiffres : {methodology}." },
+  "analytics.rules_link": { en: "Methodology, Analytics", fr: "Méthodologie, Analyses" },
+  "analytics.none": { en: "No record of this source in these fiscal years.", fr: "Aucun dossier de cette source pour ces exercices." },
+  "analytics.to_date": { en: "{fy} (to date)", fr: "{fy} (à ce jour)" },
+  "analytics.quarter": { en: "Q{n}", fr: "T{n}" },
+  "analytics.chart_aria": { en: "Chart by fiscal year", fr: "Graphique par exercice" },
+  "analytics.chart_quarters": { en: "{source}: value by fiscal quarter", fr: "{source} : valeur par trimestre d'exercice" },
+  "analytics.chart_years": { en: "{source}: value by fiscal year", fr: "{source} : valeur par exercice" },
+  "analytics.chart_buyers": { en: "Buyers with a record", fr: "Acheteurs ayant un dossier" },
+  "analytics.chart_orgs": { en: "Organizations with a record", fr: "Organisations ayant un dossier" },
+  "analytics.nc_by_count": { en: "Non-competitive share, by count", fr: "Part non concurrentielle, en nombre" },
+  "analytics.nc_by_value": { en: "Non-competitive share, by value", fr: "Part non concurrentielle, en valeur" },
+  "analytics.panel_quarters": { en: "Value by Fiscal Quarter", fr: "Valeur par trimestre" },
+  "analytics.panel_segments": { en: "Value by Segment", fr: "Valeur par segment" },
+  "analytics.panel_competition": { en: "Non-Competitive Share by Fiscal Year", fr: "Part non concurrentielle par exercice" },
+  "analytics.panel_suppliers": { en: "Largest Organizations", fr: "Principales organisations" },
+  "analytics.panel_years": { en: "Value by Fiscal Year", fr: "Valeur par exercice" },
+  "analytics.panel_buyers": { en: "Largest Buyers", fr: "Principaux acheteurs" },
+  "analytics.panel_share": { en: "Share of a Segment", fr: "Part d'un segment" },
+  "analytics.panel_activity": { en: "Buyers and Organizations by Fiscal Year", fr: "Acheteurs et organisations par exercice" },
+  "analytics.panel_segment_buyers": { en: "Largest Buyers in the Segment", fr: "Principaux acheteurs du segment" },
+  "analytics.panel_winners": { en: "Largest Organizations in the Segment", fr: "Principales organisations du segment" },
+  "analytics.panel_entrants": { en: "New to the Segment", fr: "Nouvelles venues dans le segment" },
+  "analytics.foot_quarters": {
+    en: "Values in Canadian dollars by the counting rules. A value in another currency, one not published and one flagged for checking are left out of the sums.",
+    fr: "Valeurs en dollars canadiens selon les règles de calcul. Une valeur dans une autre devise, une valeur non publiée et une valeur signalée pour vérification sont exclues des sommes.",
+  },
+  "analytics.foot_segments": {
+    en: "Award notices and PSPC contract history carry UNSPSC codes. A notice whose codes fall in several segments counts in each, so the shares can add up to more than 100%.",
+    fr: "Les avis d'attribution et l'historique des contrats de SPAC portent des codes UNSPSC. Un avis dont les codes relèvent de plusieurs segments compte dans chacun; les parts peuvent donc dépasser 100 % au total.",
+  },
+  "analytics.foot_competition": {
+    en: "As the source states it. The share by value is taken over positive values; records whose method is not stated count in the whole.",
+    fr: "Tel que l'indique la source. La part en valeur est calculée sur les valeurs positives; les dossiers dont la méthode n'est pas précisée comptent dans le total.",
+  },
+  "analytics.foot_suppliers": {
+    en: "Shares are of the whole value in the period, records that name no organization included.",
+    fr: "Les parts portent sur toute la valeur de la période, y compris les dossiers qui ne nomment aucune organisation.",
+  },
+  "analytics.foot_activity": {
+    en: "Distinct buyers and organizations with at least one record in the segment in that fiscal year.",
+    fr: "Acheteurs et organisations distincts ayant au moins un dossier dans le segment pendant cet exercice.",
+  },
+  "analytics.foot_entrants": {
+    en: "An organization is new in a fiscal year when it has a record in the segment that year and none in the {n} fiscal years before.",
+    fr: "Une organisation est nouvelle pendant un exercice lorsqu'elle a un dossier dans le segment cet exercice et aucun pendant les {n} exercices précédents.",
+  },
+  "analytics.foot_share": {
+    en: "The organizations to compare come from the segment's {m} largest in the period; at most {n} are shown beside this one.",
+    fr: "Les organisations à comparer sont tirées des {m} principales du segment pour la période; au plus {n} figurent à côté de celle-ci.",
+  },
+  "analytics.no_segments": {
+    en: "Published contracts and grants carry no UNSPSC segment. Choose award notices or PSPC contract history.",
+    fr: "Les contrats publiés et les subventions ne portent aucun segment UNSPSC. Choisissez les avis d'attribution ou l'historique des contrats de SPAC.",
+  },
+  "analytics.no_competition": {
+    en: "Grants and contributions carry no competitive flag.",
+    fr: "Les subventions et contributions ne portent aucun indicateur de concurrence.",
+  },
+  "analytics.col_fy": { en: "Fiscal year", fr: "Exercice" },
+  "analytics.col_year_value": { en: "Value for the year", fr: "Valeur de l'exercice" },
+  "analytics.col_no_value": { en: "Without a published value", fr: "Sans valeur publiée" },
+  "analytics.col_rank": { en: "Rank", fr: "Rang" },
+  "analytics.col_share": { en: "Share", fr: "Part" },
+  "analytics.col_buyers": { en: "Buyers", fr: "Acheteurs" },
+  "analytics.col_orgs": { en: "Organizations", fr: "Organisations" },
+  "analytics.top_1": { en: "Largest organization:", fr: "Principale organisation :" },
+  "analytics.top_5": { en: "Five largest:", fr: "Cinq principales :" },
+  "analytics.top_10": { en: "Ten largest:", fr: "Dix principales :" },
+  "analytics.orgs_one": { en: "{n} organization in the period", fr: "{n} organisation pour la période" },
+  "analytics.orgs_many": { en: "{n} organizations in the period", fr: "{n} organisations pour la période" },
+  "analytics.entrants_one": { en: "{n} organization new to the segment in {fy}.", fr: "{n} organisation nouvelle dans le segment en {fy}." },
+  "analytics.entrants_many": { en: "{n} organizations new to the segment in {fy}.", fr: "{n} organisations nouvelles dans le segment en {fy}." },
+  "analytics.share_lead": {
+    en: "Each organization's share of the value of segment {segment} in {source}, by fiscal year, on one scale.",
+    fr: "La part de chaque organisation dans la valeur du segment {segment}, {source}, par exercice, sur une même échelle.",
+  },
+  "analytics.share_pick": { en: "Compare with (up to {n})", fr: "Comparer avec (jusqu'à {n})" },
+  "analytics.share_apply": { en: "Show", fr: "Afficher" },
+  "analytics.share_reset": { en: "Reset", fr: "Réinitialiser" },
+  "analytics.free_asked": {
+    en: "Longer periods, other segments and comparisons are part of Pro, so this view shows the latest {n} fiscal years.",
+    fr: "Les périodes plus longues, les autres segments et les comparaisons font partie de Pro; cette vue présente donc les {n} derniers exercices.",
+  },
+  "analytics.free_buyer": {
+    en: "The full view covers up to ten fiscal years with a table under each chart: the value by segment, the non-competitive share by fiscal year, the largest organizations and the share they hold, and a CSV file of each table.",
+    fr: "La vue complète couvre jusqu'à dix exercices, avec un tableau sous chaque graphique : la valeur par segment, la part non concurrentielle par exercice, les principales organisations et la part qu'elles détiennent, et un fichier CSV de chaque tableau.",
+  },
+  "analytics.free_organization": {
+    en: "The full view covers up to ten fiscal years with a table under each chart: the largest buyers, the largest segments, this organization's share of a segment beside up to five others, and a CSV file of each table.",
+    fr: "La vue complète couvre jusqu'à dix exercices, avec un tableau sous chaque graphique : les principaux acheteurs, les principaux segments, la part de cette organisation dans un segment à côté de cinq autres au plus, et un fichier CSV de chaque tableau.",
+  },
+  "analytics.free_segment": {
+    en: "The full view covers up to ten fiscal years with a table under each chart: the largest buyers and organizations in the segment, the organizations new to it, and a CSV file of each table.",
+    fr: "La vue complète couvre jusqu'à dix exercices, avec un tableau sous chaque graphique : les principaux acheteurs et organisations du segment, les organisations nouvelles et un fichier CSV de chaque tableau.",
+  },
+  "analytics.pro_billing": { en: "See the Pro plan on the billing page", fr: "Voir le forfait Pro sur la page de facturation" },
+  "analytics.pro_sign_in": { en: "Sign in to subscribe to Pro", fr: "Se connecter pour s'abonner à Pro" },
+  "analytics.tease_buyer_segments": {
+    en: "The buyer's value in each UNSPSC segment, the ten largest, with their shares.",
+    fr: "La valeur de l'acheteur dans chaque segment UNSPSC, les dix principaux, avec leurs parts.",
+  },
+  "analytics.tease_competition": {
+    en: "The share of non-competitive records by fiscal year, by count and by value.",
+    fr: "La part des dossiers non concurrentiels par exercice, en nombre et en valeur.",
+  },
+  "analytics.tease_suppliers": {
+    en: "The ten organizations with the largest values, and the share the largest one, five and ten hold.",
+    fr: "Les dix organisations aux valeurs les plus élevées, et la part que détiennent la principale, les cinq et les dix principales.",
+  },
+  "analytics.tease_org_buyers": {
+    en: "The ten buyers with the largest values for this organization.",
+    fr: "Les dix acheteurs aux valeurs les plus élevées pour cette organisation.",
+  },
+  "analytics.tease_org_segments": {
+    en: "The ten UNSPSC segments with the largest values for this organization.",
+    fr: "Les dix segments UNSPSC aux valeurs les plus élevées pour cette organisation.",
+  },
+  "analytics.tease_share": {
+    en: "This organization's share of a segment's value by fiscal year, beside up to {n} others from the segment's largest.",
+    fr: "La part de cette organisation dans la valeur d'un segment par exercice, à côté de {n} autres au plus parmi les principales du segment.",
+  },
+  "analytics.tease_segment_buyers": {
+    en: "The ten buyers with the largest values in the segment.",
+    fr: "Les dix acheteurs aux valeurs les plus élevées dans le segment.",
+  },
+  "analytics.tease_winners": {
+    en: "The ten organizations with the largest values in the segment.",
+    fr: "Les dix organisations aux valeurs les plus élevées dans le segment.",
+  },
+  "analytics.tease_entrants": {
+    en: "The organizations with a record in the segment this fiscal year and none in the {n} before.",
+    fr: "Les organisations ayant un dossier dans le segment pendant l'exercice et aucun pendant les {n} précédents.",
+  },
+
   // -- organization profile -------------------------------------------------------------
   "org.title": { en: "Organization", fr: "Organisation" },
   "org.not_found": { en: "Organization Not Found", fr: "Organisation introuvable" },
@@ -1444,6 +1625,7 @@ const STRINGS = {
   "methodology.toc_competitive": { en: "Competitive or Not", fr: "Concurrentiel ou non" },
   "methodology.toc_statuses": { en: "Statuses and Regions", fr: "Statuts et régions" },
   "methodology.toc_expiring": { en: "Contracts Ending Soon", fr: "Contrats prenant fin bientôt" },
+  "methodology.toc_analytics": { en: "Analytics", fr: "Analyses" },
   "methodology.toc_people": { en: "People", fr: "Personnes" },
   "methodology.toc_claims": { en: "What the Site Does Not Claim", fr: "Ce que le site n'affirme pas" },
   "methodology.toc_corrections": { en: "Corrections and Responses", fr: "Corrections et réponses" },
@@ -1621,6 +1803,46 @@ const STRINGS = {
   "methodology.expiring_claim": {
     en: "An end date is the date the record states. A contract can be extended, renewed or replaced, and the list says nothing about what follows its end.",
     fr: "Une date de fin est celle qu'indique le dossier. Un contrat peut être prolongé, renouvelé ou remplacé, et la liste n'indique rien de ce qui suit sa fin.",
+  },
+  "methodology.analytics_intro": {
+    en: "The analytics views chart one buyer, organization or segment from the records, one source at a time, by these rules:",
+    fr: "Les vues d'analyse présentent en graphiques un acheteur, une organisation ou un segment à partir des dossiers, une source à la fois, selon ces règles :",
+  },
+  "methodology.analytics_fiscal": {
+    en: "Fiscal years run from April 1 to March 31 and are named by both calendar years (2025-26). A record falls in the fiscal year and quarter of its award date (award notices and contract history), its contract date (published contracts) or its agreement start (grants). The current fiscal year is counted up to the data date.",
+    fr: "Les exercices vont du 1er avril au 31 mars et portent le nom de leurs deux années civiles (2025-2026). Un dossier relève de l'exercice et du trimestre de sa date d'attribution (avis d'attribution et historique des contrats), de sa date de contrat (contrats publiés) ou du début de l'accord (subventions). L'exercice en cours est compté jusqu'à la date des données.",
+  },
+  "methodology.analytics_counting": {
+    en: "Each record counts by the rules in Counting Money: one contract per reference for award notices and contract history, each row for published contracts, one agreement for grants. Values are in Canadian dollars; a value in another currency, one not published and one flagged for checking are left out of the sums and counted beside them.",
+    fr: "Chaque dossier compte selon les règles de la section Calcul des montants : un contrat par référence pour les avis d'attribution et l'historique des contrats, chaque ligne pour les contrats publiés, un accord pour les subventions. Les valeurs sont en dollars canadiens; une valeur dans une autre devise, une valeur non publiée et une valeur signalée pour vérification sont exclues des sommes et comptées à côté.",
+  },
+  "methodology.analytics_sources": {
+    en: "A view shows one source at a time and never adds two. The buyer of a PSPC contract history record is its client department, as on the buyer pages.",
+    fr: "Une vue présente une source à la fois et n'en additionne jamais deux. L'acheteur d'un dossier de l'historique des contrats de SPAC est son ministère client, comme sur les pages des acheteurs.",
+  },
+  "methodology.analytics_segments": {
+    en: "Segments come from the UNSPSC codes of award notices and contract history; published contracts and grants carry none. A notice whose codes fall in several segments counts in each segment's figures, as on the segment pages; every other figure counts it once.",
+    fr: "Les segments viennent des codes UNSPSC des avis d'attribution et de l'historique des contrats; les contrats publiés et les subventions n'en portent pas. Un avis dont les codes relèvent de plusieurs segments compte dans les chiffres de chacun, comme sur les pages des segments; tout autre chiffre ne le compte qu'une fois.",
+  },
+  "methodology.analytics_shares": {
+    en: "A share of value is over the whole value of the period and source, records that name no organization included. The non-competitive share by value is taken over positive values, as on the profiles.",
+    fr: "Une part de valeur porte sur toute la valeur de la période et de la source, y compris les dossiers qui ne nomment aucune organisation. La part non concurrentielle en valeur est calculée sur les valeurs positives, comme sur les profils.",
+  },
+  "methodology.analytics_entrants": {
+    en: "An organization is new to a segment in a fiscal year when it has a record there that year and none in the {n} fiscal years before.",
+    fr: "Une organisation est nouvelle dans un segment pendant un exercice lorsqu'elle y a un dossier cet exercice et aucun pendant les {n} exercices précédents.",
+  },
+  "methodology.analytics_people": {
+    en: "Grants whose recipient reads as a person are not in the analytics at all. A contract whose supplier reads as a person counts in its buyer's figures with no organization named.",
+    fr: "Les subventions dont le bénéficiaire se lit comme une personne ne figurent pas du tout dans les analyses. Un contrat dont le fournisseur se lit comme une personne compte dans les chiffres de son acheteur sans qu'aucune organisation soit nommée.",
+  },
+  "methodology.analytics_pro": {
+    en: "The views are part of Pro, the site's paid plan. Every reader sees each view's first chart for the latest {n} fiscal years.",
+    fr: "Les vues font partie de Pro, le forfait payant du site. Chaque lecteur voit le premier graphique de chaque vue pour les {n} derniers exercices.",
+  },
+  "methodology.analytics_date": {
+    en: "The views read a database of the records refreshed each night after the data; each view gives the date its records describe.",
+    fr: "Les vues lisent une base des dossiers actualisée chaque nuit après les données; chaque vue indique la date que décrivent ses dossiers.",
   },
   "methodology.people_individuals": {
     en: "Private individuals are never stored: grants to individuals and any supplier, recipient or client whose name reads as a person's are dropped before anything is written, and only their number is logged.",
@@ -2133,6 +2355,7 @@ type Vars = Record<string, string | number>;
 // key to a French string that differs from the English.
 export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "account.plan_tag_pro", // the plan subscript after the wordmark reads the same in both
+  "analytics.pro", // the word on the Pro mark, the plan's name
   "site.name",
   "nav.segments",
   "common.page_n",

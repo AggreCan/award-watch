@@ -7,6 +7,10 @@ export interface Env {
   // The hosted search database (src/search_db.ts), filled by the nightly
   // sync. Absent or empty, /search explains and links the directory.
   SEARCH?: D1Database;
+  // The records database (src/records_db.ts, docs/analytics.md), filled by the
+  // nightly sync and read by the analytics views only. Absent, empty or
+  // loading, a view says it is not available.
+  RECORDS?: D1Database;
   DATA?: R2Bucket;
   ASSETS?: Fetcher;
   SCHEMA_SQL?: string;
