@@ -86,12 +86,12 @@ describe("the line", () => {
     expect(refreshText(at("2026-11-04T12:29:01Z"), DAILY_RUNS_UTC, daily)).toBe("Daily refresh now");
     expect(refreshText(at("2026-11-04T12:30:00Z"), DAILY_RUNS_UTC, daily)).toBe("Daily refresh now");
     expect(refreshText(at("2026-11-04T12:31:00Z"), DAILY_RUNS_UTC, daily)).toBe("Daily refresh in 23h 59m");
-    expect(refreshText(at("2026-11-04T11:54:00Z"), SAME_DAY_RUNS_UTC, words("en", "refresh.same_day"))).toBe("Same-day refresh in 1h 51m");
+    expect(refreshText(at("2026-11-04T11:54:00Z"), SAME_DAY_RUNS_UTC, words("en", "refresh.same_day"))).toBe("2-hourly refresh in 1h 51m");
     expect(nbsp(refreshText(at("2026-11-04T01:53:30Z"), DAILY_RUNS_UTC, words("fr", "refresh.daily")) ?? ""))
       .toBe("Actualisation quotidienne dans 10 h 36 min");
     expect(nbsp(refreshText(at("2026-11-04T11:54:00Z"), SAME_DAY_RUNS_UTC, words("fr", "refresh.same_day")) ?? ""))
-      .toBe("Actualisation du jour dans 1 h 51 min");
-    expect(refreshText(at("2026-11-04T13:44:30Z"), SAME_DAY_RUNS_UTC, words("fr", "refresh.same_day"))).toBe("Actualisation du jour maintenant");
+      .toBe("Actualisation aux 2 h dans 1 h 51 min");
+    expect(refreshText(at("2026-11-04T13:44:30Z"), SAME_DAY_RUNS_UTC, words("fr", "refresh.same_day"))).toBe("Actualisation aux 2 h maintenant");
   });
 
   it("carries its words as pieces, so no page holds an unfilled placeholder", () => {
@@ -104,16 +104,16 @@ describe("the top bar", () => {
   it("shows both timers from the page's clock, the same-day one marked Pro and linked while the switch is on", async () => {
     // 16:00 UTC on 2026-10-31: the nightly at 12:30 tomorrow, the next cut at 17:45.
     const html = await (await getOn("/")).text();
-    expect(lines(html)).toEqual(["Daily refresh in 20h 30m", "Same-day refresh in 1h 45m"]);
+    expect(lines(html)).toEqual(["Daily refresh in 20h 30m", "2-hourly refresh in 1h 45m"]);
     const bar = timers(html);
     expect(html.indexOf('<span class="asof">')).toBeLessThan(html.indexOf('<span class="refresh-timers"'));
     expect(bar).toContain(`<a class="refresh" href="${SAME_DAY_HREF}" data-refresh-runs="${SAME_DAY_RUNS_UTC.join(" ")}"`);
     // The chip is the shared one (src/pro.tsx); its markup is held by test/pro-mark.test.ts.
-    expect(bar).toContain('<span class="refresh-line">Same-day refresh in 1h 45m</span> <span class="pro-tag">');
+    expect(bar).toContain('<span class="refresh-line">2-hourly refresh in 1h 45m</span> <span class="pro-tag">');
     expect(bar).toContain('data-refresh-runs="12:30"');
     // The same on every page, in French too.
     const fr = await (await getOn("/methodology?lang=fr")).text();
-    expect(lines(fr)).toEqual(["Actualisation quotidienne dans 20 h 30 min", "Actualisation du jour dans 1 h 45 min"]);
+    expect(lines(fr)).toEqual(["Actualisation quotidienne dans 20 h 30 min", "Actualisation aux 2 h dans 1 h 45 min"]);
     expect(timers(fr)).toContain('<span class="pro-tag">');
     // With the switch off nothing is Pro: the same-day timer carries no chip and leads to the tender list.
     const off = timers(await (await get("/")).text());
@@ -121,7 +121,7 @@ describe("the top bar", () => {
     expect(off).not.toContain("pro-tag");
     expect(off).not.toContain("/tenders/same-day");
     const late = await (await get("/", "2026-11-01T12:29:30Z")).text();
-    expect(lines(late)).toEqual(["Daily refresh now", "Same-day refresh in 1h 15m"]);
+    expect(lines(late)).toEqual(["Daily refresh now", "2-hourly refresh in 1h 15m"]);
   });
 
   it("keeps the page's cache headers and its ETag from one minute to the next", async () => {
