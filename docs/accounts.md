@@ -20,8 +20,9 @@ the schema is `site/accounts_schema.sql`; the tests are
 - **Delivery by email.** On the Pro plan, a tender list or a list of
   contracts ending can be sent daily or weekly (*Phase 2: delivery*). Every
   message carries a link that turns its delivery off without signing in.
-- **API keys.** Issued and revoked on the account; shown once. No endpoint
-  asks for one yet.
+- **API keys.** Issued and revoked on the account; shown once. A key of a
+  Pro account opens the keyed API under `/api/v1` (*The keyed API*); the
+  keys page shows each key's requests today and over 30 days.
 - **Plans.** Each account is on a plan, Free or Pro, computed from the
   entitlements table. The plan sets how many saved searches the account
   keeps and whether delivery, API keys, filtered exports, same-day tender
@@ -58,16 +59,19 @@ Every datetime is ISO in UTC.
 | `code_misses` | one row per wrong code or link tried for an address: the address and the time, for the hour's count | the code tried, the IP address |
 | `audit` | user id, event name, time, a short fixed detail | an address, a code, a token, a key |
 | `bug_reports` | one row per bug report from a Pro account: the page (a path on the site), what happened, what was expected, the time | the address |
+| `api_usage` | one row per API key per UTC day it was used: how many requests the keyed API counted for it that day | a path, a parameter, an address, the time of a request |
 
 Limits: at most 25 saved searches per account (Free keeps 3), at most 5 live
 API keys, at most 5 sign-in requests per address per hour, at most 5 wrong
 codes per address per hour across all its requests, at most 5 bug reports
-per account in any 24 hours.
+per account in any 24 hours, at most 600 keyed API requests a minute and
+20,000 a UTC day per key.
 
 Retention: sign-in requests and wrong tries are deleted after a day (and
 with the account); sessions 90 days after they end; audit rows after 90
-days; bug reports after 180 days (and with the account). The sweep runs
-with each sign-in request.
+days; bug reports after 180 days (and with the account); the keyed API's
+daily counts after 60 days (and with the account's keys, by the table's
+cascade). The sweep runs with each sign-in request.
 
 ## Sign-in flow
 
@@ -359,7 +363,9 @@ The test suite runs this same insert (`MANUAL_GRANT_SQL` in
   hour per address, whatever requests it holds.
 - **Rate limits per address and per email.** `AUTH_LIMIT` (5 a minute per
   IP address) on both sign-in posts; 5 requests an hour per email in the
-  database.
+  database. The keyed API adds `KEY_LIMIT` (600 a minute per key, keyed by
+  the key's id) on top of `API_LIMIT` (60 a minute per address), and a
+  daily quota per key in the database (*The keyed API*).
 - **Cross-site posts refused.** Every POST checks `Origin`; the session
   cookie is `SameSite=Lax`; every signed-in form carries a CSRF value.
 - **No account enumeration.** The sign-in page answers the same whether or
@@ -400,13 +406,16 @@ No IP addresses: a
 sign-in request keeps, for one day, a hash of the address under a key that
 changes every UTC day (and nothing without `VIEWS_SALT_KEY`). No user agents:
 a session keeps the device class only. No codes, link secrets, session
-secrets or API keys in clear. No payment details.
+secrets or API keys in clear. No payment details. No log of keyed API
+requests: `api_usage` holds a number per key per day, and the Worker's
+logs name no key.
 
 ## Deletion
 
 `/account/delete` asks for a ticked box, then in one batch: revokes every
 session; deletes the saved searches (with their delivery rows and stop
-links), the API keys, the bug reports and the address's sign-in requests; and marks the user row deleted with its
+links), the API keys (their daily counts go with them, by the cascade on
+`api_usage`), the bug reports and the address's sign-in requests; and marks the user row deleted with its
 email replaced by `deleted:` and SHA-256 of a random salt and the address,
 the salt thrown away. The row then proves nothing about which address it
 was, and the address can sign up again as a new account. The address's rows
@@ -573,11 +582,91 @@ failed, with nothing new and not on a plan with delivery.
 
 ## Phase 3: payments and the metered API
 
-Payments are built: see *Payments* below. The metered API mounts
-`requireApiKey("api")` on new endpoints registered only while the switch is
-on, counts requests per key in a rate limiter keyed on the key's id, and
-records usage by key for the account page. The existing `/api` endpoints
-stay open without a key.
+Payments are built: see *Payments* below. The metered API is built: see
+*The keyed API*. The existing `/api` endpoints stay open without a key.
+
+## The keyed API
+
+JSON under `/api/v1` for the API key of an account whose plan allows `api`
+(Pro). The routes are `site/src/api_keyed.ts`; the endpoint list, page
+sizes and limits are `site/src/api_keyed_spec.ts`, which the Data page's API
+section (`site/src/pages/keyed_api.tsx`, shown only while the switch is on)
+and the keys page both read; the count is `site/src/account/api_usage.ts`;
+the tests are `site/test/api-keyed.test.ts`.
+
+### Endpoints
+
+| Endpoint | Reads | Parameters | Bounds |
+|---|---|---|---|
+| `GET /api/v1/tenders/open` | `tenders/open.json`, filtered as the tender list filters it | `category`, `segment`, `province` (each repeatable), `national`, `code`, `buyer`, `type`, `method`, `closing`, `q`, `sort`, `page` | 100 rows a page; `q` at most 100 characters, matched in memory |
+| `GET /api/v1/tenders/new` | `tenders/new/<day>.json` | `day` (one of the 30 days to the data date, the newest by default), `page` | 100 rows a page |
+| `GET /api/v1/expiring/{3m,6m,12m}` | the window's index and one page file | `page` | 100 rows a page, inside one 500-row file; the deeper windows also need `radar_depth` |
+| `GET /api/v1/search` | the hosted search's own statements (`site/src/search_db.ts`) | `q` (required, at most 200 characters, folded to eight words), `page` (1 to 200) | 50 organizations a page; buyers on page 1 |
+| `GET /api/v1/organizations/{id}/records` | the records database (`ORG_RECORDS_SQL`) | `source` (required: `awards`, `history`, `contracts`, `grants`), `year`, `page` (1 to 50) | 100 rows a page; the ten fiscal years ending with the data date's, or the one asked for; through `records_org` |
+| `GET /api/v1/buyers/{id}/records` | the records database (`BUYER_RECORDS_SQL`) | as above | as above, through `records_buyer` |
+| `GET /api/v1/me` | nothing past the checks | none | the key's prefix, plan, plan end, the day's count, the limits |
+
+A parameter an endpoint does not take, a single-valued one given twice, or a
+value it cannot use is a 400 whose message names no value from the request.
+A page past the last is a 404. A retired organization or buyer id on a
+records endpoint answers 301 to the id that took its records, as the open
+API's profiles do. The records statements are constants with `?N`
+placeholders, each ending in `LIMIT 101 OFFSET ?5`, ordered by the index
+itself (the plan test checks that no temporary sort is made), and read
+`extra = 0` rows only; `next_page` says whether another page follows, in
+place of a count that would read the whole range. Records carry the fiscal
+year and quarter, segment, value (dollars, with `value_note`), the
+competitive flag and the method, with the organization or the buyer they
+are paired with.
+
+### Checks, in order
+
+1. The switch: while `ACCOUNTS_ENABLED` is not `"true"` every `/api/v1`
+   address answers the open API's own 404 (`{"error":"not found"}`, public
+   for five minutes) and nothing is read.
+2. `API_LIMIT`, the per-address cap every `/api/` request meets
+   (`site/src/limits.ts`).
+3. `requireApiKey("api")`: 401 for a missing, malformed, unknown, revoked or
+   blocked account's key; 403 for a key whose account's plan lacks `api`;
+   503 when the accounts database cannot say (*Security posture*).
+4. `KEY_LIMIT` (namespace 2009, 600 a minute), keyed `key:<key id>`: a
+   429 with `Retry-After: 60`. A limiter fault lets the request through.
+5. The day's count in `api_usage`: one statement inserts the key's row for
+   the UTC day at 1 or adds one while the count is under 20,000. At the cap
+   no row comes back and nothing is written: a 429 with `Retry-After` set to
+   the seconds left until 00:00 UTC. A write that fails lets the request
+   through uncounted (fail open), and `/me` then reports `requests: null`.
+
+While the switch is on, every answer under `/api/v1`, a refusal included,
+is sent `Cache-Control: private, no-store` with `Vary: Authorization,
+X-Api-Key`. Errors are `{"error": "..."}` in English.
+
+### Limits, and why these
+
+At 600 a minute and 20,000 a day, an ordinary script (the open notices, the
+day's new notices, the three radar windows, the records of a few hundred
+organizations) fits in a few thousand requests a day, and a key makes at
+most 600,000 requests a month against the 10 million the Workers plan
+includes. A records page reads at most 5,001 rows of one index range, plus
+the further-segment rows it passes over, so a key spending its whole day on
+the deepest pages reads about 100 million rows: some 3 billion in a month,
+an eighth of the 25 billion D1 includes. The per-address cap (60 a minute)
+still applies, so 600 a minute matters only for a key used from several
+addresses.
+
+### Operator step at landing
+
+Apply the schema again, which adds `api_usage` and its index and changes
+nothing else:
+
+```
+cd site
+npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+```
+
+Until it is applied, every request is let through uncounted and the keys
+page says the counts cannot be read. The `KEY_LIMIT` binding deploys with
+`wrangler.jsonc`.
 
 ## Payments
 

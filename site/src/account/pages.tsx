@@ -11,7 +11,9 @@ import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { EMAIL_MAX } from "../pages/interest";
 import { ProNote, ProTag } from "../pro";
+import { KEYED_ENDPOINTS, KEY_PER_DAY, KEY_PER_MINUTE } from "../api_keyed_spec";
 import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
+import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
 import { SAVED_SEARCH_MAX, allowed } from "./entitlements";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch, isDeliverable } from "./searches";
@@ -383,9 +385,15 @@ export function stoppedView(lang: Lang, label: string) {
 
 // -- API keys ----------------------------------------------------------------------------------
 
-export function keysView(lang: Lang, account: Account, state: { keys: KeyRow[]; created?: string; notice?: string | null; errors?: Key[] }) {
+// usage: each key's count today and over the last 30 days (api_usage.ts); null
+// when the counts cannot be read, and a key with none in the period is absent.
+export function keysView(
+  lang: Lang, account: Account,
+  state: { keys: KeyRow[]; usage?: Map<string, KeyUsage> | null; created?: string; notice?: string | null; errors?: Key[] },
+) {
   const live = state.keys.filter((k) => !k.revoked_at).length;
   const canCreate = allowed(account, "api");
+  const count = (k: KeyRow, which: keyof KeyUsage) => (state.usage ? fmtInt(state.usage.get(k.id)?.[which] ?? 0, lang) : "");
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.keys_title")} lead={t(lang, "account.keys_lead")}
@@ -421,7 +429,9 @@ export function keysView(lang: Lang, account: Account, state: { keys: KeyRow[]; 
               <thead>
                 <tr>
                   <th>{t(lang, "account.key_name")}</th><th>{t(lang, "account.col_prefix")}</th><th>{t(lang, "account.col_created")}</th>
-                  <th>{t(lang, "account.col_last_used")}</th><th>{t(lang, "account.col_status")}</th>
+                  <th>{t(lang, "account.col_last_used")}</th>
+                  <th class="num">{t(lang, "account.col_today")}</th><th class="num">{t(lang, "account.col_30_days")}</th>
+                  <th>{t(lang, "account.col_status")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -431,6 +441,8 @@ export function keysView(lang: Lang, account: Account, state: { keys: KeyRow[]; 
                     <td data-label={t(lang, "account.col_prefix")} class="mono">aw_{k.prefix}</td>
                     <td data-label={t(lang, "account.col_created")} class="mono">{day(k.created_at)}</td>
                     <td data-label={t(lang, "account.col_last_used")} class="mono">{k.last_used_at ? day(k.last_used_at) : t(lang, "account.key_never")}</td>
+                    <td data-label={t(lang, "account.col_today")} class="num">{count(k, "today")}</td>
+                    <td data-label={t(lang, "account.col_30_days")} class="num">{count(k, "last30")}</td>
                     <td data-label={t(lang, "account.col_status")}>
                       {k.revoked_at ? (
                         <span class="muted">{t(lang, "account.key_revoked", { date: day(k.revoked_at) })}</span>
@@ -450,6 +462,18 @@ export function keysView(lang: Lang, account: Account, state: { keys: KeyRow[]; 
         ) : (
           <p class="muted">{t(lang, "account.keys_none")}</p>
         )}
+        {state.keys.length ? (
+          <p class="muted small">
+            {state.usage === null ? `${t(lang, "account.keys_usage_unread")} ` : ""}
+            {t(lang, "account.keys_usage_note", { day: fmtInt(KEY_PER_DAY, lang), minute: fmtInt(KEY_PER_MINUTE, lang) })}
+          </p>
+        ) : null}
+      </Panel>
+      <Panel title={t(lang, "account.panel_endpoints")}>
+        <dl>
+          {KEYED_ENDPOINTS.map((e) => <><dt class="mono">GET {e.path}</dt><dd>{t(lang, e.text)}</dd></>)}
+        </dl>
+        <p class="muted small">{tj(lang, "account.endpoints_more", { data: <a href="/data#api-keyed">{t(lang, "nav.data")}</a> })}</p>
       </Panel>
     </>
   );

@@ -352,7 +352,10 @@ describe("the account pages in French", () => {
         expect(html, `${path}: ${english}`).not.toContain(`<h1>${english}</h1>`);
       }
       expect(html, path).not.toContain(String.fromCharCode(0x2014));
-      const visible = html.replace(/<script type="application\/(?:ld\+)?json"[^>]*>[\s\S]*?<\/script>/g, "").replace(/ pattern="[^"]*"/g, "");
+      // Code set in mono (the keys page's endpoint paths, "/api/v1/buyers/{id}/records") is
+      // not a sentence, so its braces are not a placeholder left unfilled.
+      const visible = html.replace(/<script type="application\/(?:ld\+)?json"[^>]*>[\s\S]*?<\/script>/g, "").replace(/ pattern="[^"]*"/g, "")
+        .replace(/<dt class="mono">[^<]*<\/dt>/g, "");
       expect(visible, path).not.toMatch(/\{\w+\}/);
     }
     const french = nbsp(await (await get("/account/sign-in?lang=fr")).text());

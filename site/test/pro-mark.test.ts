@@ -434,10 +434,10 @@ describe("the Data page", () => {
 
   it("says in one line, with the chip, that API keys come with Pro", async () => {
     const en = decode(await html("/data", { env: on() }));
-    expect(en).toContain(`<p class="pro-note">${CHIP_EN} <a href="/account/keys">API keys</a> come with Pro. No endpoint asks for one yet.</p>`);
+    expect(en).toContain(`<p class="pro-note">${CHIP_EN} <a href="/account/keys">API keys</a> come with Pro and open the keyed API below.</p>`);
     expect(en.indexOf("API keys</a> come with Pro")).toBeGreaterThan(en.indexOf("Each address may make 60 API requests a minute."));
     const fr = decode(await html("/data?lang=fr", { env: on() }));
-    expect(fr).toContain(`<p class="pro-note">${CHIP_FR} Les <a href="/account/keys">clés d’API</a> sont offertes avec le forfait Pro. Aucun point d’accès n’en demande encore.</p>`);
+    expect(fr).toContain(`<p class="pro-note">${CHIP_FR} Les <a href="/account/keys">clés d’API</a> sont offertes avec le forfait Pro et ouvrent l’API avec clé ci-dessous.</p>`);
   });
 });
 

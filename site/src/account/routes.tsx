@@ -12,7 +12,7 @@
 //   POST /account/searches/import      add the alerts form's rows                     (session, CSRF)
 //   POST /account/searches/:id         email delivery                                 (session, CSRF)
 //   POST /account/searches/:id/delete  remove one                                     (session, CSRF)
-//   GET  /account/keys                 API keys                                       (session)
+//   GET  /account/keys                 API keys, each with its counts, the endpoints  (session)
 //   POST /account/keys                 create one, shown once                         (session, CSRF, plan)
 //   POST /account/keys/:id/revoke      revoke one                                     (session, CSRF)
 //   GET  /account/bug                  the bug report form, or Pro's notice           (session)
@@ -44,6 +44,7 @@ import { t, type Key, type Lang } from "../i18n";
 import { EMAIL_MAX, interestFilter, kindOfPath, normalizeEmail } from "../pages/interest";
 import { deviceClass } from "../views";
 import { KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
+import { keyUsage, nowOf } from "./api_usage";
 import { audit } from "./audit";
 import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, startCheckout } from "./billing";
 import { bugPage, fileBug } from "./bugs";
@@ -444,9 +445,11 @@ account.post("/stop", async (c) => {
 async function keysPage(c: Context<AppEnv>, who: Account, extra: { created?: string; errors?: Key[]; status?: number } = {}) {
   const lang = c.get("lang");
   const keys = await listKeys(c.env, who.userId);
+  // The counts are read only when there is a key to count; null says they cannot be read.
+  const usage = keys.length ? await keyUsage(c.env, who.userId, nowOf(c.env)) : new Map();
   const notice = c.req.query("m") === "revoked" && !extra.created ? t(lang, "account.msg_key_revoked") : null;
   return accountPage(c, t(lang, "account.keys_title"),
-    keysView(lang, who, { keys, created: extra.created, notice, errors: extra.errors }), extra.status ?? 200);
+    keysView(lang, who, { keys, usage, created: extra.created, notice, errors: extra.errors }), extra.status ?? 200);
 }
 
 account.get("/keys", async (c) => {

@@ -10,6 +10,7 @@ import { Layout, PageHead, noDataPage, page, todayOf } from "../layout";
 import { allowsRadarDepth, requestPlan } from "../plan";
 import { ProNote, ProTag } from "../pro";
 import { ODLA_URL, OGL_URL, datasetJsonLd, pageSeo } from "../seo";
+import { KeyedApiDocs } from "./keyed_api";
 import { datasetUrl } from "./shared";
 
 // The changelog of anything that changes how a figure is computed, newest
@@ -310,6 +311,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
           {pro ? (
             <ProNote lang={lang}>{tj(lang, "data.api_keys", { keys: <a href="/account/keys">{t(lang, "data.api_keys_link")}</a> })}</ProNote>
           ) : null}
+          {pro ? <KeyedApiDocs lang={lang} /> : null}
 
           <h2 id="licence">{t(lang, "data.toc_licence")}</h2>
           <p>{tj(lang, "data.licence_text", { ogl: <a href={OGL_URL[lang]}>{t(lang, "data.ogl")}</a>, odla: <a href={ODLA_URL}>{t(lang, "data.odla")}</a> })}</p>

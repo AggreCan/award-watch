@@ -166,8 +166,8 @@ export const ACCOUNT_STRINGS = {
   // -- API keys ------------------------------------------------------------------------
   "account.keys_title": { en: "API Keys", fr: "Clés d'API" },
   "account.keys_lead": {
-    en: "A key identifies your requests to the site's API. No endpoint asks for one yet.",
-    fr: "Une clé identifie vos requêtes à l'API du site. Aucun point d'accès n'en demande encore.",
+    en: "A key opens the keyed API under /api/v1 while the account is on Pro. Send it in an Authorization header as a Bearer token, or in an X-Api-Key header.",
+    fr: "Une clé ouvre l'API avec clé sous /api/v1 tant que le compte est au forfait Pro. Envoyez-la dans un en-tête Authorization comme jeton Bearer, ou dans un en-tête X-Api-Key.",
   },
   "account.panel_new_key": { en: "New Key", fr: "Nouvelle clé" },
   "account.new_key_text": {
@@ -203,6 +203,22 @@ export const ACCOUNT_STRINGS = {
   "account.api_key_plan": {
     en: "The plan of the key's account does not include the API.",
     fr: "Le forfait du compte de cette clé ne comprend pas l'API.",
+  },
+  // The keys page's endpoint list and each key's count (src/account/api_usage.ts).
+  "account.panel_endpoints": { en: "Endpoints", fr: "Points d'accès" },
+  "account.endpoints_more": {
+    en: "The parameters, the limits and an example are on the {data} page.",
+    fr: "Les paramètres, les limites et un exemple sont sur la page {data}.",
+  },
+  "account.col_today": { en: "Today", fr: "Aujourd'hui" },
+  "account.col_30_days": { en: "Last 30 days", fr: "30 derniers jours" },
+  "account.keys_usage_note": {
+    en: "Requests are counted by UTC day. Each key may make {day} a day and {minute} a minute.",
+    fr: "Les requêtes sont comptées par jour UTC. Chaque clé peut en faire {day} par jour et {minute} par minute.",
+  },
+  "account.keys_usage_unread": {
+    en: "The counts cannot be read just now.",
+    fr: "Les comptes ne peuvent pas être lus pour le moment.",
   },
 
   // -- deletion ------------------------------------------------------------------------
@@ -278,8 +294,8 @@ export const ACCOUNT_STRINGS = {
   // -- the privacy page, while accounts are open ------------------------------------------
   "account.privacy_toc": { en: "Accounts", fr: "Comptes" },
   "account.privacy_kept": {
-    en: "Signing in is optional; every page works without an account. An account keeps the email address, the language, when it was created and last used, its plan, its saved searches and the names of its API keys.",
-    fr: "La connexion est facultative; toutes les pages fonctionnent sans compte. Un compte conserve l'adresse courriel, la langue, sa date de création et de dernière utilisation, son forfait, ses recherches enregistrées et les noms de ses clés d'API.",
+    en: "Signing in is optional; every page works without an account. An account keeps the email address, the language, when it was created and last used, its plan, its saved searches, the names of its API keys and, for 60 days, how many requests each key made each day.",
+    fr: "La connexion est facultative; toutes les pages fonctionnent sans compte. Un compte conserve l'adresse courriel, la langue, sa date de création et de dernière utilisation, son forfait, ses recherches enregistrées, les noms de ses clés d'API et, pendant 60 jours, le nombre de requêtes faites chaque jour par chaque clé.",
   },
   "account.privacy_secrets": {
     en: "There are no passwords. Sign-in codes, sign-in links, the session and API keys are stored only as one-way hashes. A signed-in browser holds a second cookie, __Host-aw_session, which keeps the session for 30 days after its last use.",

@@ -90,6 +90,12 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   if (/^\/rankings\/[^/]+$/.test(path)) return { route: "/rankings/:year", kind: "page" };
   if (path.startsWith("/api/")) {
     if (API_FIXED.has(path)) return { route: path, kind: "api" };
+    // The keyed API (src/api_keyed.ts): ids and windows folded into their templates.
+    if (/^\/api\/v1\/(?:tenders\/open|tenders\/new|search|me)$/.test(path)) return { route: path, kind: "api" };
+    if (/^\/api\/v1\/expiring\/[^/]+$/.test(path)) return { route: "/api/v1/expiring/:window", kind: "api" };
+    const records = /^\/api\/v1\/(organizations|buyers)\/[^/]+\/records$/.exec(path);
+    if (records) return { route: `/api/v1/${records[1]}/:id/records`, kind: "api" };
+    if (path.startsWith("/api/v1/")) return { route: "/api/v1/other", kind: "api" };
     if (/^\/api\/organizations\/[^/]+$/.test(path)) return { route: "/api/organizations/:id", kind: "api" };
     if (/^\/api\/tenders\/[^/]+$/.test(path)) return { route: "/api/tenders/:reference", kind: "api" };
     if (/^\/api\/buyers\/[^/]+$/.test(path)) return { route: "/api/buyers/:id", kind: "api" };

@@ -66,6 +66,9 @@ export interface Env {
   STOP_LIMIT?: RateLimit;
   // The payment service's webhook posts per address (wrangler.jsonc "ratelimits").
   WEBHOOK_LIMIT?: RateLimit;
+  // The keyed API's requests per API key (wrangler.jsonc "ratelimits",
+  // src/api_keyed.ts), on top of API_LIMIT's per-address cap.
+  KEY_LIMIT?: RateLimit;
   // The operator console (src/account/admin.tsx; docs/accounts.md, Operator
   // console). All three are secrets set with `wrangler secret put`, never
   // variables: the repository is public. OPERATOR_EMAILS holds the

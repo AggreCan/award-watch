@@ -1,6 +1,5 @@
-// API keys: issued and revoked on /account/keys, enforced on no route yet.
-// Phase 3 mounts requireApiKey on the metered endpoints; until then it is
-// exported and tested, and mounted nowhere.
+// API keys: issued and revoked on /account/keys, and asked for by the keyed
+// API under /api/v1 (src/api_keyed.ts), which mounts requireApiKey("api").
 //
 // A key reads "aw_<prefix>_<secret>": 8 hex characters shown on the keys
 // page so the user can tell keys apart, then 32 random bytes. The row holds
@@ -52,8 +51,9 @@ export async function revokeKey(env: Env, userId: string, id: string, now = new 
 // -- the middleware ---------------------------------------------------------------
 
 // stale: the database could not be read and this isolate's last check of the
-// key answered.
-export type KeyHolder = { userId: string; keyId: string; stale?: true };
+// key answered. plan and planUntil are the answer the check gave, so a route
+// behind the middleware never reads the entitlements a second time.
+export type KeyHolder = { userId: string; keyId: string; plan: Plan; planUntil: string | null; stale?: true };
 
 const holders = new WeakMap<Request, KeyHolder>();
 
@@ -141,10 +141,9 @@ export function requireApiKey(feature: Feature = "api"): MiddlewareHandler<AppEn
         return refuse(503, "account.unavailable_text");
       }
       console.error("api key: database unreadable, last known answer used");
-      if (!allowed(lastKnownPlan({ id: known.userId, plan: known.plan, plan_until: known.planUntil }, now), feature)) {
-        return refuse(403, "account.api_key_plan");
-      }
-      return pass({ userId: known.userId, keyId: known.keyId, stale: true });
+      const last = lastKnownPlan({ id: known.userId, plan: known.plan, plan_until: known.planUntil }, now);
+      if (!allowed(last, feature)) return refuse(403, "account.api_key_plan");
+      return pass({ userId: known.userId, keyId: known.keyId, plan: last.plan, planUntil: last.until, stale: true });
     }
     let found: Found | null = null;
     for (const row of rows) {
@@ -166,6 +165,6 @@ export function requireApiKey(feature: Feature = "api"): MiddlewareHandler<AppEn
         // The last-use time lags; the key still stands.
       }
     }
-    return pass({ userId: found.user_id, keyId: found.id });
+    return pass({ userId: found.user_id, keyId: found.id, plan: plan.plan, planUntil: plan.until });
   };
 }

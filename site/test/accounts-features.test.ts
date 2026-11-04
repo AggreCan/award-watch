@@ -242,7 +242,7 @@ describe("API keys", () => {
 });
 
 describe("requireApiKey", () => {
-  // Mounted on a test app only: no route of the site uses it yet.
+  // Mounted on a test app here; the site's own use, under /api/v1, is test/api-keyed.test.ts.
   const probe = new Hono<AppEnv>();
   probe.get("/probe", requireApiKey(), (c) => c.json({ holder: apiKeyOf(c) ?? null }));
   const call = (env: object, headers: Record<string, string> = {}) => probe.request("/probe", { headers }, env);

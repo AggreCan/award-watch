@@ -1634,8 +1634,8 @@ const STRINGS = {
   // While the accounts switch is on: the 12-month file's note and the line on keys, each with the Pro chip.
   "data.file.pro_on": { en: "Part of Pro. The 3-month file is free.", fr: "Fait partie de Pro. Le fichier de 3 mois est gratuit." },
   "data.api_keys": {
-    en: "{keys} come with Pro. No endpoint asks for one yet.",
-    fr: "Les {keys} sont offertes avec le forfait Pro. Aucun point d'accès n'en demande encore.",
+    en: "{keys} come with Pro and open the keyed API below.",
+    fr: "Les {keys} sont offertes avec le forfait Pro et ouvrent l'API avec clé ci-dessous.",
   },
   "data.api_keys_link": { en: "API keys", fr: "clés d'API" },
   "data.licence_text": {
@@ -2587,6 +2587,121 @@ const STRINGS = {
   "data.downloads_closing": {
     en: "The open tender notices file is written once a night, so the closing states in it are as of the data date. Its closing times are Eastern time (ET), as CanadaBuys publishes them, with no zone written.",
     fr: "Le fichier des avis d'appel d'offres ouverts est écrit une fois par nuit : les états de clôture qu'il donne sont ceux de la date des données. Ses heures de clôture sont en heure de l'Est (HE), comme AchatsCanada les publie, sans fuseau indiqué.",
+  },
+
+  // -- the keyed API (src/api_keyed.ts; the Data page's section, pages/keyed_api.tsx) ----------
+  "keyed.title": { en: "Keyed API", fr: "API avec clé" },
+  "keyed.intro": {
+    en: "With a key, the endpoints under {base} answer JSON from the same files and databases as the pages, with filters, paging and the records of the last ten fiscal years. Send the key in an {auth} header as a Bearer token, or in an {xkey} header. Every answer is for the key's holder alone and is never cached.",
+    fr: "Avec une clé, les points d'accès sous {base} répondent en JSON à partir des mêmes fichiers et bases de données que les pages, avec filtres, pagination et les dossiers des dix derniers exercices. Envoyez la clé dans un en-tête {auth} comme jeton Bearer, ou dans un en-tête {xkey}. Chaque réponse est destinée au seul détenteur de la clé et n'est jamais mise en cache.",
+  },
+  "keyed.col_params": { en: "Parameters", fr: "Paramètres" },
+  "keyed.no_params": { en: "None", fr: "Aucun" },
+  "keyed.ep_open": {
+    en: "The open notices, filtered and sorted as on the tender list, 100 a page",
+    fr: "Les avis ouverts, filtrés et triés comme dans la liste des appels d'offres, 100 par page",
+  },
+  "keyed.ep_new": {
+    en: "The notices first seen on one of the last 30 days, the newest day by default",
+    fr: "Les avis vus pour la première fois l'un des 30 derniers jours, le plus récent par défaut",
+  },
+  "keyed.ep_expiring": {
+    en: "Contracts ending within 3, 6 or 12 months of the data date, soonest first, 100 a page",
+    fr: "Les contrats prenant fin dans les 3, 6 ou 12 mois suivant la date des données, les plus proches d'abord, 100 par page",
+  },
+  "keyed.ep_search": {
+    en: "Organizations and buyers by name or business number, as on the search page, 50 organizations a page",
+    fr: "Organisations et acheteurs par nom ou numéro d'entreprise, comme sur la page de recherche, 50 organisations par page",
+  },
+  "keyed.ep_org_records": {
+    en: "One organization's records from one source, newest fiscal year first, 100 a page",
+    fr: "Les dossiers d'une organisation pour une source, l'exercice le plus récent d'abord, 100 par page",
+  },
+  "keyed.ep_buyer_records": {
+    en: "One buyer's records from one source, newest fiscal year first, 100 a page",
+    fr: "Les dossiers d'un acheteur pour une source, l'exercice le plus récent d'abord, 100 par page",
+  },
+  "keyed.ep_me": {
+    en: "The key's plan, its count for the day and its limits",
+    fr: "Le forfait de la clé, son compte de la journée et ses limites",
+  },
+  "keyed.col_param": { en: "Parameter", fr: "Paramètre" },
+  "keyed.col_values": { en: "Values", fr: "Valeurs" },
+  "keyed.p_category": {
+    en: "GD, SRV, CNST or SRVTGD, the tender list's categories; repeat it for several",
+    fr: "GD, SRV, CNST ou SRVTGD, les catégories de la liste des appels d'offres; répétez-le pour en donner plusieurs",
+  },
+  "keyed.p_segment": {
+    en: "A two-digit UNSPSC segment, such as 43; repeat it for several",
+    fr: "Un segment UNSPSC à deux chiffres, comme 43; répétez-le pour en donner plusieurs",
+  },
+  "keyed.p_province": {
+    en: "A province or territory code, such as ON; repeat it for several",
+    fr: "Un code de province ou de territoire, comme ON; répétez-le pour en donner plusieurs",
+  },
+  "keyed.p_national": {
+    en: "With a province given, 1 (the default) keeps the notices that name no province and 0 leaves them out",
+    fr: "Avec une province donnée, 1 (par défaut) garde les avis qui ne nomment aucune province et 0 les écarte",
+  },
+  "keyed.p_code": {
+    en: "2 to 8 digits that start a UNSPSC code (a family has 4, a class 6)",
+    fr: "De 2 à 8 chiffres qui commencent un code UNSPSC (une famille en compte 4, une classe 6)",
+  },
+  "keyed.p_buyer": {
+    en: "A buyer id, as in the address of a buyer's page",
+    fr: "Un identifiant d'acheteur, comme dans l'adresse de la page d'un acheteur",
+  },
+  "keyed.p_type": {
+    en: "A notice type as published in English, such as Request for Proposal",
+    fr: "Un type d'avis tel que publié en anglais, comme Request for Proposal",
+  },
+  "keyed.p_method": {
+    en: "A procurement method as published in English, such as Competitive - Open bidding",
+    fr: "Une méthode d'approvisionnement telle que publiée en anglais, comme Competitive - Open bidding",
+  },
+  "keyed.p_closing": {
+    en: "7 or 30, for the notices closing within that many days",
+    fr: "7 ou 30, pour les avis dont la clôture tombe dans ce nombre de jours",
+  },
+  "keyed.p_q": {
+    en: "Words to look for. On tenders/open, in titles, descriptions and references, at most {open} characters. On search, required: a name or a business number, of which the first eight words count.",
+    fr: "Les mots à chercher. Sur tenders/open, dans les titres, les descriptions et les références, au plus {open} caractères. Sur search, obligatoire : un nom ou un numéro d'entreprise, dont les huit premiers mots comptent.",
+  },
+  "keyed.p_sort": {
+    en: "closing (the default, soonest first) or published (newest first)",
+    fr: "closing (par défaut, la clôture la plus proche d'abord) ou published (les plus récents d'abord)",
+  },
+  "keyed.p_day": {
+    en: "A date as YYYY-MM-DD, one of the 30 days to the data date",
+    fr: "Une date sous la forme AAAA-MM-JJ, l'un des 30 jours jusqu'à la date des données",
+  },
+  "keyed.p_source": {
+    en: "Required: awards (award notices), history (PSPC contract history), contracts (published contracts) or grants (grants and contributions)",
+    fr: "Obligatoire : awards (avis d'attribution), history (historique des contrats de SPAC), contracts (contrats publiés) ou grants (subventions et contributions)",
+  },
+  "keyed.p_year": {
+    en: "One fiscal year by the year it starts in (2025 for 2025-26), within the last ten; all ten by default",
+    fr: "Un exercice désigné par l'année où il commence (2025 pour 2025-2026), parmi les dix derniers; les dix par défaut",
+  },
+  "keyed.p_page": {
+    en: "The page, from 1. A records list stops at page {records}; for more, start from the downloads.",
+    fr: "La page, à partir de 1. Une liste de dossiers s'arrête à la page {records}; pour aller plus loin, partez des téléchargements.",
+  },
+  "keyed.answers": {
+    en: "A list answers total, page, pages, per_page and rows, with data_as_of, the data date. A records list gives next_page in place of a total.",
+    fr: "Une liste répond par total, page, pages, per_page et rows, avec data_as_of, la date des données. Une liste de dossiers donne next_page au lieu d'un total.",
+  },
+  "keyed.limits": {
+    en: "Each key may make {minute} requests a minute and {day} a day, counted by UTC day. The limit of {address} API requests a minute from one address applies as well.",
+    fr: "Chaque clé peut faire {minute} requêtes par minute et {day} par jour, comptées par jour UTC. La limite de {address} requêtes à l'API par minute depuis une même adresse s'applique aussi.",
+  },
+  "keyed.errors": {
+    en: "An error answers JSON with an error field: 400 for a parameter the endpoint does not take or cannot use, 401 for a missing, unknown or revoked key, 403 for a key whose account is not on Pro, 404 for an address, id or page that does not exist, 429 past a limit (Retry-After says when to try again) and 503 while the data or the account service cannot be read.",
+    fr: "Une erreur répond en JSON avec un champ error : 400 pour un paramètre que le point d'accès ne prend pas ou ne peut pas utiliser, 401 pour une clé absente, inconnue ou révoquée, 403 pour une clé dont le compte n'est pas au forfait Pro, 404 pour une adresse, un identifiant ou une page qui n'existe pas, 429 au-delà d'une limite (Retry-After indique quand réessayer) et 503 tant que les données ou le service des comptes ne peuvent pas être lus.",
+  },
+  "keyed.example": {
+    en: "For example, the open notices for Ontario that close within 7 days:",
+    fr: "Par exemple, les avis ouverts pour l'Ontario dont la clôture tombe dans les 7 jours :",
   },
 } as const satisfies Record<string, Entry>;
 

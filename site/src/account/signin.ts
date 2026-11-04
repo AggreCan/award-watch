@@ -12,6 +12,7 @@
 import type { Env } from "../env";
 import type { Lang } from "../i18n";
 import { isBlocked } from "./admin_ops";
+import { USAGE_KEEP_DAYS, USAGE_SWEEP_SQL, dayPlus, utcDay } from "./api_usage";
 import { AUDIT_DAYS, audit } from "./audit";
 import { newCode, newId, plusDays, plusMinutes, randomHex, sameHash, sha256Hex } from "./secrets";
 
@@ -187,8 +188,9 @@ export async function findOrCreateUser(env: Env, email: string, lang: Lang, now 
 
 // Rows past their keeping: sign-in requests and wrong tries after a day, sessions 90 days
 // after they ended, the audit trail after 90 days, bug reports after
-// BUG_REPORT_DAYS. Run with each sign-in request, so the tables stay small
-// without a schedule of their own.
+// BUG_REPORT_DAYS, the keyed API's daily counts after USAGE_KEEP_DAYS. Run
+// with each sign-in request, so the tables stay small without a schedule of
+// their own.
 export async function sweep(env: Env, now = new Date()): Promise<void> {
   const db = env.ACCOUNTS!;
   const day = plusDays(now, -1);
@@ -209,5 +211,11 @@ export async function sweep(env: Env, now = new Date()): Promise<void> {
     await db.prepare("DELETE FROM bug_reports WHERE created_at < ?").bind(plusDays(now, -BUG_REPORT_DAYS)).run();
   } catch {
     console.error("account sweep: bug reports not swept");
+  }
+  // Apart again, for the same reason: api_usage arrived with the keyed API.
+  try {
+    await db.prepare(USAGE_SWEEP_SQL).bind(dayPlus(utcDay(now), -USAGE_KEEP_DAYS)).run();
+  } catch {
+    console.error("account sweep: api usage not swept");
   }
 }

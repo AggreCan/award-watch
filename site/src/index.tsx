@@ -3,6 +3,7 @@ import { getCookie, setCookie } from "hono/cookie";
 import { html } from "hono/html";
 import { secureHeaders } from "hono/secure-headers";
 import { api } from "./api";
+import { keyedApi } from "./api_keyed";
 import { conditional } from "./conditional";
 import { YEAR_RE, loadStats } from "./data";
 import type { AppEnv, Env } from "./env";
@@ -92,6 +93,9 @@ app.use("*", measure);
 app.use("*", conditional);
 
 app.route("/api", api);
+// The keyed API (src/api_keyed.ts): after /api, whose middleware gives its
+// 404 the open API's headers while the accounts switch is off.
+app.route("/api/v1", keyedApi);
 // Accounts (src/account/routes.tsx): every route is the site's 404 while
 // ACCOUNTS_ENABLED is not "true".
 app.route("/account", account);

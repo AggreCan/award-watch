@@ -119,6 +119,23 @@ CREATE TABLE IF NOT EXISTS api_keys (
 CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(prefix);
 CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
 
+-- The keyed API's count (src/account/api_usage.ts, src/api_keyed.ts): one
+-- row per API key per UTC day it was used, holding how many requests the
+-- day's quota counted for it (a refused request is not counted). The keys
+-- page shows today's count and the last 30 days'. Rows go after 60 days
+-- (signin.ts, sweep) and with their key (the cascade, when deletion removes
+-- the account's keys). A count alone: no path, parameter, address or time
+-- of day. Until this table exists on the database every request is let
+-- through uncounted and the keys page says the counts cannot be read.
+CREATE TABLE IF NOT EXISTS api_usage (
+  key_id TEXT NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE,
+  day TEXT NOT NULL,                             -- the UTC date, YYYY-MM-DD
+  n INTEGER NOT NULL,                            -- requests counted that day, at most the daily quota
+  PRIMARY KEY (key_id, day)
+);
+-- The sweep's range (day < 60 days ago); a count reads and writes through the primary key.
+CREATE INDEX IF NOT EXISTS idx_api_usage_day ON api_usage(day);
+
 -- The record a plan is computed from: the latest row (by created_at) whose
 -- window holds the moment wins, and none means free. The operator grants by
 -- inserting a row with source 'manual' (docs/accounts.md); 'stripe' is kept
