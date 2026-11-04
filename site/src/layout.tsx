@@ -10,6 +10,8 @@ import { allowed } from "./account/entitlements";
 import { type RailAccount, railAccount } from "./account/session";
 import { accountsEnabled } from "./account/switch";
 import { ProTag } from "./pro";
+import { clockOf } from "./closing";
+import { RefreshTimers } from "./refresh";
 
 // The formatting helpers live with the dictionary; pages import them from here.
 export { fmtInt, fmtMoney, fmtMoneyShort, pick } from "./i18n";
@@ -235,8 +237,10 @@ const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, lang, tit
 // page() so the pages, which already hand Layout their data date, do not
 // each pass it: the rail's counts, and the page's own address as viewKey()
 // writes it, so the rail can mark the item that leads exactly here. Outside
-// page() (the error handler) the rail shows its links bare.
-export type Shell = { rail: RailCounts | null; here: string; account?: RailAccount };
+// page() (the error handler) the rail shows its links bare. now is the
+// page's clock (clockOf), which the top bar's timers count from.
+// accountsOn: the accounts switch, for the top bar's same-day timer (refresh.tsx).
+export type Shell = { rail: RailCounts | null; here: string; account?: RailAccount; now?: number; accountsOn?: boolean };
 export const RailContext = createContext<Shell | null>(null);
 
 // A path and its query as one view: the language and the page number left
@@ -400,7 +404,7 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 15;
+export const STYLES_VERSION = 16;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -451,6 +455,7 @@ export const Layout: FC<
           <TopbarSearch lang={lang} query={props.query} />
           <div class="topbar-meta">
             <span class="asof">{t(lang, "nav.data_date", { date: props.dataAsOf ?? t(lang, "common.na") })}</span>
+            <RefreshTimers lang={lang} now={shell?.now ?? Date.now()} on={shell?.accountsOn ?? false} />
             <a href={`?lang=${lang === "fr" ? "en" : "fr"}`} class="lang-toggle" rel="nofollow">
               {t(lang, "nav.lang")}
             </a>
@@ -522,7 +527,7 @@ export async function page(c: Context<AppEnv>, body: unknown, status = 200): Pro
     rail = null;
   }
   const url = new URL(c.req.url);
-  const shell: Shell = { rail, here: viewKey(`${url.pathname}${url.search}`) };
+  const shell: Shell = { rail, here: viewKey(`${url.pathname}${url.search}`), now: clockOf(c.env).now, accountsOn: accountsEnabled(c.env) };
   c.header("Cache-Control", status === 200 ? "public, max-age=300" : "no-store");
   varyOnCookie(c);
   // Accounts: undefined while the switch is off, and nothing is read. A page

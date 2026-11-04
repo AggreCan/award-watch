@@ -43,6 +43,14 @@ const STRINGS = {
   "nav.main_label": { en: "Main", fr: "Principale" },
   "nav.skip": { en: "Skip to content", fr: "Passer au contenu" },
   "nav.feeds": { en: "Feeds", fr: "Fils Atom" },
+  // The top bar's two timers beside the data date (src/refresh.tsx), hours
+  // and minutes to the next scheduled run; "now" within its last minute.
+  "refresh.daily": { en: "Daily refresh in {left}", fr: "Actualisation quotidienne dans {left}" },
+  "refresh.daily_now": { en: "Daily refresh now", fr: "Actualisation quotidienne maintenant" },
+  "refresh.same_day": { en: "Same-day refresh in {left}", fr: "Actualisation du jour dans {left}" },
+  "refresh.same_day_now": { en: "Same-day refresh now", fr: "Actualisation du jour maintenant" },
+  "refresh.hm": { en: "{h}h {m}m", fr: "{h} h {m} min" },
+  "refresh.m": { en: "{m}m", fr: "{m} min" },
 
   // -- the rail: a live index of counts, the browse links, the reader's lists ---
   "rail.index": { en: "Overview", fr: "Vue d'ensemble" },
@@ -164,6 +172,7 @@ const STRINGS = {
   "col.status": { en: "Status", fr: "Statut" },
   "col.year": { en: "Year", fr: "Année" },
   "col.province": { en: "Province", fr: "Province" },
+  "col.type": { en: "Type", fr: "Type" },
 
   // Tender statuses (normalize.tender_status), the closing-soon state the
   // site derives, and the award and contract history statuses.
@@ -351,6 +360,17 @@ const STRINGS = {
     en: "The {about} page says who publishes the site and how to reach it.",
     fr: "La page {about} indique qui publie le site et comment le joindre.",
   },
+  // Each tile's figures beside its main one, label and figure a line, short
+  // enough for the block beside the figure at 1440 px in both languages.
+  "home.side_tomorrow": { en: "Tomorrow", fr: "Demain" },
+  "home.side_in_2_days": { en: "In 2 days", fr: "Dans 2 jours" },
+  "home.side_days_3_7": { en: "Days 3 to {n}", fr: "Jours 3 à {n}" },
+  "home.side_30d": { en: "Last 30 days", fr: "30 derniers jours" },
+  "home.side_worth": { en: "Worth", fr: "Valeur" },
+  "home.side_suppliers": { en: "Suppliers", fr: "Fournisseurs" },
+  "home.side_6m": { en: "Within 6 months", fr: "D'ici 6 mois" },
+  "home.side_12m": { en: "Within 12 months", fr: "D'ici 12 mois" },
+  "home.side_no_value": { en: "No value stated", fr: "Sans valeur indiquée" },
 
   // -- tender lists ----------------------------------------------------------------------
   "tenders.title": { en: "Open Tender Notices", fr: "Avis d'appel d'offres ouverts" },
@@ -437,6 +457,22 @@ const STRINGS = {
     fr: "Aucune liste n'est publiée pour ce jour : aucune mise à jour n'a eu lieu, ou le jour est plus ancien que les fichiers conservés.",
   },
   "tenders.new_none": { en: "No new notice was seen on this day.", fr: "Aucun nouvel avis n'a été vu ce jour-là." },
+  // The home lists' Type column: the notice type's short form (constants.ts
+  // NOTICE_TYPE_SHORT), its published name on hover, the method under it.
+  "type.rfp": { en: "RFP", fr: "DP" },
+  "type.rfsa": { en: "RFSA", fr: "DAMA" },
+  "type.rfso": { en: "RFSO", fr: "DOC" },
+  "type.rfp_sa": { en: "RFP (SA)", fr: "DP (AMA)" },
+  "type.rfi": { en: "RFI", fr: "DDR" },
+  "type.itq": { en: "ITQ", fr: "IQ" },
+  "type.acan": { en: "ACAN", fr: "PAC" },
+  "type.directed": { en: "Directed", fr: "Prescrit" },
+  "method.open": { en: "Open bidding", fr: "Invitation ouverte" },
+  "method.selective": { en: "Selective tendering", fr: "Appel d'offres sélectif" },
+  "method.traditional": { en: "Traditional", fr: "Traditionnelle" },
+  "method.limited": { en: "Limited tendering", fr: "Appel d'offres limité" },
+  "method.non_competitive": { en: "Non-competitive", fr: "Non concurrentielle" },
+  "method.acan": { en: "ACAN", fr: "PAC" },
 
   // -- the same-day notices band (src/pages/intraday.tsx) ------------------------------
   "intraday.heading_one": {
@@ -2429,6 +2465,7 @@ export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "grant.type_C",
   "citepage.style.bibtex",
   "citepage.style.ris",
+  "col.type",
 ]);
 
 export function allKeys(): Key[] {

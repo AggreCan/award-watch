@@ -6,7 +6,7 @@
 // nightly run. The feeds and the CSV files are written by the nightly and
 // keep the states of the data date; their notes say so.
 
-import { closingInstant, closingParts, closingPassed as passedAt, closingState, countdownText, easternDay } from "../public/closing.js";
+import { addDays, closingInstant, closingParts, closingPassed as passedAt, closingState, countdownText, easternDay } from "../public/closing.js";
 import { CLOSING_SOON_DAYS } from "./constants";
 import { t, type Lang } from "./i18n";
 
@@ -42,6 +42,24 @@ export function tenderState(status: string, closing: string | null, clock: Clock
 // the rail's and the home page's "closing soon" counts.
 export function closingSoonCount(closings: readonly (string | null)[], clock: Clock): number {
   return closings.filter((c) => !!c && closingState(c, clock.now, CLOSING_SOON_DAYS) === "closing").length;
+}
+
+// The same notices by their closing day (the date as published, which the
+// window counts by): today, tomorrow, the day after, and the rest of the
+// window. The four add up to closingSoonCount.
+export function closingSoonByDay(closings: readonly (string | null)[], clock: Clock): { today: number; day1: number; day2: number; later: number } {
+  const out = { today: 0, day1: 0, day2: 0, later: 0 };
+  const day1 = addDays(clock.today, 1);
+  const day2 = addDays(clock.today, 2);
+  for (const c of closings) {
+    if (!c || closingState(c, clock.now, CLOSING_SOON_DAYS) !== "closing") continue;
+    const day = closingParts(c)?.day ?? "";
+    if (day <= clock.today) out.today += 1;
+    else if (day === day1) out.day1 += 1;
+    else if (day === day2) out.day2 += 1;
+    else out.later += 1;
+  }
+  return out;
 }
 
 // The closing instant in UTC ("2026-11-04T19:00:00Z") for public/countdown.js,

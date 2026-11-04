@@ -5,7 +5,7 @@
 import type { FC, PropsWithChildren } from "hono/jsx";
 import { ProTag } from "../pro";
 import { type Column, type MaybeColumn, type Rest, Table, restClass } from "../columns";
-import { MONEY_SOURCES, type MoneySource } from "../constants";
+import { METHOD_SHORT, MONEY_SOURCES, NOTICE_TYPE_SHORT, type MoneySource } from "../constants";
 import { type AwardRow, type OrgTotal, type TenderRow, type YearFigure, publishedReference } from "../data";
 import { buyerPath } from "../crosslinks";
 import { fmtInt, fmtMoney, fmtPct, pick, provinceName, segmentLabel, segmentShort, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
@@ -335,6 +335,47 @@ export function tenderColumns(lang: Lang): Column[] {
   ];
 }
 
+// The home page's two lists: every row is open and new or closing soon, so
+// the published date and the Open chip say the same thing on every row. The
+// notice type and its method take that room (Type), and the provinces go
+// under the buyer while their column rests (700 to 1279 px), so the table
+// fits the content column there without scrolling sideways.
+export function homeTenderColumns(lang: Lang): Column[] {
+  return [
+    { kind: "main", label: t(lang, "col.notice"), class: "c-notice" },
+    { kind: "label", label: t(lang, "col.type"), rest: "md", class: "c-type" },
+    { kind: "buyer", label: t(lang, "col.buyer"), class: "c-buyer" },
+    { kind: "datetime", label: t(lang, "col.closing"), class: "c-date" },
+    { kind: "region", label: t(lang, "col.region"), rest: "md", class: "c-region" },
+  ];
+}
+
+const shortKey = (en: string | null | undefined) => (en ?? "").trim().toLowerCase();
+
+// A notice type's short form ("RFP", "DP"), or null for a blank line ("Not
+// Applicable", or none). A type the table does not list prints as published,
+// so a new CanadaBuys value shows rather than vanishes; short says which it is.
+export function noticeTypeShort(lang: Lang, en: string | null, fr: string | null): { text: string; short: boolean } | null {
+  const key = shortKey(en);
+  if (key in NOTICE_TYPE_SHORT) {
+    const id = NOTICE_TYPE_SHORT[key];
+    return id ? { text: t(lang, `type.${id}` as Key), short: true } : null;
+  }
+  const text = pick(lang, en, fr);
+  return text ? { text, short: false } : null;
+}
+
+// A method without its "Competitive - " prefix ("Open bidding"); an advance
+// contract award notice's method is blank under its own type, which says it.
+export function methodShort(lang: Lang, en: string | null, fr: string | null, typeEn: string | null): string | null {
+  const key = shortKey(en);
+  if (key in METHOD_SHORT) {
+    const id = METHOD_SHORT[key];
+    return id === "acan" && NOTICE_TYPE_SHORT[shortKey(typeEn)] === "acan" ? null : t(lang, `method.${id}` as Key);
+  }
+  return pick(lang, en, fr);
+}
+
 // public/tenders.js draws the same markup; selectable rows carry their
 // reference for it. The state is the notice's at the page's clock; a notice
 // closing soon carries its closing instant for public/countdown.js, which
@@ -343,18 +384,29 @@ export function tenderColumns(lang: Lang): Column[] {
 // carry the same closing-soon chip, shows the time left in its place (the
 // chip waits hidden for public/countdown.js, which turns it on when the time
 // comes). omit: the page's own segment, left out of the chips.
+// variant "home": the home lists' columns (homeTenderColumns). Every row
+// with a closing time says how long is left: amber and kept live by the
+// countdown within the closing-soon window, a static day count beyond it,
+// which a page cached for five minutes cannot get wrong. The Open chip goes;
+// the chip of a notice whose closing time has passed stays.
 export const TenderTable: FC<{
   lang: Lang; rows: readonly TenderRow[]; clock: Clock; status?: boolean; selectable?: boolean; note?: boolean; timeLeft?: boolean; omit?: string;
-}> = ({ lang, rows, clock, status, selectable, note = true, timeLeft = false, omit }) => (
+  variant?: "home";
+}> = ({ lang, rows, clock, status, selectable, note = true, timeLeft = false, omit, variant }) => {
+  const home = variant === "home";
+  return (
   <>
   {note ? <SegmentNote lang={lang} rows={rows} omit={omit} /> : null}
   <div class="table-wrap bordered">
-    <Table cols={tenderColumns(lang)} class="t-tenders">
+    <Table cols={home ? homeTenderColumns(lang) : tenderColumns(lang)} class="t-tenders">
       <tbody>
         {rows.map((r) => {
           const state = tenderState(status ? r.status ?? "open" : "open", r.closing, clock);
           const closes = state === "closing" ? closesAtUtc(r.closing) : null;
-          const left = timeLeft && closes ? countdownLine(r.closing, clock, lang) : null;
+          const left = (timeLeft || home) && closes ? countdownLine(r.closing, clock, lang) : null;
+          const far = home && state === "open" ? countdownLine(r.closing, clock, lang) : null;
+          const type = home ? noticeTypeShort(lang, r.notice_type_en, r.notice_type_fr) : null;
+          const method = home ? methodShort(lang, r.method_en, r.method_fr, r.notice_type_en) : null;
           return (
             <tr data-ref={selectable ? r.reference.toLowerCase() : undefined}>
               <td data-label={t(lang, "col.notice")} class="c-notice">
@@ -362,19 +414,29 @@ export const TenderTable: FC<{
                 <br />
                 <span class="mono id muted">{publishedReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} omit={omit} />
               </td>
+              {home ? (
+                <td data-label={t(lang, "col.type")} class="c-type mdh">
+                  {type?.short ? <abbr class="type-name" title={pick(lang, r.notice_type_en, r.notice_type_fr) ?? undefined}>{type.text}</abbr>
+                    : type ? <span class="type-name">{type.text}</span> : null}
+                  {method ? <span class="type-method">{method}</span> : null}
+                </td>
+              ) : null}
               <td data-label={t(lang, "col.buyer")} class="c-buyer">
                 <BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} />
-                {/* Beside the detail panel the provinces column rests; they show here instead. */}
-                <span class="split-only muted small">{provincesText(lang, r.provinces)}</span>
+                {/* Beside the detail panel the provinces column rests; they show here instead. On the home
+                    lists they show here too while the column rests on a medium screen (md-only). */}
+                <span class={home ? "split-only md-only muted small" : "split-only muted small"}>{provincesText(lang, r.provinces)}</span>
               </td>
               <td data-label={t(lang, "col.closing")} class="mono c-date" data-closes={closes ?? undefined}
                 data-time={closes ? closingTime(r.closing, lang) ?? undefined : undefined} data-notice={closes ? r.reference.toLowerCase() : undefined}>
                 {closingText(r.closing, lang)}{" "}
-                <StatusBadge lang={lang} status={state} notice={closes ? r.reference.toLowerCase() : undefined} hidden={left !== null} />
+                {home && state === "open" ? null
+                  : <StatusBadge lang={lang} status={state} notice={closes ? r.reference.toLowerCase() : undefined} hidden={left !== null} />}
                 {left !== null ? <span class="countdown">{left}</span> : null}
+                {far !== null ? <span class="countdown countdown-far">{far}</span> : null}
               </td>
-              <td data-label={t(lang, "col.published")} class="mono c-pub mdh">{r.published ?? ""}</td>
-              <td data-label={t(lang, "col.region")} class="c-region">{provincesText(lang, r.provinces)}</td>
+              {home ? null : <td data-label={t(lang, "col.published")} class="mono c-pub mdh">{r.published ?? ""}</td>}
+              <td data-label={t(lang, "col.region")} class={home ? "c-region mdh" : "c-region"}>{provincesText(lang, r.provinces)}</td>
             </tr>
           );
         })}
@@ -382,7 +444,8 @@ export const TenderTable: FC<{
     </Table>
   </div>
   </>
-);
+  );
+};
 
 // The countdown under each closing-soon time (public/countdown.js) and the
 // words it writes, once per page that shows one. Without the script the

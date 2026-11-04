@@ -74,6 +74,16 @@ describe("the home tiles", () => {
       expect(t("en", key).length, key).toBeLessThanOrEqual(42);
       expect(t("fr", key).length, key).toBeLessThanOrEqual(42);
     }
+    // The side figures' labels share the tile's width with the figure and its note: 20 characters at the most.
+    const sides = (html: string) => [...html.matchAll(/<span class="tile-side-label">([^<]*)<\/span>/g)].map((m) => nbsp(m[1]));
+    const en = sides(await text("/"));
+    const fr = sides(await text("/?lang=fr"));
+    expect(en).toEqual(["Tomorrow", "In 2 days", "Days 3 to 7", "Last 30 days", "Worth", "Suppliers", "Within 6 months", "Within 12 months", "No value stated"]);
+    expect(fr).toEqual(["Demain", "Dans 2 jours", "Jours 3 à 7", "30 derniers jours", "Valeur", "Fournisseurs", "D’ici 6 mois", "D’ici 12 mois", "Sans valeur indiquée"]);
+    for (const label of [...en, ...fr]) {
+      expect(label.length, label).toBeLessThanOrEqual(20);
+      expect(label, label).not.toContain(String.fromCharCode(0x2014));
+    }
   });
 });
 

@@ -31,8 +31,19 @@ function hex(bytes: ArrayBuffer): string {
   return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// The top bar's timers (src/refresh.tsx) write a new line every minute, so
+// the tag is taken with their lines left blank: a page whose records did not
+// change keeps its tag, and a crawler coming back still gets its 304. A
+// browser that gets one shows its own copy, whose lines public/refresh.js
+// rewrites from the visitor's clock.
+const REFRESH_LINE = /<span class="refresh-line">[^<]*<\/span>/g;
+
 export async function bodyEtag(body: ArrayBuffer): Promise<string> {
-  return `W/"${hex(await crypto.subtle.digest("SHA-1", body))}"`;
+  const text = new TextDecoder().decode(body);
+  const tagged = text.includes('<span class="refresh-line">')
+    ? new TextEncoder().encode(text.replace(REFRESH_LINE, '<span class="refresh-line"></span>'))
+    : body;
+  return `W/"${hex(await crypto.subtle.digest("SHA-1", tagged))}"`;
 }
 
 // If-None-Match compares weakly: W/"x" and "x" name the same tag. "*" matches

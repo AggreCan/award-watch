@@ -534,12 +534,56 @@ describe("home", () => {
     })));
     expect(older).toContain('<span class="tile-label">Open tender notices</span><span class="tile-value">3</span>');
     expect(older).toContain('<span class="tile-label">Award notices</span><span class="tile-value">5,883</span>');
+    expect(older).not.toContain('class="tile-side"');
     expect(html).toContain("<h2>New Tender Notices Today</h2>");
     expect(html).toContain("<h2>Closing Within 7 Days</h2>");
     expect(html).toContain("<h2>Largest Award Values in 2026</h2>");
     expect(html).toContain('<a href="/rankings/2026">Full ranking</a>');
     expect(html).toContain("Exemplar Translation Services Inc.");
     expect(html).toContain("Each entry is a government record, linked to the notice or file it came from.");
+  });
+
+  // A tile's side figures, label then figure, as the page writes them.
+  const side = (html: string, href: string) => {
+    const tile = html.match(new RegExp(`<a class="tile[^"]*" href="${href.replace(/[?]/g, "\\?")}">([\\s\\S]*?)</a>`))?.[1] ?? "";
+    return [...tile.matchAll(/<span class="tile-side-label">([^<]*)<\/span><span class="tile-side-value">([^<]*)<\/span>/g)].map((m) => [nbsp(m[1]), nbsp(m[2])]);
+  };
+
+  it("sets figures beside each tile's own from the files the page reads, in both languages", async () => {
+    const html = await text("/");
+    // The fixture's one notice closing soon closes on 2026-11-04, four days after the clock's date.
+    expect(side(html, "/tenders?closing=7")).toEqual([["Tomorrow", "0"], ["In 2 days", "0"], ["Days 3 to 7", "1"]]);
+    expect(side(html, "/awards/2026")).toEqual([["Last 30 days", "2"], ["Worth", "$1.3M"], ["Suppliers", "2"]]);
+    // The radar's longer windows and the 3-month window's contracts with no value.
+    expect(side(html, "/expiring/3m")).toEqual([["Within 6 months", "5"], ["Within 12 months", "8"], ["No value stated", "1"]]);
+    const fr = await text("/?lang=fr");
+    expect(side(fr, "/tenders?closing=7")).toEqual([["Demain", "0"], ["Dans 2 jours", "0"], ["Jours 3 à 7", "1"]]);
+    expect(side(fr, "/awards/2026")).toEqual([["30 derniers jours", "2"], ["Valeur", "1,3 M$"], ["Fournisseurs", "2"]]);
+    expect(side(fr, "/expiring/3m")).toEqual([["D’ici 6 mois", "5"], ["D’ici 12 mois", "8"], ["Sans valeur indiquée", "1"]]);
+    // Label, figure and note stay first, in their order.
+    expect(html).toMatch(/<span class="tile-note">None closes today<\/span><span class="tile-side">/);
+  });
+
+  it("splits the closing-soon figure by closing day, the three rows and the ones closing today adding up to it", async () => {
+    // 12:00 Eastern on 2026-10-31: one closes later today, two tomorrow, one on the 2nd, two within the week;
+    // one has passed and one falls after the week.
+    const times = ["2026-10-31T10:00:00", "2026-10-31T15:00:00", "2026-11-01T09:00:00", "2026-11-01T14:00:00", "2026-11-02T14:00:00",
+      "2026-11-05T14:00:00", "2026-11-07", "2026-11-08T14:00:00"];
+    const html = await text("/", testEnv(makeFakeAssets({}, { "stats.json": { ...stats, closing_soon_times: times } })));
+    const figure = Number(html.match(/<a class="tile tile-soon"[^>]*><span class="tile-label">[^<]*<\/span><span class="tile-value" data-soon-count="">(\d+)</)?.[1]);
+    expect(figure).toBe(6);
+    expect(html).toContain('<span class="tile-note">1 closes today</span>');
+    const rows = side(html, "/tenders?closing=7");
+    expect(rows).toEqual([["Tomorrow", "2"], ["In 2 days", "1"], ["Days 3 to 7", "2"]]);
+    expect(rows.reduce((n, [, v]) => n + Number(v), 0) + 1).toBe(figure);
+    // Without the closing times, or without the award fields, the tile has no side figures.
+    const noTimes = await text("/", testEnv(makeFakeAssets({}, { "stats.json": { ...stats, closing_soon_times: undefined } })));
+    expect(side(noTimes, "/tenders?closing=7")).toEqual([]);
+    const noAwards = await text("/", testEnv(makeFakeAssets({}, {
+      "stats.json": { ...stats, totals: undefined, counts: { ...stats.counts, awards_30d: undefined, awards_year_suppliers: undefined } },
+    })));
+    expect(side(noAwards, "/awards/2026")).toEqual([]);
+    expect(noAwards).toContain('<a class="tile" href="/awards/2026"><span class="tile-label">Award notices in 2026</span><span class="tile-value">3</span>');
   });
 });
 

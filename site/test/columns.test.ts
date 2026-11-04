@@ -5,6 +5,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
 import { COLUMN_WIDTHS, MAIN_MIN, type Column, headClass, minWidths, tableStyle } from "../src/columns";
+import { homeTenderColumns, tenderColumns } from "../src/pages/shared";
 import { testEnv } from "./assets";
 
 // The stylesheet's text, handed over by vitest.config.ts.
@@ -88,6 +89,19 @@ describe("column widths", () => {
     ]);
     expect(data.table.heads.map((h: string[]) => h[1])).toEqual(["Notice", "Buyer", "Closing", "Published", "Provinces of delivery"]);
     expect(data.table.style).toMatch(/^--tmin:\d+px;--tmin-xl:\d+px;--tmin-lg:\d+px;--tmin-md:\d+px$/);
+  });
+
+  it("gives the home lists a Type column in place of Published, resting with the provinces below 1280 px", async () => {
+    const cols = homeTenderColumns("en");
+    expect(cols.map(headClass)).toEqual(["k-main c-notice", "k-label mdh c-type", "k-buyer c-buyer", "k-datetime c-date", "k-region mdh c-region"]);
+    expect(cols.map((c) => c.label)).toEqual(["Notice", "Type", "Buyer", "Closing", "Provinces of delivery"]);
+    // From 1000 to 1279 px the content column is 671 px at the least: the three columns left fit it.
+    expect(minWidths(cols)).toEqual({ all: 836, xxl: 836, xl: 836, lg: 836, md: 528 });
+    expect(minWidths(cols).md).toBeLessThanOrEqual(1000 - 15 - 264 - 48 - 2);
+    const html = await text("/");
+    expect(html).toContain(`<table class="restack cols t-tenders" style="${tableStyle(cols)}"><thead><tr><th class="k-main c-notice">Notice</th><th class="k-label mdh c-type">Type</th>`);
+    // The tender list keeps its own columns.
+    expect(tenderColumns("en").map(headClass)).toEqual(["k-main c-notice", "k-buyer c-buyer", "k-datetime c-date", "k-date mdh c-pub", "k-region c-region"]);
   });
 });
 

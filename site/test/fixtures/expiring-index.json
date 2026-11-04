@@ -43,6 +43,7 @@
  "windows": [
   {
    "n": 3,
+   "n_no_value": 1,
    "total": 4910500,
    "window": "3m"
   },

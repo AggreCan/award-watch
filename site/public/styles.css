@@ -989,3 +989,56 @@ a > .pro-tag, h2 > .pro-tag { margin-left: 2px; }
 @media (max-width: 699px) {
   .account-inline { flex-wrap: wrap; white-space: normal; }
 }
+
+/* -- the home page's tiles and lists, the top bar's timers -----------------
+   A tile's side figures (pages/home.tsx): a label and a figure a line, 12/16,
+   set against the tile's right edge beside the figure and its note, the last
+   line on the note's; where the tiles are two to a row (below 1200 px) they
+   drop under the note as a fourth row. The home lists' Type column: the
+   notice type's short form, the method under it in muted caption type; on a
+   phone the two read as one line. The time left beyond the closing-soon
+   window is static and in the secondary ink, not amber. */
+.tile-side { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-self: end; font-size: 12px; line-height: 16px; }
+.tile-side-row { display: contents; }
+.tile-side-label { min-width: 0; color: var(--muted); }
+.tile-side-value { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+@supports (grid-template-rows: subgrid) {
+  @media (min-width: 1200px) {
+    .tile:has(> .tile-side) { grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; }
+    .tile:has(> .tile-side) > .tile-label { grid-column: 1 / -1; }
+    .tile:has(> .tile-side) > .tile-value, .tile:has(> .tile-side) > .tile-note { grid-column: 1; }
+    .tile > .tile-side { grid-column: 2; grid-row: 2 / span 2; }
+    .tile-side-label { white-space: nowrap; }
+  }
+  @media (max-width: 1199px) {
+    .tiles:has(.tile-side) > .tile { grid-row: span 4; }
+  }
+}
+td.c-type .type-name { display: block; }
+td.c-type abbr.type-name { text-decoration: none; }
+td.c-type .type-method { display: block; font-size: 12px; line-height: 16px; color: var(--muted); }
+.countdown.countdown-far { font-weight: 400; color: var(--ink-2); }
+@media (min-width: 700px) and (max-width: 1279px) {
+  .md-only { display: block; }
+}
+@media (max-width: 699px) {
+  td.c-type .type-name, td.c-type .type-method { display: inline; }
+  td.c-type .type-name + .type-method::before { content: ", "; }
+}
+/* The top bar's timers (src/refresh.tsx), in the data date's type; the
+   same-day one is a link. Side by side they take 347 px (498 in French),
+   which the bar has from 1440 px; from 1200 they stack, one over the other
+   (199 and 244 px), and the search field keeps 267 px or more in French and
+   its placeholder whole. Below 1200 they are hidden: at 1000 px the field
+   would be at its 160 px floor in English and the bar too narrow in French. */
+.refresh-timers { display: none; }
+@media (min-width: 1200px) {
+  .refresh-timers { display: flex; flex-direction: column; align-items: flex-start; white-space: nowrap; }
+}
+@media (min-width: 1440px) {
+  .refresh-timers { flex-direction: row; align-items: center; gap: 16px; }
+}
+.refresh { font-variant-numeric: tabular-nums; }
+a.refresh { color: inherit; text-decoration: none; }
+a.refresh:hover { color: var(--ink); }
+a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offset: 2px; }

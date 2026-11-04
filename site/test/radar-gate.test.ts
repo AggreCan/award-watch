@@ -141,7 +141,9 @@ const html = async (path: string, env: object, cookie?: string) => (await get(pa
 const CHIP = / <span class="pro-tag"><svg[^>]*><path[^>]*><\/path><\/svg>Pro<span class="visually-hidden"> \((?:paid plan|forfait payant)\)<\/span><\/span>/g;
 const noRail = (page: string) =>
   page.replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "")
-    .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(CHIP, "");
+    .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(CHIP, "")
+    // The top bar's same-day timer leads to the tease while the switch is on and to the list while it is off.
+    .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');
 const pageHead = (page: string) => /<header class="page-head">[\s\S]*?<\/header>/.exec(page)?.[0] ?? "";
 // The head without its CSV button, which names the file each view links.
 const headText = (page: string) => pageHead(page).replace(/<div class="page-actions">[\s\S]*?<\/div>/, "");

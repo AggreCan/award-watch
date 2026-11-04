@@ -18,7 +18,7 @@ from awardwatch_pipeline import indicators
 from awardwatch_pipeline.db import connect, log_run
 from export_seed import (ACME, COLON_REF, CONTACT_EMAIL, CONTACT_NAME, CONTACT_PHONE, FOREIGN, NORTH, PERSON,
                          PERSON_STREET, PROSE_EMAIL, PROSE_PHONES, SERVANT, SLASH_REF, SUPPLIER_POSTAL, SUPPLIER_STREET,
-                         TODAY, seed, tender)
+                         TODAY, award, seed, tender)
 
 BASE = "https://awardwatch.example"
 
@@ -220,7 +220,8 @@ def test_every_file_passes_the_site_checks(exported):
     assert s(stats["data_as_of"]) and all(num(v) for v in stats["counts"].values())
     assert set(stats["counts"]) == {"organizations", "buyers", "tenders_open", "tenders_new_today",
                                     "tenders_closing_soon", "awards", "awards_year", "history", "contracts", "grants",
-                                    "lobbying"}
+                                    "lobbying", "awards_30d", "awards_year_suppliers"}
+    assert all(num_or_none(v) for v in stats["totals"].values())
     assert every(stats["new_tenders"], tender_row) and every(stats["closing_soon"], tender_row)
     assert every(stats["recent_awards"], award_row) and every(stats["top_organizations_year"], org_total)
     assert every(stats["runs"], lambda r: s(r["run_at"]) and s(r["source"]) and num_or_none(r["rows_new"]))
@@ -305,7 +306,7 @@ def test_counts_and_home_lists(exported):
     assert stats["data_as_of"] == "2026-10-31"
     assert stats["counts"] == {"organizations": 3, "buyers": 2, "tenders_open": 4, "tenders_new_today": 2,
                                "tenders_closing_soon": 1, "awards": 6, "awards_year": 3, "history": 2, "contracts": 2,
-                               "grants": 1, "lobbying": 1}
+                               "grants": 1, "lobbying": 1, "awards_30d": 1, "awards_year_suppliers": 2}
     # The year's count is the year's award pages' row count.
     assert stats["counts"]["awards_year"] == load(out, "awards/2026/index.json")["rows"]
     assert [r["reference"] for r in stats["closing_soon"]] == ["cb-200-2"]
@@ -328,6 +329,8 @@ def test_stats_carry_the_years_award_value_and_each_download_with_its_size_and_r
     # The seed's three award notices of 2026: ACME's and North's, ranked, and one whose supplier is withheld,
     # which no ranking names but the year's value counts.
     assert stats["totals"]["awards_year"] == 1_250_000.0 + 250_000.0 + 12_000.0
+    # Of those, North's of 2026-10-20 is the one awarded in the 30 days to the data date.
+    assert stats["totals"]["awards_30d"] == 250_000.0
     assert [o["id"] for o in stats["top_organizations_year"]] == [ids[ACME], ids[NORTH]]
     downloads = {d["file"]: d for d in stats["downloads"]}
     assert set(downloads) == set(written)
@@ -342,6 +345,28 @@ def test_stats_carry_the_years_award_value_and_each_download_with_its_size_and_r
     assert again["organizations.csv"]["rows"] == 999 and again["buyers.csv"]["rows"] == written["buyers.csv"]
     es.export_static(conn, out, today=TODAY, base_url=BASE)
     assert load(out, "stats.json")["downloads"] == []
+
+
+def test_stats_count_the_last_30_days_awards_and_the_years_suppliers(conn, tmp_path):
+    """Beside the year's award notices on the home page: those awarded in the 30 days to the data date (the data
+    date and the 29 before it), what they add up to by the counting rules, and the organizations the year's
+    notices name, each once, a withheld supplier naming none."""
+    seed(conn)
+    # 2026-10-02 is the window's first day and 2026-10-01 the day before it; a date after the data date is not in
+    # the last 30 days. A second notice to North adds a notice and no supplier; a euro value adds to no total.
+    award(conn, "AW-30A", 0, NORTH, value=100_000.0, awarded="2026-10-02")
+    award(conn, "AW-30B", 0, ACME, value=40_000.0, awarded="2026-10-01")
+    award(conn, "AW-30C", 0, ACME, value=7_000.0, awarded="2026-11-05")
+    award(conn, "AW-30D", 0, None, value=3_000.0, withheld=True, awarded="2026-10-31")
+    award(conn, "AW-30E", 0, "EURO SUPPLIES GMBH", value=9_000.0, currency="EUR", awarded="2026-10-15", country="DE")
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    stats = load(out, "stats.json")
+    # AW-2 (2026-10-20, 250,000), AW-30A, AW-30D and AW-30E.
+    assert stats["counts"]["awards_30d"] == 4
+    assert stats["totals"]["awards_30d"] == 250_000.0 + 100_000.0 + 3_000.0
+    # ACME, North and the euro supplier; AW-5 and AW-30D withhold theirs.
+    assert stats["counts"]["awards_year_suppliers"] == 3
 
 
 def test_the_3_month_csv_holds_the_3_month_list_and_the_data_page_counts_it(conn, tmp_path):

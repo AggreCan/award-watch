@@ -160,3 +160,31 @@ export const SEGMENT_SHORT: Readonly<Record<string, { en: string; fr: string }>>
 
 // Award notices start in 2012 (the historical file); the year pages count from there.
 export const FIRST_AWARD_YEAR = 2012;
+
+// The home lists' Type column: a notice type and a method as CanadaBuys
+// publishes them in English, lower-cased, to the id of the short form's
+// dictionary entry (type.<id> and method.<id> in i18n.ts). "Not Applicable"
+// maps to null, a blank line; a value not listed prints as published.
+export const NOTICE_TYPE_SHORT: Readonly<Record<string, string | null>> = {
+  "request for proposal": "rfp",
+  "request for supply arrangement": "rfsa",
+  "request for standing offer": "rfso",
+  "rfp against supply arrangement": "rfp_sa",
+  "request for information": "rfi",
+  "invitation to qualify": "itq",
+  "advance contract award notice": "acan",
+  "directed contract": "directed",
+  "not applicable": null,
+};
+
+// The methods without CanadaBuys' "Competitive - " prefix. The type line
+// above the method already tells an advance contract award notice apart, so
+// that method is left blank under its own type and named under any other.
+export const METHOD_SHORT: Readonly<Record<string, string>> = {
+  "competitive - open bidding": "open",
+  "competitive - selective tendering": "selective",
+  "competitive - traditional": "traditional",
+  "competitive - limited tendering": "limited",
+  "non-competitive": "non_competitive",
+  "advance contract award notice": "acan",
+};

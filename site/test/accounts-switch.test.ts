@@ -142,7 +142,9 @@ describe("with the switch on", () => {
       expect(rail.match(/class="pro-tag"/g), path).toHaveLength(4);
       expect(rail, path).toMatch(SAME_DAY_ITEM);
       expect(NOTE.test(on.body), path).toBe(path === "/tenders");
-      const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(NOTE, "");
+      // The top bar's same-day timer leads to the tease while the switch is on and to the list while it is off.
+      const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(NOTE, "")
+        .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');
       expect(ANALYTICS.test(stripped), path).toBe(path.startsWith("/organizations/"));
       expect(off.body, path).not.toContain("pro-tag");
       expect(off.body, path).not.toContain("/analytics");

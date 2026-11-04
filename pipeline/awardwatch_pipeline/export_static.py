@@ -10,14 +10,17 @@ loaders (site/src/data.ts) check every field they render and answer "not
 published" for a file that does not read, so a shape change here goes with a
 change there. Output tree (under data/out/static):
 
-  stats.json                    counts, today's notices, closing soon, the closing values of every open
-                                notice closing within CLOSING_TIMES_DAYS (closing_soon_times: the site
-                                counts closing soon from them at render), recent awards, the year's top
-                                organizations by awards value, the last runs, the source files read
-                                (source_files: one row per file read and one per source never read, each
-                                with last_read, last_modified as an ISO instant, last_modified_http as the
-                                publisher sent it, and loaded), totals (awards_year: the data year's award
-                                notices by the counting rules, CAD) and downloads (each file of the CSV
+  stats.json                    counts (with awards_30d, the award notices awarded in the AWARDS_RECENT_DAYS
+                                days to the data date, and awards_year_suppliers, the organizations the
+                                year's notices name), today's notices, closing soon, the closing values of
+                                every open notice closing within CLOSING_TIMES_DAYS (closing_soon_times:
+                                the site counts closing soon from them at render), recent awards, the
+                                year's top organizations by awards value, the last runs, the source files
+                                read (source_files: one row per file read and one per source never read,
+                                each with last_read, last_modified as an ISO instant, last_modified_http as
+                                the publisher sent it, and loaded), totals (awards_year: the data year's
+                                award notices by the counting rules, CAD; awards_30d: the notices
+                                counts.awards_30d counts, the same way) and downloads (each file of the CSV
                                 export the Data page offers: file, bytes, and rows under the header, the
                                 lines of SHA256SUMS; empty when the CSV folder is missing)
   tenders/open.json             every notice open on the data date as a list row (read by the browser only)
@@ -163,6 +166,9 @@ CLOSING_SOON_DAYS = 7
 # stats.json closing_soon_times covers the window and two days more, so a
 # page read a day or two after the nightly still counts from the file.
 CLOSING_TIMES_DAYS = CLOSING_SOON_DAYS + 2
+# The home page's award notices tile counts those awarded in this many days
+# to the data date, the data date included, as the new notices' list does.
+AWARDS_RECENT_DAYS = 30
 PROFILE_ROWS = 100
 # CLAUDE.md's profile contract: the newest 50 lobbying communications.
 LOBBYING_ROWS = 50
@@ -921,9 +927,17 @@ def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[
              "rows_new": r["rows_new"], "ok": r["ok"]}
             for r in conn.execute("SELECT run_at, source, detail, rows_new, ok FROM sources_log ORDER BY id DESC LIMIT ?",
                                   (RUN_ROWS,))]
+    # The figures beside the year's award notices on the home page: those awarded in the last
+    # AWARDS_RECENT_DAYS days and what they add up to (CAD, the rules' v), and the organizations the year's
+    # notices name (one whose supplier is withheld names none).
+    first_day = (m.today - timedelta(days=AWARDS_RECENT_DAYS - 1)).isoformat()
+    recent_n, recent_v = conn.execute(
+        "SELECT COUNT(*), SUM(v) FROM x_awards WHERE substr(awarded, 1, 10) BETWEEN ? AND ?", (first_day, m.as_of)).fetchone()
+    suppliers = conn.execute("SELECT COUNT(DISTINCT org) FROM x_awards WHERE substr(awarded, 1, 4) = ? AND org IS NOT NULL",
+                             (str(m.year),)).fetchone()[0]
     stats = {
         "data_as_of": m.as_of,
-        "counts": counts,
+        "counts": {**counts, "awards_30d": recent_n, "awards_year_suppliers": suppliers},
         "new_tenders": sorted(new_today, key=lambda r: (r["published"] or "", r["reference"]), reverse=True)[:HOME_ROWS],
         "closing_soon": [list_fields(r) for r in closing_soon(m, open_rows)[:HOME_ROWS]],
         "closing_soon_times": closing_soon_times(m, open_rows),
@@ -933,7 +947,8 @@ def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[
         "sources": source_files(conn),
         # The value beside the year's count on the home page: what its award notices add up to (CAD, the rules' v).
         "totals": {"awards_year": _money(conn.execute(
-            "SELECT SUM(v) FROM x_awards WHERE substr(awarded, 1, 4) = ?", (str(m.year),)).fetchone()[0])},
+            "SELECT SUM(v) FROM x_awards WHERE substr(awarded, 1, 4) = ?", (str(m.year),)).fetchone()[0]),
+                   "awards_30d": _money(recent_v)},
         "downloads": downloads or [],
     }
     _dump(out / "stats.json", stats)

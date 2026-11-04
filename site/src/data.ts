@@ -212,7 +212,10 @@ export interface Stats {
   counts: Partial<Record<
     | "organizations" | "buyers" | "tenders_open" | "tenders_new_today" | "awards" | "history" | "contracts" | "grants" | "lobbying"
     // Read by the rail when the export writes them (see loadRail).
-    | "tenders_closing_soon" | "awards_year",
+    | "tenders_closing_soon" | "awards_year"
+    // The home page's award notices tile: those awarded in the 30 days to the
+    // data date, and the organizations the year's notices name. Absent from older exports.
+    | "awards_30d" | "awards_year_suppliers",
     number
   >>;
   new_tenders: TenderRow[];
@@ -232,9 +235,10 @@ export interface Stats {
   sources: { source: string; file: string; last_read: string | null; last_modified: string | null; loaded?: boolean }[];
   // A Zenodo record of the open files, when one is published; absent until then.
   citation?: Citation | null;
-  // Values beside the counts: the data year's award notices by the counting
-  // rules (Canadian dollars). Absent from older exports.
-  totals?: { awards_year?: number | null };
+  // Values beside the counts: the data year's award notices and those awarded
+  // in the 30 days to the data date, by the counting rules (Canadian dollars).
+  // Absent from older exports.
+  totals?: { awards_year?: number | null; awards_30d?: number | null };
   // Each file of the Data page's downloads as the export found it: its size in
   // bytes and, for a CSV file, its rows under the header. Absent from older exports.
   downloads?: { file: string; bytes: number; rows: number | null }[];
@@ -583,7 +587,8 @@ export interface ExpiringRow {
 
 export interface ExpiringIndex {
   as_of: string;
-  windows: { window: ExpiringWindow; n: number; total: number | null }[];
+  // n_no_value: the window's contracts with no value published, which its total leaves out.
+  windows: { window: ExpiringWindow; n: number; total: number | null; n_no_value?: number }[];
   by_buyer: { buyer_id: string | null; buyer_en: string | null; buyer_fr: string | null; n: number; total: number | null }[];
   by_segment: { code: string; n: number; total: number | null }[];
 }

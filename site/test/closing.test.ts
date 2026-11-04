@@ -149,7 +149,9 @@ describe("the closing-soon counts", () => {
     const panel = html.slice(html.indexOf("Closing Within 7 Days"), html.indexOf("Recent Award Notices"));
     expect(panel).toContain('<span class="panel-count"><span data-soon-count="">2</span></span>');
     // An export without the times keeps its own count.
-    const older = await page("/", "2026-11-02T20:00:00Z", { "stats.json": { ...stats, counts: { ...stats.counts, tenders_closing_soon: 180 } } });
+    const older = await page("/", "2026-11-02T20:00:00Z", {
+      "stats.json": { ...stats, closing_soon_times: undefined, counts: { ...stats.counts, tenders_closing_soon: 180 } },
+    });
     expect(rail(older)).toContain('<span class="rail-n" data-soon-count="">180</span>');
   });
 

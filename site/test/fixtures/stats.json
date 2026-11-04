@@ -27,8 +27,13 @@
    "title_fr": "Services de traduction pour les bureaux régionaux"
   }
  ],
+ "closing_soon_times": [
+  "2026-11-04T14:00:00"
+ ],
  "counts": {
   "awards": 5883,
+  "awards_30d": 2,
+  "awards_year_suppliers": 2,
   "buyers": 3,
   "contracts": 101,
   "grants": 1,
@@ -153,5 +158,8 @@
    "province": "ON",
    "total": 250000
   }
- ]
+ ],
+ "totals": {
+  "awards_30d": 1250000
+ }
 }
