@@ -681,7 +681,7 @@ is deleted, tied to the id alone like the entitlement rows.
    sends no billing mail of its own.
 2. **The product and its two prices.** One product, Award Watch Pro, with
    a software-as-a-service tax code, and two recurring prices in CAD:
-   CA$19 monthly and CA$190 yearly, each with tax behaviour "exclusive"
+   CA$18.99 monthly and CA$189.99 yearly, each with tax behaviour "exclusive"
    (taxes added at checkout). Note the two price ids (`price_...`).
 3. **Taxes.** Under Managed Payments Stripe calculates, collects, files
    and remits the indirect taxes on these sales, Canadian GST/HST included,
@@ -712,9 +712,9 @@ is deleted, tied to the id alone like the entitlement rows.
    dispute names its charge, which is read for the customer), is enough,
    and holds less than the account's full secret key.
 7. **The four variables** in `site/wrangler.jsonc`: `STRIPE_PRICE_MONTHLY`
-   and `STRIPE_PRICE_YEARLY` (the price ids), `PRICE_MONTHLY_CAD` `"19"` and
-   `PRICE_YEARLY_CAD` `"190"` (shown on the billing page as CA$19 and
-   CA$190). A figure is digits with optional cents (`"19.00"`); anything
+   and `STRIPE_PRICE_YEARLY` (the price ids), `PRICE_MONTHLY_CAD` `"18.99"` and
+   `PRICE_YEARLY_CAD` `"189.99"` (shown on the billing page as CA$18.99 and
+   CA$189.99, with a decimal comma in French). A figure is digits with optional cents; anything
    else, or any of the four left empty, keeps the page at "not available
    yet". The figures must match the Stripe prices; nothing checks that for
    you.

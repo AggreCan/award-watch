@@ -145,10 +145,10 @@
     "SITE_URL": "https://awardwatch.ca",
     "ACCOUNTS_ENABLED": "true",
     "MAIL_FROM": "alerts@awardwatch.ca",
-    "STRIPE_PRICE_MONTHLY": "price_1UXYvRIP2lpoGRa5a16fcVV9",
-    "STRIPE_PRICE_YEARLY": "price_1UXYvRIP2lpoGRa5COYxUqDM",
-    "PRICE_MONTHLY_CAD": "19",
-    "PRICE_YEARLY_CAD": "190"
+    "STRIPE_PRICE_MONTHLY": "price_1UXstXIP2lpoGRa5hXTTSm4A",
+    "STRIPE_PRICE_YEARLY": "price_1UXstXIP2lpoGRa5H1NF6Od3",
+    "PRICE_MONTHLY_CAD": "18.99",
+    "PRICE_YEARLY_CAD": "189.99"
   },
   // Workers Logs keeps the console lines (which name events and counts, never
   // an address, a code or a token) and not the per-request invocation log,
