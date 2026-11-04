@@ -5,8 +5,8 @@ import { faultSummary } from "./search_db";
 
 // A daily check, run by the cron trigger, that emails the operator when the
 // site needs a hand: data that stopped refreshing, a backup that stopped
-// arriving, a refresh whose stages failed, a search database sync or audience
-// roll-up that failed, or a deploy the run rolled back because the site
+// arriving, a refresh whose stages failed, a search or records database sync
+// or audience roll-up that failed, or a deploy the run rolled back because the site
 // answered with server errors after it. The run's notices (a buyer spelling
 // no seed maps, a source that refused the download) are information, not
 // alerts: the email carries them in a section of their own, and a morning
@@ -68,6 +68,9 @@ export type RunStatus = {
   run_at?: string;
   ok?: boolean;
   search_sync?: string;
+  // The records database's sync, which the analytics views read ("synced",
+  // "nothing to send", "failed", "no database", "not run").
+  records_sync?: string;
   views_rollup?: string;
   search_console?: string;
   views_report?: string;
@@ -114,6 +117,7 @@ export function readStatus(raw: unknown): { status: RunStatus | null; problem: s
   else unreadable.push("run_at");
   if (typeof r.ok === "boolean") status.ok = r.ok;
   if (typeof r.search_sync === "string") status.search_sync = r.search_sync;
+  if (typeof r.records_sync === "string") status.records_sync = r.records_sync;
   if (typeof r.views_rollup === "string") status.views_rollup = r.views_rollup;
   if (typeof r.search_console === "string") status.search_console = r.search_console;
   if (typeof r.views_report === "string") status.views_report = r.views_report;
@@ -200,6 +204,11 @@ export function collectAlerts(i: Inputs): string[] {
     }
     if (i.status.search_sync === "failed") {
       out.push("The search database sync failed. The next run sends the same changes again; check the run log.");
+    }
+    // "no database" is the nightly's notice, carried with the others; only a
+    // failure is an alert, as in the run's attention issue.
+    if (i.status.records_sync === "failed") {
+      out.push("The records database sync failed. The analytics views answer from what the database holds (or say it is being loaded) and the next run sends the same changes again; check the run log.");
     }
     if (i.status.views_rollup === "failed") {
       out.push("The audience roll-up failed. The next run catches up; check the CLOUDFLARE_ANALYTICS_TOKEN secret and the run log.");

@@ -3,19 +3,32 @@
 // (src/records_db.ts), each chart with its table and, for Pro, a CSV file of
 // that table.
 //
-// /buyers/:id/analytics          value by fiscal quarter, value by segment,
-//                                the non-competitive share by fiscal year,
-//                                the organizations with the largest values
-// /organizations/:id/analytics   value by fiscal year, the buyers and the
-//                                segments with the largest values, its share
-//                                of one segment beside up to five others
+// /buyers/:id/analytics          value by fiscal quarter, the average and
+//                                median value, the ten largest records, value
+//                                by segment, the non-competitive share by
+//                                fiscal year, the organizations with the
+//                                largest values, value growth through
+//                                amendments, the contracts ending in the next
+//                                eight fiscal quarters
+// /organizations/:id/analytics   value by fiscal year, the ten largest
+//                                records, the buyers and the segments with the
+//                                largest values, its share of one segment
+//                                beside up to five others, value growth
+//                                through amendments
 // /segments/:nn/analytics        buyers and organizations by fiscal year, the
-//                                largest buyers and organizations, the
-//                                organizations new to the segment
+//                                average and median value, the ten largest
+//                                records, the largest buyers and
+//                                organizations, the organizations new to the
+//                                segment, the contracts ending in the next
+//                                eight fiscal quarters
 //
 // One source at a time (?source=), because no figure ever adds two sources;
-// ?years= 3, 5 or 10 fiscal years ending with the data date's. A value the
-// view cannot use reads as the default, never an error.
+// the contracts ending are the radar's, each contract once across the three
+// contract sources, and say so. The period is ?years= 3, 5 or 10 fiscal
+// years ending with the data date's, or ?from= and ?to= its first and last
+// fiscal year (at most ten, none after the data date's), so a chosen period
+// is an address. A value the view cannot use reads as the default, never an
+// error.
 //
 // The paid tier's part (feature analytics, src/plan.ts analyticsAccess).
 // While the accounts switch is off every address here is the site's 404 and
@@ -39,22 +52,25 @@ import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, segmentLabel, sourceLabe
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { analyticsAccess } from "../plan";
 import {
-  BUYER_COMPETITION_SQL, BUYER_QUARTERS_SQL, BUYER_SEGMENTS_SQL, BUYER_SUPPLIERS_SQL, ENTRANT_LOOKBACK, FREE_YEARS, MAX_RIVALS,
-  ORG_BUYERS_SQL, ORG_SEGMENTS_SQL, ORG_SHARE_SQL, ORG_YEARS_SQL, PERIODS, SEGMENT_BUYERS_SQL, SEGMENT_ENTRANTS_SQL, SEGMENT_SOURCES,
-  RIVALS_N, SEGMENT_WINNERS_SQL, SEGMENT_YEARS_SQL, SHARE_SLOTS, SOURCE_NUMBER, TOP_N, type Period, type Query, type Read, type Row,
-  dollars, fiscalLabel, fiscalYearOf, num, orgIdOf, orgNumber, readRecords, segmentCode, segmentNumber,
+  AMENDED_SOURCES, BUYER_COMPETITION_SQL, BUYER_DUE_SQL, BUYER_GROWTH_SQL, BUYER_QUARTERS_SQL, BUYER_RECORDS_SQL, BUYER_SEGMENTS_SQL,
+  BUYER_SUPPLIERS_SQL, BUYER_VALUES_SQL, DUE_QUARTERS, DUE_YEARS, EARLIEST_FY, ENTRANT_LOOKBACK, FREE_YEARS, MAX_RIVALS, MAX_YEARS,
+  ORG_BUYERS_SQL, ORG_GROWTH_SQL, ORG_RECORDS_SQL, ORG_SEGMENTS_SQL, ORG_SHARE_SQL, ORG_YEARS_SQL, PERIODS, SEGMENT_BUYERS_SQL,
+  SEGMENT_DUE_SQL, SEGMENT_ENTRANTS_SQL, SEGMENT_RECORDS_SQL, SEGMENT_SOURCES, RIVALS_N, SEGMENT_VALUES_SQL, SEGMENT_WINNERS_SQL,
+  SEGMENT_YEARS_SQL, SHARE_SLOTS, SOURCE_NUMBER, TOP_N, type Period, type Query, type Read, type Row, choosePeriod, dollars,
+  fiscalLabel, fiscalYearOf, num, orgIdOf, orgNumber, quarterEnd, readRecords, segmentCode, segmentNumber,
 } from "../records_db";
 import { railAccount } from "../account/session";
+import { growthPct, windowOf } from "./expiring";
 import { retiredIdRedirect } from "./organization";
-import { money, shareText } from "./shared";
+import { contractSearchUrl, grantUrl, money, shareText } from "./shared";
 
 export type View = "buyer" | "organization" | "segment";
 
 // Each view's tables in page order, by the name its CSV file takes.
 export const VIEW_TABLES = {
-  buyer: ["quarters", "segments", "competition", "suppliers"],
-  organization: ["years", "buyers", "segments", "share"],
-  segment: ["years", "buyers", "winners", "entrants"],
+  buyer: ["quarters", "values", "records", "segments", "competition", "suppliers", "growth", "due"],
+  organization: ["years", "records", "buyers", "segments", "share", "growth"],
+  segment: ["years", "values", "records", "buyers", "winners", "entrants", "due"],
 } as const satisfies Record<View, readonly string[]>;
 
 const DEFAULT_YEARS: Period = 10;
@@ -66,6 +82,13 @@ interface Frame {
   years: number;
   first: number;
   last: number;
+  // The fiscal year the data date falls in, counted to date.
+  current: number;
+  // The period was chosen by its first and last fiscal year (?from, ?to)
+  // rather than as the latest n, and capped: it was longer than MAX_YEARS,
+  // so its latest MAX_YEARS are shown.
+  custom: boolean;
+  capped: boolean;
   // The free view was asked for something it does not give (a longer period,
   // a segment or organizations to compare), and says so.
   asked: boolean;
@@ -81,18 +104,45 @@ function readFrame(c: Context<AppEnv>, stats: Stats, pro: boolean, allowed: read
   const url = new URL(c.req.url);
   const raw = (url.searchParams.get("source") ?? "").trim().toLowerCase();
   const source = (allowed as readonly string[]).includes(raw) ? (raw as MoneySource) : fallback;
+  const current = fiscalYearOf(todayOf(stats.data_as_of));
+  const latest = (years: number): Frame => ({ source, years, first: current - years + 1, last: current, current, custom: false, capped: false, asked: false });
+  if (!pro) {
+    const extra = ["years", "from", "to", "segment", "vs"].some((k) => url.searchParams.has(k));
+    return { ...latest(FREE_YEARS), asked: extra };
+  }
+  const chosen = choosePeriod(url.searchParams.get("from"), url.searchParams.get("to"), current);
+  if (chosen) return { ...latest(chosen.last - chosen.first + 1), first: chosen.first, last: chosen.last, custom: true, capped: chosen.capped };
   const asked = Number(url.searchParams.get("years"));
-  const years = !pro ? FREE_YEARS : (PERIODS as readonly number[]).includes(asked) ? asked : DEFAULT_YEARS;
-  const last = fiscalYearOf(todayOf(stats.data_as_of));
-  const extra = ["years", "segment", "vs"].some((k) => url.searchParams.has(k));
-  return { source, years, first: last - years + 1, last, asked: !pro && extra };
+  return latest((PERIODS as readonly number[]).includes(asked) ? asked : DEFAULT_YEARS);
 }
 
-function query(base: string, f: Pick<Frame, "source" | "years">, more: Record<string, string | readonly string[]> = {}): string {
-  const p = new URLSearchParams({ source: f.source, years: String(f.years) });
+// A view's address: the source, then the period as the reader chose it
+// (the latest n fiscal years, or the first and last one), then the rest.
+type Link = Pick<Frame, "source" | "years" | "first" | "last" | "custom">;
+
+function query(base: string, f: Link, more: Record<string, string | readonly string[]> = {}): string {
+  const p = new URLSearchParams({ source: f.source });
+  if (f.custom) {
+    p.set("from", String(f.first));
+    p.set("to", String(f.last));
+  } else {
+    p.set("years", String(f.years));
+  }
   for (const [k, v] of Object.entries(more)) for (const one of typeof v === "string" ? [v] : v) p.append(k, one);
   return `${base}?${p.toString()}`;
 }
+
+// The same as hidden fields, for a form that changes something else.
+const FrameFields: FC<{ frame: Link; more?: Record<string, string | readonly string[]>; period?: boolean }> = ({ frame, more = {}, period = true }) => (
+  <>
+    <input type="hidden" name="source" value={frame.source} />
+    {!period ? null : frame.custom ? <>
+      <input type="hidden" name="from" value={String(frame.first)} />
+      <input type="hidden" name="to" value={String(frame.last)} />
+    </> : <input type="hidden" name="years" value={String(frame.years)} />}
+    {Object.entries(more).flatMap(([k, v]) => (typeof v === "string" ? [v] : [...v]).map((one) => <input type="hidden" name={k} value={one} />))}
+  </>
+);
 
 // The organizations to compare on a profile: up to MAX_RIVALS valid ids, each
 // once, never the profile's own.
@@ -116,8 +166,9 @@ async function readNamed(c: Context<AppEnv>, named: Record<string, Query>): Prom
 
 // -- formatting --------------------------------------------------------------------
 
-const fy = (lang: Lang, year: number, last: number) =>
-  year === last ? t(lang, "analytics.to_date", { fy: fiscalLabel(lang, year) }) : fiscalLabel(lang, year);
+// A fiscal year's label, the data date's marked as counted to date.
+const fy = (lang: Lang, year: number, current: number) =>
+  year === current ? t(lang, "analytics.to_date", { fy: fiscalLabel(lang, year) }) : fiscalLabel(lang, year);
 const int = (v: unknown): number => num(v) ?? 0;
 const share = (lang: Lang, part: number | null, whole: number | null) => (part !== null && whole !== null && whole > 0 ? fmtPct(part, whole, lang) : "");
 
@@ -164,12 +215,38 @@ const PeriodTabs: FC<{ lang: Lang; base: string; frame: Frame; pro: boolean; mor
 }) => (
   <nav class="tabs tabs-small toolbar-row" aria-label={t(lang, "analytics.period_nav")}>
     {PERIODS.map((n) => (
-      <a href={query(base, { ...frame, years: n }, more)} rel="nofollow" aria-current={n === frame.years ? "page" : undefined}>
+      <a href={query(base, { ...frame, years: n, custom: false }, more)} rel="nofollow"
+        aria-current={!frame.custom && n === frame.years ? "page" : undefined}>
         {t(lang, "analytics.period", { n })}{!pro && n > FREE_YEARS ? <ProTag lang={lang} /> : null}
       </a>
     ))}
   </nav>
 );
+
+// A period by its first and last fiscal year, as a form that writes ?from=
+// and ?to= into the address, so the view it opens can be linked. Every year
+// from EARLIEST_FY to the data date's is offered; the view itself caps a
+// longer span at MAX_YEARS. For the free view the button carries the Pro
+// mark and leads to the same view, which says the choice is part of Pro.
+const PeriodForm: FC<{ lang: Lang; base: string; frame: Frame; pro: boolean; more?: Record<string, string | readonly string[]> }> = ({
+  lang, base, frame, pro, more,
+}) => {
+  const years: number[] = [];
+  for (let y = frame.current; y >= EARLIEST_FY; y--) years.push(y);
+  const select = (name: "from" | "to", chosen: number) => (
+    <select name={name}>{years.map((y) => <option value={String(y)} selected={y === chosen}>{fiscalLabel(lang, y)}</option>)}</select>
+  );
+  return (
+    <form method="get" action={base} class="toolbar-fields" aria-label={t(lang, "analytics.period_form")}>
+      <FrameFields frame={frame} more={more} period={false} />
+      <label class="field field-code"><span class="field-label">{t(lang, "analytics.period_from")}</span>{select("from", frame.first)}</label>
+      <label class="field field-code"><span class="field-label">{t(lang, "analytics.period_to")}</span>{select("to", frame.last)}</label>
+      <div class="toolbar-actions">
+        <button type="submit" class="btn">{t(lang, "analytics.period_show")}{pro ? null : <ProTag lang={lang} />}</button>
+      </div>
+    </form>
+  );
+};
 
 const CsvLink: FC<{ lang: Lang; href: string }> = ({ lang, href }) => <a href={href} rel="nofollow">{t(lang, "analytics.csv")}</a>;
 
@@ -208,10 +285,12 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
         })}
         actions={<a href={s.back} class="btn">{t(lang, s.backKey)}</a>}>
         <p class="page-note">{t(lang, "analytics.note_sources")} {t(lang, "analytics.note_fiscal")}</p>
+        {frame.capped ? <p class="page-note">{t(lang, "analytics.period_capped", { n: MAX_YEARS })}</p> : null}
       </PageHead>
       <div class="toolbar">
         <SourceTabs lang={lang} base={s.base} frame={frame} allowed={s.allowed} more={s.more} />
         <PeriodTabs lang={lang} base={s.base} frame={frame} pro={s.pro} more={s.more} />
+        <PeriodForm lang={lang} base={s.base} frame={frame} pro={s.pro} more={s.more} />
       </div>
       {ok ? (body as any) : (
         <Panel title={t(lang, "analytics.unavailable_title")}>
@@ -234,7 +313,7 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
 const FreeNote: FC<{ lang: Lang; view: View; signedIn: boolean; asked: boolean }> = ({ lang, view, signedIn, asked }) => (
   <div class="pro-note">
     {asked ? <p>{t(lang, "analytics.free_asked", { n: FREE_YEARS })}</p> : null}
-    <p><ProTag lang={lang} /> {t(lang, `analytics.free_${view}` as Key, { n: FREE_YEARS })}</p>
+    <p><ProTag lang={lang} /> {t(lang, `analytics.free_${view}` as Key, { n: FREE_YEARS })} {t(lang, `analytics.free_more_${view}` as Key)}</p>
     <p><ProLink lang={lang} signedIn={signedIn} /></p>
   </div>
 );
@@ -325,6 +404,255 @@ function rankBars(lang: Lang, rows: { label: unknown; name: string; cents: unkno
   });
 }
 
+// -- the panels the buyer and segment views share, and the records table ------------------
+
+const none = (lang: Lang) => <p class="muted">{t(lang, "analytics.none")}</p>;
+
+// The average and median value by fiscal year: one panel each, on its own
+// scale, because a few large records put the average far above the median
+// and one scale would flatten the median's bars; the table gives both and
+// the count of records they rest on.
+const ValuesPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = ({ lang, rows, frame, csv }) => {
+  const average = (r: Row) => (int(r.n_pos) > 0 ? Math.round(int(r.pos) / int(r.n_pos)) / 100 : null);
+  return (
+    <Panel title={t(lang, "analytics.panel_values")} tools={rows.length ? <CsvLink lang={lang} href={csv} /> : undefined}
+      foot={<span>{t(lang, "analytics.foot_values")}</span>}>
+      {rows.some((r) => int(r.n_pos) > 0) ? <>
+        <YearChart lang={lang} frame={frame} fmt={(v) => fmtMoneyShort(v, lang)} panels={[
+          { title: t(lang, "analytics.chart_median"), values: rows.map((r) => [int(r.fy), int(r.med) / 100]) },
+          { title: t(lang, "analytics.chart_average"), values: rows.map((r) => [int(r.fy), average(r) ?? 0]) },
+        ]} />
+        <div class="table-wrap">
+          <Table cols={[
+            { kind: "date", label: t(lang, "analytics.col_fy") },
+            { kind: "count", label: t(lang, "analytics.col_valued") },
+            { kind: "value", label: t(lang, "analytics.col_median") },
+            { kind: "main", label: t(lang, "analytics.col_average") },
+          ]}>
+            <tbody>
+              {[...rows].reverse().map((r) => (
+                <tr>
+                  <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
+                  <td data-label={t(lang, "analytics.col_valued")} class="mono num">{fmtInt(int(r.n_pos), lang)}</td>
+                  <td data-label={t(lang, "analytics.col_median")} class="mono num">{int(r.n_pos) > 0 ? money(lang, dollars(r.med)) : ""}</td>
+                  <td data-label={t(lang, "analytics.col_average")} class="mono num">{int(r.n_pos) > 0 ? money(lang, average(r)) : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
+      </> : none(lang)}
+    </Panel>
+  );
+};
+
+// Value growth through amendments by fiscal year of the award: the first
+// values of the amended records beside their values as last amended, one
+// panel each on one scale (the same measure before and after), and the
+// change. Award notices and history only: the other sources number no
+// versions.
+const GrowthPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = ({ lang, rows, frame, csv }) => {
+  const amended = AMENDED_SOURCES.includes(frame.source);
+  const n = (v: number) => fmtInt(v, lang);
+  return (
+    <Panel title={t(lang, "analytics.panel_growth")} tools={amended && rows.length ? <CsvLink lang={lang} href={csv} /> : undefined}
+      foot={amended ? <span>{t(lang, "analytics.foot_growth")}</span> : undefined}>
+      {!amended ? <p class="muted">{t(lang, "analytics.no_growth")}</p> : !rows.length ? none(lang) : <>
+        {rows.some((r) => int(r.first_cents) > 0) ? (
+          <YearChart lang={lang} frame={frame} shared fmt={(v) => fmtMoneyShort(v, lang)} panels={[
+            { title: t(lang, "analytics.chart_growth_first"), values: rows.map((r) => [int(r.fy), int(r.first_cents) / 100]) },
+            { title: t(lang, "analytics.chart_growth_last"), values: rows.map((r) => [int(r.fy), int(r.last_cents) / 100]) },
+          ]} />
+        ) : <p class="muted">{t(lang, "analytics.growth_none")}</p>}
+        <div class="table-wrap">
+          <Table cols={[
+            { kind: "date", label: t(lang, "analytics.col_fy") },
+            { kind: "count", label: t(lang, "col.records") },
+            { kind: "share", label: t(lang, "analytics.col_amended") },
+            { kind: "count", label: t(lang, "analytics.col_compared"), rest: "md" },
+            { kind: "total", label: t(lang, "analytics.col_first_value") },
+            { kind: "total", label: t(lang, "analytics.col_last_value") },
+            { kind: "main", label: t(lang, "analytics.col_change") },
+          ]}>
+            <tbody>
+              {[...rows].reverse().map((r) => {
+                const before = int(r.first_cents);
+                return (
+                  <tr>
+                    <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
+                    <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
+                    <td data-label={t(lang, "analytics.col_amended")} class="mono num">{shareText(lang, int(r.n_amended), int(r.n), n)}</td>
+                    <td data-label={t(lang, "analytics.col_compared")} class="mono num mdh">{n(int(r.n_compared))}</td>
+                    <td data-label={t(lang, "analytics.col_first_value")} class="mono num">{before > 0 ? money(lang, before / 100) : ""}</td>
+                    <td data-label={t(lang, "analytics.col_last_value")} class="mono num">{before > 0 ? money(lang, dollars(r.last_cents)) : ""}</td>
+                    <td data-label={t(lang, "analytics.col_change")} class="mono num">{before > 0 ? growthPct(lang, int(r.last_cents) / before - 1) : ""}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
+        </div>
+      </>}
+    </Panel>
+  );
+};
+
+// What a record's row links: an award notice or a history record to its
+// page here (the reference is stored in the URL form its page has), a
+// published contract to the government's contracts search, a grant to its
+// record in the grants search. The text is the reference as the reader knows
+// it; null when the row stores none the link could be made from.
+const URL_REF_RE = /^[A-Za-z0-9._-]{1,120}$/;
+
+export function recordLink(src: number, ref: unknown): { href: string; text: string; here: boolean } | null {
+  if (typeof ref !== "string" || !ref) return null;
+  if (src === SOURCE_NUMBER.awards || src === SOURCE_NUMBER.history) {
+    return URL_REF_RE.test(ref) ? { href: `/${src === SOURCE_NUMBER.awards ? "awards" : "history"}/${ref.toLowerCase()}`, text: ref, here: true } : null;
+  }
+  const at = ref.indexOf(":");
+  const dept = ref.slice(0, at);
+  const reference = ref.slice(at + 1);
+  if (at <= 0 || !reference) return null;
+  return { href: src === SOURCE_NUMBER.contracts ? contractSearchUrl(reference) : grantUrl(dept, reference), text: reference, here: false };
+}
+
+// The ten records with the largest counted values in the period, each linked
+// to its page or its government record, with the other party: the
+// organization on a buyer view, the buyer on an organization view, both on a
+// segment view.
+const RecordsPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: "organization" | "buyer" | "both"; csv: string }> = ({
+  lang, rows, frame, party, csv,
+}) => {
+  const org = party !== "buyer";
+  const buyer = party !== "organization";
+  return (
+    <Panel title={t(lang, "analytics.panel_records")} tools={rows.length ? <CsvLink lang={lang} href={csv} /> : undefined}
+      foot={<span>{t(lang, "analytics.foot_records")}</span>}>
+      {rows.length ? (
+        <div class="table-wrap">
+          <Table cols={[
+            { kind: "count", label: t(lang, "analytics.col_rank") },
+            { kind: "main", label: t(lang, "col.record") },
+            org && { kind: "org", label: t(lang, "col.organization") },
+            buyer && { kind: "buyer", label: t(lang, "col.buyer"), rest: org ? "md" : undefined },
+            { kind: "date", label: t(lang, "analytics.col_fy") },
+            { kind: "value", label: t(lang, "col.value") },
+          ]}>
+            <tbody>
+              {rows.map((r, i) => {
+                const link = recordLink(int(r.src), r.ref);
+                const title = typeof r.title === "string" && r.title ? r.title : link?.text ?? t(lang, "common.not_stated");
+                const buyerName = pick(lang, r.name_en as string | null, r.name_fr as string | null);
+                return (
+                  <tr>
+                    <td data-label={t(lang, "analytics.col_rank")} class="mono num">{fmtInt(i + 1, lang)}</td>
+                    <td data-label={t(lang, "col.record")} class="lead-cell">
+                      {link ? <a href={link.href} rel={link.here ? undefined : "nofollow noopener"}>{title}</a> : title}
+                      {link ? <><br /><span class="mono id muted">{link.text}</span></> : null}
+                    </td>
+                    {org ? (
+                      <td data-label={t(lang, "col.organization")}>
+                        {num(r.oid) !== null ? <a href={`/organizations/${orgIdOf(int(r.oid))}`}>{orgName(r)}</a> : <span class="muted">{t(lang, "common.not_stated")}</span>}
+                      </td>
+                    ) : null}
+                    {buyer ? (
+                      <td data-label={t(lang, "col.buyer")} class={org ? "mdh" : undefined}>
+                        {typeof r.buyer_id === "string" ? <a href={`/buyers/${r.buyer_id}`}>{buyerName ?? r.buyer_id}</a> : <span class="muted">{t(lang, "common.not_stated")}</span>}
+                      </td>
+                    ) : null}
+                    <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
+                    <td data-label={t(lang, "col.value")} class="mono num">{money(lang, dollars(r.cents))}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
+        </div>
+      ) : none(lang)}
+    </Panel>
+  );
+};
+
+// The fiscal quarter a date falls in (1 is April to June).
+const fiscalQuarterOf = (day: string) => Math.floor(((Number(day.slice(5, 7)) + 8) % 12) / 3) + 1;
+const DAY_MS = 86_400_000;
+
+// The contracts ending in each of the DUE_QUARTERS fiscal quarters from the
+// one the records' date falls in, by the radar's rules: count and value, one
+// panel each on its own scale (different units), and in the table each
+// quarter's link to the radar's narrowest window that holds the whole
+// quarter, counted from the radar's own data date (none past its twelve
+// months). filter is the radar's own (buyer=<id> or segment=<nn>), so the
+// window lists the same contracts and the ones before them.
+const DuePanel: FC<{ lang: Lang; rows: Row[]; from: string; radarDay: string; filter: string; csv: string; noun: Key }> = ({
+  lang, rows, from, radarDay, filter, csv, noun,
+}) => {
+  const start = fiscalYearOf(from) * 4 + fiscalQuarterOf(from) - 1;
+  const quarters = Array.from({ length: DUE_QUARTERS }, (_, k) => {
+    const at = start + k;
+    const year = Math.floor(at / 4);
+    const q = (at % 4) + 1;
+    const row = rows.find((r) => int(r.fy) === year && int(r.fq) === q);
+    const ends = quarterEnd(year, q);
+    const days = Math.round((Date.parse(`${ends}T00:00:00Z`) - Date.parse(`${radarDay}T00:00:00Z`)) / DAY_MS);
+    const label = `${t(lang, "analytics.quarter", { n: q })} ${fiscalLabel(lang, year)}`;
+    return { at, year, q, label, ends, n: int(row?.n), cents: row ? num(row.cents) : null, noValue: int(row?.n_no_value), window: windowOf(days) };
+  });
+  const value = (cents: number | null) => (cents === null ? 0 : cents / 100);
+  const axis = quarters.map((x, k) => ({ x: x.at + 0.5, text: x.label, minor: k % 2 === 1, phone: k === 0 || k === DUE_QUARTERS - 1 }));
+  const grid = quarters.filter((x, k) => k > 0 && x.q === 1).map((x) => x.at);
+  const any = quarters.some((x) => x.n > 0);
+  return (
+    <Panel title={t(lang, "analytics.panel_due")} tools={rows.length ? <CsvLink lang={lang} href={csv} /> : undefined}
+      foot={<span>{t(lang, "analytics.foot_due", { date: from })}</span>}>
+      <p>{t(lang, noun)}</p>
+      {any ? <>
+        <div class="chart">
+          <ChartStack domain={[start, start + DUE_QUARTERS]} xLabels={axis} grid={grid} height={110} aria={t(lang, "analytics.due_aria")}
+            fmt={(v) => fmtMoneyShort(v, lang)} gap={barGap(DUE_QUARTERS)} panels={[
+              {
+                title: t(lang, "analytics.chart_due_value"),
+                bars: quarters.filter((x) => value(x.cents) > 0).map((x) => ({ x0: x.at, x1: x.at + 1, value: value(x.cents), title: `${x.label}: ${fmtMoney(value(x.cents), lang)}` })),
+              },
+            ]} />
+          <ChartStack domain={[start, start + DUE_QUARTERS]} xLabels={axis} grid={grid} height={80} aria={t(lang, "analytics.due_aria")}
+            fmt={(v) => fmtInt(v, lang)} gap={barGap(DUE_QUARTERS)} panels={[
+              {
+                title: t(lang, "analytics.chart_due_count"),
+                bars: quarters.filter((x) => x.n > 0).map((x) => ({ x0: x.at, x1: x.at + 1, value: x.n, title: `${x.label}: ${fmtInt(x.n, lang)}` })),
+              },
+            ]} />
+        </div>
+        <div class="table-wrap">
+          <Table cols={[
+            { kind: "date", label: t(lang, "analytics.col_quarter") },
+            { kind: "date", label: t(lang, "analytics.col_quarter_ends"), rest: "md" },
+            { kind: "count", label: t(lang, "analytics.col_contracts") },
+            { kind: "total", label: t(lang, "col.value") },
+            { kind: "count", label: t(lang, "analytics.col_no_value"), rest: "md" },
+            { kind: "main", label: t(lang, "analytics.col_radar") },
+          ]}>
+            <tbody>
+              {quarters.map((x) => (
+                <tr>
+                  <td data-label={t(lang, "analytics.col_quarter")} class="mono">{x.label}</td>
+                  <td data-label={t(lang, "analytics.col_quarter_ends")} class="mono mdh">{x.ends}</td>
+                  <td data-label={t(lang, "analytics.col_contracts")} class="mono num">{fmtInt(x.n, lang)}</td>
+                  <td data-label={t(lang, "col.value")} class="mono num">{x.cents === null ? "" : money(lang, x.cents / 100)}</td>
+                  <td data-label={t(lang, "analytics.col_no_value")} class="mono num mdh">{fmtInt(x.noValue, lang)}</td>
+                  <td data-label={t(lang, "analytics.col_radar")}>
+                    {x.window && x.n > 0 ? <a href={`/expiring/${x.window}?${filter}`}>{t(lang, `expiring.window_${x.window}` as Key)}</a> : ""}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
+      </> : <p class="muted">{t(lang, "analytics.due_none")}</p>}
+    </Panel>
+  );
+};
+
 // -- the buyer view ------------------------------------------------------------------------
 
 function buyerQueries(id: string, f: Frame, tables: readonly string[]): Record<string, Query> {
@@ -332,9 +660,14 @@ function buyerQueries(id: string, f: Frame, tables: readonly string[]): Record<s
   const out: Record<string, Query> = {};
   for (const table of tables) {
     if (table === "quarters") out.quarters = { sql: BUYER_QUARTERS_SQL, params };
+    if (table === "values") out.values = { sql: BUYER_VALUES_SQL, params };
+    if (table === "records") out.records = { sql: BUYER_RECORDS_SQL, params };
     if (table === "segments" && SEGMENT_SOURCES.includes(f.source)) out.segments = { sql: BUYER_SEGMENTS_SQL, params };
     if (table === "competition" && f.source !== "grants") out.competition = { sql: BUYER_COMPETITION_SQL, params };
     if (table === "suppliers") out.suppliers = { sql: BUYER_SUPPLIERS_SQL, params };
+    if (table === "growth" && AMENDED_SOURCES.includes(f.source)) out.growth = { sql: BUYER_GROWTH_SQL, params };
+    // Whatever the source and period: the radar's quarters from the data date's.
+    if (table === "due") out.due = { sql: BUYER_DUE_SQL, params: [id, f.current, f.current + DUE_YEARS - 1] };
   }
   return out;
 }
@@ -403,9 +736,13 @@ export async function buyerAnalytics(c: Context<AppEnv>): Promise<Response> {
   if (!pro) {
     return shell(c, s, read, <>
       {first}
+      <Locked lang={lang} title={t(lang, "analytics.panel_values")} text={t(lang, "analytics.tease_values")} />
+      <Locked lang={lang} title={t(lang, "analytics.panel_records")} text={t(lang, "analytics.tease_records")} />
       <Locked lang={lang} title={t(lang, "analytics.panel_segments")} text={t(lang, "analytics.tease_buyer_segments")} />
       <Locked lang={lang} title={t(lang, "analytics.panel_competition")} text={t(lang, "analytics.tease_competition")} />
       <Locked lang={lang} title={t(lang, "analytics.panel_suppliers")} text={t(lang, "analytics.tease_suppliers")} />
+      <Locked lang={lang} title={t(lang, "analytics.panel_growth")} text={t(lang, "analytics.tease_growth")} />
+      <Locked lang={lang} title={t(lang, "analytics.panel_due")} text={t(lang, "analytics.tease_due")} />
     </>);
   }
 
@@ -421,6 +758,8 @@ export async function buyerAnalytics(c: Context<AppEnv>): Promise<Response> {
   });
   return shell(c, s, read, <>
     {first}
+    <ValuesPanel lang={lang} rows={rows.values ?? []} frame={frame} csv={csv("values")} />
+    <RecordsPanel lang={lang} rows={rows.records ?? []} frame={frame} party="organization" csv={csv("records")} />
     <Panel title={t(lang, "analytics.panel_segments")} tools={segments.length ? <CsvLink lang={lang} href={csv("segments")} /> : undefined}
       foot={SEGMENT_SOURCES.includes(frame.source) ? <span>{t(lang, "analytics.foot_segments")}</span> : undefined}>
       {!SEGMENT_SOURCES.includes(frame.source) ? <p class="muted">{t(lang, "analytics.no_segments")}</p>
@@ -449,6 +788,9 @@ export async function buyerAnalytics(c: Context<AppEnv>): Promise<Response> {
         <RankTable lang={lang} head={t(lang, "col.organization")} rows={supRows} />
       </> : <p class="muted">{t(lang, "analytics.none")}</p>}
     </Panel>
+    <GrowthPanel lang={lang} rows={rows.growth ?? []} frame={frame} csv={csv("growth")} />
+    <DuePanel lang={lang} rows={rows.due ?? []} from={read.asOf ?? todayOf(stats.data_as_of)} radarDay={todayOf(stats.data_as_of)}
+      filter={`buyer=${id}`} csv={csv("due")} noun="analytics.due_lead_buyer" />
   </>);
 }
 
@@ -472,7 +814,7 @@ const QuarterTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
             const value = mine.some((r) => num(r.cents) !== null) ? mine.reduce((s, r) => s + int(r.cents), 0) / 100 : null;
             return (
               <tr>
-                <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, y, frame.last)}</td>
+                <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, y, frame.current)}</td>
                 {[1, 2, 3, 4].map((q) => {
                   const r = cell(y, q);
                   return <td data-label={quarter(q)} class="mono num mdh">{r ? money(lang, dollars(r.cents)) : ""}</td>;
@@ -511,7 +853,7 @@ const CompetitionView: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, 
           <tbody>
             {[...rows].reverse().map((r) => (
               <tr>
-                <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.last)}</td>
+                <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
                 <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
                 <td data-label={t(lang, "org.col_nc_count")} class="mono num">{shareText(lang, int(r.n_nc), int(r.n), n)}</td>
                 <td data-label={t(lang, "competitive.unstated")} class="mono num mdh">{n(int(r.n_unstated))}</td>
@@ -542,6 +884,8 @@ function orgQueries(oid: number, f: Frame, tables: readonly string[], spec: Shar
   const segments = SEGMENT_SOURCES.includes(f.source);
   for (const table of tables) {
     if (table === "years") out.years = { sql: ORG_YEARS_SQL, params };
+    if (table === "records") out.records = { sql: ORG_RECORDS_SQL, params };
+    if (table === "growth" && AMENDED_SOURCES.includes(f.source)) out.growth = { sql: ORG_GROWTH_SQL, params };
     if (table === "buyers") out.buyers = { sql: ORG_BUYERS_SQL, params };
     if (table === "segments" && segments) out.segments = { sql: ORG_SEGMENTS_SQL, params };
     if (table === "share" && segments && spec) {
@@ -628,9 +972,11 @@ export async function organizationAnalytics(c: Context<AppEnv>): Promise<Respons
   if (!pro) {
     return shell(c, s, read, <>
       {first}
+      <Locked lang={lang} title={t(lang, "analytics.panel_records")} text={t(lang, "analytics.tease_records")} />
       <Locked lang={lang} title={t(lang, "analytics.panel_buyers")} text={t(lang, "analytics.tease_org_buyers")} />
       <Locked lang={lang} title={t(lang, "analytics.panel_segments")} text={t(lang, "analytics.tease_org_segments")} />
       <Locked lang={lang} title={t(lang, "analytics.panel_share")} text={t(lang, "analytics.tease_share", { n: MAX_RIVALS })} />
+      <Locked lang={lang} title={t(lang, "analytics.panel_growth")} text={t(lang, "analytics.tease_growth")} />
     </>);
   }
 
@@ -645,6 +991,7 @@ export async function organizationAnalytics(c: Context<AppEnv>): Promise<Respons
   const segmentSource = SEGMENT_SOURCES.includes(frame.source);
   return shell(c, s, read, <>
     {first}
+    <RecordsPanel lang={lang} rows={rows.records ?? []} frame={frame} party="buyer" csv={csv("records")} />
     <Panel title={t(lang, "analytics.panel_buyers")} tools={buyers.length ? <CsvLink lang={lang} href={csv("buyers")} /> : undefined}>
       {buyers.length ? <>
         <RankedBars rows={rankBars(lang, buyers)} aria={t(lang, "analytics.panel_buyers")} />
@@ -661,6 +1008,7 @@ export async function organizationAnalytics(c: Context<AppEnv>): Promise<Respons
     <SharePanel lang={lang} oid={oid} name={name} frame={frame} base={base} segment={data.segment} segmentSource={segmentSource}
       options={(rows.segments ?? []).map((r) => int(r.sid))} rivals={rows.rivals ?? []} share={rows.share ?? []} chosen={chosen}
       csv={data.segment !== null ? csv("share") : null} />
+    <GrowthPanel lang={lang} rows={rows.growth ?? []} frame={frame} csv={csv("growth")} />
   </>);
 }
 
@@ -678,7 +1026,7 @@ const OrgYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
         <tbody>
           {[...rows].reverse().map((r) => (
             <tr>
-              <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.last)}</td>
+              <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
               <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
               <td data-label={t(lang, "col.value")} class="mono num">{money(lang, dollars(r.cents))}</td>
               <td data-label={t(lang, "analytics.col_no_value")} class="mono num mdh">{n(int(r.n_no_value))}</td>
@@ -728,8 +1076,7 @@ const SharePanel: FC<{
       foot={<span>{t(lang, "analytics.foot_share", { n: MAX_RIVALS, m: RIVALS_N })}</span>}>
       <p>{tj(lang, "analytics.share_lead", { segment: segmentLink(lang, segment), source: sourceLabel(lang, frame.source) })}</p>
       <form method="get" action={base} class="toolbar">
-        <input type="hidden" name="source" value={frame.source} />
-        <input type="hidden" name="years" value={String(frame.years)} />
+        <FrameFields frame={frame} />
         <div class="toolbar-fields">
           <label class="field">
             <span>{t(lang, "col.segment")}</span>
@@ -793,11 +1140,14 @@ function segmentQueries(sid: number, f: Frame, tables: readonly string[]): Recor
   const out: Record<string, Query> = {};
   for (const table of tables) {
     if (table === "years") out.years = { sql: SEGMENT_YEARS_SQL, params };
+    if (table === "values") out.values = { sql: SEGMENT_VALUES_SQL, params };
+    if (table === "records") out.records = { sql: SEGMENT_RECORDS_SQL, params };
     if (table === "buyers") out.buyers = { sql: SEGMENT_BUYERS_SQL, params };
     if (table === "winners") out.winners = { sql: SEGMENT_WINNERS_SQL, params };
     if (table === "entrants") {
       out.entrants = { sql: SEGMENT_ENTRANTS_SQL, params: [sid, SOURCE_NUMBER[f.source], f.last - ENTRANT_LOOKBACK, f.last] };
     }
+    if (table === "due") out.due = { sql: SEGMENT_DUE_SQL, params: [sid, f.current, f.current + DUE_YEARS - 1] };
   }
   return out;
 }
@@ -838,9 +1188,12 @@ export async function segmentAnalytics(c: Context<AppEnv>): Promise<Response> {
   if (!pro) {
     return shell(c, s, read, <>
       {first}
+      <Locked lang={lang} title={t(lang, "analytics.panel_values")} text={t(lang, "analytics.tease_values")} />
+      <Locked lang={lang} title={t(lang, "analytics.panel_records")} text={t(lang, "analytics.tease_records")} />
       <Locked lang={lang} title={t(lang, "analytics.panel_segment_buyers")} text={t(lang, "analytics.tease_segment_buyers")} />
       <Locked lang={lang} title={t(lang, "analytics.panel_winners")} text={t(lang, "analytics.tease_winners")} />
       <Locked lang={lang} title={t(lang, "analytics.panel_entrants")} text={t(lang, "analytics.tease_entrants", { n: ENTRANT_LOOKBACK })} />
+      <Locked lang={lang} title={t(lang, "analytics.panel_due")} text={t(lang, "analytics.tease_due")} />
     </>);
   }
 
@@ -857,6 +1210,8 @@ export async function segmentAnalytics(c: Context<AppEnv>): Promise<Response> {
   const nNew = int(entrants[0]?.n_new);
   return shell(c, s, read, <>
     {first}
+    <ValuesPanel lang={lang} rows={rows.values ?? []} frame={frame} csv={csv("values")} />
+    <RecordsPanel lang={lang} rows={rows.records ?? []} frame={frame} party="both" csv={csv("records")} />
     <Panel title={t(lang, "analytics.panel_segment_buyers")} tools={buyers.length ? <CsvLink lang={lang} href={csv("buyers")} /> : undefined}
       foot={<span>{t(lang, "analytics.foot_segments")}</span>}>
       {buyers.length ? <>
@@ -872,7 +1227,7 @@ export async function segmentAnalytics(c: Context<AppEnv>): Promise<Response> {
     </Panel>
     <Panel title={t(lang, "analytics.panel_entrants")} tools={entrants.length ? <CsvLink lang={lang} href={csv("entrants")} /> : undefined}
       foot={<span>{t(lang, "analytics.foot_entrants", { n: ENTRANT_LOOKBACK })}</span>}>
-      <p>{tn(lang, "analytics.entrants_one", "analytics.entrants_many", nNew, { n: fmtInt(nNew, lang), fy: fy(lang, frame.last, frame.last) })}</p>
+      <p>{tn(lang, "analytics.entrants_one", "analytics.entrants_many", nNew, { n: fmtInt(nNew, lang), fy: fy(lang, frame.last, frame.current) })}</p>
       {entrants.length ? (
         <RankTable lang={lang} head={t(lang, "col.organization")} rows={entrants.map((r) => ({
           label: <a href={`/organizations/${orgIdOf(int(r.oid))}`}>{orgName(r)}</a>, n: int(r.n), cents: r.cents,
@@ -880,6 +1235,8 @@ export async function segmentAnalytics(c: Context<AppEnv>): Promise<Response> {
         }))} />
       ) : null}
     </Panel>
+    <DuePanel lang={lang} rows={rows.due ?? []} from={read.asOf ?? todayOf(stats.data_as_of)} radarDay={todayOf(stats.data_as_of)}
+      filter={`segment=${code}`} csv={csv("due")} noun="analytics.due_lead_segment" />
   </>);
 }
 
@@ -898,7 +1255,7 @@ const SegmentYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang,
         <tbody>
           {[...rows].reverse().map((r) => (
             <tr>
-              <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.last)}</td>
+              <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
               <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
               <td data-label={t(lang, "col.value")} class="mono num">{money(lang, dollars(r.cents))}</td>
               <td data-label={t(lang, "analytics.col_no_value")} class="mono num mdh">{n(int(r.n_no_value))}</td>
@@ -965,10 +1322,39 @@ function csvRows(view: View, table: string, rows: Record<string, Row[]>, segment
     case "segment/years":
       return [["fiscal_year", "fiscal_year_label", "records", "value_cad", "records_without_value", "buyers", "organizations"],
         list.map((r) => [...fyCols(r), int(r.n), cad(r.cents), int(r.n_no_value), int(r.n_buyers), int(r.n_orgs)])];
+    case "buyer/values":
+    case "segment/values":
+      return [["fiscal_year", "fiscal_year_label", "records_with_value_above_zero", "median_cad", "average_cad"],
+        list.map((r) => [...fyCols(r), int(r.n_pos), int(r.n_pos) > 0 ? cad(r.med) : null,
+          int(r.n_pos) > 0 ? (int(r.pos) / int(r.n_pos) / 100).toFixed(2) : null])];
+    case "buyer/growth":
+    case "organization/growth":
+      return [["fiscal_year", "fiscal_year_label", "records", "amended", "amended_compared", "amended_grew", "first_value_cad", "last_value_cad"],
+        list.map((r) => [...fyCols(r), int(r.n), int(r.n_amended), int(r.n_compared), int(r.n_grew), cad(r.first_cents), cad(r.last_cents)])];
+    case "buyer/records":
+    case "organization/records":
+    case "segment/records": {
+      const head = ["rank", "source", "reference", "title", "fiscal_year", "fiscal_year_label", "value_cad"];
+      const sources = Object.fromEntries(Object.entries(SOURCE_NUMBER).map(([k, v]) => [v, k]));
+      const record = (r: Row, i: number) => [i + 1, sources[int(r.src)] ?? "", r.ref ?? "", r.title ?? "", ...fyCols(r), cad(r.cents)];
+      const org = (r: Row) => (num(r.oid) === null ? ["", ""] : [orgIdOf(int(r.oid)), orgName(r)]);
+      const by = (r: Row) => [r.buyer_id ?? "", r.name_en ?? "", r.name_fr ?? ""];
+      if (view === "buyer") return [[...head, "organization_id", "organization"], list.map((r, i) => [...record(r, i), ...org(r)])];
+      if (view === "organization") return [[...head, "buyer_id", "buyer", "buyer_fr"], list.map((r, i) => [...record(r, i), ...by(r)])];
+      return [[...head, "organization_id", "organization", "buyer_id", "buyer", "buyer_fr"], list.map((r, i) => [...record(r, i), ...org(r), ...by(r)])];
+    }
+    case "buyer/due":
+    case "segment/due":
+      return [["fiscal_year", "fiscal_year_label", "quarter", "quarter_ends", "contracts", "value_cad", "contracts_without_value"],
+        list.map((r) => [...fyCols(r), int(r.fq), quarterEnd(int(r.fy), int(r.fq)), int(r.n), cad(r.cents), int(r.n_no_value)])];
     default:
       return null;
   }
 }
+
+// What a file's name says it covers: the source and the fiscal years, or for
+// the contracts ending (which follow neither) the fiscal year they count from.
+const span = (table: string, f: Frame) => (table === "due" ? `from-${f.current}` : `${f.source}-${f.first}-${f.last}`);
 
 // A view's table as a CSV file: Pro only (anyone else gets the site's 404, as
 // for a file that is not there), read with that table's statement alone, sent
@@ -988,7 +1374,7 @@ export async function analyticsCsv(c: Context<AppEnv>, view: View): Promise<Resp
     if (b instanceof Response) return b;
     const counts = { awards: b.buyer.n_awards, history: b.buyer.n_history, contracts: b.buyer.n_contracts, grants: b.buyer.n_grants };
     const frame = readFrame(c, stats, true, MONEY_SOURCES, largestSource(counts, MONEY_SOURCES));
-    key = `${b.buyer.id}-${table}-${frame.source}-${frame.first}-${frame.last}`;
+    key = `${b.buyer.id}-${table}-${span(table, frame)}`;
     data = { ...(await readNamed(c, buyerQueries(b.buyer.id, frame, [table]))), segment: null };
   } else if (view === "organization") {
     const id = (c.req.param("id") ?? "").toLowerCase();
@@ -998,14 +1384,14 @@ export async function analyticsCsv(c: Context<AppEnv>, view: View): Promise<Resp
     const o = profile.organization;
     const counts = { awards: o.n_awards, history: o.n_history, contracts: o.n_contracts, grants: o.n_grants };
     const frame = readFrame(c, stats, true, MONEY_SOURCES, largestSource(counts, MONEY_SOURCES));
-    key = `${id}-${table}-${frame.source}-${frame.first}-${frame.last}`;
+    key = `${id}-${table}-${span(table, frame)}`;
     data = await orgData(c, oid, id, frame, [table]);
   } else {
     const code = c.req.param("nn") ?? "";
     const sid = SEGMENT_RE.test(code) ? segmentNumber(code) : null;
     if (sid === null) return c.notFound();
     const frame = readFrame(c, stats, true, SEGMENT_SOURCES, "awards");
-    key = `segment-${code}-${table}-${frame.source}-${frame.first}-${frame.last}`;
+    key = `segment-${code}-${table}-${span(table, frame)}`;
     data = { ...(await readNamed(c, segmentQueries(sid, frame, [table]))), segment: null };
   }
   c.header("Cache-Control", "no-store");

@@ -2447,6 +2447,120 @@ const STRINGS = {
     en: "Same-day tender notices, part of Pro: CanadaBuys' file of the day's new notices, read every two hours through the Ottawa business day. They show above the tender lists, each marked with a bolt, until the next morning's refresh adds them there.",
     fr: "Avis d'appel d'offres du jour, offerts avec Pro : le fichier des nouveaux avis du jour d'AchatsCanada, lu toutes les deux heures pendant la journée de travail à Ottawa. Ils paraissent au-dessus des listes d'appels d'offres, chacun marqué d'un éclair, jusqu'à ce que la mise à jour du lendemain matin les y ajoute.",
   },
+
+  // -- analytics, phase 2 (src/pages/analytics.tsx, docs/analytics.md) ----------------------
+  "analytics.period_form": { en: "Choose the fiscal years", fr: "Choisir les exercices" },
+  "analytics.period_from": { en: "From", fr: "De" },
+  "analytics.period_to": { en: "To", fr: "À" },
+  "analytics.period_show": { en: "Show these years", fr: "Afficher ces exercices" },
+  "analytics.period_capped": {
+    en: "At most {n} fiscal years are shown at once, so this view shows the latest {n} of the period chosen.",
+    fr: "Au plus {n} exercices sont présentés à la fois; cette vue présente donc les {n} derniers de la période choisie.",
+  },
+  "analytics.free_more_buyer": {
+    en: "It also gives the average and median value by fiscal year, the ten largest records, the change in value through amendments and the contracts ending in each of the next eight fiscal quarters, for any period of up to ten fiscal years.",
+    fr: "Elle donne aussi la valeur moyenne et médiane par exercice, les dix dossiers de plus grande valeur, la variation de valeur par modifications et les contrats prenant fin pendant chacun des huit prochains trimestres, pour toute période d'au plus dix exercices.",
+  },
+  "analytics.free_more_organization": {
+    en: "It also gives the ten largest records and the change in value through amendments, for any period of up to ten fiscal years.",
+    fr: "Elle donne aussi les dix dossiers de plus grande valeur et la variation de valeur par modifications, pour toute période d'au plus dix exercices.",
+  },
+  "analytics.free_more_segment": {
+    en: "It also gives the average and median value by fiscal year, the ten largest records and the contracts ending in each of the next eight fiscal quarters, for any period of up to ten fiscal years.",
+    fr: "Elle donne aussi la valeur moyenne et médiane par exercice, les dix dossiers de plus grande valeur et les contrats prenant fin pendant chacun des huit prochains trimestres, pour toute période d'au plus dix exercices.",
+  },
+  "analytics.panel_values": { en: "Average and Median Value by Fiscal Year", fr: "Valeur moyenne et médiane par exercice" },
+  "analytics.panel_records": { en: "Ten Largest Records", fr: "Dix dossiers de plus grande valeur" },
+  "analytics.panel_growth": { en: "Change in Value Through Amendments", fr: "Variation de la valeur par modifications" },
+  "analytics.panel_due": { en: "Contracts Ending in the Next Eight Quarters", fr: "Contrats prenant fin au cours des huit prochains trimestres" },
+  "analytics.tease_values": {
+    en: "The average and the median value of a record by fiscal year, with the count of records they rest on.",
+    fr: "La valeur moyenne et la valeur médiane d'un dossier par exercice, avec le nombre de dossiers sur lequel elles reposent.",
+  },
+  "analytics.tease_records": {
+    en: "The ten records with the largest values in the period, each linked to its notice or its government record.",
+    fr: "Les dix dossiers aux valeurs les plus élevées de la période, chacun lié à son avis ou à son dossier gouvernemental.",
+  },
+  "analytics.tease_growth": {
+    en: "By fiscal year of award, how many records were amended and how their values changed from the first version to the newest.",
+    fr: "Par exercice d'attribution, le nombre de dossiers modifiés et la variation de leur valeur entre la première version et la plus récente.",
+  },
+  "analytics.tease_due": {
+    en: "The contracts ending in each of the next eight fiscal quarters, count and value, each linked to the list of contracts ending soon.",
+    fr: "Les contrats prenant fin pendant chacun des huit prochains trimestres, en nombre et en valeur, chacun lié à la liste des contrats prenant fin bientôt.",
+  },
+  "analytics.chart_median": { en: "Median value", fr: "Valeur médiane" },
+  "analytics.chart_average": { en: "Average value", fr: "Valeur moyenne" },
+  "analytics.chart_growth_first": { en: "Amended records: value of the first version", fr: "Dossiers modifiés : valeur de la première version" },
+  "analytics.chart_growth_last": { en: "Amended records: value of the newest version", fr: "Dossiers modifiés : valeur de la version la plus récente" },
+  "analytics.chart_due_value": { en: "Value of the contracts ending", fr: "Valeur des contrats prenant fin" },
+  "analytics.chart_due_count": { en: "Contracts ending", fr: "Contrats prenant fin" },
+  "analytics.due_aria": { en: "Chart by fiscal quarter", fr: "Graphique par trimestre d'exercice" },
+  "analytics.col_valued": { en: "With a value", fr: "Avec valeur" },
+  "analytics.col_median": { en: "Median", fr: "Médiane" },
+  "analytics.col_average": { en: "Average", fr: "Moyenne" },
+  "analytics.col_amended": { en: "Amended", fr: "Modifiés" },
+  "analytics.col_compared": { en: "Compared", fr: "Comparés" },
+  "analytics.col_first_value": { en: "First version", fr: "Première version" },
+  "analytics.col_last_value": { en: "Newest version", fr: "Version la plus récente" },
+  "analytics.col_change": { en: "Change", fr: "Variation" },
+  "analytics.col_quarter": { en: "Fiscal quarter", fr: "Trimestre" },
+  "analytics.col_quarter_ends": { en: "Quarter ends", fr: "Fin du trimestre" },
+  "analytics.col_contracts": { en: "Contracts", fr: "Contrats" },
+  "analytics.col_radar": { en: "Contracts ending soon", fr: "Contrats prenant fin bientôt" },
+  "analytics.foot_values": {
+    en: "Over the records with a counted value above zero. The average is their sum over their count; the median is the middle value, or for an even count the mean of the two middle values. Each panel has its own scale.",
+    fr: "Sur les dossiers dont la valeur comptée est supérieure à zéro. La moyenne est leur somme divisée par leur nombre; la médiane est la valeur du milieu ou, pour un nombre pair, la moyenne des deux valeurs du milieu. Chaque graphique a sa propre échelle.",
+  },
+  "analytics.foot_records": {
+    en: "Ranked by counted value; a value in another currency, one not published and one flagged for checking are not ranked. Titles are the English ones, or the French where none was published in English, cut at 120 characters.",
+    fr: "Classés selon la valeur comptée; une valeur dans une autre devise, une valeur non publiée et une valeur signalée pour vérification ne sont pas classées. Les titres sont ceux publiés en anglais, ou en français à défaut, coupés à 120 caractères.",
+  },
+  "analytics.foot_growth": {
+    en: "A record is amended when its source published a version after the first. An amended record is compared when its first version has a value above zero and its newest a counted value, each by the counting rules; a cancelled contract is not compared.",
+    fr: "Un dossier est modifié lorsque sa source a publié une version après la première. Un dossier modifié est comparé lorsque sa première version a une valeur supérieure à zéro et la plus récente une valeur comptée, chacune selon les règles de calcul; un contrat annulé n'est pas comparé.",
+  },
+  "analytics.no_growth": {
+    en: "Amendments are read from award notices and PSPC contract history, which number each version. Choose one of them.",
+    fr: "Les modifications sont lues dans les avis d'attribution et l'historique des contrats de SPAC, qui numérotent chaque version. Choisissez l'une de ces sources.",
+  },
+  "analytics.growth_none": {
+    en: "No amended record has both values to compare in these fiscal years.",
+    fr: "Aucun dossier modifié n'a les deux valeurs à comparer pour ces exercices.",
+  },
+  "analytics.due_lead_buyer": {
+    en: "The buyer's contracts ending in each fiscal quarter from the data date's, as the list of contracts ending soon counts them.",
+    fr: "Les contrats de l'acheteur prenant fin pendant chaque trimestre à partir de celui de la date des données, comptés comme dans la liste des contrats prenant fin bientôt.",
+  },
+  "analytics.due_lead_segment": {
+    en: "The segment's contracts ending in each fiscal quarter from the data date's, as the list of contracts ending soon counts them.",
+    fr: "Les contrats du segment prenant fin pendant chaque trimestre à partir de celui de la date des données, comptés comme dans la liste des contrats prenant fin bientôt.",
+  },
+  "analytics.foot_due": {
+    en: "Award notices, PSPC contract history and published contracts ending from {date}, each contract once by the list's duplicate rule, so these figures follow neither the source nor the period chosen above. Values in Canadian dollars; a value not published or flagged for checking is not added. The list's windows count days from its data date; each quarter links the narrowest window that holds all of it.",
+    fr: "Avis d'attribution, historique des contrats de SPAC et contrats publiés prenant fin à partir du {date}, chaque contrat une seule fois selon la règle des doublons de la liste; ces chiffres ne suivent donc ni la source ni la période choisies plus haut. Valeurs en dollars canadiens; une valeur non publiée ou signalée pour vérification n'est pas additionnée. Les fenêtres de la liste comptent les jours depuis sa date des données; chaque trimestre renvoie à la plus étroite qui le contient en entier.",
+  },
+  "analytics.due_none": { en: "No contract ends in these quarters.", fr: "Aucun contrat ne prend fin pendant ces trimestres." },
+  "methodology.analytics_period": {
+    en: "A view covers the latest 3, 5 or 10 fiscal years, or the fiscal years chosen by their first and last, up to the data date's and at most ten at once; the period is part of the view's address.",
+    fr: "Une vue couvre les 3, 5 ou 10 derniers exercices, ou les exercices choisis par le premier et le dernier, jusqu'à celui de la date des données et au plus dix à la fois; la période fait partie de l'adresse de la vue.",
+  },
+  "methodology.analytics_values": {
+    en: "The average and the median value of a fiscal year are taken over the records with a counted value above zero, and the count beside them says how many. The median of an even count is the mean of the two middle values. A segment's figures count each notice in each of its segments, as its other figures do.",
+    fr: "La valeur moyenne et la valeur médiane d'un exercice portent sur les dossiers dont la valeur comptée est supérieure à zéro, et le nombre indiqué à côté précise combien. La médiane d'un nombre pair est la moyenne des deux valeurs du milieu. Les chiffres d'un segment comptent chaque avis dans chacun de ses segments, comme ses autres chiffres.",
+  },
+  "methodology.analytics_growth": {
+    en: "The change in value through amendments reads award notices and PSPC contract history by the fiscal year of the award. A record is amended when its source published a version after the first. Its first version's value (the total value when positive, else the amount) is set against its newest version's counted value; only records with a first value above zero and a counted newest value are compared, and a cancelled contract never is.",
+    fr: "La variation de la valeur par modifications porte sur les avis d'attribution et l'historique des contrats de SPAC, par exercice d'attribution. Un dossier est modifié lorsque sa source a publié une version après la première. La valeur de sa première version (la valeur totale si elle est positive, sinon le montant) est comparée à la valeur comptée de sa version la plus récente; seuls les dossiers dont la première valeur est supérieure à zéro et la plus récente est comptée sont comparés, jamais un contrat annulé.",
+  },
+  "methodology.analytics_records": {
+    en: "The ten largest records are ranked by counted value in the period and source. Each shows its title as published in English, or in French where no English title was published, with contact details removed and cut at 120 characters.",
+    fr: "Les dix dossiers de plus grande valeur sont classés selon la valeur comptée pour la période et la source. Chacun affiche son titre publié en anglais, ou en français à défaut, sans coordonnées et coupé à 120 caractères.",
+  },
+  "methodology.analytics_due": {
+    en: "The contracts ending by fiscal quarter follow the rules of Contracts Ending Soon, carried to the end of the eighth fiscal quarter from the data date's: the newest version's end date, no cancelled contract, each contract once across award notices, PSPC contract history and published contracts. A buyer's are the ones the list shows under that buyer; a segment's are counted in each of a notice's segments.",
+    fr: "Les contrats prenant fin par trimestre suivent les règles de la section Contrats prenant fin bientôt, prolongées jusqu'à la fin du huitième trimestre à partir de celui de la date des données : la date de fin de la version la plus récente, aucun contrat annulé, chaque contrat une seule fois parmi les avis d'attribution, l'historique des contrats de SPAC et les contrats publiés. Ceux d'un acheteur sont ceux que la liste présente sous cet acheteur; ceux d'un segment sont comptés dans chacun des segments d'un avis.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

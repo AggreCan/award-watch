@@ -7,16 +7,18 @@ the count check, the three commands, the workflow step and its drift guards."""
 from __future__ import annotations
 
 import json
+import math
 import re
 import sqlite3
+import statistics
 from pathlib import Path
 
 import pytest
 
-from awardwatch_pipeline import cli, config, nightly, resilience
+from awardwatch_pipeline import cli, config, export_static, nightly, resilience
 from awardwatch_pipeline import records_db as rd
 from awardwatch_pipeline.db import connect, get_meta, set_meta
-from export_seed import ACME, NORTH, STAMP, seed
+from export_seed import ACME, NORTH, PROSE_EMAIL, PROSE_PHONES, SLASH_REF, STAMP, award, seed
 
 REPO = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO / ".github" / "workflows" / "nightly.yml"
@@ -108,7 +110,7 @@ def test_each_record_counts_once_with_the_buyer_pages_figures(seeded):
     conn, _ = seeded
     names = {rd.buyer_number(b): b for (b,) in conn.execute("SELECT id FROM buyers")}
     mine: dict[tuple[str, str], list] = {}
-    for _k, src, _fy, _fq, bid, _oid, _sid, extra, cents, _vnote, _comp, _meth in rd.record_rows(conn):
+    for _k, src, _fy, _fq, bid, _oid, _sid, extra, cents, *_rest in rd.record_rows(conn):
         if extra:
             continue
         cell = mine.setdefault((names[bid], {v: k for k, v in rd.SOURCES.items()}[src]), [0, None])
@@ -131,7 +133,7 @@ def test_values_are_cents_and_the_reason_a_value_is_left_out(seeded):
     assert (award("AW-4")[cents], award("AW-4")[vnote]) == (None, rd.OTHER_CURRENCY)
     # A published contract row's own value: the amendment row adds its amendment.
     contract = by[rd.key_of("contract:dnd-mdn:C-2")]
-    assert contract[cents] == 3_000_000 and contract[10:] == (0, "TN")
+    assert contract[cents] == 3_000_000 and contract[10:12] == (0, "TN")
     # A value flagged for checking, and one the source did not publish.
     conn.execute("INSERT INTO value_flags (kind, key, rule, computed_at) VALUES ('award', 'AW-2', 'other_source', ?)", (STAMP,))
     conn.execute("UPDATE awards SET amount = NULL, total_value = NULL WHERE reference = 'AW-1'")
@@ -173,6 +175,123 @@ def test_grants_to_people_are_never_in_the_database(seeded):
     keys = {r[0] for r in rd.record_rows(conn, tally)}
     assert rd.key_of("grant:dnd-mdn:G-P") not in keys and rd.key_of("grant:dnd-mdn:G-1") in keys
     assert tally.grants_withheld == 1
+
+
+# Positions of the phase 2 columns in a records row (RECORDS.written).
+OCENTS, NAMD, REF, TITLE = (rd.RECORDS.written.index(c) for c in ("ocents", "namd", "ref", "title"))
+
+
+def test_amendments_compare_the_first_version_with_the_newest(seeded):
+    conn, _ = seeded
+    by = rows_by_key(conn)
+    row = lambda key: by[rd.key_of(key)]  # noqa: E731
+    # AW-1 was amended once: 1,000,000 as first awarded, 1,250,000 as last amended.
+    assert (row("award:AW-1")[OCENTS], row("award:AW-1")[8], row("award:AW-1")[NAMD]) == (100_000_000, 125_000_000, 1)
+    # An unamended notice: its one version on both sides.
+    assert (row("award:AW-2")[OCENTS], row("award:AW-2")[8], row("award:AW-2")[NAMD]) == (25_000_000, 25_000_000, 0)
+    # A cancelled contract (its zero is a status) and one in another currency are not compared.
+    assert (row("award:AW-3")[OCENTS], row("award:AW-3")[8]) == (None, 0)
+    assert row("award:AW-4")[OCENTS] is None
+    assert (row("history:H-1")[OCENTS], row("history:H-1")[NAMD]) == (30_000_000, 0)
+    # Published contracts and grants carry no numbered versions.
+    for key in ("contract:dnd-mdn:C-1", "grant:dnd-mdn:G-1"):
+        assert (row(key)[OCENTS], row(key)[NAMD]) == (None, None), key
+
+
+def test_references_and_titles_are_what_the_pages_link_and_show(seeded):
+    conn, _ = seeded
+    by = rows_by_key(conn)
+    row = lambda key: by[rd.key_of(key)]  # noqa: E731
+    assert (row("award:AW-1")[REF], row("award:AW-1")[TITLE]) == ("AW-1", "Award AW-1")
+    assert (row("history:H-1")[REF], row("history:H-1")[TITLE]) == ("H-1", "Boots")
+    # A reference the site cannot take in a URL as published is written in the form its page has.
+    assert row(f"award:{SLASH_REF}")[REF] == export_static.url_reference(SLASH_REF) != SLASH_REF
+    # A published contract and a grant: department and reference; the description or the title, contacts scrubbed.
+    contract = row("contract:dnd-mdn:C-1")
+    assert contract[REF] == "dnd-mdn:C-1" and contract[TITLE].startswith("Translation. Fax")
+    assert not any(phone in contract[TITLE] for phone in PROSE_PHONES) and "555" not in contract[TITLE]
+    assert (row("grant:dnd-mdn:G-1")[REF], row("grant:dnd-mdn:G-1")[TITLE]) == ("dnd-mdn:G-1", "Study")
+    # The English title, else the French; cut at a word within 120 characters; none for blanks.
+    assert rd.title_of(None, "Bottes") == "Bottes" and rd.title_of("  ", "") is None
+    long = rd.title_of("Supply of " + "very " * 40 + "large boots", None)
+    assert len(long) <= rd.TITLE_CHARS and long.endswith("very…")
+    assert rd.title_of(f"Write to {PROSE_EMAIL} today", None) == "Write to [contact removed] today"
+    assert rd.title_of(None, f"Écrire à {PROSE_EMAIL}") == "Écrire à [coordonnées retirées]"
+
+
+def _median(values: list[int]) -> int:
+    """The median the summary rows keep, worked out apart from records_db: the middle value, or the floor of the
+    mean of the two middle values."""
+    return math.floor(statistics.median(values))
+
+
+def test_average_and_median_rows_hold_what_the_records_give(seeded, tmp_path):
+    conn, _ = seeded
+    db = d1()
+    night(conn, tmp_path / "records", db)
+    rows = list(rd.record_rows(conn))
+    # Every buyer, source and fiscal year with a counted value above zero, records with extra = 0.
+    groups: dict[tuple, list[int]] = {}
+    for r in rows:
+        if r[7] == 0 and r[4] is not None and r[2] is not None and (r[8] or 0) > 0:
+            groups.setdefault((r[4], r[1], r[2]), []).append(r[8])
+    want = {g: (len(v), sum(v), _median(v)) for g, v in groups.items()}
+    got = {(b, s, y): (n, pos, med) for b, s, y, n, pos, med in db.execute(
+        "SELECT bid, src, fy, n_pos, pos, med FROM rec_buyer_years")}
+    assert got == want and want
+    # National Defence's published contracts of 2025-26: two values, so the mean of the two.
+    dnd = (rd.buyer_number("dnd-mdn"), rd.SOURCES["contracts"], 2025)
+    assert got[dnd] == (2, 13_000_000, 6_500_000)
+    # Each segment year counts every row, extra or not.
+    seg: dict[tuple, list[int]] = {}
+    for r in rows:
+        if r[6] is not None and r[2] is not None and (r[8] or 0) > 0:
+            seg.setdefault((r[6], r[1], r[2]), []).append(r[8])
+    for sid, src, fy, n_pos, pos, med in db.execute("SELECT sid, src, fy, n_pos, pos, med FROM rec_segment_years"):
+        values = seg.get((sid, src, fy), [])
+        assert (n_pos, pos, med) == ((len(values), sum(values), _median(values)) if values else (0, None, None))
+
+
+def test_contracts_ending_follow_the_radar_quarter_by_quarter(seeded, tmp_path):
+    conn, _ = seeded
+    # A notice ending after the radar's twelve months, inside the eighth quarter (2028-07 to 2028-09).
+    award(conn, "AW-9", 0, NORTH, value=70_000.0, awarded="2026-09-01", codes=("43211500",))
+    conn.execute("UPDATE awards SET \"end\" = '2028-09-30' WHERE reference = 'AW-9'")
+    # And one a day past it, which no quarter takes.
+    award(conn, "AW-10", 0, NORTH, value=80_000.0, awarded="2026-09-01")
+    conn.execute("UPDATE awards SET \"end\" = '2028-10-01' WHERE reference = 'AW-10'")
+    db = d1()
+    night(conn, tmp_path / "records", db)
+    due = {(b, s, y, q): (n, c, nv) for b, s, y, q, n, c, nv in db.execute(
+        "SELECT bid, sid, fy, fq, n, cents, n_no_value FROM rec_due")}
+    assert all(2026 * 4 + 2 <= y * 4 + q - 1 <= 2026 * 4 + 2 + 7 for _, _, y, q in due)
+    # The four quarters inside the radar's twelve months hold exactly the radar's rows, per buyer, independently
+    # of rec_due's own pass: the table expiring.compute wrote for the seed.
+    radar: dict[tuple, list] = {}
+    for buyer, end, value, currency, flag in conn.execute(
+            "SELECT buyer_id, \"end\", value, currency, value_flag FROM expiring_contracts"):
+        y, q = rd.fiscal(end)
+        if y * 4 + q > 2027 * 4 + 2:
+            continue
+        cell = radar.setdefault((rd.buyer_number(buyer), None, y, q), [0, None, 0])
+        cell[0] += 1
+        if value is not None and currency in (None, "CAD") and not flag:
+            cell[1] = (cell[1] or 0) + round(value * 100)
+        cell[2] += value is None
+    mine = {k: list(v) for k, v in due.items() if k[0] is not None and k[2] * 4 + k[3] <= 2027 * 4 + 2}
+    assert mine == radar and radar
+    # Past the radar: the notice ending on the eighth quarter's last day, under its buyer and its segment.
+    pspc = rd.buyer_number("pwgsc-tpsgc")
+    assert due[(pspc, None, 2028, 2)] == (1, 7_000_000, 0)
+    assert due[(None, 43, 2028, 2)] == (1, 7_000_000, 0)
+    assert not any(k[2] * 4 + k[3] > 2028 * 4 + 2 for k in due)
+    # Every buyer a quarter names has its name in rec_buyers.
+    named = {b for (b,) in db.execute("SELECT bid FROM rec_buyers")}
+    assert {k[0] for k in due if k[0] is not None} <= named
+    # The fiscal quarters' last days.
+    assert [rd.quarter_end(2026, q).isoformat() for q in (1, 2, 3, 4)] == ["2026-06-30", "2026-09-30", "2026-12-31",
+                                                                           "2027-03-31"]
+    assert rd.add_quarters(2026, 3, 7) == (2028, 2)
 
 
 # -- the sync ------------------------------------------------------------------------
@@ -245,11 +364,37 @@ def test_a_full_reload_marks_the_database_loading_until_finish(seeded, tmp_path)
 
 def test_a_full_reload_after_a_count_mismatch_waits_its_days(conn):
     assert rd.full_reason(conn, ledger_empty=True, today="2026-11-01").startswith("first load")
+    set_meta(conn, rd.META_LAYOUT, rd.LAYOUT)
     set_meta(conn, rd.META_FULL_AT, "2026-11-01")
     rd.request_reload(conn, "2026-11-10")
     assert rd.full_reason(conn, today="2026-11-10") == ""
     assert rd.full_reason(conn, today="2026-11-29").startswith("the row counts read back")
     assert rd.full_reason(conn, requested=True, today="2026-11-02") == "requested"
+
+
+def test_tables_of_another_form_reload_in_full_whatever_the_days(seeded, tmp_path):
+    """A database last loaded by phase 1 (no layout recorded) holds tables without the new columns: the next sync
+    drops and recreates them the day after a full load, and records the form, so the night after sends changes."""
+    conn, _ = seeded
+    out = tmp_path / "records"
+    db = d1()
+    night(conn, out, db)
+    assert get_meta(conn, rd.META_LAYOUT) == str(rd.LAYOUT)
+    # As a phase 1 night would leave it: a full load yesterday, no layout in meta.
+    conn.execute("DELETE FROM meta WHERE key = ?", (rd.META_LAYOUT,))
+    set_meta(conn, rd.META_FULL_AT, "2026-11-03")
+    assert rd.full_reason(conn, today="2026-11-04") == f"the records tables changed form (layout 1 to {rd.LAYOUT})"
+    reload = rd.sync(conn, out, today="2026-11-04")
+    assert reload["full"] and reload["layout"] == rd.LAYOUT
+    assert "DROP TABLE IF EXISTS records;" in (out / reload["batches"][0]).read_text(encoding="utf-8")
+    # A reload that never finished records nothing, so the next night reloads again.
+    assert rd.full_reason(conn, today="2026-11-05").startswith("the records tables changed form")
+    apply(db, out, reload)
+    rd.record_sync(conn, reload)
+    assert get_meta(conn, rd.META_LAYOUT) == str(rd.LAYOUT) and rd.full_reason(conn, today="2026-11-05") == ""
+    # The other way round is the same: a recorded form other than the code's.
+    set_meta(conn, rd.META_LAYOUT, rd.LAYOUT + 1)
+    assert rd.full_reason(conn, ledger_empty=True).startswith("first load")
 
 
 def test_the_ledger_records_only_the_plan_it_staged(seeded, tmp_path):

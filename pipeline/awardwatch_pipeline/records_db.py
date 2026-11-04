@@ -8,10 +8,16 @@ reference, valued on its newest amendment; a published contract row; a grant
 or contribution agreement on its highest amendment), reduced to integers: the
 source, the federal fiscal year and quarter, the buyer, the organization, the
 UNSPSC segment, the counted value in cents and why a value is not counted,
-whether the record was competitive and the method's code. Beside them go the
-names the top lists show (rec_orgs, rec_buyers) and two summary tables the
-first charts and the free views read (rec_buyer_quarters, rec_segment_years).
-Grants whose recipient reads as a person are left out entirely.
+whether the record was competitive and the method's code; for award notices
+and history also the first version's value and the count of later versions
+(the amendment growth); and the reference and a short title the
+largest-records tables link and show. Beside them go the names the top lists
+show (rec_orgs, rec_buyers), the summary tables the first charts and the free
+views read (rec_buyer_quarters, rec_segment_years), the average and median
+values read from summary rows rather than computed at request time
+(rec_buyer_years, and three columns of rec_segment_years), and the contracts
+ending in each of the next eight fiscal quarters by the radar's rules
+(rec_due). Grants whose recipient reads as a person are left out entirely.
 
 The sync is the search sync's (search_db.py) with three changes, because the
 records table is about a hundred times larger:
@@ -29,7 +35,10 @@ records table is about a hundred times larger:
 
 A full reload is made on an empty ledger, when asked (`records-sync --full`)
 and after a count read back disagreed, but not within RELOAD_MIN_DAYS of the
-last one: a full load writes about ten million rows and index entries.
+last one: a full load writes about ten million rows and index entries. It is
+also made, whatever the days, when the tables changed form (LAYOUT differs
+from the one the last full load recorded): D1 creates a table only when it is
+missing, so the new columns reach it only by dropping the old tables.
 
 No value here comes from a visitor, and each is written as a literal no
 content can break out of (search_db.sql_literal).
@@ -47,12 +56,13 @@ import secrets
 import sqlite3
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
-from . import config, organizations
+from . import config, expiring, organizations
 from .db import connect, get_meta, now_iso, set_meta, today_iso
-from .export_static import BUYER_ID_RE, ORG_ID_RE, read_segments
+from .export import scrub
+from .export_static import BUYER_ID_RE, ORG_ID_RE, RefMap, read_segments
 from .indicators import RULES_VERSION
 from .search_db import (
     MAX_BATCH_BYTES, MAX_BATCH_STATEMENTS, MAX_KEYS_PER_DELETE, MAX_STATEMENT_BYTES, _BatchWriter, _grouped, sql_literal,
@@ -76,14 +86,25 @@ class Table:
 
 
 # Changing a column list or its order changes every hash of that table, which
-# resends each of its rows once.
-RECORDS = Table(1, "records", "k", ("src", "fy", "fq", "bid", "oid", "sid", "extra", "cents", "vnote", "comp", "meth"))
+# resends each of its rows once; a column added to a table D1 already holds
+# also needs LAYOUT raised, so the next sync drops and recreates the tables.
+RECORDS = Table(1, "records", "k", ("src", "fy", "fq", "bid", "oid", "sid", "extra", "cents", "vnote", "comp", "meth",
+                                    "ocents", "namd", "ref", "title"))
 ORGS = Table(2, "rec_orgs", "oid", ("name",))
 BUYERS = Table(3, "rec_buyers", "bid", ("id", "name_en", "name_fr"))
 BUYER_QUARTERS = Table(4, "rec_buyer_quarters", "k", ("bid", "src", "fy", "fq", "n", "cents", "n_no_value"))
-SEGMENT_YEARS = Table(5, "rec_segment_years", "k", ("sid", "src", "fy", "n", "cents", "n_no_value", "n_buyers", "n_orgs"))
-TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS)
+SEGMENT_YEARS = Table(5, "rec_segment_years", "k", ("sid", "src", "fy", "n", "cents", "n_no_value", "n_buyers", "n_orgs",
+                                                    "n_pos", "pos", "med"))
+BUYER_YEARS = Table(6, "rec_buyer_years", "k", ("bid", "src", "fy", "n_pos", "pos", "med"))
+DUE = Table(7, "rec_due", "k", ("bid", "sid", "fy", "fq", "n", "cents", "n_no_value"))
+TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE)
 BY_CODE = {t.code: t for t in TABLES}
+
+# The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
+# so); 2: the amendment, reference and title columns, the median columns and
+# rec_buyer_years, rec_due. Recorded in meta (META_LAYOUT) by the full load
+# that wrote it; a sync that finds another reloads in full by itself.
+LAYOUT = 2
 
 # The source numbers the site's records_db.ts SOURCE_NUMBER repeats.
 SOURCES = {"awards": 1, "history": 2, "contracts": 3, "grants": 4}
@@ -91,9 +112,16 @@ SOURCES = {"awards": 1, "history": 2, "contracts": 3, "grants": 4}
 # Why a record's value is not in its cents (records.vnote).
 COUNTED, NO_VALUE, OTHER_CURRENCY, FLAGGED = 0, 1, 2, 3
 
-# A records row is about 90 bytes of SQL, so a statement holds more of them
-# than a search row; 500 stay well under MAX_STATEMENT_BYTES.
+# A records row is about 90 bytes of SQL without its title, so a statement
+# holds more of them than a search row; the byte cap (MAX_STATEMENT_BYTES)
+# cuts a statement of long titles first.
 MAX_ROWS_PER_UPSERT = 500
+# The title the largest-records tables show, and the longest reference kept
+# (a longer one would make a wrong link, so it is left out).
+TITLE_CHARS = 120
+REF_CHARS = 120
+# The fiscal quarters rec_due covers, the data date's first.
+DUE_QUARTERS = 8
 # A full load writes about ten million rows and index entries, a fifth of the
 # plan's monthly allowance, so one forced by a count that disagreed waits this
 # long after the last.
@@ -102,6 +130,7 @@ RELOAD_MIN_DAYS = 28
 META_RELOAD = "records_reload_due"      # the date records-check found a count disagreeing
 META_FULL_AT = "records_full_at"        # the date the last full reload was written
 META_PLAN = "records_plan"              # the plan number of the stage records-synced may record
+META_LAYOUT = "records_layout"          # the LAYOUT of the last full load D1 received
 MANIFEST = "manifest.json"
 BATCH_LIST = "batches.txt"
 FINISH = "finish.sql"                   # applied after the count check: state ready, the data date
@@ -203,38 +232,67 @@ def method_code(method: object) -> str | None:
 # record's organization and buyer as indicators.RECORDS reads them, its date,
 # the counted value (NULL when another currency, not published or flagged) and
 # the three reasons apart, competitiveness, the method, the newest version's
-# UNSPSC codes and whether the party is withheld.
+# UNSPSC codes and whether the party is withheld; then what the amendment
+# growth and the largest-records tables read: whether the contract is
+# cancelled, its versions and its first version's value (award notices and
+# history, by expiring.py's rule: the total value when positive, else the
+# amount), the reference and the two titles.
 _A = organizations
-RECORD_SQL = {
-    "awards": (
-        f"WITH newest AS ({_A._newest_by_reference('awards', ('reference',))}) "
-        f"SELECT 'award:' || reference AS key, org, buyer_id AS buyer, awarded AS day, {_A.award_value('award')} AS v, "
-        f"{_A.AWARD_NO_VALUE} AS nv, {_A.award_flagged('award')} AS flagged, UPPER(TRIM(COALESCE(currency, ''))) AS cur, "
+
+
+def _notice_sql(kind: str, table: str, codes: str, buyer: str) -> str:
+    return (
+        f"WITH newest AS ({_A._newest_by_reference(table, ('reference',))}) "
+        f"SELECT '{kind}:' || reference AS key, org, {buyer} AS buyer, awarded AS day, {_A.award_value(kind)} AS v, "
+        f"{_A.AWARD_NO_VALUE} AS nv, {_A.award_flagged(kind)} AS flagged, UPPER(TRIM(COALESCE(currency, ''))) AS cur, "
         "competitive AS comp, method_en AS method, "
-        "(SELECT group_concat(c.unspsc, ' ') FROM award_codes c WHERE c.reference = newest.reference "
-        "AND c.amendment = newest.amendment) AS codes, supplier_withheld AS withheld FROM newest"
-    ),
-    "history": (
-        f"WITH newest AS ({_A._newest_by_reference('contract_history', ('reference',))}) "
-        f"SELECT 'history:' || reference AS key, org, COALESCE(client_id, buyer_id) AS buyer, awarded AS day, "
-        f"{_A.award_value('history')} AS v, {_A.AWARD_NO_VALUE} AS nv, {_A.award_flagged('history')} AS flagged, "
-        "UPPER(TRIM(COALESCE(currency, ''))) AS cur, competitive AS comp, method_en AS method, "
-        "(SELECT group_concat(c.unspsc, ' ') FROM history_codes c WHERE c.reference = newest.reference "
-        "AND c.amendment = newest.amendment) AS codes, supplier_withheld AS withheld FROM newest"
-    ),
+        f"(SELECT group_concat(c.unspsc, ' ') FROM {codes} c WHERE c.reference = newest.reference "
+        "AND c.amendment = newest.amendment) AS codes, supplier_withheld AS withheld, "
+        "COALESCE(status, '') = 'cancelled' AS cancelled, "
+        f"(SELECT COUNT(*) FROM {table} z WHERE z.reference = newest.reference) AS versions, "
+        f"(SELECT CASE WHEN z.total_value > 0 THEN z.total_value ELSE z.amount END FROM {table} z "
+        "WHERE z.reference = newest.reference ORDER BY z.amendment LIMIT 1) AS ov, "
+        "reference AS ref, title_en AS t_en, title_fr AS t_fr FROM newest"
+    )
+
+
+RECORD_SQL = {
+    "awards": _notice_sql("award", "awards", "award_codes", "buyer_id"),
+    "history": _notice_sql("history", "contract_history", "history_codes", "COALESCE(client_id, buyer_id)"),
     "contracts": (
         "SELECT 'contract:' || owner_org || ':' || reference AS key, organization_id AS org, buyer_id AS buyer, "
         f"contract_date AS day, {_A.CONTRACT_CHECKED} AS v, {_A.CONTRACT_NO_VALUE} AS nv, {_A.CONTRACT_FLAGGED} AS flagged, "
-        "'' AS cur, competitive AS comp, solicitation_procedure AS method, NULL AS codes, vendor_withheld AS withheld "
-        "FROM contracts"
+        "'' AS cur, competitive AS comp, solicitation_procedure AS method, NULL AS codes, vendor_withheld AS withheld, "
+        "0 AS cancelled, NULL AS versions, NULL AS ov, owner_org || ':' || reference AS ref, description_en AS t_en, "
+        "description_fr AS t_fr FROM contracts"
     ),
     "grants": (
         f"WITH newest AS ({_A._newest_by_reference('grants', ('owner_org', 'reference'))}) "
         "SELECT 'grant:' || owner_org || ':' || reference AS key, org, buyer_id AS buyer, start AS day, value AS v, "
         f"{_A.GRANT_NO_VALUE} AS nv, 0 AS flagged, '' AS cur, NULL AS comp, NULL AS method, NULL AS codes, "
-        "recipient_withheld AS withheld FROM newest"
+        "recipient_withheld AS withheld, 0 AS cancelled, NULL AS versions, NULL AS ov, "
+        "owner_org || ':' || reference AS ref, title_en AS t_en, title_fr AS t_fr FROM newest"
     ),
 }
+
+# The sources whose versions are numbered, so whose values can grow through amendments.
+AMENDED_SOURCES = ("awards", "history")
+_SPACES = re.compile(r"\s+")
+
+
+def title_of(en: object, fr: object) -> str | None:
+    """The title a largest-records table shows: the English one, else the French, with every email address and
+    telephone number scrubbed first (a cut could split one the scrub would no longer see), whitespace folded,
+    cut at a word boundary within TITLE_CHARS with an ellipsis."""
+    for text, lang in ((en, "en"), (fr, "fr")):
+        if isinstance(text, str) and text.strip():
+            clean = _SPACES.sub(" ", str(scrub(text, lang))).strip()
+            if len(clean) <= TITLE_CHARS:
+                return clean
+            cut = clean[:TITLE_CHARS]
+            space = cut.rfind(" ")
+            return (cut[:space] if space > TITLE_CHARS // 2 else cut[:TITLE_CHARS - 1]).rstrip(" ,;:.") + "…"
+    return None
 
 
 def value_note(v: object, nv: object, flagged: object, cur: object) -> int:
@@ -253,17 +311,33 @@ class _Counts:
         self.buyers: dict[int, str] = {}
         self.bad_buyers = 0
 
+    def bid(self, buyer: object) -> int | None:
+        """A buyer id's number, kept for rec_buyers; None (counted when the record names something else) otherwise."""
+        if isinstance(buyer, str) and BUYER_ID_RE.match(buyer) and len(buyer) <= 80:
+            number = buyer_number(buyer)
+            seen = self.buyers.setdefault(number, buyer)
+            if seen != buyer:
+                raise ValueError(f"buyers {seen!r} and {buyer!r} have the same number; change buyer_number")
+            return number
+        if buyer is not None:
+            self.bad_buyers += 1
+        return None
+
 
 def record_rows(conn: sqlite3.Connection, counts: _Counts | None = None) -> Iterator[tuple]:
     """Every row of the records table, values in RECORDS.written order (the key first).
 
     A notice whose codes reach several of the 57 segments gives its row under
-    the lowest, then one row with extra = 1 under each other. A grant whose
-    recipient is withheld (a person) gives none; counts.grants_withheld says
-    how many were left out.
+    the lowest, then one row with extra = 1 under each other (each with the
+    reference and title, so a segment's largest records can show them). A
+    grant whose recipient is withheld (a person) gives none;
+    counts.grants_withheld says how many were left out. An award or history
+    reference is written in the URL form its page has (export_static.RefMap),
+    or NULL when the site serves no page for it.
     """
     tally = counts or _Counts()
     segments = set(read_segments())
+    refs = {"awards": RefMap(conn, "awards"), "history": RefMap(conn, "contract_history")}
     for source, sql in RECORD_SQL.items():
         src = SOURCES[source]
         for r in conn.execute(sql):
@@ -271,24 +345,27 @@ def record_rows(conn: sqlite3.Connection, counts: _Counts | None = None) -> Iter
                 tally.grants_withheld += 1
                 continue
             fy, fq = fiscal(r["day"])
-            buyer = r["buyer"]
-            bid = None
-            if isinstance(buyer, str) and BUYER_ID_RE.match(buyer) and len(buyer) <= 80:
-                bid = buyer_number(buyer)
-                seen = tally.buyers.setdefault(bid, buyer)
-                if seen != buyer:
-                    raise ValueError(f"buyers {seen!r} and {buyer!r} have the same number; change buyer_number")
-            elif buyer is not None:
-                tally.bad_buyers += 1
+            bid = tally.bid(r["buyer"])
             oid = None if r["withheld"] else org_number(r["org"])
             vnote = value_note(r["v"], r["nv"], r["flagged"], r["cur"])
             cents = cents_of(r["v"]) if vnote == COUNTED else None
             comp = r["comp"] if r["comp"] in (0, 1) else None
             meth = method_code(r["method"])
+            ocents = namd = None
+            if source in AMENDED_SOURCES:
+                namd = max((r["versions"] or 1) - 1, 0)
+                # A cancelled contract's zero is a status, so it never reads as a fall in value.
+                if cents is not None and not r["cancelled"]:
+                    ocents = cents_of(r["ov"])
+            ref = refs[source].get(r["ref"]) if source in refs else r["ref"]
+            if ref is not None and len(ref) > REF_CHARS:
+                ref = None
+            title = title_of(r["t_en"], r["t_fr"])
             sids = sorted({int(c[:2]) for c in str(r["codes"] or "").split() if c[:2] in segments})
             for i, sid in enumerate(sids or [None]):
                 key = r["key"] if i == 0 else f"{r['key']}#{sid}"
-                yield (key_of(key), src, fy, fq, bid, oid, sid, 1 if i else 0, cents, vnote, comp, meth)
+                yield (key_of(key), src, fy, fq, bid, oid, sid, 1 if i else 0, cents, vnote, comp, meth, ocents, namd,
+                       ref, title)
 
 
 # -- tonight's rows, in temporary tables ----------------------------------------
@@ -298,8 +375,94 @@ def _now(table: Table) -> str:
     return f"records_now_{table.code}"
 
 
-def build(conn: sqlite3.Connection) -> dict:
-    """Fill a temporary table per D1 table with tonight's rows and their hashes; return what was left out."""
+def value_figures(conn: sqlite3.Connection, columns: str, where: str) -> dict[tuple, tuple[int, int, int]]:
+    """(count, sum, median) of the counted values above zero in tonight's records, per group of columns.
+
+    The median of an even count is the mean of the two middle values, its
+    half cent dropped. Read in one ordered pass, so no group's values are
+    held beyond its own.
+    """
+    out: dict[tuple, tuple[int, int, int]] = {}
+    group: tuple | None = None
+    values: list[int] = []
+
+    def close() -> None:
+        if group is not None and values:
+            n, mid = len(values), len(values) // 2
+            out[group] = (n, sum(values), values[mid] if n % 2 else (values[mid - 1] + values[mid]) // 2)
+
+    for row in conn.execute(f"SELECT {columns}, cents FROM temp.{_now(RECORDS)} WHERE {where} AND cents > 0 "
+                            f"ORDER BY {columns}, cents"):
+        here = tuple(row)
+        if here[:-1] != group:
+            close()
+            group, values = here[:-1], []
+        values.append(here[-1])
+    close()
+    return out
+
+
+def add_quarters(fy: int, fq: int, n: int) -> tuple[int, int]:
+    at = fy * 4 + fq - 1 + n
+    return at // 4, at % 4 + 1
+
+
+def quarter_end(fy: int, fq: int) -> date:
+    """The last day of a fiscal quarter: June 30, September 30, December 31, then March 31 of the next year."""
+    month = 4 + 3 * fq                                  # the month after the quarter, counted from January of fy
+    return date(fy + (month - 1) // 12, (month - 1) % 12 + 1, 1) - timedelta(days=1)
+
+
+def due_rows(conn: sqlite3.Connection, day: date, tally: _Counts) -> Iterator[tuple]:
+    """rec_due's rows: the contracts ending from day to the end of the DUE_QUARTERS-th fiscal quarter, by the radar's
+    own candidates and duplicate rule (expiring.py), counted per buyer and per segment by the quarter their end date
+    falls in.
+
+    The value added is the radar's counted value (Canadian dollars, not flagged); n_no_value counts the contracts
+    whose source published none. The buyer is the radar row's, which the radar's buyer filter reads, so a quarter
+    links to the window that lists the same contracts.
+    """
+    fy, fq = fiscal(day.isoformat())
+    if fy is None or fq is None:
+        return
+    last = quarter_end(*add_quarters(fy, fq, DUE_QUARTERS - 1))
+    first_day, last_day = day.isoformat(), last.isoformat()
+    names = expiring._Names(conn)
+    kept, _, _ = expiring.dedupe({
+        "award": expiring.notice_candidates(conn, "award", names, first_day, last_day, day),
+        "history": expiring.notice_candidates(conn, "history", names, first_day, last_day, day),
+        "contract": expiring.contract_candidates(conn, names, first_day, last_day, day),
+    })
+    segments = set(read_segments())
+    groups: dict[tuple, list] = {}
+    for c in kept:
+        row = c.row
+        efy, efq = fiscal(row["end"])
+        if efy is None:
+            continue
+        value = row["value"]
+        counted = cents_of(value) if row["currency"] in (None, "CAD") and not row["value_flag"] else None
+        keys = [("s", int(code)) for code in json.loads(row["segments"] or "[]") if code in segments]
+        bid = tally.bid(row["buyer_id"])
+        if bid is not None:
+            keys.insert(0, ("b", bid))
+        for kind, number in keys:
+            cell = groups.setdefault((kind, number, efy, efq), [0, None, 0])
+            cell[0] += 1
+            if counted is not None:
+                cell[1] = (cell[1] or 0) + counted
+            if value is None:
+                cell[2] += 1
+    for (kind, number, y, q), (n, cents, no_value) in sorted(groups.items()):
+        yield (key_of(f"due:{kind}:{number}:{y}:{q}"), number if kind == "b" else None, number if kind == "s" else None,
+               y, q, n, cents, no_value)
+
+
+def build(conn: sqlite3.Connection, today: date | None = None) -> dict:
+    """Fill a temporary table per D1 table with tonight's rows and their hashes; return what was left out.
+
+    today is the data date the contracts ending are counted from (the radar's day).
+    """
     for t in TABLES:
         conn.execute(f"DROP TABLE IF EXISTS temp.{_now(t)}")
         conn.execute(f"CREATE TEMP TABLE {_now(t)} ({t.key} INTEGER PRIMARY KEY, {', '.join(t.columns)}, h INTEGER NOT NULL)")
@@ -324,11 +487,21 @@ def build(conn: sqlite3.Connection) -> dict:
         (key_of(f"bq:{b}:{s}:{y}:{q}"), b, s, y, q, n, c, nv) for b, s, y, q, n, c, nv in conn.execute(
             f"SELECT bid, src, fy, fq, COUNT(*), SUM(cents), SUM(CASE WHEN vnote = {NO_VALUE} THEN 1 ELSE 0 END) "
             f"FROM temp.{now} WHERE extra = 0 AND bid IS NOT NULL AND fy IS NOT NULL GROUP BY bid, src, fy, fq").fetchall()))
+    # The median and average of each segment year count every row, extra or
+    # not, as its other figures do; a buyer's, the rows with extra = 0.
+    seg_values = value_figures(conn, "sid, src, fy", "sid IS NOT NULL AND fy IS NOT NULL")
     fill(SEGMENT_YEARS, (
-        (key_of(f"sy:{g}:{s}:{y}"), g, s, y, n, c, nv, nb, no) for g, s, y, n, c, nv, nb, no in conn.execute(
+        (key_of(f"sy:{g}:{s}:{y}"), g, s, y, n, c, nv, nb, no, *seg_values.get((g, s, y), (0, None, None)))
+        for g, s, y, n, c, nv, nb, no in conn.execute(
             f"SELECT sid, src, fy, COUNT(*), SUM(cents), SUM(CASE WHEN vnote = {NO_VALUE} THEN 1 ELSE 0 END), "
             f"COUNT(DISTINCT bid), COUNT(DISTINCT oid) FROM temp.{now} WHERE sid IS NOT NULL AND fy IS NOT NULL "
             "GROUP BY sid, src, fy").fetchall()))
+    fill(BUYER_YEARS, (
+        (key_of(f"by:{b}:{s}:{y}"), b, s, y, n, pos, med) for (b, s, y), (n, pos, med) in sorted(
+            value_figures(conn, "bid, src, fy", "extra = 0 AND bid IS NOT NULL AND fy IS NOT NULL").items())))
+    # Before the buyers' names, so a buyer named only by a contract ending has its row in rec_buyers.
+    day = today or date.fromisoformat(today_iso()[:10])
+    fill(DUE, due_rows(conn, day, counts))
     named = {r[0] for r in conn.execute(f"SELECT DISTINCT oid FROM temp.{now} WHERE oid IS NOT NULL")}
     orgs = []
     for oid_text, name in conn.execute("SELECT id, display_name FROM organizations"):
@@ -364,6 +537,13 @@ def full_reason(conn: sqlite3.Connection, *, requested: bool = False, ledger_emp
     """Why tonight's sync is a full reload, or "" when it is not."""
     if requested:
         return "requested"
+    # Tables of another form take no upsert of this one's columns, so the wait
+    # between full loads does not apply: without the reload every night fails.
+    # A database whose loads predate the meta row holds layout 1.
+    layout = get_meta(conn, META_LAYOUT) or "1"
+    if layout != str(LAYOUT):
+        return "first load (the ledger is empty)" if ledger_empty else \
+            f"the records tables changed form (layout {layout} to {LAYOUT})"
     due = get_meta(conn, META_RELOAD)
     if ledger_empty:
         why = "first load (the ledger is empty)"
@@ -495,7 +675,9 @@ def sync(conn: sqlite3.Connection, out_dir: Path | None = None, *, full: bool = 
     # Last night's files must not outlive a plan that fails tonight.
     for name in (MANIFEST, BATCH_LIST, FINISH):
         (out / name).unlink(missing_ok=True)
-    left_out = build(conn)
+    as_of = (get_meta(conn, "data_as_of") or today or today_iso())[:10]
+    finish = finish_sql(as_of)
+    left_out = build(conn, date.fromisoformat(as_of))
     ledger_empty = conn.execute("SELECT NOT EXISTS (SELECT 1 FROM records_ledger)").fetchone()[0] == 1
     reason = full_reason(conn, requested=full, ledger_empty=ledger_empty, today=today)
     staged = stage(conn, reason)
@@ -505,8 +687,7 @@ def sync(conn: sqlite3.Connection, out_dir: Path | None = None, *, full: bool = 
         set_meta(conn, META_FULL_AT, today or today_iso())
     conn.commit()
     writer = write_batches(conn, out, full=bool(reason))
-    as_of = (get_meta(conn, "data_as_of") or today or today_iso())[:10]
-    (out / FINISH).write_text(finish_sql(as_of), encoding="utf-8")
+    (out / FINISH).write_text(finish, encoding="utf-8")
     for t in TABLES:
         conn.execute(f"DROP TABLE IF EXISTS temp.{_now(t)}")
     manifest = {
@@ -514,6 +695,8 @@ def sync(conn: sqlite3.Connection, out_dir: Path | None = None, *, full: bool = 
         "plan": plan,
         "full": bool(reason),
         "reason": reason,
+        # The form of the tables a full reload creates; records-synced keeps it (META_LAYOUT).
+        "layout": LAYOUT,
         "as_of": as_of,
         "batches": writer.files,
         "bytes": writer.bytes,
@@ -581,13 +764,14 @@ def record_sync(conn: sqlite3.Connection, manifest: dict) -> dict[str, int]:
     The manifest's plan number must be the stage's (a manifest from another
     night, or planned against another database, records nothing), and the
     ledger must then hold exactly the manifest's expected total. A full
-    reload replaces the whole ledger. The stage is emptied, the sync logged
-    in records_sync, and a reload asked for earlier is no longer due.
+    reload replaces the whole ledger and records the form of the tables it
+    created (META_LAYOUT). The stage is emptied, the sync logged in
+    records_sync, and a reload asked for earlier is no longer due.
     """
     if manifest.get("plan") != get_meta(conn, META_PLAN):
         raise ValueError("the manifest's plan is not the one staged in this database; nothing recorded")
     expected = int(manifest["expected_total"])
-    summary = {k: manifest.get(k) for k in ("generated_at", "full", "reason", "as_of", "bytes", "statements",
+    summary = {k: manifest.get(k) for k in ("generated_at", "full", "reason", "layout", "as_of", "bytes", "statements",
                                             "upserts", "deletes", "expected")}
     summary["batches"] = len(manifest.get("batches") or [])
     try:
@@ -604,6 +788,8 @@ def record_sync(conn: sqlite3.Connection, manifest: dict) -> dict[str, int]:
             raise ValueError(f"the ledger would hold {held} rows where the manifest expects {expected}")
         conn.execute("DELETE FROM records_staged")
         conn.execute("DELETE FROM meta WHERE key IN (?, ?)", (META_RELOAD, META_PLAN))
+        if manifest.get("full") and isinstance(manifest.get("layout"), int):
+            set_meta(conn, META_LAYOUT, manifest["layout"])
         conn.execute("INSERT INTO records_sync (run_at, manifest, rows, full) VALUES (?, ?, ?, ?)",
                      (now_iso(), json.dumps(summary, separators=(",", ":"), sort_keys=True), held,
                       1 if manifest.get("full") else 0))

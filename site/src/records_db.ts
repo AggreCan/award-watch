@@ -11,9 +11,10 @@
 // column or order chosen by the request.
 //
 // Every statement is bounded: at most MAX_YEARS fiscal years of one buyer,
-// one organization or one segment, through the index on that column
-// (records_buyer, records_org, records_segment, or the summary tables' own),
-// and every list ends in a LIMIT. A view sends one batch: the state row and
+// one organization or one segment (DUE_YEARS for the contracts ending),
+// through the index on that column (records_buyer, records_org,
+// records_segment, or the summary tables' own), and every list ends in a
+// LIMIT. A view sends one batch: the state row and
 // its charts' statements, so a page is one round trip and a free view reads
 // one statement beside the state.
 
@@ -27,11 +28,23 @@ import { faultSummary } from "./search_db";
 export const SOURCE_NUMBER: Readonly<Record<MoneySource, number>> = { awards: 1, history: 2, contracts: 3, grants: 4 };
 // The sources that carry UNSPSC codes, and so a segment.
 export const SEGMENT_SOURCES: readonly MoneySource[] = ["awards", "history"];
+// The sources that number their versions, so whose values grow through
+// amendments (records.ocents and namd; records_db.AMENDED_SOURCES).
+export const AMENDED_SOURCES: readonly MoneySource[] = ["awards", "history"];
 
 // The periods a view offers, in fiscal years ending with the data date's.
 export const PERIODS = [3, 5, 10] as const;
 export type Period = (typeof PERIODS)[number];
 export const MAX_YEARS = 10;
+// The first fiscal year a chosen period may start in: the first year the
+// export gives a yearly file (export_static.FIRST_YEAR); an earlier date is
+// a typing error in the source.
+export const EARLIEST_FY = 2000;
+// The fiscal quarters the contracts-ending chart covers, the data date's
+// first (records_db.DUE_QUARTERS in the pipeline), and so at most three
+// fiscal years a statement reads.
+export const DUE_QUARTERS = 8;
+export const DUE_YEARS = 3;
 // What a reader without the paid feature sees of the first chart.
 export const FREE_YEARS = 3;
 // The top lists; the share chart's organizations (the profile's and up to
@@ -59,6 +72,32 @@ export function fiscalYearOf(day: string): number {
 // own pages use.
 export function fiscalLabel(lang: "en" | "fr", fy: number): string {
   return lang === "fr" ? `${fy}-${fy + 1}` : `${fy}-${String((fy + 1) % 100).padStart(2, "0")}`;
+}
+
+// The last day of a fiscal quarter (1 is April to June): June 30, September
+// 30, December 31, then March 31 of the next calendar year.
+export function quarterEnd(fy: number, fq: number): string {
+  const after = new Date(Date.UTC(fy, 3 + 3 * fq, 1));
+  return new Date(after.getTime() - 86_400_000).toISOString().slice(0, 10);
+}
+
+// A period chosen by its first and last fiscal year (?from=2019&to=2024), or
+// null when the address names neither, so ?years= applies. The last year is
+// one from EARLIEST_FY to the data date's, anything else reading as the data
+// date's; the first is one up to it, anything else reading as the MAX_YEARS
+// ending with the last; a longer span keeps its latest MAX_YEARS and says so
+// (capped), so no statement reads more than MAX_YEARS fiscal years.
+export interface ChosenPeriod { first: number; last: number; capped: boolean }
+
+export function choosePeriod(from: string | null, to: string | null, current: number): ChosenPeriod | null {
+  if (from === null && to === null) return null;
+  const year = (v: string | null) => (v !== null && /^\d{4}$/.test(v.trim()) ? Number(v.trim()) : null);
+  const asked = year(to);
+  const last = asked !== null && asked >= EARLIEST_FY && asked <= current ? asked : current;
+  const first = year(from);
+  if (first === null || first < EARLIEST_FY || first > last) return { first: Math.max(EARLIEST_FY, last - MAX_YEARS + 1), last, capped: false };
+  if (last - first + 1 > MAX_YEARS) return { first: last - MAX_YEARS + 1, last, capped: true };
+  return { first, last, capped: false };
 }
 
 // An organization's number in the records database: its id's ten hex digits,
@@ -172,10 +211,60 @@ export const SEGMENT_ENTRANTS_SQL =
   `ORDER BY cents DESC, n DESC, oid LIMIT ${RIVALS_N}` +
   `) r LEFT JOIN rec_orgs o ON o.oid = r.oid ORDER BY r.cents DESC, r.n DESC, r.oid LIMIT ${RIVALS_N}`;
 
+// The average and median value by fiscal year, from summary rows the
+// nightly sync computes (rec_buyer_years, and three columns of
+// rec_segment_years), so no statement sorts a year's values at request
+// time. n_pos counts the records with a counted value above zero, the ones
+// the two figures rest on; pos is their sum, med their median.
+export const BUYER_VALUES_SQL = `SELECT fy, n_pos, pos, med FROM rec_buyer_years WHERE ${BUYER} ORDER BY fy LIMIT ${MAX_YEARS}`;
+export const SEGMENT_VALUES_SQL = `SELECT fy, n_pos, pos, med FROM rec_segment_years WHERE ${SEGMENT} ORDER BY fy LIMIT ${MAX_YEARS}`;
+
+// Value growth through amendments, by the fiscal year of the award (award
+// notices and history, the sources that number their versions): the
+// records, those amended (a version after the first), and of those, the ones
+// with a first value above zero and a last value counted: how many, how many
+// grew, and the two sums.
+const COMPARED = "namd > 0 AND ocents > 0 AND cents IS NOT NULL";
+const GROWTH =
+  "SELECT fy, COUNT(*) AS n, SUM(CASE WHEN namd > 0 THEN 1 ELSE 0 END) AS n_amended, " +
+  `SUM(CASE WHEN ${COMPARED} THEN 1 ELSE 0 END) AS n_compared, SUM(CASE WHEN ${COMPARED} AND cents > ocents THEN 1 ELSE 0 END) AS n_grew, ` +
+  `SUM(CASE WHEN ${COMPARED} THEN ocents END) AS first_cents, SUM(CASE WHEN ${COMPARED} THEN cents END) AS last_cents FROM records WHERE`;
+export const BUYER_GROWTH_SQL = `${GROWTH} ${BUYER} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${MAX_YEARS}`;
+export const ORG_GROWTH_SQL = `${GROWTH} ${ORG} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${MAX_YEARS}`;
+
+// The TOP_N records with the largest counted values, each with the reference
+// and title its row links and shows, and the names of the other party.
+const LARGEST = "SELECT src, fy, ref, title, cents, bid, oid FROM records WHERE";
+const LARGEST_COLUMNS = "r.src AS src, r.fy AS fy, r.ref AS ref, r.title AS title, r.cents AS cents";
+const LARGEST_ORDER = `ORDER BY cents DESC, ref LIMIT ${TOP_N}`;
+export const BUYER_RECORDS_SQL =
+  `SELECT ${LARGEST_COLUMNS}, r.oid AS oid, o.name AS name FROM (${LARGEST} ${BUYER} AND extra = 0 AND cents IS NOT NULL ${LARGEST_ORDER}` +
+  `) r LEFT JOIN rec_orgs o ON o.oid = r.oid ORDER BY r.cents DESC, r.ref LIMIT ${TOP_N}`;
+export const ORG_RECORDS_SQL =
+  `SELECT ${LARGEST_COLUMNS}, b.id AS buyer_id, b.name_en AS name_en, b.name_fr AS name_fr FROM (` +
+  `${LARGEST} ${ORG} AND extra = 0 AND cents IS NOT NULL ${LARGEST_ORDER}` +
+  `) r LEFT JOIN rec_buyers b ON b.bid = r.bid ORDER BY r.cents DESC, r.ref LIMIT ${TOP_N}`;
+// A segment's rows, extra or not: each notice once in the segment, as its other figures count it.
+export const SEGMENT_RECORDS_SQL =
+  `SELECT ${LARGEST_COLUMNS}, r.oid AS oid, o.name AS name, b.id AS buyer_id, b.name_en AS name_en, b.name_fr AS name_fr FROM (` +
+  `${LARGEST} ${SEGMENT} AND cents IS NOT NULL ${LARGEST_ORDER}` +
+  `) r LEFT JOIN rec_orgs o ON o.oid = r.oid LEFT JOIN rec_buyers b ON b.bid = r.bid ORDER BY r.cents DESC, r.ref LIMIT ${TOP_N}`;
+
+// The contracts ending in each fiscal quarter (rec_due, rebuilt each night
+// from the data date by the radar's rules): ?2 and ?3 the data date's fiscal
+// year and the DUE_YEARS - 1 after it, so a statement reads at most
+// DUE_YEARS * 4 quarter rows, of which the page shows DUE_QUARTERS.
+const DUE = "SELECT fy, fq, n, cents, n_no_value FROM rec_due WHERE";
+const DUE_ORDER = `AND fy BETWEEN ?2 AND ?3 ORDER BY fy, fq LIMIT ${DUE_YEARS * 4}`;
+export const BUYER_DUE_SQL = `${DUE} bid = (SELECT bid FROM rec_buyers WHERE id = ?1) ${DUE_ORDER}`;
+export const SEGMENT_DUE_SQL = `${DUE} sid = ?1 ${DUE_ORDER}`;
+
 // Every statement, for the tests that read their plans and their bounds.
 export const ALL_SQL: readonly string[] = [
   STATE_SQL, BUYER_QUARTERS_SQL, BUYER_SEGMENTS_SQL, BUYER_COMPETITION_SQL, BUYER_SUPPLIERS_SQL, ORG_YEARS_SQL, ORG_BUYERS_SQL,
   ORG_SEGMENTS_SQL, ORG_SHARE_SQL, SEGMENT_WINNERS_SQL, SEGMENT_YEARS_SQL, SEGMENT_BUYERS_SQL, SEGMENT_ENTRANTS_SQL,
+  BUYER_VALUES_SQL, SEGMENT_VALUES_SQL, BUYER_GROWTH_SQL, ORG_GROWTH_SQL, BUYER_RECORDS_SQL, ORG_RECORDS_SQL, SEGMENT_RECORDS_SQL,
+  BUYER_DUE_SQL, SEGMENT_DUE_SQL,
 ];
 
 // -- reading -----------------------------------------------------------------------

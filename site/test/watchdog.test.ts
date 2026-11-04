@@ -77,6 +77,23 @@ describe("daily check", () => {
     expect(with_({ search_sync: "failed", views_rollup: "failed", deploy_rolled_back: true })).toHaveLength(3);
   });
 
+  it("flags a failed records database sync, reads the field, and leaves its other outcomes alone", () => {
+    const with_ = (extra: object) => collectAlerts({ ...healthy, status: { ...healthy.status, ...extra } });
+    const line = "The records database sync failed. The analytics views answer from what the database holds (or say it is being loaded) and the next run sends the same changes again; check the run log.";
+    expect(with_({ records_sync: "failed" })).toEqual([line]);
+    // "no database" reaches the email as the nightly's notice, never as an alert.
+    for (const quiet of ["synced", "nothing to send", "no database", "not run"]) {
+      expect(with_({ records_sync: quiet }), quiet).toEqual([]);
+    }
+    const read = readStatus({ ...healthy.status, records_sync: "failed" });
+    expect(read).toEqual({ status: { ...healthy.status, records_sync: "failed" }, problem: null });
+    expect(readStatus({ ...healthy.status, records_sync: ["failed"] }).status).toEqual(healthy.status);
+    // The email names it among the items.
+    const raw = buildEmail("a@b.ca", "c@d.ca", collectAlerts({ ...healthy, status: read.status! }), now);
+    expect(raw).toContain(`1. ${line}`);
+    expect(raw).not.toContain(String.fromCharCode(0x2014));
+  });
+
   it("flags a failed Search Console import and an unwritten monthly report, and nothing else they report", () => {
     const with_ = (extra: object) => collectAlerts({ ...healthy, status: { ...healthy.status, ...extra } });
     expect(with_({ search_console: "failed" })).toEqual([

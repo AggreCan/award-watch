@@ -362,7 +362,7 @@ jobs:
       # analytics views' data: the search sync's shape. records-sync stages
       # tonight's changed rows in the pipeline database and writes them as SQL
       # batches; Wrangler applies the schema and each batch, then reads the
-      # five row counts back; records-check compares them with the manifest;
+      # seven row counts back; records-check compares them with the manifest;
       # only then does Wrangler apply finish.sql (the database is ready and
       # describes tonight's data date) and records-synced record the ledger,
       # which travels with the database, so this runs before the save. While
@@ -395,7 +395,7 @@ jobs:
             "$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/$batch"
             rm -f "$out/$batch"
           done
-          "$WRANGLER" d1 execute awardwatch-records --remote --json --command "SELECT (SELECT COUNT(*) FROM records) AS records, (SELECT COUNT(*) FROM rec_orgs) AS rec_orgs, (SELECT COUNT(*) FROM rec_buyers) AS rec_buyers, (SELECT COUNT(*) FROM rec_buyer_quarters) AS rec_buyer_quarters, (SELECT COUNT(*) FROM rec_segment_years) AS rec_segment_years" > "$out/count.json"
+          "$WRANGLER" d1 execute awardwatch-records --remote --json --command "SELECT (SELECT COUNT(*) FROM records) AS records, (SELECT COUNT(*) FROM rec_orgs) AS rec_orgs, (SELECT COUNT(*) FROM rec_buyers) AS rec_buyers, (SELECT COUNT(*) FROM rec_buyer_quarters) AS rec_buyer_quarters, (SELECT COUNT(*) FROM rec_segment_years) AS rec_segment_years, (SELECT COUNT(*) FROM rec_buyer_years) AS rec_buyer_years, (SELECT COUNT(*) FROM rec_due) AS rec_due" > "$out/count.json"
           python -m awardwatch_pipeline records-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --counts "$out/count.json"
           "$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/finish.sql"
           python -m awardwatch_pipeline records-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"
