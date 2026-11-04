@@ -14,6 +14,7 @@ const BODIES = ["{", "null", "[]", "{}", '"text"', "[1,2,3]", '{"rows":5,"buyers
 const READERS: Record<string, string[]> = {
   "stats.json": ["/", "/tenders", "/awards", "/data", "/cite", "/api/stats"],
   "tenders/open-first.json": ["/tenders", "/tenders?segment=82&q=x", "/tenders?page=2"],
+  "tenders/open-levels.json": ["/segments/82", "/tenders?code=8211", "/tenders?code=82"],
   "tenders/new/2026-10-31.json": ["/tenders/new"],
   "tenders/20a.json": ["/tenders/cb-100-10000001", "/api/tenders/cb-100-10000001"],
   "contracts/637.json": ["/awards/cb-400-40000004", "/history/w8472-000633"],

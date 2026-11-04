@@ -19,7 +19,10 @@
 import type { Context } from "hono";
 import { clientTable } from "../columns";
 import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENT_CODES } from "../constants";
-import { BUYER_ID_RE, DAY_RE, type FacetCount, type OpenFirst, loadNewTenders, loadOpenFirst, loadStats, type TenderRow } from "../data";
+import {
+  BUYER_ID_RE, type CodeLevel, DAY_RE, type FacetCount, type OpenFirst, codeLevel, loadNewTenders, loadOpenFirst, loadOpenLevels, loadStats,
+  type TenderRow,
+} from "../data";
 import type { AppEnv } from "../env";
 import {
   categoryLabel, clientStrings, fmtInt, numberLocale, pick, provinceName, segmentLabel, segmentShort, t, tj, tn, type Key, type Lang,
@@ -194,7 +197,8 @@ export function tenderOptions(facets: OpenFirst["facets"], lang: Lang) {
 // Every string tenders.js draws, handed over in the page's JSON block.
 export const TENDERS_CLIENT_KEYS: readonly Key[] = [
   "col.notice", "col.buyer", "col.closing", "col.published", "col.region", "common.national", "common.not_stated",
-  "common.time", "common.zone_et", "common.other_lang_only", "segment.chip",
+  "common.time", "common.zone_et", "common.other_lang_only", "segment.chip", "tenders.filter_segment", "tenders.filter_family",
+  "tenders.filter_class",
   "status.open", "status.closing", "status.closed", "tenders.count_one", "tenders.count_many", "tenders.none_match", "tenders.page_of",
   "tenders.prev", "tenders.next", "tenders.load_failed", "tenders.loading", "tenders.remove_filter",
   "tenders.detail_empty", "tenders.detail_loading", "tenders.detail_failed", "tenders.detail_open",
@@ -246,9 +250,30 @@ const Select = ({ name, label, any, opts, value, lang }: {
 
 type Chip = { label: string; value: string; without: TenderQuery };
 
+// The name of the code the filter holds: a segment's title for two digits,
+// and for a family or class its name as the open notices give it
+// (tenders/open-levels.json); null for a commodity's eight digits, a level
+// no open notice carries, or one the notices never named.
+export function codeName(levels: readonly CodeLevel[] | null, code: string, lang: Lang): string | null {
+  if (code.length === 2) return SEGMENT_CODES.includes(code) ? segmentLabel(lang, code) : null;
+  if (!levels || !codeLevel(code)) return null;
+  const level = levels.find((l) => l.code === code);
+  return level ? pick(lang, level.en, level.fr) : null;
+}
+
+// The code filter's chip: the level its digits name (segment, family or
+// class) and the code with its name, so the chip shows no bare number
+// where a name is known.
+export function codeChip(lang: Lang, code: string, name: string | null): { label: string; value: string } {
+  const level = code.length === 2 ? "segment" : codeLevel(code);
+  const label = t(lang, level === "segment" ? "tenders.filter_segment" : level === "family" ? "tenders.filter_family"
+    : level === "class" ? "tenders.filter_class" : "tenders.filter_code");
+  return { label, value: name ? `${code} ${name}` : code };
+}
+
 // The filters the URL sets, one chip a value, each linking to the same view
 // without that value, so a filter comes off with or without the script.
-function activeChips(q: TenderQuery, opts: ReturnType<typeof tenderOptions>, lang: Lang): Chip[] {
+function activeChips(q: TenderQuery, opts: ReturnType<typeof tenderOptions>, lang: Lang, code: string | null): Chip[] {
   const named = (list: Option[], v: string) => list.find((o) => o.value === v)?.label ?? v;
   const chips: Chip[] = [];
   const one = (key: Exclude<keyof TenderQuery, MultiKey | "national" | "sort" | "page">, label: Key, value: string) =>
@@ -259,7 +284,7 @@ function activeChips(q: TenderQuery, opts: ReturnType<typeof tenderOptions>, lan
   if (q.q) one("q", "tenders.filter_text", q.q);
   each("category", "tenders.filter_category", opts.category);
   each("segment", "tenders.filter_segment", opts.segment);
-  if (q.code) one("code", "tenders.filter_code", q.code);
+  if (q.code) chips.push({ ...codeChip(lang, q.code, code), without: { ...q, code: "", page: 1 } });
   each("province", "tenders.filter_province", opts.province);
   if (q.buyer) one("buyer", "tenders.filter_buyer", named(opts.buyer, q.buyer));
   if (q.type) one("type", "tenders.filter_type", named(opts.type, q.type));
@@ -287,6 +312,9 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const pageNo = Math.min(q.page, pages);
   const shown = matched.slice((pageNo - 1) * TENDER_PAGE_SIZE, pageNo * TENDER_PAGE_SIZE);
   const opts = tenderOptions(first.facets, lang);
+  // The levels file is read only for a view with a code, to name it.
+  const levels = q.code ? await loadOpenLevels(c.env).catch(() => null) : null;
+  const named = q.code ? codeName(levels, q.code, lang) : null;
   // The canonical page is the unfiltered list; a filtered view is a view of it.
   const seo = pageSeo("tenders", lang, filtered || q.page > 1 ? { noindex: true } : {});
   const prev = !waiting && pageNo > 1 ? `/tenders${tenderQueryString(q, pageNo - 1)}` : null;
@@ -296,8 +324,11 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
     short: Object.fromEntries(SEGMENT_CODES.map((code) => [code, segmentShort(lang, code)])),
     provinces: Object.fromEntries([...PROVINCES, "XX", "UN"].map((p) => [p, provinceName(lang, p)])),
     categories: Object.fromEntries(CATEGORIES.map((k) => [k, categoryLabel(lang, k)])),
+    // The address's family or class with its name; tenders.js reads the rest from
+    // tenders/open-levels.json, and a segment's name from the two lists above.
+    codes: q.code && named && codeLevel(q.code) ? { [q.code]: named } : {},
   };
-  const chips = activeChips(q, opts, lang);
+  const chips = activeChips(q, opts, lang, named);
   const interest = await interestFilter(c.env, lang, "tenders", `/tenders${url.search}`);
   const empty = !waiting && shown.length === 0;
   // The same-day notices for a paid request; null (nothing read) on the free plan.
@@ -330,7 +361,9 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
           <label class="field field-code">
             <span class="field-label">{t(lang, "tenders.filter_code")}</span>
             <input type="text" name="code" value={q.code} maxlength={8} inputmode="numeric" pattern="[0-9]{2,8}" autocomplete="off"
-              placeholder={t(lang, "tenders.code_placeholder")} />
+              placeholder={t(lang, "tenders.code_placeholder")} list="code-levels" />
+            {/* tenders.js fills it with the open notices' families and classes, by name, once the field is used. */}
+            <datalist id="code-levels"></datalist>
           </label>
           <Select name="province" label="tenders.filter_province" any="tenders.any_f" opts={opts.province} value={q.province} lang={lang} />
           <div class="field field-check">
@@ -486,7 +519,8 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
           <TenderTable lang={lang} rows={rows} clock={clock} status marked={intraday?.marked} />
         )}
       </Panel>
-      {rows?.some((r) => tenderState(r.status ?? "open", r.closing, clock) === "closing") ? <CountdownScript lang={lang} /> : null}
+      {/* The same-day band marks its closing-soon rows too, so with a band the countdown runs whatever the day's list holds. */}
+      {intraday || rows?.some((r) => tenderState(r.status ?? "open", r.closing, clock) === "closing") ? <CountdownScript lang={lang} /> : null}
     </Layout>,
   );
 }

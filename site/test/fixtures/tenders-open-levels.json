@@ -1,0 +1,12 @@
+{
+  "levels": [
+    {"code": "4321", "en": "Computer Equipment and Accessories", "fr": "Matériel informatique et accessoires", "n": 1},
+    {"code": "432115", "en": null, "fr": null, "n": 1},
+    {"code": "7210", "en": "Building and facility construction and maintenance services", "fr": "Services de construction et d'entretien de bâtiments et d'installations", "n": 1},
+    {"code": "721015", "en": "Building support services", "fr": "Services de soutien des bâtiments", "n": 1},
+    {"code": "7818", "en": null, "fr": null, "n": 1},
+    {"code": "781815", "en": "Vehicle maintenance and repair services", "fr": "Services d'entretien et de réparation de véhicules", "n": 1},
+    {"code": "8211", "en": "Writing and translations", "fr": "Rédaction et traductions", "n": 1},
+    {"code": "821118", "en": "Editorial and support services", "fr": "Services de rédaction et de soutien", "n": 1}
+  ]
+}

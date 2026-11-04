@@ -37,6 +37,7 @@ import tenderConverted from "./fixtures/tenders-f3d.json";
 import newDay from "./fixtures/tenders-new-2026-10-31.json";
 import openTenders from "./fixtures/tenders-open.json";
 import openFirst from "./fixtures/tenders-open-first.json";
+import openLevels from "./fixtures/tenders-open-levels.json";
 
 // Served as written rather than as JSON: the sitemaps and a feed under
 // /data/, and the crawler files at the root.
@@ -58,6 +59,8 @@ export const FILES: Record<string, unknown> = {
   // The full list is the browser's (public/tenders.js); the page renders from the first file.
   "tenders/open.json": openTenders,
   "tenders/open-first.json": openFirst,
+  // The open notices' UNSPSC families and classes, for the segment pages and the code filter.
+  "tenders/open-levels.json": openLevels,
   "tenders/new/2026-10-31.json": newDay,
   "tenders/20a.json": tenderShard,
   "contracts/637.json": contracts,

@@ -236,22 +236,35 @@ def test_a_file_without_its_key_columns_is_refused(conn, tmp_path):
 def test_open_tenders_missing_from_the_open_file_expire_once_closed(conn, fixtures):
     canadabuys.load_file(conn, "tenders", fixtures / FILES["tenders"], "new.csv", now=DAY1)
     closing = dict(conn.execute("SELECT reference, closing FROM tenders"))
+    # 00:00 UTC on 2026-11-18 is 19:00 on 2026-11-17 in Ottawa, the clock the closing times are written on.
     now = "2026-11-18T00:00:00Z"
+    wall = "2026-11-17T19:00:00"
     in_open_file = {ref for ref in sorted(closing)[:8]}
     expired = canadabuys.expire_closed(conn, in_open_file, now)
     status = dict(conn.execute("SELECT reference, status FROM tenders"))
+    def passed(close):
+        return close is not None and (close < wall[:10] if len(close) == 10 else close <= wall)
     for ref, close in closing.items():
-        passed = close is not None and close < "2026-11-18T00:00:00"
-        want = "expired" if passed and ref not in in_open_file else "open"
+        want = "expired" if passed(close) and ref not in in_open_file else "open"
         assert status[ref] == want, (ref, close)
-    assert expired == sum(1 for ref, c in closing.items() if c and c < "2026-11-18" and ref not in in_open_file)
+    assert expired == sum(1 for ref, c in closing.items() if passed(c) and ref not in in_open_file)
     assert expired > 0
 
 
-def test_a_date_alone_closes_at_the_end_of_its_day():
-    assert canadabuys._passed("2026-11-16", "2026-11-16T23:00:00Z") is False
-    assert canadabuys._passed("2026-11-16", "2026-11-17T00:00:00Z") is True
-    assert canadabuys._passed("2026-11-16T14:00", "2026-11-16T14:00:01Z") is True
+def test_a_closing_is_read_on_the_eastern_clock_and_a_date_alone_lasts_the_whole_eastern_day():
+    """CanadaBuys writes closing times in Eastern time with no zone (site/public/closing.js reads them the same
+    way): 14:00 passes at 19:00 UTC in November and 18:00 UTC in July, a date alone at the end of its day in
+    Ottawa, and a time with its own zone at that instant."""
+    assert canadabuys._passed("2026-11-16", "2026-11-17T04:59:59Z") is False
+    assert canadabuys._passed("2026-11-16", "2026-11-17T05:00:00Z") is True
+    assert canadabuys._passed("2026-11-16T14:00", "2026-11-16T18:59:59Z") is False
+    assert canadabuys._passed("2026-11-16T14:00", "2026-11-16T19:00:00Z") is True
+    assert canadabuys._passed("2026-07-02T14:00:00", "2026-07-02T17:59:59Z") is False
+    assert canadabuys._passed("2026-07-02T14:00:00", "2026-07-02T18:00:00Z") is True
+    assert canadabuys._passed("2026-11-16T14:00:00Z", "2026-11-16T14:00:00Z") is True
+    assert canadabuys._passed("2026-11-16T14:00-05:00", "2026-11-16T18:59:00Z") is False
+    # The nightly runs at 12:30 UTC: a notice closing at 10:00 that morning has not closed yet.
+    assert canadabuys._passed("2026-11-04T10:00:00", "2026-11-04T12:30:00Z") is False
 
 
 def test_the_stage_reads_complete_then_new_then_open_and_derives_statuses(conn, fixtures, fake_client, tmp_path):

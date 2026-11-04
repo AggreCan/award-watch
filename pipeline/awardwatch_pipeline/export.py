@@ -13,7 +13,15 @@ and the site serves only these names):
                           in one file named for that year
   history-<year>.csv      every contract history version, by the same rule, from 2009
   history-before-2009.csv, history-after-<year>.csv   the same for the contract history
-                          (the before and after files are written only when such a row exists)
+  contracts-<year>.csv    every published contract row (proactive publication) whose contract date falls
+                          in the year, from 2004, with contracts-before-2004.csv and contracts-after-<year>.csv
+  grants-<year>.csv       every grant and contribution version whose agreement start falls in the year,
+                          from 2005, with grants-before-2005.csv and grants-after-<year>.csv
+  <source>-undated.csv    the rows of a source whose date gives no year (none, or text that is not a date),
+                          so every row is in one file; this and the before and after files are written
+                          only when such a row exists. A yearly file that would pass CSV_PART_BYTES goes
+                          on in <name>-2.csv, -3 and on: the nightly puts each file in R2 in one upload,
+                          which Wrangler refuses above 300 MiB
   organizations.csv       one row per organization: names, main place, counters and totals by source,
                           and beside each total the count of records whose source published no value
   buyers.csv              one row per buyer with a record in a column the buyers list shows (listed_buyer_ids):
@@ -31,21 +39,29 @@ Every CSV opens with a UTF-8 byte-order mark, so a spreadsheet reads the
 French names as written, and a list field (provinces, segments, end users) is
 its values joined by "; " ("SK; MB"), never a JSON array. A value the source
 did not publish is an empty cell, never 0. SHA256SUMS is computed on the bytes
-written, mark included. The award and history files carry value_flag
-("check" when value_checks.py flagged the contract's value).
+written, mark included. The award, history and published contract files
+carry value_flag ("check" when value_checks.py flagged the contract's value).
+Closing times in open-tenders.csv are as CanadaBuys publishes them: Eastern
+time, with no zone written.
 
 What never goes in a file: the contacts on tender and award notices, supplier
-street addresses, any name the loaders withheld as a private individual
-(supplier_raw is NULL on those rows and supplier_withheld says so), and a
-buyer spelling that names or locates a person (buyers.public_spelling: the
-buyer_raw_en and client_raw_en cells are blank on those rows). Rows are
+street addresses and postal codes (the published contracts' vendor_postal and
+the grants' postal_code included), the published contracts' buyer_name (a
+public servant), any name the loaders withheld as a private individual
+(supplier_raw is NULL on those rows and supplier_withheld says so; vendor and
+legal_name likewise in the contracts and grants files), and a buyer spelling
+that names or locates a person (buyers.public_spelling: the buyer_raw_en and
+client_raw_en cells are blank on those rows). Rows are
 sorted and every value is written the same way each night, so an unchanged
 year keeps its bytes.
 
 The downloads are the records as published, one row per version: the totals
 the site shows follow CLAUDE.md "Counting money" and add one version per
 contract, so a reader adding up these files would count a contract once per
-amendment.
+amendment. A published contract's contract_value is its total with the
+amendment; the site adds each row's own value (amendment_value on an
+amendment, else original_value, else contract_value), and a grant's newest
+amendment alone.
 """
 
 from __future__ import annotations
@@ -58,6 +74,7 @@ import re
 import sqlite3
 from datetime import date, datetime, timezone
 from pathlib import Path
+from typing import Any, TextIO
 
 from . import config, expiring
 from .db import log_run
@@ -151,9 +168,19 @@ def register_functions(conn: sqlite3.Connection) -> None:
     conn.create_function("tender_status_on", 3, tender_status_on, deterministic=True)
 
 
-YEAR_RE = re.compile(r"^(awards|history)-(?:before-|after-)?\d{4}\.csv$")
-# The first year with a file of its own; earlier dates are typing errors in the source and share one file.
-FIRST_YEAR = {"awards": 2012, "history": 2009}
+YEAR_RE = re.compile(r"^(awards|history|contracts|grants)-(?:\d{4}|before-\d{4}|after-\d{4}|undated)(?:-[2-9])?\.csv$")
+# The first year with a file of its own; earlier dates share one file. On the
+# notices those are typing errors in the source. Published contracts start in
+# 2004 and grants in 2005, the years their proactive publication began; an
+# earlier date there is a contract or an agreement reported later.
+FIRST_YEAR = {"awards": 2012, "history": 2009, "contracts": 2004, "grants": 2005}
+# A yearly file stops at this size and goes on in <name>-2.csv: the nightly
+# puts each file in R2 in one upload, which Wrangler refuses above 300 MiB
+# (the margin nightly.PART_MIB keeps too). A year of grants, the widest rows,
+# is expected well under it; the split keeps a busy year downloadable anyway.
+CSV_PART_BYTES = 250 * 1024 * 1024
+# Rows between two looks at a part's size, so a part ends within a few MiB of the cap.
+PART_CHECK_ROWS = 1000
 FIXED_FILES = ("open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv", "expiring-12m.csv")
 
 OPEN_TENDERS = """
@@ -181,10 +208,10 @@ _CONTRACT_COLUMNS = """
     a.gsin, a.provinces, a.source_file, a.first_seen, a.last_seen"""
 
 _FLAG = "(SELECT 'check' FROM value_flags f WHERE f.kind = '{kind}' AND f.key = a.reference) AS value_flag,"
+# The yearly files' queries without the year test and the order, which _yearly_query adds.
 AWARDS = (
     "SELECT " + _CONTRACT_COLUMNS.format(extra="a.end_users_en, " + _FLAG.format(kind="award"), codes="award_codes") +
     " FROM awards a LEFT JOIN buyers b ON b.id = a.buyer_id LEFT JOIN organizations o ON o.id = a.organization_id"
-    " WHERE substr(COALESCE(a.awarded, a.published), 1, 4) = ? ORDER BY a.reference, a.amendment"
 )
 HISTORY = (
     "SELECT " + _CONTRACT_COLUMNS.format(
@@ -193,8 +220,41 @@ HISTORY = (
         codes="history_codes") +
     " FROM contract_history a LEFT JOIN buyers b ON b.id = a.buyer_id LEFT JOIN buyers k ON k.id = a.client_id"
     " LEFT JOIN organizations o ON o.id = a.organization_id"
-    " WHERE substr(COALESCE(a.awarded, a.published), 1, 4) = ? ORDER BY a.reference, a.amendment"
 )
+# Published contracts, each row as the department reported it (an amendment is
+# a row of its own), with the value check the totals follow.
+CONTRACTS = """
+    SELECT c.owner_org, c.reference, c.procurement_id, c.reporting_period, c.contract_date, c.period_start,
+           c.delivery_date, c.value AS contract_value, c.original_value, c.amendment_value, c.instrument_type,
+           c.solicitation_procedure, c.competitive, c.limited_tendering_reason, c.trade_agreement,
+           c.trade_agreement_exceptions, c.agreement_type, c.commodity_type, c.commodity_code, c.economic_object,
+           c.description_en, c.description_fr, c.comments_en, c.comments_fr, c.land_claims, c.indigenous_business,
+           c.indigenous_business_excluding_psib, c.intellectual_property, c.potential_commercial_exploitation,
+           c.former_public_servant, c.standing_offer_number, c.ministers_office, c.number_of_bids,
+           c.article_6_exceptions, c.award_criteria, c.socioeconomic_indicator, c.contracting_entity, c.buyer_id,
+           b.name_en AS buyer_name_en, c.organization_id, o.display_name AS organization, c.vendor_raw AS vendor,
+           c.vendor_withheld, c.vendor_country,
+           (SELECT 'check' FROM value_flags f WHERE f.kind = 'contract'
+              AND f.key = c.owner_org || ':' || c.procurement_id) AS value_flag
+    FROM contracts c LEFT JOIN buyers b ON b.id = c.buyer_id LEFT JOIN organizations o ON o.id = c.organization_id"""
+# Grants and contributions, one row per agreement version (the highest
+# amendment carries the value the totals add).
+GRANTS = """
+    SELECT g.owner_org, g.reference, g.amendment, g.amendment_date, g.agreement_number, g.agreement_type,
+           g.recipient_type, g.start, g."end", g.value, g.fx_type, g.fx_value, g.program_en, g.program_fr,
+           g.title_en, g.title_fr, g.description_en, g.description_fr, g.naics, g.buyer_id,
+           b.name_en AS buyer_name_en, g.organization_id, o.display_name AS organization, g.legal_name,
+           g.operating_name, g.research_organization, g.business_number, g.recipient_withheld, g.country,
+           g.province, g.city, g.riding_number, g.riding_en, g.riding_fr
+    FROM grants g LEFT JOIN buyers b ON b.id = g.buyer_id LEFT JOIN organizations o ON o.id = g.organization_id"""
+# Each source with yearly files: its table under the alias its query reads it
+# by, the date whose calendar year names the file, the query, the row order.
+YEARLY = {
+    "awards": ("awards a", "COALESCE(a.awarded, a.published)", AWARDS, "a.reference, a.amendment"),
+    "history": ("contract_history a", "COALESCE(a.awarded, a.published)", HISTORY, "a.reference, a.amendment"),
+    "contracts": ("contracts c", "c.contract_date", CONTRACTS, "c.owner_org, c.reference"),
+    "grants": ("grants g", "g.start", GRANTS, "g.owner_org, g.reference, g.amendment"),
+}
 ORGANIZATIONS = """
     SELECT id, display_name, country, province, city, business_number, first_seen, last_seen, n_awards,
            total_awards, n_awards_no_value, n_history, total_history, n_history_no_value, n_contracts, total_contracts,
@@ -264,50 +324,115 @@ def _flat(value: object) -> object:
     return "; ".join(i for i in items if i.strip())
 
 
-def _write(path: Path, cur: sqlite3.Cursor) -> int:
-    """One CSV through a partial file, renamed when complete, so a failure never leaves a truncated file for the upload."""
+class _Counted:
+    """What the csv module writes to: passes the text on and counts its bytes in UTF-8."""
+
+    def __init__(self, fh: TextIO) -> None:
+        self.fh = fh
+        self.bytes = 0
+
+    def write(self, text: str) -> int:
+        self.bytes += len(text.encode("utf-8"))
+        return self.fh.write(text)
+
+
+def _write_parts(path: Path, cur: sqlite3.Cursor, cap: int | None = None) -> dict[str, int]:
+    """One CSV through a partial file, renamed when complete, so a failure never leaves a truncated file for the
+    upload. With cap, a file that has reached cap bytes ends at the next check and the rows go on in
+    <name>-2.csv (then -3, up to -9), each part with the header and the byte-order mark. Returns the rows
+    under the header of each file written, by file name."""
     headers = [d[0] for d in cur.description]
     langs = [(m.group(2) if (m := FREE_TEXT_KEY.match(h)) else None) for h in headers]
     raw = [h in RAW_BUYER_COLUMNS for h in headers]
-    part = path.with_name(path.name + ".partial")
-    n = 0
-    # utf-8-sig: the byte-order mark makes a spreadsheet read the file as UTF-8.
-    with part.open("w", newline="", encoding="utf-8-sig") as fh:
-        writer = csv.writer(fh, lineterminator="\n")
+    counts: dict[str, int] = {}
+    target, n = path, 0
+
+    def partial(name: Path) -> Path:
+        return name.with_name(name.name + ".partial")
+
+    def start(name: Path) -> tuple[TextIO, _Counted, Any]:
+        # utf-8-sig: the byte-order mark makes a spreadsheet read the file as UTF-8.
+        fh = partial(name).open("w", newline="", encoding="utf-8-sig")
+        sized = _Counted(fh)
+        writer = csv.writer(sized, lineterminator="\n")
         writer.writerow(headers)
+        return fh, sized, writer
+
+    fh, sized, writer = start(target)
+    try:
         for row in cur:
+            if cap is not None and n and n % PART_CHECK_ROWS == 0 and sized.bytes >= cap:
+                fh.close()
+                partial(target).replace(target)
+                counts[target.name] = n
+                if len(counts) >= 9:
+                    raise ValueError(f"{path.name}: more than 9 parts of {cap} bytes")
+                target, n = path.with_name(f"{path.stem}-{len(counts) + 1}{path.suffix}"), 0
+                fh, sized, writer = start(target)
             writer.writerow([_cell(scrub(v, lang) if lang else public_spelling(v) if is_raw else v)
                              for v, lang, is_raw in zip(row, langs, raw)])
             n += 1
-    part.replace(path)
-    return n
+    finally:
+        fh.close()
+    partial(target).replace(target)
+    counts[target.name] = n
+    return counts
 
 
-def _years(conn: sqlite3.Connection, table: str) -> list[str]:
+def _write(path: Path, cur: sqlite3.Cursor) -> int:
+    """One CSV through a partial file, with no size cap; returns its rows."""
+    return _write_parts(path, cur)[path.name]
+
+
+def _dated(date_sql: str) -> str:
+    """The test a row's date passes when it opens with a four-digit year: such a row goes in the file of that
+    year, or the before or after file; any other row (no date, or text that is not one) in the undated file."""
+    return f"substr({date_sql}, 1, 4) GLOB '[0-9][0-9][0-9][0-9]'"
+
+
+def _years(conn: sqlite3.Connection, table: str, date_sql: str) -> list[str]:
     return [y for (y,) in conn.execute(
-        f"SELECT DISTINCT substr(COALESCE(awarded, published), 1, 4) FROM {table} "
-        "WHERE COALESCE(awarded, published) GLOB '[0-9][0-9][0-9][0-9]-*' ORDER BY 1")]
+        f"SELECT DISTINCT substr({date_sql}, 1, 4) FROM {table} WHERE {_dated(date_sql)} ORDER BY 1")]
 
 
-def _yearly_files(conn: sqlite3.Connection, prefix: str, table: str, sql: str,
-                  last: int | None = None) -> list[tuple[str, str, tuple]]:
-    """(file name, query, arguments) for each yearly file of a table: one per year from FIRST_YEAR to last (the
-    data date's year), the years before it together in <prefix>-before-<FIRST_YEAR>.csv and the years after
-    last together in <prefix>-after-<last>.csv. The Data page offers exactly these names, so SHA256SUMS lists
-    nothing it does not."""
+def _undated(conn: sqlite3.Connection, table: str, date_sql: str) -> bool:
+    return conn.execute(f"SELECT 1 FROM {table} WHERE {date_sql} IS NULL OR NOT {_dated(date_sql)} LIMIT 1"
+                        ).fetchone() is not None
+
+
+def _yearly_query(prefix: str, kind: str = "year") -> str:
+    """A yearly file's query, in the file's row order. year: the dates from the first argument up to the second
+    (two year strings, so the date's index serves the range; a date opening with "2024" is at or after "2024"
+    and before "2025", and no other text is). before and after: the dated rows before or from the argument,
+    by date first, as they span several years. undated: the rest, which take no argument."""
+    _, date_sql, select, order = YEARLY[prefix]
+    if kind == "year":
+        return f"{select} WHERE {date_sql} >= ? AND {date_sql} < ? ORDER BY {order}"
+    if kind == "undated":
+        return f"{select} WHERE {date_sql} IS NULL OR NOT {_dated(date_sql)} ORDER BY {order}"
+    op = {"before": "<", "after": ">="}[kind]
+    return f"{select} WHERE {date_sql} {op} ? AND {_dated(date_sql)} ORDER BY substr({date_sql}, 1, 10), {order}"
+
+
+def _yearly_files(conn: sqlite3.Connection, prefix: str, last: int | None = None) -> list[tuple[str, str, tuple]]:
+    """(file name, query, arguments) for each yearly file of a source: one per year from FIRST_YEAR to last (the
+    data date's year), the years before it together in <prefix>-before-<FIRST_YEAR>.csv, the years after last
+    together in <prefix>-after-<last>.csv, and the rows whose date gives no year in <prefix>-undated.csv; the
+    last three only when such a row exists. Every row of the source is in exactly one file. The Data page offers
+    these names, and the -2 parts of a file past CSV_PART_BYTES from the export's list of downloads, so
+    SHA256SUMS lists nothing it does not."""
+    table, date_sql = YEARLY[prefix][:2]
     first = FIRST_YEAR[prefix]
     last = last if last is not None else datetime.now(timezone.utc).year
-    years = _years(conn, table)
-    files = [(f"{prefix}-{y}.csv", sql, (y,)) for y in years if first <= int(y) <= last]
-    where = "WHERE substr(COALESCE(a.awarded, a.published), 1, 4) = ? ORDER BY a.reference"
-    for test, op, year, name in ((lambda y: y < first, "<", first, f"{prefix}-before-{first}.csv"),
-                                 (lambda y: y > last, ">", last, f"{prefix}-after-{last}.csv")):
-        if any(test(int(y)) for y in years):
-            if where not in sql:
-                raise ValueError(f"{prefix}: the yearly query no longer reads its year as expected")
-            query = sql.replace(where, f"WHERE substr(COALESCE(a.awarded, a.published), 1, 4) {op} ? "
-                                       "ORDER BY substr(COALESCE(a.awarded, a.published), 1, 10), a.reference")
-            files.append((name, query, (str(year),)))
+    years = _years(conn, table, date_sql)
+    files = [(f"{prefix}-{y}.csv", _yearly_query(prefix), (y, str(int(y) + 1)))
+             for y in years if first <= int(y) <= last]
+    if any(int(y) < first for y in years):
+        files.append((f"{prefix}-before-{first}.csv", _yearly_query(prefix, "before"), (str(first),)))
+    if any(int(y) > last for y in years):
+        files.append((f"{prefix}-after-{last}.csv", _yearly_query(prefix, "after"), (str(last + 1),)))
+    if _undated(conn, table, date_sql):
+        files.append((f"{prefix}-undated.csv", _yearly_query(prefix, "undated"), ()))
     return files
 
 
@@ -328,9 +453,9 @@ def export_csv(conn: sqlite3.Connection, out_dir: Path | None = None, *, today: 
     as_of = (today or datetime.now(timezone.utc).date()).isoformat()
     counts: dict[str, int] = {}
     counts["open-tenders.csv"] = _write(out / "open-tenders.csv", conn.execute(OPEN_TENDERS, {"as_of": as_of}))
-    for prefix, table, sql in (("awards", "awards", AWARDS), ("history", "contract_history", HISTORY)):
-        for name, query, args in _yearly_files(conn, prefix, table, sql, int(as_of[:4])):
-            counts[name] = _write(out / name, conn.execute(query, args))
+    for prefix in YEARLY:
+        for name, query, args in _yearly_files(conn, prefix, int(as_of[:4])):
+            counts.update(_write_parts(out / name, conn.execute(query, args), CSV_PART_BYTES))
     counts["organizations.csv"] = _write(out / "organizations.csv", conn.execute(ORGANIZATIONS))
     counts["buyers.csv"] = _write(out / "buyers.csv", conn.execute(BUYERS, {"as_of": as_of}))
     counts["expiring-3m.csv"] = _write(out / "expiring-3m.csv", conn.execute(

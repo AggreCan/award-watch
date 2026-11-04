@@ -56,6 +56,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import logging
+import re
 import sqlite3
 from collections import Counter
 from collections.abc import Callable
@@ -63,6 +64,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from .. import config, organizations
 from ..db import get_meta, log_run, now_iso, set_meta
@@ -515,11 +517,28 @@ def load_file(conn: sqlite3.Connection, stage: str, path: Path, source_file: str
 # After the files: statuses and code counts
 # ---------------------------------------------------------------------------
 
+# CanadaBuys publishes closing times in Eastern time with no zone in its file
+# (site/public/closing.js holds the same rule for the pages).
+CLOSING_ZONE = ZoneInfo("America/Toronto")
+_ZONED = re.compile(r"T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$")
+
+
 def _passed(closing: str, now: str) -> bool:
-    # A closing given as a date alone lasts the whole day.
+    """Whether a closing has passed at now, a UTC instant ("2026-11-16T19:00:00Z"). A closing without a zone is
+    Eastern wall time, so now is read on the Eastern clock before the two are compared; read as UTC, a notice
+    closing at 10:00 would expire at the 12:30 UTC run, hours before it closes. A closing given as a date alone
+    lasts the whole Eastern day. One that names its zone is compared as an instant."""
+    at = datetime.fromisoformat(now.replace("Z", "+00:00"))
+    at = at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+    if _ZONED.search(closing):
+        try:
+            return datetime.fromisoformat(closing.replace("Z", "+00:00")) <= at
+        except ValueError:
+            pass
+    wall = at.astimezone(CLOSING_ZONE).strftime("%Y-%m-%dT%H:%M:%S")
     if len(closing) == 10:
-        return closing < now[:10]
-    return closing < now[:19]
+        return closing < wall[:10]
+    return closing <= wall
 
 
 def expire_closed(conn: sqlite3.Connection, open_references: set[str], now: str) -> int:

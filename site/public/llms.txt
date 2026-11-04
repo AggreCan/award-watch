@@ -16,6 +16,8 @@ open-data files, refreshed every night.
 - https://awardwatch.ca/downloads/open-tenders.csv: every open tender notice, list fields
 - https://awardwatch.ca/downloads/awards-YYYY.csv: the award notices of one calendar year of award
 - https://awardwatch.ca/downloads/history-YYYY.csv: PSPC contract history of one calendar year of award
+- https://awardwatch.ca/downloads/contracts-YYYY.csv: the published contracts of one calendar year of contract date, from 2004, one row per row published
+- https://awardwatch.ca/downloads/grants-YYYY.csv: the grant and contribution agreements of one calendar year of agreement start, from 2005, one row per amendment
 - https://awardwatch.ca/downloads/organizations.csv: one row per organization, with counts and totals per source
 - https://awardwatch.ca/downloads/buyers.csv: one row per federal buyer, with counts and totals per source
 - https://awardwatch.ca/downloads/expiring-3m.csv: every contract ending within 3 months of the data date, each listed once across sources

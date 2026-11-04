@@ -201,9 +201,12 @@ describe("storage outages", () => {
     const down = await req("/downloads/organizations.csv", { DATA: brokenBucket });
     expect(down.status).toBe(503);
     expect(await down.text()).toContain("is not available right now");
-    expect((await req("/downloads/awards-2024.csv", { DATA: brokenBucket })).status).toBe(503);
+    // A yearly file of any source with yearly files goes to the bucket; lobbying has none.
+    for (const path of ["/downloads/awards-2024.csv", "/downloads/grants-2024.csv", "/downloads/contracts-2025-2.csv"]) {
+      expect((await req(path, { DATA: brokenBucket })).status, path).toBe(503);
+    }
     expect((await req("/downloads/organizations.csv", { DATA: undefined })).status).toBe(404);
-    for (const path of ["/downloads/..%2Fstatus.json", "/downloads/mirror/..%2F..%2Fstatus.json", "/downloads/awards-24.csv", "/downloads/grants-2024.csv"]) {
+    for (const path of ["/downloads/..%2Fstatus.json", "/downloads/mirror/..%2F..%2Fstatus.json", "/downloads/awards-24.csv", "/downloads/lobbying-2024.csv"]) {
       expect((await req(path, { DATA: brokenBucket })).status, path).toBe(404);
     }
   });

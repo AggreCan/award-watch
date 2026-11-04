@@ -23,8 +23,9 @@ def test_the_downloads_and_their_sums(conn, tmp_path):
     counts = export.run(conn, out, today=TODAY)
     names = sorted(p.name for p in out.iterdir())
     assert names == ["SHA256SUMS", "awards-2024.csv", "awards-2025.csv", "awards-2026.csv", "buyers.csv",
-                     "expiring-12m.csv", "expiring-3m.csv", "history-2026.csv", "open-tenders.csv", "organizations.csv"]
-    assert all(export.YEAR_RE.match(n) for n in names if n.startswith(("awards-", "history-")))
+                     "contracts-2025.csv", "expiring-12m.csv", "expiring-3m.csv", "grants-2026.csv", "history-2026.csv",
+                     "open-tenders.csv", "organizations.csv"]
+    assert all(export.YEAR_RE.match(n) for n in names if n.startswith(("awards-", "history-", "contracts-", "grants-")))
     assert counts["open-tenders.csv"] == 4 and counts["awards-2026.csv"] == 4 and counts["organizations.csv"] == 3
     sums = (out / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
     assert len(sums) == len(names) - 1
@@ -33,7 +34,7 @@ def test_the_downloads_and_their_sums(conn, tmp_path):
         assert hashlib.sha256((out / name).read_bytes()).hexdigest() == digest
     assert not list(out.glob("*.partial"))
     log = conn.execute("SELECT source, rows_new FROM sources_log").fetchall()
-    assert [tuple(r) for r in log] == [("export_csv", 9)]
+    assert [tuple(r) for r in log] == [("export_csv", 11)]
 
 
 def test_the_3_month_file_is_the_12_month_file_cut_to_the_3_month_window(conn, tmp_path):

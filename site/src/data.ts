@@ -1253,3 +1253,29 @@ export async function loadRail(env: Env): Promise<RailCounts | null> {
     lobbyingLoaded: sourceLoaded("lobbying", null, stats) === true,
   };
 }
+
+// -- UNSPSC families and classes ------------------------------------------------------
+
+// tenders/open-levels.json: the families (4 digits) and classes (6) the open
+// notices' codes fall in, in code order, each with the notices carrying a
+// code in it and its name as the notices published it (null in both
+// languages when no notice used the level's own code; the source names
+// only the codes it uses). A segment page lists its own; the tender list
+// names a family or class chosen in its code filter by it.
+export interface CodeLevel { code: string; en: string | null; fr: string | null; n: number }
+export const LEVEL_CODE_RE = /^[0-9]{4}(?:[0-9]{2})?$/;
+
+const isCodeLevel = (v: unknown): v is CodeLevel => isObj(v) && isStr(v.code) && LEVEL_CODE_RE.test(v.code) &&
+  isStrOrNull(v.en) && isStrOrNull(v.fr) && isCount(v.n);
+
+export async function loadOpenLevels(env: Env): Promise<readonly CodeLevel[] | null> {
+  const v = await loadJson<unknown>(env, "tenders/open-levels.json");
+  return isObj(v) && checkOnce(v.levels, "tenders/open-levels.json", (x) => isListOf(x, isCodeLevel)) ? (v.levels as CodeLevel[]) : null;
+}
+
+// The level a code names: "family" for 4 digits, "class" for 6, null for
+// any other length (a segment has its own page; a commodity, 8 digits, no
+// level of its own here).
+export function codeLevel(code: string): "family" | "class" | null {
+  return code.length === 4 ? "family" : code.length === 6 ? "class" : null;
+}

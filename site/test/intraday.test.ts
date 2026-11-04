@@ -16,7 +16,7 @@ import { INTRADAY_SQL, MAX_ROWS, type IntradayRow, loadIntraday, mergeIntraday, 
 import { INTRADAY } from "../src/plan";
 import { tenderColumns } from "../src/pages/shared";
 import { headClass } from "../src/columns";
-import { fakeAssets, testEnv } from "./assets";
+import { fakeAssets, makeFakeAssets, testEnv } from "./assets";
 import { applySql } from "./setup";
 
 const plan = vi.hoisted(() => ({ value: "free" as "free" | "pro" }));
@@ -264,6 +264,16 @@ describe("a paid request", () => {
     const fr = nbsp(await html("/tenders/new?lang=fr"));
     expect(fr).toContain("3 avis publiés depuis la mise à jour de ce matin");
     expect(await html("/tenders/new?day=2026-10-30")).not.toContain("intraday");
+  });
+
+  it("runs the countdown on /tenders/new for the band's closing-soon rows when the day's list has none", async () => {
+    // The day's list empty: only the band (cb-100-10000001 at amendment 2 closes on 2026-11-04) is closing soon.
+    const quiet = testEnv(makeFakeAssets({}, { [`tenders/new/${DATA_DATE}.json`]: [] }));
+    expect(await html("/tenders/new", quiet)).not.toContain("/countdown.js");
+    plan.value = "pro";
+    const page = await html("/tenders/new", quiet);
+    expect(BAND.exec(page)?.[0] ?? "").toContain('data-closes="2026-11-04T19:00:00Z"');
+    expect(page).toContain('<script type="module" src="/countdown.js"></script>');
   });
 
   it("says one notice in the singular", async () => {

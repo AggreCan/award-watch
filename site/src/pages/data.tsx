@@ -72,12 +72,30 @@ export const DOWNLOADS: { file: string; contents: Key; note?: Key; paid?: boolea
   { file: "expiring-12m.csv", contents: "data.file.expiring", note: "data.file.pro", paid: true },
   { file: "SHA256SUMS", contents: "data.file.sums" },
 ];
-// One file per calendar year of award notices and of contract history, and
-// one each for the dates before the first year and after the data date's
-// year (typing errors in the source), as the pipeline writes them: the page
-// offers every name SHA256SUMS can list.
-export const YEARLY_DOWNLOAD = /^(awards|history)-(?:[0-9]{4}|before-[0-9]{4}|after-[0-9]{4})\.csv$/;
+// One file per calendar year of award notices, contract history, published
+// contracts and grants; one each for the dates before a source's first year
+// and after the data date's year, and for the rows whose date gives no year
+// (undated); and the numbered parts (-2 to -9) a year past 250 MiB goes on
+// in, as the pipeline writes them (export.py YEAR_RE and FIRST_YEAR): the
+// page offers every name SHA256SUMS can list.
+export const YEARLY_DOWNLOAD = /^(awards|history|contracts|grants)-(?:[0-9]{4}|before-[0-9]{4}|after-[0-9]{4}|undated)(?:-[2-9])?\.csv$/;
 export const FIRST_HISTORY_YEAR = 2009;
+// The years their proactive publication began; an earlier date is a record reported later.
+export const FIRST_CONTRACT_YEAR = 2004;
+export const FIRST_GRANT_YEAR = 2005;
+export const YEARLY_SOURCES = ["awards", "history", "contracts", "grants"] as const;
+
+// A yearly file's numbered parts, in order, among the export's files: a year
+// past the size cap goes on in <name>-2.csv, -3 and on.
+export function fileParts(file: string, files: Iterable<string>): string[] {
+  const stem = file.replace(/\.csv$/, "");
+  const parts: [number, string][] = [];
+  for (const f of files) {
+    const m = /^(.*)-([2-9])\.csv$/.exec(f);
+    if (m && m[1] === stem) parts.push([Number(m[2]), f]);
+  }
+  return parts.sort((a, b) => a[0] - b[0]).map(([, f]) => f);
+}
 
 // The licence table: what each source supplies and the terms it carries.
 // The Registry of Lobbyists' data comes under the Commissioner's own licence.
@@ -138,6 +156,18 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
   const downloads = DOWNLOADS.filter((d) => !d.paid).map((d) => ({ file: d.file, contents: t(lang, d.contents) }));
   const sizes = downloadSizes(stats);
   const sizeOf = (file: string) => sizes.get(file);
+  // Each file a yearly list names, then its numbered parts when the export wrote any.
+  const withParts = (files: readonly string[]) => files.flatMap((f) => [f, ...fileParts(f, sizes.keys())]);
+  const firstYear = { awards: FIRST_AWARD_YEAR, history: FIRST_HISTORY_YEAR, contracts: FIRST_CONTRACT_YEAR, grants: FIRST_GRANT_YEAR };
+  // The files outside the years: before and after for each source, and an
+  // undated file only when the export lists one (it writes one only for a
+  // source with such a row).
+  const outside = YEARLY_SOURCES.flatMap((s) => [`${s}-before-${firstYear[s]}.csv`, `${s}-after-${lastYear}.csv`,
+    ...(sizes.has(`${s}-undated.csv`) ? [`${s}-undated.csv`] : [])]);
+  const yearly: [Key, (typeof YEARLY_SOURCES)[number]][] = [
+    ["data.yearly_awards", "awards"], ["data.yearly_history", "history"],
+    ["data.yearly_contracts", "contracts"], ["data.yearly_grants", "grants"],
+  ];
   // A yearly file's size and rows ride on its link's title.
   const sizeTitle = (file: string) => {
     const s = sizeOf(file);
@@ -242,24 +272,22 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
             </Table>
           </div>
           {sizes.size > 0 ? <p class="muted small">{t(lang, "data.sizes_note")}</p> : null}
-          <h3>{t(lang, "data.yearly_awards")}</h3>
+          {yearly.map(([heading, source]) => (
+            <>
+              <h3>{t(lang, heading)}</h3>
+              <ul class="quick-links">
+                {withParts(years(firstYear[source]).map((y) => `${source}-${y}.csv`)).map((f) => (
+                  <li><a class="mono" href={`/downloads/${f}`} title={sizeTitle(f)}>{f}</a></li>
+                ))}
+              </ul>
+            </>
+          ))}
+          <h3>{t(lang, "data.yearly_outside")}</h3>
           <ul class="quick-links">
-            {years(FIRST_AWARD_YEAR).map((y) => (
-              <li><a class="mono" href={`/downloads/awards-${y}.csv`} title={sizeTitle(`awards-${y}.csv`)}>{`awards-${y}.csv`}</a></li>
-            ))}
-          </ul>
-          <h3>{t(lang, "data.yearly_history")}</h3>
-          <ul class="quick-links">
-            {years(FIRST_HISTORY_YEAR).map((y) => (
-              <li><a class="mono" href={`/downloads/history-${y}.csv`} title={sizeTitle(`history-${y}.csv`)}>{`history-${y}.csv`}</a></li>
-            ))}
-          </ul>
-          <h3>{t(lang, "data.yearly_other", { first: FIRST_AWARD_YEAR, last: lastYear })}</h3>
-          <ul class="quick-links">
-            {[`awards-before-${FIRST_AWARD_YEAR}.csv`, `awards-after-${lastYear}.csv`, `history-before-${FIRST_HISTORY_YEAR}.csv`,
-              `history-after-${lastYear}.csv`].map((f) => <li><a class="mono" href={`/downloads/${f}`} title={sizeTitle(f)}>{f}</a></li>)}
+            {withParts(outside).map((f) => <li><a class="mono" href={`/downloads/${f}`} title={sizeTitle(f)}>{f}</a></li>)}
           </ul>
           <p class="muted small top-gap">{t(lang, "data.downloads_note")}</p>
+          <p class="muted small">{t(lang, "data.downloads_closing")}</p>
 
           <h2 id="api">{t(lang, "data.toc_api")}</h2>
           <p>{t(lang, "data.api_text")}</p>

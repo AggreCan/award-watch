@@ -29,6 +29,9 @@ change there. Output tree (under data/out/static):
                                 /tenders and the home page render on the server: a notice whose closing
                                 time passes before the next nightly sorts last there, and the rows
                                 after it still fill the first page)
+  tenders/open-levels.json      the UNSPSC families and classes the open notices carry, each with the notices
+                                carrying a code in it and its name as the notices give it (the segment
+                                pages' levels and the tender list's code filter read it)
   tenders/new/<day>.json        the notices first seen on each of the last 30 days
   tenders/<abc>.json            every notice in the database, detail form, sharded on the reference
   contracts/<abc>.json          award notices and contract history records, detail form, same sharding,
@@ -920,8 +923,13 @@ def download_files(csv_dir: Path | None, rows: dict[str, int] | None = None) -> 
 def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[dict], new_today: list[dict],
                 top_year: list[dict], downloads: list[dict] | None = None) -> dict:
     conn = m.conn
+    # The home page's award notices: the newest by award date, the order its Awarded column reads in, so a
+    # notice published today for a contract awarded months ago does not stand above this week's awards. A
+    # date after the data date is a typing error in the source ("2029") and would head the list for good;
+    # it is left out here (the awards pages list it, with their note), as is a notice with no award date.
     recent = [row for r in conn.execute(
-        "SELECT * FROM x_awards ORDER BY published DESC, awarded DESC, reference LIMIT ?", (HOME_ROWS * 2,))
+        "SELECT * FROM x_awards WHERE substr(awarded, 1, 10) <= ? "
+        "ORDER BY substr(awarded, 1, 10) DESC, published DESC, reference LIMIT ?", (m.as_of, HOME_ROWS * 2))
         if (row := award_row(m, "awards", r))][:HOME_ROWS]
     runs = [{"run_at": r["run_at"], "source": r["source"], "detail": (r["detail"] or "")[:300] or None,
              "rows_new": r["rows_new"], "ok": r["ok"]}
@@ -991,8 +999,30 @@ def tender_facets(rows: list[dict]) -> dict[str, list[dict]]:
     return out
 
 
+# The levels below a segment the code filter takes, by the digits of their codes: a family is 4, a class 6.
+LEVEL_DIGITS = (4, 6)
+# At most this many families and classes in tenders/open-levels.json, those with the most open notices, so
+# the file stays small whatever the open list becomes (the server reads it for a segment page).
+LEVELS_MAX = 4000
+
+
+def tender_levels(m: Model, open_rows: list[dict]) -> list[dict]:
+    """The UNSPSC families and classes the open notices carry, in code order: each with n, the notices carrying
+    a code in it (a notice counts once in each), and its name in each language as the notices published it,
+    null when no notice used the family's or class's own code (the source names only the codes it uses)."""
+    counts: Counter = Counter()
+    for r in open_rows:
+        counts.update({c[:k] for c in r.get("codes", []) for k in LEVEL_DIGITS if len(c) >= k})
+    kept = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:LEVELS_MAX]
+    out = []
+    for code, n in sorted(kept):
+        en, fr = m.unspsc.get(code, (None, None))
+        out.append({"code": code, "en": en, "fr": fr, "n": n})
+    return out
+
+
 def write_tender_lists(m: Model, out: Path) -> tuple[list[dict], list[dict], dict[str, int]]:
-    """tenders/open.json, tenders/open-first.json and tenders/new/<day>.json.
+    """tenders/open.json, tenders/open-first.json, tenders/open-levels.json and tenders/new/<day>.json.
 
     Returns the open rows (soonest closing first), today's new rows, and counts.
     A day of the last 30 with no new notice gets an empty list, so the page
@@ -1005,6 +1035,7 @@ def write_tender_lists(m: Model, out: Path) -> tuple[list[dict], list[dict], dic
     _dump(out / "tenders" / "open.json", open_rows)
     _dump(out / "tenders" / "open-first.json", {
         "total": len(open_rows), "rows": open_first(m, open_rows), "facets": tender_facets(open_rows)})
+    _dump(out / "tenders" / "open-levels.json", {"levels": tender_levels(m, open_rows)})
     first_day = (m.today - timedelta(days=NEW_DAYS - 1)).isoformat()
     by_day: dict[str, list[dict]] = {(m.today - timedelta(days=i)).isoformat(): [] for i in range(NEW_DAYS)}
     for r in conn.execute("SELECT * FROM x_tenders WHERE first_sight >= ? ORDER BY published DESC, reference",

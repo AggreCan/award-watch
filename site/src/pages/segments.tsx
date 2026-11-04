@@ -1,7 +1,8 @@
 // /segments: the 57 UNSPSC segments with their open notices and this year's
 // award notices (categories/index.json; the export keeps the files' old
-// folder name). /segments/:nn: one segment's open notices, the organizations
-// with the largest award values in it, and its award notices by year. A
+// folder name). /segments/:nn: one segment's open notices, the families and
+// classes they carry (tenders/open-levels.json), the organizations with the
+// largest award values in it, and its award notices by year. A
 // notice or award counts under every segment its codes fall in, so segment
 // figures overlap and are never added up. "Category" is kept for the
 // CanadaBuys field (goods, services, construction) on the tender pages; the
@@ -10,9 +11,9 @@
 import type { Context } from "hono";
 import { Table } from "../columns";
 import { SEGMENT_CODES } from "../constants";
-import { SEGMENT_RE, loadCategories, loadCategory, loadExpiringIndex, loadStats } from "../data";
+import { type CodeLevel, SEGMENT_RE, loadCategories, loadCategory, loadExpiringIndex, loadOpenLevels, loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, segmentLabel, t, tn } from "../i18n";
+import { fmtInt, pick, segmentLabel, t, tn, type Lang } from "../i18n";
 import { clockOf, closingPassed, tenderState } from "../closing";
 import { Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { pageSeo, segmentSeo } from "../seo";
@@ -84,6 +85,80 @@ export async function segmentsIndex(c: Context<AppEnv>): Promise<Response> {
   );
 }
 
+// -- the segment's families and classes ------------------------------------------------
+
+// The families with the most open notices a segment page lists, and the
+// classes under each; the tender list filtered to a family has all of its
+// classes, and the families past the first ones are a code away there.
+export const LEVEL_FAMILIES_MAX = 25;
+export const LEVEL_CLASSES_MAX = 8;
+
+export type SegmentFamily = CodeLevel & { classes: CodeLevel[]; more: number };
+
+// The families of the segment the open notices carry (tenders/open-levels.json),
+// most notices first, then by code, each with its classes in the same order.
+export function segmentLevels(levels: readonly CodeLevel[], code: string): { families: SegmentFamily[]; total: number } {
+  const order = (a: CodeLevel, b: CodeLevel) => b.n - a.n || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0);
+  const mine = levels.filter((l) => l.code.startsWith(code));
+  const all = mine.filter((l) => l.code.length === 4).sort(order);
+  const families = all.slice(0, LEVEL_FAMILIES_MAX).map((f) => {
+    const classes = mine.filter((l) => l.code.length === 6 && l.code.startsWith(f.code)).sort(order);
+    return { ...f, classes: classes.slice(0, LEVEL_CLASSES_MAX), more: Math.max(0, classes.length - LEVEL_CLASSES_MAX) };
+  });
+  return { families, total: all.length };
+}
+
+const LevelName = ({ lang, level }: { lang: Lang; level: CodeLevel }) => {
+  const name = pick(lang, level.en, level.fr);
+  return name ? <>{name}</> : <span class="muted">{t(lang, "segment.levels_unnamed")}</span>;
+};
+
+// Each family's row, then its classes indented under it; a count opens the
+// tender list at that family or class (the code filter).
+const SegmentLevels = ({ lang, families, total }: { lang: Lang; families: readonly SegmentFamily[]; total: number }) => (
+  <Panel id="levels" title={t(lang, "segment.levels")} count={fmtInt(total, lang)}
+    foot={<span>{t(lang, "segment.levels_names")}</span>}>
+    <p class="muted small">
+      {t(lang, "segment.levels_note")}
+      {total > families.length ? ` ${t(lang, "segment.levels_first", { n: fmtInt(families.length, lang) })}` : ""}
+    </p>
+    <div class="table-wrap bordered levels">
+      <Table restack={false} class="compact" cols={[
+        { kind: "label", label: t(lang, "col.code") },
+        { kind: "main", label: t(lang, "segment.col_level") },
+        { kind: "count", label: t(lang, "segments.col_open") },
+      ]}>
+        <tbody>
+          {families.map((f) => (
+            <>
+              <tr class="level-family">
+                <td data-label={t(lang, "col.code")} class="mono">{f.code}</td>
+                <td data-label={t(lang, "segment.col_level")}><LevelName lang={lang} level={f} /></td>
+                <td data-label={t(lang, "segments.col_open")} class="mono num"><a href={`/tenders?code=${f.code}`}>{fmtInt(f.n, lang)}</a></td>
+              </tr>
+              {f.classes.map((k) => (
+                <tr class="level-class">
+                  <td data-label={t(lang, "col.code")} class="mono">{k.code}</td>
+                  <td data-label={t(lang, "segment.col_level")}><LevelName lang={lang} level={k} /></td>
+                  <td data-label={t(lang, "segments.col_open")} class="mono num"><a href={`/tenders?code=${k.code}`}>{fmtInt(k.n, lang)}</a></td>
+                </tr>
+              ))}
+              {f.more ? (
+                <tr class="level-class">
+                  <td></td>
+                  <td colspan={2} class="muted small">
+                    <a href={`/tenders?code=${f.code}`}>{tn(lang, "segment.levels_more_one", "segment.levels_more_many", f.more, { n: fmtInt(f.more, lang) })}</a>
+                  </td>
+                </tr>
+              ) : null}
+            </>
+          ))}
+        </tbody>
+      </Table>
+    </div>
+  </Panel>
+);
+
 export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const code = c.req.param("nn") ?? "";
@@ -101,10 +176,13 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
   // An open list: a notice whose closing time has passed goes after the ones still open.
   const open = [...seg.open_tenders.filter((r) => !closingPassed(r.closing, clock)), ...seg.open_tenders.filter((r) => closingPassed(r.closing, clock))];
   const shown = open.slice(0, SEGMENT_OPEN_ROWS);
-  const [interest, expiring] = await Promise.all([
+  const [interest, expiring, openLevels] = await Promise.all([
     interestFilter(c.env, lang, "segment", `/segments/${code}`),
     loadExpiringIndex(c.env).catch(() => null),
+    loadOpenLevels(c.env).catch(() => null),
   ]);
+  // An export without the levels file shows no levels panel.
+  const levels = openLevels ? segmentLevels(openLevels, code) : null;
   const ending = expiring?.by_segment.find((g) => g.code === code)?.n ?? 0;
   const dataYear = Number(todayOf(stats.data_as_of).slice(0, 4));
   const thisYear = seg.years.find((y) => y.year === dataYear);
@@ -131,6 +209,8 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
         <TenderTable lang={lang} rows={shown} clock={clock} timeLeft omit={code} />
       ) : <p class="muted">{t(lang, "segment.open_none")}</p>}
       </Panel>
+
+      {levels && levels.families.length ? <SegmentLevels lang={lang} families={levels.families} total={levels.total} /> : null}
 
       <InterestPanel lang={lang} filter={interest} />
 

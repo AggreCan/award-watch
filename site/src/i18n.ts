@@ -1072,8 +1072,8 @@ const STRINGS = {
   "org.col_nc_count": { en: "Non-competitive, by count", fr: "Non concurrentiels, en nombre" },
   "org.col_nc_value": { en: "Non-competitive, by value", fr: "Non concurrentiels, en valeur" },
   "org.nc_negative_note": {
-    en: "* The year holds records below zero (an amendment that lowered a published contract). The non-competitive share by value counts positive values only; the value column is the net total.",
-    fr: "* L'année compte des dossiers inférieurs à zéro (une modification qui a réduit un contrat publié). La part non concurrentielle en valeur ne compte que les valeurs positives; la colonne Valeur donne le total net.",
+    en: "* The year holds records below zero (an amendment that lowered a contract's value). The non-competitive share by value counts positive values only; the value column is the net total.",
+    fr: "* L'année compte des dossiers inférieurs à zéro (une modification qui a réduit la valeur d'un contrat). La part non concurrentielle en valeur ne compte que les valeurs positives; la colonne Valeur donne le total net.",
   },
   "org.nc_footnote": {
     en: "Non-competitive is the sources' term for a contract awarded without a competition. The share counts the records the source marks that way out of all the year's records, including those with no method stated. Grants carry no such flag.",
@@ -1608,10 +1608,10 @@ const STRINGS = {
   "data.file.sums": { en: "SHA-256 checksums of the files above", fr: "Sommes de contrôle SHA-256 des fichiers ci-dessus" },
   "data.yearly_awards": { en: "Award Notices by Year of Award", fr: "Avis d'attribution par année d'attribution" },
   "data.yearly_history": { en: "PSPC Contract History by Year of Award", fr: "Historique des contrats de SPAC par année d'attribution" },
-  "data.yearly_other": { en: "Dates Before {first} and After {last}", fr: "Dates antérieures à {first} et postérieures à {last}" },
+  "data.yearly_outside": { en: "Dates Outside the Years Above", fr: "Dates hors des années ci-dessus" },
   "data.downloads_note": {
-    en: "A year with no file yet answers \"not available\". The dates before the first year and after the data date's year are typing errors in the source, kept in one file each. The open tender notices file is written once a night, so the closing states in it are as of the data date.",
-    fr: "Une année sans fichier répond « non disponible ». Les dates antérieures à la première année et postérieures à l'année de la date des données sont des erreurs de saisie de la source, gardées chacune dans un fichier. Le fichier des avis d'appel d'offres ouverts est écrit une fois par nuit : les états de clôture qu'il donne sont ceux de la date des données.",
+    en: "A year with no file yet answers \"not available\". Dates before a source's first year and after the data date's year share one file each: on award notices and the contract history they are typing errors in the source, and on published contracts and grants they are records reported later. A file ending in -undated holds the rows whose date gives no year, and a year past 250 MB goes on in numbered parts (-2, -3). The files hold one row per version as published, so adding them up counts a contract once per amendment; the site's totals follow the counting rules on the Methodology page.",
+    fr: "Une année sans fichier répond « non disponible ». Les dates antérieures à la première année d'une source et postérieures à l'année de la date des données partagent un fichier chacune : sur les avis d'attribution et l'historique des contrats, ce sont des erreurs de saisie de la source, et sur les contrats publiés et les subventions, des dossiers déclarés plus tard. Un fichier se terminant par -undated contient les lignes dont la date ne donne aucune année, et une année de plus de 250 Mo se poursuit en parties numérotées (-2, -3). Les fichiers comptent une ligne par version telle que publiée : en les additionnant, un contrat compte une fois par modification; les totaux du site suivent les règles de calcul de la page Méthodologie.",
   },
   "data.api_text": {
     en: "Read-only JSON: the same files the pages read. No key is needed. The data changes nightly, so responses may be cached for 5 minutes.",
@@ -1815,8 +1815,8 @@ const STRINGS = {
     fr: "Contrats publiés, selon le code de procédure d'invitation : TN et AC sont non concurrentiels. OB, TC et ST sont concurrentiels. Un champ vide est non précisé.",
   },
   "methodology.competitive_share": {
-    en: "The non-competitive share is given by value and by count, always with the figure it is a share of.",
-    fr: "La part non concurrentielle est donnée en valeur et en nombre, toujours avec le chiffre dont elle est la part.",
+    en: "The non-competitive share is given by count and by value, always with the figure it is a share of. By value it is taken over positive values: an amendment that lowered a contract's value is a record below zero, and a share of a net total could fall below zero or pass 100 percent.",
+    fr: "La part non concurrentielle est donnée en nombre et en valeur, toujours avec le chiffre dont elle est la part. En valeur, elle est calculée sur les valeurs positives : une modification qui a réduit la valeur d'un contrat est un dossier inférieur à zéro, et une part d'un total net pourrait passer sous zéro ou dépasser 100 %.",
   },
   "methodology.competitive_meaning": {
     en: "Federal rules allow a contract without a competition in set cases, such as a low value, a single capable supplier or an emergency. The flag repeats what the source states. The reason, where the source gives one, is on the record's page.",
@@ -2560,6 +2560,33 @@ const STRINGS = {
   "methodology.analytics_due": {
     en: "The contracts ending by fiscal quarter follow the rules of Contracts Ending Soon, carried to the end of the eighth fiscal quarter from the data date's: the newest version's end date, no cancelled contract, each contract once across award notices, PSPC contract history and published contracts. A buyer's are the ones the list shows under that buyer; a segment's are counted in each of a notice's segments.",
     fr: "Les contrats prenant fin par trimestre suivent les règles de la section Contrats prenant fin bientôt, prolongées jusqu'à la fin du huitième trimestre à partir de celui de la date des données : la date de fin de la version la plus récente, aucun contrat annulé, chaque contrat une seule fois parmi les avis d'attribution, l'historique des contrats de SPAC et les contrats publiés. Ceux d'un acheteur sont ceux que la liste présente sous cet acheteur; ceux d'un segment sont comptés dans chacun des segments d'un avis.",
+  },
+
+  // -- site leftovers: UNSPSC levels, the code filter's names, yearly downloads -------
+  // A segment page's families and classes (src/pages/segments.tsx, tenders/open-levels.json).
+  "segment.levels": { en: "Families and Classes", fr: "Familles et classes" },
+  "segment.col_level": { en: "Family or class", fr: "Famille ou classe" },
+  "segment.levels_note": {
+    en: "The UNSPSC families (4 digits) and classes (6 digits) the open notices' codes fall in, most notices first. A notice with codes in several counts in each. A count opens the tender list at that family or class.",
+    fr: "Les familles (4 chiffres) et classes (6 chiffres) UNSPSC dont relèvent les codes des avis ouverts, du plus grand nombre d'avis au plus petit. Un avis dont les codes relèvent de plusieurs compte dans chacune. Un nombre ouvre la liste des appels d'offres à cette famille ou classe.",
+  },
+  "segment.levels_first": { en: "The {n} families with the most notices are listed.", fr: "Les {n} familles comptant le plus d'avis sont énumérées." },
+  "segment.levels_names": {
+    en: "Names are as the notices give them. A family or class that no notice names by its own code has none here.",
+    fr: "Les noms sont ceux que donnent les avis. Une famille ou une classe qu'aucun avis ne nomme par son propre code n'en a pas ici.",
+  },
+  "segment.levels_unnamed": { en: "No name in the notices", fr: "Aucun nom dans les avis" },
+  "segment.levels_more_one": { en: "{n} more class in the tender list", fr: "{n} autre classe dans la liste des appels d'offres" },
+  "segment.levels_more_many": { en: "{n} more classes in the tender list", fr: "{n} autres classes dans la liste des appels d'offres" },
+  // The tender list's code filter as a chip: the level its digits name, then the code and its name.
+  "tenders.filter_family": { en: "UNSPSC family", fr: "Famille UNSPSC" },
+  "tenders.filter_class": { en: "UNSPSC class", fr: "Classe UNSPSC" },
+  // The Data page's yearly files of the two proactive-publication sources.
+  "data.yearly_contracts": { en: "Published Contracts by Year of Contract Date", fr: "Contrats publiés par année de la date du contrat" },
+  "data.yearly_grants": { en: "Grants and Contributions by Year of Agreement Start", fr: "Subventions et contributions par année de début de l'accord" },
+  "data.downloads_closing": {
+    en: "The open tender notices file is written once a night, so the closing states in it are as of the data date. Its closing times are Eastern time (ET), as CanadaBuys publishes them, with no zone written.",
+    fr: "Le fichier des avis d'appel d'offres ouverts est écrit une fois par nuit : les états de clôture qu'il donne sont ceux de la date des données. Ses heures de clôture sont en heure de l'Est (HE), comme AchatsCanada les publie, sans fuseau indiqué.",
   },
 } as const satisfies Record<string, Entry>;
 

@@ -347,6 +347,29 @@ def test_stats_carry_the_years_award_value_and_each_download_with_its_size_and_r
     assert load(out, "stats.json")["downloads"] == []
 
 
+def test_the_home_pages_award_notices_are_the_newest_by_award_date(conn, tmp_path):
+    """stats.json recent_awards, which the home page lists in its Awarded column's order: the newest award dates,
+    so a notice published today for a contract awarded months ago does not stand above this week's awards. A date
+    after the data date (a typing error) and a notice with no award date are left out; the award pages keep them."""
+    seed(conn)
+    award(conn, "AW-LATE-PUB", 0, ACME, value=5.0, awarded="2025-01-10", published="2026-10-31")
+    award(conn, "AW-FUTURE", 0, ACME, value=5.0, awarded="2029-01-01", published="2026-10-30")
+    award(conn, "AW-UNDATED", 0, ACME, value=5.0, awarded=None, published="2026-10-31")
+    award(conn, "AW-TODAY", 0, NORTH, value=5.0, awarded="2026-10-31", published="2026-10-31")
+    conn.commit()
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    recent = load(out, "stats.json")["recent_awards"]
+    awarded = [r["awarded"] for r in recent]
+    assert awarded == sorted(awarded, reverse=True) and recent[0]["reference"] == "AW-TODAY"
+    refs = [r["reference"] for r in recent]
+    assert "AW-FUTURE" not in refs and "AW-UNDATED" not in refs
+    # Published today, awarded on 2025-01-10: after the seed's notices awarded since (AW-4, 2025-02-01), before
+    # the one of 2024; by publication date it would have stood first.
+    assert refs.index("AW-4") < refs.index("AW-LATE-PUB") < refs.index(SLASH_REF.replace("/", "-"))
+    assert len(recent) <= es.HOME_ROWS
+
+
 def test_stats_count_the_last_30_days_awards_and_the_years_suppliers(conn, tmp_path):
     """Beside the year's award notices on the home page: those awarded in the 30 days to the data date (the data
     date and the 29 before it), what they add up to by the counting rules, and the organizations the year's
@@ -831,3 +854,25 @@ def test_the_open_list_carries_a_scrubbed_excerpt_and_the_full_codes_and_nothing
     category = load(out, "categories/72.json")
     assert category["open_tenders"] and not any("excerpt_en" in r for r in category["open_tenders"])
     assert es.excerpt("  short   text ", "en") == "short text" and es.excerpt(None, "en") is None
+
+
+def test_the_open_levels_count_each_family_and_class_once_a_notice_with_the_names_the_notices_give(conn, tmp_path):
+    """tenders/open-levels.json: the families (4 digits) and classes (6) under the open notices' codes, for the
+    segment pages and the tender list's code filter. A notice counts once in each level its codes fall in; a
+    level the notices never named by its own code has no name; a closed notice and a bare segment add none."""
+    seed(conn)
+    tender(conn, "cb-levels", 0, title="Two codes in one class", codes=("81111501", "81111502"))
+    conn.execute("INSERT INTO unspsc_codes (code, level, desc_en, desc_fr) "
+                 "VALUES ('8111', 2, 'Computer services', 'Services informatiques')")
+    conn.commit()
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    levels = load(out, "tenders/open-levels.json")["levels"]
+    assert [lv["code"] for lv in levels] == sorted(lv["code"] for lv in levels)
+    by_code = {lv["code"]: lv for lv in levels}
+    # cb-100-1 (81111500 and 8211), cb-300-3 (81111500) and cb-levels; cb-200-2 (72101500); the expired
+    # cb-400-4 and the segment-only code 43 add nothing.
+    assert {c: lv["n"] for c, lv in by_code.items()} == {"7210": 1, "721015": 1, "8111": 3, "811115": 3, "8211": 1}
+    assert (by_code["8111"]["en"], by_code["8111"]["fr"]) == ("Computer services", "Services informatiques")
+    assert by_code["811115"]["en"] is None and by_code["811115"]["fr"] is None
+    assert es.LEVEL_DIGITS == (4, 6) and len(levels) <= es.LEVELS_MAX

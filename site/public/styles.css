@@ -1057,3 +1057,11 @@ a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offse
    keeps the weight the notice cell gives a first link here. */
 .same-day-mark { margin-right: 4px; color: var(--accent); fill: currentColor; }
 .same-day-mark + a { font-weight: 500; }
+
+/* -- a segment's families and classes (src/pages/segments.tsx, SegmentLevels) --
+   A family's row in the heading weight, its classes under it with the code
+   and the name stepped in 16 px, so the two levels read apart without a
+   rule between them. */
+.levels tr.level-family td { font-weight: 600; }
+.levels tr.level-family .muted { font-weight: 400; }
+.levels tr.level-class td:first-child, .levels tr.level-class td:nth-child(2) { padding-left: 16px; }

@@ -21,11 +21,13 @@ describe("data page", () => {
       "open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv", "expiring-12m.csv", "SHA256SUMS",
     ]);
     for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "expiring-3m.csv", "expiring-12m.csv", "SHA256SUMS",
-      "mirror/x.csv", "awards-before-2012.csv", "awards-after-2026.csv", "history-before-2009.csv"]) {
+      "mirror/x.csv", "awards-before-2012.csv", "awards-after-2026.csv", "history-before-2009.csv", "contracts-2024.csv",
+      "grants-2005.csv", "contracts-before-2004.csv", "grants-after-2026.csv", "contracts-undated.csv", "grants-2024-2.csv",
+      "contracts-undated-3.csv"]) {
       expect(downloadAllowed(file), file).toBe(true);
     }
-    for (const file of ["awards-12.csv", "grants-2024.csv", "../stats.json", "awards-2024.csv.gz", "status.json", "mirror/../x", "expiring-6m.csv",
-      "awards-later-2026.csv", "awards-before-.csv"]) {
+    for (const file of ["awards-12.csv", "lobbying-2024.csv", "../stats.json", "awards-2024.csv.gz", "status.json", "mirror/../x", "expiring-6m.csv",
+      "awards-later-2026.csv", "awards-before-.csv", "grants-2024-1.csv", "grants-2024-10.csv", "contracts-dated.csv", "grants-2024-2-2.csv"]) {
       expect(downloadAllowed(file), file).toBe(false);
     }
     expect(YEARLY_DOWNLOAD.test("history-2025.csv")).toBe(true);

@@ -34,6 +34,12 @@
    closing soon shows the time left in place of its chip (the chip waits
    hidden until the time comes), as the server draws it.
 
+   The code filter takes a UNSPSC family (4 digits) or class (6). Its
+   field suggests the families and classes the open notices carry, with
+   their names, from /data/tenders/open-levels.json (read once, when the
+   field is first used or the address holds a code), and its chip names the
+   level and the code's name where the notices give one, as the server does.
+
    An empty list says what to do next and hides the detail panel. Beside the
    panel the provinces column rests, and each row's provinces show under its
    buyer. On a phone the filters fold behind a button that counts the active
@@ -63,6 +69,14 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readS
   try { I18N = JSON.parse(document.getElementById("i18n").textContent) || {}; } catch (e) { I18N = {}; }
   var STRINGS = I18N.strings || {};
   var LABELS = I18N.labels || {};
+  // A family's or class's name by its code: the server's for the address's
+  // code, then every one the levels file names.
+  var CODE_NAMES = {};
+  if (LABELS.codes && typeof LABELS.codes === "object") {
+    Object.keys(LABELS.codes).forEach(function (k) { if (typeof LABELS.codes[k] === "string") CODE_NAMES[k] = LABELS.codes[k]; });
+  }
+  var LEVEL_RE = /^[0-9]{4}(?:[0-9]{2})?$/;
+  var levelsAsked = false;
   // The table's class, widths and head row, from the column system in src/columns.tsx.
   var TABLE = I18N.table && I18N.table.heads ? I18N.table : null;
   var LANG = I18N.lang === "fr" ? "fr" : "en";
@@ -364,7 +378,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readS
       } else if (state[k]) {
         var without = copy();
         without[k] = "";
-        out.push([k, fieldValue(k), without]);
+        out.push([k, k === "code" ? codeText(state.code) : fieldValue(k), without]);
       }
     });
     return out;
@@ -380,7 +394,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readS
       var chip = el("a", "fchip");
       chip.href = "/tenders" + query(without, 1);
       chip.setAttribute("aria-label", tx("tenders.remove_filter", { name: value }));
-      chip.appendChild(el("span", null, fieldLabel(k)));
+      chip.appendChild(el("span", null, k === "code" ? codeLabel(state.code) : fieldLabel(k)));
       chip.appendChild(document.createTextNode(" "));
       chip.appendChild(el("b", null, value));
       var x = el("span", "fchip-x", "×");
@@ -401,6 +415,42 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readS
       var n = active.length;
       foldEl.textContent = n === 0 ? tx("filters.fold") : txn("filters.fold_one", "filters.fold_many", n, { n: num(n) });
     }
+  }
+
+  // The code filter's chip, as codeChip() in src/pages/tenders.tsx: the
+  // level its digits name and the code with its name when one is known.
+  function codeLabel(code) {
+    if (code.length === 2) return tx("tenders.filter_segment");
+    return code.length === 4 ? tx("tenders.filter_family") : code.length === 6 ? tx("tenders.filter_class") : fieldLabel("code");
+  }
+  function codeText(code) {
+    var name = code.length === 2 ? (LABELS.segments && LABELS.segments[code]) || (LABELS.short && LABELS.short[code]) : CODE_NAMES[code];
+    return name ? code + " " + name : code;
+  }
+  // The families and classes the open notices carry, once: their names for
+  // the chip and the suggestions under the code field. A failed read leaves
+  // the field as it was and may be tried again.
+  function loadLevels() {
+    if (levelsAsked) return;
+    levelsAsked = true;
+    fetch("/data/tenders/open-levels.json").then(function (r) {
+      if (!r.ok) throw new Error(String(r.status));
+      return r.json();
+    }).then(function (data) {
+      var list = document.getElementById("code-levels");
+      var levels = data && Array.isArray(data.levels) ? data.levels : [];
+      levels.forEach(function (l) {
+        if (!l || typeof l.code !== "string" || !LEVEL_RE.test(l.code)) return;
+        var name = pick(l.en, l.fr);
+        if (name) CODE_NAMES[l.code] = name;
+        if (list) {
+          var opt = el("option", null, (name ? name + " " : "") + "(" + num(l.n) + ")");
+          opt.value = l.code;
+          list.appendChild(opt);
+        }
+      });
+      if (state.code) renderChips();
+    }).catch(function () { levelsAsked = false; });
   }
 
   function sortedByClosing() { return state.sort === "closing"; }
@@ -666,6 +716,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readS
     ["q", "code"].forEach(function (name) {
       var input = form.elements.namedItem(name);
       if (!input) return;
+      if (name === "code") input.addEventListener("focus", loadLevels);
       input.addEventListener("input", function () {
         if (typing) clearTimeout(typing);
         if (name === "code" && input.value && !CODE_RE.test(input.value)) return;
@@ -684,6 +735,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readS
     // A linked view (a filter, a sort, a later page) is drawn now that the
     // whole list is here; the plain view comes out the same as the server's.
     render(false);
+    if (state.code) loadLevels();
   }
 
   // The server's rows can be selected while the full list loads, and stay

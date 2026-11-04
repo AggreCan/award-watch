@@ -122,7 +122,8 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   const passed = (r: { closing: string | null }) => tenderState("open", r.closing, clock) === "closed";
   const newToday = [...stats.new_tenders.filter((r) => !passed(r)), ...stats.new_tenders.filter(passed)];
   const countdown = [...stats.new_tenders, ...closingSoon].some((r) => tenderState("open", r.closing, clock) === "closing");
-  // The newest award notices published, in the order of the Awarded column.
+  // The newest award notices by award date (stats.json picks them so, leaving
+  // out a date past the data date), in the order of the Awarded column.
   const recentAwards = newestFirst(stats.recent_awards);
   // The note on the segment chips, once: in the foot of the first list that
   // has them, so the rows start right under the head band.
