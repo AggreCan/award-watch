@@ -740,6 +740,23 @@ def run_checks(today: date, env: Mapping[str, str], http: Any, *, domain: str, n
 
 ISSUE_TITLE = "Nightly run needs attention"
 ISSUE_LABEL = "run-attention"
+# The broken links the item names; status.json's link_sample_broken has the rest.
+LINK_ITEM_MAX = 10
+
+
+def link_item(broken: Any) -> str | None:
+    """The item for the nightly link sample's links that answered 404 or 410
+    (status.json link_sample_broken): up to LINK_ITEM_MAX of them, each with
+    its kind, record reference, status and address; None when there are none."""
+    entries = [b for b in broken if isinstance(b, dict) and isinstance(b.get("url"), str)] \
+        if isinstance(broken, list) else []
+    if not entries:
+        return None
+    named = "; ".join(f"{b.get('kind')} {b.get('ref')} ({b.get('status')}) {b['url']}" for b in entries[:LINK_ITEM_MAX])
+    rest = len(entries) - LINK_ITEM_MAX
+    more = f"; and {rest} more in status.json (link_sample_broken)" if rest > 0 else ""
+    return (f"Outbound links: {len(entries)} sampled government link{'s' if len(entries) != 1 else ''} answered "
+            f"404 or 410 at the source (the site keeps its links, since a page may come back): {named}{more}")
 
 
 def attention_items(status: Any) -> list[str]:
@@ -764,6 +781,9 @@ def attention_items(status: Any) -> list[str]:
     indexnow_outcome = status.get("indexnow")
     if isinstance(indexnow_outcome, str) and indexnow_outcome.startswith("rejected"):
         items.append("IndexNow: rejected; check the key file")
+    links = link_item(status.get("link_sample_broken"))
+    if links:
+        items.append(links)
     if status.get("smoke") == "broken":
         detail = status.get("smoke_detail") or "server errors"
         if status.get("deploy_rolled_back") is True:

@@ -709,6 +709,27 @@ def test_only_an_indexnow_rejection_is_an_item():
     assert resilience.attention_items({"stages": []}) == []
 
 
+
+def test_broken_links_are_one_item_naming_ten_at_most():
+    def links(n):
+        return [{"kind": "grant", "ref": f"ised:G-{i}", "status": 404,
+                 "url": f"https://search.open.canada.ca/grants/record/ised%2CG-{i}%2Ccurrent"} for i in range(n)]
+
+    assert resilience.link_item([]) is None and resilience.link_item(None) is None
+    assert resilience.link_item([{"kind": "grant"}, "x"]) is None
+    assert resilience.attention_items({"stages": [], "link_sample_broken": links(1)}) == [
+        "Outbound links: 1 sampled government link answered 404 or 410 at the source (the site keeps its links, "
+        "since a page may come back): grant ised:G-0 (404) https://search.open.canada.ca/grants/record/ised%2CG-0%2Ccurrent"
+    ]
+    many = resilience.link_item(links(resilience.LINK_ITEM_MAX + 3))
+    assert many.startswith("Outbound links: 13 sampled government links answered 404 or 410")
+    assert many.count("https://") == resilience.LINK_ITEM_MAX == 10
+    assert many.endswith("; and 3 more in status.json (link_sample_broken)")
+    # The outcome alone, or a status from before the field existed, is no item.
+    for status in ({"stages": [], "link_sample": "checked 40, 0 broken", "link_sample_broken": []},
+                   {"stages": [], "link_sample": "failed"}, {"stages": []}):
+        assert resilience.attention_items(status) == []
+
 def test_attention_items_for_a_rollback_a_weekly_restore_and_the_checks():
     status = {"stages": [], "smoke": "broken", "smoke_detail": "/ answered 500 and 500", "deploy_rolled_back": True,
               "version_before": VERSION_A, "restore": {"source": "weekly", "weekly_key": "backups/weekly/db-slot-4.sqlite.gz",

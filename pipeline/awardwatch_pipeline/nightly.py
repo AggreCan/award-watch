@@ -149,6 +149,15 @@ INTEREST_NOTICE = "the alert sign-ups were not counted tonight (the D1 query fai
 # not exist yet: wrangler.jsonc still holds the placeholder id (docs/analytics.md).
 RECORDS_NOTICE = "the records database is not created yet, so the analytics views answer unavailable; docs/analytics.md has the steps"
 
+# The nightly link sample (link_sample.py, docs/link-sampling.md): the line
+# the daily check's email carries when a sampled link answered 404 or 410
+# (the item needing attention lists them), and the notice for a sample that
+# did not finish. BROKEN_KEPT bounds the list status.json carries; a night's
+# sample is 40 links.
+LINK_BROKEN_NOTICE = "{n} of tonight's sampled government links answered 404 or 410; the run-attention issue lists the addresses"
+LINK_FAILED_NOTICE = "the sample of outbound government links did not finish; the next run draws another"
+BROKEN_KEPT = 100
+
 # The notices for a night one of the same-day refresh's steps failed (docs/intraday.md).
 INTRADAY_NOTICES = {
     "intraday_lookup": "the buyer lookup for the same-day refresh was not saved; the intraday job keeps the one R2 has",
@@ -587,6 +596,7 @@ def run_status(
     interest: dict[str, int] | None = None, interest_tried: bool = False,
     intraday_lookup: str | None = None, intraday_prune: str | None = None,
     intraday_lookup_bytes: int | None = None,
+    link_sample: str | None = None, link_sample_broken: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """status.json for the site's daily check. Every input may be missing: the
     status then says what is missing rather than failing to be written.
@@ -630,7 +640,16 @@ def run_status(
     records is the records database sync's outcome (records_db.py: "synced",
     "nothing to send", "failed", or "no database" while wrangler.jsonc holds
     the placeholder id); "not run" when the step did not run. A failure is an
-    item needing attention, as for the search sync; "no database" a notice."""
+    item needing attention, as for the search sync; "no database" a notice.
+
+    link_sample is the nightly link sample's outcome (link_sample.py: "checked
+    N, M broken", "failed", or "not run"), and link_sample_broken the links
+    it found answering 404 or 410 (read_broken_links of its broken.json),
+    each with its kind, record reference, address and status. A broken link
+    is an item needing attention (resilience.attention_items lists up to ten)
+    and one notice, the daily check's email line; it never marks the run not
+    ok, since the site published what it should and a retry would find the
+    same pages missing. A failed sample is a notice."""
     stages: list[dict[str, Any]] = []
     notices: list[dict[str, str]] = []
     for name, result in steps.items():
@@ -675,6 +694,12 @@ def run_status(
     saved_bytes = intraday_lookup_bytes if intraday["intraday_lookup"] == "saved" else None
     if not (isinstance(saved_bytes, int) and not isinstance(saved_bytes, bool) and saved_bytes >= 0):
         saved_bytes = None
+    broken = [dict(b) for b in link_sample_broken or []][:BROKEN_KEPT]
+    # One line in the daily check's email at most: the broken links when the
+    # sample found any (a run stopped after writing them still found them),
+    # else a sample that did not finish.
+    link_notices = ([{"source": "link_sample", "detail": LINK_BROKEN_NOTICE.format(n=len(broken))}] if broken
+                    else [{"source": "link_sample", "detail": LINK_FAILED_NOTICE}] if link_sample == "failed" else [])
     return {
         "run_at": stamp,
         "stages": stages,
@@ -688,6 +713,10 @@ def run_status(
         # The bytes of the lookup saved tonight, beside intraday_lookup (the
         # daily check's bound reads it); null when none was saved.
         "intraday_lookup_bytes": saved_bytes,
+        # The nightly link sample (link_sample.py): its outcome, and the links
+        # that answered 404 or 410, which the attention item lists.
+        "link_sample": link_sample or "not run",
+        "link_sample_broken": broken,
         "views_rollup": views or "not run",
         "search_console": search_console or "not run",
         "views_report": views_report or "not run",
@@ -706,7 +735,8 @@ def run_status(
         # stays ok.
         "notices": notices + ([{"source": "interest", "detail": INTEREST_NOTICE}] if interest_tried and not interest else [])
         + [{"source": name, "detail": text} for name, text in INTRADAY_NOTICES.items() if intraday[name] == "failed"]
-        + ([{"source": "records_sync", "detail": RECORDS_NOTICE}] if records == "no database" else []),
+        + ([{"source": "records_sync", "detail": RECORDS_NOTICE}] if records == "no database" else [])
+        + link_notices,
         "ok": all(s["ok"] for s in stages) and verdict != "broken",
     }
 
@@ -765,6 +795,25 @@ def read_interest(path: str | None) -> dict[str, int] | None:
     except ValueError:
         return None
     return interest_counts(data)
+
+
+def read_broken_links(path: str | None) -> list[dict[str, Any]]:
+    """The broken links of the link sample's broken.json, each {kind, ref, url,
+    status} with status 404 or 410; [] when the file is missing or does not
+    read. An entry of another shape is left out rather than passed on."""
+    data = _read_json(path)
+    entries = data.get("broken") if isinstance(data, dict) else None
+    if not isinstance(entries, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        kind, ref, url, status = e.get("kind"), e.get("ref"), e.get("url"), e.get("status")
+        if (isinstance(kind, str) and isinstance(ref, str) and isinstance(url, str) and url.startswith("https://")
+                and not isinstance(status, bool) and status in (404, 410)):
+            out.append({"kind": kind[:40], "ref": ref[:200], "url": url[:500], "status": status})
+    return out[:BROKEN_KEPT]
 
 
 def read_byte_count(path: str | None) -> int | None:
@@ -946,6 +995,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--intraday-lookup-outcome", default=None, help="the same-day refresh lookup's outcome file")
     s.add_argument("--intraday-lookup-bytes", default=None, help="the file holding the saved lookup's size in bytes")
     s.add_argument("--intraday-prune-outcome", default=None, help="the same-day refresh prune's outcome file")
+    s.add_argument("--link-sample-outcome", default=None, help="the link sample's outcome file")
+    s.add_argument("--link-sample-broken", default=None, help="the link sample's broken.json")
     s.add_argument("--views-outcome", default=None, help="the audience roll-up's outcome file")
     s.add_argument("--indexnow-outcome", default=None, help="the IndexNow submission's outcome file")
     s.add_argument("--search-console-outcome", default=None, help="the Search Console import's outcome file")
@@ -1149,7 +1200,9 @@ def _status(args: argparse.Namespace) -> int:
                         interest=read_interest(args.interest), interest_tried=args.interest is not None,
                         intraday_lookup=_read(args.intraday_lookup_outcome),
                         intraday_prune=_read(args.intraday_prune_outcome),
-                        intraday_lookup_bytes=read_byte_count(args.intraday_lookup_bytes))
+                        intraday_lookup_bytes=read_byte_count(args.intraday_lookup_bytes),
+                        link_sample=_read(args.link_sample_outcome),
+                        link_sample_broken=read_broken_links(args.link_sample_broken))
     _write_json(Path(args.out), status)
     print(json.dumps(status, indent=1))
     return 0

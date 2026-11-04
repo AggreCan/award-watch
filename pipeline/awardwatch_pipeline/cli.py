@@ -1,6 +1,7 @@
 """Command line: `python -m awardwatch_pipeline run`, the nightly refresh, one stage after another,
-the search database's search-sync, search-check and search-synced (search_db.py), and the records
-database's records-sync, records-check and records-synced (records_db.py).
+the search database's search-sync, search-check and search-synced (search_db.py), the records
+database's records-sync, records-check and records-synced (records_db.py), and link-sample, the
+nightly check of a sample of the government pages the site links to (link_sample.py).
 
 The stages run in CLAUDE.md's order. Each records one sources_log row (the
 module writes it on success, _stage on a failure) and never stops the stages
@@ -24,7 +25,7 @@ from .http import PoliteClient
 from .sources import buyers, canadabuys, registry_federal
 from . import indicators
 from . import expiring, export, export_static, migrate
-from . import records_db, search_db
+from . import link_sample, records_db, search_db
 from .sources import contracts, grants, lobbying, matching
 
 log = logging.getLogger("awardwatch_pipeline")
@@ -48,6 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
     # The records database's sync (records_db.py, docs/analytics.md), the same
     # three steps around the workflow's Wrangler calls.
     records_db.add_parsers(sub)
+    # After the deploy: a sample of the government links checked
+    # (link_sample.py, docs/link-sampling.md).
+    link_sample.add_parser(sub)
     return parser
 
 
@@ -62,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
             return search_db.command(args)
         if args.command in records_db.COMMANDS:
             return records_db.command(args)
+        if args.command == link_sample.COMMAND:
+            return link_sample.command(args)
         conn = connect(args.db)
         try:
             return run(conn, [s for s in STAGES if getattr(args, s)], samples=config.SAMPLES_DIR if args.samples else None)

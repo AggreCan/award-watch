@@ -4,7 +4,8 @@ Public records of federal spending in Canada, organized around the organizations
 that receive it: open tender notices and the awards that follow, every contract
 over $10,000 that a federal department has published, every grant and
 contribution agreement, and the lobbying communications those organizations
-report. Every row links to the government record it came from. The site
+report. Every row links to the government record it came from, and the
+nightly run checks a sample of those links (`docs/link-sampling.md`). The site
 rebuilds itself once a day from the open data files; the scheduled run is the
 only way its data changes.
 

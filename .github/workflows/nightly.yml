@@ -26,14 +26,15 @@
 # with that data as its assets, check the live site and roll the Worker back
 # when the deploy broke it, save the buyer lookup the same-day refresh reads
 # and prune that refresh's old rows (docs/intraday.md), tell IndexNow which
-# pages changed, save the database (in parts), the public files (the static
-# bundle, also in parts, and the CSV downloads) and the review files back to
-# R2, keep the audience counts of the finished days in R2 when the analytics
-# token exists, count the alert sign-ups in the forms database, append Search
-# Console's daily figures when its key exists, write the monthly audience
-# report on the first run of a month, run the monthly expiry checks on the
-# first of a month, write the run status, and report the items needing
-# attention (failed run, one GitHub issue).
+# pages changed, check a sample of the government pages the site links to
+# (docs/link-sampling.md), save the database (in parts), the public files
+# (the static bundle, also in parts, and the CSV downloads) and the review
+# files back to R2, keep the audience counts of the finished days in R2 when
+# the analytics token exists, count the alert sign-ups in the forms database,
+# append Search Console's daily figures when its key exists, write the
+# monthly audience report on the first run of a month, run the monthly expiry
+# checks on the first of a month, write the run status, and report the items
+# needing attention (failed run, one GitHub issue).
 #
 # What a failure does (awardwatch_pipeline/nightly.py and resilience.py hold the
 # checks):
@@ -80,6 +81,11 @@
 #   intraday_prune: failed in the run status) and stops nothing: the intraday
 #   job keeps the lookup R2 has, and the site shows only the rows read since
 #   the data date whatever the prune did.
+# - A sampled government link that answers 404 or 410 is an item needing
+#   attention (listed in it, up to ten) and a notice; the run stays ok and
+#   the site keeps its link. A link sample that fails, or that its step's
+#   time limit stops, is a notice (link_sample: failed) and stops nothing:
+#   the next night draws another sample.
 # - A fault in the retry gate, the version record, the smoke test, the expiry
 #   checks or the issue update never stops the run: the gate then runs the
 #   refresh, a missing version means no rollback tonight, and each outcome is
@@ -594,6 +600,30 @@ jobs:
           python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --since "$since" \
             --site-url "${AWARDWATCH_SITE_URL:-https://awardwatch.ca}"
 
+      # A sample of the government pages the site links to (docs/link-sampling.md):
+      # about 40 links drawn from the database across the kinds of link
+      # (CanadaBuys notices, the contracts and grants searches, the lobbying
+      # registry, open.canada.ca), seeded by the data date, and checked one at
+      # a time with HEAD (GET when HEAD answers 405 or 501) and the pipeline's
+      # user agent, at most one retry each. After the deploy, so it never delays
+      # publishing, and before the database is saved, because the checks
+      # (link_checks, kept 60 days) travel in the backup. "failed" is written
+      # first; the command replaces it with "checked N, M broken" and lists the
+      # 404s and 410s in broken.json. A broken link is an item needing
+      # attention and a line in the daily check's email; the run stays ok. The
+      # command starts no check after eight minutes, so it writes what it
+      # checked inside the step's limit. Never stops the run.
+      - name: Sample the outbound links
+        id: link_sample
+        if: ${{ !cancelled() && steps.verify.outputs.db_ok == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          out=data/out/links
+          mkdir -p "$out"
+          echo "failed" > "$out/last_outcome.txt"
+          python -m awardwatch_pipeline link-sample --db data/awardwatch.sqlite --out "$out"
+
       # Only a database that passed its checks is saved, whether or not the
       # deploy worked, so a night's loads are kept even when the site could
       # not be updated. Last night's backup becomes the previous one first;
@@ -980,10 +1010,13 @@ jobs:
       # run"); a failed one is a notice, never an item needing attention.
       # intraday_lookup_bytes is the size of the lookup saved tonight (null
       # when none was), an integer beside the outcome string, which stays as
-      # it was. Written whatever happened above. The roll-up, Search Console,
-      # report, IndexNow, rollback and the two same-day steps write "failed"
-      # before they start, so a step stopped by its time limit still reads as
-      # failed.
+      # it was. link_sample is the link sample's outcome ("checked N, M
+      # broken", "failed" or "not run") and link_sample_broken the links that
+      # answered 404 or 410 (an item needing attention and a notice; a failed
+      # sample is a notice). Written whatever happened above. The roll-up,
+      # Search Console, report, IndexNow, rollback, the two same-day steps and
+      # the link sample write "failed" before they start, so a step stopped by
+      # its time limit still reads as failed.
       - name: Write the run status
         if: ${{ always() }}
         run: |
@@ -994,6 +1027,7 @@ jobs:
             --intraday-lookup-outcome data/out/intraday/lookup_outcome.txt \
             --intraday-lookup-bytes data/out/intraday/lookup_bytes.txt \
             --intraday-prune-outcome data/out/intraday/prune_outcome.txt \
+            --link-sample-outcome data/out/links/last_outcome.txt --link-sample-broken data/out/links/broken.json \
             --indexnow-outcome data/out/indexnow/last_outcome.txt \
             --search-console-outcome data/out/search_console/last_outcome.txt \
             --views-report-outcome data/out/report/last_outcome.txt \

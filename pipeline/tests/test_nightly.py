@@ -394,7 +394,7 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
     make_db(db)
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
     assert set(status) == {"run_at", "stages", "steps", "search_sync", "records_sync", "intraday_lookup", "intraday_prune",
-                           "intraday_lookup_bytes",
+                           "intraday_lookup_bytes", "link_sample", "link_sample_broken",
                            "views_rollup", "search_console", "views_report", "indexnow", "interest", "restore",
                            "smoke", "smoke_detail", "version_before", "rollback", "deploy_rolled_back", "checks",
                            "notices", "ok"}
@@ -981,3 +981,97 @@ def test_the_workflow_saves_the_lookup_after_a_good_deploy_and_prunes_every_nigh
     # The nightly never applies the intraday schema: the operator does, once (docs/intraday.md).
     code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
     assert "intraday_schema.sql" not in code
+
+
+# -- the nightly link sample (link_sample.py, docs/link-sampling.md) ---------------------------
+
+
+def broken_links(n):
+    return [{"kind": "award", "ref": f"cb-{i}", "url": f"https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cb-{i}",
+             "status": 404 if i % 2 else 410} for i in range(n)]
+
+
+def test_the_link_sample_lands_in_the_status_and_a_broken_link_needs_attention(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+
+    def status(**kw):
+        return nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"}, **kw)
+
+    quiet = status()
+    assert (quiet["link_sample"], quiet["link_sample_broken"], quiet["notices"]) == ("not run", [], [])
+    clean = status(link_sample="checked 40, 0 broken", link_sample_broken=[])
+    assert clean["link_sample"] == "checked 40, 0 broken" and clean["notices"] == []
+    assert resilience.attention_items(clean) == []
+    # Broken links: one notice (the daily check's email line) and one item naming ten of them; the run stays ok.
+    found = status(link_sample="checked 40, 12 broken", link_sample_broken=broken_links(12))
+    assert found["ok"] is True and len(found["link_sample_broken"]) == 12
+    assert found["notices"] == [{"source": "link_sample", "detail": nightly.LINK_BROKEN_NOTICE.format(n=12)}]
+    [item] = resilience.attention_items(found)
+    assert item.startswith("Outbound links: 12 sampled government links answered 404 or 410")
+    assert "award cb-9 (404)" in item and "cb-10" not in item
+    assert item.endswith("; and 2 more in status.json (link_sample_broken)")
+    # A sample that did not finish is a notice and nothing more.
+    failed = status(link_sample="failed")
+    assert failed["notices"] == [{"source": "link_sample", "detail": nightly.LINK_FAILED_NOTICE}]
+    assert failed["ok"] is True and resilience.attention_items(failed) == []
+    # Never more than one line for the email, and never more links than the status keeps.
+    both = status(link_sample="failed", link_sample_broken=broken_links(nightly.BROKEN_KEPT + 5))
+    assert [n["detail"] for n in both["notices"]] == [nightly.LINK_BROKEN_NOTICE.format(n=nightly.BROKEN_KEPT)]
+    assert len(both["link_sample_broken"]) == nightly.BROKEN_KEPT
+    # The command reads the two files the step writes.
+    outcome, broken = tmp_path / "last_outcome.txt", tmp_path / "broken.json"
+    outcome.write_text("checked 40, 1 broken\n", encoding="utf-8")
+    broken.write_text(json.dumps({"data_date": "2026-11-04", "checked": 40, "broken": broken_links(1)}), encoding="utf-8")
+    out = tmp_path / "status.json"
+    assert nightly.main(["status", "--db", str(db), "--link-sample-outcome", str(outcome),
+                         "--link-sample-broken", str(broken), "--out", str(out)]) == 0
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert written["link_sample"] == "checked 40, 1 broken" and written["link_sample_broken"] == broken_links(1)
+    assert [n["source"] for n in written["notices"]] == ["link_sample"]
+
+
+def test_the_status_takes_only_well_formed_broken_links(tmp_path):
+    good = broken_links(1)[0]
+    path = tmp_path / "broken.json"
+    odd = [
+        "not an entry", {**good, "status": 500}, {**good, "status": True}, {**good, "status": "404"},
+        {**good, "url": "http://canadabuys.canada.ca/x"}, {**good, "url": None}, {**good, "kind": 3},
+        {k: v for k, v in good.items() if k != "ref"},
+    ]
+    path.write_text(json.dumps({"broken": [good, *odd]}), encoding="utf-8")
+    assert nightly.read_broken_links(str(path)) == [good]
+    for body in ("{", "[]", '{"broken": {}}', '{"broken": null}'):
+        path.write_text(body, encoding="utf-8")
+        assert nightly.read_broken_links(str(path)) == [], body
+    assert nightly.read_broken_links(str(tmp_path / "missing.json")) == []
+    assert nightly.read_broken_links(None) == []
+
+
+def test_the_workflow_samples_the_links_after_the_deploy_and_never_holds_the_run_back():
+    from awardwatch_pipeline import link_sample
+
+    text = WORKFLOW.read_text(encoding="utf-8")
+    names = [line.strip()[len("- name: "):] for line in text.splitlines() if line.strip().startswith("- name: ")]
+    at = names.index("Sample the outbound links")
+    # After the deploy and the steps that follow it, before the database is saved (the checks travel in the
+    # backup) and before the run status that records the outcome.
+    assert names[at - 1] == "Tell IndexNow which pages changed" and names[at + 1] == "Save the database to R2"
+    assert names.index("Deploy the Worker with the new data as assets") < at
+    assert at < names.index("Write the run status") < names.index("Items needing attention")
+    sample = step(text, "Sample the outbound links")
+    assert "id: link_sample" in sample and "continue-on-error: true" in sample and "timeout-minutes: 10" in sample
+    assert "if: ${{ !cancelled() && steps.verify.outputs.db_ok == 'true' }}" in sample
+    order = [
+        "out=data/out/links",
+        'echo "failed" > "$out/last_outcome.txt"',
+        f'python -m awardwatch_pipeline {link_sample.COMMAND} --db data/awardwatch.sqlite --out "$out"',
+    ]
+    places = [sample.index(line) for line in order]
+    assert places == sorted(places)
+    # The run status reads both files; no other step waits on this one.
+    status = step(text, "Write the run status")
+    assert f"--link-sample-outcome data/out/links/{link_sample.OUTCOME}" in status
+    assert f"--link-sample-broken data/out/links/{link_sample.BROKEN_FILE}" in status
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    assert "steps.link_sample" not in code

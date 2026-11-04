@@ -735,6 +735,26 @@ CREATE TABLE IF NOT EXISTS expiring_contracts (
 );
 CREATE INDEX IF NOT EXISTS idx_expiring_end ON expiring_contracts(end);
 
+-- Nightly link sampling (link_sample.py, docs/link-sampling.md): one row per
+-- government link checked, from the sample drawn each night. Rows older than
+-- link_sample.RETENTION_DAYS (60) are deleted by the night that writes the
+-- next ones. Never exported.
+CREATE TABLE IF NOT EXISTS link_checks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  checked_at TEXT NOT NULL,                      -- ISO datetime UTC, one value for a night's rows
+  data_date TEXT NOT NULL,                       -- the data date that seeded the draw
+  kind TEXT NOT NULL,                            -- tender | award | contract | grant | lobbying | portal
+  record_ref TEXT NOT NULL,                      -- the record the link belongs to: a notice's reference,
+                                                 -- '<owner_org>:<reference>', a communication number,
+                                                 -- 'dataset:<source>' or 'buyer:<buyer id>'
+  url TEXT NOT NULL,
+  method TEXT NOT NULL,                          -- HEAD, or GET when HEAD answered 405 or 501
+  status INTEGER,                                -- the final answer after redirects; NULL when none came
+  error TEXT,                                    -- why no answer came (the exception's name)
+  elapsed_ms INTEGER NOT NULL,                   -- the last attempt's time on the wire
+  attempts INTEGER NOT NULL                      -- 1, or 2 after a retry
+);
+
 -- ---------------------------------------------------------------------------
 -- Visitor submissions: the only tables the D1 database of the site holds.
 -- ---------------------------------------------------------------------------
