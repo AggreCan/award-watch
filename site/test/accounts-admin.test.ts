@@ -7,9 +7,9 @@
 // an address may ask for five codes an hour.
 import { Hono } from "hono";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { REASON_MAX, REFERENCE_MAX, addressNotice } from "../src/account/admin";
+import { ACCOUNT_CSV_HEAD, REASON_MAX, REFERENCE_MAX, addressNotice } from "../src/account/admin";
 import { CERTS_TTL_MS, accessEmail, forgetAccessCerts, teamHost } from "../src/account/admin_access";
-import { isBlocked, pausedSearches } from "../src/account/admin_ops";
+import { ACCOUNT_CSV_ROWS, ACCOUNT_MAX_PAGE, ACCOUNT_PAGE_SIZE, isBlocked, pausedSearches } from "../src/account/admin_ops";
 import { refundKey } from "../src/account/admin_stripe";
 import { requireApiKey } from "../src/account/api_keys";
 import { runDeliveries } from "../src/account/deliveries";
@@ -192,7 +192,8 @@ const withToken = (jwt: string) => ({ "cf-access-jwt-assertion": jwt });
 // =========================================================================================
 
 const getPaths = (id: string) => [
-  "/admin", "/admin?q=example", `/admin/users/${id}`, `/admin/users/${id}/block`, `/admin/users/${id}/email`, `/admin/users/${id}/cancel`,
+  "/admin", "/admin?q=example", "/admin/accounts", "/admin/accounts?plan=pro&sort=address&page=2", "/admin/accounts.csv",
+  `/admin/users/${id}`, `/admin/users/${id}/block`, `/admin/users/${id}/email`, `/admin/users/${id}/cancel`,
   `/admin/users/${id}/refund`, `/admin/users/${id}/delete`, "/admin/nothing",
 ];
 const postPaths = (id: string) => [
@@ -256,7 +257,7 @@ describe("who gets in", () => {
       expect(res.headers.get("x-robots-tag"), path).toBe("noindex, nofollow");
       expect(res.headers.get("content-security-policy"), path).toContain("default-src 'self'");
       expect(res.headers.get("x-frame-options"), path).toBe("DENY");
-      expect(await res.text(), path).toContain('<meta name="robots" content="noindex"/>');
+      expect(await res.text(), path).toContain(path.includes(".csv") ? `${ACCOUNT_CSV_HEAD.join(",")}\r\n` : '<meta name="robots" content="noindex"/>');
     }
     // An address under /admin with no route is the site's 404, past the guard as before it.
     const none = await adminGet(op, "/admin/nothing");
@@ -492,6 +493,322 @@ describe("the overview", () => {
     expect(html).toContain("Console de l’exploitant");
     expect(html).toContain("Trouver un compte");
     expect(html).not.toContain("Operator Console");
+  });
+});
+
+// =========================================================================================
+// The accounts table
+// =========================================================================================
+
+let tagSeq = 0;
+// An address start no other test's accounts share, so ?q= holds a test to its own.
+const newTag = () => `tbl${++tagSeq}x${Date.now().toString(36)}`;
+
+async function addUser(email: string, created: string, o: { lang?: string; status?: string } = {}): Promise<string> {
+  const id = hexId();
+  await ACCOUNTS.prepare("INSERT INTO users (id, email, created_at, lang, status, plan) VALUES (?, ?, ?, ?, ?, 'free')")
+    .bind(id, email, created, o.lang ?? "en", o.status ?? "active").run();
+  return id;
+}
+
+const addSession = (user: string, created: string) =>
+  ACCOUNTS.prepare("INSERT INTO sessions (id, user_id, token_hash, created_at, last_seen_at, expires_at) VALUES (?, ?, 'x', ?, ?, '2099-01-01T00:00:00.000Z')")
+    .bind(hexId(), user, created, created).run();
+
+const addKey = (user: string, revoked: string | null = null) =>
+  ACCOUNTS.prepare("INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at, revoked_at) VALUES (?, ?, 'k', 'h', 'abcd0123', ?, ?)")
+    .bind(hexId(), user, "2026-06-01T00:00:00.000Z", revoked).run();
+
+const addPayment = (user: string, status: string) =>
+  ACCOUNTS.prepare("INSERT INTO payment_customers (user_id, customer_id, subscription_id, status, current_period_end, updated_at) VALUES (?, ?, ?, ?, NULL, ?)")
+    .bind(user, `cus_${user.slice(-6)}`, `sub_${user.slice(-6)}`, status, new Date().toISOString()).run();
+
+// Five accounts under one tag, signed up a month apart (a oldest), so the
+// default order is e, d, c, b, a:
+//   a  free, English, nothing else
+//   b  Pro by hand to 2099-01-01, French, 2 searches (1 delivering), 1 live key and 1 revoked, subscription active
+//   c  blocked since 2026-10-01, 1 search (off), subscription past_due
+//   d  deleted, holding a live Pro row (a deleted account reads as free)
+//   e  a Stripe Pro row that ended, 3 searches (2 delivering), 2 live keys, subscription canceled
+async function seedAccounts(op: Operator) {
+  const tag = newTag();
+  const mail = (k: string) => `${tag}-${k}@example.com`;
+  const a = await addUser(mail("a"), "2026-01-01T00:00:00.000Z");
+  const b = await addUser(mail("b"), "2026-02-01T00:00:00.000Z", { lang: "fr" });
+  const c = await addUser(mail("c"), "2026-03-01T00:00:00.000Z");
+  const d = await addUser(mail("d"), "2026-04-01T00:00:00.000Z", { status: "deleted" });
+  const e = await addUser(mail("e"), "2026-05-01T00:00:00.000Z");
+  await entitle(b, { ends: "2099-01-01T00:00:00.000Z" });
+  await entitle(d);
+  await entitle(e, { source: "stripe", ends: "2026-02-01T00:00:00.000Z" });
+  await addSearch(b, "daily", "/tenders?segment=72");
+  await addSearch(b, "off", "/tenders?segment=43");
+  await addSearch(c, "off");
+  await addSearch(e, "weekly", "/tenders?segment=72");
+  await addSearch(e, "daily", "/tenders?segment=43");
+  await addSearch(e, "off", "/tenders?segment=10");
+  await addKey(b);
+  await addKey(b, "2026-07-01T00:00:00.000Z");
+  await addKey(e);
+  await addKey(e);
+  await addPayment(b, "active");
+  await addPayment(c, "past_due");
+  await addPayment(e, "canceled");
+  await addSession(b, "2026-10-30T09:00:00.000Z");
+  await addSession(b, "2026-08-01T09:00:00.000Z");
+  await addSession(c, "2026-09-15T09:00:00.000Z");
+  await addSession(e, "2026-11-01T09:00:00.000Z");
+  await ACCOUNTS.prepare("INSERT INTO account_blocks (user_id, reason, created_at, by_user_id) VALUES (?, 'test', '2026-10-01T12:00:00.000Z', ?)")
+    .bind(c, op.id).run();
+  return { tag, mail, a, b, c, d, e };
+}
+
+// The accounts the table lists, in its order.
+const listed = (html: string) => [...html.matchAll(/<a href="\/admin\/users\/([0-9a-f]{32})">/g)].map((m) => m[1]);
+
+// One account's row, as its labels and the text of its cells.
+function cells(html: string, id: string): Record<string, string> {
+  const at = html.indexOf(`<a href="/admin/users/${id}">`);
+  const row = html.slice(html.lastIndexOf("<tr>", at), html.indexOf("</tr>", at));
+  return Object.fromEntries([...row.matchAll(/<td data-label="([^"]*)">(.*?)<\/td>/g)].map((m) => [m[1], m[2].replace(/<[^>]+>/g, "")]));
+}
+
+describe("the accounts table", () => {
+  it("is linked from the overview and lists every account with its columns, newest sign-up first", async () => {
+    const op = await operator();
+    expect(await text(await adminGet(op, "/admin"))).toContain('href="/admin/accounts"');
+    const s = await seedAccounts(op);
+    const res = await adminGet(op, `/admin/accounts?q=${s.tag}`);
+    expect(res.status).toBe(200);
+    const html = await text(res);
+    expect(listed(html)).toEqual([s.e, s.d, s.c, s.b, s.a]);
+    expect(html).toContain("5 accounts, showing 1 to 5");
+    for (const head of ["Address", "Plan", "Status", "Blocked", "Signed up", "Last sign-in", "Saved searches", "Delivery on", "API keys", "Subscription", "Language"]) {
+      expect(html, head).toContain(`>${head}<`);
+    }
+    expect(cells(html, s.b)).toEqual({
+      Address: s.mail("b"), Plan: "Pro, until 2099-01-01", Status: "Active", Blocked: "No", "Signed up": "2026-02-01", "Last sign-in": "2026-10-30",
+      "Saved searches": "2", "Delivery on": "1", "API keys": "1", Subscription: "active", Language: "French",
+    });
+    expect(cells(html, s.c)).toMatchObject({ Blocked: "Yes, since 2026-10-01", Subscription: "past_due", "Saved searches": "1", "Delivery on": "0" });
+    expect(cells(html, s.d)).toMatchObject({ Plan: "Free", Status: "Deleted", "Last sign-in": "-", Subscription: "-" });
+    expect(cells(html, s.e)).toMatchObject({ Plan: "Free", "Saved searches": "3", "Delivery on": "2", "API keys": "2", Subscription: "canceled" });
+    expect(cells(html, s.a)).toMatchObject({ Plan: "Free", Blocked: "No", "Saved searches": "0", Language: "English" });
+    // The default column says so, and its heading reverses it with the filters kept.
+    expect(html).toMatch(/<th aria-sort="descending"><a href="\/admin\/accounts\?q=[a-z0-9]+&dir=asc">Signed up/);
+    expect(html).not.toContain(EM_DASH);
+  });
+
+  it("narrows by each filter, and by several at once", async () => {
+    const op = await operator();
+    const s = await seedAccounts(op);
+    const ids = async (query: string) => listed(await text(await adminGet(op, `/admin/accounts?q=${s.tag}&${query}`)));
+    const cases: [string, string[]][] = [
+      ["plan=pro", [s.b]], ["plan=free", [s.e, s.d, s.c, s.a]], ["plan=any", [s.e, s.d, s.c, s.b, s.a]],
+      ["status=deleted", [s.d]], ["status=active", [s.e, s.c, s.b, s.a]],
+      ["blocked=yes", [s.c]], ["blocked=no", [s.e, s.d, s.b, s.a]],
+      ["delivery=on", [s.e, s.b]], ["delivery=off", [s.d, s.c, s.a]],
+      ["subscription=active", [s.b]], ["subscription=past_due", [s.c]], ["subscription=canceled", [s.e]], ["subscription=none", [s.d, s.a]],
+      ["subscription=trialing", []],
+      ["language=fr", [s.b]], ["language=en", [s.e, s.d, s.c, s.a]],
+      ["plan=free&language=en&delivery=off", [s.d, s.c, s.a]], ["status=active&blocked=no&subscription=none", [s.a]],
+    ];
+    for (const [query, want] of cases) expect(await ids(query), query).toEqual(want);
+    // The address's start alone, and an address in full.
+    expect(listed(await text(await adminGet(op, `/admin/accounts?q=${encodeURIComponent(s.mail("c"))}`)))).toEqual([s.c]);
+    const none = await text(await adminGet(op, `/admin/accounts?q=${s.tag}&subscription=trialing`));
+    expect(none).toContain("No account matches.");
+    // Each filter's select shows the value in force.
+    expect(await text(await adminGet(op, `/admin/accounts?q=${s.tag}&plan=pro`))).toContain('<option value="pro" selected="">Pro now</option>');
+  });
+
+  it("sorts by any column both ways, its heading links keeping the filters", async () => {
+    const op = await operator();
+    const s = await seedAccounts(op);
+    const ids = async (query: string) => listed(await text(await adminGet(op, `/admin/accounts?q=${s.tag}&${query}`)));
+    expect(await ids("sort=address")).toEqual([s.a, s.b, s.c, s.d, s.e]);
+    expect(await ids("sort=address&dir=desc")).toEqual([s.e, s.d, s.c, s.b, s.a]);
+    // Saved searches: a and d hold none, and tie on the id, in the same direction.
+    expect(await ids("sort=searches&dir=asc")).toEqual([s.a, s.d, s.c, s.b, s.e]);
+    expect(await ids("sort=searches&dir=desc")).toEqual([s.e, s.b, s.c, s.d, s.a]);
+    expect(await ids("sort=created&dir=asc")).toEqual([s.a, s.b, s.c, s.d, s.e]);
+    // Every key sorts without a fault.
+    for (const key of ["plan", "status", "blocked", "sign_in", "delivery", "keys", "subscription", "language"]) {
+      for (const dir of ["asc", "desc"]) expect((await ids(`sort=${key}&dir=${dir}`)).sort(), `${key} ${dir}`).toEqual([s.a, s.b, s.c, s.d, s.e].sort());
+    }
+    expect(await ids("sort=sign_in&dir=desc")).toEqual([s.e, s.b, s.c, s.d, s.a]);
+    const html = await text(await adminGet(op, `/admin/accounts?q=${s.tag}&plan=free&sort=address`));
+    expect(html).toContain(`<th aria-sort="ascending"><a href="/admin/accounts?q=${s.tag}&plan=free&sort=address&dir=desc">Address`);
+    expect(html).toContain(`<a href="/admin/accounts?q=${s.tag}&plan=free&sort=searches">Saved searches</a>`);
+    expect(html).toContain(`<a href="/admin/accounts?q=${s.tag}&plan=free">Signed up</a>`);
+    // The filter form keeps the order.
+    expect(html).toContain('<input type="hidden" name="sort" value="address"/>');
+  });
+
+  it("ignores a sort, direction, filter or page value off its list, and runs nothing it is given", async () => {
+    const op = await operator();
+    const s = await seedAccounts(op);
+    const all = [s.e, s.d, s.c, s.b, s.a];
+    for (const query of [
+      `sort=${encodeURIComponent("created_at; DROP TABLE users")}`, `sort=${encodeURIComponent("email) --")}`, "sort=CREATED", "dir=sideways",
+      `dir=${encodeURIComponent("desc; DELETE FROM users")}`, "plan=enterprise", `subscription=${encodeURIComponent("' OR 1=1 --")}`,
+      "language=de", "blocked=maybe", "delivery=1", "status=", "page=-3", "page=1e3", "page=abc",
+    ]) {
+      const res = await adminGet(op, `/admin/accounts?q=${s.tag}&${query}`);
+      expect(res.status, query).toBe(200);
+      expect(listed(await text(res)), query).toEqual(all);
+    }
+    // A direction off the list on a valid key is that key's first direction.
+    expect(listed(await text(await adminGet(op, `/admin/accounts?q=${s.tag}&sort=address&dir=${encodeURIComponent("asc; --")}`))))
+      .toEqual([s.a, s.b, s.c, s.d, s.e]);
+    const csv = await adminGet(op, `/admin/accounts.csv?q=${s.tag}&sort=${encodeURIComponent("created_at; DROP TABLE users")}`);
+    expect(csv.status).toBe(200);
+    expect((await csv.text()).split("\r\n").slice(1, 6).map((l) => l.split(",")[0])).toEqual(all);
+    expect(await userRow(s.b)).toMatchObject({ status: "active" });
+    expect((await ACCOUNTS.prepare("SELECT COUNT(*) AS n FROM users WHERE email LIKE ?").bind(`${s.tag}%`).first<{ n: number }>())?.n).toBe(5);
+  });
+
+  it("pages 50 at a time, a page past the last showing the last, page 0 the first", async () => {
+    const op = await operator();
+    const tag = newTag();
+    const users = Array.from({ length: 120 }, (_, i) => ({
+      id: hexId(), email: `${tag}-${String(i).padStart(3, "0")}@example.com`, at: new Date(Date.UTC(2025, 0, 1, 0, i)).toISOString(),
+    }));
+    await ACCOUNTS.batch(users.map((u) => ACCOUNTS.prepare("INSERT INTO users (id, email, created_at, lang, status, plan) VALUES (?, ?, ?, 'en', 'active', 'free')")
+      .bind(u.id, u.email, u.at)));
+    const newest = [...users].reverse().map((u) => u.id);
+    const pageOf = async (query: string) => text(await adminGet(op, `/admin/accounts?q=${tag}&language=en${query}`));
+    const first = await pageOf("");
+    expect(ACCOUNT_PAGE_SIZE).toBe(50);
+    expect(listed(first)).toEqual(newest.slice(0, 50));
+    expect(first).toContain("120 accounts, showing 1 to 50");
+    expect(first).toContain("Page 1 of 3");
+    expect(first).toContain(`<a href="/admin/accounts?q=${tag}&language=en&page=2" class="btn" rel="next">`);
+    expect(first).not.toContain('rel="prev"');
+    expect(listed(await pageOf("&page=0"))).toEqual(newest.slice(0, 50));
+    expect(listed(await pageOf("&page=1"))).toEqual(newest.slice(0, 50));
+    const second = await pageOf("&page=2");
+    expect(listed(second)).toEqual(newest.slice(50, 100));
+    expect(second).toContain(`<a href="/admin/accounts?q=${tag}&language=en" class="btn" rel="prev">`);
+    for (const page of ["3", "4", "200", "10000", "999999"]) {
+      const last = await pageOf(`&page=${page}`);
+      expect(listed(last), page).toEqual(newest.slice(100));
+      expect(last, page).toContain("120 accounts, showing 101 to 120");
+      expect(last, page).toContain("Page 3 of 3");
+      expect(last, page).not.toContain('rel="next"');
+    }
+    // The order and the filters carry through the pages.
+    const byAddress = await pageOf("&sort=address&dir=desc&page=2");
+    expect(listed(byAddress)).toEqual([...users].reverse().slice(50, 100).map((u) => u.id));
+    expect(byAddress).toContain(`href="/admin/accounts?q=${tag}&language=en&sort=address&dir=desc&page=3"`);
+  });
+
+  it(`stops paging at page ${ACCOUNT_MAX_PAGE} and the CSV at ${ACCOUNT_CSV_ROWS} rows`, async () => {
+    const op = await operator();
+    const tag = newTag();
+    const total = ACCOUNT_CSV_ROWS + 50;
+    const idHead = (0xb0000000 + ++seq).toString(16).padStart(24, "0");
+    await ACCOUNTS.prepare(
+      "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < ?3 - 1) " +
+      "INSERT INTO users (id, email, created_at, lang, status, plan) " +
+      "SELECT ?1 || printf('%08x', i), ?2 || printf('-%05d@example.com', i), strftime('%Y-%m-%dT%H:%M:%fZ', '2024-01-01', '+' || i || ' minutes'), 'en', 'active', 'free' FROM n",
+    ).bind(idHead, tag, total).run();
+    try {
+      const html = await text(await adminGet(op, `/admin/accounts?q=${tag}&page=10000`));
+      expect(html).toContain("10,050 accounts, showing 9,951 to 10,000");
+      expect(html).toContain(`Page ${ACCOUNT_MAX_PAGE} of ${ACCOUNT_MAX_PAGE}`);
+      expect(html).toContain("Only the first 10,000 can be paged through");
+      expect(html).not.toContain('rel="next"');
+      const res = await adminGet(op, `/admin/accounts.csv?q=${tag}`);
+      const lines = (await res.text()).split("\r\n");
+      expect(lines[0]).toBe(ACCOUNT_CSV_HEAD.join(","));
+      expect(lines.at(-1)).toBe("");
+      expect(lines.length - 2).toBe(ACCOUNT_CSV_ROWS);
+      // Newest first: the 50 oldest are the ones left out.
+      expect(lines[1].split(",")[1]).toBe(`${tag}-${String(total - 1).padStart(5, "0")}@example.com`);
+      expect(lines.at(-2)!.split(",")[1]).toBe(`${tag}-00050@example.com`);
+    } finally {
+      await ACCOUNTS.prepare("DELETE FROM users WHERE id LIKE ?").bind(`${idHead}%`).run();
+    }
+  });
+
+  it("serves the view as a CSV: the same columns, filters and order, every page, no-store", async () => {
+    const op = await operator();
+    const s = await seedAccounts(op);
+    const res = await adminGet(op, `/admin/accounts.csv?q=${s.tag}&page=2`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(res.headers.get("content-disposition")).toMatch(/^attachment; filename="accounts-[0-9]{4}-[0-9]{2}-[0-9]{2}\.csv"$/);
+    const lines = (await res.text()).split("\r\n");
+    expect(lines[0]).toBe(
+      "user_id,address,plan,plan_until,status,blocked,blocked_at,signed_up,last_sign_in,saved_searches,delivery_on,api_keys,subscription,language",
+    );
+    expect(lines.slice(1, -1).map((l) => l.split(",")[0])).toEqual([s.e, s.d, s.c, s.b, s.a]);
+    expect(lines).toContain(
+      `${s.b},${s.mail("b")},pro,2099-01-01T00:00:00.000Z,active,no,,2026-02-01T00:00:00.000Z,2026-10-30T09:00:00.000Z,2,1,1,active,fr`,
+    );
+    expect(lines).toContain(
+      `${s.c},${s.mail("c")},free,,active,yes,2026-10-01T12:00:00.000Z,2026-03-01T00:00:00.000Z,2026-09-15T09:00:00.000Z,1,0,0,past_due,en`,
+    );
+    expect(lines).toContain(`${s.a},${s.mail("a")},free,,active,no,,2026-01-01T00:00:00.000Z,,0,0,0,,en`);
+    const filtered = (await (await adminGet(op, `/admin/accounts.csv?q=${s.tag}&delivery=on&sort=address`)).text()).split("\r\n");
+    expect(filtered.slice(1, -1).map((l) => l.split(",")[0])).toEqual([s.b, s.e]);
+    // The page's link carries the view, without its page.
+    const html = await text(await adminGet(op, `/admin/accounts?q=${s.tag}&delivery=on&sort=address&page=2`));
+    expect(html).toContain(`href="/admin/accounts.csv?q=${s.tag}&delivery=on&sort=address"`);
+    // A cell a spreadsheet would read as a formula is written as text.
+    const formula = await addUser(`=${s.tag}-f@example.com`, "2026-06-01T00:00:00.000Z");
+    const guarded = (await (await adminGet(op, `/admin/accounts.csv?q=${encodeURIComponent(`=${s.tag}`)}`)).text()).split("\r\n");
+    expect(guarded[1]).toBe(`${formula},'=${s.tag}-f@example.com,free,,active,no,,2026-06-01T00:00:00.000Z,,0,0,0,,en`);
+  });
+
+  it("reads every account as not blocked while account_blocks is missing", async () => {
+    const op = await operator();
+    const s = await seedAccounts(op);
+    const blocks = await ACCOUNTS.prepare("SELECT user_id, reason, created_at, by_user_id, paused FROM account_blocks").all();
+    await ACCOUNTS.prepare("DROP TABLE account_blocks").run();
+    try {
+      const html = await text(await adminGet(op, `/admin/accounts?q=${s.tag}`));
+      expect(listed(html)).toEqual([s.e, s.d, s.c, s.b, s.a]);
+      expect(cells(html, s.c).Blocked).toBe("No");
+      expect(listed(await text(await adminGet(op, `/admin/accounts?q=${s.tag}&blocked=yes`)))).toEqual([]);
+      expect((await adminGet(op, `/admin/accounts.csv?q=${s.tag}`)).status).toBe(200);
+    } finally {
+      await ACCOUNTS.prepare(
+        "CREATE TABLE IF NOT EXISTS account_blocks (user_id TEXT PRIMARY KEY REFERENCES users(id), reason TEXT, created_at TEXT NOT NULL, " +
+        "by_user_id TEXT NOT NULL REFERENCES users(id), paused TEXT)",
+      ).run();
+      for (const r of (blocks.results ?? []) as Record<string, string | null>[]) {
+        await ACCOUNTS.prepare("INSERT INTO account_blocks (user_id, reason, created_at, by_user_id, paused) VALUES (?, ?, ?, ?, ?)")
+          .bind(r.user_id, r.reason, r.created_at, r.by_user_id, r.paused).run();
+      }
+    }
+  });
+
+  it("is the site's 404 for a reader, a signed-out request, and anyone while the switch is off", async () => {
+    const op = await operator();
+    const r = await reader(op.env, "tbl-reader");
+    for (const path of ["/admin/accounts", "/admin/accounts.csv"]) {
+      expect((await get(path, { cookie: r.cookie, env: op.env })).status, `reader ${path}`).toBe(404);
+      expect((await get(path, { env: op.env })).status, `signed out ${path}`).toBe(404);
+      expect((await get(path, { cookie: op.cookie, env: { ...offEnv(), OPERATOR_EMAILS: op.email } })).status, `switch off ${path}`).toBe(404);
+      expect((await adminGet(op, path)).status, `operator ${path}`).toBe(200);
+    }
+  });
+
+  it("speaks French", async () => {
+    const op = await operator();
+    const s = await seedAccounts(op);
+    const html = await text(await adminGet(op, `/admin/accounts?lang=fr&q=${s.tag}`));
+    for (const w of [
+      "Comptes", "Inscription", "Dernière connexion", "Recherches enregistrées", "Envoi activé", "Clés d’API", "Abonnement", "Langue",
+      "Indifférent", "Gratuit maintenant", "Pro maintenant", "Activé pour au moins une recherche", "Aucun abonnement",
+      "5 comptes, affichage de 1 à 5", "Oui, depuis le 2026-10-01", "Français", "Télécharger le CSV", "Appliquer",
+    ]) expect(html, w).toContain(w);
+    for (const w of ["Signed up", "Last sign-in", "Download CSV", "Any<"]) expect(html, w).not.toContain(w);
+    expect(html).not.toContain(EM_DASH);
   });
 });
 
@@ -1173,6 +1490,8 @@ describe("the docs", () => {
       "`cancel_at_period_end=true`", "`DELETE /v1/subscriptions/<id>`", "`POST /v1/refunds`", `\`Idempotency-Key: ${refundKey("<charge id>")}\``,
       "`charge.refunded`", "Subscriptions write", "Refunds write", "Invoices and Charges read", "The console never shows card data.",
       `at most ${REFERENCE_MAX} characters`, `at most ${REASON_MAX} characters`, "`by <operator's user id>`", "`account_blocks`",
+      "`/admin/accounts`", "`/admin/accounts.csv`", "idx_users_created", `${ACCOUNT_PAGE_SIZE} to a page`, `page ${ACCOUNT_MAX_PAGE}`,
+      `${ACCOUNT_CSV_ROWS.toLocaleString("en-CA")} rows`, ACCOUNT_CSV_HEAD.join(","),
     ]) expect(section, s).toContain(s);
     expect(section).not.toContain(EM_DASH);
     // No mailbox is named: the only @ in the section is the character refused in a note.

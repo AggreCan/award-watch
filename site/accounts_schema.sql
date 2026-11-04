@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS users (
   plan_until TEXT,                               -- the end of the entitlement behind plan; NULL for none or no end
   deleted_at TEXT
 );
+-- The operator console's accounts table (/admin/accounts) opens newest
+-- sign-up first, by created_at and then id; this index reads its first page
+-- in that order without sorting every account.
+CREATE INDEX IF NOT EXISTS idx_users_created ON users(created_at, id);
 
 -- A sign-in request: a 6-digit code and a link token, sent together, either
 -- one good once, for 15 minutes. code_hash is SHA-256 of the row id and the

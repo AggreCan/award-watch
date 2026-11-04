@@ -881,6 +881,8 @@ delete the operator's own account.
   the last 7 days and in all, with the latest 10, once the `bug_reports`
   table exists; sign-in codes issued today (UTC); the last 20 audit
   events; and a search by user id or by address, exact or by its start.
+- `/admin/accounts`: every account in one table, filtered, sorted and
+  paged, with a CSV of the same view (*The accounts table*, below).
 - `/admin/users/<id>`: the user row (address, created, last seen,
   language, status, cached plan), the plan `planFor` computes, every
   entitlement row with a revoke button on those not revoked or ended, the
@@ -896,6 +898,75 @@ The console never shows card data. The Stripe objects it reads are used
 for ids, statuses, dates, an amount and its currency, shown once and not
 kept; nothing from a charge's card or billing details is read into the
 page.
+
+### The accounts table
+
+`/admin/accounts`, linked from the overview, lists every account, 50 to a
+page, newest sign-up first. Its columns: the address (linked to the
+account's page), the plan now, status, blocked (with the block's date),
+signed up, last sign-in, saved searches, saved searches with delivery on,
+live API keys (not revoked), the subscription's status and the account's
+language.
+
+- The plan is the one the deciding entitlement row gives, as `planFor`
+  picks it, with its end date when Pro. A deleted account reads as Free,
+  as in the overview's counts of Pro.
+- Last sign-in is the start of the account's newest session. Session rows
+  go 90 days after they end, so an account that has not signed in since
+  shows none.
+- Subscription is `payment_customers.status` as Stripe last notified it,
+  shown as stored; an account without the row shows none.
+
+The query parameters. Each value is checked against its list, and any
+other value, `any` included, sets no filter or falls back to the default
+order; no parameter's text reaches the SQL.
+
+| Parameter | Values |
+|---|---|
+| `q` | The start of an address, read lower-cased; `%` and `_` match only themselves. |
+| `plan` | `free`, `pro` |
+| `status` | `active`, `deleted` |
+| `blocked` | `yes`, `no` |
+| `delivery` | `on` (at least one saved search has delivery on), `off` |
+| `subscription` | `active`, `trialing`, `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `canceled`, `paused`, `none` (no row or no status) |
+| `language` | `en`, `fr`: the account's language. `lang` stays the page's own. |
+| `sort` | `address`, `plan`, `status`, `blocked`, `created` (the default), `sign_in`, `searches`, `delivery`, `keys`, `subscription`, `language` |
+| `dir` | `asc`, `desc`. Without it `created` sorts newest first and every other key ascending. |
+| `page` | 1 to 200. A page past the last shows the last. |
+
+Each column heading links to its sort with the filters kept, and the
+current column's heading reverses it. Each sort key maps to an ORDER BY
+written out in `admin_ops.ts`, and each filter is a bound parameter of one
+fixed statement. Paging stops at page 200 (10,000 accounts), as on the
+search page; filter to reach the rest.
+
+`/admin/accounts.csv` takes the same parameters and returns the current
+filters and order from the first row, whatever the page, at most 10,000
+rows, `Cache-Control: no-store`, as the attachment `accounts-<date>.csv`.
+Its header:
+
+```
+user_id,address,plan,plan_until,status,blocked,blocked_at,signed_up,last_sign_in,saved_searches,delivery_on,api_keys,subscription,language
+```
+
+Times are ISO in UTC, as stored. The user id stands in for the link each
+address carries on the page. The file holds every address in the view:
+keep it as the database itself would be kept. A cell starting with `=`,
+`+`, `-` or `@` gets a leading `'`, so a spreadsheet reads it as text.
+
+The default order reads the index `idx_users_created` on
+`users(created_at, id)`, next to the `users` table in
+`accounts_schema.sql`. Apply it on the account before deploying the
+table (applying the whole schema again does the same, since every
+statement in it is idempotent):
+
+```
+cd site
+npx wrangler d1 execute awardwatch-accounts --remote --command="CREATE INDEX IF NOT EXISTS idx_users_created ON users(created_at, id)"
+```
+
+Until it is applied the table still works, sorting every account for
+each page.
 
 ### Stripe key permissions
 

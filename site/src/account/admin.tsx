@@ -11,6 +11,8 @@
 //   5. when ACCESS_AUD is set: the token's address is the session's.
 //
 //   GET  /admin                                        counts, the last audit events, the search box (?q=)
+//   GET  /admin/accounts                               every account, filtered, sorted, 50 to a page
+//   GET  /admin/accounts.csv                           the same view as CSV, at most 10,000 rows
 //   GET  /admin/users/:id                              one account: rows, plan, subscription, activity, actions
 //   POST /admin/users/:id/grant                        Pro by hand (end date optional, reference required)
 //   POST /admin/users/:id/entitlements/:eid/revoke     revoke one row
@@ -32,15 +34,17 @@ import { isOwnAddress } from "../api";
 import { readForm } from "../body";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
+import { fmtInt, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { CONTACT_EMAIL } from "../pages/docs";
 import { EMAIL_MAX, normalizeEmail } from "../pages/interest";
 import { accessEmail, accessRequired } from "./admin_access";
 import {
-  type BlockRow, type Overview, type UserDetail, type UserHit, type UserRow, ID_RE, USER_DELIVERY_ROWS, WEEK_DAYS, blockAccount,
-  changeAddress, findUsers, grantPro, isBlocked, operatorAudit, operatorEmails, overview, revocable, revokeEntitlement, unblockAccount,
-  userDetail,
+  type AccountFilter, type AccountListRow, type AccountQuery, type AccountSort, type AccountsPage, type BlockRow, type Overview,
+  type UserDetail, type UserHit, type UserRow, ACCOUNT_CSV_ROWS, ACCOUNT_FILTERS, ACCOUNT_FILTER_NAMES, ACCOUNT_MAX_PAGE,
+  ACCOUNT_PAGE_SIZE, DEFAULT_SORT, ID_RE, USER_DELIVERY_ROWS, WEEK_DAYS, accountsForCsv, accountsPage, blockAccount, changeAddress,
+  findUsers, firstDir, grantPro, isBlocked, operatorAudit, operatorEmails, overview, readAccountQuery, revocable, revokeEntitlement,
+  unblockAccount, userDetail,
 } from "./admin_ops";
 import { type LiveSubscription, type PaidCharge, operatorStripe } from "./admin_stripe";
 import { endForDeletion } from "./billing";
@@ -199,10 +203,12 @@ const ConfirmBox: FC<{ lang: Lang }> = ({ lang }) => (
 const UserLink: FC<{ id: string | null }> = ({ id }) =>
   id ? <a href={`/admin/users/${id}`} class="mono">{id}</a> : <span class="muted">-</span>;
 
-const Table: FC<{ heads: string[]; rows: unknown[][] }> = ({ heads, rows }) => (
+// th, when given, writes each heading cell (the accounts table's sort links);
+// heads stay the labels a restacked row shows beside its cells.
+const Table: FC<{ heads: string[]; rows: unknown[][]; th?: (label: string, i: number) => unknown }> = ({ heads, rows, th }) => (
   <div class="table-wrap">
     <table class="restack">
-      <thead><tr>{heads.map((h) => <th>{h}</th>)}</tr></thead>
+      <thead><tr>{heads.map((h, i) => (th ? th(h, i) : <th>{h}</th>))}</tr></thead>
       <tbody>
         {rows.map((r) => <tr>{r.map((cell, i) => <td data-label={heads[i]}>{cell as any}</td>)}</tr>)}
       </tbody>
@@ -230,7 +236,8 @@ function overviewView(lang: Lang, o: Overview, search: { q: string; hits: UserHi
     : t(lang, "admin.none");
   return (
     <>
-      <PageHead lang={lang} title={t(lang, "admin.title")} lead={t(lang, "admin.lead")} />
+      <PageHead lang={lang} title={t(lang, "admin.title")} lead={t(lang, "admin.lead")}
+        actions={<a href="/admin/accounts" class="btn">{t(lang, "admin.accounts_link")}</a>} />
       <Panel title={t(lang, "admin.panel_find")} class="panel-form">
         <form method="get" action="/admin" class="stack" role="search">
           <label>
@@ -297,6 +304,180 @@ admin.get("/", async (c) => {
     return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }));
   });
 });
+
+// -- every account -----------------------------------------------------------------------------
+
+// The table's columns in order: the sort key each heading sets, and its label.
+const ACCOUNT_COLUMNS: [AccountSort, Key][] = [
+  ["address", "admin.col_address"], ["plan", "admin.col_plan"], ["status", "admin.col_status"], ["blocked", "admin.field_blocked"],
+  ["created", "admin.col_signed_up"], ["sign_in", "admin.col_sign_in"], ["searches", "admin.col_searches"],
+  ["delivery", "admin.col_delivery_on"], ["keys", "admin.col_keys"], ["subscription", "admin.col_subscription"],
+  ["language", "admin.field_lang"],
+];
+
+const FILTER_LABEL: Record<AccountFilter, Key> = {
+  plan: "admin.col_plan", status: "admin.col_status", blocked: "admin.field_blocked", delivery: "admin.col_delivery",
+  subscription: "admin.col_subscription", language: "admin.field_lang",
+};
+
+// A value without a word here is a Stripe status, shown as Stripe writes it.
+const OPTION_LABEL: { [K in AccountFilter]?: Partial<Record<string, Key>> } = {
+  plan: { free: "admin.plan_free_now", pro: "admin.plan_pro_now" },
+  status: { active: "admin.status_active", deleted: "admin.status_deleted" },
+  blocked: { yes: "admin.yes", no: "admin.no" },
+  delivery: { on: "admin.delivery_some", off: "admin.delivery_none" },
+  subscription: { none: "admin.sub_filter_none" },
+  language: { en: "admin.lang_en", fr: "admin.lang_fr" },
+};
+
+const optionLabel = (lang: Lang, name: AccountFilter, value: string) => {
+  const key = OPTION_LABEL[name]?.[value];
+  return key ? t(lang, key) : value;
+};
+
+// A view's query string without its defaults (no filter, the default order,
+// page 1), so the plain view is /admin/accounts.
+function accountsQuery(a: AccountQuery, page = a.page): string {
+  const p = new URLSearchParams();
+  if (a.q) p.set("q", a.q);
+  for (const name of ACCOUNT_FILTER_NAMES) {
+    const v = a.filters[name];
+    if (v) p.set(name, v);
+  }
+  if (a.sort !== DEFAULT_SORT) p.set("sort", a.sort);
+  if (a.dir !== firstDir(a.sort)) p.set("dir", a.dir);
+  if (page > 1) p.set("page", String(page));
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+// A heading's link: the same filters from the first page, its column's order
+// reversed when it is the current one.
+const sortHref = (a: AccountQuery, sort: AccountSort) =>
+  `/admin/accounts${accountsQuery({ ...a, sort, dir: a.sort === sort ? (a.dir === "asc" ? "desc" : "asc") : firstDir(sort) }, 1)}`;
+
+const FilterSelect: FC<{ lang: Lang; name: AccountFilter; value: string | null }> = ({ lang, name, value }) => (
+  <label class="field">
+    <span class="field-label">{t(lang, FILTER_LABEL[name])}</span>
+    <select name={name}>
+      <option value="">{t(lang, "admin.any")}</option>
+      {(ACCOUNT_FILTERS[name] as readonly string[]).map((v) => <option value={v} selected={v === value}>{optionLabel(lang, name, v)}</option>)}
+    </select>
+  </label>
+);
+
+function accountCells(lang: Lang, r: AccountListRow): unknown[] {
+  const count = (v: number) => <span class="mono">{fmtInt(v, lang)}</span>;
+  const dash = () => <span class="muted">-</span>;
+  return [
+    <a href={`/admin/users/${r.id}`}>{r.email}</a>, cachedPlan(lang, r), statusWord(lang, r.status),
+    r.blocked_at ? t(lang, "admin.blocked_on", { date: day(r.blocked_at) }) : t(lang, "admin.no"),
+    <span class="mono">{day(r.created_at)}</span>, r.last_sign_in ? <span class="mono">{day(r.last_sign_in)}</span> : dash(),
+    count(r.searches), count(r.delivering), count(r.live_keys), r.sub_status ? <span class="mono">{r.sub_status}</span> : dash(),
+    t(lang, r.lang === "fr" ? "admin.lang_fr" : "admin.lang_en"),
+  ];
+}
+
+function accountsView(lang: Lang, a: AccountQuery, p: AccountsPage) {
+  const n = (v: number) => fmtInt(v, lang);
+  const from = (p.page - 1) * ACCOUNT_PAGE_SIZE + 1;
+  const to = (p.page - 1) * ACCOUNT_PAGE_SIZE + p.rows.length;
+  const capped = p.total > ACCOUNT_MAX_PAGE * ACCOUNT_PAGE_SIZE;
+  const prev = p.page > 1 ? `/admin/accounts${accountsQuery(a, p.page - 1)}` : null;
+  const next = p.page < p.pages ? `/admin/accounts${accountsQuery(a, p.page + 1)}` : null;
+  const pager = p.pages > 1 || capped ? (
+    <nav aria-label={t(lang, "common.pagination")} class="pagination">
+      <span class="muted">
+        {t(lang, "tenders.page_of", { page: n(p.page), pages: n(p.pages) })}
+        {capped ? <> · {t(lang, "admin.accounts_cap", { n: n(ACCOUNT_MAX_PAGE * ACCOUNT_PAGE_SIZE) })}</> : null}
+      </span>
+      <span class="pages">
+        {prev ? <a href={prev} class="btn" rel="prev">{t(lang, "tenders.prev")}</a> : null}
+        {next ? <a href={next} class="btn" rel="next">{t(lang, "tenders.next")}</a> : null}
+      </span>
+    </nav>
+  ) : undefined;
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "admin.accounts_title")} lead={t(lang, "admin.accounts_lead", { n: n(ACCOUNT_CSV_ROWS) })}
+        actions={<>
+          <a href="/admin" class="btn">{t(lang, "admin.title")}</a>
+          <a href={`/admin/accounts.csv${accountsQuery(a, 1)}`} class="btn">{t(lang, "admin.accounts_csv")}</a>
+        </>} />
+      <form method="get" action="/admin/accounts" class="toolbar" aria-label={t(lang, "admin.accounts_filters")}>
+        <div class="toolbar-fields">
+          <label class="field field-text">
+            <span class="field-label">{t(lang, "admin.filter_address")}</span>
+            <input type="search" name="q" value={a.q} maxlength={EMAIL_MAX} autocomplete="off" spellcheck={false} />
+          </label>
+          {ACCOUNT_FILTER_NAMES.map((name) => <FilterSelect lang={lang} name={name} value={a.filters[name]} />)}
+          {/* The order stays when the filters change; the page goes back to the first. */}
+          {a.sort !== DEFAULT_SORT ? <input type="hidden" name="sort" value={a.sort} /> : null}
+          {a.dir !== firstDir(a.sort) ? <input type="hidden" name="dir" value={a.dir} /> : null}
+          <div class="toolbar-actions">
+            <button type="submit" class="btn btn-primary">{t(lang, "tenders.apply")}</button>
+            <a href="/admin/accounts" class="btn">{t(lang, "tenders.reset")}</a>
+          </div>
+        </div>
+      </form>
+      <Panel title={t(lang, "admin.accounts_title")} foot={pager}
+        count={p.total ? tn(lang, "admin.accounts_count_one", "admin.accounts_count_many", p.total, { n: n(p.total), from: n(from), to: n(to) }) : n(0)}>
+        {p.rows.length ? (
+          <Table heads={ACCOUNT_COLUMNS.map(([, key]) => t(lang, key))} rows={p.rows.map((r) => accountCells(lang, r))}
+            th={(label, i) => {
+              const key = ACCOUNT_COLUMNS[i][0];
+              const on = a.sort === key;
+              return (
+                <th aria-sort={on ? (a.dir === "asc" ? "ascending" : "descending") : undefined}>
+                  <a href={sortHref(a, key)}>{label}{on ? <span aria-hidden="true">{a.dir === "asc" ? " ↑" : " ↓"}</span> : null}</a>
+                </th>
+              );
+            }} />
+        ) : <p class="muted">{t(lang, "admin.find_none")}</p>}
+      </Panel>
+    </>
+  );
+}
+
+const readAccounts = (c: Context<AppEnv>) => readAccountQuery((name) => c.req.query(name));
+
+admin.get("/accounts", (c) => {
+  const lang = c.get("lang");
+  return guarded(c, async () => {
+    const a = readAccounts(c);
+    const p = await accountsPage(c.env, a);
+    const title = t(lang, "admin.accounts_title");
+    return adminPage(c, p.page > 1 ? `${title}, ${t(lang, "common.page_n", { n: fmtInt(p.page, lang) })}` : title, accountsView(lang, a, p));
+  });
+});
+
+export const ACCOUNT_CSV_HEAD = [
+  "user_id", "address", "plan", "plan_until", "status", "blocked", "blocked_at", "signed_up", "last_sign_in", "saved_searches",
+  "delivery_on", "api_keys", "subscription", "language",
+];
+
+// Quoted as RFC 4180 has it. A cell a spreadsheet would read as a formula
+// gets a leading apostrophe: an address may start with =, + or -.
+const csvCell = (v: string | number | null): string => {
+  const s = v === null ? "" : /^[=+\-@\t\r]/.test(String(v)) ? `'${v}` : String(v);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+// The view's rows from the first, whatever page it showed. The user id
+// stands in for the link each address carries on the page.
+admin.get("/accounts.csv", (c) =>
+  guarded(c, async () => {
+    const rows = await accountsForCsv(c.env, readAccounts(c));
+    const lines = rows.map((r) => [
+      r.id, r.email, r.plan, r.plan_until, r.status, r.blocked_at ? "yes" : "no", r.blocked_at, r.created_at, r.last_sign_in,
+      r.searches, r.delivering, r.live_keys, r.sub_status, r.lang,
+    ].map(csvCell).join(","));
+    return c.body([ACCOUNT_CSV_HEAD.join(","), ...lines, ""].join("\r\n"), 200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="accounts-${new Date().toISOString().slice(0, 10)}.csv"`,
+      "Cache-Control": "no-store",
+    });
+  }));
 
 // -- one account -------------------------------------------------------------------------------
 

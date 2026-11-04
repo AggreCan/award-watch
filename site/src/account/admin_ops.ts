@@ -254,6 +254,10 @@ export async function overview(env: Env, now = new Date()): Promise<Overview> {
 export const SEARCH_HITS = 20;
 export const ID_RE = /^[0-9a-f]{32}$/;
 
+// A LIKE pattern for an address's start, read with ESCAPE '\': the
+// wildcards an address may hold (% and _) match only themselves.
+const likePrefix = (q: string) => `${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+
 // The search box: a user id, or an address, exact or by its start.
 export async function findUsers(env: Env, raw: string): Promise<UserHit[]> {
   const q = raw.trim().toLowerCase().slice(0, 254);
@@ -261,9 +265,161 @@ export async function findUsers(env: Env, raw: string): Promise<UserHit[]> {
   const db = env.ACCOUNTS!;
   const cols = "SELECT id, email, status, plan, plan_until, created_at FROM users";
   if (ID_RE.test(q)) return (await db.prepare(`${cols} WHERE id = ?`).bind(q).all<UserHit>()).results ?? [];
-  const prefix = `${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
   return (await db.prepare(`${cols} WHERE email = ?1 OR email LIKE ?2 ESCAPE '\\' ORDER BY email = ?1 DESC, email LIMIT ?3`)
-    .bind(q, prefix, SEARCH_HITS).all<UserHit>()).results ?? [];
+    .bind(q, likePrefix(q), SEARCH_HITS).all<UserHit>()).results ?? [];
+}
+
+// -- reads: the accounts table -------------------------------------------------------------
+
+export const ACCOUNT_PAGE_SIZE = 50;
+export const ACCOUNT_MAX_PAGE = 200;
+export const ACCOUNT_CSV_ROWS = 10_000;
+
+// The values each filter takes; anything else, "any" included, sets no
+// filter. subscription is Stripe's status as payment_customers stores it,
+// or none for an account with no row or no status.
+export const ACCOUNT_FILTERS = {
+  plan: ["free", "pro"],
+  status: ["active", "deleted"],
+  blocked: ["yes", "no"],
+  delivery: ["on", "off"],
+  subscription: ["active", "trialing", "past_due", "unpaid", "incomplete", "incomplete_expired", "canceled", "paused", "none"],
+  language: ["en", "fr"],
+} as const;
+
+export type AccountFilter = keyof typeof ACCOUNT_FILTERS;
+export const ACCOUNT_FILTER_NAMES = Object.keys(ACCOUNT_FILTERS) as AccountFilter[];
+
+export const ACCOUNT_SORTS = [
+  "address", "plan", "status", "blocked", "created", "sign_in", "searches", "delivery", "keys", "subscription", "language",
+] as const;
+export type AccountSort = (typeof ACCOUNT_SORTS)[number];
+export type SortDir = "asc" | "desc";
+export const DEFAULT_SORT: AccountSort = "created";
+
+// Each sort key's ORDER BY, written out in full: a request picks a key and a
+// direction from these lists, and its own text never reaches the SQL. The id
+// comes last so rows with equal values keep one order from page to page.
+const ORDER_BY: Record<AccountSort, Record<SortDir, string>> = {
+  address: { asc: "email ASC, id ASC", desc: "email DESC, id DESC" },
+  plan: { asc: "plan ASC, plan_until ASC, id ASC", desc: "plan DESC, plan_until DESC, id DESC" },
+  status: { asc: "status ASC, id ASC", desc: "status DESC, id DESC" },
+  blocked: { asc: "blocked_at ASC, id ASC", desc: "blocked_at DESC, id DESC" },
+  created: { asc: "created_at ASC, id ASC", desc: "created_at DESC, id DESC" },
+  sign_in: { asc: "last_sign_in ASC, id ASC", desc: "last_sign_in DESC, id DESC" },
+  searches: { asc: "searches ASC, id ASC", desc: "searches DESC, id DESC" },
+  delivery: { asc: "delivering ASC, id ASC", desc: "delivering DESC, id DESC" },
+  keys: { asc: "live_keys ASC, id ASC", desc: "live_keys DESC, id DESC" },
+  subscription: { asc: "sub_status ASC, id ASC", desc: "sub_status DESC, id DESC" },
+  language: { asc: "lang ASC, id ASC", desc: "lang DESC, id DESC" },
+};
+
+export type AccountQuery = {
+  q: string;
+  filters: { [K in AccountFilter]: (typeof ACCOUNT_FILTERS)[K][number] | null };
+  sort: AccountSort;
+  dir: SortDir;
+  page: number;
+};
+
+const oneOf = <T extends string>(list: readonly T[], v: string | undefined): T | null =>
+  v !== undefined && (list as readonly string[]).includes(v) ? (v as T) : null;
+
+// The direction a key sorts in until its heading is clicked again: the
+// default key newest first, every other key ascending.
+export const firstDir = (sort: AccountSort): SortDir => (sort === DEFAULT_SORT ? "desc" : "asc");
+
+// The table's parameters from the request's query. Every value is checked
+// against the lists above, and one that is not on them reads as unset. q, an
+// address's start, is the only text, and it is bound as a LIKE pattern.
+export function readAccountQuery(get: (name: string) => string | undefined): AccountQuery {
+  const filters = {} as Record<AccountFilter, string | null>;
+  for (const name of ACCOUNT_FILTER_NAMES) filters[name] = oneOf(ACCOUNT_FILTERS[name], get(name));
+  const sort = oneOf(ACCOUNT_SORTS, get("sort")) ?? DEFAULT_SORT;
+  const rawPage = get("page") ?? "";
+  return {
+    q: (get("q") ?? "").trim().toLowerCase().slice(0, 254),
+    filters: filters as AccountQuery["filters"],
+    sort,
+    dir: oneOf(["asc", "desc"] as const, get("dir")) ?? firstDir(sort),
+    page: /^[0-9]{1,6}$/.test(rawPage) ? Math.min(Math.max(1, Number(rawPage)), ACCOUNT_MAX_PAGE) : 1,
+  };
+}
+
+export type AccountListRow = {
+  id: string; email: string; created_at: string; lang: string; status: string; plan: string; plan_until: string | null;
+  blocked_at: string | null; last_sign_in: string | null; searches: number; delivering: number; live_keys: number; sub_status: string | null;
+};
+
+// One row per account, ?1 the moment. The plan is the deciding entitlement
+// row's, as planFromRows picks it, under the overview's rule for Pro now (an
+// active account only). The last sign-in is the newest session's start, so
+// an account whose sessions have all been swept (90 days after they end)
+// shows none. A database without account_blocks reads every account as not
+// blocked, as the rest of the console does.
+const accountsWith = (blocks: boolean) =>
+  "WITH a AS (SELECT u.id, u.email, u.created_at, u.lang, u.status, " +
+  "CASE WHEN u.status = 'active' AND e.plan = 'pro' THEN 'pro' ELSE 'free' END AS plan, " +
+  "CASE WHEN u.status = 'active' AND e.plan = 'pro' THEN e.ends_at END AS plan_until, " +
+  "b.created_at AS blocked_at, p.status AS sub_status, " +
+  "(SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS last_sign_in, " +
+  "(SELECT COUNT(*) FROM saved_searches q WHERE q.user_id = u.id) AS searches, " +
+  "(SELECT COUNT(*) FROM saved_searches q WHERE q.user_id = u.id AND q.deliver != 'off') AS delivering, " +
+  "(SELECT COUNT(*) FROM api_keys k WHERE k.user_id = u.id AND k.revoked_at IS NULL) AS live_keys " +
+  "FROM users u " +
+  "LEFT JOIN entitlements e ON e.id = (SELECT x.id FROM entitlements x WHERE x.user_id = u.id AND x.revoked_at IS NULL " +
+  "AND x.starts_at <= ?1 AND (x.ends_at IS NULL OR x.ends_at > ?1) ORDER BY x.created_at DESC, x.id DESC LIMIT 1) " +
+  (blocks ? "LEFT JOIN account_blocks b ON b.user_id = u.id " : "LEFT JOIN (SELECT NULL AS user_id, NULL AS created_at WHERE 0) b ON b.user_id = u.id ") +
+  "LEFT JOIN payment_customers p ON p.user_id = u.id) ";
+
+// Every filter is in the text, and an unset one is bound as NULL and passes
+// every row, so the statement's text is the same whatever the request.
+const ACCOUNT_WHERE =
+  "WHERE (?2 IS NULL OR email LIKE ?2 ESCAPE '\\') AND (?3 IS NULL OR plan = ?3) AND (?4 IS NULL OR status = ?4) " +
+  "AND (?5 IS NULL OR (blocked_at IS NOT NULL) = (?5 = 'yes')) AND (?6 IS NULL OR (delivering > 0) = (?6 = 'on')) " +
+  "AND (?7 IS NULL OR COALESCE(sub_status, 'none') = ?7) AND (?8 IS NULL OR lang = ?8) ";
+
+const accountBinds = (a: AccountQuery, now: Date) => {
+  const f = a.filters;
+  return [now.toISOString(), a.q ? likePrefix(a.q) : null, f.plan, f.status, f.blocked, f.delivery, f.subscription, f.language];
+};
+
+async function withBlocks<T>(run: (blocks: boolean) => Promise<T>): Promise<T> {
+  try {
+    return await run(true);
+  } catch (e) {
+    if (missingTable(e)) return run(false);
+    throw e;
+  }
+}
+
+export type AccountsPage = { rows: AccountListRow[]; total: number; page: number; pages: number };
+
+// The page asked for, in one batch with the count. A page past the last (an
+// old link, a hand-edited number) shows the last, as the search page does.
+export async function accountsPage(env: Env, a: AccountQuery, now = new Date()): Promise<AccountsPage> {
+  const db = env.ACCOUNTS!;
+  const binds = accountBinds(a, now);
+  return withBlocks(async (blocks) => {
+    const head = accountsWith(blocks);
+    const select = (page: number) =>
+      db.prepare(`${head}SELECT * FROM a ${ACCOUNT_WHERE}ORDER BY ${ORDER_BY[a.sort][a.dir]} LIMIT ?9 OFFSET ?10`)
+        .bind(...binds, ACCOUNT_PAGE_SIZE, (page - 1) * ACCOUNT_PAGE_SIZE);
+    const [count, first] = await db.batch([db.prepare(`${head}SELECT COUNT(*) AS n FROM a ${ACCOUNT_WHERE}`).bind(...binds), select(a.page)]);
+    const total = (count.results?.[0] as { n: number } | undefined)?.n ?? 0;
+    const pages = Math.max(1, Math.min(Math.ceil(total / ACCOUNT_PAGE_SIZE), ACCOUNT_MAX_PAGE));
+    const page = Math.min(a.page, pages);
+    const rows = page === a.page ? first.results ?? [] : (await select(page).all()).results ?? [];
+    return { rows: rows as AccountListRow[], total, page, pages };
+  });
+}
+
+// The same rows for the CSV, from the first, at most ACCOUNT_CSV_ROWS.
+export async function accountsForCsv(env: Env, a: AccountQuery, now = new Date()): Promise<AccountListRow[]> {
+  const db = env.ACCOUNTS!;
+  return withBlocks(async (blocks) =>
+    (await db.prepare(`${accountsWith(blocks)}SELECT * FROM a ${ACCOUNT_WHERE}ORDER BY ${ORDER_BY[a.sort][a.dir]} LIMIT ?9`)
+      .bind(...accountBinds(a, now), ACCOUNT_CSV_ROWS).all<AccountListRow>()).results ?? []);
 }
 
 // -- reads: one account ---------------------------------------------------------------------
