@@ -1639,8 +1639,8 @@ const STRINGS = {
   },
   "data.api_keys_link": { en: "API keys", fr: "clés d'API" },
   "data.licence_text": {
-    en: "Every source but the Registry of Lobbyists is published under the {ogl}, and so are the site's files. Reuse them freely with the attribution below. The registry's reports come under the Commissioner of Lobbying's own {odla}, which the site will follow once it reads them.",
-    fr: "Chaque source, sauf le Registre des lobbyistes, est publiée sous la {ogl}, tout comme les fichiers du site. Réutilisez-les librement avec la mention ci-dessous. Les rapports du registre relèvent de l'{odla} du commissaire au lobbying, que le site suivra lorsqu'il les lira.",
+    en: "Every source but the Registry of Lobbyists is published under the {ogl}, and so are the site's files. Reuse them freely with the attribution below. The registry's reports come under the Commissioner of Lobbying's own {odla}, which the site follows.",
+    fr: "Chaque source, sauf le Registre des lobbyistes, est publiée sous la {ogl}, tout comme les fichiers du site. Réutilisez-les librement avec la mention ci-dessous. Les rapports du registre relèvent de l'{odla} du commissaire au lobbying, que le site suit.",
   },
   "data.odla": {
     en: "Open Data Licence Agreement",
@@ -1668,8 +1668,8 @@ const STRINGS = {
   },
   "data.lic.ogl_terms": { en: "Open Government Licence, Canada", fr: "Licence du gouvernement ouvert, Canada" },
   "data.lic.odla_terms": {
-    en: "Open Data Licence Agreement, Office of the Commissioner of Lobbying (not loaded yet)",
-    fr: "Accord de licence de données ouvertes, Commissariat au lobbying (pas encore chargé)",
+    en: "Open Data Licence Agreement, Office of the Commissioner of Lobbying",
+    fr: "Accord de licence de données ouvertes, Commissariat au lobbying",
   },
   "data.lic.computed_terms": {
     en: "Open Government Licence, Canada, as information derived from the sources",
@@ -1733,8 +1733,8 @@ const STRINGS = {
     fr: "Divulgation proactive des subventions et contributions : chaque accord conclu avec une organisation, lu chaque semaine.",
   },
   "methodology.src_lobbying": {
-    en: "Registry of Lobbyists: the monthly communication reports, read weekly when the registry's host answers.",
-    fr: "Registre des lobbyistes : les rapports mensuels de communication, lus chaque semaine lorsque l'hôte du registre répond.",
+    en: "Registry of Lobbyists: the monthly communication reports, read weekly from the registry's export or, while its host refuses the pipeline, from a copy of that export (the operator's download, refreshed monthly, or the Internet Archive's newest capture), under the registry's open data licence.",
+    fr: "Registre des lobbyistes : les rapports mensuels de communication, lus chaque semaine à partir de l'exportation du registre ou, lorsque son hôte refuse le pipeline, d'une copie de cette exportation (le téléchargement de l'exploitant, renouvelé chaque mois, ou la plus récente capture d'Internet Archive), sous la licence de données ouvertes du registre.",
   },
   "methodology.src_registry": {
     en: "Corporations Canada: the federal corporations extract, read weekly and matched to organizations by name.",

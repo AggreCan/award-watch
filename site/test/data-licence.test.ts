@@ -80,8 +80,8 @@ describe("data page", () => {
     expect(lic).toContain('Every source but the Registry of Lobbyists is published under the <a href="https://open.canada.ca/en/open-government-licence-canada">Open Government Licence, Canada</a>, and so are the site&#39;s files.');
     // The registry publishes under the Commissioner of Lobbying's Open Data Licence Agreement, not the OGL.
     const odla = '<a href="https://lobbycanada.gc.ca/en/open-data/open-data-licence-agreement/">';
-    expect(lic).toContain(`${odla}Open Data Licence Agreement</a>, which the site will follow once it reads them.`);
-    expect(lic).toContain(`${odla}Open Data Licence Agreement, Office of the Commissioner of Lobbying (not loaded yet)</a>`);
+    expect(lic).toContain(`${odla}Open Data Licence Agreement</a>, which the site follows.`);
+    expect(lic).toContain(`${odla}Open Data Licence Agreement, Office of the Commissioner of Lobbying</a>`);
     expect(section(html, "sources")).toContain(`${odla}Open Data Licence Agreement</a>`);
     expect(lic).toContain("Contains information licensed under the Open Government Licence, Canada.");
     expect(lic).toContain("The site&#39;s merged organizations, buyer mapping, totals and rankings");
