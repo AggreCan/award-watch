@@ -38,8 +38,10 @@ class FakeSession:
 @pytest.fixture(autouse=True)
 def out_dir(tmp_path, monkeypatch):
     # Nothing a test runs writes into the repository's data/out (the review
-    # lists of withheld names go there in a real run).
+    # lists of withheld names go there in a real run), and no stage reads a
+    # seed copy the operator left in the repository's data/seeds.
     monkeypatch.setattr(config, "OUT_DIR", tmp_path / "out")
+    monkeypatch.setattr(config, "SEEDS_DIR", tmp_path / "seeds")
     return tmp_path / "out"
 
 

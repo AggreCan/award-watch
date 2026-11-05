@@ -121,13 +121,16 @@ PERSON_TEST_VERSION = 6
 # person's name.
 EMAIL_IN_NAME_RE = re.compile(r"[\w.+%'-]+@[\w-]+(?:\.[\w-]+)+")
 PERSON_TEST_KEY = "person_test_version"
-# The meta keys that let a loader skip a file: checksums, the validators of
-# its conditional request, and the weekly check. A refused lobbying download
-# keeps its hold (lobbying:refused_*): a new person test is no reason to ask again.
+# The meta keys that let a loader skip a file: checksums (a stand-in copy's
+# too), the validators of its conditional request, and the weekly check. A
+# refused lobbying download keeps its hold (lobbying:refused_*): a new person
+# test is no reason to ask again. The date of the lobbying copy loaded last
+# (lobbying:file_date) stays too: an older copy is still never read.
 SKIP_KEY_PATTERNS = (
     "canadabuys:%:sha256", "canadabuys:%:etag", "canadabuys:%:last_modified", "canadabuys:%:read_at",
     *(f"{stage}:{item}" for stage in ("contracts", "grants", "lobbying")
-      for item in ("sha256", "etag", "last_modified", "read_at", "rejected", "rejected_sha256")),
+      for item in ("sha256", "etag", "last_modified", "read_at", "rejected", "rejected_sha256", "seed_sha256",
+                   "archive_sha256")),
     "contracts_loaded_at", "grants_loaded_at", "lobbying_loaded_at",
 )
 # The CanadaBuys stages whose legacy file is to be read again (canadabuys.plan

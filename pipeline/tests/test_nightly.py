@@ -1075,3 +1075,28 @@ def test_the_workflow_samples_the_links_after_the_deploy_and_never_holds_the_run
     assert f"--link-sample-broken data/out/links/{link_sample.BROKEN_FILE}" in status
     code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
     assert "steps.link_sample" not in code
+
+
+def test_the_workflow_fetches_the_seed_copy_before_the_stages_and_never_uploads_it():
+    from awardwatch_pipeline import config
+    from awardwatch_pipeline.sources import lobbying
+
+    text = WORKFLOW.read_text(encoding="utf-8")
+    names = [line.strip()[len("- name: "):] for line in text.splitlines() if line.strip().startswith("- name: ")]
+    at = names.index("Fetch the operator's seed copies")
+    assert names[at - 1] == "Restore the database from R2" and names[at + 1] == "Run every stage"
+    fetch = step(text, "Fetch the operator's seed copies")
+    # A copy that cannot be fetched never stops the run.
+    assert "continue-on-error: true" in fetch
+    # The file the lobbying stage looks for, where it looks (config.SEEDS_DIR, which the tests point
+    # elsewhere), from the bucket's seeds/ prefix, through a .part so a failed download leaves nothing
+    # for the stage to read.
+    assert 'SEEDS_DIR = DATA_DIR / "seeds"' in Path(config.__file__).read_text(encoding="utf-8")
+    assert config.DATA_DIR.relative_to(config.REPO_ROOT).as_posix() == "data"
+    assert f"f={lobbying.SPEC.file_name}\n" in fetch and "BUCKET: awardwatch-data" in text
+    get = '"$WRANGLER" r2 object get --remote "$BUCKET/seeds/$f" --file "data/seeds/$f.part"'
+    assert get in fetch and fetch.index(get) < fetch.index('mv "data/seeds/$f.part" "data/seeds/$f"')
+    # No other step touches the copies: nothing uploads them, and the download cache is another folder.
+    rest = text.replace(fetch, "")
+    assert [line for line in rest.splitlines() if "seeds" in line and not line.lstrip().startswith("#")] == []
+    assert text.count("path: data/raw/cache") == 2

@@ -51,4 +51,14 @@ open.canada.ca), the Registry of Lobbyists' monthly communication reports
 Canada. The Data page on the site lists each file, its publisher and the date
 it was last read.
 
+The Registry of Lobbyists' host has refused this project's requests since
+2026-10-31. While it does, the lobbying stage reads the registry's export from
+a copy the operator downloaded by hand and keeps in R2, or from the Internet
+Archive's newest capture of the same file when that capture holds a newer
+export. Only captures the archive already holds are read; the pipeline never
+asks the archive to fetch the registry. The registry's Open Data Licence
+Agreement permits this reuse. The run's notices name the copy read and the
+start of its SHA-256. The stage still asks the registry's host first every
+week, and the live file takes over the first time the host answers.
+
 The code is source-available; see `LICENSE.md`.

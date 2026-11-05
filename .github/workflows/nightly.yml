@@ -15,8 +15,9 @@
 # delay, a runner fault or a Cloudflare API error is retried the same day with
 # no one involved, and a clean day costs two gate jobs of a minute each.
 #
-# Steps: restore the SQLite file from R2 (saved in parts), run every pipeline
-# stage (the buyers, the CanadaBuys tender and award notices and contract
+# Steps: restore the SQLite file from R2 (saved in parts), fetch the
+# operator's seed copies (read only while a source's host refuses), run every
+# pipeline stage (the buyers, the CanadaBuys tender and award notices and contract
 # history, the published contracts, the grants and contributions, the
 # lobbying communications, the federal corporations registry, then the
 # organizations, the yearly figures and the export), check the database and
@@ -317,6 +318,26 @@ jobs:
           # resource of the night, so the parts go now.
           rm -f data/restore/*.gz.[0-9][0-9][0-9]
           df -h --output=avail,pcent . | tail -1 | sed 's/^/disk after the restore: /'
+
+      # The operator's own copy of a source file whose host refuses this
+      # project's requests (the Registry of Lobbyists' zip), kept in R2 under
+      # seeds/. The lobbying stage reads it only while the registry's host
+      # refuses (config.SEEDS_DIR, sources/lobbying.py). A copy that cannot be
+      # fetched leaves the stage to the Internet Archive's capture or to
+      # recording the refusal, so the step never stops the run. No step uploads
+      # data/seeds: a new copy goes to R2 by hand.
+      - name: Fetch the operator's seed copies
+        continue-on-error: true
+        run: |
+          f=communications_ocl_cal.zip
+          mkdir -p data/seeds
+          # A .part first, so a failed download never leaves a broken copy for the stage.
+          if ! "$WRANGLER" r2 object get --remote "$BUCKET/seeds/$f" --file "data/seeds/$f.part"; then
+            rm -f "data/seeds/$f.part"
+            exit 1
+          fi
+          mv "data/seeds/$f.part" "data/seeds/$f"
+          ls -l data/seeds
 
       # A non-zero exit marks the run failed, and the steps below still check
       # and save what the run produced.

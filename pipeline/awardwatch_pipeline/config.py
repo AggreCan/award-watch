@@ -16,6 +16,11 @@ CACHE_DIR = RAW_DIR / "cache"
 WORK_DIR = RAW_DIR / "work"
 # The 2026-10-31 downloads a dev run reads with --samples instead of fetching.
 SAMPLES_DIR = RAW_DIR / "samples"
+# The operator's own copies of a source file, downloaded by hand under the
+# publisher's licence for a host that refuses this project's requests. The
+# nightly workflow fetches them from R2 (seeds/); a stage reads one only while
+# its host refuses (sources/lobbying), and nothing writes here.
+SEEDS_DIR = DATA_DIR / "seeds"
 OUT_DIR = DATA_DIR / "out"
 DEFAULT_DB = DATA_DIR / "awardwatch.sqlite"
 SCHEMA_PATH = REPO_ROOT / "pipeline" / "schema.sql"
@@ -80,5 +85,13 @@ GRANTS_URL = f"https://open.canada.ca/data/dataset/{GRANTS_DATASET}/resource/{GR
 
 # Registry of Lobbyists, monthly communication reports.
 LOBBYING_URL = "https://lobbycanada.gc.ca/media/mqbbmaqk/communications_ocl_cal.zip"
+# The Internet Archive's captures of that file, read only while the registry's
+# host refuses this project, and only those the archive already holds: its
+# index for the newest capture that answered 200 (limit=-1 is the index's
+# documented "last result"), then that capture's original bytes (id_). Nothing
+# here asks the archive to fetch the registry.
+LOBBYING_ARCHIVE_INDEX = ("https://web.archive.org/cdx/search/cdx?url=" + LOBBYING_URL.split("://", 1)[1]
+                          + "&output=json&filter=statuscode:200&fl=timestamp,digest,length&limit=-1")
+LOBBYING_ARCHIVE_CAPTURE = "https://web.archive.org/web/{timestamp}id_/" + LOBBYING_URL
 
 ORGBOOK_SEARCH = "https://orgbook.gov.bc.ca/api/v4/search/topic"

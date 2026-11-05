@@ -1,6 +1,8 @@
 # data: raw downloads and pipeline outputs are rebuilt, never committed
 data/raw/
 data/out/
+# the operator's seed copies (data/seeds) come from R2 and stay out of the repository
+data/seeds/
 data/*.sqlite
 data/*.sqlite-journal
 data/*.sqlite-wal

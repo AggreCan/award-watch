@@ -21,9 +21,29 @@ layout: the stage fails and the previous rows stay.
 Downloads go through the polite client only, under its named user agent,
 once a week (meta lobbying_loaded_at), as a conditional request, with the
 cadence, checksum and refused-layout rules of contracts.refresh. A refusal
-(any 4xx) is not worked around: the stage records it as a notice, keeps the
-rows it has, and does not ask again for REFUSAL_HOLD_DAYS. A 5xx or a timeout
-is a failed stage, tried again on the next run.
+(any 4xx) is never answered with another request to the registry's host: the
+stage reads a copy of the file kept elsewhere when it has one (below), or
+else records the refusal as a notice, keeps the rows it has, and does not ask
+again for REFUSAL_HOLD_DAYS. A 5xx or a timeout is a failed stage, tried
+again on the next run.
+
+The copies read while the host refuses (401 or 403), under the registry's
+Open Data Licence Agreement: the seed, the operator's own download of the
+zip, kept in R2 under seeds/ and fetched by the nightly workflow into
+config.SEEDS_DIR; and the Internet Archive's newest capture of the file, found
+with one query to the archive's index per weekly check and downloaded as its
+original bytes. Only captures the archive already holds are read; nothing
+asks the archive to fetch the registry. The copy whose primary file
+(Communication_PrimaryExport.csv) was written later is read, the seed on a
+tie or when the archive has no capture or does not answer, and never one
+older than the copy the table holds (meta lobbying:file_date, written with
+every load), so the table never goes back to older rows. A capture that
+fails the zip's checks (check_zip) is passed over for the seed and not
+downloaded again. The outcome is
+"read (seed)", "unchanged (seed)", "read (archive <timestamp>)" or
+"unchanged (archive)", with a notice naming the copy and the start of its
+SHA-256. The host is still asked first every week, and the first week it
+answers, its file replaces the copy's rows.
 
 Loading rewrites lobbying_communications whole in one transaction. The client
 goes through organizations.upsert; a client whose name reads as a person is
@@ -46,6 +66,7 @@ import re
 import sqlite3
 import sys
 import zipfile
+import zlib
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -57,7 +78,7 @@ from ..db import get_meta, log_run, now_iso, set_meta
 from ..http import FetchError, PoliteClient
 from ..normalize import fold_accents, iso_date, squash
 from . import buyers, matching
-from .contracts import BATCH, LayoutError, WeeklyFile, refresh
+from .contracts import BATCH, LayoutError, StandIn, WeeklyFile, _shown, refresh
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +87,14 @@ SPEC = WeeklyFile("lobbying", config.LOBBYING_URL, "communications_ocl_cal.zip",
 CHECK_EVERY_DAYS = SPEC.check_every_days
 REFUSAL_HOLD_DAYS = 7
 OTHER_INSTITUTION = {"other", "autre", "other / autre", "autre / other"}
+# The member whose date says how recent a copy of the zip is (file_date).
+PRIMARY_FILE = "communication_primaryexport.csv"
+# The archive's index is a small answer: one that takes longer is passed over.
+ARCHIVE_INDEX_TIMEOUT_S = 20
+# Seconds between bytes of a capture (about 25 MB in November 2026).
+ARCHIVE_TIMEOUT_S = 120
+# A capture is downloaded beside the live file and deleted when the stage ends.
+ARCHIVE_FILE = "archive-" + SPEC.file_name
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +219,76 @@ class LobbyingStats:
     missing: list[str] = field(default_factory=list)
 
 
+def _open_zip(path: Path) -> zipfile.ZipFile:
+    try:
+        return zipfile.ZipFile(path)
+    except zipfile.BadZipFile as exc:
+        # A page served in the file's place, or a copy cut short: refused like
+        # a changed layout, so the previous rows stay and the copy is named.
+        raise LayoutError(f"the lobbying file is not a zip ({exc}); the layout changed") from exc
+
+
+def _csv_members(zf: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
+    members = [m for m in zf.infolist() if not m.is_dir() and m.filename.lower().endswith(".csv")]
+    if not members:
+        raise LayoutError("the lobbying zip holds no CSV; the layout changed")
+    return members
+
+
+def _kinds(cols: dict[str, int]) -> tuple[bool, bool]:
+    """Whether a CSV with these columns carries reports, and whether it carries their parts."""
+    is_primary = "comm" in cols and any(f in cols for f in PRIMARY_FIELDS)
+    has_parts = "comm" in cols and (any(f in cols for f in DPOH_FIELDS) or "subject" in cols)
+    return is_primary, has_parts
+
+
+def _require_reports(primary: bool, seen: set[str]) -> None:
+    if not primary or not seen & {"date", "client_en", "client_fr"}:
+        raise LayoutError("no CSV in the lobbying zip carries a communication id with a date or a client; "
+                          "the layout changed")
+
+
+def check_zip(path: Path) -> None:
+    """read_zip's checks without reading a row, and every member's checksum; raises LayoutError.
+
+    For a copy fetched from elsewhere, so that one read_zip would refuse, or
+    one damaged on the way, is passed over before it is chosen.
+    """
+    with _open_zip(path) as zf:
+        members = _csv_members(zf)
+        try:
+            damaged = zf.testzip()
+        except (zipfile.BadZipFile, zlib.error, EOFError) as exc:
+            damaged = f"a member ({exc})"
+        if damaged is not None:
+            raise LayoutError(f"the lobbying zip is damaged: {damaged} does not read whole")
+        seen: set[str] = set()
+        primary = False
+        for member in members:
+            with _member_rows(zf, member) as (header, _rows):
+                cols = find_columns(header)
+            is_primary, has_parts = _kinds(cols)
+            if is_primary or has_parts:
+                seen.update(f for f in cols if f != "comm")
+                primary = primary or is_primary
+        _require_reports(primary, seen)
+
+
+def file_date(path: Path) -> str | None:
+    """When the zip's primary file was written, as its ZipInfo date (the registry's local time), ISO.
+
+    The newest CSV's date when no member is named Communication_PrimaryExport.csv;
+    None for a file that is no zip or holds no CSV.
+    """
+    try:
+        with zipfile.ZipFile(path) as zf:
+            members = [m for m in zf.infolist() if not m.is_dir() and m.filename.lower().endswith(".csv")]
+            primary = [m for m in members if m.filename.rsplit("/", 1)[-1].lower() == PRIMARY_FILE] or members
+            return max(datetime(*m.date_time).isoformat() for m in primary) if primary else None
+    except (zipfile.BadZipFile, OSError, ValueError):
+        return None
+
+
 def read_zip(path: Path, stats: LobbyingStats) -> dict[str, _Report]:
     """Every communication report in the zip, with its office holders and subject matters."""
     csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
@@ -201,10 +300,8 @@ def read_zip(path: Path, stats: LobbyingStats) -> dict[str, _Report]:
         # Office holders, titles and institutions repeat on thousands of rows.
         return shared.setdefault(value, value)
 
-    with zipfile.ZipFile(path) as zf:
-        members = [m for m in zf.infolist() if not m.is_dir() and m.filename.lower().endswith(".csv")]
-        if not members:
-            raise LayoutError("the lobbying zip holds no CSV; the layout changed")
+    with _open_zip(path) as zf:
+        members = _csv_members(zf)
         seen: set[str] = set()
         primary = False
         # The reports first, from whichever files carry them; their parts are
@@ -212,8 +309,7 @@ def read_zip(path: Path, stats: LobbyingStats) -> dict[str, _Report]:
         for member in members:
             with _member_rows(zf, member) as (header, rows):
                 cols = find_columns(header)
-                is_primary = "comm" in cols and any(f in cols for f in PRIMARY_FIELDS)
-                has_parts = "comm" in cols and (any(f in cols for f in DPOH_FIELDS) or "subject" in cols)
+                is_primary, has_parts = _kinds(cols)
                 if not (is_primary or has_parts):
                     stats.unread.append(member.filename)
                     continue
@@ -225,9 +321,7 @@ def read_zip(path: Path, stats: LobbyingStats) -> dict[str, _Report]:
                     primary = True
                     for row in rows:
                         _primary_row(row, cols, reports)
-        if not primary or not seen & {"date", "client_en", "client_fr"}:
-            raise LayoutError("no CSV in the lobbying zip carries a communication id with a date or a client; "
-                              "the layout changed")
+        _require_reports(primary, seen)
         expected = {"date": ("date",), "client": ("client_en", "client_fr"),
                     "registrant": ("registrant_last", "registrant"), "office holder": ("dpoh_last", "dpoh"),
                     "institution": ("institution",), "subject matter": ("subject",)}
@@ -301,7 +395,11 @@ def _json(items: list) -> str | None:
 
 def load_zip(conn: sqlite3.Connection, path: Path, *, now: str | None = None,
              drops: matching.PersonDrops | None = None) -> LobbyingStats:
-    """Rewrite lobbying_communications from one copy of the zip, in one transaction."""
+    """Rewrite lobbying_communications from one copy of the zip, in one transaction.
+
+    The copy's file_date goes in with the rows (meta lobbying:file_date), so a
+    stand-in older than the rows is never read (_Copies).
+    """
     stamp = now or now_iso()
     stats = LobbyingStats()
     person_drops = drops if drops is not None else matching.PersonDrops()
@@ -360,6 +458,11 @@ def load_zip(conn: sqlite3.Connection, path: Path, *, now: str | None = None,
         stats.stored = conn.execute("SELECT COUNT(*) FROM lobbying_communications").fetchone()[0]
         if not stats.stored:
             raise LayoutError("the lobbying zip held no communication reports; the previous rows are kept")
+        written = file_date(path)
+        if written:
+            set_meta(conn, SPEC.key("file_date"), written)
+        else:
+            conn.execute("DELETE FROM meta WHERE key = ?", (SPEC.key("file_date"),))
         conn.commit()
     except BaseException:
         conn.rollback()
@@ -386,9 +489,123 @@ def refusal_notice(status: int, until: str) -> str:
     return f"lobbying: {what}; not retried until {until}"
 
 
+@dataclass(frozen=True)
+class Capture:
+    """One capture in the Internet Archive's index: when it was taken (UTC, 14 digits) and the archive's digest."""
+
+    timestamp: str
+    digest: str
+
+    @property
+    def key(self) -> str:
+        return f"{self.timestamp} {self.digest}"
+
+    @property
+    def url(self) -> str:
+        return config.LOBBYING_ARCHIVE_CAPTURE.format(timestamp=self.timestamp)
+
+
+def newest_capture(client: PoliteClient) -> Capture | None:
+    """The newest capture of the registry's file the archive holds, from one query to its index.
+
+    None when it holds none, or when the index does not answer or answers
+    something else: the seed then stands alone.
+    """
+    try:
+        rows = json.loads(client.get(config.LOBBYING_ARCHIVE_INDEX, timeout=ARCHIVE_INDEX_TIMEOUT_S))
+        if not rows:
+            return None  # the archive holds no capture of the file
+        header = rows[0]
+        at, digest = header.index("timestamp"), header.index("digest")
+        found = [Capture(str(row[at]), str(row[digest])) for row in rows[1:]
+                 if re.fullmatch(r"\d{14}", str(row[at])) and row[digest]]
+    except (FetchError, ValueError, TypeError, IndexError, KeyError, AttributeError) as exc:
+        log.warning("lobbying: the Internet Archive's index gave no capture (%s)", exc)
+        return None
+    # The newest of what came back, whatever order the index used.
+    return max(found, key=lambda c: c.timestamp, default=None)
+
+
+class _Copies:
+    """The stand-in for a refused download (contracts.refresh): the seed or the archive's newest capture.
+
+    Called once per weekly check, only after the registry's host refused.
+    Notices go straight to the stage's list.
+    """
+
+    def __init__(self, conn: sqlite3.Connection, client: PoliteClient, seed: Path, capture_path: Path,
+                 notices: list[str]) -> None:
+        self.conn = conn
+        self.client = client
+        self.seed = seed
+        self.capture_path = capture_path
+        self.notices = notices
+        self.capture: Capture | None = None
+        self.chosen: StandIn | None = None
+
+    def __call__(self) -> StandIn | None:
+        held = get_meta(self.conn, SPEC.key("file_date"))
+        seed = self.seed if self.seed.is_file() else None
+        best = StandIn(seed) if seed is not None else None
+        best_date = file_date(seed) if seed is not None else None
+        found = self._capture(max((d for d in (best_date, held) if d), default=None))
+        # The seed wins a tie; a seed with no date is no zip, and loses.
+        if found is not None and (best is None or best_date is None or (found[1] or "") > best_date):
+            best, best_date = found
+        if best is not None and held and best_date and best_date < held:
+            # The table's rows are newer than any copy at hand: the refusal stands.
+            best = None
+        self.chosen = best
+        return best
+
+    def _capture(self, newest: str | None) -> tuple[StandIn, str | None] | None:
+        """The archive's newest capture with its file_date, when it may be newer than newest; None otherwise."""
+        capture = newest_capture(self.client)
+        if capture is None:
+            return None
+        self.capture = capture
+        label = f"archive {capture.timestamp}"
+        table = get_meta(self.conn, SPEC.key("sha256"))
+        if (capture.key == get_meta(self.conn, SPEC.key("archive_capture")) and table
+                and table == get_meta(self.conn, SPEC.key("archive_sha256"))):
+            # The table holds this capture's rows already: nothing to fetch again.
+            return StandIn(None, "archive", label), get_meta(self.conn, SPEC.key("file_date"))
+        if capture.key == get_meta(self.conn, SPEC.key("archive_refused")):
+            return None
+        if newest and capture.timestamp[:8] < newest[:10].replace("-", ""):
+            # Taken the day before that copy was written, or earlier: it holds an
+            # older file, so it is not downloaded. (The registry's local date is
+            # never ahead of the archive's UTC one.)
+            return None
+        try:
+            self.client.download(capture.url, self.capture_path, timeout=ARCHIVE_TIMEOUT_S)
+        except FetchError as exc:
+            log.warning("lobbying: the Internet Archive's capture %s did not download (%s)", capture.timestamp, exc)
+            return None
+        try:
+            check_zip(self.capture_path)
+        except LayoutError as exc:
+            # Remembered, so the same capture is not downloaded again next week.
+            set_meta(self.conn, SPEC.key("archive_refused"), capture.key)
+            self.conn.commit()
+            self.notices.append(f"lobbying: the Internet Archive's capture {capture.timestamp} was not read: {exc}")
+            return None
+        return StandIn(self.capture_path, "archive", label), file_date(self.capture_path)
+
+    def notice(self, digest: str, *, read: bool) -> str:
+        assert self.chosen is not None
+        if self.chosen.source == "archive" and self.capture is not None:
+            copy = f"the Internet Archive's capture {self.capture.timestamp} (sha256 {digest[:12]})"
+        else:
+            copy = f"the seed copy {_shown(self.seed)} (sha256 {digest[:12]})"
+        return f"lobbying: read from {copy}" if read else f"lobbying: {copy} is unchanged; its rows stay"
+
+
 @dataclass
 class LobbyingResult:
-    state: str = ""            # read | unchanged | not due | no sample | refused: ... | held: ...
+    # read | unchanged | read (seed) | unchanged (seed) | read (archive <timestamp>) | unchanged (archive)
+    # | not due | no sample | refused: ... | held: ...
+    state: str = ""
     stats: LobbyingStats | None = None
     notices: list[str] = field(default_factory=list)
 
@@ -418,7 +635,10 @@ def _log(conn: sqlite3.Connection, result: LobbyingResult) -> LobbyingResult:
 
 def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | None = None,
         samples: Path | None = None, work_dir: Path | None = None, review_dir: Path | None = None) -> LobbyingResult:
-    """The lobbying stage: fetch the zip weekly unless a refusal is being honoured, rewrite the table, log one row."""
+    """The lobbying stage: fetch the zip weekly unless a refusal is being honoured, rewrite the table, log one row.
+
+    While the host refuses, the seed or the archive's capture is read instead (_Copies).
+    """
     stamp = now or now_iso()
     result = LobbyingResult()
     buyers.take_notices(conn)
@@ -430,15 +650,19 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | Non
         result.notices.append(held)
         return _log(conn, result)
     drops = matching.PersonDrops()
+    copies = None
+    if samples is None and client is not None:
+        copies = _Copies(conn, client, config.SEEDS_DIR / SPEC.file_name,
+                         (work_dir or config.WORK_DIR) / ARCHIVE_FILE, result.notices)
     try:
         result.state, result.stats = refresh(
             conn, client, SPEC, lambda path: load_zip(conn, path, now=stamp, drops=drops),
-            stamp=stamp, samples=samples, work_dir=work_dir,
+            stamp=stamp, samples=samples, work_dir=work_dir, stand_in=copies,
         )
     except FetchError as exc:
         if exc.status is None or not 400 <= exc.status < 500:
             raise  # a 5xx or a timeout: a failed stage, tried again on the next run
-        # A refusal is the host's decision: recorded, honoured, never worked around.
+        # A refusal is the host's decision: recorded, and honoured until the hold ends.
         until = (_iso(stamp) + timedelta(days=REFUSAL_HOLD_DAYS)).date().isoformat()
         set_meta(conn, SPEC.key("refused_on"), stamp[:10])
         set_meta(conn, SPEC.key("refused_status"), exc.status)
@@ -447,6 +671,16 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | Non
         result.state = f"refused: HTTP {exc.status}"
         result.notices.append(refusal_notice(exc.status, until))
         return _log(conn, result)
+    finally:
+        if copies is not None:
+            copies.capture_path.unlink(missing_ok=True)
+    if copies is not None and copies.chosen is not None:
+        # A copy stood in for the refusal: the notice names it. The table's
+        # checksum is the copy's, read or unchanged.
+        if copies.chosen.source == "archive" and copies.capture is not None:
+            set_meta(conn, SPEC.key("archive_capture"), copies.capture.key)
+        result.notices.append(copies.notice(get_meta(conn, SPEC.key("sha256")) or "",
+                                            read=result.state.startswith("read")))
     if samples is None:
         conn.execute("DELETE FROM meta WHERE key IN (?, ?, ?)",
                      (SPEC.key("refused_on"), SPEC.key("refused_status"), SPEC.key("refused_until")))

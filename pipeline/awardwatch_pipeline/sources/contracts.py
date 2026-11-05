@@ -21,7 +21,10 @@ rewritten whole in one transaction that commits only once the whole file has
 been read: a missing required column (checked before anything is written) or
 any failure part way leaves the previous rows in place and fails the stage. A
 copy refused for its layout is remembered by its validators and checksum, so
-the same bytes are not downloaded and refused again on every retry.
+the same bytes are not downloaded and refused again on every retry. A stage
+may name a stand-in: another copy of the file (the operator's own download,
+the Internet Archive's capture), read only when the host refuses the download
+(refresh, _read_stand_in).
 
 The vendor goes through organizations.upsert. A vendor whose name reads as a
 person (matching.is_person_name) keeps the row, which is a public spending
@@ -48,7 +51,7 @@ from typing import TypeVar
 
 from .. import config, organizations
 from ..db import get_meta, hours_since, log_run, now_iso, set_meta
-from ..http import PoliteClient
+from ..http import FetchError, PoliteClient
 from ..normalize import competitive_code, iso_date, money, squash, to_int
 from . import buyers, matching
 
@@ -60,6 +63,12 @@ BATCH = 5000
 TEXT_MAX = 600
 # Seconds between bytes; the whole body may take four times this (http.py).
 TIMEOUT_S = 900
+# The answers that say the host will not serve this project the file at all;
+# only these send refresh to a stand-in copy. A 404 or 410 says the address
+# moved, which a copy would hide.
+STAND_IN_ON_STATUS = (401, 403)
+# The kinds of stand-in copy; <stage>:<source>_sha256 names the one the table holds.
+STAND_IN_SOURCES = ("seed", "archive")
 
 # The columns the counting rules and the joins need: a file without one of
 # them is refused before anything is written.
@@ -115,6 +124,21 @@ class WeeklyFile:
     @property
     def loaded_key(self) -> str:
         return f"{self.stage}_loaded_at"
+
+
+@dataclass(frozen=True)
+class StandIn:
+    """A copy of the file read in place of a download the host refused (refresh, stand_in).
+
+    source is one of STAND_IN_SOURCES: it names the copy's checksum key and
+    marks the outcome, as label does when the copy is read ("archive
+    20261101093000"). path None is the copy the table already holds, known
+    unchanged without fetching it again.
+    """
+
+    path: Path | None
+    source: str = "seed"
+    label: str = ""
 
 
 @dataclass
@@ -259,12 +283,20 @@ def _shown(path: Path) -> str:
 
 def refresh(conn: sqlite3.Connection, client: PoliteClient | None, spec: WeeklyFile,
             load: Callable[[Path], Stats], *, stamp: str, samples: Path | None = None,
-            work_dir: Path | None = None) -> tuple[str, Stats | None]:
+            work_dir: Path | None = None,
+            stand_in: Callable[[], StandIn | None] | None = None) -> tuple[str, Stats | None]:
     """Fetch the file when it is due and changed, and load it; returns the outcome and the load's figures.
 
     load(path) rewrites the table in one transaction and commits, or rolls
     back and raises. The meta keys are written after it commits. Any failure
     raises, so the stage is logged as failed and tried again on the next run.
+
+    stand_in is asked for another copy of the file only once the host has
+    refused the download (STAND_IN_ON_STATUS): the host is asked first every
+    time the file is due. The copy it names is read instead (_read_stand_in),
+    with the outcome "read (<label>)" or "unchanged (<source>)"; when it names
+    none, the refusal is raised as before. Choosing the copy, and deleting
+    one it fetched, are the stage's.
     """
     if samples is not None:
         path = samples / spec.sample_name
@@ -286,10 +318,16 @@ def refresh(conn: sqlite3.Connection, client: PoliteClient | None, spec: WeeklyF
     rejected = get_meta(conn, spec.key("rejected"))
     path = (work_dir or config.WORK_DIR) / spec.file_name
     try:
-        got = client.download_if_changed(
-            spec.url, path, etag=get_meta(conn, spec.key("etag")),
-            last_modified=get_meta(conn, spec.key("last_modified")), timeout=TIMEOUT_S,
-        )
+        try:
+            got = client.download_if_changed(
+                spec.url, path, etag=get_meta(conn, spec.key("etag")),
+                last_modified=get_meta(conn, spec.key("last_modified")), timeout=TIMEOUT_S,
+            )
+        except FetchError as exc:
+            copy = stand_in() if stand_in is not None and exc.status in STAND_IN_ON_STATUS else None
+            if copy is None:
+                raise
+            return _read_stand_in(conn, spec, load, copy, stamp=stamp)
         if got is None:
             if rejected:
                 raise LayoutError(f"{rejected} (the copy refused then has not changed)")
@@ -305,6 +343,7 @@ def refresh(conn: sqlite3.Connection, client: PoliteClient | None, spec: WeeklyF
             # The copy last loaded, back again: nothing to parse, and any
             # refusal since is over.
             _clear_rejected(conn, spec)
+            _clear_stand_ins(conn, spec)
             _record_validators(conn, spec, got.etag, got.last_modified)
             set_meta(conn, spec.loaded_key, stamp)
             conn.commit()
@@ -320,6 +359,7 @@ def refresh(conn: sqlite3.Connection, client: PoliteClient | None, spec: WeeklyF
             conn.commit()
             raise
         _clear_rejected(conn, spec)
+        _clear_stand_ins(conn, spec)
         set_meta(conn, spec.key("sha256"), digest)
         set_meta(conn, spec.key("read_at"), stamp)
         set_meta(conn, spec.loaded_key, stamp)
@@ -328,6 +368,51 @@ def refresh(conn: sqlite3.Connection, client: PoliteClient | None, spec: WeeklyF
         return "read", stats
     finally:
         path.unlink(missing_ok=True)
+
+
+def _read_stand_in(conn: sqlite3.Connection, spec: WeeklyFile, load: Callable[[Path], Stats], copy: StandIn,
+                   *, stamp: str) -> tuple[str, Stats | None]:
+    """The host refused the download: a stand-in copy instead, on the live file's weekly cadence.
+
+    A copy with the table's checksum is not parsed again. A copy that fails
+    its layout fails the stage like any refused layout, named, and the
+    previous rows stay; it is not remembered, since such a copy is replaced by
+    hand or by a newer capture, never by the host. The copy is never deleted here.
+    """
+    if copy.path is None:
+        set_meta(conn, spec.loaded_key, stamp)
+        conn.commit()
+        return f"unchanged ({copy.source})", None
+    digest = sha256(copy.path)
+    if digest == get_meta(conn, spec.key("sha256")):
+        _hold_stand_in(conn, spec, copy, digest)
+        set_meta(conn, spec.loaded_key, stamp)
+        conn.commit()
+        return f"unchanged ({copy.source})", None
+    try:
+        stats = load(copy.path)
+    except LayoutError as exc:
+        raise LayoutError(f"the {copy.source} copy {_shown(copy.path)} (sha256 {digest[:12]}): {exc}") from exc
+    _hold_stand_in(conn, spec, copy, digest)
+    # The live checksum names the table's rows whatever copy they came from,
+    # so a live file with the same bytes is not parsed again; the last live
+    # copy's validators go, so the host's next answer is the whole file, compared.
+    set_meta(conn, spec.key("sha256"), digest)
+    conn.execute("DELETE FROM meta WHERE key IN (?, ?)", (spec.key("etag"), spec.key("last_modified")))
+    set_meta(conn, spec.key("read_at"), stamp)
+    set_meta(conn, spec.loaded_key, stamp)
+    conn.commit()
+    return f"read ({copy.label or copy.source})", stats
+
+
+def _hold_stand_in(conn: sqlite3.Connection, spec: WeeklyFile, copy: StandIn, digest: str) -> None:
+    """Record that the table holds this stand-in's bytes; any other stand-in's key goes."""
+    _clear_stand_ins(conn, spec)
+    set_meta(conn, spec.key(f"{copy.source}_sha256"), digest)
+
+
+def _clear_stand_ins(conn: sqlite3.Connection, spec: WeeklyFile) -> None:
+    conn.executemany("DELETE FROM meta WHERE key = ?", [(spec.key(f"{s}_sha256"),) for s in STAND_IN_SOURCES])
 
 
 def _clear_rejected(conn: sqlite3.Connection, spec: WeeklyFile) -> None:
