@@ -1,4 +1,6 @@
 import type { Context } from "hono";
+import type { FC } from "hono/jsx";
+import { accountsEnabled } from "../account/switch";
 import { clockOf, closingSoonByDay, tenderState } from "../closing";
 import { CLOSING_SOON_DAYS } from "../constants";
 import { STATS_LIST_ROWS, closingSoonTotal, loadExpiringIndex, loadOpenFirst, loadRail, loadStats } from "../data";
@@ -134,7 +136,7 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
     c,
     <Layout lang={lang} title={t(lang, "site.name")} dataAsOf={stats.data_as_of} seo={pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] })}
       head={<FeedLinks lang={lang} />}>
-      <PageHead lang={lang} title={t(lang, "home.title")} lead={t(lang, "home.lead")}
+      <PageHead lang={lang} title={t(lang, "home.title")} lead={homeLead(lang, stats.counts.organizations)}
         actions={<>
           <a href="/feeds" class="btn">{t(lang, "feeds.button_all")}</a>
           <a href="/data#downloads" class="btn">{t(lang, "footer.download")}</a>
@@ -158,6 +160,8 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
           ))}
         </section>
       ) : null}
+
+      <HomeDo lang={lang} pro={accountsEnabled(c.env)} />
 
       <Panel title={t(lang, "home.new_heading")} tools={<a href="/tenders/new">{t(lang, "home.new_all")}</a>}
         foot={chipsFirst ? <SegmentNote lang={lang} rows={newToday} /> : undefined}>
@@ -209,3 +213,32 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
     </Layout>,
   );
 }
+
+// -- search framing (docs/seo.md) -------------------------------------------------
+
+// The lead, with the organizations stats.json counts when it carries them.
+export function homeLead(lang: Lang, organizations: number | undefined): string {
+  return organizations ? t(lang, "home.lead_n", { n: fmtInt(organizations, lang) }) : t(lang, "home.lead");
+}
+
+// What a reader can do here, one line a task, each led by its link: the
+// tasks search brings readers for. The email line leads to the Pro page
+// while the accounts switch is on and is left out while it is off (nothing
+// is Pro then). It names Pro in words and carries no chip: the Pro-mark
+// ruling leaves the home page without one (test/pro-mark.test.ts).
+const HOME_DO: readonly { text: Key; link: Key; href: string }[] = [
+  { text: "home.do_tenders", link: "home.do_tenders_link", href: "/tenders" },
+  { text: "home.do_awards", link: "home.do_awards_link", href: "/awards" },
+  { text: "home.do_expiring", link: "home.do_expiring_link", href: "/expiring" },
+];
+
+export const HomeDo: FC<{ lang: Lang; pro: boolean }> = ({ lang, pro }) => (
+  <Panel title={t(lang, "home.do_heading")} class="home-do">
+    <ul class="home-do-list">
+      {HOME_DO.map((d) => <li>{tj(lang, d.text, { link: <a href={d.href}>{t(lang, d.link)}</a> })}</li>)}
+      {pro ? (
+        <li class="home-do-pro">{tj(lang, "home.do_pro", { link: <a href="/pro">{t(lang, "home.do_pro_link")}</a> })}</li>
+      ) : null}
+    </ul>
+  </Panel>
+);

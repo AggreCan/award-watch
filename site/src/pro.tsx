@@ -106,10 +106,12 @@ export const ProPanel: FC<{ lang: Lang; text: unknown; free?: unknown; price: Pr
     </ul>
     {free ? <p>{free as any}</p> : null}
     <PriceLine lang={lang} price={price} />
-    <p>
+    <p class="pro-panel-actions">
       <a href={signedIn ? "/account" : "/account/sign-in"} class="btn btn-primary">
         {t(lang, signedIn ? "expiring.pro_account" : "expiring.pro_sign_in")}
       </a>
+      {/* A reader not signed in can read the whole plan first (pages/pro.tsx). */}
+      {signedIn ? null : <>{" "}<a href="/pro" class="btn">{t(lang, "pro.about_button")}</a></>}
     </p>
   </Panel>
 );

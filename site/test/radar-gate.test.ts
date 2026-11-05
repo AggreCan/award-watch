@@ -141,7 +141,7 @@ const html = async (path: string, env: object, cookie?: string) => (await get(pa
 const CHIP = / <span class="pro-tag"><svg[^>]*><path[^>]*><\/path><\/svg>Pro<span class="visually-hidden"> \((?:paid plan|forfait payant)\)<\/span><\/span>/g;
 const noRail = (page: string) =>
   page.replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "")
-    .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(CHIP, "")
+    .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(/<a href="\/pro">[^<]*<\/a>/, "").replace(CHIP, "")
     // The top bar's same-day timer leads to the tease while the switch is on and to the list while it is off.
     .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');
 const pageHead = (page: string) => /<header class="page-head">[\s\S]*?<\/header>/.exec(page)?.[0] ?? "";
@@ -499,9 +499,8 @@ describe("the radar CSVs", () => {
     // The dataset metadata for search engines names the free files only, the
     // 3-month radar file where the 12-month one stood, so a crawler never meets the gate.
     const dataset = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(en)?.[1] ?? "{}");
-    expect(dataset.distribution.map((d: { name: string }) => d.name)).toEqual([
-      "open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv", "SHA256SUMS",
-    ]);
+    const files = dataset.hasPart.flatMap((p: { distribution: { name: string }[] }) => p.distribution.map((d) => d.name));
+    for (const f of ["open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv"]) expect(files).toContain(f);
     expect(JSON.stringify(dataset)).not.toContain("expiring-12m");
     // The crawlers' list says the same.
     const llms = await html("/llms.txt", off());

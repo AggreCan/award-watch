@@ -9,7 +9,7 @@ import { decimal, fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, noDataPage, page, todayOf } from "../layout";
 import { allowsRadarDepth, requestPlan } from "../plan";
 import { ProNote, ProTag } from "../pro";
-import { ODLA_URL, OGL_URL, datasetJsonLd, pageSeo } from "../seo";
+import { type DataSet, ODLA_URL, OGL_URL, datasetJsonLd, pageSeo } from "../seo";
 import { KeyedApiDocs } from "./keyed_api";
 import { datasetUrl } from "./shared";
 
@@ -152,14 +152,24 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
   if (!stats) return noDataPage(c, "data.title");
   const lastYear = Number(todayOf(stats.data_as_of).slice(0, 4));
   const years = (from: number) => Array.from({ length: lastYear - from + 1 }, (_, i) => lastYear - i);
-  // The dataset metadata names the free files only: the 3-month radar file
-  // stands where the 12-month one would.
-  const downloads = DOWNLOADS.filter((d) => !d.paid).map((d) => ({ file: d.file, contents: t(lang, d.contents) }));
   const sizes = downloadSizes(stats);
   const sizeOf = (file: string) => sizes.get(file);
   // Each file a yearly list names, then its numbered parts when the export wrote any.
   const withParts = (files: readonly string[]) => files.flatMap((f) => [f, ...fileParts(f, sizes.keys())]);
   const firstYear = { awards: FIRST_AWARD_YEAR, history: FIRST_HISTORY_YEAR, contracts: FIRST_CONTRACT_YEAR, grants: FIRST_GRANT_YEAR };
+  // The dataset metadata names the free files only, each set with the
+  // government dataset it is read from: the 3-month radar file stands where
+  // the 12-month one would. A yearly set lists the files its list names.
+  const src = (...sources: string[]) => sources.map((s) => datasetUrl(s, lang));
+  const sets: DataSet[] = [
+    { id: "open-tenders", files: ["open-tenders.csv"], basedOn: src("tenders") },
+    ...YEARLY_SOURCES.map((s): DataSet => ({
+      id: s, files: years(firstYear[s]).map((y) => `${s}-${y}.csv`), basedOn: src(s), from: firstYear[s],
+    })),
+    { id: "organizations", files: ["organizations.csv"], basedOn: src("awards", "history", "contracts", "grants", "lobbying") },
+    { id: "buyers", files: ["buyers.csv"], basedOn: src("tenders", "awards", "history", "contracts", "grants") },
+    { id: "expiring-3m", files: ["expiring-3m.csv"], basedOn: src("awards", "history", "contracts") },
+  ];
   // The files outside the years: before and after for each source, and an
   // undated file only when the export lists one (it writes one only for a
   // source with such a row).
@@ -196,7 +206,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={t(lang, "data.title")} dataAsOf={stats.data_as_of} active="/data"
-      seo={pageSeo("data", lang, { jsonLd: [datasetJsonLd(downloads, stats.data_as_of, lang)] })}>
+      seo={pageSeo("data", lang, { jsonLd: [datasetJsonLd(sets, stats.data_as_of, lang)] })}>
       <PageHead lang={lang} title={t(lang, "data.title")} lead={t(lang, "data.lead")} />
       <div class="doc-layout">
         <nav class="toc" aria-label={t(lang, "toc.label")}>

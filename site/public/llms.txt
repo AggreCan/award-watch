@@ -31,6 +31,7 @@ Downloads are limited to ten per minute per address.
 - https://awardwatch.ca/methodology: how organizations and buyers are merged and how money is counted, source by source
 - https://awardwatch.ca/tenders: the open tender notices
 - https://awardwatch.ca/organizations: every organization A to Z by province
+- https://awardwatch.ca/pro: what Pro, the paid plan, adds to the free pages and what it costs
 - https://awardwatch.ca/corrections: how to report an error
 - https://awardwatch.ca/about: who publishes the site and how to reach it
 - https://awardwatch.ca/terms: the terms of use and reuse

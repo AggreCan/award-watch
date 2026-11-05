@@ -1,5 +1,6 @@
 """Sitemaps: the fixed pages, then every organization, buyer, category, open and recent tender, award year
-and directory page, at most 50,000 to a file, with an index of the parts at the site root."""
+and directory page, at most 25,000 to a file (the Worker serves each page twice, English and French, within the
+protocol's 50,000), with an index of the parts at the site root."""
 
 import xml.etree.ElementTree as ET
 
@@ -37,9 +38,10 @@ def test_parts_respect_the_limit_and_the_index_lists_them(tmp_path):
 
 
 def test_full_size_split():
-    entries = list(range(168_000))
-    assert [len(c) for c in es.sitemap_chunks(entries)] == [50_000, 50_000, 50_000, 18_000]
-    assert es.sitemap_chunks(list(range(50_000))) == [list(range(50_000))]
+    assert es.SITEMAP_MAX_URLS * 2 <= 50_000
+    entries = list(range(68_000))
+    assert [len(c) for c in es.sitemap_chunks(entries)] == [25_000, 25_000, 18_000]
+    assert es.sitemap_chunks(list(range(25_000))) == [list(range(25_000))]
 
 
 def test_lastmod_accepts_dates_only():
@@ -58,8 +60,9 @@ def test_static_export_writes_the_sitemaps(conn, tmp_path):
     assert counts["sitemap_files"] == 1 and counts["sitemap_urls"] == len(urls) == len(set(urls))
     assert urls[:len(es.SITEMAP_PAGES)] == [BASE + p for p in es.SITEMAP_PAGES]
     assert entries[f"{BASE}/"] == "2026-10-31" and entries[f"{BASE}/methodology"] is None
-    # The alerts page changes with the code only, so it carries no date.
+    # The alerts page changes with the code only, so it carries no date; nor do the Pro page and the same-day page.
     assert entries[f"{BASE}/alerts"] is None
+    assert entries[f"{BASE}/pro"] is None and entries[f"{BASE}/tenders/same-day"] is None
     # The site takes no donations: there is no support page to list.
     assert "/support" not in es.SITEMAP_PAGES and f"{BASE}/support" not in entries
     for oid in ids.values():

@@ -23,7 +23,7 @@ import { t, tj, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, noDataPage, page } from "../layout";
 import { allowsIntraday, requestPlan } from "../plan";
 import { ProNote, ProPanel, SameDayLegend, proPrice } from "../pro";
-import { sectionSeo } from "../seo";
+import { breadcrumbJsonLd, pageSeo } from "../seo";
 import { intradayBand } from "./intraday";
 
 export const SAME_DAY_PATH = "/tenders/same-day";
@@ -72,7 +72,7 @@ export async function sameDayPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/tenders"
-      seo={sectionSeo(SAME_DAY_PATH, title, t(lang, "sameday.description"), crumbs)}>
+      seo={pageSeo("same_day", lang, { jsonLd: [breadcrumbJsonLd(crumbs)] })}>
       <PageHead lang={lang} title={title} crumbs={crumbs} lead={t(lang, "sameday.lead")} />
       {body as any}
     </Layout>,

@@ -5,7 +5,7 @@ import { CLOSING_SOON_DAYS } from "./constants";
 import { type Competitive, type RailCounts, competitiveOf, loadRail } from "./data";
 import type { AppEnv } from "./env";
 import { competitiveLabel, fmtInt, statusLabel, t, type Key, type Lang } from "./i18n";
-import { type Seo, absoluteUrl, alternates, canonicalUrl, defaultDescription, pageTitle } from "./seo";
+import { LOGO_PATH, LOGO_SIZE, type Seo, absoluteUrl, alternates, canonicalUrl, defaultDescription, pageTitle } from "./seo";
 import { allowed } from "./account/entitlements";
 import { type RailAccount, railAccount } from "./account/session";
 import { accountsEnabled } from "./account/switch";
@@ -222,10 +222,10 @@ const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, lang, tit
       <meta property="og:description" content={seo.description} />
       <meta property="og:locale" content={lang === "fr" ? "fr_CA" : "en_CA"} />
       <meta property="og:locale:alternate" content={lang === "fr" ? "en_CA" : "fr_CA"} />
-      <meta property="og:image" content={absoluteUrl("/apple-touch-icon.png")} />
       <meta name="twitter:card" content="summary" />
       <meta name="twitter:title" content={socialTitle} />
       <meta name="twitter:description" content={seo.description} />
+      <SocialImage lang={lang} />
       {(seo.jsonLd ?? []).map((data) => (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: scriptJson(data) }}></script>
       ))}
@@ -404,7 +404,7 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 20;
+export const STYLES_VERSION = 21;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -482,6 +482,7 @@ export const Layout: FC<
                   <a href="/data#downloads">{t(lang, "footer.download")}</a>
                   <a href="/feeds">{t(lang, "footer.feeds")}</a>
                   <a href="/alerts">{t(lang, "rail.email_lists")}</a>
+                  <FooterProLink lang={lang} on={shell?.accountsOn ?? false} />
                   <a href="/watchlist">{t(lang, "footer.watchlist")}</a>
                   <a href="/corrections">{t(lang, "footer.corrections")}</a>
                   {/* A signed-in Pro reader only (src/account/bugs.tsx); nothing for anyone else, so public pages keep every byte. */}
@@ -573,3 +574,26 @@ export function lowerRedirect(c: Context<AppEnv>, path: string): Response | null
   c.header("Cache-Control", "public, max-age=300");
   return c.redirect(`${path}${url.search}`, 301);
 }
+
+// -- search framing (docs/seo.md) -------------------------------------------------
+
+// The image a shared link shows: the brand mark at 512 px square
+// (public/brand/mark-512.png), which a "summary" card shows as is and Open
+// Graph readers take at its stated size. The alt text is the site's name,
+// which is what the mark says.
+export const SocialImage: FC<{ lang: Lang }> = ({ lang }) => (
+  <>
+    <meta property="og:image" content={absoluteUrl(LOGO_PATH)} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content={String(LOGO_SIZE)} />
+    <meta property="og:image:height" content={String(LOGO_SIZE)} />
+    <meta property="og:image:alt" content={t(lang, "site.name")} />
+    <meta name="twitter:image" content={absoluteUrl(LOGO_PATH)} />
+    <meta name="twitter:image:alt" content={t(lang, "site.name")} />
+  </>
+);
+
+// The footer's link to the Pro page (pages/pro.tsx), while the accounts
+// switch is on: nothing is Pro while it is off, and the page is the 404.
+export const FooterProLink: FC<{ lang: Lang; on: boolean }> = ({ lang, on }) =>
+  on ? <a href="/pro">{t(lang, "footer.pro")}</a> : null;

@@ -40,7 +40,9 @@ import { searchPage } from "./pages/search";
 import { tenderPage } from "./pages/tender";
 import { newTendersPage, tendersPage } from "./pages/tenders";
 import { watchlistPage } from "./pages/watchlist";
-import { llmsTxt, robotsTxt, sitemapFile } from "./seo";
+import { llmsTxt, robotsTxt } from "./seo";
+import { contractSitemap, sitemapFile } from "./sitemaps";
+import { proPage } from "./pages/pro";
 import { account } from "./account/routes";
 import { admin } from "./account/admin";
 import { interestStopPage, interestStopPost } from "./account/announce";
@@ -190,6 +192,9 @@ app.get("/interest", (c) => c.redirect("/alerts", 302));
 // lists (account/announce.tsx): open whatever the accounts switch says.
 app.get("/interest/stop", interestStopPage);
 app.post("/interest/stop", interestStopPost);
+// What the paid plan adds and costs (pages/pro.tsx): the site's 404 while the
+// accounts switch is off, as /tenders/same-day is.
+app.get("/pro", proPage);
 app.get("/data", dataPage);
 app.get("/methodology", methodologyPage);
 app.get("/cite", citePage);
@@ -201,6 +206,8 @@ app.post("/corrections", correctionsSubmit);
 app.get("/robots.txt", robotsTxt);
 app.get("/llms.txt", llmsTxt);
 app.get("/:file{sitemap(?:-[0-9]+)?\\.xml}", sitemapFile);
+// The published contracts' parts, read from the records database (src/sitemaps.ts).
+app.get("/:file{sitemap-contracts-[0-9]+\\.xml}", contractSitemap);
 
 // The Atom feeds (feeds.py) are static files, but wrangler.jsonc runs the
 // Worker first for /data/feeds/* so the measure middleware counts each poll

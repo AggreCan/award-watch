@@ -209,11 +209,18 @@ _REF_BAD = re.compile(r"[^A-Za-z0-9._-]+")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 TEMP_TABLES = ("x_tenders", "x_awards", "x_history", "x_grants", "x_records", "x_proc")
 
-SITEMAP_MAX_URLS = 50_000
+# Half the protocol's 50,000 URLs to a file: the Worker serves each part with
+# every page twice, the English address and the French one (?lang=fr), each
+# carrying the language alternates (site/src/sitemaps.ts SITEMAP_PART_MAX,
+# which site/test/seo-intent.test.ts holds equal to this).
+SITEMAP_MAX_URLS = 25_000
 SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
-SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments",
-                 "/rankings", "/feeds", "/watchlist", "/data", "/methodology", "/cite", "/corrections",
-                 "/about", "/terms", "/privacy", "/alerts"]
+# /pro and /tenders/same-day answer while the site's accounts switch is on, as
+# it is in production; the published contracts' pages are listed by the
+# Worker from the records database (/sitemap-contracts-<n>.xml).
+SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/expiring", "/organizations", "/buyers",
+                 "/segments", "/rankings", "/feeds", "/watchlist", "/data", "/methodology", "/cite", "/corrections",
+                 "/about", "/terms", "/privacy", "/alerts", "/pro"]
 # Pages whose content follows the nightly data carry its date; the others
 # change only with the code, so they carry none rather than a false one.
 SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments",

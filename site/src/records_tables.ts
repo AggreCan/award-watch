@@ -275,9 +275,25 @@ export function readOrgFeed(env: Env, oid: number, first: string): Promise<Read>
   return readRecords(env, [{ sql: ORG_FEED_SQL, params: [oid, first] }]);
 }
 
+// -- the published contracts' sitemaps (src/sitemaps.ts) --------------------------------
+
+// ?1 and ?2 the first and last key of one part's range, as decimal text: the
+// keys are signed 64-bit hashes (records_db.key_of in the pipeline), past
+// what a JavaScript number holds exactly, and SQLite reads the text as the
+// integer for the seek on the primary key. Each row is the department and
+// the reference that make the page's address; CONTRACT_SITEMAP_ROWS bounds a
+// part, two URLs a row (English and French) within the protocol's 50,000.
+export const CONTRACT_SITEMAP_ROWS = 25_000;
+export const CONTRACT_SITEMAP_SQL =
+  `SELECT dept, ref FROM rec_contracts WHERE k BETWEEN ?1 AND ?2 ORDER BY k LIMIT ${CONTRACT_SITEMAP_ROWS}`;
+
+export function readContractSitemap(env: Env, first: string, last: string): Promise<Read> {
+  return readRecords(env, [{ sql: CONTRACT_SITEMAP_SQL, params: [first, last] }]);
+}
+
 // Every statement here, for the tests that read their plans and their bounds.
 export const TABLE_SQL: readonly string[] = [
-  EARLIER_AWARDS_SQL, BUYER_INCUMBENTS_SQL, SEGMENT_INCUMBENTS_SQL, ORG_FEED_SQL,
+  CONTRACT_SITEMAP_SQL, EARLIER_AWARDS_SQL, BUYER_INCUMBENTS_SQL, SEGMENT_INCUMBENTS_SQL, ORG_FEED_SQL,
   PUBLISHED_CONTRACT_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
   RADAR_FACETS_SQL, RADAR_BUYERS_SQL, RADAR_CLIENTS_SQL, RADAR_SUPPLIERS_SQL,
   ...Object.values(RECORDS_SQL.organization), ...Object.values(RECORDS_SQL.buyer),

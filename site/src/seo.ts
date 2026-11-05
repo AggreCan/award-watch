@@ -9,15 +9,15 @@ import type { Context } from "hono";
 import type { Buyer, Category, ContractDetail, Profile, TenderDetail } from "./data";
 import type { AppEnv } from "./env";
 import { fmtInt, frTypography, pick, provinceName, segmentLabel, t, type Key, type Lang } from "./i18n";
-import { assetResponse, publishedReference } from "./data";
+import { publishedReference } from "./data";
 
 // Canonical URLs name the apex domain whichever host served the request, so
 // www and apex never compete in an index. robots.txt, llms.txt and the
 // pipeline's sitemaps name the same origin; change them together.
 export const SITE_ORIGIN = "https://awardwatch.ca";
 export const SITE_NAME = "Award Watch";
-// A result list cuts a description near 160 characters; stay under it.
-export const DESCRIPTION_MAX = 159;
+// A result list cuts a description near 160 characters; stay at 155 or under.
+export const DESCRIPTION_MAX = 155;
 
 // French sets a narrow no-break space before a colon, as the dictionary does.
 const FR_COLON = `${String.fromCharCode(0x202f)}: `;
@@ -38,91 +38,106 @@ export interface Seo {
 type Both = Record<Lang, string>;
 
 export type PageKey =
-  | "home" | "tenders" | "tenders_new" | "awards" | "expiring" | "organizations" | "buyers" | "segments" | "rankings" | "feeds"
-  | "watchlist" | "methodology" | "data" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts";
+  | "home" | "tenders" | "tenders_new" | "same_day" | "awards" | "expiring" | "organizations" | "buyers" | "segments" | "rankings"
+  | "feeds" | "watchlist" | "methodology" | "data" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts" | "pro";
+
+// A result list shows about 60 characters of a title; the whole <title>,
+// " | Award Watch" included, stays within it (test/seo-intent.test.ts).
+export const TITLE_MAX = 60;
 
 // `name` is the result-list name, either written here or, where the page's own
-// heading already reads well in a result list, its dictionary key.
+// heading already reads well in a result list, its dictionary key. The
+// section pages name what a reader searches for (docs/seo.md, the intent
+// table): open federal tenders, who won, contracts ending, the suppliers and
+// the departments, the data, the paid plan.
 const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; description: Both }> = {
   home: {
     path: "/",
     name: "site.name",
     title: {
-      en: "Award Watch: Federal Tenders, Contracts and Grants by Organization",
-      fr: "Award Watch : appels d'offres, contrats et subventions fédéraux par organisation",
+      en: "Award Watch: Federal Tenders, Awards and Contracts Ending",
+      fr: "Award Watch : appels d'offres et contrats fédéraux du Canada",
     },
     description: {
-      en: "Open federal tenders, contracts awarded and grants paid, organized by the organizations that receive them. From the government's open data, updated nightly.",
-      fr: "Appels d'offres fédéraux ouverts, contrats attribués et subventions versées, par organisation. Données ouvertes du gouvernement, mises à jour chaque nuit.",
+      en: "Canadian federal tenders from CanadaBuys, who won each contract, and the contracts ending within a year, by supplier and department. Updated nightly.",
+      fr: "Appels d'offres d'AchatsCanada, contrats attribués et contrats qui prennent fin d'ici un an, par fournisseur et par ministère. Mis à jour chaque nuit.",
     },
   },
   tenders: {
     path: "/tenders",
-    name: { en: "Open Federal Tender Notices", fr: "Avis d'appel d'offres fédéraux ouverts" },
+    name: { en: "Open Federal Tenders from CanadaBuys", fr: "Appels d'offres ouverts d'AchatsCanada" },
     description: {
-      en: "Every open tender notice on CanadaBuys, filtered by category, region, buyer and closing date, each linked to its notice.",
-      fr: "Tous les avis d'appel d'offres ouverts sur AchatsCanada, filtrés par catégorie, région, acheteur et date de clôture, chacun lié à son avis.",
+      en: "Every open federal tender notice on CanadaBuys, filtered by UNSPSC segment, region, buyer and closing date, each linked to its notice.",
+      fr: "Tous les avis d'appel d'offres fédéraux ouverts sur AchatsCanada, filtrés par segment, région, acheteur et date de clôture, chacun lié à son avis.",
     },
   },
   tenders_new: {
     path: "/tenders/new",
-    name: { en: "New Federal Tender Notices by Day", fr: "Nouveaux avis d'appel d'offres fédéraux par jour" },
+    name: { en: "New Federal Tenders by Day", fr: "Nouveaux appels d'offres fédéraux par jour" },
     description: {
-      en: "The tender notices CanadaBuys published each day over the last 30 days, newest first.",
-      fr: "Les avis d'appel d'offres publiés chaque jour sur AchatsCanada au cours des 30 derniers jours, du plus récent au plus ancien.",
+      en: "The federal tender notices CanadaBuys published each day over the last 30 days, newest first, with the buyer and the closing date.",
+      fr: "Les avis d'appel d'offres fédéraux publiés chaque jour sur AchatsCanada depuis 30 jours, du plus récent au plus ancien, avec acheteur et clôture.",
+    },
+  },
+  same_day: {
+    path: "/tenders/same-day",
+    name: { en: "Same-Day CanadaBuys Tender Notices", fr: "Avis d'AchatsCanada publiés le jour même" },
+    description: {
+      en: "Federal tender notices CanadaBuys posts during the day, read every two hours through the business day. Part of Pro, the paid plan.",
+      fr: "Les avis d'appel d'offres publiés sur AchatsCanada pendant la journée, lus toutes les deux heures. Offerts avec Pro, le forfait payant.",
     },
   },
   awards: {
     path: "/awards",
-    name: { en: "Federal Contract Award Notices", fr: "Avis d'attribution de contrats fédéraux" },
+    name: { en: "Federal Contract Awards: Who Won", fr: "Contrats fédéraux attribués : qui a gagné" },
     description: {
-      en: "The newest contract award notices on CanadaBuys: supplier, buyer, value and procurement method, each linked to the notice.",
-      fr: "Les plus récents avis d'attribution de contrats sur AchatsCanada : fournisseur, acheteur, valeur et méthode d'approvisionnement, chacun lié à l'avis.",
+      en: "Who won federal contracts: the newest CanadaBuys award notices with supplier, buyer, value and procurement method, each linked to the notice.",
+      fr: "Qui a remporté les contrats fédéraux : les plus récents avis d'attribution d'AchatsCanada, avec fournisseur, acheteur, valeur et méthode.",
     },
   },
   expiring: {
     path: "/expiring",
-    name: { en: "Federal Contracts Ending Soon", fr: "Contrats fédéraux prenant fin bientôt" },
+    name: { en: "Federal Contracts Ending Soon, with Incumbents", fr: "Contrats fédéraux qui prennent fin bientôt" },
     description: {
-      en: "Federal contracts ending within 3, 6 or 12 months: organization, buyer, value, competition and amendments, each listed once and linked to its record.",
-      fr: "Contrats fédéraux qui prennent fin d'ici 3, 6 ou 12 mois : organisation, acheteur, valeur, concurrence et modifications, chacun lié à son dossier.",
+      en: "Federal contracts ending within 3, 6 or 12 months: incumbent supplier, buyer, value, competition and amendments, each linked to its record.",
+      fr: "Contrats fédéraux qui prennent fin d'ici 3, 6 ou 12 mois : fournisseur en place, acheteur, valeur, concurrence et modifications.",
     },
   },
   organizations: {
     path: "/organizations",
-    name: { en: "Organizations Receiving Federal Money", fr: "Organisations qui reçoivent des fonds fédéraux" },
+    name: { en: "Federal Suppliers and Grant Recipients", fr: "Fournisseurs et bénéficiaires fédéraux" },
     description: {
-      en: "Every supplier, grant recipient and lobbying client on record, A to Z by province, each with a profile of its public records.",
-      fr: "Tous les fournisseurs, bénéficiaires de subventions et clients de lobbying au dossier, de A à Z par province, chacun avec le profil de ses dossiers publics.",
+      en: "Every federal supplier, grant recipient and lobbying client on record, A to Z by province, each with a profile of its contracts and grants.",
+      fr: "Chaque fournisseur, bénéficiaire de subventions et client de lobbying fédéral au dossier, de A à Z par province, avec le profil de ses dossiers.",
     },
   },
   buyers: {
     path: "/buyers",
-    name: { en: "Federal Buyers: Departments, Agencies and Crown Corporations", fr: "Acheteurs fédéraux : ministères, organismes et sociétés d'État" },
+    name: { en: "Federal Buyers: Departments and Agencies", fr: "Acheteurs fédéraux : ministères et organismes" },
     description: {
-      en: "Each federal institution's open tenders, contract awards, published contracts and grants, source by source.",
-      fr: "Les appels d'offres ouverts, les attributions de contrats, les contrats publiés et les subventions de chaque institution fédérale, source par source.",
+      en: "Each federal department, agency and Crown corporation: its open tenders, contract awards, published contracts, grants and largest suppliers.",
+      fr: "Chaque ministère, organisme et société d'État fédéral : appels d'offres ouverts, attributions, contrats publiés, subventions et fournisseurs.",
     },
   },
   segments: {
     path: "/segments",
-    name: { en: "Federal Procurement by Segment", fr: "Approvisionnement fédéral par segment" },
+    name: { en: "Federal Tenders and Awards by UNSPSC Segment", fr: "Appels d'offres fédéraux par segment UNSPSC" },
     description: {
-      en: "The 57 UNSPSC segments: open tenders, contract awards this year and the organizations that received them.",
-      fr: "Les 57 segments de l'UNSPSC : appels d'offres ouverts, attributions de contrats de l'année et organisations qui les ont reçues.",
+      en: "The 57 UNSPSC segments of federal procurement: open tenders, this year's contract awards and the suppliers that won them, segment by segment.",
+      fr: "Les 57 segments UNSPSC de l'approvisionnement fédéral : appels d'offres ouverts, attributions de l'année et fournisseurs retenus.",
     },
   },
   rankings: {
     path: "/rankings",
-    name: { en: "Rankings: Organizations by Federal Contracts and Grants", fr: "Classements : organisations par contrats et subventions fédéraux" },
+    name: { en: "Top Federal Suppliers and Grant Recipients", fr: "Classements des fournisseurs fédéraux" },
     description: {
       en: "The organizations with the most contract awards, published contracts and grants, by value and by count, each source ranked on its own.",
-      fr: "Les organisations qui comptent le plus d'attributions, de contrats publiés et de subventions, en valeur et en nombre, chaque source classée séparément.",
+      fr: "Les organisations qui comptent le plus d'attributions, de contrats publiés et de subventions, en valeur et en nombre, chaque source à part.",
     },
   },
   feeds: {
     path: "/feeds",
-    name: "feeds.title",
+    name: { en: "Atom Feeds of New Federal Tenders", fr: "Fils Atom des appels d'offres fédéraux" },
     description: {
       en: "Atom feeds of new tender notices and award notices: all of Canada, by segment, by province and by buyer.",
       fr: "Fils Atom des nouveaux avis d'appel d'offres et d'attribution : tout le Canada, par segment, par province et par acheteur.",
@@ -133,7 +148,7 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     name: "watch.title",
     description: {
       en: "Follow organizations from this browser and see which have new records since your last visit. Nothing is sent to the site.",
-      fr: "Suivez des organisations à partir de ce navigateur et voyez lesquelles ont de nouveaux dossiers depuis votre dernière visite. Rien n'est transmis au site.",
+      fr: "Suivez des organisations à partir de ce navigateur et voyez lesquelles ont de nouveaux dossiers depuis votre dernière visite.",
     },
   },
   about: {
@@ -149,7 +164,7 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     name: { en: "Terms of Use", fr: "Conditions d'utilisation" },
     description: {
       en: "The terms for reading Award Watch, reusing its files under the Open Government Licence, Canada, and subscribing to Pro.",
-      fr: "Les conditions de lecture d'Award Watch, de réutilisation de ses fichiers sous la Licence du gouvernement ouvert, Canada, et d'abonnement à Pro.",
+      fr: "Les conditions de lecture d'Award Watch, de réutilisation de ses fichiers sous la Licence du gouvernement ouvert, Canada, et de Pro.",
     },
   },
   privacy: {
@@ -162,10 +177,10 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
   },
   alerts: {
     path: "/alerts",
-    name: "alerts.title",
+    name: { en: "Email Alerts for New Federal Tenders", fr: "Alertes courriel des appels d'offres fédéraux" },
     description: {
-      en: "Email lists of new federal tender notices, by category, segment and province, and of contracts entering the 3-month window. Part of Pro once accounts open.",
-      fr: "Nouveaux appels d'offres fédéraux, par catégorie, segment et province, et contrats qui entrent dans la période de 3 mois. Avec Pro dès l'ouverture des comptes.",
+      en: "Email lists of new federal tender notices by category, segment and province, and of contracts entering the 3-month window. Delivery is part of Pro.",
+      fr: "Listes par courriel des nouveaux appels d'offres fédéraux par catégorie, segment et province, et des contrats à 3 mois. L'envoi fait partie de Pro.",
     },
   },
   methodology: {
@@ -173,15 +188,15 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     name: { en: "Methodology: Sources, Identity and Counting", fr: "Méthodologie : sources, identité et calculs" },
     description: {
       en: "How the site reads each federal source, merges organizations and buyers, totals money source by source, and what it does not claim.",
-      fr: "Comment le site lit chaque source fédérale, fusionne organisations et acheteurs, totalise les montants source par source, et ce qu'il n'affirme pas.",
+      fr: "Comment le site lit chaque source fédérale, fusionne organisations et acheteurs, totalise les montants par source, et ce qu'il n'affirme pas.",
     },
   },
   data: {
     path: "/data",
-    name: { en: "Data: Sources, Downloads, API and Licence", fr: "Données : sources, téléchargements, API et licence" },
+    name: { en: "Federal Procurement Data: CSV, API, Licence", fr: "Données des marchés fédéraux : CSV et API" },
     description: {
-      en: "The open-data files the site reads, when each was last read, the CSV downloads, the read-only JSON API and the licence.",
-      fr: "Les fichiers de données ouvertes que lit le site, leur dernière lecture, les téléchargements CSV, l'API JSON en lecture seule et la licence.",
+      en: "CSV downloads of federal tenders, awards, contracts, grants, organizations and buyers, the open JSON API, the source files and the licence.",
+      fr: "Téléchargements CSV des appels d'offres, attributions, contrats, subventions, organisations et acheteurs fédéraux, l'API JSON et la licence.",
     },
   },
   cite: {
@@ -196,10 +211,26 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/corrections",
     name: "form.correct_title",
     description: {
-      en: "Report a wrong organization match, a buyer mapped to the wrong institution or a record shown wrongly. Changes are logged on the page after review.",
-      fr: "Signalez un mauvais appariement d'organisation, un acheteur mal associé ou un dossier mal affiché. Les changements sont consignés sur la page après examen.",
+      en: "Report a wrong organization match, a buyer mapped to the wrong institution or a record shown wrongly. Changes are logged after review.",
+      fr: "Signalez un mauvais appariement d'organisation, un acheteur mal associé ou un dossier mal affiché. Les changements sont consignés.",
     },
   },
+  pro: {
+    path: "/pro",
+    name: { en: "Pro: Tender Alerts and Contracts Ending", fr: "Pro : alertes et contrats prenant fin" },
+    description: {
+      en: "Pro adds same-day tender notices, the full 6- and 12-month lists of contracts ending, saved searches sent by email, analytics and a keyed API.",
+      fr: "Pro ajoute les avis du jour même, les listes de 6 et 12 mois des contrats prenant fin, l'envoi des recherches par courriel, les analyses et une API.",
+    },
+  },
+};
+
+// The result-list titles of the radar's three windows, where the page's
+// heading ("Contracts Ending Within 3 Months") leaves out "federal".
+const WINDOW_TITLES: Record<string, Both> = {
+  "3m": { en: "Federal Contracts Ending Within 3 Months", fr: "Contrats fédéraux prenant fin d'ici 3 mois" },
+  "6m": { en: "Federal Contracts Ending Within 6 Months", fr: "Contrats fédéraux prenant fin d'ici 6 mois" },
+  "12m": { en: "Federal Contracts Ending Within 12 Months", fr: "Contrats fédéraux prenant fin d'ici 12 mois" },
 };
 
 // French strings written here get the dictionary's typography (apostrophe,
@@ -251,27 +282,51 @@ export function absoluteUrl(path: string): string {
   return `${SITE_ORIGIN}${path}`;
 }
 
-// The publisher is the project, never a person.
-const PUBLISHER = {
-  "@type": "Organization",
-  name: SITE_NAME,
-  url: `${SITE_ORIGIN}/`,
-};
+/// The publisher: Allwater Software Inc., the British Columbia corporation the
+// About and Terms pages name, never a person. The logo is the site's mark
+// (public/brand/mark-512.png), which Google takes for an organization's logo
+// at 112 px square or more.
+export const PUBLISHER_NAME = "Allwater Software Inc.";
+export const LOGO_PATH = "/brand/mark-512.png";
+export const LOGO_SIZE = 512;
+const ORG_ID = `${SITE_ORIGIN}/#organization`;
+
+function publisher(lang: Lang): Record<string, unknown> {
+  return {
+    "@type": "Organization",
+    "@id": ORG_ID,
+    name: PUBLISHER_NAME,
+    url: canonicalUrl("/about", lang),
+    logo: { "@type": "ImageObject", url: absoluteUrl(LOGO_PATH), width: LOGO_SIZE, height: LOGO_SIZE },
+    address: { "@type": "PostalAddress", addressRegion: "BC", addressCountry: "CA" },
+  };
+}
+
+// The site search (pages/search.tsx), organizations and buyers by name. Google
+// retired the sitelinks search box in 2024; other readers of the markup still
+// take the action.
+export function searchUrlTemplate(lang: Lang): string {
+  return `${SITE_ORIGIN}/search?q={search_term_string}${lang === "fr" ? "&lang=fr" : ""}`;
+}
 
 export function homeJsonLd(lang: Lang): object {
-  const org = `${SITE_ORIGIN}/#organization`;
   return {
     "@context": "https://schema.org",
     "@graph": [
-      { ...PUBLISHER, "@id": org },
+      publisher(lang),
       {
         "@type": "WebSite",
         "@id": `${SITE_ORIGIN}/#website`,
         name: SITE_NAME,
-        url: `${SITE_ORIGIN}/`,
+        url: canonicalUrl("/", lang),
         description: local(lang, PAGES.home.description),
         inLanguage: ["en-CA", "fr-CA"],
-        publisher: { "@id": org },
+        publisher: { "@id": ORG_ID },
+        potentialAction: {
+          "@type": "SearchAction",
+          target: { "@type": "EntryPoint", urlTemplate: searchUrlTemplate(lang) },
+          "query-input": "required name=search_term_string",
+        },
       },
     ],
   };
@@ -287,14 +342,6 @@ export const OGL_URL: Both = {
   fr: "https://ouvert.canada.ca/fr/licence-du-gouvernement-ouvert-canada",
 };
 
-const SOURCE_DATASETS = [
-  "https://open.canada.ca/data/en/dataset/6abd20d4-7a1c-4b38-baa2-9525d0bb2fd2",
-  "https://open.canada.ca/data/en/dataset/a1acb126-9ce8-40a9-b889-5da2b1dd20cb",
-  "https://open.canada.ca/data/en/dataset/4fe645a1-ffcd-40c1-9385-2c771be956a4",
-  "https://open.canada.ca/data/en/dataset/d8f85d91-7dec-4fd1-8055-483b77225d8b",
-  "https://open.canada.ca/data/en/dataset/432527ab-7aac-45b5-81d6-7597107a7013",
-  "https://open.canada.ca/data/en/dataset/a34eb330-7136-4f5e-9f5f-3ba41df58b06",
-];
 const DATASET_NAME: Both = {
   en: "Award Watch: Federal Tenders, Contracts, Grants and Lobbying by Organization",
   fr: "Award Watch : appels d'offres, contrats, subventions et lobbying fédéraux par organisation",
@@ -315,34 +362,185 @@ const DATASET_KEYWORDS: Record<Lang, string[]> = {
   fr: ["approvisionnement fédéral", "appels d'offres", "contrats", "subventions et contributions", "lobbying", "AchatsCanada", "divulgation proactive", "Canada"],
 };
 
-export function datasetJsonLd(downloads: { file: string; contents: string }[], dataAsOf: string | null, lang: Lang): object {
+// The downloadable sets of the Data page, each a Dataset of its own inside
+// the site's (hasPart), with its files, its licence and the government
+// dataset it is read from. The 12-month radar file is Pro's and is left out;
+// the 3-month file stands for the radar.
+export const DATA_SETS = ["open-tenders", "awards", "history", "contracts", "grants", "organizations", "buyers", "expiring-3m"] as const;
+export type DataSetId = (typeof DATA_SETS)[number];
+export type DataSet = { id: DataSetId; files: readonly string[]; basedOn: readonly string[]; from?: number };
+
+const SET_TEXT: Record<DataSetId, { name: Both; description: Both }> = {
+  "open-tenders": {
+    name: { en: "Open Federal Tender Notices", fr: "Avis d'appel d'offres fédéraux ouverts" },
+    description: {
+      en: "Every tender notice open on CanadaBuys on the data date, one row per notice with its list fields: reference, title, buyer, closing date, UNSPSC segments and regions.",
+      fr: "Tous les avis d'appel d'offres ouverts sur AchatsCanada à la date des données, une ligne par avis avec ses champs de liste : référence, titre, acheteur, clôture, segments UNSPSC et régions.",
+    },
+  },
+  awards: {
+    name: { en: "Federal Contract Award Notices by Year", fr: "Avis d'attribution de contrats fédéraux par année" },
+    description: {
+      en: "The award notices published on CanadaBuys, one file per calendar year of award: supplier, buyer, value, procurement method and the organization ID each supplier is merged under.",
+      fr: "Les avis d'attribution publiés sur AchatsCanada, un fichier par année d'attribution : fournisseur, acheteur, valeur, méthode d'approvisionnement et l'identifiant de l'organisation.",
+    },
+  },
+  history: {
+    name: { en: "PSPC Contract History by Year", fr: "Historique des contrats de SPAC par année" },
+    description: {
+      en: "The contracts Public Services and Procurement Canada awarded for federal departments, one file per calendar year of award, with supplier, client department and value.",
+      fr: "Les contrats que Services publics et Approvisionnement Canada a attribués pour les ministères, un fichier par année d'attribution, avec fournisseur, ministère client et valeur.",
+    },
+  },
+  contracts: {
+    name: { en: "Published Federal Contracts over $10,000 by Year", fr: "Contrats fédéraux publiés de plus de 10 000 $ par année" },
+    description: {
+      en: "The contracts over $10,000 federal departments publish under proactive disclosure, one file per calendar year of contract date, one row per row published, amendments included.",
+      fr: "Les contrats de plus de 10 000 $ que publient les ministères fédéraux en divulgation proactive, un fichier par année de la date du contrat, une ligne par ligne publiée.",
+    },
+  },
+  grants: {
+    name: { en: "Federal Grants and Contributions by Year", fr: "Subventions et contributions fédérales par année" },
+    description: {
+      en: "The grant and contribution agreements federal departments publish, one file per calendar year of agreement start, one row per amendment, with recipient, program and value.",
+      fr: "Les accords de subvention et de contribution que publient les ministères fédéraux, un fichier par année de début, une ligne par modification, avec bénéficiaire, programme et valeur.",
+    },
+  },
+  organizations: {
+    name: { en: "Organizations Receiving Federal Money", fr: "Organisations qui reçoivent des fonds fédéraux" },
+    description: {
+      en: "One row per organization named in the federal records the site reads: its stable ID, name, place, and its counts and totals in each source, each source counted on its own.",
+      fr: "Une ligne par organisation nommée dans les dossiers fédéraux que lit le site : identifiant stable, nom, lieu, et ses nombres et totaux dans chaque source, comptés séparément.",
+    },
+  },
+  buyers: {
+    name: { en: "Federal Buyers", fr: "Acheteurs fédéraux" },
+    description: {
+      en: "One row per federal department, agency and Crown corporation that buys or funds, with its counts and totals in each source: tenders, awards, contracts and grants.",
+      fr: "Une ligne par ministère, organisme et société d'État fédéral qui achète ou finance, avec ses nombres et totaux dans chaque source : appels d'offres, attributions, contrats, subventions.",
+    },
+  },
+  "expiring-3m": {
+    name: { en: "Federal Contracts Ending Within 3 Months", fr: "Contrats fédéraux prenant fin d'ici 3 mois" },
+    description: {
+      en: "Every federal contract ending within 3 months of the data date, each listed once across award notices, PSPC contract history and published contracts, with the incumbent supplier.",
+      fr: "Chaque contrat fédéral qui prend fin dans les 3 mois suivant la date des données, inscrit une seule fois entre les sources, avec le fournisseur en place.",
+    },
+  },
+};
+
+const fr = (lang: Lang, s: string) => (lang === "fr" ? frTypography(s) : s);
+
+function setJsonLd(set: DataSet, dataAsOf: string | null, lang: Lang, org: Record<string, unknown>): object {
+  const text = SET_TEXT[set.id];
+  return {
+    "@type": "Dataset",
+    "@id": `${SITE_ORIGIN}/data#${set.id}`,
+    name: local(lang, text.name),
+    description: local(lang, text.description),
+    url: canonicalUrl("/data", lang) + "#downloads",
+    license: OGL_URL[lang],
+    isAccessibleForFree: true,
+    creator: org,
+    publisher: org,
+    inLanguage: lang,
+    spatialCoverage: { "@type": "Place", name: "Canada" },
+    ...(set.from ? { temporalCoverage: `${set.from}/..` } : {}),
+    ...(dataAsOf ? { dateModified: dataAsOf } : {}),
+    isBasedOn: [...set.basedOn],
+    distribution: set.files.map((file) => ({
+      "@type": "DataDownload",
+      name: file,
+      encodingFormat: "text/csv",
+      contentUrl: absoluteUrl(`/downloads/${file}`),
+      license: OGL_URL[lang],
+    })),
+  };
+}
+
+export function datasetJsonLd(sets: readonly DataSet[], dataAsOf: string | null, lang: Lang): object {
+  const org = publisher(lang);
   return {
     "@context": "https://schema.org",
     "@type": "Dataset",
     "@id": `${SITE_ORIGIN}/data#dataset`,
     name: local(lang, DATASET_NAME),
     description: local(lang, DATASET_DESCRIPTION),
-    url: absoluteUrl("/data"),
-    keywords: DATASET_KEYWORDS[lang].map((k) => (lang === "fr" ? frTypography(k) : k)),
+    url: canonicalUrl("/data", lang),
+    keywords: DATASET_KEYWORDS[lang].map((k) => fr(lang, k)),
     license: OGL_URL[lang],
     isAccessibleForFree: true,
     creditText: t(lang, "data.credit"),
-    creator: PUBLISHER,
-    publisher: PUBLISHER,
+    creator: org,
+    publisher: org,
     inLanguage: lang,
     spatialCoverage: { "@type": "Place", name: "Canada" },
-    temporalCoverage: "2009/..",
+    temporalCoverage: "2004/..",
     ...(dataAsOf ? { dateModified: dataAsOf } : {}),
-    isBasedOn: SOURCE_DATASETS,
-    distribution: downloads.map((d) => ({
-      "@type": "DataDownload",
-      name: d.file,
-      description: d.contents,
-      encodingFormat: "text/csv",
-      contentUrl: absoluteUrl(`/downloads/${d.file}`),
-      license: OGL_URL[lang],
-    })),
+    isBasedOn: [...new Set(sets.flatMap((s) => s.basedOn))],
+    hasPart: sets.map((s) => setJsonLd(s, dataAsOf, lang, org)),
   };
+}
+
+// The Pro page (pages/pro.tsx): the plan as a Product with one Offer per
+// billing period, at the figures the billing page prints (the operator's
+// PRICE_MONTHLY_CAD and PRICE_YEARLY_CAD), taxes not included; and the
+// page's questions as a FAQPage, word for word as the page shows them. No
+// Product without a price: the page leaves it out while the checkout is
+// not configured.
+export type Faq = { q: string; a: string };
+
+export function proJsonLd(
+  lang: Lang, o: { price: { monthly: string; yearly: string } | null; description: string; faq: readonly Faq[] },
+): object[] {
+  const url = canonicalUrl("/pro", lang);
+  const org = publisher(lang);
+  const offer = (figure: string, unit: "MON" | "ANN", name: Both) => ({
+    "@type": "Offer",
+    name: local(lang, name),
+    price: figure,
+    priceCurrency: "CAD",
+    availability: "https://schema.org/InStock",
+    url,
+    seller: org,
+    priceSpecification: {
+      "@type": "UnitPriceSpecification",
+      price: figure,
+      priceCurrency: "CAD",
+      valueAddedTaxIncluded: false,
+      referenceQuantity: { "@type": "QuantitativeValue", value: 1, unitCode: unit },
+    },
+  });
+  const out: object[] = [];
+  if (o.price) {
+    out.push({
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "@id": `${SITE_ORIGIN}/pro#product`,
+      name: "Award Watch Pro",
+      description: o.description,
+      url,
+      image: absoluteUrl(LOGO_PATH),
+      brand: { "@type": "Brand", name: SITE_NAME },
+      category: lang === "fr" ? "Abonnement à un service de données" : "Data service subscription",
+      offers: [
+        offer(o.price.monthly, "MON", { en: "Pro, monthly", fr: "Pro, mensuel" }),
+        offer(o.price.yearly, "ANN", { en: "Pro, yearly", fr: "Pro, annuel" }),
+      ],
+    });
+  }
+  out.push({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "@id": `${SITE_ORIGIN}/pro#faq`,
+    inLanguage: lang,
+    mainEntity: o.faq.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  });
+  return out;
 }
 
 // The visible trail of a page, as structured data. Every crumb but the last
@@ -381,13 +579,16 @@ export function sectionSeo(path: string, title: string, description: string, cru
 }
 
 // One window of the contracts ending soon. A filtered or later page is a view
-// of the window's first page and stays out of the index.
+// of the window's first page and stays out of the index. The result list
+// names the window as a federal one (WINDOW_TITLES); the heading stays.
 export function expiringWindowSeo(
   path: string, title: string, lang: Lang, crumbs: { name: string; path?: string }[],
   o: { n: number; months: string; date: string; noindex: boolean },
 ): Seo {
   const description = t(lang, "expiring.window_description", { n: fmtInt(o.n, lang), months: o.months, date: o.date });
-  return sectionSeo(path, title, description, crumbs, o.noindex);
+  const named = WINDOW_TITLES[path.slice(path.lastIndexOf("/") + 1)];
+  const listed = named ? local(lang, named) : title;
+  return { ...sectionSeo(path, listed, description, crumbs, o.noindex), socialTitle: listed };
 }
 
 function plural(n: number, one: string, many: string, lang: Lang): string {
@@ -512,18 +713,7 @@ export function segmentSeo(seg: Category, lang: Lang, crumbs: { name: string; pa
 
 // --- Crawler files ---------------------------------------------------------
 
-const XML_HEADERS = { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" };
-
-// The pipeline writes the sitemap index and its parts under data/sitemaps/.
-// They are served from the site root (/sitemap.xml, /sitemap-<n>.xml) because a
-// sitemap may only list URLs at or below its own directory. The Worker streams
-// the file without parsing it.
-export async function sitemapFile(c: Context<AppEnv>): Promise<Response> {
-  const m = /^sitemap(?:-([0-9]{1,4}))?\.xml$/.exec(c.req.param("file") ?? "");
-  const res = m ? await assetResponse(c.env, `sitemaps/${m[1] ? `sitemap-${m[1]}` : "index"}.xml`) : null;
-  if (!res) return c.notFound();
-  return new Response(res.body, { headers: XML_HEADERS });
-}
+// The sitemaps are src/sitemaps.ts's.
 
 async function textFile(c: Context<AppEnv>, name: string): Promise<Response> {
   const res = c.env.ASSETS ? await c.env.ASSETS.fetch(new Request(`https://assets.invalid/${name}`)) : null;

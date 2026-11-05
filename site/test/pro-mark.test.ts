@@ -374,9 +374,10 @@ describe("same-day notices", () => {
       expect(panel).toContain("<li>same-day tender notices on the tender lists, read from CanadaBuys every two hours</li>");
       expect(panel).toContain('<p>The <a href="/tenders">list of open notices</a>, the <a href="/tenders/new">new notices by day</a> and their feeds stay free, refreshed every morning.</p>');
       expect(panel).toContain(`<p class="pro-price">Pro is CA$${PRICE[1]} a month or CA$${PRICE[2]} a year, taxes added at checkout.</p>`);
-      expect(panel.match(/class="btn/g), who).toHaveLength(1);
+      // A reader not signed in also gets the Pro page (pages/pro.tsx), as a second button.
+      expect(panel.match(/class="btn/g), who).toHaveLength(cookie ? 1 : 2);
       expect(panel).toContain(cookie ? '<a href="/account" class="btn btn-primary">Your account</a>'
-        : '<a href="/account/sign-in" class="btn btn-primary">Sign in or create an account</a>');
+        : '<a href="/account/sign-in" class="btn btn-primary">Sign in or create an account</a> <a href="/pro" class="btn">About Pro</a>');
       expect(page).not.toContain("intraday");
     }
     const fr = decode(await html("/tenders/same-day?lang=fr", { env: on() }));

@@ -301,7 +301,7 @@ describe("the alerts page and the privacy page", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("<h1>Email Lists</h1>");
-    expect(html).toContain("<title>Email Lists | Award Watch</title>");
+    expect(html).toContain("<title>Email Alerts for New Federal Tenders | Award Watch</title>");
     expect(decode(html)).toContain(
       "Email lists are part of Pro, the site's paid plan, once accounts open. Sign up now and your lists will be waiting in your account. " +
       "Nothing is sent before then except one message saying accounts are open.",
@@ -333,7 +333,7 @@ describe("the alerts page and the privacy page", () => {
     expect(fr.status).toBe(200);
     const french = nbsp(await fr.text());
     expect(french).toContain("<h1>Listes de diffusion</h1>");
-    expect(french).toContain("<title>Listes de diffusion | Award Watch</title>");
+    expect(french).toContain("<title>Alertes courriel des appels d’offres fédéraux | Award Watch</title>");
     expect(french).toContain("Les listes de diffusion font partie de Pro, le forfait payant du site, dès l’ouverture des comptes.");
     expect(french).toContain("D’ici là, rien n’est envoyé, sauf un message annonçant l’ouverture des comptes.");
     expect(french).toContain('<h2 id="cover">Ce que Pro envoie</h2>');

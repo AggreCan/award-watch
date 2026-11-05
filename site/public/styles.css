@@ -1065,3 +1065,22 @@ a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offse
 .levels tr.level-family td { font-weight: 600; }
 .levels tr.level-family .muted { font-weight: 400; }
 .levels tr.level-class td:first-child, .levels tr.level-class td:nth-child(2) { padding-left: 16px; }
+
+/* -- search framing (docs/seo.md) ----------------------------------------------
+   The home page's "What You Can Do Here" (pages/home.tsx, HomeDo): one line
+   a task with its link first, no bullets, two columns from 1000 px and one
+   below. The Pro page (pages/pro.tsx): the price and the way in under the
+   lead, and again after the questions over a hairline. The tease panel's
+   buttons (src/pro.tsx, ProPanel) keep the 8 px step in a row. */
+.home-do-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 32px; padding: 0; list-style: none; }
+.home-do-list li { margin: 0; line-height: 20px; }
+.home-do-list li > a:first-child { font-weight: 600; }
+@media (min-width: 1000px) {
+  .home-do-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.pro-offer { margin-top: 16px; }
+.pro-offer p { margin: 0 0 8px; }
+.pro-offer .pro-price { font-weight: 600; color: var(--ink); }
+.pro-offer-actions, .pro-panel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.doc > .pro-offer { margin: 16px 0 0; padding-top: 16px; border-top: 1px solid var(--border); }
+.doc > .pro-offer p:last-child { margin-bottom: 0; }

@@ -290,9 +290,11 @@ const STRINGS = {
 
   // -- home ----------------------------------------------------------------------------
   "home.title": { en: "Federal Tenders, Contracts and Grants, by Organization", fr: "Appels d'offres, contrats et subventions du fédéral, par organisation" },
+  // The lead names what a reader comes for (docs/seo.md); home.lead_n, with
+  // the organizations counted in stats.json, when the export carries the count.
   "home.lead": {
-    en: "The tender notices open on CanadaBuys, the contracts awarded after them, and the contracts, grants and lobbying the government publishes, gathered under the organizations they name. From the government's open data, refreshed nightly.",
-    fr: "Les avis d'appel d'offres ouverts sur AchatsCanada, les contrats attribués ensuite, ainsi que les contrats, subventions et communications de lobbying que publie le gouvernement, regroupés sous les organisations qu'ils nomment. D'après les données ouvertes du gouvernement, mises à jour chaque nuit.",
+    en: "The tender notices open on CanadaBuys, who won the contracts awarded after them, and the contracts ending within a year, with a page for each department and for each organization the records name. From the Government of Canada's open data, refreshed nightly.",
+    fr: "Les avis d'appel d'offres ouverts sur AchatsCanada, qui a remporté les contrats attribués ensuite et les contrats qui prennent fin d'ici un an, avec une page pour chaque ministère et pour chaque organisation que nomment les dossiers. D'après les données ouvertes du gouvernement du Canada, mises à jour chaque nuit.",
   },
   "home.quick_open": { en: "Open tenders", fr: "Appels d'offres ouverts" },
   "home.quick_closing": { en: "Closing this week", fr: "Clôture cette semaine" },
@@ -2876,6 +2878,104 @@ const STRINGS = {
     fr: "Les 50 avis d'attribution, dossiers de l'historique des contrats, contrats publiés et subventions les plus récents nommant l'organisation.",
   },
   "orgfeed.button": { en: "Records feed", fr: "Fil des dossiers" },
+  // -- search framing (docs/seo.md): the Pro page (src/pages/pro.tsx), the
+  // footer's link to it, the tease panel's second button, and the home page's
+  // "What You Can Do Here" lines. {monthly} and {yearly} are the operator's
+  // figures from wrangler.jsonc, never written here.
+  "footer.pro": { en: "Pro plan", fr: "Forfait Pro" },
+  "pro.about_button": { en: "About Pro", fr: "À propos de Pro" },
+  "propage.title": { en: "Pro: What the Paid Plan Adds", fr: "Pro : ce qu'ajoute le forfait payant" },
+  "propage.lead": {
+    en: "Pro is the paid plan of Award Watch, for people who bid on federal work or follow who wins it. It adds same-day tender notices, the full lists of contracts ending within 6 and 12 months, saved searches sent by email, analytics of each buyer, organization and segment, and a keyed API. Every page you can read today stays free.",
+    fr: "Pro est le forfait payant d'Award Watch, pour qui soumissionne aux marchés fédéraux ou suit qui les remporte. Il ajoute les avis d'appel d'offres du jour même, les listes complètes des contrats prenant fin d'ici 6 et 12 mois, l'envoi des recherches enregistrées par courriel, les analyses de chaque acheteur, organisation et segment, et une API à clé. Toutes les pages que vous lisez aujourd'hui restent gratuites.",
+  },
+  "propage.records": {
+    en: "Every record of an organization or a buyer in one table, with its filters, its pages and a CSV file; the Free plan sees the newest {n}.",
+    fr: "Tous les dossiers d'une organisation ou d'un acheteur dans un tableau, avec ses filtres, ses pages et un fichier CSV; le forfait Gratuit voit les {n} plus récents.",
+  },
+  "propage.incumbents": {
+    en: "The whole list of who holds a buyer's or a segment's contracts ending within 12 months; the Free plan sees the first {n}.",
+    fr: "La liste complète de qui détient les contrats d'un acheteur ou d'un segment prenant fin d'ici 12 mois; le forfait Gratuit voit les {n} premiers.",
+  },
+  "propage.api": {
+    en: "A keyed API for scripts: the open tenders, each day's new notices, the contracts ending in each window, search, and each organization's and buyer's records, up to {day} requests a day and {minute} a minute.",
+    fr: "Une API à clé pour les scripts : les appels d'offres ouverts, les nouveaux avis de chaque jour, les contrats prenant fin dans chaque période, la recherche et les dossiers de chaque organisation et acheteur, jusqu'à {day} requêtes par jour et {minute} par minute.",
+  },
+  "propage.who_title": { en: "Who It Is For", fr: "À qui il s'adresse" },
+  "propage.who_bid": {
+    en: "Bid writers and small suppliers who want a notice the day CanadaBuys posts it, not the next morning.",
+    fr: "Les rédacteurs de soumissions et les petits fournisseurs qui veulent un avis le jour où AchatsCanada le publie, et non le lendemain.",
+  },
+  "propage.who_capture": {
+    en: "Capture and business development staff who track which contracts in their field end within the year, who holds them and how they were awarded.",
+    fr: "Les équipes de développement des affaires qui suivent les contrats de leur domaine qui prennent fin dans l'année, qui les détient et comment ils ont été attribués.",
+  },
+  "propage.who_research": {
+    en: "Consultants, researchers and journalists who follow a department, a supplier or a segment over several fiscal years and want the tables as CSV.",
+    fr: "Les consultants, chercheurs et journalistes qui suivent un ministère, un fournisseur ou un segment sur plusieurs exercices et veulent les tableaux en CSV.",
+  },
+  "propage.free_title": { en: "What Stays Free", fr: "Ce qui reste gratuit" },
+  "propage.free_text": {
+    en: "Every page of the site, without an account: the open tenders and each day's new notices from the nightly refresh, every award notice, organization profile and buyer page, the contracts ending within 3 months, the CSV downloads, the open JSON API and the Atom feeds.",
+    fr: "Toutes les pages du site, sans compte : les appels d'offres ouverts et les nouveaux avis de chaque jour selon la mise à jour de nuit, chaque avis d'attribution, profil d'organisation et page d'acheteur, les contrats prenant fin d'ici 3 mois, les téléchargements CSV, l'API JSON ouverte et les fils Atom.",
+  },
+  "propage.sign_in_note": {
+    en: "An account needs only an email address: the site sends a code to sign in, and there is no password.",
+    fr: "Un compte ne demande qu'une adresse courriel : le site envoie un code pour se connecter, sans mot de passe.",
+  },
+  "propage.billing": { en: "Plan and billing", fr: "Forfait et facturation" },
+  "propage.faq_title": { en: "Common Questions", fr: "Questions fréquentes" },
+  "propage.q_price": { en: "What does Pro cost?", fr: "Combien coûte Pro?" },
+  "propage.a_price": {
+    en: "CA${monthly} a month or CA${yearly} a year, in Canadian dollars. Taxes are added at checkout according to the buyer's location.",
+    fr: "{monthly} $ CA par mois ou {yearly} $ CA par année, en dollars canadiens. Les taxes sont ajoutées au paiement selon le lieu de l'acheteur.",
+  },
+  "propage.q_free": { en: "Do I need Pro to read the site?", fr: "Faut-il Pro pour consulter le site?" },
+  "propage.a_free": {
+    en: "No. Every page stays free to read without an account, along with the CSV downloads, the open JSON API and the Atom feeds.",
+    fr: "Non. Toutes les pages restent gratuites, sans compte, tout comme les téléchargements CSV, l'API JSON ouverte et les fils Atom.",
+  },
+  "propage.q_alerts": { en: "How do the email alerts work?", fr: "Comment fonctionnent les alertes par courriel?" },
+  "propage.a_alerts": {
+    en: "Save a filtered tender list or radar window, or an organization, a buyer or a segment, and choose daily or weekly email. Each message lists what is new since the last one. Pro keeps up to {n} saved searches.",
+    fr: "Enregistrez une liste d'appels d'offres ou une période du radar filtrée, ou une organisation, un acheteur ou un segment, puis choisissez un courriel quotidien ou hebdomadaire. Chaque message énumère ce qui est nouveau depuis le précédent. Pro conserve jusqu'à {n} recherches.",
+  },
+  "propage.q_source": { en: "Where does the data come from?", fr: "D'où viennent les données?" },
+  "propage.a_source": {
+    en: "From the Government of Canada's open data: CanadaBuys tender and award notices, PSPC contract history, the contracts over $10,000 and the grants departments publish, and the Registry of Lobbyists. The site reads them every night; the same-day notices are read from CanadaBuys every two hours through the business day.",
+    fr: "Des données ouvertes du gouvernement du Canada : les avis d'appel d'offres et d'attribution d'AchatsCanada, l'historique des contrats de SPAC, les contrats de plus de 10 000 $ et les subventions que publient les ministères, et le Registre des lobbyistes. Le site les lit chaque nuit; les avis du jour même sont lus sur AchatsCanada toutes les deux heures pendant la journée de travail.",
+  },
+  "propage.q_cancel": { en: "Can I cancel?", fr: "Puis-je annuler?" },
+  "propage.q_seller": { en: "Who sells Pro?", fr: "Qui vend Pro?" },
+  "propage.a_seller": {
+    en: "Pro is sold through Link, the merchant of record run by Stripe, on behalf of Allwater Software Inc., the British Columbia corporation that publishes Award Watch. Card details go to Stripe and never reach this site; Link sends the receipts.",
+    fr: "Pro est vendu par l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le compte d'Allwater Software Inc., la société de la Colombie-Britannique qui publie Award Watch. Les données de carte vont à Stripe et n'atteignent jamais ce site; Link envoie les reçus.",
+  },
+  "home.lead_n": {
+    en: "The tender notices open on CanadaBuys, who won the contracts awarded after them, and the contracts ending within a year, with a page for each department and for each of the {n} organizations the records name. From the Government of Canada's open data, refreshed nightly.",
+    fr: "Les avis d'appel d'offres ouverts sur AchatsCanada, qui a remporté les contrats attribués ensuite et les contrats qui prennent fin d'ici un an, avec une page pour chaque ministère et pour chacune des {n} organisations que nomment les dossiers. D'après les données ouvertes du gouvernement du Canada, mises à jour chaque nuit.",
+  },
+  "home.do_heading": { en: "What You Can Do Here", fr: "Ce que vous pouvez faire ici" },
+  "home.do_tenders_link": { en: "Watch tenders", fr: "Suivre les appels d'offres" },
+  "home.do_tenders": {
+    en: "{link}: the open notices by segment, region, buyer and closing date, and the new ones each day.",
+    fr: "{link} : les avis ouverts par segment, région, acheteur et date de clôture, et les nouveaux de chaque jour.",
+  },
+  "home.do_awards_link": { en: "Find who wins", fr: "Voir qui gagne" },
+  "home.do_awards": {
+    en: "{link}: each award notice with its supplier and value, and each supplier's and department's records over the years.",
+    fr: "{link} : chaque avis d'attribution avec son fournisseur et sa valeur, et les dossiers de chaque fournisseur et ministère au fil des ans.",
+  },
+  "home.do_expiring_link": { en: "See what ends soon", fr: "Voir ce qui prend fin" },
+  "home.do_expiring": {
+    en: "{link}: contracts ending within 3, 6 and 12 months, with the incumbent, the method and the amendments.",
+    fr: "{link} : les contrats prenant fin d'ici 3, 6 et 12 mois, avec le fournisseur en place, la méthode et les modifications.",
+  },
+  "home.do_pro_link": { en: "Get it by email with Pro", fr: "Tout recevoir par courriel avec Pro" },
+  "home.do_pro": {
+    en: "{link}: saved searches sent daily or weekly, and the notices CanadaBuys posts during the day.",
+    fr: "{link} : les recherches enregistrées envoyées chaque jour ou chaque semaine, et les avis qu'AchatsCanada publie pendant la journée.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

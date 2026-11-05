@@ -123,11 +123,15 @@ describe("with the switch on", () => {
   // the chip on the rail's Pro entries, the rail's same-day entry, the gate
   // note in the tender list's head, and on a profile the link to its
   // analytics view, marked Pro (nothing a free reader is offered is hidden;
-  // operator's ruling of 2026-11-03, docs/analytics.md). Nothing else changes.
+  // operator's ruling of 2026-11-03, docs/analytics.md); and the links to the
+  // Pro page, in the footer and as the home page's email line (docs/seo.md).
+  // Nothing else changes.
   const CHIP = / ?<span class="pro-tag">[\s\S]*?<\/span><\/span>/g;
   const SAME_DAY_ITEM = /<li><a class="rail-item rail-child" href="\/tenders\/same-day">[\s\S]*?<\/a><\/li>/;
   const NOTE = /<p class="pro-note">[\s\S]*?<\/p>/;
   const ANALYTICS = /<a href="\/organizations\/org-a000000001\/analytics" class="btn" rel="nofollow">Analytics<\/a>/;
+  const FOOTER_PRO = '<a href="/pro">Pro plan</a>';
+  const HOME_PRO = /<li class="home-do-pro">[\s\S]*?<\/li>/;
 
   it("opens the routes and adds the account item, the Pro marks and a profile's analytics link, and nothing else on a public page", async () => {
     expect((await get("/account/sign-in")).status).toBe(200);
@@ -143,7 +147,10 @@ describe("with the switch on", () => {
       expect(rail, path).toMatch(SAME_DAY_ITEM);
       expect(NOTE.test(on.body), path).toBe(path === "/tenders");
       // The top bar's same-day timer leads to the tease while the switch is on and to the list while it is off.
+      expect(on.body, path).toContain(FOOTER_PRO);
+      expect(HOME_PRO.test(on.body), path).toBe(path === "/");
       const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(NOTE, "")
+        .replace(FOOTER_PRO, "").replace(HOME_PRO, "")
         .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');
       expect(ANALYTICS.test(stripped), path).toBe(path.startsWith("/organizations/"));
       expect(off.body, path).not.toContain("pro-tag");

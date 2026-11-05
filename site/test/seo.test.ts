@@ -33,30 +33,30 @@ const jsonLd = (head: string): any[] =>
 
 const O = "https://awardwatch.ca";
 const PAGES: [string, string, string][] = [
-  ["/", `${O}/`, "Award Watch: Federal Tenders, Contracts and Grants by Organization"],
-  ["/tenders", `${O}/tenders`, "Open Federal Tender Notices | Award Watch"],
-  ["/tenders/new", `${O}/tenders/new`, "New Federal Tender Notices by Day | Award Watch"],
+  ["/", `${O}/`, "Award Watch: Federal Tenders, Awards and Contracts Ending"],
+  ["/tenders", `${O}/tenders`, "Open Federal Tenders from CanadaBuys | Award Watch"],
+  ["/tenders/new", `${O}/tenders/new`, "New Federal Tenders by Day | Award Watch"],
   ["/tenders/cb-100-10000001", `${O}/tenders/cb-100-10000001`, "Translation services for regional offices | Award Watch"],
-  ["/awards", `${O}/awards`, "Federal Contract Award Notices | Award Watch"],
+  ["/awards", `${O}/awards`, "Federal Contract Awards: Who Won | Award Watch"],
   ["/awards/2026", `${O}/awards/2026`, "Award Notices in 2026 | Award Watch"],
   ["/awards/cb-400-40000004", `${O}/awards/cb-400-40000004`, "Translation standing offer, official languages | Award Watch"],
-  ["/expiring", `${O}/expiring`, "Federal Contracts Ending Soon | Award Watch"],
-  ["/expiring/3m", `${O}/expiring/3m`, "Contracts Ending Within 3 Months | Award Watch"],
+  ["/expiring", `${O}/expiring`, "Federal Contracts Ending Soon, with Incumbents | Award Watch"],
+  ["/expiring/3m", `${O}/expiring/3m`, "Federal Contracts Ending Within 3 Months | Award Watch"],
   ["/history/w8472-000633", `${O}/history/w8472-000633`, "Vessel refit, mid-shore patrol | Award Watch"],
-  ["/organizations", `${O}/organizations`, "Organizations Receiving Federal Money | Award Watch"],
+  ["/organizations", `${O}/organizations`, "Federal Suppliers and Grant Recipients | Award Watch"],
   ["/organizations/directory/on", `${O}/organizations/directory/on`, "Organizations A to Z: Ontario | Award Watch"],
   ["/organizations/org-a000000001", `${O}/organizations/org-a000000001`, "Exemplar Translation Services Inc. | Award Watch"],
-  ["/buyers", `${O}/buyers`, "Federal Buyers: Departments, Agencies and Crown Corporations | Award Watch"],
+  ["/buyers", `${O}/buyers`, "Federal Buyers: Departments and Agencies | Award Watch"],
   ["/buyers/pwgsc-tpsgc", `${O}/buyers/pwgsc-tpsgc`, "Public Services and Procurement Canada | Award Watch"],
-  ["/segments", `${O}/segments`, "Federal Procurement by Segment | Award Watch"],
+  ["/segments", `${O}/segments`, "Federal Tenders and Awards by UNSPSC Segment | Award Watch"],
   ["/segments/82", `${O}/segments/82`, "Editorial and Design and Graphic and Fine Art Services | Award Watch"],
-  ["/rankings", `${O}/rankings`, "Rankings: Organizations by Federal Contracts and Grants | Award Watch"],
+  ["/rankings", `${O}/rankings`, "Top Federal Suppliers and Grant Recipients | Award Watch"],
   ["/rankings/2026", `${O}/rankings/2026`, "Rankings for 2026 | Award Watch"],
-  ["/feeds", `${O}/feeds`, "Atom Feeds | Award Watch"],
-  ["/alerts", `${O}/alerts`, "Email Lists | Award Watch"],
+  ["/feeds", `${O}/feeds`, "Atom Feeds of New Federal Tenders | Award Watch"],
+  ["/alerts", `${O}/alerts`, "Email Alerts for New Federal Tenders | Award Watch"],
   ["/watchlist", `${O}/watchlist`, "Watchlist | Award Watch"],
   ["/methodology", `${O}/methodology`, "Methodology: Sources, Identity and Counting | Award Watch"],
-  ["/data", `${O}/data`, "Data: Sources, Downloads, API and Licence | Award Watch"],
+  ["/data", `${O}/data`, "Federal Procurement Data: CSV, API, Licence | Award Watch"],
   ["/cite", `${O}/cite`, "How to Cite | Award Watch"],
   ["/corrections?organization=org-a000000001", `${O}/corrections`, "Report a Correction | Award Watch"],
 ];
@@ -96,10 +96,10 @@ describe("page metadata", () => {
       expect(jsonLd(head)[0].itemListElement.map((i: any) => i.name)).toEqual(["Accueil", "Organisations", "Ontario", "Exemplar Translation Services Inc."]);
     }
     const home = await headOf("/?lang=fr");
-    expect(nbsp(title(home))).toBe("Award Watch : appels d’offres, contrats et subventions fédéraux par organisation");
+    expect(nbsp(title(home))).toBe("Award Watch : appels d’offres et contrats fédéraux du Canada");
     expect(canonical(home)).toBe(`${O}/?lang=fr`);
     const data = await headOf("/data?lang=fr");
-    expect(nbsp(title(data))).toBe("Données : sources, téléchargements, API et licence | Award Watch");
+    expect(nbsp(title(data))).toBe("Données des marchés fédéraux : CSV et API | Award Watch");
     expect(jsonLd(data)[0].inLanguage).toBe("fr");
     expect(jsonLd(data)[0].license).toBe("https://ouvert.canada.ca/fr/licence-du-gouvernement-ouvert-canada");
     const cite = await headOf("/cite?lang=fr");
@@ -123,25 +123,33 @@ describe("page metadata", () => {
     for (const word of ["suspicious", "flag", "risk"]) expect(organizationDescription(p, "en").toLowerCase()).not.toContain(word);
   });
 
-  it("the home page carries the site and the project as publisher, never a person", async () => {
+  it("the home page names Allwater Software Inc. as publisher with the site's logo, never a person", async () => {
     const [graph] = jsonLd(await headOf("/"));
     const org = graph["@graph"].find((n: any) => n["@type"] === "Organization");
-    expect(org.name).toBe("Award Watch");
+    expect(org.name).toBe("Allwater Software Inc.");
+    expect(org.logo).toEqual({ "@type": "ImageObject", url: `${O}/brand/mark-512.png`, width: 512, height: 512 });
     expect(org.sameAs).toBeUndefined();
     const site = graph["@graph"].find((n: any) => n["@type"] === "WebSite");
+    expect(site.name).toBe("Award Watch");
     expect(site.inLanguage).toEqual(["en-CA", "fr-CA"]);
     expect(site.publisher).toEqual({ "@id": `${O}/#organization` });
+    expect(site.potentialAction.target.urlTemplate).toBe(`${O}/search?q={search_term_string}`);
   });
 
-  it("the data page describes the downloads as an open Dataset", async () => {
+  it("the data page describes the downloads as an open Dataset, one part per downloadable set", async () => {
     const [dataset] = jsonLd(await headOf("/data"));
     expect(dataset["@type"]).toBe("Dataset");
     expect(dataset.license).toBe("https://open.canada.ca/en/open-government-licence-canada");
     expect(dataset.dateModified).toBe("2026-10-31");
-    // The free files only: the paid 12-month radar file is left out.
-    expect(dataset.distribution.map((d: any) => d.name)).toEqual(DOWNLOADS.filter((d) => !d.paid).map((d) => d.file));
-    for (const d of dataset.distribution) expect(d.contentUrl).toBe(`${O}/downloads/${d.name}`);
-    expect(dataset.creator).toEqual({ "@type": "Organization", name: "Award Watch", url: `${O}/` });
+    // The free files only: the paid 12-month radar file is left out; the checksums are no dataset.
+    const files = dataset.hasPart.flatMap((p: any) => p.distribution.map((d: any) => d.name));
+    for (const d of DOWNLOADS.filter((d) => !d.paid && d.file.endsWith(".csv"))) expect(files).toContain(d.file);
+    expect(files).not.toContain("expiring-12m.csv");
+    for (const part of dataset.hasPart) {
+      expect(part.license).toBe(dataset.license);
+      for (const d of part.distribution) expect(d.contentUrl).toBe(`${O}/downloads/${d.name}`);
+    }
+    expect(dataset.creator.name).toBe("Allwater Software Inc.");
   });
 
   it("breadcrumbs carry a URL on every crumb but the last", () => {
@@ -168,7 +176,7 @@ describe("page metadata", () => {
     }
     const missing = await headOf("/nothing-here");
     expect(missing).not.toContain('rel="canonical"');
-    expect(meta(missing, "description")).toContain("Open federal tenders");
+    expect(meta(missing, "description")).toContain("Canadian federal tenders from CanadaBuys");
   });
 
   it("JSON-LD text cannot close its script element", () => {
@@ -197,14 +205,18 @@ function robotsAllow(rules: string[], path: string): boolean {
 }
 
 describe("crawler files", () => {
-  it("/sitemap.xml is the index and each part streams from data/sitemaps", async () => {
-    const index = await get("/sitemap.xml");
+  it("/sitemap.xml is the index and each part comes from data/sitemaps, in both languages", async () => {
+    // Without the records database the index is the pipeline's file as written.
+    const index = await app.request("/sitemap.xml", {}, { ...testEnv(), RECORDS: undefined });
     expect(index.status).toBe(200);
     expect(index.headers.get("content-type")).toBe("application/xml; charset=utf-8");
     expect(await index.text()).toBe(sitemapIndex);
     const part = await get("/sitemap-1.xml");
     expect(part.status).toBe(200);
-    expect(await part.text()).toBe(sitemapPart);
+    // Each page of the part twice, English then French (test/seo-intent.test.ts reads the alternates).
+    const listed = [...sitemapPart.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
+    const served = [...(await part.text()).matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
+    expect(served).toEqual(listed.flatMap((u) => [u, `${u}?lang=fr`]));
     expect((await get("/sitemap-2.xml")).status).toBe(404);
     expect((await get("/sitemap-x.xml")).status).toBe(404);
     const none = await app.request("/sitemap.xml", {}, testEnv(emptyAssets));
