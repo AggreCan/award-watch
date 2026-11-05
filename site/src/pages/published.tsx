@@ -94,7 +94,7 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
       c,
       <Layout lang={lang} title={t(lang, "published.title")} dataAsOf={stats.data_as_of}>
         <PageHead lang={lang} eyebrow={t(lang, "published.title")} title={ref}
-          lead={t(lang, read.state === "loading" ? "analytics.unavailable_loading" : "published.unavailable")}
+          lead={t(lang, read.state === "loading" ? "published.loading" : "published.unavailable")}
           actions={<a href={search} class="btn" rel="nofollow noopener">{t(lang, "published.search")}</a>} />
       </Layout>,
       503,

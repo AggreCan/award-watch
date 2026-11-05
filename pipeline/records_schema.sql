@@ -156,7 +156,7 @@ CREATE TABLE IF NOT EXISTS rec_details (
   vnote INTEGER NOT NULL DEFAULT 0,              -- records.vnote
   comp INTEGER,                                  -- records.comp
   meth TEXT,                                     -- records.meth
-  ref TEXT NOT NULL,                             -- an award or history reference in its URL form; "<department>:<reference>" otherwise
+  ref TEXT NOT NULL,                             -- an award or history reference in its URL form, ":<reference>" when it has no page; "<department>:<reference>" otherwise
   title_en TEXT,                                 -- the title: a published contract's description, a grant's title or program
   title_fr TEXT
 );

@@ -48,7 +48,7 @@ records table is about a hundred times larger:
 
 A full reload is made on an empty ledger, when asked (`records-sync --full`)
 and after a count read back disagreed, but not within RELOAD_MIN_DAYS of the
-last one: a full load writes about ten million rows and index entries. It is
+last one: a full load of the twelve tables writes about 25 million rows. It is
 also made, whatever the days, when the tables changed form (LAYOUT differs
 from the one the last full load recorded): D1 creates a table only when it is
 missing, so the new columns reach it only by dropping the old tables.
@@ -75,7 +75,7 @@ from pathlib import Path
 from . import config, expiring, organizations
 from .db import connect, get_meta, now_iso, set_meta, today_iso
 from .export import scrub
-from .export_static import BUYER_ID_RE, ORG_ID_RE, RefMap, read_segments, url_reference
+from .export_static import BUYER_ID_RE, ORG_ID_RE, RefMap, read_segments
 from .indicators import RULES_VERSION
 from .search_db import (
     MAX_BATCH_BYTES, MAX_BATCH_STATEMENTS, MAX_KEYS_PER_DELETE, MAX_STATEMENT_BYTES, _BatchWriter, _grouped, sql_literal,
@@ -147,9 +147,9 @@ TITLE_CHARS = 120
 REF_CHARS = 120
 # The fiscal quarters rec_due covers, the data date's first.
 DUE_QUARTERS = 8
-# A full load writes about ten million rows and index entries, a fifth of the
-# plan's monthly allowance, so one forced by a count that disagreed waits this
-# long after the last.
+# A full load of all twelve tables writes about 25 million rows, half of the
+# 50 million a month the paid plan includes, so one forced by a count that
+# disagreed waits this long after the last.
 RELOAD_MIN_DAYS = 28
 
 META_RELOAD = "records_reload_due"      # the date records-check found a count disagreeing
@@ -349,7 +349,13 @@ class _Counts:
         return None
 
 
-def record_rows(conn: sqlite3.Connection, counts: _Counts | None = None) -> Iterator[tuple]:
+def ref_maps(conn: sqlite3.Connection) -> dict[str, RefMap]:
+    """The URL forms of the award and history references, as the site serves their pages."""
+    return {"awards": RefMap(conn, "awards"), "history": RefMap(conn, "contract_history")}
+
+
+def record_rows(conn: sqlite3.Connection, counts: _Counts | None = None,
+                refs: dict[str, RefMap] | None = None) -> Iterator[tuple]:
     """Every row of the records table, values in RECORDS.written order (the key first).
 
     A notice whose codes reach several of the 57 segments gives its row under
@@ -362,7 +368,7 @@ def record_rows(conn: sqlite3.Connection, counts: _Counts | None = None) -> Iter
     """
     tally = counts or _Counts()
     segments = set(read_segments())
-    refs = {"awards": RefMap(conn, "awards"), "history": RefMap(conn, "contract_history")}
+    refs = refs if refs is not None else ref_maps(conn)
     for source, sql in RECORD_SQL.items():
         src = SOURCES[source]
         for r in conn.execute(sql):
@@ -450,20 +456,31 @@ def title_text(value: object, lang: str) -> str | None:
     return text or None
 
 
-def text_rows(conn: sqlite3.Connection, segments: set[str] | None = None) -> Iterator[tuple]:
+def text_rows(conn: sqlite3.Connection, segments: set[str] | None = None,
+              refs: dict[str, RefMap] | None = None) -> Iterator[tuple]:
     """(key, day, ref, title_en, title_fr, classes) for every record that has a date.
 
     An award or history reference takes its URL form (the site's /awards/ and
-    /history/ addresses); the classes are the newest version's distinct
-    six-digit UNSPSC classes within the 57 segments, space-separated.
+    /history/ addresses) by the decision records.ref follows
+    (export_static.RefMap). One whose URL form another reference took first,
+    or that has none, has no page here: it is written as ":" and the
+    reference as published, the "<department>:<reference>" shape with no
+    department, so the tables print it unlinked. NULL would say the same, but
+    D1 created the column NOT NULL and only a LAYOUT change recreates it. The
+    classes are the newest version's distinct six-digit UNSPSC classes within
+    the 57 segments, space-separated.
     """
     segments = segments if segments is not None else set(read_segments())
+    refs = refs if refs is not None else ref_maps(conn)
     for source, sql in TEXT_SQL.items():
         for r in conn.execute(sql):
             day = day_of(r["day"])
             if day is None:
                 continue
-            ref = url_reference(r["ref"]) if source in ("awards", "history") else str(r["ref"])[:200]
+            if source in refs:
+                ref = refs[source].get(r["ref"]) or f":{r['ref'] or ''}"[:200]
+            else:
+                ref = str(r["ref"])[:200]
             if not ref:
                 continue
             classes = sorted({c[:6] for c in str(r["codes"] or "").split() if len(c) >= 6 and c[:6].isdigit() and c[:2] in segments})
@@ -720,13 +737,16 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
         conn.execute(f"CREATE TEMP TABLE {_now(t)} ({t.key} INTEGER PRIMARY KEY, {', '.join(t.columns)}, h INTEGER NOT NULL)")
     counts = _Counts()
     marks = ", ".join("?" * (len(RECORDS.written) + 1))
+    # One map for records.ref and rec_details.ref, so a record table never
+    # links a page the records row says the record does not have.
+    refs = ref_maps(conn)
 
     def hashed(rows: Iterator[tuple]) -> Iterator[tuple]:
         for row in rows:
             yield (*row, row_hash(RECORDS, row[1:]))
 
     try:
-        conn.executemany(f"INSERT INTO temp.{_now(RECORDS)} VALUES ({marks})", hashed(record_rows(conn, counts)))
+        conn.executemany(f"INSERT INTO temp.{_now(RECORDS)} VALUES ({marks})", hashed(record_rows(conn, counts, refs)))
     except sqlite3.IntegrityError:
         raise ValueError("two records have the same key; key_of needs more bits") from None
 
@@ -780,7 +800,7 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
     conn.execute("CREATE TEMP TABLE records_text_now (k INTEGER PRIMARY KEY, day TEXT, ref TEXT, title_en TEXT, title_fr TEXT, "
                  "classes TEXT)")
     try:
-        conn.executemany("INSERT INTO temp.records_text_now VALUES (?, ?, ?, ?, ?, ?)", text_rows(conn))
+        conn.executemany("INSERT INTO temp.records_text_now VALUES (?, ?, ?, ?, ?, ?)", text_rows(conn, refs=refs))
     except sqlite3.IntegrityError:
         raise ValueError("two records have the same key; key_of needs more bits") from None
     joined = (f"FROM temp.{now} r JOIN temp.records_text_now t ON t.k = r.k WHERE r.extra = 0 "

@@ -476,7 +476,9 @@ describe("the radar digest", () => {
     expect(m.html).toContain("3 contracts whose end date now falls within 3 months of the data date, under your saved search <b>Contracts entering the 3-month window for National Defence</b>. Weekly. Data date 2026-10-31.");
     expect(m.html).toContain(`<a class="ink" href="${SITE}/awards/cb-500-50000001"`);
     expect(m.html).toContain(`<a class="ink" href="${SITE}/history/w8486-091235"`);
-    expect(m.html).toContain('<a class="ink" href="https://search.open.canada.ca/contracts/?search_text=C-2026-0099"');
+    expect(m.html).toContain(`<a class="ink" href="${SITE}/contracts/dnd-mdn/C-2026-0099"`);
+    expect(m.html).not.toContain("search.open.canada.ca");
+    expect(m.text).toContain(`  ${SITE}/contracts/dnd-mdn/C-2026-0099\n`);
     expect(m.html).toContain("Marathon Targets Inc. · National Defence");
     expect(m.html).toContain("Individual, name withheld · National Defence");
     expect(m.html).toContain("Ends 2027-01-30 · $188,345 · Award notice");
@@ -502,10 +504,22 @@ describe("the radar digest", () => {
     expect(html).toContain(">Contrats prenant fin d’ici 3 mois</h1>");
     expect(html).toContain("Chaque semaine. Date des données : 2026-10-31.");
     expect(html).toContain(`<a class="ink" href="${SITE}/awards/cb-500-50000001?lang=fr"`);
+    expect(html).toContain(`<a class="ink" href="${SITE}/contracts/dnd-mdn/C-2026-0099?lang=fr"`);
     expect(html).toContain("Prend fin le 2027-01-30 · 188 345 $ · Avis d’attribution");
     expect(html).toContain(">Ouvrir le radar</a>");
     expect(nbsp(m.text)).toContain(`Ouvrir le radar : ${SITE}/expiring/3m?buyer=dnd-mdn&lang=fr`);
     expect(m.text + m.html).not.toContain(EM_DASH);
+  });
+
+  it("links a published contract without its department to the government's search, as before", () => {
+    const bare = contract("contract", "C-2026-0100", "2027-01-20");
+    const m = expiringDigest({ ...expiringInput("en"), rows: [bare], total: 1 });
+    expect(m.html).toContain('<a class="ink" href="https://search.open.canada.ca/contracts/?search_text=C-2026-0100"');
+    expect(m.html).not.toContain(`${SITE}/contracts/`);
+    expect(m.text).toContain("  https://search.open.canada.ca/contracts/?search_text=C-2026-0100\n");
+    const fr = expiringDigest({ ...expiringInput("fr"), rows: [bare], total: 1 });
+    expect(fr.html).toContain('href="https://search.open.canada.ca/contracts/?search_text=C-2026-0100"');
+    expect(fr.html).not.toContain("search_text=C-2026-0100&amp;lang=fr");
   });
 });
 

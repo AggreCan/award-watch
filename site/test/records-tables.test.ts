@@ -15,6 +15,7 @@ import { bucketFor } from "../src/limits";
 import {
   BUYER_INCUMBENTS_SQL, CONTRACT_VERSIONS_MAX, EARLIER_AWARDS_SQL, ORG_FEED_SQL, PUBLISHED_CONTRACT_SQL, RADAR_PAGE_ROWS, SEGMENT_INCUMBENTS_SQL, TABLE_SQL,
 } from "../src/records_tables";
+import { recordHref, recordTitle, shownReference } from "../src/pages/records";
 import { contractPath } from "../src/pages/shared";
 import { get, grantPro, newEmail, offEnv, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { applySql } from "./setup";
@@ -250,6 +251,12 @@ describe("a published contract's page", () => {
       const loading = await page(contractPath("dnd-mdn", SECOND));
       expect(loading.res.status).toBe(503);
       expect(loading.html).not.toContain("$130,000");
+      // Each page says what returns: this page, or the record table, not "the analytics".
+      expect(loading.html).toContain("This page returns when the load is finished");
+      const table = (await page(`/organizations/${A1}/records`)).html;
+      expect(table).toContain("The record table returns when the load is finished.");
+      expect(table + loading.html).not.toContain("analytics return");
+      expect((await page(`/organizations/${A1}/records?lang=fr`)).html).toContain("Le tableau des dossiers reviendra");
     } finally {
       await seed();
     }
@@ -357,6 +364,7 @@ describe("the record tables", () => {
     expect(res.status).toBe(200);
     expect(order(html)).toEqual(["Translation standing offer", "Translation services", "Research grant"]);
     expect(html).toContain("3 records");
+    expect(html).toContain('fiscal years <span class="nw">2017-18</span> to <span class="nw">2026-27</span>.');
     expect(html).toContain("Value counted: $390,000.");
     expect(html).toContain('href="/awards/cb-400-1"');
     expect(html).toContain(`href="${contractPath("dnd-mdn", FIRST)}"`);
@@ -504,6 +512,55 @@ describe("the earlier awards, the incumbents and the organization feeds", () => 
       const text = steps.join("\n");
       expect(steps.filter((x) => /^SCAN (c|d|rec_\w+|records)\b/.test(x) && !/USING/.test(x)), `${sql}\n${text}`).toEqual([]);
       expect(text, sql).toMatch(index);
+    }
+  });
+});
+
+// An award reference whose URL form another reference took first has no page
+// here: records.ref is null and rec_details.ref reads ":" and the reference
+// as published (records_db.text_rows), so no row links the other record's page.
+describe("a record with no page here", () => {
+  it("is never linked: the reference is read after the empty department, and a missing title falls back to it", () => {
+    expect(recordHref(1, ":PW-ZZ-1")).toBeNull();
+    expect(recordHref(2, ":W8472/1")).toBeNull();
+    expect(recordHref(1, "pw-zz-1")).toBe("/awards/pw-zz-1");
+    expect(recordHref(3, ":C-1")).toBeNull();
+    expect(recordHref(3, "dnd-mdn:C-1")).toBe(contractPath("dnd-mdn", "C-1"));
+    expect(shownReference(":PW-ZZ-1")).toBe("PW-ZZ-1");
+    expect(shownReference("dnd-mdn:C-1")).toBe("C-1");
+    expect(recordTitle("en", {}, ":PW-ZZ-1")).toBe("PW-ZZ-1");
+    expect(recordTitle("fr", {}, ":")).toBe("Non indiqué");
+  });
+
+  it("shows its title unlinked and its reference as text in the record table, the earlier awards and the feed", async () => {
+    const feed = new Request(`https://awardwatch.ca/data/feeds/organizations/${A1}.xml`);
+    const edge = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+    await RECORDS.batch([
+      RECORDS.prepare("INSERT INTO rec_details (k, src, day, bid, oid, cents, vnote, comp, meth, ref, title_en, title_fr) " +
+        "VALUES (17, 1, '2026-07-01', ?, ?, 2000000, 0, 1, 'OB', ':PW-ZZ-1', 'Translation of manuals', 'FR Translation of manuals')").bind(PSPC, orgNumber(A1)),
+      RECORDS.prepare("INSERT INTO rec_classes (k, rk, cls, bid, day) VALUES (1017, 17, 821118, ?, '2026-07-01')").bind(PSPC),
+    ]);
+    await edge?.delete(feed);
+    try {
+      const cell = 'class="lead-cell">Translation of manuals<br/><span class="mono id muted">PW-ZZ-1</span>';
+      const table = (await page(`/organizations/${A1}/records`)).html;
+      expect(table).toContain(cell);
+      expect(table).not.toMatch(/href="\/awards\/pw-zz-1"/);
+      expect((await page(`/organizations/${A1}/records?lang=fr`)).html).toContain('class="lead-cell">FR Translation of manuals<br/>');
+      const earlier = (await page("/tenders/cb-100-10000001")).html.split("Earlier Awards Like This One")[1] ?? "";
+      expect(earlier).toContain(cell);
+      expect(earlier).not.toContain("pw-zz-1");
+      const body = await (await get(`/data/feeds/organizations/${A1}.xml`, { env: offEnv() })).text();
+      const entry = body.split("<entry>").find((e) => e.includes("Translation of manuals")) ?? "";
+      expect(entry).toContain("<id>tag:awardwatch.ca,2026:records/1/:PW-ZZ-1</id>");
+      expect(entry).toContain("<title>Translation of manuals / FR Translation of manuals</title>");
+      expect(entry).not.toContain("<link");
+      expect(entry).toMatch(/<content type="text">[^<]+ · PW-ZZ-1<\/content>/);
+      // The other three entries keep their links.
+      expect(body.split("<entry>").slice(1).filter((e) => e.includes("<link")).length).toBe(3);
+    } finally {
+      await RECORDS.batch([RECORDS.prepare("DELETE FROM rec_details WHERE k = 17"), RECORDS.prepare("DELETE FROM rec_classes WHERE k = 1017")]);
+      await edge?.delete(feed);
     }
   });
 });

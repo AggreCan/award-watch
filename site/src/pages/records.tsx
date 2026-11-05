@@ -20,7 +20,7 @@ import { Table } from "../columns";
 import { MONEY_SOURCES, type MoneySource } from "../constants";
 import { BUYER_ID_RE, ORG_ID_RE, loadBuyer, loadBuyerAlias, loadProfile, loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
+import { fmtInt, pick, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { requestPlan } from "../plan";
 import { ProNote } from "../pro";
@@ -69,19 +69,27 @@ export function recordsQueryString(view: RecordsView, q: RecordsQuery, pageNo = 
   return s ? `?${s}` : "";
 }
 
-// The site's page of a record, or the government's for a grant; ref is
-// rec_details.ref (an award or history reference in its URL form,
-// "<department>:<reference>" otherwise).
-export function recordHref(src: number, ref: string): string {
-  if (src === 1) return `/awards/${ref.toLowerCase()}`;
-  if (src === 2) return `/history/${ref.toLowerCase()}`;
+// The site's page of a record, or the government's for a grant; null when
+// the record has none. ref is rec_details.ref: an award or history reference
+// in its URL form, or ":<reference>" when another reference took that form
+// first (records_db.text_rows), so the row never links the other record's
+// page; "<department>:<reference>" otherwise.
+export function recordHref(src: number, ref: string): string | null {
   const at = ref.indexOf(":");
-  const dept = at > 0 ? ref.slice(0, at) : "";
-  const reference = at > 0 ? ref.slice(at + 1) : ref;
+  if (src === 1 || src === 2) return ref && at < 0 ? `/${src === 1 ? "awards" : "history"}/${ref.toLowerCase()}` : null;
+  if (at <= 0) return null;
+  const dept = ref.slice(0, at);
+  const reference = ref.slice(at + 1);
   return src === 3 ? contractPath(dept, reference) : grantUrl(dept, reference);
 }
 
-export const shownReference = (src: number, ref: string): string => (src >= 3 && ref.includes(":") ? ref.slice(ref.indexOf(":") + 1) : ref);
+// The reference as the reader knows it: what follows the department, or
+// the empty place of one; a URL form holds no colon.
+export const shownReference = (ref: string): string => (ref.includes(":") ? ref.slice(ref.indexOf(":") + 1) : ref);
+
+// A record's title, else its reference, else "Not stated".
+export const recordTitle = (lang: Lang, r: Row, ref: string): string =>
+  pick(lang, str(r.title_en), str(r.title_fr)) ?? (shownReference(ref) || t(lang, "common.not_stated"));
 
 type Access = "full" | "first";
 
@@ -144,16 +152,17 @@ const RecordRows: FC<{ lang: Lang; view: RecordsView; rows: Row[] }> = ({ lang, 
         {rows.map((r) => {
           const src = num(r.src) ?? 0;
           const ref = String(r.ref ?? "");
-          const title = pick(lang, str(r.title_en), str(r.title_fr)) ?? shownReference(src, ref);
+          const href = recordHref(src, ref);
+          const title = recordTitle(lang, r, ref);
           const oid = num(r.oid);
           const cents = dollars(r.cents);
           return (
             <tr>
               <td data-label={t(lang, "col.date")} class="mono">{str(r.day) ?? ""}</td>
               <td data-label={t(lang, "col.record")} class="lead-cell">
-                <a href={recordHref(src, ref)} rel={src === 4 ? "nofollow noopener" : "nofollow"}>{title}</a>
+                {href ? <a href={href} rel={src === 4 ? "nofollow noopener" : "nofollow"}>{title}</a> : title}
                 <br />
-                <span class="mono id muted">{shownReference(src, ref)}</span> <span class="muted small">{SOURCE_OF[src] ? sourceLabel(lang, SOURCE_OF[src]) : ""}</span>
+                <span class="mono id muted">{shownReference(ref)}</span> <span class="muted small">{SOURCE_OF[src] ? sourceLabel(lang, SOURCE_OF[src]) : ""}</span>
               </td>
               {view === "organization" ? (
                 <td data-label={t(lang, "col.buyer")}><BuyerLink lang={lang} id={str(r.buyer_id)} en={str(r.buyer_en)} fr={str(r.buyer_fr)} /></td>
@@ -221,11 +230,14 @@ async function recordsPage(c: Context<AppEnv>, view: RecordsView): Promise<Respo
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of}
       seo={{ path: e.base, description: t(lang, `records.description_${view}` as Key, { name: e.name }), noindex: true }}>
       <PageHead lang={lang} crumbs={crumbs} eyebrow={t(lang, "records.eyebrow")} title={e.name}
-        lead={t(lang, `records.lead_${view}` as Key, { first: fiscalLabel(lang, lastFy - MAX_YEARS + 1), last: fiscalLabel(lang, lastFy) })}
+        // Each fiscal year on one line: the browser would break "2026-27" at its hyphen.
+        lead={tj(lang, `records.lead_${view}` as Key, {
+          first: <span class="nw">{fiscalLabel(lang, lastFy - MAX_YEARS + 1)}</span>, last: <span class="nw">{fiscalLabel(lang, lastFy)}</span>,
+        })}
         actions={<a href={e.back} class="btn">{t(lang, view === "organization" ? "records.back_organization" : "records.back_buyer")}</a>} />
       {!ok ? (
-        <Panel title={t(lang, "analytics.unavailable_title")}>
-          <p>{t(lang, read.state === "loading" ? "analytics.unavailable_loading" : "analytics.unavailable_text")}</p>
+        <Panel title={t(lang, "records.unavailable_title")}>
+          <p>{t(lang, read.state === "loading" ? "records.unavailable_loading" : "analytics.unavailable_text")}</p>
           <p><a href={e.back}>{t(lang, view === "organization" ? "records.back_organization" : "records.back_buyer")}</a></p>
         </Panel>
       ) : (
@@ -325,14 +337,14 @@ async function recordsCsv(c: Context<AppEnv>, view: RecordsView): Promise<Respon
   if (read.state !== "ready") {
     c.header("Retry-After", "3600");
     c.header("Cache-Control", "no-store");
-    return c.text(t(lang, read.state === "loading" ? "analytics.unavailable_loading" : "analytics.unavailable_text"), 503);
+    return c.text(t(lang, read.state === "loading" ? "records.unavailable_loading" : "analytics.unavailable_text"), 503);
   }
   const lines = (read.rows[0] ?? []).map((r) => {
     const src = num(r.src) ?? 0;
     const oid = num(r.oid);
     const cents = num(r.cents);
     return [
-      r.day, SOURCE_OF[src] ?? "", shownReference(src, String(r.ref ?? "")), r.title_en, r.title_fr, r.buyer_id, r.buyer_en,
+      r.day, SOURCE_OF[src] ?? "", shownReference(String(r.ref ?? "")), r.title_en, r.title_fr, r.buyer_id, r.buyer_en,
       oid === null ? null : orgIdOf(oid), r.org_name, cents === null ? null : (cents / 100).toFixed(2), VALUE_NOTE[num(r.vnote) ?? 0] ?? "",
       num(r.comp), r.meth,
     ].map(csvCell).join(",");

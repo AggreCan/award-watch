@@ -180,8 +180,8 @@ A full reload drops the tables, applies the schema, sets `state` to
 `loading`, and sends every row. The pages answer "being loaded" until
 `finish.sql` sets it back, so no reader sees half a load. The sync makes one
 by itself on an empty ledger and after a count read back disagreed, but not
-within 28 days of the last one (a full load writes about ten million rows,
-a fifth of the plan's monthly allowance).
+within 28 days of the last one (a full load of the twelve tables writes
+about 25 million rows, half of the plan's monthly allowance).
 
 It also makes one, whatever the days, when the tables changed form. D1
 creates a table only when it is missing, so a new column reaches a database
@@ -211,7 +211,7 @@ the measured figures.
 
 | | Estimate |
 |---|---|
-| A first load or full reload | about 500 MB of SQL in about 100 batches for the analytics tables (phase 1: 290 MB in about 60); about 3.2 million rows and 9 million index entries written. The record tables and the published contracts' pages add about 1.1 GB in about 230 batches and 5.3 million rows, sent as ordinary changes on their first night; a full reload after that sends both, about 1.6 GB in about 330 batches |
+| A first load or full reload | about 500 MB of SQL in about 100 batches for the analytics tables (phase 1: 290 MB in about 60); about 3.2 million rows and 9 million index entries written. The record tables and the published contracts' pages add about 1.1 GB in about 230 batches and 5.3 million rows, sent as ordinary changes on their first night; a full reload after that sends both, about 1.6 GB in about 330 batches. Counted as D1 bills it, a full reload of all twelve tables is about 25 million row writes, half of the 50 million a month the paid plan includes, which is why a LAYOUT change waits for room in the month |
 | A night | the records whose figures, organization, buyer, flag, reference or title changed, the `rec_due` rows that moved, and the record-table, radar-window and published-contract rows that changed: thousands to tens of thousands of rows, one or two batches |
 | The count check | one count of each table: about 3.2 million rows read a night for the analytics tables, about 8.5 million with the rest |
 | Database size | about 600 MB for the analytics tables (phase 1: about 400 MB); about 2 GB with the record tables and the published contracts' pages |
@@ -406,6 +406,25 @@ fiscal year (`year=2025`), the other party (`buyer=<id>` on a profile,
 (award notices, history records, published contracts) or the government's
 record of a grant. `<address>.csv` with the same query sends the matches
 (at most 10,000).
+
+`rec_details.ref` holds an award or history reference in the URL form its
+page has, from the same `export_static.RefMap` that writes `records.ref`, so
+the two tables agree on which records have a page. When two published
+references reduce to one URL form, the first in sort order keeps the page;
+the other record has none here, and its `ref` is `:` and the reference as
+published (the `<department>:<reference>` shape with no department). A
+reference with no URL form at all, whose record had no row before, is
+written the same way. The
+record tables, the earlier awards and the organization feeds show such a
+record's title unlinked with its reference as plain text (a feed entry
+carries it as content instead of a link). The ten largest records read
+`records.ref`, which is null for it, so they show the title unlinked. The
+value is not null because D1 created the column `NOT NULL`, and only a
+`LAYOUT` change recreates a table; this changes the column's values, not
+its form, so it needs none. A row whose `ref` changes this way hashes
+differently, so the ledger sends it again as an ordinary change (as it does
+when a later reference takes a URL form an earlier record held), and the
+rows new to the table go as new rows.
 
 Every statement reads through `rec_details_org (oid, day)` or
 `rec_details_buyer (bid, day)`, held to a span within ten fiscal years: the

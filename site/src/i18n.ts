@@ -1610,8 +1610,8 @@ const STRINGS = {
   "data.yearly_history": { en: "PSPC Contract History by Year of Award", fr: "Historique des contrats de SPAC par année d'attribution" },
   "data.yearly_outside": { en: "Dates Outside the Years Above", fr: "Dates hors des années ci-dessus" },
   "data.downloads_note": {
-    en: "A year with no file yet answers \"not available\". Dates before a source's first year and after the data date's year share one file each: on award notices and the contract history they are typing errors in the source, and on published contracts and grants they are records reported later. A file ending in -undated holds the rows whose date gives no year, and a year past 250 MB goes on in numbered parts (-2, -3). The files hold one row per version as published, so adding them up counts a contract once per amendment; the site's totals follow the counting rules on the Methodology page.",
-    fr: "Une année sans fichier répond « non disponible ». Les dates antérieures à la première année d'une source et postérieures à l'année de la date des données partagent un fichier chacune : sur les avis d'attribution et l'historique des contrats, ce sont des erreurs de saisie de la source, et sur les contrats publiés et les subventions, des dossiers déclarés plus tard. Un fichier se terminant par -undated contient les lignes dont la date ne donne aucune année, et une année de plus de 250 Mo se poursuit en parties numérotées (-2, -3). Les fichiers comptent une ligne par version telle que publiée : en les additionnant, un contrat compte une fois par modification; les totaux du site suivent les règles de calcul de la page Méthodologie.",
+    en: "A year with no file yet answers \"not available\". Dates before a source's first year and after the data date's year share one file each: on award notices and the contract history they are typing errors in the source, and on published contracts and grants they are records reported later. A file ending in {undated} holds the rows whose date gives no year, and a year past 250 MB goes on in numbered parts ({parts}). The files hold one row per version as published, so adding them up counts a contract once per amendment; the site's totals follow the counting rules on the Methodology page.",
+    fr: "Une année sans fichier répond « non disponible ». Les dates antérieures à la première année d'une source et postérieures à l'année de la date des données partagent un fichier chacune : sur les avis d'attribution et l'historique des contrats, ce sont des erreurs de saisie de la source, et sur les contrats publiés et les subventions, des dossiers déclarés plus tard. Un fichier se terminant par {undated} contient les lignes dont la date ne donne aucune année, et une année de plus de 250 Mo se poursuit en parties numérotées ({parts}). Les fichiers comptent une ligne par version telle que publiée : en les additionnant, un contrat compte une fois par modification; les totaux du site suivent les règles de calcul de la page Méthodologie.",
   },
   "data.api_text": {
     en: "Read-only JSON: the same files the pages read. No key is needed. The data changes nightly, so responses may be cached for 5 minutes.",
@@ -2715,6 +2715,10 @@ const STRINGS = {
     en: "This page is not available right now. The government's contracts search holds the record.",
     fr: "Cette page n'est pas disponible pour le moment. La recherche de contrats du gouvernement présente le dossier.",
   },
+  "published.loading": {
+    en: "The records database is being loaded again. This page returns when the load is finished; the government's contracts search holds the record.",
+    fr: "La base des dossiers est en cours de rechargement. Cette page reviendra une fois le chargement terminé; la recherche de contrats du gouvernement présente le dossier.",
+  },
   "published.search": { en: "Contracts search on open.canada.ca", fr: "Recherche de contrats sur ouvert.canada.ca" },
   "published.description": {
     en: "Published contract {reference}: {supplier}, contracted by {buyer} on {date}. Values, procedure, amendments and comments as published.",
@@ -2811,6 +2815,11 @@ const STRINGS = {
   "records.lead_buyer": {
     en: "Award notices, contract history records, published contracts and grants of this buyer, fiscal years {first} to {last}.",
     fr: "Avis d'attribution, dossiers de l'historique des contrats, contrats publiés et subventions de cet acheteur, exercices {first} à {last}.",
+  },
+  "records.unavailable_title": { en: "The Record Table Is Not Available Right Now", fr: "Tableau des dossiers non disponible pour le moment" },
+  "records.unavailable_loading": {
+    en: "The records database is being loaded again. The record table returns when the load is finished.",
+    fr: "La base des dossiers est en cours de rechargement. Le tableau des dossiers reviendra une fois le chargement terminé.",
   },
   "records.back_organization": { en: "Back to the profile", fr: "Retour au profil" },
   "records.back_buyer": { en: "Back to the buyer page", fr: "Retour à la page de l'acheteur" },

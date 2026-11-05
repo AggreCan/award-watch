@@ -17,8 +17,7 @@ import { CATEGORIES, PROVINCES, SEGMENTS } from "../constants";
 import { type ExpiringRow, type TenderRow, publishedReference } from "../data";
 import { categoryLabel, fmtInt, fmtMoney, pick, provinceName, segmentShort, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { CONTACT_EMAIL } from "../pages/docs";
-import { type ExpiringQuery, contractReference } from "../pages/expiring";
-import { contractSearchUrl } from "../pages/shared";
+import { type ExpiringQuery, contractReference, sitePath } from "../pages/expiring";
 import { CODE_RE } from "../pages/tenders";
 import { fiscalLabel } from "../records_db";
 import type { RecordsKind, Rise } from "./records_deliveries";
@@ -406,12 +405,13 @@ const KIND_KEY: Record<ExpiringRow["kind"], Key> = {
   award: "expiring.kind_award", history: "expiring.kind_history", contract: "expiring.kind_contract",
 };
 
-// The site's own page for an award notice or a PSPC record; a published
-// contract has none, so its title opens the government's contracts search.
+// The site's own page for the row, as the radar links it (sitePath). A
+// published contract's page needs its department ("owner_org:reference"); a
+// row without one gets the government's contracts search instead, which
+// sitePath returns as a full address, so only a path takes the site.
 function contractLink(o: { site: string; lang: Lang }, r: ExpiringRow): string {
-  if (r.kind === "award") return siteLink(o.site, `/awards/${r.reference.toLowerCase()}`, o.lang);
-  if (r.kind === "history") return siteLink(o.site, `/history/${r.reference.toLowerCase()}`, o.lang);
-  return contractSearchUrl(contractReference(r));
+  const path = sitePath(r);
+  return path.startsWith("/") ? siteLink(o.site, path, o.lang) : path;
 }
 
 function contractLines(lang: Lang, r: ExpiringRow) {

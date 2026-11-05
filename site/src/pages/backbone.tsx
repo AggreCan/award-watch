@@ -33,7 +33,7 @@ import {
 } from "../records_tables";
 import { SITE_ORIGIN } from "../seo";
 import { money } from "./shared";
-import { recordHref, shownReference } from "./records";
+import { recordHref, recordTitle, shownReference } from "./records";
 
 const SOURCE_OF: Record<number, "awards" | "history" | "contracts" | "grants"> = { 1: "awards", 2: "history", 3: "contracts", 4: "grants" };
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
@@ -106,14 +106,18 @@ export const EarlierAwards: FC<{ lang: Lang; earlier: Earlier }> = ({ lang, earl
                 {earlier.rows.map((r) => {
                   const src = num(r.src) ?? 0;
                   const ref = String(r.ref ?? "");
+                  const href = recordHref(src, ref);
+                  const title = recordTitle(lang, r, ref);
                   const oid = num(r.oid);
                   const v = dollars(r.cents);
                   return (
                     <tr>
                       <td data-label={t(lang, "col.awarded")} class="mono">{str(r.day) ?? ""}</td>
                       <td data-label={t(lang, "col.contract")} class="lead-cell">
-                        <a href={recordHref(src, ref)}>{pick(lang, str(r.title_en), str(r.title_fr)) ?? shownReference(src, ref)}</a>
-                        <br /><span class="muted small">{SOURCE_OF[src] ? sourceLabel(lang, SOURCE_OF[src]) : ""}</span>
+                        {/* A record with no page here (records.tsx recordHref) shows its reference instead. */}
+                        {href ? <a href={href}>{title}</a> : title}
+                        <br />{href ? null : <><span class="mono id muted">{shownReference(ref)}</span> </>}
+                        <span class="muted small">{SOURCE_OF[src] ? sourceLabel(lang, SOURCE_OF[src]) : ""}</span>
                       </td>
                       <td data-label={t(lang, "col.supplier")}>
                         {oid === null ? <span class="muted">{t(lang, "common.not_stated")}</span>
@@ -237,11 +241,11 @@ export async function orgFeed(c: Context<AppEnv>): Promise<Response> {
     const src = num(r.src) ?? 0;
     const ref = String(r.ref ?? "");
     const href = recordHref(src, ref);
-    const link = href.startsWith("/") ? `${SITE_ORIGIN}${href}` : href;
+    const link = href?.startsWith("/") ? `${SITE_ORIGIN}${href}` : href;
     const title = (() => {
       const en = str(r.title_en);
       const fr = str(r.title_fr);
-      return en && fr ? both(en, fr) : en ?? fr ?? shownReference(src, ref);
+      return en && fr ? both(en, fr) : en ?? fr ?? (shownReference(ref) || both(t("en", "common.not_stated"), t("fr", "common.not_stated")));
     })();
     const v = dollars(r.cents);
     const buyer = str(r.buyer_en) ?? str(r.buyer_id) ?? t("en", "common.not_stated");
@@ -251,8 +255,13 @@ export async function orgFeed(c: Context<AppEnv>): Promise<Response> {
       [source ? sourceLabel("fr", source) : "", str(r.buyer_fr) ?? buyer, v === null ? t("fr", "common.not_stated") : fmtMoney(v, "fr")].filter(Boolean).join(" · "),
     );
     const day = str(r.day) ?? today;
+    // A record with no page here (records.tsx recordHref) has no link, and
+    // Atom then asks for content: the summary with the reference as text.
+    const rest = link
+      ? `    <link rel="alternate" type="text/html" href="${xml(link)}"/>\n    <summary>${xml(summary)}</summary>\n`
+      : `    <summary>${xml(summary)}</summary>\n    <content type="text">${xml(`${summary} · ${shownReference(ref)}`)}</content>\n`;
     return `  <entry>\n    <id>${xml(`${TAG}records/${src}/${ref}`)}</id>\n    <title>${xml(title)}</title>\n    <updated>${day}T00:00:00Z</updated>\n` +
-      `    <link rel="alternate" type="text/html" href="${xml(link)}"/>\n    <summary>${xml(summary)}</summary>\n  </entry>\n`;
+      `${rest}  </entry>\n`;
   });
   const updated = (read.asOf ?? today) + "T00:00:00Z";
   const body = '<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">\n' +

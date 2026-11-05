@@ -661,6 +661,33 @@ def test_the_record_tables_rows_carry_each_counted_records_date_reference_and_ti
         "OR c.cls < 100000 OR c.cls > 999999 OR c.bid IS NOT d.bid OR c.day != d.day").fetchone() == (0,)
 
 
+def test_a_reference_whose_url_form_another_takes_loses_its_link_in_both_tables_and_is_sent_again(seeded, tmp_path):
+    conn, _ = seeded
+    db = d1()
+    out = tmp_path / "records"
+    # "PW-ZZ-1" alone: its own page, in both tables.
+    award(conn, "PW-ZZ-1", 0, ACME, value=2_000.0, awarded="2025-06-01")
+    night(conn, out, db)
+    loser, winner = rd.key_of("award:PW-ZZ-1"), rd.key_of("award:PW-$$ZZ-1")
+    ref = lambda table, k: db.execute(f"SELECT ref FROM {table} WHERE k = ?", (k,)).fetchone()  # noqa: E731
+    assert ref("records", loser) == ref("rec_details", loser) == ("PW-ZZ-1",)
+    # A reference with the same URL form that sorts first takes the page (export_static.RefMap): the
+    # earlier record keeps its row, unlinked, so no table links it to the other record's page. D1 holds
+    # rec_details.ref NOT NULL, so it reads ":" and the reference as published rather than NULL.
+    award(conn, "PW-$$ZZ-1", 0, ACME, value=1_000.0, awarded="2025-07-01")
+    manifest = night(conn, out, db)
+    assert manifest["batches"] and not manifest["full"]
+    assert ref("records", winner) == ref("rec_details", winner) == ("PW-ZZ-1",)
+    assert ref("records", loser) == (None,) and ref("rec_details", loser) == (":PW-ZZ-1",)
+    assert db.execute("SELECT COUNT(*) FROM rec_details WHERE ref = 'PW-ZZ-1'").fetchone() == (1,)
+    # Both are still counted rows of the tables, with their classes.
+    assert db.execute("SELECT COUNT(*) FROM rec_classes WHERE rk IN (?, ?)", (loser, winner)).fetchone() == (2,)
+    # A reference with no URL form at all has no page either, and keeps its row.
+    award(conn, "$$", 0, ACME, value=500.0, awarded="2025-08-01")
+    night(conn, out, db)
+    assert ref("rec_details", rd.key_of("award:$$")) == (":$$",)
+
+
 def _window(static: Path, rows: object, pages: object = 1) -> None:
     folder = static / "expiring" / "12m"
     folder.mkdir(parents=True, exist_ok=True)

@@ -287,7 +287,11 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
           <ul class="quick-links">
             {withParts(outside).map((f) => <li><a class="mono" href={`/downloads/${f}`} title={sizeTitle(f)}>{f}</a></li>)}
           </ul>
-          <p class="muted small top-gap">{t(lang, "data.downloads_note")}</p>
+          {/* A div carries the gap: ".doc p" sets every paragraph's margin and outranks
+              .top-gap. The file endings stay whole; a browser breaks "-undated" after its hyphen. */}
+          <div class="top-gap">
+            <p class="muted small">{tj(lang, "data.downloads_note", { undated: <span class="nw">-undated</span>, parts: <span class="nw">-2, -3</span> })}</p>
+          </div>
           <p class="muted small">{t(lang, "data.downloads_closing")}</p>
 
           <h2 id="api">{t(lang, "data.toc_api")}</h2>
