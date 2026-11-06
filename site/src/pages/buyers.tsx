@@ -24,6 +24,8 @@ import { IncumbentsPanel, loadIncumbents } from "./backbone";
 import { ExpiringSection } from "./expiring";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
+import { holdersPart } from "../instruments";
+import { HoldersPanel } from "./instruments";
 import {
   AnalyticsLink, AwardTable, BUYER_SOURCE_RESTS, Count, OrgTotalTable, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, money,
   shareText, sourceCellClass, sourceColumns,
@@ -263,6 +265,8 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
       ) : null}
 
       <IncumbentsPanel lang={lang} inc={incumbents} />
+
+      <HoldersPanel lang={lang} part={holdersPart(b)} kind="buyer" filter={`user=${b.buyer.id}`} />
 
       <div class="panel-grid">
         {ranked.map((s) => (

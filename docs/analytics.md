@@ -46,6 +46,8 @@ reads it, with prepared statements.
 | `rec_contracts` | published contract row: every field its page shows (`/contracts/<department>/<reference>`) | about 1.34 million |
 | `rec_gsin` | GSIN code a published contract carries: its names | about 10,000 at most |
 | `rec_events` | thing that happened on a data date of the last 90 to an organization, a buyer, a single record or a tender notice, plus a count row past 100 a subject a day (*Events*) | thousands a night, a few hundred thousand |
+| `rec_instruments` | standing offer or supply arrangement the pipeline keeps (`docs/sosa.md`): its fields and its call-ups as JSON | a few thousand |
+| `rec_holders` | active holder of one, by region, whose name is shown | about 10,000 |
 | `rec_meta` | key: `state` (`loading` or `ready`), `as_of` (the data date the rows describe), `rules` | 3 |
 
 A row of `records` is one record as the profiles count it (*Counting money*

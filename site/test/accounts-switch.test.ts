@@ -7,7 +7,7 @@
 // the routes answer and the rail gains one item.
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
-import { testEnv } from "./assets";
+import { makeFakeAssets, testEnv } from "./assets";
 import { get, grantPro, newEmail, nextIp, onEnv, post, signIn, useAccountsDb } from "./accounts-helpers";
 
 useAccountsDb();
@@ -193,5 +193,37 @@ describe("the plan subscript after the wordmark", () => {
     expect(pro).toContain('<span class="brand-plan brand-plan-pro">pro</span>');
     expect(pro).not.toContain("brand-plan-free");
     expect((await render("/", onEnv())).body).not.toContain("brand-plan");
+  });
+});
+
+// The standing offers and supply arrangements (pages/instruments.tsx): with
+// the switch off their pages are the same whatever the accounts module's
+// bindings hold, carry no Pro mark, and their two CSV files are the site's
+// 404 without the accounts database being read.
+describe("the standing offers' pages with the switch off", () => {
+  it("are byte for byte the same without the accounts module's bindings, and their files are the 404", async () => {
+    const index = {
+      as_of: "2026-10-31", published: "2026-10-30", status: "ok", source: "https://sosa.canadabuys.canada.ca/", types: {}, commodities: {},
+      end_users: {}, rows: [{ agreement: "E60ZT-120002/001/ZT", type: "RMSO", description_en: "Environmental consulting services",
+        description_fr: null, commodity: null, end_user: null, regions: ["BC"], segments: [], start: null, expiry: "2028-03-31", n_holders: 2,
+        n_holders_withheld: 0 }],
+    };
+    const assets = makeFakeAssets({}, { "instruments/index.json": index });
+    const { used, binding: db } = trap<D1Database>();
+    const off = { ...testEnv(assets), ACCOUNTS: db };
+    const bare = { ...testEnv(assets) } as Record<string, unknown>;
+    delete bare.ACCOUNTS;
+    delete bare.ACCOUNTS_ENABLED;
+    for (const path of ["/instruments", "/instruments?region=BC", "/instruments?lang=fr"]) {
+      const a = await render(path, off);
+      expect(a, path).toEqual(await render(path, bare));
+      expect(a.status, path).toBe(200);
+      expect(a.body, path).not.toContain("pro-tag");
+      expect(a.body, path).not.toContain("rows.csv");
+    }
+    for (const path of ["/instruments/rows.csv", "/instruments/E60ZT-120002%2F001%2FZT/holders.csv"]) {
+      expect((await render(path, off)).status, path).toBe(404);
+    }
+    expect(used).toEqual([]);
   });
 });

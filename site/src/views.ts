@@ -120,6 +120,11 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   if (radar) return { route: `/data/expiring/${radar[1]}/:file`, kind: "file" };
   if (path === "/robots.txt" || path === "/llms.txt") return { route: path, kind: "file" };
   if (/^\/sitemap(?:-[0-9]+)?\.xml$/.test(path)) return { route: "/sitemap.xml", kind: "file" };
+  // The standing offers and supply arrangements (pages/instruments.tsx): the numbers folded into the template.
+  if (path === "/instruments") return { route: path, kind: "page" };
+  if (path === "/instruments/rows.csv") return { route: path, kind: "download" };
+  if (/^\/instruments\/.+\/holders\.csv$/.test(path)) return { route: "/instruments/:agreement/holders.csv", kind: "download" };
+  if (/^\/instruments\/.+$/.test(path)) return { route: "/instruments/:agreement", kind: "page" };
   return { route: "other", kind: "other" };
 }
 

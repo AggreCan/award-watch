@@ -37,6 +37,12 @@ watch_events.ts): what happened tonight to an organization, a buyer, a
 single record or a tender notice, derived by derive_events from the
 night's differences and the previous night's state (docs/analytics.md,
 "Events"), kept 90 data dates.
+Two serve the page of each standing offer or supply arrangement
+(/instruments/<agreement>, site/src/pages/instruments.tsx): rec_instruments
+(the instrument, its call-ups from the published contracts as JSON) and
+rec_holders (its active holders whose names are shown; a holder withheld as a
+person is only counted, in rec_instruments.nw). Their rows come from the sosa
+tables (sosa_export.instrument_rows and holder_rows).
 
 The sync is the search sync's (search_db.py) with three changes, because the
 records table is about a hundred times larger:
@@ -79,7 +85,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
-from . import config, expiring, organizations
+from . import config, expiring, organizations, sosa_export
 from .db import connect, get_meta, now_iso, set_meta, today_iso
 from .export import scrub
 from .export_static import BUYER_ID_RE, NEW_LAG_DAYS, ORG_ID_RE, RefMap, read_segments
@@ -130,18 +136,22 @@ GSIN = Table(12, "rec_gsin", "k", ("code", "desc_en", "desc_fr"))
 EVENTS = Table(13, "rec_events", "k", ("day", "kind", "src", "oid", "buyer", "sid", "ref", "cents", "ocents", "endd", "oendd",
                                        "closing", "oclosing", "namd", "title", "title_fr", "other", "other_fr", "horizon", "more",
                                        "path"))
+INSTRUMENTS = Table(14, "rec_instruments", "k", ("agr", "type_en", "type_fr", "desc_en", "desc_fr", "gsin", "gsin_en", "gsin_fr",
+                                                 "user_en", "user_fr", "buyer", "start", "expiry", "segs", "tref", "n", "nw",
+                                                 "seen", "last", "calls"))
+HOLDERS = Table(15, "rec_holders", "k", ("ik", "oid", "name", "op", "region", "region_en", "region_fr", "seen"))
 TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE, DETAILS, CLASSES, EXPIRING, CONTRACTS, GSIN,
-          EVENTS)
+          EVENTS, INSTRUMENTS, HOLDERS)
 BY_CODE = {t.code: t for t in TABLES}
 
 # The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
 # so); 2: the amendment, reference and title columns, the median columns and
 # rec_buyer_years, rec_due. Recorded in meta (META_LAYOUT) by the full load
 # that wrote it; a sync that finds another reloads in full by itself. The
-# tables added beside them (rec_details to rec_gsin, then rec_events) leave it
+# tables added beside them (rec_details to rec_gsin, then rec_events, rec_instruments and rec_holders) leave it
 # at 2: no table D1 holds changed form, the nightly schema creates a missing
 # table, and its rows are all new to the ledger, so the ordinary changes fill
-# it. A column added to any of the thirteen raises it.
+# it. A column added to any of the fifteen raises it.
 LAYOUT = 2
 
 # The source numbers the site's records_db.ts SOURCE_NUMBER repeats.
@@ -840,6 +850,14 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
         raise ValueError("two published contracts have the same key; key_of needs more bits") from None
     codes = {r[0] for r in conn.execute(f"SELECT DISTINCT gsin FROM temp.{_now(CONTRACTS)} WHERE gsin IS NOT NULL")}
     fill(GSIN, gsin_rows(conn, codes))
+
+    # The standing offers and supply arrangements' pages.
+    tenders = RefMap(conn, "tenders")
+    try:
+        fill(INSTRUMENTS, sosa_export.instrument_rows(conn, key_of, org_number, tenders.get))
+        fill(HOLDERS, sosa_export.holder_rows(conn, key_of, org_number))
+    except sqlite3.IntegrityError:
+        raise ValueError("two instruments or holders have the same key; key_of needs more bits") from None
     return left_out
 
 

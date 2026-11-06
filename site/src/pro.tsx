@@ -74,6 +74,7 @@ export const PRO_INCLUDES: readonly (readonly [Feature, Key])[] = [
   // A calendar feed is a delivery, as mail is (src/account/feeds.ts).
   ["delivery", "pro.include_feeds"],
   ["bug_reports", "pro.include_bugs"],
+  ["export_filtered", "instruments.pro_include"],
 ];
 
 // The two figures, as the billing page offers them: the operator's text

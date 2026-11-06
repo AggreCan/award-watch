@@ -44,6 +44,7 @@ import { watchlistPage } from "./pages/watchlist";
 import { llmsTxt, robotsTxt } from "./seo";
 import { contractSitemap, sitemapFile } from "./sitemaps";
 import { proPage } from "./pages/pro";
+import { instrumentRoute, instrumentsCsv, instrumentsIndex } from "./pages/instruments";
 import { account } from "./account/routes";
 import { admin } from "./account/admin";
 import { interestStopPage, interestStopPost } from "./account/announce";
@@ -175,6 +176,14 @@ app.get("/segments/:nn/analytics/:table{[a-z]+\\.csv}", (c) => analyticsCsv(c, "
 app.get("/categories", (c) => movedTo(c, "/segments"));
 app.get("/categories/:nn", (c) => movedTo(c, `/segments/${encodeURIComponent(c.req.param("nn") ?? "")}`));
 app.get("/rankings", rankingsPage);
+// Standing offers and supply arrangements (pages/instruments.tsx, docs/sosa.md):
+// the list from its static index, its CSV (Pro), then one instrument from the
+// records database, its number escaped as one path segment, and its holders'
+// CSV (Pro) at <number>/holders.csv. rows.csv comes before the instrument,
+// which would read it as a number.
+app.get("/instruments", instrumentsIndex);
+app.get("/instruments/rows.csv", instrumentsCsv);
+app.get("/instruments/:agreement{.+}", instrumentRoute);
 app.get("/rankings/:year", rankingsPage);
 // Organizations and buyers by name, from the hosted search database (D1
 // SEARCH); the top bar's field on every page submits here. A page for the

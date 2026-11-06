@@ -95,3 +95,19 @@ LOBBYING_ARCHIVE_INDEX = ("https://web.archive.org/cdx/search/cdx?url=" + LOBBYI
 LOBBYING_ARCHIVE_CAPTURE = "https://web.archive.org/web/{timestamp}id_/" + LOBBYING_URL
 
 ORGBOOK_SEARCH = "https://orgbook.gov.bc.ca/api/v4/search/topic"
+
+# Standing offers and supply arrangements (sources/sosa.py): PSPC's weekly
+# file of the active instruments and their holders, Open Government Licence.
+SOSA_DATASET = "f5c8a5a0-354d-455a-99ab-8276aa38032e"
+SOSA_URL = "https://sosa.canadabuys.canada.ca/cds/opendata/tpsgc-pwgsc_ocama-sosa.csv"
+SOSA_DICTIONARY_URL = "https://donnees-data.tpsgc-pwgsc.gc.ca/ba2/ac-cb/ocama-sosa-dd.xml"
+SOSA_SEARCH_URL = "https://sosa.canadabuys.canada.ca/"
+# The host sends its own certificate without the intermediate that issued it
+# (a Windows client fills the gap from its store; OpenSSL does not), so the
+# verifying client fails on it. The operator places that intermediate's PEM
+# here (docs/sosa.md); the stage then trusts it for this one host, with
+# verification and the host name check still on.
+SOSA_CA_PEM = PACKAGE_DATA / "sosa_intermediate.pem"
+# A file whose rows fell by more than the hold rule allows is held for review;
+# the operator releases it by writing its publication date (YYYY-MM-DD) here.
+SOSA_RELEASE = PACKAGE_DATA / "sosa_release.txt"

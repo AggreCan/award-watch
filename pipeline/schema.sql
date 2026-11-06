@@ -870,3 +870,95 @@ CREATE TABLE IF NOT EXISTS interest (
   notice_at TEXT,                                -- when the accounts-open message went to the address, on the rows it had then
   UNIQUE (email, kind, params)
 );
+
+-- ---------------------------------------------------------------------------
+-- Standing offers and supply arrangements (sources/sosa.py, docs/sosa.md).
+-- PSPC's weekly file lists the instruments active on its publication date,
+-- one row per supplier, instrument and delivery point; the history is what
+-- these tables keep of each week's file.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sosa_instruments (
+  agreement_number TEXT PRIMARY KEY,             -- as published
+  type_en TEXT,
+  type_fr TEXT,
+  description_en TEXT,
+  description_fr TEXT,
+  commodity TEXT,                                -- the GSIN
+  commodity_en TEXT,
+  commodity_fr TEXT,
+  end_user_en TEXT,
+  end_user_fr TEXT,
+  end_user_buyer_id TEXT,                        -- the buyer a source has named with the end user's spelling, else NULL
+  start TEXT,                                    -- award-date
+  expiry TEXT,                                   -- expiry-date
+  solicitation TEXT,                             -- the agreement number's stem (sosa.stem), for the join to the notices
+  segments TEXT,                                 -- JSON list of two-digit UNSPSC segments, from the notices the stem matches
+  tender_reference TEXT,                         -- the newest tender notice the stem matches, its reference as published
+  n_holders INTEGER NOT NULL DEFAULT 0,          -- active holders (suppliers), persons withheld counted
+  n_holders_withheld INTEGER NOT NULL DEFAULT 0,
+  first_seen TEXT NOT NULL,                      -- the publication date of the first file that held it
+  last_seen TEXT NOT NULL,                       -- the publication date of the last file that held it
+  expiry_changes INTEGER NOT NULL DEFAULT 0      -- how many file publications moved the expiry (the calendar SEQUENCE)
+);
+CREATE INDEX IF NOT EXISTS idx_sosa_instruments_expiry ON sosa_instruments(expiry);
+
+-- One supplier on one instrument in one delivery region. A name that reads as
+-- a person is never stored: supplier_raw, the operating and standardized
+-- names are NULL and supplier_norm is a hash of the normalized name, which
+-- keeps the row's key from week to week without keeping the name. The
+-- organization is resolved, never created: a holder links to a profile only
+-- when its name already names one (sosa.resolve), and loses the link when the
+-- organizations stage removes that profile (ON DELETE SET NULL); the sosa
+-- stage, which runs after it, links it again the same night after a merge.
+CREATE TABLE IF NOT EXISTS sosa_holders (
+  agreement_number TEXT NOT NULL,
+  supplier_norm TEXT NOT NULL,                   -- normalize.norm_name of the legal name; 'person:<hash>' when withheld
+  delivery_point_code TEXT NOT NULL,             -- BC, ON ... (ISO 3166-2 without the CA- prefix), FD, NA, NC
+  supplier_raw TEXT,                             -- the legal name as published; NULL when withheld
+  operating_name TEXT,                           -- only beside a legal name that is shown
+  standardized_name TEXT,
+  delivery_point_en TEXT,
+  delivery_point_fr TEXT,
+  organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+  supplier_withheld INTEGER NOT NULL DEFAULT 0,  -- 1: the name reads as a person (matching.is_person_name)
+  first_seen TEXT NOT NULL,                      -- the publication date of the file the row first appeared in
+  last_seen TEXT NOT NULL,                       -- the publication date of the last file that held it
+  missing_files INTEGER NOT NULL DEFAULT 0,      -- files in a row that lacked it; 2 means lost
+  lost_on TEXT,                                  -- the date it was marked lost (two files without it, or the expiry
+                                                 -- passed); NULL while held. Deleted sosa.LOST_KEEP_DAYS later.
+  lost_why TEXT,                                 -- absent | expired
+  PRIMARY KEY (agreement_number, supplier_norm, delivery_point_code)
+);
+CREATE INDEX IF NOT EXISTS idx_sosa_holders_org ON sosa_holders(organization_id);
+
+-- The call-ups the published contracts record against an instrument
+-- (contracts.standing_offer_number equal to the agreement number, spaces and
+-- case folded) over ten fiscal years, per holder organization; '' gathers the
+-- rows whose vendor is no resolved holder (another firm, a person withheld,
+-- a name with no profile). Rebuilt whole every night.
+CREATE TABLE IF NOT EXISTS sosa_callups (
+  agreement_number TEXT NOT NULL,
+  organization_id TEXT NOT NULL DEFAULT '',
+  n INTEGER NOT NULL,                            -- published contract rows
+  value REAL,                                    -- their counted values (organizations.CONTRACT_CHECKED); NULL for none
+  n_no_value INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (agreement_number, organization_id)
+);
+
+-- The gains and losses of holders resolved to an organization, for the watch
+-- events (pro-features section 1 reads them once it is built; until then no
+-- records database table exists for them). kind 12: the organization gained
+-- the instrument in a region; 13: it no longer holds it there. Rows older
+-- than sosa.EVENT_KEEP_DAYS are deleted.
+CREATE TABLE IF NOT EXISTS sosa_events (
+  id INTEGER PRIMARY KEY,
+  day TEXT NOT NULL,                             -- the file's publication date (gained, lost by absence) or the run's (expired)
+  kind INTEGER NOT NULL,                         -- 12 gained | 13 no longer held
+  ref TEXT NOT NULL,                             -- 'sosa:<agreement number>'
+  oid TEXT NOT NULL,                             -- the holder's organization
+  region TEXT NOT NULL,                          -- the delivery point code
+  endd TEXT,                                     -- the instrument's expiry
+  why TEXT,                                      -- 13 only: absent | expired
+  UNIQUE (kind, ref, oid, region, day)
+);
+CREATE INDEX IF NOT EXISTS idx_sosa_events_day ON sosa_events(day);

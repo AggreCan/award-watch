@@ -26,11 +26,13 @@ from .sources import buyers, canadabuys, registry_federal
 from . import indicators
 from . import expiring, export, export_static, migrate
 from . import link_sample, records_db, search_db
-from .sources import contracts, grants, lobbying, matching
+from .sources import contracts, grants, lobbying, matching, sosa
 
 log = logging.getLogger("awardwatch_pipeline")
+# sosa after organizations: its holders link to profiles by name, and tonight's
+# merges and removals are known only then.
 STAGES = ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry",
-          "organizations", "indicators", "expiring", "export"]
+          "organizations", "sosa", "indicators", "expiring", "export"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -120,6 +122,9 @@ def stage_runners(conn: sqlite3.Connection, client: PoliteClient | None,
         # A 260 MB download can fail; the rest of the night still runs.
         "registry": lambda: registry_federal.run(conn, client, download=not offline),
         "organizations": lambda: organizations.run(conn),
+        # Standing offers and supply arrangements: the weekly file, applied
+        # when its publication date moves, and the nightly upkeep of its holders.
+        "sosa": lambda: sosa.run(conn, client, samples=samples),
         "indicators": lambda: indicators.run(conn),
         "expiring": lambda: expiring.run(conn),
         "export": lambda: _export(conn),

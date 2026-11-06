@@ -294,3 +294,50 @@ CREATE INDEX IF NOT EXISTS rec_events_buyer ON rec_events (buyer, day) WHERE buy
 CREATE INDEX IF NOT EXISTS rec_events_segment ON rec_events (sid, day) WHERE sid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS rec_events_ref ON rec_events (ref, day);
 CREATE INDEX IF NOT EXISTS rec_events_day ON rec_events (day, kind);
+-- The page of each standing offer or supply arrangement
+-- (/instruments/<agreement>, site/src/pages/instruments.tsx), from the
+-- pipeline's sosa tables (sosa_export.py): one row per instrument the
+-- pipeline keeps (active, or lapsed within 90 days), found by its number
+-- (rec_instruments_agr). calls holds the call-ups the published contracts
+-- record against it over ten fiscal years, as JSON: [organization number or
+-- null for any vendor that is no resolved holder, rows, cents or null, rows
+-- with no value].
+CREATE TABLE IF NOT EXISTS rec_instruments (
+  k INTEGER PRIMARY KEY,                         -- key_of('sosa:<agreement>')
+  agr TEXT NOT NULL,                             -- the agreement number as published
+  type_en TEXT,
+  type_fr TEXT,
+  desc_en TEXT,                                  -- the description, one line, at most 120 characters
+  desc_fr TEXT,
+  gsin TEXT,                                     -- the commodity's GSIN
+  gsin_en TEXT,
+  gsin_fr TEXT,
+  user_en TEXT,                                  -- the end user as published
+  user_fr TEXT,
+  buyer TEXT,                                    -- the end user's buyer id when a source names it so
+  start TEXT,
+  expiry TEXT,
+  segs TEXT NOT NULL DEFAULT '',                 -- inherited UNSPSC segments, each between spaces: ' 43 81 '
+  tref TEXT,                                     -- the RFSO or RFSA notice's reference in the site's URL form
+  n INTEGER NOT NULL DEFAULT 0,                  -- active holders, persons withheld counted
+  nw INTEGER NOT NULL DEFAULT 0,                 -- of them withheld as persons
+  seen TEXT,                                     -- the publication date of the first file that held it
+  last TEXT,                                     -- the publication date of the last file that held it
+  calls TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS rec_instruments_agr ON rec_instruments (agr);
+
+-- Its active holders whose names are shown, one row per region; a holder
+-- withheld as a person has no row (rec_instruments.nw counts it).
+CREATE TABLE IF NOT EXISTS rec_holders (
+  k INTEGER PRIMARY KEY,                         -- key_of('sosa:<agreement>:<normalized name>:<region>')
+  ik INTEGER NOT NULL,                           -- rec_instruments.k
+  oid INTEGER,                                   -- the organization's number; NULL when the name names no profile
+  name TEXT NOT NULL,                            -- the legal name as published
+  op TEXT,                                       -- the operating name
+  region TEXT NOT NULL,                          -- the delivery point code
+  region_en TEXT,
+  region_fr TEXT,
+  seen TEXT NOT NULL                             -- the publication date of the first file that held the row
+);
+CREATE INDEX IF NOT EXISTS rec_holders_instrument ON rec_holders (ik, name, region);

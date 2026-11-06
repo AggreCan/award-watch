@@ -17,6 +17,8 @@ import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFou
 import { EarlierAwards, loadEarlierAwards } from "./backbone";
 import { closingStart } from "../calendar";
 import { tenderIcsPath } from "./ics";
+import { tenderInstruments } from "../instruments";
+import { TenderInstrumentsPanel } from "./instruments";
 import { tenderSeo } from "../seo";
 import {
   BuyerLink, CountdownScript, closingHasZone, closingText, money, otherLanguageMark, provincesText, sourceFileText, tenderNoticeUrl,
@@ -248,6 +250,8 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         <p class="muted">{t(lang, "tender.related_none")}</p>
       )}
       </Panel>
+
+      <TenderInstrumentsPanel lang={lang} rows={tenderInstruments(d)} />
 
       <EarlierAwards lang={lang} earlier={earlier} />
 

@@ -61,6 +61,9 @@ change there. Output tree (under data/out/static):
   expiring/<window>/index.json, expiring/<window>/<n>.json   a window's rows, soonest end first, 500 a page
                                 (buyer files and profiles carry their own first 25 as "expiring")
   feeds/...                     Atom feeds (feeds.py)
+  instruments/index.json        the standing offers and supply arrangements with an active holder
+                                (sosa_export.py, which also names what profiles, segment and buyer files and
+                                tender details carry of them: "instruments" and "holders")
   sitemaps/sitemap-<n>.xml, sitemaps/index.xml
 
 Open and closed. CanadaBuys' open-notice file keeps listing some notices for
@@ -145,13 +148,14 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from . import config, directory, expiring, indicators, organizations, value_checks
+from . import config, directory, expiring, indicators, organizations, sosa_export, value_checks
 from .db import get_meta, log_run, set_meta
 from .export import SUMS, listed_buyer_ids, register_functions, scrub, scrub_doc
 from .feeds import write_feeds
 from .normalize import closing_day, tender_status_on
 from .sources import buyers as buyer_rules
 from .sources.buyers import public_spelling
+from .sources.sosa import stem as sosa_stem
 
 log = logging.getLogger(__name__)
 
@@ -1157,6 +1161,7 @@ def write_tender_shards(m: Model, out: Path) -> dict[str, int]:
     conn = m.conn
     solicitations = {s for (raw,) in conn.execute("SELECT DISTINCT solicitation FROM tenders") if (s := _sol(raw))}
     related = related_awards(m, solicitations)
+    instruments = sosa_export.tender_instruments(conn)
     shards = m.refs["tenders"].shards()
     written = largest = 0
     for key in sorted(shards):
@@ -1168,7 +1173,12 @@ def write_tender_shards(m: Model, out: Path) -> dict[str, int]:
             rows = versions[raw]
             if rows:
                 ref = m.refs["tenders"].url[raw]
-                shard[ref.lower()] = tender_detail(m, ref, rows, codes.get((raw, rows[-1]["amendment"]), []), related)
+                d = tender_detail(m, ref, rows, codes.get((raw, rows[-1]["amendment"]), []), related)
+                held = instruments.get(sosa_stem(rows[-1]["solicitation"]) or "")
+                if held:
+                    # An RFSO or RFSA notice: the instruments it issued that are active, with their holders.
+                    d["instruments"] = held
+                shard[ref.lower()] = d
         largest = max(largest, _dump(out / "tenders" / f"{key}.json", shard))
         written += 1
     return {"tender_shards": written, "tender_shard_max_bytes": largest,
@@ -1414,6 +1424,7 @@ def _profile_extra(m: Model, p: dict, checks: dict[str, int]) -> dict:
 def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, int]:
     """profiles/<abc>.json: every organization's profile, one shard per three hex digits of its id."""
     keys = sorted({shard_key(oid) for oid in m.orgs})
+    held = sosa_export.organization_parts(conn)
     written = largest_bytes = 0
     over: list[str] = []
     for key in keys:
@@ -1430,6 +1441,9 @@ def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, i
         checks = _value_checks(conn, rng)
         shard = {o["id"]: _profile_extra(m, profile(m, o, tables, non_cad.get(o["id"], {})), checks.get(o["id"], {}))
                  for o in orgs}
+        for oid, p in shard.items():
+            if oid in held:
+                p["instruments"] = held[oid]
         size = _dump(out / "profiles" / f"{key}.json", shard)
         written += 1
         largest_bytes = max(largest_bytes, size)
@@ -1661,6 +1675,7 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
         for bid, items in cells.items():
             top[bid][source] = _top(items, BUYER_TOP, _by_value)
     also = buyer_aliases_of(m, listed)
+    holders = sosa_export.buyer_holders(conn)
     for s in summaries:
         bid = s["id"]
         b = m.buyers[bid]
@@ -1680,6 +1695,7 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
             "recent_awards": recent,
             "expiring": m.expiring_part("buyer_id", bid),
             "aliases": also.get(bid, []),
+            **({"holders": holders[bid]} if bid in holders else {}),
         })
     retired = {old: new for old, new in conn.execute("SELECT old_id, new_id FROM buyer_aliases ORDER BY old_id")
                if new in listed and old not in listed and _buyer_id(old)}
@@ -1717,6 +1733,7 @@ def write_categories(m: Model, out: Path, open_rows: list[dict]) -> dict[str, in
                 for cell in cells:
                     cell[1] = (cell[1] or 0) + r["v"]
     index = []
+    holders = sosa_export.segment_holders(m.conn)
     for code, (en, fr) in sorted(m.segments.items()):
         this_year = by_year[code].get(m.year, [0, None, 0])
         index.append({"code": code, "title_en": en, "title_fr": fr, "open_tenders": len(open_by[code]),
@@ -1729,6 +1746,7 @@ def write_categories(m: Model, out: Path, open_rows: list[dict]) -> dict[str, in
             "top_organizations": [m.org_total(*c) for c in ranked],
             "years": [{"year": y, "n": n, "total": _money(t), "n_no_value": nv}
                       for y, (n, t, nv) in sorted(by_year[code].items(), reverse=True)],
+            **({"holders": holders[code]} if code in holders else {}),
         })
     _dump(out / "categories" / "index.json", {"year": m.year, "segments": index})
     return {"categories": len(index)}
@@ -1778,6 +1796,16 @@ def write_expiring(m: Model, out: Path) -> dict[str, int]:
     return counts
 
 
+# -- standing offers and supply arrangements ----------------------------------------------
+
+
+def write_instruments(m: Model, out: Path) -> dict[str, int]:
+    """instruments/index.json: every instrument with an active holder (sosa_export.index_doc)."""
+    doc = sosa_export.index_doc(m.conn, m.as_of)
+    _dump(out / "instruments" / "index.json", doc)
+    return {"instruments": len(doc["rows"])}
+
+
 # -- sitemaps -----------------------------------------------------------------------
 
 
@@ -1821,6 +1849,8 @@ def sitemap_entries(m: Model, skip: Collection[str] = ()) -> list[tuple[str, str
         entries += [(f"/expiring/{name}", dated) for name, _ in expiring.WINDOWS]
     if "directory" not in skip:
         entries += directory.sitemap_entries(conn)
+    if "instruments" not in skip:
+        entries += sosa_export.sitemap_entries(conn, dated)
     return entries
 
 
@@ -1943,6 +1973,7 @@ def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: st
         ("expiring", lambda: write_expiring(m, out)),
         ("aliases", lambda: write_aliases(conn, out)),
         ("directory", lambda: directory.write_all(conn, out, m.as_of)),
+        ("instruments", lambda: write_instruments(m, out)),
     )
     for name, write in sections:
         try:

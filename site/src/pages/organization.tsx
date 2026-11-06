@@ -27,6 +27,8 @@ import {
   grantUrl, lobbyUrl, money, orList, shareText,
 } from "./shared";
 import { WATCH_MAX } from "./watchlist";
+import { profileInstruments } from "../instruments";
+import { InstrumentsLine, ProfileInstrumentsPanel } from "./instruments";
 
 const REGISTRY_NAME: Record<string, Key> = {
   corporations_canada: "registry.corporations_canada",
@@ -220,6 +222,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
     return notFoundPage(c, stats.data_as_of, "org.not_found", "/organizations", "org.back");
   }
   const o = profile.organization;
+  // The standing offers and supply arrangements it holds (sosa_export.py); none on a file written before them.
+  const instruments = profileInstruments(profile);
   const [{ responses, corrections }, directories, interest] = await Promise.all([
     siteRows(c, id), loadDirectories(c.env), interestFilter(c.env, lang, "organization", `/organizations/${o.id}`, { name: o.display_name }),
   ]);
@@ -423,6 +427,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           {o.business_number ? ` ${t(lang, "org.business_number", { bn: o.business_number })}` : ""}
         </p>
         <WatchControl lang={lang} state={watch} kind="organization" target={o.id} />
+        <InstrumentsLine lang={lang} part={instruments} />
       </PageHead>
 
       {/* A tile opens its source's list when the profile has one; a source
@@ -452,6 +457,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         <ExpiringSection lang={lang} part={profile.expiring} heading="org.expiring" organization={false} phoneRows={PHONE_ROWS}
           more={<MoreInWindow lang={lang} part={profile.expiring} pro={accountsEnabled(c.env)} />} />
       ) : null}
+
+      <ProfileInstrumentsPanel lang={lang} part={instruments} today={todayOf(stats.data_as_of)} />
 
       {/* The buyers under each source's own sub-head, so a source is named once. */}
       <Panel id="buyers" title={t(lang, "org.buyers")}>

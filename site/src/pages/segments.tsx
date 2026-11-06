@@ -20,6 +20,8 @@ import { pageSeo, segmentSeo } from "../seo";
 import { accountsEnabled } from "../account/switch";
 import { IncumbentsPanel, loadIncumbents } from "./backbone";
 import { InterestPanel, interestFilter } from "./interest";
+import { holdersPart } from "../instruments";
+import { HoldersPanel } from "./instruments";
 import { AnalyticsLink, Count, CountdownScript, OrgTotalTable, TenderTable, money } from "./shared";
 
 // How many open notices a segment page lists, the soonest to close; the
@@ -218,6 +220,9 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
 
       {/* The incumbents: who holds the segment's contracts ending within 12 months (pages/backbone.tsx). */}
       <IncumbentsPanel lang={lang} inc={incumbents} />
+
+      {/* Who holds the most active standing offers and supply arrangements carrying the segment (pages/instruments.tsx). */}
+      <HoldersPanel lang={lang} part={holdersPart(seg)} kind="segment" filter={`segment=${code}`} />
 
       <div class="panel-grid">
       <Panel title={t(lang, "segment.top")}>

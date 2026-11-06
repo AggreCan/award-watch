@@ -54,6 +54,7 @@ export function proIncludes(lang: Lang): { feature: keyof (typeof RULES)["pro"];
     { feature: "analytics", text: t(lang, "propage.incumbents", { n: fmtInt(INCUMBENTS_TEASE, lang) }) },
     { feature: "api", text: t(lang, "propage.api", { day: fmtInt(KEY_PER_DAY, lang), minute: fmtInt(KEY_PER_MINUTE, lang) }) },
     { feature: "bug_reports", text: t(lang, "billing.pro_bugs") },
+    { feature: "export_filtered", text: t(lang, "propage.instruments") },
   ];
 }
 
