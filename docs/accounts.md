@@ -32,6 +32,11 @@ the schema is `site/accounts_schema.sql`; the tests are
   up to five organizations the account chooses, its contracts ending within
   12 months and the buyers it has won from, each as a CSV file (*Your
   organization*).
+- **Weekly briefings.** Any account subscribes to a segment or a buyer from
+  its page; Pro gets one message a week about it: the week's notices,
+  awards and notable amendments, and the contracts ending next fiscal quarter.
+  A public sample is built live at `/pro/briefing-sample` (*Weekly
+  briefings*).
 - **Calendar feeds.** On the Pro plan, a saved tender search becomes an
   address a calendar app subscribes to, its open notices' closings as
   events (*Calendar feeds*). Every notice and contract page also offers its
@@ -80,6 +85,7 @@ Every datetime is ISO in UTC.
 | `bug_reports` | one row per bug report from a Pro account: the page (a path on the site), what happened, what was expected, the time | the address |
 | `api_usage` | one row per API key per UTC day it was used: how many requests the keyed API counted for it that day | a path, a parameter, an address, the time of a request |
 | `watches`, `watch_mail` | the pages an account follows and its watch mail (*Watches*) | anything typed, a copy of a message |
+| `briefings`, `briefing_deliveries` | the segments and buyers an account receives a weekly briefing about, and each briefing's runs (*Weekly briefings*) | anything typed, a copy of a message |
 | `feeds` | one row per calendar feed: kind (`search`, `watchlist`, `all`), the saved search it follows, the address's secret, created and revocation times, the UTC day a calendar last read it | a time of reading, an address, a user agent |
 | `org_claims` | one row per account that named its organization: the organization id, up to five organization ids to compare it with, the share block's segment, when it was chosen and last changed (*Your organization*) | anything typed, a name, any sign of which other accounts chose the same organization |
 
@@ -1668,6 +1674,134 @@ show); the user page shows the account's claim, its competitor ids and its
 segment.
 
 ### Operator step
+## Weekly briefings
+
+A weekly briefing is one message a week about one UNSPSC segment or one buyer
+(optionally narrowed to one segment): the week's new notices, the awards with
+their winners and values, the contracts ending next fiscal quarter with their
+holders, the notable amendments and the fiscal year's largest records. Pro
+(`delivery`) gets the message; a Free account keeps the briefing with its
+email off. The code is `site/src/account/briefings.ts` (the rows, the records
+statements, the run, the console figures), `briefing_pages.tsx` (the control,
+the searches page's panel, the stop page, the public sample) and
+`digests.ts` `briefingDigest` (the message, in the digest shell); the tests
+are `site/test/briefings.test.ts`.
+
+### Subscribing
+
+- Each segment page and buyer page has a Weekly Briefing panel (`Bulletin
+  hebdomadaire`) under Email Lists, with a link to this week's sample. With
+  the switch off it is not rendered and the page keeps every byte. Not signed
+  in: Subscribe links to `/account/sign-in?next=<this page>`. Free: Subscribe
+  saves the briefing with delivery `off`, beside a gate note with the Pro chip
+  saying the weekly email is Pro's. Pro: saved with delivery `weekly`, "Sent
+  each Monday by email". A buyer's form adds a choice of the whole buyer or
+  one of the 57 segments. A subscribed page reads "Subscribed" and links the
+  searches page.
+- `POST /account/briefings` takes the kind, the subject (checked as the page
+  checks it) and a buyer's segment; the label is the site's ("81
+  Engineering", a buyer's name from the data, "Fisheries and Oceans Canada ·
+  81 Engineering"), never typed. A buyer no longer in the data adds nothing.
+- Briefings and saved searches share one cap (3 on Free, 25 on Pro): each
+  insert counts both tables inside the statement, so two posts at once cannot
+  pass it. `addSearch` does the same (it counts the searches alone while the
+  `briefings` table is not on the database yet).
+- `/account/searches` lists the briefings in their own panel: delivery
+  (weekly or off; Free sees the gate note), the newest run, Remove. Turning
+  delivery on is Pro's (`POST /account/briefings/:id`).
+
+### The message
+
+For a subject S at data date D, the span is the seven data dates ending with
+D (after a message that failed, back to the last one covered, at most 14).
+
+| Section | Rows | Read from |
+|---|---|---|
+| New notices this week | the count, then up to 10, soonest closing first, with the buyer and the closing and time left; a line for the rest linking the open notices | `rec_events` kind `notice` by `sid` (segment) or `buyer` in the span, buyer names from `rec_buyers`; a count row counts what it stands for |
+| Awards this week | the count, then each source's own figures (count, counted value, how many without one; nothing added across sources), then up to 10 by value with the winner and the buyer (on a buyer briefing, the winner's segment), the value and the source | `rec_events` kind `award` (grants are their own kind and stay out); a count row is a line of its own, not in the totals |
+| Contracts ending next quarter | the quarter named ("Q4 2026-27 (January to March 2027)"), the count, total and how many without a value; how many are new to the list this week; up to 10 by value with the holder, the buyer, the end date, the value, the amendments and growth, "new this week" on those new to it; a link to the 6-month radar filtered the same way | `rec_due` for the count and total (a buyer narrowed to a segment: the list's own counts, since `rec_due` holds a buyer or a segment); `rec_expiring` by `endd` in the quarter with `buyer` or the segment mark, through `rec_expiring_end` or `rec_expiring_buyer` |
+| Notable amendments this week | up to 10 whose counted value moved by `EVENT_NOTABLE_CENTS` (CA$100,000) or `EVENT_NOTABLE_SHARE` (50 percent) of the value before, largest change first, with before, after, the change and the end date moved | `rec_events` kind `amended` |
+| Largest records this fiscal year | the ten largest counted records in the data date's fiscal year, one line each with the other party, the value, the date and the source; then the subject's analytics view | `records` by `sid` (award notices and history, every row of the segment) or `bid` (award notices, history and published contracts, `extra = 0`; narrowed, the segment's rows), the date from `rec_details` |
+
+"Next fiscal quarter" is the quarter after the one D falls in, stable from week
+to week; a row is "new this week" when the span holds an `award` event for it
+(new to the records) or an `amended` event that moved its end date from
+outside the quarter (the 12-month crossing, `ends_12m`, cannot fall in the
+next quarter). The last briefing of a quarter adds "The fiscal quarter turns on
+2027-04-01; next week's briefing lists Q2 2027-28 (July to September 2027)."
+The note repeats the caveats: the newest amendment's value, nothing added
+across sources, "ends" is the stated date; a segment briefing adds that a
+week's line lists a record under its lowest segment (rec_events carries one);
+a narrowed briefing says once that published contracts and grants carry no
+segment.
+
+Subject: `Weekly briefing, {name}: {n} new notices, {n} awards, {n} contracts
+ending next quarter` (each part only when not zero); in French `Bulletin
+hebdomadaire, {name} : ...`. The preview line names the awards and the
+quarter's count, total and new rows. The footer: "You receive this each week
+for a briefing in your account.", the searches page, and the stop link.
+
+### The run
+
+The delivery job's last step (`runBriefings`, after the watch mail, inside the
+same cap of 300 messages a run). For each briefing with delivery `weekly`,
+whose account is active, not blocked and on a plan with `delivery`, not
+covered since the week's Monday (`BRIEFING_WEEKDAY`; a Monday whose nightly was
+late sends on the next data date of the week, and a first subscription sends
+on the next run), with no message refused for it since that Monday: one
+D1 batch on the records database (the state row and seven statements, six for
+a narrowed buyer; each a constant with the subject bound, each ending in a
+`LIMIT` of 10), read once per subject and span in a run. Until that database
+is ready at today's data date every briefing waits unclaimed (`records`:
+absent, loading, failed, stale; `no_table` before `accounts_schema.sql` is
+applied). A briefing with anything in the week's sections or a contract ending
+next quarter is sent; one with nothing in either writes `empty` and no message
+(the year's largest records alone are not news). The claim, the send, `sent`,
+`failed` and `empty` are the saved searches': claimed for the week before the
+message goes, given back when the send does not go; a refusal that is not a
+sending limit writes `failed` and leaves `last_delivered_at`, so next week's
+message covers both weeks with the span in its lead. Each run of a briefing is
+a `briefing_deliveries` row (kept 90 days). The log line adds `briefings: n
+sent, n failed, n with nothing new, n not on a plan with delivery`.
+
+The stop link is `/account/stop?b=<briefing id>&t=<secret>`, in the footer and
+in `List-Unsubscribe` with `List-Unsubscribe-Post`; it turns that briefing's
+email off (the briefing stays on the searches page). GET shows a button; POST
+and the one-click body act; a wrong secret is the site's 404. The secret is 16
+random bytes made with the first message.
+
+### The public sample
+
+`/pro/briefing-sample` renders this week's briefing for segment 81
+(Engineering) with the same reader and the same message, from the seven data
+dates ending with the site's data date, headed "A sample of the weekly
+briefing, built from this week's data". It is linked from the briefing panels,
+`/pro` and the Email lists page. It reads no session (the same page for every
+reader, the rail's Sign in item for all), keeps nothing about the reader,
+reads the records database once (one batch) and is cached `public,
+max-age=3600` (`layout.tsx` `publicPage`). A database that cannot answer gives
+the page's shell with "not available right now", 503, never stored. With the
+switch off it is the site's 404.
+
+### Bounds and privacy
+
+Briefings share the 25 cap; 10 rows a section, five sections, so 50 rows a
+message; one batch a briefing; 300 messages a run shared with the saved
+searches and the watch mail; one fiscal year for the largest records. A
+briefing row keeps the kind, the subject (a segment code or a buyer id), the
+segment, the site's label, the language, delivery, the last run and the stop
+secret; the message names public records and totals, nothing about the
+reader. The console's overview counts briefings by kind and delivery and the
+last seven days' runs by status; the user page lists the account's briefings
+(kind, delivery, added, newest run) and its last 20 runs, never the secret.
+Deleting a briefing deletes its runs; deleting the account deletes both
+(`deleteBriefingsOf`, before the deletion batch).
+
+Not built yet: the sixth section (standing offers and supply arrangements
+ending within 6 months) waits for that source; the notices' provinces are
+not in `rec_events`, so a notice's line names its buyer and closing only.
+
+### Operator step at landing
 
 ```
 npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
@@ -1676,3 +1810,7 @@ npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
 Idempotent. It adds `org_claims` and its two indexes; until it runs the
 page answers 503 and the overview leaves the line out. Apply it before
 deploying.
+Idempotent; it adds `briefings` and `briefing_deliveries`. Apply it before
+deploying: until then a signed-in reader sees no briefing panel, the run logs
+that the accounts database has no briefings table, and saved searches count
+against the cap alone.

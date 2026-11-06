@@ -18,6 +18,7 @@ import { clockOf, closingPassed, tenderState } from "../closing";
 import { Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { pageSeo, segmentSeo } from "../seo";
 import { accountsEnabled } from "../account/switch";
+import { BriefingPanel, briefingControl } from "../account/briefing_pages";
 import { IncumbentsPanel, loadIncumbents } from "./backbone";
 import { InterestPanel, interestFilter } from "./interest";
 import { holdersPart } from "../instruments";
@@ -179,11 +180,12 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
   // An open list: a notice whose closing time has passed goes after the ones still open.
   const open = [...seg.open_tenders.filter((r) => !closingPassed(r.closing, clock)), ...seg.open_tenders.filter((r) => closingPassed(r.closing, clock))];
   const shown = open.slice(0, SEGMENT_OPEN_ROWS);
-  const [interest, expiring, openLevels, incumbents] = await Promise.all([
+  const [interest, expiring, openLevels, incumbents, briefing] = await Promise.all([
     interestFilter(c.env, lang, "segment", `/segments/${code}`),
     loadExpiringIndex(c.env).catch(() => null),
     loadOpenLevels(c.env).catch(() => null),
     loadIncumbents(c, "segment", code, todayOf(stats.data_as_of)),
+    briefingControl(c, "segment", code),
   ]);
   // An export without the levels file shows no levels panel.
   const levels = openLevels ? segmentLevels(openLevels, code) : null;
@@ -217,6 +219,8 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
       {levels && levels.families.length ? <SegmentLevels lang={lang} families={levels.families} total={levels.total} /> : null}
 
       <InterestPanel lang={lang} filter={interest} />
+      {/* The weekly briefing beside the email lists, while the accounts switch is on (account/briefing_pages.tsx). */}
+      <BriefingPanel lang={lang} state={briefing} kind="segment" subject={code} />
 
       {/* The incumbents: who holds the segment's contracts ending within 12 months (pages/backbone.tsx). */}
       <IncumbentsPanel lang={lang} inc={incumbents} />

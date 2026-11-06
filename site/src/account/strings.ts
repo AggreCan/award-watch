@@ -1668,4 +1668,223 @@ export const ACCOUNT_STRINGS = {
     fr: "Acheteurs dont vous avez déjà obtenu des contrats et qui ont publié de nouveaux avis cette semaine : {names}",
   },
   "orgclaim.week_buyers_more": { en: "{names} and {n} more", fr: "{names} et {n} de plus" },
+
+  // -- weekly briefings (briefings.ts, briefing_pages.tsx, digests.ts briefingDigest) -----------
+  // The message.
+  "briefing.subject": { en: "Weekly briefing, {name}: {what}", fr: "Bulletin hebdomadaire, {name} : {what}" },
+  "briefing.subj_notices_one": { en: "1 new notice", fr: "1 nouvel avis" },
+  "briefing.subj_notices_many": { en: "{n} new notices", fr: "{n} nouveaux avis" },
+  "briefing.subj_awards_one": { en: "1 award", fr: "1 attribution" },
+  "briefing.subj_awards_many": { en: "{n} awards", fr: "{n} attributions" },
+  "briefing.subj_amended_one": { en: "1 notable amendment", fr: "1 modification notable" },
+  "briefing.subj_amended_many": { en: "{n} notable amendments", fr: "{n} modifications notables" },
+  "briefing.subj_ending_one": { en: "1 contract ending next quarter", fr: "1 contrat prenant fin le trimestre prochain" },
+  "briefing.subj_ending_many": { en: "{n} contracts ending next quarter", fr: "{n} contrats prenant fin le trimestre prochain" },
+  "briefing.pre_awards": { en: "Awards this week: {n}.", fr: "Attributions cette semaine : {n}." },
+  "briefing.pre_quarter_one": {
+    en: "Next quarter, {quarter}: 1 contract ending, {total}; new to the list: {fresh}.",
+    fr: "Trimestre prochain, {quarter} : 1 contrat prenant fin, {total}; nouveaux dans la liste : {fresh}.",
+  },
+  "briefing.pre_quarter_many": {
+    en: "Next quarter, {quarter}: {n} contracts ending, {total}; new to the list: {fresh}.",
+    fr: "Trimestre prochain, {quarter} : {n} contrats prenant fin, {total}; nouveaux dans la liste : {fresh}.",
+  },
+  "briefing.pre_quarter_none": { en: "Next quarter, {quarter}: no contract ending.", fr: "Trimestre prochain, {quarter} : aucun contrat ne prend fin." },
+  "briefing.no_total": { en: "no counted value", fr: "aucune valeur comptée" },
+  "briefing.title": { en: "{name}, week to {date}", fr: "{name}, semaine se terminant le {date}" },
+  "briefing.span": { en: "Data dates {first} to {last}.", fr: "Dates des données : du {first} au {last}." },
+  "briefing.quarter": { en: "Q{q} {fy}", fr: "T{q} {fy}" },
+  "briefing.months_1": { en: "April to June {year}", fr: "avril à juin {year}" },
+  "briefing.months_2": { en: "July to September {year}", fr: "juillet à septembre {year}" },
+  "briefing.months_3": { en: "October to December {year}", fr: "octobre à décembre {year}" },
+  "briefing.months_4": { en: "January to March {year}", fr: "janvier à mars {year}" },
+  "briefing.notices_head": { en: "New notices this week: {n}", fr: "Nouveaux avis cette semaine : {n}" },
+  "briefing.notices_none": { en: "New notices this week: none", fr: "Nouveaux avis cette semaine : aucun" },
+  "briefing.notices_link": { en: "The open notices", fr: "Les avis ouverts" },
+  "briefing.more_one": { en: "And 1 more this week", fr: "Et 1 autre cette semaine" },
+  "briefing.more_many": { en: "And {n} more this week", fr: "Et {n} autres cette semaine" },
+  "briefing.awards_head": { en: "Awards this week: {n}", fr: "Attributions cette semaine : {n}" },
+  "briefing.awards_none": { en: "Awards this week: none", fr: "Attributions cette semaine : aucune" },
+  "briefing.source_line": { en: "{source}: {figures}", fr: "{source} : {figures}" },
+  "briefing.nv": { en: "{n} without a value", fr: "{n} sans valeur" },
+  "briefing.uncounted": {
+    en: "On days past the 100 awards kept for one buyer: {n} more, not listed and not in these totals",
+    fr: "Les jours au-delà des 100 attributions conservées pour un acheteur : {n} de plus, ni listées ni comprises dans ces totaux",
+  },
+  "briefing.no_value": { en: "No counted value", fr: "Aucune valeur comptée" },
+  "briefing.withheld": { en: "Supplier not named", fr: "Fournisseur non nommé" },
+  "briefing.ending_head": {
+    en: "Contracts ending next quarter, {quarter} ({months}): {figures}",
+    fr: "Contrats prenant fin le trimestre prochain, {quarter} ({months}) : {figures}",
+  },
+  "briefing.ending_none": {
+    en: "No contract ends next quarter, {quarter} ({months}).",
+    fr: "Aucun contrat ne prend fin le trimestre prochain, {quarter} ({months}).",
+  },
+  "briefing.ending_fresh": { en: "New to the list this week: {n}.", fr: "Nouveaux dans la liste cette semaine : {n}." },
+  "briefing.ends": { en: "ends {date}", fr: "prend fin le {date}" },
+  "briefing.fresh": { en: "new this week", fr: "nouveau cette semaine" },
+  "briefing.radar_link": { en: "On the 6-month radar", fr: "Dans le radar sur 6 mois" },
+  "briefing.turn": {
+    en: "The fiscal quarter turns on {date}; next week's briefing lists {quarter} ({months}).",
+    fr: "Le trimestre financier change le {date}; le bulletin de la semaine prochaine présente le {quarter} ({months}).",
+  },
+  "briefing.amended_head": { en: "Notable amendments this week: {n}", fr: "Modifications notables cette semaine : {n}" },
+  "briefing.amended_none": { en: "Notable amendments this week: none", fr: "Modifications notables cette semaine : aucune" },
+  "briefing.largest_head": {
+    en: "Largest records this fiscal year ({fy} to date): {n}",
+    fr: "Dossiers les plus importants de l'exercice ({fy} à ce jour) : {n}",
+  },
+  "briefing.largest_none": {
+    en: "Largest records this fiscal year ({fy} to date): none",
+    fr: "Dossiers les plus importants de l'exercice ({fy} à ce jour) : aucun",
+  },
+  "briefing.analytics_segment": { en: "Analytics for this segment", fr: "Analyse de ce segment" },
+  "briefing.analytics_buyer": { en: "Analytics for this buyer", fr: "Analyse de cet acheteur" },
+  "briefing.records_link": { en: "The buyer's records", fr: "Les dossiers de l'acheteur" },
+  "briefing.segment_link": { en: "The segment's page", fr: "La page du segment" },
+  "briefing.note": {
+    en: "A contract's value is its newest amendment's. Nothing is added across sources. \"Ends\" is the date the record states.",
+    fr: "La valeur d'un contrat est celle de sa plus récente modification. Rien n'est additionné entre les sources. « Prend fin » est la date que le dossier indique.",
+  },
+  "briefing.note_segment": {
+    en: "Segment coding is the buyer's; a record can carry several segments, and the week's lines list it under the lowest of them.",
+    fr: "Le codage par segment est celui de l'acheteur; un dossier peut porter plusieurs segments, et les lignes de la semaine le placent sous le plus bas.",
+  },
+  "briefing.note_narrowed": {
+    en: "Published contracts and grants carry no segment, so a briefing narrowed to one leaves them out.",
+    fr: "Les contrats publiés et les subventions ne portent aucun segment; un bulletin limité à un segment les laisse de côté.",
+  },
+  "briefing.why": {
+    en: "You receive this each week for a briefing in your account.",
+    fr: "Vous recevez ce message chaque semaine pour un bulletin de votre compte.",
+  },
+  "briefing.searches_link": { en: "Briefings and delivery", fr: "Bulletins et envoi" },
+  "briefing.stop_link": { en: "Stop this briefing", fr: "Arrêter ce bulletin" },
+
+  // The control on a segment page and a buyer page.
+  "briefing.panel": { en: "Weekly Briefing", fr: "Bulletin hebdomadaire" },
+  "briefing.lead_segment": {
+    en: "One email each Monday about this segment: the week's new notices, the awards with their winners and values, the contracts ending next fiscal quarter with their holders, the notable amendments and the fiscal year's largest records.",
+    fr: "Un courriel chaque lundi sur ce segment : les nouveaux avis de la semaine, les attributions avec leurs gagnants et leurs valeurs, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables et les dossiers les plus importants de l'exercice.",
+  },
+  "briefing.lead_buyer": {
+    en: "One email each Monday about this buyer, or one of its segments: the week's new notices, the awards with their winners and values, the contracts ending next fiscal quarter with their holders, the notable amendments and the fiscal year's largest records.",
+    fr: "Un courriel chaque lundi sur cet acheteur, ou l'un de ses segments : les nouveaux avis de la semaine, les attributions avec leurs gagnants et leurs valeurs, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables et les dossiers les plus importants de l'exercice.",
+  },
+  "briefing.subscribe": { en: "Subscribe", fr: "S'abonner" },
+  "briefing.subscribed": { en: "Subscribed", fr: "Abonné" },
+  "briefing.control_out": { en: "Signing in makes an account if there is none.", fr: "La connexion crée un compte s'il n'y en a pas." },
+  "briefing.control_pro": { en: "Sent each Monday by email.", fr: "Envoyé chaque lundi par courriel." },
+  "briefing.control_free": {
+    en: "A Free account keeps the briefing on its searches page; the weekly email is part of Pro.",
+    fr: "Un compte gratuit conserve le bulletin sur sa page de recherches; le courriel hebdomadaire fait partie de Pro.",
+  },
+  "briefing.control_cap": {
+    en: "Your account holds {n} saved searches and briefings, its cap of {cap}.",
+    fr: "Votre compte détient {n} recherches enregistrées et bulletins, son maximum de {cap}.",
+  },
+  "briefing.segment_label": { en: "Briefing segment", fr: "Segment du bulletin" },
+  "briefing.segment_all": { en: "The whole buyer", fr: "L'acheteur entier" },
+  "briefing.sample_link": { en: "This week's sample", fr: "L'exemple de cette semaine" },
+  "briefing.manage": { en: "Manage your briefings", fr: "Gérer vos bulletins" },
+
+  // The searches page.
+  "briefing.list_title": { en: "Weekly Briefings", fr: "Bulletins hebdomadaires" },
+  "briefing.list_lead": {
+    en: "A briefing counts toward the account's cap of saved searches. Each one is sent on Mondays, in the language of the page it was added from.",
+    fr: "Un bulletin compte dans le maximum de recherches enregistrées du compte. Chacun est envoyé le lundi, dans la langue de la page où il a été ajouté.",
+  },
+  "briefing.col": { en: "Briefing", fr: "Bulletin" },
+  "briefing.none": {
+    en: "No briefing yet. Each segment page and buyer page offers one.",
+    fr: "Aucun bulletin pour l'instant. Chaque page de segment et d'acheteur en offre un.",
+  },
+  "briefing.last_none": { en: "Not sent yet.", fr: "Pas encore envoyé." },
+  "briefing.last_sent_one": { en: "Last sent {time}, 1 row.", fr: "Dernier envoi le {time}, 1 ligne." },
+  "briefing.last_sent_many": { en: "Last sent {time}, {n} rows.", fr: "Dernier envoi le {time}, {n} lignes." },
+  "briefing.last_empty": { en: "Checked {time}, nothing in the week.", fr: "Vérifié le {time}, rien dans la semaine." },
+  "briefing.last_failed": {
+    en: "Could not be sent {time}; next week's message covers both weeks.",
+    fr: "N'a pas pu être envoyé le {time}; le message de la semaine prochaine couvre les deux semaines.",
+  },
+  "briefing.msg_added": { en: "Briefing added.", fr: "Bulletin ajouté." },
+  "briefing.msg_exists": { en: "That briefing is on your account already.", fr: "Ce bulletin est déjà dans votre compte." },
+  "briefing.msg_removed": { en: "Briefing removed.", fr: "Bulletin retiré." },
+  "briefing.msg_changed": { en: "Briefing delivery saved.", fr: "Envoi du bulletin enregistré." },
+  "briefing.msg_pro": { en: "The weekly email of a briefing is part of Pro.", fr: "Le courriel hebdomadaire d'un bulletin fait partie de Pro." },
+  "briefing.msg_gone": {
+    en: "That page is no longer in the data, so no briefing was added.",
+    fr: "Cette page ne figure plus dans les données; aucun bulletin n'a été ajouté.",
+  },
+  "briefing.msg_cap": {
+    en: "Your account is at its cap of saved searches and briefings, so no briefing was added.",
+    fr: "Votre compte a atteint son maximum de recherches enregistrées et de bulletins; aucun bulletin n'a été ajouté.",
+  },
+
+  // The stop link of a message (/account/stop?b=...&t=...).
+  "briefing.stop_title": { en: "Stop a Briefing", fr: "Arrêter un bulletin" },
+  "briefing.stop_lead": {
+    en: "This turns the briefing's email off. The briefing stays on your searches page.",
+    fr: "Ceci désactive le courriel du bulletin. Le bulletin reste sur votre page de recherches.",
+  },
+  "briefing.stop_button": { en: "Turn this briefing off", fr: "Désactiver ce bulletin" },
+  "briefing.stop_already": { en: "This briefing's email is already off.", fr: "Le courriel de ce bulletin est déjà désactivé." },
+  "briefing.stopped_title": { en: "Briefing Off", fr: "Bulletin désactivé" },
+  "briefing.stopped_lead": {
+    en: "The briefing's email is off. Turn it back on from your searches page.",
+    fr: "Le courriel du bulletin est désactivé. Réactivez-le à partir de votre page de recherches.",
+  },
+  "briefing.stopped_one_click": { en: "The briefing is off.", fr: "Le bulletin est désactivé." },
+
+  // The public sample (/pro/briefing-sample).
+  "briefing.sample_title": { en: "A Sample of the Weekly Briefing", fr: "Un exemple du bulletin hebdomadaire" },
+  "briefing.sample_lead": {
+    en: "A sample of the weekly briefing, built from this week's data for segment {name}. Every figure in it is on the free pages; with Pro, a briefing like it comes each Monday for a segment or a buyer you choose.",
+    fr: "Un exemple du bulletin hebdomadaire, construit à partir des données de cette semaine pour le segment {name}. Chaque chiffre qu'il contient figure sur les pages gratuites; avec Pro, un bulletin semblable arrive chaque lundi pour un segment ou un acheteur de votre choix.",
+  },
+  "briefing.sample_description": {
+    en: "This week's briefing for one segment, built live from the data: new notices, awards, the contracts ending next fiscal quarter, notable amendments and the year's largest records.",
+    fr: "Le bulletin de cette semaine pour un segment, construit en direct à partir des données : nouveaux avis, attributions, contrats prenant fin au prochain trimestre financier, modifications notables et dossiers les plus importants de l'exercice.",
+  },
+  "briefing.sample_subject": { en: "Subject", fr: "Objet" },
+  "briefing.sample_preheader": { en: "Preview line", fr: "Ligne d'aperçu" },
+  "briefing.sample_message": { en: "The Message", fr: "Le message" },
+  "briefing.sample_unavailable": {
+    en: "The sample is not available right now: the records database cannot answer. Try again in a few minutes.",
+    fr: "L'exemple n'est pas disponible pour le moment : la base des dossiers ne répond pas. Réessayez dans quelques minutes.",
+  },
+
+  // The Pro page, the tease panels, the email lists page, the privacy page, deletion and the console.
+  "briefing.pro_include": {
+    en: "a weekly briefing by email for a segment or a buyer",
+    fr: "un bulletin hebdomadaire par courriel pour un segment ou un acheteur",
+  },
+  "briefing.pro_page": {
+    en: "A weekly briefing by email for a segment or a buyer: the week's new notices, the awards with their winners, the contracts ending next fiscal quarter with their holders, the notable amendments and the fiscal year's largest records.",
+    fr: "Un bulletin hebdomadaire par courriel pour un segment ou un acheteur : les nouveaux avis de la semaine, les attributions avec leurs gagnants, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables et les dossiers les plus importants de l'exercice.",
+  },
+  "briefing.pro_sample": { en: "This week's sample briefing, for one segment: {link}.", fr: "L'exemple de bulletin de cette semaine, pour un segment : {link}." },
+  "briefing.sample_link_text": { en: "A sample of the weekly briefing", fr: "Un exemple du bulletin hebdomadaire" },
+  "briefing.alerts_line": {
+    en: "A weekly briefing of one segment or one buyer, with its notices, awards, contracts ending next quarter and amendments in one message: {link}.",
+    fr: "Un bulletin hebdomadaire d'un segment ou d'un acheteur, avec ses avis, attributions, contrats prenant fin le trimestre prochain et modifications en un message : {link}.",
+  },
+  "briefing.alerts_link": { en: "this week's sample", fr: "l'exemple de cette semaine" },
+  "briefing.privacy": {
+    en: "A weekly briefing keeps the segment or buyer it follows, its language, its delivery setting and, for 90 days, when each message went; the message names public records and totals only.",
+    fr: "Un bulletin hebdomadaire conserve le segment ou l'acheteur qu'il suit, sa langue, son réglage d'envoi et, pendant 90 jours, la date de chaque message; le message ne nomme que des dossiers et des totaux publics.",
+  },
+  "briefing.delete": { en: "Your weekly briefings and their runs.", fr: "Vos bulletins hebdomadaires et leurs envois." },
+  "briefing.admin_panel": { en: "Weekly Briefings", fr: "Bulletins hebdomadaires" },
+  "briefing.admin_kind": { en: "{kind}, delivery {deliver}", fr: "{kind}, envoi {deliver}" },
+  "briefing.admin_runs": { en: "Runs, last {n} days", fr: "Envois, {n} derniers jours" },
+  "briefing.admin_runs_value": {
+    en: "{sent} sent, {empty} with nothing in the week, {failed} failed",
+    fr: "{sent} envoyés, {empty} sans rien dans la semaine, {failed} en échec",
+  },
+  "briefing.admin_none": { en: "No briefing.", fr: "Aucun bulletin." },
+  "briefing.admin_runs_title": { en: "Briefing Runs", fr: "Envois des bulletins" },
+  "briefing.kind_segment": { en: "Segment", fr: "Segment UNSPSC" },
+  "briefing.kind_buyer": { en: "Buyer", fr: "Acheteur" },
 } as const satisfies Record<string, { en: string; fr: string }>;

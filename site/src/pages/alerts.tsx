@@ -22,6 +22,7 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { accountsEnabled } from "../account/switch";
+import { SampleLine } from "../account/briefing_pages";
 import { PROVINCES, SEGMENTS, SEGMENT_CODES } from "../constants";
 import { loadOpenFirst, loadStats } from "../data";
 import type { AppEnv, Env } from "../env";
@@ -252,6 +253,7 @@ async function alertsView(c: Context<AppEnv>, state: ListsState, status: 200 | 4
             <li>{t(lang, "alerts.cover_expiring")}</li>
             <li>{t(lang, "alerts.cover_organizations")}</li>
             <li>{t(lang, "alerts.cover_buyers")}</li>
+            {accountsEnabled(c.env) ? <li><SampleLine lang={lang} text="briefing.alerts_line" link="briefing.alerts_link" /></li> : null}
           </ul>
 
           <h2 id="now">{t(lang, "alerts.toc_now")}</h2>

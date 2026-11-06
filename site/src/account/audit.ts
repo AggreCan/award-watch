@@ -14,7 +14,8 @@ export type AuditEvent =
   | "feed_created" | "feed_rotated" | "feed_removed"
   // Your organization (org_claim.ts): org_claimed carries the organization id
   // (not personal data), never the address; the others a fixed word.
-  | "org_claimed" | "org_unclaimed" | "org_compare";
+  | "org_claimed" | "org_unclaimed" | "org_compare"
+  | "briefing_added" | "briefing_changed" | "briefing_removed" | "briefing_stopped";
 
 export const AUDIT_DAYS = 90;
 

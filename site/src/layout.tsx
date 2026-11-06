@@ -597,3 +597,23 @@ export const SocialImage: FC<{ lang: Lang }> = ({ lang }) => (
 // switch is on: nothing is Pro while it is off, and the page is the 404.
 export const FooterProLink: FC<{ lang: Lang; on: boolean }> = ({ lang, on }) =>
   on ? <a href="/pro">{t(lang, "footer.pro")}</a> : null;
+
+// A page that is the same for every reader, signed in or not (the weekly
+// briefing's public sample, account/briefing_pages.tsx): the shell page()
+// gives, with no session read, so the rail shows the sign-in item to
+// everyone, and a shared cache may keep it for maxAge seconds. Any other
+// status is never stored.
+export async function publicPage(c: Context<AppEnv>, body: unknown, status = 200, maxAge = 3600): Promise<Response> {
+  let rail: RailCounts | null = null;
+  try {
+    rail = await loadRail(c.env);
+  } catch {
+    rail = null;
+  }
+  const url = new URL(c.req.url);
+  const shell: Shell = { rail, here: viewKey(`${url.pathname}${url.search}`), now: clockOf(c.env).now, accountsOn: accountsEnabled(c.env) };
+  // What railAccount gives a request with no session.
+  if (shell.accountsOn) shell.account = { email: null, plan: null };
+  c.header("Cache-Control", status === 200 ? `public, max-age=${maxAge}` : "no-store");
+  return c.html(html`<!doctype html>${(<RailContext.Provider value={shell}>{body as any}</RailContext.Provider>) as any}`, status as any);
+}

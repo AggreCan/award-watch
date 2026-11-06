@@ -45,6 +45,7 @@ import { llmsTxt, robotsTxt } from "./seo";
 import { contractSitemap, sitemapFile } from "./sitemaps";
 import { proPage } from "./pages/pro";
 import { instrumentRoute, instrumentsCsv, instrumentsIndex } from "./pages/instruments";
+import { SAMPLE_PATH, briefingSamplePage } from "./account/briefing_pages";
 import { account } from "./account/routes";
 import { admin } from "./account/admin";
 import { interestStopPage, interestStopPost } from "./account/announce";
@@ -212,6 +213,9 @@ app.post("/interest/stop", interestStopPost);
 // What the paid plan adds and costs (pages/pro.tsx): the site's 404 while the
 // accounts switch is off, as /tenders/same-day is.
 app.get("/pro", proPage);
+// This week's weekly briefing for one segment, built live, the same for every
+// reader (account/briefing_pages.tsx); the 404 while the switch is off.
+app.get(SAMPLE_PATH, briefingSamplePage);
 app.get("/data", dataPage);
 app.get("/methodology", methodologyPage);
 app.get("/cite", citePage);

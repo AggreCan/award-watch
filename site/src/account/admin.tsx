@@ -54,6 +54,8 @@ import {
 } from "./admin_ops";
 import { type LiveSubscription, type PaidCharge, operatorStripe } from "./admin_stripe";
 import { endForDeletion } from "./billing";
+import { BriefingsOverviewPanel, BriefingsUserPanels } from "./briefing_pages";
+import { type BriefingOverview, briefingOverview, userBriefings } from "./briefings";
 import { type PlanState, planFor } from "./entitlements";
 import { type FeedCounts, type FeedView, feedCounts, userFeeds } from "./feeds";
 import { CLAIM_TOP_N, type Claim, type ClaimOverview, claimDetail, claimOverview } from "./org_claim";
@@ -308,6 +310,7 @@ const feedKinds = (lang: Lang, f: FeedCounts) =>
 function overviewView(
   lang: Lang, o: Overview, search: { q: string; hits: UserHit[] | null }, w: WatchesSeen = { ov: null, events: null }, feeds: FeedCounts | null = null,
   claims: ClaimOverview | null = null,
+  briefings: BriefingOverview | null = null,
 ) {
   const subs = o.subscriptions.length
     ? o.subscriptions.map((s) => `${s.status} ${fmtInt(s.n, lang)}`).join(", ")
@@ -367,6 +370,7 @@ function overviewView(
       </Panel>
       <WatchesPanel lang={lang} w={w} />
       <ClaimsPanel lang={lang} c={claims} />
+      <BriefingsOverviewPanel lang={lang} ov={briefings} />
       <Panel title={t(lang, "admin.panel_audit")} count={fmtInt(o.audit.length, lang)}>
         {o.audit.length ? (
           <Table heads={[t(lang, "admin.col_time"), t(lang, "admin.col_event"), t(lang, "admin.col_account"), t(lang, "admin.col_detail")]}
@@ -389,11 +393,11 @@ admin.get("/", async (c) => {
   const lang = c.get("lang");
   return guarded(c, async () => {
     const q = (c.req.query("q") ?? "").trim().slice(0, EMAIL_MAX);
-    const [o, hits, ov, events, feeds, claims] = await Promise.all([
+    const [o, hits, ov, events, feeds, claims, briefings] = await Promise.all([
       overview(c.env), q ? findUsers(c.env, q) : Promise.resolve(null), watchOverview(c.env), eventCounts(c.env), feedCounts(c.env),
-      claimOverview(c.env),
+      claimOverview(c.env), briefingOverview(c.env),
     ]);
-    return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }, { ov, events }, feeds, claims));
+    return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }, { ov, events }, feeds, claims, briefings));
   });
 });
 
@@ -608,6 +612,8 @@ type UserState = {
   feeds?: FeedView[] | null;
   // The organization the account claims (org_claim.ts); false for none, null without the table.
   claim?: Claim | false | null;
+  // The account's weekly briefings and their runs (briefings.ts), never the stop secret; null without the tables.
+  briefings?: Awaited<ReturnType<typeof userBriefings>>;
 };
 
 function blockLine(lang: Lang, block: BlockRow | null): string {
@@ -765,6 +771,7 @@ function userView(lang: Lang, op: Account, d: UserDetail, s: UserState, now: Dat
             ])} />
         ) : <p class="muted">{t(lang, "admin.searches_none")}</p>}
       </Panel>
+      <BriefingsUserPanels lang={lang} detail={s.briefings ?? null} />
       <Panel title={t(lang, "admin.panel_keys")} count={fmtInt(d.keys.length, lang)}>
         {d.keys.length ? (
           <Table heads={[t(lang, "admin.col_prefix"), t(lang, "admin.col_created"), t(lang, "admin.col_last_used"), t(lang, "admin.col_revoked")]}
@@ -831,6 +838,7 @@ async function userPage(c: Context<AppEnv>, id: string, extra: Partial<UserState
   if (!d) return c.notFound();
   const feeds = await userFeeds(c.env, id);
   const claim = await claimDetail(c.env, id);
+  const briefings = await userBriefings(c.env, id);
   const plan = await planFor(c.env, d.user, now);
   const stripe = operatorStripe(c.env);
   const live = stripe && d.payment?.subscription_id ? await stripe.subscription(d.payment.subscription_id) : undefined;
@@ -838,7 +846,7 @@ async function userPage(c: Context<AppEnv>, id: string, extra: Partial<UserState
   const notice = extra.notice !== undefined ? extra.notice
     : NOTICE[m] ? t(lang, NOTICE[m], { n: fmtInt(Number(c.req.query("n") ?? "0") || 0, lang) }) : null;
   const title = d.user.status === "active" ? d.user.email : t(lang, "admin.deleted_title");
-  return adminPage(c, title, userView(lang, operatorOf(c), d, { ...extra, plan, stripeOn: !!stripe, live, notice, feeds, claim }, now), extra.status ?? 200);
+  return adminPage(c, title, userView(lang, operatorOf(c), d, { ...extra, plan, stripeOn: !!stripe, live, notice, feeds, claim, briefings }, now), extra.status ?? 200);
 }
 
 admin.get("/users/:id", (c) => {

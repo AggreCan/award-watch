@@ -71,6 +71,8 @@ export const PRO_INCLUDES: readonly (readonly [Feature, Key])[] = [
   ["intraday", "expiring.pro_intraday"],
   ["delivery", "expiring.pro_searches"],
   ["watch_mail", "watches.pro_include"],
+  // A weekly briefing is a delivery, as a saved search's mail is (src/account/briefings.ts).
+  ["delivery", "briefing.pro_include"],
   // A calendar feed is a delivery, as mail is (src/account/feeds.ts).
   ["delivery", "pro.include_feeds"],
   // The blocks of "Your organization" past its first (src/account/org_pages.tsx).

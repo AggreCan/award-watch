@@ -362,11 +362,14 @@ export function searchesView(
   state: {
     searches: (SavedSearch & { last?: LastDelivery | null })[]; cap: number; pending: InterestRow[]; notice?: string | null;
     errors?: Key[]; url?: string; calendar?: CalendarView | null;
+    // The weekly briefings' panel (briefing_pages.tsx) and how many the account holds: they share the cap.
+    briefings?: { n: number; panel: unknown } | null;
   },
 ) {
   const { searches, cap, pending } = state;
   const canDeliver = allowed(account, "delivery");
-  const full = searches.length >= cap;
+  const held = searches.length + (state.briefings?.n ?? 0);
+  const full = held >= cap;
   const capLine = t(lang, account.plan === "free" ? "account.cap_free" : "account.cap_pro", { cap: fmtInt(cap, lang) });
   return (
     <>
@@ -384,8 +387,8 @@ export function searchesView(
         </Panel>
       ) : null}
       <Panel title={t(lang, "account.searches_title")}
-        count={t(lang, "account.searches_n", { n: fmtInt(searches.length, lang), cap: fmtInt(cap, lang) })}
-        foot={canDeliver ? <p>{capLine}</p> : <CapNote lang={lang} n={searches.length} cap={cap} />}>
+        count={t(lang, "account.searches_n", { n: fmtInt(held, lang), cap: fmtInt(cap, lang) })}
+        foot={canDeliver ? <p>{capLine}</p> : <CapNote lang={lang} n={held} cap={cap} />}>
         {searches.length ? (
           <div class="table-wrap">
             <table class="restack">
@@ -431,6 +434,7 @@ export function searchesView(
           <p class="muted">{t(lang, "account.searches_none")}</p>
         )}
       </Panel>
+      {state.briefings ? (state.briefings.panel as any) : null}
       {state.calendar ? <CalendarPanel lang={lang} account={account} view={state.calendar} /> : null}
       <Panel title={t(lang, "account.panel_add")} class="panel-form">
         <Errors lang={lang} errors={state.errors} />
@@ -600,6 +604,7 @@ export function deleteView(lang: Lang, account: Account, errors?: Key[]) {
           <li>{t(lang, "account.delete_searches")}</li>
           <li>{t(lang, "watches.delete")}</li>
           <li>{t(lang, "orgclaim.delete")}</li>
+          <li>{t(lang, "briefing.delete")}</li>
           <li>{t(lang, "calfeed.delete")}</li>
           <li>{t(lang, "bugs.delete")}</li>
           <li>{t(lang, "account.delete_sessions")}</li>

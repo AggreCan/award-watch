@@ -15,6 +15,7 @@ import type { Lang } from "../i18n";
 import { INTEREST_KINDS, type InterestFilter, type InterestKind, kindOfPath } from "../pages/interest";
 import { SAVED_SEARCH_MAX, savedSearchCap } from "./entitlements";
 import { deleteFeeds } from "./feeds";
+import { missingTable } from "./records_deliveries";
 import { newId } from "./secrets";
 import type { Account } from "./session";
 
@@ -47,19 +48,27 @@ export async function listSearches(env: Env, userId: string): Promise<SavedSearc
 export const capFor = (account: Pick<Account, "plan">): number => Math.min(savedSearchCap(account.plan), SAVED_SEARCH_MAX);
 
 // One insert, held to the cap inside the statement so two posts at once
-// cannot pass it. "exists" when the same filter is saved already.
+// cannot pass it; the weekly briefings share the cap (briefings.ts), so the
+// count reads both tables (the searches alone while the briefings table is
+// not on the database yet). "exists" when the same filter is saved already.
+const ADD_SEARCH = (count: string) =>
+  "INSERT INTO saved_searches (id, user_id, kind, params, label, lang, created_at, deliver) " +
+  `SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'off' WHERE ${count} < ?8 ON CONFLICT (user_id, kind, params) DO NOTHING`;
+const SEARCHES_COUNT = "(SELECT COUNT(*) FROM saved_searches WHERE user_id = ?2)";
+
 export async function addSearch(
   env: Env, account: Pick<Account, "userId" | "plan">, filter: InterestFilter, lang: Lang, now = new Date(),
 ): Promise<"added" | "exists" | "cap"> {
   const db = env.ACCOUNTS!;
-  const res = await db.prepare(
-    "INSERT INTO saved_searches (id, user_id, kind, params, label, lang, created_at, deliver) " +
-    "SELECT ?, ?, ?, ?, ?, ?, ?, 'off' WHERE (SELECT COUNT(*) FROM saved_searches WHERE user_id = ?) < ? " +
-    "ON CONFLICT (user_id, kind, params) DO NOTHING",
-  ).bind(
+  const binds = [
     newId(), account.userId, filter.kind, filter.params.slice(0, PARAMS_MAX), filter.label.slice(0, LABEL_MAX), lang, now.toISOString(),
-    account.userId, capFor(account),
-  ).run();
+    capFor(account),
+  ];
+  const res = await db.prepare(ADD_SEARCH(`${SEARCHES_COUNT} + (SELECT COUNT(*) FROM briefings WHERE user_id = ?2)`)).bind(...binds).run()
+    .catch((e) => {
+      if (!missingTable(e)) throw e;
+      return db.prepare(ADD_SEARCH(SEARCHES_COUNT)).bind(...binds).run();
+    });
   if ((res.meta?.changes ?? 0) === 1) return "added";
   const same = await db.prepare("SELECT 1 AS x FROM saved_searches WHERE user_id = ? AND kind = ? AND params = ?")
     .bind(account.userId, filter.kind, filter.params).first();

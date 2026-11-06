@@ -101,6 +101,18 @@ describe("with the switch off", () => {
     expect(mail.used).toEqual([]);
   });
 
+  it("answers the weekly briefing's sample with the site's 404, reading neither database (account/briefing_pages.tsx)", async () => {
+    const { used, binding: db } = trap<D1Database>();
+    const records = trap<D1Database>("the records database");
+    const env = { ...testEnv(), ACCOUNTS: db, RECORDS: records.binding };
+    const notFound = (await render("/nothing-here", env)).body;
+    const sample = await render("/pro/briefing-sample", env);
+    expect(sample.status).toBe(404);
+    expect(sample.body).toBe(notFound);
+    expect(used).toEqual([]);
+    expect(records.used).toEqual([]);
+  });
+
   it("keeps the rail's lists at two items and the privacy page's 'No Accounts'", async () => {
     const home = (await render("/", testEnv())).body;
     const lists = home.slice(home.indexOf('id="rail-lists"'), home.indexOf("</nav>"));

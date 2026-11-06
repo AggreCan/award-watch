@@ -9,6 +9,7 @@
 
 import type { Context } from "hono";
 import { accountsEnabled } from "../account/switch";
+import { BriefingPanel, briefingControl } from "../account/briefing_pages";
 import { WatchControl, watchControl } from "../account/watch_pages";
 import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
 import { Table } from "../columns";
@@ -213,6 +214,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   const feed = (event: string) => feeds.find((f) => f.event === event);
   const FEED_BUTTON: [string, Key][] = [["tenders", "feeds.button_tenders"], ["awards", "feeds.button_awards"], [EXPIRING_EVENT, "expiring.feed"]];
   const watch = await watchControl(c, "buyer", b.buyer.id);
+  const briefing = await briefingControl(c, "buyer", b.buyer.id);
 
   return page(
     c,
@@ -282,6 +284,8 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
       </Panel>
 
       <InterestPanel lang={lang} filter={interest} />
+      {/* The weekly briefing beside the email lists, while the accounts switch is on (account/briefing_pages.tsx). */}
+      <BriefingPanel lang={lang} state={briefing} kind="buyer" subject={b.buyer.id} />
 
       <Panel id="years" title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
       {lateYears ? <p class="muted small">{t(lang, "common.dates_as_published")}</p> : null}

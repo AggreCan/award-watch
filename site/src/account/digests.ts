@@ -15,11 +15,12 @@ import { addDays, closingParts } from "../../public/closing.js";
 import { closingTime } from "../closing";
 import { CATEGORIES, PROVINCES, SEGMENTS } from "../constants";
 import { type ExpiringRow, type TenderRow, publishedReference } from "../data";
-import { categoryLabel, fmtInt, fmtMoney, pick, provinceName, segmentShort, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
+import { categoryLabel, fmtInt, fmtMoney, fmtMoneyShort, pick, provinceName, segmentShort, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { CONTACT_EMAIL } from "../pages/docs";
-import { type ExpiringQuery, contractReference, sitePath } from "../pages/expiring";
+import { type ExpiringQuery, contractReference, growthPct, sitePath } from "../pages/expiring";
 import { CODE_RE } from "../pages/tenders";
 import { fiscalLabel } from "../records_db";
+import type { BriefingData, BriefingSubject, Quarter } from "./briefings";
 import type { RecordsKind, Rise } from "./records_deliveries";
 import type { EventKind, EventRow, Listed, WatchKind } from "./watch_events";
 import type { MailMessage } from "./sender";
@@ -744,6 +745,269 @@ export function watchDigest(o: WatchDigest): DigestMessage {
     html: shell({
       lang, site: o.site, subject, preheader: pre, body: html.join(""),
       why: `${escapeHtml(why)} ${link(page, "watches.digest_link")} · ${link(o.stopUrl, "watches.digest_stop")}`,
+    }),
+  };
+}
+
+// -- weekly briefings: one segment or one buyer (briefings.ts) -----------------------------------
+
+// One message per briefing, in the briefing's language: the week's new
+// notices, the awards with their winners and each source's figures (nothing
+// added across sources), the contracts ending next fiscal quarter with their
+// holders and the ones new to the list this week, the notable amendments, and
+// the fiscal year's largest records; each section SECTION_ROWS rows at most
+// (briefings.ts), then a line with how many more. The public sample
+// (/pro/briefing-sample) renders the same parts with no recipient and no
+// footer of its own.
+export interface BriefingDigest {
+  lang: Lang;
+  to: string;
+  site: string;
+  // The briefing's stop link (/account/stop?b=...&t=...).
+  stopUrl: string;
+  briefing: BriefingSubject;
+  // "81 Engineering", a buyer's name, or a buyer narrowed to a segment.
+  name: string;
+  data: BriefingData;
+}
+
+const BRIEFING_MONTHS: Readonly<Record<number, Key>> = {
+  1: "briefing.months_1", 2: "briefing.months_2", 3: "briefing.months_3", 4: "briefing.months_4",
+};
+// records.src and rec_events.src to the radar's word for one record, and to the source's name.
+const RECORD_KIND: Readonly<Record<number, Key>> = { 1: "expiring.kind_award", 2: "expiring.kind_history", 3: "expiring.kind_contract" };
+const RECORD_SOURCE: Readonly<Record<number, string>> = { 1: "awards", 2: "history", 3: "contracts" };
+
+// "Q4 2026-27" ("T4 2026-2027") and "January to March 2027".
+export const quarterName = (lang: Lang, q: Pick<Quarter, "fy" | "fq">): string =>
+  t(lang, "briefing.quarter", { q: q.fq, fy: fiscalLabel(lang, q.fy) });
+export const quarterMonths = (lang: Lang, q: Pick<Quarter, "fy" | "fq">): string =>
+  t(lang, BRIEFING_MONTHS[q.fq], { year: q.fq === 4 ? q.fy + 1 : q.fy });
+
+// "310, $364,414,137 (69 without a value)": a count, its counted value when
+// there is one, and how many have none.
+function briefingFigures(lang: Lang, n: number, cents: number | null, nv: number): string {
+  let s = fmtInt(n, lang);
+  if (cents !== null) s += `, ${fmtMoney(cents / 100, lang)}`;
+  if (nv) s += ` (${t(lang, "briefing.nv", { n: fmtInt(nv, lang) })})`;
+  return s;
+}
+
+// A row of the briefing: the title (a link when the record has a page) and one line.
+function briefingRow(title: string, href: string | null, line: string, first: boolean): string {
+  const border = first ? "" : `border-top:1px solid ${C.border};`;
+  const head = href
+    ? `<a class="ink" href="${escapeHtml(href)}" style="font:600 15px/1.4 ${FONT};color:${C.ink};text-decoration:none;">${escapeHtml(title)}</a>`
+    : `<span class="ink" style="font:600 15px/1.4 ${FONT};color:${C.ink};">${escapeHtml(title)}</span>`;
+  return `<tr><td class="rule" style="padding:10px 0;${border}">${head}` +
+    `<div class="ink2" style="margin-top:3px;font:13px/1.5 ${FONT};color:${C.ink2};">${line}</div></td></tr>`;
+}
+
+type BriefingLine = { title: string; href: string | null; line: string; lineHtml: string };
+
+export type BriefingParts = { subject: string; preheader: string; body: string; text: string };
+
+// The message's parts: its subject, preview line, the body inside the shell
+// (HTML) and the plain-text part without its footer.
+export function briefingParts(o: Pick<BriefingDigest, "lang" | "site" | "briefing" | "name" | "data">): BriefingParts {
+  const { lang, data: d, briefing: b } = o;
+  const link = (path: string) => siteLink(o.site, path, lang);
+  const segment = b.kind === "segment";
+  const narrowed = b.kind === "buyer" && !!b.segment;
+  const n = (v: number) => fmtInt(v, lang);
+  const title = (en: string | null, fr: string | null) => pick(lang, en, fr) ?? t(lang, "common.not_stated");
+  const buyerName = (en: string | null, fr: string | null) => pick(lang, en, fr) ?? t(lang, "common.not_stated");
+  const segmentName = (sid: number) => `${String(sid).padStart(2, "0")} ${segmentShort(lang, String(sid).padStart(2, "0"))}`;
+  const recordValue = (cents: number | null) => (cents === null ? t(lang, "briefing.no_value") : fmtMoney(cents / 100, lang));
+  const html: string[] = [];
+  const text: string[] = [];
+  const quarter = d.ending.quarter;
+  const qName = quarterName(lang, quarter);
+  const qMonths = quarterMonths(lang, quarter);
+
+  // Where each section's rest is on the site.
+  const seg = segment ? b.subject : b.segment;
+  const noticesPage = segment ? `/tenders?segment=${b.subject}` : `/tenders?buyer=${b.subject}${seg ? `&segment=${seg}` : ""}`;
+  const recordsPage = segment ? `/segments/${b.subject}` : `/buyers/${b.subject}/records`;
+  const radarPage = segment ? `/expiring/6m?segment=${b.subject}` : `/expiring/6m?buyer=${b.subject}${seg ? `&segment=${seg}` : ""}`;
+  const analyticsPage = segment ? `/segments/${b.subject}/analytics` : `/buyers/${b.subject}/analytics`;
+
+  const joined = (parts: (string | null)[]) => parts.filter((x): x is string => !!x);
+  const plain = (parts: (string | null)[]) => {
+    const kept = joined(parts);
+    return { line: kept.join(" · "), lineHtml: kept.map(escapeHtml).join(" · ") };
+  };
+  // A section: its heading, its lines of figures, its rows, then the rest's
+  // line; the plain text keeps a section's lines together.
+  const section = (heading: string, notes: string[], lines: BriefingLine[], rest: number, restPath: string | null, oneLine = false) => {
+    const block: string[] = [heading, ...notes];
+    html.push(h2(heading), ...notes.map((x) => para(escapeHtml(x))));
+    if (lines.length) html.push(rows(lines.map((l, i) => briefingRow(l.title, l.href ? link(l.href) : null, l.lineHtml, i === 0))));
+    for (const l of lines) {
+      block.push(oneLine ? `- ${l.title} · ${l.line}` : `- ${l.title}\n  ${l.line}${l.href ? `\n  ${link(l.href)}` : ""}`);
+    }
+    if (rest > 0 && restPath) {
+      const label = tn(lang, "briefing.more_one", "briefing.more_many", rest, { n: n(rest) });
+      html.push(para(`<a href="${escapeHtml(link(restPath))}" style="color:${C.ink2};">${escapeHtml(label)}</a>`));
+      block.push(t(lang, "digest.text_link", { label, url: link(restPath) }));
+    }
+    text.push(block.join("\n"));
+  };
+  // A last line of the section just written (a link, the quarter's turn).
+  const tail = (lineText: string, lineHtml: string) => {
+    html.push(lineHtml);
+    text[text.length - 1] += `\n${lineText}`;
+  };
+  const linkLine = (label: string, path: string) =>
+    tail(t(lang, "digest.text_link", { label, url: link(path) }), para(`<a href="${escapeHtml(link(path))}" style="color:${C.ink2};">${escapeHtml(label)}</a>`));
+
+  const heading = t(lang, "briefing.title", { name: o.name, date: d.dataDate });
+  const span = t(lang, "briefing.span", { first: addDays(d.start, 1), last: d.dataDate });
+  html.push(h1(heading), para(escapeHtml(span), true));
+  text.push(`${heading}\n${span}`);
+
+  // 1. New notices, soonest closing first, with the time left (amber within AMBER_DAYS).
+  section(
+    d.notices.n ? t(lang, "briefing.notices_head", { n: n(d.notices.n) }) : t(lang, "briefing.notices_none"), [],
+    d.notices.rows.map((r) => {
+      const closes = closesText(lang, r.closing);
+      const left = timeLeft(lang, r.closing, d.dataDate);
+      const buyer = segment ? buyerName(r.buyer_en, r.buyer_fr) : null;
+      const when = joined([closes, left?.text ?? null]).join(", ");
+      const whenHtml = joined([closes ? escapeHtml(closes) : null,
+        left ? (left.days <= AMBER_DAYS ? amber(escapeHtml(left.text)) : escapeHtml(left.text)) : null]).join(", ");
+      return {
+        title: title(r.title, r.title_fr), href: r.path, line: joined([buyer, when || null]).join(" · "),
+        lineHtml: joined([buyer ? escapeHtml(buyer) : null, whenHtml || null]).join(" · "),
+      };
+    }),
+    d.notices.n - d.notices.rows.length, noticesPage,
+  );
+
+  // 2. Awards, the largest first, each source's figures on a line of its own.
+  const counted = d.awards.sources.filter((x) => x.src === null).reduce((sum, x) => sum + x.n, 0);
+  section(
+    d.awards.n ? t(lang, "briefing.awards_head", { n: n(d.awards.n) }) : t(lang, "briefing.awards_none"),
+    d.awards.sources.map((x) => (x.src !== null && RECORD_SOURCE[x.src]
+      ? t(lang, "briefing.source_line", { source: sourceLabel(lang, RECORD_SOURCE[x.src]), figures: briefingFigures(lang, x.n, x.cents, x.nv) })
+      : t(lang, "briefing.uncounted", { n: n(x.n) }))),
+    d.awards.rows.map((r) => ({
+      title: title(r.title, r.title_fr), href: r.path,
+      ...plain([
+        r.org ?? t(lang, "briefing.withheld"),
+        segment ? buyerName(r.buyer_en, r.buyer_fr) : !narrowed && r.sid !== null ? segmentName(r.sid) : null,
+        recordValue(r.cents), r.src !== null && RECORD_KIND[r.src] ? t(lang, RECORD_KIND[r.src]) : null,
+      ]),
+    })),
+    d.awards.n - counted - d.awards.rows.length, recordsPage,
+  );
+
+  // 3. The contracts ending next fiscal quarter, the largest first, those new to the list marked.
+  section(
+    d.ending.n
+      ? t(lang, "briefing.ending_head", { quarter: qName, months: qMonths, figures: briefingFigures(lang, d.ending.n, d.ending.cents, d.ending.nv) })
+      : t(lang, "briefing.ending_none", { quarter: qName, months: qMonths }),
+    d.ending.n && d.ending.fresh ? [t(lang, "briefing.ending_fresh", { n: n(d.ending.fresh) })] : [],
+    d.ending.rows.map(({ row: r, fresh }) => {
+      const path = sitePath(r);
+      const holder = r.supplier_withheld ? t(lang, "expiring.withheld") : r.organization ?? t(lang, "common.not_stated");
+      const amended = r.n_amendments > 0
+        ? tn(lang, "expiring.amendments_one", "expiring.amendments_many", r.n_amendments, { n: n(r.n_amendments) }) +
+          (r.value_growth === null ? "" : `, ${growthPct(lang, r.value_growth)}`)
+        : null;
+      const kept = joined([
+        holder, segment ? buyerName(r.buyer_en, r.buyer_fr) : null, t(lang, "briefing.ends", { date: r.end.slice(0, 10) }),
+        r.value === null ? t(lang, "common.not_stated") : fmtMoney(r.value, lang, r.currency), amended,
+      ]);
+      const mark = fresh ? t(lang, "briefing.fresh") : null;
+      return {
+        title: pick(lang, r.title_en, r.title_fr) ?? contractReference(r), href: path.startsWith("/") ? path : null,
+        line: joined([...kept, mark]).join(" · "),
+        lineHtml: [...kept.map(escapeHtml), ...(mark ? [amber(escapeHtml(mark))] : [])].join(" · "),
+      };
+    }),
+    0, null,
+  );
+  if (d.ending.n) linkLine(t(lang, "briefing.radar_link"), radarPage);
+  if (d.turn) {
+    const turn = t(lang, "briefing.turn", { date: d.turn.on, quarter: quarterName(lang, d.turn.quarter), months: quarterMonths(lang, d.turn.quarter) });
+    tail(turn, para(escapeHtml(turn), true));
+  }
+
+  // 4. Notable amendments, the largest change first.
+  section(
+    d.amended.n ? t(lang, "briefing.amended_head", { n: n(d.amended.n) }) : t(lang, "briefing.amended_none"), [],
+    d.amended.rows.map((r) => ({
+      title: title(r.title, r.title_fr), href: r.path,
+      ...plain([
+        r.org ?? t(lang, "briefing.withheld"), segment ? buyerName(r.buyer_en, r.buyer_fr) : null,
+        r.cents !== null && r.ocents !== null
+          ? t(lang, "watches.line_was", {
+            value: fmtMoney(r.cents / 100, lang), was: fmtMoney(r.ocents / 100, lang), change: valueChange(lang, r.ocents, r.cents),
+          })
+          : null,
+        r.oendd && r.endd ? t(lang, "watches.line_end_moved", { from: r.oendd.slice(0, 10), to: r.endd.slice(0, 10) }) : null,
+      ]),
+    })),
+    d.amended.n - d.amended.rows.length, recordsPage,
+  );
+
+  // 5. The fiscal year's largest records, one line each.
+  const fy = fiscalLabel(lang, d.largest.fy);
+  section(
+    d.largest.rows.length ? t(lang, "briefing.largest_head", { fy, n: n(d.largest.rows.length) }) : t(lang, "briefing.largest_none", { fy }), [],
+    d.largest.rows.map((r) => ({
+      title: title(r.title, r.title_fr), href: r.path,
+      ...plain([
+        r.org ?? t(lang, "briefing.withheld"), segment ? buyerName(r.buyer_en, r.buyer_fr) : null, fmtMoney(r.cents / 100, lang), r.day,
+        RECORD_KIND[r.src] ? t(lang, RECORD_KIND[r.src]) : null,
+      ]),
+    })),
+    0, null, true,
+  );
+  const analytics = t(lang, segment ? "briefing.analytics_segment" : "briefing.analytics_buyer");
+  linkLine(analytics, analyticsPage);
+
+  const note = joined([
+    t(lang, "briefing.note"), segment ? t(lang, "briefing.note_segment") : null, narrowed ? t(lang, "briefing.note_narrowed") : null,
+  ]).join(" ");
+  html.push(para(escapeHtml(note), true));
+  text.push(note);
+
+  // The subject names the week's counts that are not zero and the quarter's.
+  const what = joined([
+    d.notices.n ? tn(lang, "briefing.subj_notices_one", "briefing.subj_notices_many", d.notices.n, { n: n(d.notices.n) }) : null,
+    d.awards.n ? tn(lang, "briefing.subj_awards_one", "briefing.subj_awards_many", d.awards.n, { n: n(d.awards.n) }) : null,
+    d.ending.n ? tn(lang, "briefing.subj_ending_one", "briefing.subj_ending_many", d.ending.n, { n: n(d.ending.n) }) : null,
+  ]);
+  if (!what.length && d.amended.n) what.push(tn(lang, "briefing.subj_amended_one", "briefing.subj_amended_many", d.amended.n, { n: n(d.amended.n) }));
+  const subject = t(lang, "briefing.subject", { name: o.name, what: what.join(", ") });
+  const total = d.ending.cents === null ? t(lang, "briefing.no_total") : fmtMoneyShort(d.ending.cents / 100, lang);
+  const preheader = joined([
+    d.awards.n ? t(lang, "briefing.pre_awards", { n: n(d.awards.n) }) : null,
+    d.ending.n
+      ? tn(lang, "briefing.pre_quarter_one", "briefing.pre_quarter_many", d.ending.n, { quarter: qName, n: n(d.ending.n), total, fresh: n(d.ending.fresh) })
+      : t(lang, "briefing.pre_quarter_none", { quarter: qName }),
+  ]).join(" ");
+  return { subject, preheader, body: html.join(""), text: text.join("\n\n") };
+}
+
+export function briefingDigest(o: BriefingDigest): DigestMessage {
+  const { lang } = o;
+  const parts = briefingParts(o);
+  const searches = siteLink(o.site, "/account/searches", lang);
+  const why = t(lang, "briefing.why");
+  const link = (href: string, key: Key) => `<a href="${escapeHtml(href)}" style="color:${C.muted};">${escapeHtml(t(lang, key))}</a>`;
+  const whyText = [
+    why,
+    t(lang, "digest.text_link", { label: t(lang, "briefing.searches_link"), url: searches }),
+    t(lang, "digest.text_link", { label: t(lang, "briefing.stop_link"), url: o.stopUrl }),
+  ].join("\n");
+  return {
+    to: o.to, subject: parts.subject, lang, headers: deliveryHeaders(o.stopUrl), text: `${parts.text}\n\n${whyText}\n${textFooter(lang)}`,
+    html: shell({
+      lang, site: o.site, subject: parts.subject, preheader: parts.preheader, body: parts.body,
+      why: `${escapeHtml(why)} ${link(searches, "briefing.searches_link")} · ${link(o.stopUrl, "briefing.stop_link")}`,
     }),
   };
 }

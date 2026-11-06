@@ -1110,3 +1110,12 @@ a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offse
 .watch-events li + li { margin-top: 6px; }
 .watch-settings { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0; }
 .watch-settings label { display: flex; align-items: center; gap: 6px; }
+
+/* Weekly briefings (src/account/briefing_pages.tsx): the Subscribe control in
+   its panel on a segment or buyer page, and the public sample's message, which
+   keeps the light ground the mail is drawn on (its colours are inline, as the
+   mail's are) in either theme, at the mail's 600 px column. */
+.briefing-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.briefing-control .muted { max-width: 60ch; }
+.briefing-sample { max-width: 600px; margin-top: 16px; padding: 16px 20px; background: #ffffff; color: #0f172a; border: 1px solid var(--border); overflow-wrap: anywhere; }
+.briefing-sample table { width: 100%; }

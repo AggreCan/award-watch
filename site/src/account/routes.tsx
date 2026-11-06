@@ -27,6 +27,11 @@
 //   POST /account/stop?s=&t=           turn that delivery off; also RFC 8058 one-click (the link's secret)
 //   GET  /account/stop?w=&t=           the watch mail's stop page, from its message    (the link's secret)
 //   POST /account/stop?w=&t=           turn the account's watch mail off; one-click too (the link's secret)
+//   POST /account/briefings            subscribe to a segment's or a buyer's briefing  (session, CSRF, the shared cap)
+//   POST /account/briefings/:id        a briefing's delivery, weekly or off            (session, CSRF, plan to turn on)
+//   POST /account/briefings/:id/delete remove a briefing                               (session, CSRF)
+//   GET  /account/stop?b=&t=           a briefing's stop page, from its message        (the link's secret)
+//   POST /account/stop?b=&t=           turn that briefing's email off; one-click too   (the link's secret)
 //   GET  /account/watches              watches with their last 14 days of events, the calendar feed (session)
 //   POST /account/watches              watch a page (kind, target)                     (session, CSRF, plan's cap)
 //   POST /account/watches/mail         the watch mail on or off                        (session, CSRF, plan to turn on)
@@ -72,6 +77,11 @@ import { KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
 import { keyUsage, nowOf } from "./api_usage";
 import { audit } from "./audit";
 import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, startCheckout } from "./billing";
+import { BriefingsPanel, briefingLabel, briefingStopView, briefingStoppedView } from "./briefing_pages";
+import {
+  addBriefing, briefingName, briefingPath, deleteBriefing, deleteBriefingsOf, isBriefingDelivery, isBriefingKind, lastBriefingRuns,
+  listBriefings, narrowOf, setBriefingDelivery, subjectOf,
+} from "./briefings";
 import { bugPage, fileBug } from "./bugs";
 import { WATCH_MAX, allowed, watchCap } from "./entitlements";
 import {
@@ -347,6 +357,9 @@ const SEARCH_NOTICE: Record<string, Key> = {
   // The calendar feeds' panel (feeds.ts).
   feed_added: "calfeed.msg_added", feed_exists: "calfeed.msg_exists", feed_cap: "calfeed.msg_cap", feed_missing: "calfeed.msg_missing",
   feed_pro: "calfeed.msg_pro", feed_rotated: "calfeed.msg_rotated", feed_removed: "calfeed.msg_removed",
+  // The weekly briefings' panel (briefings.ts).
+  b_added: "briefing.msg_added", b_exists: "briefing.msg_exists", b_removed: "briefing.msg_removed", b_changed: "briefing.msg_changed",
+  b_pro: "briefing.msg_pro", b_cap: "briefing.msg_cap", b_gone: "briefing.msg_gone",
 };
 
 // A stored label is in the language of the page it was saved from; the page
@@ -360,10 +373,16 @@ async function labelIn(c: Context<AppEnv>, lang: Lang, row: { kind: string; para
 
 async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: Key[]; url?: string; status?: number } = {}) {
   const lang = c.get("lang");
-  const [stored, waiting, last, feeds] = await Promise.all([
+  const [stored, waiting, last, feeds, briefings] = await Promise.all([
     listSearches(c.env, who.userId), pendingInterest(c.env, who.email, who.userId), lastDeliveries(c.env, who.userId),
-    listFeeds(c.env, who.userId),
+    listFeeds(c.env, who.userId), listBriefings(c.env, who.userId),
   ]);
+  // No briefings table on the database yet: the page leaves the panel out.
+  const runs = briefings?.length ? await lastBriefingRuns(c.env, who.userId) : new Map();
+  const briefed = briefings === null ? null : {
+    n: briefings.length,
+    panel: <BriefingsPanel lang={lang} account={who} briefings={briefings.map((b) => ({ ...b, last: runs.get(b.id) ?? null }))} />,
+  };
   const searches = await Promise.all(stored.map(async (s) => ({ ...s, label: await labelIn(c, lang, s), last: last.get(s.id) ?? null })));
   const pending = await Promise.all(waiting.map(async (r) => ({ ...r, label: await labelIn(c, lang, r) })));
   const cap = capFor(who);
@@ -374,7 +393,7 @@ async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: 
   // No feeds table on the database yet: the page leaves the feeds out.
   const calendar = feeds === null ? null : await calendarView(c, lang, who.userId, searches, feeds);
   return accountPage(c, t(lang, "account.searches_title"),
-    searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar }), extra.status ?? 200);
+    searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar, briefings: briefed }), extra.status ?? 200);
 }
 
 // What a page counts a feed's events with, as the feed reads them: the
@@ -482,6 +501,60 @@ account.post("/searches/:id", async (c) => {
     if (!(await setDelivery(c.env, who.userId, c.req.param("id") ?? "", deliver))) return c.redirect("/account/searches", 303);
     await audit(c.env, who.userId, "search_changed", deliver);
     return c.redirect("/account/searches?m=changed", 303);
+  });
+});
+
+// -- weekly briefings (briefings.ts, briefing_pages.tsx) ------------------------------------------
+
+// The page's own form posts the kind, the subject and, on a buyer page, a
+// segment; the label is the site's, read from the data. A Free account's
+// briefing is kept with its email off. The answer goes back to the page,
+// which then reads "Subscribed".
+account.post("/briefings", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  const lang = c.get("lang");
+  const kind = fields.kind;
+  const subject = isBriefingKind(kind) ? subjectOf(kind, clean(fields, "subject", 100)) : null;
+  const segment = kind === "buyer" ? narrowOf(fields.segment) : "";
+  if (!isBriefingKind(kind) || !subject || segment === null) return c.text(t(lang, "form.rejected"), 400);
+  return guarded(c, async () => {
+    const s = { kind, subject, segment };
+    let name = "";
+    if (kind === "buyer") {
+      const b = await loadBuyer(c.env, subject).catch(() => null);
+      if (!b) return c.redirect("/account/searches?m=b_gone#briefings", 303);
+      name = pick(lang, b.buyer.name_en, b.buyer.name_fr) ?? b.buyer.id;
+    }
+    const result = await addBriefing(c.env, who, { ...s, label: briefingName(lang, s, name) }, lang);
+    if (result === "added") await audit(c.env, who.userId, "briefing_added", kind);
+    if (result === "cap") return c.redirect("/account/searches?m=b_cap#briefings", 303);
+    return c.redirect(`${briefingPath(s)}${lang === "fr" ? "?lang=fr" : ""}`, 303);
+  });
+});
+
+account.post("/briefings/:id/delete", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who } = post;
+  return guarded(c, async () => {
+    if (await deleteBriefing(c.env, who.userId, c.req.param("id") ?? "")) await audit(c.env, who.userId, "briefing_removed");
+    return c.redirect("/account/searches?m=b_removed#briefings", 303);
+  });
+});
+
+account.post("/briefings/:id", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  const deliver = fields.deliver;
+  if (!isBriefingDelivery(deliver)) return c.text(t(c.get("lang"), "form.rejected"), 400);
+  if (deliver !== "off" && !allowed(who, "delivery")) return c.redirect("/account/searches?m=b_pro#briefings", 303);
+  return guarded(c, async () => {
+    if (!(await setBriefingDelivery(c.env, who.userId, c.req.param("id") ?? "", deliver))) return c.redirect("/account/searches#briefings", 303);
+    await audit(c.env, who.userId, "briefing_changed", deliver);
+    return c.redirect("/account/searches?m=b_changed#briefings", 303);
   });
 });
 
@@ -607,12 +680,38 @@ async function watchStopTarget(c: Context<AppEnv>, userId: string, secret: strin
   return row?.secret && sameHash(row.secret, secret) ? row : null;
 }
 
+// A briefing's stop link, /account/stop?b=<briefing id>&t=<secret>: the same
+// rules, for that briefing alone (briefings.ts). It turns the briefing's email
+// off; the briefing stays on the searches page.
+type BriefingStopRow = {
+  id: string; user_id: string; kind: string; subject: string; segment: string; label: string; lang: string; deliver: string; secret: string | null;
+};
+
+async function briefingStopTarget(c: Context<AppEnv>, id: string, secret: string): Promise<BriefingStopRow | null> {
+  if (!STOP_VALUE_RE.test(id) || !STOP_VALUE_RE.test(secret)) return null;
+  const row = await c.env.ACCOUNTS!.prepare(
+    "SELECT b.id, b.user_id, b.kind, b.subject, b.segment, b.label, b.lang, b.deliver, b.secret FROM briefings b JOIN users u ON u.id = b.user_id " +
+    "WHERE b.id = ? AND u.status = 'active'",
+  ).bind(id).first<BriefingStopRow>();
+  return row?.secret && sameHash(row.secret, secret) && isBriefingKind(row.kind) ? row : null;
+}
+
+const stopLabel = (lang: Lang, row: BriefingStopRow) =>
+  isBriefingKind(row.kind) ? briefingLabel(lang, { ...row, kind: row.kind, lang: row.lang === "fr" ? "fr" : "en" }) : row.label;
+
 account.get("/stop", async (c) => {
   const lang = c.get("lang");
   const searchId = c.req.query("s") ?? "";
   const secret = c.req.query("t") ?? "";
   const watcher = c.req.query("w");
+  const briefing = c.req.query("b");
   return guarded(c, async () => {
+    if (briefing !== undefined && !searchId) {
+      const mine = await briefingStopTarget(c, briefing, secret);
+      if (!mine) return c.notFound();
+      return accountPage(c, t(lang, "briefing.stop_title"),
+        briefingStopView(lang, { id: mine.id, secret, label: stopLabel(lang, mine), off: mine.deliver === "off" }));
+    }
     if (watcher !== undefined && !searchId) {
       const mine = await watchStopTarget(c, watcher, secret);
       if (!mine) return c.notFound();
@@ -634,8 +733,19 @@ account.post("/stop", async (c) => {
   const searchId = clean(fields, "s", 64) || (c.req.query("s") ?? "");
   const secret = clean(fields, "t", 64) || (c.req.query("t") ?? "");
   const watcher = clean(fields, "w", 64) || (c.req.query("w") ?? "");
+  const briefing = clean(fields, "b", 64) || (c.req.query("b") ?? "");
   const oneClick = fields["List-Unsubscribe"] === "One-Click";
   return guarded(c, async () => {
+    if (briefing && !searchId && !watcher) {
+      const mine = await briefingStopTarget(c, briefing, secret);
+      if (!mine) return c.notFound();
+      if (mine.deliver !== "off") {
+        await c.env.ACCOUNTS!.prepare("UPDATE briefings SET deliver = 'off' WHERE id = ?").bind(mine.id).run();
+        await audit(c.env, mine.user_id, "briefing_stopped", oneClick ? "one_click" : "link");
+      }
+      if (oneClick) return c.text(t(lang, "briefing.stopped_one_click"), 200);
+      return accountPage(c, t(lang, "briefing.stopped_title"), briefingStoppedView(lang, stopLabel(lang, mine)));
+    }
     if (watcher && !searchId) {
       const mine = await watchStopTarget(c, watcher, secret);
       if (!mine) return c.notFound();
@@ -974,6 +1084,7 @@ export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new 
   const tomb = `deleted:${await sha256Hex(`${randomHex(32)}\n${who.email}`)}`;
   await deleteWatchesOf(c.env, who.userId);
   await deleteClaimOf(c.env, who.userId);
+  await deleteBriefingsOf(c.env, who.userId);
   await deleteFeeds(c.env, { userId: who.userId });
   await db.batch([
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, who.userId),

@@ -286,8 +286,11 @@ describe("the radar's tabs and tiles", () => {
     for (const key of ["pro.price"] as Key[]) expect(rawEntry(key).en + rawEntry(key).fr).not.toMatch(/[0-9]/);
   });
 
-  it("lists what Pro includes, watches, calendar feeds, your organization, instrument files and bug reports among it, each line a Pro feature", () => {
-    expect(PRO_INCLUDES.map(([f]) => f)).toEqual(["radar_depth", "radar_depth", "intraday", "delivery", "watch_mail", "delivery", "analytics", "bug_reports", "export_filtered"]);
+  it("lists what Pro includes, watches, calendar feeds, your organization, the weekly briefing, instrument files and bug reports among it, each line a Pro feature", () => {
+    expect(PRO_INCLUDES.map(([f]) => f)).toEqual([
+      "radar_depth", "radar_depth", "intraday", "delivery", "watch_mail", "delivery", "delivery", "analytics", "bug_reports", "export_filtered",
+    ]);
+    expect(PRO_INCLUDES.map(([, key]) => key)).toContain("briefing.pro_include");
   });
 });
 

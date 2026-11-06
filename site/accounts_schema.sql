@@ -400,3 +400,53 @@ CREATE TABLE IF NOT EXISTS org_claims (
 -- The console's most-claimed organizations, and its claims of the week.
 CREATE INDEX IF NOT EXISTS idx_org_claims_org ON org_claims(organization_id);
 CREATE INDEX IF NOT EXISTS idx_org_claims_created ON org_claims(created_at);
+
+-- Weekly briefings (src/account/briefings.ts; docs/accounts.md, Weekly
+-- briefings): one segment or one buyer (optionally narrowed to one UNSPSC
+-- segment) an account receives a message about each week: the week's new
+-- notices, awards, the contracts ending next fiscal quarter, notable
+-- amendments and the fiscal year's largest records. A table of its own rather
+-- than a saved_searches kind, whose CHECK cannot change on D1 without
+-- rebuilding the table. subject is the two-digit segment or the buyer id;
+-- segment narrows a buyer briefing ('' for the whole buyer, so the UNIQUE key
+-- holds: SQLite treats two NULLs as different). label is the site's name for
+-- the subject, never typed. deliver is weekly on Pro and off on Free (the row
+-- is kept, and listed on the searches page). Briefings and saved searches
+-- share one cap, held inside each insert. last_delivered_at is the run that
+-- covered the briefing, claimed before the message goes. secret is the stop
+-- link's 16 random bytes, made with the first message and kept in clear as
+-- delivery_tokens keeps its own; it turns this briefing's email off and
+-- nothing else. Goes with the account.
+CREATE TABLE IF NOT EXISTS briefings (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL CHECK (kind IN ('segment', 'buyer')),
+  subject TEXT NOT NULL,                         -- two digits, or a buyer id (at most 80 characters)
+  segment TEXT NOT NULL DEFAULT '',              -- '' or two digits; a buyer briefing only
+  label TEXT NOT NULL,                           -- at most 300 characters
+  lang TEXT NOT NULL CHECK (lang IN ('en', 'fr')),
+  created_at TEXT NOT NULL,
+  deliver TEXT NOT NULL DEFAULT 'off' CHECK (deliver IN ('weekly', 'off')),
+  last_delivered_at TEXT,
+  secret TEXT,
+  UNIQUE (user_id, kind, subject, segment)
+);
+CREATE INDEX IF NOT EXISTS idx_briefings_user ON briefings(user_id, created_at);
+-- The delivery job's list of the briefings to send, oldest first.
+CREATE INDEX IF NOT EXISTS idx_briefings_deliver ON briefings(deliver, created_at);
+
+-- One row per run of a briefing (src/account/briefings.ts): sent (the message
+-- left), failed (the mail service refused it) or empty (nothing in the week
+-- and no contract ending next quarter, no message), with the data date
+-- covered and how many rows the message listed. Rows go after 90 days (the
+-- run) and with the briefing.
+CREATE TABLE IF NOT EXISTS briefing_deliveries (
+  id INTEGER PRIMARY KEY,
+  briefing_id TEXT NOT NULL REFERENCES briefings(id) ON DELETE CASCADE,
+  sent_at TEXT NOT NULL,
+  day TEXT NOT NULL,
+  items INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL                           -- sent | failed | empty
+);
+CREATE INDEX IF NOT EXISTS idx_briefing_deliveries_briefing ON briefing_deliveries(briefing_id, id);
+CREATE INDEX IF NOT EXISTS idx_briefing_deliveries_sent ON briefing_deliveries(sent_at);

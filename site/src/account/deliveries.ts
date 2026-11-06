@@ -42,6 +42,7 @@
 // one message per account with watches, inside the same cap, and a sending
 // limit met there stops the run the same way. A file that did not read stops
 // the saved searches only, since the watches read the records database alone.
+// Then the weekly briefings (briefings.ts runBriefings), the same way.
 //
 // Log lines name counts and dates only, never an address or a label.
 
@@ -60,6 +61,7 @@ import {
   type Entity, type Mark, type RecordsWait, type Rise, MARK_WRITE_SQL, entityOf, isRecordsKind, loadMark, markText, missingTable, readCounts,
   rises,
 } from "./records_deliveries";
+import { type BriefingReport, briefingActive, briefingCounts, runBriefings } from "./briefings";
 import { DELIVERABLE_KINDS } from "./searches";
 import { randomHex } from "./secrets";
 import { type MailMessage, senderFor } from "./sender";
@@ -100,6 +102,8 @@ export interface RunReport {
   records: RecordsWait | "no_marks" | null;
   // The watch mail's part (watch_mail.ts); null when the run did not reach it.
   watch: WatchReport | null;
+  // The weekly briefings' part (briefings.ts); absent or null when the run did not reach it.
+  briefing?: BriefingReport | null;
 }
 
 // A file or the database could not be read: the message is the run's one log line.
@@ -542,8 +546,25 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
       return { ...report, outcome: "fault" };
     }
   }
+  if (!stop) {
+    try {
+      const used = report.sent + report.failed + (report.watch ? report.watch.sent + report.watch.failed : 0);
+      const brief = await runBriefings(env, {
+        site, dataDate, now, plans, room: RUN_MESSAGES_MAX - used, capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
+      });
+      report.briefing = brief.report;
+      if (brief.stop) {
+        stop = brief.stop;
+        if (report.outcome === "done") report.outcome = brief.capped ? "capped" : "limited";
+      }
+    } catch {
+      log(`${dataDate}: the briefings could not read or write the accounts database; the next hour tries again`);
+      return { ...report, outcome: "fault" };
+    }
+  }
   if (report.outcome === "fault") {
     if (report.watch && watchActive(report.watch)) log(`${dataDate}: ${watchCounts(report.watch)}`);
+    if (report.briefing && briefingActive(report.briefing)) log(`${dataDate}: ${briefingCounts(report.briefing)}`);
     return report;
   }
   log(`${dataDate}: ${counts(report)}${stop ? `; stopped at ${stop}, the next hour goes on` : ""}`);
@@ -567,4 +588,5 @@ const watchCounts = (w: WatchReport) =>
 const counts = (r: RunReport) =>
   `${r.sent} sent, ${r.failed} failed, ${r.empty} with nothing new, ${r.skipped} not on a plan with delivery` +
   (r.records ? `, ${r.waiting} organization, buyer or segment searches waiting: ${WAIT_WHY[r.records]}` : "") +
-  (r.watch && watchActive(r.watch) ? `; ${watchCounts(r.watch)}` : "");
+  (r.watch && watchActive(r.watch) ? `; ${watchCounts(r.watch)}` : "") +
+  (r.briefing && briefingActive(r.briefing) ? `; ${briefingCounts(r.briefing)}` : "");

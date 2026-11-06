@@ -14,6 +14,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { SampleLine } from "../account/briefing_pages";
 import { RULES } from "../account/entitlements";
 import { paymentSource } from "../account/payments";
 import { railAccount } from "../account/session";
@@ -49,6 +50,8 @@ export function proIncludes(lang: Lang): { feature: keyof (typeof RULES)["pro"];
     },
     { feature: "delivery", text: t(lang, "billing.pro_delivery") },
     { feature: "watch_mail", text: t(lang, "watches.pro_page", { n: fmtInt(RULES.pro.watchlists, lang), free: fmtInt(RULES.free.watchlists, lang) }) },
+    // A weekly briefing is a delivery, as a saved search's mail is (src/account/briefings.ts).
+    { feature: "delivery", text: t(lang, "briefing.pro_page") },
     // A calendar feed is a delivery, as mail is (src/account/feeds.ts).
     { feature: "delivery", text: t(lang, "propage.feeds") },
     { feature: "analytics", text: t(lang, "billing.pro_analytics") },
@@ -116,6 +119,7 @@ export async function proPage(c: Context<AppEnv>): Promise<Response> {
         <div class="doc">
           <h2 id="includes">{t(lang, "billing.panel_pro")}</h2>
           <ul>{proIncludes(lang).map((i) => <li>{i.text}</li>)}</ul>
+          <p><SampleLine lang={lang} text="briefing.pro_sample" link="briefing.sample_link_text" /></p>
           <h2 id="who">{t(lang, "propage.who_title")}</h2>
           <ul>
             <li>{t(lang, "propage.who_bid")}</li>
