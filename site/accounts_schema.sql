@@ -296,8 +296,10 @@ CREATE TABLE IF NOT EXISTS account_blocks (
 -- the reader chose fewer). cadence is how often its events are mailed on the
 -- Pro plan. last_sent_day is the data date up to which the watch mail has
 -- covered its events. At most 3 per account on the Free plan and 25 on Pro,
--- held to the cap inside the insert. A tender notice's watch ends when the
--- notice closes (watch_mail.ts). Goes with the account.
+-- held to the cap inside the insert; the organization watch on the
+-- organization the account claims (org_claims) is outside that cap, so an
+-- account holds at most 26. A tender notice's watch ends when the notice
+-- closes (watch_mail.ts). Goes with the account.
 CREATE TABLE IF NOT EXISTS watches (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),

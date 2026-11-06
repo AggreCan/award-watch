@@ -177,6 +177,7 @@ event per instrument and organization, UID
 | segment page | "Holders in this segment": the 25 organizations with the most active instruments carrying the segment, with the count and the soonest expiry, after the incumbents | `holders` in `categories/<nn>.json` |
 | buyer page | the same block for the instruments whose end user is the buyer | `holders` in `buyers/<id>.json` |
 | tender page | "Current holders of {agreement}" for each active instrument the notice's solicitation stem issued | `instruments` in the tender shard |
+| `/account/organization` | for Pro, the instruments the claimed organization holds (soonest expiry first, 25 shown, the profile's section for the rest) and `instruments.csv`; Free sees the title with the Pro chip (`docs/accounts.md`, *Your organization*) | `rec_holders` by organization (a scan: no index leads with it), `rec_instruments` by key |
 
 The agreement number is one escaped path segment (`E60ZT-120002%2F001%2FZT`).
 The instrument page is in the sitemaps; a filtered or later view of the list

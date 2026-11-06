@@ -1,7 +1,7 @@
 // Watches (src/account/watches.ts, watch_events.ts, watch_pages.tsx,
 // watch_mail.ts; docs/accounts.md, Watches): the routes for Free and Pro,
-// the caps held inside the insert, CSRF, deletion, the return after sign-in,
-// the merges followed; the watch mail against a local records database built
+// the caps held inside the insert, the claimed organization's watch outside
+// them, CSRF, deletion, the return after sign-in, the merges followed; the watch mail against a local records database built
 // from pipeline/records_schema.sql with rec_events rows written here (one
 // message per account, grouped by watch, an event listed once across
 // watches, a buyer's segment and threshold, count rows, the claim, the cap on
@@ -16,7 +16,7 @@ import {
   DAY_SLOTS, EVENT_COUNTS_SQL, EVENT_KINDS, EVENT_ROWS_SQL, INDEX_OF, KINDS_FOR, NARROW_COUNTS_SQL, NARROW_ROWS_SQL, TARGET_SLOTS,
   WATCH_EVENTS_SQL, WATCH_KINDS, eventCounts, segmentOf, targetOf, watchPath,
 } from "../src/account/watch_events";
-import { watchDetail, watchOverview } from "../src/account/watches";
+import { ADD_WATCH_SQL, watchDetail, watchOverview } from "../src/account/watches";
 import { ACCOUNTS, csrf, decode, get, grantPro, lastMail, nbsp, newEmail, onEnv, post, requestCode, signIn, useAccountsDb, userId } from "./accounts-helpers";
 import { makeFakeAssets } from "./assets";
 import { applySql } from "./setup";
@@ -503,6 +503,119 @@ describe("an organization's standing offers and supply arrangements", () => {
     await events([rows(0xe000000007)[2]]);
     await runDeliveries(jobEnv(mail.binding));
     expect(mail.to(email)[0].text).toContain("Geospatial data services · expires 2027-04-30 · 1 holder\n");
+  });
+});
+
+// -- the claimed organization's watch -----------------------------------------------------------
+
+describe("the claimed organization's watch, outside the cap", () => {
+  const A2 = "org-a000000002"; // a second profile the fixtures hold
+  const claim = (cookie: string, token: string, org: string) => post("/account/organization", { csrf: token, org }, { cookie });
+  const follow = (cookie: string, token: string, kind: string, target: string) => post("/account/watches", { csrf: token, kind, target }, { cookie });
+  const claimed = async (id: string) =>
+    (await ACCOUNTS.prepare("SELECT organization_id FROM org_claims WHERE user_id = ?").bind(id).first<{ organization_id: string }>())?.organization_id;
+  const OWN = "Your organization, outside the limit";
+
+  it("is held by a Free account at its cap; a fourth ordinary watch is refused; once the claim goes it counts", async () => {
+    const email = newEmail("w-own-free");
+    const cookie = await signIn(email);
+    const id = await userId(email);
+    const others = ["org-a000000003", "org-a000000004", "org-a000000005"];
+    for (const t of others) await watch(id, "organization", t, t);
+    const token = await csrf(cookie);
+    // The claim makes the organization's watch, at the cap.
+    expect((await claim(cookie, token, ORG)).headers.get("location")).toBe("/account/organization?m=claimed");
+    expect((await watchRows(id)).map((w) => w.target)).toEqual([...others, ORG]);
+    const en = decode(await (await get("/account/watches", { cookie })).text());
+    expect(en).toContain('<span class="panel-count">3 of 3, plus your organization</span>');
+    expect(en.split(OWN)).toHaveLength(2);
+    expect(en).toContain("This account follows 3 of 3 pages.");
+    const fr = nbsp(decode(await (await get("/account/watches?lang=fr", { cookie })).text()));
+    expect(fr).toContain('<span class="panel-count">3 sur 3, plus votre organisation</span>');
+    expect(fr).toContain("Votre organisation, hors de la limite");
+    for (const page of [en, fr]) expect(page).not.toContain(EM_DASH);
+    expect(decode(await (await get("/account", { cookie })).text())).toContain('<span class="num">3 of 3, plus your organization</span>');
+    // A fourth ordinary watch is refused with the page's line.
+    const fourth = await follow(cookie, token, "buyer", "pwgsc-tpsgc");
+    expect(fourth.status).toBe(403);
+    expect(decode(await fourth.text())).toContain("This account follows 3 of 3 pages.");
+    // Removed, the organization's page still offers the button at the cap, and the post passes; another page shows the cap.
+    const own = (await ACCOUNTS.prepare("SELECT id FROM watches WHERE user_id = ? AND target = ?").bind(id, ORG).first<{ id: string }>())!.id;
+    await post(`/account/watches/${own}/delete`, { csrf: token }, { cookie });
+    expect(await (await get(`/organizations/${ORG}`, { cookie })).text()).toContain('<form method="post" action="/account/watches" class="watch-control">');
+    expect(await (await get("/buyers/pwgsc-tpsgc", { cookie })).text()).not.toContain('action="/account/watches"');
+    expect((await follow(cookie, token, "organization", ORG)).status).toBe(303);
+    expect(await watchRows(id)).toHaveLength(4);
+    // The claim removed: the watch stays and counts, the account is over its cap, and the next add is refused.
+    await post("/account/organization/delete", { csrf: token }, { cookie });
+    expect(await watchRows(id)).toHaveLength(4);
+    const over = decode(await (await get("/account/watches", { cookie })).text());
+    expect(over).toContain('<span class="panel-count">4 of 3</span>');
+    expect(over).not.toContain(OWN);
+    expect((await follow(cookie, token, "buyer", "pwgsc-tpsgc")).status).toBe(403);
+    // A claim made while over the cap is saved, and its watch waits: moving the claim cannot pile watches up.
+    expect((await claim(cookie, token, A2)).headers.get("location")).toBe("/account/organization?m=claimed_cap");
+    expect(await claimed(id)).toBe(A2);
+    expect(await watchRows(id)).toHaveLength(4);
+    expect(decode(await (await get("/account/organization?m=claimed_cap", { cookie })).text()))
+      .toContain("so the organization's watch was not added; remove a watch, then use Follow on its profile.");
+  });
+
+  it("is held by Pro beside its 25, every one listed and its events read", async () => {
+    const email = newEmail("w-own-pro");
+    const cookie = await signIn(email);
+    await grantPro(email);
+    const id = await userId(email);
+    for (let i = 1; i <= 25; i++) await watch(id, "organization", `org-b0000000${String(i).padStart(2, "0")}`, `Org ${i}`);
+    const token = await csrf(cookie);
+    expect((await claim(cookie, token, ORG)).headers.get("location")).toBe("/account/organization?m=claimed");
+    // The newest of 26 organization watches: listed and read like the others.
+    expect(await watchRows(id)).toHaveLength(26);
+    await events([{ kind: "award", src: 1, oid: ORG_N, buyer: "pwgsc-tpsgc", cents: 2_000_000, title: "Own organization award",
+      path: "/awards/aw-own", ref: "award:aw-own", day: "2026-10-29" }]);
+    const html = decode(await (await get("/account/watches", { cookie })).text());
+    expect(html).toContain('<span class="panel-count">25 of 25, plus your organization</span>');
+    expect(html).toContain(">Org 1</a>");
+    expect(html).toContain('<a href="/awards/aw-own">Own organization award</a>');
+    expect(html.split(OWN)).toHaveLength(2);
+    expect((await follow(cookie, token, "buyer", "pwgsc-tpsgc")).status).toBe(403);
+    expect(await watchRows(id)).toHaveLength(26);
+  });
+
+  it("compares surviving ids: the claim and the watches are moved past a merge before anything is counted", async () => {
+    const insertClaim = (id: string, org: string) => ACCOUNTS.prepare(
+      "INSERT INTO org_claims (user_id, organization_id, segment, competitors, created_at, updated_at) VALUES (?, ?, NULL, '[]', ?, ?)",
+    ).bind(id, org, `${DAY}T00:00:00.000Z`, `${DAY}T00:00:00.000Z`).run();
+    // The claim on the retired id, the watch on the surviving one.
+    const one = newEmail("w-own-merge-1");
+    const c1 = await signIn(one);
+    const u1 = await userId(one);
+    await insertClaim(u1, "org-a00000000f");
+    await watch(u1, "organization", ORG, "Exemplar");
+    await watch(u1, "organization", "org-a000000003", "x");
+    await watch(u1, "organization", "org-a000000004", "y");
+    expect((await follow(c1, await csrf(c1), "buyer", "pwgsc-tpsgc")).status).toBe(303);
+    expect(await claimed(u1)).toBe(ORG);
+    expect(await watchRows(u1)).toHaveLength(4);
+    // The watch on the retired id, the claim on the surviving one.
+    const two = newEmail("w-own-merge-2");
+    const c2 = await signIn(two);
+    const u2 = await userId(two);
+    await insertClaim(u2, ORG);
+    await watch(u2, "organization", "org-a00000000f", "Old name Ltd.");
+    await watch(u2, "organization", "org-a000000003", "x");
+    await watch(u2, "organization", "org-a000000004", "y");
+    expect((await follow(c2, await csrf(c2), "buyer", "pwgsc-tpsgc")).status).toBe(303);
+    expect((await watchRows(u2)).map((w) => w.target)).toEqual([ORG, "org-a000000003", "org-a000000004", "pwgsc-tpsgc"]);
+    const page = decode(await (await get("/account/watches", { cookie: c2 })).text());
+    expect(page).toContain('<span class="panel-count">3 of 3, plus your organization</span>');
+  });
+
+  it("reads the claim by its key and the watches through the account's index, in the one insert", async () => {
+    const steps = ((await ACCOUNTS.prepare(`EXPLAIN QUERY PLAN ${ADD_WATCH_SQL}`)
+      .bind("w", "u", "organization", ORG, "label", "award", DAY, 3, DAY, "").all()).results ?? []).map((r) => String((r as { detail?: unknown }).detail));
+    expect(steps.filter((x) => /^SCAN (watches|w|c|org_claims)\b/.test(x)), steps.join("\n")).toEqual([]);
+    expect(steps.some((x) => /SEARCH c USING INDEX sqlite_autoindex_org_claims_1/.test(x)), steps.join("\n")).toBe(true);
   });
 });
 

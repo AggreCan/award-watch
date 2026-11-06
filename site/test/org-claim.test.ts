@@ -1,10 +1,12 @@
 // Your organization (src/account/org_claim.ts, org_pages.tsx; docs/accounts.md,
 // Your organization): the claim stores only a checked id, a second replaces
-// the first, five competitors and no more, merges followed; the page for Free
-// (the first block, the chips) and Pro (every block, one records batch);
-// the files, Pro and private; the public profile unchanged by a claim;
-// deletion; the console; the statements' plans and bounds; the weekly block
-// of the watch mail in both languages. The records database is built here
+// the first, five competitors and no more, merges followed; the claimed
+// organization followed as a watch, made once; the page for Free (the first
+// block, the chips) and Pro (every block, one records batch), the standing
+// offers and supply arrangements held among them; the files, Pro and
+// private; the public profile unchanged by a claim; deletion; the console;
+// the statements' plans and bounds; the weekly block of the watch mail in
+// both languages. The records database is built here
 // from pipeline/records_schema.sql with rows written below, and every
 // expected figure is worked out from those rows, never read back from the
 // code under test.
@@ -12,8 +14,8 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { watchDigest, type WatchDigest } from "../src/account/digests";
 import {
-  BUYERS_SHOWN, CLAIM_ACCOUNTS_SQL, CLAIM_BATCH_MAX, CLAIM_RECORDS_SQL, CLAIM_SHARE_LARGEST_SQL, CLAIM_SHARE_SQL, COMPETITORS_MAX, claimFrame,
-  endingParams, orgWeekOpening, readWeek, weekOpening,
+  BUYERS_SHOWN, CLAIM_ACCOUNTS_SQL, CLAIM_BATCH_MAX, CLAIM_INSTRUMENTS_SQL, CLAIM_RECORDS_SQL, CLAIM_SHARE_LARGEST_SQL, CLAIM_SHARE_SQL,
+  COMPETITORS_MAX, INSTRUMENTS_SHOWN, claimFrame, endingParams, orgWeekOpening, readWeek, weekOpening,
 } from "../src/account/org_claim";
 import { bucketFor } from "../src/limits";
 import { radarParams, readExpiringQuery } from "../src/pages/expiring";
@@ -115,10 +117,54 @@ const EVENTS = [
   { day: "2026-10-30", kind: "notice", src: 5, oid: null, buyer: "dnd-mdn", ref: "tender:t4", more: null },
 ];
 
+// Standing offers and supply arrangements as the nightly keeps them
+// (rec_instruments, rec_holders): the organization holds three, the
+// regional offer in two regions and the arrangement with no expiry; another
+// organization and a holder with no profile hold two of them too; a fifth
+// organization holds 27, more than the page shows.
+const AGR = { rmso: "E60ZT-120002/001/ZT", nmso: "EZ899-250380/001/ZM", sa: "E60ZT-777777/001/ZT" };
+const MANY = MORE[2];
+const MANY_N = 27;
+const manyAgr = (i: number) => `W0000-${String(i).padStart(6, "0")}/001/ZZ`;
+const INSTRUMENTS = [
+  { k: 1, agr: AGR.rmso, type_en: "Regional Master Standing Offer", type_fr: "Offre à commandes principale régionale",
+    desc_en: "Environmental consulting services", desc_fr: "Services d'experts-conseils en environnement",
+    user_en: "Public Services and Procurement Canada", user_fr: "Services publics et Approvisionnement Canada", buyer: "pwgsc-tpsgc",
+    start: "2024-04-01", expiry: "2028-03-31" },
+  { k: 2, agr: AGR.nmso, type_en: "National Master Standing Offer", type_fr: null, desc_en: "Translation services", desc_fr: "Services de traduction",
+    user_en: "All government departments", user_fr: "Tous les ministères", buyer: null, start: "2025-06-01", expiry: "2027-06-30" },
+  { k: 3, agr: AGR.sa, type_en: "Supply Arrangement", type_fr: null, desc_en: "Geospatial data services", desc_fr: null, user_en: null, user_fr: null,
+    buyer: null, start: null, expiry: null },
+  ...Array.from({ length: MANY_N }, (_, i) => ({
+    k: 100 + i, agr: manyAgr(i + 1), type_en: "Supply Arrangement", type_fr: null, desc_en: `Arrangement ${i + 1}`, desc_fr: null, user_en: null,
+    user_fr: null, buyer: null, start: null, expiry: `2027-01-${String(i + 1).padStart(2, "0")}`,
+  })),
+];
+const HOLDERS = [
+  { ik: 1, oid: n(A1), name: NAME1, region: "AB" }, { ik: 1, oid: n(A1), name: NAME1, region: "BC" },
+  { ik: 1, oid: null, name: "Unprofiled Consulting", region: "AB" },
+  { ik: 2, oid: n(A1), name: NAME1, region: "NC" }, { ik: 2, oid: n(MORE[1]), name: "Compared Organization 4", region: "NC" },
+  { ik: 3, oid: n(A1), name: NAME1, region: "NA" },
+  ...Array.from({ length: MANY_N }, (_, i) => ({ ik: 100 + i, oid: n(MANY), name: "Compared Organization 5", region: "ON" })),
+];
+
+async function seedInstruments(): Promise<void> {
+  await RECORDS.batch([
+    ...INSTRUMENTS.map((x) => RECORDS.prepare(
+      "INSERT INTO rec_instruments (k, agr, type_en, type_fr, desc_en, desc_fr, user_en, user_fr, buyer, start, expiry, n, nw, seen, last) " +
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, '2026-10-30', '2026-10-30')",
+    ).bind(x.k, x.agr, x.type_en, x.type_fr, x.desc_en, x.desc_fr, x.user_en, x.user_fr, x.buyer, x.start, x.expiry)),
+    ...HOLDERS.map((h, i) => RECORDS.prepare(
+      "INSERT INTO rec_holders (k, ik, oid, name, op, region, region_en, region_fr, seen) VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, '2026-10-30')",
+    ).bind(i + 1, h.ik, h.oid, h.name, h.region)),
+  ]);
+}
+
 async function seedRecords(asOf = DAY): Promise<void> {
   await applySql(RECORDS, SCHEMA);
-  await RECORDS.batch(["records", "rec_orgs", "rec_buyers", "rec_segment_years", "rec_details", "rec_expiring", "rec_events", "rec_meta"]
-    .map((t) => RECORDS.prepare(`DELETE FROM ${t}`)));
+  await RECORDS.batch(["records", "rec_orgs", "rec_buyers", "rec_segment_years", "rec_details", "rec_expiring", "rec_events", "rec_meta",
+    "rec_instruments", "rec_holders"].map((t) => RECORDS.prepare(`DELETE FROM ${t}`)));
+  await seedInstruments();
   await RECORDS.batch([
     ...RECS.map((r, i) => RECORDS.prepare(
       "INSERT INTO records (src, fy, fq, bid, oid, sid, extra, cents, vnote, comp, ref, title) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)",
@@ -310,6 +356,50 @@ describe("the claim", () => {
   });
 });
 
+// -- the claimed organization's watch -----------------------------------------------------------
+
+type WatchRow = { kind: string; target: string; segment: string; label: string; events: string; cadence: string };
+const watchRows = async (id: string) =>
+  (await ACCOUNTS.prepare("SELECT kind, target, segment, label, events, cadence FROM watches WHERE user_id = ? ORDER BY created_at, id").bind(id)
+    .all<WatchRow>()).results ?? [];
+// A new organization watch follows every kind of its own (watch_events.ts KINDS_FOR), the instrument kinds included.
+const ORG_KINDS = "award,grant,amended,cancelled,ends_12m,ends_6m,ended,instrument_gained,instrument_lost,instrument_expires_6m";
+
+describe("the claimed organization's watch", () => {
+  it("is made on the claim with the default kinds, audited, and made once for the same organization", async () => {
+    const r = await reader("watch-made");
+    await send(r, "/account/organization", { org: A1 });
+    expect(await watchRows(r.id)).toEqual([{ kind: "organization", target: A1, segment: "", label: NAME1, events: ORG_KINDS, cadence: "daily" }]);
+    const added = async () => ((await ACCOUNTS.prepare("SELECT COUNT(*) AS n FROM audit WHERE user_id = ? AND event = 'watch_added' AND detail = 'organization'")
+      .bind(r.id).first<{ n: number }>())?.n ?? 0);
+    expect(await added()).toBe(1);
+    // The same organization again, and its retired id: no second watch, no second audit row.
+    await send(r, "/account/organization", { org: A1 });
+    await send(r, "/account/organization", { org: "org-a00000000f" });
+    expect(await watchRows(r.id)).toHaveLength(1);
+    expect(await added()).toBe(1);
+    // The watch mail row the first watch makes, on.
+    expect((await ACCOUNTS.prepare("SELECT mail FROM watch_mail WHERE user_id = ?").bind(r.id).first<{ mail: string }>())?.mail).toBe("on");
+  });
+
+  it("keeps the account's mail setting and every watch it held, when the claim changes or goes", async () => {
+    const r = await reader("watch-keep", true);
+    await ACCOUNTS.prepare("INSERT INTO watch_mail (user_id, mail, created_at) VALUES (?, 'off', ?)").bind(r.id, `${DAY}T00:00:00.000Z`).run();
+    await send(r, "/account/organization", { org: A1 });
+    await send(r, "/account/organization", { org: A2 });
+    expect((await watchRows(r.id)).map((w) => w.target)).toEqual([A1, A2]);
+    expect((await ACCOUNTS.prepare("SELECT mail FROM watch_mail WHERE user_id = ?").bind(r.id).first<{ mail: string }>())?.mail).toBe("off");
+    await send(r, "/account/organization/delete");
+    expect((await watchRows(r.id)).map((w) => w.target)).toEqual([A1, A2]);
+  });
+
+  it("follows the claim's merge: a retired id claimed is watched as the surviving one", async () => {
+    const r = await reader("watch-merge");
+    await send(r, "/account/organization", { org: `${SITE}/organizations/org-a00000000f` });
+    expect((await watchRows(r.id)).map((w) => w.target)).toEqual([A1]);
+  });
+});
+
 // -- the page ------------------------------------------------------------------------------------
 
 // A records binding that writes down the size of each batch it runs.
@@ -431,6 +521,123 @@ describe("the page", () => {
     expect(html).toContain('<a href="/account/organization">Your organization</a><span class="kv-note">Exemplar Translation Services Inc.</span>');
     const none = await reader("page-none");
     expect(await text(await page(none, "/account"))).toContain('<span class="kv-note">None chosen yet</span>');
+  });
+});
+
+// -- the standing offers and supply arrangements ----------------------------------------------------
+
+describe("the standing offers and supply arrangements block", () => {
+  let free: Reader;
+  let pro: Reader;
+  beforeAll(async () => {
+    free = await reader("sosa-free");
+    pro = await reader("sosa-pro", true);
+    for (const r of [free, pro]) await send(r, "/account/organization", { org: A1 });
+  });
+  const link = (agr: string) => `/instruments/${encodeURIComponent(agr)}`;
+
+  it("lists for Pro the instruments the organization holds, soonest expiry first, in the page's one batch", async () => {
+    const recorded = counting(RECORDS);
+    const html = await text(await page(pro, "/account/organization", { RECORDS: recorded.binding }));
+    expect(recorded.sizes).toEqual([1 + 7]);
+    // Three held: the other organization's and the unprofiled holder's rows add none; the CSV file in the head.
+    expect(html).toMatch(/<h2>Standing Offers and Supply Arrangements<\/h2><div class="panel-tools"><span class="panel-count">3<\/span>/);
+    expect(html).toContain('<a href="/account/organization/instruments.csv" rel="nofollow">');
+    const at = [AGR.nmso, AGR.rmso, AGR.sa].map((a) => html.indexOf(`<a href="${link(a)}" class="mono">${a}</a>`));
+    expect(at.every((x, i) => x > 0 && (i === 0 || x > at[i - 1])), at.join(",")).toBe(true);
+    expect(link(AGR.rmso)).toBe("/instruments/E60ZT-120002%2F001%2FZT");
+    // Each instrument's type, description, regions, end user and expiry.
+    expect(html).toContain("Regional master standing offer");
+    expect(html).toContain("Environmental consulting services");
+    expect(html).toContain("Alberta, British Columbia");
+    expect(html).toContain('<a href="/buyers/pwgsc-tpsgc">Public Services and Procurement Canada</a>');
+    expect(html).toContain(">All government departments</td>");
+    expect(html).toContain("2027-06-30 (242 days left)");
+    expect(html).toContain("2028-03-31 (517 days left)");
+    expect(html).toContain("National Capital Region");
+    expect(html).toContain("National (all regions)");
+    expect(html).toContain(`the first 3 here, all of them in the CSV file and in <a href="/organizations/${A1}#instruments">its profile's section</a>`);
+    // It comes after the buyers block and before the registry match.
+    expect(html.indexOf("Buyers It Has Won From")).toBeLessThan(html.indexOf("<h2>Standing Offers and Supply Arrangements</h2>"));
+    expect(html.indexOf("<h2>Standing Offers and Supply Arrangements</h2>")).toBeLessThan(html.indexOf("<h2>Registry Match</h2>"));
+    expect(html).not.toContain(EM_DASH);
+  });
+
+  it(`shows ${INSTRUMENTS_SHOWN} and links the profile's section for the rest`, async () => {
+    const r = await reader("sosa-many", true);
+    await send(r, "/account/organization", { org: MANY });
+    const html = await text(await page(r));
+    expect(html).toMatch(new RegExp(`<h2>Standing Offers and Supply Arrangements</h2><div class="panel-tools"><span class="panel-count">${MANY_N}</span>`));
+    expect(html).toContain(link(manyAgr(INSTRUMENTS_SHOWN)));
+    expect(html).not.toContain(link(manyAgr(INSTRUMENTS_SHOWN + 1)));
+    expect(html).toContain(`<a href="/organizations/${MANY}#instruments">All ${MANY_N} on its profile</a>`);
+    expect(html).toContain(`the first ${INSTRUMENTS_SHOWN} here`);
+    const csv = (await (await page(r, "/account/organization/instruments.csv")).text()).trim().split("\r\n");
+    expect(csv).toHaveLength(1 + MANY_N);
+  });
+
+  it("says when the organization holds none", async () => {
+    const r = await reader("sosa-none", true);
+    await send(r, "/account/organization", { org: A2 });
+    const html = await text(await page(r));
+    expect(html).toContain("This organization holds no active standing offer or supply arrangement.");
+    expect(html).not.toContain("/account/organization/instruments.csv");
+  });
+
+  it("gives Free the title with the chip and one line", async () => {
+    const html = await text(await page(free));
+    expect(html).toMatch(/<h2>Standing Offers and Supply Arrangements<span class="pro-tag">/);
+    expect(html).toContain("The standing offers and supply arrangements it holds now, soonest expiry first, with the type, regions and end user of each and the CSV file.");
+    expect(html).not.toContain(link(AGR.nmso));
+    expect(html).not.toContain("/account/organization/instruments.csv");
+  });
+
+  it("is French on a French request, with no em-dash", async () => {
+    const html = await text(await page(pro, "/account/organization?lang=fr"));
+    expect(html).toContain("<h2>Offres à commandes et arrangements en matière d'approvisionnement</h2>");
+    expect(html).toContain("Offre à commandes principale régionale");
+    expect(html).toContain("2027-06-30 (242 jours restants)");
+    expect(html).toContain(">Tous les ministères</td>");
+    expect(html).toContain("Alberta, Colombie-Britannique");
+    expect(html).not.toContain("Standing Offers and Supply Arrangements");
+    expect(html).not.toContain(EM_DASH);
+    const tease = await text(await page(free, "/account/organization?lang=fr"));
+    expect(tease).toMatch(/<h2>Offres à commandes et arrangements en matière d'approvisionnement<span class="pro-tag">/);
+    expect(tease).not.toContain(EM_DASH);
+  });
+
+  it("is a CSV file for Pro, private and never kept, a download; the site's 404 for Free", async () => {
+    expect((await page(free, "/account/organization/instruments.csv")).status).toBe(404);
+    const res = await page(pro, "/account/organization/instruments.csv");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    expect(res.headers.get("content-disposition")).toBe(`attachment; filename="organization-${A1}-instruments-${DAY}.csv"`);
+    expect(bucketFor("GET", "/account/organization/instruments.csv")).toBe("download");
+    expect((await res.text()).trim().split("\r\n")).toEqual([
+      "agreement_number,type,type_en,type_fr,description_en,description_fr,end_user_en,end_user_fr,end_user_buyer_id,regions,start,expiry,days_left,url",
+      `${AGR.nmso},NMSO,National Master Standing Offer,,Translation services,Services de traduction,All government departments,Tous les ministères,,NC,` +
+        `2025-06-01,2027-06-30,242,http://localhost${link(AGR.nmso)}`,
+      `${AGR.rmso},RMSO,Regional Master Standing Offer,Offre à commandes principale régionale,Environmental consulting services,` +
+        "Services d'experts-conseils en environnement,Public Services and Procurement Canada,Services publics et Approvisionnement Canada," +
+        `pwgsc-tpsgc,AB BC,2024-04-01,2028-03-31,517,http://localhost${link(AGR.rmso)}`,
+      `${AGR.sa},SA,Supply Arrangement,,Geospatial data services,,,,,NA,,,,http://localhost${link(AGR.sa)}`,
+    ]);
+    // The records database not answering: 503, still private.
+    const down = await page(pro, "/account/organization/instruments.csv", { RECORDS: undefined });
+    expect(down.status).toBe(503);
+    expect(down.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("reads rec_holders through its organization index, each instrument by its key, and bounded", async () => {
+    const steps = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${CLAIM_INSTRUMENTS_SQL}`).bind(n(A1)).all()).results ?? [])
+      .map((r) => String((r as { detail?: unknown }).detail));
+    // rec_holders_org (records_schema.sql) finds the organization's rows; rec_instruments is sought by its integer key.
+    expect(steps.some((s) => /^SEARCH h USING INDEX rec_holders_org/.test(s)), steps.join("\n")).toBe(true);
+    expect(steps.filter((s) => /^SCAN /.test(s)), steps.join("\n")).toEqual([]);
+    expect(steps.some((s) => /^SEARCH i USING INTEGER PRIMARY KEY/.test(s)), steps.join("\n")).toBe(true);
+    expect(CLAIM_INSTRUMENTS_SQL).toMatch(/LIMIT 10000$/);
+    expect(CLAIM_RECORDS_SQL).not.toContain(CLAIM_INSTRUMENTS_SQL);
   });
 });
 

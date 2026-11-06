@@ -21,6 +21,7 @@ import { BUYER_ID_RE, ORG_ID_RE, REFERENCE_RE } from "../data";
 import type { Env } from "../env";
 import { STATE_SQL, orgIdOf, orgNumber } from "../records_db";
 import { faultSummary } from "../search_db";
+import { WATCH_MAX } from "./entitlements";
 import type { RecordsWait } from "./records_deliveries";
 
 // pipeline records_db.EVENT_KINDS holds the same list (test_records_events.py compares them).
@@ -61,8 +62,10 @@ export const INDEX_OF: Readonly<Record<WatchKind, string>> = {
 
 // The watches page reads 30 data dates; a message 7 at most (deliveries.ts SPAN_DAYS_MAX).
 export const DAY_SLOTS = 30;
-// One account's watches of one kind: the plans' ceiling (entitlements.ts WATCH_MAX).
-export const TARGET_SLOTS = 25;
+// One account's watches of one kind: the plans' ceiling (entitlements.ts
+// WATCH_MAX) and the claimed organization's watch, which is outside the cap
+// (watches.ts), so a Pro account's 25 organizations and its own are all read.
+export const TARGET_SLOTS = WATCH_MAX + 1;
 // The newest rows a watch lists of each kind; the rest are a count.
 export const ROWS_PER_KIND = 10;
 // A buyer watch not narrowed to a segment reports an amendment only when the

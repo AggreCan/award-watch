@@ -5,7 +5,8 @@
 // then the blocks: records by fiscal year for any account (the latest three
 // fiscal years on Free, as the free analytics view shows), and for Pro the
 // records by segment, the share of a segment, the contracts ending within 12
-// months, the buyers won from and the registry match, each with its CSV file.
+// months, the buyers won from, the standing offers and supply arrangements
+// held and the registry match, each with its CSV file.
 // A Free account sees each Pro block's title with the chip and one line of
 // what it holds, as the analytics views do. No ranking words, nothing said
 // about being ahead or behind: the figures, their denominators, and the
@@ -22,12 +23,14 @@ import { fmtInt, fmtMoneyShort, fmtPct, pick, provinceName, segmentLabel, source
 import { PageHead, Panel, todayOf } from "../layout";
 import { csvCell } from "../pages/analytics";
 import { ExpiringNote, ExpiringTable, RADAR_CSV_COLUMNS, contractReference, radarRow } from "../pages/expiring";
+import { expiryText, regionName, typeCodeOf, typeLabel } from "../pages/instruments";
+import { daysLeft, instrumentPath } from "../instruments";
 import { money } from "../pages/shared";
 import { ProNote, ProTag } from "../pro";
 import { FREE_YEARS, MAX_YEARS, SOURCE_NUMBER, type Row, dollars, fiscalLabel, num, orgNumber, segmentCode } from "../records_db";
 import { allowed } from "./entitlements";
 import {
-  BUYERS_MAX, BUYERS_SHOWN, COMPETITORS_MAX, ENDING_SHOWN, type BlockRows, type BlocksRead, type ClaimBlock, type ClaimFrame, type Found,
+  BUYERS_MAX, BUYERS_SHOWN, COMPETITORS_MAX, ENDING_SHOWN, INSTRUMENTS_SHOWN, type BlockRows, type BlocksRead, type ClaimBlock, type ClaimFrame, type Found,
   SHARE_SOURCES, claimFrame, findOrganizations, followClaim, isShareSource, readBlockCsv, readBlocks, readClaim, shareSegment,
 } from "./org_claim";
 import { accountPage } from "./pages";
@@ -449,6 +452,75 @@ const BuyersBlock: FC<{ lang: Lang; id: string; rows: Row[]; open: Map<string, n
   );
 };
 
+// One instrument held, from a CLAIM_INSTRUMENTS_SQL row: its regions in code
+// order, an empty code left out (as the profile's section does).
+interface Held {
+  agreement: string; typeEn: string | null; typeFr: string | null; descEn: string | null; descFr: string | null; userEn: string | null;
+  userFr: string | null; buyer: string | null; start: string | null; expiry: string | null; regions: string[];
+}
+
+const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
+
+function heldOf(r: Row): Held | null {
+  const agreement = str(r.agr);
+  if (!agreement) return null;
+  return {
+    agreement, typeEn: str(r.type_en), typeFr: str(r.type_fr), descEn: str(r.desc_en), descFr: str(r.desc_fr), userEn: str(r.user_en),
+    userFr: str(r.user_fr), buyer: str(r.buyer), start: str(r.start), expiry: str(r.expiry),
+    regions: [...new Set(String(r.regions ?? "").split(",").map((x) => x.trim()).filter(Boolean))].sort(),
+  };
+}
+
+// The standing offers and supply arrangements the organization holds now,
+// soonest expiry first: the first INSTRUMENTS_SHOWN here, every one on the
+// profile's section and in the CSV file.
+const InstrumentsBlock: FC<{ lang: Lang; id: string; rows: Row[]; today: string }> = ({ lang, id, rows, today }) => {
+  const held = rows.map(heldOf).filter((h): h is Held => h !== null);
+  const shown = held.slice(0, INSTRUMENTS_SHOWN);
+  const section = `/organizations/${id}#instruments`;
+  return (
+    <Panel title={t(lang, "orgclaim.panel_instruments")} count={fmtInt(held.length, lang)}
+      tools={held.length ? <CsvLink lang={lang} block="instruments" /> : undefined}
+      foot={held.length ? <span>{tj(lang, "orgclaim.foot_instruments", {
+        shown: fmtInt(shown.length, lang), section: <a href={section}>{t(lang, "orgclaim.instruments_section")}</a>,
+      })}</span> : undefined}>
+      {shown.length ? <>
+        <div class="table-wrap">
+          <Table cols={[
+            { kind: "main", label: t(lang, "instruments.col_instrument") },
+            { kind: "label", label: t(lang, "instruments.col_type") },
+            { kind: "region", label: t(lang, "instruments.col_regions") },
+            { kind: "label", label: t(lang, "instruments.col_user") },
+            { kind: "date", label: t(lang, "instruments.col_expiry") },
+          ]}>
+            <tbody>
+              {shown.map((h) => {
+                const description = pick(lang, h.descEn, h.descFr);
+                const user = pick(lang, h.userEn, h.userFr);
+                return (
+                  <tr>
+                    <td data-label={t(lang, "instruments.col_instrument")}>
+                      <a href={instrumentPath(h.agreement)} class="mono">{h.agreement}</a>
+                      {description ? <><br /><span class="small">{description}</span></> : null}
+                    </td>
+                    <td data-label={t(lang, "instruments.col_type")}>{typeLabel(lang, typeCodeOf(h.typeEn), h.typeEn, h.typeFr)}</td>
+                    <td data-label={t(lang, "instruments.col_regions")}>{h.regions.map((x) => regionName(lang, x)).join(", ")}</td>
+                    <td data-label={t(lang, "instruments.col_user")}>
+                      {user && h.buyer ? <a href={`/buyers/${h.buyer}`}>{user}</a> : user ?? t(lang, "common.not_stated")}
+                    </td>
+                    <td data-label={t(lang, "instruments.col_expiry")} class="mono">{expiryText(lang, h.expiry, today)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
+        </div>
+        {held.length > shown.length ? <p><a href={section}>{t(lang, "orgclaim.instruments_all", { n: fmtInt(held.length, lang) })}</a></p> : null}
+      </> : <p class="muted">{t(lang, "orgclaim.none_instruments")}</p>}
+    </Panel>
+  );
+};
+
 // The corporate registry entries matched to the organization, as the profile shows them.
 const RegistryBlock: FC<{ lang: Lang; profile: Profile }> = ({ lang, profile }) => (
   <Panel title={t(lang, "orgclaim.panel_registry")}>
@@ -555,12 +627,14 @@ export function claimedView(lang: Lang, account: Account, s: ClaimedState) {
             chosen={s.segment} orgs={orgs} />
           <EndingBlock lang={lang} id={s.id} rows={ending} total={rows.endingTotal?.[0]} />
           <BuyersBlock lang={lang} id={s.id} rows={rows.buyers ?? []} open={s.open} />
+          <InstrumentsBlock lang={lang} id={s.id} rows={rows.instruments ?? []} today={s.frame.today} />
           {s.profile ? <RegistryBlock lang={lang} profile={s.profile} /> : null}
         </> : <>
           <Locked lang={lang} title="orgclaim.panel_segments" text={t(lang, "orgclaim.tease_segments")} />
           <Locked lang={lang} title="orgclaim.panel_share" text={t(lang, "orgclaim.tease_share", { n: fmtInt(COMPETITORS_MAX, lang) })} />
           <Locked lang={lang} title="orgclaim.panel_ending" text={t(lang, "orgclaim.tease_ending")} />
           <Locked lang={lang} title="orgclaim.panel_buyers" text={t(lang, "orgclaim.tease_buyers")} />
+          <Locked lang={lang} title="orgclaim.panel_instruments" text={t(lang, "orgclaim.tease_instruments")} />
           <Locked lang={lang} title="orgclaim.panel_registry" text={t(lang, "orgclaim.tease_registry")} />
         </>}
         <p class="muted small">
@@ -576,7 +650,7 @@ export function claimedView(lang: Lang, account: Account, s: ClaimedState) {
 
 // The line after a post (?m=), by what it did.
 const NOTICE: Readonly<Record<string, Key>> = {
-  claimed: "orgclaim.msg_claimed", unclaimed: "orgclaim.msg_unclaimed", added: "orgclaim.msg_added", removed: "orgclaim.msg_compare_removed",
+  claimed: "orgclaim.msg_claimed", claimed_cap: "orgclaim.msg_claimed_cap", unclaimed: "orgclaim.msg_unclaimed", added: "orgclaim.msg_added", removed: "orgclaim.msg_compare_removed",
   exists: "orgclaim.msg_exists", self: "orgclaim.msg_self", full: "orgclaim.msg_full", busy: "orgclaim.msg_busy", segment: "orgclaim.msg_segment",
 };
 
@@ -644,8 +718,17 @@ const cad = (cents: unknown) => {
   return v === null ? null : (v / 100).toFixed(2);
 };
 
+// The instruments file's columns: the instrument as the index's file names it
+// (pages/instruments.tsx INSTRUMENT_CSV_COLUMNS), with the regions this
+// organization holds it in.
+export const CLAIM_INSTRUMENT_CSV_COLUMNS = [
+  "agreement_number", "type", "type_en", "type_fr", "description_en", "description_fr", "end_user_en", "end_user_fr", "end_user_buyer_id",
+  "regions", "start", "expiry", "days_left", "url",
+] as const;
+
 function csvTable(block: ClaimBlock, rows: Row[][], ctx: {
   frame: ClaimFrame; source: MoneySource; chosen: string | null; orgs: { oid: number; id: string; name: string }[]; open: Map<string, number> | null;
+  origin: string;
 }): [string[], unknown[][]] {
   const list = rows[0] ?? [];
   const fy = (y: number) => [y, fiscalLabel("en", y)];
@@ -684,6 +767,12 @@ function csvTable(block: ClaimBlock, rows: Row[][], ctx: {
     };
     return [[...RADAR_CSV_COLUMNS], ending.map((r) => RADAR_CSV_COLUMNS.map((k) => cell(r, k)))];
   }
+  if (block === "instruments") {
+    return [[...CLAIM_INSTRUMENT_CSV_COLUMNS], list.map(heldOf).filter((h): h is Held => h !== null).map((h) => [
+      h.agreement, typeCodeOf(h.typeEn), h.typeEn, h.typeFr, h.descEn, h.descFr, h.userEn, h.userFr, h.buyer, h.regions.join(" "), h.start,
+      h.expiry, daysLeft(h.expiry, ctx.frame.today), `${ctx.origin}${instrumentPath(h.agreement)}`,
+    ])];
+  }
   const head = ["buyer_id", "buyer", "buyer_fr", "records"];
   for (const s of MONEY_SOURCES) head.push(`records_${s}`, `value_${s}_cad`);
   head.push("open_notices", "contracts_ending_12m");
@@ -721,7 +810,7 @@ export async function orgCsv(c: Context<AppEnv>, who: Account, block: ClaimBlock
     c.header("Cache-Control", "private, no-store");
     return c.text(t(lang, read.state === "loading" ? "analytics.unavailable_loading" : "orgclaim.unavailable_text"), 503);
   }
-  const [head, body] = csvTable(block, read.rows, { frame, source, chosen: f.claim.segment, orgs, open });
+  const [head, body] = csvTable(block, read.rows, { frame, source, chosen: f.claim.segment, orgs, open, origin: new URL(c.req.url).origin });
   const text = [head, ...body].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
   const name = `organization-${id}-${block}${block === "share" ? `-${source}` : ""}-${frame.today}.csv`;
   return new Response(text, {

@@ -39,7 +39,8 @@ export type Feature = (typeof FEATURES)[number];
 // The ceiling on saved searches whatever the plan (accounts_schema.sql says
 // the same).
 export const SAVED_SEARCH_MAX = 25;
-// The ceiling on watches whatever the plan (accounts_schema.sql says the same).
+// The ceiling on watches whatever the plan (accounts_schema.sql says the same);
+// the claimed organization's watch is held beside it (watches.ts).
 export const WATCH_MAX = 25;
 
 type Rules = {

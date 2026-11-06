@@ -344,3 +344,5 @@ CREATE TABLE IF NOT EXISTS rec_holders (
   seen TEXT NOT NULL                             -- the publication date of the first file that held the row
 );
 CREATE INDEX IF NOT EXISTS rec_holders_instrument ON rec_holders (ik, name, region);
+-- An organization's instruments: the claim page's block and the watches' calendar read holders by oid.
+CREATE INDEX IF NOT EXISTS rec_holders_org ON rec_holders (oid) WHERE oid IS NOT NULL;

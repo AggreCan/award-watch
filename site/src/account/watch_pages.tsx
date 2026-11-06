@@ -27,13 +27,13 @@ import {
   type EventsRead, type WatchKind, KINDS_FOR, closedOn, foundKey, listed, watchPath,
 } from "./watch_events";
 import { watchLabel } from "./watch_mail";
-import { type MailRow, type Watch, watchState } from "./watches";
+import { type MailRow, type Watch, countedWatches, ownWatch, watchState } from "./watches";
 
 // -- the control on the pages -------------------------------------------------------------
 
 export type ControlState =
   | { at: "out"; next: string }
-  | { at: "in"; account: Account; id: string | null; segment: string; n: number; cap: number; mail: boolean };
+  | { at: "in"; account: Account; id: string | null; segment: string; n: number; cap: number; mail: boolean; free: boolean };
 
 // What the control shows for this request: null while the switch is off, when
 // the accounts database cannot say, or when it cannot be read.
@@ -46,7 +46,7 @@ export async function watchControl(c: Context<AppEnv>, kind: WatchKind, target: 
     const s = await watchState(c.env, read.account.userId, kind, target);
     return {
       at: "in", account: read.account, id: s.id, segment: s.segment, n: s.n, cap: watchCap(read.account.plan),
-      mail: allowed(read.account, "watch_mail"),
+      mail: allowed(read.account, "watch_mail"), free: s.free,
     };
   } catch {
     return null;
@@ -79,7 +79,9 @@ export const WatchControl: FC<{ lang: Lang; state: ControlState | null; kind: Wa
       </div>
     );
   }
-  if (state.n >= state.cap) {
+  // The claimed organization's page keeps its button at the cap: its watch is
+  // the one outside the cap (watches.ts ADD_WATCH_SQL), until the account is over it.
+  if (state.free ? state.n > state.cap : state.n >= state.cap) {
     return state.mail ? (
       <p class="watch-control muted small">
         {t(lang, "watches.control_cap_pro", { cap: fmtInt(state.cap, lang) })} <a href="/account/watches">{t(lang, "watches.manage")}</a>
@@ -207,17 +209,21 @@ export function watchesView(
   state: {
     watches: Watch[]; read: EventsRead | null; days: readonly string[]; mail: MailRow | null; notice?: string | null;
     moved?: number; merged?: number; calendar?: WatchCalendar | null;
+    // The claimed organization's id after the merges (org_claim.ts followClaimedId); its watch is outside the cap.
+    claimed?: string | null;
   },
 ) {
   const { watches } = state;
   const canMail = allowed(account, "watch_mail");
   const cap = watchCap(account.plan);
   const days = new Set(state.days);
+  const own = ownWatch(watches, state.claimed ?? null);
+  const counted = countedWatches(watches, state.claimed ?? null);
   const capLine = canMail
     ? <p>{t(lang, "watches.cap_pro", { cap: fmtInt(cap, lang) })}</p>
     : (
       <ProNote lang={lang}>
-        {t(lang, "watches.cap_free", { n: fmtInt(watches.length, lang), cap: fmtInt(cap, lang), max: fmtInt(WATCH_MAX, lang) })}{" "}
+        {t(lang, "watches.cap_free", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang), max: fmtInt(WATCH_MAX, lang) })}{" "}
         <a href="/account/billing">{t(lang, "billing.link_plans")}</a>
       </ProNote>
     );
@@ -246,7 +252,7 @@ export function watchesView(
           <ProNote lang={lang}>{t(lang, "watches.mail_gate")} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></ProNote>
         )}
       </Panel>
-      <Panel title={t(lang, "watches.panel")} count={t(lang, "watches.n", { n: fmtInt(watches.length, lang), cap: fmtInt(cap, lang) })}
+      <Panel title={t(lang, "watches.panel")} count={t(lang, own ? "watches.n_own" : "watches.n", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang) })}
         foot={capLine}>
         {watches.length ? (
           <div class="table-wrap">
@@ -265,6 +271,7 @@ export function watchesView(
                       <td data-label={t(lang, "watches.col_watch")}>
                         <a href={watchPath(w.kind, w.target)}>{watchLabel(lang, w)}</a>
                         <br /><span class="muted small">{t(lang, WATCH_KIND_KEY[w.kind])}</span>
+                        {w === own ? <><br /><span class="muted small">{t(lang, "watches.own_note")}</span></> : null}
                         {last ? <><br /><span class="muted small mono">{t(lang, "watches.last_event", { date: last })}</span></> : null}
                       </td>
                       <td data-label={t(lang, "watches.col_events")}><Events lang={lang} w={w} read={state.read} days={days} /></td>

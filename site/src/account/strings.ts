@@ -1908,4 +1908,29 @@ export const ACCOUNT_STRINGS = {
     en: "An organization watch that follows Instrument expires within 6 months also adds the expiry of each standing offer or supply arrangement the organization holds that expires within 6 months.",
     fr: "Un suivi d'organisation qui suit Instrument expirant d'ici 6 mois ajoute aussi l'expiration de chaque offre à commandes ou arrangement en matière d'approvisionnement que détient l'organisation et qui expire d'ici 6 mois.",
   },
+
+  // The claimed organization's watch, outside the plan's cap (watches.ts, watch_pages.tsx).
+  "watches.n_own": { en: "{n} of {cap}, plus your organization", fr: "{n} sur {cap}, plus votre organisation" },
+  "watches.own_note": { en: "Your organization, outside the limit", fr: "Votre organisation, hors de la limite" },
+  "orgclaim.msg_claimed_cap": {
+    en: "Saved. Only your account sees which organization you chose. The account already follows more pages than its plan allows, so the organization's watch was not added; remove a watch, then use Follow on its profile.",
+    fr: "Enregistré. Seul votre compte voit l'organisation choisie. Le compte suit déjà plus de pages que son forfait ne le permet, donc le suivi de l'organisation n'a pas été ajouté; retirez un suivi, puis utilisez Suivre sur son profil.",
+  },
+
+  // The standing offers and supply arrangements block of "Your organization" (org_pages.tsx).
+  "orgclaim.panel_instruments": { en: "Standing Offers and Supply Arrangements", fr: "Offres à commandes et arrangements en matière d'approvisionnement" },
+  "orgclaim.foot_instruments": {
+    en: "The instruments PSPC's latest weekly file lists the organization as holding, the soonest expiry first: the first {shown} here, all of them in the CSV file and in {section}.",
+    fr: "Les instruments dont le dernier fichier hebdomadaire de SPAC indique l'organisation comme titulaire, l'expiration la plus proche d'abord : les {shown} premiers ici, tous dans le fichier CSV et dans {section}.",
+  },
+  "orgclaim.instruments_section": { en: "its profile's section", fr: "la section de son profil" },
+  "orgclaim.instruments_all": { en: "All {n} on its profile", fr: "Les {n} sur son profil" },
+  "orgclaim.none_instruments": {
+    en: "This organization holds no active standing offer or supply arrangement.",
+    fr: "Cette organisation ne détient aucune offre à commandes ni aucun arrangement en matière d'approvisionnement actif.",
+  },
+  "orgclaim.tease_instruments": {
+    en: "The standing offers and supply arrangements it holds now, soonest expiry first, with the type, regions and end user of each and the CSV file.",
+    fr: "Les offres à commandes et arrangements en matière d'approvisionnement qu'elle détient maintenant, l'expiration la plus proche d'abord, avec le type, les régions et l'utilisateur final de chacun et le fichier CSV.",
+  },
 } as const satisfies Record<string, { en: string; fr: string }>;

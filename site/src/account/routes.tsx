@@ -104,14 +104,14 @@ import {
 import { CODE_MINUTES, CODES_PER_HOUR, CODE_TRIES, type Checked, checkCode, checkLink, findOrCreateUser, issueCode, sweep } from "./signin";
 import { accountsEnabled } from "./switch";
 import {
-  changeCompetitors, checkOrganization, claimOrganization, claimSummary, deleteClaim, deleteClaimOf, isClaimBlock, isShareSource, orgIdIn,
-  readClaim, setClaimSegment,
+  changeCompetitors, checkOrganization, claimOrganization, claimSummary, deleteClaim, deleteClaimOf, followClaimedId, isClaimBlock,
+  isShareSource, orgIdIn, readClaim, setClaimSegment,
 } from "./org_claim";
 import { ORG_PATH, orgCsv, orgPage, segmentChoice } from "./org_pages";
 import { DAY_SLOTS, type WatchKind, isWatchKind, readEvents, segmentOf, targetOf, watchPath } from "./watch_events";
 import { type WatchCalendar, watchStopView, watchStoppedView, watchesView } from "./watch_pages";
 import {
-  addWatch, deleteWatch, deleteWatchesOf, followAliases, isCadence, listWatches, mailOf, setMail, setWatch, watchCount,
+  addWatch, countedWatches, deleteWatch, deleteWatchesOf, followAliases, isCadence, listWatches, mailOf, setMail, setWatch, watchCount,
 } from "./watches";
 
 export const account = new Hono<AppEnv>();
@@ -340,7 +340,7 @@ account.get("/", async (c) => {
     const org = await claimSummary(c.env, who.userId);
     return accountPage(c, t(lang, "account.title"), overviewView(lang, who, {
       sessions: counts?.sessions ?? 0, searches: counts?.searches ?? 0, cap: capFor(who), keys: counts?.keys ?? 0,
-      watches: watching?.n ?? null, org,
+      watches: watching?.n ?? null, watchesOwn: watching?.own ?? false, org,
     }, {
       billing: await billingLine(c.env, who.userId),
       // Stripe's checkout returns here; the plan changes when its notice lands, often a moment later.
@@ -806,13 +806,22 @@ async function watchLabel(c: Context<AppEnv>, kind: WatchKind, target: string, l
   return description ? description.split("\n")[0].slice(0, 200) : ref;
 }
 
+// The account's watches and its claim pointed at the ids the nightly's merges
+// left (watches.ts followAliases, org_claim.ts followClaimedId), so the watch
+// of the claimed organization, the one outside the cap, is compared on
+// surviving ids before anything is counted or added.
+async function alignWatches(c: Context<AppEnv>, userId: string) {
+  const [listed, claimed] = await Promise.all([listWatches(c.env, userId), followClaimedId(c.env, userId)]);
+  return { claimed, ...(await followAliases(c.env, userId, listed)) };
+}
+
 async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, status = 200): Promise<Response> {
   const lang = c.get("lang");
-  const [listedWatches, mail, stats, feeds] = await Promise.all([
-    listWatches(c.env, who.userId), mailOf(c.env, who.userId), loadStats(c.env).catch(() => null), listFeeds(c.env, who.userId),
+  const [aligned, mail, stats, feeds] = await Promise.all([
+    alignWatches(c, who.userId), mailOf(c.env, who.userId), loadStats(c.env).catch(() => null), listFeeds(c.env, who.userId),
   ]);
   // A watch on an organization or buyer the nightly merged follows the surviving id from this view on.
-  const { watches, moved, merged } = await followAliases(c.env, who.userId, listedWatches);
+  const { watches, moved, merged, claimed } = aligned;
   const dataDate = stats?.data_as_of?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
   const days = Array.from({ length: DAY_SLOTS }, (_, i) => addDays(dataDate, -i));
   const read = watches.length ? await readEvents(c.env, watches, days) : null;
@@ -820,7 +829,7 @@ async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, stat
   const cap = watchCap(who.plan);
   const notice = m === "cap"
     ? allowed(who, "watch_mail") ? t(lang, "watches.control_cap_pro", { cap: fmtInt(cap, lang) })
-      : t(lang, "watches.cap_free", { n: fmtInt(watches.length, lang), cap: fmtInt(cap, lang), max: fmtInt(WATCH_MAX, lang) })
+      : t(lang, "watches.cap_free", { n: fmtInt(countedWatches(watches, claimed), lang), cap: fmtInt(cap, lang), max: fmtInt(WATCH_MAX, lang) })
     : WATCH_NOTICE[m] ? t(lang, WATCH_NOTICE[m]) : null;
   // The watches' calendar feed, with how many events it holds now; no feeds
   // table on the database yet leaves it out.
@@ -833,7 +842,7 @@ async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, stat
     full: feeds.length >= FEEDS_MAX,
   };
   return accountPage(c, t(lang, "watches.title"),
-    watchesView(lang, who, { watches, read, days, mail, notice, moved, merged, calendar }), status);
+    watchesView(lang, who, { watches, read, days, mail, notice, moved, merged, calendar, claimed }), status);
 }
 
 account.get("/watches", async (c) => {
@@ -856,7 +865,7 @@ account.post("/watches", async (c) => {
   return guarded(c, async () => {
     const label = await watchLabel(c, kind, target, lang);
     if (!label) return c.redirect("/account/watches?m=gone", 303);
-    const stats = await loadStats(c.env).catch(() => null);
+    const [stats] = await Promise.all([loadStats(c.env).catch(() => null), alignWatches(c, who.userId)]);
     const result = await addWatch(c.env, who, { kind, target, segment, label }, stats?.data_as_of?.slice(0, 10) ?? null);
     if (result === "added") await audit(c.env, who.userId, "watch_added", kind);
     // At the plan's cap the post is refused with the page's own line.
@@ -930,9 +939,24 @@ account.post("/organization", async (c) => {
     if (!found) return orgPage(c, who, { errors: ["orgclaim.err_org"], status: 400 });
     await claimOrganization(c.env, who.userId, found.id);
     await audit(c.env, who.userId, "org_claimed", found.id);
-    return orgBack(c, "claimed");
+    const watched = await followClaimed(c, who, found.id, found.profile.organization.display_name);
+    return orgBack(c, watched === "cap" ? "claimed_cap" : "claimed");
   });
 });
+
+// The claimed organization followed as a watch, outside the plan's cap
+// (watches.ts ADD_WATCH_SQL): added with the default kinds when the account
+// has no watch on it, under the account's own mail setting (addWatch keeps a
+// watch_mail row that exists), and audited as the watch post audits its own.
+// After the claim is written, so the insert reads it; "cap" only when the
+// account is already over its plan's cap. A watch the account holds stays as
+// it is: nothing here deletes or changes one.
+async function followClaimed(c: Context<AppEnv>, who: Account, id: string, label: string): Promise<"added" | "exists" | "cap"> {
+  const [stats] = await Promise.all([loadStats(c.env).catch(() => null), alignWatches(c, who.userId)]);
+  const result = await addWatch(c.env, who, { kind: "organization", target: id, segment: "", label }, stats?.data_as_of?.slice(0, 10) ?? null);
+  if (result === "added") await audit(c.env, who.userId, "watch_added", "organization");
+  return result;
+}
 
 // One organization more to compare with (at most five, held inside the
 // update), or one fewer.

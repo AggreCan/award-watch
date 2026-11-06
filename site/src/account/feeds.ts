@@ -305,7 +305,8 @@ export function horizonDays(events: readonly string[]): number {
   return events.includes("ends_12m") ? WINDOW_DAYS["12m"] : events.includes("ends_6m") ? WINDOW_DAYS["6m"] : 0;
 }
 
-// One slot per watch an account can hold (entitlements.ts WATCH_MAX).
+// One slot per watch an account can hold (entitlements.ts WATCH_MAX, and the
+// claimed organization's beside them).
 export const ENDS_SLOTS = TARGET_SLOTS;
 
 // The contracts an account's organization and buyer watches hold in the

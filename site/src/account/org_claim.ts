@@ -16,8 +16,9 @@
 // Every records statement is a constant with ?N placeholders, bound only to
 // values checked before they reach it (an organization number from an
 // organization id, fiscal years and days from the data date, a segment from
-// the 57), read through the index on the column it names, and ended by a
-// LIMIT; a page view is one batch: the state row and at most eight
+// the 57), read through the index on the column it names (the instruments
+// block's apart, which scans rec_holders: see CLAIM_INSTRUMENTS_SQL), and
+// ended by a LIMIT; a page view is one batch: the state row and at most eight
 // statements (CLAIM_BATCH_MAX). The statements the views already have are
 // reused as they are (ORG_COUNTS_SQL, the radar's); the share is
 // ORG_SHARE_SQL's, narrowed to the six organizations named (CLAIM_SHARE_SQL);
@@ -59,8 +60,12 @@ export const WEEK_DAYS = 7;
 // The buyers named in the weekly block's third line before "and n more".
 export const WEEK_BUYERS_NAMED = 5;
 
+// The standing offers and supply arrangements block: INSTRUMENTS_SHOWN on the
+// page, the rest on the profile's section, all of them in the CSV file.
+export const INSTRUMENTS_SHOWN = 25;
+
 // The page's blocks, by the name of each one's CSV file.
-export const CLAIM_BLOCKS = ["years", "segments", "share", "ending", "buyers"] as const;
+export const CLAIM_BLOCKS = ["years", "segments", "share", "ending", "buyers", "instruments"] as const;
 export type ClaimBlock = (typeof CLAIM_BLOCKS)[number];
 export const isClaimBlock = (v: string): v is ClaimBlock => (CLAIM_BLOCKS as readonly string[]).includes(v);
 
@@ -132,6 +137,23 @@ export const CLAIM_BUYERS_SQL =
   "(SELECT COUNT(*) FROM rec_expiring e WHERE e.buyer = b.id AND e.endd BETWEEN ?4 AND ?5) AS n_ending " +
   `FROM (${BUYER_POOL}) p JOIN rec_buyers b ON b.bid = p.bid ORDER BY p.n DESC, b.id LIMIT ${BUYERS_MAX}`;
 
+// The standing offers and supply arrangements the organization holds now
+// (docs/sosa.md): its rows in rec_holders (one a holder name and region,
+// active holders only, as the nightly keeps them) joined to their instrument,
+// one row an instrument with its regions, the soonest expiry first and no
+// expiry last, as the profile's section orders them. ?1 the organization's
+// number. rec_holders has no index by
+// organization (its one index leads with the instrument), so the plan scans
+// it, a table of one row per active holder and region, once; CROSS JOIN keeps
+// it the outer loop whatever the planner's statistics say, so each
+// instrument is then read by its key. The page and the CSV file read the
+// same rows.
+export const CLAIM_INSTRUMENTS_SQL =
+  "SELECT i.agr AS agr, i.type_en AS type_en, i.type_fr AS type_fr, i.desc_en AS desc_en, i.desc_fr AS desc_fr, i.user_en AS user_en, " +
+  "i.user_fr AS user_fr, i.buyer AS buyer, i.start AS start, i.expiry AS expiry, group_concat(DISTINCT h.region) AS regions " +
+  "FROM rec_holders h CROSS JOIN rec_instruments i ON i.k = h.ik WHERE h.oid = ?1 GROUP BY i.k " +
+  `ORDER BY i.expiry IS NULL, i.expiry, i.agr LIMIT ${CLAIM_CSV_MAX}`;
+
 // -- the weekly block's statements (orgWeekOpening) ----------------------------------
 
 // The records naming the organization that the nightly first saw in the
@@ -157,8 +179,9 @@ export const WEEK_BUYERS_SQL =
   `ORDER BY n DESC, d.bid LIMIT ${BUYERS_MAX}) p JOIN rec_buyers rb ON rb.bid = p.bid) ` +
   `GROUP BY e.buyer ORDER BY n DESC, e.buyer LIMIT ${BUYERS_MAX}`;
 
-// Every records statement this feature reads, reused ones included, for the
-// tests that read their plans and bounds.
+// Every records statement this feature reads through an index, reused ones
+// included, for the tests that read their plans and bounds
+// (CLAIM_INSTRUMENTS_SQL, which scans, has a test of its own).
 export const CLAIM_RECORDS_SQL: readonly string[] = [
   ORG_COUNTS_SQL, CLAIM_SEGMENTS_SQL, CLAIM_SHARE_SQL, CLAIM_SHARE_LARGEST_SQL, RADAR_ROWS_END_SQL, RADAR_TOTAL_SQL, RADAR_CSV_END_SQL,
   CLAIM_BUYERS_SQL, WEEK_RECORDS_SQL, WEEK_ENDING_SQL, WEEK_BUYERS_SQL,
@@ -205,7 +228,7 @@ export function shareBinds(oid: number, competitors: readonly number[], source: 
 
 // -- the page's batch -------------------------------------------------------------------
 
-export type BlockRows = Partial<Record<"years" | "segments" | "share" | "ending" | "endingTotal" | "buyers", Row[]>>;
+export type BlockRows = Partial<Record<"years" | "segments" | "share" | "ending" | "endingTotal" | "buyers" | "instruments", Row[]>>;
 
 export type BlocksRead = { state: "ready"; asOf: string | null; rows: BlockRows } | { state: "absent" | "loading" | "failed" };
 
@@ -224,6 +247,7 @@ export async function readBlocks(
       ["ending", { sql: RADAR_ROWS_END_SQL, params: [...radar, 0] }],
       ["endingTotal", { sql: RADAR_TOTAL_SQL, params: radar }],
       ["buyers", { sql: CLAIM_BUYERS_SQL, params: [oid, f.firstDay, f.today, f.today, f.endLast] }],
+      ["instruments", { sql: CLAIM_INSTRUMENTS_SQL, params: [oid] }],
     );
   }
   const read: Read = await readRecords(env, named.map(([, q]) => q));
@@ -246,6 +270,7 @@ export async function readBlockCsv(
       { sql: CLAIM_SEGMENTS_SQL, params: [oid, f.first, f.current] },
     ]
     : block === "ending" ? [{ sql: RADAR_CSV_END_SQL, params: radarBinds(endingParams(oid, f)) }]
+    : block === "instruments" ? [{ sql: CLAIM_INSTRUMENTS_SQL, params: [oid] }]
     : [{ sql: CLAIM_BUYERS_SQL, params: [oid, f.firstDay, f.today, f.today, f.endLast] }];
   return readRecords(env, q);
 }
@@ -356,6 +381,29 @@ export async function checkOrganization(env: Env, id: string): Promise<{ id: str
   if (!live) return null;
   const moved = await loadProfile(env, live).catch(() => null);
   return moved ? { id: live, profile: moved } : null;
+}
+
+// The claimed organization's id as the data now stands: a retired id is
+// followed to the one that took its records and the row pointed there, as
+// followClaim does for the page (without the competitors). The watches
+// compare their targets with it (watches.ts ownWatch), after followAliases
+// has moved theirs, so the free watch is found on surviving ids. Null
+// without a claim or before the table exists.
+export async function followClaimedId(env: Env, userId: string, now = new Date()): Promise<string | null> {
+  let claim: Claim | null;
+  try {
+    claim = await readClaim(env, userId);
+  } catch (e) {
+    if (missingTable(e)) return null;
+    throw e;
+  }
+  if (!claim) return null;
+  const live = await checkOrganization(env, claim.organizationId);
+  if (!live || live.id === claim.organizationId) return claim.organizationId;
+  const res = await env.ACCOUNTS!.prepare(CLAIM_REPOINT_SQL).bind(live.id, now.toISOString(), userId, claim.organizationId).run();
+  if ((res.meta?.changes ?? 0) === 1) return live.id;
+  // Another request changed the claim in between: read what it wrote.
+  return (await readClaim(env, userId))?.organizationId ?? null;
 }
 
 export async function claimOrganization(env: Env, userId: string, id: string, now = new Date()): Promise<void> {

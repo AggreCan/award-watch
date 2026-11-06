@@ -163,7 +163,9 @@ export function planLine(lang: Lang, account: Pick<Account, "plan" | "planUntil"
 export function overviewView(
   lang: Lang, account: Account,
   counts: {
-    sessions: number; searches: number; cap: number; keys: number; watches?: number | null;
+    sessions: number; searches: number; cap: number; keys: number;
+    // The watches that count toward the cap, and whether the claimed organization's is held beside them (watches.ts watchCount).
+    watches?: number | null; watchesOwn?: boolean;
     // The organization the account claims (org_claim.ts claimSummary): false for none, undefined before its table exists.
     org?: { id: string; name: string | null } | false;
   },
@@ -205,7 +207,9 @@ export function overviewView(
           {counts.watches === undefined || counts.watches === null ? null : (
             <li>
               <a href="/account/watches">{t(lang, "watches.title")}</a>
-              <span class="num">{t(lang, "watches.n", { n: fmtInt(counts.watches, lang), cap: fmtInt(watchCap(account.plan), lang) })}</span>
+              <span class="num">
+                {t(lang, counts.watchesOwn ? "watches.n_own" : "watches.n", { n: fmtInt(counts.watches, lang), cap: fmtInt(watchCap(account.plan), lang) })}
+              </span>
             </li>
           )}
           {counts.org === undefined ? null : (

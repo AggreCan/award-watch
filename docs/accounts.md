@@ -1456,8 +1456,9 @@ A watch follows one page: an organization, a buyer (optionally narrowed to one
 UNSPSC segment), a single record (an award notice, a PSPC history record or a
 published contract) or an open tender notice, and lists what happens to it.
 Every signed-in account keeps watches: 3 on Free, 25 on Pro (`watchlists`,
-held to the cap inside the insert, as `addSearch` holds its own). Pro also gets
-the events by email (`watch_mail`). The code is `site/src/account/watches.ts`
+held to the cap inside the insert, as `addSearch` holds its own), plus the
+organization watch on the organization it claims (*Your organization*), which
+is outside the cap. Pro also gets the events by email (`watch_mail`). The code is `site/src/account/watches.ts`
 (the rows, merges, console figures), `watch_events.ts` (the records database's
 statements), `watch_pages.tsx` (the control and the page) and `watch_mail.ts`
 (the mail); the tests are `site/test/accounts-watches.test.ts`. The events come
@@ -1507,6 +1508,34 @@ from `rec_events` in the records database (`docs/analytics.md`, *Events*).
   id (`followAliases`); when the account already follows that id (with the
   same segment), the retired watch is deleted, and the page says how many
   moved and merged.
+- The claimed organization. An organization watch on the organization the
+  account claims (*Your organization*) does not count toward the cap; every
+  other watch does. The rule needs no table of its own. The insert
+  (`ADD_WATCH_SQL`) reads the claim in the same statement, through a
+  subquery on `org_claims` by the account's key, and counts every watch but
+  that one. A watch passes while the counted watches are under the cap; the
+  claimed organization's passes at the cap too, never over it. It is one
+  statement, so two posts at once cannot both pass.
+- A claim made (`POST /account/organization`) adds that watch when the
+  account has none on the organization: the default kinds, the account's
+  watch mail as it stands (a first watch makes the row, on), audited
+  `watch_added` as the watch post is. A second claim of the same
+  organization adds nothing. When the claim changes or is removed the watch
+  stays and counts from then on; nothing deletes a watch for it. An account
+  that a claim change leaves over its cap is refused its next watch, and the
+  new claim's watch waits (the page says so) until the account is back within
+  its plan, so moving the claim cannot pile watches up past the cap. An
+  account holds 26 watches at most; the events statements read 26 subjects of
+  a kind (`TARGET_SLOTS`).
+- The watches page marks that watch "Your organization, outside the limit"
+  ("Votre organisation, hors de la limite") and its count, like the
+  overview's, reads "N of 25, plus your organization" ("N sur 25, plus votre
+  organisation"). On the claimed organization's own page the Follow button
+  stays at the cap.
+- The claim's merges. The claim and the watches follow merges apart
+  (`followClaimedId`, `followAliases`); the watches page and both posts that
+  add a watch point both at the surviving ids before anything is counted or
+  added, so a merge does not turn the free watch into a counted one.
 
 ### The mail
 
@@ -1640,13 +1669,19 @@ weekly block) and `org_pages.tsx` (the page and the files); the tests are
   (up to 100 by records over ten fiscal years, 25 shown), each source's
   records and value apart, each buyer's open notices from the buyers index
   (linked `/tenders?buyer=`) and its contracts ending within 12 months
-  (linked `/expiring/12m?buyer=`); and the registry match as the profile
-  shows it.
+  (linked `/expiring/12m?buyer=`); the standing offers and supply
+  arrangements it holds (`docs/sosa.md`), the soonest expiry first and no
+  expiry last, each with its agreement number linked to
+  `/instruments/<number>` (the number escaped as one path segment), its
+  type, description, regions, end user (linked to the buyer when the source
+  names one) and expiry, 25 shown and a link to the profile's section for
+  the rest, the count in the panel head, or a line that it holds none; and
+  the registry match as the profile shows it.
 - Free sees the first block for the latest 3 fiscal years and every other
   block's title with the Pro chip and one line of what it holds. Pro
   (`analytics`) sees every block and a CSV file of each:
-  `/account/organization/<years|segments|share|ending|buyers>.csv`, at most
-  10,000 rows, sent `private, no-store`, a download under the per-address
+  `/account/organization/<years|segments|share|ending|buyers|instruments>.csv`,
+  at most 10,000 rows, sent `private, no-store`, a download under the per-address
   limit; anyone else gets the site's 404, and a records database that cannot
   answer gives 503.
 - The page is `private, no-store` and `noindex`. With the records database
@@ -1662,7 +1697,7 @@ weekly block) and `org_pages.tsx` (the page and the files); the tests are
 One claim per account; 5 competitors (held in the update, which writes only
 over the list the page read, and by the table's CHECK); 10 fiscal years in
 any statement; 100 buyers, 25 shown; one records batch per page view, the
-state row and at most 8 statements (6 for Pro, 1 for Free); CSV files of at
+state row and at most 8 statements (7 for Pro, 1 for Free); CSV files of at
 most 10,000 rows. Every records statement is a constant bound to checked
 values and ends in a LIMIT; the test reads each plan. The share statement
 keeps the rows and binds of the organization view's (`ORG_SHARE_SQL`) for
@@ -1671,7 +1706,23 @@ than the whole segment through `records_segment` (the organization view also
 offers the segment's largest others, which needs the whole segment); the
 test holds its rows equal to `ORG_SHARE_SQL`'s. The buyers block reads
 `rec_details_org` and, per buyer, `rec_expiring_buyer` over the radar's
-window.
+window. The instruments block (`CLAIM_INSTRUMENTS_SQL`) reads `rec_holders`
+by the organization's number, one row an instrument with its regions,
+joined to `rec_instruments` by its key, at most 10,000 rows for the page and
+the file alike. `rec_holders` has no index by organization (its one index
+leads with the instrument), so this statement scans it, one row per active
+holder and region, and is the one statement of the page that scans; `CROSS
+JOIN` keeps the holders the outer loop, so each instrument is then read by
+its key. The test reads its plan.
+
+### The claimed organization's watch
+
+The claim follows the organization as a watch outside the plan's cap
+(*Watches*): the claim post adds it with the default kinds when the account
+has none on the organization, and a second claim of the same one adds
+nothing. Changing or removing the claim leaves the watch, which then counts
+toward the cap; nothing deletes it. The watch and the claim follow a merge
+alike, and the watches compare their targets with the claim's surviving id.
 
 ### The weekly block
 
@@ -1836,9 +1887,12 @@ not in `rec_events`, so a notice's line names its buyer and closing only.
 npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
 ```
 
-Idempotent. It adds `org_claims` and its two indexes; until it runs the
-page answers 503 and the overview leaves the line out. Apply it before
-deploying.
+Idempotent. It adds `org_claims` and its two indexes. Until it runs,
+`/account/organization` answers 503 and the overview leaves its line out;
+the watches' cap reads `org_claims` too, so a Follow post answers 503 and
+the Follow button and the overview's watches line are left out. Apply it
+before deploying.
+
 Idempotent; it adds `briefings` and `briefing_deliveries`. Apply it before
 deploying: until then a signed-in reader sees no briefing panel, the run logs
 that the accounts database has no briefings table, and saved searches count
