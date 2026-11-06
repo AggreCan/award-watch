@@ -667,6 +667,35 @@ describe("the watch mail", () => {
     for (const part of [m.subject, m.html!, text]) expect(part).not.toContain(EM_DASH);
   });
 
+  it("opens the weekly message with the account's organization block, and sends the block alone when the watches have nothing", async () => {
+    quiet();
+    const mail = fakeMail();
+    const email = newEmail("m-org");
+    const user = await makeUser(email);
+    const at = "2026-10-01T00:00:00.000Z";
+    await ACCOUNTS.prepare("INSERT INTO org_claims (user_id, organization_id, segment, competitors, created_at, updated_at) VALUES (?, ?, NULL, '[]', ?, ?)")
+      .bind(user, ORG, at, at).run();
+    // A weekly watch due today with no event of its own; an award naming the organization in the week.
+    await watch(user, "buyer", "dnd-mdn", "National Defence", { cadence: "weekly", last: "2026-10-23" });
+    await events([{ kind: "award", src: 1, oid: ORG_N, cents: 50_000_000, title: "Survey", path: "/awards/aw-9", ref: "award:aw-9" }]);
+    const report = await runDeliveries(jobEnv(mail.binding));
+    expect(report.watch).toMatchObject({ sent: 1, empty: 0 });
+    const [m] = mail.to(email);
+    expect(m.subject).toMatch(/^Your organization this week: /);
+    expect(m.text).toMatch(/^Your organization: [^\n]+\n  New records naming you this week: 1 \(1 award notice\) · https:\/\/awardwatch\.ca\/organizations\/org-a000000001\/records\n/);
+    expect(m.text).not.toContain("events on");
+    for (const part of [m.subject, m.html!, m.text!]) expect(part).not.toContain(EM_DASH);
+    // The data date is a Saturday: a daily account gets no block on it, and an empty daily message stays unsent.
+    const other = newEmail("m-org-daily");
+    const daily = await makeUser(other);
+    await ACCOUNTS.prepare("INSERT INTO org_claims (user_id, organization_id, segment, competitors, created_at, updated_at) VALUES (?, ?, NULL, '[]', ?, ?)")
+      .bind(daily, ORG, at, at).run();
+    await watch(daily, "buyer", "dnd-mdn", "National Defence");
+    const second = await runDeliveries(jobEnv(mail.binding));
+    expect(second.watch).toMatchObject({ sent: 0, empty: 1 });
+    expect(mail.to(other)).toHaveLength(0);
+  });
+
   it("reads a buyer narrowed to a segment on that segment alone, every amendment in it", async () => {
     quiet();
     const mail = fakeMail();

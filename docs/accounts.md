@@ -1737,9 +1737,11 @@ organization: nothing new this week." The records database must be at the
 run's data date, or the block is left out. `watchDigest` (`digests.ts`) takes
 it as `opening` and puts it before the watches; a message with the block and
 no watch event carries the block alone, under its own subject. The watch
-mail's run (`watch_mail.ts`) does not call it yet; when it does, it passes
-the block on the account's weekly day and sends a message that would
-otherwise be empty when the block has a line.
+mail's run (`watch_mail.ts` `runWatchMail`) reads it on the account's weekly
+day (a day one of its weekly watches is due, or Monday for an account whose
+watches are all daily, `WEEK_OPENING_DAY`) and sends a message that would
+otherwise be empty when the block has a line; a fault in reading it leaves
+the message without the block.
 
 ### Privacy and the console
 

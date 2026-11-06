@@ -32,6 +32,7 @@ import type { Env } from "../env";
 import { segmentShort, type Lang } from "../i18n";
 import { ROWS_MAX, STOP_CODES, isDue, sendWithHeaders, spanStart } from "./deliveries";
 import { type WatchGroup, siteLink, watchDigest } from "./digests";
+import { orgWeekOpening } from "./org_claim";
 import { allowed, planFor, type Plan } from "./entitlements";
 import { type RecordsWait, missingTable } from "./records_deliveries";
 import { randomHex } from "./secrets";
@@ -196,6 +197,9 @@ async function mailSecret(env: Env, userId: string): Promise<string | null> {
 // room: the messages the run may still send (the cap less what the saved
 // searches sent). stop: why the run stopped early (a sending limit's code, or
 // the cap), for the caller's report and log line.
+// The weekday (Date.getUTCDay) the organization block opens a daily account's message: Monday, the weekly briefing's day.
+export const WEEK_OPENING_DAY = 1;
+
 export async function runWatchMail(
   env: Env, o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string },
 ): Promise<{ report: WatchReport; stop: string | null; capped: boolean }> {
@@ -239,12 +243,19 @@ export async function runWatchMail(
         break;
       }
       const lang = a.lang === "fr" ? "fr" : "en";
+      // The "Your organization" block (org_claim.ts) opens the account's weekly
+      // message: the day a weekly watch of its is due, or Monday (the
+      // briefing's day) for an account whose watches are all daily. A fault
+      // in reading it leaves the message without the block.
+      const weekly = due.some((w) => w.cadence === "weekly") || new Date(`${dataDate}T00:00:00Z`).getUTCDay() === WEEK_OPENING_DAY;
+      const opening = weekly ? await orgWeekOpening(env, { userId: a.user_id, lang, site, dataDate }).catch(() => null) : null;
       const closed = due.filter((w) => {
         const shut = w.kind === "tender" ? closedOn(read.found.get(foundKey(w))) : null;
         return !!shut && spans.get(w.id)!.has(shut);
       }).map((w) => w.id);
       const { groups, total } = groupsFor(lang, due, read, spans);
-      if (!total) {
+      // A message with nothing from the watches still goes when the block has a line (the block alone, under its own subject).
+      if (!total && !opening?.lines.length) {
         if (!(await claim(env, a.user_id, dataDate, now))) continue;
         held = a;
         await covered(env, a.user_id, "empty", 0, now, dataDate, due, closed);
@@ -266,7 +277,7 @@ export async function runWatchMail(
         continue;
       }
       const stopUrl = siteLink(site, `/account/stop?w=${a.user_id}&t=${secret}`, lang);
-      const message = watchDigest({ lang, to: a.email, site, dataDate, stopUrl, groups, total, watched: all.length });
+      const message = watchDigest({ lang, to: a.email, site, dataDate, stopUrl, groups, total, watched: all.length, opening });
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {
         held = null;
