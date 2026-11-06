@@ -60,7 +60,7 @@ describe("organization profile", () => {
     expect(awards).toContain('<span class="flag flag-yes" title="The source records the contract as awarded through a competition');
     const contracts = section(page, "contracts");
     expect(contracts.match(/<tr>/g)?.length).toBe(101);
-    expect(contracts).toContain(`<a href="${contractSearchUrl("C-2026-000")}" class="mono" rel="nofollow noopener">C-2026-000</a>`);
+    expect(contracts).toContain(`<a href="${contractSearchUrl("C-2026-000")}" class="mono wrap" rel="nofollow noopener">C-2026-000</a>`);
     expect(contracts).toContain("Value as last reported: $36,001");
     expect(contracts).toContain('<span class="flag flag-unstated" title="The source leaves the procurement method blank for this record.">Method not stated</span>');
     expect(contracts).toContain('Showing the newest 100 of 101 records. The other one is in <a href="https://open.canada.ca/data/en/dataset/d8f85d91-7dec-4fd1-8055-483b77225d8b">the publisher&#39;s file</a>.');
@@ -82,7 +82,7 @@ describe("organization profile", () => {
     expect(history).toContain('<th class="k-buyer mdh"><button type="button" class="th-sort">Client department</button></th>');
     expect(history).toContain('<span class="flag flag-no" title="The source&#39;s own term for a contract awarded without a competition');
     const grants = section(two, "grants");
-    expect(grants).toContain(`<a href="${grantUrl("dfo-mpo", "GC-2025-0099")}" class="mono" rel="nofollow noopener">GC-2025-0099</a>`);
+    expect(grants).toContain(`<a href="${grantUrl("dfo-mpo", "GC-2025-0099")}" class="mono wrap" rel="nofollow noopener">GC-2025-0099</a>`);
     expect(grants).toContain("Small Craft Harbours");
     expect(grants).toContain(">Contribution</td>");
     // A cancelled notice is marked as such where it is listed.

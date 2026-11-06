@@ -317,7 +317,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                       ) : null}
                     </td>
                     <td data-label={t(lang, "col.method")}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
-                    <td data-label={t(lang, "col.record")}><a href={contractSearchUrl(r.reference)} class="mono" rel="nofollow noopener">{r.reference}</a></td>
+                    {/* A published contract's or a grant's reference runs to 30 characters ("199-2019-2020-Q4- CSGC16725277"), past the record column; it wraps at its hyphens rather than widening the table into a scroll. */}
+                    <td data-label={t(lang, "col.record")}><a href={contractSearchUrl(r.reference)} class="mono wrap" rel="nofollow noopener">{r.reference}</a></td>
                   </tr>
                 ))}
               </tbody>
@@ -355,7 +356,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                     <td data-label={t(lang, "grant.type")}>{g.agreement_type && AGREEMENT_TYPE[g.agreement_type] ? t(lang, AGREEMENT_TYPE[g.agreement_type]) : g.agreement_type ?? ""}</td>
                     <td data-label={t(lang, "col.value")} class="mono num">{money(lang, g.value)}</td>
                     <td data-label={t(lang, "col.record")}>
-                      <a href={grantUrl(g.owner_org, g.reference)} class="mono" rel="nofollow noopener">{g.reference}</a>
+                      <a href={grantUrl(g.owner_org, g.reference)} class="mono wrap" rel="nofollow noopener">{g.reference}</a>
                       {g.amendment > 0 ? <span class="muted small"> {t(lang, "grant.amendment", { n: g.amendment })}</span> : null}
                     </td>
                   </tr>
