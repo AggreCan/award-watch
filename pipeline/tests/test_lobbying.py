@@ -318,7 +318,7 @@ def test_a_refusal_with_a_seed_copy_reads_the_copy_on_the_weekly_cadence(seeded,
     assert get_meta(conn, "lobbying_loaded_at") == "2026-11-08T00:00:00Z" and seed.is_file()
 
 
-def test_a_seed_copy_added_during_a_hold_is_read_when_the_hold_ends(seeded, fixtures, fake_client, tmp_path):
+def test_a_seed_copy_added_during_a_hold_is_read_at_once_and_the_hold_stays(seeded, fixtures, fake_client, tmp_path):
     conn = seeded
     client = fake_client({URL: FakeResponse(403)})
     calls = client.fake_session.calls
@@ -328,12 +328,24 @@ def test_a_seed_copy_added_during_a_hold_is_read_when_the_hold_ends(seeded, fixt
 
     assert run("2026-11-01T00:00:00Z").state == "refused: HTTP 403"
     seed_zip(fixtures)
-    # The hold governs when the host is asked; the copy waits for it.
-    assert run("2026-11-04T00:00:00Z").state == "held: refused on 2026-11-01" and len(calls) == 2
-    assert reports(conn) == {}
-    result = run("2026-11-08T00:00:00Z")
-    assert result.state == "read (seed)" and len(asked(calls)) == 2 and len(reports(conn)) == 5
+    # The hold governs when the host is asked, not when a copy at hand is read:
+    # the seed is read at once, with no request to the host or the archive's
+    # index (asked on 2026-11-01, so not due), and the hold stays.
+    result = run("2026-11-04T00:00:00Z")
+    assert result.state == "read (seed)" and len(calls) == 2 and len(reports(conn)) == 5
+    assert get_meta(conn, "lobbying:refused_until") == "2026-11-08"
+    # The next day the copy is the one already loaded: the hold is reported, nothing is asked,
+    # and the weekly cadence from the read stays where it was.
+    assert run("2026-11-05T00:00:00Z").state == "held: refused on 2026-11-01" and len(calls) == 2
+    assert get_meta(conn, "lobbying_loaded_at") == "2026-11-04T00:00:00Z"
+    # The seed's read set the weekly cadence, so the end of the hold alone asks nothing.
+    assert run("2026-11-08T00:00:00Z").state == "not due" and len(calls) == 2
+    # A week after the read the host is asked again; refused again, the copy stands in, unchanged.
+    result = run("2026-11-11T00:00:00Z")
+    assert result.state == "unchanged (seed)" and len(asked(calls)) == 2 and len(reports(conn)) == 5
+    # With a copy standing in, no hold is needed: the weekly cadence alone spaces the requests.
     assert get_meta(conn, "lobbying:refused_until") is None
+    assert get_meta(conn, "lobbying_loaded_at") == "2026-11-11T00:00:00Z"
 
 
 def test_the_live_file_takes_over_the_day_the_host_answers_and_no_older_copy_is_read_after(seeded, fixtures,

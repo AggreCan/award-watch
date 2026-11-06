@@ -74,11 +74,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .. import config, organizations
-from ..db import get_meta, log_run, now_iso, set_meta
+from ..db import get_meta, log_run, now_iso, set_meta, hours_since
 from ..http import FetchError, PoliteClient
 from ..normalize import fold_accents, iso_date, squash
 from . import buyers, matching
-from .contracts import BATCH, LayoutError, StandIn, WeeklyFile, _shown, refresh
+from .contracts import BATCH, LayoutError, StandIn, WeeklyFile, _read_stand_in, _shown, refresh, sha256
 
 log = logging.getLogger(__name__)
 
@@ -534,8 +534,9 @@ class _Copies:
     """
 
     def __init__(self, conn: sqlite3.Connection, client: PoliteClient, seed: Path, capture_path: Path,
-                 notices: list[str]) -> None:
+                 notices: list[str], stamp: str) -> None:
         self.conn = conn
+        self.stamp = stamp
         self.client = client
         self.seed = seed
         self.capture_path = capture_path
@@ -543,12 +544,13 @@ class _Copies:
         self.capture: Capture | None = None
         self.chosen: StandIn | None = None
 
-    def __call__(self) -> StandIn | None:
+    def __call__(self, archive: bool = True) -> StandIn | None:
+        """The copy to read, or None. archive False looks at the seed alone (a hold's runs between index queries)."""
         held = get_meta(self.conn, SPEC.key("file_date"))
         seed = self.seed if self.seed.is_file() else None
         best = StandIn(seed) if seed is not None else None
         best_date = file_date(seed) if seed is not None else None
-        found = self._capture(max((d for d in (best_date, held) if d), default=None))
+        found = self._capture(max((d for d in (best_date, held) if d), default=None)) if archive else None
         # The seed wins a tie; a seed with no date is no zip, and loses.
         if found is not None and (best is None or best_date is None or (found[1] or "") > best_date):
             best, best_date = found
@@ -560,6 +562,9 @@ class _Copies:
 
     def _capture(self, newest: str | None) -> tuple[StandIn, str | None] | None:
         """The archive's newest capture with its file_date, when it may be newer than newest; None otherwise."""
+        # One index query per weekly check, counted from here whatever it finds.
+        set_meta(self.conn, SPEC.key("archive_checked_at"), self.stamp)
+        self.conn.commit()
         capture = newest_capture(self.client)
         if capture is None:
             return None
@@ -618,6 +623,12 @@ class LobbyingResult:
                 f"redacted={s.redacted}")
 
 
+def _archive_due(conn: sqlite3.Connection, stamp: str) -> bool:
+    """Whether a week has passed since the archive's index was last asked (never asked counts as due)."""
+    age = hours_since(conn, SPEC.key("archive_checked_at"), now=stamp)
+    return age is None or age >= CHECK_EVERY_DAYS * 24
+
+
 def _held(conn: sqlite3.Connection, stamp: str) -> str | None:
     """The notice for a refusal still being honoured; None when the stage may ask again."""
     until = get_meta(conn, SPEC.key("refused_until"))
@@ -645,19 +656,36 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | Non
     buyers.take_rejects(conn)
     conn.commit()
     held = _held(conn, stamp) if samples is None else None
-    if held:
-        result.state = f"held: refused on {get_meta(conn, SPEC.key('refused_on'))}"
-        result.notices.append(held)
-        return _log(conn, result)
     drops = matching.PersonDrops()
     copies = None
     if samples is None and client is not None:
         copies = _Copies(conn, client, config.SEEDS_DIR / SPEC.file_name,
-                         (work_dir or config.WORK_DIR) / ARCHIVE_FILE, result.notices)
+                         (work_dir or config.WORK_DIR) / ARCHIVE_FILE, result.notices, stamp)
+    load = lambda path: load_zip(conn, path, now=stamp, drops=drops)  # noqa: E731
+    if held:
+        # A refusal being honoured is the case the stand-ins exist for: a copy
+        # that is newer than the rows is read now rather than after the hold,
+        # which stays, so the host is still asked again only when it ends.
+        result.notices.append(held)
+        # The seed is at hand and costs nothing to look at; the archive's index
+        # is asked on the weekly cadence only.
+        chosen = copies(archive=_archive_due(conn, stamp)) if copies is not None else None
+        # A copy the table already holds changes nothing, and must not move the
+        # weekly cadence, or the host would never be asked again while a seed
+        # sits in the folder.
+        if chosen is None or chosen.path is None or sha256(chosen.path) == get_meta(conn, SPEC.key("sha256")):
+            result.state = f"held: refused on {get_meta(conn, SPEC.key('refused_on'))}"
+            if copies is not None:
+                copies.capture_path.unlink(missing_ok=True)
+            return _log(conn, result)
+        try:
+            result.state, result.stats = _read_stand_in(conn, SPEC, load, chosen, stamp=stamp)
+        finally:
+            copies.capture_path.unlink(missing_ok=True)
+        return _finish(conn, result, copies, drops, stamp, samples=None, review_dir=review_dir, holding=True)
     try:
         result.state, result.stats = refresh(
-            conn, client, SPEC, lambda path: load_zip(conn, path, now=stamp, drops=drops),
-            stamp=stamp, samples=samples, work_dir=work_dir, stand_in=copies,
+            conn, client, SPEC, load, stamp=stamp, samples=samples, work_dir=work_dir, stand_in=copies,
         )
     except FetchError as exc:
         if exc.status is None or not 400 <= exc.status < 500:
@@ -674,6 +702,12 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | Non
     finally:
         if copies is not None:
             copies.capture_path.unlink(missing_ok=True)
+    return _finish(conn, result, copies, drops, stamp, samples=samples, review_dir=review_dir, holding=False)
+
+
+def _finish(conn: sqlite3.Connection, result: LobbyingResult, copies: "_Copies | None", drops: matching.PersonDrops,
+            stamp: str, *, samples: Path | None, review_dir: Path | None, holding: bool) -> LobbyingResult:
+    """The stage's tail after a load: the stand-in's notice, the end of a refusal (unless the hold stays), the review file."""
     if copies is not None and copies.chosen is not None:
         # A copy stood in for the refusal: the notice names it. The table's
         # checksum is the copy's, read or unchanged.
@@ -681,11 +715,11 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | Non
             set_meta(conn, SPEC.key("archive_capture"), copies.capture.key)
         result.notices.append(copies.notice(get_meta(conn, SPEC.key("sha256")) or "",
                                             read=result.state.startswith("read")))
-    if samples is None:
+    if samples is None and not holding:
         conn.execute("DELETE FROM meta WHERE key IN (?, ?, ?)",
                      (SPEC.key("refused_on"), SPEC.key("refused_status"), SPEC.key("refused_until")))
         conn.commit()
-    elif result.state == "no sample":
+    elif samples is not None and result.state == "no sample":
         result.notices.append(f"lobbying: no {SPEC.sample_name} in the samples folder; not downloaded (samples run)")
     stats = result.stats
     if stats is not None:
