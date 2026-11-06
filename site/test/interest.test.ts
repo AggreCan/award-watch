@@ -113,7 +113,7 @@ describe("the alerts block on each page", () => {
     expect(block.match(/<button/g)).toHaveLength(1);
     expect(block.match(/<input name="email"/g)).toHaveLength(1);
     expect(block).toContain(
-      'Email lists are part of Pro once accounts open, and your list will be waiting in your account; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+      'Email lists are part of Pro. Sign in with this address and the list is waiting in your account as a saved search; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
     );
     expect(block).toContain('<a href="/alerts">How email lists work</a>');
     // The script only keeps the reader on the page; the form posts without it.
@@ -259,7 +259,7 @@ describe("POST /interest", () => {
     expect(html).toContain(
       '<p class="interest-done" role="status">Noted: fragment@example.ca, for new tender notices and award notices in segment 82 Editorial and Design and Graphic and Fine Art Services.</p>',
     );
-    expect(html).toContain("Email lists are part of Pro once accounts open, and your list will be waiting in your account;");
+    expect(html).toContain("Email lists are part of Pro. Sign in with this address and the list is waiting in your account as a saved search;");
     const bad = await post({ email: "nope", kind: "segment", params: "/segments/82", lang: "en" }, { "x-interest-fragment": "1" });
     expect(bad.status).toBe(400);
     const again = await bad.text();
@@ -303,8 +303,7 @@ describe("the alerts page and the privacy page", () => {
     expect(html).toContain("<h1>Email Lists</h1>");
     expect(html).toContain("<title>Email Alerts for New Federal Tenders | Award Watch</title>");
     expect(decode(html)).toContain(
-      "Email lists are part of Pro, the site's paid plan, once accounts open. Sign up now and your lists will be waiting in your account. " +
-      "Nothing is sent before then except one message saying accounts are open.",
+      "Email lists are part of Pro, the site's paid plan. Accounts are open: sign in with your address and each list becomes a saved search, sent daily or weekly on Pro. The form below keeps a list for an address that has no account yet.",
     );
     // A few short sections: no contents box. The chooser comes first, the page's own action.
     expect(html).toContain('<div class="doc-layout doc-alone"><div class="doc"><h2 id="register">Choose Your Lists</h2>');
@@ -312,11 +311,11 @@ describe("the alerts page and the privacy page", () => {
     expect(html).toContain("On the Pro plan, each list is a saved search on your account, sent by email each day or each week with what is new in it.");
     expect(html).toContain("Contracts entering the 3-, 6- or 12-month window of contracts ending soon, for one buyer, one segment or every contract.");
     expect(html).toContain("New records naming an organization you watch: an award notice, a contract or a grant.");
-    expect(html).toContain("The form keeps the address and each list chosen. When accounts open, one message will say so, with a link to unsubscribe. " +
-      "Create an account with the same address and the lists will be there, ready to add to its saved searches. The address is never shown or shared.");
+    expect(html).toContain("The form keeps the address and each list chosen, and sends nothing itself. Sign in with the same address, now or later, " +
+      "and the lists are there, ready to add to the account's saved searches; delivery by email comes with Pro.");
     // The chooser's note names the lists, several of them.
     expect(html).toContain(
-      'Email lists are part of Pro once accounts open, and your lists will be waiting in your account; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+      'Email lists are part of Pro. Sign in with this address and the lists are waiting in your account as a saved search; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
     );
     for (const href of ["/tenders", "/expiring", "/organizations", "/buyers", "/segments", "/privacy#interest"]) {
       expect(html, href).toContain(`<a href="${href}">`);
@@ -334,8 +333,8 @@ describe("the alerts page and the privacy page", () => {
     const french = nbsp(await fr.text());
     expect(french).toContain("<h1>Listes de diffusion</h1>");
     expect(french).toContain("<title>Alertes courriel des appels d’offres fédéraux | Award Watch</title>");
-    expect(french).toContain("Les listes de diffusion font partie de Pro, le forfait payant du site, dès l’ouverture des comptes.");
-    expect(french).toContain("D’ici là, rien n’est envoyé, sauf un message annonçant l’ouverture des comptes.");
+    expect(french).toContain("Les listes de diffusion font partie de Pro, le forfait payant du site. Les comptes sont ouverts :");
+    expect(french).toContain("Le formulaire ci-dessous conserve une liste pour une adresse qui n’a pas encore de compte.");
     expect(french).toContain('<h2 id="cover">Ce que Pro envoie</h2>');
     expect(french).toContain('<h2 id="register">Choisissez vos listes</h2>');
     expect(french).toContain("Rien n’est encore envoyé.");
@@ -410,11 +409,11 @@ describe("the email lists as part of Pro", () => {
 
   it("says Pro on the Email lists page, in the rail and under every page's form, in both languages, with no price", async () => {
     const en = decode(await text("/alerts"));
-    expect(en).toContain("<p class=\"lead\">Email lists are part of Pro, the site's paid plan, once accounts open.");
+    expect(en).toContain("<p class=\"lead\">Email lists are part of Pro, the site's paid plan. Accounts are open:");
     // The rail's item under Your lists carries the Pro chip once the switch is on (test/pro-mark.test.ts).
     expect(en).toContain('<a class="rail-item" href="/alerts"><span class="rail-label">Email lists</span></a>');
     const french = nbsp(decode(await text("/alerts?lang=fr")));
-    expect(french).toContain("<p class=\"lead\">Les listes de diffusion font partie de Pro, le forfait payant du site, dès l’ouverture des comptes.");
+    expect(french).toContain("<p class=\"lead\">Les listes de diffusion font partie de Pro, le forfait payant du site. Les comptes sont ouverts :");
     expect(french).toContain('<a class="rail-item" href="/alerts"><span class="rail-label">Listes de diffusion</span></a>');
     // The page names no price and promises no delivery without the plan.
     for (const page of [en, french]) {
@@ -424,10 +423,10 @@ describe("the email lists as part of Pro", () => {
     // Every page's block says it in one sentence, the same in each place.
     for (const path of BLOCK_PAGES) {
       expect(block(await text(path)), path).toContain(
-        'Email lists are part of Pro once accounts open, and your list will be waiting in your account; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+        'Email lists are part of Pro. Sign in with this address and the list is waiting in your account as a saved search; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
       );
       expect(nbsp(block(await text(fr(path)))), path).toContain(
-        "Les listes de diffusion font partie de Pro dès l’ouverture des comptes, et votre liste vous attendra dans votre compte; " +
+        "Les listes de diffusion font partie de Pro. Connectez-vous avec cette adresse et la liste vous attend dans votre compte comme recherche enregistrée; " +
         'la page <a href="/privacy#interest">Confidentialité</a> indique ce que conserve le formulaire.',
       );
     }

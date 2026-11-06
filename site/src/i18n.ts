@@ -2027,8 +2027,8 @@ const STRINGS = {
   "interest.email": { en: "Email address", fr: "Adresse courriel" },
   "interest.submit": { en: "Notify me", fr: "M'avertir" },
   "interest.note": {
-    en: "Email lists are part of Pro once accounts open, and your list will be waiting in your account; the {privacy} page says what the form keeps.",
-    fr: "Les listes de diffusion font partie de Pro dès l'ouverture des comptes, et votre liste vous attendra dans votre compte; la page {privacy} indique ce que conserve le formulaire.",
+    en: "Email lists are part of Pro. Sign in with this address and the list is waiting in your account as a saved search; the {privacy} page says what the form keeps.",
+    fr: "Les listes de diffusion font partie de Pro. Connectez-vous avec cette adresse et la liste vous attend dans votre compte comme recherche enregistrée; la page {privacy} indique ce que conserve le formulaire.",
   },
   "interest.done": { en: "Noted: {email}, for {label}.", fr: "C'est noté : {email}, pour {label}." },
   "interest.watch_note": {
@@ -2069,8 +2069,8 @@ const STRINGS = {
   },
   "alerts.title": { en: "Email Lists", fr: "Listes de diffusion" },
   "alerts.lead": {
-    en: "Email lists are part of Pro, the site's paid plan, once accounts open. Sign up now and your lists will be waiting in your account. Nothing is sent before then except one message saying accounts are open.",
-    fr: "Les listes de diffusion font partie de Pro, le forfait payant du site, dès l'ouverture des comptes. Inscrivez-vous maintenant et vos listes vous attendront dans votre compte. D'ici là, rien n'est envoyé, sauf un message annonçant l'ouverture des comptes.",
+    en: "Email lists are part of Pro, the site's paid plan. Accounts are open: sign in with your address and each list becomes a saved search, sent daily or weekly on Pro. The form below keeps a list for an address that has no account yet.",
+    fr: "Les listes de diffusion font partie de Pro, le forfait payant du site. Les comptes sont ouverts : connectez-vous avec votre adresse et chaque liste devient une recherche enregistrée, envoyée chaque jour ou chaque semaine avec Pro. Le formulaire ci-dessous conserve une liste pour une adresse qui n'a pas encore de compte.",
   },
   "alerts.toc_cover": { en: "What Pro Delivers", fr: "Ce que Pro envoie" },
   "alerts.cover_intro": {
@@ -2093,10 +2093,10 @@ const STRINGS = {
     en: "New award notices and contracts from one buyer, and new tender and award notices in one UNSPSC segment.",
     fr: "Les nouveaux avis d'attribution et contrats d'un acheteur, et les nouveaux avis d'appel d'offres et d'attribution d'un segment UNSPSC.",
   },
-  "alerts.toc_now": { en: "Until Then", fr: "D'ici là" },
+  "alerts.toc_now": { en: "Without an Account", fr: "Sans compte" },
   "alerts.now": {
-    en: "Nothing is sent yet. The form keeps the address and each list chosen. When accounts open, one message will say so, with a link to unsubscribe. Create an account with the same address and the lists will be there, ready to add to its saved searches. The address is never shown or shared.",
-    fr: "Rien n'est encore envoyé. Le formulaire conserve l'adresse et chaque liste choisie. À l'ouverture des comptes, un seul message le signalera, avec un lien de désabonnement. Créez un compte avec la même adresse et les listes y seront, prêtes à être ajoutées à ses recherches enregistrées. L'adresse n'est jamais affichée ni communiquée.",
+    en: "The form keeps the address and each list chosen, and sends nothing itself. Sign in with the same address, now or later, and the lists are there, ready to add to the account's saved searches; delivery by email comes with Pro. The address is never shown or shared, and a link in any message removes it.",
+    fr: "Le formulaire conserve l'adresse et chaque liste choisie et n'envoie rien lui-même. Connectez-vous avec la même adresse, maintenant ou plus tard, et les listes y sont, prêtes à être ajoutées aux recherches enregistrées du compte; l'envoi par courriel vient avec Pro. L'adresse n'est jamais affichée ni communiquée, et un lien dans tout message la retire.",
   },
   "alerts.privacy": {
     en: "The {privacy} page says what the form keeps and how to have the address removed.",
