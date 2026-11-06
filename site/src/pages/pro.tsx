@@ -68,6 +68,7 @@ export function proFaq(lang: Lang, price: ProPrice | null): Faq[] {
       : []),
     qa("propage.q_free", t(lang, "propage.a_free")),
     qa("propage.q_alerts", t(lang, "propage.a_alerts", { n: fmtInt(RULES.pro.saved_searches, lang) })),
+    qa("propage.q_recompete", t(lang, "propage.a_recompete")),
     qa("propage.q_source", t(lang, "propage.a_source")),
     qa("propage.q_cancel", t(lang, "billing.renewal")),
     qa("propage.q_seller", t(lang, "propage.a_seller")),

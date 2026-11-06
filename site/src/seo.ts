@@ -219,8 +219,8 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/pro",
     name: { en: "Pro: Tender Alerts and Contracts Ending", fr: "Pro : alertes et contrats prenant fin" },
     description: {
-      en: "Pro adds same-day tender notices, the full 6- and 12-month lists of contracts ending, saved searches sent by email, analytics and a keyed API.",
-      fr: "Pro ajoute les avis du jour même, les listes de 6 et 12 mois des contrats prenant fin, l'envoi des recherches par courriel, les analyses et une API.",
+      en: "Pro adds same-day tender notices, the 6- and 12-month lists of contracts ending (the recompetes ahead), watchlists, email alerts, analytics and an API.",
+      fr: "Pro ajoute les avis du jour même, les listes de 6 et 12 mois des contrats prenant fin (les remises en concurrence), les suivis, les alertes et une API.",
     },
   },
 };

@@ -213,7 +213,10 @@ describe("the Pro page", () => {
     // The questions, word for word as the page shows them.
     expect(faq["@type"]).toBe("FAQPage");
     expect(faq.mainEntity.length).toBeGreaterThanOrEqual(4);
-    expect(faq.mainEntity.length).toBeLessThanOrEqual(6);
+    expect(faq.mainEntity.length).toBeLessThanOrEqual(7);
+    // The one page allowed the capture manager's word (the radar never says it).
+    expect(page).toContain("the recompetes in their field");
+    expect(page).toContain("<h3>Does Pro show recompetes?</h3>");
     for (const q of faq.mainEntity) {
       expect(page).toContain(`<h3>${q.name}</h3>`);
       expect(page).toContain(`<p>${q.acceptedAnswer.text}</p>`);
@@ -229,6 +232,7 @@ describe("the Pro page", () => {
     // The markup keeps the decimal point, as schema.org reads a price.
     expect(product.offers[0].price).toBe("21.50");
     expect(faq.inLanguage).toBe("fr");
+    expect(page).toContain("remises en concurrence");
   });
 
   it("names no price and carries no Product while the checkout is not configured", async () => {

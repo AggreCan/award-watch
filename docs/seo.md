@@ -72,7 +72,8 @@ both languages; the last column is the page that answers.
 | A paid tool for all of the above | government procurement intelligence Canada | renseignement sur les marchés publics fédéraux | `/pro`, `/` |
 
 Two limits on the words the site uses. The radar's pages describe end dates
-and never advise, so they never say "opportunity" or "recompete"; their
+and never advise, so they never say "opportunity" or "recompete" (the Pro
+page alone may say "recompete", by the operator's ruling of 2026-11-05); their
 titles say "contracts ending" and "incumbents", which cover the same
 searches. And no other service is named anywhere on the site.
 
@@ -152,6 +153,5 @@ Pro.
    live, and the URL Inspection tool on one page in each language.
 4. A wide social image (1200 by 630) would fill a shared card better than
    the square mark; it needs a design.
-5. The radar's rule keeps "recompete" off the site. If the operator wants
-   the word on the Pro page alone, that is a ruling to make; it is the term
-   capture managers type.
+5. Done 2026-11-06: the Pro page says "recompete" (its "who it is for" line,
+   a question, the description); the radar's pages still never do.

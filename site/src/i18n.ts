@@ -2922,8 +2922,8 @@ const STRINGS = {
     fr: "Les rédacteurs de soumissions et les petits fournisseurs qui veulent un avis le jour où AchatsCanada le publie, et non le lendemain.",
   },
   "propage.who_capture": {
-    en: "Capture and business development staff who track which contracts in their field end within the year, who holds them and how they were awarded.",
-    fr: "Les équipes de développement des affaires qui suivent les contrats de leur domaine qui prennent fin dans l'année, qui les détient et comment ils ont été attribués.",
+    en: "Capture and business development staff who track the recompetes in their field: which contracts end within the year, who holds them and how they were awarded.",
+    fr: "Les équipes de développement des affaires qui suivent les remises en concurrence de leur domaine : quels contrats prennent fin dans l'année, qui les détient et comment ils ont été attribués.",
   },
   "propage.who_research": {
     en: "Consultants, researchers and journalists who follow a department, a supplier or a segment over several fiscal years and want the tables as CSV.",
@@ -2959,6 +2959,13 @@ const STRINGS = {
   "propage.a_source": {
     en: "From the Government of Canada's open data: CanadaBuys tender and award notices, PSPC contract history, the contracts over $10,000 and the grants departments publish, and the Registry of Lobbyists. The site reads them every night; the same-day notices are read from CanadaBuys every two hours through the business day.",
     fr: "Des données ouvertes du gouvernement du Canada : les avis d'appel d'offres et d'attribution d'AchatsCanada, l'historique des contrats de SPAC, les contrats de plus de 10 000 $ et les subventions que publient les ministères, et le Registre des lobbyistes. Le site les lit chaque nuit; les avis du jour même sont lus sur AchatsCanada toutes les deux heures pendant la journée de travail.",
+  },
+  // "Recompete" is allowed on the Pro page alone (the operator, 2026-11-05):
+  // the radar's pages describe end dates and give no advice (test/expiring.test.ts ADVICE).
+  "propage.q_recompete": { en: "Does Pro show recompetes?", fr: "Pro montre-t-il les remises en concurrence?" },
+  "propage.a_recompete": {
+    en: "Yes. The 6- and 12-month windows list every contract ending in the period with its holder, its buyer and how it was awarded, and the analytics show a buyer's or a segment's contracts ending by quarter. Watch an organization or a buyer and Pro writes to you as its contracts near their end.",
+    fr: "Oui. Les périodes de 6 et 12 mois énumèrent chaque contrat qui prend fin, avec son détenteur, son acheteur et sa méthode d'attribution, et les analyses montrent les contrats d'un acheteur ou d'un segment qui prennent fin par trimestre. Suivez une organisation ou un acheteur et Pro vous écrit quand ses contrats approchent de leur fin.",
   },
   "propage.q_cancel": { en: "Can I cancel?", fr: "Puis-je annuler?" },
   "propage.q_seller": { en: "Who sells Pro?", fr: "Qui vend Pro?" },
