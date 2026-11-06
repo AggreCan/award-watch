@@ -47,9 +47,9 @@ const STRINGS = {
   // and minutes to the next scheduled run; "now" within its last minute.
   "refresh.daily": { en: "Daily refresh in {left}", fr: "Actualisation quotidienne dans {left}" },
   "refresh.daily_now": { en: "Daily refresh now", fr: "Actualisation quotidienne maintenant" },
-  // "2-hourly" says the cadence; the same-day page explains what a cut is.
-  "refresh.same_day": { en: "2-hourly refresh in {left}", fr: "Actualisation aux 2 h dans {left}" },
-  "refresh.same_day_now": { en: "2-hourly refresh now", fr: "Actualisation aux 2 h maintenant" },
+  // "Sub-daily" (operator, 2026-11-06); the same-day page explains the cadence and what a cut is.
+  "refresh.same_day": { en: "Sub-daily refresh in {left}", fr: "Actualisation en journée dans {left}" },
+  "refresh.same_day_now": { en: "Sub-daily refresh now", fr: "Actualisation en journée maintenant" },
   "refresh.hm": { en: "{h}h {m}m", fr: "{h} h {m} min" },
   "refresh.m": { en: "{m}m", fr: "{m} min" },
 
