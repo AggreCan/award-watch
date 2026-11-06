@@ -5,14 +5,18 @@ Every expected value is written out from the seed and the changes below, never r
 
 from __future__ import annotations
 
+import csv
 import json
 import sqlite3
 from pathlib import Path
 
 import pytest
 
+from awardwatch_pipeline import organizations
 from awardwatch_pipeline import records_db as rd
 from awardwatch_pipeline.db import set_meta
+from awardwatch_pipeline.normalize import norm_name, org_id
+from awardwatch_pipeline.sources import sosa
 from export_seed import ACME, NORTH, award, seed
 
 SHOWN = ("day", "kind", "src", "oid", "buyer", "sid", "ref", "cents", "ocents", "endd", "oendd", "closing", "oclosing", "namd",
@@ -318,6 +322,136 @@ def test_a_data_date_before_the_last_one_derives_nothing_and_keeps_the_rows(worl
     back = night(w, "2026-10-31")
     assert sum(v for k, v in back["events"].items() if k != "capped") == 0 and back["deletes"]["rec_events"] == 0
     assert in_d1(w, "notice") == held
+
+
+# -- standing offers and supply arrangements ----------------------------------------------------
+
+RMSO = "E60ZT-120002/001/ZT"
+RMSO_PATH = "/instruments/E60ZT-120002%2F001%2FZT"
+EXEMPLAR = "Exemplar Environmental Consulting Ltd."
+COASTAL = "Coastal Geomatics Limited"
+INSTRUMENT_KINDS = ("instrument_gained", "instrument_lost", "instrument_expires_6m")
+SOSA_SHOWN = ("day", "kind", "oid", "ref", "endd", "title", "title_fr", "other", "other_fr", "horizon", "more", "path")
+
+
+def sosa_rows(w: dict, kind: str) -> list[dict]:
+    rows = w["db"].execute(f"SELECT {', '.join(SOSA_SHOWN)} FROM rec_events WHERE kind = ? ORDER BY day, ref, oid, other, more",
+                           (kind,)).fetchall()
+    return [{k: v for k, v in zip(SOSA_SHOWN, r) if v is not None} for r in rows]
+
+
+def sosa_week(fixtures: Path, tmp_path: Path, published: str, *, drop=lambda r: False, add: tuple[dict, ...] = ()) -> Path:
+    """sosa_head.csv (test_sosa.py's fixture) as published on another date, rows dropped or added."""
+    with (fixtures / "sosa_head.csv").open(encoding="utf-8-sig", newline="") as fh:
+        reader = csv.DictReader(fh)
+        header, base = list(reader.fieldnames or []), list(reader)
+    rows = [{**r, "date-file-published": published} for r in base if not drop(r)]
+    rows += [{**base[0], **extra, "date-file-published": published} for extra in add]
+    path = tmp_path / f"sosa-{published}-{len(rows)}.csv"
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=header, lineterminator="\r\n")
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
+
+
+def sosa_file(w: dict, path: Path, today: str) -> None:
+    sosa.load_file(w["conn"], path, today=today)
+    sosa.upkeep(w["conn"], today)
+
+
+def holder(name: str) -> int:
+    return rd.org_number(org_id(norm_name(name)))
+
+
+@pytest.fixture
+def holders_world(world):
+    for name in (EXEMPLAR, COASTAL):
+        organizations.upsert(world["conn"], name, source="awards", now="2026-10-30T01:00:00Z")
+    world["conn"].commit()
+    return world
+
+
+def test_a_gained_or_lost_instrument_is_its_holders_event_once_and_the_first_file_gives_none(holders_world, fixtures, tmp_path):
+    w = holders_world
+    night(w, "2026-10-30")
+    # The first file: every row is new, and none is an event.
+    sosa_file(w, fixtures / "sosa_head.csv", "2026-10-31")
+    first = night(w, "2026-10-31")
+    assert [first["events"][k] for k in INSTRUMENT_KINDS] == [0, 0, 0]
+    assert all(sosa_rows(w, k) == [] for k in INSTRUMENT_KINDS)
+    # The second file, published 2026-11-06, reaches the pipeline only after the night of the 7th: Coastal gained
+    # the offer in Alberta, and a firm with no profile gained one too (no organization can follow it).
+    night(w, "2026-11-07")
+    extra = ({"supplier-legal-name": COASTAL, "delivery-point-code": "CA-AB", "delivery-point_en": "Alberta", "delivery-point_fr": "Alberta"},
+             {"supplier-legal-name": "Unlisted Labs Corp.", "delivery-point-code": "CA-AB"})
+    sosa_file(w, sosa_week(fixtures, tmp_path, "2026-11-06", add=extra), "2026-11-08")
+    second = night(w, "2026-11-08")
+    gained = [{"day": "2026-11-08", "kind": "instrument_gained", "oid": holder(COASTAL), "ref": f"sosa:{RMSO}", "endd": "2028-03-31",
+               "title": "Environmental consulting services", "title_fr": "Services d'experts-conseils en environnement",
+               "other": "Regional Master Standing Offer · Alberta", "other_fr": "Offre à commandes principale régionale · Alberta",
+               "path": RMSO_PATH}]
+    assert sosa_rows(w, "instrument_gained") == gained and second["events"]["instrument_gained"] == 1
+    assert night(w, "2026-11-09")["events"]["instrument_gained"] == 0 and sosa_rows(w, "instrument_gained") == gained
+    # Coastal's British Columbia row is absent from two files in a row: no longer held there, once.
+    no_coastal_bc = lambda r: r["supplier-legal-name"] == COASTAL and r["delivery-point-code"] == "CA-BC"  # noqa: E731
+    sosa_file(w, sosa_week(fixtures, tmp_path, "2026-11-13", drop=no_coastal_bc, add=extra), "2026-11-14")
+    assert night(w, "2026-11-14")["events"]["instrument_lost"] == 0
+    sosa_file(w, sosa_week(fixtures, tmp_path, "2026-11-20", drop=no_coastal_bc, add=extra), "2026-11-21")
+    third = night(w, "2026-11-21")
+    assert sosa_rows(w, "instrument_lost") == [{
+        "day": "2026-11-21", "kind": "instrument_lost", "oid": holder(COASTAL), "ref": f"sosa:{RMSO}", "endd": "2028-03-31",
+        "title": "Environmental consulting services", "title_fr": "Services d'experts-conseils en environnement",
+        "other": "Regional Master Standing Offer · British Columbia",
+        "other_fr": "Offre à commandes principale régionale · Colombie-Britannique", "path": RMSO_PATH}]
+    assert third["events"]["instrument_lost"] == 1 and night(w, "2026-11-22")["events"]["instrument_lost"] == 0
+    # The pipeline's copies agree with D1's.
+    assert [r["day"] for r in local(w, "instrument_gained")] == ["2026-11-08"]
+
+
+def test_an_instruments_expiry_crosses_the_6_month_line_once_per_holder_and_never_the_12_month_one(holders_world, fixtures):
+    w = holders_world
+    sosa_file(w, fixtures / "sosa_head.csv", "2026-10-31")
+    night(w, "2026-10-31")
+    # 2026-11-01 + 182 days is 2027-05-02; 2026-11-01 + 365 days is 2027-11-01.
+    w["conn"].execute("UPDATE sosa_instruments SET expiry = '2027-05-02' WHERE agreement_number = ?", (RMSO,))
+    w["conn"].execute("UPDATE sosa_instruments SET expiry = '2027-11-01' WHERE agreement_number = 'EZ899-250380/001/ZM'")
+    w["conn"].commit()
+    crossed = night(w, "2026-11-01")
+    common = {"day": "2026-11-01", "kind": "instrument_expires_6m", "ref": f"sosa:{RMSO}", "endd": "2027-05-02",
+              "title": "Environmental consulting services", "title_fr": "Services d'experts-conseils en environnement",
+              "horizon": 182, "path": RMSO_PATH}
+    # Exemplar holds it in two regions and gets one event naming both; the person withheld gets none.
+    expected = sorted([
+        {**common, "oid": holder(EXEMPLAR), "other": "Regional Master Standing Offer · Alberta, British Columbia",
+         "other_fr": "Offre à commandes principale régionale · Alberta, Colombie-Britannique"},
+        {**common, "oid": holder(COASTAL), "other": "Regional Master Standing Offer · British Columbia",
+         "other_fr": "Offre à commandes principale régionale · Colombie-Britannique"},
+    ], key=lambda r: (r["oid"], r["other"]))
+    assert sorted(sosa_rows(w, "instrument_expires_6m"), key=lambda r: (r["oid"], r["other"])) == expected
+    assert crossed["events"]["instrument_expires_6m"] == 2
+    assert night(w, "2026-11-02")["events"]["instrument_expires_6m"] == 0
+    assert rd.INSTRUMENT_LINE == 182
+
+
+def test_more_than_100_instrument_events_for_one_organization_keep_100_and_a_count_row(world):
+    w = world
+    night(w, "2026-10-31")
+    acme = w["ids"][ACME]
+    w["conn"].executemany(
+        "INSERT INTO sosa_events (day, kind, ref, oid, region, endd) VALUES ('2026-10-30', 12, ?, ?, 'BC', '2028-03-31')",
+        [(f"sosa:CAP-{i:03d}/001/ZT", acme) for i in range(101)])
+    w["conn"].commit()
+    manifest = night(w, "2026-11-01")
+    rows = sosa_rows(w, "instrument_gained")
+    assert len([r for r in rows if r.get("oid") == oid(w, ACME) and "more" not in r]) == 100
+    assert [r for r in rows if "more" in r] == [{"day": "2026-11-01", "kind": "instrument_gained", "oid": oid(w, ACME),
+                                                "ref": f"count:instrument_gained:{oid(w, ACME)}", "more": 1,
+                                                "path": f"/organizations/{acme}"}]
+    # An instrument the stage no longer describes still links its page, with the region's code.
+    first = next(r for r in rows if r["ref"] == "sosa:CAP-000/001/ZT")
+    assert (first["path"], first["other"], first["endd"]) == ("/instruments/CAP-000%2F001%2FZT", "BC", "2028-03-31")
+    assert manifest["events"]["instrument_gained"] == 101 and manifest["events"]["capped"] == 1
 
 
 # -- refs and paths ------------------------------------------------------------------------------

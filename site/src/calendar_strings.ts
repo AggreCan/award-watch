@@ -48,4 +48,17 @@ export const CALENDAR_STRINGS = {
   "cal.d_source": { en: "Source: {v}", fr: "Source : {v}" },
   "cal.d_site": { en: "On Award Watch: {v}", fr: "Sur Award Watch : {v}" },
   "cal.d_canadabuys": { en: "On CanadaBuys: {v}", fr: "Sur AchatsCanada : {v}" },
+
+  // A standing offer's or supply arrangement's expiry, which the watches'
+  // feed lists for an organization watch that follows it (src/account/feeds.ts
+  // watchEnds): the title, its category and its description's lines.
+  "cal.expires": { en: "Expires: {agreement} · {type} · {holder}", fr: "Expire : {agreement} · {type} · {holder}" },
+  "cal.expires_untyped": { en: "Expires: {agreement} · {holder}", fr: "Expire : {agreement} · {holder}" },
+  "cal.cat_expiry": { en: "Instrument expiry", fr: "Expiration d'instrument" },
+  "cal.d_agreement": { en: "Agreement number: {v}", fr: "Numéro de l'accord : {v}" },
+  "cal.d_instrument_type": { en: "Type: {v}", fr: "Type : {v}" },
+  "cal.d_description": { en: "Description: {v}", fr: "Description : {v}" },
+  "cal.d_end_user": { en: "End user: {v}", fr: "Utilisateur final : {v}" },
+  "cal.d_expiry": { en: "Expiry: {v}", fr: "Expiration : {v}" },
+  "cal.d_holders": { en: "Active holders: {n}", fr: "Titulaires actifs : {n}" },
 } as const satisfies Record<string, { en: string; fr: string }>;

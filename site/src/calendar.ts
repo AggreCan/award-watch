@@ -16,15 +16,18 @@
 // characters, and never inside a character); TEXT values escape backslash,
 // semicolon, comma and line breaks. A timed closing has no DTEND: RFC 5545
 // requires DTEND to be later than DTSTART, and a DATE-TIME start without one
-// is an event that ends when it starts.
+// is an event that ends when it starts. A standing offer's or supply
+// arrangement's expiry is an all-day event too, one per instrument and
+// holder organization, for the watches' feed alone.
 
 import { addDays, closingInstant, closingParts } from "../public/closing.js";
 import { DAY_RE, publishedReference, type ContractDetail, type ExpiringKind, type ExpiringRow, type TenderRow } from "./data";
 import type { Env } from "./env";
 import { fmtInt, pick, segmentShort, sourceLabel, t, type Lang } from "./i18n";
+import { instrumentPath } from "./instruments";
 import { KIND_SOURCE, contractReference, growthPct, sitePath } from "./pages/expiring";
 import { contractPath, money, provincesText, tenderNoticeUrl } from "./pages/shared";
-import { type Row, dollars, num } from "./records_db";
+import { type Row, dollars, num, orgIdOf } from "./records_db";
 
 export const ICS_TYPE = "text/calendar; charset=utf-8";
 // The bounds of a feed (src/account/feeds.ts): the events it carries at most,
@@ -385,6 +388,81 @@ export function publishedFacts(lang: Lang, dept: string, ref: string, rows: read
     currency: "CAD",
     amendments: rows.filter((r) => num(r.self) !== 1).length,
     growth: null,
+  };
+}
+
+// -- an instrument's expiry ------------------------------------------------------------------
+
+// What an expiry event needs: a row of the watches' feed's instruments
+// statement (feeds.ts WATCH_INSTRUMENTS_SQL), in the feed's language. holderId
+// is the organization's id: the UID names the instrument and the holder, so
+// two followed organizations on one instrument are two events, each stable.
+export type InstrumentFacts = {
+  agreement: string;
+  holderId: string;
+  holder: string;
+  type: string | null;
+  description: string | null;
+  regions: readonly string[];
+  endUser: string | null;
+  start: string | null;
+  expiry: string;
+  holders: number | null;
+};
+
+export function instrumentEvent(lang: Lang, f: InstrumentFacts, base: string): CalEvent | null {
+  const day = f.expiry.slice(0, 10);
+  if (!DAY_RE.test(day) || !f.agreement) return null;
+  const url = `${base}${instrumentPath(f.agreement)}`;
+  const description = [
+    t(lang, "cal.d_agreement", { v: f.agreement }),
+    line(f.type, () => t(lang, "cal.d_instrument_type", { v: f.type ?? "" })),
+    line(f.description, () => t(lang, "cal.d_description", { v: f.description ?? "" })),
+    t(lang, "cal.d_holder", { v: f.holder }),
+    line(f.regions.length, () => t(lang, "cal.d_regions", { v: f.regions.join(", ") })),
+    line(f.endUser, () => t(lang, "cal.d_end_user", { v: f.endUser ?? "" })),
+    line(f.start, () => t(lang, "cal.d_start", { v: (f.start ?? "").slice(0, 10) })),
+    t(lang, "cal.d_expiry", { v: day }),
+    line(f.holders !== null, () => t(lang, "cal.d_holders", { n: fmtInt(f.holders ?? 0, lang) })),
+    t(lang, "cal.d_site", { v: url }),
+  ].filter((x): x is string => x !== null);
+  return {
+    uid: `instrument-${uidPart(`sosa:${f.agreement}:${f.holderId}`)}@${UID_HOST}`,
+    // The records database keeps no count of the file publications that moved
+    // an expiry, so the sequence stays 0; a subscribed calendar reads the moved
+    // date on its next refresh all the same.
+    sequence: 0,
+    start: { day },
+    summary: f.type
+      ? t(lang, "cal.expires", { agreement: f.agreement, type: f.type, holder: f.holder })
+      : t(lang, "cal.expires_untyped", { agreement: f.agreement, holder: f.holder }),
+    description: description.join("\n"),
+    url,
+    categories: [t(lang, "site.name"), t(lang, "cal.cat_expiry")],
+  };
+}
+
+// A row of the watches' feed's instruments statement as an expiry event's
+// facts, in the feed's language: the regions the organization holds it in,
+// in alphabetical order. Null for a row without a number, an expiry or an
+// organization.
+export function instrumentFacts(lang: Lang, r: Row): InstrumentFacts | null {
+  const agreement = text(r.agr);
+  const expiry = text(r.expiry);
+  const oid = num(r.oid);
+  if (!agreement || !expiry || oid === null) return null;
+  const regions = [...new Set(String((lang === "fr" ? r.regions_fr : r.regions_en) ?? "").split("\u001f").filter((s) => s.trim()))];
+  return {
+    agreement,
+    holderId: orgIdOf(oid),
+    holder: text(r.name) ?? t(lang, "common.not_stated"),
+    type: pick(lang, text(r.type_en), text(r.type_fr)),
+    description: pick(lang, text(r.desc_en), text(r.desc_fr)),
+    regions: regions.sort((a, b) => a.localeCompare(b, lang === "fr" ? "fr-CA" : "en-CA")),
+    endUser: pick(lang, text(r.user_en), text(r.user_fr)),
+    start: text(r.start),
+    expiry,
+    holders: num(r.n),
   };
 }
 

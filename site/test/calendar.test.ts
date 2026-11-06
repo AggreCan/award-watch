@@ -13,7 +13,10 @@ import { closesAtUtc } from "../src/closing";
 import {
   type CalEvent, FEED_EVENTS_MAX, capped, contractEvent, escapeText, foldLine, noticeEvent, writeCalendar,
 } from "../src/calendar";
-import { ENDS_SLOTS, type FeedRow, WATCH_ENDS_SQL, endsBinds, forgetFeeds } from "../src/account/feeds";
+import {
+  ENDS_SLOTS, type FeedRow, INSTRUMENT_DAYS, INSTRUMENT_SLOTS, WATCH_ENDS_SQL, WATCH_INSTRUMENTS_SQL, endsBinds, forgetFeeds, instrumentBinds,
+} from "../src/account/feeds";
+import { WINDOW_DAYS } from "../src/pages/expiring";
 import { app } from "../src/index";
 import { orgNumber } from "../src/records_db";
 import { FILES, makeFakeAssets, testEnv } from "./assets";
@@ -921,6 +924,96 @@ describe("the watches' feed", () => {
     const removed = await post(`/account/calendar/${feed.id}/delete`, { csrf: a.token }, { cookie: a.cookie });
     expect(removed.headers.get("location")).toBe("/account/watches?m=feed_removed#calendar");
     expect((await feedRows(a.user)).every((f) => f.revoked_at)).toBe(true);
+  });
+
+  // The standing offers and supply arrangements: ORG holds the regional offer
+  // in British Columbia and Alberta and the supply arrangement nationally,
+  // both expiring within the 182 days from the data date (2027-05-01 is the
+  // last day), and the national offer, expiring after; Org B holds the
+  // regional offer too, and a holder with no profile the arrangement.
+  async function instruments(): Promise<void> {
+    const inst = (k: number, agr: string, type: [string, string], desc: [string, string | null], expiry: string, n: number) =>
+      RECORDS.prepare(
+        "INSERT OR REPLACE INTO rec_instruments (k, agr, type_en, type_fr, desc_en, desc_fr, user_en, user_fr, start, expiry, n, nw) " +
+        "VALUES (?, ?, ?, ?, ?, ?, 'Public Services and Procurement Canada', 'Services publics et Approvisionnement Canada', '2024-04-01', ?, ?, 0)",
+      ).bind(k, agr, ...type, ...desc, expiry, n);
+    const holder = (k: number, ik: number, oid: string | null, name: string, region: string, en: string, fr: string) =>
+      RECORDS.prepare("INSERT OR REPLACE INTO rec_holders (k, ik, oid, name, region, region_en, region_fr, seen) VALUES (?, ?, ?, ?, ?, ?, ?, '2026-10-30')")
+        .bind(k, ik, oid ? orgNumber(oid) : null, name, region, en, fr);
+    await RECORDS.batch([
+      inst(3001, "E60ZT-120002/001/ZT", ["Regional Master Standing Offer", "Offre à commandes principale régionale"],
+        ["Environmental consulting services", "Services d'experts-conseils en environnement"], "2027-03-31", 14),
+      inst(3002, "E60ZT-120003/001/ZT", ["Supply Arrangement", "Arrangement en matière d'approvisionnement"], ["Geospatial data services", null],
+        "2026-12-31", 3),
+      inst(3003, "EZ899-250380/001/ZM", ["National Master Standing Offer", "Offre à commandes principale et nationale"],
+        ["Translation services", "Services de traduction"], "2027-06-30", 1),
+      holder(4001, 3001, ORG, "Exemplar Works Ltd.", "BC", "British Columbia", "Colombie-Britannique"),
+      holder(4002, 3001, ORG, "Exemplar Works Ltd.", "AB", "Alberta", "Alberta"),
+      holder(4003, 3001, ORG_B, "Org B Two Inc.", "BC", "British Columbia", "Colombie-Britannique"),
+      holder(4004, 3002, ORG, "Exemplar Works Ltd.", "NA", "National", "National"),
+      holder(4005, 3002, null, "Unlinked Survey Ltd.", "NA", "National", "National"),
+      holder(4006, 3003, ORG, "Exemplar Works Ltd.", "NC", "National Capital Region", "Région de la capitale nationale"),
+    ]);
+  }
+
+  it("read the instruments an organization watch holds through each instrument's holders, bounded, within D1's 100 bound values", async () => {
+    expect(INSTRUMENT_DAYS).toBe(WINDOW_DAYS["6m"]);
+    expect(WATCH_INSTRUMENTS_SQL).toMatch(new RegExp(`LIMIT ${FEED_EVENTS_MAX}$`));
+    const highest = Math.max(...[...WATCH_INSTRUMENTS_SQL.matchAll(/\?(\d+)/g)].map((m) => Number(m[1])));
+    expect(highest).toBe(2 + INSTRUMENT_SLOTS);
+    expect(highest).toBeLessThanOrEqual(100);
+    const binds = instrumentBinds(DAY, [orgNumber(ORG)!]);
+    expect(binds).toHaveLength(highest);
+    expect(binds.slice(0, 4)).toEqual([DAY, "2027-05-01", orgNumber(ORG), -1]);
+    const steps = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${WATCH_INSTRUMENTS_SQL}`).bind(...binds).all()).results ?? [])
+      .map((r) => String((r as { detail?: unknown }).detail));
+    const text = steps.join("\n");
+    // rec_holders has no index by organization: rec_instruments (a few thousand rows) is the outer table, and each
+    // instrument's holders are sought through rec_holders_instrument; rec_holders is never scanned.
+    expect(steps.filter((s) => /^SCAN h\b|^SCAN rec_holders\b/.test(s)), text).toEqual([]);
+    expect(text).toMatch(/^SCAN i$/m);
+    expect(text).toMatch(/SEARCH h USING (COVERING )?INDEX rec_holders_instrument \(ik=\?\)/);
+  });
+
+  it("lists the instruments each organization watch that follows their expiry holds, one event per instrument and holder", async () => {
+    await instruments();
+    const a = await proAccount("wfeed-instruments", []);
+    // ORG through its retired id and its own; Org B follows the gains and losses but not the expiry.
+    await follow(a.user, "organization", RETIRED, { events: "instrument_expires_6m" });
+    await follow(a.user, "organization", ORG, { events: "award,instrument_expires_6m" });
+    await follow(a.user, "organization", ORG_B, { events: "award,instrument_gained,instrument_lost" });
+    const feed = await watchFeed(a);
+    const text = await (await get(feedPath(feed))).text();
+    const cal = wellFormed(text);
+    const list = events(cal);
+    const SA_UID = "instrument-sosa:e60zt-120003%2F001%2Fzt:org-a000000001@awardwatch.ca";
+    const RMSO_UID = "instrument-sosa:e60zt-120002%2F001%2Fzt:org-a000000001@awardwatch.ca";
+    expect(list.map((e) => e.uid)).toEqual([SA_UID, RMSO_UID]);
+    const [sa, rmso] = list;
+    expect(sa.summary).toBe("Expires: E60ZT-120003/001/ZT · Supply Arrangement · Exemplar Works Ltd.");
+    expect(rmso.summary).toBe("Expires: E60ZT-120002/001/ZT · Regional Master Standing Offer · Exemplar Works Ltd.");
+    expect([rmso.sequence, rmso.startDate.toString(), rmso.endDate.toString()]).toEqual([0, "2027-03-31", "2027-04-01"]);
+    expect(rmso.description.split("\n")).toEqual([
+      "Agreement number: E60ZT-120002/001/ZT", "Type: Regional Master Standing Offer", "Description: Environmental consulting services",
+      "Holder: Exemplar Works Ltd.", "Regions: Alberta, British Columbia", "End user: Public Services and Procurement Canada",
+      "Start: 2024-04-01", "Expiry: 2027-03-31", "Active holders: 14", `On Award Watch: ${LOCAL}/instruments/E60ZT-120002%2F001%2FZT`,
+    ]);
+    expect(prop(text, "URL")).toContain(`URL:${LOCAL}/instruments/E60ZT-120002%2F001%2FZT`);
+    expect(prop(text, "CATEGORIES")).toEqual(["CATEGORIES:Award Watch,Instrument expiry", "CATEGORIES:Award Watch,Instrument expiry"]);
+    expect(prop(text, "TRANSP")).toEqual(["TRANSP:TRANSPARENT", "TRANSP:TRANSPARENT"]);
+    expect(prop(text, "DTSTART")).toEqual(["DTSTART;VALUE=DATE:20261231", "DTSTART;VALUE=DATE:20270331"]);
+    // In French.
+    const fr = events(wellFormed(await (await get(feedPath(feed, "&lang=fr"))).text()));
+    expect(nbsp(fr[1].summary)).toBe("Expire : E60ZT-120002/001/ZT · Offre à commandes principale régionale · Exemplar Works Ltd.");
+    expect(nbsp(fr[1].description)).toContain("Régions : Alberta, Colombie-Britannique");
+    expect(nbsp(fr[0].description)).toContain("Description : Geospatial data services");
+    // An expiry moved past the 182 days leaves the feed; the UID of the one that stays is unchanged.
+    await RECORDS.prepare("UPDATE rec_instruments SET expiry = '2027-05-02' WHERE k = 3002").run();
+    const later = events(wellFormed(await (await get(feedPath(feed))).text()));
+    expect(later.map((e) => e.uid)).toEqual([RMSO_UID]);
+    await RECORDS.prepare("UPDATE rec_instruments SET expiry = '2026-12-31' WHERE k = 3002").run();
+    // The watches page counts them with the feed.
+    expect(await (await get("/account/watches", { cookie: a.cookie })).text()).toContain("2 events today");
   });
 
   it("gives a Free account the Pro chip and one line, and no feed", async () => {

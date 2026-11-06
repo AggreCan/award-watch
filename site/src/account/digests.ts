@@ -22,7 +22,7 @@ import { CODE_RE } from "../pages/tenders";
 import { fiscalLabel } from "../records_db";
 import type { BriefingData, BriefingSubject, Quarter } from "./briefings";
 import type { RecordsKind, Rise } from "./records_deliveries";
-import type { EventKind, EventRow, Listed, WatchKind } from "./watch_events";
+import { type EventKind, type EventRow, INSTRUMENT_REF, type Listed, type WatchKind, isInstrumentKind } from "./watch_events";
 import type { MailMessage } from "./sender";
 
 // A message and the headers it goes out with (List-Unsubscribe and its
@@ -624,14 +624,16 @@ export const EVENT_KEY: Readonly<Record<EventKind, Key>> = {
   award: "watches.ev_award", grant: "watches.ev_grant", amended: "watches.ev_amended", cancelled: "watches.ev_cancelled",
   ends_12m: "watches.ev_ends_12m", ends_6m: "watches.ev_ends_6m", ended: "watches.ev_ended", notice: "watches.ev_notice",
   notice_amended: "watches.ev_notice_amended", notice_closed: "watches.ev_notice_closed", notice_cancelled: "watches.ev_notice_cancelled",
-  notice_awarded: "watches.ev_notice_awarded",
+  notice_awarded: "watches.ev_notice_awarded", instrument_gained: "watches.ev_instrument_gained",
+  instrument_lost: "watches.ev_instrument_lost", instrument_expires_6m: "watches.ev_instrument_expires_6m",
 };
 
 // An event's three lines, as the message and the watches page write them:
 // the title; what happened, with its figures (an amendment's value before
 // and after, its change and an end date that moved; a closing that moved; a
-// notice's winner); the data date it was first seen, and the account's other
-// watches the same event reached.
+// notice's winner; a standing offer's type and region, description, expiry
+// and holders, under its agreement number); the data date it was first seen,
+// and the account's other watches the same event reached.
 export function watchEventLines(lang: Lang, r: EventRow): { title: string; line2: string; line3: string } {
   const money = (cents: number) => fmtMoney(cents / 100, lang);
   const day = (v: string | null) => (v ? v.slice(0, 10) : null);
@@ -664,9 +666,20 @@ export function watchEventLines(lang: Lang, r: EventRow): { title: string; line2
     what.push(r.other ? t(lang, "watches.line_awarded", { name: r.other }) : t(lang, "watches.line_withheld"));
     value();
   }
+  const instrument = isInstrumentKind(r.kind) && r.ref.startsWith(INSTRUMENT_REF) ? r.ref.slice(INSTRUMENT_REF.length) : null;
+  if (instrument !== null) {
+    // The agreement number is the title, as a reader quotes it; its type and
+    // region, its description, its expiry and its holders follow.
+    for (const part of [pick(lang, r.other, r.other_fr), pick(lang, r.title, r.title_fr)]) if (part) what.push(part);
+    if (r.endd) what.push(t(lang, "watches.line_expires", { date: r.endd }));
+    if (typeof r.holders === "number") {
+      what.push(tn(lang, "watches.line_holders_one", "watches.line_holders_many", r.holders, { n: fmtInt(r.holders, lang) }));
+    }
+  }
   const when = [t(lang, "watches.line_found", { date: r.day })];
   if (r.also?.length) when.push(t(lang, "watches.also", { labels: r.also.join(", ") }));
-  return { title: pick(lang, r.title, r.title_fr) ?? t(lang, "common.not_stated"), line2: what.join(" · "), line3: when.join(" · ") };
+  const title = instrument ?? pick(lang, r.title, r.title_fr) ?? t(lang, "common.not_stated");
+  return { title, line2: what.join(" · "), line3: when.join(" · ") };
 }
 
 // An amendment's change in dollars and in percent of the value before:

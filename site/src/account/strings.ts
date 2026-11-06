@@ -1887,4 +1887,25 @@ export const ACCOUNT_STRINGS = {
   "briefing.admin_runs_title": { en: "Briefing Runs", fr: "Envois des bulletins" },
   "briefing.kind_segment": { en: "Segment", fr: "Segment UNSPSC" },
   "briefing.kind_buyer": { en: "Buyer", fr: "Acheteur" },
+
+  // The standing offers and supply arrangements an organization watch
+  // follows (watch_events.ts INSTRUMENT_KINDS, digests.ts watchEventLines;
+  // docs/sosa.md, The events): the kinds, a row's expiry and holders, and
+  // what they add to the watches' calendar feed (feeds.ts watchEnds).
+  "watches.ev_instrument_gained": {
+    en: "Gained a standing offer or supply arrangement",
+    fr: "A obtenu une offre à commandes ou un arrangement en matière d'approvisionnement",
+  },
+  "watches.ev_instrument_lost": {
+    en: "No longer holds a standing offer or supply arrangement",
+    fr: "Ne détient plus d'offre à commandes ou d'arrangement en matière d'approvisionnement",
+  },
+  "watches.ev_instrument_expires_6m": { en: "Instrument expires within 6 months", fr: "Instrument expirant d'ici 6 mois" },
+  "watches.line_expires": { en: "expires {date}", fr: "expire le {date}" },
+  "watches.line_holders_one": { en: "{n} holder", fr: "{n} titulaire" },
+  "watches.line_holders_many": { en: "{n} holders", fr: "{n} titulaires" },
+  "calfeed.watch_instruments": {
+    en: "An organization watch that follows Instrument expires within 6 months also adds the expiry of each standing offer or supply arrangement the organization holds that expires within 6 months.",
+    fr: "Un suivi d'organisation qui suit Instrument expirant d'ici 6 mois ajoute aussi l'expiration de chaque offre à commandes ou arrangement en matière d'approvisionnement que détient l'organisation et qui expire d'ici 6 mois.",
+  },
 } as const satisfies Record<string, { en: string; fr: string }>;

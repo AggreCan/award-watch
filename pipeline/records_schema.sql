@@ -263,14 +263,16 @@ CREATE TABLE IF NOT EXISTS rec_events (
   k INTEGER PRIMARY KEY,                         -- a hash of what the event is about; never read by the site
   day TEXT NOT NULL,                             -- the data date the change was first seen
   kind TEXT NOT NULL,                            -- award, grant, amended, cancelled, ends_12m, ends_6m, ended, notice,
-                                                 -- notice_amended, notice_closed, notice_cancelled, notice_awarded
+                                                 -- notice_amended, notice_closed, notice_cancelled, notice_awarded,
+                                                 -- instrument_gained, instrument_lost, instrument_expires_6m
   src INTEGER,                                   -- 1 award notice, 2 history, 3 published contract, 4 grant, 5 tender
   oid INTEGER,                                   -- the organization named (records.oid); NULL when withheld or none
   buyer TEXT,                                    -- the buyer id (history: the client department)
   sid INTEGER,                                   -- the lowest UNSPSC segment; NULL for published contracts and grants
   ref TEXT NOT NULL,                             -- what a watch on one record follows: 'award:<reference in URL form>',
                                                  -- 'history:...', 'contract:<department>:<reference>', 'grant:...',
-                                                 -- 'tender:<reference>'; 'count:<kind>:<subject>' for a count row
+                                                 -- 'tender:<reference>'; 'sosa:<agreement number>' for a standing
+                                                 -- offer or supply arrangement; 'count:<kind>:<subject>' for a count row
   cents INTEGER,                                 -- the value now (in cents)
   ocents INTEGER,                                -- the value before (amended, cancelled)
   endd TEXT,                                     -- the end date now
@@ -280,7 +282,8 @@ CREATE TABLE IF NOT EXISTS rec_events (
   namd INTEGER,                                  -- the amendment number of the version that made the event
   title TEXT,                                    -- at most 120 characters, contacts scrubbed
   title_fr TEXT,
-  other TEXT,                                    -- the other party (the holder, a notice's winner), or a notice's title before
+  other TEXT,                                    -- the other party (the holder, a notice's winner), or a notice's title before;
+                                                 -- an instrument's type and regions ('Supply Arrangement · Alberta')
   other_fr TEXT,
   horizon INTEGER,                               -- ends_12m 365, ends_6m 182
   more INTEGER,                                  -- a count row: how many rows of its kind the subject had past 100 that day

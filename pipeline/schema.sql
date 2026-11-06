@@ -675,7 +675,8 @@ CREATE TABLE IF NOT EXISTS records_events (
   oid INTEGER,                                   -- the organization's number
   buyer TEXT,                                    -- the buyer id
   sid INTEGER,                                   -- the lowest UNSPSC segment
-  ref TEXT NOT NULL,                             -- what a watch on one record follows: award:, history:, contract:, grant:, tender:
+  ref TEXT NOT NULL,                             -- what a watch on one record follows: award:, history:, contract:, grant:, tender:;
+                                                 -- sosa:<agreement number> for an instrument's events
   cents INTEGER,
   ocents INTEGER,                                -- the value before (amended, cancelled)
   endd TEXT,
@@ -946,10 +947,10 @@ CREATE TABLE IF NOT EXISTS sosa_callups (
 );
 
 -- The gains and losses of holders resolved to an organization, for the watch
--- events (pro-features section 1 reads them once it is built; until then no
--- records database table exists for them). kind 12: the organization gained
--- the instrument in a region; 13: it no longer holds it there. Rows older
--- than sosa.EVENT_KEEP_DAYS are deleted.
+-- events: the records sync carries each row once into rec_events
+-- (records_db.derive_events: instrument_gained, instrument_lost). kind 12: the
+-- organization gained the instrument in a region; 13: it no longer holds it
+-- there. Rows older than sosa.EVENT_KEEP_DAYS are deleted.
 CREATE TABLE IF NOT EXISTS sosa_events (
   id INTEGER PRIMARY KEY,
   day TEXT NOT NULL,                             -- the file's publication date (gained, lost by absence) or the run's (expired)

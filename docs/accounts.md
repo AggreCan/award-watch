@@ -736,6 +736,10 @@ watches reach it:
   id the nightly retired reads the surviving id (`survivorOf`, the function
   `followAliases` moves watches with; the feed only reads, and the page or
   the next mail run writes the move);
+- the standing offers and supply arrangements each organization watch that
+  follows `instrument_expires_6m` holds and that expire from the data date
+  to 182 days on (`docs/sosa.md`), one all-day event per instrument and
+  organization, read by the surviving id as the radar rows are;
 - each followed notice's closing while it is in `tenders/open.json`, as a
   search feed lists it.
 
@@ -790,8 +794,22 @@ watches' feed as the feed reads them.
   watches' feed the same way. A followed award notice or history record
   that was cancelled keeps its event, marked `STATUS:CANCELLED`, as its
   one-event file does; the radar's rows carry no cancellation.
-- Not yet listed: the expiry of the standing offers and supply arrangements a
-  followed organization holds, which waits for that source.
+- An instrument's expiry comes from a second statement in the same batch,
+  `WATCH_INSTRUMENTS_SQL`: the organizations' numbers in 25 slots (27 bound
+  values), one row per instrument and holder organization with its regions'
+  names, soonest first, at most 500, with `COUNT(*) OVER ()` for the cap's
+  last event. `rec_holders` has no index by organization, so the statement
+  reads `rec_instruments` whole (a few thousand rows) and each instrument's
+  holders through `rec_holders_instrument`; an index on `rec_holders (oid)`
+  would let it seek, and is the operator's to add. UID
+  `instrument-sosa:<agreement>:<organization id>@awardwatch.ca`, so two
+  followed organizations on one instrument are two events; `SEQUENCE` 0,
+  since the records database does not carry the count of file publications
+  that moved an expiry (`sosa_instruments.expiry_changes` stays in the
+  pipeline); title "Expires: {agreement} · {type} · {holder}" ("Expire :
+  ..."); the description gives the number, type, description, holder,
+  regions, end user, start, expiry, active holders and the instrument's page;
+  `CATEGORIES:Award Watch,Instrument expiry`.
 
 The console's overview counts live feeds by kind and feeds read in the last
 7 days; the user page lists the account's feeds (kind, created, revoked,
@@ -1469,7 +1487,9 @@ from `rec_events` in the records database (`docs/analytics.md`, *Events*).
   (*Calendar feeds*). The kinds a watch follows set how far ahead its end
   dates reach in the feed. Free accounts see the Pro chip and one line.
 - What a watch follows by default, and can narrow to: an organization: award,
-  grant, amended, cancelled, ends_12m, ends_6m, ended; a buyer: notice,
+  grant, amended, cancelled, ends_12m, ends_6m, ended, instrument_gained,
+  instrument_lost, instrument_expires_6m (the standing offers and supply
+  arrangements it holds, `docs/sosa.md`); a buyer: notice,
   notice_amended, award, amended, cancelled, ends_12m, ends_6m, ended (a buyer
   not narrowed reports an amendment only when the value moved by CA$100,000 or
   50 percent, `EVENT_NOTABLE_CENTS`, `EVENT_NOTABLE_SHARE`; a narrowed one
@@ -1477,7 +1497,10 @@ from `rec_events` in the records database (`docs/analytics.md`, *Events*).
   or grant, which carry no segment); a single record: amended, cancelled,
   ends_12m, ends_6m, ended; a tender notice: notice_amended, notice_closed,
   notice_cancelled, notice_awarded. A watch reports from the data date it was
-  added on (`last_sent_day` starts there).
+  added on (`last_sent_day` starts there). A watch keeps the list stored when
+  it was made: an organization watch made before the three instrument kinds
+  existed follows none of them until its reader ticks them on the watches
+  page, where they are listed unticked; no stored row is rewritten.
 - Merges. A watch follows an id. When the nightly retires an organization id
   (`aliases/<shard>.json`) or a buyer id (`buyers/aliases.json`) into
   another, the next page view or mail run points the watch at the surviving
@@ -1512,7 +1535,13 @@ title linking its page; what happened with its figures (an amendment's value
 before and after with the change in dollars and percent, the end date moved
 and the amendment number; a cancellation's value before; an end date; a
 notice's closing, its closing moved or its winner); then the data date it was
-first seen. Then the footer's note, the watches page and the stop link.
+first seen. A standing offer's or supply arrangement's row is titled with its
+agreement number, linking `/instruments/<agreement>` (one escaped path
+segment), and gives the type and region, the description, "expires {date}"
+("expire le {date}") and its active holders now ("14 holders", read with the
+events through `rec_instruments_agr`, left out when the records database no
+longer holds the instrument). Then the footer's note, the watches page and the
+stop link.
 
 The stop link is `/account/stop?w=<user id>&t=<secret>`, in the footer and in
 `List-Unsubscribe` with `List-Unsubscribe-Post`. It turns the account's watch

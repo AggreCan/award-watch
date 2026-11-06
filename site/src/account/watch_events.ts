@@ -11,6 +11,10 @@
 // narrowed to a segment reads its own pair of statements, its buyer and
 // segment bound. Each ends in a LIMIT. An account reads one batch: the state
 // row and two statements per kind of watch it holds and per narrowed watch.
+// The rows statement joins each standing offer or supply arrangement row
+// (ref 'sosa:<agreement>') to its rec_instruments row through
+// rec_instruments_agr, for the holders it counts now: one seek per row read,
+// in the statement already read, so the count costs no statement of its own.
 
 import { SEGMENT_CODES } from "../constants";
 import { BUYER_ID_RE, ORG_ID_RE, REFERENCE_RE } from "../data";
@@ -22,10 +26,17 @@ import type { RecordsWait } from "./records_deliveries";
 // pipeline records_db.EVENT_KINDS holds the same list (test_records_events.py compares them).
 export const EVENT_KINDS = [
   "award", "grant", "amended", "cancelled", "ends_12m", "ends_6m", "ended", "notice", "notice_amended", "notice_closed",
-  "notice_cancelled", "notice_awarded",
+  "notice_cancelled", "notice_awarded", "instrument_gained", "instrument_lost", "instrument_expires_6m",
 ] as const;
 export type EventKind = (typeof EVENT_KINDS)[number];
 export const isEventKind = (v: unknown): v is EventKind => typeof v === "string" && (EVENT_KINDS as readonly string[]).includes(v);
+
+// The standing offers and supply arrangements an organization gains, no
+// longer holds, or holds into the 6 months before their expiry.
+export const INSTRUMENT_KINDS: readonly EventKind[] = ["instrument_gained", "instrument_lost", "instrument_expires_6m"];
+export const isInstrumentKind = (k: EventKind): boolean => INSTRUMENT_KINDS.includes(k);
+// An instrument event's ref: 'sosa:' and the agreement number as published.
+export const INSTRUMENT_REF = "sosa:";
 
 export const WATCH_KINDS = ["organization", "buyer", "contract", "tender"] as const;
 export type WatchKind = (typeof WATCH_KINDS)[number];
@@ -33,8 +44,10 @@ export const isWatchKind = (v: unknown): v is WatchKind => typeof v === "string"
 
 // What each kind of watch can follow, in the order a message lists them. A
 // buyer's label names no grants, as the records digest's rule already says.
+// A watch made follows every kind of its own (watches.ts addWatch); a watch
+// stored before a kind was added keeps its list until its reader ticks it.
 export const KINDS_FOR: Readonly<Record<WatchKind, readonly EventKind[]>> = {
-  organization: ["award", "grant", "amended", "cancelled", "ends_12m", "ends_6m", "ended"],
+  organization: ["award", "grant", "amended", "cancelled", "ends_12m", "ends_6m", "ended", ...INSTRUMENT_KINDS],
   buyer: ["notice", "notice_amended", "award", "amended", "cancelled", "ends_12m", "ends_6m", "ended"],
   contract: ["amended", "cancelled", "ends_12m", "ends_6m", "ended"],
   tender: ["notice_amended", "notice_closed", "notice_cancelled", "notice_awarded"],
@@ -63,14 +76,19 @@ const TARGETS = Array.from({ length: TARGET_SLOTS }, (_, i) => `?${DAY_SLOTS + i
 const NOTABLE =
   ` AND (kind <> 'amended' OR cents IS NULL OR ocents IS NULL OR abs(cents - ocents) >= ${EVENT_NOTABLE_CENTS} ` +
   `OR abs(cents - ocents) >= ${EVENT_NOTABLE_SHARE} * abs(ocents))`;
-const FIELDS = "day, kind, src, ref, cents, ocents, endd, oendd, closing, oclosing, namd, title, title_fr, other, horizon, path";
+const FIELDS = "day, kind, src, ref, cents, ocents, endd, oendd, closing, oclosing, namd, title, title_fr, other, other_fr, horizon, path";
+const OUTER = FIELDS.split(", ").map((f) => `e.${f}`).join(", ");
 
 // The newest ROWS_PER_KIND rows of each subject and kind on the days named;
-// a count row (more) is left to the counts.
+// a count row (more) is left to the counts. An instrument's row carries its
+// active holders (rec_instruments.n, persons withheld counted); any other
+// row's ref names no instrument, so its holders are NULL.
 const rowsSql = (col: string, where: string, slots: number) =>
-  `SELECT ${FIELDS}, t FROM (SELECT ${FIELDS}, ${col} AS t, ROW_NUMBER() OVER (PARTITION BY ${col}, kind ORDER BY day DESC, k) AS rn ` +
-  `FROM rec_events WHERE ${where} AND more IS NULL) WHERE rn <= ${ROWS_PER_KIND} ` +
-  `ORDER BY t, kind, rn LIMIT ${slots * EVENT_KINDS.length * ROWS_PER_KIND}`;
+  `SELECT ${OUTER}, e.t, i.n AS holders FROM (SELECT ${FIELDS}, ${col} AS t, ROW_NUMBER() OVER (PARTITION BY ${col}, kind ORDER BY day DESC, k) AS rn ` +
+  `FROM rec_events WHERE ${where} AND more IS NULL) e ` +
+  `LEFT JOIN rec_instruments i ON i.agr = CASE WHEN substr(e.ref, 1, ${INSTRUMENT_REF.length}) = '${INSTRUMENT_REF}' ` +
+  `THEN substr(e.ref, ${INSTRUMENT_REF.length + 1}) END ` +
+  `WHERE e.rn <= ${ROWS_PER_KIND} ORDER BY e.t, e.kind, e.rn LIMIT ${slots * EVENT_KINDS.length * ROWS_PER_KIND}`;
 
 // How many each subject has of each kind on each day named (a count row
 // counts the rows it stands for), so a watch counts its own days alone.
@@ -151,7 +169,9 @@ const blank = (kind: WatchKind): number | string => (kind === "organization" ? -
 export type EventRow = {
   day: string; kind: EventKind; src: number | null; ref: string; cents: number | null; ocents: number | null; endd: string | null;
   oendd: string | null; closing: string | null; oclosing: string | null; namd: number | null; title: string | null; title_fr: string | null;
-  other: string | null; horizon: number | null; path: string;
+  other: string | null; other_fr?: string | null; horizon: number | null; path: string;
+  // An instrument's active holders now (rec_instruments.n); null for any other row.
+  holders?: number | null;
   // The labels of the account's other watches the same event reached (watch_mail.ts).
   also?: string[];
 };
@@ -230,7 +250,7 @@ export async function readEvents(env: Env, watches: readonly Subject[], days: re
       f.rows.push({
         day, kind: r.kind, src: num(r.src), ref, cents: num(r.cents), ocents: num(r.ocents), endd: str(r.endd), oendd: str(r.oendd),
         closing: str(r.closing), oclosing: str(r.oclosing), namd: num(r.namd), title: str(r.title), title_fr: str(r.title_fr),
-        other: str(r.other), horizon: num(r.horizon), path,
+        other: str(r.other), other_fr: str(r.other_fr), horizon: num(r.horizon), path, holders: num(r.holders),
       });
     }
     for (const r of results[2 + 2 * i]?.results ?? []) {
@@ -274,8 +294,10 @@ export function closedOn(found: Found | undefined): string | null {
   return days.length ? days[days.length - 1] : null;
 }
 
-// The same event reached through two watches: its day, kind, page and figures.
-export const eventIdentity = (r: EventRow): string => [r.day, r.kind, r.path, r.cents ?? "", r.endd ?? "", r.closing ?? ""].join("|");
+// The same event reached through two watches: its day, kind, page and figures,
+// and the other party (an instrument's rows of one day differ by region there).
+export const eventIdentity = (r: EventRow): string =>
+  [r.day, r.kind, r.path, r.cents ?? "", r.endd ?? "", r.closing ?? "", r.other ?? ""].join("|");
 
 // The console's view of the events: the records database's data date and,
 // for it, the rows of each kind and the subjects past the per-day cap; null

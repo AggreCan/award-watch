@@ -186,6 +186,7 @@ const CalendarPanel: FC<{ lang: Lang; account: Account; calendar: WatchCalendar 
       </>}>
       <p>{t(lang, "calfeed.watch_lead")}</p>
       <p class="muted small">{t(lang, "calfeed.watch_horizon")}</p>
+      <p class="muted small">{t(lang, "calfeed.watch_instruments")}</p>
       {calendar.feed ? <FeedCell lang={lang} account={account} feed={calendar.feed} /> : calendar.full ? (
         <p class="muted small">{t(lang, "calfeed.cap", { n: fmtInt(FEEDS_MAX, lang) })}</p>
       ) : (

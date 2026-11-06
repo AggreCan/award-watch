@@ -112,11 +112,58 @@ with verification and the host name check still on.
 
 `sosa_events` holds one row per organization, instrument and region for kind
 12 (gained) and kind 13 (no longer held, `why` absent or expired), with
-`ref` `sosa:<agreement>`, the organization and the expiry. They are in the
-pipeline database because the records database has no `rec_events` table
-yet; the watch build (pro-features section 1) moves them there. A holder with
+`ref` `sosa:<agreement>`, the organization and the expiry. A holder with
 no organization gets no event, since no watch can name it. Rows older than
 400 days are deleted.
+
+The records sync turns them into the watches' events
+(`records_db.derive_events`; `docs/analytics.md`, *Events*): three kinds of
+`rec_events` row on the holder organization (`oid`), each with `ref`
+`sosa:<agreement>`, the expiry in `endd`, the description in `title` and
+`title_fr` (120 characters), the type and the region's name in `other` and
+`other_fr` ("Regional Master Standing Offer · British Columbia"), and the
+instrument's page as `path`. `rec_events` keeps its columns: no `LAYOUT`
+change, no reload.
+
+| Kind | From |
+|---|---|
+| `instrument_gained` | each kind 12 row, once (by its key; its day is the file's publication date, which can be earlier than the previous night) |
+| `instrument_lost` | each kind 13 row, once |
+| `instrument_expires_6m` | an active instrument whose expiry enters the 182 days of the data date between the previous night and tonight, once per holder organization, its regions together; no 365-day line |
+
+The first file writes no kind 12 row, so the first load derives nothing;
+lost events start after the second file. The per-organization cap of 100 rows
+a kind a day applies as to every kind.
+
+An organization watch (`docs/accounts.md`, *Watches*) follows the three
+kinds: "Gained a standing offer or supply arrangement", "No longer holds a
+standing offer or supply arrangement", "Instrument expires within 6 months"
+("A obtenu une offre à commandes ou un arrangement en matière
+d'approvisionnement", "Ne détient plus d'offre à commandes ou d'arrangement
+en matière d'approvisionnement", "Instrument expirant d'ici 6 mois"). A watch
+made from now on follows them; a watch stored earlier keeps its list until
+its reader ticks them. Free accounts see the rows on the watches page; Pro
+gets them in the watch mail:
+
+```
+- E60ZT-120002/001/ZT
+  Gained a standing offer or supply arrangement · Regional Master Standing Offer · British Columbia · Environmental consulting services · expires 2028-03-31 · 14 holders
+  First seen 2026-11-07
+  https://awardwatch.ca/instruments/E60ZT-120002%2F001%2FZT
+```
+
+The holder count is the instrument's active holders now (`rec_instruments.n`,
+persons withheld counted), read in the events statement through
+`rec_instruments_agr`; an instrument the records database no longer holds
+shows none.
+
+The watches' calendar feed (`docs/accounts.md`, *Calendar feeds*) lists, for
+each organization watch that follows `instrument_expires_6m`, every active
+instrument the organization holds that expires within 182 days: one all-day
+event per instrument and organization, UID
+`instrument-sosa:<agreement>:<organization id>@awardwatch.ca`, `SEQUENCE` 0
+(the records database does not carry `expiry_changes`), title "Expires:
+{agreement} · {type} · {holder}".
 
 ## What the site shows
 
@@ -177,3 +224,8 @@ operator console (`/admin`) does not show these yet.
    schema (new tables, `LAYOUT` unchanged), sent as ordinary changes.
 3. The first file loads quietly (no gained events); the second starts the
    lost events.
+4. Optional: `rec_holders` has no index by organization, so the watches'
+   calendar feed reads `rec_instruments` whole (a few thousand rows) for an
+   organization's instruments. `CREATE INDEX IF NOT EXISTS rec_holders_org ON
+   rec_holders (oid) WHERE oid IS NOT NULL;` in `records_schema.sql` would let
+   it seek; nothing needs it at today's size.

@@ -36,7 +36,9 @@ One more, rec_events, holds what the watches follow (site/src/account/
 watch_events.ts): what happened tonight to an organization, a buyer, a
 single record or a tender notice, derived by derive_events from the
 night's differences and the previous night's state (docs/analytics.md,
-"Events"), kept 90 data dates.
+"Events"), kept 90 data dates; an organization's standing offers and supply
+arrangements gained and lost come from the sosa stage's own comparison
+(sosa_events).
 Two serve the page of each standing offer or supply arrangement
 (/instruments/<agreement>, site/src/pages/instruments.tsx): rec_instruments
 (the instrument, its call-ups from the published contracts as JSON) and
@@ -94,6 +96,7 @@ from .normalize import closing_day, tender_status_on
 from .search_db import (
     MAX_BATCH_BYTES, MAX_BATCH_STATEMENTS, MAX_KEYS_PER_DELETE, MAX_STATEMENT_BYTES, _BatchWriter, _grouped, sql_literal,
 )
+from .sources import sosa
 
 log = logging.getLogger(__name__)
 
@@ -864,7 +867,8 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
 # -- the events the watches follow (rec_events) ------------------------------------
 
 EVENT_KINDS = ("award", "grant", "amended", "cancelled", "ends_12m", "ends_6m", "ended", "notice", "notice_amended",
-               "notice_closed", "notice_cancelled", "notice_awarded")
+               "notice_closed", "notice_cancelled", "notice_awarded", "instrument_gained", "instrument_lost",
+               "instrument_expires_6m")
 # How long an event is kept, here and in D1: the watches page reads the last
 # 30 data dates, a weekly message 7, and a night whose apply failed is sent later.
 EVENT_DAYS = 90
@@ -892,6 +896,13 @@ EVENT_GROUP_ROWS = 50
 EVENT_SUBJECT_DAY_MAX = 100
 # records_event_state.src of a tender notice open on the data date.
 NOTICE_STATE = 0
+# The sosa stage's event kinds (sosa_events.kind) and the kinds they become here.
+INSTRUMENT_EVENTS = {sosa.GAINED: "instrument_gained", sosa.LOST: "instrument_lost"}
+# The one line an instrument's expiry crosses: 6 months only, since many
+# instruments run for years and a 12-month line would list most of them.
+INSTRUMENT_LINE = dict(expiring.WINDOWS)["6m"]
+# The longest "type · regions" an instrument's row carries.
+INSTRUMENT_OTHER_CHARS = 300
 META_EVENTS_AT = "records_events_at"      # the data date the events were last derived for
 META_EVENTS_PREV = "records_events_prev"  # the one before it: the previous night's
 _URI_SAFE = "-_.!~*'()"                  # what encodeURIComponent leaves as it is
@@ -993,6 +1004,7 @@ def derive_events(conn: sqlite3.Connection, as_of: str) -> dict[str, int]:
             _ended_events(conn, found, lo, as_of)
         opened = _notice_events(conn, found, lo or _plus(as_of, -1), as_of, segments, compare=lo is not None)
         _replace_state(conn, opened)
+        _instrument_events(conn, found, lo, as_of)
         rows, capped = _capped(found.rows)
         conn.executemany(f"INSERT OR IGNORE INTO records_events ({', '.join(_COLUMNS)}) VALUES ({', '.join('?' * len(_COLUMNS))})",
                          [tuple(r[c] for c in _COLUMNS) for r in rows])
@@ -1255,6 +1267,75 @@ def _notice_events(conn: sqlite3.Connection, found: _Found, lo: str, as_of: str,
                                               (r["tender"],)).fetchone()[0], None))
     conn.execute("DROP TABLE IF EXISTS temp.records_solicitations")
     return opened
+
+
+def _instrument_other(kind: object, places: list[str]) -> str | None:
+    """'Regional Master Standing Offer · British Columbia': the agreement type and the regions' names."""
+    parts = [p for p in (re.sub(r"\s+", " ", str(kind or "")).strip(), ", ".join(places)) if p]
+    return sosa_export.short(" · ".join(parts), INSTRUMENT_OTHER_CHARS) if parts else None
+
+
+def _instrument_events(conn: sqlite3.Connection, found: _Found, lo: str | None, as_of: str) -> None:
+    """instrument_gained and instrument_lost, from sosa_events: the sosa stage compares each week's file with the
+    last one applied and writes neither on its first file (nor a loss before its second), so this step only carries
+    its rows over, each once. A row is read while it is younger than EVENT_DAYS and taken when records_events does
+    not hold it yet: its day is the file's publication date, which can be earlier than the previous night (a held
+    file released later), so the previous night's date cannot select them. instrument_expires_6m: an active
+    instrument whose expiry is after lo plus INSTRUMENT_LINE days and on or before the data date plus them, once per
+    holder organization. Rows name the organization (oid), ref 'sosa:<agreement>', the expiry (endd), the
+    description (title), the type and region (other), and link the instrument's page."""
+    info = {r["agreement_number"]: r for r in conn.execute(
+        "SELECT agreement_number, type_en, type_fr, description_en, description_fr, expiry FROM sosa_instruments")}
+    known = {k for (k,) in conn.execute(
+        f"SELECT k FROM records_events WHERE kind IN ({', '.join('?' * len(INSTRUMENT_EVENTS))})", tuple(INSTRUMENT_EVENTS.values()))}
+
+    def add(identity: str, kind: str, agreement: str, number: int, endd: object, en: list[str], fr: list[str], **more) -> None:
+        inst = info.get(agreement)
+        found.add(identity, kind, ref=f"sosa:{agreement}", path=sosa_export.instrument_path(agreement), oid=number,
+                  endd=endd or (inst["expiry"] if inst else None),
+                  title=title_of(inst["description_en"], None) if inst else None,
+                  title_fr=title_of(inst["description_fr"], None) if inst else None,
+                  other=_instrument_other(inst["type_en"] if inst else None, en),
+                  other_fr=_instrument_other(inst["type_fr"] if inst else None, fr), **more)
+
+    marks = ", ".join("?" * len(INSTRUMENT_EVENTS))
+    for r in conn.execute(
+            "SELECT e.kind, e.day, e.ref, e.oid, e.region, e.endd, "
+            "(SELECT h.delivery_point_en FROM sosa_holders h WHERE h.agreement_number = substr(e.ref, 6) "
+            "AND h.delivery_point_code = e.region AND h.organization_id = e.oid LIMIT 1) AS region_en, "
+            "(SELECT h.delivery_point_fr FROM sosa_holders h WHERE h.agreement_number = substr(e.ref, 6) "
+            "AND h.delivery_point_code = e.region AND h.organization_id = e.oid LIMIT 1) AS region_fr "
+            f"FROM sosa_events e WHERE e.kind IN ({marks}) AND e.day > ? ORDER BY e.id",
+            (*INSTRUMENT_EVENTS, _plus(as_of, -EVENT_DAYS))).fetchall():
+        kind = INSTRUMENT_EVENTS[r["kind"]]
+        agreement = str(r["ref"])[len("sosa:"):]
+        number = org_number(r["oid"])
+        identity = f"{kind}:{r['ref']}:{r['oid']}:{r['region']}:{r['day']}"
+        if number is None or not sosa_export.addressable(agreement) or key_of(f"event:{identity}") in known:
+            continue
+        en = r["region_en"] or r["region"]
+        add(identity, kind, agreement, number, r["endd"], [en], [r["region_fr"] or en])
+    if lo is None or lo >= as_of:
+        return
+    held: dict[tuple[str, str], tuple[str, list[str], list[str]]] = {}
+    for r in conn.execute(
+            "SELECT h.agreement_number AS agreement, h.organization_id AS oid, h.delivery_point_code AS region, "
+            "h.delivery_point_en AS en, h.delivery_point_fr AS fr, i.expiry FROM sosa_holders h "
+            "JOIN sosa_instruments i ON i.agreement_number = h.agreement_number "
+            "WHERE h.lost_on IS NULL AND h.organization_id IS NOT NULL AND i.expiry > ? AND i.expiry <= ? "
+            "ORDER BY h.agreement_number, h.organization_id, h.delivery_point_code",
+            (_plus(lo, INSTRUMENT_LINE), _plus(as_of, INSTRUMENT_LINE))):
+        expiry, en, fr = held.setdefault((r["agreement"], r["oid"]), (r["expiry"], [], []))
+        name_en = r["en"] or r["region"]
+        if name_en and name_en not in en:
+            en.append(name_en)
+            fr.append(r["fr"] or name_en)
+    for (agreement, oid), (expiry, en, fr) in held.items():
+        number = org_number(oid)
+        if number is None or not sosa_export.addressable(agreement):
+            continue
+        add(f"instrument_expires_6m:{agreement}:{oid}:{expiry}", "instrument_expires_6m", agreement, number, expiry, en, fr,
+            horizon=INSTRUMENT_LINE)
 
 
 def _replace_state(conn: sqlite3.Connection, opened: list[int]) -> None:

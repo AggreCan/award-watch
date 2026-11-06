@@ -13,8 +13,8 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runDeliveries } from "../src/account/deliveries";
 import { valueChange } from "../src/account/digests";
 import {
-  DAY_SLOTS, EVENT_COUNTS_SQL, EVENT_KINDS, EVENT_ROWS_SQL, INDEX_OF, NARROW_COUNTS_SQL, NARROW_ROWS_SQL, TARGET_SLOTS, WATCH_EVENTS_SQL,
-  WATCH_KINDS, eventCounts, segmentOf, targetOf, watchPath,
+  DAY_SLOTS, EVENT_COUNTS_SQL, EVENT_KINDS, EVENT_ROWS_SQL, INDEX_OF, KINDS_FOR, NARROW_COUNTS_SQL, NARROW_ROWS_SQL, TARGET_SLOTS,
+  WATCH_EVENTS_SQL, WATCH_KINDS, eventCounts, segmentOf, targetOf, watchPath,
 } from "../src/account/watch_events";
 import { watchDetail, watchOverview } from "../src/account/watches";
 import { ACCOUNTS, csrf, decode, get, grantPro, lastMail, nbsp, newEmail, onEnv, post, requestCode, signIn, useAccountsDb, userId } from "./accounts-helpers";
@@ -37,15 +37,16 @@ const ORG_N = parseInt(ORG.slice(4), 16);
 type Ev = {
   day?: string; kind: string; src?: number | null; oid?: number | null; buyer?: string | null; sid?: number | null; ref?: string;
   cents?: number | null; ocents?: number | null; endd?: string | null; oendd?: string | null; closing?: string | null;
-  oclosing?: string | null; namd?: number | null; title?: string | null; other?: string | null; more?: number | null; path: string;
+  oclosing?: string | null; namd?: number | null; title?: string | null; title_fr?: string | null; other?: string | null;
+  other_fr?: string | null; horizon?: number | null; more?: number | null; path: string;
 };
 let k = 0;
 const COLS = ["day", "kind", "src", "oid", "buyer", "sid", "ref", "cents", "ocents", "endd", "oendd", "closing", "oclosing", "namd", "title",
-  "other", "more", "path"] as const;
+  "title_fr", "other", "other_fr", "horizon", "more", "path"] as const;
 
 async function seedRecords(state = "ready", asOf = DAY): Promise<void> {
   await applySql(RECORDS, SCHEMA);
-  await RECORDS.batch(["rec_events", "rec_meta"].map((t) => RECORDS.prepare(`DELETE FROM ${t}`)));
+  await RECORDS.batch(["rec_events", "rec_meta", "rec_instruments"].map((t) => RECORDS.prepare(`DELETE FROM ${t}`)));
   await RECORDS.prepare("INSERT INTO rec_meta (key, value) VALUES ('state', ?), ('as_of', ?), ('rules', '2')").bind(state, asOf).run();
 }
 
@@ -78,8 +79,10 @@ async function makeUser(email: string, o: { lang?: "en" | "fr"; pro?: boolean; m
   return id;
 }
 
+// What an organization watch stored before the standing offers' kinds followed; a new one follows them too.
+const ORG_BEFORE = "award,grant,amended,cancelled,ends_12m,ends_6m,ended";
 const ALL: Record<string, string> = {
-  organization: "award,grant,amended,cancelled,ends_12m,ends_6m,ended",
+  organization: `${ORG_BEFORE},instrument_gained,instrument_lost,instrument_expires_6m`,
   buyer: "notice,notice_amended,award,amended,cancelled,ends_12m,ends_6m,ended",
   contract: "amended,cancelled,ends_12m,ends_6m,ended",
   tender: "notice_amended,notice_closed,notice_cancelled,notice_awarded",
@@ -144,6 +147,10 @@ describe("the events statements", () => {
         expect(steps.filter((s) => /^SCAN rec_events\b/.test(s)), `${sql}\n${steps.join("\n")}`).toEqual([]);
         expect(steps.some((s) => s.includes(`SEARCH rec_events USING INDEX ${INDEX_OF[kind]}`)), `${sql}\n${steps.join("\n")}`).toBe(true);
       }
+      // An instrument's holders: one seek of its row per event row read, never a scan.
+      const steps = await plan(EVENT_ROWS_SQL[kind], [...days, ...Array.from({ length: TARGET_SLOTS }, () => (kind === "organization" ? ORG_N : "x"))]);
+      expect(steps.filter((s) => /^SCAN i\b|^SCAN rec_instruments\b/.test(s)), steps.join("\n")).toEqual([]);
+      expect(steps.some((s) => /SEARCH i USING (COVERING )?INDEX rec_instruments_agr \(agr=\?\)/.test(s)), steps.join("\n")).toBe(true);
     }
     for (const sql of [NARROW_ROWS_SQL, NARROW_COUNTS_SQL]) {
       expect(sql).toMatch(/LIMIT \d+$/);
@@ -154,7 +161,7 @@ describe("the events statements", () => {
     }
     expect(DAY_SLOTS + TARGET_SLOTS).toBeLessThanOrEqual(100);
     expect(EVENT_KINDS).toEqual(["award", "grant", "amended", "cancelled", "ends_12m", "ends_6m", "ended", "notice", "notice_amended",
-      "notice_closed", "notice_cancelled", "notice_awarded"]);
+      "notice_closed", "notice_cancelled", "notice_awarded", "instrument_gained", "instrument_lost", "instrument_expires_6m"]);
   });
 
   it("take a target only as its page names it, a record by its rec_events ref", () => {
@@ -359,6 +366,143 @@ describe("the Follow control and the watch routes", () => {
     expect(await watchRows(id)).toEqual([]);
     expect(await mailRow(id)).toBeNull();
     expect(await runs(id)).toEqual([]);
+  });
+});
+
+// -- standing offers and supply arrangements ----------------------------------------------------
+
+describe("an organization's standing offers and supply arrangements", () => {
+  beforeEach(() => seedRecords());
+
+  const RMSO = "E60ZT-120002/001/ZT";
+  const SA = "E60ZT-120003/001/ZT";
+  const RMSO_PATH = "/instruments/E60ZT-120002%2F001%2FZT";
+  const SA_PATH = "/instruments/E60ZT-120003%2F001%2FZT";
+  const DESC = { title: "Environmental consulting services", title_fr: "Services d'experts-conseils en environnement" };
+  const RMSO_EN = "Regional Master Standing Offer";
+  const RMSO_FR = "Offre à commandes principale régionale";
+
+  // The three kinds for one organization: a gain in British Columbia, a loss in
+  // Alberta, and a supply arrangement whose expiry entered the 6 months. The
+  // regional offer has 14 holders in rec_instruments; the arrangement has no
+  // row there, so its line names no count.
+  const rows = (oid: number): Ev[] => [
+    { kind: "instrument_gained", oid, ref: `sosa:${RMSO}`, endd: "2028-03-31", ...DESC, other: `${RMSO_EN} · British Columbia`,
+      other_fr: `${RMSO_FR} · Colombie-Britannique`, path: RMSO_PATH },
+    { kind: "instrument_lost", oid, ref: `sosa:${RMSO}`, endd: "2028-03-31", ...DESC, other: `${RMSO_EN} · Alberta`,
+      other_fr: `${RMSO_FR} · Alberta`, path: RMSO_PATH },
+    { kind: "instrument_expires_6m", oid, ref: `sosa:${SA}`, endd: "2027-04-30", horizon: 182, title: "Geospatial data services",
+      title_fr: "Services de données géospatiales", other: "Supply Arrangement · National",
+      other_fr: "Arrangement en matière d'approvisionnement · National", path: SA_PATH },
+  ];
+  const holders = () => RECORDS.prepare("INSERT INTO rec_instruments (k, agr, n, nw) VALUES (?, ?, 14, 1)").bind(++k, RMSO).run();
+
+  it("are followed by a new organization watch, listed on its form, and left out of a watch stored before them", async () => {
+    expect(KINDS_FOR.organization).toEqual(["award", "grant", "amended", "cancelled", "ends_12m", "ends_6m", "ended", "instrument_gained",
+      "instrument_lost", "instrument_expires_6m"]);
+    for (const kind of ["buyer", "contract", "tender"] as const) {
+      expect(KINDS_FOR[kind].some((x) => x.startsWith("instrument_")), kind).toBe(false);
+    }
+    const email = newEmail("i-form");
+    const cookie = await signIn(email);
+    const id = await userId(email);
+    await watch(id, "organization", ORG, "Exemplar Works Ltd.", { events: ORG_BEFORE });
+    await events(rows(ORG_N));
+    const page = decode(await (await get("/account/watches", { cookie })).text());
+    for (const [kind, label] of [["instrument_gained", "Gained a standing offer or supply arrangement"],
+      ["instrument_lost", "No longer holds a standing offer or supply arrangement"],
+      ["instrument_expires_6m", "Instrument expires within 6 months"]]) {
+      // Offered, unticked: the stored list stands until its reader ticks the box.
+      expect(page).toMatch(new RegExp(`<input type="checkbox" name="ev_${kind}" value="1"/><span>${label}</span>`));
+    }
+    expect(page).not.toContain(RMSO_PATH);
+    expect((await watchRows(id))[0].events).toBe(ORG_BEFORE);
+    const token = await csrf(cookie);
+    const watchId = (await ACCOUNTS.prepare("SELECT id FROM watches WHERE user_id = ?").bind(id).first<{ id: string }>())!.id;
+    await post(`/account/watches/${watchId}`, { csrf: token, ev_award: "1", ev_instrument_gained: "1", cadence: "daily" }, { cookie });
+    expect((await watchRows(id))[0].events).toBe("award,instrument_gained");
+    const after = decode(await (await get("/account/watches", { cookie })).text());
+    expect(after).toContain(`<a href="${RMSO_PATH}">${RMSO}</a>`);
+    expect(after).toMatch(/<input type="checkbox" name="ev_instrument_gained" value="1" checked=""\/>/);
+    expect(after).not.toContain("No longer holds a standing offer or supply arrangement · ");
+  });
+
+  it("show on the watches page of a Free account, each row under its agreement number, in both languages", async () => {
+    const email = newEmail("i-page");
+    const cookie = await signIn(email);
+    await post("/account/watches", { csrf: await csrf(cookie), kind: "organization", target: ORG }, { cookie });
+    await holders();
+    await events(rows(ORG_N));
+    const en = decode(await (await get("/account/watches", { cookie })).text());
+    expect(en).toContain(`<li><a href="${RMSO_PATH}">${RMSO}</a><br/><span class="muted small">Gained a standing offer or supply arrangement · ` +
+      `${RMSO_EN} · British Columbia · Environmental consulting services · expires 2028-03-31 · 14 holders · First seen ${DAY}</span></li>`);
+    expect(en).toContain(`No longer holds a standing offer or supply arrangement · ${RMSO_EN} · Alberta · Environmental consulting services · ` +
+      "expires 2028-03-31 · 14 holders");
+    expect(en).toContain(`<a href="${SA_PATH}">${SA}</a><br/><span class="muted small">Instrument expires within 6 months · ` +
+      `Supply Arrangement · National · Geospatial data services · expires 2027-04-30 · First seen ${DAY}</span>`);
+    const fr = nbsp(decode(await (await get("/account/watches?lang=fr", { cookie })).text()));
+    expect(fr).toContain(`<a href="${RMSO_PATH}">${RMSO}</a><br/><span class="muted small">A obtenu une offre à commandes ou un arrangement ` +
+      `en matière d’approvisionnement · ${RMSO_FR} · Colombie-Britannique · Services d'experts-conseils en environnement · ` +
+      `expire le 2028-03-31 · 14 titulaires · Vu pour la première fois le ${DAY}</span>`);
+    expect(fr).toContain("Ne détient plus d’offre à commandes ou d’arrangement en matière d’approvisionnement · ");
+    expect(fr).toContain("Instrument expirant d’ici 6 mois · Arrangement en matière d'approvisionnement · National · ");
+    for (const page of [en, fr]) expect(page).not.toContain(EM_DASH);
+  });
+
+  it("are mailed to Pro as the specification's rows, the agreement number linking its page, in both languages", async () => {
+    quiet();
+    const mail = fakeMail();
+    const en = newEmail("i-mail");
+    const fr = newEmail("i-mail-fr");
+    for (const [email, lang] of [[en, "en"], [fr, "fr"]] as const) {
+      await watch(await makeUser(email, { lang }), "organization", "org-e000000006", "Exemplar Environmental Consulting Ltd.");
+    }
+    await holders();
+    await events(rows(0xe000000006));
+    await runDeliveries(jobEnv(mail.binding));
+    const [m] = mail.to(en);
+    expect(m.subject).toBe("3 watchlist events: Exemplar Environmental Consulting Ltd.");
+    expect(m.text).toContain(`- ${RMSO}\n  Gained a standing offer or supply arrangement · ${RMSO_EN} · British Columbia · ` +
+      `Environmental consulting services · expires 2028-03-31 · 14 holders\n  First seen ${DAY}\n  ${SITE}/instruments/E60ZT-120002%2F001%2FZT`);
+    expect(m.text).toContain(`- ${RMSO}\n  No longer holds a standing offer or supply arrangement · ${RMSO_EN} · Alberta · ` +
+      `Environmental consulting services · expires 2028-03-31 · 14 holders\n  First seen ${DAY}\n  ${SITE}${RMSO_PATH}`);
+    expect(m.text).toContain(`- ${SA}\n  Instrument expires within 6 months · Supply Arrangement · National · Geospatial data services · ` +
+      `expires 2027-04-30\n  First seen ${DAY}\n  ${SITE}${SA_PATH}`);
+    expect(m.html).toContain(`href="${SITE}${RMSO_PATH}"`);
+    const [f] = mail.to(fr);
+    const text = nbsp(f.text!);
+    expect(text).toContain(`- ${RMSO}\n  A obtenu une offre à commandes ou un arrangement en matière d’approvisionnement · ${RMSO_FR} · ` +
+      `Colombie-Britannique · Services d'experts-conseils en environnement · expire le 2028-03-31 · 14 titulaires\n  ` +
+      `Vu pour la première fois le ${DAY}\n  ${SITE}/instruments/E60ZT-120002%2F001%2FZT?lang=fr`);
+    expect(text).toContain(`- ${SA}\n  Instrument expirant d’ici 6 mois · Arrangement en matière d'approvisionnement · National · ` +
+      `Services de données géospatiales · expire le 2027-04-30\n`);
+    for (const part of [m.subject, m.html!, m.text!, f.subject, f.html!, f.text!]) expect(part).not.toContain(EM_DASH);
+  });
+
+  it("list one offer gained in two regions on one day as two rows, neither taken for the other reached twice", async () => {
+    quiet();
+    const mail = fakeMail();
+    const email = newEmail("i-regions");
+    await watch(await makeUser(email), "organization", "org-e000000008", "Two Regions Ltd.");
+    const [bc] = rows(0xe000000008);
+    await events([bc, { ...bc, other: `${RMSO_EN} · Saskatchewan`, other_fr: `${RMSO_FR} · Saskatchewan` }]);
+    await runDeliveries(jobEnv(mail.binding));
+    const [m] = mail.to(email);
+    expect(m.subject).toBe("2 watchlist events: Two Regions Ltd.");
+    expect(m.text).toContain(`${RMSO_EN} · British Columbia · Environmental consulting services`);
+    expect(m.text).toContain(`${RMSO_EN} · Saskatchewan · Environmental consulting services`);
+    expect(m.text).not.toContain("Also on your watch");
+  });
+
+  it("count one holder in the singular", async () => {
+    quiet();
+    const mail = fakeMail();
+    const email = newEmail("i-one");
+    await watch(await makeUser(email), "organization", "org-e000000007", "Sole Holder Inc.");
+    await RECORDS.prepare("INSERT INTO rec_instruments (k, agr, n, nw) VALUES (?, ?, 1, 0)").bind(++k, SA).run();
+    await events([rows(0xe000000007)[2]]);
+    await runDeliveries(jobEnv(mail.binding));
+    expect(mail.to(email)[0].text).toContain("Geospatial data services · expires 2027-04-30 · 1 holder\n");
   });
 });
 

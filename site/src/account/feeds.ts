@@ -10,14 +10,18 @@
 //   watchlist  the account's watches (watches.ts): the end of each followed
 //              contract whatever its date, the contracts each organization
 //              and buyer watch holds that end within its horizon (the
-//              radar's window, rec_expiring, read below), and each followed
-//              open notice's closing
+//              radar's window, rec_expiring, read below), the standing
+//              offers and supply arrangements each organization watch that
+//              follows instrument_expires_6m holds that expire within 182
+//              days (rec_instruments and rec_holders, read below), and each
+//              followed open notice's closing
 //   all        every saved tender search and the watches in one feed
 //
 // Every event is written by contractEvent or noticeEvent, so its UID and
 // SEQUENCE are the one-event file's for the same record: an amendment that
 // moves an end or a closing moves the event in a client that holds it from
-// either.
+// either. An instrument's expiry (instrumentEvent) has no one-event file; its
+// UID names the instrument and the holder organization.
 //
 // The secret is 16 random bytes in clear, as a stop link's is: the page shows
 // the whole address, so it must be readable again. It is compared in
@@ -43,8 +47,8 @@
 import { addDays } from "../../public/closing.js";
 import { closingPassed, type Clock } from "../closing";
 import {
-  type CalEvent, FEED_EVENTS_MAX, type MoreKind, UID_HOST, capped, contractEvent, detailFacts, expiringFacts, noticeEvent, publishedFacts,
-  writeCalendar,
+  type CalEvent, FEED_EVENTS_MAX, type MoreKind, UID_HOST, capped, contractEvent, detailFacts, expiringFacts, instrumentEvent, instrumentFacts,
+  noticeEvent, publishedFacts, writeCalendar,
 } from "../calendar";
 import { BUYER_ID_RE, loadContract, loadOpenList, type TenderRow } from "../data";
 import type { Env } from "../env";
@@ -333,21 +337,57 @@ export function endsBinds(first: string, slots: readonly EndsSlot[]): (string | 
   return [first, last, ...bound.flatMap((s) => (s ? [s.target, s.mark, s.last] : [-1, "", ""]))];
 }
 
+// How far ahead an organization watch reads the instruments it holds: the
+// 6-month line its instrument_expires_6m event crosses, and no further. The
+// radar's WINDOW_DAYS["6m"], written out: pages/expiring.tsx reaches this
+// module back through the account pages, so its constants are not set yet
+// while this one is (calendar.test.ts holds the two equal).
+export const INSTRUMENT_DAYS = 182;
+// One slot per organization watch an account can hold.
+export const INSTRUMENT_SLOTS = TARGET_SLOTS;
+
+// The standing offers and supply arrangements the account's organization
+// watches hold (?3 to ?27, each an organization's number; an unused slot is
+// bound to -1, which no holder is), expiring from the data date (?1) to
+// INSTRUMENT_DAYS later (?2): one row per instrument and holder organization,
+// the names of its regions gathered (char(31) between them), soonest expiry
+// first, at most FEED_EVENTS_MAX rows, COUNT(*) OVER () counting every match
+// so the cap's last event can say how many more. rec_holders has no index by
+// organization and rec_instruments none by expiry, so the statement reads
+// rec_instruments whole (a few thousand rows; CROSS JOIN keeps it the outer
+// table) and the holders of each instrument in the window through
+// rec_holders_instrument.
+export const WATCH_INSTRUMENTS_SQL =
+  "SELECT i.agr, i.type_en, i.type_fr, i.desc_en, i.desc_fr, i.user_en, i.user_fr, i.start, i.expiry, i.n, h.oid, " +
+  "MIN(h.name) AS name, group_concat(COALESCE(h.region_en, h.region), char(31)) AS regions_en, " +
+  "group_concat(COALESCE(h.region_fr, h.region_en, h.region), char(31)) AS regions_fr, COUNT(*) OVER () AS total " +
+  "FROM rec_instruments i CROSS JOIN rec_holders h ON h.ik = i.k WHERE i.expiry BETWEEN ?1 AND ?2 AND h.oid IN (" +
+  `${Array.from({ length: INSTRUMENT_SLOTS }, (_, i) => `?${3 + i}`).join(", ")}) ` +
+  `GROUP BY i.k, h.oid ORDER BY i.expiry, i.agr, h.oid LIMIT ${FEED_EVENTS_MAX}`;
+
+export function instrumentBinds(first: string, owners: readonly number[]): (string | number)[] {
+  return [first, addDays(first, INSTRUMENT_DAYS), ...Array.from({ length: INSTRUMENT_SLOTS }, (_, i) => owners[i] ?? -1)];
+}
+
 // The watches' contract ends: each followed record's end whatever its date,
 // read as its one-event file reads it (the detail file of an award notice or
 // a history record, the rows of a published contract in the records
 // database), then the radar rows each organization and buyer watch reaches,
-// read by the id the nightly merged its own into when it retired one (the
-// page or the next mail run writes the move; a feed only reads). A record the
-// data no longer holds adds nothing. A records database that is not ready
-// throws, and the feed answers 503.
+// and the instruments each organization watch that follows
+// instrument_expires_6m holds expiring within INSTRUMENT_DAYS, each read by
+// the id the nightly merged its own into when it retired one (the page or the
+// next mail run writes the move; a feed only reads). A record the data no
+// longer holds adds nothing. A records database that is not ready throws, and
+// the feed answers 503.
 export async function watchEnds(env: Env, watches: readonly FeedWatch[], ctx: EventContext): Promise<FeedEvents> {
   const records: { kind: "award" | "history"; reference: string }[] = [];
   const published: { dept: string; ref: string }[] = [];
   const subjects: (FeedWatch & { kind: "organization" | "buyer" })[] = [];
+  const holders: FeedWatch[] = [];
   for (const w of watches) {
     if (w.kind === "organization" || w.kind === "buyer") {
       if (horizonDays(w.events)) subjects.push({ ...w, kind: w.kind });
+      if (w.kind === "organization" && w.events.includes("instrument_expires_6m")) holders.push(w);
       continue;
     }
     if (w.kind !== "contract") continue;
@@ -355,7 +395,18 @@ export async function watchEnds(env: Env, watches: readonly FeedWatch[], ctx: Ev
     if (head === "award" || head === "history") records.push({ kind: head, reference: rest.join(":") });
     else if (head === "contract" && rest.length > 1) published.push({ dept: rest[0], ref: rest.slice(1).join(":") });
   }
-  const ids = await Promise.all(subjects.map(async (w) => (await survivorOf(env, w.kind, w.target)) ?? w.target));
+  // An organization followed for both its ends and its instruments asks for its survivor once.
+  const survivors = new Map<string, Promise<string>>();
+  const idOf = (kind: "organization" | "buyer", target: string): Promise<string> => {
+    const key = `${kind}\n${target}`;
+    let id = survivors.get(key);
+    if (!id) {
+      id = survivorOf(env, kind, target).then((next) => next ?? target);
+      survivors.set(key, id);
+    }
+    return id;
+  };
+  const ids = await Promise.all(subjects.map((w) => idOf(w.kind, w.target)));
   const slots = new Map<string, EndsSlot>();
   subjects.forEach((w, i) => {
     const id = ids[i];
@@ -368,8 +419,11 @@ export async function watchEnds(env: Env, watches: readonly FeedWatch[], ctx: Ev
     if (!held || held.last < last) slots.set(key, { target, mark: w.segment ? ` ${w.segment} ` : "", last });
   });
   const bound = [...slots.values()].slice(0, ENDS_SLOTS);
+  const owners = [...new Set((await Promise.all(holders.map((w) => idOf("organization", w.target))))
+    .map((id) => orgNumber(id)).filter((n): n is number => n !== null))].slice(0, INSTRUMENT_SLOTS);
   const queries: Query[] = [
     ...(bound.length ? [{ sql: WATCH_ENDS_SQL, params: endsBinds(ctx.dataDate, bound) }] : []),
+    ...(owners.length ? [{ sql: WATCH_INSTRUMENTS_SQL, params: instrumentBinds(ctx.dataDate, owners) }] : []),
     ...published.map((p) => ({ sql: PUBLISHED_CONTRACT_SQL, params: [p.dept, p.ref] })),
   ];
   let rows: Row[][] = [];
@@ -386,18 +440,24 @@ export async function watchEnds(env: Env, watches: readonly FeedWatch[], ctx: Ev
     const facts = d ? detailFacts(ctx.lang, d) : null;
     push(facts ? contractEvent(ctx.lang, facts, ctx.base) : null);
   }
-  const first = bound.length ? 1 : 0;
+  let at = 0;
+  const ends = bound.length ? rows[at++] ?? [] : [];
+  const held = owners.length ? rows[at++] ?? [] : [];
   published.forEach((p, i) => {
-    const facts = publishedFacts(ctx.lang, p.dept, p.ref, rows[first + i] ?? []);
+    const facts = publishedFacts(ctx.lang, p.dept, p.ref, rows[at + i] ?? []);
     push(facts ? contractEvent(ctx.lang, facts, ctx.base) : null);
   });
-  if (!bound.length) return { events, beyond: 0 };
-  const ends = rows[0] ?? [];
   for (const r of ends) {
     const row = radarRow(r, ctx.dataDate);
     push(row ? contractEvent(ctx.lang, expiringFacts(ctx.lang, row), ctx.base) : null);
   }
-  return { events, beyond: Math.max(0, (num(ends[0]?.n) ?? 0) - ends.length) };
+  for (const r of held) {
+    const facts = instrumentFacts(ctx.lang, r);
+    push(facts ? instrumentEvent(ctx.lang, facts, ctx.base) : null);
+  }
+  // Each statement's rows past the ones read, every one later than them.
+  const past = (read: Row[], column: string) => Math.max(0, (num(read[0]?.[column]) ?? 0) - read.length);
+  return { events, beyond: past(ends, "n") + past(held, "total") };
 }
 
 // -- a feed's events --------------------------------------------------------------------------
@@ -450,7 +510,7 @@ export const feedPage = (feed: Pick<FeedState, "kind" | "searches">): string =>
 // names the dates the feed holds: closing dates, end dates, or both.
 export async function feedCalendar(env: Env, feed: FeedState, ctx: FeedContext): Promise<string> {
   const { events: all, beyond } = await feedEvents(env, feed, ctx);
-  const ends = beyond > 0 || all.some((e) => e.uid.startsWith("contract-"));
+  const ends = beyond > 0 || all.some((e) => e.uid.startsWith("contract-") || e.uid.startsWith("instrument-"));
   const closings = all.some((e) => e.uid.startsWith("notice-"));
   const more: MoreKind = ends && closings ? "dates" : ends ? "end" : "closing";
   const events = capped(ctx.lang, all, {

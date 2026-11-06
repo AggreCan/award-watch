@@ -43,7 +43,9 @@ Rules (pro-features section 5, docs/sosa.md):
   not move and a missing file is not an absence.
 
 The events (kind 12 gained, 13 no longer held) go to sosa_events, one row per
-organization, instrument and region; the watch build reads them from there.
+organization, instrument and region; the records sync carries each one once
+into rec_events as instrument_gained or instrument_lost
+(records_db.derive_events), where the organization watches read them.
 """
 
 from __future__ import annotations

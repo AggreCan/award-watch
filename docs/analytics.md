@@ -573,15 +573,22 @@ there is none, and no amendment, cancellation, end date or closing is written.
 | `notice_amended` | a notice first seen earlier with a version first seen after `lo`: `oclosing` and `closing` when the closing moved, the earlier title in `other` when it changed |
 | `notice_closed`, `notice_cancelled` | a notice open on the previous night's data date (`normalize.tender_status_on`) and not open tonight; `notice_cancelled` when its status is cancelled |
 | `notice_awarded` | an award notice first seen after `lo` whose solicitation is a notice's (compared in upper case): once per notice, the winner in `other` (none when withheld) |
+| `instrument_gained`, `instrument_lost` | a row of the sosa stage's `sosa_events` (kind 12, 13; `docs/sosa.md`) younger than 90 days whose key `records_events` does not hold yet: one per organization, instrument and region. The stage compares each weekly file with the last one applied and writes no gain on its first file and no loss before its second, so this step carries its rows over and compares nothing; a row's day there is the file's publication date, which can be earlier than `lo` (a held file released later), so rows are taken by key, not by day |
+| `instrument_expires_6m` | an active holder row (resolved to an organization) of an instrument whose expiry is after `lo` plus 182 days and on or before the data date plus 182, so each expiry crosses the line once: one per instrument and organization, its regions together; `horizon` 182. No 365-day line: many instruments run for years |
 
 Subjects: `oid` (the organization), `buyer` (the buyer id; history: the client
 department), `sid` (the lowest UNSPSC segment of an award notice, a history
 record or a notice), `ref` (what a watch on one record follows:
 `award:<reference>`, `history:<reference>` in the URL form in lower case,
 `contract:<department>:<reference>`, `grant:<department>:<reference>`,
-`tender:<reference>`). An event about a published contract is written once per
+`tender:<reference>`; `sosa:<agreement number>` for a standing offer or supply
+arrangement). An event about a published contract is written once per
 row of the contract (50 at most) with that row's `ref`, so a watch on any
-version's page sees it; the organization and buyer are on the first only.
+version's page sees it; the organization and buyer are on the first only. An
+instrument's event names its holder (`oid`) and no buyer or segment; `endd`
+is the expiry, `title` and `title_fr` the description, `other` and `other_fr`
+the type and the regions' names ("Regional Master Standing Offer · British
+Columbia"), `path` the instrument's page; no column was added for it.
 
 At most 100 rows of one kind per organization or buyer per data date, the
 largest values first; past that the rows lose that subject (they still serve a
@@ -605,6 +612,9 @@ each partial, `(ref, day)`, and `(day, kind)` for the console's counts. The
 site's statements (`site/src/account/watch_events.ts`) bind 30 day slots and 25
 subject slots and seek each pair (a buyer narrowed to a segment binds its
 buyer and segment); each ends in a `LIMIT`, and the tests read their plans.
+The rows statement joins each `sosa:` row to `rec_instruments` through
+`rec_instruments_agr` for the instrument's active holders now, one seek per
+row read.
 
 ## Phase 3
 
