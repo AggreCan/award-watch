@@ -1606,7 +1606,7 @@ const STRINGS = {
   },
   // Beside the 12-month file on the Data page: it is part of Pro from the
   // accounts switch (index.tsx). No price is named.
-  "data.file.pro": { en: "Part of Pro once accounts open.", fr: "Fait partie de Pro dès l'ouverture des comptes." },
+  "data.file.pro": { en: "Part of Pro.", fr: "Fait partie de Pro." },
   "data.file.sums": { en: "SHA-256 checksums of the files above", fr: "Sommes de contrôle SHA-256 des fichiers ci-dessus" },
   "data.yearly_awards": { en: "Award Notices by Year of Award", fr: "Avis d'attribution par année d'attribution" },
   "data.yearly_history": { en: "PSPC Contract History by Year of Award", fr: "Historique des contrats de SPAC par année d'attribution" },
@@ -1869,8 +1869,8 @@ const STRINGS = {
     fr: "Les périodes sont cumulatives : d'ici 3, 6 et 12 mois après la date des données. Un contrat qui prend fin d'ici 3 mois figure aussi dans les listes de 6 et de 12 mois.",
   },
   "methodology.expiring_pro": {
-    en: "Once accounts open, the full 6-month and 12-month lists and the 12-month CSV file are part of Pro, the site's paid plan; every reader still sees their counts, their totals and their first {n} contracts.",
-    fr: "Dès l'ouverture des comptes, les listes complètes de 6 et de 12 mois et le fichier CSV de 12 mois font partie de Pro, le forfait payant du site; chaque lecteur en voit toujours le nombre, le total et les {n} premiers contrats.",
+    en: "The full 6-month and 12-month lists and the 12-month CSV file are part of Pro, the site's paid plan; every reader still sees their counts, their totals and their first {n} contracts.",
+    fr: "Les listes complètes de 6 et de 12 mois et le fichier CSV de 12 mois font partie de Pro, le forfait payant du site; chaque lecteur en voit toujours le nombre, le total et les {n} premiers contrats.",
   },
   "methodology.expiring_growth": {
     en: "Amendments counts the versions beyond the original. Value growth is the newest total value over the original amount, minus one, shown as a percentage. It is left blank when either figure is unknown.",
@@ -2149,8 +2149,8 @@ const STRINGS = {
   "lists.err_none": { en: "Choose at least one list.", fr: "Choisissez au moins une liste." },
   // Under the chooser: interest.note for several lists.
   "lists.note": {
-    en: "Email lists are part of Pro once accounts open, and your lists will be waiting in your account; the {privacy} page says what the form keeps.",
-    fr: "Les listes de diffusion font partie de Pro dès l'ouverture des comptes, et vos listes vous attendront dans votre compte; la page {privacy} indique ce que conserve le formulaire.",
+    en: "Email lists are part of Pro. Sign in with this address and the lists are waiting in your account as saved searches; the {privacy} page says what the form keeps.",
+    fr: "Les listes de diffusion font partie de Pro. Connectez-vous avec cette adresse et les listes vous attendent dans votre compte comme recherches enregistrées; la page {privacy} indique ce que conserve le formulaire.",
   },
 
   // -- citing -------------------------------------------------------------------------------------

@@ -311,11 +311,12 @@ describe("the alerts page and the privacy page", () => {
     expect(html).toContain("On the Pro plan, each list is a saved search on your account, sent by email each day or each week with what is new in it.");
     expect(html).toContain("Contracts entering the 3-, 6- or 12-month window of contracts ending soon, for one buyer, one segment or every contract.");
     expect(html).toContain("New records naming an organization you watch: an award notice, a contract or a grant.");
-    expect(html).toContain("The form keeps the address and each list chosen, and sends nothing itself. Sign in with the same address, now or later, " +
+    // decode(): the apostrophe in "account's" is an entity in the page.
+    expect(decode(html)).toContain("The form keeps the address and each list chosen, and sends nothing itself. Sign in with the same address, now or later, " +
       "and the lists are there, ready to add to the account's saved searches; delivery by email comes with Pro.");
     // The chooser's note names the lists, several of them.
     expect(html).toContain(
-      'Email lists are part of Pro. Sign in with this address and the lists are waiting in your account as a saved search; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+      'Email lists are part of Pro. Sign in with this address and the lists are waiting in your account as saved searches; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
     );
     for (const href of ["/tenders", "/expiring", "/organizations", "/buyers", "/segments", "/privacy#interest"]) {
       expect(html, href).toContain(`<a href="${href}">`);
@@ -337,7 +338,7 @@ describe("the alerts page and the privacy page", () => {
     expect(french).toContain("Le formulaire ci-dessous conserve une liste pour une adresse qui n’a pas encore de compte.");
     expect(french).toContain('<h2 id="cover">Ce que Pro envoie</h2>');
     expect(french).toContain('<h2 id="register">Choisissez vos listes</h2>');
-    expect(french).toContain("Rien n’est encore envoyé.");
+    expect(french).toContain("Le formulaire conserve l’adresse et chaque liste choisie et n’envoie rien lui-même.");
     expect(french).toContain('<a class="rail-item" href="/alerts" aria-current="page"><span class="rail-label">Listes de diffusion</span></a>');
     expect(french).toContain('<a class="rail-item" href="/alerts"><span class="rail-label">Listes de diffusion</span></a>');
     expect(french.slice(french.indexOf('<footer class="site-footer">'))).toContain('<a href="/alerts">Listes de diffusion</a>');

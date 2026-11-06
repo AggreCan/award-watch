@@ -486,13 +486,13 @@ describe("the radar CSVs", () => {
     }
   });
 
-  it("are both on the Data page, the 12-month file marked as part of Pro once accounts open, in both languages", async () => {
+  it("are both on the Data page, the 12-month file marked as part of Pro, in both languages", async () => {
     const en = await html("/data", off());
     expect(en).toContain('<a href="/downloads/expiring-3m.csv" class="mono">expiring-3m.csv</a>');
-    expect(en).toMatch(/<a href="\/downloads\/expiring-12m.csv" class="mono">expiring-12m.csv<\/a><\/td><td data-label="Contents">Every contract ending within 12 months of the data date, one row each, listed once across sources<br\/><span class="muted small">Part of Pro once accounts open.<\/span><\/td>/);
+    expect(en).toMatch(/<a href="\/downloads\/expiring-12m.csv" class="mono">expiring-12m.csv<\/a><\/td><td data-label="Contents">Every contract ending within 12 months of the data date, one row each, listed once across sources<br\/><span class="muted small">Part of Pro.<\/span><\/td>/);
     expect(en.indexOf("expiring-3m.csv</a>")).toBeLessThan(en.indexOf("expiring-12m.csv</a>"));
     const fr = nbsp(await html("/data?lang=fr", off()));
-    expect(fr).toContain('<span class="muted small">Fait partie de Pro dès l’ouverture des comptes.</span>');
+    expect(fr).toContain('<span class="muted small">Fait partie de Pro.</span>');
     expect(fr).toContain("Tous les contrats prenant fin dans les 3 mois suivant la date des données, avec les colonnes du fichier de 12 mois");
     // The mark says when, never what it costs.
     for (const lang of ["en", "fr"] as const) expect(t(lang, "data.file.pro")).not.toMatch(/\$|[0-9]|price|prix|month|mois/i);
@@ -536,13 +536,13 @@ describe("the feeds", () => {
 });
 
 describe("the methodology page", () => {
-  it("says, in both languages and with no price, that the deep windows are part of Pro once accounts open", async () => {
+  it("says, in both languages and with no price, that the deep windows are part of Pro", async () => {
     const en = await html("/methodology", off());
-    expect(en).toContain("<li>Once accounts open, the full 6-month and 12-month lists and the 12-month CSV file are part of Pro, the site&#39;s paid plan; every reader still sees their counts, their totals and their first 10 contracts.</li>");
+    expect(en).toContain("<li>The full 6-month and 12-month lists and the 12-month CSV file are part of Pro, the site&#39;s paid plan; every reader still sees their counts, their totals and their first 10 contracts.</li>");
     const fr = nbsp(await html("/methodology?lang=fr", off()));
-    expect(fr).toContain("<li>Dès l’ouverture des comptes, les listes complètes de 6 et de 12 mois et le fichier CSV de 12 mois font partie de Pro, le forfait payant du site; chaque lecteur en voit toujours le nombre, le total et les 10 premiers contrats.</li>");
+    expect(fr).toContain("<li>Les listes complètes de 6 et de 12 mois et le fichier CSV de 12 mois font partie de Pro, le forfait payant du site; chaque lecteur en voit toujours le nombre, le total et les 10 premiers contrats.</li>");
     // The sentence follows the one that defines the windows.
-    expect(en.indexOf("Once accounts open")).toBeGreaterThan(en.indexOf("The windows are cumulative"));
+    expect(en.indexOf("The full 6-month and 12-month lists")).toBeGreaterThan(en.indexOf("The windows are cumulative"));
   });
 });
 
