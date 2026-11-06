@@ -360,7 +360,7 @@ describe("the CSV files", () => {
     expect(bucketFor("GET", "/instruments/E60ZT-120002%2F001%2FZT")).toBe("page");
     expect(routeTemplate("GET", "/instruments/E60ZT-120002%2F001%2FZT").route).toBe("/instruments/:agreement");
     expect(routeTemplate("GET", "/instruments/E60ZT-120002%2F001%2FZT/holders.csv").route).toBe("/instruments/:agreement/holders.csv");
-    expect(PRO_INCLUDES.some(([f, k]) => f === "export_filtered" && k === "instruments.pro_include")).toBe(true);
+    expect(PRO_INCLUDES.some(([f, k]) => f === "export_filtered" && k === "plans.pro_instruments")).toBe(true);
   });
 });
 

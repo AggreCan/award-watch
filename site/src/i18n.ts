@@ -3251,6 +3251,48 @@ const STRINGS = {
     en: "A notice or contract history record whose award date falls after the data date, which in every such record seen is the contract's end date entered in the award-date field, is counted in the fiscal year and quarter of its publication date.",
     fr: "Un avis ou un dossier de l'historique des contrats dont la date d'attribution tombe après la date des données, qui dans chaque dossier observé est la date de fin du contrat saisie dans le champ de la date d'attribution, est compté dans l'exercice et le trimestre de sa date de publication.",
   },
+  // -- the plan cards (src/pro.tsx PlanCards): Free beside Pro on the tease
+  // panels, the Pro page and the billing page, one checklist row a feature.
+  // Each row is one short line (src/pro.tsx PLAN_LINE_MAX) that names the
+  // figure its own plan gets and never compares the plans (operator,
+  // 2026-11-06). {n}, {h}, {m}, {a}, {b} and {day} are read from the plans
+  // (account/entitlements.ts RULES) and the constants; {monthly} and
+  // {yearly} are the operator's figures from wrangler.jsonc, never written here.
+  "plans.free": { en: "Free", fr: "Gratuit" },
+  "plans.figure": { en: "CA${n}", fr: "{n} $ CA" },
+  "plans.price": { en: "{monthly} a month or {yearly} a year", fr: "{monthly} par mois ou {yearly} par année" },
+  "plans.unavailable": { en: "Not on sale yet", fr: "Pas encore en vente" },
+  "plans.free_for": { en: "Every page, with or without an account.", fr: "Toutes les pages, avec ou sans compte." },
+  "plans.pro_for": { en: "For people who bid, or follow who wins.", fr: "Pour qui soumissionne, ou suit qui gagne." },
+  // Under the Pro card's buttons while it is on sale: the taxes named with the price.
+  "plans.seller": {
+    en: "Taxes added at checkout. Monthly or yearly, cancel any time. Sold through Link on behalf of Allwater Software Inc.",
+    fr: "Taxes ajoutées au paiement. Mensuel ou annuel, annulable en tout temps. Vendu par l'intermédiaire de Link pour le compte d'Allwater Software Inc.",
+  },
+  "plans.current": { en: "Your plan", fr: "Votre forfait" },
+  "plans.create_free": { en: "Create a free account", fr: "Créer un compte gratuit" },
+  // Read before a row the plan lacks, for a reader who does not see the hollow mark.
+  "plans.lacks": { en: "Not in this plan:", fr: "Pas dans ce forfait :" },
+  "plans.free_tenders": { en: "Tender notices, nightly", fr: "Appels d'offres, chaque nuit" },
+  "plans.pro_tenders": { en: "Tender notices, same day, every {h} hours", fr: "Appels d'offres du jour, toutes les {h} h" },
+  "plans.free_radar": { en: "Contracts ending: the {m}-month list", fr: "Contrats prenant fin : liste de {m} mois" },
+  "plans.pro_radar": { en: "Contracts ending: {a}- and {b}-month lists", fr: "Contrats prenant fin d'ici {a} et {b} mois" },
+  "plans.radar_csv": { en: "Contracts ending: the {m}-month CSV", fr: "Contrats prenant fin : CSV de {m} mois" },
+  "plans.free_searches": { en: "{n} saved searches, on the site", fr: "{n} recherches enregistrées, sur le site" },
+  "plans.pro_searches": { en: "{n} saved searches, by email", fr: "{n} recherches enregistrées, par courriel" },
+  "plans.free_watches": { en: "{n} watches, on the site", fr: "{n} suivis, sur le site" },
+  "plans.pro_watches": { en: "{n} watches, events by email", fr: "{n} suivis, événements par courriel" },
+  "plans.free_feeds": { en: "A calendar file per notice or contract", fr: "Fichier de calendrier par avis ou contrat" },
+  "plans.pro_feeds": { en: "Calendar feeds of searches and watches", fr: "Flux de calendrier : recherches et suivis" },
+  "plans.free_analytics": { en: "Analytics: first block, {n} fiscal years", fr: "Analyses : premier bloc, {n} exercices" },
+  "plans.pro_analytics": { en: "Analytics: every view, {n} fiscal years", fr: "Analyses : toutes les vues, {n} exercices" },
+  "plans.free_api": { en: "Open JSON API", fr: "API JSON ouverte" },
+  "plans.pro_api": { en: "Keyed API: {day} requests a day", fr: "API à clé : {day} requêtes par jour" },
+  "plans.free_instruments": { en: "Standing offer pages", fr: "Pages des offres à commandes" },
+  "plans.pro_instruments": { en: "Standing offer CSV files", fr: "Fichiers CSV des offres à commandes" },
+  "plans.pro_briefing": { en: "Weekly briefing by email", fr: "Bulletin hebdomadaire par courriel" },
+  "plans.pro_org": { en: "Your organization's page", fr: "La page de votre organisation" },
+  "plans.pro_bugs": { en: "Bug report form", fr: "Formulaire de signalement de bogue" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

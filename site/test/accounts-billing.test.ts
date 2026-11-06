@@ -23,6 +23,12 @@ const KEYS = {
 };
 const payEnv = (extra: Record<string, unknown> = {}) => onEnv({ ...KEYS, ...extra });
 
+// The billing page's plan cards (src/pro.tsx PlanCards): Free, then Pro to the panel's end.
+const cardsOf = (html: string): string[] => {
+  const at = html.indexOf('<div class="plan-cards"');
+  return html.slice(at, html.indexOf("</section>", at)).split(/(?=<div class="plan-card[ "])/).slice(1);
+};
+
 // -- a fake Stripe ------------------------------------------------------------------
 
 type Sent = { method: string; url: string; headers: Record<string, string>; form: URLSearchParams };
@@ -559,11 +565,37 @@ describe("the billing page", () => {
     expect(html).toContain('name="interval" value="monthly"');
     expect(html).toContain('name="interval" value="yearly"');
     expect(html).toMatch(/name="csrf" value="[0-9a-f]{32}"/);
-    expect(html).toContain("Up to 25 saved searches; the Free plan keeps 3.");
+    // What Pro includes, as the plan cards: the Free card is the account's
+    // own plan, with no link (the head links the account); the Pro card names
+    // the price and leads to the Subscribe panel below.
+    const [free, pro] = cardsOf(html);
+    expect(free).toContain('<h3>Free</h3><span class="plan-current">Your plan</span>');
+    expect(free).not.toContain("<a ");
+    expect(free).toContain("<span>3 saved searches, on the site</span>");
+    expect(pro).toContain("<span>25 saved searches, by email</span>");
+    expect(pro).toContain('<strong class="plan-amount">CA$12</strong> a month or CA$120.50 a year');
+    expect(pro).toContain('<a href="#subscribe" class="btn btn-primary">Subscribe to Pro</a> <a href="/pro" class="btn">About Pro</a>');
+    expect(pro).not.toContain("plan-current");
+    expect(html).toContain('<h2 id="subscribe">Subscribe to Pro</h2>');
     const fr = nbsp(decode(await (await get("/account/billing?lang=fr", { cookie, env: payEnv() })).text()));
     expect(fr).toContain("Mensuel, 12 $ CA par mois");
     expect(fr).toContain("Annuel, 120,50 $ CA par année");
     expect(fr).toContain("Prix en dollars canadiens. Taxes ajoutées au paiement.");
+    const [freeFr, proFr] = cardsOf(fr);
+    expect(freeFr).toContain('<h3>Gratuit</h3><span class="plan-current">Votre forfait</span>');
+    expect(proFr).toContain('<strong class="plan-amount">12 $ CA</strong> par mois ou 120,50 $ CA par année');
+  });
+
+  it("shows a Pro account its own card as the current plan, with no way to buy it", async () => {
+    const { cookie } = await subscriber("cards");
+    const html = decode(await (await get("/account/billing", { cookie, env: payEnv() })).text());
+    const [free, pro] = cardsOf(html);
+    expect(pro).toContain('<span class="plan-current">Your plan</span>');
+    expect(free).not.toContain("plan-current");
+    // No link on either card: nothing to buy, and the head already links the account.
+    expect(html.slice(html.indexOf('<div class="plan-cards"'), html.indexOf("</section>", html.indexOf('<div class="plan-cards"')))).not.toContain("<a ");
+    expect(html).not.toContain('href="#subscribe"');
+    expect(html).not.toContain('id="subscribe"');
   });
 
   it("shows a subscriber the status, the period end and the portal button instead of the prices", async () => {

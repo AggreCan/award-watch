@@ -1,11 +1,12 @@
 // /pro: what the paid plan adds, who it is for, what stays free, its price
 // and the way in, for a reader who has not signed in and for a search engine
-// (docs/seo.md). Every line of what Pro includes is a feature the plans grant
-// (account/entitlements.ts RULES.pro), in the billing page's words where it
-// has them; test/seo-intent.test.ts holds the two together. The price is the
-// billing page's: the operator's two figures, shown only while a checkout
-// can be made (the payment source is available). Without one the page says
-// Pro is not on sale yet and carries no Product markup.
+// (docs/seo.md). What Pro includes is the plan cards under the head (Free
+// beside Pro, src/pro.tsx PlanCards): every row is a feature the plans grant
+// Pro and not Free (account/entitlements.ts RULES); test/seo-intent.test.ts
+// holds the two together. The price is the billing page's: the operator's
+// two figures, shown only while a checkout can be made (the payment source
+// is available). Without one the page says Pro is not on sale yet and
+// carries no Product markup.
 //
 // The rail is unchanged; the footer and the tease panels link here. While
 // the accounts switch is off the address is the site's 404, as
@@ -15,53 +16,22 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { SampleLine } from "../account/briefing_pages";
-import { RULES } from "../account/entitlements";
-import { paymentSource } from "../account/payments";
+import { RULES, type Feature } from "../account/entitlements";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
-import { KEY_PER_DAY, KEY_PER_MINUTE } from "../api_keyed_spec";
 import { loadStats } from "../data";
-import type { AppEnv, Env } from "../env";
+import type { AppEnv } from "../env";
 import { decimal, fmtInt, t, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
-import { PriceLine, ProTag, type ProPrice, proPrice } from "../pro";
-import { RECORDS_PAGE_ROWS } from "../records_tables";
-// The organizations "Your organization" compares with (account/org_claim.ts COMPETITORS_MAX).
-import { FREE_YEARS, MAX_RIVALS as COMPETITORS_MAX } from "../records_db";
+import { PLAN_ROWS, PlanCards, PriceLine, ProTag, type PlanReader, type ProPrice, checkoutPrice, planCards, planLine } from "../pro";
 import { type Faq, pageSeo, proJsonLd } from "../seo";
-import { INCUMBENTS_TEASE } from "./backbone";
 
 export const PRO_PATH = "/pro";
 
-// The two figures while a checkout can be made, else null.
-export function checkoutPrice(env: Env): ProPrice | null {
-  return paymentSource(env).available() ? proPrice(env) : null;
-}
-
-// What Pro includes, one line a feature, each beside the feature the plans
+// What Pro includes: the Pro card's lines, each beside the feature the plans
 // grant for it.
-export function proIncludes(lang: Lang): { feature: keyof (typeof RULES)["pro"]; text: string }[] {
-  return [
-    { feature: "intraday", text: t(lang, "billing.pro_intraday") },
-    { feature: "radar_depth", text: t(lang, "billing.pro_radar") },
-    {
-      feature: "saved_searches",
-      text: t(lang, "billing.pro_searches", { n: fmtInt(RULES.pro.saved_searches, lang), free: fmtInt(RULES.free.saved_searches, lang) }),
-    },
-    { feature: "delivery", text: t(lang, "billing.pro_delivery") },
-    { feature: "watch_mail", text: t(lang, "watches.pro_page", { n: fmtInt(RULES.pro.watchlists, lang), free: fmtInt(RULES.free.watchlists, lang) }) },
-    // A weekly briefing is a delivery, as a saved search's mail is (src/account/briefings.ts).
-    { feature: "delivery", text: t(lang, "briefing.pro_page") },
-    // A calendar feed is a delivery, as mail is (src/account/feeds.ts).
-    { feature: "delivery", text: t(lang, "propage.feeds") },
-    { feature: "analytics", text: t(lang, "billing.pro_analytics") },
-    { feature: "analytics", text: t(lang, "propage.records", { n: fmtInt(RECORDS_PAGE_ROWS, lang) }) },
-    { feature: "analytics", text: t(lang, "propage.incumbents", { n: fmtInt(INCUMBENTS_TEASE, lang) }) },
-    { feature: "analytics", text: t(lang, "orgclaim.pro_page", { n: fmtInt(COMPETITORS_MAX, lang), free: fmtInt(FREE_YEARS, lang) }) },
-    { feature: "api", text: t(lang, "propage.api", { day: fmtInt(KEY_PER_DAY, lang), minute: fmtInt(KEY_PER_MINUTE, lang) }) },
-    { feature: "bug_reports", text: t(lang, "billing.pro_bugs") },
-    { feature: "export_filtered", text: t(lang, "propage.instruments") },
-  ];
+export function proIncludes(lang: Lang): { feature: Feature; text: string }[] {
+  return PLAN_ROWS.map((row) => ({ feature: row.feature, text: planLine(lang, row.pro) }));
 }
 
 // The questions, word for word as the page shows them and as the FAQPage
@@ -81,7 +51,7 @@ export function proFaq(lang: Lang, price: ProPrice | null): Faq[] {
   ];
 }
 
-type Reader = "out" | "free" | "pro";
+type Reader = PlanReader;
 
 // The way in: sign in (an account is made the same way), the billing page for
 // a free account, the account for a Pro one.
@@ -109,16 +79,16 @@ export async function proPage(c: Context<AppEnv>): Promise<Response> {
   const base = pageSeo("pro", lang);
   const seo = { ...base, jsonLd: proJsonLd(lang, { price, description: base.description, faq }) };
   const title = t(lang, "propage.title");
+  // The cards come straight under the head with the price and the way in,
+  // so the head carries no offer of its own; the questions end on one.
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats?.data_as_of ?? null} seo={seo}>
-      <PageHead lang={lang} eyebrow={<ProTag lang={lang} />} title={title} lead={t(lang, "propage.lead")}>
-        <Offer lang={lang} price={price} reader={reader} />
-      </PageHead>
+      <PageHead lang={lang} eyebrow={<ProTag lang={lang} />} title={title} lead={t(lang, "propage.lead")} />
       <div class="doc-layout doc-alone">
         <div class="doc">
           <h2 id="includes">{t(lang, "billing.panel_pro")}</h2>
-          <ul>{proIncludes(lang).map((i) => <li>{i.text}</li>)}</ul>
+          <PlanCards lang={lang} plans={planCards(lang, { price, reader, place: "pro_page" })} />
           <p><SampleLine lang={lang} text="briefing.pro_sample" link="briefing.sample_link_text" /></p>
           <h2 id="who">{t(lang, "propage.who_title")}</h2>
           <ul>

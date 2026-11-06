@@ -213,7 +213,8 @@ describe("a reader without Pro", () => {
           expect(html, at).not.toContain(MARK[lang]);
           if (path === "/tenders/same-day") {
             const tease = /<section class="panel pro-panel">[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
-            expect(tease, at).toContain(`</p>${footOf(lang)}</section>`);
+            // The legend under the plan cards, the panel's last block.
+            expect(tease, at).toContain(`</p></div></div>${footOf(lang)}</section>`);
             expect(count(html, LEGEND[lang]), at).toBe(1);
           } else {
             expect(html, at).not.toContain(LEGEND[lang]);

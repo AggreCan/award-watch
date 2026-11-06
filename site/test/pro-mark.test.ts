@@ -18,7 +18,12 @@ import wrangler from "../wrangler.jsonc?raw";
 import { allKeys, rawEntry, SAME_IN_BOTH, t, type Key } from "../src/i18n";
 import { app } from "../src/index";
 import { STYLES_VERSION } from "../src/layout";
-import { PRO_GLYPH_PATH, PRO_INCLUDES, proPrice } from "../src/pro";
+import { RULES } from "../src/account/entitlements";
+import { KEY_PER_DAY } from "../src/api_keyed_spec";
+import { EXPIRING_WINDOWS } from "../src/data";
+import { PLAN_CARD_ROWS, PLAN_LINE_MAX, PLAN_ROWS, PRO_GLYPH_PATH, PRO_INCLUDES, planLine, proPrice } from "../src/pro";
+import { FREE_YEARS, MAX_YEARS } from "../src/records_db";
+import { SAME_DAY_RUNS_UTC } from "../src/refresh";
 import { routeTemplate } from "../src/views";
 import { csrf, decode, get, grantPro, nbsp, newEmail, nextIp, onEnv, post, signIn, useAccountsDb } from "./accounts-helpers";
 import { FILES, makeFakeAssets, testEnv } from "./assets";
@@ -40,6 +45,12 @@ const DEEP_FILES: Record<string, unknown> = Object.fromEntries((["6m", "12m"] as
 ]));
 const radar = (extra: Record<string, unknown> = {}) => makeFakeAssets({}, { ...DEEP_FILES, ...extra });
 const on = (extra: Record<string, unknown> = {}) => onEnv({ ASSETS: radar(), ...extra });
+// The switch on with the payment service's two secrets set, so a checkout can
+// be made and the plan cards name the price from wrangler.jsonc's figures.
+const paid = (extra: Record<string, unknown> = {}) => on({ STRIPE_SECRET_KEY: "sk_test_fake0000", STRIPE_WEBHOOK_SECRET: "whsec_fake0000", ...extra });
+// A tease panel, and its plan cards: Free, then Pro to the panel's end.
+const teaseOf = (html: string) => /<section class="panel pro-panel">[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
+const cardsOf = (panel: string) => panel.split(/(?=<div class="plan-card[ "])/).slice(1);
 
 // The chip as ProTag writes it, in either language.
 const CHIP_EN = `<span class="pro-tag"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="${PRO_GLYPH_PATH}"></path></svg>Pro<span class="visually-hidden"> (paid plan)</span></span>`;
@@ -270,27 +281,228 @@ describe("the radar's tabs and tiles", () => {
     expect(fr).toContain(`<span class="tile-label">D’ici 6 mois ${CHIP_FR}</span>`);
   });
 
-  it("name the price on the tease panel from the variables, whatever they hold, and leave it out when they do not read", async () => {
-    const at = async (vars: Record<string, string>, lang = "en") =>
-      /<p class="pro-price">[^<]*<\/p>/.exec(await html(`/expiring/6m?lang=${lang}`, { env: on(vars) }))?.[0] ?? null;
-    expect(await at({})).toBe(`<p class="pro-price">Pro is CA$${PRICE[1]} a month or CA$${PRICE[2]} a year, taxes added at checkout.</p>`);
+  it("name the price on the tease panel's Pro card from the variables while a checkout can be made, and say Pro is not on sale otherwise", async () => {
+    const figure = (page: string) => /<span class="plan-figure">([\s\S]*?)<\/span><\/p>/.exec(cardsOf(teaseOf(page))[1] ?? "")?.[1] ?? null;
+    const at = async (vars: Record<string, string>, lang = "en", e = paid) => figure(nbsp(await html(`/expiring/6m?lang=${lang}`, { env: e(vars) })));
+    expect(await at({})).toBe(`<strong class="plan-amount">CA$${PRICE[1]}</strong> a month or CA$${PRICE[2]} a year`);
     expect(await at({ PRICE_MONTHLY_CAD: "12.00", PRICE_YEARLY_CAD: "120.50" })).toBe(
-      '<p class="pro-price">Pro is CA$12.00 a month or CA$120.50 a year, taxes added at checkout.</p>');
+      '<strong class="plan-amount">CA$12.00</strong> a month or CA$120.50 a year');
     expect(await at({ PRICE_MONTHLY_CAD: "12.00", PRICE_YEARLY_CAD: "120.50" }, "fr")).toBe(
-      '<p class="pro-price">Pro coûte 12,00 $ CA par mois ou 120,50 $ CA par année, taxes ajoutées au paiement.</p>');
-    // A figure out of form, or a missing price the checkout would charge: no line, as the billing page offers nothing then.
-    expect(await at({ PRICE_YEARLY_CAD: "about 120" })).toBeNull();
-    expect(await at({ STRIPE_PRICE_MONTHLY: "" })).toBeNull();
+      '<strong class="plan-amount">12,00 $ CA</strong> par mois ou 120,50 $ CA par année');
+    // A figure out of form, a missing price the checkout would charge, or no
+    // payment service: no figure, as the billing page offers nothing then.
+    const none = '<span class="muted">Not on sale yet</span>';
+    expect(await at({ PRICE_YEARLY_CAD: "about 120" })).toBe(none);
+    expect(await at({ STRIPE_PRICE_MONTHLY: "" })).toBe(none);
+    expect(await at({}, "en", on)).toBe(none);
+    expect(await at({}, "fr", on)).toBe('<span class="muted">Pas encore en vente</span>');
     expect(proPrice({ ...testEnv(radar()), PRICE_MONTHLY_CAD: "" } as never)).toBeNull();
+    // The taxes are named with the price, in the note under the buttons, and only with it.
+    const withPrice = cardsOf(teaseOf(await html("/expiring/6m", { env: paid() })))[1];
+    expect(withPrice).toContain('<p class="plan-for">For people who bid, or follow who wins.</p>');
+    expect(withPrice).toContain('<p class="plan-note">Taxes added at checkout. Monthly or yearly, cancel any time. Sold through Link on behalf of Allwater Software Inc.</p>');
+    const withoutPrice = cardsOf(teaseOf(await html("/expiring/6m", { env: on() })))[1];
+    expect(withoutPrice).toContain('<p class="plan-for">For people who bid, or follow who wins.</p>');
+    expect(withoutPrice).not.toContain("plan-note");
     // The price is never written as a figure in the code's strings.
-    for (const key of ["pro.price"] as Key[]) expect(rawEntry(key).en + rawEntry(key).fr).not.toMatch(/[0-9]/);
+    for (const key of ["pro.price", "plans.price", "plans.figure"] as Key[]) expect(rawEntry(key).en + rawEntry(key).fr).not.toMatch(/[0-9]/);
   });
 
-  it("lists what Pro includes, watches, calendar feeds, your organization, the weekly briefing, instrument files and bug reports among it, each line a Pro feature", () => {
+  it("lists what Pro includes, watches, calendar feeds, your organization, the weekly briefing, the keyed API, instrument files and bug reports among it, each line a Pro feature", () => {
     expect(PRO_INCLUDES.map(([f]) => f)).toEqual([
-      "radar_depth", "radar_depth", "intraday", "delivery", "watch_mail", "delivery", "delivery", "analytics", "bug_reports", "export_filtered",
+      "intraday", "radar_depth", "radar_depth", "delivery", "watch_mail", "delivery", "analytics", "api", "export_filtered",
+      "delivery", "analytics", "bug_reports",
     ]);
-    expect(PRO_INCLUDES.map(([, key]) => key)).toContain("briefing.pro_include");
+    expect(PRO_INCLUDES.map(([, key]) => key)).toContain("plans.pro_briefing");
+    expect(PRO_INCLUDES).toEqual(PLAN_ROWS.map((r) => [r.feature, r.pro.key]));
+    // The rows Free has come first, then the rows only Pro has, so the hollow marks gather at the foot.
+    const firstLack = PLAN_ROWS.findIndex((r) => !r.free);
+    expect(firstLack).toBeGreaterThan(0);
+    expect(PLAN_ROWS.slice(firstLack).every((r) => !r.free)).toBe(true);
+  });
+});
+
+// -- the plan cards (src/pro.tsx PlanCards) ---------------------------------------------------
+
+// A card's rows: whether each is marked as lacking, and its words as read.
+const rowsOf = (card: string) => [...card.matchAll(/<li( class="plan-lacks")?>([\s\S]*?)<\/li>/g)].map((m) => ({
+  lacks: !!m[1],
+  hollow: m[2].includes('class="plan-mark plan-mark-none"'),
+  text: m[2].replace(/<span class="visually-hidden">[^<]*<\/span>/, "").replace(/<[^>]+>/g, ""),
+  said: /<span class="visually-hidden">([^<]*)<\/span>/.exec(m[2])?.[1] ?? null,
+}));
+
+describe("the plan cards", () => {
+  const TEASES = ["/tenders/same-day", "/expiring/6m", "/expiring/12m"];
+
+  it("put Free beside Pro on both tease pages, the same rows in the same order, Free's lacks in a hollow ring, in both languages", async () => {
+    await sessions();
+    for (const path of TEASES) {
+      for (const lang of ["en", "fr"] as const) {
+        for (const [who, cookie] of [["no session", undefined], ["free", freeCookie]] as const) {
+          const at = `${path} ${lang} ${who}`;
+          const page = nbsp(decode(await html(`${path}?lang=${lang}`, { env: paid(), cookie })));
+          const panel = teaseOf(page);
+          // One span for every card: the head band, the price, the "for" line,
+          // one row an entry, the buttons and the note (the stylesheet reads it).
+          expect(PLAN_CARD_ROWS).toBe(3 + PLAN_ROWS.length + 2);
+          expect(panel, at).toContain(`<div class="plan-cards" style="--plan-rows:${PLAN_ROWS.length};--plan-card-rows:${PLAN_CARD_ROWS}">`);
+          const cards = cardsOf(panel);
+          expect(cards, at).toHaveLength(2);
+          // Every card exactly one <li> an entry, and no row span of its own.
+          for (const card of cards) {
+            expect(card.match(/<li[ >]/g), at).toHaveLength(PLAN_ROWS.length);
+            expect(card, at).not.toContain("style=");
+          }
+          const [free, pro] = cards;
+          // Pro is the plan on offer: framed through its class; Free is not.
+          expect(free, at).toMatch(/^<div class="plan-card"><div class="plan-card-head"><h3>(Free|Gratuit)<\/h3>/);
+          expect(pro, at).toMatch(/^<div class="plan-card plan-card-offer"><div class="plan-card-head"><h3>Pro<\/h3><span class="pro-tag">/);
+          const freeRows = rowsOf(free);
+          const proRows = rowsOf(pro);
+          expect(freeRows, at).toHaveLength(PLAN_ROWS.length);
+          expect(proRows, at).toHaveLength(PLAN_ROWS.length);
+          PLAN_ROWS.forEach((row, i) => {
+            // Pro has every row, in its own words with a check.
+            expect(proRows[i], `${at} row ${i}`).toEqual({ lacks: false, hollow: false, text: nbsp(planLine(lang, row.pro)), said: null });
+            // Free has its own words with a check, or Pro's in a hollow ring, said in words for a screen reader.
+            expect(freeRows[i], `${at} row ${i}`).toEqual(row.free
+              ? { lacks: false, hollow: false, text: nbsp(planLine(lang, row.free)), said: null }
+              : { lacks: true, hollow: true, text: nbsp(planLine(lang, row.pro)), said: nbsp(`${t(lang, "plans.lacks")} `) });
+          });
+          expect(freeRows.filter((r) => r.lacks).length, at).toBe(PLAN_ROWS.filter((r) => !r.free).length);
+          expect(freeRows.filter((r) => r.lacks).length, at).toBeGreaterThan(0);
+          expect(panel, at).not.toContain(EM_DASH);
+        }
+      }
+    }
+  });
+
+  it("state each plan's own figure on its own line, read from RULES and the constants, and never compare the plans", async () => {
+    const at = async (lang: "en" | "fr") => cardsOf(teaseOf(nbsp(decode(await html(`/tenders/same-day?lang=${lang}`, { env: paid() })))));
+    const [free, pro] = await at("en");
+    // Saved searches and watches: each plan's count, from RULES.
+    expect(free).toContain(`<span>${RULES.free.saved_searches} saved searches, on the site</span>`);
+    expect(pro).toContain(`<span>${RULES.pro.saved_searches} saved searches, by email</span>`);
+    expect(free).toContain(`<span>${RULES.free.watchlists} watches, on the site</span>`);
+    expect(pro).toContain(`<span>${RULES.pro.watchlists} watches, events by email</span>`);
+    // Analytics: the fiscal years Free sees against every view.
+    expect(free).toContain(`<span>Analytics: first block, ${FREE_YEARS} fiscal years</span>`);
+    expect(pro).toContain(`<span>Analytics: every view, ${MAX_YEARS} fiscal years</span>`);
+    // The keyed API's daily limit, from api_keyed_spec, against the open API.
+    expect(free).toContain("<span>Open JSON API</span>");
+    expect(pro).toContain(`<span>Keyed API: ${KEY_PER_DAY.toLocaleString("en-CA")} requests a day</span>`);
+    // Contracts ending: the windows by name, from EXPIRING_WINDOWS; same-day notices every 2 hours, from the schedule.
+    expect(free).toContain("<span>Contracts ending: the 3-month list</span>");
+    expect(pro).toContain("<span>Contracts ending: 6- and 12-month lists</span>");
+    expect(free).toContain("<span>Contracts ending: the 3-month CSV</span>");
+    expect(pro).toContain("<span>Contracts ending: the 12-month CSV</span>");
+    expect(EXPIRING_WINDOWS).toEqual(["3m", "6m", "12m"]);
+    const hours = Number(SAME_DAY_RUNS_UTC[1].slice(0, 2)) - Number(SAME_DAY_RUNS_UTC[0].slice(0, 2));
+    expect(pro).toContain(`<span>Tender notices, same day, every ${hours} hours</span>`);
+    expect(free).toContain('<strong class="plan-amount">CA$0</strong>');
+    const [freeFr, proFr] = await at("fr");
+    expect(freeFr).toContain(`<span>${RULES.free.saved_searches} recherches enregistrées, sur le site</span>`);
+    expect(proFr).toContain(`<span>${RULES.pro.saved_searches} recherches enregistrées, par courriel</span>`);
+    expect(proFr).toContain(`<span>API à clé : ${KEY_PER_DAY.toLocaleString("fr-CA").replace(/\s/g, " ")} requêtes par jour</span>`);
+    // Every figure on a card is one of the plans' or the constants', or a window's months.
+    const figures = new Set([RULES.free.saved_searches, RULES.pro.saved_searches, RULES.free.watchlists, RULES.pro.watchlists, FREE_YEARS, MAX_YEARS,
+      KEY_PER_DAY, hours, 3, 6, 12].map(String));
+    for (const card of [free, pro, freeFr, proFr]) {
+      for (const { text } of rowsOf(card)) {
+        for (const n of text.match(/[0-9][0-9 ,]*[0-9]|[0-9]/g) ?? []) expect(figures, `${n} in "${text}"`).toContain(n.replace(/[ ,]/g, ""));
+      }
+    }
+    // No comparative: a line names what its own plan gets.
+    const COMPARATIVE = /\b(more|higher|above|unlimited|limits above|plus|davantage|supérieure?s?|au-dessus|illimitée?s?)\b/i;
+    for (const card of [free, pro, freeFr, proFr]) expect(card.replace(/<[^>]+>/g, " "), card.slice(0, 60)).not.toMatch(COMPARATIVE);
+    for (const key of allKeys().filter((k) => k.startsWith("plans."))) expect(rawEntry(key).en + " " + rawEntry(key).fr, key).not.toMatch(COMPARATIVE);
+    // Every row is one the plans give Pro and not Free.
+    for (const row of PLAN_ROWS) {
+      expect(RULES.pro[row.feature], row.pro.key).toBe(true);
+      expect(RULES.free[row.feature], row.pro.key).toBe(false);
+    }
+  });
+
+  it("are drawn in the theme's tokens: Pro framed 2 px in the accent with its head on the accent's soft ground, the heights held by the grid", () => {
+    const rule = (selector: string) => rulesFor(...selector.split(/[ .]+/).filter(Boolean)).find((r) => r.selector === selector)?.body ?? "";
+    expect(decl(rule(".plan-card.plan-card-offer"), "border")).toBe("2px solid var(--accent)");
+    expect(decl(rule(".plan-card-offer .plan-card-head"), "background")).toBe("var(--accent-soft)");
+    expect(decl(rule(".plan-cards"), "grid-template-columns")).toBe("repeat(auto-fit, minmax(300px, 1fr))");
+    expect(decl(rule(".plan-cards"), "align-items")).toBe("stretch");
+    // No row gap in the grid: under subgrid it would set a floor under every row of the cards.
+    expect(decl(rule(".plan-cards"), "gap")).toBe("0 var(--gutter)");
+    expect(decl(rule(".plan-card"), "margin-bottom")).toBe("var(--gutter)");
+    // Without subgrid: a flex column, the buttons pushed to the foot.
+    expect(decl(rule(".plan-card"), "flex-direction")).toBe("column");
+    expect(decl(rule(".plan-card .plan-buttons"), "margin")).toMatch(/^auto /);
+    // One line each, tight: no wrap (an ellipsis at worst), no padding and no rule between rows.
+    for (const selector of [".plan-card .plan-for", ".plan-card .plan-list li"]) {
+      expect(decl(rule(selector), "white-space"), selector).toBe("nowrap");
+      expect(decl(rule(selector), "overflow"), selector).toBe("hidden");
+    }
+    expect(decl(rule(".plan-card .plan-for"), "text-overflow")).toBe("ellipsis");
+    expect(decl(rule(".plan-card .plan-list li > span"), "text-overflow")).toBe("ellipsis");
+    expect(decl(rule(".plan-card .plan-list li"), "padding")).toBe("0");
+    expect(rule(".plan-card .plan-list li")).not.toContain("border");
+    expect(decl(rule(".plan-mark"), "width")).toBe("12px");
+    // The spacing values are named once on the grid and read by the rules.
+    const cards = rule(".plan-cards");
+    expect(decl(cards, "--plan-row-lh")).toBe("0.9");
+    expect(decl(cards, "--plan-head-h")).toBe("28px");
+    expect(decl(rule(".plan-card .plan-list li"), "line-height")).toBe("var(--plan-row-lh)");
+    expect(decl(rule(".plan-card .plan-list li:first-child"), "padding-top")).toBe("var(--plan-row-first)");
+    expect(decl(rule(".plan-card .plan-card-head"), "min-height")).toBe("var(--plan-head-h)");
+    expect(decl(rule(".plan-card .plan-buttons"), "padding-top")).toBe("var(--plan-buttons-above)");
+    for (const v of ["--plan-head-pad", "--plan-name-above", "--plan-for-below", "--plan-row-first", "--plan-buttons-above", "--plan-foot"]) {
+      expect(decl(cards, v), v).toMatch(/^[0-9]+px$/);
+      expect(STYLES.split(`var(${v})`).length - 1, v).toBeGreaterThanOrEqual(1);
+    }
+    // With it: every card spans the same rows, its list one row an entry, each a subgrid, so the rows align across the cards.
+    const supports = /@supports \(grid-template-rows: subgrid\) \{\n {2}\.plan-card \{[\s\S]*?\n\}/.exec(STYLES)?.[0] ?? "";
+    const inner = (selector: string) => new RegExp(`\\n {2}${selector.replace(/\./g, "\\.")} \\{([^}]*)\\}`).exec(supports)?.[1] ?? "";
+    expect(decl(inner(".plan-card"), "grid-row")).toBe("span var(--plan-card-rows)");
+    expect(decl(inner(".plan-card"), "grid-template-rows")).toBe("subgrid");
+    expect(decl(inner(".plan-card .plan-list"), "grid-row")).toBe("span var(--plan-rows)");
+    expect(decl(inner(".plan-card .plan-list"), "grid-template-rows")).toBe("subgrid");
+    expect(decl(inner(".plan-card .plan-buttons"), "align-self")).toBe("start");
+    // Each theme defines the soft ground.
+    for (const block of [/:root \{[\s\S]*?\n\}/, /:root\[data-theme="dark"\] \{[\s\S]*?\n\}/, /:root:not\(\[data-theme="light"\]\) \{[\s\S]*?\n {2}\}/]) {
+      expect(block.exec(STYLES)?.[0] ?? "").toMatch(/--accent-soft: #[0-9a-f]{6};/);
+    }
+    // The marks are inline SVG in the markup, never a character or a pseudo-element.
+    for (const { selector, body } of rulesFor("plan-mark", "plan-card", "plan-cards")) {
+      expect(selector).not.toMatch(/::?(before|after)/);
+      expect(body, selector).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    }
+    expect(STYLES_VERSION).toBeGreaterThanOrEqual(25);
+  });
+
+  it("keep every row and the two \"for\" lines to one short line in both languages", () => {
+    for (const lang of ["en", "fr"] as const) {
+      for (const row of PLAN_ROWS) {
+        for (const w of [row.free, row.pro]) {
+          if (!w) continue;
+          const line = planLine(lang, w);
+          expect(line.length, `${lang} "${line}"`).toBeLessThanOrEqual(PLAN_LINE_MAX);
+          expect(line, lang).not.toMatch(/\{\w+\}/);
+        }
+      }
+      for (const key of ["plans.free_for", "plans.pro_for"] as Key[]) expect(t(lang, key).length, `${lang} ${key}`).toBeLessThanOrEqual(PLAN_LINE_MAX);
+    }
+    expect(PLAN_LINE_MAX).toBeLessThanOrEqual(44);
+  });
+
+  it("have their strings in both languages, French apart, with no em-dash, no price figure and no sales words", () => {
+    const keys = allKeys().filter((k) => k.startsWith("plans."));
+    expect(keys.length).toBeGreaterThanOrEqual(20);
+    for (const key of keys) {
+      const { en, fr } = rawEntry(key);
+      expect(fr, key).not.toBe(en);
+      expect(en + fr, key).not.toContain(EM_DASH);
+      expect(en + fr, key).not.toMatch(/\$\s?[0-9]|[0-9]\s?\$/);
+      for (const word of ["powerful", "seamless", "unlock", "best", "ultimate", "premium", "exclusive"]) expect(en.toLowerCase(), `${key}: ${word}`).not.toContain(word);
+    }
   });
 });
 
@@ -361,7 +573,7 @@ describe("same-day notices", () => {
     await sessions();
     for (const [who, cookie] of [["no session", undefined], ["free", freeCookie]] as const) {
       const { db, used } = refusing();
-      const res = await get("/tenders/same-day", { env: on({ SEARCH: db }), cookie });
+      const res = await get("/tenders/same-day", { env: paid({ SEARCH: db }), cookie });
       expect(res.status, who).toBe(200);
       expect(res.headers.get("cache-control"), who).toBe(cookie ? "private, no-store" : "public, max-age=300");
       expect(res.headers.get("vary"), who).toBe("Cookie");
@@ -371,23 +583,31 @@ describe("same-day notices", () => {
       expect(page).toContain('<p class="lead">The notices CanadaBuys posts after the morning refresh, read every two hours through the Ottawa business day.</p>');
       expect(page).toContain('<a href="/tenders">Open tender notices</a>');
       expect(page).not.toContain('<meta name="robots" content="noindex');
-      const panel = /<section class="panel pro-panel">[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
+      const panel = teaseOf(page);
       expect(panel).toContain(`<h2>Part of Pro</h2><div class="panel-tools">${CHIP_EN}</div>`);
       expect(panel).toContain("<p>With Pro, this page lists them as they are read, and the same notices show above the tender lists until the next morning's refresh adds them there.</p>");
-      expect(panel).toContain("<li>same-day tender notices on the tender lists, read from CanadaBuys every two hours</li>");
       expect(panel).toContain('<p>The <a href="/tenders">list of open notices</a>, the <a href="/tenders/new">new notices by day</a> and their feeds stay free, refreshed every morning.</p>');
-      expect(panel).toContain(`<p class="pro-price">Pro is CA$${PRICE[1]} a month or CA$${PRICE[2]} a year, taxes added at checkout.</p>`);
-      // A reader not signed in also gets the Pro page (pages/pro.tsx), as a second button.
-      expect(panel.match(/class="btn/g), who).toHaveLength(cookie ? 1 : 2);
-      expect(panel).toContain(cookie ? '<a href="/account" class="btn btn-primary">Your account</a>'
+      const [free, pro] = cardsOf(panel);
+      expect(free).toContain("<span>Tender notices, nightly</span>");
+      expect(pro).toContain("<span>Tender notices, same day, every 2 hours</span>");
+      expect(pro).toContain(`<strong class="plan-amount">CA$${PRICE[1]}</strong> a month or CA$${PRICE[2]} a year`);
+      expect(pro).toContain('<p class="plan-note">Taxes added at checkout. Monthly or yearly, cancel any time. Sold through Link on behalf of Allwater Software Inc.</p>');
+      // Signed out: an account on Free's card, sign-in and the Pro page
+      // (pages/pro.tsx) on Pro's. A Free session: its account, the billing page.
+      expect(free.match(/class="btn/g), who).toHaveLength(1);
+      expect(pro.match(/class="btn/g), who).toHaveLength(2);
+      expect(free).toContain(cookie ? '<a href="/account" class="btn">Your account</a>' : '<a href="/account/sign-in" class="btn">Create a free account</a>');
+      expect(pro).toContain(cookie ? '<a href="/account/billing" class="btn btn-primary">Plan and billing</a> <a href="/pro" class="btn">About Pro</a>'
         : '<a href="/account/sign-in" class="btn btn-primary">Sign in or create an account</a> <a href="/pro" class="btn">About Pro</a>');
+      expect(free.includes('<span class="plan-current">Your plan</span>'), who).toBe(!!cookie);
       expect(page).not.toContain("intraday");
     }
-    const fr = decode(await html("/tenders/same-day?lang=fr", { env: on() }));
+    const fr = decode(nbsp(await html("/tenders/same-day?lang=fr", { env: paid() })));
     expect(fr).toContain("<h1>Avis d’appel d’offres du jour</h1>");
     expect(fr).toContain(`<h2>Offert avec le forfait Pro</h2><div class="panel-tools">${CHIP_FR}</div>`);
     expect(fr).toContain("La <a href=\"/tenders\">liste des avis ouverts</a>, les <a href=\"/tenders/new\">nouveaux avis par jour</a> et leurs fils restent gratuits, mis à jour chaque matin.");
-    expect(fr).toContain(`Pro coûte ${PRICE[1].replace(".", ",")} $ CA par mois`);
+    expect(fr).toContain(`<strong class="plan-amount">${PRICE[1].replace(".", ",")} $ CA</strong> par mois`);
+    expect(fr).toContain('<a href="/account/sign-in" class="btn">Créer un compte gratuit</a>');
   });
 
   it("show a Pro reader the band's notices as a page, or a line when none has been read", async () => {

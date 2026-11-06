@@ -192,7 +192,21 @@ describe("the Pro page", () => {
     expect(page).toContain("<h1>Pro: What the Paid Plan Adds</h1>");
     expect(page).toContain('<p class="pro-price">Pro is CA$21.50 a month or CA$215.00 a year, taxes added at checkout.</p>');
     expect(page).toContain('<a href="/account/sign-in" class="btn btn-primary">Sign in or create an account</a>');
-    for (const i of proIncludes("en")) expect(page).toContain(`<li>${i.text}</li>`);
+    // What Pro includes is the plan cards, straight under the section's head:
+    // Free beside Pro, every line of the Pro card one of proIncludes, the
+    // price on its price line, and no link to the page itself.
+    expect(page).toContain('<h2 id="includes">What Pro Includes</h2><div class="plan-cards"');
+    const cards = /<div class="plan-cards"[\s\S]*?<\/p><\/div><\/div><p>/.exec(page)?.[0] ?? "";
+    const [free, pro] = cards.split(/(?=<div class="plan-card[ "])/).slice(1);
+    expect(free).toContain("<h3>Free</h3>");
+    expect(pro).toContain('<div class="plan-card plan-card-offer"><div class="plan-card-head"><h3>Pro</h3>');
+    for (const i of proIncludes("en")) expect(pro).toContain(`<span>${i.text}</span>`);
+    expect(pro.match(/<li/g)).toHaveLength(proIncludes("en").length);
+    expect(free.match(/<li/g)).toHaveLength(proIncludes("en").length);
+    expect(pro).toContain('<strong class="plan-amount">CA$21.50</strong> a month or CA$215.00 a year');
+    expect(cards).not.toContain('href="/pro"');
+    // The head carries no offer of its own: the cards follow it.
+    expect(/<header class="page-head">[\s\S]*?<\/header>/.exec(page)?.[0]).not.toContain("pro-offer");
     expect(page).toContain("<h2 id=\"who\">Who It Is For</h2>");
     expect(page).toContain("<h2 id=\"free\">What Stays Free</h2>");
     expect(page).toContain("Allwater Software Inc.");
@@ -238,9 +252,12 @@ describe("the Pro page", () => {
   it("names no price and carries no Product while the checkout is not configured", async () => {
     for (const e of [onEnv(), payEnv({ STRIPE_SECRET_KEY: "" }), payEnv({ PRICE_YEARLY_CAD: "" }), payEnv({ STRIPE_PRICE_MONTHLY: "monthly" })]) {
       const page = decode(await html("/pro", e));
-      expect(page).not.toContain("CA$");
+      // Free's CA$0 is the only amount; the Pro card says it is not on sale.
+      expect(page.match(/CA\$[0-9.]*/g)).toEqual(["CA$0"]);
       expect(page).not.toContain("pro-price");
       expect(page).toContain("Paying for Pro is not available yet.");
+      expect(page).toContain('<span class="plan-figure"><span class="muted">Not on sale yet</span></span>');
+      expect(page).not.toContain("Taxes added at checkout.");
       const blocks = jsonLd(page);
       expect(blocks.map((b) => b["@type"])).toEqual(["FAQPage"]);
       expect(blocks[0].mainEntity.length).toBeGreaterThanOrEqual(4);

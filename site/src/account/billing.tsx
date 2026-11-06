@@ -19,10 +19,11 @@
 
 import type { Context } from "hono";
 import type { AppEnv, Env } from "../env";
-import { decimal, fmtInt, t, tj, type Key, type Lang } from "../i18n";
+import { decimal, t, tj, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
+import { PlanCards, planCards } from "../pro";
 import { audit } from "./audit";
-import { RULES, planFor } from "./entitlements";
+import { planFor } from "./entitlements";
 import { accountPage, planLine } from "./pages";
 import { INTERVALS, type Interval, type Notice, type PaymentSource, type SubscriptionState, isInterval, paymentSource } from "./payments";
 import { newId, plusDays } from "./secrets";
@@ -134,19 +135,12 @@ export function billingView(
           </form>
         </Panel>
       ) : null}
+      {/* Free beside Pro, the account's own plan marked; Pro's link leads to the Subscribe panel below. */}
       <Panel title={t(lang, "billing.panel_pro")}>
-        <ul class="account-list">
-          <li>{t(lang, "billing.pro_searches", { n: fmtInt(RULES.pro.saved_searches, lang), free: fmtInt(RULES.free.saved_searches, lang) })}</li>
-          <li>{t(lang, "billing.pro_delivery")}</li>
-          <li>{t(lang, "watches.pro_page", { n: fmtInt(RULES.pro.watchlists, lang), free: fmtInt(RULES.free.watchlists, lang) })}</li>
-          <li>{t(lang, "billing.pro_intraday")}</li>
-          <li>{t(lang, "billing.pro_radar")}</li>
-          <li>{t(lang, "billing.pro_analytics")}</li>
-          <li>{t(lang, "billing.pro_bugs")}</li>
-        </ul>
+        <PlanCards lang={lang} plans={planCards(lang, { price: offer, reader: account.plan === "pro" ? "pro" : "free", place: "billing" })} />
       </Panel>
       {live ? null : (
-        <Panel title={t(lang, "billing.panel_subscribe")} class="panel-form">
+        <Panel title={t(lang, "billing.panel_subscribe")} id="subscribe" class="panel-form">
           {offer ? (
             <>
               <div class="account-actions">

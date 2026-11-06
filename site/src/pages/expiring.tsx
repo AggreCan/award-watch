@@ -49,7 +49,7 @@ import {
   RADAR_CSV_MAX, RADAR_PAGE_ROWS, type RadarParams, type RadarSort, type Read, type Row, type SortDir, readRadar, readRadarCsv,
 } from "../records_tables";
 import { csvCell } from "./analytics";
-import { ProNote, ProPanel, ProTag, proPrice } from "../pro";
+import { ProNote, ProPanel, ProTag, checkoutPrice } from "../pro";
 import { canonicalUrl, expiringWindowSeo, pageSeo } from "../seo";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
@@ -916,7 +916,7 @@ async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats:
           <p class="muted">{t(lang, "expiring.none_window")}</p>
         )}
       </Panel>
-      <ProPanel lang={lang} signedIn={!!account?.email} price={proPrice(c.env)} text={t(lang, "expiring.pro_text")}
+      <ProPanel lang={lang} signedIn={!!account?.email} price={checkoutPrice(c.env)} text={t(lang, "expiring.pro_text")}
         free={tj(lang, "expiring.pro_free", { list: <a href="/expiring/3m">{t(lang, "expiring.pro_free_list")}</a> })} />
     </Layout>,
   );
