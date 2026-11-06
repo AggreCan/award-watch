@@ -30,14 +30,25 @@ import { accountsEnabled } from "./account/switch";
 // the payment service, which no reader does five times a minute. The CSV
 // files of the analytics views are downloads: each reads the records
 // database, so a script asking for every table of every buyer meets the
-// download cap rather than the pages'.
-export type Bucket = "page" | "api" | "download" | "form" | "feed" | "auth" | "stop" | "hook";
+// download cap rather than the pages'. A notice's or a contract's calendar
+// file (pages/ics.ts) is a download too. A Pro account's calendar feed
+// (/account/calendar/<id>.ics, src/account/feeds.ts) gets "calendar", 20 a
+// minute, on the accounts terms: each read checks the feed in the accounts
+// database. The Atom feeds keep their wide cap of their own; the calendar
+// services that poll a feed for many readers ask far less often (a
+// subscribed calendar is read every few hours), so 20 a minute from one of
+// their addresses holds for thousands of feeds.
+export type Bucket = "page" | "api" | "download" | "form" | "feed" | "calendar" | "auth" | "stop" | "hook";
 
 // A table of an analytics view as CSV (pages/analytics.tsx, analyticsCsv).
 export const ANALYTICS_CSV = /^\/(?:buyers|organizations|segments)\/[^/]+\/analytics\/[a-z]+\.csv$/;
 // A file of records from the records database (src/records_tables.ts): a
 // filtered radar window's matches, a profile's or a buyer's record table.
 export const RECORDS_CSV = /^\/(?:expiring\/(?:3m|6m|12m)\/rows|(?:buyers|organizations)\/[^/]+\/records)\.csv$/;
+// A notice's or a contract's one-event calendar file.
+export const RECORD_ICS = /^\/(?:(?:tenders|awards|history)\/[^/]+|contracts\/[^/]+\/.+)\.ics$/;
+// A Pro account's calendar feed.
+export const FEED_ICS = /^\/account\/calendar\/[^/]+\.ics$/;
 
 // A HEAD request for a download (a link checker, a client asking a file's
 // size before fetching it) moves no file, so it is not counted against the
@@ -46,7 +57,8 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/data/feeds/")) return "feed";
   if (path.startsWith("/api/")) return "api";
   if (path.startsWith("/downloads/")) return method === "HEAD" ? "page" : "download";
-  if (ANALYTICS_CSV.test(path) || RECORDS_CSV.test(path)) return method === "HEAD" ? "page" : "download";
+  if (ANALYTICS_CSV.test(path) || RECORDS_CSV.test(path) || RECORD_ICS.test(path)) return method === "HEAD" ? "page" : "download";
+  if (FEED_ICS.test(path)) return "calendar";
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
   if (path === "/account/stop" || path === "/interest/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";
@@ -58,8 +70,8 @@ export function bucketFor(method: string, path: string): Bucket {
 }
 
 const BINDING: Record<Bucket, keyof Env> = {
-  page: "PAGE_LIMIT", api: "API_LIMIT", download: "DOWNLOAD_LIMIT", form: "FORM_LIMIT", feed: "FEED_LIMIT", auth: "AUTH_LIMIT",
-  stop: "STOP_LIMIT", hook: "WEBHOOK_LIMIT",
+  page: "PAGE_LIMIT", api: "API_LIMIT", download: "DOWNLOAD_LIMIT", form: "FORM_LIMIT", feed: "FEED_LIMIT", calendar: "CALENDAR_LIMIT",
+  auth: "AUTH_LIMIT", stop: "STOP_LIMIT", hook: "WEBHOOK_LIMIT",
 };
 
 // The address Cloudflare saw. The edge sets this header itself and drops any
@@ -70,7 +82,8 @@ export function clientKey(c: Context<AppEnv>): string {
 
 export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response | void> {
   let bucket = bucketFor(c.req.method, c.req.path);
-  const accountsOnly = bucket === "auth" || bucket === "stop" || bucket === "hook" || (bucket === "form" && c.req.path.startsWith("/account/"));
+  const accountsOnly = bucket === "auth" || bucket === "stop" || bucket === "hook" || bucket === "calendar" ||
+    (bucket === "form" && c.req.path.startsWith("/account/"));
   if (accountsOnly && !accountsEnabled(c.env)) bucket = "page";
   const limiter = c.env[BINDING[bucket]] as RateLimit | undefined;
   if (!limiter) return next();

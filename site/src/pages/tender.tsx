@@ -15,6 +15,8 @@ import { categoryLabel, fmtInt, pick, segmentLabel, t, tj, tn, type Key, type La
 import { clockOf, closesAtUtc, closingTime, tenderState } from "../closing";
 import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { EarlierAwards, loadEarlierAwards } from "./backbone";
+import { closingStart } from "../calendar";
+import { tenderIcsPath } from "./ics";
 import { tenderSeo } from "../seo";
 import {
   BuyerLink, CountdownScript, closingHasZone, closingText, money, otherLanguageMark, provincesText, sourceFileText, tenderNoticeUrl,
@@ -61,6 +63,10 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   // A notice closing soon: the countdown goes under its closing time.
   const closes = state === "closing" ? closesAtUtc(d.closing) : null;
   const notice = closes ? d.reference.toLowerCase() : undefined;
+  // The notice's calendar file (pages/ics.ts), beside its closing while it is still open.
+  const calendarLink = (state === "open" || state === "closing") && closingStart(d.closing) ? (
+    <> · <a href={tenderIcsPath(d.reference, lang)} class="small" rel="nofollow">{t(lang, "cal.add")}</a></>
+  ) : null;
   const shownRef = publishedReference(d);
   const title = pick(lang, d.title_en, d.title_fr) ?? shownRef;
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: shownRef }];
@@ -112,9 +118,11 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
             {closes ? (
               <>
                 <dt>{t(lang, "col.closing")}</dt>
-                <dd data-closes={closes} data-time={closingTime(d.closing, lang) ?? undefined} data-notice={notice}>{closingText(d.closing, lang)}</dd>
+                <dd data-closes={closes} data-time={closingTime(d.closing, lang) ?? undefined} data-notice={notice}>
+                  {closingText(d.closing, lang)}{calendarLink}
+                </dd>
               </>
-            ) : <Row lang={lang} k="col.closing" v={closingText(d.closing, lang)} />}
+            ) : <Row lang={lang} k="col.closing" v={calendarLink ? <>{closingText(d.closing, lang)}{calendarLink}</> : closingText(d.closing, lang)} />}
             <Row lang={lang} k="tender.amended" v={d.amended} />
             <Row lang={lang} k="tender.start_expected" v={d.start_expected} />
             <Row lang={lang} k="tender.end_expected" v={d.end_expected} />

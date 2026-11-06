@@ -353,3 +353,27 @@ CREATE TABLE IF NOT EXISTS watch_deliveries (
 );
 CREATE INDEX IF NOT EXISTS idx_watch_deliveries_user ON watch_deliveries(user_id, id);
 CREATE INDEX IF NOT EXISTS idx_watch_deliveries_sent ON watch_deliveries(sent_at);
+-- A calendar feed (src/account/feeds.ts; docs/accounts.md, Calendar feeds):
+-- an address a calendar app subscribes to, /account/calendar/<id>.ics?t=
+-- <secret>, listing the closings of a saved tender search ('search'), the
+-- watchlist's dates ('watchlist'), or both ('all'). Part of Pro. The secret
+-- is kept in clear, as a stop link's is, because the searches page shows
+-- the whole address; it reads that one feed and nothing else. Rotating
+-- writes a new secret and removing sets revoked_at; either stops the old
+-- address at once. last_read_day is the UTC date a calendar last read the
+-- feed, written at most once a day: no time, no address, no user agent. At
+-- most five live feeds per account (counted inside the insert); one live
+-- feed per search and one of each other kind (the unique index). Goes with
+-- the search (searches.ts) and with the account (routes.tsx).
+CREATE TABLE IF NOT EXISTS feeds (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL CHECK (kind IN ('search', 'watchlist', 'all')),
+  search_id TEXT,                                -- for kind 'search'
+  secret TEXT NOT NULL,                          -- 16 random bytes, hex
+  created_at TEXT NOT NULL,
+  revoked_at TEXT,
+  last_read_day TEXT                             -- YYYY-MM-DD, UTC
+);
+CREATE INDEX IF NOT EXISTS idx_feeds_user ON feeds(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_feeds_live ON feeds(user_id, kind, COALESCE(search_id, '')) WHERE revoked_at IS NULL;

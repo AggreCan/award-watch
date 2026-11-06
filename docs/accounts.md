@@ -26,6 +26,10 @@ the schema is `site/accounts_schema.sql`; the tests are
   published contracts or open tender notices (Pro, 25) and sees what
   happened to each over the last 30 data dates; Pro gets one message a data
   date with those events (*Watches*).
+- **Calendar feeds.** On the Pro plan, a saved tender search becomes an
+  address a calendar app subscribes to, its open notices' closings as
+  events (*Calendar feeds*). Every notice and contract page also offers its
+  closing or end date as a one-event file, to any reader.
 - **API keys.** Issued and revoked on the account; shown once. A key of a
   Pro account opens the keyed API under `/api/v1` (*The keyed API*); the
   keys page shows each key's requests today and over 30 days.
@@ -70,6 +74,7 @@ Every datetime is ISO in UTC.
 | `bug_reports` | one row per bug report from a Pro account: the page (a path on the site), what happened, what was expected, the time | the address |
 | `api_usage` | one row per API key per UTC day it was used: how many requests the keyed API counted for it that day | a path, a parameter, an address, the time of a request |
 | `watches`, `watch_mail` | the pages an account follows and its watch mail (*Watches*) | anything typed, a copy of a message |
+| `feeds` | one row per calendar feed: kind (`search`, `watchlist`, `all`), the saved search it follows, the address's secret, created and revocation times, the UTC day a calendar last read it | a time of reading, an address, a user agent |
 
 Limits: at most 25 saved searches per account (Free keeps 3), at most 5 live
 API keys, at most 5 sign-in requests per address per hour, at most 5 wrong
@@ -257,6 +262,9 @@ account's verified destination addresses, and any other address gets the
    `delivery_marks` table, both of which deleting a search or an account now
    clears, so the schema goes on before the code that names them is deployed
    (without `delivery_marks`, deleting a search or an account answers 503).
+   The calendar feeds added `feeds` and its two indexes; until they exist
+   the searches page shows no feeds and the console no feed counts, and
+   deletion goes on without them.
    `npm run db:local` applies it to the local database, with
    `seed/accounts_dev.sql` (the development outbox, never applied on the
    account).
@@ -428,7 +436,9 @@ logs name no key.
 
 ## Deletion
 
-`/account/delete` asks for a ticked box, then in one batch: revokes every
+`/account/delete` asks for a ticked box, deletes the account's calendar
+feeds (a statement of its own, so a database without the `feeds` table
+still deletes the rest), then in one batch: revokes every
 session; deletes the saved searches (with their delivery rows, stop links
 and records marks), the API keys (their daily counts go with them, by the
 cascade on `api_usage`), the bug reports, the watches and the watch mail row, and the address's sign-in requests; and marks the user row deleted with its
@@ -659,6 +669,85 @@ The records kinds' marks:
 ```
 npx wrangler d1 execute awardwatch-accounts --remote --command "SELECT as_of, COUNT(*) AS n FROM delivery_marks GROUP BY as_of ORDER BY as_of DESC LIMIT 10"
 ```
+
+## Calendar feeds
+
+Dates as calendar events (RFC 5545), in two forms. The file writer is
+`site/src/calendar.ts`; the one-event files `site/src/pages/ics.ts`; the
+feeds `site/src/account/feeds.ts`, with their routes in `routes.tsx` and
+their panel in `pages.tsx`; the tests `site/test/calendar.test.ts`.
+
+**One-event files, public.** `/tenders/<reference>.ics` holds a notice's
+closing; `/awards/<reference>.ics`, `/history/<reference>.ics` and
+`/contracts/<department>/<reference>.ics` a contract's end, as an all-day
+event. Each page links its file ("Add to calendar", "Ajouter au
+calendrier") beside the closing or the end date while that date is still to
+come and the record is not cancelled, whatever the accounts switch says. The
+file itself answers for any record the data holds: a cancelled one carries
+`STATUS:CANCELLED`. It is cached `public, max-age=3600`, counts against the
+download cap, takes `?lang=fr` (which a French page's link carries), and
+carries no `X-WR-CALNAME` or refresh hints, so importing it makes no
+calendar of its own.
+
+**Feeds, Pro.** `/account/calendar/<feed id>.ics?t=<secret>`, under the
+feature `delivery`: a feed is a delivery, as mail is. The searches page has a
+Calendar Feeds panel: a row for each saved tender search and one for all of
+them together (kind `all`), each with the address, a copy button
+(`public/calendar.js`), "Rotate the address", "Remove", when a calendar last
+read it and how many events it holds now; then the three subscription
+routes and the refresh schedule. A Free account sees the Pro chip and one
+line; signed out, the page does not exist. A search feed lists every open
+notice its filter matches now, read from `tenders/open.json` through
+`readTenderQuery` and `filterTenders`, soonest closing first. `&lang=fr` on
+the address writes the feed in French; `&alarm=1d` adds a display alarm a
+day before each event.
+
+- UID `notice-<reference>@awardwatch.ca` with the amendment number as
+  `SEQUENCE`, so an amendment that moves a closing moves the event;
+  `contract-<kind>-<reference>@awardwatch.ca` with the amendment count for
+  an end. Times in UTC, converted as `closing.ts` converts a closing; the
+  description repeats the closing as published, "Eastern time".
+- A timed closing has no `DTEND`: RFC 5545 requires `DTEND` to be later than
+  `DTSTART`, and a start without one ends when it starts. An all-day end's
+  `DTEND` is the next day.
+- Bounds: 500 events a feed, the 500th an all-day event on the data date
+  saying how many more ("Award Watch: 312 more closing dates, see the site");
+  descriptions cut at 1,000 characters; 5 live feeds an account, one per
+  search and one `all` (held inside the insert and by a unique index); 20
+  reads a minute per IP address (`CALENDAR_LIMIT`, namespace 2010, only
+  while the switch is on). The Atom feeds keep `FEED_LIMIT`.
+- The file is `private, no-store`. A wrong, rotated or removed secret, a
+  deleted search or account, a plan without `delivery` or a blocked account
+  is the site's 404 on that read. A database outage serves a feed this
+  instance verified within the hour from its last known state, its plan
+  held to the plan's own end; any other read then, and a `tenders/open.json`
+  that does not load, is a 503 with `Retry-After`, never an empty calendar,
+  which a client would read as every event gone.
+- Kept: the row and `last_read_day`, written at most once a UTC day. The
+  secret is kept in clear, as a stop link's is, since the page shows the
+  whole address; the page says that anyone holding it reads what the feed
+  lists. The file names no account and no address.
+- A cancelled notice drops out of `tenders/open.json`, so it leaves a search
+  feed, and a subscribed calendar removes its event on the next read. No
+  published file lists the notices cancelled since a date, so a feed cannot
+  keep them 30 days marked `STATUS:CANCELLED`.
+- The watchlist kinds wait for the watchlist build: it sets
+  `WATCHLIST_EVENTS` in `feeds.ts` to its reader (each watch's contracts
+  ending within its horizon from `rec_expiring`, followed contracts' ends,
+  followed notices' closings, built with `contractEvent(expiringFacts(...))`
+  and `noticeEvent` so the UIDs match the one-event files) and adds the row
+  to the watchlist page (`FeedCell` in `pages.tsx`). Until then no
+  `watchlist` feed can be made, and an `all` feed holds the saved tender
+  searches alone.
+
+The console's overview counts live feeds by kind and feeds read in the last
+7 days; the user page lists the account's feeds (kind, created, revoked,
+last read), never the secret. Deleting a search deletes its feed; deleting
+the account deletes them all.
+
+Operator step at landing: apply `accounts_schema.sql` again (*Operator
+steps*, step 1), which adds `feeds`; `CALENDAR_LIMIT` deploys with
+`wrangler.jsonc`.
 
 ## The accounts-open message
 
@@ -1172,7 +1261,8 @@ delete the operator's own account.
   (by hand or through Stripe); subscriptions by their last notified
   status; deliveries sent and not sent in the last 7 days; bug reports in
   the last 7 days and in all, with the latest 10, once the `bug_reports`
-  table exists; sign-in codes issued today (UTC); the last 20 audit
+  table exists; calendar feeds by kind and read in the last 7 days, once
+  the `feeds` table exists; sign-in codes issued today (UTC); the last 20 audit
   events; and a search by user id or by address, exact or by its start.
 - `/admin/accounts`: every account in one table, filtered, sorted and
   paged, with a CSV of the same view (*The accounts table*, below).
@@ -1183,7 +1273,8 @@ delete the operator's own account.
   subscription's status, period end and pending cancellation as Stripe
   holds them now; sessions (signed in now, the newest use, device
   classes); saved searches with their delivery and last delivery; API keys
-  (prefix, created, last used, revoked); the last 20 deliveries; the
+  (prefix, created, last used, revoked); calendar feeds (kind, created,
+  revoked, last read, never the secret); the last 20 deliveries; the
   account's bug reports; the last 50 audit rows; and whether it is
   blocked, since when, by whom and why.
 

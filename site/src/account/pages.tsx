@@ -7,7 +7,7 @@ import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
+import { fmtInt, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { EMAIL_MAX } from "../pages/interest";
 import { ProNote, ProTag } from "../pro";
@@ -16,6 +16,7 @@ import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
 import { SAVED_SEARCH_MAX, allowed, watchCap } from "./entitlements";
+import { FEEDS_MAX, type FeedKind } from "./feeds";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch } from "./searches";
 import type { Account } from "./session";
 import { CODE_MINUTES } from "./signin";
@@ -253,11 +254,101 @@ const CapNote: FC<{ lang: Lang; n: number; cap: number }> = ({ lang, n, cap }) =
   </ProNote>
 );
 
+// -- calendar feeds (feeds.ts) ----------------------------------------------------------------
+
+// One row of the feeds panel: a saved tender search, or the "all" feed (and,
+// once the watchlist build adds it, the watchlist's), with its feed when it
+// has one. events is how many the feed holds now, null when the open
+// notices could not be read for the count.
+export type CalendarRow = {
+  kind: FeedKind; searchId: string | null; label: string; href: string | null;
+  feed: { id: string; address: string; lastRead: string | null; events: number | null } | null;
+};
+export type CalendarView = { rows: CalendarRow[]; live: number };
+
+// The feed's own cell: the address to copy (calendar.js adds the copy
+// button), when a calendar last read it and how many events it holds, and
+// the two buttons. Exported for the watchlist page's row.
+export const FeedCell: FC<{ lang: Lang; account: Account; feed: NonNullable<CalendarRow["feed"]> }> = ({ lang, account, feed }) => (
+  <div class="feed-cell">
+    <input class="calendar-address mono" type="text" readonly value={feed.address} aria-label={t(lang, "calfeed.address")}
+      spellcheck={false} data-copy={t(lang, "calfeed.copy")} data-copied={t(lang, "calfeed.copied")} />
+    <p class="muted small">
+      {feed.lastRead ? t(lang, "calfeed.last_read", { date: feed.lastRead }) : t(lang, "calfeed.not_read")}
+      {feed.events === null ? null : <>{" · "}{tn(lang, "calfeed.events_one", "calfeed.events_many", feed.events, { n: fmtInt(feed.events, lang) })}</>}
+    </p>
+    <div class="account-inline">
+      <form method="post" action={`/account/calendar/${feed.id}/rotate`} class="account-inline">
+        <Csrf account={account} />
+        <button type="submit" class="btn-link">{t(lang, "calfeed.rotate")}</button>
+      </form>
+      <form method="post" action={`/account/calendar/${feed.id}/delete`} class="account-inline">
+        <Csrf account={account} />
+        <button type="submit" class="btn-link">{t(lang, "calfeed.remove")}</button>
+      </form>
+    </div>
+  </div>
+);
+
+// The searches page's feeds: for a Free account the Pro chip and one line;
+// for Pro a row per saved tender search and one for all of them, each with
+// its feed or the button that makes one, then how to subscribe.
+const CalendarPanel: FC<{ lang: Lang; account: Account; view: CalendarView }> = ({ lang, account, view }) => {
+  if (!allowed(account, "delivery")) {
+    return (
+      <Panel title={t(lang, "calfeed.panel")} id="calendar" tools={<ProTag lang={lang} />}>
+        <ProNote lang={lang}>{t(lang, "calfeed.gate")} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></ProNote>
+      </Panel>
+    );
+  }
+  const full = view.live >= FEEDS_MAX;
+  return (
+    <Panel title={t(lang, "calfeed.panel")} id="calendar"
+      count={t(lang, "calfeed.count", { n: fmtInt(view.live, lang), max: fmtInt(FEEDS_MAX, lang) })}
+      foot={<>
+        <p>{t(lang, "calfeed.route_google")}</p>
+        <p>{t(lang, "calfeed.route_outlook")}</p>
+        <p>{t(lang, "calfeed.route_apple")}</p>
+        <p>{t(lang, "calfeed.refresh")}</p>
+      </>}>
+      <p>{t(lang, "calfeed.lead")}</p>
+      {view.rows.length ? (
+        <div class="table-wrap">
+          <table class="restack">
+            <thead><tr><th>{t(lang, "calfeed.col_feed")}</th><th>{t(lang, "calfeed.col_address")}</th></tr></thead>
+            <tbody>
+              {view.rows.map((r) => (
+                <tr>
+                  <td data-label={t(lang, "calfeed.col_feed")}>{r.href ? <a href={r.href}>{r.label}</a> : r.label}</td>
+                  <td data-label={t(lang, "calfeed.col_address")}>
+                    {r.feed ? <FeedCell lang={lang} account={account} feed={r.feed} /> : full ? (
+                      <p class="muted small">{t(lang, "calfeed.cap", { n: fmtInt(FEEDS_MAX, lang) })}</p>
+                    ) : (
+                      <form method="post" action="/account/calendar" class="account-inline">
+                        <Csrf account={account} />
+                        <input type="hidden" name="kind" value={r.kind} />
+                        {r.searchId ? <input type="hidden" name="search" value={r.searchId} /> : null}
+                        <button type="submit" class="btn">{t(lang, "calfeed.make")}</button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p class="muted">{t(lang, "calfeed.none")}</p>}
+      <p class="muted small">{t(lang, "calfeed.privacy")}</p>
+      <script src="/calendar.js" defer></script>
+    </Panel>
+  );
+};
+
 export function searchesView(
   lang: Lang, account: Account,
   state: {
     searches: (SavedSearch & { last?: LastDelivery | null })[]; cap: number; pending: InterestRow[]; notice?: string | null;
-    errors?: Key[]; url?: string;
+    errors?: Key[]; url?: string; calendar?: CalendarView | null;
   },
 ) {
   const { searches, cap, pending } = state;
@@ -327,6 +418,7 @@ export function searchesView(
           <p class="muted">{t(lang, "account.searches_none")}</p>
         )}
       </Panel>
+      {state.calendar ? <CalendarPanel lang={lang} account={account} view={state.calendar} /> : null}
       <Panel title={t(lang, "account.panel_add")} class="panel-form">
         <Errors lang={lang} errors={state.errors} />
         {full ? (
@@ -494,6 +586,7 @@ export function deleteView(lang: Lang, account: Account, errors?: Key[]) {
           <li>{t(lang, "account.delete_subscription")}</li>
           <li>{t(lang, "account.delete_searches")}</li>
           <li>{t(lang, "watches.delete")}</li>
+          <li>{t(lang, "calfeed.delete")}</li>
           <li>{t(lang, "bugs.delete")}</li>
           <li>{t(lang, "account.delete_sessions")}</li>
           <li>{t(lang, "account.delete_interest")}</li>

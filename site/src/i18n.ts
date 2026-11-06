@@ -13,6 +13,7 @@
 
 import { SEGMENTS, SEGMENT_SHORT } from "./constants";
 import { ACCOUNT_STRINGS } from "./account/strings";
+import { CALENDAR_STRINGS } from "./calendar_strings";
 
 export type Lang = "en" | "fr";
 
@@ -21,6 +22,8 @@ type Entry = { en: string; fr: string };
 const STRINGS = {
   // The accounts module's strings live with the module (src/account/strings.ts).
   ...ACCOUNT_STRINGS,
+  // The calendar files' strings (src/calendar_strings.ts).
+  ...CALENDAR_STRINGS,
   "site.name": { en: "Award Watch", fr: "Award Watch" },
   "site.tagline": {
     en: "Federal tenders, awards, contracts and grants, by organization.",
@@ -861,6 +864,10 @@ const STRINGS = {
     fr: "Pro coûte {monthly} $ CA par mois ou {yearly} $ CA par année, taxes ajoutées au paiement.",
   },
   "pro.include_bugs": { en: "a form under the account to report a bug", fr: "un formulaire dans le compte pour signaler un bogue" },
+  "pro.include_feeds": {
+    en: "a calendar feed of each saved tender search, its closing dates as events",
+    fr: "un flux de calendrier pour chaque recherche d'appels d'offres enregistrée, avec ses dates de clôture comme événements",
+  },
 
   // -- analytics (src/pages/analytics.tsx, docs/analytics.md) ---------------------------
   "analytics.title": { en: "Analytics", fr: "Analyses" },
@@ -2904,6 +2911,10 @@ const STRINGS = {
   "propage.api": {
     en: "A keyed API for scripts: the open tenders, each day's new notices, the contracts ending in each window, search, and each organization's and buyer's records, up to {day} requests a day and {minute} a minute.",
     fr: "Une API à clé pour les scripts : les appels d'offres ouverts, les nouveaux avis de chaque jour, les contrats prenant fin dans chaque période, la recherche et les dossiers de chaque organisation et acheteur, jusqu'à {day} requêtes par jour et {minute} par minute.",
+  },
+  "propage.feeds": {
+    en: "A calendar feed of each saved tender search for Google Calendar, Outlook or Apple Calendar: each open notice's closing as an event, moved when an amendment moves it. Any notice or contract page also offers its date as a file, free.",
+    fr: "Un flux de calendrier pour chaque recherche d'appels d'offres enregistrée, pour Google Agenda, Outlook ou Calendrier d'Apple : la clôture de chaque avis ouvert comme événement, déplacée quand une modification la déplace. Chaque page d'avis ou de contrat offre aussi sa date en fichier, gratuitement.",
   },
   "propage.who_title": { en: "Who It Is For", fr: "À qui il s'adresse" },
   "propage.who_bid": {

@@ -67,6 +67,10 @@ const FEED_PATH = /^\/data\/(feeds\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\.xml)$/;
 
 export function routeTemplate(method: string, path: string): { route: string; kind: Kind } {
   if (PAGES.has(path)) return { route: path, kind: method === "POST" ? "form" : "page" };
+  // A notice's or a contract's calendar file (pages/ics.ts), a download.
+  const ics = /^\/(tenders|awards|history)\/[^/]+\.ics$/.exec(path);
+  if (ics) return { route: `/${ics[1]}/:reference.ics`, kind: "download" };
+  if (/^\/contracts\/[^/]+\/.+\.ics$/.test(path)) return { route: "/contracts/:dept/:reference.ics", kind: "download" };
   if (/^\/tenders\/[^/]+$/.test(path)) return { route: "/tenders/:reference", kind: "page" };
   if (/^\/awards\/[0-9]{4}$/.test(path)) return { route: "/awards/:year", kind: "page" };
   if (/^\/awards\/[^/]+$/.test(path)) return { route: "/awards/:reference", kind: "page" };

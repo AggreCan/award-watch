@@ -55,6 +55,7 @@ import {
 import { type LiveSubscription, type PaidCharge, operatorStripe } from "./admin_stripe";
 import { endForDeletion } from "./billing";
 import { type PlanState, planFor } from "./entitlements";
+import { type FeedCounts, type FeedView, feedCounts, userFeeds } from "./feeds";
 import { planLabel } from "./pages";
 import { deleteAccount } from "./routes";
 import { type MailMessage, isLocalHost, senderFor } from "./sender";
@@ -267,7 +268,13 @@ const WatchesPanel = ({ lang, w }: { lang: Lang; w: WatchesSeen }) => {
   );
 };
 
-function overviewView(lang: Lang, o: Overview, search: { q: string; hits: UserHit[] | null }, w: WatchesSeen = { ov: null, events: null }) {
+// "search 3, all 1": the live calendar feeds by kind, as stored.
+const feedKinds = (lang: Lang, f: FeedCounts) =>
+  f.byKind.length ? f.byKind.map((k) => `${k.kind} ${fmtInt(k.n, lang)}`).join(", ") : t(lang, "admin.none");
+
+function overviewView(
+  lang: Lang, o: Overview, search: { q: string; hits: UserHit[] | null }, w: WatchesSeen = { ov: null, events: null }, feeds: FeedCounts | null = null,
+) {
   const subs = o.subscriptions.length
     ? o.subscriptions.map((s) => `${s.status} ${fmtInt(s.n, lang)}`).join(", ")
     : t(lang, "admin.none");
@@ -315,6 +322,12 @@ function overviewView(lang: Lang, o: Overview, search: { q: string; hits: UserHi
               <dt>{t(lang, "admin.count_bugs_all")}</dt><dd>{fmtInt(o.bugs.all, lang)}</dd>
             </>
           )}
+          {feeds === null ? null : (
+            <>
+              <dt>{t(lang, "admin.count_feeds")}</dt><dd class="mono">{feedKinds(lang, feeds)}</dd>
+              <dt>{t(lang, "admin.count_feeds_read", { n: WEEK_DAYS })}</dt><dd>{fmtInt(feeds.readWeek, lang)}</dd>
+            </>
+          )}
           <dt>{t(lang, "admin.count_codes")}</dt><dd>{fmtInt(o.codesToday, lang)}</dd>
         </dl>
       </Panel>
@@ -341,10 +354,10 @@ admin.get("/", async (c) => {
   const lang = c.get("lang");
   return guarded(c, async () => {
     const q = (c.req.query("q") ?? "").trim().slice(0, EMAIL_MAX);
-    const [o, hits, ov, events] = await Promise.all([
-      overview(c.env), q ? findUsers(c.env, q) : Promise.resolve(null), watchOverview(c.env), eventCounts(c.env),
+    const [o, hits, ov, events, feeds] = await Promise.all([
+      overview(c.env), q ? findUsers(c.env, q) : Promise.resolve(null), watchOverview(c.env), eventCounts(c.env), feedCounts(c.env),
     ]);
-    return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }, { ov, events }));
+    return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }, { ov, events }, feeds));
   });
 });
 
@@ -555,6 +568,8 @@ const deliveryWord = (lang: Lang, status: string, items: number) =>
 type UserState = {
   plan: PlanState; stripeOn: boolean; live: LiveSubscription | "missing" | null | undefined;
   notice?: string | null; errors?: Key[]; until?: string; reference?: string;
+  // The account's calendar feeds (feeds.ts), never their secrets; null without the table.
+  feeds?: FeedView[] | null;
 };
 
 function blockLine(lang: Lang, block: BlockRow | null): string {
@@ -721,6 +736,18 @@ function userView(lang: Lang, op: Account, d: UserDetail, s: UserState, now: Dat
             ])} />
         ) : <p class="muted">{t(lang, "admin.keys_none")}</p>}
       </Panel>
+      {s.feeds == null ? null : (
+        <Panel title={t(lang, "admin.panel_feeds")} count={fmtInt(s.feeds.length, lang)}>
+          {s.feeds.length ? (
+            <Table heads={[t(lang, "admin.col_kind"), t(lang, "admin.col_created"), t(lang, "admin.col_revoked"), t(lang, "admin.col_last_read")]}
+              rows={s.feeds.map((f) => [
+                <span class="mono">{f.kind}</span>, <span class="mono">{day(f.created_at)}</span>,
+                <span class="mono">{f.revoked_at ? day(f.revoked_at) : t(lang, "admin.no")}</span>,
+                <span class="mono">{f.last_read_day ?? t(lang, "admin.never")}</span>,
+              ])} />
+          ) : <p class="muted">{t(lang, "admin.feeds_none")}</p>}
+        </Panel>
+      )}
       <Panel title={t(lang, "admin.panel_deliveries", { n: USER_DELIVERY_ROWS })} count={fmtInt(d.deliveries.length, lang)}>
         {d.deliveries.length ? (
           <Table heads={[t(lang, "admin.col_time"), t(lang, "admin.col_search"), t(lang, "admin.col_state")]}
@@ -763,6 +790,7 @@ async function userPage(c: Context<AppEnv>, id: string, extra: Partial<UserState
   const now = new Date();
   const d = await userDetail(c.env, id, now);
   if (!d) return c.notFound();
+  const feeds = await userFeeds(c.env, id);
   const plan = await planFor(c.env, d.user, now);
   const stripe = operatorStripe(c.env);
   const live = stripe && d.payment?.subscription_id ? await stripe.subscription(d.payment.subscription_id) : undefined;
@@ -770,7 +798,7 @@ async function userPage(c: Context<AppEnv>, id: string, extra: Partial<UserState
   const notice = extra.notice !== undefined ? extra.notice
     : NOTICE[m] ? t(lang, NOTICE[m], { n: fmtInt(Number(c.req.query("n") ?? "0") || 0, lang) }) : null;
   const title = d.user.status === "active" ? d.user.email : t(lang, "admin.deleted_title");
-  return adminPage(c, title, userView(lang, operatorOf(c), d, { ...extra, plan, stripeOn: !!stripe, live, notice }, now), extra.status ?? 200);
+  return adminPage(c, title, userView(lang, operatorOf(c), d, { ...extra, plan, stripeOn: !!stripe, live, notice, feeds }, now), extra.status ?? 200);
 }
 
 admin.get("/users/:id", (c) => {

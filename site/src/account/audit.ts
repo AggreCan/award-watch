@@ -10,7 +10,8 @@ export type AuditEvent =
   | "bug_reported"
   | "search_added" | "search_changed" | "search_deleted" | "searches_imported"
   | "key_created" | "key_revoked" | "key_refused" | "plan_changed" | "deleted" | "delivery_stopped"
-  | "watch_added" | "watch_changed" | "watch_removed" | "watch_mail" | "watch_mail_stopped";
+  | "watch_added" | "watch_changed" | "watch_removed" | "watch_mail" | "watch_mail_stopped"
+  | "feed_created" | "feed_rotated" | "feed_removed";
 
 export const AUDIT_DAYS = 90;
 

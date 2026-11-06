@@ -19,6 +19,10 @@
 //   POST /account/bug                  store a report, send it to the operator        (session, CSRF, plan, FORM_LIMIT)
 //   GET  /account/delete               what deleting removes                          (session)
 //   POST /account/delete               delete, after cancelling a subscription        (session, CSRF)
+//   GET  /account/calendar/:id.ics?t=  a calendar feed, read by a calendar app        (the feed's secret, plan)
+//   POST /account/calendar             make a feed of a saved tender search, or "all"  (session, CSRF, plan)
+//   POST /account/calendar/:id/rotate  a new secret; the old address stops            (session, CSRF)
+//   POST /account/calendar/:id/delete  remove the feed; its address stops             (session, CSRF)
 //   GET  /account/stop?s=&t=           a delivery's stop page, from its message       (the link's secret)
 //   POST /account/stop?s=&t=           turn that delivery off; also RFC 8058 one-click (the link's secret)
 //   GET  /account/stop?w=&t=           the watch mail's stop page, from its message    (the link's secret)
@@ -47,10 +51,13 @@ import { getCookie } from "hono/cookie";
 import { addDays } from "../../public/closing.js";
 import { isOwnAddress } from "../api";
 import { readForm } from "../body";
+import { FEED_EVENTS_MAX, ICS_TYPE, closingStart } from "../calendar";
 import { clockOf, tenderState } from "../closing";
-import { loadBuyer, loadContract, loadProfile, loadStats, loadTender } from "../data";
+import { loadBuyer, loadContract, loadOpenList, loadProfile, loadStats, loadTender } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, pick, t, type Key, type Lang } from "../i18n";
+import { todayOf } from "../layout";
+import { FEED_ICS } from "../limits";
 import { readPublishedContract } from "../records_tables";
 import { EMAIL_MAX, interestFilter, kindOfPath, normalizeEmail } from "../pages/interest";
 import { deviceClass } from "../views";
@@ -61,11 +68,15 @@ import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, s
 import { bugPage, fileBug } from "./bugs";
 import { WATCH_MAX, allowed, watchCap } from "./entitlements";
 import {
-  accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView, signInView, stopView, stoppedView,
-  unavailableView,
+  FEED_KINDS, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
+  listFeeds, readFeed, removeFeed, rotateFeed, searchMatches,
+} from "./feeds";
+import {
+  type CalendarRow, type CalendarView, accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView,
+  signInView, stopView, stoppedView, unavailableView,
 } from "./pages";
 import {
-  addSearch, capFor, deleteSearch, importInterest, isDelivery, lastDeliveries, listSearches, pendingInterest, setDelivery,
+  type SavedSearch, addSearch, capFor, deleteSearch, importInterest, isDelivery, lastDeliveries, listSearches, pendingInterest, setDelivery,
 } from "./searches";
 import { randomHex, sameHash, sha256Hex, ipHash } from "./secrets";
 import { isLocalHost, senderFor, signInMessage } from "./sender";
@@ -86,7 +97,8 @@ export const account = new Hono<AppEnv>();
 account.use("*", async (c, next) => {
   if (!accountsEnabled(c.env)) return c.notFound();
   await next();
-  c.header("Cache-Control", "no-store");
+  // A calendar feed is read by a calendar app, never a page: private as well.
+  c.header("Cache-Control", FEED_ICS.test(c.req.path) ? "private, no-store" : "no-store");
   c.header("X-Robots-Tag", "noindex, nofollow");
 });
 
@@ -317,6 +329,9 @@ account.get("/", async (c) => {
 const SEARCH_NOTICE: Record<string, Key> = {
   added: "account.msg_added", exists: "account.msg_exists", deleted: "account.msg_deleted", changed: "account.msg_changed",
   imported: "account.msg_imported", imported_some: "account.msg_imported_some", pro: "account.deliver_pro",
+  // The calendar feeds' panel (feeds.ts).
+  feed_added: "calfeed.msg_added", feed_exists: "calfeed.msg_exists", feed_cap: "calfeed.msg_cap", feed_missing: "calfeed.msg_missing",
+  feed_pro: "calfeed.msg_pro", feed_rotated: "calfeed.msg_rotated", feed_removed: "calfeed.msg_removed",
 };
 
 // A stored label is in the language of the page it was saved from; the page
@@ -330,8 +345,9 @@ async function labelIn(c: Context<AppEnv>, lang: Lang, row: { kind: string; para
 
 async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: Key[]; url?: string; status?: number } = {}) {
   const lang = c.get("lang");
-  const [stored, waiting, last] = await Promise.all([
+  const [stored, waiting, last, feeds] = await Promise.all([
     listSearches(c.env, who.userId), pendingInterest(c.env, who.email, who.userId), lastDeliveries(c.env, who.userId),
+    listFeeds(c.env, who.userId),
   ]);
   const searches = await Promise.all(stored.map(async (s) => ({ ...s, label: await labelIn(c, lang, s), last: last.get(s.id) ?? null })));
   const pending = await Promise.all(waiting.map(async (r) => ({ ...r, label: await labelIn(c, lang, r) })));
@@ -340,8 +356,37 @@ async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: 
   const notice = m === "cap"
     ? t(lang, who.plan === "free" ? "account.cap_free" : "account.cap_pro", { cap })
     : SEARCH_NOTICE[m] ? t(lang, SEARCH_NOTICE[m]) : null;
+  // No feeds table on the database yet: the page leaves the feeds out.
+  const calendar = feeds === null ? null : await calendarView(c, lang, searches, feeds);
   return accountPage(c, t(lang, "account.searches_title"),
-    searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url }), extra.status ?? 200);
+    searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar }), extra.status ?? 200);
+}
+
+// The feeds panel's rows: each saved tender search with its feed, then the
+// "all" feed (feeds.ts), each with how many events it holds now, counted
+// from the open notices the feed reads (null when they cannot be read).
+async function calendarView(c: Context<AppEnv>, lang: Lang, searches: SavedSearch[], feeds: FeedRow[]): Promise<CalendarView> {
+  const tenders = searches.filter((s) => s.kind === FEED_SEARCH_KIND);
+  const open = tenders.length ? await loadOpenList(c.env).catch(() => null) : null;
+  const clock = clockOf(c.env);
+  const matches = new Map(tenders.map((s) => [
+    s.id, open ? searchMatches(open, s.params, clock).filter((r) => closingStart(r.closing)).map((r) => r.reference) : null,
+  ]));
+  const base = siteBase(c);
+  const cell = (row: FeedRow | undefined, refs: string[] | null): CalendarRow["feed"] => row ? {
+    id: row.id, address: feedAddress(base, row, lang), lastRead: row.last_read_day,
+    events: refs === null ? null : Math.min(refs.length, FEED_EVENTS_MAX),
+  } : null;
+  const rows: CalendarRow[] = tenders.map((s) => ({
+    kind: "search", searchId: s.id, label: s.label, href: s.params,
+    feed: cell(feeds.find((f) => f.kind === "search" && f.search_id === s.id), matches.get(s.id) ?? null),
+  }));
+  if (tenders.length || feeds.some((f) => f.kind === "all")) {
+    const lists = [...matches.values()];
+    const all = lists.some((x) => x === null) ? null : [...new Set(lists.flatMap((x) => x ?? []))];
+    rows.push({ kind: "all", searchId: null, label: t(lang, "calfeed.kind_all"), href: null, feed: cell(feeds.find((f) => f.kind === "all"), all) });
+  }
+  return { rows, live: feeds.length };
 }
 
 account.get("/searches", async (c) => {
@@ -412,6 +457,82 @@ account.post("/searches/:id", async (c) => {
     if (!(await setDelivery(c.env, who.userId, c.req.param("id") ?? "", deliver))) return c.redirect("/account/searches", 303);
     await audit(c.env, who.userId, "search_changed", deliver);
     return c.redirect("/account/searches?m=changed", 303);
+  });
+});
+
+// -- calendar feeds (feeds.ts) ------------------------------------------------------------------
+
+// A calendar app reads the feed: no session, no cookie, the secret in the
+// address is the proof. A feed that does not stand (a wrong or rotated
+// secret, a removed feed, a deleted search or account, a plan without
+// delivery, a blocked account) is the site's 404; a database or a file that
+// cannot be read is a 503 a calendar app retries, never an empty calendar.
+// ?alarm=1d adds a reminder a day before each event.
+account.get("/calendar/:file", async (c) => {
+  const m = /^([0-9a-f]{32})\.ics$/.exec(c.req.param("file") ?? "");
+  if (!m) return c.notFound();
+  const lang = c.get("lang");
+  const unread = () => {
+    c.header("Retry-After", "600");
+    return c.text(t(lang, "calfeed.unavailable"), 503);
+  };
+  let read: FeedRead;
+  try {
+    read = await readFeed(c.env, m[1], c.req.query("t") ?? "");
+  } catch {
+    read = { state: "unavailable" };
+  }
+  if (read.state === "none") return c.notFound();
+  if (read.state === "unavailable") return unread();
+  const stats = await loadStats(c.env).catch(() => null);
+  if (!stats?.data_as_of) return unread();
+  const feed = read.feed;
+  const first = feed.searches[0];
+  const label = feed.kind === "search" && first ? await labelIn(c, lang, { ...first, kind: FEED_SEARCH_KIND }) : undefined;
+  try {
+    const body = await feedCalendar(c.env, feed, {
+      lang, base: siteBase(c), clock: clockOf(c.env), dataDate: todayOf(stats.data_as_of), alarm: c.req.query("alarm") === "1d",
+      name: feedName(lang, feed, label),
+    });
+    c.header("Content-Type", ICS_TYPE);
+    return c.body(body);
+  } catch (e) {
+    console.error(`calendar feed: ${String(e).slice(0, 120)}`);
+    return unread();
+  }
+});
+
+account.post("/calendar", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  const kind = fields.kind;
+  if (!(FEED_KINDS as readonly string[]).includes(kind)) return c.text(t(c.get("lang"), "form.rejected"), 400);
+  if (!allowed(who, "delivery")) return c.redirect("/account/searches?m=feed_pro#calendar", 303);
+  return guarded(c, async () => {
+    const result = await createFeed(c.env, who.userId, kind as FeedKind, kind === "search" ? clean(fields, "search", 64) : null);
+    if (result === "added") await audit(c.env, who.userId, "feed_created", kind);
+    return c.redirect(`/account/searches?m=feed_${result}#calendar`, 303);
+  });
+});
+
+account.post("/calendar/:id/rotate", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who } = post;
+  return guarded(c, async () => {
+    if (await rotateFeed(c.env, who.userId, c.req.param("id") ?? "")) await audit(c.env, who.userId, "feed_rotated");
+    return c.redirect("/account/searches?m=feed_rotated#calendar", 303);
+  });
+});
+
+account.post("/calendar/:id/delete", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who } = post;
+  return guarded(c, async () => {
+    if (await removeFeed(c.env, who.userId, c.req.param("id") ?? "")) await audit(c.env, who.userId, "feed_removed");
+    return c.redirect("/account/searches?m=feed_removed#calendar", 303);
   });
 });
 
@@ -698,16 +819,18 @@ account.get("/delete", async (c) => {
 // The user row stays, marked deleted, its email replaced by "deleted:" and
 // SHA-256 of a random salt and the address, the salt thrown away: the row
 // cannot be matched to the address, and the address can sign up afresh.
-// Sessions are revoked; saved searches (with their stop links, delivery
-// rows and records marks), keys, bug reports and sign-in requests are
-// deleted; so are the address's rows in the alerts form's table. The
-// entitlement rows stay, tied to the id alone, as the record of what was
-// granted.
+// Sessions are revoked; calendar feeds, saved searches (with their stop
+// links, delivery rows and records marks), keys, bug reports and sign-in
+// requests are deleted; so are the address's rows in the alerts form's
+// table. The entitlement rows stay, tied to the id alone, as the record of
+// what was granted. The feeds go first, on their own (feeds.ts), so a
+// database without their table yet still deletes the rest.
 export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new Date()): Promise<void> {
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
   const tomb = `deleted:${await sha256Hex(`${randomHex(32)}\n${who.email}`)}`;
   await deleteWatchesOf(c.env, who.userId);
+  await deleteFeeds(c.env, { userId: who.userId });
   await db.batch([
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, who.userId),
     db.prepare("DELETE FROM delivery_tokens WHERE search_id IN (SELECT id FROM saved_searches WHERE user_id = ?)").bind(who.userId),

@@ -28,6 +28,7 @@ import { EXPIRING_CSV, expiringFile, expiringPage, expiringRowsCsv, expiringWind
 import { feedsPage } from "./pages/feeds";
 import { correctionsForm, correctionsSubmit, respondPage, respondSubmit } from "./pages/forms";
 import { homePage } from "./pages/home";
+import { contractIcs, publishedContractIcs, tenderIcs } from "./pages/ics";
 import { interestSubmit, readInterestPost } from "./pages/interest";
 import { methodologyPage } from "./pages/methodology";
 import { organizationPage } from "./pages/organization";
@@ -114,17 +115,24 @@ app.get("/", homePage);
 app.get("/tenders", tendersPage);
 app.get("/tenders/new", newTendersPage);
 app.get("/tenders/same-day", sameDayPage);
+// The one-event calendar files (pages/ics.ts), public whatever the accounts
+// switch says; each before the page route that would read "<reference>.ics"
+// as a reference.
+app.get("/tenders/:file{[A-Za-z0-9._-]+\\.ics}", tenderIcs);
 app.get("/tenders/:reference", tenderPage);
 // /awards/2026 is a year; anything else after /awards/ is a reference.
 app.get("/awards", awardsPage);
+app.get("/awards/:file{[A-Za-z0-9._-]+\\.ics}", (c) => contractIcs(c, "award"));
 app.get("/awards/:key", (c) => {
   const key = c.req.param("key") ?? "";
   return YEAR_RE.test(key) ? awardsYearPage(c, key) : contractPage(c, "award", key);
 });
+app.get("/history/:file{[A-Za-z0-9._-]+\\.ics}", (c) => contractIcs(c, "history"));
 app.get("/history/:reference", (c) => contractPage(c, "history", c.req.param("reference") ?? ""));
 // One published contract, from the records database (pages/published.tsx):
 // the department, then the reference as published, which may hold an
 // escaped slash, hence the pattern.
+app.get("/contracts/:dept/:file{.+\\.ics}", publishedContractIcs);
 app.get("/contracts/:dept/:reference{.+}", publishedContractPage);
 // Contracts ending within 3, 6 and 12 months of the data date; anything
 // after /expiring/ that is not a window is a 404.

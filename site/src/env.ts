@@ -66,6 +66,8 @@ export interface Env {
   STOP_LIMIT?: RateLimit;
   // The payment service's webhook posts per address (wrangler.jsonc "ratelimits").
   WEBHOOK_LIMIT?: RateLimit;
+  // A calendar feed's reads per address (wrangler.jsonc "ratelimits", src/account/feeds.ts).
+  CALENDAR_LIMIT?: RateLimit;
   // The keyed API's requests per API key (wrangler.jsonc "ratelimits",
   // src/api_keyed.ts), on top of API_LIMIT's per-address cap.
   KEY_LIMIT?: RateLimit;

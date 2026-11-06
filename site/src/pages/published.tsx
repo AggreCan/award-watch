@@ -22,6 +22,7 @@ import { dollars, num } from "../records_db";
 import { CONTRACT_VERSIONS_MAX, readPublishedContract, type Row } from "../records_tables";
 import { breadcrumbJsonLd, clip, pageTitle, type Seo } from "../seo";
 import { windowOf } from "./expiring";
+import { publishedIcsPath } from "./ics";
 import { BuyerLink, contractPath, contractSearchUrl, datasetUrl, money, otherLanguageMark } from "./shared";
 
 // The longest reference the address takes (records_db.REF_MAX in the pipeline).
@@ -213,6 +214,9 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
             <Item lang={lang} k="contract.end" v={end ? <>
               {end}
               {window ? <> · <a href={`/expiring/${window}`} class="small">{daysText}</a></> : null}
+              {daysLeft !== null && daysLeft >= 0 ? (
+                <> · <a href={publishedIcsPath(dept, ref, lang)} class="small" rel="nofollow">{t(lang, "cal.add")}</a></>
+              ) : null}
             </> : null} />
             <Item lang={lang} k="published.period" v={str(d.period)} />
           </dl>

@@ -14,6 +14,7 @@ import type { Env } from "../env";
 import type { Lang } from "../i18n";
 import { INTEREST_KINDS, type InterestFilter, type InterestKind, kindOfPath } from "../pages/interest";
 import { SAVED_SEARCH_MAX, savedSearchCap } from "./entitlements";
+import { deleteFeeds } from "./feeds";
 import { newId } from "./secrets";
 import type { Account } from "./session";
 
@@ -76,9 +77,11 @@ export async function setDelivery(env: Env, userId: string, id: string, deliver:
 
 // The search with its stop link, its delivery rows and its records mark,
 // which the schema's cascade removes too; named here so the delete does not
-// lean on it.
+// lean on it. Its calendar feed goes first (feeds.ts), so the feed's address
+// stops with the search.
 export async function deleteSearch(env: Env, userId: string, id: string): Promise<boolean> {
   const db = env.ACCOUNTS!;
+  await deleteFeeds(env, { userId, searchId: id });
   const mine = "SELECT id FROM saved_searches WHERE id = ? AND user_id = ?";
   const res = await db.batch([
     db.prepare(`DELETE FROM delivery_tokens WHERE search_id IN (${mine})`).bind(id, userId),

@@ -16,6 +16,8 @@ const PUBLIC_PAGES = [
   "/", "/tenders", "/tenders?segment=82", "/awards", "/expiring", "/organizations", "/organizations/org-a000000001",
   "/buyers/pwgsc-tpsgc", "/segments/82", "/alerts", "/watchlist", "/about", "/terms", "/privacy", "/data", "/corrections",
   "/nothing-here", "/?lang=fr", "/privacy?lang=fr",
+  // A notice's and a contract's pages carry their calendar file's link whatever the switch (pages/ics.ts).
+  "/tenders/cb-200-20005019", "/awards/cb-400-40000004",
 ];
 
 const ACCOUNT_ROUTES: [string, string][] = [
@@ -24,6 +26,9 @@ const ACCOUNT_ROUTES: [string, string][] = [
   ["POST", "/account/sign-in"], ["POST", "/account/check"], ["POST", "/account/sign-out"], ["POST", "/account/searches"],
   ["POST", "/account/searches/import"], ["POST", "/account/keys"], ["POST", "/account/delete"],
   ["GET", `/account/stop?s=${"a".repeat(32)}&t=${"b".repeat(32)}`], ["POST", "/account/stop"],
+  // Calendar feeds (account/feeds.ts): every address under /account/calendar.
+  ["GET", `/account/calendar/${"a".repeat(32)}.ics?t=${"b".repeat(32)}`], ["POST", "/account/calendar"],
+  ["POST", `/account/calendar/${"a".repeat(32)}/rotate`], ["POST", `/account/calendar/${"a".repeat(32)}/delete`],
 ];
 
 // A binding that notes every use and throws: the accounts database, or the

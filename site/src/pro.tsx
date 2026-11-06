@@ -71,6 +71,8 @@ export const PRO_INCLUDES: readonly (readonly [Feature, Key])[] = [
   ["intraday", "expiring.pro_intraday"],
   ["delivery", "expiring.pro_searches"],
   ["watch_mail", "watches.pro_include"],
+  // A calendar feed is a delivery, as mail is (src/account/feeds.ts).
+  ["delivery", "pro.include_feeds"],
   ["bug_reports", "pro.include_bugs"],
 ];
 

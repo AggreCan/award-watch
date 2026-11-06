@@ -10,6 +10,7 @@ export const AccountsPrivacy: FC<{ lang: Lang }> = ({ lang }) => (
   <>
     <p>{t(lang, "account.privacy_kept")}</p>
     <p>{t(lang, "account.privacy_mail")}</p>
+    <p>{t(lang, "calfeed.privacy_page")}</p>
     <p>{t(lang, "bugs.privacy", { days: BUG_REPORT_DAYS })}</p>
     <p>{t(lang, "account.privacy_secrets")}</p>
     <p>{t(lang, "account.privacy_not_kept")}</p>

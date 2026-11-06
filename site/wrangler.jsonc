@@ -40,7 +40,13 @@
     // per-address API_LIMIT above, so a key shared across many addresses is
     // still held to one rate. KEY_PER_MINUTE in src/api_keyed.ts is this
     // limit (a test holds the two equal).
-    { "name": "KEY_LIMIT", "namespace_id": "2009", "simple": { "limit": 600, "period": 60 } }
+    { "name": "KEY_LIMIT", "namespace_id": "2009", "simple": { "limit": 600, "period": 60 } },
+    // A Pro account's calendar feed (/account/calendar/<id>.ics,
+    // src/account/feeds.ts), only while ACCOUNTS_ENABLED is "true": each read
+    // checks the feed in the accounts database. A calendar service reads a
+    // subscribed feed every few hours, so this holds for thousands of feeds
+    // read from one of its addresses. The Atom feeds keep FEED_LIMIT.
+    { "name": "CALENDAR_LIMIT", "namespace_id": "2010", "simple": { "limit": 20, "period": 60 } }
   ],
   // The daily check (src/watchdog.ts): 06:00 UTC, after the nightly run has had
   // its window and 2 h 15 after the same-day refresh's last cut. It emails the

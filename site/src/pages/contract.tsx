@@ -15,6 +15,7 @@ import { categoryLabel, fmtInt, pick, provinceName, segmentLabel, statusLabel, t
 import { CompetitiveFlag, Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { contractSeo } from "../seo";
 import { windowOf } from "./expiring";
+import { contractIcsPath } from "./ics";
 import { BuyerLink, awardNoticeUrl, datasetUrl, instrumentText, money, otherLanguageMark, provincesText, sourceFileText } from "./shared";
 
 // Days from one ISO date to another.
@@ -82,6 +83,8 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
   const end = d.end && /^\d{4}-\d{2}-\d{2}/.test(d.end) ? d.end.slice(0, 10) : null;
   const daysLeft = end ? daysBetween(today, end) : null;
   const window = daysLeft !== null && d.status !== "cancelled" ? windowOf(daysLeft) : null;
+  // The contract's calendar file (pages/ics.ts), beside an end still to come.
+  const calendar = daysLeft !== null && daysLeft >= 0 && d.status !== "cancelled";
   const daysText = daysLeft === null ? "" : daysLeft === 0 ? t(lang, "contract.ends_today")
     : tn(lang, "contract.days_left_one", "contract.days_left_many", daysLeft, { n: fmtInt(daysLeft, lang) });
   const supplier = d.organization_id ? <a href={`/organizations/${d.organization_id}`}>{d.supplier ?? d.organization_id}</a> : d.supplier;
@@ -155,6 +158,7 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
         <Row lang={lang} k="contract.end" v={d.end ? <>
           {d.end}
           {window ? <> · <a href={`/expiring/${window}`} class="small">{daysText}</a></> : null}
+          {calendar ? <> · <a href={contractIcsPath(kind, d.reference, lang)} class="small" rel="nofollow">{t(lang, "cal.add")}</a></> : null}
         </> : null} />
       </dl>
       </Panel>

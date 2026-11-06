@@ -989,6 +989,10 @@ a > .pro-tag, h2 > .pro-tag { margin-left: 2px; }
 .stack label.account-check { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; }
 .stack input.account-code { max-width: 160px; font-variant-numeric: tabular-nums; letter-spacing: 0.2em; }
 .account-key { margin: 0 0 16px; font-size: 13px; }
+/* A calendar feed's cell (account/pages.tsx FeedCell): the address, a copy button calendar.js adds, a line, two buttons. */
+.feed-cell { display: grid; gap: 4px; justify-items: start; }
+.feed-cell p { margin: 0; }
+.calendar-address { width: 100%; min-width: 24ch; font-size: 12px; }
 /* On a phone the tables restack, and a select with its button wraps rather than overflow the cell. */
 @media (max-width: 699px) {
   .account-inline { flex-wrap: wrap; white-space: normal; }

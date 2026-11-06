@@ -233,6 +233,28 @@ describe("a published contract's page", () => {
     }
   });
 
+  it("offers its end as a calendar file beside the end date (pages/ics.ts), its other rows as the event's sequence", async () => {
+    const ics = `${contractPath("dnd-mdn", SECOND)}.ics`;
+    expect((await page(contractPath("dnd-mdn", SECOND))).html).toContain(`<a href="${ics}" class="small" rel="nofollow">Add to calendar</a>`);
+    const res = await get(ics, { env: offEnv() });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("text/calendar; charset=utf-8");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3600");
+    const text = (await res.text()).replace(/\r\n /g, "");
+    expect(text).toContain(`UID:contract-contract-dnd-mdn:${SECOND.toLowerCase()}@awardwatch.ca`);
+    expect(text).toContain("SEQUENCE:1");
+    expect(text).toContain("DTSTART;VALUE=DATE:20270228");
+    expect(text).toContain("DTEND;VALUE=DATE:20270301");
+    expect(text).toContain("SUMMARY:Ends: Exemplar Translation Services Inc. · National Defence · Translation services");
+    expect(text).not.toContain(EM_DASH);
+    // An ended contract's page has no link; its file still names no person.
+    expect((await page(contractPath("dnd-mdn", SLASHED))).html).not.toContain(".ics");
+    const person = (await (await get(`${contractPath("dnd-mdn", SLASHED)}.ics`, { env: offEnv() })).text()).replace(/\r\n /g, "");
+    expect(person).toContain("SUMMARY:Ends: Individual\\, name withheld · National Defence · Snow removal");
+    expect((await get("/contracts/dnd-mdn/C-2026-2027-Q3-99999.ics", { env: offEnv() })).status).toBe(404);
+    expect((await get("/contracts/Not%20A%20Department/X-1.ics", { env: offEnv() })).status).toBe(404);
+  });
+
   it("sends a department in capitals to its lower-case address", async () => {
     const res = await get(`/contracts/DND-MDN/${SECOND}?lang=fr`, { env: offEnv() });
     expect(res.status).toBe(301);

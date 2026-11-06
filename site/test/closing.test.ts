@@ -122,7 +122,9 @@ describe("the state at render", () => {
   it("marks the notice page's closing time for the countdown while it is near", async () => {
     // The notice's newest amendment closes 2026-11-04 at 14:00 Eastern.
     const near = await page("/tenders/cb-100-10000001", "2026-11-04T15:00:00Z");
-    expect(near).toContain('<dd data-closes="2026-11-04T19:00:00Z" data-time="14:00 ET" data-notice="cb-100-10000001">2026-11-04 14:00 ET</dd>');
+    // The calendar file's link sits beside the time (pages/ics.ts); the script's line goes under both.
+    expect(near).toContain('<dd data-closes="2026-11-04T19:00:00Z" data-time="14:00 ET" data-notice="cb-100-10000001">2026-11-04 14:00 ET · ' +
+      '<a href="/tenders/cb-100-10000001.ics" class="small" rel="nofollow">Add to calendar</a></dd>');
     expect(near).toContain('<script type="module" src="/countdown.js"></script>');
     const gone = await page("/tenders/cb-100-10000001", "2026-11-04T19:00:00Z");
     expect(gone).toContain('<span class="badge badge-closed">Closing date passed</span>');

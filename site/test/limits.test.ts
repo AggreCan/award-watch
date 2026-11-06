@@ -41,6 +41,14 @@ describe("request buckets", () => {
     expect(bucketFor("GET", FEED)).toBe("feed");
     expect(bucketFor("GET", "/data/feeds/index.json")).toBe("feed");
     expect(bucketFor("GET", "/feeds")).toBe("page");
+    // The calendar files (pages/ics.ts) are downloads; a Pro feed (account/feeds.ts) has its own cap.
+    for (const path of ["/tenders/cb-1.ics", "/awards/cb-4.ics", "/history/w8472-1.ics", "/contracts/dnd-mdn/W8486-1%2F001.ics"]) {
+      expect(bucketFor("GET", path), path).toBe("download");
+      expect(bucketFor("HEAD", path), path).toBe("page");
+    }
+    expect(bucketFor("GET", "/tenders/cb-1")).toBe("page");
+    expect(bucketFor("GET", `/account/calendar/${"a".repeat(32)}.ics`)).toBe("calendar");
+    expect(bucketFor("POST", "/account/calendar")).toBe("page");
   });
 
   it("counts a feed poll against the feed cap, never the page cap", async () => {

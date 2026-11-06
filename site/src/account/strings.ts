@@ -163,6 +163,93 @@ export const ACCOUNT_STRINGS = {
     fr: "Cette adresse ne mène pas à une page dont le filtre peut être enregistré.",
   },
 
+  // -- calendar feeds (src/account/feeds.ts, the searches page) -------------------------
+  "calfeed.panel": { en: "Calendar Feeds", fr: "Flux de calendrier" },
+  "calfeed.lead": {
+    en: "A calendar feed is an address a calendar app subscribes to. It lists the closing date of each open notice a saved tender search matches, and an amendment that moves a closing moves its event.",
+    fr: "Un flux de calendrier est une adresse à laquelle une application de calendrier s'abonne. Il présente la date de clôture de chaque avis ouvert que vise une recherche d'appels d'offres enregistrée, et une modification qui déplace une clôture déplace son événement.",
+  },
+  "calfeed.gate": {
+    en: "A calendar feed of each saved tender search is part of Pro.",
+    fr: "Un flux de calendrier pour chaque recherche d'appels d'offres enregistrée fait partie de Pro.",
+  },
+  "calfeed.col_feed": { en: "Feed", fr: "Flux" },
+  "calfeed.col_address": { en: "Calendar feed", fr: "Flux de calendrier" },
+  "calfeed.kind_all": { en: "All saved tender searches", fr: "Toutes les recherches d'appels d'offres enregistrées" },
+  "calfeed.kind_watchlist": { en: "Watchlist", fr: "Liste de suivi" },
+  "calfeed.make": { en: "Make a calendar feed", fr: "Créer un flux de calendrier" },
+  "calfeed.address": { en: "Feed address", fr: "Adresse du flux" },
+  "calfeed.copy": { en: "Copy", fr: "Copier" },
+  "calfeed.copied": { en: "Copied", fr: "Copiée" },
+  "calfeed.rotate": { en: "Rotate the address", fr: "Changer l'adresse" },
+  "calfeed.remove": { en: "Remove", fr: "Retirer" },
+  "calfeed.last_read": { en: "Last read by a calendar on {date}", fr: "Lu par un calendrier pour la dernière fois le {date}" },
+  "calfeed.not_read": { en: "Not read yet", fr: "Pas encore lu" },
+  "calfeed.events_one": { en: "{n} event today", fr: "{n} événement aujourd'hui" },
+  "calfeed.events_many": { en: "{n} events today", fr: "{n} événements aujourd'hui" },
+  "calfeed.none": {
+    en: "Save a tender list to make a calendar feed of it.",
+    fr: "Enregistrez une liste d'appels d'offres pour en créer un flux de calendrier.",
+  },
+  "calfeed.count": { en: "{n} of {max}", fr: "{n} sur {max}" },
+  "calfeed.cap": { en: "An account keeps up to {n} calendar feeds.", fr: "Un compte conserve jusqu'à {n} flux de calendrier." },
+  "calfeed.privacy": {
+    en: "Anyone who holds a feed's address can read what it lists. Rotate the address if it was shared by mistake.",
+    fr: "Quiconque détient l'adresse d'un flux peut lire ce qu'il présente. Changez l'adresse si elle a été communiquée par erreur.",
+  },
+  "calfeed.route_google": {
+    en: "Google Calendar: Other calendars, then From URL, then paste the address.",
+    fr: "Google Agenda : Autres agendas, puis À partir de l'URL, puis collez l'adresse.",
+  },
+  "calfeed.route_outlook": {
+    en: "Outlook: Add calendar, then Subscribe from web, then paste the address.",
+    fr: "Outlook : Ajouter un calendrier, puis S'abonner à partir du web, puis collez l'adresse.",
+  },
+  "calfeed.route_apple": {
+    en: "Apple Calendar: File, then New Calendar Subscription, then paste the address.",
+    fr: "Calendrier d'Apple : Fichier, puis Nouvel abonnement à un calendrier, puis collez l'adresse.",
+  },
+  "calfeed.refresh": {
+    en: "Calendar apps read a subscribed feed again on their own schedule, from every few hours to once a day. The feed is read from the site's data, refreshed nightly.",
+    fr: "Les applications de calendrier relisent un flux auquel elles sont abonnées selon leur propre horaire, de quelques heures à une fois par jour. Le flux est tiré des données du site, actualisées chaque nuit.",
+  },
+  "calfeed.msg_added": {
+    en: "The calendar feed is made. Copy its address into a calendar app.",
+    fr: "Le flux de calendrier est créé. Copiez son adresse dans une application de calendrier.",
+  },
+  "calfeed.msg_exists": { en: "That calendar feed already exists.", fr: "Ce flux de calendrier existe déjà." },
+  "calfeed.msg_rotated": {
+    en: "The feed has a new address. The old one no longer answers; give the new one to the calendar app.",
+    fr: "Le flux a une nouvelle adresse. L'ancienne ne répond plus; donnez la nouvelle à l'application de calendrier.",
+  },
+  "calfeed.msg_removed": {
+    en: "The calendar feed is removed. Its address no longer answers.",
+    fr: "Le flux de calendrier est retiré. Son adresse ne répond plus.",
+  },
+  "calfeed.msg_cap": {
+    en: "This account holds the most calendar feeds it can keep. Remove one to make another.",
+    fr: "Ce compte détient le nombre maximal de flux de calendrier. Retirez-en un pour en créer un autre.",
+  },
+  "calfeed.msg_missing": { en: "That saved search cannot have a calendar feed.", fr: "Cette recherche enregistrée ne peut pas avoir de flux de calendrier." },
+  "calfeed.msg_pro": { en: "Calendar feeds come with the Pro plan.", fr: "Les flux de calendrier sont offerts avec le forfait Pro." },
+  "calfeed.unavailable": {
+    en: "The calendar feed cannot be read just now. The calendar app tries again later.",
+    fr: "Le flux de calendrier ne peut pas être lu pour le moment. L'application de calendrier réessaiera plus tard.",
+  },
+  "calfeed.delete": {
+    en: "Every calendar feed, whose address stops answering.",
+    fr: "Tous les flux de calendrier, dont l'adresse cesse de répondre.",
+  },
+  "calfeed.privacy_page": {
+    en: "A calendar feed keeps the day a calendar app last read it, with no time, IP address or app name. Its address carries a secret: anyone who holds it can read what the feed lists, and the account rotates or removes it at any time.",
+    fr: "Un flux de calendrier conserve le jour où une application de calendrier l'a lu pour la dernière fois, sans heure, adresse IP ni nom d'application. Son adresse comporte un secret : quiconque la détient peut lire ce que présente le flux, et le compte peut la changer ou la retirer en tout temps.",
+  },
+  "admin.count_feeds": { en: "Calendar feeds by kind", fr: "Flux de calendrier par type" },
+  "admin.count_feeds_read": { en: "Calendar feeds read, last {n} days", fr: "Flux de calendrier lus, {n} derniers jours" },
+  "admin.panel_feeds": { en: "Calendar Feeds", fr: "Flux de calendrier" },
+  "admin.col_last_read": { en: "Last read", fr: "Dernière lecture" },
+  "admin.feeds_none": { en: "No calendar feeds.", fr: "Aucun flux de calendrier." },
+
   // -- API keys ------------------------------------------------------------------------
   "account.keys_title": { en: "API Keys", fr: "Clés d'API" },
   "account.keys_lead": {
