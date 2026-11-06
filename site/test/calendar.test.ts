@@ -2,17 +2,25 @@
 // contract (src/pages/ics.ts), public whatever the switch, and a Pro
 // account's feeds (src/account/feeds.ts). Every file is read back through a
 // strict parser (ical.js) as well as checked line by line: CRLF ends, 75
-// octets at most, escaped TEXT, UTC times.
+// octets at most, escaped TEXT, UTC times. The watches' feed reads a local
+// records database built from pipeline/records_schema.sql with rows written
+// here; every expected line is written out from those rows.
+import { env as workerEnv } from "cloudflare:test";
 import ICAL from "ical.js";
-import { describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { addDays } from "../public/closing.js";
 import { closesAtUtc } from "../src/closing";
 import {
   type CalEvent, FEED_EVENTS_MAX, capped, contractEvent, escapeText, foldLine, noticeEvent, writeCalendar,
 } from "../src/calendar";
-import { type FeedRow, WATCHLIST_EVENTS, forgetFeeds } from "../src/account/feeds";
+import { ENDS_SLOTS, type FeedRow, WATCH_ENDS_SQL, endsBinds, forgetFeeds } from "../src/account/feeds";
 import { app } from "../src/index";
+import { orgNumber } from "../src/records_db";
 import { FILES, makeFakeAssets, testEnv } from "./assets";
-import { ACCOUNTS, csrf, get, grantPro, newEmail, nextIp, offEnv, onEnv, post, signIn, userId, useAccountsDb } from "./accounts-helpers";
+import {
+  ACCOUNTS, csrf, get, grantPro, nbsp, newEmail, nextIp, offEnv, onEnv, post, signIn, userId, useAccountsDb,
+} from "./accounts-helpers";
+import { applySql } from "./setup";
 
 useAccountsDb();
 
@@ -385,7 +393,7 @@ describe("a saved search's feed", () => {
     expect(events(cal).map((e) => e.uid)).toEqual([
       "notice-cb-100-10000001@awardwatch.ca", "notice-cb-200-20005019@awardwatch.ca", "notice-cb-300-30000003@awardwatch.ca",
     ]);
-    expect(cal.getFirstPropertyValue("x-wr-calname")).toBe("Award Watch · All saved tender searches");
+    expect(cal.getFirstPropertyValue("x-wr-calname")).toBe("Award Watch · All saved tender searches and watches");
   });
 
   it("is an empty calendar, still valid, for a search with no open notice; the page says 0 events today", async () => {
@@ -497,13 +505,12 @@ describe("a saved search's feed", () => {
     expect((await makeFeed(a, "all")).headers.get("location")).toBe("/account/searches?m=feed_exists#calendar");
     expect((await makeFeed(a, "search", a.searches[4].id)).headers.get("location")).toBe("/account/searches?m=feed_cap#calendar");
     expect(await feedRows(a.user)).toHaveLength(5);
-    // Another account's search, an unknown kind, and the watchlist before its build.
+    // Another account's search, an unknown kind; the watches' feed is the sixth, past the cap, and answers on the watches page.
     const other = await proAccount("feed-cap-other");
     expect((await makeFeed(a, "search", other.searches[0].id)).headers.get("location")).toBe("/account/searches?m=feed_missing#calendar");
     expect((await makeFeed(a, "everything")).status).toBe(400);
-    if (!WATCHLIST_EVENTS) {
-      expect((await makeFeed(other, "watchlist")).headers.get("location")).toBe("/account/searches?m=feed_missing#calendar");
-    }
+    expect((await makeFeed(a, "watchlist")).headers.get("location")).toBe("/account/watches?m=feed_cap#calendar");
+    expect(await feedRows(a.user)).toHaveLength(5);
   });
 
   it("serves a feed this isolate verified within the hour through a database outage, and answers 503 for any other", async () => {
@@ -615,5 +622,328 @@ describe("the feeds' states", () => {
     expect(user).toContain("<h2>Calendar Feeds</h2>");
     expect(user).toContain(today());
     expect(user).not.toContain(feed.secret);
+  });
+});
+
+// -- the watches' feed ---------------------------------------------------------------------------
+
+const RECORDS = (workerEnv as unknown as { RECORDS: D1Database }).RECORDS;
+const RECORDS_SCHEMA = (workerEnv as unknown as { RECORDS_SCHEMA_SQL: string }).RECORDS_SCHEMA_SQL;
+const DAY = "2026-10-31"; // the fixtures' data date
+const ORG = "org-a000000001"; // the fixtures' profile; org-a00000000f is an alias of it
+const RETIRED = "org-a00000000f";
+const ORG_B = "org-b000000002";
+const PUBLISHED_REF = "C-2026-2027-Q1-00096";
+
+const BUYER_NAMES: Record<string, string> = {
+  "pwgsc-tpsgc": "Public Services and Procurement Canada", "dnd-mdn": "National Defence", "hc-sc": "Health Canada",
+  "dfo-mpo": "Fisheries and Oceans Canada",
+};
+const ORG_NAMES: Record<string, string> = { [ORG]: "Exemplar Works Ltd.", [ORG_B]: "Org B Two Inc." };
+const KIND_N = { award: 1, history: 2, contract: 3 } as const;
+
+// A contract in the radar's 12-month window, as rec_expiring holds it: the
+// window file's row (without days_left) and the columns a statement filters by.
+type Ending = {
+  k: number; end: string; title: string; oid: string | null; buyer: string; client?: string; segs?: string[];
+  kind?: "award" | "history" | "contract"; ref?: string; amendments?: number;
+};
+
+function windowRow(e: Ending): Record<string, unknown> {
+  return {
+    kind: e.kind ?? "award", reference: e.ref ?? `RADAR-${e.k}`, title_en: e.title, title_fr: `FR ${e.title}`, organization_id: e.oid,
+    organization: e.oid ? ORG_NAMES[e.oid] : null, supplier_withheld: e.oid === null, buyer_id: e.buyer, buyer_en: BUYER_NAMES[e.buyer],
+    buyer_fr: null, start: "2025-04-01", end: e.end, value: 100_000, currency: "CAD", competitive: 1, method_en: null, method_fr: null,
+    instrument_en: "Contract", instrument_fr: null, n_amendments: e.amendments ?? 0, value_growth: null, segments: e.segs ?? [], provinces: [],
+    client_buyer_id: e.client ?? e.buyer, client_buyer_name: null,
+  };
+}
+
+async function radar(rows: Ending[], state = "ready"): Promise<void> {
+  await RECORDS.batch(["rec_expiring", "rec_meta"].map((t) => RECORDS.prepare(`DELETE FROM ${t}`)));
+  for (let i = 0; i < rows.length; i += 100) {
+    await RECORDS.batch(rows.slice(i, i + 100).map((e) => RECORDS.prepare(
+      "INSERT INTO rec_expiring (k, endd, oid, buyer, client, segs, kind, comp, cad, cents, nv, so, m31, j) " +
+      "VALUES (?, ?, ?, ?, ?, ?, ?, 1, 10000000, 10000000, 0, 0, 0, ?)",
+    ).bind(e.k, e.end, e.oid ? orgNumber(e.oid) : null, e.buyer, e.client ?? e.buyer, e.segs?.length ? ` ${e.segs.join(" ")} ` : "",
+      KIND_N[e.kind ?? "award"], JSON.stringify(windowRow(e)))));
+  }
+  await RECORDS.prepare("INSERT INTO rec_meta (key, value) VALUES ('state', ?), ('as_of', ?), ('rules', '2')").bind(state, DAY).run();
+}
+
+// The window: ORG's contracts at three buyers (one past the 6-month mark,
+// one before the data date, one past the 12 months), a published contract and
+// a withheld person's record at National Defence (the second as its client
+// department), and Org B's in segments 43 and 81 at PSPC.
+const WINDOW: Ending[] = [
+  { k: 1, end: "2026-11-20", title: "Cleaning services", oid: ORG, buyer: "pwgsc-tpsgc", client: "dnd-mdn", segs: ["80"] },
+  { k: 2, end: "2027-03-01", title: "Software licences", oid: ORG, buyer: "hc-sc", segs: ["43"] },
+  { k: 3, end: "2027-08-15", title: "Network equipment", oid: ORG, buyer: "pwgsc-tpsgc", segs: ["43"] },
+  { k: 4, end: "2027-01-15", title: "Fleet maintenance", oid: ORG_B, buyer: "dnd-mdn", kind: "contract", ref: "dnd-mdn:C-4" },
+  { k: 5, end: "2027-02-10", title: "Snow removal", oid: null, buyer: "pwgsc-tpsgc", client: "dnd-mdn", kind: "history" },
+  { k: 6, end: "2027-04-01", title: "Laptops", oid: ORG_B, buyer: "pwgsc-tpsgc", segs: ["43"] },
+  { k: 7, end: "2027-04-02", title: "Office furniture", oid: ORG_B, buyer: "pwgsc-tpsgc", segs: ["81"] },
+  { k: 8, end: "2027-06-01", title: "Base security", oid: ORG_B, buyer: "dnd-mdn" },
+  { k: 9, end: "2026-10-15", title: "Already ended", oid: ORG, buyer: "hc-sc" },
+  { k: 10, end: "2027-12-01", title: "Past the window", oid: ORG, buyer: "hc-sc" },
+];
+
+const EVENTS_OF: Record<string, string> = {
+  organization: "award,grant,amended,cancelled,ends_12m,ends_6m,ended",
+  buyer: "notice,notice_amended,award,amended,cancelled,ends_12m,ends_6m,ended",
+  contract: "amended,cancelled,ends_12m,ends_6m,ended",
+  tender: "notice_amended,notice_closed,notice_cancelled,notice_awarded",
+};
+let watchSeq = 0;
+
+async function follow(user: string, kind: string, target: string, o: { events?: string; segment?: string } = {}): Promise<void> {
+  watchSeq++;
+  await ACCOUNTS.prepare(
+    "INSERT INTO watches (id, user_id, kind, target, segment, label, events, cadence, created_at, last_sent_day) VALUES (?, ?, ?, ?, ?, ?, ?, 'daily', ?, ?)",
+  ).bind((0xc0000000 + watchSeq).toString(16).padStart(32, "0"), user, kind, target, o.segment ?? "", target, o.events ?? EVENTS_OF[kind],
+    `2026-01-01T00:00:00.${String(watchSeq).padStart(3, "0")}Z`, DAY).run();
+}
+
+// The watches of the first test: a single award notice (ending in 2029) and
+// a published contract, the retired id of ORG (12 months), National Defence
+// on the 6-month notice alone, PSPC narrowed to segment 43, Org B with no end
+// kind chosen, and an open notice.
+async function followAll(user: string): Promise<void> {
+  await follow(user, "contract", "award:cb-400-40000004");
+  await follow(user, "contract", `contract:dnd-mdn:${PUBLISHED_REF}`);
+  await follow(user, "organization", RETIRED);
+  await follow(user, "buyer", "dnd-mdn", { events: "notice,award,ends_6m" });
+  await follow(user, "buyer", "pwgsc-tpsgc", { segment: "43" });
+  await follow(user, "organization", ORG_B, { events: "award,amended" });
+  await follow(user, "tender", "tender:cb-200-20005019");
+}
+
+const EXPECTED = [
+  "contract-award-radar-1@awardwatch.ca", "notice-cb-200-20005019@awardwatch.ca", "contract-contract-dnd-mdn:c-4@awardwatch.ca",
+  "contract-history-radar-5@awardwatch.ca", "contract-award-radar-2@awardwatch.ca", "contract-award-radar-6@awardwatch.ca",
+  `contract-contract-dnd-mdn:${PUBLISHED_REF.toLowerCase()}@awardwatch.ca`, "contract-award-radar-3@awardwatch.ca",
+  "contract-award-cb-400-40000004@awardwatch.ca",
+];
+
+async function watchFeed(a: { user: string; cookie: string; token: string }): Promise<FeedRow> {
+  const made = await makeFeed(a, "watchlist");
+  expect(made.headers.get("location")).toBe("/account/watches?m=feed_added#calendar");
+  return (await feedRows(a.user)).find((f) => f.kind === "watchlist" && !f.revoked_at)!;
+}
+
+describe("the watches' feed", () => {
+  beforeAll(async () => {
+    await applySql(RECORDS, RECORDS_SCHEMA);
+    await RECORDS.batch(["rec_contracts", "records", "rec_orgs", "rec_buyers"].map((t) => RECORDS.prepare(`DELETE FROM ${t}`)));
+    // One published contract at National Defence, held by Org B, no amendment.
+    await RECORDS.batch([
+      RECORDS.prepare(
+        "INSERT INTO rec_contracts (k, dept, ref, pid, bid, oid, wh, cdate, start, endd, value, inst, desc_en, desc_fr) " +
+        "VALUES (2001, 'dnd-mdn', ?, NULL, 102, ?, 0, '2026-04-10', '2026-04-15', '2027-06-30', 5000000, 'C', 'Translation services', NULL)",
+      ).bind(PUBLISHED_REF, orgNumber(ORG_B)),
+      RECORDS.prepare("INSERT INTO records (k, src, fy, fq, bid, oid, extra, cents, vnote, comp, meth) VALUES (2001, 3, 2026, 1, 102, ?, 0, 5000000, 0, 0, 'TN')")
+        .bind(orgNumber(ORG_B)),
+      RECORDS.prepare("INSERT INTO rec_orgs (oid, name) VALUES (?, 'Org B Two Inc.')").bind(orgNumber(ORG_B)),
+      RECORDS.prepare("INSERT INTO rec_buyers (bid, id, name_en, name_fr) VALUES (102, 'dnd-mdn', 'National Defence', 'Défense nationale')"),
+    ]);
+  });
+  beforeEach(() => radar(WINDOW));
+
+  it("read the radar's window through its end-date index, bounded, within D1's 100 bound values", async () => {
+    expect(WATCH_ENDS_SQL).toMatch(new RegExp(`LIMIT ${FEED_EVENTS_MAX}$`));
+    const highest = Math.max(...[...WATCH_ENDS_SQL.matchAll(/\?(\d+)/g)].map((m) => Number(m[1])));
+    expect(highest).toBe(2 + 3 * ENDS_SLOTS);
+    expect(highest).toBeLessThanOrEqual(100);
+    const binds = endsBinds(DAY, [
+      { target: orgNumber(ORG)!, mark: "", last: "2027-10-31" }, { target: "pwgsc-tpsgc", mark: " 43 ", last: "2027-05-01" },
+    ]);
+    expect(binds).toHaveLength(highest);
+    expect(binds.slice(0, 2)).toEqual([DAY, "2027-10-31"]);
+    expect(binds.slice(-3)).toEqual([-1, "", ""]);
+    const steps = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${WATCH_ENDS_SQL}`).bind(...binds).all()).results ?? [])
+      .map((r) => String((r as { detail?: unknown }).detail));
+    const text = steps.join("\n");
+    expect(steps.filter((s) => /^SCAN rec_expiring\b/.test(s) && !/USING/.test(s)), text).toEqual([]);
+    expect(text).toMatch(/SEARCH rec_expiring USING INDEX rec_expiring_end \(endd>\? AND endd<\?\)/);
+  });
+
+  it("lists each followed contract's end, the contracts each organization and buyer watch holds within its horizon, and a followed notice's closing", async () => {
+    const a = await proAccount("wfeed-contents", []);
+    await followAll(a.user);
+    const feed = await watchFeed(a);
+    const res = await get(feedPath(feed));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    const text = await res.text();
+    const cal = wellFormed(text);
+    expect(cal.getFirstPropertyValue("x-wr-calname")).toBe("Award Watch · Watches");
+    const list = events(cal);
+    // Soonest first, each contract once whichever watches reach it; Office
+    // furniture (segment 81, and Org B follows no end), Base security (past
+    // the 6-month horizon), the ended contract and the one past 12 months
+    // are not there.
+    expect(list.map((e) => e.uid)).toEqual(EXPECTED);
+    const by = (uid: string) => list.find((e) => e.uid === uid)!;
+    // The holder first; a withheld person's record says so.
+    expect(by(EXPECTED[0]).summary).toBe("Ends: Exemplar Works Ltd. · Public Services and Procurement Canada · Cleaning services");
+    expect(by(EXPECTED[2]).summary).toBe("Ends: Org B Two Inc. · National Defence · Fleet maintenance");
+    expect(by(EXPECTED[3]).summary).toBe("Ends: Individual, name withheld · Public Services and Procurement Canada · Snow removal");
+    expect(by(EXPECTED[6]).summary).toBe("Ends: Org B Two Inc. · National Defence · Translation services");
+    expect(by(EXPECTED[8]).summary)
+      .toBe("Ends: Exemplar Translation Services Inc. · Public Services and Procurement Canada · Translation standing offer, official languages");
+    expect(by(EXPECTED[1]).summary.startsWith("Closes: ")).toBe(true);
+    expect(prop(text, "DTSTART").slice(0, 3)).toEqual([
+      "DTSTART;VALUE=DATE:20261120", "DTSTART:20261126T190000Z", "DTSTART;VALUE=DATE:20270115",
+    ]);
+    expect(by(EXPECTED[0]).description).toContain(`On Award Watch: ${LOCAL}/awards/radar-1`);
+    expect(prop(text, "CATEGORIES")[0]).toBe("CATEGORIES:Award Watch,Contract end");
+    // The single records' events are the one-event files' own.
+    const award = events(wellFormed(await (await get("/awards/cb-400-40000004.ics", { env: offEnv() })).text()))[0];
+    expect([award.uid, award.sequence, award.summary]).toEqual([by(EXPECTED[8]).uid, by(EXPECTED[8]).sequence, by(EXPECTED[8]).summary]);
+    expect(text).not.toContain(a.email);
+    // In French, under its French name.
+    const fr = wellFormed(await (await get(feedPath(feed, "&lang=fr"))).text());
+    expect(fr.getFirstPropertyValue("x-wr-calname")).toBe("Award Watch · Suivis");
+    expect(nbsp(events(fr)[0].summary)).toBe("Prend fin : Exemplar Works Ltd. · Public Services and Procurement Canada · FR Cleaning services");
+  });
+
+  it("merges the watches with every saved tender search in the all feed, and counts it on the searches page", async () => {
+    const a = await proAccount("wfeed-all");
+    await followAll(a.user);
+    await makeFeed(a, "all");
+    const [feed] = await feedRows(a.user);
+    const cal = wellFormed(await (await get(feedPath(feed))).text());
+    // Segment 82's open notice closes 2026-11-04, before the rest.
+    expect(events(cal).map((e) => e.uid)).toEqual(["notice-cb-100-10000001@awardwatch.ca", ...EXPECTED]);
+    const page = await (await get("/account/searches", { cookie: a.cookie })).text();
+    expect(page).toContain("All saved tender searches and watches");
+    expect(page).toContain(`${EXPECTED.length + 1} events today`);
+  });
+
+  it("keeps an event's UID and raises its SEQUENCE when an amendment moves the end", async () => {
+    const a = await proAccount("wfeed-moved", []);
+    await follow(a.user, "organization", ORG);
+    await follow(a.user, "contract", "award:cb-400-40000004");
+    const feed = await watchFeed(a);
+    const before = await (await get(feedPath(feed))).text();
+    const radar1 = (text: string) => events(wellFormed(text)).filter((e) => e.uid === "contract-award-radar-1@awardwatch.ca");
+    expect(radar1(before).map((e) => [e.sequence, e.startDate.toString()])).toEqual([[0, "2026-11-20"]]);
+    // The radar's row: the end moved to January with the first amendment.
+    await radar(WINDOW.map((e) => (e.k === 1 ? { ...e, end: "2027-01-31", amendments: 1 } : e)));
+    // The award notice's detail: its end moved with amendment 1.
+    const contracts = clone(FILES["contracts/637.json"]) as Record<string, Record<string, unknown>>;
+    contracts["award:cb-400-40000004"].end = "2030-03-31";
+    contracts["award:cb-400-40000004"].amendment = 1;
+    const after = await (await get(feedPath(feed), { env: onEnv({ ASSETS: makeFakeAssets({}, { "contracts/637.json": contracts }) }) })).text();
+    expect(radar1(after).map((e) => [e.sequence, e.startDate.toString()])).toEqual([[1, "2027-01-31"]]);
+    const award = (text: string) => events(wellFormed(text)).filter((e) => e.uid === "contract-award-cb-400-40000004@awardwatch.ca")
+      .map((e) => [e.sequence, e.startDate.toString()]);
+    expect(award(before)).toEqual([[0, "2029-09-30"]]);
+    expect(award(after)).toEqual([[1, "2030-03-31"]]);
+  });
+
+  it("holds 500 events at most, the soonest, the last counting the radar rows past the ones read", async () => {
+    const a = await proAccount("wfeed-cap", []);
+    await follow(a.user, "buyer", "dfo-mpo");
+    // 620 contracts at Fisheries and Oceans, two ending on each of the next 260 days and one on each of the 100 after.
+    await radar(Array.from({ length: 620 }, (_, i) => ({
+      k: 100 + i, end: addDays(DAY, 1 + (i % 360)), title: `Vessel ${i}`, oid: ORG_B, buyer: "dfo-mpo",
+    })));
+    const feed = await watchFeed(a);
+    const text = await (await get(feedPath(feed))).text();
+    const list = events(wellFormed(text));
+    expect(list).toHaveLength(FEED_EVENTS_MAX);
+    expect(list[0].startDate.toString()).toBe(addDays(DAY, 1));
+    // 249 days of two, then the first of day 250.
+    expect(list[FEED_EVENTS_MAX - 2].startDate.toString()).toBe(addDays(DAY, 250));
+    const last = list[FEED_EVENTS_MAX - 1];
+    expect(last.summary).toBe("Award Watch: 121 more end dates, see the site");
+    expect(last.startDate.toString()).toBe(DAY);
+    expect(last.description).toBe(`This feed holds the 499 soonest dates. The rest are on the site: ${LOCAL}/account/watches`);
+    expect(await (await get("/account/watches", { cookie: a.cookie })).text()).toContain("500 events today");
+  });
+
+  it("answers 503, never an empty calendar, while the records database is not ready", async () => {
+    const a = await proAccount("wfeed-loading", []);
+    await follow(a.user, "organization", ORG);
+    const feed = await watchFeed(a);
+    await radar(WINDOW, "loading");
+    const error = console.error;
+    console.error = () => undefined;
+    try {
+      const res = await get(feedPath(feed));
+      expect(res.status).toBe(503);
+      expect(res.headers.get("retry-after")).toBe("600");
+      expect(await res.text()).not.toContain("BEGIN:VCALENDAR");
+      // The page still shows the feed, without a count it cannot make.
+      const page = await (await get("/account/watches", { cookie: a.cookie })).text();
+      expect(page).toContain(feed.secret);
+      expect(page).not.toContain("events today");
+    } finally {
+      console.error = error;
+    }
+    // A watchlist with no contract ending in its horizon is a valid calendar with no event.
+    await radar([]);
+    const empty = wellFormed(await (await get(feedPath(feed))).text());
+    expect(empty.getAllSubcomponents("vevent")).toHaveLength(0);
+    expect(empty.getFirstPropertyValue("x-wr-calname")).toBe("Award Watch · Watches");
+  });
+
+  it("shows the feed's cell on the watches page in both languages, and rotates and removes it there", async () => {
+    const a = await proAccount("wfeed-page", []);
+    await followAll(a.user);
+    const fresh = await (await get("/account/watches", { cookie: a.cookie })).text();
+    const panel = (page: string) => page.slice(page.indexOf('id="calendar"'));
+    expect(panel(fresh)).toContain('<input type="hidden" name="kind" value="watchlist"/>');
+    expect(panel(fresh)).toContain("Make a calendar feed");
+    const feed = await watchFeed(a);
+    const en = (await (await get("/account/watches?m=feed_added", { cookie: a.cookie })).text()).replace(/&#39;/g, "'");
+    expect(en).toContain("The calendar feed is made. Copy its address into a calendar app.");
+    expect(panel(en)).toContain('id="calendar">Calendar Feed</h2>');
+    expect(panel(en)).toContain(`value="${LOCAL}/account/calendar/${feed.id}.ics?t=${feed.secret}"`);
+    expect(panel(en)).toContain(`Not read yet · ${EXPECTED.length} events today`);
+    expect(panel(en)).toContain("A calendar feed of your watches lists the end date of each followed contract");
+    expect(panel(en)).toContain("Each end date's title starts with the holder");
+    expect(panel(en)).toContain("Google Calendar: Other calendars, then From URL, then paste the address.");
+    expect(panel(en)).toContain('<script src="/calendar.js" defer=""></script>');
+    await get(feedPath(feed));
+    const fr = nbsp((await (await get("/account/watches?lang=fr", { cookie: a.cookie })).text()));
+    expect(panel(fr)).toContain('id="calendar">Flux de calendrier</h2>');
+    expect(panel(fr)).toContain(`value="${LOCAL}/account/calendar/${feed.id}.ics?t=${feed.secret}&amp;lang=fr"`);
+    expect(panel(fr)).toContain(`Lu par un calendrier pour la dernière fois le ${today()} · ${EXPECTED.length} événements aujourd’hui`);
+    expect(panel(fr)).toContain("Changer l’adresse");
+    expect(panel(fr)).toContain("Un flux de calendrier de vos suivis présente la date de fin de chaque contrat suivi");
+    for (const page of [en, fr]) expect(page).not.toContain(EM_DASH);
+    // Rotating and removing answer on the watches page.
+    const rotated = await post(`/account/calendar/${feed.id}/rotate`, { csrf: a.token }, { cookie: a.cookie });
+    expect(rotated.headers.get("location")).toBe("/account/watches?m=feed_rotated#calendar");
+    expect((await get(feedPath(feed))).status).toBe(404);
+    const removed = await post(`/account/calendar/${feed.id}/delete`, { csrf: a.token }, { cookie: a.cookie });
+    expect(removed.headers.get("location")).toBe("/account/watches?m=feed_removed#calendar");
+    expect((await feedRows(a.user)).every((f) => f.revoked_at)).toBe(true);
+  });
+
+  it("gives a Free account the Pro chip and one line, and no feed", async () => {
+    const email = newEmail("wfeed-free");
+    const cookie = await signIn(email);
+    const user = await userId(email);
+    await follow(user, "organization", ORG);
+    const page = await (await get("/account/watches", { cookie })).text();
+    const panel = page.slice(page.indexOf('id="calendar"'));
+    expect(panel).toContain('class="pro-tag"');
+    expect(panel).toContain("A calendar feed of your watches, with their end and closing dates, is part of Pro.");
+    expect(panel).not.toContain("Make a calendar feed");
+    const fr = nbsp(await (await get("/account/watches?lang=fr", { cookie })).text());
+    expect(fr).toContain("Un flux de calendrier de vos suivis, avec leurs dates de fin et de clôture, fait partie de Pro.");
+    const made = await post("/account/calendar", { csrf: await csrf(cookie, "/account/watches"), kind: "watchlist" }, { cookie });
+    expect(made.headers.get("location")).toBe("/account/watches?m=feed_pro#calendar");
+    expect(await feedRows(user)).toHaveLength(0);
+    // A Pro account's feed stops when the plan does.
+    const b = await proAccount("wfeed-lapse", []);
+    await follow(b.user, "organization", ORG);
+    const feed = await watchFeed(b);
+    expect((await get(feedPath(feed))).status).toBe(200);
+    await ACCOUNTS.prepare("UPDATE entitlements SET revoked_at = ? WHERE user_id = ?").bind(new Date().toISOString(), b.user).run();
+    expect((await get(feedPath(feed))).status).toBe(404);
   });
 });

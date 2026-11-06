@@ -163,7 +163,7 @@ export const ACCOUNT_STRINGS = {
     fr: "Cette adresse ne mène pas à une page dont le filtre peut être enregistré.",
   },
 
-  // -- calendar feeds (src/account/feeds.ts, the searches page) -------------------------
+  // -- calendar feeds (src/account/feeds.ts, the searches and watches pages) -----------
   "calfeed.panel": { en: "Calendar Feeds", fr: "Flux de calendrier" },
   "calfeed.lead": {
     en: "A calendar feed is an address a calendar app subscribes to. It lists the closing date of each open notice a saved tender search matches, and an amendment that moves a closing moves its event.",
@@ -175,8 +175,26 @@ export const ACCOUNT_STRINGS = {
   },
   "calfeed.col_feed": { en: "Feed", fr: "Flux" },
   "calfeed.col_address": { en: "Calendar feed", fr: "Flux de calendrier" },
-  "calfeed.kind_all": { en: "All saved tender searches", fr: "Toutes les recherches d'appels d'offres enregistrées" },
-  "calfeed.kind_watchlist": { en: "Watchlist", fr: "Liste de suivi" },
+  // The "all" feed holds the watches too; "Suivis", as the watches page is
+  // named, since "liste de suivi" is the browser's own list.
+  "calfeed.kind_all": {
+    en: "All saved tender searches and watches", fr: "Toutes les recherches d'appels d'offres enregistrées et les suivis",
+  },
+  "calfeed.kind_watchlist": { en: "Watches", fr: "Suivis" },
+  // The watches page's panel (src/account/watch_pages.tsx).
+  "calfeed.panel_watch": { en: "Calendar Feed", fr: "Flux de calendrier" },
+  "calfeed.watch_lead": {
+    en: "A calendar feed of your watches lists the end date of each followed contract, of each contract a followed organization or buyer holds that ends within 12 months, and the closing of each followed open notice. Each end date's title starts with the holder, and an amendment that moves a date moves its event.",
+    fr: "Un flux de calendrier de vos suivis présente la date de fin de chaque contrat suivi, celle de chaque contrat d'une organisation ou d'un acheteur suivi qui prend fin d'ici 12 mois, et la clôture de chaque appel d'offres ouvert suivi. Le titre de chaque date de fin commence par le titulaire, et une modification qui déplace une date déplace son événement.",
+  },
+  "calfeed.watch_horizon": {
+    en: "An organization or buyer watch reaches 12 months ahead when it follows Ends within 12 months, 6 months when it follows Ends within 6 months alone, and adds no end dates when it follows neither.",
+    fr: "Un suivi d'organisation ou d'acheteur couvre les 12 mois à venir lorsqu'il suit Prend fin d'ici 12 mois, 6 mois lorsqu'il suit seulement Prend fin d'ici 6 mois, et n'ajoute aucune date de fin lorsqu'il ne suit ni l'un ni l'autre.",
+  },
+  "calfeed.watch_gate": {
+    en: "A calendar feed of your watches, with their end and closing dates, is part of Pro.",
+    fr: "Un flux de calendrier de vos suivis, avec leurs dates de fin et de clôture, fait partie de Pro.",
+  },
   "calfeed.make": { en: "Make a calendar feed", fr: "Créer un flux de calendrier" },
   "calfeed.address": { en: "Feed address", fr: "Adresse du flux" },
   "calfeed.copy": { en: "Copy", fr: "Copier" },

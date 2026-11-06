@@ -865,8 +865,8 @@ const STRINGS = {
   },
   "pro.include_bugs": { en: "a form under the account to report a bug", fr: "un formulaire dans le compte pour signaler un bogue" },
   "pro.include_feeds": {
-    en: "a calendar feed of each saved tender search, its closing dates as events",
-    fr: "un flux de calendrier pour chaque recherche d'appels d'offres enregistrée, avec ses dates de clôture comme événements",
+    en: "a calendar feed of each saved tender search and one of the watches, with closing and end dates as events",
+    fr: "un flux de calendrier pour chaque recherche d'appels d'offres enregistrée et un pour les suivis, avec les dates de clôture et de fin comme événements",
   },
 
   // -- analytics (src/pages/analytics.tsx, docs/analytics.md) ---------------------------

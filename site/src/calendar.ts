@@ -23,7 +23,8 @@ import { DAY_RE, publishedReference, type ContractDetail, type ExpiringKind, typ
 import type { Env } from "./env";
 import { fmtInt, pick, segmentShort, sourceLabel, t, type Lang } from "./i18n";
 import { KIND_SOURCE, contractReference, growthPct, sitePath } from "./pages/expiring";
-import { money, provincesText, tenderNoticeUrl } from "./pages/shared";
+import { contractPath, money, provincesText, tenderNoticeUrl } from "./pages/shared";
+import { type Row, dollars, num } from "./records_db";
 
 export const ICS_TYPE = "text/calendar; charset=utf-8";
 // The bounds of a feed (src/account/feeds.ts): the events it carries at most,
@@ -359,21 +360,53 @@ export function expiringFacts(lang: Lang, r: ExpiringRow): ContractFacts {
   };
 }
 
+// A published contract's end, from its rows as PUBLISHED_CONTRACT_SQL reads
+// them (records_tables.ts), for its one-event file and a watch of it: the
+// holder, the department, the counted value and the end of the row named;
+// its amendments are the other rows of the same contract. Null when the row
+// is not there or names no end.
+const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
+
+export function publishedFacts(lang: Lang, dept: string, ref: string, rows: readonly Row[]): ContractFacts | null {
+  const d = rows.find((r) => num(r.self) === 1);
+  const end = d ? text(d.endd) : null;
+  if (!d || !end) return null;
+  const description = pick(lang, text(d.desc_en), text(d.desc_fr));
+  return {
+    kind: "contract",
+    reference: `${dept}:${ref}`,
+    path: contractPath(dept, ref),
+    holder: num(d.wh) === 1 ? t(lang, "expiring.withheld") : text(d.org_name) ?? t(lang, "common.not_stated"),
+    buyer: pick(lang, text(d.buyer_en), text(d.buyer_fr)) ?? dept,
+    title: description ? description.split("\n")[0].slice(0, 200) : ref,
+    end,
+    start: text(d.start),
+    value: dollars(d.counted),
+    currency: "CAD",
+    amendments: rows.filter((r) => num(r.self) !== 1).length,
+    growth: null,
+  };
+}
+
 // -- the cap ------------------------------------------------------------------------------
 
 export type MoreKind = "closing" | "end" | "dates";
 
 // A feed's events, soonest first, at most FEED_EVENTS_MAX: when the cap cuts,
 // the last is an all-day event on the data date saying how many more there
-// are, linking the page that lists them all.
+// are, linking the page that lists them all. beyond counts the events a
+// reader matched but did not read, each one later than all of those given (a
+// watchlist feed reads the soonest FEED_EVENTS_MAX rows of the radar and
+// counts the rest), so the cap cuts them first.
 export function capped(
   lang: Lang, events: readonly CalEvent[],
-  more: { uid: string; kind: MoreKind; dataDate: string; url: string },
+  more: { uid: string; kind: MoreKind; dataDate: string; url: string; beyond?: number },
 ): CalEvent[] {
   const sorted = soonestFirst(events);
-  if (sorted.length <= FEED_EVENTS_MAX) return sorted;
+  const beyond = Math.max(0, more.beyond ?? 0);
+  if (sorted.length + beyond <= FEED_EVENTS_MAX) return sorted;
   const kept = sorted.slice(0, FEED_EVENTS_MAX - 1);
-  const n = fmtInt(sorted.length - kept.length, lang);
+  const n = fmtInt(sorted.length + beyond - kept.length, lang);
   const key = more.kind === "closing" ? "cal.more_closing" : more.kind === "end" ? "cal.more_end" : "cal.more_dates";
   kept.push({
     uid: more.uid,

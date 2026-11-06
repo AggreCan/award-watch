@@ -675,7 +675,8 @@ npx wrangler d1 execute awardwatch-accounts --remote --command "SELECT as_of, CO
 Dates as calendar events (RFC 5545), in two forms. The file writer is
 `site/src/calendar.ts`; the one-event files `site/src/pages/ics.ts`; the
 feeds `site/src/account/feeds.ts`, with their routes in `routes.tsx` and
-their panel in `pages.tsx`; the tests `site/test/calendar.test.ts`.
+their panels in `pages.tsx` (the searches page) and `watch_pages.tsx` (the
+watches page); the tests `site/test/calendar.test.ts`.
 
 **One-event files, public.** `/tenders/<reference>.ics` holds a notice's
 closing; `/awards/<reference>.ics`, `/history/<reference>.ics` and
@@ -692,15 +693,51 @@ calendar of its own.
 **Feeds, Pro.** `/account/calendar/<feed id>.ics?t=<secret>`, under the
 feature `delivery`: a feed is a delivery, as mail is. The searches page has a
 Calendar Feeds panel: a row for each saved tender search and one for all of
-them together (kind `all`), each with the address, a copy button
-(`public/calendar.js`), "Rotate the address", "Remove", when a calendar last
-read it and how many events it holds now; then the three subscription
-routes and the refresh schedule. A Free account sees the Pro chip and one
-line; signed out, the page does not exist. A search feed lists every open
-notice its filter matches now, read from `tenders/open.json` through
-`readTenderQuery` and `filterTenders`, soonest closing first. `&lang=fr` on
-the address writes the feed in French; `&alarm=1d` adds a display alarm a
-day before each event.
+them together with the watches (kind `all`), each with the address, a copy
+button (`public/calendar.js`), "Rotate the address", "Remove", when a
+calendar last read it and how many events it holds now; then the three
+subscription routes and the refresh schedule. The watches page has a
+Calendar Feed panel with the same cell for the watches' feed (kind
+`watchlist`, named "Watches", "Suivis"). A Free account sees the Pro chip
+and one line on either page; signed out, the pages do not exist. A search
+feed lists every open notice its filter matches now, read from
+`tenders/open.json` through `readTenderQuery` and `filterTenders`, soonest
+closing first. `&lang=fr` on the address writes the feed in French;
+`&alarm=1d` adds a display alarm a day before each event.
+
+The watches' feed lists, soonest first and each record once whichever
+watches reach it:
+
+- each followed contract's end, whatever its date, read as its one-event
+  file reads it: the detail file of an award notice or a history record, the
+  rows of a published contract (`PUBLISHED_CONTRACT_SQL`), so the event
+  matches the file's UID and `SEQUENCE`;
+- the contracts each organization and buyer watch holds in the radar's
+  window (`rec_expiring`), ending from the data date to the watch's horizon:
+  12 months when it follows `ends_12m`, 6 months (182 days) when it follows
+  `ends_6m` alone, none when it follows neither. An organization is matched
+  on the row's organization, a buyer on the row's buyer or its client
+  department (as the radar's buyer filter and the incumbents read one), a
+  buyer narrowed to a segment on that segment's mark as well. A watch on an
+  id the nightly retired reads the surviving id (`survivorOf`, the function
+  `followAliases` moves watches with; the feed only reads, and the page or
+  the next mail run writes the move);
+- each followed notice's closing while it is in `tenders/open.json`, as a
+  search feed lists it.
+
+Each end's title starts with the holder ("Ends: {holder} · {buyer} ·
+{title}"), a person's record reading "Individual, name withheld". The radar
+rows come from one statement, `WATCH_ENDS_SQL` in `feeds.ts`: every
+organization and buyer watch of the account in a slot of three bound values
+(the target, the segment mark, the horizon's last day; 25 slots, 77 values,
+within D1's 100), through `rec_expiring_end` over the window's dates, soonest
+first, at most 500 rows, with `COUNT(*) OVER ()` giving how many matched, so
+the cap's last event counts the rows past the ones read. Single published
+contracts add one `PUBLISHED_CONTRACT_SQL` each to the same batch. A records
+database that is absent, loading or failing answers 503, never an empty
+calendar; a watchlist with no date in its horizon is a valid calendar with no
+event. The searches page counts the `all` feed and the watches page the
+watches' feed as the feed reads them.
 
 - UID `notice-<reference>@awardwatch.ca` with the amendment number as
   `SEQUENCE`, so an amendment that moves a closing moves the event;
@@ -711,18 +748,23 @@ day before each event.
   `DTSTART`, and a start without one ends when it starts. An all-day end's
   `DTEND` is the next day.
 - Bounds: 500 events a feed, the 500th an all-day event on the data date
-  saying how many more ("Award Watch: 312 more closing dates, see the site");
+  saying how many more ("Award Watch: 312 more closing dates, see the site";
+  "end dates" for a feed of contract ends alone, "dates" for both kinds) and
+  linking the search's list, the watches page or the searches page;
   descriptions cut at 1,000 characters; 5 live feeds an account, one per
-  search and one `all` (held inside the insert and by a unique index); 20
+  search, one of the watches and one `all` (held inside the insert and by a
+  unique index; the posts answer on the page the feed's row is on); 20
   reads a minute per IP address (`CALENDAR_LIMIT`, namespace 2010, only
   while the switch is on). The Atom feeds keep `FEED_LIMIT`.
 - The file is `private, no-store`. A wrong, rotated or removed secret, a
   deleted search or account, a plan without `delivery` or a blocked account
   is the site's 404 on that read. A database outage serves a feed this
   instance verified within the hour from its last known state, its plan
-  held to the plan's own end; any other read then, and a `tenders/open.json`
-  that does not load, is a 503 with `Retry-After`, never an empty calendar,
-  which a client would read as every event gone.
+  held to the plan's own end (the searches and the watches it lists are read
+  with the feed's row, so they are held too); any other read then, and a
+  `tenders/open.json` or a records database that does not answer, is a 503
+  with `Retry-After`, never an empty calendar, which a client would read as
+  every event gone.
 - Kept: the row and `last_read_day`, written at most once a UTC day. The
   secret is kept in clear, as a stop link's is, since the page shows the
   whole address; the page says that anyone holding it reads what the feed
@@ -730,15 +772,12 @@ day before each event.
 - A cancelled notice drops out of `tenders/open.json`, so it leaves a search
   feed, and a subscribed calendar removes its event on the next read. No
   published file lists the notices cancelled since a date, so a feed cannot
-  keep them 30 days marked `STATUS:CANCELLED`.
-- The watchlist kinds wait for the watchlist build: it sets
-  `WATCHLIST_EVENTS` in `feeds.ts` to its reader (each watch's contracts
-  ending within its horizon from `rec_expiring`, followed contracts' ends,
-  followed notices' closings, built with `contractEvent(expiringFacts(...))`
-  and `noticeEvent` so the UIDs match the one-event files) and adds the row
-  to the watchlist page (`FeedCell` in `pages.tsx`). Until then no
-  `watchlist` feed can be made, and an `all` feed holds the saved tender
-  searches alone.
+  keep them 30 days marked `STATUS:CANCELLED`. A followed notice leaves the
+  watches' feed the same way. A followed award notice or history record
+  that was cancelled keeps its event, marked `STATUS:CANCELLED`, as its
+  one-event file does; the radar's rows carry no cancellation.
+- Not yet listed: the expiry of the standing offers and supply arrangements a
+  followed organization holds, which waits for that source.
 
 The console's overview counts live feeds by kind and feeds read in the last
 7 days; the user page lists the account's feeds (kind, created, revoked,
@@ -1410,6 +1449,11 @@ from `rec_events` in the records database (`docs/analytics.md`, *Events*).
   event was found on, the kinds it follows (checkboxes, at least one) and, on
   Pro, daily or weekly. Free accounts see the page in full; the mail panel
   carries the Pro chip. A post at the cap answers 403 with the page's own line.
+- Under the watches, the Calendar Feed panel (Pro): the watches' calendar
+  feed, with its address, copy button, rotate and remove, the day a calendar
+  last read it and how many events it holds now, or the button that makes it
+  (*Calendar feeds*). The kinds a watch follows set how far ahead its end
+  dates reach in the feed. Free accounts see the Pro chip and one line.
 - What a watch follows by default, and can narrow to: an organization: award,
   grant, amended, cancelled, ends_12m, ends_6m, ended; a buyer: notice,
   notice_amended, award, amended, cancelled, ends_12m, ends_6m, ended (a buyer

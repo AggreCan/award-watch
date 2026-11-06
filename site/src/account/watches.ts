@@ -112,6 +112,14 @@ export async function watchState(env: Env, userId: string, kind: WatchKind, targ
 
 // -- merges --------------------------------------------------------------------------------
 
+// The id a retired organization or buyer id was merged into, or null while it
+// stands (or the alias files cannot say): what followAliases moves a watch
+// to, and what a calendar feed reads a watch by before the move is written.
+export async function survivorOf(env: Env, kind: "organization" | "buyer", target: string): Promise<string | null> {
+  const next = kind === "organization" ? await loadAlias(env, target).catch(() => null) : await loadBuyerAlias(env, target).catch(() => null);
+  return next && next !== target ? next : null;
+}
+
 // Each organization or buyer watch whose id the nightly retired into another
 // is pointed at the surviving id; when the account already follows that id
 // (with the same segment), the retired one is deleted, merged into it. Returns
@@ -128,12 +136,9 @@ export async function followAliases(env: Env, userId: string, watches: readonly 
       continue;
     }
     const key = `${w.kind}\n${w.target}`;
-    if (!live.has(key)) {
-      const next = w.kind === "organization" ? await loadAlias(env, w.target).catch(() => null) : await loadBuyerAlias(env, w.target).catch(() => null);
-      live.set(key, next);
-    }
+    if (!live.has(key)) live.set(key, await survivorOf(env, w.kind, w.target));
     const next = live.get(key);
-    if (!next || next === w.target) {
+    if (!next) {
       out.push(w);
       continue;
     }

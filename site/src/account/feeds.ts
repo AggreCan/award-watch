@@ -7,14 +7,17 @@
 //              filter now, by closing date, read from tenders/open.json
 //              through readTenderQuery and filterTenders, as the delivery
 //              and /tenders read it
-//   watchlist  the account's watchlist: the end dates of the contracts its
-//              watches follow, and its followed notices' closings
-//   all        every saved tender search and the watchlist in one feed
+//   watchlist  the account's watches (watches.ts): the end of each followed
+//              contract whatever its date, the contracts each organization
+//              and buyer watch holds that end within its horizon (the
+//              radar's window, rec_expiring, read below), and each followed
+//              open notice's closing
+//   all        every saved tender search and the watches in one feed
 //
-// The watchlist is another build's (src/account/watch*). Its events come in
-// through WATCHLIST_EVENTS below, null until that build sets it: until then
-// no watchlist feed can be made, and an "all" feed holds the saved tender
-// searches alone.
+// Every event is written by contractEvent or noticeEvent, so its UID and
+// SEQUENCE are the one-event file's for the same record: an amendment that
+// moves an end or a closing moves the event in a client that holds it from
+// either.
 //
 // The secret is 16 random bytes in clear, as a stop link's is: the page shows
 // the whole address, so it must be readable again. It is compared in
@@ -28,23 +31,34 @@
 // end); any other read during an outage answers 503, which a calendar app
 // retries without dropping what it holds. A feed the database says is
 // revoked, rotated, removed, of a deleted search, a deleted, blocked or
-// non-Pro account answers 404 at once. A file the feed reads that does not
-// load (tenders/open.json) is a 503 too, never an empty calendar, which a
-// client would read as every event cancelled.
+// non-Pro account answers 404 at once. A file or a database the feed reads
+// that does not answer (tenders/open.json, the records database) is a 503
+// too, never an empty calendar, which a client would read as every event
+// cancelled. The account's searches and watches are read with the feed's own
+// row, so the outage case serves them as last read.
 //
 // What is kept: the row, and last_read_day, the UTC date a calendar last read
 // the feed (written at most once a day; no time, no address, no user agent).
 
+import { addDays } from "../../public/closing.js";
 import { closingPassed, type Clock } from "../closing";
-import { type CalEvent, type MoreKind, UID_HOST, capped, noticeEvent, writeCalendar } from "../calendar";
-import { loadOpenList, type TenderRow } from "../data";
+import {
+  type CalEvent, FEED_EVENTS_MAX, type MoreKind, UID_HOST, capped, contractEvent, detailFacts, expiringFacts, noticeEvent, publishedFacts,
+  writeCalendar,
+} from "../calendar";
+import { BUYER_ID_RE, loadContract, loadOpenList, type TenderRow } from "../data";
 import type { Env } from "../env";
 import { t, type Lang } from "../i18n";
+import { WINDOW_DAYS, radarRow } from "../pages/expiring";
 import { filterTenders, readTenderQuery } from "../pages/tenders";
+import { type Query, type Row, num, orgNumber, readRecords } from "../records_db";
+import { PUBLISHED_CONTRACT_SQL } from "../records_tables";
 import { isBlocked } from "./admin_ops";
 import { type Plan, allowed, lastKnownPlan, planFor } from "./entitlements";
 import { newId, randomHex, sameHash } from "./secrets";
 import { OUTAGE_TRUST_MS } from "./session";
+import { TARGET_SLOTS } from "./watch_events";
+import { type Watch, listWatches, survivorOf } from "./watches";
 
 export const FEED_KINDS = ["search", "watchlist", "all"] as const;
 export type FeedKind = (typeof FEED_KINDS)[number];
@@ -55,18 +69,7 @@ export const FEED_PATH = "/account/calendar";
 export const FEED_ID_RE = /^[0-9a-f]{32}$/;
 // The saved searches a feed can follow: the tender lists.
 export const FEED_SEARCH_KIND = "tenders";
-
-// The watchlist's events for a feed (kinds "watchlist" and "all"). The
-// watchlist build sets this to its reader: the contracts ending within each
-// watch's horizon (12 months at most) of each organization and buyer watch
-// from rec_expiring, each followed contract's end and each followed notice's
-// closing, built with contractEvent(expiringFacts(...)) and noticeEvent so
-// the UIDs match the per-record files. It throws when it cannot read, and
-// the feed answers 503.
-export type WatchlistEvents = (env: Env, userId: string, lang: Lang, base: string, clock: Clock) => Promise<CalEvent[]>;
-export const WATCHLIST_EVENTS: WatchlistEvents | null = null;
-
-export const feedKindsOpen = (): readonly FeedKind[] => (WATCHLIST_EVENTS ? FEED_KINDS : ["search", "all"]);
+export const isFeedKind = (v: unknown): v is FeedKind => typeof v === "string" && (FEED_KINDS as readonly string[]).includes(v);
 
 // -- the rows ---------------------------------------------------------------------------
 
@@ -98,7 +101,7 @@ export async function listFeeds(env: Env, userId: string): Promise<FeedRow[] | n
 export async function createFeed(
   env: Env, userId: string, kind: FeedKind, searchId: string | null, now = new Date(),
 ): Promise<"added" | "exists" | "cap" | "missing"> {
-  if (!feedKindsOpen().includes(kind)) return "missing";
+  if (!isFeedKind(kind)) return "missing";
   const search = kind === "search" ? searchId : null;
   if (kind === "search" && !(search && FEED_ID_RE.test(search))) return "missing";
   const db = env.ACCOUNTS!;
@@ -121,21 +124,24 @@ export async function createFeed(
   return "cap";
 }
 
-// A new secret: the old address stops at once.
-export async function rotateFeed(env: Env, userId: string, id: string): Promise<boolean> {
+// A new secret: the old address stops at once. Each answers the feed's kind
+// (the page it is shown on: the watches page for the watchlist's, the
+// searches page for the others), or null when no live feed of the account's
+// had that id.
+export async function rotateFeed(env: Env, userId: string, id: string): Promise<FeedKind | null> {
   lastKnown.delete(id);
-  if (!FEED_ID_RE.test(id)) return false;
-  const res = await env.ACCOUNTS!.prepare("UPDATE feeds SET secret = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL")
-    .bind(randomHex(16), id, userId).run();
-  return (res.meta?.changes ?? 0) === 1;
+  if (!FEED_ID_RE.test(id)) return null;
+  const row = await env.ACCOUNTS!.prepare("UPDATE feeds SET secret = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL RETURNING kind")
+    .bind(randomHex(16), id, userId).first<{ kind: string }>();
+  return row && isFeedKind(row.kind) ? row.kind : null;
 }
 
-export async function removeFeed(env: Env, userId: string, id: string, now = new Date()): Promise<boolean> {
+export async function removeFeed(env: Env, userId: string, id: string, now = new Date()): Promise<FeedKind | null> {
   lastKnown.delete(id);
-  if (!FEED_ID_RE.test(id)) return false;
-  const res = await env.ACCOUNTS!.prepare("UPDATE feeds SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL")
-    .bind(now.toISOString(), id, userId).run();
-  return (res.meta?.changes ?? 0) === 1;
+  if (!FEED_ID_RE.test(id)) return null;
+  const row = await env.ACCOUNTS!.prepare("UPDATE feeds SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL RETURNING kind")
+    .bind(now.toISOString(), id, userId).first<{ kind: string }>();
+  return row && isFeedKind(row.kind) ? row.kind : null;
 }
 
 // The feeds of a search being deleted, or of an account being deleted. Run
@@ -160,11 +166,28 @@ export async function deleteFeeds(env: Env, who: { userId: string; searchId?: st
 // A saved search's label is in the language it was saved in.
 export type SearchRef = { id: string; params: string; label: string; lang: string };
 
-// What a feed lists: its kind, the account, and the saved tender searches it
-// reads (the one search, or all of the account's for "all").
+// A watch as a feed reads it: what it follows and the kinds of event it
+// follows, which set an organization's or a buyer's horizon.
+export type FeedWatch = Pick<Watch, "kind" | "target" | "segment" | "events">;
+
+// What a feed lists: its kind, the account, the saved tender searches it
+// reads (the one search, or all of the account's for "all") and the watches
+// (for "watchlist" and "all").
 export type FeedState = {
-  id: string; userId: string; kind: FeedKind; searchId: string | null; searches: SearchRef[]; plan: Plan; stale: boolean;
+  id: string; userId: string; kind: FeedKind; searchId: string | null; searches: SearchRef[]; watches: FeedWatch[]; plan: Plan;
+  stale: boolean;
 };
+
+// The account's watches for a feed; none while the table is not on the
+// database yet.
+export async function feedWatches(env: Env, userId: string): Promise<FeedWatch[]> {
+  try {
+    return (await listWatches(env, userId)).map(({ kind, target, segment, events }) => ({ kind, target, segment, events }));
+  } catch (e) {
+    if (missingTable(e)) return [];
+    throw e;
+  }
+}
 
 type Known = Omit<FeedState, "stale"> & { secret: string; planUntil: string | null; verifiedAt: number };
 
@@ -207,7 +230,7 @@ export async function readFeed(env: Env, id: string, secret: string, now = new D
     }
     const kind = row.kind as FeedKind;
     const plan = await planFor(env, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now);
-    if (!allowed(plan, "delivery") || (await isBlocked(env, { id: row.user_id })) || (kind === "watchlist" && !WATCHLIST_EVENTS)) {
+    if (!allowed(plan, "delivery") || (await isBlocked(env, { id: row.user_id }))) {
       lastKnown.delete(id);
       return { state: "none" };
     }
@@ -218,9 +241,10 @@ export async function readFeed(env: Env, id: string, secret: string, now = new D
       lastKnown.delete(id);
       return { state: "none" };
     }
+    const watches = kind === "search" ? [] : await feedWatches(env, row.user_id);
     known = {
-      id, userId: row.user_id, kind, searchId: row.search_id, searches, plan: plan.plan, planUntil: plan.until, secret: row.secret,
-      verifiedAt: now.getTime(),
+      id, userId: row.user_id, kind, searchId: row.search_id, searches, watches, plan: plan.plan, planUntil: plan.until,
+      secret: row.secret, verifiedAt: now.getTime(),
     };
     remember(known);
     // The day a calendar last read it, once a UTC day at most; a write that
@@ -261,37 +285,177 @@ export function searchMatches(rows: readonly TenderRow[], params: string, clock:
 export class FeedFault extends Error {}
 
 export type FeedContext = { lang: Lang; base: string; clock: Clock; dataDate: string; alarm: boolean; name: string };
+export type EventContext = Omit<FeedContext, "alarm" | "name">;
 
-// The events of a feed, before the cap: the notices of its saved tender
-// searches (each once, whichever searches match it) and, for "watchlist" and
-// "all", the watchlist's events.
-export async function feedEvents(env: Env, feed: FeedState, ctx: Omit<FeedContext, "alarm" | "name">): Promise<CalEvent[]> {
-  const events = new Map<string, CalEvent>();
-  if (feed.searches.length) {
-    const open = await loadOpenList(env);
-    if (!open) throw new FeedFault("tenders/open.json could not be read");
-    for (const s of feed.searches) {
-      for (const r of searchMatches(open, s.params, ctx.clock)) {
-        if (events.has(`notice:${r.reference}`)) continue;
-        const e = noticeEvent(ctx.lang, r, ctx.base);
-        if (e) events.set(`notice:${r.reference}`, e);
-      }
-    }
-  }
-  if (feed.kind !== "search" && WATCHLIST_EVENTS) {
-    for (const e of await (WATCHLIST_EVENTS as WatchlistEvents)(env, feed.userId, ctx.lang, ctx.base, ctx.clock)) {
-      if (!events.has(e.uid)) events.set(e.uid, e);
-    }
-  }
-  return [...events.values()];
+// What a feed lists before the cap: its events, and how many radar rows its
+// watches matched past the ones read (watchEnds), every one later than them.
+export type FeedEvents = { events: CalEvent[]; beyond: number };
+
+// -- the watches' dates ---------------------------------------------------------------------
+
+// How far ahead an organization or buyer watch reads the radar, in days: the
+// 12-month window when it follows ends_12m, 6 months when it follows ends_6m
+// alone, and nothing when it follows neither, since its reader chose no end
+// dates for it.
+export function horizonDays(events: readonly string[]): number {
+  return events.includes("ends_12m") ? WINDOW_DAYS["12m"] : events.includes("ends_6m") ? WINDOW_DAYS["6m"] : 0;
 }
 
-// The feed's file: its events, capped, under its name.
+// One slot per watch an account can hold (entitlements.ts WATCH_MAX).
+export const ENDS_SLOTS = TARGET_SLOTS;
+
+// The contracts an account's organization and buyer watches hold in the
+// radar's window (rec_expiring), soonest end first: the rows ending from the
+// data date (?1) to the furthest horizon (?2), through rec_expiring_end, so
+// a read never passes the 12-month window's rows. Each watch has a slot of
+// three: its target (an organization's number, or a buyer's id matched as the
+// row's buyer or its client department, as the radar's and the incumbents'
+// buyer filters read one), its segment mark (' 43 ', or '' for the whole
+// buyer) and the last day of its horizon. typeof keeps a buyer's id made of
+// digits from reading as an organization's number. An unused slot is bound to
+// -1, '' and '', which match no row. A row two watches reach is one row; n
+// counts every match before the LIMIT, so the feed's last event can say how
+// many more there are.
+const endsSlot = (i: number): string => {
+  const t = 3 + 3 * i;
+  return `(endd <= ?${t + 2} AND ((typeof(?${t}) <> 'text' AND oid = ?${t}) OR (typeof(?${t}) = 'text' AND (buyer = ?${t} OR client = ?${t}))) ` +
+    `AND (?${t + 1} = '' OR instr(segs, ?${t + 1}) > 0))`;
+};
+export const WATCH_ENDS_SQL =
+  "SELECT endd, j, COUNT(*) OVER () AS n FROM rec_expiring WHERE endd BETWEEN ?1 AND ?2 AND (" +
+  `${Array.from({ length: ENDS_SLOTS }, (_, i) => endsSlot(i)).join(" OR ")}) ORDER BY endd, k LIMIT ${FEED_EVENTS_MAX}`;
+
+export type EndsSlot = { target: number | string; mark: string; last: string };
+
+export function endsBinds(first: string, slots: readonly EndsSlot[]): (string | number)[] {
+  const last = slots.reduce((m, s) => (s.last > m ? s.last : m), first);
+  const bound = Array.from({ length: ENDS_SLOTS }, (_, i) => slots[i]);
+  return [first, last, ...bound.flatMap((s) => (s ? [s.target, s.mark, s.last] : [-1, "", ""]))];
+}
+
+// The watches' contract ends: each followed record's end whatever its date,
+// read as its one-event file reads it (the detail file of an award notice or
+// a history record, the rows of a published contract in the records
+// database), then the radar rows each organization and buyer watch reaches,
+// read by the id the nightly merged its own into when it retired one (the
+// page or the next mail run writes the move; a feed only reads). A record the
+// data no longer holds adds nothing. A records database that is not ready
+// throws, and the feed answers 503.
+export async function watchEnds(env: Env, watches: readonly FeedWatch[], ctx: EventContext): Promise<FeedEvents> {
+  const records: { kind: "award" | "history"; reference: string }[] = [];
+  const published: { dept: string; ref: string }[] = [];
+  const subjects: (FeedWatch & { kind: "organization" | "buyer" })[] = [];
+  for (const w of watches) {
+    if (w.kind === "organization" || w.kind === "buyer") {
+      if (horizonDays(w.events)) subjects.push({ ...w, kind: w.kind });
+      continue;
+    }
+    if (w.kind !== "contract") continue;
+    const [head, ...rest] = w.target.split(":");
+    if (head === "award" || head === "history") records.push({ kind: head, reference: rest.join(":") });
+    else if (head === "contract" && rest.length > 1) published.push({ dept: rest[0], ref: rest.slice(1).join(":") });
+  }
+  const ids = await Promise.all(subjects.map(async (w) => (await survivorOf(env, w.kind, w.target)) ?? w.target));
+  const slots = new Map<string, EndsSlot>();
+  subjects.forEach((w, i) => {
+    const id = ids[i];
+    const target = w.kind === "organization" ? orgNumber(id) : BUYER_ID_RE.test(id) ? id : null;
+    if (target === null) return;
+    // The same subject followed twice (a retired id and its survivor) reads once, to the longer horizon.
+    const key = `${w.kind}\n${id}\n${w.segment}`;
+    const last = addDays(ctx.dataDate, horizonDays(w.events));
+    const held = slots.get(key);
+    if (!held || held.last < last) slots.set(key, { target, mark: w.segment ? ` ${w.segment} ` : "", last });
+  });
+  const bound = [...slots.values()].slice(0, ENDS_SLOTS);
+  const queries: Query[] = [
+    ...(bound.length ? [{ sql: WATCH_ENDS_SQL, params: endsBinds(ctx.dataDate, bound) }] : []),
+    ...published.map((p) => ({ sql: PUBLISHED_CONTRACT_SQL, params: [p.dept, p.ref] })),
+  ];
+  let rows: Row[][] = [];
+  if (queries.length) {
+    const read = await readRecords(env, queries);
+    if (read.state !== "ready") throw new FeedFault(`the records database is ${read.state}`);
+    rows = read.rows;
+  }
+  const events: CalEvent[] = [];
+  const push = (e: CalEvent | null) => {
+    if (e) events.push(e);
+  };
+  for (const d of await Promise.all(records.map((r) => loadContract(env, r.kind, r.reference)))) {
+    const facts = d ? detailFacts(ctx.lang, d) : null;
+    push(facts ? contractEvent(ctx.lang, facts, ctx.base) : null);
+  }
+  const first = bound.length ? 1 : 0;
+  published.forEach((p, i) => {
+    const facts = publishedFacts(ctx.lang, p.dept, p.ref, rows[first + i] ?? []);
+    push(facts ? contractEvent(ctx.lang, facts, ctx.base) : null);
+  });
+  if (!bound.length) return { events, beyond: 0 };
+  const ends = rows[0] ?? [];
+  for (const r of ends) {
+    const row = radarRow(r, ctx.dataDate);
+    push(row ? contractEvent(ctx.lang, expiringFacts(ctx.lang, row), ctx.base) : null);
+  }
+  return { events, beyond: Math.max(0, (num(ends[0]?.n) ?? 0) - ends.length) };
+}
+
+// -- a feed's events --------------------------------------------------------------------------
+
+// The events of a feed, before the cap, each once whichever searches or
+// watches reach it: the notices of its saved tender searches and, for
+// "watchlist" and "all", the watches' contract ends (a followed record's own
+// first) and the closings of their followed notices.
+export async function feedEvents(env: Env, feed: Pick<FeedState, "kind" | "searches" | "watches">, ctx: EventContext): Promise<FeedEvents> {
+  const events = new Map<string, CalEvent>();
+  const add = (e: CalEvent | null) => {
+    if (e && !events.has(e.uid)) events.set(e.uid, e);
+  };
+  const watches = feed.kind === "search" ? [] : feed.watches;
+  const notices = new Set(watches.filter((w) => w.kind === "tender").map((w) => w.target.slice(w.target.indexOf(":") + 1)));
+  let open: TenderRow[] = [];
+  if (feed.searches.length || notices.size) {
+    const list = await loadOpenList(env);
+    if (!list) throw new FeedFault("tenders/open.json could not be read");
+    open = list;
+  }
+  for (const s of feed.searches) for (const r of searchMatches(open, s.params, ctx.clock)) add(noticeEvent(ctx.lang, r, ctx.base));
+  const ends = watches.length ? await watchEnds(env, watches, ctx) : { events: [], beyond: 0 };
+  for (const e of ends.events) add(e);
+  // A followed notice leaves the open list when it closes or is cancelled,
+  // and its event leaves the feed, as a search's does.
+  for (const r of open) {
+    if (notices.has(r.reference.toLowerCase()) && r.closing && !closingPassed(r.closing, ctx.clock)) add(noticeEvent(ctx.lang, r, ctx.base));
+  }
+  return { events: [...events.values()], beyond: ends.beyond };
+}
+
+// How many events a feed holds now, as its file counts them (the cap's last
+// event among them), for the pages' rows; null when what it reads does not
+// answer.
+export async function feedSize(env: Env, feed: Pick<FeedState, "kind" | "searches" | "watches">, ctx: EventContext): Promise<number | null> {
+  try {
+    const { events, beyond } = await feedEvents(env, feed, ctx);
+    return Math.min(events.length + beyond, FEED_EVENTS_MAX);
+  } catch {
+    return null;
+  }
+}
+
+// The page a feed's events come from: the search's list, the watches page or the searches page.
+export const feedPage = (feed: Pick<FeedState, "kind" | "searches">): string =>
+  feed.kind === "search" && feed.searches[0] ? feed.searches[0].params : feed.kind === "watchlist" ? "/account/watches" : "/account/searches";
+
+// The feed's file: its events, capped, under its name. The cap's last event
+// names the dates the feed holds: closing dates, end dates, or both.
 export async function feedCalendar(env: Env, feed: FeedState, ctx: FeedContext): Promise<string> {
-  const all = await feedEvents(env, feed, ctx);
-  const more: MoreKind = feed.kind === "search" || !WATCHLIST_EVENTS ? "closing" : feed.kind === "watchlist" ? "end" : "dates";
-  const page = feed.kind === "search" && feed.searches[0] ? feed.searches[0].params : "/account/searches";
-  const events = capped(ctx.lang, all, { uid: `more-${feed.id}@${UID_HOST}`, kind: more, dataDate: ctx.dataDate, url: `${ctx.base}${page}` });
+  const { events: all, beyond } = await feedEvents(env, feed, ctx);
+  const ends = beyond > 0 || all.some((e) => e.uid.startsWith("contract-"));
+  const closings = all.some((e) => e.uid.startsWith("notice-"));
+  const more: MoreKind = ends && closings ? "dates" : ends ? "end" : "closing";
+  const events = capped(ctx.lang, all, {
+    uid: `more-${feed.id}@${UID_HOST}`, kind: more, dataDate: ctx.dataDate, url: `${ctx.base}${feedPage(feed)}`, beyond,
+  });
   return writeCalendar({ lang: ctx.lang, events, dataDate: ctx.dataDate, name: ctx.name, alarm: ctx.alarm });
 }
 

@@ -256,10 +256,10 @@ const CapNote: FC<{ lang: Lang; n: number; cap: number }> = ({ lang, n, cap }) =
 
 // -- calendar feeds (feeds.ts) ----------------------------------------------------------------
 
-// One row of the feeds panel: a saved tender search, or the "all" feed (and,
-// once the watchlist build adds it, the watchlist's), with its feed when it
-// has one. events is how many the feed holds now, null when the open
-// notices could not be read for the count.
+// One row of the feeds panel: a saved tender search, or the "all" feed, with
+// its feed when it has one (the watches' feed is on the watches page,
+// watch_pages.tsx). events is how many the feed holds now, null when what it
+// reads could not be read for the count.
 export type CalendarRow = {
   kind: FeedKind; searchId: string | null; label: string; href: string | null;
   feed: { id: string; address: string; lastRead: string | null; events: number | null } | null;
@@ -268,7 +268,7 @@ export type CalendarView = { rows: CalendarRow[]; live: number };
 
 // The feed's own cell: the address to copy (calendar.js adds the copy
 // button), when a calendar last read it and how many events it holds, and
-// the two buttons. Exported for the watchlist page's row.
+// the two buttons. The watches page shows its feed in the same cell.
 export const FeedCell: FC<{ lang: Lang; account: Account; feed: NonNullable<CalendarRow["feed"]> }> = ({ lang, account, feed }) => (
   <div class="feed-cell">
     <input class="calendar-address mono" type="text" readonly value={feed.address} aria-label={t(lang, "calfeed.address")}

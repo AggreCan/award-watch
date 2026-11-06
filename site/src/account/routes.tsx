@@ -20,14 +20,14 @@
 //   GET  /account/delete               what deleting removes                          (session)
 //   POST /account/delete               delete, after cancelling a subscription        (session, CSRF)
 //   GET  /account/calendar/:id.ics?t=  a calendar feed, read by a calendar app        (the feed's secret, plan)
-//   POST /account/calendar             make a feed of a saved tender search, or "all"  (session, CSRF, plan)
+//   POST /account/calendar             make a feed: a saved tender search, the watches or "all" (session, CSRF, plan)
 //   POST /account/calendar/:id/rotate  a new secret; the old address stops            (session, CSRF)
 //   POST /account/calendar/:id/delete  remove the feed; its address stops             (session, CSRF)
 //   GET  /account/stop?s=&t=           a delivery's stop page, from its message       (the link's secret)
 //   POST /account/stop?s=&t=           turn that delivery off; also RFC 8058 one-click (the link's secret)
 //   GET  /account/stop?w=&t=           the watch mail's stop page, from its message    (the link's secret)
 //   POST /account/stop?w=&t=           turn the account's watch mail off; one-click too (the link's secret)
-//   GET  /account/watches              watches with their last 14 days of events       (session)
+//   GET  /account/watches              watches with their last 14 days of events, the calendar feed (session)
 //   POST /account/watches              watch a page (kind, target)                     (session, CSRF, plan's cap)
 //   POST /account/watches/mail         the watch mail on or off                        (session, CSRF, plan to turn on)
 //   POST /account/watches/:id          the events a watch follows and its cadence      (session, CSRF)
@@ -52,7 +52,7 @@ import { addDays } from "../../public/closing.js";
 import { isOwnAddress } from "../api";
 import { readForm } from "../body";
 import { FEED_EVENTS_MAX, ICS_TYPE, closingStart } from "../calendar";
-import { clockOf, tenderState } from "../closing";
+import { type Clock, clockOf, tenderState } from "../closing";
 import { loadBuyer, loadContract, loadOpenList, loadProfile, loadStats, loadTender } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, pick, t, type Key, type Lang } from "../i18n";
@@ -68,8 +68,8 @@ import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, s
 import { bugPage, fileBug } from "./bugs";
 import { WATCH_MAX, allowed, watchCap } from "./entitlements";
 import {
-  FEED_KINDS, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
-  listFeeds, readFeed, removeFeed, rotateFeed, searchMatches,
+  FEEDS_MAX, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
+  feedSize, feedWatches, isFeedKind, listFeeds, readFeed, removeFeed, rotateFeed, searchMatches,
 } from "./feeds";
 import {
   type CalendarRow, type CalendarView, accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView,
@@ -87,7 +87,7 @@ import {
 import { CODE_MINUTES, CODES_PER_HOUR, CODE_TRIES, type Checked, checkCode, checkLink, findOrCreateUser, issueCode, sweep } from "./signin";
 import { accountsEnabled } from "./switch";
 import { DAY_SLOTS, type WatchKind, isWatchKind, readEvents, segmentOf, targetOf, watchPath } from "./watch_events";
-import { watchStopView, watchStoppedView, watchesView } from "./watch_pages";
+import { type WatchCalendar, watchStopView, watchStoppedView, watchesView } from "./watch_pages";
 import {
   addWatch, deleteWatch, deleteWatchesOf, followAliases, isCadence, listWatches, mailOf, setMail, setWatch, watchCount,
 } from "./watches";
@@ -357,34 +357,44 @@ async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: 
     ? t(lang, who.plan === "free" ? "account.cap_free" : "account.cap_pro", { cap })
     : SEARCH_NOTICE[m] ? t(lang, SEARCH_NOTICE[m]) : null;
   // No feeds table on the database yet: the page leaves the feeds out.
-  const calendar = feeds === null ? null : await calendarView(c, lang, searches, feeds);
+  const calendar = feeds === null ? null : await calendarView(c, lang, who.userId, searches, feeds);
   return accountPage(c, t(lang, "account.searches_title"),
     searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar }), extra.status ?? 200);
 }
 
+// What a page counts a feed's events with, as the feed reads them: the
+// page's language, the site's address, the clock and the data date.
+async function eventContext(c: Context<AppEnv>, lang: Lang): Promise<{ lang: Lang; base: string; clock: Clock; dataDate: string }> {
+  const stats = await loadStats(c.env).catch(() => null);
+  return { lang, base: siteBase(c), clock: clockOf(c.env), dataDate: todayOf(stats?.data_as_of) };
+}
+
 // The feeds panel's rows: each saved tender search with its feed, then the
-// "all" feed (feeds.ts), each with how many events it holds now, counted
-// from the open notices the feed reads (null when they cannot be read).
-async function calendarView(c: Context<AppEnv>, lang: Lang, searches: SavedSearch[], feeds: FeedRow[]): Promise<CalendarView> {
+// "all" feed (feeds.ts), each with how many events it holds now (null when
+// what it reads cannot be read): a search's counted from the open notices,
+// the "all" feed's as the feed reads it, with the account's watches.
+async function calendarView(c: Context<AppEnv>, lang: Lang, userId: string, searches: SavedSearch[], feeds: FeedRow[]): Promise<CalendarView> {
   const tenders = searches.filter((s) => s.kind === FEED_SEARCH_KIND);
   const open = tenders.length ? await loadOpenList(c.env).catch(() => null) : null;
   const clock = clockOf(c.env);
   const matches = new Map(tenders.map((s) => [
-    s.id, open ? searchMatches(open, s.params, clock).filter((r) => closingStart(r.closing)).map((r) => r.reference) : null,
+    s.id, open ? searchMatches(open, s.params, clock).filter((r) => closingStart(r.closing)).length : null,
   ]));
   const base = siteBase(c);
-  const cell = (row: FeedRow | undefined, refs: string[] | null): CalendarRow["feed"] => row ? {
-    id: row.id, address: feedAddress(base, row, lang), lastRead: row.last_read_day,
-    events: refs === null ? null : Math.min(refs.length, FEED_EVENTS_MAX),
+  const cell = (row: FeedRow | undefined, n: number | null): CalendarRow["feed"] => row ? {
+    id: row.id, address: feedAddress(base, row, lang), lastRead: row.last_read_day, events: n === null ? null : Math.min(n, FEED_EVENTS_MAX),
   } : null;
   const rows: CalendarRow[] = tenders.map((s) => ({
     kind: "search", searchId: s.id, label: s.label, href: s.params,
     feed: cell(feeds.find((f) => f.kind === "search" && f.search_id === s.id), matches.get(s.id) ?? null),
   }));
-  if (tenders.length || feeds.some((f) => f.kind === "all")) {
-    const lists = [...matches.values()];
-    const all = lists.some((x) => x === null) ? null : [...new Set(lists.flatMap((x) => x ?? []))];
-    rows.push({ kind: "all", searchId: null, label: t(lang, "calfeed.kind_all"), href: null, feed: cell(feeds.find((f) => f.kind === "all"), all) });
+  const allFeed = feeds.find((f) => f.kind === "all");
+  if (tenders.length || allFeed) {
+    const watches = allFeed ? await feedWatches(c.env, userId).catch(() => null) : null;
+    const n = watches ? await feedSize(c.env, {
+      kind: "all", searches: tenders.map(({ id, params, label, lang: l }) => ({ id, params, label, lang: l })), watches,
+    }, await eventContext(c, lang)) : null;
+    rows.push({ kind: "all", searchId: null, label: t(lang, "calfeed.kind_all"), href: null, feed: cell(allFeed, n) });
   }
   return { rows, live: feeds.length };
 }
@@ -507,22 +517,30 @@ account.post("/calendar", async (c) => {
   if (post instanceof Response) return post;
   const { account: who, fields } = post;
   const kind = fields.kind;
-  if (!(FEED_KINDS as readonly string[]).includes(kind)) return c.text(t(c.get("lang"), "form.rejected"), 400);
-  if (!allowed(who, "delivery")) return c.redirect("/account/searches?m=feed_pro#calendar", 303);
+  if (!isFeedKind(kind)) return c.text(t(c.get("lang"), "form.rejected"), 400);
+  if (!allowed(who, "delivery")) return c.redirect(feedBack(kind, "feed_pro"), 303);
   return guarded(c, async () => {
-    const result = await createFeed(c.env, who.userId, kind as FeedKind, kind === "search" ? clean(fields, "search", 64) : null);
+    const result = await createFeed(c.env, who.userId, kind, kind === "search" ? clean(fields, "search", 64) : null);
     if (result === "added") await audit(c.env, who.userId, "feed_created", kind);
-    return c.redirect(`/account/searches?m=feed_${result}#calendar`, 303);
+    return c.redirect(feedBack(kind, `feed_${result}`), 303);
   });
 });
+
+// The page a feed's row is on, with the line saying what was done: the
+// watches page for the watchlist's feed, the searches page for the others
+// (and for an id that names no live feed of the account's).
+function feedBack(kind: FeedKind | null, m: string): string {
+  return `${kind === "watchlist" ? "/account/watches" : "/account/searches"}?m=${m}#calendar`;
+}
 
 account.post("/calendar/:id/rotate", async (c) => {
   const post = await signedInPost(c);
   if (post instanceof Response) return post;
   const { account: who } = post;
   return guarded(c, async () => {
-    if (await rotateFeed(c.env, who.userId, c.req.param("id") ?? "")) await audit(c.env, who.userId, "feed_rotated");
-    return c.redirect("/account/searches?m=feed_rotated#calendar", 303);
+    const kind = await rotateFeed(c.env, who.userId, c.req.param("id") ?? "");
+    if (kind) await audit(c.env, who.userId, "feed_rotated");
+    return c.redirect(feedBack(kind, "feed_rotated"), 303);
   });
 });
 
@@ -531,8 +549,9 @@ account.post("/calendar/:id/delete", async (c) => {
   if (post instanceof Response) return post;
   const { account: who } = post;
   return guarded(c, async () => {
-    if (await removeFeed(c.env, who.userId, c.req.param("id") ?? "")) await audit(c.env, who.userId, "feed_removed");
-    return c.redirect("/account/searches?m=feed_removed#calendar", 303);
+    const kind = await removeFeed(c.env, who.userId, c.req.param("id") ?? "");
+    if (kind) await audit(c.env, who.userId, "feed_removed");
+    return c.redirect(feedBack(kind, "feed_removed"), 303);
   });
 });
 
@@ -628,6 +647,9 @@ account.post("/stop", async (c) => {
 const WATCH_NOTICE: Record<string, Key> = {
   added: "watches.msg_added", exists: "watches.msg_exists", removed: "watches.msg_removed", changed: "watches.msg_changed",
   unchanged: "watches.msg_unchanged", mail: "watches.msg_mail", pro: "watches.msg_pro", gone: "watches.msg_gone",
+  // The watches' calendar feed (feeds.ts).
+  feed_added: "calfeed.msg_added", feed_exists: "calfeed.msg_exists", feed_cap: "calfeed.msg_cap", feed_pro: "calfeed.msg_pro",
+  feed_rotated: "calfeed.msg_rotated", feed_removed: "calfeed.msg_removed",
 };
 
 // The page's name as the site writes it, read from the data the page reads;
@@ -661,8 +683,8 @@ async function watchLabel(c: Context<AppEnv>, kind: WatchKind, target: string, l
 
 async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, status = 200): Promise<Response> {
   const lang = c.get("lang");
-  const [listedWatches, mail, stats] = await Promise.all([
-    listWatches(c.env, who.userId), mailOf(c.env, who.userId), loadStats(c.env).catch(() => null),
+  const [listedWatches, mail, stats, feeds] = await Promise.all([
+    listWatches(c.env, who.userId), mailOf(c.env, who.userId), loadStats(c.env).catch(() => null), listFeeds(c.env, who.userId),
   ]);
   // A watch on an organization or buyer the nightly merged follows the surviving id from this view on.
   const { watches, moved, merged } = await followAliases(c.env, who.userId, listedWatches);
@@ -675,7 +697,18 @@ async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, stat
     ? allowed(who, "watch_mail") ? t(lang, "watches.control_cap_pro", { cap: fmtInt(cap, lang) })
       : t(lang, "watches.cap_free", { n: fmtInt(watches.length, lang), cap: fmtInt(cap, lang), max: fmtInt(WATCH_MAX, lang) })
     : WATCH_NOTICE[m] ? t(lang, WATCH_NOTICE[m]) : null;
-  return accountPage(c, t(lang, "watches.title"), watchesView(lang, who, { watches, read, days, mail, notice, moved, merged }), status);
+  // The watches' calendar feed, with how many events it holds now; no feeds
+  // table on the database yet leaves it out.
+  const row = feeds?.find((f) => f.kind === "watchlist");
+  const calendar: WatchCalendar | null = feeds === null ? null : {
+    feed: row ? {
+      id: row.id, address: feedAddress(siteBase(c), row, lang), lastRead: row.last_read_day,
+      events: allowed(who, "delivery") ? await feedSize(c.env, { kind: "watchlist", searches: [], watches }, await eventContext(c, lang)) : null,
+    } : null,
+    full: feeds.length >= FEEDS_MAX,
+  };
+  return accountPage(c, t(lang, "watches.title"),
+    watchesView(lang, who, { watches, read, days, mail, notice, moved, merged, calendar }), status);
 }
 
 account.get("/watches", async (c) => {

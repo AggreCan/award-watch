@@ -11,12 +11,13 @@
 // can take the file again and see the change.
 
 import type { Context } from "hono";
-import { ICS_TYPE, calendarBase, contractEvent, detailFacts, noticeEvent, writeCalendar, type CalEvent } from "../calendar";
+import {
+  ICS_TYPE, calendarBase, contractEvent, detailFacts, noticeEvent, publishedFacts, writeCalendar, type CalEvent,
+} from "../calendar";
 import { BUYER_ID_RE, REFERENCE_RE, loadContract, loadStats, loadTender } from "../data";
 import type { AppEnv } from "../env";
-import { pick, t, type Lang } from "../i18n";
+import { t, type Lang } from "../i18n";
 import { noDataPage, todayOf } from "../layout";
-import { dollars, num } from "../records_db";
 import { readPublishedContract } from "../records_tables";
 import { REF_MAX } from "./published";
 import { contractPath } from "./shared";
@@ -68,13 +69,11 @@ export async function contractIcs(c: Context<AppEnv>, kind: "award" | "history")
   return event && d ? icsFile(c, event, stats.data_as_of, d.reference) : c.notFound();
 }
 
-const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 const CONTROL_RE = /[\u0000-\u001f\u007f]/;
 
 // A published contract, from the records database as its page reads it
-// (pages/published.tsx): the holder, the department, the counted value and
-// the end of this row; its amendments are the other rows of the same
-// contract.
+// (pages/published.tsx), through publishedFacts, which a watch of it in a
+// calendar feed reads too, so the two give the same event.
 export async function publishedContractIcs(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const dept = (c.req.param("dept") ?? "").toLowerCase();
@@ -88,24 +87,7 @@ export async function publishedContractIcs(c: Context<AppEnv>): Promise<Response
     c.header("Cache-Control", "no-store");
     return c.text(t(lang, read.state === "loading" ? "published.loading" : "published.unavailable"), 503);
   }
-  const rows = read.rows[0] ?? [];
-  const d = rows.find((r) => num(r.self) === 1);
-  const end = d ? str(d.endd) : null;
-  if (!d || !end) return c.notFound();
-  const description = pick(lang, str(d.desc_en), str(d.desc_fr));
-  const event = contractEvent(lang, {
-    kind: "contract",
-    reference: `${dept}:${ref}`,
-    path: contractPath(dept, ref),
-    holder: num(d.wh) === 1 ? t(lang, "expiring.withheld") : str(d.org_name) ?? t(lang, "common.not_stated"),
-    buyer: pick(lang, str(d.buyer_en), str(d.buyer_fr)) ?? dept,
-    title: description ? description.split("\n")[0].slice(0, 200) : ref,
-    end,
-    start: str(d.start),
-    value: dollars(d.counted),
-    currency: "CAD",
-    amendments: rows.filter((r) => num(r.self) !== 1).length,
-    growth: null,
-  }, calendarBase(c.env, c.req.url));
+  const facts = publishedFacts(lang, dept, ref, read.rows[0] ?? []);
+  const event = facts ? contractEvent(lang, facts, calendarBase(c.env, c.req.url)) : null;
   return event ? icsFile(c, event, stats.data_as_of, `${dept}-${ref}`) : c.notFound();
 }

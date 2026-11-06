@@ -1,7 +1,8 @@
 // The watches' pages: the Watch control on an organization, a buyer, a
 // published contract and an open tender notice page; /account/watches, each
 // watch with its last 14 days of events, what it follows and its email
-// cadence; and the watch mail's stop page. docs/accounts.md, Watches.
+// cadence, and the watches' calendar feed; and the watch mail's stop page.
+// docs/accounts.md, Watches and Calendar feeds.
 //
 // The control reads the session the page's shell already read (readSession
 // keeps one answer per request) and, for a signed-in reader, one statement on
@@ -15,9 +16,11 @@ import { SEGMENT_CODES } from "../constants";
 import type { AppEnv } from "../env";
 import { fmtInt, segmentShort, t, tn, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
-import { ProNote } from "../pro";
+import { ProNote, ProTag } from "../pro";
 import { EVENT_KEY, WATCH_KIND_KEY, watchEventLines, watchMoreText } from "./digests";
 import { WATCH_MAX, allowed, watchCap } from "./entitlements";
+import { FEEDS_MAX } from "./feeds";
+import { type CalendarRow, FeedCell } from "./pages";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
 import {
@@ -158,11 +161,51 @@ function lastEvent(read: EventsRead | null, w: Watch): string | null {
   return last;
 }
 
+// The watches' calendar feed (feeds.ts, kind "watchlist"): the feed's cell
+// when it has one, and whether the account holds as many feeds as it can.
+export type WatchCalendar = { feed: CalendarRow["feed"]; full: boolean };
+
+// For a Free account the Pro chip and one line; for Pro the feed's cell
+// (pages.tsx FeedCell, as the searches page shows its feeds) or the button
+// that makes it, what it lists, and how to subscribe.
+const CalendarPanel: FC<{ lang: Lang; account: Account; calendar: WatchCalendar }> = ({ lang, account, calendar }) => {
+  if (!allowed(account, "delivery")) {
+    return (
+      <Panel title={t(lang, "calfeed.panel_watch")} id="calendar" tools={<ProTag lang={lang} />}>
+        <ProNote lang={lang}>{t(lang, "calfeed.watch_gate")} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></ProNote>
+      </Panel>
+    );
+  }
+  return (
+    <Panel title={t(lang, "calfeed.panel_watch")} id="calendar"
+      foot={<>
+        <p>{t(lang, "calfeed.route_google")}</p>
+        <p>{t(lang, "calfeed.route_outlook")}</p>
+        <p>{t(lang, "calfeed.route_apple")}</p>
+        <p>{t(lang, "calfeed.refresh")}</p>
+      </>}>
+      <p>{t(lang, "calfeed.watch_lead")}</p>
+      <p class="muted small">{t(lang, "calfeed.watch_horizon")}</p>
+      {calendar.feed ? <FeedCell lang={lang} account={account} feed={calendar.feed} /> : calendar.full ? (
+        <p class="muted small">{t(lang, "calfeed.cap", { n: fmtInt(FEEDS_MAX, lang) })}</p>
+      ) : (
+        <form method="post" action="/account/calendar" class="account-inline">
+          <Csrf account={account} />
+          <input type="hidden" name="kind" value="watchlist" />
+          <button type="submit" class="btn">{t(lang, "calfeed.make")}</button>
+        </form>
+      )}
+      <p class="muted small">{t(lang, "calfeed.privacy")}</p>
+      <script src="/calendar.js" defer></script>
+    </Panel>
+  );
+};
+
 export function watchesView(
   lang: Lang, account: Account,
   state: {
     watches: Watch[]; read: EventsRead | null; days: readonly string[]; mail: MailRow | null; notice?: string | null;
-    moved?: number; merged?: number;
+    moved?: number; merged?: number; calendar?: WatchCalendar | null;
   },
 ) {
   const { watches } = state;
@@ -262,6 +305,7 @@ export function watchesView(
         )}
         {watches.length ? <p class="muted small">{t(lang, "watches.add_note")}</p> : null}
       </Panel>
+      {state.calendar ? <CalendarPanel lang={lang} account={account} calendar={state.calendar} /> : null}
     </>
   );
 }
