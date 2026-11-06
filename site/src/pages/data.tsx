@@ -272,7 +272,12 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                         {d.paid && pro ? <>{" "}<ProTag lang={lang} /><br /><span class="muted small">{t(lang, "data.file.pro_on")}</span></> : null}
                         {d.note && !(d.paid && pro) ? <><br /><span class="muted small">{t(lang, d.note)}</span></> : null}
                       </td>
-                      {sizes.size > 0 ? <td data-label={t(lang, "data.col_size")} class="mono num">{size ? fileSize(lang, size.bytes) : ""}</td> : null}
+                      {/* Sorted in the page by the bytes: the units the size is written in differ from row to row. */}
+                      {sizes.size > 0 ? (
+                        <td data-label={t(lang, "data.col_size")} class="mono num" data-sort={size ? String(size.bytes) : undefined}>
+                          {size ? fileSize(lang, size.bytes) : ""}
+                        </td>
+                      ) : null}
                       {sizes.size > 0 ? (
                         <td data-label={t(lang, "data.col_rows")} class="mono num">{size && size.rows !== null ? fmtInt(size.rows, lang) : ""}</td>
                       ) : null}

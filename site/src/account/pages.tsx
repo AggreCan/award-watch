@@ -5,6 +5,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { SortHead } from "../columns";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, t, tj, tn, type Key, type Lang } from "../i18n";
@@ -331,8 +332,9 @@ const CalendarPanel: FC<{ lang: Lang; account: Account; view: CalendarView }> = 
       <p>{t(lang, "calfeed.lead")}</p>
       {view.rows.length ? (
         <div class="table-wrap">
-          <table class="restack">
-            <thead><tr><th>{t(lang, "calfeed.col_feed")}</th><th>{t(lang, "calfeed.col_address")}</th></tr></thead>
+          {/* Sorted in the page by the feed's name; the address cell holds a form, with nothing to sort by. */}
+          <table class="restack" data-sorting="client">
+            <thead><tr><SortHead>{t(lang, "calfeed.col_feed")}</SortHead><th>{t(lang, "calfeed.col_address")}</th></tr></thead>
             <tbody>
               {view.rows.map((r) => (
                 <tr>
@@ -395,9 +397,10 @@ export function searchesView(
         foot={canDeliver ? <p>{capLine}</p> : <CapNote lang={lang} n={held} cap={cap} />}>
         {searches.length ? (
           <div class="table-wrap">
-            <table class="restack">
+            {/* Sorted in the page by the search; the other cells are forms. */}
+            <table class="restack" data-sorting="client">
               <thead>
-                <tr><th>{t(lang, "account.col_search")}</th><th>{t(lang, "account.col_delivery")}</th><th>{t(lang, "account.col_remove")}</th></tr>
+                <tr><SortHead>{t(lang, "account.col_search")}</SortHead><th>{t(lang, "account.col_delivery")}</th><th>{t(lang, "account.col_remove")}</th></tr>
               </thead>
               <tbody>
                 {searches.map((s) => (
@@ -540,13 +543,13 @@ export function keysView(
       <Panel title={t(lang, "account.panel_keys")} count={fmtInt(live, lang)}>
         {state.keys.length ? (
           <div class="table-wrap">
-            <table class="restack">
+            <table class="restack" data-sorting="client">
               <thead>
                 <tr>
-                  <th>{t(lang, "account.key_name")}</th><th>{t(lang, "account.col_prefix")}</th><th>{t(lang, "account.col_created")}</th>
-                  <th>{t(lang, "account.col_last_used")}</th>
-                  <th class="num">{t(lang, "account.col_today")}</th><th class="num">{t(lang, "account.col_30_days")}</th>
-                  <th>{t(lang, "account.col_status")}</th>
+                  <SortHead>{t(lang, "account.key_name")}</SortHead><SortHead>{t(lang, "account.col_prefix")}</SortHead>
+                  <SortHead kind="date">{t(lang, "account.col_created")}</SortHead><SortHead kind="date">{t(lang, "account.col_last_used")}</SortHead>
+                  <SortHead class="num">{t(lang, "account.col_today")}</SortHead><SortHead class="num">{t(lang, "account.col_30_days")}</SortHead>
+                  <SortHead>{t(lang, "account.col_status")}</SortHead>
                 </tr>
               </thead>
               <tbody>

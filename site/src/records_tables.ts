@@ -69,16 +69,34 @@ const RADAR_WHERE =
   "AND (?6 = '' OR instr(segs, ?6) > 0) AND (?7 = -1 OR (?7 = 2 AND comp IS NULL) OR comp = ?7) " +
   "AND (?8 = -1 OR (cad >= ?8 AND cad < ?9)) AND (?10 = 0 OR kind = ?10) AND (?11 = 1 OR m31 = 0) AND (?12 = 1 OR so = 0)";
 // Soonest end first, the source's order and the key breaking ties; or the
-// largest value first, the rows without a Canadian value last.
+// largest value first, the rows without a Canadian value last. Each the
+// other way round too (a head of the radar's table asks for either), the
+// rows without a value still last.
 const BY_END = "ORDER BY endd, kind, k";
+const BY_END_DESC = "ORDER BY endd DESC, kind, k";
 const BY_VALUE = "ORDER BY cad IS NULL, cad DESC, endd, k";
+const BY_VALUE_ASC = "ORDER BY cad IS NULL, cad, endd, k";
 
 // A page of the matches: ?13 the offset (a multiple of RADAR_PAGE_ROWS).
 export const RADAR_ROWS_END_SQL = `SELECT endd, j FROM rec_expiring WHERE ${RADAR_WHERE} ${BY_END} LIMIT ${RADAR_PAGE_ROWS} OFFSET ?13`;
+export const RADAR_ROWS_END_DESC_SQL = `SELECT endd, j FROM rec_expiring WHERE ${RADAR_WHERE} ${BY_END_DESC} LIMIT ${RADAR_PAGE_ROWS} OFFSET ?13`;
 export const RADAR_ROWS_VALUE_SQL = `SELECT endd, j FROM rec_expiring WHERE ${RADAR_WHERE} ${BY_VALUE} LIMIT ${RADAR_PAGE_ROWS} OFFSET ?13`;
+export const RADAR_ROWS_VALUE_ASC_SQL = `SELECT endd, j FROM rec_expiring WHERE ${RADAR_WHERE} ${BY_VALUE_ASC} LIMIT ${RADAR_PAGE_ROWS} OFFSET ?13`;
 // The matches as a file, at most RADAR_CSV_MAX of them.
 export const RADAR_CSV_END_SQL = `SELECT endd, j FROM rec_expiring WHERE ${RADAR_WHERE} ${BY_END} LIMIT ${RADAR_CSV_MAX}`;
+export const RADAR_CSV_END_DESC_SQL = `SELECT endd, j FROM rec_expiring WHERE ${RADAR_WHERE} ${BY_END_DESC} LIMIT ${RADAR_CSV_MAX}`;
 export const RADAR_CSV_VALUE_SQL = `SELECT endd, j FROM rec_expiring WHERE ${RADAR_WHERE} ${BY_VALUE} LIMIT ${RADAR_CSV_MAX}`;
+export const RADAR_CSV_VALUE_ASC_SQL = `SELECT endd, j FROM rec_expiring WHERE ${RADAR_WHERE} ${BY_VALUE_ASC} LIMIT ${RADAR_CSV_MAX}`;
+
+// Each order's page and file statements; dir, when left out, is the
+// order's own: the soonest end, the largest value.
+export type RadarSort = "end" | "value";
+export type SortDir = "asc" | "desc";
+const RADAR_ORDER: Record<RadarSort, Record<SortDir, { rows: string; csv: string }>> = {
+  end: { asc: { rows: RADAR_ROWS_END_SQL, csv: RADAR_CSV_END_SQL }, desc: { rows: RADAR_ROWS_END_DESC_SQL, csv: RADAR_CSV_END_DESC_SQL } },
+  value: { desc: { rows: RADAR_ROWS_VALUE_SQL, csv: RADAR_CSV_VALUE_SQL }, asc: { rows: RADAR_ROWS_VALUE_ASC_SQL, csv: RADAR_CSV_VALUE_ASC_SQL } },
+};
+const radarOrder = (sort: RadarSort, dir?: SortDir) => RADAR_ORDER[sort][dir ?? (sort === "value" ? "desc" : "asc")];
 // How many match, what their counted values add up to, and how many have no value.
 export const RADAR_TOTAL_SQL = `SELECT COUNT(*) AS n, SUM(cents) AS cents, SUM(nv) AS n_no_value FROM rec_expiring WHERE ${RADAR_WHERE} LIMIT 1`;
 
@@ -116,11 +134,11 @@ export function radarBinds(p: RadarParams): (string | number)[] {
 }
 
 // One batch: the state row, the page of matches, their count and total, and the form's choices.
-export function readRadar(env: Env, p: RadarParams, sort: "end" | "value", offset: number): Promise<Read> {
+export function readRadar(env: Env, p: RadarParams, sort: RadarSort, offset: number, dir?: SortDir): Promise<Read> {
   const binds = radarBinds(p);
   const span = [p.first, p.last];
   const queries: Query[] = [
-    { sql: sort === "value" ? RADAR_ROWS_VALUE_SQL : RADAR_ROWS_END_SQL, params: [...binds, offset] },
+    { sql: radarOrder(sort, dir).rows, params: [...binds, offset] },
     { sql: RADAR_TOTAL_SQL, params: binds },
     { sql: RADAR_FACETS_SQL, params: span },
     { sql: RADAR_BUYERS_SQL, params: span },
@@ -130,8 +148,8 @@ export function readRadar(env: Env, p: RadarParams, sort: "end" | "value", offse
   return readRecords(env, queries);
 }
 
-export function readRadarCsv(env: Env, p: RadarParams, sort: "end" | "value"): Promise<Read> {
-  return readRecords(env, [{ sql: sort === "value" ? RADAR_CSV_VALUE_SQL : RADAR_CSV_END_SQL, params: radarBinds(p) }]);
+export function readRadarCsv(env: Env, p: RadarParams, sort: RadarSort, dir?: SortDir): Promise<Read> {
+  return readRecords(env, [{ sql: radarOrder(sort, dir).csv, params: radarBinds(p) }]);
 }
 
 // -- the record tables of a profile and a buyer (pages/records.tsx) --------------------
@@ -150,6 +168,10 @@ const DETAIL_COLUMNS =
 const DETAIL_JOINS = "LEFT JOIN rec_buyers b ON b.bid = d.bid LEFT JOIN rec_orgs o ON o.oid = d.oid";
 const NEWEST = "ORDER BY d.day DESC, d.k";
 const LARGEST = "ORDER BY d.cents IS NULL, d.cents DESC, d.day DESC, d.k";
+// The other way round, for the table's heads: the oldest first, the smallest
+// value first (the records without a value still last).
+const OLDEST = "ORDER BY d.day, d.k";
+const SMALLEST = "ORDER BY d.cents IS NULL, d.cents, d.day DESC, d.k";
 
 // ?1 the organization's number; ?2 and ?3 the first and last day; ?4 the
 // source's number or 0; ?5 the method's code or ''; ?6 a buyer's id or ''.
@@ -172,6 +194,9 @@ export const BUYER_RECORDS_LARGEST_SQL = `SELECT ${DETAIL_COLUMNS} FROM rec_deta
 export const BUYER_RECORDS_CSV_NEWEST_SQL = `SELECT ${DETAIL_COLUMNS} FROM rec_details d ${DETAIL_JOINS} WHERE ${BUYER_WHERE} ${NEWEST} LIMIT ${RECORDS_CSV_MAX}`;
 export const BUYER_RECORDS_CSV_LARGEST_SQL = `SELECT ${DETAIL_COLUMNS} FROM rec_details d ${DETAIL_JOINS} WHERE ${BUYER_WHERE} ${LARGEST} LIMIT ${RECORDS_CSV_MAX}`;
 export const BUYER_RECORDS_TOTAL_SQL = `SELECT COUNT(*) AS n, SUM(d.cents) AS cents FROM rec_details d WHERE ${BUYER_WHERE} LIMIT 1`;
+const pageSql = (where: string, order: string) =>
+  `SELECT ${DETAIL_COLUMNS} FROM rec_details d ${DETAIL_JOINS} WHERE ${where} ${order} LIMIT ${RECORDS_PAGE_ROWS} OFFSET ?7`;
+const csvSql = (where: string, order: string) => `SELECT ${DETAIL_COLUMNS} FROM rec_details d ${DETAIL_JOINS} WHERE ${where} ${order} LIMIT ${RECORDS_CSV_MAX}`;
 
 // The other party's choices over the span (?1 to ?3): an organization's
 // buyers by records, a buyer's organizations by value.
@@ -193,28 +218,37 @@ const RECORDS_SQL = {
   organization: {
     newest: ORG_RECORDS_NEWEST_SQL, largest: ORG_RECORDS_LARGEST_SQL, csvNewest: ORG_RECORDS_CSV_NEWEST_SQL,
     csvLargest: ORG_RECORDS_CSV_LARGEST_SQL, total: ORG_RECORDS_TOTAL_SQL, parties: ORG_RECORD_BUYERS_SQL,
+    oldest: pageSql(ORG_WHERE, OLDEST), smallest: pageSql(ORG_WHERE, SMALLEST), csvOldest: csvSql(ORG_WHERE, OLDEST),
+    csvSmallest: csvSql(ORG_WHERE, SMALLEST),
   },
   buyer: {
     newest: BUYER_RECORDS_NEWEST_SQL, largest: BUYER_RECORDS_LARGEST_SQL, csvNewest: BUYER_RECORDS_CSV_NEWEST_SQL,
     csvLargest: BUYER_RECORDS_CSV_LARGEST_SQL, total: BUYER_RECORDS_TOTAL_SQL, parties: BUYER_RECORD_ORGS_SQL,
+    oldest: pageSql(BUYER_WHERE, OLDEST), smallest: pageSql(BUYER_WHERE, SMALLEST), csvOldest: csvSql(BUYER_WHERE, OLDEST),
+    csvSmallest: csvSql(BUYER_WHERE, SMALLEST),
   },
 } as const;
+
+// The four orders of a record table: by day or by value, each either way.
+export type RecordsSort = "newest" | "oldest" | "largest" | "smallest";
+const PAGE_KEY = { newest: "newest", oldest: "oldest", largest: "largest", smallest: "smallest" } as const;
+const CSV_KEY = { newest: "csvNewest", oldest: "csvOldest", largest: "csvLargest", smallest: "csvSmallest" } as const;
 
 const recordsBinds = (p: RecordsParams): (string | number)[] => [p.key, p.first, p.last, p.src, p.meth, p.party];
 
 // full: the page, its count and total and the party choices in one batch;
 // otherwise the first page alone (the free view).
-export function readRecordTable(env: Env, view: RecordsView, p: RecordsParams, sort: "newest" | "largest", offset: number, full: boolean): Promise<Read> {
+export function readRecordTable(env: Env, view: RecordsView, p: RecordsParams, sort: RecordsSort, offset: number, full: boolean): Promise<Read> {
   const sql = RECORDS_SQL[view];
   const binds = recordsBinds(p);
-  const queries: Query[] = [{ sql: sort === "largest" ? sql.largest : sql.newest, params: [...binds, offset] }];
+  const queries: Query[] = [{ sql: sql[PAGE_KEY[sort]], params: [...binds, offset] }];
   if (full) queries.push({ sql: sql.total, params: binds }, { sql: sql.parties, params: [p.key, p.first, p.last] });
   return readRecords(env, queries);
 }
 
-export function readRecordCsv(env: Env, view: RecordsView, p: RecordsParams, sort: "newest" | "largest"): Promise<Read> {
+export function readRecordCsv(env: Env, view: RecordsView, p: RecordsParams, sort: RecordsSort): Promise<Read> {
   const sql = RECORDS_SQL[view];
-  return readRecords(env, [{ sql: sort === "largest" ? sql.csvLargest : sql.csvNewest, params: recordsBinds(p) }]);
+  return readRecords(env, [{ sql: sql[CSV_KEY[sort]], params: recordsBinds(p) }]);
 }
 
 // -- the earlier awards on a tender (pages/earlier.tsx) --------------------------------
@@ -295,6 +329,7 @@ export function readContractSitemap(env: Env, first: string, last: string): Prom
 export const TABLE_SQL: readonly string[] = [
   CONTRACT_SITEMAP_SQL, EARLIER_AWARDS_SQL, BUYER_INCUMBENTS_SQL, SEGMENT_INCUMBENTS_SQL, ORG_FEED_SQL,
   PUBLISHED_CONTRACT_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
+  RADAR_ROWS_END_DESC_SQL, RADAR_ROWS_VALUE_ASC_SQL, RADAR_CSV_END_DESC_SQL, RADAR_CSV_VALUE_ASC_SQL,
   RADAR_FACETS_SQL, RADAR_BUYERS_SQL, RADAR_CLIENTS_SQL, RADAR_SUPPLIERS_SQL,
   ...Object.values(RECORDS_SQL.organization), ...Object.values(RECORDS_SQL.buyer),
 ];

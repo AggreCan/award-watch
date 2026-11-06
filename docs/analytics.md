@@ -413,8 +413,9 @@ the same link. The page is cached like the other record pages
 every award notice, contract history record, published contract and grant
 naming the organization or of the buyer over the ten fiscal years ending
 with the data date's, from `rec_details` (one row per counted record, with
-its date, reference, title and the figures the charts count). Newest first
-or largest value first (`sort=largest`), 50 to a page (`page=`), filtered by
+its date, reference, title and the figures the charts count). Newest first,
+or by date or value either way (`sort=oldest|newest|smallest|largest`, which
+the table's Date and Value heads also set), 50 to a page (`page=`), filtered by
 fiscal year (`year=2025`), the other party (`buyer=<id>` on a profile,
 `organization=<id>` on a buyer page), source (`source=`) and method
 (`method=OB|TC|ST|TN|AC`). Each title opens the record's page on the site
@@ -459,8 +460,9 @@ or loading answers 503 as the analytics views do.
 `/expiring/3m`, `/6m` and `/12m` read the static window files while nothing
 is filtered or sorted. A filter (buyer, client department `client=`,
 organization `supplier=`, segment, competitive flag, value band, source, the
-March 31 mark `fye=0`, the standing offer mark `sosa=0`) or `sort=value`
-reads `rec_expiring` instead (`site/src/records_tables.ts`): one batch of the
+March 31 mark `fye=0`, the standing offer mark `sosa=0`) or an order
+(`sort=end|end-desc|value-asc|value`, which the table's Ends and Value heads
+also set) reads `rec_expiring` instead (`site/src/records_tables.ts`): one batch of the
 state row, a page of 100 matches (`page=` counts the matches' pages), their
 count, total and the number with no value, and the form's choices from the
 whole window (its buyers, client departments and 200 largest

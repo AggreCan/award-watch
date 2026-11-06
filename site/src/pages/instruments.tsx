@@ -19,13 +19,13 @@ import type { FC } from "hono/jsx";
 import { allowed } from "../account/entitlements";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
-import { Table } from "../columns";
+import { type HeadSort, Table, headSort } from "../columns";
 import { SEGMENTS } from "../constants";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, pick, provinceName, segmentLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import {
-  AGREEMENT_MAX, HOLDER_ROWS_MAX, HOLDERS_CSV_MAX, INSTRUMENT_CSV_MAX, INSTRUMENT_PAGE_ROWS, OTHER_REGIONS, TYPE_CODES, WITHIN_DAYS,
+  AGREEMENT_MAX, HOLDER_ROWS_MAX, HOLDERS_CSV_MAX, INSTRUMENT_CSV_MAX, INSTRUMENT_ORDERS, INSTRUMENT_PAGE_ROWS, OTHER_REGIONS, TYPE_CODES, WITHIN_DAYS,
   activeFilters, callsOf, daysLeft, filterInstruments, instrumentPath, instrumentQueryString, isAgreement, loadInstrumentIndex,
   readHoldersCsv, readInstrument, readInstrumentQuery, sortInstruments, type Calls, type HeldInstrument, type HoldersPart,
   type InstrumentIndex, type InstrumentQuery, type InstrumentRow, type ProfileInstruments, type Row, type TenderInstrument,
@@ -139,16 +139,20 @@ const Select: FC<{ name: string; label: Key; any?: Key; opts: Option[]; value: s
   </label>
 );
 
-const InstrumentsTable: FC<{ lang: Lang; rows: readonly InstrumentRow[]; idx: InstrumentIndex; today: string }> = ({ lang, rows, idx, today }) => (
+// One page of the list, so the server orders it: the Expiry and Holders
+// heads link its orders (sorts) and the others stay plain.
+const InstrumentsTable: FC<{
+  lang: Lang; rows: readonly InstrumentRow[]; idx: InstrumentIndex; today: string; sorts: { expiry: HeadSort; holders: HeadSort };
+}> = ({ lang, rows, idx, today, sorts }) => (
   <div class="table-wrap bordered">
-    <Table cols={[
+    <Table sorting="server" cols={[
       { kind: "main", label: t(lang, "instruments.col_instrument") },
       { kind: "label", label: t(lang, "instruments.col_type") },
       { kind: "text", label: t(lang, "instruments.col_commodity"), rest: "lg" },
       { kind: "buyer", label: t(lang, "instruments.col_user"), rest: "xl" },
       { kind: "region", label: t(lang, "instruments.col_regions"), rest: "md" },
-      { kind: "date", label: t(lang, "instruments.col_expiry") },
-      { kind: "count", label: t(lang, "instruments.col_holders") },
+      { kind: "date", label: t(lang, "instruments.col_expiry"), sort: sorts.expiry },
+      { kind: "count", label: t(lang, "instruments.col_holders"), sort: sorts.holders },
     ]}>
       <tbody>
         {rows.map((r) => {
@@ -223,6 +227,11 @@ export async function instrumentsIndex(c: Context<AppEnv>): Promise<Response> {
   const account = accountsEnabled(c.env) && !csvOk ? await railAccount(c).catch(() => undefined) : undefined;
   const prevPath = n > 1 ? `${path}${instrumentQueryString(q, n - 1)}` : null;
   const nextPath = n < pages ? `${path}${instrumentQueryString(q, n + 1)}` : null;
+  // The heads' links: the same filters in the next order, from the first page.
+  const sortHref = (v: string) => `${path}${instrumentQueryString({ ...q, sort: v as InstrumentQuery["sort"] })}`;
+  const sorts = {
+    expiry: headSort(INSTRUMENT_ORDERS, q.sort, "expiry", sortHref), holders: headSort(INSTRUMENT_ORDERS, q.sort, "holders", sortHref),
+  };
   const title = t(lang, "instruments.title");
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: title }];
   const label = (k: (typeof FILTER_KEYS)[number]): string => {
@@ -259,9 +268,12 @@ export async function instrumentsIndex(c: Context<AppEnv>): Promise<Response> {
             </label>
             <label class="field">
               <span class="field-label">{t(lang, "tenders.sort")}</span>
+              {/* "expiry", set from the head, is the list's own order and reads as it here. */}
               <select name="sort">
                 <option value="">{t(lang, "instruments.sort_expiry")}</option>
+                <option value="expiry-desc" selected={q.sort === "expiry-desc"}>{t(lang, "instruments.sort_expiry_desc")}</option>
                 <option value="holders" selected={q.sort === "holders"}>{t(lang, "instruments.sort_holders")}</option>
+                <option value="holders-asc" selected={q.sort === "holders-asc"}>{t(lang, "instruments.sort_holders_asc")}</option>
               </select>
             </label>
             <div class="toolbar-actions">
@@ -302,7 +314,7 @@ export async function instrumentsIndex(c: Context<AppEnv>): Promise<Response> {
             </p>
           ) : accountsEnabled(c.env) ? <ProCsvNote lang={lang} text="instruments.csv_pro" signedIn={!!account?.email} /> : null
         ) : null}
-        {shown.length ? <InstrumentsTable lang={lang} rows={shown} idx={idx} today={today} />
+        {shown.length ? <InstrumentsTable lang={lang} rows={shown} idx={idx} today={today} sorts={sorts} />
           : <p class="muted">{t(lang, idx.rows.length ? "instruments.none" : "instruments.none_published")}</p>}
       </Panel>
     </Layout>,

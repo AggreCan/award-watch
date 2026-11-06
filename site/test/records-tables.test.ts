@@ -334,6 +334,24 @@ describe("the radar over its whole window", () => {
     expect(RADAR_PAGE_ROWS).toBe(100);
   });
 
+  it("orders the whole window by end date and by value either way from the table's heads, the rows without a value last", async () => {
+    expect(titles((await page("/expiring/3m?sort=end")).html)).toEqual([1, 2, 3, 4, 5]);
+    expect(titles((await page("/expiring/3m?sort=end-desc")).html)).toEqual([5, 4, 3, 2, 1]);
+    expect(titles((await page("/expiring/3m?sort=value-asc")).html)).toEqual([2, 1, 3, 4, 5]);
+    const { html } = await page(`/expiring/3m?supplier=${A1}&sort=value-asc`);
+    expect(titles(html)).toEqual([1, 3, 5]);
+    // The heads: Value ascending, its link the next order with the filter kept; Ends the start of its own.
+    expect(html).toContain(`<th class="k-value num" aria-sort="ascending"><a href="/expiring/3m?supplier=${A1}&sort=value" class="th-sort" rel="nofollow">Value</a></th>`);
+    expect(html).toContain(`<th class="k-date"><a href="/expiring/3m?supplier=${A1}&sort=end" class="th-sort" rel="nofollow">Ends on</a></th>`);
+    // The matches' file keeps the order shown.
+    const email = newEmail("pro-radar-order");
+    const pro = await signIn(email);
+    await grantPro(email);
+    const res = await get(`/expiring/3m/rows.csv?supplier=${A1}&sort=value-asc`, { cookie: pro, env: onEnv() });
+    expect(res.status).toBe(200);
+    expect((await res.text()).trim().split("\r\n").slice(1).map((l) => l.split(",")[1])).toEqual(["RADAR-1", "C-3", "RADAR-5"]);
+  });
+
   it("filters the window file's page as before when the records database cannot answer", async () => {
     const { res, html } = await page(`/expiring/3m?supplier=${A1}`, { env: { ...offEnv(), RECORDS: undefined } });
     expect(res.status).toBe(200);
@@ -416,6 +434,29 @@ describe("the record tables", () => {
     const fr = await page(`${ORG}?lang=fr`);
     expect(fr.html).toContain("FR Translation services");
     expect(fr.html).toContain("Dossiers de");
+  });
+
+  it("order by date and by value either way from the Date and Value heads, the other heads plain, and give a free reader plain heads", async () => {
+    expect(order((await page(`${ORG}?sort=oldest`)).html)).toEqual(["Research grant", "Translation services", "Translation standing offer"]);
+    expect(order((await page(`${ORG}?sort=smallest`)).html)).toEqual(["Research grant", "Translation services", "Translation standing offer"]);
+    const plain = (await page(ORG)).html;
+    expect(plain).toContain('data-sorting="server"');
+    expect(plain).toContain(`<th class="k-date"><a href="${ORG}?sort=oldest" class="th-sort" rel="nofollow">Date</a></th>`);
+    expect(plain).toContain(`<th class="k-value num"><a href="${ORG}?sort=smallest" class="th-sort" rel="nofollow">Value</a></th>`);
+    expect(plain).toContain('<th class="k-main">Record</th>');
+    expect(plain).not.toContain("aria-sort");
+    // Descending is the table's own order shown on its head; the next click leaves the order, the filter kept.
+    const newest = (await page(`${ORG}?buyer=dnd-mdn&sort=newest`)).html;
+    expect(order(newest)).toEqual(["Translation services", "Research grant"]);
+    expect(newest).toContain(`<th class="k-date" aria-sort="descending"><a href="${ORG}?buyer=dnd-mdn" class="th-sort" rel="nofollow">Date</a></th>`);
+    expect(newest).toContain(`<a href="${ORG}?buyer=dnd-mdn&sort=smallest" class="th-sort"`);
+    expect((await page(`${ORG}?sort=smallest`)).html).toContain('<option value="smallest" selected="">Value, smallest first</option>');
+    // A free reader's view keeps the newest first: no head offers an order it would not get.
+    const free = await signIn(newEmail("free-records-heads"));
+    const freeHtml = decode(nbsp(await (await get(`${ORG}?sort=smallest`, { cookie: free, env: onEnv() })).text()));
+    expect(freeHtml).toContain('data-sorting="server"');
+    expect(freeHtml).not.toContain("th-sort");
+    expect(order(freeHtml)).toEqual(["Translation standing offer", "Translation services", "Research grant"]);
   });
 
   it("list a buyer's records by organization", async () => {

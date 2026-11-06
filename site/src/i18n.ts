@@ -3208,6 +3208,23 @@ const STRINGS = {
   "org.instruments_none": { en: "No active instrument.", fr: "Aucun instrument actif." },
   "org.instruments_lapsed": { en: "No Longer Held", fr: "Plus détenus" },
   "org.instruments_lost_on": { en: "No longer held since", fr: "Plus détenu depuis" },
+
+  // Sorting a table by its head (public/sort.js reads these from the page's
+  // JSON block): the hint on a head, the three states, and the line a screen
+  // reader hears after a sort. The orders the lists' Sort fields add, beside
+  // the ones the heads set.
+  "sort.by": { en: "Sort by {column}", fr: "Trier par {column}" },
+  "sort.ascending": { en: "sorted ascending", fr: "tri croissant" },
+  "sort.descending": { en: "sorted descending", fr: "tri décroissant" },
+  "sort.original": { en: "original order", fr: "ordre d'origine" },
+  "sort.done": { en: "{column}: {state}", fr: "{column} : {state}" },
+  "tenders.sort_closing_desc": { en: "Closing latest", fr: "Clôture la plus lointaine" },
+  "tenders.sort_published_asc": { en: "Oldest published", fr: "Publication la plus ancienne" },
+  "expiring.sort_end_desc": { en: "End date, latest first", fr: "Date de fin, la plus lointaine d'abord" },
+  "expiring.sort_value_asc": { en: "Value, smallest first", fr: "Valeur, la plus faible d'abord" },
+  "records.sort_oldest": { en: "Oldest first", fr: "Les plus anciens d'abord" },
+  "instruments.sort_expiry_desc": { en: "Latest expiry", fr: "Expiration la plus lointaine" },
+  "instruments.sort_holders_asc": { en: "Fewest holders", fr: "Le moins de titulaires" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

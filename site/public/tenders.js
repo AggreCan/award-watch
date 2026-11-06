@@ -48,9 +48,16 @@
    Everything rendered from data uses textContent. Every word the script
    draws comes from the page's <script type="application/json" id="i18n">
    block or from the toolbar's own labels, so the script holds no copy of
-   its own in either language. The page loads it as a module. */
+   its own in either language. The page loads it as a module.
+
+   The list runs past one page, so its heads sort the whole list, never the
+   page shown: Closing and Published are links to the same view in their
+   next order (ascending, descending, then the list's own), which this
+   script answers in memory as it does a page link; the other heads are
+   plain, as the server draws them (src/columns.tsx, sorting "server"). */
 import { closingInstant, closingParts, closingPassed, closingState, countdownText } from "./closing.js";
-import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readSearch } from "./tender-query.js";
+import { headOrder } from "./sort.js";
+import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryString, readSearch } from "./tender-query.js";
 
 (function () {
   var form = document.getElementById("tender-filters");
@@ -210,6 +217,8 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readS
       if (MULTI.indexOf(k) >= 0) return writeMulti(k);
       var field = form.elements.namedItem(k);
       if (field && "value" in field) field.value = state[k] || (k === "sort" ? "closing" : "");
+      // The order a head sets with no line of its own (closing-asc) reads as the list's own.
+      if (k === "sort" && field && "value" in field && field.value !== state.sort) field.value = "closing";
     });
     if (nationalBox) nationalBox.checked = state.national;
   }
@@ -311,7 +320,8 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readS
       ["c-notice", tx("col.notice")], ["c-buyer", tx("col.buyer")], ["c-date", tx("col.closing")],
       ["c-pub mdh", tx("col.published")], ["c-region", tx("col.region")],
     ];
-    heads.forEach(function (h) { hr.appendChild(el("th", h[0], h[1])); });
+    t.setAttribute("data-sorting", "server");
+    heads.forEach(function (h) { hr.appendChild(h[2] ? sortHead(h) : el("th", h[0], h[1])); });
     head.appendChild(hr);
     t.appendChild(head);
     var body = el("tbody");
@@ -319,6 +329,31 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readS
     t.appendChild(body);
     wrap.appendChild(t);
     return wrap;
+  }
+  // A head that orders the list: its order now on the cell, and a link to
+  // the view in its next order, from the first page, drawn here without a
+  // request.
+  function sortHead(h) {
+    var th = el("th", h[0]);
+    var order = headOrder(ORDERS, state.sort, h[2], "closing");
+    if (order.state) th.setAttribute("aria-sort", order.state);
+    var a = el("a", "th-sort", h[1]);
+    var next = {};
+    Object.keys(state).forEach(function (k) { next[k] = state[k]; });
+    next.sort = order.next;
+    a.href = "/tenders" + query(next, 1);
+    a.rel = "nofollow";
+    a.addEventListener("click", function (e) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+      e.preventDefault();
+      state.sort = order.next;
+      state.page = 1;
+      selected = null;
+      writeForm();
+      render(true);
+    });
+    th.appendChild(a);
+    return th;
   }
   function pageLink(label, page, rel) {
     var a = el("a", "btn", label);
@@ -453,7 +488,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, clean, filterRows, queryString, readS
     }).catch(function () { levelsAsked = false; });
   }
 
-  function sortedByClosing() { return state.sort === "closing"; }
+  function sortedByClosing() { return state.sort === "closing" || state.sort === "closing-asc"; }
 
   // The empty list's next steps, as NoMatch in src/pages/tenders.tsx draws them.
   function noMatch() {

@@ -1119,3 +1119,33 @@ a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offse
 .briefing-control .muted { max-width: 60ch; }
 .briefing-sample { max-width: 600px; margin-top: 16px; padding: 16px 20px; background: #ffffff; color: #0f172a; border: 1px solid var(--border); overflow-wrap: anywhere; }
 .briefing-sample table { width: 100%; }
+
+/* -- sorting a table by its head (src/columns.tsx, public/sort.js) -----------
+   The label is a button where the page sorts the rows, a link where the
+   server does, in the head's own type. A glyph follows it: two small
+   triangles in the head's muted tone while the column is not the order,
+   one triangle in ink pointing up (ascending) or down (descending) once it
+   is. The glyph sits past the label's box, in the cell's padding, so a
+   head that fits its column on one line still does (the tally heads). Its
+   colour is the head's, from the theme's tokens, so the dark palette and
+   the system setting need no rule of their own. On a phone a restacked
+   table's head row is out of view; its controls stay there for a screen
+   reader and take no room. */
+.th-sort {
+  display: inline-block; position: relative; max-width: 100%; margin: 0; padding: 0; border: 0; border-radius: 0;
+  background: none; color: inherit; font: inherit; text-align: inherit; text-decoration: none; cursor: pointer;
+}
+.th-sort:hover, th[aria-sort] .th-sort { color: var(--ink); }
+.th-sort::after {
+  content: ""; position: absolute; left: 100%; bottom: 4px; width: 6px; height: 8px; margin-left: 2px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 8'%3E%3Cpath d='M0 3L3 0L6 3ZM0 5L6 5L3 8Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 8'%3E%3Cpath d='M0 3L3 0L6 3ZM0 5L6 5L3 8Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+th[aria-sort="ascending"] .th-sort::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 8'%3E%3Cpath d='M0 6L3 1L6 6Z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 8'%3E%3Cpath d='M0 6L3 1L6 6Z'/%3E%3C/svg%3E");
+}
+th[aria-sort="descending"] .th-sort::after {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 8'%3E%3Cpath d='M0 2L6 2L3 7Z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 8'%3E%3Cpath d='M0 2L6 2L3 7Z'/%3E%3C/svg%3E");
+}

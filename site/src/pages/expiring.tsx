@@ -10,7 +10,8 @@
 // expiring/<window>/index.json for the page count, so no request parses a
 // whole window. The filters in the URL (buyer, client department,
 // organization, segment, competitive, value band, source, the two marks)
-// and the order by value apply to the whole window, read from the records
+// and the orders (by end date or by value, either way, which the table's
+// heads set too) apply to the whole window, read from the records
 // database (rec_expiring, src/records_tables.ts), RADAR_PAGE_ROWS to a page,
 // with the matches' count and total; the matches as CSV are Pro's
 // (export_filtered). Without the database they apply to the page loaded, as
@@ -32,7 +33,7 @@ import type { FC } from "hono/jsx";
 import { allowed } from "../account/entitlements";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
-import { type Rest, Table, restClass } from "../columns";
+import { type HeadSort, type Rest, type SortOrders, Table, headSort, restClass } from "../columns";
 import { SEGMENTS } from "../constants";
 import {
   BUYER_ID_RE, EXPIRING_KINDS, EXPIRING_WINDOWS, ORG_ID_RE, SEGMENT_RE, isExpiringRow, isExpiringWindow, loadExpiringIndex, loadExpiringPage,
@@ -44,7 +45,9 @@ import { fmtInt, fmtMoneyShort, numberLocale, pick, segmentLabel, sourceLabel, t
 import { CompetitiveFlag, Layout, addDays, noDataPage, notFoundPage, page, PageHead, Panel, todayOf, varyOnCookie } from "../layout";
 import { DEEP_WINDOWS, radarWindowLocked, requestPlan } from "../plan";
 import { dollars, num, orgIdOf, orgNumber } from "../records_db";
-import { RADAR_CSV_MAX, RADAR_PAGE_ROWS, type RadarParams, type Read, type Row, readRadar, readRadarCsv } from "../records_tables";
+import {
+  RADAR_CSV_MAX, RADAR_PAGE_ROWS, type RadarParams, type RadarSort, type Read, type Row, type SortDir, readRadar, readRadarCsv,
+} from "../records_tables";
 import { csvCell } from "./analytics";
 import { ProNote, ProPanel, ProTag, proPrice } from "../pro";
 import { canonicalUrl, expiringWindowSeo, pageSeo } from "../seo";
@@ -126,8 +129,23 @@ export interface ExpiringQuery {
   // arrangements stay in the list: on unless the address says fye=0 or sosa=0.
   fye: boolean;
   sosa: boolean;
-  // "value": the largest value first; otherwise the soonest end first.
-  sort: "" | "value";
+  // The order (RADAR_ORDERS): "" the soonest end first, the window's own;
+  // "end" the same, set from the table's head; "end-desc" the latest end
+  // first; "value" the largest value first; "value-asc" the smallest.
+  sort: RadarOrder;
+}
+
+// The orders a window offers: the value in the address, the column of the
+// table's head that sets it, and the direction.
+export const RADAR_ORDERS = [
+  ["end", "end", "asc"], ["end-desc", "end", "desc"], ["value-asc", "value", "asc"], ["value", "value", "desc"],
+] as const satisfies SortOrders;
+export type RadarOrder = "" | (typeof RADAR_ORDERS)[number][0];
+
+// What the records database orders a window's matches by.
+export function radarSortOf(order: RadarOrder): { by: RadarSort; dir: SortDir } {
+  const o = RADAR_ORDERS.find((x) => x[0] === order);
+  return o ? { by: o[1], dir: o[2] } : { by: "end", dir: "asc" };
 }
 
 // A contract ending on March 31, the last day of the federal fiscal year.
@@ -169,7 +187,7 @@ export function readExpiringQuery(url: URL): ExpiringQuery {
     kind: (EXPIRING_KINDS as readonly string[]).includes(kind) ? (kind as ExpiringKind) : "",
     supplier: ORG_ID_RE.test(supplier) ? supplier : "",
     client: BUYER_ID_RE.test(client) && client.length <= 80 ? client : "",
-    sort: get("sort").toLowerCase() === "value" ? "value" : "",
+    sort: RADAR_ORDERS.find((o) => o[0] === get("sort").toLowerCase())?.[0] ?? "",
   };
 }
 
@@ -254,6 +272,28 @@ export function largestFirst(rows: readonly ExpiringRow[]): ExpiringRow[] {
   });
 }
 
+// A page's rows in a window's order, as the records database orders the
+// whole window (src/records_tables.ts): the latest end first with the
+// source's order breaking ties, or the smallest Canadian value first with
+// the rows without one still last.
+export function orderExpiring(rows: readonly ExpiringRow[], order: RadarOrder): ExpiringRow[] {
+  if (order === "value") return largestFirst(rows);
+  const soonest = soonestFirst(rows);
+  if (order === "end-desc") {
+    const day = (r: ExpiringRow) => r.end.slice(0, 10);
+    return soonest.map((r, i) => [r, i] as const).sort(([a, i], [b, j]) => (day(a) !== day(b) ? (day(a) < day(b) ? 1 : -1) : i - j)).map(([r]) => r);
+  }
+  if (order === "value-asc") {
+    const cad = (r: ExpiringRow) => (valueBand(r) === null ? null : r.value);
+    return soonest.map((r, i) => [r, i] as const).sort(([a, i], [b, j]) => {
+      const x = cad(a);
+      const y = cad(b);
+      return x === y ? i - j : x === null ? 1 : y === null ? -1 : x - y;
+    }).map(([r]) => r);
+  }
+  return soonest;
+}
+
 export function filterExpiring(rows: readonly ExpiringRow[], q: ExpiringQuery): ExpiringRow[] {
   return rows.filter((r) => {
     if (q.buyer && r.buyer_id !== q.buyer) return false;
@@ -332,22 +372,26 @@ const LATE_REST: Rest = "xl";
 // server pages, which the phone pager steps through); phoneRows: a short
 // list on a profile or a buyer page, its first rows on a phone. csv: the
 // file the line under the table sends a reader to for the resting columns.
+// sorts: a window read from the server one page at a time orders by its end
+// date and its value there (the heads link the orders), and no other head
+// sorts; a list shown whole sorts in the page by any column.
 export const ExpiringTable: FC<{
   lang: Lang; rows: readonly ExpiringRow[]; organization?: boolean; buyer?: boolean; phonePages?: boolean; pages?: ServerPages; phoneRows?: number;
   // Which file the line under the table names, or "list" for the 12-month
   // list itself: on profiles and buyer pages the 12-month file is part of Pro
   // once accounts open, and the list shows a free reader the teaser instead.
   csv?: CsvWindow | "list";
-}> = ({ lang, rows, organization = true, buyer = true, phonePages = false, pages, phoneRows, csv = "12m" }) => (
+  sorts?: { end: HeadSort; value: HeadSort };
+}> = ({ lang, rows, organization = true, buyer = true, phonePages = false, pages, phoneRows, csv = "12m", sorts }) => (
   <>
   <SegmentNote lang={lang} rows={rows} />
   <PhonePages lang={lang} on={phonePages} pages={pages} rows={phoneRows}>
-    <Table cols={[
-      { kind: "date", label: t(lang, "expiring.col_ends") },
+    <Table sorting={sorts ? "server" : "client"} cols={[
+      { kind: "date", label: t(lang, "expiring.col_ends"), sort: sorts?.end },
       { kind: "main", label: t(lang, "col.contract") },
       organization && { kind: "org", label: t(lang, "col.supplier") },
       buyer && { kind: "buyer", label: t(lang, "col.buyer"), rest: BUYER_REST },
-      { kind: "value", label: t(lang, "col.value") },
+      { kind: "value", label: t(lang, "col.value"), sort: sorts?.value },
       { kind: "comp", label: t(lang, "col.method") },
       { kind: "amend", label: <span title={t(lang, "expiring.growth_def")}>{t(lang, "expiring.col_amendments")}</span>, rest: LATE_REST },
       { kind: "record", label: t(lang, "col.record"), rest: LATE_REST },
@@ -386,7 +430,8 @@ export const ExpiringTable: FC<{
               {buyer ? <td data-label={t(lang, "col.buyer")} class={restClass(BUYER_REST)}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td> : null}
               <td data-label={t(lang, "col.value")} class="mono num">{money(lang, r.value, r.currency)}</td>
               <td data-label={t(lang, "col.method")}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
-              <td data-label={t(lang, "expiring.col_amendments")} class={restClass(LATE_REST)}>
+              {/* Sorted in the page by the number of amendments, which the words around it hide. */}
+              <td data-label={t(lang, "expiring.col_amendments")} class={restClass(LATE_REST)} data-sort={String(r.n_amendments)}>
                 {r.n_amendments === 0
                   ? t(lang, "expiring.amendments_none")
                   : tn(lang, "expiring.amendments_one", "expiring.amendments_many", r.n_amendments, { n: fmtInt(r.n_amendments, lang) })}
@@ -742,7 +787,8 @@ function wholeOptions(read: Extract<Read, { state: "ready" }>, page: ReturnType<
 // database cannot answer (the page then filters its own rows, as before).
 async function wholeWindow(c: Context<AppEnv>, window: ExpiringWindow, today: string, q: ExpiringQuery, pageNo: number,
   page: ReturnType<typeof options>, lang: Lang): Promise<Whole | null> {
-  const read = await readRadar(c.env, radarParams(window, today, q), q.sort === "value" ? "value" : "end", (pageNo - 1) * RADAR_PAGE_ROWS);
+  const order = radarSortOf(q.sort);
+  const read = await readRadar(c.env, radarParams(window, today, q), order.by, (pageNo - 1) * RADAR_PAGE_ROWS, order.dir);
   if (read.state !== "ready") return null;
   const total = read.rows[1]?.[0] ?? {};
   return {
@@ -775,7 +821,8 @@ export async function expiringRowsCsv(c: Context<AppEnv>): Promise<Response> {
   if (!stats) return noDataPage(c, "expiring.title");
   const today = todayOf(stats.data_as_of);
   const q = readExpiringQuery(new URL(c.req.url));
-  const read = await readRadarCsv(c.env, radarParams(window, today, q), q.sort === "value" ? "value" : "end");
+  const order = radarSortOf(q.sort);
+  const read = await readRadarCsv(c.env, radarParams(window, today, q), order.by, order.dir);
   if (read.state !== "ready") {
     c.header("Retry-After", "3600");
     c.header("Cache-Control", "no-store");
@@ -912,7 +959,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   const interest = await interestFilter(c.env, lang, "expiring", `${path}${url.search}`);
   const sorted = soonestFirst(rows);
   const local = filtered ? filterExpiring(sorted, q) : sorted;
-  const shown = whole ? whole.rows : q.sort === "value" ? largestFirst(local) : local;
+  const shown = whole ? whole.rows : orderExpiring(local, q.sort);
   const pages = whole ? wholePages : Math.max(1, idx.pages);
   const csvAllowed = whole ? await filteredCsvAllowed(c, window) : false;
   const account = whole && accountsEnabled(c.env) && !csvAllowed ? await railAccount(c).catch(() => undefined) : undefined;
@@ -936,6 +983,9 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   const csvPath = `${path}/rows.csv${expiringQueryString(q)}`;
   // The 3-month list's own rows are all in the free 3-month file.
   const csv: CsvWindow = window === "3m" ? "3m" : "12m";
+  // The heads the window orders by, each a link to the same view in its next order, from the first page.
+  const sortHref = (v: string) => `${path}${expiringQueryString({ ...q, sort: v as RadarOrder })}`;
+  const sorts = { end: headSort(RADAR_ORDERS, q.sort, "end", sortHref), value: headSort(RADAR_ORDERS, q.sort, "value", sortHref) };
 
   return page(
     c,
@@ -959,9 +1009,12 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
           <Select name="kind" label="col.source" any="tenders.any_f" opts={opts.kind} value={q.kind} lang={lang} />
           <label class="field">
             <span class="field-label">{t(lang, "tenders.sort")}</span>
+            {/* "end", set from the head, is the window's own order and reads as it here. */}
             <select name="sort">
               <option value="">{t(lang, "expiring.sort_end")}</option>
+              <option value="end-desc" selected={q.sort === "end-desc"}>{t(lang, "expiring.sort_end_desc")}</option>
               <option value="value" selected={q.sort === "value"}>{t(lang, "expiring.sort_value")}</option>
+              <option value="value-asc" selected={q.sort === "value-asc"}>{t(lang, "expiring.sort_value_asc")}</option>
             </select>
           </label>
           <div class="toolbar-actions">
@@ -1050,7 +1103,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
           ) : null
         ) : null}
         {shown.length ? (
-          <ExpiringTable lang={lang} rows={shown} phonePages pages={serverPages} csv={csv} />
+          <ExpiringTable lang={lang} rows={shown} phonePages pages={serverPages} csv={csv} sorts={sorts} />
         ) : (
           <p class="muted">{t(lang, whole ? "expiring.whole_none" : filtered ? "expiring.none_match" : "expiring.none_window")}</p>
         )}

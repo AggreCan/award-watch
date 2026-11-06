@@ -79,7 +79,7 @@ describe("organization profile", () => {
     const two = await html("/organizations/org-a000000002");
     const history = section(two, "history");
     expect(history).toContain('<a href="/history/w8472-000633">Vessel refit, mid-shore patrol</a>');
-    expect(history).toContain('<th class="k-buyer mdh">Client department</th>');
+    expect(history).toContain('<th class="k-buyer mdh"><button type="button" class="th-sort">Client department</button></th>');
     expect(history).toContain('<span class="flag flag-no" title="The source&#39;s own term for a contract awarded without a competition');
     const grants = section(two, "grants");
     expect(grants).toContain(`<a href="${grantUrl("dfo-mpo", "GC-2025-0099")}" class="mono" rel="nofollow noopener">GC-2025-0099</a>`);

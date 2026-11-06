@@ -1,6 +1,7 @@
 // /organizations/:id/records and /buyers/:id/records: every record naming an
 // organization or a buyer over ten fiscal years, from the records database
-// (rec_details, src/records_tables.ts), newest first or largest first, 50 to
+// (rec_details, src/records_tables.ts), newest first by default or by date or
+// value either way (the Sort field, and the table's Date and Value heads), 50 to
 // a page, filtered by fiscal year, the other party, source and method; the
 // same query as CSV at <address>.csv. docs/analytics.md "Record tables".
 //
@@ -16,7 +17,7 @@ import type { FC } from "hono/jsx";
 import { allowed } from "../account/entitlements";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
-import { Table } from "../columns";
+import { type HeadSort, type SortOrders, Table, headSort } from "../columns";
 import { MONEY_SOURCES, type MoneySource } from "../constants";
 import { BUYER_ID_RE, ORG_ID_RE, loadBuyer, loadBuyerAlias, loadProfile, loadStats } from "../data";
 import type { AppEnv } from "../env";
@@ -25,7 +26,9 @@ import { CompetitiveFlag, Layout, PageHead, Panel, lowerRedirect, noDataPage, no
 import { requestPlan } from "../plan";
 import { ProNote } from "../pro";
 import { MAX_YEARS, SOURCE_NUMBER, dollars, fiscalLabel, fiscalYearOf, num, orgIdOf, orgNumber } from "../records_db";
-import { RECORDS_CSV_MAX, RECORDS_PAGE_ROWS, type RecordsParams, type RecordsView, type Row, readRecordCsv, readRecordTable } from "../records_tables";
+import {
+  RECORDS_CSV_MAX, RECORDS_PAGE_ROWS, type RecordsParams, type RecordsSort, type RecordsView, type Row, readRecordCsv, readRecordTable,
+} from "../records_tables";
 import { csvCell } from "./analytics";
 import { BuyerLink, contractPath, grantUrl, money } from "./shared";
 
@@ -35,7 +38,13 @@ const METHOD_NAME: Record<(typeof METHODS)[number], Key> = {
 };
 const SOURCE_OF: Record<number, MoneySource> = { 1: "awards", 2: "history", 3: "contracts", 4: "grants" };
 
-export interface RecordsQuery { year: number | null; source: MoneySource | ""; method: string; party: string; sort: "newest" | "largest"; page: number }
+// The orders a record table offers, the table's Date and Value heads set
+// them too; "" (no order asked) is the newest first, the table's own.
+export const RECORDS_ORDERS = [
+  ["oldest", "date", "asc"], ["newest", "date", "desc"], ["smallest", "value", "asc"], ["largest", "value", "desc"],
+] as const satisfies SortOrders;
+
+export interface RecordsQuery { year: number | null; source: MoneySource | ""; method: string; party: string; sort: "" | RecordsSort; page: number }
 
 // A value the table cannot use reads as no filter; a page that is not a whole number from 1 reads as null (a 404).
 export function readRecordsQuery(url: URL, view: RecordsView, lastFy: number): RecordsQuery & { badPage: boolean } {
@@ -51,7 +60,7 @@ export function readRecordsQuery(url: URL, view: RecordsView, lastFy: number): R
     source: (MONEY_SOURCES as readonly string[]).includes(source) ? (source as MoneySource) : "",
     method: (METHODS as readonly string[]).includes(method) ? method : "",
     party: view === "organization" ? (BUYER_ID_RE.test(party) && party.length <= 80 ? party : "") : ORG_ID_RE.test(party) ? party : "",
-    sort: get("sort") === "largest" ? "largest" : "newest",
+    sort: RECORDS_ORDERS.find((o) => o[0] === get("sort"))?.[0] ?? "",
     page: page || 1,
     badPage: page === 0,
   };
@@ -63,7 +72,7 @@ export function recordsQueryString(view: RecordsView, q: RecordsQuery, pageNo = 
   if (q.party) p.set(view === "organization" ? "buyer" : "organization", q.party);
   if (q.source) p.set("source", q.source);
   if (q.method) p.set("method", q.method);
-  if (q.sort === "largest") p.set("sort", "largest");
+  if (q.sort) p.set("sort", q.sort);
   if (pageNo > 1) p.set("page", String(pageNo));
   const s = p.toString();
   return s ? `?${s}` : "";
@@ -139,13 +148,16 @@ function params(e: Entity, q: RecordsQuery, lastFy: number): RecordsParams {
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 
-const RecordRows: FC<{ lang: Lang; view: RecordsView; rows: Row[] }> = ({ lang, view, rows }) => (
+// The table is one page of a longer list, so the server orders it: the date
+// and value heads link their orders (sorts), and a free reader, whose view
+// keeps the newest first, gets plain heads.
+const RecordRows: FC<{ lang: Lang; view: RecordsView; rows: Row[]; sorts?: { date: HeadSort; value: HeadSort } }> = ({ lang, view, rows, sorts }) => (
   <div class="table-wrap bordered">
-    <Table cols={[
-      { kind: "date", label: t(lang, "col.date") },
+    <Table sorting="server" cols={[
+      { kind: "date", label: t(lang, "col.date"), sort: sorts?.date },
       { kind: "main", label: t(lang, "col.record") },
       { kind: view === "organization" ? "buyer" : "org", label: t(lang, view === "organization" ? "col.buyer" : "col.supplier") },
-      { kind: "value", label: t(lang, "col.value") },
+      { kind: "value", label: t(lang, "col.value"), sort: sorts?.value },
       { kind: "comp", label: t(lang, "col.method") },
     ]}>
       <tbody>
@@ -200,7 +212,7 @@ async function recordsPage(c: Context<AppEnv>, view: RecordsView): Promise<Respo
   // A free reader's view is the newest page with no filter: one statement beside the state row.
   const read = free
     ? await readRecordTable(c.env, view, params(e, { ...q, year: null, source: "", method: "", party: "" }, lastFy), "newest", 0, false)
-    : await readRecordTable(c.env, view, params(e, q, lastFy), q.sort, (q.page - 1) * RECORDS_PAGE_ROWS, true);
+    : await readRecordTable(c.env, view, params(e, q, lastFy), q.sort || "newest", (q.page - 1) * RECORDS_PAGE_ROWS, true);
   const partyRows: Row[] = read.state === "ready" && !free ? read.rows[2] ?? [] : [];
   const ok = read.state === "ready";
   const rows = ok ? read.rows[0] ?? [] : [];
@@ -218,6 +230,11 @@ async function recordsPage(c: Context<AppEnv>, view: RecordsView): Promise<Respo
   ];
   const prev = !free && q.page > 1 ? `${e.base}${recordsQueryString(view, q, q.page - 1)}` : null;
   const next = !free && q.page < pages ? `${e.base}${recordsQueryString(view, q, q.page + 1)}` : null;
+  // The heads' links, each to the same filters in its next order, from the first page; none in the free view.
+  const sortHref = (v: string) => `${e.base}${recordsQueryString(view, { ...q, sort: v as RecordsQuery["sort"] })}`;
+  const sorts = free ? undefined : {
+    date: headSort(RECORDS_ORDERS, q.sort, "date", sortHref), value: headSort(RECORDS_ORDERS, q.sort, "value", sortHref),
+  };
   const years = Array.from({ length: MAX_YEARS }, (_, i) => lastFy - i);
   const parties = partyRows.map((r) => view === "organization"
     ? { value: String(r.id), label: pick(lang, str(r.name_en), str(r.name_fr)) ?? String(r.id) }
@@ -270,9 +287,12 @@ async function recordsPage(c: Context<AppEnv>, view: RecordsView): Promise<Respo
                   </select>
                 </label>
                 <label class="field"><span class="field-label">{t(lang, "tenders.sort")}</span>
+                  {/* "newest", set from the head, is the table's own order and reads as it here. */}
                   <select name="sort">
                     <option value="">{t(lang, "records.sort_newest")}</option>
+                    <option value="oldest" selected={q.sort === "oldest"}>{t(lang, "records.sort_oldest")}</option>
                     <option value="largest" selected={q.sort === "largest"}>{t(lang, "expiring.sort_value")}</option>
+                    <option value="smallest" selected={q.sort === "smallest"}>{t(lang, "expiring.sort_value_asc")}</option>
                   </select>
                 </label>
                 <div class="toolbar-actions">
@@ -306,7 +326,7 @@ async function recordsPage(c: Context<AppEnv>, view: RecordsView): Promise<Respo
                 {!a.csv && accountsEnabled(c.env) && n ? <ProNote lang={lang}>{t(lang, "records.csv_pro")}</ProNote> : null}
               </p>
             )}
-            {rows.length ? <RecordRows lang={lang} view={view} rows={rows} /> : <p class="muted">{t(lang, "records.none")}</p>}
+            {rows.length ? <RecordRows lang={lang} view={view} rows={rows} sorts={sorts} /> : <p class="muted">{t(lang, "records.none")}</p>}
           </Panel>
           <p class="muted small">{t(lang, "records.note", { as_of: read.state === "ready" && read.asOf ? read.asOf : t(lang, "common.na") })}</p>
         </>
@@ -333,7 +353,7 @@ async function recordsCsv(c: Context<AppEnv>, view: RecordsView): Promise<Respon
   if (e instanceof Response) return e;
   const lastFy = fiscalYearOf(todayOf(stats.data_as_of));
   const q = readRecordsQuery(new URL(c.req.url), view, lastFy);
-  const read = await readRecordCsv(c.env, view, params(e, q, lastFy), q.sort);
+  const read = await readRecordCsv(c.env, view, params(e, q, lastFy), q.sort || "newest");
   if (read.state !== "ready") {
     c.header("Retry-After", "3600");
     c.header("Cache-Control", "no-store");

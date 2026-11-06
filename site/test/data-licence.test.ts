@@ -66,8 +66,9 @@ describe("data page", () => {
     ];
     const html = await (await app.request("/data", {}, withFiles({ "stats.json": { ...stats, downloads } }))).text();
     const listed = section(html, "downloads");
-    expect(listed).toContain('<td data-label="Size" class="mono num">742 KB</td><td data-label="Rows" class="mono num">4,321</td>');
-    expect(listed).toContain('<td data-label="Size" class="mono num">2 KB</td><td data-label="Rows" class="mono num">22</td>');
+    // Each size carries its bytes, which the table's Size head sorts by (public/sort.js), the units differing.
+    expect(listed).toContain('<td data-label="Size" class="mono num" data-sort="760062">742 KB</td><td data-label="Rows" class="mono num">4,321</td>');
+    expect(listed).toContain('<td data-label="Size" class="mono num" data-sort="1811">2 KB</td><td data-label="Rows" class="mono num">22</td>');
     // A file the list does not name has empty cells; a yearly file carries its size and rows on its link.
     expect(listed).toContain('<td data-label="Size" class="mono num"></td><td data-label="Rows" class="mono num"></td>');
     expect(listed).toContain('<a class="mono" href="/downloads/awards-2026.csv" title="2.1 MB, 4,860 rows">awards-2026.csv</a>');

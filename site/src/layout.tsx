@@ -11,7 +11,9 @@ import { type RailAccount, railAccount } from "./account/session";
 import { accountsEnabled } from "./account/switch";
 import { ProTag } from "./pro";
 import { clockOf } from "./closing";
+import { type TableUse, TableUseContext } from "./columns";
 import { RefreshTimers } from "./refresh";
+import { templatePieces } from "../public/refresh.js";
 
 // The formatting helpers live with the dictionary; pages import them from here.
 export { fmtInt, fmtMoney, fmtMoneyShort, pick } from "./i18n";
@@ -402,9 +404,29 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
   );
 };
 
+// public/sort.js and its words, on a page where a table sorts in the browser
+// or carries the server's sort links. Table marks it while the content
+// renders, so this is drawn after the content, at the end of the body.
+// The two templates travel as pieces (public/refresh.js templatePieces), so
+// no page carries an unfilled placeholder.
+export function sortWords(lang: Lang): { by: string[]; done: string[]; asc: string; desc: string; none: string } {
+  return {
+    by: templatePieces(t(lang, "sort.by")), done: templatePieces(t(lang, "sort.done")),
+    asc: t(lang, "sort.ascending"), desc: t(lang, "sort.descending"), none: t(lang, "sort.original"),
+  };
+}
+
+const SortScript: FC<{ lang: Lang; tables: TableUse }> = ({ lang, tables }) =>
+  tables.sortable ? (
+    <>
+      <ClientData id="sort-i18n" data={sortWords(lang)} />
+      <script type="module" src="/sort.js"></script>
+    </>
+  ) : null;
+
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 23;
+export const STYLES_VERSION = 24;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -423,6 +445,7 @@ export const Layout: FC<
   const { lang, active } = props;
   const title = props.seo?.title ?? pageTitle(props.title);
   const shell = useContext(RailContext);
+  const tables: TableUse = { sortable: false };
   return (
     <html lang={lang}>
       <head>
@@ -468,7 +491,9 @@ export const Layout: FC<
         <div class="frame">
           <Rail lang={lang} active={active} rail={shell?.rail ?? null} here={shell?.here ?? ""} account={shell?.account} />
           <div class="content">
-            <main id="main">{props.children}</main>
+            <TableUseContext.Provider value={tables}>
+              <main id="main">{props.children}</main>
+            </TableUseContext.Provider>
             <footer class="site-footer">
               <div class="footer-row">
                 <span class="footer-sources">
@@ -498,6 +523,7 @@ export const Layout: FC<
             </footer>
           </div>
         </div>
+        <SortScript lang={lang} tables={tables} />
       </body>
     </html>
   );

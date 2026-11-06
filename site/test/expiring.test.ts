@@ -142,7 +142,7 @@ describe("/expiring/:window", () => {
     // Amendments and value change as a signed percentage.
     expect(html).toContain("2 amendments<br/><span class=\"muted small\">+25% on the original amount</span>");
     expect(html).toContain("1 amendment<br/><span class=\"muted small\">-10% on the original amount</span>");
-    expect(html).toContain('<td data-label="Amendments and value change" class="xlh">None</td>');
+    expect(html).toContain('<td data-label="Amendments and value change" class="xlh" data-sort="0">None</td>');
     // The source record: the CanadaBuys notice, the history dataset, the contracts search.
     expect(html).toContain('<a href="https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cb-400-40000004" rel="noopener">CanadaBuys notice</a>');
     expect(html).toContain('<a href="https://open.canada.ca/data/en/dataset/4fe645a1-ffcd-40c1-9385-2c771be956a4" rel="noopener">Contract history dataset</a>');
@@ -283,11 +283,12 @@ describe("contracts ending on buyer pages and profiles", () => {
     expect(section).toContain('<a href="/awards/cb-400-40000004">Translation standing offer, official languages</a>');
     expect(section).toContain('<a href="/expiring/12m?buyer=pwgsc-tpsgc">This buyer&#39;s contracts in the 12-month list</a>');
     // The buyer is the page's own, so the table leaves the column out.
-    expect(section).not.toMatch(/<th class="k-buyer[^"]*">Buyer<\/th>/);
-    expect(section).toContain('<th class="k-org">Supplier</th>');
+    expect(section).not.toMatch(/<th class="k-buyer[^"]*">(<button type="button" class="th-sort">)?Buyer</);
+    // The section shows its rows whole, so every head sorts them in the page.
+    expect(section).toContain('<th class="k-org"><button type="button" class="th-sort">Supplier</button></th>');
     // The same order as the full list: amendments and growth and the record links from 1600 px.
-    expect(section).toContain('<th class="k-amend xlh">');
-    expect(section).toContain('<th class="k-record xlh">Record</th>');
+    expect(section).toContain('<th class="k-amend xlh"><button type="button" class="th-sort">');
+    expect(section).toContain('<th class="k-record xlh"><button type="button" class="th-sort">Record</button></th>');
     const fr = nbsp(await text("/buyers/pwgsc-tpsgc?lang=fr"));
     expect(fr).toContain('<h2 id="expiring">Contrats prenant fin bientôt</h2>');
     expect(fr).toContain("1 contrat prend fin dans les 12 mois suivant la date des données. Valeur : 312 500 $.");
@@ -307,10 +308,10 @@ describe("contracts ending on buyer pages and profiles", () => {
     const section = html.slice(html.indexOf('<h2 id="expiring">'), html.indexOf('<h2 id="awards">'));
     expect(section).toContain("<h2 id=\"expiring\">Contracts Ending</h2>");
     expect(section).toContain("1 contract ends within 12 months of the data date. Value: $312,500.");
-    expect(section).not.toMatch(/<th class="k-org[^"]*">Organization<\/th>/);
-    expect(section).toContain('<th class="k-buyer mdh">Buyer</th>');
-    expect(section).toContain('<th class="k-amend xlh">');
-    expect(section).toContain('<th class="k-record xlh">Record</th>');
+    expect(section).not.toMatch(/<th class="k-org[^"]*">(<button type="button" class="th-sort">)?Organization</);
+    expect(section).toContain('<th class="k-buyer mdh"><button type="button" class="th-sort">Buyer</button></th>');
+    expect(section).toContain('<th class="k-amend xlh"><button type="button" class="th-sort">');
+    expect(section).toContain('<th class="k-record xlh"><button type="button" class="th-sort">Record</button></th>');
     // The radar has no supplier filter: a link to it would drop the organization, so the profile has none.
     expect(section).not.toContain('<a href="/expiring">');
     expect(section).not.toContain("The first");

@@ -20,6 +20,14 @@ var CATEGORY_ORDER = ["GD", "SRV", "CNST", "SRVTGD"];
 var PROVINCE_ORDER = ["AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT"];
 export var CODE_RE = /^[0-9]{2,8}$/;
 export var BUYER_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// The orders the list's heads set, as TENDER_ORDERS in src/pages/tenders.tsx:
+// the value in the address, the column, the direction. "closing" (no order
+// asked) is the list's own, the soonest closing first, which "closing-asc"
+// repeats from the head; "published" is the newest first.
+export var ORDERS = [
+  ["closing-asc", "closing", "asc"], ["closing-desc", "closing", "desc"], ["published-asc", "published", "asc"], ["published", "published", "desc"],
+];
+var SORTS = ORDERS.map(function (o) { return o[0]; });
 
 // The values of a key the filter can use, once each, in the given order.
 function ordered(values, order) {
@@ -50,7 +58,7 @@ export function clean(raw) {
   s.type = (raw.type || "").slice(0, 200);
   s.method = (raw.method || "").slice(0, 200);
   s.closing = raw.closing === "7" || raw.closing === "30" ? raw.closing : "";
-  s.sort = raw.sort === "published" ? "published" : "closing";
+  s.sort = SORTS.indexOf(raw.sort) >= 0 ? raw.sort : "closing";
   // The Canada-wide notices stay in unless the address or the box says otherwise.
   s.national = raw.national !== false;
   var page = parseInt(raw.page || "1", 10);
@@ -113,21 +121,26 @@ export function filterRows(all, s, now) {
     return true;
   });
   function byReference(a, b) { return a.reference < b.reference ? -1 : a.reference > b.reference ? 1 : 0; }
-  if (s.sort === "published") {
+  if (s.sort === "published" || s.sort === "published-asc") {
+    // Newest first, or oldest; a notice with no published date goes last either way.
+    var up = s.sort === "published-asc" ? 1 : -1;
     out.sort(function (a, b) {
       var x = a.published || "", y = b.published || "";
-      return x < y ? 1 : x > y ? -1 : byReference(a, b);
+      if (!x !== !y) return x ? -1 : 1;
+      return x < y ? -up : x > y ? up : byReference(a, b);
     });
   } else {
-    // Soonest first; a notice whose closing time has passed, then one with
-    // no closing date, go last (filterTenders() orders them the same way).
+    // Soonest first (latest first for closing-desc); a notice whose closing
+    // time has passed, then one with no closing date, go last either way
+    // (filterTenders() orders them the same way).
     var ranks = {};
+    var dir = s.sort === "closing-desc" ? -1 : 1;
     out.forEach(function (r) { ranks[r.reference] = !r.closing ? 2 : closingPassed(r.closing, now) ? 1 : 0; });
     out.sort(function (a, b) {
       var ra = ranks[a.reference], rb = ranks[b.reference];
       if (ra !== rb) return ra - rb;
       var x = a.closing || "￿", y = b.closing || "￿";
-      return x < y ? -1 : x > y ? 1 : byReference(a, b);
+      return x < y ? -dir : x > y ? dir : byReference(a, b);
     });
   }
   return out;

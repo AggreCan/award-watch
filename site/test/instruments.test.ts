@@ -161,6 +161,16 @@ describe("the list of standing offers and supply arrangements", () => {
     expect(await shown("within=3")).toEqual([SA]);
     expect(await shown("within=12")).toEqual([SA, NMSO]);
     expect(await shown("sort=holders")).toEqual([RMSO, SA, NMSO]);
+    // Each way round, from the table's Expires and Holders heads; ties by the soonest expiry.
+    expect(await shown("sort=holders-asc")).toEqual([SA, NMSO, RMSO]);
+    expect(await shown("sort=expiry-desc")).toEqual([RMSO, NMSO, SA]);
+    expect(await shown("sort=expiry")).toEqual([SA, NMSO, RMSO]);
+    const heads = (await page("/instruments?region=BC&sort=holders")).html;
+    expect(heads).toContain('data-sorting="server"');
+    expect(heads).toContain('<th class="k-count num" aria-sort="descending"><a href="/instruments?region=BC" class="th-sort" rel="nofollow">Holders</a></th>');
+    expect(heads).toContain('<th class="k-date"><a href="/instruments?region=BC&sort=expiry" class="th-sort" rel="nofollow">Expires</a></th>');
+    expect(heads).toContain('<th class="k-label">Instrument type</th>');
+    expect(heads).toContain('<option value="holders" selected="">Most holders</option>');
     // Anything out of form reads as no filter.
     expect(readInstrumentQuery(new URL("https://x/instruments?type=<b>&within=5&segment=4&user=A B&sort=value"))).toEqual({
       type: "", region: "", segment: "", commodity: "", user: "", within: "", sort: "",

@@ -22,6 +22,10 @@
    the filters above a list) starts closed on a phone and stays open
    elsewhere.
 
+   A table sorted in the page (public/sort.js) sends "aw:sorted": both kinds
+   of wrapper read their rows again in the new order, a paged one going
+   back to its first rows, so the rows shown are the first of the sort.
+
    The words come from the page's JSON block (id "pager-i18n"), so the script
    holds no copy of its own in either language. */
 (function () {
@@ -105,6 +109,11 @@
     }
     show();
     onChange(show);
+    wrap.addEventListener("aw:sorted", function () {
+      rows = Array.prototype.slice.call(wrap.querySelectorAll("tbody > tr"));
+      part = 0;
+      show();
+    });
     if (combined && location.hash === FROM_END && PHONE.matches && wrap.scrollIntoView) wrap.scrollIntoView({ block: "start" });
   }
 
@@ -136,6 +145,10 @@
     }
     apply();
     onChange(apply);
+    wrap.addEventListener("aw:sorted", function () {
+      rows = Array.prototype.slice.call(wrap.querySelectorAll("tbody > tr"));
+      apply();
+    });
     var box = wrap.closest ? wrap.closest(".years-box") : null;
     if (box) {
       box.addEventListener("change", apply);

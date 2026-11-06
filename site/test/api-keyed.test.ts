@@ -662,6 +662,11 @@ describe("the keys page", () => {
       const html = await res.text();
       expect(html).toContain("The counts cannot be read just now.");
       expect(html).toContain(`aw_${shared.key.slice(3, 11)}`);
+      // The keys sort in the page by their heads (public/sort.js): dates as dates, counts as figures.
+      expect(html).toContain('<table class="restack" data-sorting="client">');
+      expect(html).toContain('<th data-kind="date"><button type="button" class="th-sort">');
+      expect(html).toContain('<th class="num"><button type="button" class="th-sort">');
+      expect(html).toContain('<script type="module" src="/sort.js"></script>');
     } finally {
       error.mockRestore();
     }

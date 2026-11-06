@@ -17,7 +17,7 @@
 // the newest day by default and any of the last 30 on request.
 
 import type { Context } from "hono";
-import { clientTable } from "../columns";
+import { type SortOrders, SortsHere, clientTable, headSort } from "../columns";
 import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENT_CODES } from "../constants";
 import {
   BUYER_ID_RE, type CodeLevel, DAY_RE, type FacetCount, type OpenFirst, codeLevel, loadNewTenders, loadOpenFirst, loadOpenLevels, loadStats,
@@ -64,9 +64,21 @@ export interface TenderQuery {
   type: string;
   method: string;
   closing: string;
-  sort: "closing" | "published";
+  // TENDER_ORDERS, or "closing", the list's own order.
+  sort: "closing" | (typeof TENDER_ORDERS)[number][0];
   page: number;
 }
+
+// The orders the list's heads set (ORDERS in public/tender-query.js): the
+// value in the address, the column, the direction. "closing" (no order
+// asked) is the soonest closing first, which "closing-asc" repeats from the
+// head; "published" is the newest first.
+export const TENDER_ORDERS = [
+  ["closing-asc", "closing", "asc"], ["closing-desc", "closing", "desc"], ["published-asc", "published", "asc"], ["published", "published", "desc"],
+] as const satisfies SortOrders;
+
+// Whether the list runs soonest closing first, where the closing-soon rows show the time left.
+export const soonestClosing = (q: Pick<TenderQuery, "sort">): boolean => q.sort === "closing" || q.sort === "closing-asc";
 
 const MAX_TEXT = 100;
 
@@ -97,7 +109,7 @@ export function readTenderQuery(url: URL): TenderQuery {
     type: get("type").slice(0, 200),
     method: get("method").slice(0, 200),
     closing: (CLOSING_WINDOWS as readonly string[]).includes(closing) ? closing : "",
-    sort: get("sort") === "published" ? "published" : "closing",
+    sort: TENDER_ORDERS.find((o) => o[0] === get("sort"))?.[0] ?? "closing",
     page: Number.isInteger(pageNo) && pageNo >= 1 && pageNo <= 10_000 ? pageNo : 1,
   };
 }
@@ -138,11 +150,20 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock:
   });
   // Ties fall back to the reference so the order never depends on the file's.
   const byRef = (a: TenderRow, b: TenderRow) => (a.reference < b.reference ? -1 : a.reference > b.reference ? 1 : 0);
-  if (q.sort === "published") {
-    out.sort((a, b) => (a.published ?? "") < (b.published ?? "") ? 1 : (a.published ?? "") > (b.published ?? "") ? -1 : byRef(a, b));
+  if (q.sort === "published" || q.sort === "published-asc") {
+    // Newest first, or oldest; a notice with no published date goes last either way.
+    const up = q.sort === "published-asc" ? 1 : -1;
+    out.sort((a, b) => {
+      const x = a.published ?? "";
+      const y = b.published ?? "";
+      if (!x !== !y) return x ? -1 : 1;
+      return x < y ? -up : x > y ? up : byRef(a, b);
+    });
   } else {
-    // Soonest first; a notice whose closing time has passed, then one with
-    // no closing date, go last. Each rank is worked out once.
+    // Soonest first (latest first for closing-desc); a notice whose closing
+    // time has passed, then one with no closing date, go last either way.
+    // Each rank is worked out once.
+    const dir = q.sort === "closing-desc" ? -1 : 1;
     const ranks = new Map(out.map((r) => [r, r.closing === null ? 2 : closingPassed(r.closing, clock) ? 1 : 0]));
     out.sort((a, b) => {
       const ra = ranks.get(a)!;
@@ -150,7 +171,7 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock:
       if (ra !== rb) return ra - rb;
       const x = a.closing ?? "\uffff";
       const y = b.closing ?? "\uffff";
-      return x < y ? -1 : x > y ? 1 : byRef(a, b);
+      return x < y ? -dir : x > y ? dir : byRef(a, b);
     });
   }
   return out;
@@ -334,6 +355,14 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   // The same-day notices for a paid request; null (nothing read) on the free plan.
   const intraday = await intradayBand(c, stats.data_as_of, clock);
   const sameDay = await sameDayNoted(c);
+  // The list runs past one page, so its heads sort it whole: Closing and
+  // Published link the same view in their next order (tenders.js answers
+  // the links in memory once the full list is in); the other heads are plain.
+  const sortHref = (v: string) => `/tenders${tenderQueryString({ ...q, sort: v as TenderQuery["sort"], page: 1 })}`;
+  const sorts = {
+    closing: headSort(TENDER_ORDERS, q.sort, "closing", sortHref, "closing"),
+    published: headSort(TENDER_ORDERS, q.sort, "published", sortHref, "closing"),
+  };
 
   return page(
     c,
@@ -387,9 +416,12 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
           </label>
           <label class="field">
             <span class="field-label">{t(lang, "tenders.sort")}</span>
+            {/* "closing-asc", set from the head, is the list's own order and reads as it here. */}
             <select name="sort">
               <option value="closing">{t(lang, "tenders.sort_closing")}</option>
+              <option value="closing-desc" selected={q.sort === "closing-desc"}>{t(lang, "tenders.sort_closing_desc")}</option>
               <option value="published" selected={q.sort === "published"}>{t(lang, "tenders.sort_published")}</option>
+              <option value="published-asc" selected={q.sort === "published-asc"}>{t(lang, "tenders.sort_published_asc")}</option>
             </select>
           </label>
           <div class="toolbar-actions">
@@ -438,7 +470,7 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
                   </noscript>
                 </>
               ) : shown.length ? (
-                <TenderTable lang={lang} rows={shown} clock={clock} selectable note={false} timeLeft={q.sort === "closing"} />
+                <TenderTable lang={lang} rows={shown} clock={clock} selectable note={false} timeLeft={soonestClosing(q)} sorts={sorts} />
               ) : (
                 <NoMatch lang={lang} q={q.q} />
               )}
@@ -457,8 +489,9 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
       <InterestPanel lang={lang} filter={interest} />
       <ClientData id="i18n" data={{
         lang, locale: numberLocale(lang), strings: clientStrings(lang, TENDERS_CLIENT_KEYS), labels,
-        table: clientTable(tenderColumns(lang), "t-tenders"),
+        table: clientTable(tenderColumns(lang, { closing: { key: "closing" }, published: { key: "published" } }), "t-tenders", "server"),
       }} />
+      <SortsHere />
       <CountdownScript lang={lang} />
       <script type="module" src="/tenders.js"></script>
       <script src="/pager.js" defer></script>

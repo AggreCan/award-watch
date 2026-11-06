@@ -250,7 +250,9 @@ export async function searchPage(c: Context<AppEnv>): Promise<Response> {
     <Panel title={t(lang, "nav.organizations")}
       count={t(lang, "search.range", { from: n(from), to: n(to), total: n(result.orgTotal) })} foot={pager}>
       <div class="table-wrap bordered">
-        <Table cols={[
+        {/* Over more than one page the matches keep the search's own order, which no head can
+            change, so the heads stay plain; all on one page, they sort here. */}
+        <Table sorting={pager ? "server" : "client"} cols={[
           { kind: "main", label: t(lang, "col.organization") },
           { kind: "count", label: t(lang, "col.records") },
           ...sourceColumns(lang, BUYER_SOURCE_RESTS),

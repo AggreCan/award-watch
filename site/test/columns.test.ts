@@ -99,7 +99,8 @@ describe("column widths", () => {
     expect(minWidths(cols)).toEqual({ all: 836, xxl: 836, xl: 836, lg: 836, md: 528 });
     expect(minWidths(cols).md).toBeLessThanOrEqual(1000 - 15 - 264 - 48 - 2);
     const html = await text("/");
-    expect(html).toContain(`<table class="restack cols t-tenders" style="${tableStyle(cols)}"><thead><tr><th class="k-main c-notice">Notice</th><th class="k-label mdh c-type">Type</th>`);
+    expect(html).toContain(`<table class="restack cols t-tenders" style="${tableStyle(cols)}" data-sorting="client"><thead><tr>` +
+      '<th class="k-main c-notice"><button type="button" class="th-sort">Notice</button></th><th class="k-label mdh c-type"><button type="button" class="th-sort">Type</button></th>');
     // The tender list keeps its own columns.
     expect(tenderColumns("en").map(headClass)).toEqual(["k-main c-notice", "k-buyer c-buyer", "k-datetime c-date", "k-date mdh c-pub", "k-region c-region"]);
   });
@@ -127,8 +128,12 @@ describe("a source's name over its figure", () => {
       ["/segments", ["Award notices in 2026", "All award notices"]],
     ] as const) {
       const html = await text(path);
-      // A tally column may rest on a medium screen ([a-z]+h) or on a phone (ph).
-      for (const head of heads) expect(html, `${path} ${head}`).toMatch(new RegExp(`<th class="k-tally( [a-z]+h)? num( ph)?">${head}</th>`));
+      // A tally column may rest on a medium screen ([a-z]+h) or on a phone (ph). Each of these
+      // tables is whole on its page, so its head is the button that sorts it; the button's glyph
+      // sits in the cell's padding, so the name still fits the line.
+      for (const head of heads) {
+        expect(html, `${path} ${head}`).toMatch(new RegExp(`<th class="k-tally( [a-z]+h)? num( ph)?"><button type="button" class="th-sort">${head}</button></th>`));
+      }
     }
   });
 

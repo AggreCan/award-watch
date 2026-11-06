@@ -4,7 +4,7 @@
 
 import type { FC, PropsWithChildren } from "hono/jsx";
 import { ProTag, SameDayMark } from "../pro";
-import { type Column, type MaybeColumn, type Rest, Table, restClass } from "../columns";
+import { type Column, type HeadSort, type MaybeColumn, type Rest, type Sorting, Table, restClass } from "../columns";
 import { METHOD_SHORT, MONEY_SOURCES, NOTICE_TYPE_SHORT, type MoneySource } from "../constants";
 import { type AwardRow, type OrgTotal, type TenderRow, type YearFigure, publishedReference } from "../data";
 import { buyerPath } from "../crosslinks";
@@ -332,15 +332,18 @@ export function YearsBox<Y extends YearFigure>({ lang, years, dataYear, cols, ce
 // The tender list's columns. The c- classes name each column for the split
 // view, which hides the published date and the region beside its detail
 // panel; the kinds set the widths (src/columns.tsx).
-export function tenderColumns(lang: Lang): Column[] {
+// sorts: on /tenders, the list's orders the Closing and Published heads set (pages/tenders.tsx).
+export function tenderColumns(lang: Lang, sorts?: TenderSorts): Column[] {
   return [
     { kind: "main", label: t(lang, "col.notice"), class: "c-notice" },
     { kind: "buyer", label: t(lang, "col.buyer"), class: "c-buyer" },
-    { kind: "datetime", label: t(lang, "col.closing"), class: "c-date" },
-    { kind: "date", label: t(lang, "col.published"), rest: "md", class: "c-pub" },
+    { kind: "datetime", label: t(lang, "col.closing"), class: "c-date", sort: sorts?.closing },
+    { kind: "date", label: t(lang, "col.published"), rest: "md", class: "c-pub", sort: sorts?.published },
     { kind: "region", label: t(lang, "col.region"), class: "c-region" },
   ];
 }
+
+export type TenderSorts = { closing: HeadSort; published: HeadSort };
 
 // The home page's two lists: every row is open and new or closing soon, so
 // the published date and the Open chip say the same thing on every row. The
@@ -398,16 +401,19 @@ export function methodShort(lang: Lang, en: string | null, fr: string | null, ty
 // countdown within the closing-soon window, a static day count beyond it,
 // which a page cached for five minutes cannot get wrong. The Open chip goes;
 // the chip of a notice whose closing time has passed stays.
+// sorts: /tenders, one page of the whole list, whose Closing and Published
+// heads link the list's orders; every other list is whole on its page and
+// sorts there.
 export const TenderTable: FC<{
   lang: Lang; rows: readonly TenderRow[]; clock: Clock; status?: boolean; selectable?: boolean; note?: boolean; timeLeft?: boolean; omit?: string;
-  variant?: "home"; marked?: ReadonlySet<string>;
-}> = ({ lang, rows, clock, status, selectable, note = true, timeLeft = false, omit, variant, marked }) => {
+  variant?: "home"; marked?: ReadonlySet<string>; sorts?: TenderSorts;
+}> = ({ lang, rows, clock, status, selectable, note = true, timeLeft = false, omit, variant, marked, sorts }) => {
   const home = variant === "home";
   return (
   <>
   {note ? <SegmentNote lang={lang} rows={rows} omit={omit} /> : null}
   <div class="table-wrap bordered">
-    <Table cols={home ? homeTenderColumns(lang) : tenderColumns(lang)} class="t-tenders">
+    <Table cols={home ? homeTenderColumns(lang) : tenderColumns(lang, sorts)} class="t-tenders" sorting={sorts ? "server" : "client"}>
       <tbody>
         {rows.map((r) => {
           const state = tenderState(status ? r.status ?? "open" : "open", r.closing, clock);
@@ -476,17 +482,22 @@ export const CountdownScript: FC<{ lang: Lang }> = ({ lang }) => (
 
 // Award notices and contract history rows. href is the record page's
 // prefix (/awards or /history); on history rows the buyer is the client
-// department.
-export const AwardTable: FC<{ lang: Lang; rows: readonly AwardRow[]; href?: string; organization?: boolean; buyer?: boolean; phoneRows?: number }> = ({
-  lang, rows, href = "/awards", organization = true, buyer = true, phoneRows,
+// department. sorting "server": a page of a longer list (/awards and a
+// year's awards), whose heads sort only where sorts links the server's
+// orders; a list shown whole sorts in the page.
+export const AwardTable: FC<{
+  lang: Lang; rows: readonly AwardRow[]; href?: string; organization?: boolean; buyer?: boolean; phoneRows?: number;
+  sorting?: Sorting; sorts?: { awarded: HeadSort; value: HeadSort };
+}> = ({
+  lang, rows, href = "/awards", organization = true, buyer = true, phoneRows, sorting = "client", sorts,
 }) => (
   <div class="table-wrap bordered" data-phone-rows={phoneRows ? String(phoneRows) : undefined}>
-    <Table cols={[
-      { kind: "date", label: t(lang, "col.awarded") },
+    <Table sorting={sorting} cols={[
+      { kind: "date", label: t(lang, "col.awarded"), sort: sorts?.awarded },
       { kind: "main", label: t(lang, "col.contract") },
       organization && { kind: "org", label: t(lang, "col.supplier") },
       buyer && { kind: "buyer", label: t(lang, href === "/history" ? "col.client" : "col.buyer"), rest: "md" },
-      { kind: "value", label: t(lang, "col.value") },
+      { kind: "value", label: t(lang, "col.value"), sort: sorts?.value },
       { kind: "comp", label: t(lang, "col.method") },
     ]}>
       <tbody>

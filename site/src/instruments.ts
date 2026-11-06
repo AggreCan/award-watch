@@ -159,8 +159,17 @@ export function tenderInstruments(detail: unknown): TenderInstrument[] {
 // -- the index's filters ---------------------------------------------------------------
 
 export interface InstrumentQuery {
-  type: string; region: string; segment: string; commodity: string; user: string; within: "" | Within; sort: "" | "holders";
+  type: string; region: string; segment: string; commodity: string; user: string; within: "" | Within; sort: "" | InstrumentOrder;
 }
+
+// The orders of /instruments, which the Expiry and Holders heads set too:
+// the value in the address, the column, the direction. "" (no order asked)
+// is the soonest expiry first, which "expiry" repeats from the head;
+// "holders" is the most holders first.
+export const INSTRUMENT_ORDERS = [
+  ["expiry", "expiry", "asc"], ["expiry-desc", "expiry", "desc"], ["holders-asc", "holders", "asc"], ["holders", "holders", "desc"],
+] as const;
+export type InstrumentOrder = (typeof INSTRUMENT_ORDERS)[number][0];
 
 const QUERY_KEYS = ["type", "region", "segment", "commodity", "user", "within", "sort"] as const;
 
@@ -174,7 +183,7 @@ export function readInstrumentQuery(url: URL): InstrumentQuery {
   return {
     type: get("type", /^[A-Z]{2,5}$/), region: get("region", /^[A-Z]{2}$/), segment: get("segment", /^(?:\d{2}|none)$/),
     commodity: get("commodity", /^[A-Za-z0-9.-]{1,40}$/), user: get("user", /^[a-z0-9:-]{1,80}$/), within,
-    sort: get("sort", /^holders$/) as "" | "holders",
+    sort: get("sort", /^(?:expiry|expiry-desc|holders|holders-asc)$/) as "" | InstrumentOrder,
   };
 }
 
@@ -211,12 +220,17 @@ export function filterInstruments(rows: readonly InstrumentRow[], q: InstrumentQ
   });
 }
 
-// Soonest expiry first (no expiry last), or the most holders first; the number breaks ties.
+// Soonest expiry first (no expiry last), or the most holders first; the
+// number breaks ties. Each the other way round too, for the table's heads:
+// the latest expiry first (no expiry still last), the fewest holders first.
 export function sortInstruments(rows: readonly InstrumentRow[], sort: InstrumentQuery["sort"]): InstrumentRow[] {
   const byNumber = (a: InstrumentRow, b: InstrumentRow) => (a.agreement < b.agreement ? -1 : a.agreement > b.agreement ? 1 : 0);
+  const up = sort === "expiry-desc" ? -1 : 1;
   const byExpiry = (a: InstrumentRow, b: InstrumentRow) =>
-    a.expiry === b.expiry ? 0 : a.expiry === null ? 1 : b.expiry === null ? -1 : a.expiry < b.expiry ? -1 : 1;
-  return [...rows].sort((a, b) => (sort === "holders" ? b.n_holders - a.n_holders || byExpiry(a, b) : byExpiry(a, b)) || byNumber(a, b));
+    a.expiry === b.expiry ? 0 : a.expiry === null ? 1 : b.expiry === null ? -1 : a.expiry < b.expiry ? -up : up;
+  const byHolders = (a: InstrumentRow, b: InstrumentRow) =>
+    sort === "holders" ? b.n_holders - a.n_holders : sort === "holders-asc" ? a.n_holders - b.n_holders : 0;
+  return [...rows].sort((a, b) => byHolders(a, b) || byExpiry(a, b) || byNumber(a, b));
 }
 
 // -- one instrument, from the records database ------------------------------------------------

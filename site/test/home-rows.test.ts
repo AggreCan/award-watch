@@ -121,11 +121,11 @@ describe("the home lists' rows", () => {
     for (const heading of ["New Tender Notices Today", "Closing Within 7 Days"]) {
       const list = panel(html, heading);
       expect(list, heading).not.toContain("c-pub");
-      expect(list, heading).toContain('<th class="k-region mdh c-region">Provinces of delivery</th>');
+      expect(list, heading).toContain('<th class="k-region mdh c-region"><button type="button" class="th-sort">Provinces of delivery</button></th>');
       expect(list, heading).toContain('<span class="split-only md-only muted small">');
     }
     const day = await text("/tenders/new");
-    expect(day).toContain('<th class="k-date mdh c-pub">Published</th>');
+    expect(day).toContain('<th class="k-date mdh c-pub"><button type="button" class="th-sort">Published</button></th>');
     expect(day).not.toContain("md-only");
     expect(day).not.toContain('class="c-type');
   });

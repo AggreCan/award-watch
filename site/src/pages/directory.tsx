@@ -137,7 +137,9 @@ export async function directoryPage(c: Context<AppEnv>): Promise<Response> {
           </span>
         </nav>}>
       <div class="table-wrap bordered">
-        <Table cols={[
+        {/* A page of a longer directory keeps the A to Z the pages are cut by, so its heads stay
+            plain; a directory on one page sorts here. */}
+        <Table sorting={idx.pages > 1 ? "server" : "client"} cols={[
           { kind: "main", label: t(lang, "col.organization") },
           { kind: "region", label: t(lang, "col.city") },
           { kind: "count", label: t(lang, "col.records") },

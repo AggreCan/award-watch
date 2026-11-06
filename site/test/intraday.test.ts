@@ -221,7 +221,8 @@ describe("a paid request", () => {
     expect(band).toContain('<h2>3 notices posted since this morning&#39;s refresh</h2>');
     expect(page.indexOf(band)).toBeLessThan(page.indexOf('<div class="split" id="tender-split">'));
     // The heads and widths of the table below.
-    for (const col of tenderColumns("en")) expect(band).toContain(`<th class="${headClass(col)}">${col.label}</th>`);
+    // The band is whole on the page, so its heads sort it there.
+    for (const col of tenderColumns("en")) expect(band).toContain(`<th class="${headClass(col)}"><button type="button" class="th-sort">${col.label}</button></th>`);
     expect(band.match(/<tr data-intraday="(new|amended)">/g)).toEqual([
       '<tr data-intraday="new">', '<tr data-intraday="new">', '<tr data-intraday="amended">',
     ]);

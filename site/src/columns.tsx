@@ -1,4 +1,5 @@
-import type { FC, PropsWithChildren } from "hono/jsx";
+import { createContext, useContext, type FC, type PropsWithChildren } from "hono/jsx";
+import { headOrder } from "../public/sort.js";
 
 // One column system for every table on the site. Each column is of a kind,
 // and a kind has one width wherever it appears (th.k-* in public/styles.css
@@ -53,7 +54,15 @@ export function restClass(rest: Rest | undefined): string | undefined {
   return rest ? REST_CLASS[rest] : undefined;
 }
 
-export type Column = { kind: ColumnKind; label: unknown; rest?: Rest; class?: string };
+// A head the server orders by, on a table it sorts (Table's sorting
+// "server"): the address of the same view in the next order (ascending,
+// descending, then the list's own order) and the order now, when this
+// column sets it. key alone names the order for a table a client script
+// draws (clientTable), which writes the address itself.
+export type SortState = "ascending" | "descending";
+export type HeadSort = { key?: string; href?: string; state?: SortState | null };
+
+export type Column = { kind: ColumnKind; label: unknown; rest?: Rest; class?: string; sort?: HeadSort };
 
 // A tally column is a figure's when its table says so (class "num"): the
 // watchlist's new records by source are words.
@@ -104,24 +113,96 @@ export function tableClass(restack: boolean, cls?: string): string {
   return [restack ? "restack" : "", "cols", cls ?? ""].filter(Boolean).join(" ");
 }
 
-// The head row and widths of a table a client script draws (public/tenders.js),
-// so the script carries no copy of the column system.
-export function clientTable(cols: readonly Column[], cls?: string): { cls: string; style: string; heads: [string, string][] } {
-  return { cls: tableClass(true, cls), style: tableStyle(cols), heads: cols.map((c) => [headClass(c), String(c.label)]) };
+// Who orders a table's rows when a reader asks (public/sort.js reads it from
+// the table). "client": every row of the list is on the page, so the script
+// sorts them there, by any column. "server": the list runs past the page (a
+// next-page link), so only the heads the server can order by carry a link
+// (Column.sort) and the others stay plain labels: sorting one page in the
+// browser would pass for sorting the list. "none": a table whose rows only
+// read in their own order (a tree of levels).
+export type Sorting = "client" | "server" | "none";
+
+// The orders a server-sorted list offers, as headOrder in public/sort.js
+// reads them: the value in the address, the column, the direction.
+export type SortOrders = readonly (readonly [string, string, "asc" | "desc"])[];
+
+// A head's link on a server-sorted list. href turns the next order's value
+// into the view's address (the other filters kept, the first page); none
+// is the value of the list's own order.
+export function headSort(orders: SortOrders, current: string, column: string, href: (value: string) => string, none = ""): HeadSort {
+  const h = headOrder(orders, current, column, none);
+  return { key: column, href: href(h.next), state: h.state };
 }
+
+// Whether a table on the page sorts in the browser, for the layout, which
+// then loads public/sort.js and its words after the content (src/layout.tsx).
+export type TableUse = { sortable: boolean };
+export const TableUseContext = createContext<TableUse | null>(null);
+
+// For a page whose sortable table a client script draws after load (the
+// tender list while the server waits for it): the script and its words come
+// all the same.
+export const SortsHere: FC = () => {
+  const use = useContext(TableUseContext);
+  if (use) use.sortable = true;
+  return null;
+};
+
+// A head cell that sorts in the page, for a table drawn outside the column
+// system (the account pages' own lists, whose table carries
+// data-sorting="client"). kind says how its cells read where no k-* class
+// can ("date"); a head with class "num" reads figures.
+export const SortHead: FC<PropsWithChildren<{ class?: string; kind?: "date" }>> = ({ class: cls, kind, children }) => {
+  const use = useContext(TableUseContext);
+  if (use) use.sortable = true;
+  return <th class={cls} data-kind={kind}><button type="button" class="th-sort">{children as any}</button></th>;
+};
+
+// The head row and widths of a table a client script draws (public/tenders.js),
+// so the script carries no copy of the column system. Each head is its
+// class, its label, and the order it sets on a server-sorted list ("" for
+// none).
+export function clientTable(cols: readonly Column[], cls?: string, sorting: Sorting = "client"): {
+  cls: string; style: string; sorting: Sorting; heads: [string, string, string][];
+} {
+  return {
+    cls: tableClass(true, cls), style: tableStyle(cols), sorting,
+    heads: cols.map((c) => [headClass(c), String(c.label), c.sort?.key ?? ""]),
+  };
+}
+
+// One head cell. On a client-sorted table the label is a button for
+// public/sort.js; on a server-sorted one it is a link where the server
+// orders by the column, aria-sort on the cell while it does; anywhere else
+// it is the label alone.
+const Head: FC<{ c: Column; sorting: Sorting }> = ({ c, sorting }) => {
+  if (sorting === "client") return <th class={headClass(c)}><button type="button" class="th-sort">{c.label as any}</button></th>;
+  if (sorting === "server" && c.sort?.href) {
+    return (
+      <th class={headClass(c)} aria-sort={c.sort.state ?? undefined}>
+        <a href={c.sort.href} class="th-sort" rel="nofollow">{c.label as any}</a>
+      </th>
+    );
+  }
+  return <th class={headClass(c)}>{c.label as any}</th>;
+};
 
 // A table on the system: the head row drawn from the columns, the body passed
 // in. Every table restacks into labelled blocks on a phone unless it says
-// otherwise (its cells then need no data-label, and it scrolls instead).
-export const Table: FC<PropsWithChildren<{ cols: readonly MaybeColumn[]; class?: string; restack?: boolean }>> = ({
-  cols, class: cls, restack = true, children,
+// otherwise (its cells then need no data-label, and it scrolls instead), and
+// sorts in the browser unless it says otherwise (sorting).
+export const Table: FC<PropsWithChildren<{ cols: readonly MaybeColumn[]; class?: string; restack?: boolean; sorting?: Sorting }>> = ({
+  cols, class: cls, restack = true, sorting = "client", children,
 }) => {
   const shown = shownColumns(cols);
+  // The script gives a server-sorted table's links their hint too.
+  const use = useContext(TableUseContext);
+  if (use && (sorting === "client" || (sorting === "server" && shown.some((c) => c.sort?.href)))) use.sortable = true;
   return (
-    <table class={tableClass(restack, cls)} style={tableStyle(shown)}>
+    <table class={tableClass(restack, cls)} style={tableStyle(shown)} data-sorting={sorting === "none" ? undefined : sorting}>
       <thead>
         <tr>
-          {shown.map((c) => <th class={headClass(c)}>{c.label as any}</th>)}
+          {shown.map((c) => <Head c={c} sorting={sorting} />)}
         </tr>
       </thead>
       {children}

@@ -428,7 +428,7 @@ describe("the page", () => {
     expect(html).toContain("$1,000,000");
     expect(html).toContain("$500,000");
     expect(html).toContain("$12,345");
-    expect(html).not.toContain(">PSPC contract history</th>");
+    expect(html).not.toContain(">PSPC contract history</button></th>");
     expect(html).toContain("The Free plan shows the latest 3 fiscal years; Pro shows 10 and the blocks below.");
     for (const title of ["Records by Segment", "Share of a Segment", "Contracts Ending Within 12 Months", "Buyers It Has Won From", "Registry Match"]) {
       expect(html, title).toMatch(new RegExp(`<h2>${title}<span class="pro-tag">`));
@@ -451,7 +451,7 @@ describe("the page", () => {
     expect(html).toContain("2017-18");
     expect(html).toContain("2020-21");
     expect(html).not.toContain("2015-16");
-    expect(html).toContain(">PSPC contract history</th>");
+    expect(html).toContain(">PSPC contract history</button></th>");
     // By segment: each record once, in its first segment (77 is a further one), the two sources apart.
     expect(html).toContain('href="/segments/81"');
     expect(html).toContain('href="/segments/43"');
@@ -465,7 +465,7 @@ describe("the page", () => {
     expect(html).toMatch(/2024-25<\/td><td[^>]*>\$1,000,000<\/td><td[^>]*>100%<br\/><span class="muted small">\$1,000,000<\/span><\/td><td[^>]*>0%<br\/>/);
     expect(html).toMatch(/10 fiscal years<\/strong><\/td><td[^>]*>\$3,000,000<\/td><td[^>]*>50%<br\/>.*?<\/td><td[^>]*>17%<br\/>/);
     // The table's columns are the organization's, then the competitors in the order chosen.
-    expect(html.indexOf(`<th class="k-share num">${NAME1}</th>`)).toBeLessThan(html.indexOf(`<th class="k-share num">${NAME2}</th>`));
+    expect(html.indexOf(`<th class="k-share num"><button type="button" class="th-sort">${NAME1}</button></th>`)).toBeLessThan(html.indexOf(`<th class="k-share num"><button type="button" class="th-sort">${NAME2}</button></th>`));
     // Its contracts ending within 12 months: two of the three, the soonest first, and the radar's own filter for all of them.
     expect(html).toContain("2 contracts of this organization end within 12 months of the data date, the soonest on 2027-01-15; their counted value is $500,000.");
     expect(html.indexOf("Contract EN578-111111-001")).toBeLessThan(html.indexOf("Contract F1700-222222"));

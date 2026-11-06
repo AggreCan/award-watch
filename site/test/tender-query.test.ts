@@ -22,6 +22,8 @@ const VIEWS = [
   "?segment=72&segment=82&province=BC", "?segment=43&segment=82&province=QC&province=BC",
   "?segment=43&segment=82&province=QC&province=BC&national=0", "?category=gd&category=SRV&segment=43&sort=published",
   "?segment=82&province=qc&segment=43&province=BC&segment=82&national=0&category=srv&category=GD&province=ZZ&page=2",
+  // The orders the list's heads set, each way, and one the list does not know.
+  "?sort=closing-asc", "?sort=closing-desc", "?sort=published-asc", "?sort=closing-desc&province=QC", "?sort=up",
 ];
 
 describe("the browser's view rules", () => {

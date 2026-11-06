@@ -12,6 +12,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { SortHead } from "../columns";
 import { SEGMENT_CODES } from "../constants";
 import type { AppEnv } from "../env";
 import { fmtInt, segmentShort, t, tn, type Key, type Lang } from "../i18n";
@@ -256,10 +257,11 @@ export function watchesView(
         foot={capLine}>
         {watches.length ? (
           <div class="table-wrap">
-            <table class="restack watch-table">
+            {/* Sorted in the page by what is followed; the other cells are lists and forms. */}
+            <table class="restack watch-table" data-sorting="client">
               <thead>
                 <tr>
-                  <th>{t(lang, "watches.col_watch")}</th><th>{t(lang, "watches.col_events")}</th>
+                  <SortHead>{t(lang, "watches.col_watch")}</SortHead><th>{t(lang, "watches.col_events")}</th>
                   <th>{t(lang, "watches.col_settings")}</th><th>{t(lang, "watches.col_remove")}</th>
                 </tr>
               </thead>

@@ -127,7 +127,8 @@ const SegmentLevels = ({ lang, families, total }: { lang: Lang; families: readon
       {total > families.length ? ` ${t(lang, "segment.levels_first", { n: fmtInt(families.length, lang) })}` : ""}
     </p>
     <div class="table-wrap bordered levels">
-      <Table restack={false} class="compact" cols={[
+      {/* Each family over its classes: a sort would part a class from its family, so the heads stay plain. */}
+      <Table restack={false} class="compact" sorting="none" cols={[
         { kind: "label", label: t(lang, "col.code") },
         { kind: "main", label: t(lang, "segment.col_level") },
         { kind: "count", label: t(lang, "segments.col_open") },
