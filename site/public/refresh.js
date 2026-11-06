@@ -3,18 +3,19 @@
 
    The runs are fixed times of the UTC day (src/refresh.tsx holds the
    schedules, read from the two workflows), so the time left comes from the
-   visitor's clock alone: no request, nothing read. The server writes each
-   timer's line from its own clock, with the schedule in data-refresh-runs
-   ("12:30", or "11:45 13:45 ...") and the line's words in data-in and
-   data-now; the hour and minute forms sit on the group (data-hm, data-m).
-   This script rewrites the line on each minute. Without it the server's
-   line stands.
+   visitor's clock alone: no request, nothing read. Each timer is a label
+   over the time left (.refresh-left). The server writes the time left from
+   its own clock, with the schedule in data-refresh-runs ("12:30", or
+   "11:45 13:45 ...") and the word for a run due in data-now; the hour and
+   minute forms sit on the group (data-hm, data-m). This script rewrites
+   the time left on each minute and leaves the label alone. Without it the
+   server's figure stands.
 
    A template travels as pieces, its text and the names of its slots in
-   turn ("in {left}" is ["in ", "left", ""]), so no page carries an unfilled
-   placeholder. src/refresh.tsx imports the functions below for the server's
-   line, so the rule has one copy; the part that touches the page runs only
-   in a browser. */
+   turn ("{h} h {m} min" is ["", "h", " h ", "m", " min"]), so no page
+   carries an unfilled placeholder. src/refresh.tsx imports the functions
+   below for the server's figure, so the rule has one copy; the part that
+   touches the page runs only in a browser. */
 
 const DAY_MS = 86400000;
 
@@ -53,12 +54,12 @@ export function nextRunAt(now, runs) {
 }
 
 /**
- * The timer's line: whole minutes to the next run, rounded down, so a page
- * kept in a cache for a few minutes never reads later than the run; "now"
- * within its last minute. Null when no time reads.
+ * The timer's figure: whole minutes to the next run, rounded down, so a
+ * page kept in a cache for a few minutes never reads later than the run;
+ * "now" within its last minute. Null when no time reads.
  * @param {number} now
  * @param {readonly string[]} runs
- * @param {{ in: readonly string[], now: string, hm: readonly string[], m: readonly string[] }} words
+ * @param {{ now: string, hm: readonly string[], m: readonly string[] }} words
  * @returns {string | null}
  */
 export function refreshText(now, runs, words) {
@@ -66,8 +67,7 @@ export function refreshText(now, runs, words) {
   if (at === null) return null;
   const minutes = Math.floor((at - now) / 60000);
   if (minutes < 1) return words.now;
-  const left = minutes < 60 ? fill(words.m, { m: minutes }) : fill(words.hm, { h: Math.floor(minutes / 60), m: minutes % 60 });
-  return fill(words.in, { left });
+  return minutes < 60 ? fill(words.m, { m: minutes }) : fill(words.hm, { h: Math.floor(minutes / 60), m: minutes % 60 });
 }
 
 function pieces(el, name) {
@@ -83,10 +83,10 @@ function tick() {
   const now = Date.now();
   for (const timer of document.querySelectorAll("[data-refresh-runs]")) {
     const group = timer.closest("[data-hm]");
-    const words = { in: pieces(timer, "data-in"), now: timer.getAttribute("data-now") || "", hm: pieces(group, "data-hm"), m: pieces(group, "data-m") };
+    const words = { now: timer.getAttribute("data-now") || "", hm: pieces(group, "data-hm"), m: pieces(group, "data-m") };
     const text = refreshText(now, (timer.getAttribute("data-refresh-runs") || "").split(" "), words);
-    const line = timer.querySelector(".refresh-line");
-    if (text && line && line.textContent !== text) line.textContent = text;
+    const left = timer.querySelector(".refresh-left");
+    if (text && left && left.textContent !== text) left.textContent = text;
   }
 }
 

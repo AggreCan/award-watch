@@ -43,13 +43,17 @@ const STRINGS = {
   "nav.main_label": { en: "Main", fr: "Principale" },
   "nav.skip": { en: "Skip to content", fr: "Passer au contenu" },
   "nav.feeds": { en: "Feeds", fr: "Fils Atom" },
-  // The top bar's two timers beside the data date (src/refresh.tsx), hours
-  // and minutes to the next scheduled run; "now" within its last minute.
-  "refresh.daily": { en: "Daily refresh in {left}", fr: "Actualisation quotidienne dans {left}" },
-  "refresh.daily_now": { en: "Daily refresh now", fr: "Actualisation quotidienne maintenant" },
+  // The top bar's two timers beside the data date (src/refresh.tsx): a label
+  // over the hours and minutes to the next scheduled run, "now" within its
+  // last minute.
+  "refresh.daily_label": { en: "Daily refresh", fr: "Actualisation quotidienne" },
   // "Sub-daily" (operator, 2026-11-06); the same-day page explains the cadence and what a cut is.
-  "refresh.same_day": { en: "Sub-daily refresh in {left}", fr: "Actualisation en journée dans {left}" },
-  "refresh.same_day_now": { en: "Sub-daily refresh now", fr: "Actualisation en journée maintenant" },
+  "refresh.same_day_label": { en: "Sub-daily refresh", fr: "Actualisation en journée" },
+  // The labels from 1200 to 1439 px, where the French ones whole do not fit;
+  // the English ones do, so their short form is the whole label.
+  "refresh.daily_label_short": { en: "Daily refresh", fr: "Quotidienne" },
+  "refresh.same_day_label_short": { en: "Sub-daily refresh", fr: "En journée" },
+  "refresh.now": { en: "now", fr: "maintenant" },
   "refresh.hm": { en: "{h}h {m}m", fr: "{h} h {m} min" },
   "refresh.m": { en: "{m}m", fr: "{m} min" },
 
