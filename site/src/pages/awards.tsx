@@ -303,8 +303,11 @@ const ErroneousTable: FC<{ lang: Lang; rows: readonly AwardRow[] }> = ({ lang, r
 export async function erroneousAwardsPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
-  const rows = stats ? await loadErroneousAwards(c.env) : null;
-  if (!stats || !rows) return noDataPage(c, "erroneous.title");
+  if (!stats) return noDataPage(c, "erroneous.title");
+  // An export from before the file existed carries no count: the page then
+  // lists none rather than failing, until the next nightly writes the file.
+  const rows = (await loadErroneousAwards(c.env)) ?? (stats.counts.awards_erroneous === undefined ? [] : null);
+  if (!rows) return noDataPage(c, "erroneous.title");
   const title = t(lang, "erroneous.title");
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "awards.title"), path: "/awards" }, { name: title }];
   return page(

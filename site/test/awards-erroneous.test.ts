@@ -68,6 +68,10 @@ describe("the erroneous submissions page", () => {
     }
     const missing = await get("/awards/erroneous", { "awards/erroneous.json": undefined });
     expect(missing.status).toBe(503);
+    // An export from before the file existed (no count in stats.json): none listed, not a failure.
+    const before = await get("/awards/erroneous", { "awards/erroneous.json": undefined, ...withCount(undefined) });
+    expect(before.status).toBe(200);
+    expect(await before.text()).toContain("None at the moment.");
   });
 });
 
