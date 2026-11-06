@@ -25,6 +25,8 @@ import { decimal, fmtInt, t, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { PriceLine, ProTag, type ProPrice, proPrice } from "../pro";
 import { RECORDS_PAGE_ROWS } from "../records_tables";
+// The organizations "Your organization" compares with (account/org_claim.ts COMPETITORS_MAX).
+import { FREE_YEARS, MAX_RIVALS as COMPETITORS_MAX } from "../records_db";
 import { type Faq, pageSeo, proJsonLd } from "../seo";
 import { INCUMBENTS_TEASE } from "./backbone";
 
@@ -52,6 +54,7 @@ export function proIncludes(lang: Lang): { feature: keyof (typeof RULES)["pro"];
     { feature: "analytics", text: t(lang, "billing.pro_analytics") },
     { feature: "analytics", text: t(lang, "propage.records", { n: fmtInt(RECORDS_PAGE_ROWS, lang) }) },
     { feature: "analytics", text: t(lang, "propage.incumbents", { n: fmtInt(INCUMBENTS_TEASE, lang) }) },
+    { feature: "analytics", text: t(lang, "orgclaim.pro_page", { n: fmtInt(COMPETITORS_MAX, lang), free: fmtInt(FREE_YEARS, lang) }) },
     { feature: "api", text: t(lang, "propage.api", { day: fmtInt(KEY_PER_DAY, lang), minute: fmtInt(KEY_PER_MINUTE, lang) }) },
     { feature: "bug_reports", text: t(lang, "billing.pro_bugs") },
     { feature: "export_filtered", text: t(lang, "propage.instruments") },

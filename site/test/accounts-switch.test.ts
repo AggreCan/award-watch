@@ -29,6 +29,10 @@ const ACCOUNT_ROUTES: [string, string][] = [
   // Calendar feeds (account/feeds.ts): every address under /account/calendar.
   ["GET", `/account/calendar/${"a".repeat(32)}.ics?t=${"b".repeat(32)}`], ["POST", "/account/calendar"],
   ["POST", `/account/calendar/${"a".repeat(32)}/rotate`], ["POST", `/account/calendar/${"a".repeat(32)}/delete`],
+  // Your organization (account/org_claim.ts, org_pages.tsx): the page, its posts and its files.
+  ["GET", "/account/organization"], ["GET", "/account/organization?q=exemplar"], ["POST", "/account/organization"],
+  ["POST", "/account/organization/compare"], ["POST", "/account/organization/compare/remove"], ["POST", "/account/organization/segment"],
+  ["POST", "/account/organization/delete"], ["GET", "/account/organization/years.csv"],
 ];
 
 // A binding that notes every use and throws: the accounts database, or the

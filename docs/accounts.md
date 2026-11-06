@@ -26,6 +26,12 @@ the schema is `site/accounts_schema.sql`; the tests are
   published contracts or open tender notices (Pro, 25) and sees what
   happened to each over the last 30 data dates; Pro gets one message a data
   date with those events (*Watches*).
+- **Your organization.** Any account names the organization it is,
+  privately and unchecked, and gets a page of that organization's records by
+  fiscal year; Pro adds its records by segment, its share of a segment beside
+  up to five organizations the account chooses, its contracts ending within
+  12 months and the buyers it has won from, each as a CSV file (*Your
+  organization*).
 - **Calendar feeds.** On the Pro plan, a saved tender search becomes an
   address a calendar app subscribes to, its open notices' closings as
   events (*Calendar feeds*). Every notice and contract page also offers its
@@ -75,6 +81,7 @@ Every datetime is ISO in UTC.
 | `api_usage` | one row per API key per UTC day it was used: how many requests the keyed API counted for it that day | a path, a parameter, an address, the time of a request |
 | `watches`, `watch_mail` | the pages an account follows and its watch mail (*Watches*) | anything typed, a copy of a message |
 | `feeds` | one row per calendar feed: kind (`search`, `watchlist`, `all`), the saved search it follows, the address's secret, created and revocation times, the UTC day a calendar last read it | a time of reading, an address, a user agent |
+| `org_claims` | one row per account that named its organization: the organization id, up to five organization ids to compare it with, the share block's segment, when it was chosen and last changed (*Your organization*) | anything typed, a name, any sign of which other accounts chose the same organization |
 
 Limits: at most 25 saved searches per account (Free keeps 3), at most 5 live
 API keys, at most 5 sign-in requests per address per hour, at most 5 wrong
@@ -436,9 +443,10 @@ logs name no key.
 
 ## Deletion
 
-`/account/delete` asks for a ticked box, deletes the account's calendar
-feeds (a statement of its own, so a database without the `feeds` table
-still deletes the rest), then in one batch: revokes every
+`/account/delete` asks for a ticked box, deletes the account's watches, its
+claim of an organization and its calendar feeds (statements of their own,
+so a database without those tables still deletes the rest), then in one
+batch: revokes every
 session; deletes the saved searches (with their delivery rows, stop links
 and records marks), the API keys (their daily counts go with them, by the
 cascade on `api_usage`), the bug reports, the watches and the watch mail row, and the address's sign-in requests; and marks the user row deleted with its
@@ -1551,3 +1559,120 @@ runs the watch mail logs `no watch_mail table` and the watches page answers
 only award, grant, notice, notice_amended and notice_awarded rows (it has no
 previous night to compare with, and no award rows if the ledger is empty); the
 second night writes every kind.
+
+## Your organization
+
+An account names the organization it is, and `/account/organization` shows
+that organization's figures in one place. The claim is self-declared and
+unchecked: the site checks only that the id is one the profiles hold. It
+grants no data the profile and the analytics views do not already show a
+Pro reader, it is shown to that account alone (and to the operator's
+console), and it changes nothing public: no page, feed, sitemap or file
+names it, and the profile reads the same in every byte for every reader. Two
+accounts may claim the same organization; nothing ties one to the other. The
+code is `site/src/account/org_claim.ts` (the claim, the statements, the
+weekly block) and `org_pages.tsx` (the page and the files); the tests are
+`site/test/org-claim.test.ts`.
+
+### The page
+
+- Unclaimed: a search box that reads the hosted search with the statements
+  `/search` runs (`search_db.ts`), or a pasted profile address (or an id),
+  read from the files. Each result shows the name, city and province and the
+  records count, with a "This is us" button (`C'est nous`). The page says the
+  choice is private and changes nothing public. The post stores only an id
+  the profiles hold; a retired id is stored as the one that took its records.
+  A second claim replaces the first (another organization resets the
+  segment and the claim's date; the competitors stay).
+- Claimed: the organization linked to its profile, a Change link, a remove
+  button, the line "You have told the site this is your organization. The
+  site does not check this and shows it to no one else.", then the
+  organizations to compare (up to 5, `COMPETITORS_MAX`, added by the same
+  search, each with a remove button, kept in the order added), then the
+  blocks.
+- The blocks, all over the 10 fiscal years ending with the data date's:
+  records by fiscal year, each source apart (`ORG_COUNTS_SQL`); records by
+  segment, award notices and PSPC contract history apart, each record once
+  in its first segment, with the published contracts and grants (no segment)
+  counted beside; the share of one segment's counted value by fiscal year
+  for the organization and its competitors, in their order, with the
+  segment's whole value as the denominator (supplier-withheld records count
+  in it and in nobody's share; an organization with no record in a year
+  shows 0%), one source at a time (award notices by default, PSPC contract
+  history as a tab), the segment chosen or else the organization's largest;
+  its contracts ending within 12 months, the radar's own rows for
+  `/expiring/12m?supplier=<id>`, 25 shown; the buyers it has records with
+  (up to 100 by records over ten fiscal years, 25 shown), each source's
+  records and value apart, each buyer's open notices from the buyers index
+  (linked `/tenders?buyer=`) and its contracts ending within 12 months
+  (linked `/expiring/12m?buyer=`); and the registry match as the profile
+  shows it.
+- Free sees the first block for the latest 3 fiscal years and every other
+  block's title with the Pro chip and one line of what it holds. Pro
+  (`analytics`) sees every block and a CSV file of each:
+  `/account/organization/<years|segments|share|ending|buyers>.csv`, at most
+  10,000 rows, sent `private, no-store`, a download under the per-address
+  limit; anyone else gets the site's 404, and a records database that cannot
+  answer gives 503.
+- The page is `private, no-store` and `noindex`. With the records database
+  missing, loading or failing it still shows the claim and the competitors
+  and says the figures are not available right now.
+- Merges: a claimed id the nightly retired is pointed at the surviving one on
+  the next view (`loadAlias`, as watches follow it); a competitor merged the
+  same way follows; one that no longer exists, or became the same as another,
+  is dropped with a line.
+
+### Statements and bounds
+
+One claim per account; 5 competitors (held in the update, which writes only
+over the list the page read, and by the table's CHECK); 10 fiscal years in
+any statement; 100 buyers, 25 shown; one records batch per page view, the
+state row and at most 8 statements (6 for Pro, 1 for Free); CSV files of at
+most 10,000 rows. Every records statement is a constant bound to checked
+values and ends in a LIMIT; the test reads each plan. The share statement
+keeps the rows and binds of the organization view's (`ORG_SHARE_SQL`) for
+the six organizations named, and reads them through `records_org` rather
+than the whole segment through `records_segment` (the organization view also
+offers the segment's largest others, which needs the whole segment); the
+test holds its rows equal to `ORG_SHARE_SQL`'s. The buyers block reads
+`rec_details_org` and, per buyer, `rec_expiring_buyer` over the radar's
+window.
+
+### The weekly block
+
+`orgWeekOpening` builds the block the spec puts at the head of an account's
+weekly watch mail: "Your organization: <name>", then up to three lines, each
+a count with its link (new records naming the organization in the last 7
+data dates, from `rec_events` through `rec_events_org`; its contracts ending
+within 12 months, with the soonest end and their value; the buyers it has
+won from that posted new notices in the week, from `rec_events` through
+`rec_events_buyer`). A week with nothing is the single line "Your
+organization: nothing new this week." The records database must be at the
+run's data date, or the block is left out. `watchDigest` (`digests.ts`) takes
+it as `opening` and puts it before the watches; a message with the block and
+no watch event carries the block alone, under its own subject. The watch
+mail's run (`watch_mail.ts`) does not call it yet; when it does, it passes
+the block on the account's weekly day and sends a message that would
+otherwise be empty when the block has a line.
+
+### Privacy and the console
+
+The row is a user id, an organization id, up to five organization ids, a
+segment and two times. The audit row `org_claimed` carries the organization
+id (not personal data), never the address; `org_unclaimed` and `org_compare`
+carry a fixed word. The row goes with the account (`deleteClaimOf`, before
+the deletion batch). The console's overview shows the claims in all, those
+of the last 7 days and the 10 most-claimed organization ids (a spike on one
+id may be accounts claiming a rival, which reads nothing the profile does not
+show); the user page shows the account's claim, its competitor ids and its
+segment.
+
+### Operator step
+
+```
+npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+```
+
+Idempotent. It adds `org_claims` and its two indexes; until it runs the
+page answers 503 and the overview leaves the line out. Apply it before
+deploying.

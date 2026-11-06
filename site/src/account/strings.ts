@@ -1386,4 +1386,286 @@ export const ACCOUNT_STRINGS = {
     en: "Watches on up to {n} organizations, buyers, published contracts and tender notices, each event sent by email daily or weekly; the Free plan follows {free} without email.",
     fr: "Des suivis de jusqu'à {n} organisations, acheteurs, contrats publiés et appels d'offres, chaque événement envoyé par courriel chaque jour ou chaque semaine; le forfait Gratuit en suit {free} sans courriel.",
   },
+
+  // -- your organization (org_claim.ts, org_pages.tsx) ------------------------------
+  "orgclaim.title": { en: "Your Organization", fr: "Votre organisation" },
+  "orgclaim.title_short": { en: "Your organization", fr: "Votre organisation" },
+  "orgclaim.overview_none": { en: "None chosen yet", fr: "Aucune organisation choisie pour le moment" },
+  "orgclaim.lead": {
+    en: "Tell the site which organization is yours to see, in one place, its records by fiscal year and segment, its share of a segment beside up to five organizations you choose, its contracts ending within 12 months and the buyers it has won from.",
+    fr: "Indiquez au site quelle organisation est la vôtre pour voir au même endroit ses dossiers par exercice et par segment, sa part d'un segment à côté de jusqu'à cinq organisations de votre choix, ses contrats prenant fin d'ici 12 mois et les acheteurs auprès desquels elle a obtenu des contrats.",
+  },
+  "orgclaim.lead_claimed": {
+    en: "The figures of {name}, the organization you told the site is yours, from the same records as its profile.",
+    fr: "Les chiffres de {name}, l'organisation que vous avez indiquée comme la vôtre, tirés des mêmes dossiers que son profil.",
+  },
+  "orgclaim.panel_find": { en: "Find Your Organization", fr: "Trouver votre organisation" },
+  "orgclaim.search_label": { en: "Organization name, or the address of its profile", fr: "Nom de l'organisation, ou adresse de son profil" },
+  "orgclaim.compare_label": {
+    en: "Add an organization: its name, or the address of its profile",
+    fr: "Ajouter une organisation : son nom, ou l'adresse de son profil",
+  },
+  "orgclaim.search_note": {
+    en: "The search reads the names the site holds, as the site search does; the address of a profile finds that profile.",
+    fr: "La recherche porte sur les noms que le site connaît, comme la recherche du site; l'adresse d'un profil trouve ce profil.",
+  },
+  "orgclaim.search_button": { en: "Search", fr: "Chercher" },
+  "orgclaim.private": {
+    en: "Your choice is private to your account and changes nothing public: no page, feed or file shows it, and the organization's profile reads the same for every reader.",
+    fr: "Votre choix reste privé à votre compte et ne change rien de public : aucune page, aucun fil ni aucun fichier ne le montre, et le profil de l'organisation reste le même pour tous les lecteurs.",
+  },
+  "orgclaim.private_claimed": {
+    en: "You have told the site this is your organization. The site does not check this and shows it to no one else.",
+    fr: "Vous avez indiqué au site que c'est votre organisation. Le site ne le vérifie pas et ne le montre à personne d'autre.",
+  },
+  "orgclaim.panel_results": { en: "Results", fr: "Résultats" },
+  "orgclaim.search_unavailable": {
+    en: "The search is not available right now. Paste the address of the organization's profile instead.",
+    fr: "La recherche n'est pas disponible pour le moment. Collez plutôt l'adresse du profil de l'organisation.",
+  },
+  "orgclaim.search_none": {
+    en: "No organization matches. Try fewer words, or paste the address of its profile.",
+    fr: "Aucune organisation ne correspond. Essayez moins de mots, ou collez l'adresse de son profil.",
+  },
+  "orgclaim.search_first": { en: "The first {n} of {total} organizations that match.", fr: "Les {n} premières des {total} organisations qui correspondent." },
+  "orgclaim.search_count_one": { en: "{n} organization matches.", fr: "{n} organisation correspond." },
+  "orgclaim.search_count_many": { en: "{n} organizations match.", fr: "{n} organisations correspondent." },
+  "orgclaim.col_claim": { en: "Choose", fr: "Choisir" },
+  "orgclaim.col_compare": { en: "Compare", fr: "Comparer" },
+  "orgclaim.this_is_us": { en: "This is us", fr: "C'est nous" },
+  "orgclaim.compare": { en: "Compare", fr: "Comparer" },
+  "orgclaim.is_yours": { en: "Your organization", fr: "Votre organisation" },
+  "orgclaim.in_set": { en: "Already compared", fr: "Déjà comparée" },
+  "orgclaim.set_full_short": { en: "The comparison is full", fr: "La comparaison est complète" },
+  "orgclaim.changing": {
+    en: "You told the site {name} is yours. Choosing another replaces it.",
+    fr: "Vous avez indiqué {name} comme la vôtre. En choisir une autre la remplace.",
+  },
+  "orgclaim.keep": { en: "Keep it", fr: "La garder" },
+  "orgclaim.records_one": { en: "{n} record", fr: "{n} dossier" },
+  "orgclaim.records_many": { en: "{n} records", fr: "{n} dossiers" },
+
+  // The blocks.
+  "orgclaim.panel_years": { en: "Records by Fiscal Year", fr: "Dossiers par exercice" },
+  "orgclaim.years_lead": {
+    en: "Each source apart, {first} to {last}: the records naming the organization and their counted value.",
+    fr: "Chaque source à part, de {first} à {last} : les dossiers qui nomment l'organisation et leur valeur comptée.",
+  },
+  "orgclaim.foot_years": {
+    en: "A figure never adds two sources: one contract can appear in several.",
+    fr: "Un chiffre n'additionne jamais deux sources : un même contrat peut figurer dans plusieurs.",
+  },
+  "orgclaim.free_years": {
+    en: "The Free plan shows the latest {n} fiscal years; Pro shows {max} and the blocks below.",
+    fr: "Le forfait Gratuit montre les {n} derniers exercices; Pro en montre {max}, avec les blocs ci-dessous.",
+  },
+  "orgclaim.none_years": {
+    en: "No record naming this organization in the last {n} fiscal years.",
+    fr: "Aucun dossier ne nomme cette organisation au cours des {n} derniers exercices.",
+  },
+  "orgclaim.panel_segments": { en: "Records by Segment", fr: "Dossiers par segment" },
+  "orgclaim.foot_segments": {
+    en: "Each record counts once, in its first UNSPSC segment. Published contracts and grants carry no segment and are not in this table (published contracts: {contracts}; grants: {grants}).",
+    fr: "Chaque dossier compte une fois, dans son premier segment UNSPSC. Les contrats publiés et les subventions ne portent aucun segment et ne figurent pas dans ce tableau (contrats publiés : {contracts}; subventions : {grants}).",
+  },
+  "orgclaim.none_segments": {
+    en: "No award notice or PSPC contract history record names this organization in the last {n} fiscal years.",
+    fr: "Aucun avis d'attribution ni dossier de l'historique des contrats de SPAC ne nomme cette organisation au cours des {n} derniers exercices.",
+  },
+  "orgclaim.panel_share": { en: "Share of a Segment", fr: "Part d'un segment" },
+  "orgclaim.share_lead": {
+    en: "Each organization's share of the counted value of segment {segment}, {source}, by fiscal year; the segment's whole value is the denominator.",
+    fr: "La part de chaque organisation dans la valeur comptée du segment {segment}, {source}, par exercice; la valeur totale du segment est le dénominateur.",
+  },
+  "orgclaim.share_caveat": {
+    en: "Records whose supplier is withheld count in the segment's value and in no organization's share; an organization with no record in a year shows 0%.",
+    fr: "Les dossiers dont le fournisseur est caché comptent dans la valeur du segment et dans la part d'aucune organisation; une organisation sans dossier pour un exercice affiche 0 %.",
+  },
+  "orgclaim.share_alone": {
+    en: "Add up to {n} organizations to compare in the panel above; until then the block shows yours alone.",
+    fr: "Ajoutez jusqu'à {n} organisations à comparer dans le panneau ci-dessus; d'ici là, le bloc montre la vôtre seule.",
+  },
+  "orgclaim.col_segment_value": { en: "Segment value", fr: "Valeur du segment" },
+  "orgclaim.share_period": { en: "{n} fiscal years", fr: "{n} exercices" },
+  "orgclaim.none_share": {
+    en: "No record of this source ({source}) names this organization in a segment in the last {n} fiscal years.",
+    fr: "Aucun dossier de cette source ({source}) ne nomme cette organisation dans un segment au cours des {n} derniers exercices.",
+  },
+  "orgclaim.none_share_value": { en: "The segment has no counted value in these fiscal years.", fr: "Le segment n'a aucune valeur comptée pour ces exercices." },
+  "orgclaim.segment_largest": { en: "The largest: {segment}", fr: "Le plus important : {segment}" },
+  "orgclaim.foot_share": {
+    en: "The organizations compared are the ones you chose, in the order you added them.",
+    fr: "Les organisations comparées sont celles que vous avez choisies, dans l'ordre où vous les avez ajoutées.",
+  },
+  "orgclaim.panel_ending": { en: "Contracts Ending Within 12 Months", fr: "Contrats prenant fin d'ici 12 mois" },
+  "orgclaim.ending_lead_one": {
+    en: "{n} contract of this organization ends within 12 months of the data date, on {date}; its counted value is {total}.",
+    fr: "{n} contrat de cette organisation prend fin d'ici 12 mois après la date des données, le {date}; sa valeur comptée est de {total}.",
+  },
+  "orgclaim.ending_lead_many": {
+    en: "{n} contracts of this organization end within 12 months of the data date, the soonest on {date}; their counted value is {total}.",
+    fr: "{n} contrats de cette organisation prennent fin d'ici 12 mois après la date des données, le plus proche le {date}; leur valeur comptée est de {total}.",
+  },
+  "orgclaim.ending_all": { en: "All {n} on the 12-month list", fr: "Les {n} dans la liste sur 12 mois" },
+  "orgclaim.ending_list": { en: "On the 12-month list", fr: "Dans la liste sur 12 mois" },
+  "orgclaim.none_ending": {
+    en: "No contract of this organization ends within 12 months of the data date.",
+    fr: "Aucun contrat de cette organisation ne prend fin d'ici 12 mois après la date des données.",
+  },
+  "orgclaim.panel_buyers": { en: "Buyers It Has Won From", fr: "Acheteurs auprès desquels elle a obtenu des contrats" },
+  "orgclaim.col_its_records": { en: "Its records with the buyer", fr: "Ses dossiers avec l'acheteur" },
+  "orgclaim.col_open": { en: "Open notices", fr: "Avis ouverts" },
+  "orgclaim.col_ending": { en: "Ending within 12 months", fr: "Fin d'ici 12 mois" },
+  "orgclaim.foot_buyers": {
+    en: "Up to {n} buyers, those with the most records naming the organization over the last ten fiscal years: the first {shown} here, all of them in the CSV file, and every record in {records}. Open notices are the buyer's now; contracts ending are the buyer's within 12 months, whoever holds them.",
+    fr: "Jusqu'à {n} acheteurs, ceux qui ont le plus de dossiers nommant l'organisation au cours des dix derniers exercices : les {shown} premiers ici, tous dans le fichier CSV, et chaque dossier dans {records}. Les avis ouverts sont ceux de l'acheteur en ce moment; les contrats prenant fin sont ceux de l'acheteur d'ici 12 mois, quel qu'en soit le titulaire.",
+  },
+  "orgclaim.records_link": { en: "its record table", fr: "son tableau de dossiers" },
+  "orgclaim.none_buyers": {
+    en: "No record names this organization and a buyer in the last {n} fiscal years.",
+    fr: "Aucun dossier ne nomme cette organisation et un acheteur au cours des {n} derniers exercices.",
+  },
+  "orgclaim.panel_registry": { en: "Registry Match", fr: "Correspondance au registre" },
+  "orgclaim.tease_segments": {
+    en: "Its award notices and PSPC contract history by UNSPSC segment over ten fiscal years, with the CSV file.",
+    fr: "Ses avis d'attribution et son historique des contrats de SPAC par segment UNSPSC sur dix exercices, avec le fichier CSV.",
+  },
+  "orgclaim.tease_share": {
+    en: "Its share of a segment's counted value by fiscal year beside up to {n} organizations you choose, with the segment's whole value as the denominator.",
+    fr: "Sa part de la valeur comptée d'un segment par exercice à côté de jusqu'à {n} organisations de votre choix, avec la valeur totale du segment comme dénominateur.",
+  },
+  "orgclaim.tease_ending": {
+    en: "Its own contracts ending within 12 months, soonest first, with their amendments and value growth.",
+    fr: "Ses propres contrats prenant fin d'ici 12 mois, les plus proches d'abord, avec leurs modifications et la croissance de leur valeur.",
+  },
+  "orgclaim.tease_buyers": {
+    en: "The buyers it has won from, each with its notices open now and its contracts ending within 12 months.",
+    fr: "Les acheteurs auprès desquels elle a obtenu des contrats, chacun avec ses avis ouverts et ses contrats prenant fin d'ici 12 mois.",
+  },
+  "orgclaim.tease_registry": {
+    en: "The corporate registry entries matched to it, with the grade of each match.",
+    fr: "Les inscriptions au registre des sociétés qui lui sont associées, avec le degré de chaque correspondance.",
+  },
+
+  // The claim and the comparison.
+  "orgclaim.panel_claim": { en: "Your Choice", fr: "Votre choix" },
+  "orgclaim.field_since": { en: "Chosen on", fr: "Choisie le" },
+  "orgclaim.change": { en: "Change", fr: "Changer" },
+  "orgclaim.remove_claim": { en: "Remove your choice", fr: "Retirer votre choix" },
+  "orgclaim.panel_compare": { en: "Organizations to Compare", fr: "Organisations à comparer" },
+  "orgclaim.compare_n": { en: "{n} of {max}", fr: "{n} sur {max}" },
+  "orgclaim.foot_compare": {
+    en: "Up to {n}, any organization with a profile; the share block shows them in this order.",
+    fr: "Jusqu'à {n}, toute organisation qui a un profil; le bloc des parts les montre dans cet ordre.",
+  },
+  "orgclaim.compare_remove": { en: "Remove", fr: "Retirer" },
+  "orgclaim.compare_none": { en: "None yet. Add up to {n} with the search below.", fr: "Aucune pour le moment. Ajoutez-en jusqu'à {n} avec la recherche ci-dessous." },
+  "orgclaim.set_full": {
+    en: "The comparison holds {n}, the most it takes. Remove one to add another.",
+    fr: "La comparaison en compte {n}, le maximum. Retirez-en une pour en ajouter une autre.",
+  },
+  "orgclaim.gone_title": { en: "Profile No Longer in the Data", fr: "Profil absent des données" },
+  "orgclaim.gone_text": {
+    en: "The files no longer hold this organization's profile, and no other profile took its records. Change your choice to pick the organization again.",
+    fr: "Les fichiers ne contiennent plus le profil de cette organisation, et aucun autre profil n'a repris ses dossiers. Changez votre choix pour désigner de nouveau l'organisation.",
+  },
+  "orgclaim.unavailable_title": { en: "Figures Not Available Right Now", fr: "Chiffres non disponibles pour le moment" },
+  "orgclaim.unavailable_text": {
+    en: "The records database could not be read. Your choice and the organizations you compare are kept; try again later.",
+    fr: "La base des dossiers n'a pas pu être lue. Votre choix et les organisations comparées sont conservés; réessayez plus tard.",
+  },
+  "orgclaim.msg_claimed": { en: "Saved. Only your account sees which organization you chose.", fr: "Enregistré. Seul votre compte voit l'organisation choisie." },
+  "orgclaim.msg_unclaimed": { en: "Your choice is removed.", fr: "Votre choix est retiré." },
+  "orgclaim.msg_added": { en: "Added to the comparison.", fr: "Ajoutée à la comparaison." },
+  "orgclaim.msg_compare_removed": { en: "Removed from the comparison.", fr: "Retirée de la comparaison." },
+  "orgclaim.msg_exists": { en: "That organization is already in the comparison.", fr: "Cette organisation figure déjà dans la comparaison." },
+  "orgclaim.msg_self": {
+    en: "That is your own organization; it is always in the comparison.",
+    fr: "C'est votre propre organisation; elle figure toujours dans la comparaison.",
+  },
+  "orgclaim.msg_full": {
+    en: "The comparison holds five organizations already, the most it takes. Remove one first.",
+    fr: "La comparaison compte déjà cinq organisations, le maximum. Retirez-en une d'abord.",
+  },
+  "orgclaim.msg_busy": {
+    en: "The comparison changed in another window; nothing was saved. Try again.",
+    fr: "La comparaison a changé dans une autre fenêtre; rien n'a été enregistré. Réessayez.",
+  },
+  "orgclaim.msg_segment": { en: "The share block's segment is saved.", fr: "Le segment du bloc des parts est enregistré." },
+  "orgclaim.msg_moved": {
+    en: "The organization you chose was merged into another profile; your choice now follows that profile.",
+    fr: "L'organisation choisie a été fusionnée avec un autre profil; votre choix suit maintenant ce profil.",
+  },
+  "orgclaim.msg_repointed_one": {
+    en: "{n} organization in the comparison was merged into another profile, which it now follows.",
+    fr: "{n} organisation de la comparaison a été fusionnée avec un autre profil, qu'elle suit maintenant.",
+  },
+  "orgclaim.msg_repointed_many": {
+    en: "{n} organizations in the comparison were merged into other profiles, which they now follow.",
+    fr: "{n} organisations de la comparaison ont été fusionnées avec d'autres profils, qu'elles suivent maintenant.",
+  },
+  "orgclaim.msg_dropped_one": {
+    en: "{n} organization is no longer in the data and was taken out of the comparison.",
+    fr: "{n} organisation n'est plus dans les données et a été retirée de la comparaison.",
+  },
+  "orgclaim.msg_dropped_many": {
+    en: "{n} organizations are no longer in the data and were taken out of the comparison.",
+    fr: "{n} organisations ne sont plus dans les données et ont été retirées de la comparaison.",
+  },
+  "orgclaim.err_org": {
+    en: "No organization profile has that address. Use a result's button, or paste the address of its profile.",
+    fr: "Aucun profil d'organisation n'a cette adresse. Utilisez le bouton d'un résultat, ou collez l'adresse de son profil.",
+  },
+
+  // The account's other pages, the privacy page, the console and the Pro page.
+  "orgclaim.delete": {
+    en: "The organization you told the site is yours, and the organizations you compare it with.",
+    fr: "L'organisation que vous avez indiquée comme la vôtre, et celles avec lesquelles vous la comparez.",
+  },
+  "orgclaim.privacy": {
+    en: "If you tell the site which organization is yours, the account keeps that organization's id, up to five others you compare it with and the share block's segment. No public page, feed or file shows them; they go with the account.",
+    fr: "Si vous indiquez au site quelle organisation est la vôtre, le compte conserve l'identifiant de cette organisation, jusqu'à cinq autres avec lesquelles vous la comparez et le segment du bloc des parts. Aucune page, aucun fil ni aucun fichier public ne les montre; ils disparaissent avec le compte.",
+  },
+  "orgclaim.admin_panel": { en: "Organizations Chosen", fr: "Organisations choisies" },
+  "orgclaim.admin_all": { en: "Accounts with a choice", fr: "Comptes ayant fait un choix" },
+  "orgclaim.admin_week": { en: "Chosen in the last {n} days", fr: "Choisies au cours des {n} derniers jours" },
+  "orgclaim.admin_top": { en: "Most chosen ({n} at most)", fr: "Les plus choisies ({n} au plus)" },
+  "orgclaim.admin_competitors": { en: "Compared with", fr: "Comparée avec" },
+  "orgclaim.admin_largest": { en: "largest (default)", fr: "le plus important (par défaut)" },
+  "orgclaim.admin_none": { en: "No organization chosen.", fr: "Aucune organisation choisie." },
+  "orgclaim.pro_include": {
+    en: "your own organization's page: its records by segment, its share of a segment beside organizations you choose, its contracts ending and the buyers it has won from",
+    fr: "la page de votre organisation : ses dossiers par segment, sa part d'un segment à côté d'organisations de votre choix, ses contrats prenant fin et les acheteurs auprès desquels elle a obtenu des contrats",
+  },
+  "orgclaim.pro_page": {
+    en: "Your organization: tell the site privately which organization is yours and see its records by segment, its share of a segment beside up to {n} organizations you choose, its contracts ending within 12 months and the buyers it has won from, each with a CSV file; the Free plan shows its records for the latest {free} fiscal years.",
+    fr: "Votre organisation : indiquez au site, en privé, quelle organisation est la vôtre et voyez ses dossiers par segment, sa part d'un segment à côté de jusqu'à {n} organisations de votre choix, ses contrats prenant fin d'ici 12 mois et les acheteurs auprès desquels elle a obtenu des contrats, chacun avec un fichier CSV; le forfait Gratuit montre ses dossiers des {free} derniers exercices.",
+  },
+
+  // The weekly block of the watch mail (org_claim.ts weekOpening).
+  "orgclaim.week_subject": { en: "Your organization this week: {name}", fr: "Votre organisation cette semaine : {name}" },
+  "orgclaim.week_heading": { en: "Your organization: {name}", fr: "Votre organisation : {name}" },
+  "orgclaim.week_nothing": { en: "Your organization: nothing new this week.", fr: "Votre organisation : rien de nouveau cette semaine." },
+  "orgclaim.week_records": { en: "New records naming you this week: {n} ({parts})", fr: "Nouveaux dossiers vous nommant cette semaine : {n} ({parts})" },
+  "orgclaim.week_awards_one": { en: "{n} award notice", fr: "{n} avis d'attribution" },
+  "orgclaim.week_awards_many": { en: "{n} award notices", fr: "{n} avis d'attribution" },
+  "orgclaim.week_history_one": { en: "{n} PSPC contract history record", fr: "{n} dossier de l'historique des contrats de SPAC" },
+  "orgclaim.week_history_many": { en: "{n} PSPC contract history records", fr: "{n} dossiers de l'historique des contrats de SPAC" },
+  "orgclaim.week_contracts_one": { en: "{n} published contract", fr: "{n} contrat publié" },
+  "orgclaim.week_contracts_many": { en: "{n} published contracts", fr: "{n} contrats publiés" },
+  "orgclaim.week_grants_one": { en: "{n} grant", fr: "{n} subvention" },
+  "orgclaim.week_grants_many": { en: "{n} grants", fr: "{n} subventions" },
+  "orgclaim.week_ending": {
+    en: "Your contracts ending within 12 months: {n}, soonest {date} ({total} in all)",
+    fr: "Vos contrats prenant fin d'ici 12 mois : {n}, le plus proche le {date} ({total} en tout)",
+  },
+  "orgclaim.week_ending_no_total": {
+    en: "Your contracts ending within 12 months: {n}, soonest {date}",
+    fr: "Vos contrats prenant fin d'ici 12 mois : {n}, le plus proche le {date}",
+  },
+  "orgclaim.week_buyers": {
+    en: "Buyers you have won from with new notices this week: {names}",
+    fr: "Acheteurs dont vous avez déjà obtenu des contrats et qui ont publié de nouveaux avis cette semaine : {names}",
+  },
+  "orgclaim.week_buyers_more": { en: "{names} and {n} more", fr: "{names} et {n} de plus" },
 } as const satisfies Record<string, { en: string; fr: string }>;

@@ -377,3 +377,26 @@ CREATE TABLE IF NOT EXISTS feeds (
 );
 CREATE INDEX IF NOT EXISTS idx_feeds_user ON feeds(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_feeds_live ON feeds(user_id, kind, COALESCE(search_id, '')) WHERE revoked_at IS NULL;
+
+-- The organization an account says it is ("Your organization",
+-- src/account/org_claim.ts; docs/accounts.md, Your organization): one row per
+-- account, self-declared and unchecked, shown to that account alone and on
+-- no public page. organization_id is an org-<ten hex digits> the profiles
+-- hold, checked as the profile checks it when it is written; segment is the
+-- share block's UNSPSC segment (NULL: the organization's largest);
+-- competitors is a JSON list of up to five other organization ids, in the
+-- order the account chose them. created_at is when this organization was
+-- claimed (a claim of another organization starts it again); updated_at
+-- moves with any change. Two accounts may claim the same organization;
+-- nothing here ties one to the other. Goes with the account.
+CREATE TABLE IF NOT EXISTS org_claims (
+  user_id TEXT PRIMARY KEY REFERENCES users(id),
+  organization_id TEXT NOT NULL,
+  segment TEXT CHECK (segment IS NULL OR segment GLOB '[0-9][0-9]'),
+  competitors TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(competitors) AND json_array_length(competitors) <= 5),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+-- The console's most-claimed organizations, and its claims of the week.
+CREATE INDEX IF NOT EXISTS idx_org_claims_org ON org_claims(organization_id);
+CREATE INDEX IF NOT EXISTS idx_org_claims_created ON org_claims(created_at);

@@ -161,7 +161,12 @@ export function planLine(lang: Lang, account: Pick<Account, "plan" | "planUntil"
 }
 
 export function overviewView(
-  lang: Lang, account: Account, counts: { sessions: number; searches: number; cap: number; keys: number; watches?: number | null },
+  lang: Lang, account: Account,
+  counts: {
+    sessions: number; searches: number; cap: number; keys: number; watches?: number | null;
+    // The organization the account claims (org_claim.ts claimSummary): false for none, undefined before its table exists.
+    org?: { id: string; name: string | null } | false;
+  },
   extra: { billing?: BillingLine | null; notice?: string | null } = {},
 ) {
   const stripe = extra.billing?.stripe && account.plan === "pro";
@@ -201,6 +206,14 @@ export function overviewView(
             <li>
               <a href="/account/watches">{t(lang, "watches.title")}</a>
               <span class="num">{t(lang, "watches.n", { n: fmtInt(counts.watches, lang), cap: fmtInt(watchCap(account.plan), lang) })}</span>
+            </li>
+          )}
+          {counts.org === undefined ? null : (
+            <li>
+              <span>
+                <a href="/account/organization">{t(lang, "orgclaim.title_short")}</a>
+                <span class="kv-note">{counts.org ? counts.org.name ?? counts.org.id : t(lang, "orgclaim.overview_none")}</span>
+              </span>
             </li>
           )}
         </ul>
@@ -586,6 +599,7 @@ export function deleteView(lang: Lang, account: Account, errors?: Key[]) {
           <li>{t(lang, "account.delete_subscription")}</li>
           <li>{t(lang, "account.delete_searches")}</li>
           <li>{t(lang, "watches.delete")}</li>
+          <li>{t(lang, "orgclaim.delete")}</li>
           <li>{t(lang, "calfeed.delete")}</li>
           <li>{t(lang, "bugs.delete")}</li>
           <li>{t(lang, "account.delete_sessions")}</li>

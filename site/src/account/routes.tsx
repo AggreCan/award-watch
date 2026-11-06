@@ -32,6 +32,13 @@
 //   POST /account/watches/mail         the watch mail on or off                        (session, CSRF, plan to turn on)
 //   POST /account/watches/:id          the events a watch follows and its cadence      (session, CSRF)
 //   POST /account/watches/:id/delete   stop watching                                   (session, CSRF)
+//   GET  /account/organization         your organization: the claim and its blocks     (session; blocks Pro)
+//   POST /account/organization         claim one, checked against the profiles        (session, CSRF)
+//   POST /account/organization/compare         add one to compare, at most five        (session, CSRF)
+//   POST /account/organization/compare/remove  take one out                            (session, CSRF)
+//   POST /account/organization/segment the share block's segment                       (session, CSRF)
+//   POST /account/organization/delete  remove the claim                                (session, CSRF)
+//   GET  /account/organization/:block.csv  a block as a file                           (session, plan)
 //   GET  /account/billing              the plan, the prices or the subscription       (session)
 //   POST /account/billing/checkout     to the payment service's checkout              (session, CSRF)
 //   POST /account/billing/portal       to the payment service's portal                (session, CSRF)
@@ -86,6 +93,11 @@ import {
 } from "./session";
 import { CODE_MINUTES, CODES_PER_HOUR, CODE_TRIES, type Checked, checkCode, checkLink, findOrCreateUser, issueCode, sweep } from "./signin";
 import { accountsEnabled } from "./switch";
+import {
+  changeCompetitors, checkOrganization, claimOrganization, claimSummary, deleteClaim, deleteClaimOf, isClaimBlock, isShareSource, orgIdIn,
+  readClaim, setClaimSegment,
+} from "./org_claim";
+import { ORG_PATH, orgCsv, orgPage, segmentChoice } from "./org_pages";
 import { DAY_SLOTS, type WatchKind, isWatchKind, readEvents, segmentOf, targetOf, watchPath } from "./watch_events";
 import { type WatchCalendar, watchStopView, watchStoppedView, watchesView } from "./watch_pages";
 import {
@@ -97,8 +109,10 @@ export const account = new Hono<AppEnv>();
 account.use("*", async (c, next) => {
   if (!accountsEnabled(c.env)) return c.notFound();
   await next();
-  // A calendar feed is read by a calendar app, never a page: private as well.
-  c.header("Cache-Control", FEED_ICS.test(c.req.path) ? "private, no-store" : "no-store");
+  // A calendar feed is read by a calendar app, never a page: private as
+  // well; so is the organization an account claims, its page and its files.
+  const own = FEED_ICS.test(c.req.path) || c.req.path === ORG_PATH || c.req.path.startsWith(`${ORG_PATH}/`);
+  c.header("Cache-Control", own ? "private, no-store" : "no-store");
   c.header("X-Robots-Tag", "noindex, nofollow");
 });
 
@@ -313,9 +327,10 @@ account.get("/", async (c) => {
       "(SELECT COUNT(*) FROM api_keys WHERE user_id = ?1 AND revoked_at IS NULL) AS keys",
     ).bind(who.userId, new Date().toISOString()).first<{ sessions: number; searches: number; keys: number }>();
     const watching = await watchCount(c.env, who.userId);
+    const org = await claimSummary(c.env, who.userId);
     return accountPage(c, t(lang, "account.title"), overviewView(lang, who, {
       sessions: counts?.sessions ?? 0, searches: counts?.searches ?? 0, cap: capFor(who), keys: counts?.keys ?? 0,
-      watches: watching?.n ?? null,
+      watches: watching?.n ?? null, org,
     }, {
       billing: await billingLine(c.env, who.userId),
       // Stripe's checkout returns here; the plan changes when its notice lands, often a moment later.
@@ -778,6 +793,100 @@ account.post("/watches/:id", async (c) => {
   });
 });
 
+// -- your organization (org_claim.ts, org_pages.tsx) ---------------------------------------------
+
+// Back to the page with the line of what the post did, in the reader's language.
+function orgBack(c: Context<AppEnv>, m: string, more = ""): Response {
+  const q = [m ? `m=${m}` : "", more, c.get("lang") === "fr" ? "lang=fr" : ""].filter(Boolean).join("&");
+  return c.redirect(`${ORG_PATH}${q ? `?${q}` : ""}`, 303);
+}
+
+account.get("/organization", async (c) => {
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => orgPage(c, who));
+});
+
+// A claim: the id the page's button carries (or a pasted profile address),
+// checked against the profiles; only the checked id is kept. A second claim
+// replaces the first.
+account.post("/organization", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  return guarded(c, async () => {
+    const id = orgIdIn(clean(fields, "org", 300));
+    const found = id ? await checkOrganization(c.env, id) : null;
+    if (!found) return orgPage(c, who, { errors: ["orgclaim.err_org"], status: 400 });
+    await claimOrganization(c.env, who.userId, found.id);
+    await audit(c.env, who.userId, "org_claimed", found.id);
+    return orgBack(c, "claimed");
+  });
+});
+
+// One organization more to compare with (at most five, held inside the
+// update), or one fewer.
+account.post("/organization/compare/remove", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  return guarded(c, async () => {
+    const claim = await readClaim(c.env, who.userId);
+    const id = orgIdIn(clean(fields, "org", 300));
+    if (!claim || !id) return orgBack(c, "");
+    const result = await changeCompetitors(c.env, who.userId, claim, id, false);
+    if (result === "removed") await audit(c.env, who.userId, "org_compare", "removed");
+    return orgBack(c, result === "removed" ? "removed" : result === "busy" ? "busy" : "");
+  });
+});
+
+account.post("/organization/compare", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  return guarded(c, async () => {
+    const claim = await readClaim(c.env, who.userId);
+    if (!claim) return orgBack(c, "");
+    const id = orgIdIn(clean(fields, "org", 300));
+    const found = id ? await checkOrganization(c.env, id) : null;
+    if (!found) return orgPage(c, who, { errors: ["orgclaim.err_org"], status: 400 });
+    const result = await changeCompetitors(c.env, who.userId, claim, found.id, true);
+    if (result === "added") await audit(c.env, who.userId, "org_compare", "added");
+    return orgBack(c, result === "none" ? "" : result);
+  });
+});
+
+account.post("/organization/segment", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  const segment = segmentChoice(fields.segment);
+  if (segment === false) return c.text(t(c.get("lang"), "form.rejected"), 400);
+  const source = isShareSource(fields.source) && fields.source !== "awards" ? `source=${fields.source}` : "";
+  return guarded(c, async () => {
+    const saved = await setClaimSegment(c.env, who.userId, segment);
+    return orgBack(c, saved ? "segment" : "", source);
+  });
+});
+
+account.post("/organization/delete", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who } = post;
+  return guarded(c, async () => {
+    if (await deleteClaim(c.env, who.userId)) await audit(c.env, who.userId, "org_unclaimed");
+    return orgBack(c, "unclaimed");
+  });
+});
+
+account.get("/organization/:file{[a-z]+\\.csv}", async (c) => {
+  const block = (c.req.param("file") ?? "").replace(/\.csv$/, "");
+  if (!isClaimBlock(block)) return c.notFound();
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => orgCsv(c, who, block));
+});
+
 // -- API keys ----------------------------------------------------------------------------------------
 
 async function keysPage(c: Context<AppEnv>, who: Account, extra: { created?: string; errors?: Key[]; status?: number } = {}) {
@@ -853,16 +962,18 @@ account.get("/delete", async (c) => {
 // SHA-256 of a random salt and the address, the salt thrown away: the row
 // cannot be matched to the address, and the address can sign up afresh.
 // Sessions are revoked; calendar feeds, saved searches (with their stop
-// links, delivery rows and records marks), keys, bug reports and sign-in
-// requests are deleted; so are the address's rows in the alerts form's
-// table. The entitlement rows stay, tied to the id alone, as the record of
-// what was granted. The feeds go first, on their own (feeds.ts), so a
-// database without their table yet still deletes the rest.
+// links, delivery rows and records marks), keys, bug reports, the claim of
+// an organization and sign-in requests are deleted; so are the address's
+// rows in the alerts form's table. The entitlement rows stay, tied to the
+// id alone, as the record of what was granted. The watches, the claim and
+// the feeds go first, each on its own, so a database without their tables
+// yet still deletes the rest.
 export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new Date()): Promise<void> {
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
   const tomb = `deleted:${await sha256Hex(`${randomHex(32)}\n${who.email}`)}`;
   await deleteWatchesOf(c.env, who.userId);
+  await deleteClaimOf(c.env, who.userId);
   await deleteFeeds(c.env, { userId: who.userId });
   await db.batch([
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, who.userId),

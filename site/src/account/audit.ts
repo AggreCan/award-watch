@@ -11,7 +11,10 @@ export type AuditEvent =
   | "search_added" | "search_changed" | "search_deleted" | "searches_imported"
   | "key_created" | "key_revoked" | "key_refused" | "plan_changed" | "deleted" | "delivery_stopped"
   | "watch_added" | "watch_changed" | "watch_removed" | "watch_mail" | "watch_mail_stopped"
-  | "feed_created" | "feed_rotated" | "feed_removed";
+  | "feed_created" | "feed_rotated" | "feed_removed"
+  // Your organization (org_claim.ts): org_claimed carries the organization id
+  // (not personal data), never the address; the others a fixed word.
+  | "org_claimed" | "org_unclaimed" | "org_compare";
 
 export const AUDIT_DAYS = 90;
 

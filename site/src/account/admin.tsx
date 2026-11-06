@@ -56,6 +56,7 @@ import { type LiveSubscription, type PaidCharge, operatorStripe } from "./admin_
 import { endForDeletion } from "./billing";
 import { type PlanState, planFor } from "./entitlements";
 import { type FeedCounts, type FeedView, feedCounts, userFeeds } from "./feeds";
+import { CLAIM_TOP_N, type Claim, type ClaimOverview, claimDetail, claimOverview } from "./org_claim";
 import { planLabel } from "./pages";
 import { deleteAccount } from "./routes";
 import { type MailMessage, isLocalHost, senderFor } from "./sender";
@@ -268,12 +269,45 @@ const WatchesPanel = ({ lang, w }: { lang: Lang; w: WatchesSeen }) => {
   );
 };
 
+// The claims of "Your organization" (org_claim.ts claimOverview): how many,
+// how many this week, and the most-claimed organization ids. A spike on one
+// id is the thing to look at; the claim grants no data the profile does not show.
+const ClaimsPanel = ({ lang, c }: { lang: Lang; c: ClaimOverview | null }) => (c ? (
+  <Panel title={t(lang, "orgclaim.admin_panel")}>
+    <dl class="wide">
+      <dt>{t(lang, "orgclaim.admin_all")}</dt><dd>{fmtInt(c.n, lang)}</dd>
+      <dt>{t(lang, "orgclaim.admin_week", { n: WEEK_DAYS })}</dt><dd>{fmtInt(c.week, lang)}</dd>
+      <dt>{t(lang, "orgclaim.admin_top", { n: CLAIM_TOP_N })}</dt>
+      <dd>
+        {c.top.length ? c.top.map((x) => <span class="mono nw-block"><a href={`/organizations/${x.id}`}>{x.id}</a> {fmtInt(x.n, lang)}</span>)
+          : t(lang, "admin.none")}
+      </dd>
+    </dl>
+  </Panel>
+) : null);
+
+// One account's claim on its console page.
+const ClaimPanel = ({ lang, claim }: { lang: Lang; claim: Claim | false | null | undefined }) => (claim == null ? null : (
+  <Panel title={t(lang, "orgclaim.admin_panel")}>
+    {claim ? (
+      <dl class="wide">
+        <dt>{t(lang, "col.organization")}</dt><dd><a href={`/organizations/${claim.organizationId}`} class="mono">{claim.organizationId}</a></dd>
+        <dt>{t(lang, "orgclaim.admin_competitors")}</dt>
+        <dd>{claim.competitors.length ? claim.competitors.map((x) => <span class="mono nw-block"><a href={`/organizations/${x}`}>{x}</a></span>) : t(lang, "admin.none")}</dd>
+        <dt>{t(lang, "col.segment")}</dt><dd class="mono">{claim.segment ?? t(lang, "orgclaim.admin_largest")}</dd>
+        <dt>{t(lang, "orgclaim.field_since")}</dt><dd class="mono">{day(claim.createdAt)}</dd>
+      </dl>
+    ) : <p class="muted">{t(lang, "orgclaim.admin_none")}</p>}
+  </Panel>
+));
+
 // "search 3, all 1": the live calendar feeds by kind, as stored.
 const feedKinds = (lang: Lang, f: FeedCounts) =>
   f.byKind.length ? f.byKind.map((k) => `${k.kind} ${fmtInt(k.n, lang)}`).join(", ") : t(lang, "admin.none");
 
 function overviewView(
   lang: Lang, o: Overview, search: { q: string; hits: UserHit[] | null }, w: WatchesSeen = { ov: null, events: null }, feeds: FeedCounts | null = null,
+  claims: ClaimOverview | null = null,
 ) {
   const subs = o.subscriptions.length
     ? o.subscriptions.map((s) => `${s.status} ${fmtInt(s.n, lang)}`).join(", ")
@@ -332,6 +366,7 @@ function overviewView(
         </dl>
       </Panel>
       <WatchesPanel lang={lang} w={w} />
+      <ClaimsPanel lang={lang} c={claims} />
       <Panel title={t(lang, "admin.panel_audit")} count={fmtInt(o.audit.length, lang)}>
         {o.audit.length ? (
           <Table heads={[t(lang, "admin.col_time"), t(lang, "admin.col_event"), t(lang, "admin.col_account"), t(lang, "admin.col_detail")]}
@@ -354,10 +389,11 @@ admin.get("/", async (c) => {
   const lang = c.get("lang");
   return guarded(c, async () => {
     const q = (c.req.query("q") ?? "").trim().slice(0, EMAIL_MAX);
-    const [o, hits, ov, events, feeds] = await Promise.all([
+    const [o, hits, ov, events, feeds, claims] = await Promise.all([
       overview(c.env), q ? findUsers(c.env, q) : Promise.resolve(null), watchOverview(c.env), eventCounts(c.env), feedCounts(c.env),
+      claimOverview(c.env),
     ]);
-    return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }, { ov, events }, feeds));
+    return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }, { ov, events }, feeds, claims));
   });
 });
 
@@ -570,6 +606,8 @@ type UserState = {
   notice?: string | null; errors?: Key[]; until?: string; reference?: string;
   // The account's calendar feeds (feeds.ts), never their secrets; null without the table.
   feeds?: FeedView[] | null;
+  // The organization the account claims (org_claim.ts); false for none, null without the table.
+  claim?: Claim | false | null;
 };
 
 function blockLine(lang: Lang, block: BlockRow | null): string {
@@ -717,6 +755,7 @@ function userView(lang: Lang, op: Account, d: UserDetail, s: UserState, now: Dat
           </Panel>
         </>
       ) : null}
+      <ClaimPanel lang={lang} claim={s.claim} />
       <Panel title={t(lang, "admin.panel_searches")} count={fmtInt(d.searches.length, lang)}>
         {d.searches.length ? (
           <Table heads={[t(lang, "admin.col_search"), t(lang, "admin.col_kind"), t(lang, "admin.col_delivery"), t(lang, "admin.col_last")]}
@@ -791,6 +830,7 @@ async function userPage(c: Context<AppEnv>, id: string, extra: Partial<UserState
   const d = await userDetail(c.env, id, now);
   if (!d) return c.notFound();
   const feeds = await userFeeds(c.env, id);
+  const claim = await claimDetail(c.env, id);
   const plan = await planFor(c.env, d.user, now);
   const stripe = operatorStripe(c.env);
   const live = stripe && d.payment?.subscription_id ? await stripe.subscription(d.payment.subscription_id) : undefined;
@@ -798,7 +838,7 @@ async function userPage(c: Context<AppEnv>, id: string, extra: Partial<UserState
   const notice = extra.notice !== undefined ? extra.notice
     : NOTICE[m] ? t(lang, NOTICE[m], { n: fmtInt(Number(c.req.query("n") ?? "0") || 0, lang) }) : null;
   const title = d.user.status === "active" ? d.user.email : t(lang, "admin.deleted_title");
-  return adminPage(c, title, userView(lang, operatorOf(c), d, { ...extra, plan, stripeOn: !!stripe, live, notice, feeds }, now), extra.status ?? 200);
+  return adminPage(c, title, userView(lang, operatorOf(c), d, { ...extra, plan, stripeOn: !!stripe, live, notice, feeds, claim }, now), extra.status ?? 200);
 }
 
 admin.get("/users/:id", (c) => {

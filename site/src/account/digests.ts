@@ -594,6 +594,26 @@ export interface WatchDigest {
   total: number;
   // How many pages the account follows, the lead's "of the 9 pages you follow".
   watched: number;
+  // A block the message opens with, before the watches (opening below).
+  opening?: DigestOpening | null;
+}
+
+// The block a watch message opens with: the "Your organization" block
+// (org_claim.ts orgWeekOpening), a heading and its lines, each a fact with
+// its link. A message with the block and no watch event carries the block
+// alone, under the block's own subject.
+export interface DigestOpening {
+  subject: string;
+  heading: string;
+  lines: readonly { text: string; url: string }[];
+}
+
+function openingHtml(o: DigestOpening): string[] {
+  return [h2(o.heading), ...o.lines.map((l) => para(`<a href="${escapeHtml(l.url)}" style="color:${C.ink2};">${escapeHtml(l.text)}</a>`))];
+}
+
+function openingText(o: DigestOpening): string {
+  return [o.heading, ...o.lines.map((l) => `  ${l.text} · ${l.url}`)].join("\n");
 }
 
 export const WATCH_KIND_KEY: Readonly<Record<WatchKind, Key>> = {
@@ -666,15 +686,18 @@ export function watchMoreText(lang: Lang, kind: EventKind, rest: number): string
 
 export function watchDigest(o: WatchDigest): DigestMessage {
   const { lang } = o;
+  const open = o.opening ?? null;
+  const alone = open !== null && o.groups.length === 0;
   const labels = o.groups.slice(0, 2).map((g) => g.label).join(", ");
-  const subject = tn(lang, "watches.digest_subject_one", "watches.digest_subject_many", o.total, { n: fmtInt(o.total, lang), labels });
+  const subject = alone ? open.subject
+    : tn(lang, "watches.digest_subject_one", "watches.digest_subject_many", o.total, { n: fmtInt(o.total, lang), labels });
   const title = t(lang, "watches.digest_title");
   const lead = tn(lang, "watches.digest_lead_one", "watches.digest_lead_many", o.total, {
     n: fmtInt(o.total, lang), w: fmtInt(o.groups.length, lang), all: fmtInt(o.watched, lang), date: o.dataDate,
   });
   const page = siteLink(o.site, "/account/watches", lang);
-  const html: string[] = [h1(title), para(escapeHtml(lead))];
-  const text: string[] = [title, lead];
+  const html: string[] = [...(open ? openingHtml(open) : []), ...(alone ? [] : [h1(title), para(escapeHtml(lead))])];
+  const text: string[] = [...(open ? [openingText(open)] : []), ...(alone ? [] : [title, lead])];
   for (const g of o.groups) {
     const href = siteLink(o.site, g.path, lang);
     const n = g.events.reduce((sum, e) => sum + e.n, 0);
@@ -713,7 +736,8 @@ export function watchDigest(o: WatchDigest): DigestMessage {
   text.push(t(lang, "digest.text_link", { label: t(lang, "watches.digest_button"), url: page }), t(lang, "watches.digest_note"),
     `${whyText}\n${textFooter(lang)}`);
   // The first facts in words ("Kerr Wood Leidal · Contract amended"), then how many more.
-  const facts = o.groups.flatMap((g) => g.events.map((e) => `${g.label} · ${t(lang, EVENT_KEY[e.kind])}`));
+  const facts = alone ? (open.lines.length ? open.lines.map((l) => l.text) : [open.heading])
+    : o.groups.flatMap((g) => g.events.map((e) => `${g.label} · ${t(lang, EVENT_KEY[e.kind])}`));
   const pre = preheader(lang, facts, facts.length);
   return {
     to: o.to, subject, lang, headers: deliveryHeaders(o.stopUrl), text: text.join("\n\n"),

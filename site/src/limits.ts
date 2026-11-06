@@ -31,7 +31,9 @@ import { accountsEnabled } from "./account/switch";
 // files of the analytics views are downloads: each reads the records
 // database, so a script asking for every table of every buyer meets the
 // download cap rather than the pages'. A notice's or a contract's calendar
-// file (pages/ics.ts) is a download too. A Pro account's calendar feed
+// file (pages/ics.ts) is a download too, and so is a block of an account's
+// own organization as a file (/account/organization/<block>.csv), on the
+// accounts terms. A Pro account's calendar feed
 // (/account/calendar/<id>.ics, src/account/feeds.ts) gets "calendar", 20 a
 // minute, on the accounts terms: each read checks the feed in the accounts
 // database. The Atom feeds keep their wide cap of their own; the calendar
@@ -51,6 +53,9 @@ export const RECORDS_CSV = /^\/(?:expiring\/(?:3m|6m|12m)\/rows|(?:buyers|organi
 export const RECORD_ICS = /^\/(?:(?:tenders|awards|history)\/[^/]+|contracts\/[^/]+\/.+)\.ics$/;
 // A Pro account's calendar feed.
 export const FEED_ICS = /^\/account\/calendar\/[^/]+\.ics$/;
+// A block of an account's own organization as a file (src/account/org_pages.tsx):
+// a download, on the accounts terms (a page while the switch is off).
+export const ORG_CLAIM_CSV = /^\/account\/organization\/[a-z]+\.csv$/;
 
 // A HEAD request for a download (a link checker, a client asking a file's
 // size before fetching it) moves no file, so it is not counted against the
@@ -59,7 +64,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/data/feeds/")) return "feed";
   if (path.startsWith("/api/")) return "api";
   if (path.startsWith("/downloads/")) return method === "HEAD" ? "page" : "download";
-  if (ANALYTICS_CSV.test(path) || RECORDS_CSV.test(path) || RECORD_ICS.test(path) || INSTRUMENTS_CSV.test(path)) {
+  if (ANALYTICS_CSV.test(path) || RECORDS_CSV.test(path) || RECORD_ICS.test(path) || INSTRUMENTS_CSV.test(path) || ORG_CLAIM_CSV.test(path)) {
     return method === "HEAD" ? "page" : "download";
   }
   if (FEED_ICS.test(path)) return "calendar";
@@ -87,7 +92,7 @@ export function clientKey(c: Context<AppEnv>): string {
 export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response | void> {
   let bucket = bucketFor(c.req.method, c.req.path);
   const accountsOnly = bucket === "auth" || bucket === "stop" || bucket === "hook" || bucket === "calendar" ||
-    (bucket === "form" && c.req.path.startsWith("/account/"));
+    ((bucket === "form" || bucket === "download") && c.req.path.startsWith("/account/"));
   if (accountsOnly && !accountsEnabled(c.env)) bucket = "page";
   const limiter = c.env[BINDING[bucket]] as RateLimit | undefined;
   if (!limiter) return next();
