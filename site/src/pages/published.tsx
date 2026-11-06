@@ -12,6 +12,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { WatchControl, watchControl } from "../account/watch_pages";
 import { Table } from "../columns";
 import { BUYER_ID_RE, loadStats } from "../data";
 import type { AppEnv } from "../env";
@@ -164,6 +165,7 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
     })),
     jsonLd: [breadcrumbJsonLd(crumbs)],
   };
+  const watch = await watchControl(c, "contract", `contract:${dept}:${ref}`);
 
   return page(
     c,
@@ -181,6 +183,7 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
           <a href={datasetUrl("contracts", lang)} class="btn" rel="noopener">{t(lang, "contract.history_dataset")}</a>
         </>}>
         <p class="page-note"><span class="mono">{ref}</span> <CompetitiveFlag lang={lang} value={num(d.comp) as 0 | 1 | null} /></p>
+        <WatchControl lang={lang} state={watch} kind="contract" target={`contract:${dept}:${ref}`} />
       </PageHead>
 
       <div class="panel-grid">

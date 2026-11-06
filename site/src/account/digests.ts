@@ -21,6 +21,7 @@ import { type ExpiringQuery, contractReference, sitePath } from "../pages/expiri
 import { CODE_RE } from "../pages/tenders";
 import { fiscalLabel } from "../records_db";
 import type { RecordsKind, Rise } from "./records_deliveries";
+import type { EventKind, EventRow, Listed, WatchKind } from "./watch_events";
 import type { MailMessage } from "./sender";
 
 // A message and the headers it goes out with (List-Unsubscribe and its
@@ -565,5 +566,160 @@ export function recordsDigest(o: RecordsDigest): DigestMessage {
   return {
     to: o.to, subject, lang, headers: deliveryHeaders(o.stopUrl), text: text.join("\n\n"),
     html: shell({ lang, site: o.site, subject, preheader: preheader(lang, titles, titles.length), body: html.join(""), why: footer.html }),
+  };
+}
+
+// -- watches: one message per account (watch_mail.ts) ----------------------------------------
+
+// One watch's part of the message: its page, and its events by kind in the
+// watch's order, each kind with how many in all and the newest rows
+// (watch_mail.ts keeps the rows of the whole message to ROWS_MAX).
+export interface WatchGroup {
+  kind: WatchKind;
+  label: string;
+  // The watch's page, a path on the site.
+  path: string;
+  events: Listed;
+}
+
+export interface WatchDigest {
+  lang: Lang;
+  to: string;
+  site: string;
+  dataDate: string;
+  // The stop link of the account's watch mail (/account/stop?w=...&t=...).
+  stopUrl: string;
+  groups: readonly WatchGroup[];
+  // Events in all, past the rows listed.
+  total: number;
+  // How many pages the account follows, the lead's "of the 9 pages you follow".
+  watched: number;
+}
+
+export const WATCH_KIND_KEY: Readonly<Record<WatchKind, Key>> = {
+  organization: "watches.kind_organization", buyer: "watches.kind_buyer", contract: "watches.kind_contract", tender: "watches.kind_tender",
+};
+export const EVENT_KEY: Readonly<Record<EventKind, Key>> = {
+  award: "watches.ev_award", grant: "watches.ev_grant", amended: "watches.ev_amended", cancelled: "watches.ev_cancelled",
+  ends_12m: "watches.ev_ends_12m", ends_6m: "watches.ev_ends_6m", ended: "watches.ev_ended", notice: "watches.ev_notice",
+  notice_amended: "watches.ev_notice_amended", notice_closed: "watches.ev_notice_closed", notice_cancelled: "watches.ev_notice_cancelled",
+  notice_awarded: "watches.ev_notice_awarded",
+};
+
+// An event's three lines, as the message and the watches page write them:
+// the title; what happened, with its figures (an amendment's value before
+// and after, its change and an end date that moved; a closing that moved; a
+// notice's winner); the data date it was first seen, and the account's other
+// watches the same event reached.
+export function watchEventLines(lang: Lang, r: EventRow): { title: string; line2: string; line3: string } {
+  const money = (cents: number) => fmtMoney(cents / 100, lang);
+  const day = (v: string | null) => (v ? v.slice(0, 10) : null);
+  const what: string[] = [t(lang, EVENT_KEY[r.kind])];
+  const value = () => (r.cents !== null ? what.push(t(lang, "watches.line_value", { value: money(r.cents) })) : 0);
+  if (r.kind === "award" || r.kind === "grant") {
+    value();
+    if (r.endd) what.push(t(lang, "watches.line_ends", { date: r.endd }));
+  } else if (r.kind === "amended") {
+    if (r.cents !== null && r.ocents !== null) {
+      what.push(t(lang, "watches.line_was", { value: money(r.cents), was: money(r.ocents), change: valueChange(lang, r.ocents, r.cents) }));
+    } else value();
+    if (r.oendd && r.endd) what.push(t(lang, "watches.line_end_moved", { from: r.oendd, to: r.endd }));
+    if (r.namd) what.push(t(lang, "watches.line_amendment", { n: fmtInt(r.namd, lang) }));
+  } else if (r.kind === "cancelled") {
+    if (r.ocents !== null) what.push(t(lang, "watches.line_value_before", { value: money(r.ocents) }));
+  } else if (r.kind === "ends_12m" || r.kind === "ends_6m" || r.kind === "ended") {
+    if (r.endd) what.push(t(lang, r.kind === "ended" ? "watches.line_ended" : "watches.line_ends", { date: r.endd }));
+    value();
+    if (r.other) what.push(r.other);
+  } else if (r.kind === "notice") {
+    if (r.closing) what.push(t(lang, "watches.line_closes", { date: day(r.closing)! }));
+  } else if (r.kind === "notice_amended") {
+    if (r.oclosing && r.closing) what.push(t(lang, "watches.line_closing_moved", { from: day(r.oclosing)!, to: day(r.closing)! }));
+    else if (r.other) what.push(t(lang, "watches.line_title_changed"));
+    else if (r.namd) what.push(t(lang, "watches.line_amendment", { n: fmtInt(r.namd, lang) }));
+  } else if (r.kind === "notice_closed") {
+    if (r.closing) what.push(t(lang, "watches.line_closed", { date: day(r.closing)! }));
+  } else if (r.kind === "notice_awarded") {
+    what.push(r.other ? t(lang, "watches.line_awarded", { name: r.other }) : t(lang, "watches.line_withheld"));
+    value();
+  }
+  const when = [t(lang, "watches.line_found", { date: r.day })];
+  if (r.also?.length) when.push(t(lang, "watches.also", { labels: r.also.join(", ") }));
+  return { title: pick(lang, r.title, r.title_fr) ?? t(lang, "common.not_stated"), line2: what.join(" · "), line3: when.join(" · ") };
+}
+
+// An amendment's change in dollars and in percent of the value before:
+// "+$148,000, +123%" ("+148 000 $, +123 %"); the percent left out when the
+// value before was not above zero.
+export function valueChange(lang: Lang, was: number, now: number): string {
+  const diff = now - was;
+  const sign = diff < 0 ? "-" : "+";
+  const parts = [`${sign}${fmtMoney(Math.abs(diff) / 100, lang)}`];
+  if (was > 0) parts.push(`${sign}${Math.round((Math.abs(diff) / was) * 100)}${lang === "fr" ? "\u00a0%" : "%"}`);
+  return parts.join(", ");
+}
+
+// "Contract amended: 3 more on the page", after a kind's rows when it has more.
+export function watchMoreText(lang: Lang, kind: EventKind, rest: number): string {
+  return tn(lang, "watches.more_one", "watches.more_many", rest, { kind: t(lang, EVENT_KEY[kind]), n: fmtInt(rest, lang) });
+}
+
+export function watchDigest(o: WatchDigest): DigestMessage {
+  const { lang } = o;
+  const labels = o.groups.slice(0, 2).map((g) => g.label).join(", ");
+  const subject = tn(lang, "watches.digest_subject_one", "watches.digest_subject_many", o.total, { n: fmtInt(o.total, lang), labels });
+  const title = t(lang, "watches.digest_title");
+  const lead = tn(lang, "watches.digest_lead_one", "watches.digest_lead_many", o.total, {
+    n: fmtInt(o.total, lang), w: fmtInt(o.groups.length, lang), all: fmtInt(o.watched, lang), date: o.dataDate,
+  });
+  const page = siteLink(o.site, "/account/watches", lang);
+  const html: string[] = [h1(title), para(escapeHtml(lead))];
+  const text: string[] = [title, lead];
+  for (const g of o.groups) {
+    const href = siteLink(o.site, g.path, lang);
+    const n = g.events.reduce((sum, e) => sum + e.n, 0);
+    const head = `${g.label} · ${t(lang, WATCH_KIND_KEY[g.kind])}`;
+    const count = tn(lang, "watches.count_one", "watches.count_many", n, { n: fmtInt(n, lang) });
+    html.push(h2(head), para(`<a href="${escapeHtml(href)}" style="color:${C.ink2};">${escapeHtml(count)}</a>`));
+    const lines: string[] = [`${head}\n${t(lang, "digest.text_link", { label: count, url: href })}`];
+    for (const e of g.events) {
+      if (e.rows.length) {
+        html.push(rows(e.rows.map((r, i) => {
+          const l = watchEventLines(lang, r);
+          return row(l.title, siteLink(o.site, r.path, lang), escapeHtml(l.line2), escapeHtml(l.line3), i === 0);
+        })));
+        for (const r of e.rows) {
+          const l = watchEventLines(lang, r);
+          lines.push(`- ${l.title}\n  ${l.line2}\n  ${l.line3}\n  ${siteLink(o.site, r.path, lang)}`);
+        }
+      }
+      const rest = e.n - e.rows.length;
+      if (rest > 0) {
+        const more = watchMoreText(lang, e.kind, rest);
+        html.push(para(`<a href="${escapeHtml(href)}" style="color:${C.ink2};">${escapeHtml(more)}</a>`));
+        lines.push(t(lang, "digest.text_link", { label: more, url: href }));
+      }
+    }
+    text.push(lines.join("\n\n"));
+  }
+  html.push(button(page, t(lang, "watches.digest_button")), para(escapeHtml(t(lang, "watches.digest_note")), true));
+  const why = t(lang, "watches.digest_why");
+  const link = (href: string, key: Key) => `<a href="${escapeHtml(href)}" style="color:${C.muted};">${escapeHtml(t(lang, key))}</a>`;
+  const whyText = [
+    why,
+    t(lang, "digest.text_link", { label: t(lang, "watches.digest_link"), url: page }),
+    t(lang, "digest.text_link", { label: t(lang, "watches.digest_stop"), url: o.stopUrl }),
+  ].join("\n");
+  text.push(t(lang, "digest.text_link", { label: t(lang, "watches.digest_button"), url: page }), t(lang, "watches.digest_note"),
+    `${whyText}\n${textFooter(lang)}`);
+  // The first facts in words ("Kerr Wood Leidal · Contract amended"), then how many more.
+  const facts = o.groups.flatMap((g) => g.events.map((e) => `${g.label} · ${t(lang, EVENT_KEY[e.kind])}`));
+  const pre = preheader(lang, facts, facts.length);
+  return {
+    to: o.to, subject, lang, headers: deliveryHeaders(o.stopUrl), text: text.join("\n\n"),
+    html: shell({
+      lang, site: o.site, subject, preheader: pre, body: html.join(""),
+      why: `${escapeHtml(why)} ${link(page, "watches.digest_link")} · ${link(o.stopUrl, "watches.digest_stop")}`,
+    }),
   };
 }

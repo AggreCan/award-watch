@@ -652,6 +652,53 @@ CREATE TABLE IF NOT EXISTS records_sync (
   full INTEGER NOT NULL
 );
 
+-- The events the watch mail reads (records_db.derive_events, docs/analytics.md
+-- "Events"): what happened to an organization, a buyer, a published contract
+-- or a tender notice on each data date of the last 90 days. The sync sends
+-- these rows to D1's rec_events as it sends every records table (through the
+-- ledger), and drops the rows older than 90 days here, so D1 loses them on
+-- the same night. k is a hash of what the event is about, so finding it again
+-- (a night run twice, a night whose apply failed) writes nothing new.
+CREATE TABLE IF NOT EXISTS records_events (
+  k INTEGER PRIMARY KEY,
+  day TEXT NOT NULL,                             -- the data date it was first seen on
+  kind TEXT NOT NULL,                            -- records_db.EVENT_KINDS
+  src INTEGER,                                   -- 1 award notice, 2 history, 3 published contract, 4 grant, 5 tender
+  oid INTEGER,                                   -- the organization's number
+  buyer TEXT,                                    -- the buyer id
+  sid INTEGER,                                   -- the lowest UNSPSC segment
+  ref TEXT NOT NULL,                             -- what a watch on one record follows: award:, history:, contract:, grant:, tender:
+  cents INTEGER,
+  ocents INTEGER,                                -- the value before (amended, cancelled)
+  endd TEXT,
+  oendd TEXT,                                    -- the end date before, when it moved
+  closing TEXT,
+  oclosing TEXT,                                 -- a notice's closing before, when it moved
+  namd INTEGER,                                  -- the amendment number of the version that made the event
+  title TEXT,
+  title_fr TEXT,
+  other TEXT,                                    -- the other party (the holder, the winner), or a notice's title before
+  other_fr TEXT,
+  horizon INTEGER,                               -- ends_12m 365, ends_6m 182
+  more INTEGER,                                  -- a count row: the rows past the per-day cap
+  path TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS records_events_day ON records_events(day);
+
+-- What the events step compares tonight with (the previous night's state, no
+-- more): each award notice and PSPC history record (src 1, 2) with its
+-- versions after the first, its counted value and its end date, each
+-- published contract row (src 3) with its value and end date
+-- as published, and each tender notice open on the data date (src 0, n 1).
+-- Replaced whole by each night's events step.
+CREATE TABLE IF NOT EXISTS records_event_state (
+  k INTEGER PRIMARY KEY,
+  src INTEGER NOT NULL,
+  n INTEGER,
+  cents INTEGER,
+  endd TEXT                                      -- the end date, to see it move
+);
+
 -- The organization directory's pages (directory.py) as last exported, by
 -- path, each with a hash of its rows and the data date on which that hash last
 -- changed. The sitemap gives that date as the page's lastmod, so a page whose

@@ -6,6 +6,7 @@
 
 import type { Context } from "hono";
 import { accountsEnabled } from "../account/switch";
+import { WatchControl, watchControl } from "../account/watch_pages";
 import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
 import { Table } from "../columns";
 import { MONEY_SOURCES } from "../constants";
@@ -162,6 +163,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   const feeds = feedIndex?.feeds.filter((f) => f.scope === "buyer" && f.key === b.buyer.id) ?? [];
   const feed = (event: string) => feeds.find((f) => f.event === event);
   const FEED_BUTTON: [string, Key][] = [["tenders", "feeds.button_tenders"], ["awards", "feeds.button_awards"], [EXPIRING_EVENT, "expiring.feed"]];
+  const watch = await watchControl(c, "buyer", b.buyer.id);
 
   return page(
     c,
@@ -184,6 +186,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
           <a href={`/buyers/${b.buyer.id}/records`} class="btn" rel="nofollow">{t(lang, "records.link")}</a>
         </>}>
         {span ? <p class="page-note">{t(lang, "buyer.seen", { first: String(span.first), last: String(span.last) })}</p> : null}
+        <WatchControl lang={lang} state={watch} kind="buyer" target={b.buyer.id} />
       </PageHead>
 
       {/* A tile opens the source's largest values when the page has them. */}

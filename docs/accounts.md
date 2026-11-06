@@ -22,6 +22,10 @@ the schema is `site/accounts_schema.sql`; the tests are
   records of an organization, a buyer or a segment (*Phase 2: delivery*).
   Every message carries a link that turns its delivery off without signing
   in.
+- **Watches.** Any account follows up to 3 organizations, buyers,
+  published contracts or open tender notices (Pro, 25) and sees what
+  happened to each over the last 30 data dates; Pro gets one message a data
+  date with those events (*Watches*).
 - **API keys.** Issued and revoked on the account; shown once. A key of a
   Pro account opens the keyed API under `/api/v1` (*The keyed API*); the
   keys page shows each key's requests today and over 30 days.
@@ -65,6 +69,7 @@ Every datetime is ISO in UTC.
 | `audit` | user id, event name, time, a short fixed detail | an address, a code, a token, a key |
 | `bug_reports` | one row per bug report from a Pro account: the page (a path on the site), what happened, what was expected, the time | the address |
 | `api_usage` | one row per API key per UTC day it was used: how many requests the keyed API counted for it that day | a path, a parameter, an address, the time of a request |
+| `watches`, `watch_mail` | the pages an account follows and its watch mail (*Watches*) | anything typed, a copy of a message |
 
 Limits: at most 25 saved searches per account (Free keeps 3), at most 5 live
 API keys, at most 5 sign-in requests per address per hour, at most 5 wrong
@@ -426,7 +431,7 @@ logs name no key.
 `/account/delete` asks for a ticked box, then in one batch: revokes every
 session; deletes the saved searches (with their delivery rows, stop links
 and records marks), the API keys (their daily counts go with them, by the
-cascade on `api_usage`), the bug reports and the address's sign-in requests; and marks the user row deleted with its
+cascade on `api_usage`), the bug reports, the watches and the watch mail row, and the address's sign-in requests; and marks the user row deleted with its
 email replaced by `deleted:` and SHA-256 of a random salt and the address,
 the salt thrown away. The row then proves nothing about which address it
 was, and the address can sign up again as a new account. The address's rows
@@ -1282,3 +1287,132 @@ keys and the console read every account as not blocked.
   the next sign-in is refused.
 - A blocked account still holding Pro is counted by the same-day refresh's
   gate (`LIVE_PRO_SQL`), as any live Pro row is.
+
+## Watches
+
+A watch follows one page: an organization, a buyer (optionally narrowed to one
+UNSPSC segment), a single record (an award notice, a PSPC history record or a
+published contract) or an open tender notice, and lists what happens to it.
+Every signed-in account keeps watches: 3 on Free, 25 on Pro (`watchlists`,
+held to the cap inside the insert, as `addSearch` holds its own). Pro also gets
+the events by email (`watch_mail`). The code is `site/src/account/watches.ts`
+(the rows, merges, console figures), `watch_events.ts` (the records database's
+statements), `watch_pages.tsx` (the control and the page) and `watch_mail.ts`
+(the mail); the tests are `site/test/accounts-watches.test.ts`. The events come
+from `rec_events` in the records database (`docs/analytics.md`, *Events*).
+
+### The control and the page
+
+- A `Follow` button (`Suivre`) under the head of every organization, buyer,
+  award notice, history record, published contract and open tender notice
+  page. With the switch off it is not rendered and the page keeps every byte.
+  Not signed in: a link to `/account/sign-in?next=<this page>`; the sign-in
+  form, the code form and the emailed link carry `next`, and a sign-in returns
+  there (a path on this site only, never the sign-in pages). Signed in: a form
+  that posts the kind and the target with the session's CSRF value; a buyer's
+  form adds a choice of the whole buyer or one of the 57 segments. The label
+  is read from the data, never typed. A followed page reads `Following` and
+  links the watches page. A Free account at its cap sees the cap with the Pro
+  chip instead of the button; Pro at 25 sees the cap.
+- `/account/watches` lists each watch with its events of the last 30 data
+  dates (the 10 newest of each kind, then how many more), the newest day any
+  event was found on, the kinds it follows (checkboxes, at least one) and, on
+  Pro, daily or weekly. Free accounts see the page in full; the mail panel
+  carries the Pro chip. A post at the cap answers 403 with the page's own line.
+- What a watch follows by default, and can narrow to: an organization: award,
+  grant, amended, cancelled, ends_12m, ends_6m, ended; a buyer: notice,
+  notice_amended, award, amended, cancelled, ends_12m, ends_6m, ended (a buyer
+  not narrowed reports an amendment only when the value moved by CA$100,000 or
+  50 percent, `EVENT_NOTABLE_CENTS`, `EVENT_NOTABLE_SHARE`; a narrowed one
+  reads its segment's rows alone, every amendment, and no published contract
+  or grant, which carry no segment); a single record: amended, cancelled,
+  ends_12m, ends_6m, ended; a tender notice: notice_amended, notice_closed,
+  notice_cancelled, notice_awarded. A watch reports from the data date it was
+  added on (`last_sent_day` starts there).
+- Merges. A watch follows an id. When the nightly retires an organization id
+  (`aliases/<shard>.json`) or a buyer id (`buyers/aliases.json`) into
+  another, the next page view or mail run points the watch at the surviving
+  id (`followAliases`); when the account already follows that id (with the
+  same segment), the retired watch is deleted, and the page says how many
+  moved and merged.
+
+### The mail
+
+The delivery job's last step (`runWatchMail`, after the saved searches, in the
+same run and the same cap of 300 messages). For each account whose watch mail
+is on, whose plan allows `watch_mail`, that is not blocked and not covered for
+today's data date: its watches after the merges, the due ones (daily: not
+covered for this data date; weekly: never, or seven or more days ago), each
+read on the days after the data date it was last covered, at most seven. One
+message per account, grouped by watch in the order single records,
+organizations, buyers, notices; an event two watches reach is listed once,
+under the first, with "Also on your watch of ..."; the kinds each follows
+only; 50 rows in all, then a line per kind with how many more (a count row
+counts what it stands for). Nothing new writes `empty` and sends nothing: no
+empty message is ever sent. The account is claimed for the data date before
+its message goes (`watch_mail.last_day`), given back when the send does not
+go; a refusal that is not a sending limit sets `failed_day` and the account
+waits for the next data date. Each run of an account is a `watch_deliveries`
+row (kept 90 days). Until the records database is ready at today's data date
+(absent, loading, failed, stale) every account waits unclaimed and the run's
+report says why (`watch.records`).
+
+Subject: `{n} watchlist events: {first two watch labels}` (`1 watchlist
+event: {label}`); in French `{n} événements de suivi : ...`. Each row: the
+title linking its page; what happened with its figures (an amendment's value
+before and after with the change in dollars and percent, the end date moved
+and the amendment number; a cancellation's value before; an end date; a
+notice's closing, its closing moved or its winner); then the data date it was
+first seen. Then the footer's note, the watches page and the stop link.
+
+The stop link is `/account/stop?w=<user id>&t=<secret>`, in the footer and in
+`List-Unsubscribe` with `List-Unsubscribe-Post`. It turns the account's watch
+mail off (`watch_mail.mail`), not the watches. GET shows a button; POST and
+the one-click body act; a wrong secret is the site's 404; `STOP_LIMIT`
+applies as it does to the searches' link. The secret is 16 random bytes made
+with the first message.
+
+After the messages, the run ends the watches of notices that closed or were
+cancelled: one whose event was covered by its account's message, or found
+seven or more days ago (shown on the page for a week), is deleted
+(`TENDER_SWEEP_MAX` 250 oldest a run).
+
+### Tables
+
+| Table | Holds | Never holds |
+|---|---|---|
+| `watches` | kind, target (the page's id or the record's ref), segment, the site's label, the kinds followed, daily or weekly, created, the data date its mail last covered | anything typed |
+| `watch_mail` | on or off, the stop secret, the last data date covered and how that run ended, the data date a message was refused for | a copy of a message, the address |
+| `watch_deliveries` | one row per run of an account: when, the data date, how many events, sent, empty or failed | the message |
+
+All go with the account (`deleteWatchesOf`, before the deletion batch; a
+database without the tables yet is no fault there). The console's overview
+shows the watches by kind, the accounts with the mail on, the last week's runs
+by status, and the records database's data date with its events by kind (and
+how many subjects went past the cap); the user page lists the account's
+watches (kind, subject, segment, cadence, added, covered to), whether its mail
+is on and its last 20 runs.
+
+### The browser watchlist
+
+`/watchlist` and its `Add to watchlist` button on a profile
+(`public/watchlist.js`) are unchanged: a list of organizations kept in the
+browser alone, compared by counts since the last visit, for any reader with or
+without an account. The account's watches are separate rows on the server,
+cover buyers, records and notices as well, list dated events and send mail. A
+profile shows both controls while the switch is on; nothing moves one list
+into the other yet.
+
+### Operator steps
+
+```
+npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+npx wrangler d1 execute awardwatch-records --remote --file=../pipeline/records_schema.sql
+```
+
+Both are idempotent; the nightly applies the second itself. Until the first
+runs the watch mail logs `no watch_mail table` and the watches page answers
+503; apply it before deploying. The first night with the events step writes
+only award, grant, notice, notice_amended and notice_awarded rows (it has no
+previous night to compare with, and no award rows if the ledger is empty); the
+second night writes every kind.

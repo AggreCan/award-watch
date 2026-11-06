@@ -250,3 +250,47 @@ CREATE TABLE IF NOT EXISTS rec_gsin (
   desc_en TEXT,
   desc_fr TEXT
 );
+
+-- The events the watches follow (site/src/account/watch_events.ts; the rules
+-- in docs/analytics.md, "Events"): one row per thing that happened on a data
+-- date of the last 90 days to an organization, a buyer, a published contract
+-- or a tender notice. Written by the nightly sync from the pipeline's
+-- records_events (records_db.derive_events), through the ledger like every
+-- table here; rows older than 90 days are deleted by the same sync. A new
+-- table beside the others: the nightly schema creates it and its rows are
+-- all new to the ledger, so no full reload is needed.
+CREATE TABLE IF NOT EXISTS rec_events (
+  k INTEGER PRIMARY KEY,                         -- a hash of what the event is about; never read by the site
+  day TEXT NOT NULL,                             -- the data date the change was first seen
+  kind TEXT NOT NULL,                            -- award, grant, amended, cancelled, ends_12m, ends_6m, ended, notice,
+                                                 -- notice_amended, notice_closed, notice_cancelled, notice_awarded
+  src INTEGER,                                   -- 1 award notice, 2 history, 3 published contract, 4 grant, 5 tender
+  oid INTEGER,                                   -- the organization named (records.oid); NULL when withheld or none
+  buyer TEXT,                                    -- the buyer id (history: the client department)
+  sid INTEGER,                                   -- the lowest UNSPSC segment; NULL for published contracts and grants
+  ref TEXT NOT NULL,                             -- what a watch on one record follows: 'award:<reference in URL form>',
+                                                 -- 'history:...', 'contract:<department>:<reference>', 'grant:...',
+                                                 -- 'tender:<reference>'; 'count:<kind>:<subject>' for a count row
+  cents INTEGER,                                 -- the value now (in cents)
+  ocents INTEGER,                                -- the value before (amended, cancelled)
+  endd TEXT,                                     -- the end date now
+  oendd TEXT,                                    -- the end date before, when it moved
+  closing TEXT,                                  -- a notice's closing now
+  oclosing TEXT,                                 -- a notice's closing before, when it moved
+  namd INTEGER,                                  -- the amendment number of the version that made the event
+  title TEXT,                                    -- at most 120 characters, contacts scrubbed
+  title_fr TEXT,
+  other TEXT,                                    -- the other party (the holder, a notice's winner), or a notice's title before
+  other_fr TEXT,
+  horizon INTEGER,                               -- ends_12m 365, ends_6m 182
+  more INTEGER,                                  -- a count row: how many rows of its kind the subject had past 100 that day
+  path TEXT NOT NULL                             -- the page on the site the line links
+);
+-- A watch reads one subject on named days: the subject first, so a statement
+-- seeks each subject and day it names and reads nothing else. The day index
+-- serves the console's counts by kind.
+CREATE INDEX IF NOT EXISTS rec_events_org ON rec_events (oid, day) WHERE oid IS NOT NULL;
+CREATE INDEX IF NOT EXISTS rec_events_buyer ON rec_events (buyer, day) WHERE buyer IS NOT NULL;
+CREATE INDEX IF NOT EXISTS rec_events_segment ON rec_events (sid, day) WHERE sid IS NOT NULL;
+CREATE INDEX IF NOT EXISTS rec_events_ref ON rec_events (ref, day);
+CREATE INDEX IF NOT EXISTS rec_events_day ON rec_events (day, kind);

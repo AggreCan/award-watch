@@ -132,6 +132,8 @@ describe("with the switch on", () => {
   const ANALYTICS = /<a href="\/organizations\/org-a000000001\/analytics" class="btn" rel="nofollow">Analytics<\/a>/;
   const FOOTER_PRO = '<a href="/pro">Pro plan</a>';
   const HOME_PRO = /<li class="home-do-pro">[\s\S]*?<\/li>/;
+  // The Follow control under a profile's head (account/watch_pages.tsx): for a reader not signed in, a link to sign in.
+  const FOLLOW = /<div class="watch-control"><a href="\/account\/sign-in\?next=[^"]*" class="btn">Follow<\/a>[\s\S]*?<\/div>/;
 
   it("opens the routes and adds the account item, the Pro marks and a profile's analytics link, and nothing else on a public page", async () => {
     expect((await get("/account/sign-in")).status).toBe(200);
@@ -149,8 +151,9 @@ describe("with the switch on", () => {
       // The top bar's same-day timer leads to the tease while the switch is on and to the list while it is off.
       expect(on.body, path).toContain(FOOTER_PRO);
       expect(HOME_PRO.test(on.body), path).toBe(path === "/");
+      expect(FOLLOW.test(on.body), path).toBe(path.startsWith("/organizations/"));
       const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(NOTE, "")
-        .replace(FOOTER_PRO, "").replace(HOME_PRO, "")
+        .replace(FOOTER_PRO, "").replace(HOME_PRO, "").replace(FOLLOW, "")
         .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');
       expect(ANALYTICS.test(stripped), path).toBe(path.startsWith("/organizations/"));
       expect(off.body, path).not.toContain("pro-tag");

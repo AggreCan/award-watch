@@ -287,7 +287,7 @@ describe("the radar's tabs and tiles", () => {
   });
 
   it("lists what Pro includes, bug reports among it, each line a Pro feature", () => {
-    expect(PRO_INCLUDES.map(([f]) => f)).toEqual(["radar_depth", "radar_depth", "intraday", "delivery", "bug_reports"]);
+    expect(PRO_INCLUDES.map(([f]) => f)).toEqual(["radar_depth", "radar_depth", "intraday", "delivery", "watch_mail", "bug_reports"]);
   });
 });
 

@@ -45,6 +45,7 @@ reads it, with prepared statements.
 | `rec_expiring` | row of the radar's 12-month window, as the static export writes it | about 20,000 |
 | `rec_contracts` | published contract row: every field its page shows (`/contracts/<department>/<reference>`) | about 1.34 million |
 | `rec_gsin` | GSIN code a published contract carries: its names | about 10,000 at most |
+| `rec_events` | thing that happened on a data date of the last 90 to an organization, a buyer, a single record or a tender notice, plus a count row past 100 a subject a day (*Events*) | thousands a night, a few hundred thousand |
 | `rec_meta` | key: `state` (`loading` or `ready`), `as_of` (the data date the rows describe), `rules` | 3 |
 
 A row of `records` is one record as the profiles count it (*Counting money*
@@ -527,6 +528,69 @@ flatten the median's bars. The first and newest values of the amended
 records are two panels on one scale, the same measure before and after. The
 contracts ending are two charts by fiscal quarter, value and count, since
 their units differ. The ten largest records are a table only.
+
+## Events
+
+`rec_events` holds what happened on each data date of the last 90 to an
+organization, a buyer, a single record or a tender notice: what the watches
+read (`docs/accounts.md`, *Watches*). The sync derives the rows
+(`records_db.derive_events`, after `build`, before `stage`) from tonight's
+temporary tables, the ledger, the radar's own candidates and the previous
+night's state, keeps them in the pipeline's `records_events`, and sends them
+to D1 through the ledger as every table is sent: a new table, so no full
+reload and no `LAYOUT` change.
+
+The previous night's state is `records_event_state` in the pipeline database:
+each award notice and PSPC history record with its versions after the first,
+its counted value and its end date; each published contract row with its value
+as published and its end date; each tender notice open on the data date. The
+events step replaces it whole each night. `lo` below is the previous night's
+data date (meta `records_events_at`, at most 7 days back); on the first night
+there is none, and no amendment, cancellation, end date or closing is written.
+
+| Kind | Rule |
+|---|---|
+| `award`, `grant` | a row of `records` (extra = 0) whose key the ledger does not hold, naming an organization or a buyer (`grant` for a grant); none while the ledger holds no records row (a first load); a published contract row joining a known contract is `amended` instead |
+| `amended` | an award notice or PSPC history record whose versions after the first, counted value, or end date changed since the state (versions or value up, or the end moved); a published contract row whose value as published rose or whose end date moved; a published contract row new tonight whose department and procurement_id match a row of the state. `ocents` and `cents` are the values before and after, `oendd` and `endd` the end dates when it moved, `namd` the amendment number |
+| `cancelled` | the same, when the newest version's status is cancelled: the value before in `ocents`, never a fall to zero |
+| `ends_12m`, `ends_6m` | a row of the radar's 12-month window whose end date is after `lo` plus 365 (182) days and on or before the data date plus them, so each end date crosses each line once; `horizon` 365 or 182 |
+| `ended` | the radar's own candidates (`expiring.notice_candidates`, `contract_candidates`, `dedupe`: newest end date, not cancelled, each contract once) whose end date is on or after `lo` and before the data date |
+| `notice` | a tender notice whose first version was first seen after `lo` (the first night: on the data date), published within 7 days of that, naming a buyer |
+| `notice_amended` | a notice first seen earlier with a version first seen after `lo`: `oclosing` and `closing` when the closing moved, the earlier title in `other` when it changed |
+| `notice_closed`, `notice_cancelled` | a notice open on the previous night's data date (`normalize.tender_status_on`) and not open tonight; `notice_cancelled` when its status is cancelled |
+| `notice_awarded` | an award notice first seen after `lo` whose solicitation is a notice's (compared in upper case): once per notice, the winner in `other` (none when withheld) |
+
+Subjects: `oid` (the organization), `buyer` (the buyer id; history: the client
+department), `sid` (the lowest UNSPSC segment of an award notice, a history
+record or a notice), `ref` (what a watch on one record follows:
+`award:<reference>`, `history:<reference>` in the URL form in lower case,
+`contract:<department>:<reference>`, `grant:<department>:<reference>`,
+`tender:<reference>`). An event about a published contract is written once per
+row of the contract (50 at most) with that row's `ref`, so a watch on any
+version's page sees it; the organization and buyer are on the first only.
+
+At most 100 rows of one kind per organization or buyer per data date, the
+largest values first; past that the rows lose that subject (they still serve a
+watch on the record itself) and one count row (`ref` `count:<kind>:<subject>`,
+`more` the rows past 100) stands for them. The manifest's `events` carries
+tonight's count of each kind and how many subjects went past the cap
+(`capped`).
+
+Each row's key hashes what it is about rather than (day, kind, ref): a night
+derived twice, or a night whose apply failed and whose records are new to the
+ledger again, writes nothing new and keeps the day first found. A data date
+earlier than the last derived derives nothing. Rows older than 90 data dates
+are deleted here and, through the ledger, in D1.
+
+Columns: `day` (the data date first seen, which every line shows), `kind`,
+`src` (5 a tender notice), `oid`, `buyer`, `sid`, `ref`, `cents`, `ocents`,
+`endd`, `oendd`, `closing`, `oclosing`, `namd`, `title`, `title_fr` (120
+characters, contacts scrubbed), `other`, `other_fr`, `horizon`, `more`, `path`
+(the page the line links). Indexes: `(oid, day)`, `(buyer, day)`, `(sid, day)`,
+each partial, `(ref, day)`, and `(day, kind)` for the console's counts. The
+site's statements (`site/src/account/watch_events.ts`) bind 30 day slots and 25
+subject slots and seek each pair (a buyer narrowed to a segment binds its
+buyer and segment); each ends in a `LIMIT`, and the tests read their plans.
 
 ## Phase 3
 

@@ -138,6 +138,7 @@ export function billingView(
         <ul class="account-list">
           <li>{t(lang, "billing.pro_searches", { n: fmtInt(RULES.pro.saved_searches, lang), free: fmtInt(RULES.free.saved_searches, lang) })}</li>
           <li>{t(lang, "billing.pro_delivery")}</li>
+          <li>{t(lang, "watches.pro_page", { n: fmtInt(RULES.pro.watchlists, lang), free: fmtInt(RULES.free.watchlists, lang) })}</li>
           <li>{t(lang, "billing.pro_intraday")}</li>
           <li>{t(lang, "billing.pro_radar")}</li>
           <li>{t(lang, "billing.pro_analytics")}</li>

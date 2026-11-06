@@ -13,6 +13,7 @@
 // the block is lifted, so the delivery job, which reads only the searches
 // that are on, skips the account without a change of its own.
 
+import { watchDetail } from "./watches";
 import type { Env } from "../env";
 import { planFor } from "./entitlements";
 import { newId } from "./secrets";
@@ -447,6 +448,10 @@ export type UserDetail = {
   user: UserRow; entitlements: EntitlementView[]; payment: PaymentView | null;
   sessions: { live: number; newest: string | null; classes: { ua_class: string | null; n: number }[] };
   searches: SearchView[]; keys: KeyView[]; deliveries: DeliveryView[]; bugs: BugRow[] | null; audit: AuditRow[]; block: BlockRow | null;
+  // How many watches the account holds and its watch mail (on, off, or none yet); null before the tables exist.
+  watches?: { n: number; mail: string | null } | null;
+  // The account's watches, its watch mail and its newest runs (watches.ts watchDetail).
+  watchDetail?: Awaited<ReturnType<typeof watchDetail>>;
 };
 
 export const USER_DELIVERY_ROWS = 20;
@@ -485,6 +490,9 @@ export async function userDetail(env: Env, userId: string, now = new Date()): Pr
   if (!row) return null;
   const block = await optional(() =>
     db.prepare("SELECT reason, created_at, by_user_id, paused FROM account_blocks WHERE user_id = ?").bind(userId).first<BlockRow>());
+  const watches = await optional(async () => (await db.prepare(
+    "SELECT (SELECT COUNT(*) FROM watches WHERE user_id = ?1) AS n, (SELECT mail FROM watch_mail WHERE user_id = ?1) AS mail",
+  ).bind(userId).first<{ n: number; mail: string | null }>()) ?? { n: 0, mail: null });
   const bugs = await optional(async () => (await db.prepare(
     "SELECT id, user_id, page, text, created_at FROM bug_reports WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
   ).bind(userId, USER_BUG_ROWS).all<BugRow>()).results ?? []);
@@ -503,6 +511,8 @@ export async function userDetail(env: Env, userId: string, now = new Date()): Pr
     bugs,
     audit: (audit.results ?? []) as AuditRow[],
     block,
+    watches,
+    watchDetail: await watchDetail(env, userId),
   };
 }
 

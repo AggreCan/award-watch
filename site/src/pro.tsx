@@ -70,6 +70,7 @@ export const PRO_INCLUDES: readonly (readonly [Feature, Key])[] = [
   ["radar_depth", "expiring.pro_csv"],
   ["intraday", "expiring.pro_intraday"],
   ["delivery", "expiring.pro_searches"],
+  ["watch_mail", "watches.pro_include"],
   ["bug_reports", "pro.include_bugs"],
 ];
 

@@ -8,6 +8,7 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { accountsEnabled } from "../account/switch";
+import { WatchControl, watchControl } from "../account/watch_pages";
 import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
 import { Table, restClass } from "../columns";
 import { MONEY_SOURCES, PROVINCES, type MoneySource, type SourceKey } from "../constants";
@@ -398,6 +399,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
     ),
   };
 
+  // The account's Follow control (account/watch_pages.tsx): nothing while the accounts switch is off.
+  const watch = await watchControl(c, "organization", o.id);
   return page(
     c,
     <Layout lang={lang} title={o.display_name} dataAsOf={stats.data_as_of} active="/organizations" seo={organizationSeo(profile, lang, crumbs)}>
@@ -419,6 +422,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           {t(lang, "org.seen", { first: o.first_seen ?? t(lang, "common.na"), last: o.last_seen ?? t(lang, "common.na") })}
           {o.business_number ? ` ${t(lang, "org.business_number", { bn: o.business_number })}` : ""}
         </p>
+        <WatchControl lang={lang} state={watch} kind="organization" target={o.id} />
       </PageHead>
 
       {/* A tile opens its source's list when the profile has one; a source

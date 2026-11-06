@@ -7,6 +7,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { WatchControl, watchControl } from "../account/watch_pages";
 import { Table } from "../columns";
 import { REFERENCE_RE, loadContract, loadStats, publishedReference, type ContractDetail } from "../data";
 import type { AppEnv } from "../env";
@@ -85,6 +86,8 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
     : tn(lang, "contract.days_left_one", "contract.days_left_many", daysLeft, { n: fmtInt(daysLeft, lang) });
   const supplier = d.organization_id ? <a href={`/organizations/${d.organization_id}`}>{d.supplier ?? d.organization_id}</a> : d.supplier;
 
+  // The account's Follow control (account/watch_pages.tsx): nothing while the accounts switch is off.
+  const watch = await watchControl(c, "contract", `${kind}:${raw.toLowerCase()}`);
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active={kind === "award" ? "/awards" : undefined} seo={contractSeo(d, lang, crumbs)}>
@@ -106,6 +109,7 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
           {d.tender_reference ? <a href={`/tenders/${d.tender_reference.toLowerCase()}`} class="btn">{t(lang, "contract.tender_link")}</a> : null}
         </>}>
         <p class="page-note"><span class="mono">{shownRef}</span> <CompetitiveFlag lang={lang} value={d.competitive} /></p>
+        <WatchControl lang={lang} state={watch} kind="contract" target={`${kind}:${raw.toLowerCase()}`} />
       </PageHead>
 
       <div class="panel-grid">

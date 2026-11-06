@@ -38,6 +38,11 @@
 // send each search once: a run claims a search for the data date before
 // sending (claim), and gives it back when the send does not go (release).
 //
+// After the saved searches, the same run sends the watch mail (watch_mail.ts):
+// one message per account with watches, inside the same cap, and a sending
+// limit met there stops the run the same way. A file that did not read stops
+// the saved searches only, since the watches read the records database alone.
+//
 // Log lines name counts and dates only, never an address or a label.
 
 import { addDays } from "../../public/closing.js";
@@ -59,6 +64,7 @@ import { DELIVERABLE_KINDS } from "./searches";
 import { randomHex } from "./secrets";
 import { type MailMessage, senderFor } from "./sender";
 import { accountsEnabled } from "./switch";
+import { WATCH_WAIT_WHY, type WatchReport, runWatchMail } from "./watch_mail";
 
 // The hourly trigger in wrangler.jsonc; any other trigger is the daily check.
 export const DELIVERY_CRON = "0 15-20 * * *";
@@ -92,6 +98,8 @@ export interface RunReport {
   // yet applied again); records is null when none waited.
   waiting: number;
   records: RecordsWait | "no_marks" | null;
+  // The watch mail's part (watch_mail.ts); null when the run did not reach it.
+  watch: WatchReport | null;
 }
 
 // A file or the database could not be read: the message is the run's one log line.
@@ -389,7 +397,9 @@ function siteOf(env: Env): string | null {
 }
 
 export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<RunReport> {
-  const report: RunReport = { outcome: "done", dataDate: null, sent: 0, failed: 0, empty: 0, skipped: 0, waiting: 0, records: null };
+  const report: RunReport = {
+    outcome: "done", dataDate: null, sent: 0, failed: 0, empty: 0, skipped: 0, waiting: 0, records: null, watch: null,
+  };
   if (!accountsEnabled(env)) return { ...report, outcome: "off" };
   const site = siteOf(env);
   if (!env.MAIL || !env.MAIL_FROM?.trim() || !site) return { ...report, outcome: "no_mail" };
@@ -514,7 +524,27 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
     if (held) await release(env, held.id, held.before, now).catch(() => undefined);
     const why = e instanceof Fault ? e.message : "the accounts database could not be read or written; the next hour tries again";
     log(`${dataDate}: ${why} (${counts(report)} before it)`);
-    return { ...report, outcome: "fault" };
+    if (!(e instanceof Fault)) return { ...report, outcome: "fault" };
+    report.outcome = "fault";
+  }
+  if (!stop) {
+    try {
+      const watch = await runWatchMail(env, {
+        site, dataDate, now, plans, room: RUN_MESSAGES_MAX - report.sent - report.failed, capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
+      });
+      report.watch = watch.report;
+      if (watch.stop) {
+        stop = watch.stop;
+        if (report.outcome === "done") report.outcome = watch.capped ? "capped" : "limited";
+      }
+    } catch {
+      log(`${dataDate}: the watch mail could not read or write the accounts database; the next hour tries again`);
+      return { ...report, outcome: "fault" };
+    }
+  }
+  if (report.outcome === "fault") {
+    if (report.watch && watchActive(report.watch)) log(`${dataDate}: ${watchCounts(report.watch)}`);
+    return report;
   }
   log(`${dataDate}: ${counts(report)}${stop ? `; stopped at ${stop}, the next hour goes on` : ""}`);
   return report;
@@ -528,6 +558,13 @@ const WAIT_WHY: Record<RecordsWait | "no_marks", string> = {
   no_marks: "the accounts database has no delivery_marks table (apply accounts_schema.sql)",
 };
 
+const watchActive = (w: WatchReport) => w.sent + w.failed + w.empty + w.skipped + w.waiting + w.expired > 0 || w.records !== null;
+
+const watchCounts = (w: WatchReport) =>
+  `watch mail: ${w.sent} sent, ${w.failed} failed, ${w.empty} with nothing new, ${w.skipped} not on a plan with it, ` +
+  `${w.expired} closed notices' watches ended` + (w.records ? `, ${w.waiting} accounts waiting: ${WATCH_WAIT_WHY[w.records]}` : "");
+
 const counts = (r: RunReport) =>
   `${r.sent} sent, ${r.failed} failed, ${r.empty} with nothing new, ${r.skipped} not on a plan with delivery` +
-  (r.records ? `, ${r.waiting} organization, buyer or segment searches waiting: ${WAIT_WHY[r.records]}` : "");
+  (r.records ? `, ${r.waiting} organization, buyer or segment searches waiting: ${WAIT_WHY[r.records]}` : "") +
+  (r.watch && watchActive(r.watch) ? `; ${watchCounts(r.watch)}` : "");

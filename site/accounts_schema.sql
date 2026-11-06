@@ -281,3 +281,75 @@ CREATE TABLE IF NOT EXISTS account_blocks (
   by_user_id TEXT NOT NULL REFERENCES users(id),
   paused TEXT
 );
+
+-- Watches (src/account/watches.ts; docs/accounts.md, Watches): an
+-- organization, a buyer, a single record or an open tender notice an account
+-- follows, and the events it follows on it (the kinds of rec_events in the
+-- records database, docs/analytics.md "Events"). target is the page's id: the
+-- organization id, the buyer id, a record's rec_events ref ('award:<reference>',
+-- 'history:<reference>', 'contract:<department>:<reference>') or
+-- 'tender:<reference>'. segment narrows a buyer watch to one UNSPSC segment
+-- (two digits; '' for the whole buyer). The nightly's merges move target to
+-- the surviving id (watches.ts followAliases). label is
+-- the page's name when it was watched, written by the site. events lists the
+-- kinds followed, comma-separated (all the kind of watch can follow, unless
+-- the reader chose fewer). cadence is how often its events are mailed on the
+-- Pro plan. last_sent_day is the data date up to which the watch mail has
+-- covered its events. At most 3 per account on the Free plan and 25 on Pro,
+-- held to the cap inside the insert. A tender notice's watch ends when the
+-- notice closes (watch_mail.ts). Goes with the account.
+CREATE TABLE IF NOT EXISTS watches (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL CHECK (kind IN ('organization', 'buyer', 'contract', 'tender')),
+  target TEXT NOT NULL,                          -- at most 290 characters (a department and a reference)
+  segment TEXT NOT NULL DEFAULT '',              -- '' or two digits
+  label TEXT NOT NULL,                           -- at most 300 characters
+  events TEXT NOT NULL,
+  cadence TEXT NOT NULL DEFAULT 'daily' CHECK (cadence IN ('daily', 'weekly')),
+  created_at TEXT NOT NULL,
+  last_sent_day TEXT,
+  UNIQUE (user_id, kind, target, segment)
+);
+CREATE INDEX IF NOT EXISTS idx_watches_user ON watches(user_id, created_at);
+-- The job's pass over the tender notices' watches, oldest first.
+CREATE INDEX IF NOT EXISTS idx_watches_kind ON watches(kind, created_at);
+
+-- The watch mail of an account (src/account/watch_mail.ts): one row per
+-- account that has held a watch, made with its first one. mail is on until
+-- the reader turns it off on the watches page or with the stop link of a
+-- message (the watches stay). secret is the stop link's 16 random bytes,
+-- made with the first message, kept in clear as delivery_tokens keeps its
+-- own (every message carries it; it can turn this account's watch mail off
+-- and nothing else). last_day is the data date the last run covered (a
+-- message sent, or nothing new), claimed before the message goes; last_at,
+-- last_status (sent, empty, failed) and last_items describe that run;
+-- failed_day is the data date a message was refused for, so the account waits
+-- for the next one. Goes with the account.
+CREATE TABLE IF NOT EXISTS watch_mail (
+  user_id TEXT PRIMARY KEY REFERENCES users(id),
+  mail TEXT NOT NULL DEFAULT 'on' CHECK (mail IN ('on', 'off')),
+  secret TEXT,
+  last_day TEXT,
+  last_at TEXT,
+  last_status TEXT,
+  last_items INTEGER,
+  failed_day TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- One row per watch mail run of an account (src/account/watch_mail.ts): sent
+-- (the message left), failed (the mail service refused it) or empty (nothing
+-- new, no message), with the data date covered and how many events matched.
+-- The console reads the newest and the last week's. Rows go after 90 days (the
+-- run) and with the account.
+CREATE TABLE IF NOT EXISTS watch_deliveries (
+  id INTEGER PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sent_at TEXT NOT NULL,
+  day TEXT NOT NULL,
+  items INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL                           -- sent | failed | empty
+);
+CREATE INDEX IF NOT EXISTS idx_watch_deliveries_user ON watch_deliveries(user_id, id);
+CREATE INDEX IF NOT EXISTS idx_watch_deliveries_sent ON watch_deliveries(sent_at);

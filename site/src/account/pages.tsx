@@ -15,7 +15,7 @@ import { KEYED_ENDPOINTS, KEY_PER_DAY, KEY_PER_MINUTE } from "../api_keyed_spec"
 import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
-import { SAVED_SEARCH_MAX, allowed } from "./entitlements";
+import { SAVED_SEARCH_MAX, allowed, watchCap } from "./entitlements";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch } from "./searches";
 import type { Account } from "./session";
 import { CODE_MINUTES } from "./signin";
@@ -50,7 +50,12 @@ const day = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : "");
 
 // -- sign-in ------------------------------------------------------------------------
 
-export function signInView(lang: Lang, state: { errors?: Key[]; email?: string; notice?: string | null; limitN?: number } = {}) {
+// next: the page to return to after signing in (routes.tsx safeNext), carried as a hidden field.
+const Next: FC<{ next?: string | null }> = ({ next }) => (next ? <input type="hidden" name="next" value={next} /> : null);
+
+export function signInView(
+  lang: Lang, state: { errors?: Key[]; email?: string; notice?: string | null; limitN?: number; next?: string | null } = {},
+) {
   const errors = state.errors ?? [];
   return (
     <>
@@ -64,6 +69,7 @@ export function signInView(lang: Lang, state: { errors?: Key[]; email?: string; 
         ) : null}
         <form method="post" action="/account/sign-in" class="stack">
           <input type="hidden" name="lang" value={lang} />
+          <Next next={state.next} />
           <label>
             {t(lang, "interest.email")}
             <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={state.email ?? ""} />
@@ -79,7 +85,7 @@ export function signInView(lang: Lang, state: { errors?: Key[]; email?: string; 
 
 // The code form: after a request (email hidden, the lead names it), or typed
 // from scratch (the email as a field).
-export function codeView(lang: Lang, state: { email?: string; sent?: boolean; errors?: Key[] } = {}) {
+export function codeView(lang: Lang, state: { email?: string; sent?: boolean; errors?: Key[]; next?: string | null } = {}) {
   const sent = !!state.sent && !!state.email;
   return (
     <>
@@ -90,6 +96,7 @@ export function codeView(lang: Lang, state: { email?: string; sent?: boolean; er
         <Errors lang={lang} errors={state.errors} />
         <form method="post" action="/account/check" class="stack">
           <input type="hidden" name="lang" value={lang} />
+          <Next next={state.next} />
           {sent ? (
             <>
               <input type="hidden" name="email" value={state.email} />
@@ -116,7 +123,7 @@ export function codeView(lang: Lang, state: { email?: string; sent?: boolean; er
 
 // The link from the message opens this page; the button posts the token, so a
 // mail scanner that fetches the link signs no one in and uses nothing up.
-export function linkView(lang: Lang, token: string, errors?: Key[]) {
+export function linkView(lang: Lang, token: string, errors?: Key[], next?: string | null) {
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.link_title")} lead={t(lang, "account.link_lead")} />
@@ -128,6 +135,7 @@ export function linkView(lang: Lang, token: string, errors?: Key[]) {
           <form method="post" action="/account/check" class="stack">
             <input type="hidden" name="lang" value={lang} />
             <input type="hidden" name="token" value={token} />
+            <Next next={next} />
             <button type="submit" class="btn btn-primary">{t(lang, "account.sign_in")}</button>
           </form>
         )}
@@ -152,7 +160,7 @@ export function planLine(lang: Lang, account: Pick<Account, "plan" | "planUntil"
 }
 
 export function overviewView(
-  lang: Lang, account: Account, counts: { sessions: number; searches: number; cap: number; keys: number },
+  lang: Lang, account: Account, counts: { sessions: number; searches: number; cap: number; keys: number; watches?: number | null },
   extra: { billing?: BillingLine | null; notice?: string | null } = {},
 ) {
   const stripe = extra.billing?.stripe && account.plan === "pro";
@@ -188,6 +196,12 @@ export function overviewView(
             <a href="/account/keys">{t(lang, "account.keys")}{allowed(account, "api") ? null : <>{" "}<ProTag lang={lang} /></>}</a>
             <span class="num">{fmtInt(counts.keys, lang)}</span>
           </li>
+          {counts.watches === undefined || counts.watches === null ? null : (
+            <li>
+              <a href="/account/watches">{t(lang, "watches.title")}</a>
+              <span class="num">{t(lang, "watches.n", { n: fmtInt(counts.watches, lang), cap: fmtInt(watchCap(account.plan), lang) })}</span>
+            </li>
+          )}
         </ul>
       </Panel>
       <Panel title={t(lang, "account.panel_sign_out")}>
@@ -479,6 +493,7 @@ export function deleteView(lang: Lang, account: Account, errors?: Key[]) {
         <ul class="account-list">
           <li>{t(lang, "account.delete_subscription")}</li>
           <li>{t(lang, "account.delete_searches")}</li>
+          <li>{t(lang, "watches.delete")}</li>
           <li>{t(lang, "bugs.delete")}</li>
           <li>{t(lang, "account.delete_sessions")}</li>
           <li>{t(lang, "account.delete_interest")}</li>

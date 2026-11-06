@@ -21,6 +21,13 @@
 //   POST /account/delete               delete, after cancelling a subscription        (session, CSRF)
 //   GET  /account/stop?s=&t=           a delivery's stop page, from its message       (the link's secret)
 //   POST /account/stop?s=&t=           turn that delivery off; also RFC 8058 one-click (the link's secret)
+//   GET  /account/stop?w=&t=           the watch mail's stop page, from its message    (the link's secret)
+//   POST /account/stop?w=&t=           turn the account's watch mail off; one-click too (the link's secret)
+//   GET  /account/watches              watches with their last 14 days of events       (session)
+//   POST /account/watches              watch a page (kind, target)                     (session, CSRF, plan's cap)
+//   POST /account/watches/mail         the watch mail on or off                        (session, CSRF, plan to turn on)
+//   POST /account/watches/:id          the events a watch follows and its cadence      (session, CSRF)
+//   POST /account/watches/:id/delete   stop watching                                   (session, CSRF)
 //   GET  /account/billing              the plan, the prices or the subscription       (session)
 //   POST /account/billing/checkout     to the payment service's checkout              (session, CSRF)
 //   POST /account/billing/portal       to the payment service's portal                (session, CSRF)
@@ -37,10 +44,14 @@
 
 import { Hono, type Context } from "hono";
 import { getCookie } from "hono/cookie";
+import { addDays } from "../../public/closing.js";
 import { isOwnAddress } from "../api";
 import { readForm } from "../body";
+import { clockOf, tenderState } from "../closing";
+import { loadBuyer, loadContract, loadProfile, loadStats, loadTender } from "../data";
 import type { AppEnv } from "../env";
-import { t, type Key, type Lang } from "../i18n";
+import { fmtInt, pick, t, type Key, type Lang } from "../i18n";
+import { readPublishedContract } from "../records_tables";
 import { EMAIL_MAX, interestFilter, kindOfPath, normalizeEmail } from "../pages/interest";
 import { deviceClass } from "../views";
 import { KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
@@ -48,7 +59,7 @@ import { keyUsage, nowOf } from "./api_usage";
 import { audit } from "./audit";
 import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, startCheckout } from "./billing";
 import { bugPage, fileBug } from "./bugs";
-import { allowed } from "./entitlements";
+import { WATCH_MAX, allowed, watchCap } from "./entitlements";
 import {
   accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView, signInView, stopView, stoppedView,
   unavailableView,
@@ -64,6 +75,11 @@ import {
 } from "./session";
 import { CODE_MINUTES, CODES_PER_HOUR, CODE_TRIES, type Checked, checkCode, checkLink, findOrCreateUser, issueCode, sweep } from "./signin";
 import { accountsEnabled } from "./switch";
+import { DAY_SLOTS, type WatchKind, isWatchKind, readEvents, segmentOf, targetOf, watchPath } from "./watch_events";
+import { watchStopView, watchStoppedView, watchesView } from "./watch_pages";
+import {
+  addWatch, deleteWatch, deleteWatchesOf, followAliases, isCadence, listWatches, mailOf, setMail, setWatch, watchCount,
+} from "./watches";
 
 export const account = new Hono<AppEnv>();
 
@@ -144,12 +160,22 @@ function siteBase(c: Context<AppEnv>): string {
 
 // -- sign-in ----------------------------------------------------------------------------
 
+// The page to return to after signing in (?next=, from a page's Follow link):
+// a path on this site only, never another host, never the sign-in pages.
+const NEXT_MAX = 300;
+export function safeNext(raw: string | undefined | null): string | null {
+  if (!raw || raw.length > NEXT_MAX || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return null;
+  if (/[\u0000-\u001f\u007f]/.test(raw) || raw.startsWith("/account/sign-in") || raw.startsWith("/account/check")) return null;
+  return raw;
+}
+
 account.get("/sign-in", async (c) => {
   const lang = c.get("lang");
-  if ((await readSession(c)).state === "ok") return c.redirect("/account", 303);
+  const next = safeNext(c.req.query("next"));
+  if ((await readSession(c)).state === "ok") return c.redirect(next ?? "/account", 303);
   const m = c.req.query("m");
   const notice = m === "out" ? t(lang, "account.msg_signed_out") : m === "out_all" ? t(lang, "account.msg_signed_out_all") : null;
-  return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { notice }));
+  return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { notice, next }));
 });
 
 account.post("/sign-in", async (c) => {
@@ -157,8 +183,9 @@ account.post("/sign-in", async (c) => {
   if (fields instanceof Response) return fields;
   const lang = c.get("lang");
   const typed = clean(fields, "email", EMAIL_MAX + 50);
+  const next = safeNext(fields.next);
   const again = (errors: Key[], status: number, limitN?: number) =>
-    accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { errors, email: typed.slice(0, EMAIL_MAX), limitN }), status);
+    accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { errors, email: typed.slice(0, EMAIL_MAX), limitN, next }), status);
   if (clean(fields, "website", 10)) return again(["interest.err_rejected"], 400);
   const email = normalizeEmail(typed);
   if (!email) return again(["interest.err_email"], 400);
@@ -172,7 +199,7 @@ account.post("/sign-in", async (c) => {
     }
     await audit(c.env, issued.userId, "code_requested", null, now);
     const base = siteBase(c);
-    const link = `${base}/account/check?token=${issued.token}${lang === "fr" ? "&lang=fr" : ""}`;
+    const link = `${base}/account/check?token=${issued.token}${lang === "fr" ? "&lang=fr" : ""}${next ? `&next=${encodeURIComponent(next)}` : ""}`;
     const sent = await senderFor(c.env, c.req.url)
       .send(signInMessage(lang, email, issued.code, link, CODE_MINUTES, base))
       .catch(() => ({ sent: false, reason: "failed" }) as const);
@@ -180,7 +207,7 @@ account.post("/sign-in", async (c) => {
       if (sent.reason === "failed") await audit(c.env, issued.userId, "mail_failed", null, now);
       return again([sent.reason === "not_configured" ? "account.err_not_sent" : "account.err_send_failed"], 503);
     }
-    return accountPage(c, t(lang, "account.check_title"), codeView(lang, { email, sent: true }));
+    return accountPage(c, t(lang, "account.check_title"), codeView(lang, { email, sent: true, next }));
   });
 });
 
@@ -192,7 +219,8 @@ account.get("/check", async (c) => {
   const token = c.req.query("token");
   if (token !== undefined) {
     const ok = TOKEN_RE.test(token);
-    return accountPage(c, t(lang, "account.link_title"), linkView(lang, ok ? token : "", ok ? undefined : ["account.err_stale"]), ok ? 200 : 400);
+    return accountPage(c, t(lang, "account.link_title"),
+      linkView(lang, ok ? token : "", ok ? undefined : ["account.err_stale"], safeNext(c.req.query("next"))), ok ? 200 : 400);
   }
   return accountPage(c, t(lang, "account.enter_title"), codeView(lang));
 });
@@ -238,6 +266,8 @@ account.post("/check", async (c) => {
     }
     await startSession(c, user.id, uaClass(c), now);
     await audit(c.env, user.id, "signed_in", token ? "link" : "code", now);
+    const next = safeNext(fields.next);
+    if (next) return c.redirect(next, 303);
     const pending = await pendingInterest(c.env, checked.email, user.id).catch(() => []);
     return c.redirect(pending.length ? "/account/searches" : "/account", 303);
   });
@@ -270,8 +300,10 @@ account.get("/", async (c) => {
       "(SELECT COUNT(*) FROM saved_searches WHERE user_id = ?1) AS searches, " +
       "(SELECT COUNT(*) FROM api_keys WHERE user_id = ?1 AND revoked_at IS NULL) AS keys",
     ).bind(who.userId, new Date().toISOString()).first<{ sessions: number; searches: number; keys: number }>();
+    const watching = await watchCount(c.env, who.userId);
     return accountPage(c, t(lang, "account.title"), overviewView(lang, who, {
       sessions: counts?.sessions ?? 0, searches: counts?.searches ?? 0, cap: capFor(who), keys: counts?.keys ?? 0,
+      watches: watching?.n ?? null,
     }, {
       billing: await billingLine(c.env, who.userId),
       // Stripe's checkout returns here; the plan changes when its notice lands, often a moment later.
@@ -407,11 +439,30 @@ async function stopTarget(c: Context<AppEnv>, searchId: string, secret: string):
   return row && sameHash(row.secret, secret) ? row : null;
 }
 
+// The watch mail's stop link, /account/stop?w=<user id>&t=<secret>: the
+// same rules, for the account's watch mail as a whole (watch_mail.ts). It
+// turns the mail off; the watches stay.
+type WatchStopRow = { user_id: string; mail: string; secret: string | null };
+
+async function watchStopTarget(c: Context<AppEnv>, userId: string, secret: string): Promise<WatchStopRow | null> {
+  if (!STOP_VALUE_RE.test(userId) || !STOP_VALUE_RE.test(secret)) return null;
+  const row = await c.env.ACCOUNTS!.prepare(
+    "SELECT m.user_id, m.mail, m.secret FROM watch_mail m JOIN users u ON u.id = m.user_id WHERE m.user_id = ? AND u.status = 'active'",
+  ).bind(userId).first<WatchStopRow>();
+  return row?.secret && sameHash(row.secret, secret) ? row : null;
+}
+
 account.get("/stop", async (c) => {
   const lang = c.get("lang");
   const searchId = c.req.query("s") ?? "";
   const secret = c.req.query("t") ?? "";
+  const watcher = c.req.query("w");
   return guarded(c, async () => {
+    if (watcher !== undefined && !searchId) {
+      const mine = await watchStopTarget(c, watcher, secret);
+      if (!mine) return c.notFound();
+      return accountPage(c, t(lang, "watches.stop_title"), watchStopView(lang, { userId: mine.user_id, secret, off: mine.mail === "off" }));
+    }
     const row = await stopTarget(c, searchId, secret);
     if (!row) return c.notFound();
     return accountPage(c, t(lang, "account.stop_title"),
@@ -427,8 +478,19 @@ account.post("/stop", async (c) => {
   const lang = c.get("lang");
   const searchId = clean(fields, "s", 64) || (c.req.query("s") ?? "");
   const secret = clean(fields, "t", 64) || (c.req.query("t") ?? "");
+  const watcher = clean(fields, "w", 64) || (c.req.query("w") ?? "");
   const oneClick = fields["List-Unsubscribe"] === "One-Click";
   return guarded(c, async () => {
+    if (watcher && !searchId) {
+      const mine = await watchStopTarget(c, watcher, secret);
+      if (!mine) return c.notFound();
+      if (mine.mail !== "off") {
+        await c.env.ACCOUNTS!.prepare("UPDATE watch_mail SET mail = 'off' WHERE user_id = ?").bind(mine.user_id).run();
+        await audit(c.env, mine.user_id, "watch_mail_stopped", oneClick ? "one_click" : "link");
+      }
+      if (oneClick) return c.text(t(lang, "watches.stopped_one_click"), 200);
+      return accountPage(c, t(lang, "watches.stopped_title"), watchStoppedView(lang));
+    }
     const row = await stopTarget(c, searchId, secret);
     if (!row) return c.notFound();
     if (row.deliver !== "off") {
@@ -437,6 +499,128 @@ account.post("/stop", async (c) => {
     }
     if (oneClick) return c.text(t(lang, "account.stopped_one_click"), 200);
     return accountPage(c, t(lang, "account.stopped_title"), stoppedView(lang, await labelIn(c, lang, row)));
+  });
+});
+
+// -- watches (watches.ts, watch_pages.tsx, watch_mail.ts) -------------------------------------------
+
+const WATCH_NOTICE: Record<string, Key> = {
+  added: "watches.msg_added", exists: "watches.msg_exists", removed: "watches.msg_removed", changed: "watches.msg_changed",
+  unchanged: "watches.msg_unchanged", mail: "watches.msg_mail", pro: "watches.msg_pro", gone: "watches.msg_gone",
+};
+
+// The page's name as the site writes it, read from the data the page reads;
+// null when the page no longer reads (a notice must still be open to be watched).
+async function watchLabel(c: Context<AppEnv>, kind: WatchKind, target: string, lang: Lang): Promise<string | null> {
+  if (kind === "organization") return (await loadProfile(c.env, target).catch(() => null))?.organization.display_name ?? null;
+  if (kind === "buyer") {
+    const b = await loadBuyer(c.env, target).catch(() => null);
+    return b ? pick(lang, b.buyer.name_en, b.buyer.name_fr) ?? b.buyer.id : null;
+  }
+  const [head, ...rest] = target.split(":");
+  if (kind === "tender") {
+    const d = await loadTender(c.env, rest.join(":")).catch(() => null);
+    if (!d) return null;
+    const state = tenderState(d.status, d.closing, clockOf(c.env));
+    if (state !== "open" && state !== "closing") return null;
+    return pick(lang, d.title_en, d.title_fr) ?? d.reference;
+  }
+  if (head === "award" || head === "history") {
+    const d = await loadContract(c.env, head, rest.join(":")).catch(() => null);
+    return d ? pick(lang, d.title_en, d.title_fr) ?? d.reference : null;
+  }
+  const ref = rest.slice(1).join(":");
+  const read = await readPublishedContract(c.env, rest[0], ref);
+  if (read.state !== "ready") return ref;
+  const row = (read.rows[0] ?? []).find((r) => r.self === 1);
+  if (!row) return null;
+  const description = pick(lang, typeof row.desc_en === "string" ? row.desc_en : null, typeof row.desc_fr === "string" ? row.desc_fr : null);
+  return description ? description.split("\n")[0].slice(0, 200) : ref;
+}
+
+async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, status = 200): Promise<Response> {
+  const lang = c.get("lang");
+  const [listedWatches, mail, stats] = await Promise.all([
+    listWatches(c.env, who.userId), mailOf(c.env, who.userId), loadStats(c.env).catch(() => null),
+  ]);
+  // A watch on an organization or buyer the nightly merged follows the surviving id from this view on.
+  const { watches, moved, merged } = await followAliases(c.env, who.userId, listedWatches);
+  const dataDate = stats?.data_as_of?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+  const days = Array.from({ length: DAY_SLOTS }, (_, i) => addDays(dataDate, -i));
+  const read = watches.length ? await readEvents(c.env, watches, days) : null;
+  const m = said ?? c.req.query("m") ?? "";
+  const cap = watchCap(who.plan);
+  const notice = m === "cap"
+    ? allowed(who, "watch_mail") ? t(lang, "watches.control_cap_pro", { cap: fmtInt(cap, lang) })
+      : t(lang, "watches.cap_free", { n: fmtInt(watches.length, lang), cap: fmtInt(cap, lang), max: fmtInt(WATCH_MAX, lang) })
+    : WATCH_NOTICE[m] ? t(lang, WATCH_NOTICE[m]) : null;
+  return accountPage(c, t(lang, "watches.title"), watchesView(lang, who, { watches, read, days, mail, notice, moved, merged }), status);
+}
+
+account.get("/watches", async (c) => {
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => watchesPage(c, who));
+});
+
+// The page's own form posts the kind and the target; the label is read from
+// the data, and the answer goes back to the page, which then reads "Watching".
+account.post("/watches", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  const lang = c.get("lang");
+  const kind = fields.kind;
+  const target = isWatchKind(kind) ? targetOf(kind, clean(fields, "target", 300)) : null;
+  const segment = kind === "buyer" ? segmentOf(fields.segment) : "";
+  if (!isWatchKind(kind) || !target || segment === null) return c.text(t(lang, "form.rejected"), 400);
+  return guarded(c, async () => {
+    const label = await watchLabel(c, kind, target, lang);
+    if (!label) return c.redirect("/account/watches?m=gone", 303);
+    const stats = await loadStats(c.env).catch(() => null);
+    const result = await addWatch(c.env, who, { kind, target, segment, label }, stats?.data_as_of?.slice(0, 10) ?? null);
+    if (result === "added") await audit(c.env, who.userId, "watch_added", kind);
+    // At the plan's cap the post is refused with the page's own line.
+    if (result === "cap") return watchesPage(c, who, "cap", 403);
+    return c.redirect(`${watchPath(kind, target)}${lang === "fr" ? "?lang=fr" : ""}`, 303);
+  });
+});
+
+account.post("/watches/mail", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  if (fields.mail !== "on" && fields.mail !== "off") return c.text(t(c.get("lang"), "form.rejected"), 400);
+  if (fields.mail === "on" && !allowed(who, "watch_mail")) return c.redirect("/account/watches?m=pro", 303);
+  return guarded(c, async () => {
+    await setMail(c.env, who.userId, fields.mail === "on");
+    await audit(c.env, who.userId, "watch_mail", fields.mail);
+    return c.redirect("/account/watches?m=mail", 303);
+  });
+});
+
+account.post("/watches/:id/delete", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who } = post;
+  return guarded(c, async () => {
+    if (await deleteWatch(c.env, who.userId, c.req.param("id") ?? "")) await audit(c.env, who.userId, "watch_removed");
+    return c.redirect("/account/watches?m=removed", 303);
+  });
+});
+
+// Each kind a checkbox of its own (ev_<kind>=1); at least one stays chosen.
+account.post("/watches/:id", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  const cadence = fields.cadence ?? "daily";
+  if (!isCadence(cadence)) return c.text(t(c.get("lang"), "form.rejected"), 400);
+  const events = Object.keys(fields).filter((k) => k.startsWith("ev_") && fields[k] === "1").map((k) => k.slice(3));
+  return guarded(c, async () => {
+    const saved = await setWatch(c.env, who.userId, c.req.param("id") ?? "", events, cadence);
+    if (saved) await audit(c.env, who.userId, "watch_changed", cadence);
+    return c.redirect(`/account/watches?m=${saved ? "changed" : "unchanged"}`, 303);
   });
 });
 
@@ -523,6 +707,7 @@ export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new 
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
   const tomb = `deleted:${await sha256Hex(`${randomHex(32)}\n${who.email}`)}`;
+  await deleteWatchesOf(c.env, who.userId);
   await db.batch([
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, who.userId),
     db.prepare("DELETE FROM delivery_tokens WHERE search_id IN (SELECT id FROM saved_searches WHERE user_id = ?)").bind(who.userId),

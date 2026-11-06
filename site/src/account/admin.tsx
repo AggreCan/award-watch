@@ -30,6 +30,9 @@
 // operator by user id (admin_ops.ts). The pages show no card data: Stripe
 // keeps it, and nothing here asks for it (admin_stripe.ts).
 
+import { WATCH_KIND_KEY } from "./digests";
+import { eventCounts, isWatchKind, watchPath } from "./watch_events";
+import { type WatchOverview, watchOverview } from "./watches";
 import { Hono, type Context } from "hono";
 import type { FC } from "hono/jsx";
 import { isOwnAddress } from "../api";
@@ -241,7 +244,30 @@ function auditRows(lang: Lang, rows: Overview["audit"], withUser: boolean): unkn
 
 // -- the overview ----------------------------------------------------------------------------
 
-function overviewView(lang: Lang, o: Overview, search: { q: string; hits: UserHit[] | null }) {
+// The watches' part of the overview (watches.ts watchOverview, watch_events.ts eventCounts).
+type WatchesSeen = { ov: WatchOverview | null; events: Awaited<ReturnType<typeof eventCounts>> };
+
+const WatchesPanel = ({ lang, w }: { lang: Lang; w: WatchesSeen }) => {
+  if (!w.ov) return null;
+  const runs = (status: string) => fmtInt(w.ov!.week.find((r) => r.status === status)?.n ?? 0, lang);
+  return (
+    <Panel title={t(lang, "watches.admin_panel")}>
+      <dl class="wide">
+        {w.ov.byKind.map((k) => <><dt>{isWatchKind(k.kind) ? t(lang, WATCH_KIND_KEY[k.kind]) : k.kind}</dt><dd>{fmtInt(k.n, lang)}</dd></>)}
+        <dt>{t(lang, "watches.admin_mail_on")}</dt><dd>{fmtInt(w.ov.mailOn, lang)}</dd>
+        <dt>{t(lang, "watches.admin_runs", { n: 7 })}</dt>
+        <dd>{t(lang, "watches.admin_runs_value", { sent: runs("sent"), empty: runs("empty"), failed: runs("failed") })}</dd>
+        <dt>{w.events?.asOf ? t(lang, "watches.admin_events", { date: w.events.asOf }) : t(lang, "watches.admin_events", { date: "" })}</dt>
+        <dd>
+          {w.events === null || !w.events.asOf ? t(lang, "watches.admin_events_none")
+            : w.events.byKind.map((k) => <span class="mono nw-block">{`${k.kind} ${fmtInt(k.n, lang)}${k.capped ? ` (${fmtInt(k.capped, lang)})` : ""}`}</span>)}
+        </dd>
+      </dl>
+    </Panel>
+  );
+};
+
+function overviewView(lang: Lang, o: Overview, search: { q: string; hits: UserHit[] | null }, w: WatchesSeen = { ov: null, events: null }) {
   const subs = o.subscriptions.length
     ? o.subscriptions.map((s) => `${s.status} ${fmtInt(s.n, lang)}`).join(", ")
     : t(lang, "admin.none");
@@ -292,6 +318,7 @@ function overviewView(lang: Lang, o: Overview, search: { q: string; hits: UserHi
           <dt>{t(lang, "admin.count_codes")}</dt><dd>{fmtInt(o.codesToday, lang)}</dd>
         </dl>
       </Panel>
+      <WatchesPanel lang={lang} w={w} />
       <Panel title={t(lang, "admin.panel_audit")} count={fmtInt(o.audit.length, lang)}>
         {o.audit.length ? (
           <Table heads={[t(lang, "admin.col_time"), t(lang, "admin.col_event"), t(lang, "admin.col_account"), t(lang, "admin.col_detail")]}
@@ -314,8 +341,10 @@ admin.get("/", async (c) => {
   const lang = c.get("lang");
   return guarded(c, async () => {
     const q = (c.req.query("q") ?? "").trim().slice(0, EMAIL_MAX);
-    const [o, hits] = await Promise.all([overview(c.env), q ? findUsers(c.env, q) : Promise.resolve(null)]);
-    return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }));
+    const [o, hits, ov, events] = await Promise.all([
+      overview(c.env), q ? findUsers(c.env, q) : Promise.resolve(null), watchOverview(c.env), eventCounts(c.env),
+    ]);
+    return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }, { ov, events }));
   });
 });
 
@@ -594,6 +623,14 @@ function userView(lang: Lang, op: Account, d: UserDetail, s: UserState, now: Dat
           <dt>{t(lang, "admin.field_cached")}</dt><dd>{cachedPlan(lang, u)}</dd>
           <dt>{t(lang, "admin.field_plan")}</dt><dd>{planLabel(lang, { plan: s.plan.plan, planUntil: s.plan.until })}</dd>
           <dt>{t(lang, "admin.field_blocked")}</dt><dd>{blockLine(lang, d.block)}</dd>
+          {d.watches ? (
+            <>
+              <dt>{t(lang, "watches.admin_field")}</dt>
+              <dd>{t(lang, "watches.admin_value", {
+                n: fmtInt(d.watches.n, lang), mail: t(lang, d.watches.mail === "off" ? "watches.mail_off" : "watches.mail_on"),
+              })}</dd>
+            </>
+          ) : null}
         </dl>
       </Panel>
       <Panel title={t(lang, "admin.panel_entitlements")} count={fmtInt(d.entitlements.length, lang)}>
@@ -642,6 +679,29 @@ function userView(lang: Lang, op: Account, d: UserDetail, s: UserState, now: Dat
           </form>
         )}
       </Panel>
+      {d.watchDetail ? (
+        <>
+          <Panel title={t(lang, "watches.admin_panel")} count={fmtInt(d.watchDetail.watches.length, lang)}>
+            {d.watchDetail.watches.length ? (
+              <Table heads={[t(lang, "admin.col_kind"), t(lang, "watches.admin_col_subject"), t(lang, "watches.admin_col_segment"),
+                t(lang, "watches.admin_col_cadence"), t(lang, "watches.admin_col_since"), t(lang, "watches.admin_col_covered")]}
+                rows={d.watchDetail.watches.map((x) => [
+                  t(lang, WATCH_KIND_KEY[x.kind]), <a href={watchPath(x.kind, x.target)} class="mono">{x.target}</a>,
+                  <span class="mono">{x.segment}</span>, t(lang, x.cadence === "weekly" ? "watches.cadence_weekly" : "watches.cadence_daily"),
+                  <span class="mono">{day(x.created_at)}</span>, <span class="mono">{x.last_sent_day ?? ""}</span>,
+                ])} />
+            ) : <p class="muted">{t(lang, "watches.admin_none")}</p>}
+            <p class="muted small">{t(lang, "watches.mail_label")}: {t(lang, d.watchDetail.mail?.mail === "off" ? "watches.mail_off" : "watches.mail_on")}</p>
+          </Panel>
+          <Panel title={t(lang, "watches.admin_runs_title")} count={fmtInt(d.watchDetail.runs.length, lang)}>
+            {d.watchDetail.runs.length ? (
+              <Table heads={[t(lang, "admin.col_time"), t(lang, "watches.admin_col_covered"), t(lang, "admin.col_state")]}
+                rows={d.watchDetail.runs.map((r) => [<span class="mono">{stamp(r.sent_at)}</span>, <span class="mono">{r.day}</span>,
+                  deliveryWord(lang, r.status, r.items)])} />
+            ) : <p class="muted">{t(lang, "admin.deliveries_none")}</p>}
+          </Panel>
+        </>
+      ) : null}
       <Panel title={t(lang, "admin.panel_searches")} count={fmtInt(d.searches.length, lang)}>
         {d.searches.length ? (
           <Table heads={[t(lang, "admin.col_search"), t(lang, "admin.col_kind"), t(lang, "admin.col_delivery"), t(lang, "admin.col_last")]}

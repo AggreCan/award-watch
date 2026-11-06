@@ -6,6 +6,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { WatchControl, watchControl } from "../account/watch_pages";
 import { Table } from "../columns";
 import { REFERENCE_RE, loadOpenFirst, loadStats, loadTender, publishedReference, type TenderDetail } from "../data";
 import { buyerPath } from "../crosslinks";
@@ -74,6 +75,9 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   const buyerOpen = facets?.buyer.find((f) => f.value === d.buyer_id)?.n ?? 0;
   const otherOpen = buyerOpen > 1 || (buyerOpen === 1 && state !== "open" && state !== "closing");
   const categories = d.category.map((code) => categoryLabel(lang, code)).join(", ");
+  // An open notice can be followed; its watch ends when it closes (account/watch_mail.ts).
+  const open = state === "open" || state === "closing";
+  const watch = open ? await watchControl(c, "tender", `tender:${d.reference.toLowerCase()}`) : null;
   const description_ = description ? (
     <Panel title={descriptionMark ? `${t(lang, "tender.description_heading")} ${descriptionMark}` : t(lang, "tender.description_heading")}>
       <div class="prose">{description.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
@@ -98,6 +102,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
           {d.amendment > 0 ? ` · ${t(lang, "tender.amendment_n", { n: d.amendment })}` : null}
         </p>
         <p class="page-note">{t(lang, "tender.contact_note")}</p>
+        <WatchControl lang={lang} state={watch} kind="tender" target={`tender:${d.reference.toLowerCase()}`} />
       </PageHead>
 
       <div class="panel-grid">

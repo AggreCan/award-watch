@@ -26,28 +26,35 @@ export type Plan = (typeof PLANS)[number];
 // database in full, and their CSV files; a request without it sees each
 // view's first chart for three fiscal years and what the rest holds
 // (src/pages/analytics.tsx, docs/analytics.md).
+// watchlists: how many organizations, buyers, published contracts and tender
+// notices an account follows (src/account/watches.ts), with their events on
+// the watches page: 3 on Free, WATCH_MAX on Pro. watch_mail: those events by
+// email, daily or weekly per watch (src/account/watch_mail.ts).
 export const FEATURES = [
-  "saved_searches", "delivery", "api", "export_filtered", "intraday", "radar_depth", "bug_reports", "analytics",
+  "saved_searches", "delivery", "api", "export_filtered", "intraday", "radar_depth", "bug_reports", "analytics", "watchlists",
+  "watch_mail",
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
 // The ceiling on saved searches whatever the plan (accounts_schema.sql says
 // the same).
 export const SAVED_SEARCH_MAX = 25;
+// The ceiling on watches whatever the plan (accounts_schema.sql says the same).
+export const WATCH_MAX = 25;
 
 type Rules = {
   saved_searches: number; delivery: boolean; api: boolean; export_filtered: boolean; intraday: boolean; radar_depth: boolean;
-  bug_reports: boolean; analytics: boolean;
+  bug_reports: boolean; analytics: boolean; watchlists: number; watch_mail: boolean;
 };
 
 export const RULES: Readonly<Record<Plan, Rules>> = {
   free: {
     saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false, radar_depth: false, bug_reports: false,
-    analytics: false,
+    analytics: false, watchlists: 3, watch_mail: false,
   },
   pro: {
     saved_searches: SAVED_SEARCH_MAX, delivery: true, api: true, export_filtered: true, intraday: true, radar_depth: true, bug_reports: true,
-    analytics: true,
+    analytics: true, watchlists: WATCH_MAX, watch_mail: true,
   },
 };
 
@@ -124,14 +131,18 @@ export async function planFor(env: Env, user: PlanHolder, now: Date = new Date()
 }
 
 // allowed(user, feature): whether the user's plan allows a feature. For
-// saved_searches, `used` is how many the user holds, and the answer is
-// whether one more fits.
+// saved_searches and watchlists, `used` is how many the user holds, and the
+// answer is whether one more fits.
 export function allowed(who: { plan: Plan } | null | undefined, feature: Feature, used = 0): boolean {
   const rules = RULES[who?.plan ?? "free"];
-  if (feature === "saved_searches") return used < rules.saved_searches;
+  if (feature === "saved_searches" || feature === "watchlists") return used < rules[feature];
   return rules[feature];
 }
 
 export function savedSearchCap(plan: Plan): number {
   return RULES[plan].saved_searches;
+}
+
+export function watchCap(plan: Plan): number {
+  return Math.min(RULES[plan].watchlists, WATCH_MAX);
 }

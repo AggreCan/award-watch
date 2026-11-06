@@ -46,6 +46,7 @@ export function proIncludes(lang: Lang): { feature: keyof (typeof RULES)["pro"];
       text: t(lang, "billing.pro_searches", { n: fmtInt(RULES.pro.saved_searches, lang), free: fmtInt(RULES.free.saved_searches, lang) }),
     },
     { feature: "delivery", text: t(lang, "billing.pro_delivery") },
+    { feature: "watch_mail", text: t(lang, "watches.pro_page", { n: fmtInt(RULES.pro.watchlists, lang), free: fmtInt(RULES.free.watchlists, lang) }) },
     { feature: "analytics", text: t(lang, "billing.pro_analytics") },
     { feature: "analytics", text: t(lang, "propage.records", { n: fmtInt(RECORDS_PAGE_ROWS, lang) }) },
     { feature: "analytics", text: t(lang, "propage.incumbents", { n: fmtInt(INCUMBENTS_TEASE, lang) }) },

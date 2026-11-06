@@ -32,6 +32,12 @@ page shows of a published contract row) and rec_gsin (the names of the GSIN
 codes those rows carry). The asset count is why these live here rather than
 in static shards: a page per published contract would be 1.3 million files.
 
+One more, rec_events, holds what the watches follow (site/src/account/
+watch_events.ts): what happened tonight to an organization, a buyer, a
+single record or a tender notice, derived by derive_events from the
+night's differences and the previous night's state (docs/analytics.md,
+"Events"), kept 90 data dates.
+
 The sync is the search sync's (search_db.py) with three changes, because the
 records table is about a hundred times larger:
 
@@ -71,12 +77,14 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 from . import config, expiring, organizations
 from .db import connect, get_meta, now_iso, set_meta, today_iso
 from .export import scrub
-from .export_static import BUYER_ID_RE, ORG_ID_RE, RefMap, read_segments
+from .export_static import BUYER_ID_RE, NEW_LAG_DAYS, ORG_ID_RE, RefMap, read_segments
 from .indicators import RULES_VERSION
+from .normalize import closing_day, tender_status_on
 from .search_db import (
     MAX_BATCH_BYTES, MAX_BATCH_STATEMENTS, MAX_KEYS_PER_DELETE, MAX_STATEMENT_BYTES, _BatchWriter, _grouped, sql_literal,
 )
@@ -118,17 +126,22 @@ CONTRACTS = Table(11, "rec_contracts", "k", ("dept", "ref", "pid", "bid", "oid",
                                             "amend", "proc", "comp", "ctype", "gsin", "agr", "trade", "ltr", "inst", "period",
                                             "bids", "so_no", "desc_en", "desc_fr", "com_en", "com_fr"))
 GSIN = Table(12, "rec_gsin", "k", ("code", "desc_en", "desc_fr"))
-TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE, DETAILS, CLASSES, EXPIRING, CONTRACTS, GSIN)
+# The events the watches follow, filled by derive_events from records_events.
+EVENTS = Table(13, "rec_events", "k", ("day", "kind", "src", "oid", "buyer", "sid", "ref", "cents", "ocents", "endd", "oendd",
+                                       "closing", "oclosing", "namd", "title", "title_fr", "other", "other_fr", "horizon", "more",
+                                       "path"))
+TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE, DETAILS, CLASSES, EXPIRING, CONTRACTS, GSIN,
+          EVENTS)
 BY_CODE = {t.code: t for t in TABLES}
 
 # The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
 # so); 2: the amendment, reference and title columns, the median columns and
 # rec_buyer_years, rec_due. Recorded in meta (META_LAYOUT) by the full load
 # that wrote it; a sync that finds another reloads in full by itself. The
-# tables added beside them (rec_details to rec_gsin) leave it at 2: no table
-# D1 holds changed form, the nightly schema creates a missing table, and its
-# rows are all new to the ledger, so the ordinary changes fill it. A column
-# added to any of the twelve raises it.
+# tables added beside them (rec_details to rec_gsin, then rec_events) leave it
+# at 2: no table D1 holds changed form, the nightly schema creates a missing
+# table, and its rows are all new to the ledger, so the ordinary changes fill
+# it. A column added to any of the thirteen raises it.
 LAYOUT = 2
 
 # The source numbers the site's records_db.ts SOURCE_NUMBER repeats.
@@ -830,6 +843,415 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
     return left_out
 
 
+# -- the events the watches follow (rec_events) ------------------------------------
+
+EVENT_KINDS = ("award", "grant", "amended", "cancelled", "ends_12m", "ends_6m", "ended", "notice", "notice_amended",
+               "notice_closed", "notice_cancelled", "notice_awarded")
+# How long an event is kept, here and in D1: the watches page reads the last
+# 30 data dates, a weekly message 7, and a night whose apply failed is sent later.
+EVENT_DAYS = 90
+# The most days one night's events reach back when nights were missed; the
+# watch mail reaches back as far (deliveries.ts SPAN_DAYS_MAX).
+EVENT_SPAN_DAYS = 7
+# The lines a contract's end date crosses, in days from the data date: the
+# radar's 12- and 6-month windows (expiring.WINDOWS); the event's horizon.
+EVENT_LINES = (("ends_12m", dict(expiring.WINDOWS)["12m"]), ("ends_6m", dict(expiring.WINDOWS)["6m"]))
+# The sources whose amendments are events: award notices and PSPC history (a
+# version after the first, a counted value that rose, an end date that moved)
+# and the published contracts (a row joining a contract already known, or a
+# row whose value rose or whose end date moved).
+AMENDED_EVENT_SOURCES = (SOURCES["awards"], SOURCES["history"], SOURCES["contracts"])
+_VERSIONED = (SOURCES["awards"], SOURCES["history"])
+TENDER_SRC = 5
+# The rows of one published contract (its versions: the department and
+# procurement_id they share) an event about it is written for, so a watch on
+# any version's page sees it; the page lists as many (records_tables.ts
+# CONTRACT_VERSIONS_MAX).
+EVENT_GROUP_ROWS = 50
+# The rows one organization or buyer keeps of one kind on one data date, the
+# largest values first; the rest become one count row (more) the mail and the
+# page turn into "212 more, see the page".
+EVENT_SUBJECT_DAY_MAX = 100
+# records_event_state.src of a tender notice open on the data date.
+NOTICE_STATE = 0
+META_EVENTS_AT = "records_events_at"      # the data date the events were last derived for
+META_EVENTS_PREV = "records_events_prev"  # the one before it: the previous night's
+_URI_SAFE = "-_.!~*'()"                  # what encodeURIComponent leaves as it is
+_COLUMNS = EVENTS.written
+
+
+def _plus(day: str, n: int) -> str:
+    return (date.fromisoformat(day) + timedelta(days=n)).isoformat()
+
+
+def contract_path(dept: str, ref: str) -> str:
+    """A published contract's page, as the site's contractPath writes it."""
+    return f"/contracts/{quote(dept, safe=_URI_SAFE)}/{quote(ref, safe=_URI_SAFE)}"
+
+
+def record_ref(src: object, ref: object) -> str | None:
+    """An event's ref, the key a watch on a single record follows: 'award:<reference in URL form>',
+    'history:<...>', 'contract:<department>:<reference>', 'grant:<department>:<reference>'; None without one."""
+    if not isinstance(ref, str) or not ref:
+        return None
+    if src == SOURCES["awards"] and ":" not in ref:
+        return f"award:{ref.lower()}"
+    if src == SOURCES["history"] and ":" not in ref:
+        return f"history:{ref.lower()}"
+    if src in (SOURCES["contracts"], SOURCES["grants"]) and ":" in ref:
+        return f"{'contract' if src == SOURCES['contracts'] else 'grant'}:{ref}"
+    return None
+
+
+def event_path(src: object, ref: object, oid: object, buyer: object) -> str | None:
+    """The page an event's line links: the record's own (an award notice, a PSPC record, a published contract), else
+    its organization's, else its buyer's; None when there is none. A grant has no page here: its organization's."""
+    if src in (SOURCES["awards"], SOURCES["history"]) and isinstance(ref, str) and ref and ":" not in ref:
+        return f"/{'awards' if src == SOURCES['awards'] else 'history'}/{ref.lower()}"
+    if src == SOURCES["contracts"] and isinstance(ref, str) and ":" in ref:
+        dept, reference = ref.split(":", 1)
+        if dept and reference:
+            return contract_path(dept, reference)
+    if isinstance(oid, int):
+        return f"/organizations/{org_id(oid)}"
+    if isinstance(buyer, str) and buyer:
+        return f"/buyers/{buyer}"
+    return None
+
+
+def _buyer_id(value: object) -> str | None:
+    return value if isinstance(value, str) and BUYER_ID_RE.match(value) and len(value) <= 80 else None
+
+
+def _seg(codes: object, segments: set[str]) -> int | None:
+    found = sorted({c[:2] for c in str(codes or "").split() if c[:2] in segments})
+    return int(found[0]) if found else None
+
+
+class _Found:
+    """Tonight's rows, by what they are about, before the cap and the insert."""
+
+    def __init__(self, as_of: str) -> None:
+        self.as_of = as_of
+        self.rows: list[dict] = []
+        self.counts = {kind: 0 for kind in EVENT_KINDS}
+
+    def add(self, identity: str, kind: str, *, ref: str | None, path: str | None, **fields) -> None:
+        if ref is None or path is None:
+            return
+        row = {c: None for c in _COLUMNS}
+        row.update(fields, k=key_of(f"event:{identity}"), day=self.as_of, kind=kind, ref=ref, path=path)
+        for c in ("endd", "oendd"):
+            row[c] = day_of(row[c])
+        self.rows.append(row)
+        self.counts[kind] += 1
+
+
+def derive_events(conn: sqlite3.Connection, as_of: str) -> dict[str, int]:
+    """Tonight's events into records_events, the state they were compared with replaced by tonight's, the rows older
+    than EVENT_DAYS dropped, and what is left as tonight's rec_events (its temporary table, for the stage).
+
+    Called by sync after build, while tonight's rows sit in the temporary tables. The rules are docs/analytics.md
+    "Events"; lo is the previous night's data date (at most EVENT_SPAN_DAYS back; None on the first night, which
+    writes no amendment, cancellation, end date or closing, having nothing to compare with).
+
+    Each row's key hashes what it is about (not its day), so a night derived twice, or a night whose apply failed and
+    whose records are new to the ledger again, writes nothing new and keeps the day it was first found on. A data date
+    earlier than the last one derived derives nothing. Returns how many of each kind were found tonight, and how many
+    subjects went past the per-day cap ("capped").
+    """
+    at_before = get_meta(conn, META_EVENTS_AT) or None
+    found = _Found(as_of)
+    capped = 0
+    if at_before is None or at_before <= as_of:
+        prev = (get_meta(conn, META_EVENTS_PREV) or None) if at_before == as_of else at_before
+        lo = max(prev, _plus(as_of, -EVENT_SPAN_DAYS)) if prev else None
+        segments = set(read_segments())
+        _fill_ends(conn)
+        joined = _published_events(conn, found)
+        _record_events(conn, found, joined)
+        if lo is not None and lo < as_of:
+            _crossing_events(conn, found, lo, as_of, segments)
+            _ended_events(conn, found, lo, as_of)
+        opened = _notice_events(conn, found, lo or _plus(as_of, -1), as_of, segments, compare=lo is not None)
+        _replace_state(conn, opened)
+        rows, capped = _capped(found.rows)
+        conn.executemany(f"INSERT OR IGNORE INTO records_events ({', '.join(_COLUMNS)}) VALUES ({', '.join('?' * len(_COLUMNS))})",
+                         [tuple(r[c] for c in _COLUMNS) for r in rows])
+        conn.execute("DELETE FROM records_events WHERE day <= ?", (_plus(as_of, -EVENT_DAYS),))
+        if at_before != as_of:
+            set_meta(conn, META_EVENTS_PREV, at_before or "")
+            set_meta(conn, META_EVENTS_AT, as_of)
+        conn.execute("DROP TABLE IF EXISTS temp.records_ends_now")
+    now = f"temp.{_now(EVENTS)}"
+    conn.execute(f"DELETE FROM {now}")
+    conn.executemany(f"INSERT INTO {now} VALUES ({', '.join('?' * (len(_COLUMNS) + 1))})", (
+        (*r, row_hash(EVENTS, r[1:])) for r in map(tuple, conn.execute(f"SELECT {', '.join(_COLUMNS)} FROM records_events ORDER BY k"))))
+    return {**found.counts, "capped": capped}
+
+
+def _capped(rows: list[dict]) -> tuple[list[dict], int]:
+    """At most EVENT_SUBJECT_DAY_MAX rows of one kind for one organization or buyer, the largest values first; past
+    that the row loses that subject (it still serves a watch on the record itself) and one count row says how many."""
+    out = list(rows)
+    capped = 0
+    for column in ("oid", "buyer"):
+        groups: dict[tuple, list[dict]] = {}
+        for r in out:
+            if r[column] is not None and r["more"] is None:
+                groups.setdefault((r["kind"], r[column]), []).append(r)
+        for (kind, subject), members in sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
+            if len(members) <= EVENT_SUBJECT_DAY_MAX:
+                continue
+            capped += 1
+            members.sort(key=lambda r: (-(r["cents"] or 0), r["k"]))
+            for r in members[EVENT_SUBJECT_DAY_MAX:]:
+                r[column] = None
+            row = {c: None for c in _COLUMNS}
+            page = f"/organizations/{org_id(subject)}" if column == "oid" else f"/buyers/{subject}"
+            row.update(k=key_of(f"event:count:{members[0]['day']}:{kind}:{column}:{subject}"), day=members[0]["day"], kind=kind,
+                       ref=f"count:{kind}:{subject}", path=page, more=len(members) - EVENT_SUBJECT_DAY_MAX, **{column: subject})
+            out.append(row)
+    return out, capped
+
+
+def _fill_ends(conn: sqlite3.Connection) -> None:
+    """temp.records_ends_now: each award notice's and PSPC history record's newest end date and whether that version
+    is cancelled, each grant's end, keyed as its records row, so the events read them by key."""
+    conn.execute("DROP TABLE IF EXISTS temp.records_ends_now")
+    conn.execute("CREATE TEMP TABLE records_ends_now (k INTEGER PRIMARY KEY, endd TEXT, cancelled INTEGER NOT NULL)")
+
+    def rows() -> Iterator[tuple]:
+        for kind, table in (("award", "awards"), ("history", "contract_history")):
+            for r in conn.execute(f"WITH newest AS ({_A._newest_by_reference(table, ('reference',))}) "
+                                  'SELECT reference, "end" AS endd, COALESCE(status, \'\') = \'cancelled\' AS cancelled FROM newest'):
+                yield key_of(f"{kind}:{r['reference']}"), day_of(r["endd"]), 1 if r["cancelled"] else 0
+        for r in conn.execute(f"WITH newest AS ({_A._newest_by_reference('grants', ('owner_org', 'reference'))}) "
+                              'SELECT owner_org, reference, "end" AS endd FROM newest'):
+            yield key_of(f"grant:{r['owner_org']}:{r['reference']}"), day_of(r["endd"]), 0
+
+    conn.executemany("INSERT OR REPLACE INTO temp.records_ends_now VALUES (?, ?, ?)", rows())
+    conn.execute(f"INSERT OR REPLACE INTO temp.records_ends_now SELECT k, endd, 0 FROM temp.{_now(CONTRACTS)}")
+
+
+def _group(conn: sqlite3.Connection, dept: str, pid: object, k: int, ref: str, known: bool) -> list[tuple[int, str]]:
+    """The rows of one published contract (a department and procurement_id; a row with none stands alone), oldest
+    first, at most EVENT_GROUP_ROWS; with known, only the rows of the previous night's state."""
+    if pid is None:
+        return [(k, ref)]
+    join = "JOIN records_event_state s ON s.k = o.k " if known else ""
+    return [(r[0], r[1]) for r in conn.execute(
+        f"SELECT o.k, o.ref FROM temp.{_now(CONTRACTS)} o {join}WHERE o.dept = ? AND o.pid = ? ORDER BY o.cdate, o.ref LIMIT ?",
+        (dept, pid, EVENT_GROUP_ROWS))]
+
+
+def _published_events(conn: sqlite3.Connection, found: _Found) -> set[int]:
+    """amended, for the published contracts; returns the rows new tonight that joined a contract already known."""
+    c, buyers = f"temp.{_now(CONTRACTS)}", f"temp.{_now(BUYERS)}"
+    conn.execute(f"CREATE INDEX IF NOT EXISTS temp.{_now(CONTRACTS)}_group ON {_now(CONTRACTS)} (dept, pid)")
+    conn.execute(f"CREATE INDEX IF NOT EXISTS temp.{_now(CONTRACTS)}_ref ON {_now(CONTRACTS)} (dept, ref)")
+    src = SOURCES["contracts"]
+
+    def fan(identity: str, r: sqlite3.Row, targets: list[tuple[int, str]], ocents: object, oendd: object) -> None:
+        for i, (tk, tref) in enumerate(targets):
+            found.add(f"{identity}:{tk}", "amended", ref=f"contract:{r['dept']}:{tref}", path=contract_path(r["dept"], r["ref"]),
+                      src=src, oid=r["oid"] if i == 0 else None, buyer=r["buyer"] if i == 0 else None, cents=r["value"],
+                      ocents=ocents, endd=r["endd"], oendd=oendd, title=title_of(r["desc_en"], None),
+                      title_fr=title_of(r["desc_fr"], None))
+
+    head = (f"SELECT c.k, c.dept, c.ref, c.pid, c.oid, b.id AS buyer, c.value, c.endd, c.desc_en, c.desc_fr, c.cdate FROM {c} c "
+            f"LEFT JOIN {buyers} b ON b.bid = c.bid ")
+    # A row whose value as published rose, or whose end date moved, since the previous night.
+    for r in conn.execute(
+            head.replace("c.cdate FROM", "c.cdate, s.cents AS ocents, s.endd AS oendd FROM") +
+            "JOIN records_event_state s ON s.k = c.k AND s.src = ? "
+            "WHERE c.value > s.cents OR (c.endd IS NOT NULL AND s.endd IS NOT NULL AND c.endd <> s.endd) ORDER BY c.k", (src,)).fetchall():
+        fan(f"amended:{r['k']}:{r['value']}:{r['endd']}", r, _group(conn, r["dept"], r["pid"], r["k"], r["ref"], False), r["ocents"],
+            r["oendd"] if r["oendd"] and r["endd"] and r["oendd"] != r["endd"] else None)
+    # A row new tonight joining a contract the previous night knew: the contract gained a version.
+    joined: set[int] = set()
+    for r in conn.execute(
+            head + "WHERE c.pid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM records_event_state s WHERE s.k = c.k) "
+            f"AND EXISTS (SELECT 1 FROM {c} o JOIN records_event_state s ON s.k = o.k WHERE o.dept = c.dept AND o.pid = c.pid) "
+            "ORDER BY c.k").fetchall():
+        joined.add(r["k"])
+        before = conn.execute(
+            f"SELECT o.value, o.endd FROM {c} o JOIN records_event_state s ON s.k = o.k WHERE o.dept = ? AND o.pid = ? "
+            "ORDER BY o.cdate DESC, o.ref DESC LIMIT 1", (r["dept"], r["pid"])).fetchone()
+        fan(f"amended:{r['k']}", r, _group(conn, r["dept"], r["pid"], r["k"], r["ref"], True), before[0],
+            before[1] if before[1] and r["endd"] and before[1] != r["endd"] else None)
+    return joined
+
+
+def _record_events(conn: sqlite3.Connection, found: _Found, joined: set[int]) -> None:
+    """award and grant, for the records new to the ledger; amended and cancelled, for the award notices and PSPC
+    history against the state."""
+    n, buyers, details = f"temp.{_now(RECORDS)}", f"temp.{_now(BUYERS)}", f"temp.{_now(DETAILS)}"
+    columns = ("n.k, n.src, n.oid, b.id AS buyer, n.sid, n.cents, n.namd, n.ref, COALESCE(d.title_en, n.title) AS title_en, "
+               "d.title_fr, d.day, e.endd, e.cancelled")
+    joins = (f"FROM {n} n LEFT JOIN {buyers} b ON b.bid = n.bid LEFT JOIN {details} d ON d.k = n.k "
+             "LEFT JOIN temp.records_ends_now e ON e.k = n.k ")
+    if conn.execute("SELECT EXISTS (SELECT 1 FROM records_ledger WHERE t = ?)", (RECORDS.code,)).fetchone()[0]:
+        for r in conn.execute(
+                f"SELECT {columns} {joins}WHERE n.extra = 0 AND (n.oid IS NOT NULL OR n.bid IS NOT NULL) "
+                "AND NOT EXISTS (SELECT 1 FROM records_ledger l WHERE l.t = ? AND l.k = n.k) ORDER BY n.k", (RECORDS.code,)).fetchall():
+            if r["k"] in joined:
+                continue
+            kind = "grant" if r["src"] == SOURCES["grants"] else "award"
+            found.add(f"award:{r['k']}", kind, ref=record_ref(r["src"], r["ref"]), path=event_path(r["src"], r["ref"], r["oid"], r["buyer"]),
+                      src=r["src"], oid=r["oid"], buyer=r["buyer"], sid=r["sid"], cents=r["cents"], endd=r["endd"],
+                      title=title_of(r["title_en"], None), title_fr=title_of(r["title_fr"], None))
+    versioned = ", ".join(str(v) for v in _VERSIONED)
+    for r in conn.execute(
+            f"SELECT {columns}, s.cents AS ocents, s.n AS onamd, s.endd AS oendd {joins}"
+            "JOIN records_event_state s ON s.k = n.k AND s.src = n.src "
+            f"WHERE n.extra = 0 AND n.src IN ({versioned}) AND (n.oid IS NOT NULL OR n.bid IS NOT NULL) "
+            "AND (n.namd > s.n OR n.cents > s.cents OR (e.endd IS NOT NULL AND s.endd IS NOT NULL AND e.endd <> s.endd)) "
+            "ORDER BY n.k").fetchall():
+        kind = "cancelled" if r["cancelled"] and r["namd"] > (r["onamd"] or 0) else "amended"
+        found.add(f"{kind}:{r['k']}:{r['namd']}:{r['cents']}:{r['endd']}", kind, ref=record_ref(r["src"], r["ref"]),
+                  path=event_path(r["src"], r["ref"], r["oid"], r["buyer"]), src=r["src"], oid=r["oid"], buyer=r["buyer"],
+                  sid=r["sid"], cents=None if kind == "cancelled" else r["cents"], ocents=r["ocents"], endd=r["endd"],
+                  oendd=r["oendd"] if r["oendd"] and r["endd"] and r["oendd"] != r["endd"] else None, namd=r["namd"], title=title_of(r["title_en"], None),
+                  title_fr=title_of(r["title_fr"], None))
+
+
+def _crossing_events(conn: sqlite3.Connection, found: _Found, lo: str, as_of: str, segments: set[str]) -> None:
+    """ends_12m and ends_6m, from tonight's radar window."""
+    kinds = {number: name for name, number in EXPIRING_KINDS.items()}
+    for kind, days in EVENT_LINES:
+        for r in conn.execute(
+                f"SELECT k, endd, oid, buyer, kind, segs, cad, j FROM temp.{_now(EXPIRING)} WHERE endd > ? AND endd <= ? ORDER BY k",
+                (_plus(lo, days), _plus(as_of, days))).fetchall():
+            row = json.loads(r["j"])
+            reference = str(row.get("reference") or "")
+            common = dict(src=r["kind"], cents=r["cad"], endd=r["endd"], horizon=days, sid=_seg(r["segs"], segments),
+                          title=title_of(row.get("title_en"), None), title_fr=title_of(row.get("title_fr"), None),
+                          other=row.get("organization"))
+            identity = f"{kind}:{r['k']}:{r['endd']}"
+            if kinds.get(r["kind"]) != "contract":
+                found.add(identity, kind, ref=record_ref(r["kind"], reference), oid=r["oid"], buyer=r["buyer"],
+                          path=event_path(r["kind"], reference, r["oid"], r["buyer"]), **common)
+                continue
+            dept, _, ref = reference.partition(":")
+            if not dept or not ref:
+                continue
+            own = conn.execute(f"SELECT k, pid FROM temp.{_now(CONTRACTS)} WHERE dept = ? AND ref = ?", (dept, ref)).fetchone()
+            targets = _group(conn, dept, own["pid"], own["k"], ref, False) if own else [(0, ref)]
+            for i, (tk, tref) in enumerate(targets):
+                found.add(f"{identity}:{tk}", kind, ref=f"contract:{dept}:{tref}", path=contract_path(dept, ref),
+                          oid=r["oid"] if i == 0 else None, buyer=r["buyer"] if i == 0 else None, **common)
+
+
+def _ended_events(conn: sqlite3.Connection, found: _Found, lo: str, as_of: str) -> None:
+    """ended: the radar's own candidates (newest version's end date, not cancelled, each contract once across the
+    three sources) whose end date is on or after lo and before as_of: the last day in force passed since the
+    previous night."""
+    names = expiring._Names(conn)
+    first, last = lo, _plus(as_of, -1)
+    day = date.fromisoformat(as_of)
+    kept, _, _ = expiring.dedupe({
+        "award": expiring.notice_candidates(conn, "award", names, first, last, day),
+        "history": expiring.notice_candidates(conn, "history", names, first, last, day),
+        "contract": expiring.contract_candidates(conn, names, first, last, day),
+    })
+    urls = ref_maps(conn)
+    for cand in sorted(kept, key=lambda x: x.source_key):
+        row = cand.row
+        src = EXPIRING_KINDS[cand.kind]
+        if cand.kind == "contract":
+            ref = cand.reference
+        else:
+            ref = urls["awards" if cand.kind == "award" else "history"].get(cand.reference)
+        oid = None if row.get("supplier_withheld") else org_number(row.get("organization_id"))
+        buyer = _buyer_id(row.get("buyer_id"))
+        currency = str(row.get("currency") or "").upper()
+        found.add(f"ended:{cand.source_key}:{row['end']}", "ended", ref=record_ref(src, ref), path=event_path(src, ref, oid, buyer),
+                  src=src, oid=oid, buyer=buyer, cents=cents_of(row.get("value")) if currency in ("", "CAD") else None,
+                  endd=row["end"], title=title_of(row.get("title_en"), None), title_fr=title_of(row.get("title_fr"), None),
+                  other=row.get("organization"))
+
+
+def _notice_events(conn: sqlite3.Connection, found: _Found, lo: str, as_of: str, segments: set[str], *, compare: bool) -> list[int]:
+    """notice and notice_amended, for the versions first seen after lo; notice_closed and notice_cancelled, against the
+    state; notice_awarded, for the award notices first seen after lo whose solicitation is a notice's. Returns the keys
+    of the notices open on as_of, tonight's state."""
+    urls = RefMap(conn, "tenders")
+    first, last = _plus(lo, 1), _plus(as_of, 1)
+    newest = ("SELECT t.reference, t.amendment, t.title_en, t.title_fr, t.buyer_id, t.closing, t.published, t.status, "
+              "(SELECT MIN(z.first_seen) FROM tenders z WHERE z.reference = t.reference) AS first_sight, "
+              "(SELECT group_concat(c.unspsc, ' ') FROM tender_codes c WHERE c.reference = t.reference AND c.amendment = t.amendment) AS codes, "
+              "(SELECT p.closing FROM tenders p WHERE p.reference = t.reference AND p.amendment < t.amendment ORDER BY p.amendment DESC LIMIT 1) AS oclosing, "
+              "(SELECT p.title_en FROM tenders p WHERE p.reference = t.reference AND p.amendment < t.amendment ORDER BY p.amendment DESC LIMIT 1) AS otitle "
+              "FROM tenders t WHERE t.amendment = (SELECT MAX(y.amendment) FROM tenders y WHERE y.reference = t.reference)")
+    for r in conn.execute(newest + " AND t.reference IN (SELECT reference FROM tenders WHERE first_seen >= ? AND first_seen < ?) "
+                          "ORDER BY t.reference", (first, last)).fetchall():
+        url = urls.get(r["reference"])
+        if url is None:
+            continue
+        sight = day_of(r["first_sight"]) or as_of
+        buyer = _buyer_id(r["buyer_id"])
+        common = dict(src=TENDER_SRC, sid=_seg(r["codes"], segments), closing=r["closing"], title=title_of(r["title_en"], None),
+                      title_fr=title_of(r["title_fr"], None), namd=r["amendment"])
+        if sight >= first:
+            published = day_of(r["published"])
+            if buyer is None or (published is not None and published < _plus(sight, -NEW_LAG_DAYS)):
+                continue
+            found.add(f"notice:{r['reference']}", "notice", ref=f"tender:{url.lower()}", path=f"/tenders/{url.lower()}", buyer=buyer, **common)
+        else:
+            moved = r["oclosing"] if r["oclosing"] != r["closing"] else None
+            retitled = r["otitle"] if (r["otitle"] or "") != (r["title_en"] or "") else None
+            found.add(f"notice_amended:{r['reference']}:{r['amendment']}", "notice_amended", ref=f"tender:{url.lower()}",
+                      path=f"/tenders/{url.lower()}", buyer=buyer, oclosing=moved, other=title_of(retitled, None), **common)
+    open_before = {k for (k,) in conn.execute("SELECT k FROM records_event_state WHERE src = ?", (NOTICE_STATE,))}
+    opened: list[int] = []
+    for r in conn.execute(newest + " ORDER BY t.reference").fetchall():
+        k = key_of(f"notice:{r['reference']}")
+        status = tender_status_on(r["status"], r["closing"], as_of)
+        if status == "open":
+            opened.append(k)
+        elif compare and k in open_before and (url := urls.get(r["reference"])) is not None:
+            kind = "notice_cancelled" if status == "cancelled" else "notice_closed"
+            found.add(f"{kind}:{r['reference']}", kind, ref=f"tender:{url.lower()}", path=f"/tenders/{url.lower()}", src=TENDER_SRC,
+                      closing=r["closing"], title=title_of(r["title_en"], None), title_fr=title_of(r["title_fr"], None))
+    # An award notice first seen tonight whose solicitation a notice carries: the notice was awarded, to its supplier.
+    conn.execute("DROP TABLE IF EXISTS temp.records_solicitations")
+    conn.execute("CREATE TEMP TABLE records_solicitations AS SELECT UPPER(TRIM(solicitation)) AS sol, MIN(reference) AS reference "
+                 "FROM tenders WHERE solicitation IS NOT NULL AND TRIM(solicitation) <> '' GROUP BY UPPER(TRIM(solicitation))")
+    conn.execute("CREATE INDEX temp.records_solicitations_sol ON records_solicitations (sol)")
+    seen: set[str] = set()
+    for r in conn.execute(
+            "SELECT a.reference, a.solicitation, a.supplier_withheld, o.display_name AS winner, s.reference AS tender, "
+            "CASE WHEN a.total_value > 0 THEN a.total_value ELSE a.amount END AS v, a.currency FROM awards a JOIN records_solicitations s ON s.sol = UPPER(TRIM(a.solicitation)) "
+            "LEFT JOIN organizations o ON o.id = a.organization_id WHERE a.amendment = 0 AND a.first_seen >= ? AND a.first_seen < ? "
+            "ORDER BY s.reference, a.reference", (first, last)).fetchall():
+        url = urls.get(r["tender"])
+        if url is None or r["tender"] in seen:
+            continue
+        seen.add(r["tender"])
+        currency = str(r["currency"] or "").upper()
+        found.add(f"notice_awarded:{r['tender']}", "notice_awarded", ref=f"tender:{url.lower()}", path=f"/tenders/{url.lower()}",
+                  src=TENDER_SRC, other=None if r["supplier_withheld"] else r["winner"],
+                  cents=cents_of(r["v"]) if currency in ("", "CAD") else None,
+                  title=title_of(conn.execute("SELECT title_en FROM tenders WHERE reference = ? ORDER BY amendment DESC LIMIT 1",
+                                              (r["tender"],)).fetchone()[0], None))
+    conn.execute("DROP TABLE IF EXISTS temp.records_solicitations")
+    return opened
+
+
+def _replace_state(conn: sqlite3.Connection, opened: list[int]) -> None:
+    """records_event_state := tonight's award notices and PSPC history records (versions, value, end date), published
+    contract rows (value and end date as published) and open notices."""
+    conn.execute("DELETE FROM records_event_state")
+    versioned = ", ".join(str(v) for v in _VERSIONED)
+    conn.execute(f"INSERT OR REPLACE INTO records_event_state (k, src, n, cents, endd) SELECT n.k, n.src, n.namd, n.cents, e.endd "
+                 f"FROM temp.{_now(RECORDS)} n LEFT JOIN temp.records_ends_now e ON e.k = n.k WHERE n.extra = 0 AND n.src IN ({versioned})")
+    conn.execute(f"INSERT OR REPLACE INTO records_event_state (k, src, n, cents, endd) SELECT k, ?, NULL, value, endd "
+                 f"FROM temp.{_now(CONTRACTS)}", (SOURCES["contracts"],))
+    conn.executemany("INSERT OR REPLACE INTO records_event_state (k, src, n, cents) VALUES (?, ?, 1, NULL)",
+                     ((k, NOTICE_STATE) for k in opened))
+
+
 # -- the plan --------------------------------------------------------------------
 
 
@@ -987,6 +1409,7 @@ def sync(conn: sqlite3.Connection, out_dir: Path | None = None, *, full: bool = 
     as_of = (get_meta(conn, "data_as_of") or today or today_iso())[:10]
     finish = finish_sql(as_of)
     left_out = build(conn, date.fromisoformat(as_of), static_dir)
+    events = derive_events(conn, as_of)
     ledger_empty = conn.execute("SELECT NOT EXISTS (SELECT 1 FROM records_ledger)").fetchone()[0] == 1
     reason = full_reason(conn, requested=full, ledger_empty=ledger_empty, today=today)
     staged = stage(conn, reason)
@@ -1013,6 +1436,7 @@ def sync(conn: sqlite3.Connection, out_dir: Path | None = None, *, full: bool = 
         **staged,
         "expected_total": sum(staged["expected"].values()),
         "left_out": left_out,
+        "events": events,
     }
     (out / BATCH_LIST).write_text("".join(f"{name}\n" for name in writer.files), encoding="utf-8")
     partial = out / (MANIFEST + ".partial")
@@ -1160,7 +1584,8 @@ def command(args: argparse.Namespace) -> int:
             kind = f"full reload ({manifest['reason']})" if manifest["full"] else "changes only"
             summary = (f"records-sync: {kind}: upserts {manifest['upserts']}, deletes {manifest['deletes']}, "
                        f"{len(manifest['batches'])} batches, {manifest['bytes']} bytes, {manifest['statements']} "
-                       f"statements, rows expected afterwards {manifest['expected']}, left out {manifest['left_out']}")
+                       f"statements, rows expected afterwards {manifest['expected']}, left out {manifest['left_out']}, "
+                       f"events tonight {manifest['events']}")
             log.info("%s", summary)
             print(summary)
             return 0
