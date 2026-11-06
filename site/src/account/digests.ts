@@ -16,6 +16,7 @@ import { closingTime } from "../closing";
 import { CATEGORIES, PROVINCES, SEGMENTS } from "../constants";
 import { type ExpiringRow, type TenderRow, publishedReference } from "../data";
 import { categoryLabel, fmtInt, fmtMoney, fmtMoneyShort, pick, provinceName, segmentShort, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
+import { instrumentPath, instrumentQueryString } from "../instruments";
 import { CONTACT_EMAIL } from "../pages/docs";
 import { type ExpiringQuery, contractReference, growthPct, sitePath } from "../pages/expiring";
 import { CODE_RE } from "../pages/tenders";
@@ -767,9 +768,11 @@ export function watchDigest(o: WatchDigest): DigestMessage {
 // One message per briefing, in the briefing's language: the week's new
 // notices, the awards with their winners and each source's figures (nothing
 // added across sources), the contracts ending next fiscal quarter with their
-// holders and the ones new to the list this week, the notable amendments, and
-// the fiscal year's largest records; each section SECTION_ROWS rows at most
-// (briefings.ts), then a line with how many more. The public sample
+// holders and the ones new to the list this week, the notable amendments, the
+// fiscal year's largest records, and the standing offers and supply
+// arrangements ending within 6 months with their holders; each section
+// SECTION_ROWS rows at most (briefings.ts), then a line with how many more or
+// the list on the site. The public sample
 // (/pro/briefing-sample) renders the same parts with no recipient and no
 // footer of its own.
 export interface BriefingDigest {
@@ -851,13 +854,19 @@ export function briefingParts(o: Pick<BriefingDigest, "lang" | "site" | "briefin
     return { line: kept.join(" · "), lineHtml: kept.map(escapeHtml).join(" · ") };
   };
   // A section: its heading, its lines of figures, its rows, then the rest's
-  // line; the plain text keeps a section's lines together.
-  const section = (heading: string, notes: string[], lines: BriefingLine[], rest: number, restPath: string | null, oneLine = false) => {
+  // line; the plain text keeps a section's lines together. A row's plain text
+  // is its title, its line and its link on three lines ("rows"), or the title
+  // and the line on one: with no link ("line", the largest records, which
+  // the analytics view follows), or with the link under it ("line+link", the
+  // instruments, whose title is the number a reader quotes).
+  type Layout = "rows" | "line" | "line+link";
+  const section = (heading: string, notes: string[], lines: BriefingLine[], rest: number, restPath: string | null, layout: Layout = "rows") => {
     const block: string[] = [heading, ...notes];
     html.push(h2(heading), ...notes.map((x) => para(escapeHtml(x))));
     if (lines.length) html.push(rows(lines.map((l, i) => briefingRow(l.title, l.href ? link(l.href) : null, l.lineHtml, i === 0))));
     for (const l of lines) {
-      block.push(oneLine ? `- ${l.title} · ${l.line}` : `- ${l.title}\n  ${l.line}${l.href ? `\n  ${link(l.href)}` : ""}`);
+      const url = l.href ? `\n  ${link(l.href)}` : "";
+      block.push(layout === "rows" ? `- ${l.title}\n  ${l.line}${url}` : `- ${l.title} · ${l.line}${layout === "line+link" ? url : ""}`);
     }
     if (rest > 0 && restPath) {
       const label = tn(lang, "briefing.more_one", "briefing.more_many", rest, { n: n(rest) });
@@ -976,10 +985,33 @@ export function briefingParts(o: Pick<BriefingDigest, "lang" | "site" | "briefin
         RECORD_KIND[r.src] ? t(lang, RECORD_KIND[r.src]) : null,
       ]),
     })),
-    0, null, true,
+    0, null, "line",
   );
   const analytics = t(lang, segment ? "briefing.analytics_segment" : "briefing.analytics_buyer");
   linkLine(analytics, analyticsPage);
+
+  // 6. The standing offers and supply arrangements ending within 6 months,
+  // the soonest first, with their holders. The end user is named on a
+  // segment briefing only: on a buyer's it is the buyer. The rest are on the
+  // instruments index with the same filters, which counts the same rows.
+  const instrumentsPage = `/instruments${instrumentQueryString({
+    type: "", region: "", segment: seg, commodity: "", user: segment ? "" : b.subject, within: d.instruments.within, sort: "",
+  })}`;
+  section(
+    d.instruments.n ? t(lang, "briefing.instruments_head", { n: n(d.instruments.n) }) : t(lang, "briefing.instruments_none"), [],
+    d.instruments.rows.map((r) => ({
+      title: r.agr, href: instrumentPath(r.agr),
+      ...plain([
+        pick(lang, r.type_en, r.type_fr), pick(lang, r.desc_en, r.desc_fr), segment ? pick(lang, r.user_en, r.user_fr) : null,
+        t(lang, "watches.line_expires", { date: r.expiry }),
+        tn(lang, "watches.line_holders_one", "watches.line_holders_many", r.n, { n: n(r.n) }),
+      ]),
+    })),
+    0, null, "line+link",
+  );
+  if (d.instruments.n) {
+    linkLine(tn(lang, "briefing.instruments_all_one", "briefing.instruments_all_many", d.instruments.n, { n: n(d.instruments.n) }), instrumentsPage);
+  }
 
   const note = joined([
     t(lang, "briefing.note"), segment ? t(lang, "briefing.note_segment") : null, narrowed ? t(lang, "briefing.note_narrowed") : null,

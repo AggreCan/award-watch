@@ -6,9 +6,11 @@
 // pipeline/records_schema.sql with rows written here, in English and French
 // byte for byte, with the "new this week" marks and the notable threshold; a
 // briefing with only the quarter's contracts sent, one with nothing written
-// empty; the run's claim and stop link; the public sample, the same with and
-// without a session; and every statement's plan. Every expected line is
-// written out from the rows below, never read back from the code under test.
+// empty; the standing offers and supply arrangements ending within 6 months,
+// their window, their "See all" link and its filters, their empty line; the
+// run's claim and stop link; the public sample, the same with and without a
+// session; and every statement's plan. Every expected line is written out
+// from the rows below, never read back from the code under test.
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { addBriefing, BRIEFINGS_DUE_SQL, BUYER_BRIEFING_SQL, SEGMENT_BRIEFING_SQL, briefingDue, briefingStart, nextQuarter, quarterTurn,
@@ -16,6 +18,7 @@ import { addBriefing, BRIEFINGS_DUE_SQL, BUYER_BRIEFING_SQL, SEGMENT_BRIEFING_SQ
 import { runDeliveries } from "../src/account/deliveries";
 import { briefingDigest, quarterMonths, quarterName } from "../src/account/digests";
 import { addSearch } from "../src/account/searches";
+import { readInstrumentQuery } from "../src/instruments";
 import { BUYER_DUE_SQL, SEGMENT_DUE_SQL } from "../src/records_db";
 import { ACCOUNTS, csrf, decode, get, grantPro, nbsp, newEmail, onEnv, post, signIn, useAccountsDb, userId } from "./accounts-helpers";
 import { FILES, makeFakeAssets } from "./assets";
@@ -54,7 +57,7 @@ const row = (o: Record<string, unknown>) => JSON.stringify({
 
 async function seed(asOf = D, state = "ready"): Promise<void> {
   await applySql(RECORDS, SCHEMA);
-  await RECORDS.batch(["rec_events", "rec_meta", "rec_expiring", "rec_due", "records", "rec_details", "rec_buyers", "rec_orgs"]
+  await RECORDS.batch(["rec_events", "rec_meta", "rec_expiring", "rec_due", "records", "rec_details", "rec_buyers", "rec_orgs", "rec_instruments"]
     .map((t) => RECORDS.prepare(`DELETE FROM ${t}`)));
   await RECORDS.prepare("INSERT INTO rec_meta (key, value) VALUES ('state', ?), ('as_of', ?), ('rules', '2')").bind(state, asOf).run();
   await insert("rec_buyers", [
@@ -133,7 +136,35 @@ async function seed(asOf = D, state = "ready"): Promise<void> {
     { k: 101, src: 1, day: "2026-07-14", bid: 3, oid: DAVIE, cents: 3_890_000_000, ref: "w8472-210001-001", title_en: "Joint Support Ship engineering services",
       title_fr: "Services d'ingénierie, navires de soutien interarmées" },
   ]);
+  // Section 6: the active instruments expiring from the data date to 182 days on (2026-11-02 to 2027-05-03), the soonest first.
+  await insert("rec_instruments", [...INSTRUMENTS]);
 }
+
+const instrument = (o: Record<string, unknown>) => ({ type_fr: null, desc_fr: null, user_fr: null, buyer: null, nw: 0, ...o });
+const INSTRUMENTS = [
+  instrument({ k: 1, agr: "EN578-170432/005/EI", type_en: "Supply Arrangement", type_fr: "Arrangement en matière d'approvisionnement",
+    desc_en: "Engineering services", desc_fr: "Services d'ingénierie", user_en: "Public Services and Procurement Canada",
+    user_fr: "Services publics et Approvisionnement Canada", buyer: "pspc-spac", expiry: "2026-12-15", segs: " 81 ", n: 1 }),
+  instrument({ k: 2, agr: "E60ZT-120002/001/ZT", type_en: "Regional Master Standing Offer", type_fr: "Offre à commandes principale régionale",
+    desc_en: "Environmental consulting services", desc_fr: "Services d'experts-conseils en environnement", user_en: "Fisheries and Oceans Canada",
+    user_fr: "Pêches et Océans Canada", buyer: "dfo-mpo", expiry: "2027-03-31", segs: " 77 81 ", n: 14, nw: 1 }),
+  // The window's last day, 182 days on: in, as the index's 6-month filter counts it.
+  instrument({ k: 3, agr: "F5211-200001/002/VAN", type_en: "Regional Individual Standing Offer", type_fr: "Offre à commandes individuelle régionale",
+    desc_en: "Hydrometric station maintenance", desc_fr: "Entretien de stations hydrométriques", user_en: "Fisheries and Oceans Canada",
+    user_fr: "Pêches et Océans Canada", buyer: "dfo-mpo", expiry: "2027-05-03", segs: " 81 ", n: 3 }),
+  // A day past the window; the day before the data date (in the sample's window, which starts on 2026-10-31); lapsed, with no active holder.
+  instrument({ k: 4, agr: "W8486-180001/001/QD", type_en: "National Master Standing Offer", desc_en: "Survey equipment", user_en: "National Defence",
+    buyer: "dnd-mdn", expiry: "2027-05-04", segs: " 81 ", n: 5 }),
+  instrument({ k: 5, agr: "W8486-150001/001/QD", type_en: "Departmental Individual Standing Offer", desc_en: "Calibration services",
+    user_en: "National Defence", buyer: "dnd-mdn", expiry: "2026-11-01", segs: " 81 ", n: 2 }),
+  instrument({ k: 6, agr: "F1700-190001/001/VAN", type_en: "Supply Arrangement", desc_en: "Lapsed", user_en: "Fisheries and Oceans Canada",
+    buyer: "dfo-mpo", expiry: "2027-01-31", segs: " 81 ", n: 0 }),
+  // Another segment of the same buyer, and the only instrument of segment 10.
+  instrument({ k: 7, agr: "F1700-200002/001/VAN", type_en: "Supply Arrangement", desc_en: "Fishing gear", user_en: "Fisheries and Oceans Canada",
+    buyer: "dfo-mpo", expiry: "2027-02-01", segs: " 43 ", n: 4 }),
+  instrument({ k: 8, agr: "01B68-210001/001/ZF", type_en: "Supply Arrangement", desc_en: "Laboratory animals", user_en: "Canadian Food Inspection Agency",
+    expiry: "2027-01-05", segs: " 10 ", n: 2 }),
+];
 
 beforeAll(() => seed());
 
@@ -266,6 +297,39 @@ describe("the briefing's statements", () => {
     // The run's own list of due briefings ends in its bound too.
     expect(BRIEFINGS_DUE_SQL).toMatch(/LIMIT \?2$/);
   });
+
+  it("read the instruments from rec_instruments alone, in one pass with no index, and list 10 of any number while counting all", async () => {
+    const window = [D, "2027-05-03"];
+    for (const [name, sql, binds] of [
+      ["segment instruments", SEGMENT_BRIEFING_SQL.instruments, [" 81 ", ...window]],
+      ["buyer instruments", BUYER_BRIEFING_SQL.instruments, ["dfo-mpo", "", ...window]],
+      ["narrowed instruments", BUYER_BRIEFING_SQL.instruments, ["dfo-mpo", " 81 ", ...window]],
+    ] as [string, string, string[]][]) {
+      expect(sql, name).toMatch(/LIMIT 10$/);
+      const steps = await plan(sql, binds);
+      // No index serves expiry, segment or end user: the one table read once (a few thousand rows), no other table touched.
+      expect(steps.filter((s) => /^(SCAN|SEARCH) (?!\(subquery)/.test(s)), `${name}\n${steps.join("\n")}`).toEqual(["SCAN rec_instruments"]);
+    }
+    // Twelve of one segment in the window: ten listed, the soonest first, all twelve counted and linked.
+    const extra = Array.from({ length: 12 }, (_, i) => instrument({
+      k: 900 + i, agr: `EP000-26${String(i).padStart(4, "0")}/001/XL`, type_en: "Supply Arrangement", desc_en: `Item ${i}`,
+      expiry: `2027-01-${String(12 - i).padStart(2, "0")}`, segs: " 95 ", n: i + 1,
+    }));
+    await insert("rec_instruments", extra);
+    try {
+      const subject = { kind: "segment" as const, subject: "95", segment: "" };
+      const read = await readBriefing(env as never, subject, D, "2026-10-26");
+      if (read.state !== "ready") throw new Error(read.state);
+      expect(read.data.instruments.n).toBe(12);
+      expect(read.data.instruments.rows.map((r) => r.expiry)).toEqual(Array.from({ length: 10 }, (_, i) => `2027-01-${String(i + 1).padStart(2, "0")}`));
+      const m = briefingDigest({ lang: "en", to: "a@example.com", site: SITE, stopUrl: `${SITE}/s`, briefing: subject, name: "95 Land", data: read.data });
+      expect(m.text).toContain("Standing offers and supply arrangements ending within 6 months: 12\n- EP000-260011/001/XL · Supply Arrangement · Item 11 · expires 2027-01-01 · 12 holders\n");
+      expect(m.text).toContain("\nSee all 12: https://awardwatch.ca/instruments?segment=95&within=6\n");
+      expect(m.text.match(/^- EP000-/gm)).toHaveLength(10);
+    } finally {
+      await RECORDS.prepare("DELETE FROM rec_instruments WHERE k >= 900").run();
+    }
+  });
 });
 
 // -- the message -------------------------------------------------------------------------------
@@ -316,6 +380,15 @@ Largest records this fiscal year (2026-27 to date): 2
 - Joint Support Ship engineering services · Chantier Davie Canada Inc. · National Defence · $38,900,000 · 2026-07-14 · Award notice
 - Coastal engineering · Kerr Wood Leidal Associates Ltd. · Fisheries and Oceans Canada · $500,000 · PSPC contract history
 Analytics for this segment: https://awardwatch.ca/segments/81/analytics
+
+Standing offers and supply arrangements ending within 6 months: 3
+- EN578-170432/005/EI · Supply Arrangement · Engineering services · Public Services and Procurement Canada · expires 2026-12-15 · 1 holder
+  https://awardwatch.ca/instruments/EN578-170432%2F005%2FEI
+- E60ZT-120002/001/ZT · Regional Master Standing Offer · Environmental consulting services · Fisheries and Oceans Canada · expires 2027-03-31 · 14 holders
+  https://awardwatch.ca/instruments/E60ZT-120002%2F001%2FZT
+- F5211-200001/002/VAN · Regional Individual Standing Offer · Hydrometric station maintenance · Fisheries and Oceans Canada · expires 2027-05-03 · 3 holders
+  https://awardwatch.ca/instruments/F5211-200001%2F002%2FVAN
+See all 3: https://awardwatch.ca/instruments?segment=81&within=6
 
 A contract's value is its newest amendment's. Nothing is added across sources. "Ends" is the date the record states. Segment coding is the buyer's; a record can carry several segments, and the week's lines list it under the lowest of them.
 
@@ -374,6 +447,15 @@ Dossiers les plus importants de l’exercice (2026-2027 à ce jour) : 2
 - Coastal engineering · Kerr Wood Leidal Associates Ltd. · Pêches et Océans Canada · 500 000 $ · Historique des contrats de SPAC
 Analyse de ce segment : https://awardwatch.ca/segments/81/analytics?lang=fr
 
+Offres à commandes et arrangements en matière d’approvisionnement prenant fin d’ici 6 mois : 3
+- EN578-170432/005/EI · Arrangement en matière d'approvisionnement · Services d'ingénierie · Services publics et Approvisionnement Canada · expire le 2026-12-15 · 1 titulaire
+  https://awardwatch.ca/instruments/EN578-170432%2F005%2FEI?lang=fr
+- E60ZT-120002/001/ZT · Offre à commandes principale régionale · Services d'experts-conseils en environnement · Pêches et Océans Canada · expire le 2027-03-31 · 14 titulaires
+  https://awardwatch.ca/instruments/E60ZT-120002%2F001%2FZT?lang=fr
+- F5211-200001/002/VAN · Offre à commandes individuelle régionale · Entretien de stations hydrométriques · Pêches et Océans Canada · expire le 2027-05-03 · 3 titulaires
+  https://awardwatch.ca/instruments/F5211-200001%2F002%2FVAN?lang=fr
+Voir les 3 : https://awardwatch.ca/instruments?segment=81&within=6&lang=fr
+
 La valeur d’un contrat est celle de sa plus récente modification. Rien n’est additionné entre les sources. « Prend fin » est la date que le dossier indique. Le codage par segment est celui de l’acheteur; un dossier peut porter plusieurs segments, et les lignes de la semaine le placent sous le plus bas.
 
 Vous recevez ce message chaque semaine pour un bulletin de votre compte.
@@ -408,6 +490,62 @@ describe("the message", () => {
     expect(decode(en.html)).toContain(">Engineering support, Esquimalt Graving Dock</a>");
     expect(en.html).toContain(">new this week</span>");
     expect(decode(fr.html)).toContain(">Soutien en ingénierie, cale sèche d'Esquimalt</a>");
+    // Section 6 in the HTML part: the agreement number links its page, the rest of the list its index view.
+    expect(decode(en.html)).toContain(`href="${SITE}/instruments/E60ZT-120002%2F001%2FZT" style="font:600 15px/1.4`);
+    expect(decode(en.html)).toContain(">E60ZT-120002/001/ZT</a>");
+    expect(decode(en.html)).toContain("Regional Master Standing Offer · Environmental consulting services · Fisheries and Oceans Canada · expires 2027-03-31 · 14 holders</div>");
+    expect(decode(en.html)).toMatch(new RegExp(`href="${SITE}/instruments\\?segment=81&within=6" [^>]*>See all 3</a>`));
+    expect(decode(fr.html)).toContain(`href="${SITE}/instruments?segment=81&within=6&lang=fr"`);
+  });
+
+  it("lists the instruments ending within 6 months of the data date, active ones only, the soonest first", async () => {
+    const read = await readBriefing(env as never, segment81, D, "2026-10-26");
+    if (read.state !== "ready") throw new Error(read.state);
+    // Not the day before the data date, a day past the window, a lapsed one, nor another segment's.
+    expect(read.data.instruments.rows.map((r) => r.agr)).toEqual(["EN578-170432/005/EI", "E60ZT-120002/001/ZT", "F5211-200001/002/VAN"]);
+    expect(read.data.instruments.n).toBe(3);
+    expect(read.data.instruments.rows[1]).toEqual({
+      agr: "E60ZT-120002/001/ZT", type_en: "Regional Master Standing Offer", type_fr: "Offre à commandes principale régionale",
+      desc_en: "Environmental consulting services", desc_fr: "Services d'experts-conseils en environnement", user_en: "Fisheries and Oceans Canada",
+      user_fr: "Pêches et Océans Canada", expiry: "2027-03-31", n: 14,
+    });
+    // The window moves with the data date: on 2026-10-31 it runs to 2027-05-01.
+    const earlier = await readBriefing(env as never, segment81, "2026-10-31", "2026-10-24");
+    if (earlier.state !== "ready") throw new Error(earlier.state);
+    expect(earlier.data.instruments.rows.map((r) => r.agr)).toEqual(["W8486-150001/001/QD", "EN578-170432/005/EI", "E60ZT-120002/001/ZT"]);
+  });
+
+  it("links the rest of the instruments to the index filtered by the segment or the end user and the 6-month window", async () => {
+    const linkOf = async (s: { kind: "segment" | "buyer"; subject: string; segment: string }, lang: "en" | "fr" = "en") => {
+      const read = await readBriefing(env as never, s, D, "2026-10-26");
+      if (read.state !== "ready") throw new Error(read.state);
+      const m = briefingDigest({ lang, to: "a@example.com", site: SITE, stopUrl: `${SITE}/s`, briefing: s, name: "Name", data: read.data });
+      return nbsp(m.text).split("\n").find((l) => l.includes("/instruments?")) ?? "";
+    };
+    expect(await linkOf(segment81)).toBe("See all 3: https://awardwatch.ca/instruments?segment=81&within=6");
+    expect(await linkOf({ kind: "buyer", subject: "dfo-mpo", segment: "" })).toBe("See all 3: https://awardwatch.ca/instruments?user=dfo-mpo&within=6");
+    expect(await linkOf({ kind: "buyer", subject: "dfo-mpo", segment: "81" }, "fr"))
+      .toBe("Voir les 2 : https://awardwatch.ca/instruments?segment=81&user=dfo-mpo&within=6&lang=fr");
+    expect(await linkOf({ kind: "buyer", subject: "pspc-spac", segment: "" })).toBe("See the list: https://awardwatch.ca/instruments?user=pspc-spac&within=6");
+    // The index page reads those parameters as its own filters (pages/instruments.tsx readInstrumentQuery).
+    const q = readInstrumentQuery(new URL("https://awardwatch.ca/instruments?segment=81&user=dfo-mpo&within=6&lang=fr"));
+    expect(q).toMatchObject({ segment: "81", user: "dfo-mpo", within: "6", type: "", region: "", commodity: "", sort: "" });
+  });
+
+  it("says no instrument ends within 6 months, in both languages, with no link", async () => {
+    const s = { kind: "segment" as const, subject: "72", segment: "" };
+    const read = await readBriefing(env as never, s, D, "2026-10-26");
+    if (read.state !== "ready") throw new Error(read.state);
+    expect(read.data.instruments).toMatchObject({ n: 0, rows: [] });
+    const en = briefingDigest({ lang: "en", to: "a@example.com", site: SITE, stopUrl: `${SITE}/s`, briefing: s, name: "72 Construction", data: read.data });
+    const fr = briefingDigest({ lang: "fr", to: "a@example.com", site: SITE, stopUrl: `${SITE}/s`, briefing: s, name: "72 Construction", data: read.data });
+    expect(en.text).toContain("\n\nStanding offers and supply arrangements ending within 6 months: none\n\nA contract's value");
+    expect(nbsp(fr.text)).toContain("\n\nOffres à commandes et arrangements en matière d’approvisionnement prenant fin d’ici 6 mois : aucun\n\nLa valeur");
+    for (const m of [en, fr]) {
+      expect(m.text).not.toContain("/instruments");
+      expect(m.html).not.toContain("/instruments");
+      for (const part of [m.subject, m.text, m.html]) expect(part).not.toContain(EM_DASH);
+    }
   });
 
   it("marks a contract new to the quarter's list only for an award or an end date moved into the quarter this week", async () => {
@@ -442,10 +580,22 @@ describe("the message", () => {
     const m = briefingDigest({ lang: "en", to: "a@example.com", site: SITE, stopUrl: `${SITE}/s`, briefing: narrowed, name: "Fisheries and Oceans Canada · 81 Engineering", data: read.data });
     expect(m.text.split("Published contracts and grants carry no segment, so a briefing narrowed to one leaves them out.").length).toBe(2);
     expect(m.text).toContain("On the 6-month radar: https://awardwatch.ca/expiring/6m?buyer=dfo-mpo&segment=81");
+    // Its instruments: the buyer's as end user, in the segment; the end user is the buyer, so the line leaves it out.
+    expect(read.data.instruments.rows.map((r) => r.agr)).toEqual(["E60ZT-120002/001/ZT", "F5211-200001/002/VAN"]);
+    expect(m.text).toContain("Standing offers and supply arrangements ending within 6 months: 2\n" +
+      "- E60ZT-120002/001/ZT · Regional Master Standing Offer · Environmental consulting services · expires 2027-03-31 · 14 holders\n" +
+      "  https://awardwatch.ca/instruments/E60ZT-120002%2F001%2FZT\n" +
+      "- F5211-200001/002/VAN · Regional Individual Standing Offer · Hydrometric station maintenance · expires 2027-05-03 · 3 holders\n" +
+      "  https://awardwatch.ca/instruments/F5211-200001%2F002%2FVAN\n" +
+      "See all 2: https://awardwatch.ca/instruments?segment=81&user=dfo-mpo&within=6\n");
     // The whole buyer: its quarter from rec_due, no grant, and a published contract's award among its own.
     const whole = await readBriefing(env as never, { kind: "buyer", subject: "pspc-spac", segment: "" }, D, "2026-10-26");
     if (whole.state !== "ready") throw new Error(whole.state);
     expect(whole.data.awards.sources.map((s) => s.src)).toEqual([1, 3]);
+    // The whole buyer's instruments, every segment of them.
+    const dfo = await readBriefing(env as never, { kind: "buyer", subject: "dfo-mpo", segment: "" }, D, "2026-10-26");
+    if (dfo.state !== "ready") throw new Error(dfo.state);
+    expect(dfo.data.instruments.rows.map((r) => r.agr)).toEqual(["F1700-200002/001/VAN", "E60ZT-120002/001/ZT", "F5211-200001/002/VAN"]);
   });
 });
 
@@ -470,8 +620,8 @@ describe("the run", () => {
     expect(m.headers?.["List-Unsubscribe"]).toBe(`<mailto:contact@awardwatch.ca>, <${SITE}/account/stop?b=${id}&t=${row!.secret}>`);
     expect(m.text).toContain(`Stop this briefing: ${SITE}/account/stop?b=${id}&t=${row!.secret}`);
     expect(row!.last_delivered_at?.slice(0, 10)).toBe(D);
-    // 2 notices, 2 awards, 3 contracts ending, 2 amendments, 2 records.
-    expect(await runs(id)).toEqual([{ day: D, items: 11, status: "sent" }]);
+    // 2 notices, 2 awards, 3 contracts ending, 2 amendments, 2 records, 3 instruments.
+    expect(await runs(id)).toEqual([{ day: D, items: 14, status: "sent" }]);
     expect(log.mock.calls.flat().join("\n")).toContain("briefings: 1 sent, 0 failed, 0 with nothing new, 0 not on a plan with delivery");
     // The same day again, and the rest of the week: nothing more.
     await runDeliveries(envAt(D));
@@ -496,12 +646,17 @@ describe("the run", () => {
     const [m] = mail.to(email);
     expect(m.subject).toBe("Weekly briefing, 72 Construction: 1 contract ending next quarter");
     for (const line of ["New notices this week: none", "Awards this week: none", "Notable amendments this week: none",
+      "Standing offers and supply arrangements ending within 6 months: none",
       "Contracts ending next quarter, Q4 2026-27 (January to March 2027): 1, $200,000", "- Roof repair\n  Roofing Ltd. · Public Services and Procurement Canada · ends 2027-02-01 · $200,000"]) {
       expect(m.text).toContain(line);
     }
     expect((await runs(only))[0]).toMatchObject({ status: "sent" });
     expect(await runs(none)).toEqual([{ day: D, items: 0, status: "empty" }]);
     expect((await stateOf(none))!.last_delivered_at?.slice(0, 10)).toBe(D);
+    // Segment 10 has an instrument ending within 6 months: a standing list, like the year's largest records, so not news on its own.
+    const ten = await readBriefing(env as never, { kind: "segment", subject: "10", segment: "" }, D, "2026-10-26");
+    if (ten.state !== "ready") throw new Error(ten.state);
+    expect(ten.data.instruments.rows.map((r) => r.agr)).toEqual(["01B68-210001/001/ZF"]);
   });
 
   it("is not sent on Free or with delivery off, and waits unclaimed while the records database is behind", async () => {
@@ -640,10 +795,18 @@ describe("the public sample", () => {
     // The site's data date is 2026-10-31: the week from 2026-10-25, the quarter after Q3.
     expect(decode(body)).toContain("81 Engineering, week to 2026-10-31");
     expect(decode(body)).toContain("Contracts ending next quarter, Q4 2026-27 (January to March 2027): 3, $1,050,000 (1 without a value)");
+    // Section 6 as the mail writes it, from the site's data date: 2026-10-31 to 2027-05-01.
+    expect(decode(body)).toContain("Standing offers and supply arrangements ending within 6 months: 3</h2>");
+    expect(decode(body)).toContain(">W8486-150001/001/QD</a>");
+    expect(decode(body)).toContain("Departmental Individual Standing Offer · Calibration services · National Defence · expires 2026-11-01 · 2 holders</div>");
+    expect(decode(body)).toMatch(/href="[^"]*\/instruments\?segment=81&within=6" [^>]*>See all 3<\/a>/);
+    expect(body).not.toContain("F5211-200001");
     expect(body).not.toContain("aw_session");
     expect(body).not.toContain(EM_DASH);
     const fr = await (await get("/pro/briefing-sample?lang=fr")).text();
     expect(nbsp(decode(fr))).toContain("81 Ingénierie, semaine se terminant le 2026-10-31");
+    expect(nbsp(decode(fr))).toContain("Offres à commandes et arrangements en matière d’approvisionnement prenant fin d’ici 6 mois : 3</h2>");
+    expect(nbsp(decode(fr))).toMatch(/href="[^"]*\/instruments\?segment=81&within=6&lang=fr" [^>]*>Voir les 3<\/a>/);
     // A records database that cannot answer: the page's shell and one line, never stored.
     const down = await get("/pro/briefing-sample", { env: onEnv({ RECORDS: undefined }) });
     expect(down.status).toBe(503);

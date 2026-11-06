@@ -1765,12 +1765,12 @@ export const ACCOUNT_STRINGS = {
   // The control on a segment page and a buyer page.
   "briefing.panel": { en: "Weekly Briefing", fr: "Bulletin hebdomadaire" },
   "briefing.lead_segment": {
-    en: "One email each Monday about this segment: the week's new notices, the awards with their winners and values, the contracts ending next fiscal quarter with their holders, the notable amendments and the fiscal year's largest records.",
-    fr: "Un courriel chaque lundi sur ce segment : les nouveaux avis de la semaine, les attributions avec leurs gagnants et leurs valeurs, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables et les dossiers les plus importants de l'exercice.",
+    en: "One email each Monday about this segment: the week's new notices, the awards with their winners and values, the contracts ending next fiscal quarter with their holders, the notable amendments, the fiscal year's largest records and the standing offers and supply arrangements ending within 6 months.",
+    fr: "Un courriel chaque lundi sur ce segment : les nouveaux avis de la semaine, les attributions avec leurs gagnants et leurs valeurs, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables, les dossiers les plus importants de l'exercice et les offres à commandes et arrangements en matière d'approvisionnement prenant fin d'ici 6 mois.",
   },
   "briefing.lead_buyer": {
-    en: "One email each Monday about this buyer, or one of its segments: the week's new notices, the awards with their winners and values, the contracts ending next fiscal quarter with their holders, the notable amendments and the fiscal year's largest records.",
-    fr: "Un courriel chaque lundi sur cet acheteur, ou l'un de ses segments : les nouveaux avis de la semaine, les attributions avec leurs gagnants et leurs valeurs, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables et les dossiers les plus importants de l'exercice.",
+    en: "One email each Monday about this buyer, or one of its segments: the week's new notices, the awards with their winners and values, the contracts ending next fiscal quarter with their holders, the notable amendments, the fiscal year's largest records and the standing offers and supply arrangements ending within 6 months.",
+    fr: "Un courriel chaque lundi sur cet acheteur, ou l'un de ses segments : les nouveaux avis de la semaine, les attributions avec leurs gagnants et leurs valeurs, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables, les dossiers les plus importants de l'exercice et les offres à commandes et arrangements en matière d'approvisionnement prenant fin d'ici 6 mois.",
   },
   "briefing.subscribe": { en: "Subscribe", fr: "S'abonner" },
   "briefing.subscribed": { en: "Subscribed", fr: "Abonné" },
@@ -1844,8 +1844,8 @@ export const ACCOUNT_STRINGS = {
     fr: "Un exemple du bulletin hebdomadaire, construit à partir des données de cette semaine pour le segment {name}. Chaque chiffre qu'il contient figure sur les pages gratuites; avec Pro, un bulletin semblable arrive chaque lundi pour un segment ou un acheteur de votre choix.",
   },
   "briefing.sample_description": {
-    en: "This week's briefing for one segment, built live from the data: new notices, awards, the contracts ending next fiscal quarter, notable amendments and the year's largest records.",
-    fr: "Le bulletin de cette semaine pour un segment, construit en direct à partir des données : nouveaux avis, attributions, contrats prenant fin au prochain trimestre financier, modifications notables et dossiers les plus importants de l'exercice.",
+    en: "This week's briefing for one segment, built live from the data: new notices, awards, the contracts ending next fiscal quarter, notable amendments, the year's largest records and the standing offers ending within 6 months.",
+    fr: "Le bulletin de cette semaine pour un segment, construit en direct à partir des données : nouveaux avis, attributions, contrats prenant fin au prochain trimestre financier, modifications notables, dossiers les plus importants de l'exercice et offres à commandes prenant fin d'ici 6 mois.",
   },
   "briefing.sample_subject": { en: "Subject", fr: "Objet" },
   "briefing.sample_preheader": { en: "Preview line", fr: "Ligne d'aperçu" },
@@ -1861,8 +1861,8 @@ export const ACCOUNT_STRINGS = {
     fr: "un bulletin hebdomadaire par courriel pour un segment ou un acheteur",
   },
   "briefing.pro_page": {
-    en: "A weekly briefing by email for a segment or a buyer: the week's new notices, the awards with their winners, the contracts ending next fiscal quarter with their holders, the notable amendments and the fiscal year's largest records.",
-    fr: "Un bulletin hebdomadaire par courriel pour un segment ou un acheteur : les nouveaux avis de la semaine, les attributions avec leurs gagnants, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables et les dossiers les plus importants de l'exercice.",
+    en: "A weekly briefing by email for a segment or a buyer: the week's new notices, the awards with their winners, the contracts ending next fiscal quarter with their holders, the notable amendments, the fiscal year's largest records and the standing offers and supply arrangements ending within 6 months.",
+    fr: "Un bulletin hebdomadaire par courriel pour un segment ou un acheteur : les nouveaux avis de la semaine, les attributions avec leurs gagnants, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables, les dossiers les plus importants de l'exercice et les offres à commandes et arrangements en matière d'approvisionnement prenant fin d'ici 6 mois.",
   },
   "briefing.pro_sample": { en: "This week's sample briefing, for one segment: {link}.", fr: "L'exemple de bulletin de cette semaine, pour un segment : {link}." },
   "briefing.sample_link_text": { en: "A sample of the weekly briefing", fr: "Un exemple du bulletin hebdomadaire" },
@@ -1887,6 +1887,19 @@ export const ACCOUNT_STRINGS = {
   "briefing.admin_runs_title": { en: "Briefing Runs", fr: "Envois des bulletins" },
   "briefing.kind_segment": { en: "Segment", fr: "Segment UNSPSC" },
   "briefing.kind_buyer": { en: "Buyer", fr: "Acheteur" },
+  // The message's sixth section (digests.ts briefingParts): the standing
+  // offers and supply arrangements ending within 6 months. Its rows reuse the
+  // watch mail's "expires {date}" and "{n} holders".
+  "briefing.instruments_head": {
+    en: "Standing offers and supply arrangements ending within 6 months: {n}",
+    fr: "Offres à commandes et arrangements en matière d'approvisionnement prenant fin d'ici 6 mois : {n}",
+  },
+  "briefing.instruments_none": {
+    en: "Standing offers and supply arrangements ending within 6 months: none",
+    fr: "Offres à commandes et arrangements en matière d'approvisionnement prenant fin d'ici 6 mois : aucun",
+  },
+  "briefing.instruments_all_one": { en: "See the list", fr: "Voir la liste" },
+  "briefing.instruments_all_many": { en: "See all {n}", fr: "Voir les {n}" },
 
   // The standing offers and supply arrangements an organization watch
   // follows (watch_events.ts INSTRUMENT_KINDS, digests.ts watchEventLines;

@@ -1761,9 +1761,10 @@ segment.
 A weekly briefing is one message a week about one UNSPSC segment or one buyer
 (optionally narrowed to one segment): the week's new notices, the awards with
 their winners and values, the contracts ending next fiscal quarter with their
-holders, the notable amendments and the fiscal year's largest records. Pro
-(`delivery`) gets the message; a Free account keeps the briefing with its
-email off. The code is `site/src/account/briefings.ts` (the rows, the records
+holders, the notable amendments, the fiscal year's largest records, and the
+standing offers and supply arrangements ending within 6 months with their
+holders' count. Pro (`delivery`) gets the message; a Free account keeps the
+briefing with its email off. The code is `site/src/account/briefings.ts` (the rows, the records
 statements, the run, the console figures), `briefing_pages.tsx` (the control,
 the searches page's panel, the stop page, the public sample) and
 `digests.ts` `briefingDigest` (the message, in the digest shell); the tests
@@ -1804,6 +1805,7 @@ D (after a message that failed, back to the last one covered, at most 14).
 | Contracts ending next quarter | the quarter named ("Q4 2026-27 (January to March 2027)"), the count, total and how many without a value; how many are new to the list this week; up to 10 by value with the holder, the buyer, the end date, the value, the amendments and growth, "new this week" on those new to it; a link to the 6-month radar filtered the same way | `rec_due` for the count and total (a buyer narrowed to a segment: the list's own counts, since `rec_due` holds a buyer or a segment); `rec_expiring` by `endd` in the quarter with `buyer` or the segment mark, through `rec_expiring_end` or `rec_expiring_buyer` |
 | Notable amendments this week | up to 10 whose counted value moved by `EVENT_NOTABLE_CENTS` (CA$100,000) or `EVENT_NOTABLE_SHARE` (50 percent) of the value before, largest change first, with before, after, the change and the end date moved | `rec_events` kind `amended` |
 | Largest records this fiscal year | the ten largest counted records in the data date's fiscal year, one line each with the other party, the value, the date and the source; then the subject's analytics view | `records` by `sid` (award notices and history, every row of the segment) or `bid` (award notices, history and published contracts, `extra = 0`; narrowed, the segment's rows), the date from `rec_details` |
+| Standing offers and supply arrangements ending within 6 months | the count, then up to 10, soonest expiry first, one line each with the agreement number, the type, the description, the end user (on a segment briefing; on a buyer's it is the buyer), the expiry and the active holders, then the instrument's page; a "See all" line linking the instruments index with the same filters | `rec_instruments` with an active holder (`n > 0`), `expiry` from D to 182 days on, carrying the segment (`segs`) or whose end user is the buyer (`buyer`, and the segment when narrowed) |
 
 "Next fiscal quarter" is the quarter after the one D falls in, stable from week
 to week; a row is "new this week" when the span holds an `award` event for it
@@ -1816,6 +1818,25 @@ across sources, "ends" is the stated date; a segment briefing adds that a
 week's line lists a record under its lowest segment (rec_events carries one);
 a narrowed briefing says once that published contracts and grants carry no
 segment.
+
+Section 6 uses the instruments index's 6-month window (`WITHIN_DAYS["6"]`,
+182 days, both ends included), so its count matches the page its "See all"
+link opens: `/instruments?segment=81&within=6`, a buyer
+`/instruments?user=<buyer id>&within=6`, a narrowed buyer
+`/instruments?segment=81&user=<buyer id>&within=6` (`&lang=fr` added in
+French). A row is
+
+```
+- E60ZT-120002/001/ZT · Regional Master Standing Offer · Environmental consulting services · Fisheries and Oceans Canada · expires 2027-03-31 · 14 holders
+  https://awardwatch.ca/instruments/E60ZT-120002%2F001%2FZT
+```
+
+with the number escaped as one path segment; "none" when nothing ends in the
+window, and then no link. `rec_instruments` has no index by expiry, segment or
+end user, so the statement reads the table once (a few thousand rows: the
+active instruments and those lapsed within 90 days, as the watches' calendar
+statement does) and sorts its matches for the first 10; `COUNT(*) OVER ()`
+counts all of them.
 
 Subject: `Weekly briefing, {name}: {n} new notices, {n} awards, {n} contracts
 ending next quarter` (each part only when not zero); in French `Bulletin
@@ -1831,14 +1852,15 @@ whose account is active, not blocked and on a plan with `delivery`, not
 covered since the week's Monday (`BRIEFING_WEEKDAY`; a Monday whose nightly was
 late sends on the next data date of the week, and a first subscription sends
 on the next run), with no message refused for it since that Monday: one
-D1 batch on the records database (the state row and seven statements, six for
-a narrowed buyer; each a constant with the subject bound, each ending in a
+D1 batch on the records database (the state row and eight statements, seven
+for a narrowed buyer; each a constant with the subject bound, each ending in a
 `LIMIT` of 10), read once per subject and span in a run. Until that database
 is ready at today's data date every briefing waits unclaimed (`records`:
 absent, loading, failed, stale; `no_table` before `accounts_schema.sql` is
 applied). A briefing with anything in the week's sections or a contract ending
 next quarter is sent; one with nothing in either writes `empty` and no message
-(the year's largest records alone are not news). The claim, the send, `sent`,
+(the year's largest records and the instruments ending within 6 months alone
+are not news: both lists stand from week to week). The claim, the send, `sent`,
 `failed` and `empty` are the saved searches': claimed for the week before the
 message goes, given back when the send does not go; a refusal that is not a
 sending limit writes `failed` and leaves `last_delivered_at`, so next week's
@@ -1867,7 +1889,7 @@ switch off it is the site's 404.
 
 ### Bounds and privacy
 
-Briefings share the 25 cap; 10 rows a section, five sections, so 50 rows a
+Briefings share the 25 cap; 10 rows a section, six sections, so 60 rows a
 message; one batch a briefing; 300 messages a run shared with the saved
 searches and the watch mail; one fiscal year for the largest records. A
 briefing row keeps the kind, the subject (a segment code or a buyer id), the
@@ -1879,9 +1901,8 @@ last seven days' runs by status; the user page lists the account's briefings
 Deleting a briefing deletes its runs; deleting the account deletes both
 (`deleteBriefingsOf`, before the deletion batch).
 
-Not built yet: the sixth section (standing offers and supply arrangements
-ending within 6 months) waits for that source; the notices' provinces are
-not in `rec_events`, so a notice's line names its buyer and closing only.
+Not built yet: the notices' provinces are not in `rec_events`, so a notice's
+line names its buyer and closing only.
 
 ### Operator step at landing
 

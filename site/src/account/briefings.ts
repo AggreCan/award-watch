@@ -4,18 +4,22 @@
 // (accounts_schema.sql, briefings) and its runs (briefing_deliveries); the
 // records database holds what a message reports: rec_events for the week's
 // notices, awards and amendments, rec_due and rec_expiring for the contracts
-// ending next fiscal quarter, records for the fiscal year's largest. The
-// message is digests.ts briefingDigest; the pages are briefing_pages.tsx.
+// ending next fiscal quarter, records for the fiscal year's largest,
+// rec_instruments for the standing offers and supply arrangements ending
+// within 6 months. The message is digests.ts briefingDigest; the pages are
+// briefing_pages.tsx.
 //
 // Every records statement is a constant here with ?N placeholders, bound to
 // values checked before they reach it (a segment that is one of the 57, a
 // buyer id that is a buyer id, days and quarters from the data date), read
 // through the subject's index (rec_events_segment or _buyer by subject and
 // day, rec_expiring_end or _buyer by end date, records_segment or
-// records_buyer by subject, source and one fiscal year), and ended by a LIMIT
-// of SECTION_ROWS rows (the per-source totals at most SECTION_ROWS too). A
-// briefing reads one batch: the state row and its seven statements (six for
-// a buyer narrowed to a segment, which rec_due does not hold).
+// records_buyer by subject, source and one fiscal year; rec_instruments,
+// which has no index by expiry, segment or end user, is read whole), and
+// ended by a LIMIT of SECTION_ROWS rows (the per-source totals at most
+// SECTION_ROWS too). A briefing reads one batch: the state row and its eight
+// statements (seven for a buyer narrowed to a segment, which rec_due does not
+// hold).
 //
 // The delivery job's last step (deliveries.ts runDeliveries calls
 // runBriefings after the watch mail, inside the same cap of RUN_MESSAGES_MAX
@@ -33,6 +37,7 @@ import { SEGMENT_CODES } from "../constants";
 import { BUYER_ID_RE, type ExpiringRow } from "../data";
 import type { Env } from "../env";
 import { segmentShort, type Lang } from "../i18n";
+import { WITHIN_DAYS, type Within } from "../instruments";
 import {
   BUYER_DUE_SQL, SEGMENT_DUE_SQL, type Query, SOURCE_NUMBER, fiscalYearOf, quarterEnd, readRecords,
 } from "../records_db";
@@ -62,6 +67,11 @@ export const WEEK_DAYS = 7;
 export const SPAN_DAYS_MAX = 14;
 // Rows a section lists; six sections at most, so 60 rows a message.
 export const SECTION_ROWS = 10;
+// Section 6's window: the instruments index's 6-month expiry filter
+// (instruments.ts WITHIN_DAYS), so the section's count is the count its "See
+// all" link opens on.
+export const INSTRUMENT_WITHIN = "6" as const;
+export const INSTRUMENT_DAYS = WITHIN_DAYS[INSTRUMENT_WITHIN];
 // Briefings the job reads in one run; the next hour reads the rest.
 export const BRIEFINGS_RUN_MAX = 1000;
 // How long a run's row is kept, and the rows the console's user page lists.
@@ -232,12 +242,26 @@ const largestSql = (where: string) =>
   `ORDER BY cents DESC, ref LIMIT ${SECTION_ROWS}) r LEFT JOIN rec_details d ON d.k = r.k LEFT JOIN rec_orgs o ON o.oid = r.oid ` +
   `LEFT JOIN rec_buyers b ON b.bid = r.bid ORDER BY r.cents DESC, r.ref LIMIT ${SECTION_ROWS}`;
 
+// Section 6: the standing offers and supply arrangements expiring from the
+// data date to INSTRUMENT_DAYS later, as the index's window counts them, the
+// soonest first, each with its type, description, end user and active
+// holders. n above 0 keeps the active ones only (rec_instruments keeps a
+// lapsed one 90 days with n at 0), as the index lists them. The table has no
+// index by expiry, segment or end user, so the statement reads it whole (a
+// few thousand rows, as feeds.ts WATCH_INSTRUMENTS_SQL does) and sorts the
+// matches for the first SECTION_ROWS; COUNT(*) OVER () counts every match.
+const instrumentsSql = (where: string, from: string, to: string) =>
+  "SELECT agr, type_en, type_fr, desc_en, desc_fr, user_en, user_fr, expiry, n, COUNT(*) OVER () AS n_all FROM rec_instruments " +
+  `WHERE ${where} AND n > 0 AND expiry BETWEEN ${from} AND ${to} ORDER BY expiry, agr LIMIT ${SECTION_ROWS}`;
+
 const SEGMENT_SOURCES = `${SOURCE_NUMBER.awards}, ${SOURCE_NUMBER.history}`;
 const BUYER_SOURCES = `${SOURCE_NUMBER.awards}, ${SOURCE_NUMBER.history}, ${SOURCE_NUMBER.contracts}`;
 
-// A segment briefing: ?1 the segment as a number (the ending list: as it sits
-// in rec_expiring.segs, ' 81 '), ?2 the span's start, ?3 the data date, ?4
-// ?5 the quarter's first and last day; the largest: ?2 the fiscal year.
+// A segment briefing: ?1 the segment as a number (the ending list and the
+// instruments: as it sits in rec_expiring.segs and rec_instruments.segs,
+// ' 81 '), ?2 the span's start, ?3 the data date, ?4 ?5 the quarter's first
+// and last day; the largest: ?2 the fiscal year; the instruments: ?2 the
+// data date, ?3 INSTRUMENT_DAYS later.
 export const SEGMENT_BRIEFING_SQL = {
   notices: noticesSql(SEG_EVENTS),
   awards: awardsSql(SEG_EVENTS),
@@ -246,11 +270,15 @@ export const SEGMENT_BRIEFING_SQL = {
   amended: amendedSql(SEG_EVENTS),
   // Every row of the segment, a notice's further segments included: each notice once in the segment, as its figures count it.
   largest: largestSql(`sid = ?1 AND src IN (${SEGMENT_SOURCES}) AND fy = ?2`),
+  instruments: instrumentsSql("instr(segs, ?1) > 0", "?2", "?3"),
 } as const;
 
 // A buyer briefing: ?1 the buyer id, ?2 the segment it is narrowed to (a
-// number, -1 for none; the ending list: ' 81 ', '' for none), ?3 the span's
-// start, ?4 the data date, ?5 ?6 the quarter; the largest: ?3 the fiscal year.
+// number, -1 for none; the ending list and the instruments: ' 81 ', '' for
+// none), ?3 the span's start, ?4 the data date, ?5 ?6 the quarter; the
+// largest: ?3 the fiscal year; the instruments: ?3 the data date, ?4
+// INSTRUMENT_DAYS later. An instrument is the buyer's when its end user is
+// (rec_instruments.buyer, which the index's end user filter reads too).
 export const BUYER_BRIEFING_SQL = {
   notices: noticesSql(BUY_EVENTS),
   awards: awardsSql(BUY_EVENTS),
@@ -261,6 +289,7 @@ export const BUYER_BRIEFING_SQL = {
   largest: largestSql(
     `bid = (SELECT bid FROM rec_buyers WHERE id = ?1) AND src IN (${BUYER_SOURCES}) AND fy = ?3 AND ((?2 = -1 AND extra = 0) OR sid = ?2)`,
   ),
+  instruments: instrumentsSql("buyer = ?1 AND (?2 = '' OR instr(segs, ?2) > 0)", "?3", "?4"),
 } as const;
 
 // Every statement a briefing reads, for the tests that read their plans and bounds.
@@ -288,6 +317,11 @@ export type LargestLine = {
   // The record's page on the site (recordPath), null when it has none.
   path: string | null;
 };
+// n: the active holders, persons withheld counted.
+export type InstrumentLine = {
+  agr: string; type_en: string | null; type_fr: string | null; desc_en: string | null; desc_fr: string | null;
+  user_en: string | null; user_fr: string | null; expiry: string; n: number;
+};
 
 export type BriefingData = {
   // The records database's data date, the data date the message is for, and
@@ -298,6 +332,8 @@ export type BriefingData = {
   ending: { quarter: Quarter; n: number; cents: number | null; nv: number; fresh: number; rows: EndingLine[] };
   amended: { n: number; rows: AmendLine[] };
   largest: { fy: number; rows: LargestLine[] };
+  // within: the index's expiry filter the section reads, for its link.
+  instruments: { within: Within; n: number; rows: InstrumentLine[] };
   turn: { on: string; quarter: Quarter } | null;
 };
 
@@ -333,6 +369,7 @@ function expiringRow(j: unknown): Omit<ExpiringRow, "days_left"> | null {
 export async function readBriefing(env: Env, s: BriefingSubject, dataDate: string, start: string): Promise<BriefingRead> {
   const quarter = nextQuarter(dataDate);
   const fy = fiscalYearOf(dataDate);
+  const until = addDays(dataDate, INSTRUMENT_DAYS);
   const seg = s.kind === "segment" ? s.subject : s.segment;
   const segNumber = seg ? Number(seg) : -1;
   const segText = seg ? ` ${seg} ` : "";
@@ -345,6 +382,7 @@ export async function readBriefing(env: Env, s: BriefingSubject, dataDate: strin
       { sql: q.notices, params: ev }, { sql: q.awards, params: ev }, { sql: q.sources, params: ev },
       { sql: q.ending, params: [segText, start, dataDate, quarter.first, quarter.last] },
       { sql: q.amended, params: ev }, { sql: q.largest, params: [segNumber, fy] },
+      { sql: q.instruments, params: [segText, dataDate, until] },
       { sql: SEGMENT_DUE_SQL, params: [segNumber, quarter.fy, quarter.fy] },
     ];
   } else {
@@ -354,13 +392,14 @@ export async function readBriefing(env: Env, s: BriefingSubject, dataDate: strin
       { sql: q.notices, params: ev }, { sql: q.awards, params: ev }, { sql: q.sources, params: ev },
       { sql: q.ending, params: [s.subject, segText, start, dataDate, quarter.first, quarter.last] },
       { sql: q.amended, params: ev }, { sql: q.largest, params: [s.subject, segNumber, fy] },
-      // rec_due holds a buyer's quarters and a segment's, never the two together.
+      { sql: q.instruments, params: [s.subject, segText, dataDate, until] },
+      // rec_due holds a buyer's quarters and a segment's, never the two together: last, since a narrowed buyer has none.
       ...(narrowed ? [] : [{ sql: BUYER_DUE_SQL, params: [s.subject, quarter.fy, quarter.fy] }]),
     ];
   }
   const read = await readRecords(env, queries);
   if (read.state !== "ready") return { state: read.state };
-  const [noticeRows, awardRows, sourceRows, endingRows, amendedRows, largestRows, dueRows] = read.rows;
+  const [noticeRows, awardRows, sourceRows, endingRows, amendedRows, largestRows, instrumentRows, dueRows] = read.rows;
 
   // A count row sorts last and is not a notice: the count holds it.
   const notices = (noticeRows ?? []).filter((r) => r.more === null || r.more === undefined).map((r): NoticeLine | null => {
@@ -395,6 +434,15 @@ export async function readBriefing(env: Env, s: BriefingSubject, dataDate: strin
       buyer_en: str(r.buyer_en), buyer_fr: str(r.buyer_fr), path: recordPath(src, str(r.ref)),
     } : null;
   }).filter((r): r is LargestLine => r !== null);
+  const instruments = (instrumentRows ?? []).map((r): InstrumentLine | null => {
+    const agr = str(r.agr);
+    const expiry = str(r.expiry);
+    const holders = num(r.n);
+    return agr && expiry && holders !== null ? {
+      agr, type_en: str(r.type_en), type_fr: str(r.type_fr), desc_en: str(r.desc_en), desc_fr: str(r.desc_fr), user_en: str(r.user_en),
+      user_fr: str(r.user_fr), expiry: expiry.slice(0, 10), n: holders,
+    } : null;
+  }).filter((r): r is InstrumentLine => r !== null);
 
   return {
     state: "ready",
@@ -407,6 +455,7 @@ export async function readBriefing(env: Env, s: BriefingSubject, dataDate: strin
       ending: { quarter, ...due, fresh: num(first?.n_new) ?? 0, rows: ending },
       amended: { n: num(amendedRows?.[0]?.n) ?? 0, rows: amended },
       largest: { fy, rows: largest },
+      instruments: { within: INSTRUMENT_WITHIN, n: num(instrumentRows?.[0]?.n_all) ?? 0, rows: instruments },
       turn: quarterTurn(dataDate),
     },
   };
@@ -414,12 +463,14 @@ export async function readBriefing(env: Env, s: BriefingSubject, dataDate: strin
 
 // Whether a briefing has anything to send: a row in the week's sections, or a
 // contract ending next quarter (the quarter's list is the standing part). The
-// fiscal year's largest records alone are not news.
+// fiscal year's largest records and the instruments ending within 6 months
+// alone are not news: both lists stand from week to week.
 export const hasNews = (d: BriefingData): boolean => d.notices.n + d.awards.n + d.amended.n + d.ending.n > 0;
 
 // How many rows the message lists, for its delivery row.
 export const listedRows = (d: BriefingData): number =>
-  d.notices.rows.length + d.awards.rows.length + d.ending.rows.length + d.amended.rows.length + d.largest.rows.length;
+  d.notices.rows.length + d.awards.rows.length + d.ending.rows.length + d.amended.rows.length + d.largest.rows.length +
+  d.instruments.rows.length;
 
 // The page a record of the largest list links: an award notice or a history
 // record its page here, a published contract its page here; null for none.
