@@ -1212,10 +1212,14 @@ th[aria-sort="descending"] .th-sort::after {
 .plan-card .plan-list { margin: 0 16px; padding: 0; list-style: none; }
 .plan-card .plan-list li {
   display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; padding: 0; line-height: var(--plan-row-lh);
-  white-space: nowrap; overflow: hidden;
+  white-space: nowrap; overflow: visible;
 }
 .plan-card .plan-list li:first-child { padding-top: var(--plan-row-first); }
-.plan-card .plan-list li > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Below a line height of 1 the text's clip (for the ellipsis) would cut the
+   tops and bottoms of letters: 3 px of padding keeps them, a matching
+   negative margin keeps the row's height. The row itself lets the 12 px mark
+   and the tall letters show past its box. */
+.plan-card .plan-list li > span { min-width: 0; padding: 3px 0; margin: -3px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plan-card .plan-list .plan-lacks { color: var(--muted); }
 .plan-mark { display: block; flex: none; width: 12px; height: 12px; fill: var(--muted); }
 .plan-card-offer .plan-mark { fill: var(--accent); }

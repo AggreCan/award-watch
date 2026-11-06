@@ -439,16 +439,25 @@ describe("the plan cards", () => {
     // One line each, tight: no wrap (an ellipsis at worst), no padding and no rule between rows.
     for (const selector of [".plan-card .plan-for", ".plan-card .plan-list li"]) {
       expect(decl(rule(selector), "white-space"), selector).toBe("nowrap");
-      expect(decl(rule(selector), "overflow"), selector).toBe("hidden");
     }
+    expect(decl(rule(".plan-card .plan-for"), "overflow")).toBe("hidden");
     expect(decl(rule(".plan-card .plan-for"), "text-overflow")).toBe("ellipsis");
-    expect(decl(rule(".plan-card .plan-list li > span"), "text-overflow")).toBe("ellipsis");
+    // Below a line height of 1 the row lets its mark and tall letters show; the text span clips for its ellipsis,
+    // with padding and a matching negative margin so the clip cuts no letter.
+    expect(decl(rule(".plan-card .plan-list li"), "overflow")).toBe("visible");
+    const span = rule(".plan-card .plan-list li > span");
+    expect(decl(span, "overflow")).toBe("hidden");
+    expect(decl(span, "text-overflow")).toBe("ellipsis");
+    expect(decl(span, "white-space")).toBe("nowrap");
+    expect(decl(span, "padding")).toBe("3px 0");
+    expect(decl(span, "margin")).toBe("-3px 0");
     expect(decl(rule(".plan-card .plan-list li"), "padding")).toBe("0");
     expect(rule(".plan-card .plan-list li")).not.toContain("border");
     expect(decl(rule(".plan-mark"), "width")).toBe("12px");
     // The spacing values are named once on the grid and read by the rules.
     const cards = rule(".plan-cards");
-    expect(decl(cards, "--plan-row-lh")).toBe("0.9");
+    // A plain number, the one spacing value the operator is still settling (0.9 at the last step).
+    expect(decl(cards, "--plan-row-lh")).toMatch(/^[0-9.]+$/);
     expect(decl(cards, "--plan-head-h")).toBe("28px");
     expect(decl(rule(".plan-card .plan-list li"), "line-height")).toBe("var(--plan-row-lh)");
     expect(decl(rule(".plan-card .plan-list li:first-child"), "padding-top")).toBe("var(--plan-row-first)");
