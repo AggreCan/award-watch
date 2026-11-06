@@ -219,8 +219,8 @@ def test_every_file_passes_the_site_checks(exported):
     stats = load(out, "stats.json")
     assert s(stats["data_as_of"]) and all(num(v) for v in stats["counts"].values())
     assert set(stats["counts"]) == {"organizations", "buyers", "tenders_open", "tenders_new_today",
-                                    "tenders_closing_soon", "awards", "awards_year", "history", "contracts", "grants",
-                                    "lobbying", "awards_30d", "awards_year_suppliers"}
+                                    "tenders_closing_soon", "awards", "awards_year", "awards_erroneous", "history",
+                                    "contracts", "grants", "lobbying", "awards_30d", "awards_year_suppliers"}
     assert all(num_or_none(v) for v in stats["totals"].values())
     assert every(stats["new_tenders"], tender_row) and every(stats["closing_soon"], tender_row)
     assert every(stats["recent_awards"], award_row) and every(stats["top_organizations_year"], org_total)
@@ -246,11 +246,18 @@ def test_every_file_passes_the_site_checks(exported):
             assert contract_detail(v, kind, reference), key
             assert es.reference_shard(reference) == path.stem
     assert every(load(out, "awards/recent.json"), award_row)
+    # The site's isErroneousAward: a list row with the publication date and the contract's dates beside it.
+    assert every(load(out, "awards/erroneous.json"), lambda r: award_row(r) and s_or_none(r["published"])
+                 and s_or_none(r["start"]) and s_or_none(r["end"]))
     for index in (out / "awards").glob("*/index.json"):
         meta = json.loads(index.read_text(encoding="utf-8"))
         assert meta["year"] == int(index.parent.name) and meta["rows"] >= meta["pages"]
         rows = [r for n in range(1, meta["pages"] + 1) for r in load(out, f"awards/{meta['year']}/{n}.json")]
         assert len(rows) == meta["rows"] and every(rows, award_row)
+        # The value set: the same rows, as many files or one more, the valued ones first.
+        assert meta["pages"] <= meta["value_pages"] <= meta["pages"] + 1 and meta["valued_pages"] <= meta["value_pages"]
+        by_value = [r for n in range(1, meta["value_pages"] + 1) for r in load(out, f"awards/{meta['year']}/value/{n}.json")]
+        assert every(by_value, award_row) and sorted(map(json.dumps, by_value)) == sorted(map(json.dumps, rows))
     for path in (out / "profiles").glob("*.json"):
         for oid, p in json.loads(path.read_text(encoding="utf-8")).items():
             assert oid[4:7] == path.stem and profile(p, oid), oid
@@ -305,8 +312,9 @@ def test_counts_and_home_lists(exported):
     stats = load(out, "stats.json")
     assert stats["data_as_of"] == "2026-10-31"
     assert stats["counts"] == {"organizations": 3, "buyers": 2, "tenders_open": 4, "tenders_new_today": 2,
-                               "tenders_closing_soon": 1, "awards": 6, "awards_year": 3, "history": 2, "contracts": 2,
-                               "grants": 1, "lobbying": 1, "awards_30d": 1, "awards_year_suppliers": 2}
+                               "tenders_closing_soon": 1, "awards": 6, "awards_year": 3, "awards_erroneous": 0,
+                               "history": 2, "contracts": 2, "grants": 1, "lobbying": 1, "awards_30d": 1,
+                               "awards_year_suppliers": 2}
     # The year's count is the year's award pages' row count.
     assert stats["counts"]["awards_year"] == load(out, "awards/2026/index.json")["rows"]
     assert [r["reference"] for r in stats["closing_soon"]] == ["cb-200-2"]
@@ -368,6 +376,99 @@ def test_the_home_pages_award_notices_are_the_newest_by_award_date(conn, tmp_pat
     # the one of 2024; by publication date it would have stood first.
     assert refs.index("AW-4") < refs.index("AW-LATE-PUB") < refs.index(SLASH_REF.replace("/", "-"))
     assert len(recent) <= es.HOME_ROWS
+
+
+def test_an_award_date_after_the_data_date_leaves_the_newest_lists_and_is_listed_apart(conn, tmp_path):
+    """The contract's end date typed in the award-date field (cb-502-17330425: awarded 2029-08-31, start 2026-09-01,
+    end 2029-08-31). The newest lists leave it out and awards/erroneous.json holds it with its dates; the year
+    pages, the profile and the tender's related awards keep it, the last two at its publication date. An award date
+    up to the data date is left alone, even one after the publication date."""
+    ids = seed(conn)
+    award(conn, "AW-FUTURE", 0, NORTH, value=80_000.0, awarded="2029-08-31", published="2026-08-31",
+          solicitation="sol-1")
+    award(conn, "AW-DEC", 0, ACME, value=9_000.0, awarded="2026-12-15", published="2026-10-01")
+    award(conn, "AW-EDGE", 0, ACME, value=7_000.0, awarded="2026-10-31", published="2026-10-29")
+    conn.execute('UPDATE awards SET start = ?, "end" = ? WHERE reference = ?', ("2026-09-01", "2029-08-31", "AW-FUTURE"))
+    conn.execute('UPDATE awards SET "end" = ? WHERE reference = ?', ("2026-12-15", "AW-DEC"))
+    # A PSPC history record dated the same way, for the profile's other list.
+    conn.execute(
+        "INSERT INTO contract_history (reference, amendment, title_en, awarded, published, amount, total_value, currency, "
+        "status, supplier_raw, organization_id, buyer_id, client_id, source_file, first_seen, last_seen) VALUES "
+        "('H-FUTURE', 0, 'Boots, later', '2028-03-31', '2026-05-01', 1000, 1000, 'CAD', 'active', ?, ?, 'pwgsc-tpsgc', "
+        "'dnd-mdn', 'history.csv', '2026-10-31', '2026-10-31')", (ACME, ids[ACME]))
+    conn.commit()
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+
+    recent = [r["reference"] for r in load(out, "awards/recent.json")]
+    assert "AW-FUTURE" not in recent and "AW-DEC" not in recent and "AW-EDGE" in recent
+    buyer = [r["reference"] for r in load(out, "buyers/pwgsc-tpsgc.json")["recent_awards"]]
+    assert "AW-FUTURE" not in buyer and "AW-DEC" not in buyer and "AW-EDGE" in buyer
+    # The year pages: 2026 keeps December's; no page for 2029, a year after the data date's.
+    year = load(out, "awards/2026/1.json")
+    assert "AW-DEC" in [r["reference"] for r in year] and not (out / "awards" / "2029").exists()
+
+    erroneous = load(out, "awards/erroneous.json")
+    assert [r["reference"] for r in erroneous] == ["AW-FUTURE", "AW-DEC"]
+    first = erroneous[0]
+    assert (first["awarded"], first["published"], first["start"], first["end"]) == (
+        "2029-08-31", "2026-08-31", "2026-09-01", "2029-08-31")
+    assert first["organization_id"] == ids[NORTH] and first["value"] == 80_000.0
+    assert load(out, "stats.json")["counts"]["awards_erroneous"] == 2
+
+    # The profile keeps it, placed by its publication date, its award date as published: North's AW-2 was awarded
+    # 2026-10-20, AW-FUTURE published 2026-08-31, AW-3 awarded 2025-05-05.
+    north = load(out, f"profiles/{ids[NORTH][4:7]}.json")[ids[NORTH]]
+    assert [r["reference"] for r in north["awards"]] == ["AW-2", "AW-FUTURE", "AW-3"]
+    assert north["awards"][1]["awarded"] == "2029-08-31"
+    acme = load(out, f"profiles/{ids[ACME][4:7]}.json")[ids[ACME]]
+    assert [r["reference"] for r in acme["awards"]][:3] == ["AW-EDGE", "AW-DEC", "AW-1"]
+    # H-1 awarded 2026-06-01 stands before H-FUTURE, published 2026-05-01.
+    assert [r["reference"] for r in acme["history"]] == ["H-1", "H-FUTURE"]
+
+    # The tender with solicitation SOL-1: AW-2 (awarded 2026-10-20) before AW-FUTURE (published 2026-08-31).
+    shard = load(out, f"tenders/{es.reference_shard('cb-100-1')}.json")
+    assert [a["reference"] for a in shard["cb-100-1"]["related_awards"]] == ["AW-2", "AW-FUTURE"]
+
+
+def test_each_year_is_also_written_by_value_with_the_rows_without_one_last(conn, tmp_path, monkeypatch):
+    """awards/<year>/value/<n>.json: the year's rows, those with a value in Canadian dollars (or no stated
+    currency) largest first, equal values in award date order; then, from a file of their own, those without one
+    (none published, or another currency) in award date order. The index counts the set's files and the valued
+    ones, so the site can read the smallest first and still keep the rows without a value last."""
+    monkeypatch.setattr(es, "AWARD_PAGE", 2)
+    seed(conn)
+    # 2026 in the seed: AW-1 (1,250,000, March 2), AW-2 (250,000, October 20), AW-5 (12,000, August 8).
+    award(conn, "AW-TIE", 0, ACME, value=12_000.0, awarded="2026-07-01")
+    award(conn, "AW-NOVAL", 0, ACME, value=None, awarded="2026-05-01")
+    award(conn, "AW-EURO26", 0, FOREIGN, value=5_000.0, currency="EUR", awarded="2026-04-01", country="DE", province="")
+    conn.commit()
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+
+    def refs(path):
+        return [r["reference"] for r in load(out, path)]
+
+    meta = load(out, "awards/2026/index.json")
+    assert meta == {"year": 2026, "pages": 3, "rows": 6, "value_pages": 3, "valued_pages": 2}
+    assert refs("awards/2026/1.json") + refs("awards/2026/2.json") + refs("awards/2026/3.json") == [
+        "AW-2", "AW-5", "AW-TIE", "AW-NOVAL", "AW-EURO26", "AW-1"]
+    assert [refs(f"awards/2026/value/{n}.json") for n in (1, 2, 3)] == [
+        ["AW-1", "AW-2"], ["AW-5", "AW-TIE"], ["AW-NOVAL", "AW-EURO26"]]
+    # 2025: AW-3, cancelled (a value of 0), and AW-4 in euros. The row without a value starts a file of its own,
+    # so the set has one file more than the date set.
+    assert load(out, "awards/2025/index.json") == {"year": 2025, "pages": 1, "rows": 2, "value_pages": 2, "valued_pages": 1}
+    assert refs("awards/2025/1.json") == ["AW-3", "AW-4"]
+    assert refs("awards/2025/value/1.json") == ["AW-3"] and refs("awards/2025/value/2.json") == ["AW-4"]
+    # A year whose every row has a value has no file of rows without one.
+    assert load(out, "awards/2024/index.json")["value_pages"] == load(out, "awards/2024/index.json")["valued_pages"] == 1
+
+
+def test_the_award_day_is_built_only_from_a_date():
+    assert es.award_day("2026-10-31") == "CASE WHEN substr(awarded, 1, 10) > '2026-10-31' THEN published ELSE awarded END"
+    for bad in ("2026-10-31' OR 1=1 --", "", "2026-10-3", "2026-10-31T00:00:00"):
+        with pytest.raises(ValueError):
+            es.award_day(bad)
 
 
 def test_stats_count_the_last_30_days_awards_and_the_years_suppliers(conn, tmp_path):
@@ -572,7 +673,7 @@ def test_open_first_counts_every_open_notice_and_award_years_are_paged(conn, tmp
     assert first["facets"]["buyer"][0] == {"value": "pwgsc-tpsgc", "n": 3,
                                            "en": "Public Services and Procurement Canada",
                                            "fr": "Services publics et Approvisionnement Canada"}
-    assert load(out, "awards/2026/index.json") == {"year": 2026, "pages": 2, "rows": 3}
+    assert load(out, "awards/2026/index.json") == {"year": 2026, "pages": 2, "rows": 3, "value_pages": 2, "valued_pages": 2}
     assert [r["awarded"] for r in load(out, "awards/2026/1.json")] == ["2026-10-20", "2026-08-08"]
     assert [r["reference"] for r in load(out, "awards/2026/2.json")] == ["AW-1"]
     assert not (out / "awards" / "2026.json").exists()

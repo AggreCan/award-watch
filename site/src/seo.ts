@@ -38,7 +38,8 @@ export interface Seo {
 type Both = Record<Lang, string>;
 
 export type PageKey =
-  | "home" | "tenders" | "tenders_new" | "same_day" | "awards" | "expiring" | "organizations" | "buyers" | "segments" | "rankings"
+  | "home" | "tenders" | "tenders_new" | "same_day" | "awards" | "awards_erroneous" | "expiring" | "organizations" | "buyers"
+  | "segments" | "rankings"
   | "feeds" | "watchlist" | "methodology" | "data" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts" | "pro";
 
 // A result list shows about 60 characters of a title; the whole <title>,
@@ -93,6 +94,15 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     description: {
       en: "Who won federal contracts: the newest CanadaBuys award notices with supplier, buyer, value and procurement method, each linked to the notice.",
       fr: "Qui a remporté les contrats fédéraux : les plus récents avis d'attribution d'AchatsCanada, avec fournisseur, acheteur, valeur et méthode.",
+    },
+  },
+  // Award notices whose award date falls after the data date, listed apart (pages/awards.tsx).
+  awards_erroneous: {
+    path: "/awards/erroneous",
+    name: { en: "Erroneous Award Notice Submissions", fr: "Avis d'attribution : soumissions erronées" },
+    description: {
+      en: "CanadaBuys award notices whose award date falls after the data date, shown as published beside the contract's start and end dates.",
+      fr: "Avis d'attribution d'AchatsCanada dont la date d'attribution tombe après la date des données, tels que publiés, avec les dates du contrat.",
     },
   },
   expiring: {
@@ -266,8 +276,9 @@ export function pageSeo(key: PageKey, lang: Lang, extra: Partial<Seo> = {}): Seo
 // carries no cookie, so the plain URL is the English page and ?lang=fr the
 // French one. Each version names itself as canonical; a French page that named
 // the plain URL would be folded into the English one and drop out of results.
+// A path that already carries a query (a year page's ?page=2) takes the language after an ampersand.
 export function canonicalUrl(path: string, lang: Lang): string {
-  return `${SITE_ORIGIN}${path}${lang === "fr" ? "?lang=fr" : ""}`;
+  return `${SITE_ORIGIN}${path}${lang === "fr" ? `${path.includes("?") ? "&" : "?"}lang=fr` : ""}`;
 }
 
 export function alternates(path: string): { hreflang: string; href: string }[] {

@@ -1,0 +1,54 @@
+[
+ {
+  "awarded": "2029-08-31",
+  "buyer_en": "Public Services and Procurement Canada",
+  "buyer_fr": "Services publics et Approvisionnement Canada",
+  "buyer_id": "pwgsc-tpsgc",
+  "competitive": 1,
+  "currency": "CAD",
+  "end": "2029-08-31",
+  "instrument_en": "Contract",
+  "instrument_fr": "Contrat",
+  "organization": "Exemplar Translation Services Inc.",
+  "organization_id": "org-a000000001",
+  "provinces": [
+   "ON"
+  ],
+  "published": "2026-08-31",
+  "reference": "cb-810-81000001",
+  "segments": [
+   "82"
+  ],
+  "start": "2026-09-01",
+  "status": "active",
+  "title_en": "Conference interpretation, three years",
+  "title_fr": "Interprétation de conférence, trois ans",
+  "value": 420000
+ },
+ {
+  "awarded": "2027-04-22",
+  "buyer_en": "Fisheries and Oceans Canada",
+  "buyer_fr": "Pêches et Océans Canada",
+  "buyer_id": "dfo-mpo",
+  "competitive": 0,
+  "currency": "CAD",
+  "end": "2027-04-22",
+  "instrument_en": "Contract",
+  "instrument_fr": "Contrat",
+  "organization": "Sample Harbour Marine Ltd.",
+  "organization_id": "org-a000000002",
+  "provinces": [
+   "BC"
+  ],
+  "published": "2026-04-22",
+  "reference": "cb-820-82000002",
+  "segments": [
+   "72"
+  ],
+  "start": "2026-04-22",
+  "status": "active",
+  "title_en": "Wharf inspection services",
+  "title_fr": "Services d'inspection de quais",
+  "value": 61000
+ }
+]

@@ -17,7 +17,7 @@ const text = async (path: string) =>
 
 // Every page that draws a table, in both languages.
 const PAGES = [
-  "/", "/tenders", "/tenders/new", "/tenders/cb-100-10000001", "/awards", "/awards/2026", "/awards/cb-400-40000004",
+  "/", "/tenders", "/tenders/new", "/tenders/cb-100-10000001", "/awards", "/awards/2026", "/awards/erroneous", "/awards/cb-400-40000004",
   "/expiring", "/expiring/3m", "/organizations", "/organizations/directory/on", "/organizations/org-a000000001",
   "/organizations/org-a000000002", "/buyers", "/buyers/pwgsc-tpsgc", "/segments", "/segments/82", "/rankings",
   "/data", "/feeds", "/watchlist",

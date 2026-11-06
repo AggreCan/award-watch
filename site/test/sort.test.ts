@@ -251,7 +251,7 @@ describe("the markup", () => {
     expect(tendersJs).toContain('headOrder(ORDERS, state.sort, h[2], "closing")');
   });
 
-  it("links the newest awards' Awarded and Value heads, and leaves a year's heads plain", async () => {
+  it("links the newest awards' Awarded and Value heads, and a year's too (test/awards-year-sort.test.ts)", async () => {
     const html = await text("/awards");
     const heads = headRow(html);
     expect(heads).toContain('<th class="k-date"><a href="/awards?sort=oldest" class="th-sort" rel="nofollow">Awarded</a></th>');
@@ -265,8 +265,10 @@ describe("the markup", () => {
     expect(smallest).toContain('<meta name="robots" content="noindex');
     const year = await text("/awards/2026");
     expect(tableTag(year)).toContain('data-sorting="server"');
-    expect(headRow(year)).not.toContain("th-sort");
-    expect(year).not.toContain("/sort.js");
+    expect(headRow(year)).toContain('<th class="k-date"><a href="/awards/2026?sort=oldest" class="th-sort" rel="nofollow">Awarded</a></th>');
+    expect(headRow(year)).toContain('<th class="k-value num"><a href="/awards/2026?sort=smallest" class="th-sort" rel="nofollow">Value</a></th>');
+    expect(headRow(year).match(/class="th-sort"/g)).toHaveLength(2);
+    expect(year).toContain('<script type="module" src="/sort.js"></script>');
   });
 
   it("keeps the words out of the script, in both languages in the dictionary, with no em-dash", () => {

@@ -3,18 +3,25 @@
 // /awards/:year: one calendar year of award notices by award date, read one
 // page at a time (awards/<year>/<n>.json, 500 rows each, newest first), with
 // awards/<year>/index.json for the page count, so no request parses a whole
-// year.
+// year. The Awarded and Value heads order it (?sort=) through a second copy
+// ordered by value (awards/<year>/value/<n>.json), one file a page.
+// /awards/erroneous: the notices whose award date falls after the data date
+// (awards/erroneous.json), which the newest lists leave out.
 
 import type { Context } from "hono";
+import type { FC } from "hono/jsx";
 import { FIRST_AWARD_YEAR } from "../constants";
-import { YEAR_RE, loadAwardPage, loadAwardYear, loadRecentAwards, loadStats, type AwardRow } from "../data";
+import {
+  YEAR_RE, loadAwardPage, loadAwardYear, loadErroneousAwards, loadRecentAwards, loadStats, publishedReference, type AwardRow,
+  type AwardYear,
+} from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, t, tn } from "../i18n";
-import { type SortOrders, headSort } from "../columns";
-import { Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
-import { canonicalUrl, pageSeo, sectionSeo } from "../seo";
+import { fmtInt, pick, t, tn, type Lang } from "../i18n";
+import { Table, type SortOrders, headSort } from "../columns";
+import { Layout, PageHead, Panel, StatusBadge, noDataPage, notFoundPage, page, todayOf } from "../layout";
+import { breadcrumbJsonLd, canonicalUrl, pageSeo, sectionSeo } from "../seo";
 import { FeedLinks, nationalFeedPath } from "./feeds";
-import { AwardTable, SourceLine } from "./shared";
+import { AwardTable, BuyerLink, SourceLine, awardNoticeUrl, money } from "./shared";
 
 export const AWARD_PAGE_SIZE = 100;
 
@@ -133,6 +140,8 @@ export async function awardsPage(c: Context<AppEnv>): Promise<Response> {
   const year = today.slice(0, 4);
   const sortHref = (v: string) => `/awards${awardsQuery(v as AwardOrder, 1)}`;
   const sorts = { awarded: headSort(AWARD_ORDERS, order, "awarded", sortHref), value: headSort(AWARD_ORDERS, order, "value", sortHref) };
+  // The notices dated after the data date, which this list leaves out (absent from older exports: no line).
+  const erroneous = stats.counts.awards_erroneous ?? 0;
   return page(
     c,
     <Layout lang={lang} title={t(lang, "awards.title")} dataAsOf={stats.data_as_of} active="/awards"
@@ -142,7 +151,12 @@ export async function awardsPage(c: Context<AppEnv>): Promise<Response> {
           <a href={`/downloads/awards-${year}.csv`} class="btn">{t(lang, "awards.download", { year })}</a>
           <a href={`/data/${nationalFeedPath("awards")}`} class="btn">{t(lang, "feeds.button_awards")}</a>
         </>}>
-        <p class="page-note">{t(lang, "awards.value_note")}{lateDates(sorted, today) ? ` ${t(lang, "common.dates_as_published")}` : ""}</p>
+        <p class="page-note">
+          {t(lang, "awards.value_note")}{lateDates(sorted, today) ? ` ${t(lang, "common.dates_as_published")}` : ""}
+          {erroneous > 0 ? (
+            <> <a href="/awards/erroneous">{tn(lang, "erroneous.note_one", "erroneous.note_many", erroneous, { n: fmtInt(erroneous, lang) })}</a></>
+          ) : null}
+        </p>
       </PageHead>
       <YearLinks years={awardYears(stats.data_as_of)} current={null} lang={lang} />
       <Panel title={t(lang, "awards.recent")} count={fmtInt(rows.length, lang)}
@@ -151,6 +165,39 @@ export async function awardsPage(c: Context<AppEnv>): Promise<Response> {
       </Panel>
     </Layout>,
   );
+}
+
+// The order a year's ?sort= asks for: none (""), one of /awards's orders, or
+// null for anything else, which answers 404 as a page number that is not
+// one does.
+export function readYearOrder(raw: string | undefined): AwardOrder | null {
+  if (raw === undefined) return "";
+  return AWARD_ORDERS.find((o) => o[0] === raw)?.[0] ?? null;
+}
+
+// The pages of a year in an order, or null when the order needs the value
+// set and the export has none. The value set can hold one file more than the
+// date set: its rows without a value start a file of their own.
+export function yearPages(idx: AwardYear, order: AwardOrder): number | null {
+  if (order === "largest" || order === "smallest") return idx.value_pages ?? null;
+  return idx.pages;
+}
+
+// The file page n of an order reads, and whether its rows run backwards. The
+// pipeline writes a year twice, newest award date first and largest value
+// first (the rows without a value in the files after the first
+// valued_pages), so one file makes one page in every order: the oldest are the
+// date set read from its last file backwards; the smallest are the valued
+// files read the same way, then the files without a value as they stand, so
+// those rows stay last whichever way the values run.
+export function yearPageFile(idx: AwardYear, order: AwardOrder, n: number): { set: "date" | "value"; file: number; reverse: boolean } {
+  if (order === "oldest") return { set: "date", file: idx.pages - n + 1, reverse: true };
+  if (order === "largest") return { set: "value", file: n, reverse: false };
+  if (order === "smallest") {
+    const valued = idx.valued_pages ?? 0;
+    return n <= valued ? { set: "value", file: valued - n + 1, reverse: true } : { set: "value", file: n, reverse: false };
+  }
+  return { set: "date", file: n, reverse: false };
 }
 
 export async function awardsYearPage(c: Context<AppEnv>, raw: string): Promise<Response> {
@@ -164,19 +211,34 @@ export async function awardsYearPage(c: Context<AppEnv>, raw: string): Promise<R
   if (!idx) return noDataPage(c, "awards.title");
   const path = `/awards/${year}`;
   const n = pageOf(c);
-  if (n === null || (n > 1 && n > idx.pages)) return notFoundPage(c, stats.data_as_of, "awards.page_not_found", path, "awards.back_year");
-  const rows = idx.pages === 0 ? [] : await loadAwardPage(c.env, year, n);
-  if (!rows) return noDataPage(c, "awards.title");
-  const shown = newestFirst(rows);
-  const pages = Math.max(1, idx.pages);
+  const order = readYearOrder(c.req.query("sort"));
+  const count = order === null ? null : yearPages(idx, order);
+  if (n === null || order === null || count === null || (n > 1 && n > count)) {
+    return notFoundPage(c, stats.data_as_of, "awards.page_not_found", path, "awards.back_year");
+  }
+  const at = yearPageFile(idx, order, n);
+  const read = count === 0 ? [] : await loadAwardPage(c.env, year, at.file, at.set);
+  if (!read) return noDataPage(c, "awards.title");
+  // A file of the order is the page already; newest first only reorders the
+  // plain view's ties as the list always has.
+  const shown = order === "" ? newestFirst(read) : at.reverse ? [...read].reverse() : [...read];
+  const pages = Math.max(1, count);
   const title = t(lang, "awards.year_title", { year });
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "awards.title"), path: "/awards" }, { name: String(year) }];
-  const prev = n > 1 ? canonicalUrl(n === 2 ? path : `${path}?page=${n - 1}`, lang) : null;
-  const next = n < pages ? canonicalUrl(`${path}?page=${n + 1}`, lang) : null;
+  // Only the plain view's pages are a series for search engines; a sorted view is noindex.
+  const prev = order === "" && n > 1 ? canonicalUrl(n === 2 ? path : `${path}?page=${n - 1}`, lang) : null;
+  const next = order === "" && n < pages ? canonicalUrl(`${path}?page=${n + 1}`, lang) : null;
+  const sortHref = (v: string) => `${path}${awardsQuery(v as AwardOrder, 1)}`;
+  // The Value head links only where the export wrote the value set.
+  const sorts = {
+    awarded: headSort(AWARD_ORDERS, order, "awarded", sortHref),
+    value: idx.value_pages === undefined ? {} : headSort(AWARD_ORDERS, order, "value", sortHref),
+  };
+  const noindex = c.req.query("page") !== undefined || c.req.query("sort") !== undefined;
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/awards"
-      seo={sectionSeo(path, title, t(lang, "awards.year_description", { year, n: fmtInt(idx.rows, lang) }), crumbs, c.req.query("page") !== undefined)}
+      seo={sectionSeo(path, title, t(lang, "awards.year_description", { year, n: fmtInt(idx.rows, lang) }), crumbs, noindex)}
       head={<>{prev ? <link rel="prev" href={prev} /> : null}{next ? <link rel="next" href={next} /> : null}</>}>
       <PageHead lang={lang} crumbs={crumbs} title={title}
         lead={tn(lang, "awards.year_count_one", "awards.year_count_many", idx.rows, { n: fmtInt(idx.rows, lang), year })}
@@ -187,9 +249,71 @@ export async function awardsYearPage(c: Context<AppEnv>, raw: string): Promise<R
       </PageHead>
       <YearLinks years={years} current={year} lang={lang} />
       <Panel title={t(lang, "awards.year_panel", { year })} count={fmtInt(idx.rows, lang)}
-        foot={<>{pager(path, n, pages, lang)}<SourceLine lang={lang} source="awards" /></>}>
-        {/* A year is read one file of 500 at a time, newest first, so no head can order the year: they stay plain. */}
-        {shown.length ? <AwardTable lang={lang} rows={shown} sorting="server" /> : <p class="muted">{t(lang, "awards.none")}</p>}
+        foot={<>{pager(path, n, pages, lang, order)}<SourceLine lang={lang} source="awards" /></>}>
+        {/* A year is read one file of 500 at a time, so the Awarded and Value heads order the whole year
+            through the export's two orders of it (yearPageFile); the others stay plain. */}
+        {shown.length ? <AwardTable lang={lang} rows={shown} sorting="server" sorts={sorts} /> : <p class="muted">{t(lang, "awards.none")}</p>}
+      </Panel>
+    </Layout>,
+  );
+}
+
+// The notices dated after the data date, each with the dates its award date
+// is read against: the publication date, and the contract's start and end.
+// Every row is on the page, so any head sorts it in the browser. The buyer
+// and start rest below 1280 px and the record link below 1440 px; the
+// title opens the site's page of the notice, which links it too.
+const ErroneousTable: FC<{ lang: Lang; rows: readonly AwardRow[] }> = ({ lang, rows }) => (
+  <div class="table-wrap bordered">
+    <Table sorting="client" cols={[
+      { kind: "main", label: t(lang, "col.notice") },
+      { kind: "buyer", label: t(lang, "col.buyer"), rest: "md" },
+      { kind: "date", label: t(lang, "col.published") },
+      { kind: "date", label: t(lang, "erroneous.col_awarded") },
+      { kind: "date", label: t(lang, "erroneous.col_start"), rest: "md" },
+      { kind: "date", label: t(lang, "erroneous.col_end") },
+      { kind: "value", label: t(lang, "col.value") },
+      { kind: "record", label: t(lang, "col.record"), rest: "lg" },
+    ]}>
+      <tbody>
+        {rows.map((r) => (
+          <tr>
+            <td data-label={t(lang, "col.notice")} class="lead-cell">
+              <a href={`/awards/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? publishedReference(r)}</a>
+              <br />
+              <span class="mono id muted">{publishedReference(r)}</span>
+              {r.status === "cancelled" ? <> <StatusBadge lang={lang} status="cancelled" /></> : null}
+            </td>
+            <td data-label={t(lang, "col.buyer")} class="mdh"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
+            <td data-label={t(lang, "col.published")} class="mono">{r.published ?? ""}</td>
+            <td data-label={t(lang, "erroneous.col_awarded")} class="mono">{r.awarded ?? ""}</td>
+            <td data-label={t(lang, "erroneous.col_start")} class="mono mdh">{r.start ?? ""}</td>
+            <td data-label={t(lang, "erroneous.col_end")} class="mono">{r.end ?? ""}</td>
+            <td data-label={t(lang, "col.value")} class="mono num">{money(lang, r.value, r.currency)}</td>
+            <td data-label={t(lang, "col.record")} class="lgh">
+              <a href={awardNoticeUrl(publishedReference(r), lang)} rel="noopener">{t(lang, "expiring.record_award")}</a>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  </div>
+);
+
+export async function erroneousAwardsPage(c: Context<AppEnv>): Promise<Response> {
+  const lang = c.get("lang");
+  const stats = await loadStats(c.env);
+  const rows = stats ? await loadErroneousAwards(c.env) : null;
+  if (!stats || !rows) return noDataPage(c, "erroneous.title");
+  const title = t(lang, "erroneous.title");
+  const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "awards.title"), path: "/awards" }, { name: title }];
+  return page(
+    c,
+    <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/awards"
+      seo={pageSeo("awards_erroneous", lang, { jsonLd: [breadcrumbJsonLd(crumbs)] })}>
+      <PageHead lang={lang} crumbs={crumbs} title={title} lead={t(lang, "erroneous.lead", { date: todayOf(stats.data_as_of) })} />
+      <Panel title={t(lang, "erroneous.panel")} count={fmtInt(rows.length, lang)} foot={<SourceLine lang={lang} source="awards" />}>
+        {rows.length ? <ErroneousTable lang={lang} rows={rows} /> : <p class="muted">{t(lang, "erroneous.none")}</p>}
       </Panel>
     </Layout>,
   );

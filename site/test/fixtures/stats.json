@@ -33,6 +33,7 @@
  "counts": {
   "awards": 5883,
   "awards_30d": 2,
+  "awards_erroneous": 2,
   "awards_year_suppliers": 2,
   "buyers": 3,
   "contracts": 101,

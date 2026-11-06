@@ -26,6 +26,14 @@ rec_classes (the UNSPSC classes of each notice and history record) and
 rec_expiring (the radar's 12-month window, read from the static export's
 window files so the site's two views of the radar cannot disagree).
 
+A record's date (records.fy and fq, rec_details.day, rec_classes.day) is its
+award date for an award notice or a history record, its contract date for a
+published contract and its start for a grant; an award notice or history
+record whose award date falls after the data date takes its publication date
+instead (NOTICE_DAY), because in every such row seen the award date is the
+contract's end date entered in the award-date field. The fiscal-year counts
+and the record tables' newest order then place it when it appeared.
+
 Two serve the page of each published contract (/contracts/<department>/
 <reference>, site/src/pages/published.tsx): rec_contracts (every field the
 page shows of a published contract row) and rec_gsin (the names of the GSIN
@@ -291,10 +299,18 @@ def method_code(method: object) -> str | None:
 _A = organizations
 
 
+# The date an award notice or history record is counted and listed under: its
+# award date, or its publication date when the award date falls after the
+# data date. In every such row seen the award date is the contract's end
+# date entered in the award-date field; the data date is bound as :as_of when
+# the statement runs (record_rows, text_rows), and NULL keeps the award date.
+NOTICE_DAY = "CASE WHEN substr(awarded, 1, 10) > :as_of THEN published ELSE awarded END"
+
+
 def _notice_sql(kind: str, table: str, codes: str, buyer: str) -> str:
     return (
         f"WITH newest AS ({_A._newest_by_reference(table, ('reference',))}) "
-        f"SELECT '{kind}:' || reference AS key, org, {buyer} AS buyer, awarded AS day, {_A.award_value(kind)} AS v, "
+        f"SELECT '{kind}:' || reference AS key, org, {buyer} AS buyer, {NOTICE_DAY} AS day, {_A.award_value(kind)} AS v, "
         f"{_A.AWARD_NO_VALUE} AS nv, {_A.award_flagged(kind)} AS flagged, UPPER(TRIM(COALESCE(currency, ''))) AS cur, "
         "competitive AS comp, method_en AS method, "
         f"(SELECT group_concat(c.unspsc, ' ') FROM {codes} c WHERE c.reference = newest.reference "
@@ -381,8 +397,12 @@ def ref_maps(conn: sqlite3.Connection) -> dict[str, RefMap]:
 
 
 def record_rows(conn: sqlite3.Connection, counts: _Counts | None = None,
-                refs: dict[str, RefMap] | None = None) -> Iterator[tuple]:
+                refs: dict[str, RefMap] | None = None, *, as_of: str | None = None) -> Iterator[tuple]:
     """Every row of the records table, values in RECORDS.written order (the key first).
+
+    as_of is the data date: an award notice or history record whose award
+    date falls after it takes its fiscal year and quarter from its
+    publication date (NOTICE_DAY); None keeps every award date.
 
     A notice whose codes reach several of the 57 segments gives its row under
     the lowest, then one row with extra = 1 under each other (each with the
@@ -397,7 +417,8 @@ def record_rows(conn: sqlite3.Connection, counts: _Counts | None = None,
     refs = refs if refs is not None else ref_maps(conn)
     for source, sql in RECORD_SQL.items():
         src = SOURCES[source]
-        for r in conn.execute(sql):
+        # The statements without :as_of ignore it (sqlite3 reads only the names a statement holds).
+        for r in conn.execute(sql, {"as_of": as_of}):
             if source == "grants" and r["withheld"]:
                 tally.grants_withheld += 1
                 continue
@@ -434,13 +455,13 @@ def record_rows(conn: sqlite3.Connection, counts: _Counts | None = None,
 TEXT_SQL = {
     "awards": (
         f"WITH newest AS ({_A._newest_by_reference('awards', ('reference',))}) "
-        "SELECT 'award:' || reference AS key, reference AS ref, awarded AS day, title_en, title_fr, "
+        f"SELECT 'award:' || reference AS key, reference AS ref, {NOTICE_DAY} AS day, title_en, title_fr, "
         "(SELECT group_concat(c.unspsc, ' ') FROM award_codes c WHERE c.reference = newest.reference "
         "AND c.amendment = newest.amendment) AS codes FROM newest"
     ),
     "history": (
         f"WITH newest AS ({_A._newest_by_reference('contract_history', ('reference',))}) "
-        "SELECT 'history:' || reference AS key, reference AS ref, awarded AS day, title_en, title_fr, "
+        f"SELECT 'history:' || reference AS key, reference AS ref, {NOTICE_DAY} AS day, title_en, title_fr, "
         "(SELECT group_concat(c.unspsc, ' ') FROM history_codes c WHERE c.reference = newest.reference "
         "AND c.amendment = newest.amendment) AS codes FROM newest"
     ),
@@ -483,8 +504,12 @@ def title_text(value: object, lang: str) -> str | None:
 
 
 def text_rows(conn: sqlite3.Connection, segments: set[str] | None = None,
-              refs: dict[str, RefMap] | None = None) -> Iterator[tuple]:
+              refs: dict[str, RefMap] | None = None, *, as_of: str | None = None) -> Iterator[tuple]:
     """(key, day, ref, title_en, title_fr, classes) for every record that has a date.
+
+    The day of an award notice or history record is NOTICE_DAY with as_of
+    bound, as in record_rows, so the record tables' newest order and the
+    fiscal year the site reads from the day agree with the figures.
 
     An award or history reference takes its URL form (the site's /awards/ and
     /history/ addresses) by the decision records.ref follows
@@ -499,7 +524,7 @@ def text_rows(conn: sqlite3.Connection, segments: set[str] | None = None,
     segments = segments if segments is not None else set(read_segments())
     refs = refs if refs is not None else ref_maps(conn)
     for source, sql in TEXT_SQL.items():
-        for r in conn.execute(sql):
+        for r in conn.execute(sql, {"as_of": as_of}):
             day = day_of(r["day"])
             if day is None:
                 continue
@@ -754,10 +779,13 @@ def due_rows(conn: sqlite3.Connection, day: date, tally: _Counts) -> Iterator[tu
 def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path | None = None) -> dict:
     """Fill a temporary table per D1 table with tonight's rows and their hashes; return what was left out.
 
-    today is the data date the contracts ending are counted from (the radar's day).
+    today is the data date the contracts ending are counted from (the radar's day),
+    and the one an award date after it is read against (NOTICE_DAY).
     static_dir is the static export (default data/out/static), whose 12-month
     radar window becomes rec_expiring.
     """
+    day = today or date.fromisoformat(today_iso()[:10])
+    as_of = day.isoformat()
     for t in TABLES:
         conn.execute(f"DROP TABLE IF EXISTS temp.{_now(t)}")
         conn.execute(f"CREATE TEMP TABLE {_now(t)} ({t.key} INTEGER PRIMARY KEY, {', '.join(t.columns)}, h INTEGER NOT NULL)")
@@ -772,7 +800,8 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
             yield (*row, row_hash(RECORDS, row[1:]))
 
     try:
-        conn.executemany(f"INSERT INTO temp.{_now(RECORDS)} VALUES ({marks})", hashed(record_rows(conn, counts, refs)))
+        conn.executemany(f"INSERT INTO temp.{_now(RECORDS)} VALUES ({marks})",
+                         hashed(record_rows(conn, counts, refs, as_of=as_of)))
     except sqlite3.IntegrityError:
         raise ValueError("two records have the same key; key_of needs more bits") from None
 
@@ -798,7 +827,6 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
         (key_of(f"by:{b}:{s}:{y}"), b, s, y, n, pos, med) for (b, s, y), (n, pos, med) in sorted(
             value_figures(conn, "bid, src, fy", "extra = 0 AND bid IS NOT NULL AND fy IS NOT NULL").items())))
     # Before the buyers' names, so a buyer named only by a contract ending has its row in rec_buyers.
-    day = today or date.fromisoformat(today_iso()[:10])
     fill(DUE, due_rows(conn, day, counts))
     named = {r[0] for r in conn.execute(f"SELECT DISTINCT oid FROM temp.{now} WHERE oid IS NOT NULL")}
     orgs = []
@@ -826,7 +854,8 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
     conn.execute("CREATE TEMP TABLE records_text_now (k INTEGER PRIMARY KEY, day TEXT, ref TEXT, title_en TEXT, title_fr TEXT, "
                  "classes TEXT)")
     try:
-        conn.executemany("INSERT INTO temp.records_text_now VALUES (?, ?, ?, ?, ?, ?)", text_rows(conn, refs=refs))
+        conn.executemany("INSERT INTO temp.records_text_now VALUES (?, ?, ?, ?, ?, ?)",
+                         text_rows(conn, refs=refs, as_of=as_of))
     except sqlite3.IntegrityError:
         raise ValueError("two records have the same key; key_of needs more bits") from None
     joined = (f"FROM temp.{now} r JOIN temp.records_text_now t ON t.k = r.k WHERE r.extra = 0 "

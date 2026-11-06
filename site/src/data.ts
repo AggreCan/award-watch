@@ -91,6 +91,11 @@ export interface AwardRow {
   segments: string[];
   provinces: string[];
   status?: string;
+  // On the rows of awards/erroneous.json only: the publication date and the
+  // contract's start and end, which the award date is read against there.
+  published?: string | null;
+  start?: string | null;
+  end?: string | null;
 }
 
 // One row of the proactive publication of contracts over $10,000.
@@ -205,6 +210,12 @@ export interface AwardYear {
   year: number;
   pages: number;
   rows: number;
+  // The value set (awards/<year>/value/<n>.json): its file count, and how
+  // many of its first files hold the rows with a value; the files after them
+  // hold the rows without one. Absent from older exports, which have no
+  // value set (the year's Value head then stays plain).
+  value_pages?: number;
+  valued_pages?: number;
 }
 
 export interface Stats {
@@ -215,7 +226,10 @@ export interface Stats {
     | "tenders_closing_soon" | "awards_year"
     // The home page's award notices tile: those awarded in the 30 days to the
     // data date, and the organizations the year's notices name. Absent from older exports.
-    | "awards_30d" | "awards_year_suppliers",
+    | "awards_30d" | "awards_year_suppliers"
+    // The award notices dated after the data date, which awards/erroneous.json
+    // lists apart (the /awards line counts them). Absent from older exports.
+    | "awards_erroneous",
     number
   >>;
   new_tenders: TenderRow[];
@@ -802,7 +816,13 @@ export const isAwardRow = (r: unknown): r is AwardRow => isObj(r) && isRef(r.ref
   isStrOrNull(r.title_fr) && isOrgIdOrNull(r.organization_id) && isStrOrNull(r.organization) && isBuyerIdOrNull(r.buyer_id) &&
   isStrOrNull(r.buyer_en) && isStrOrNull(r.buyer_fr) && isStrOrNull(r.awarded) && isNumOrNull(r.value) &&
   isStrOrNull(r.currency) && isCompetitive(r.competitive) && isStrOrNull(r.instrument_en) && isStrOrNull(r.instrument_fr) &&
-  isStrList(r.segments) && isStrList(r.provinces) && optional(r.status, isStr);
+  isStrList(r.segments) && isStrList(r.provinces) && optional(r.status, isStr) &&
+  optional(r.published, isStrOrNull) && optional(r.start, isStrOrNull) && optional(r.end, isStrOrNull);
+
+// A row of awards/erroneous.json: a list row that carries the publication
+// date and the contract's dates, which that page shows beside the award date.
+export const isErroneousAward = (r: unknown): r is AwardRow => isAwardRow(r) &&
+  isStrOrNull(r.published) && isStrOrNull(r.start) && isStrOrNull(r.end);
 
 const isContractRow = (r: unknown): r is ContractRow => isObj(r) && isStr(r.owner_org) && isStr(r.reference) &&
   isStrOrNull(r.procurement_id) && isBuyerIdOrNull(r.buyer_id) && isStrOrNull(r.buyer_en) && isStrOrNull(r.buyer_fr) &&
@@ -969,6 +989,14 @@ export async function loadRecentAwards(env: Env): Promise<AwardRow[] | null> {
   return checkOnce(rows, "awards", (v) => isListOf(v, isAwardRow)) ? (rows as AwardRow[]) : null;
 }
 
+// awards/erroneous.json: the award notices whose award date falls after the
+// data date (500 at most), newest award date first, left out of the newest
+// lists and shown on /awards/erroneous.
+export async function loadErroneousAwards(env: Env): Promise<AwardRow[] | null> {
+  const rows = await loadJson<unknown>(env, "awards/erroneous.json");
+  return checkOnce(rows, "awards/erroneous", (v) => isListOf(v, isErroneousAward)) ? (rows as AwardRow[]) : null;
+}
+
 const isYear = (y: unknown): y is number => isNum(y) && Number.isInteger(y) && y >= 1900 && y <= 2999;
 
 // A year of award notices is paged so no request parses more than one page
@@ -976,14 +1004,21 @@ const isYear = (y: unknown): y is number => isNum(y) && Number.isInteger(y) && y
 export async function loadAwardYear(env: Env, year: number): Promise<AwardYear | null> {
   if (!isYear(year)) return null;
   const v = await loadJson<unknown>(env, `awards/${year}/index.json`);
-  return isObj(v) && v.year === year && isCount(v.pages) && isCount(v.rows) && v.rows >= v.pages ? (v as unknown as AwardYear) : null;
+  if (!(isObj(v) && v.year === year && isCount(v.pages) && isCount(v.rows) && v.rows >= v.pages)) return null;
+  // The value set holds the same rows in as many files or one more (the rows
+  // without a value start a file of their own); one that says otherwise is
+  // left out, so the year still reads in award date order.
+  const value = isCount(v.value_pages) && isCount(v.valued_pages) && v.valued_pages <= v.value_pages &&
+    v.value_pages >= v.pages && v.value_pages <= v.pages + 1;
+  const { value_pages: _p, valued_pages: _v, ...plain } = v;
+  return (value ? v : plain) as unknown as AwardYear;
 }
 
 // One page of a year: the rows as a list, or an object holding them as
-// "rows" (either form reads).
-export async function loadAwardPage(env: Env, year: number, n: number): Promise<AwardRow[] | null> {
+// "rows" (either form reads). set "value" reads the year's value set.
+export async function loadAwardPage(env: Env, year: number, n: number, set: "date" | "value" = "date"): Promise<AwardRow[] | null> {
   if (!isYear(year) || !Number.isInteger(n) || n < 1 || n > 100_000) return null;
-  const v = await loadJson<unknown>(env, `awards/${year}/${n}.json`);
+  const v = await loadJson<unknown>(env, `awards/${year}/${set === "value" ? "value/" : ""}${n}.json`);
   const rows = isObj(v) ? v.rows : v;
   return checkOnce(rows, "awards", (r) => isListOf(r, isAwardRow)) ? (rows as AwardRow[]) : null;
 }

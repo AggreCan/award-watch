@@ -661,6 +661,33 @@ def test_the_record_tables_rows_carry_each_counted_records_date_reference_and_ti
         "OR c.cls < 100000 OR c.cls > 999999 OR c.bid IS NOT d.bid OR c.day != d.day").fetchone() == (0,)
 
 
+def test_an_award_date_after_the_data_date_gives_way_to_the_publication_date(seeded, tmp_path):
+    """The contract's end date typed in the award-date field (2029-08-31 on a notice published 2026-08-31): the
+    record is counted in the fiscal year it appeared in and dated by its publication in the record tables, so
+    their newest order places it then. An award date up to the data date (2026-10-31) is kept, even one after
+    the publication date."""
+    conn, _ = seeded
+    award(conn, "AW-FUTURE", 0, NORTH, value=80_000.0, awarded="2029-08-31", published="2026-08-31")
+    award(conn, "AW-EDGE", 0, ACME, value=7_000.0, awarded="2026-10-31", published="2026-10-29")
+    conn.commit()
+    future, edge = rd.key_of("award:AW-FUTURE"), rd.key_of("award:AW-EDGE")
+    # The rows as the sync builds them, with the data date bound; without one, the award date stands.
+    rows = {r[0]: r for r in rd.record_rows(conn, as_of="2026-10-31")}
+    assert rows[future][2:4] == rd.fiscal("2026-08-31") == (2026, 2)
+    assert rows[edge][2:4] == rd.fiscal("2026-10-31") == (2026, 3)
+    assert rows_by_key(conn)[future][2:4] == rd.fiscal("2029-08-31") == (2029, 2)
+    db = d1()
+    night(conn, tmp_path / "records", db)
+    assert db.execute("SELECT fy, fq FROM records WHERE k = ?", (future,)).fetchone() == (2026, 2)
+    assert db.execute("SELECT day FROM rec_details WHERE k = ?", (future,)).fetchone() == ("2026-08-31",)
+    assert db.execute("SELECT day FROM rec_details WHERE k = ?", (edge,)).fetchone() == ("2026-10-31",)
+    assert {d for (d,) in db.execute("SELECT day FROM rec_classes WHERE rk = ?", (future,))} == {"2026-08-31"}
+    # The record tables' newest first (records_tables.ts NEWEST: day, then key): North's AW-2 of 2026-10-20 first.
+    north = [k for (k,) in db.execute(
+        "SELECT k FROM rec_details WHERE oid = (SELECT oid FROM records WHERE k = ?) ORDER BY day DESC, k", (future,))]
+    assert north.index(rd.key_of("award:AW-2")) < north.index(future)
+
+
 def test_a_reference_whose_url_form_another_takes_loses_its_link_in_both_tables_and_is_sent_again(seeded, tmp_path):
     conn, _ = seeded
     db = d1()

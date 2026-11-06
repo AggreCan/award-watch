@@ -57,6 +57,8 @@ const PAGES = new Set([
   "/alerts", "/interest",
   // The same-day notices' page (src/pages/same_day.tsx), which /tenders/:reference would otherwise count.
   "/tenders/same-day",
+  // The award notices dated after the data date (pages/awards.tsx), which /awards/:reference would otherwise count.
+  "/awards/erroneous",
   // The search page: its query string is never stored, only the route.
   "/search",
 ]);

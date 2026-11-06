@@ -15,7 +15,7 @@ import { runWatchdog } from "./watchdog";
 import { langFrom, t, tj } from "./i18n";
 import { Layout, PageHead, page } from "./layout";
 import { analyticsCsv, buyerAnalytics, organizationAnalytics, segmentAnalytics } from "./pages/analytics";
-import { awardsPage, awardsYearPage } from "./pages/awards";
+import { awardsPage, awardsYearPage, erroneousAwardsPage } from "./pages/awards";
 import { buyerPage, buyersIndex } from "./pages/buyers";
 import { segmentPage, segmentsIndex } from "./pages/segments";
 import { citePage } from "./pages/cite";
@@ -123,7 +123,9 @@ app.get("/tenders/same-day", sameDayPage);
 app.get("/tenders/:file{[A-Za-z0-9._-]+\\.ics}", tenderIcs);
 app.get("/tenders/:reference", tenderPage);
 // /awards/2026 is a year; anything else after /awards/ is a reference.
+// /awards/erroneous is registered before /awards/:key, which would read it as one.
 app.get("/awards", awardsPage);
+app.get("/awards/erroneous", erroneousAwardsPage);
 app.get("/awards/:file{[A-Za-z0-9._-]+\\.ics}", (c) => contractIcs(c, "award"));
 app.get("/awards/:key", (c) => {
   const key = c.req.param("key") ?? "";

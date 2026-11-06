@@ -54,7 +54,7 @@ const payEnv = (extra: Record<string, unknown> = {}) => onEnv({ ...PAY, ...extra
 // and 12-month windows have no fixture files here; their result-list titles
 // come from the same function as the 3-month window's (checked below).
 const SECTIONS = [
-  "/", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/expiring", "/expiring/3m",
+  "/", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous", "/expiring", "/expiring/3m",
   "/organizations", "/buyers", "/segments", "/rankings", "/feeds", "/alerts", "/watchlist", "/methodology", "/data", "/cite",
   "/corrections", "/about", "/terms", "/privacy", "/pro",
 ];

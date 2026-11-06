@@ -11,8 +11,9 @@ published" for a file that does not read, so a shape change here goes with a
 change there. Output tree (under data/out/static):
 
   stats.json                    counts (with awards_30d, the award notices awarded in the AWARDS_RECENT_DAYS
-                                days to the data date, and awards_year_suppliers, the organizations the
-                                year's notices name), today's notices, closing soon, the closing values of
+                                days to the data date, awards_year_suppliers, the organizations the
+                                year's notices name, and awards_erroneous, the award notices whose award
+                                date falls after the data date), today's notices, closing soon, the closing values of
                                 every open notice closing within CLOSING_TIMES_DAYS (closing_soon_times:
                                 the site counts closing soon from them at render), recent awards, the
                                 year's top organizations by awards value, the last runs, the source files
@@ -36,9 +37,20 @@ change there. Output tree (under data/out/static):
   tenders/<abc>.json            every notice in the database, detail form, sharded on the reference
   contracts/<abc>.json          award notices and contract history records, detail form, same sharding,
                                 keyed "award:<reference>" and "history:<reference>"
-  awards/recent.json            the 500 most recently published award notices
-  awards/<year>/index.json      a year's page count and row count
+  awards/recent.json            the 500 most recently published award notices whose award date is not after
+                                the data date
+  awards/erroneous.json         the award notices whose award date falls after the data date, newest award
+                                date first, ERRONEOUS_AWARDS at most: the list row with published, start and
+                                end (the contract's dates) beside it
+  awards/<year>/index.json      a year's page count and row count, and value_pages and valued_pages, the
+                                value set's file count and the first of them that hold a value
   awards/<year>/<n>.json        the year's award notices, newest award date first, 500 to a page
+  awards/<year>/value/<n>.json  the same rows ordered by value (by_award_value): those with a value in
+                                Canadian dollars (or no stated currency) largest first, then from a file of
+                                their own those without one, newest award date first; 500 to a page, so the
+                                set has one file more than the date set at most. The site reads the
+                                largest values in file order, the smallest by reversing the first
+                                valued_pages files, and the oldest by reversing the date set
   profiles/<abc>.json           organization profiles, sharded on the id's characters 5 to 7
   aliases/<ab>.json             retired organization id -> the live id that took its records, sharded on the
                                 id's characters 5 and 6 (256 files at most: 27,000 merged ids on 4,096
@@ -75,6 +87,16 @@ details, and the rows of tenders/new). Only a notice open on the data date is
 in tenders/open.json, tenders/open-first.json, the counts and closing-soon
 list of stats.json, a buyer's or a segment's open notices, open-tenders.csv
 and the tenders feed (feeds.py). A notice closing on the data date is open.
+
+Award dates after the data date. Some award notices carry an award date
+years ahead, and in every such row seen it is the contract's end date entered
+in the award-date field. Such a notice is left out of the newest lists
+(stats.json recent_awards, awards/recent.json, a buyer file's recent_awards)
+and listed apart in awards/erroneous.json; a profile's awards and history and
+a tender's related awards keep it, ordered by its publication date
+(award_day), with its award date as published. A year page lists it under its
+award date's year while that year is not after the data date's. An award date
+up to the data date is left alone, even one a day or two after publication.
 
 Buyers. A record's buyer_id names a listed buyer or is null; the buyer's names
 stay on the record either way. A record whose buyer spelling named no
@@ -162,6 +184,8 @@ log = logging.getLogger(__name__)
 HOME_ROWS = 12
 TOP_YEAR_ROWS = 8
 RECENT_AWARDS = 500
+# awards/erroneous.json: the award notices dated after the data date, at most this many.
+ERRONEOUS_AWARDS = 500
 AWARD_PAGE = 500
 OPEN_FIRST_ROWS = 50
 # open-first.json also holds every notice closing up to this many days after
@@ -217,6 +241,7 @@ ORG_ID_RE = re.compile(r"^org-[0-9a-f]{10}$")
 BUYER_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _REF_BAD = re.compile(r"[^A-Za-z0-9._-]+")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
+_ISO_DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 TEMP_TABLES = ("x_tenders", "x_awards", "x_history", "x_grants", "x_records", "x_proc")
 
 # Half the protocol's 50,000 URLs to a file: the Worker serves each part with
@@ -228,13 +253,13 @@ SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 # /pro and /tenders/same-day answer while the site's accounts switch is on, as
 # it is in production; the published contracts' pages are listed by the
 # Worker from the records database (/sitemap-contracts-<n>.xml).
-SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/expiring", "/organizations", "/buyers",
-                 "/segments", "/rankings", "/feeds", "/watchlist", "/data", "/methodology", "/cite", "/corrections",
-                 "/about", "/terms", "/privacy", "/alerts", "/pro"]
+SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous", "/expiring",
+                 "/organizations", "/buyers", "/segments", "/rankings", "/feeds", "/watchlist", "/data", "/methodology",
+                 "/cite", "/corrections", "/about", "/terms", "/privacy", "/alerts", "/pro"]
 # Pages whose content follows the nightly data carry its date; the others
 # change only with the code, so they carry none rather than a false one.
-SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments",
-                       "/rankings", "/feeds", "/data"}
+SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/awards/erroneous", "/expiring", "/organizations",
+                       "/buyers", "/segments", "/rankings", "/feeds", "/data"}
 
 
 # -- small helpers ------------------------------------------------------------------
@@ -325,6 +350,19 @@ def _day(value: object) -> str | None:
 def _year_of(value: object) -> int | None:
     text = str(value or "")
     return int(text[:4]) if _DATE_RE.match(text) else None
+
+
+def award_day(as_of: str) -> str:
+    """The SQL date an award notice or history record is ordered by: its award date, or its publication date when
+    the award date falls after the data date. In every such row seen the award date is the contract's end date
+    entered in the award-date field, so the row is placed when it appeared rather than first for years.
+
+    as_of is the export's own data date, never a visitor's value; it is checked to read as a date before it goes
+    into the statement as a literal, as the profile queries share one tuple of bound values.
+    """
+    if not _ISO_DAY.fullmatch(as_of):
+        raise ValueError(f"{as_of!r} is not a date")
+    return f"CASE WHEN substr(awarded, 1, 10) > '{as_of}' THEN published ELSE awarded END"
 
 
 def _buyer_id(value: object) -> str | None:
@@ -440,7 +478,7 @@ def _materialize(conn: sqlite3.Connection, as_of: str) -> None:
             "SELECT n.reference, n.amendment, n.solicitation, "
             "CASE WHEN n.supplier_withheld = 1 THEN NULL ELSE n.org END AS org, n.supplier_withheld, "
             "n.title_en, n.title_fr, n.buyer_id, n.buyer_raw_en, n.buyer_raw_fr, " + extra +
-            "n.published, n.awarded, n.currency, n.status, n.competitive, n.instrument_type_en, "
+            "n.published, n.awarded, n.start, n.\"end\", n.currency, n.status, n.competitive, n.instrument_type_en, "
             "n.instrument_type_fr, n.provinces, "
             f"{shown} AS value, {organizations.award_value(kind)} AS v, {organizations.AWARD_NO_VALUE} AS nv, "
             f"{organizations.award_flagged(kind)} AS flag, "
@@ -942,8 +980,9 @@ def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[
     conn = m.conn
     # The home page's award notices: the newest by award date, the order its Awarded column reads in, so a
     # notice published today for a contract awarded months ago does not stand above this week's awards. A
-    # date after the data date is a typing error in the source ("2029") and would head the list for good;
-    # it is left out here (the awards pages list it, with their note), as is a notice with no award date.
+    # date after the data date is the contract's end date typed in the award-date field ("2029") and would head
+    # the list for good; it is left out here, as from every newest list (awards/erroneous.json lists it apart),
+    # and so is a notice with no award date.
     recent = [row for r in conn.execute(
         "SELECT * FROM x_awards WHERE substr(awarded, 1, 10) <= ? "
         "ORDER BY substr(awarded, 1, 10) DESC, published DESC, reference LIMIT ?", (m.as_of, HOME_ROWS * 2))
@@ -1101,9 +1140,11 @@ def _versions(conn: sqlite3.Connection, table: str, refs: Sequence[str]) -> dict
 
 
 def related_awards(m: Model, solicitations: set[str]) -> dict[str, list[dict]]:
-    """The award notices of each solicitation number a tender carries, newest award first."""
+    """The award notices of each solicitation number a tender carries, newest award first (by award_day: a notice
+    dated after the data date stands at its publication date)."""
     out: dict[str, list[dict]] = defaultdict(list)
-    for r in m.conn.execute("SELECT * FROM x_awards WHERE solicitation IS NOT NULL ORDER BY awarded DESC, reference"):
+    for r in m.conn.execute(f"SELECT * FROM x_awards WHERE solicitation IS NOT NULL "
+                            f"ORDER BY {award_day(m.as_of)} DESC, reference"):
         sol = _sol(r["solicitation"])
         ref = m.refs["awards"].get(r["reference"])
         if sol not in solicitations or ref is None or len(out[sol]) >= RELATED_AWARDS:
@@ -1286,12 +1327,24 @@ def write_contract_shards(m: Model, out: Path) -> dict[str, int]:
 
 
 def write_award_lists(m: Model, out: Path) -> dict[str, int]:
-    """awards/recent.json and each year's pages, by the calendar year of the award date."""
+    """awards/recent.json, awards/erroneous.json and each year's pages, by the calendar year of the award date."""
     conn = m.conn
+    # The site lists the newest by award date, so a date after the data date would head the list for good: such
+    # a notice is listed apart instead (erroneous.json). A notice with no award date stays.
     recent = [row for r in conn.execute(
-        "SELECT * FROM x_awards ORDER BY published DESC, awarded DESC, reference LIMIT ?", (RECENT_AWARDS * 2,))
+        "SELECT * FROM x_awards WHERE COALESCE(substr(awarded, 1, 10), '') <= ? "
+        "ORDER BY published DESC, awarded DESC, reference LIMIT ?", (m.as_of, RECENT_AWARDS * 2))
         if (row := award_row(m, "awards", r))][:RECENT_AWARDS]
     _dump(out / "awards" / "recent.json", recent)
+    erroneous = conn.execute("SELECT COUNT(*) FROM x_awards WHERE substr(awarded, 1, 10) > ?", (m.as_of,)).fetchone()[0]
+    late = []
+    for r in conn.execute("SELECT * FROM x_awards WHERE substr(awarded, 1, 10) > ? "
+                          "ORDER BY awarded DESC, published DESC, reference LIMIT ?", (m.as_of, ERRONEOUS_AWARDS * 2)):
+        if row := award_row(m, "awards", r):
+            # The page sets the award date beside the contract's own dates, where the end date shows what was typed.
+            row.update(published=r["published"], start=r["start"], end=r["end"])
+            late.append(row)
+    _dump(out / "awards" / "erroneous.json", late[:ERRONEOUS_AWARDS])
     years: dict[int, list[dict]] = defaultdict(list)
     for r in conn.execute("SELECT * FROM x_awards WHERE awarded IS NOT NULL ORDER BY awarded DESC, reference"):
         year = _year_of(r["awarded"])
@@ -1301,12 +1354,40 @@ def write_award_lists(m: Model, out: Path) -> dict[str, int]:
             years[year].append(row)
     pages_written = 0
     for year, rows in years.items():
-        pages = [rows[i:i + AWARD_PAGE] for i in range(0, len(rows), AWARD_PAGE)]
+        folder = out / "awards" / str(year)
+        pages = _award_pages(rows)
         for n, page in enumerate(pages, start=1):
-            _dump(out / "awards" / str(year) / f"{n}.json", page)
-        _dump(out / "awards" / str(year) / "index.json", {"year": year, "pages": len(pages), "rows": len(rows)})
-        pages_written += len(pages)
-    return {"award_years": len(years), "award_pages": pages_written}
+            _dump(folder / f"{n}.json", page)
+        valued, unvalued = by_award_value(rows)
+        value_pages = _award_pages(valued) + _award_pages(unvalued)
+        for n, page in enumerate(value_pages, start=1):
+            _dump(folder / "value" / f"{n}.json", page)
+        _dump(folder / "index.json", {"year": year, "pages": len(pages), "rows": len(rows), "value_pages": len(value_pages),
+                                      "valued_pages": len(_award_pages(valued))})
+        pages_written += len(pages) + len(value_pages)
+    return {"award_years": len(years), "award_pages": pages_written, "awards_erroneous": erroneous}
+
+
+def _award_pages(rows: list[dict]) -> list[list[dict]]:
+    return [rows[i:i + AWARD_PAGE] for i in range(0, len(rows), AWARD_PAGE)]
+
+
+def _counted_value(row: dict) -> bool:
+    # The site's rule for ordering by value (pages/awards.tsx orderAwards): a value in Canadian dollars or
+    # in no stated currency; any other row has no value to order by.
+    return row["value"] is not None and (row["currency"] or "CAD") == "CAD"
+
+
+def by_award_value(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """A year's award rows (newest award date first) as the value set orders them: those with a value, largest
+    first, then those without one. The sort is stable, so equal values keep the award date order and the
+    reference breaks the rest.
+
+    The two parts go to separate files (awards/<year>/value/<n>.json, the rows without a value starting a file
+    of their own), so the site reads the smallest values first by reversing only the first valued_pages files,
+    one file a page, and the rows without a value stay last whichever way the values run."""
+    valued = sorted((r for r in rows if _counted_value(r)), key=lambda r: -r["value"])
+    return valued, [r for r in rows if not _counted_value(r)]
 
 
 # -- profiles -----------------------------------------------------------------------
@@ -1324,8 +1405,11 @@ def _grouped(rows: Iterable[sqlite3.Row], column: str) -> dict[str, list[sqlite3
     return out
 
 
-def _profile_tables(conn: sqlite3.Connection, rng: tuple[str, str]) -> dict[str, dict[str, list[sqlite3.Row]]]:
-    """Every row a shard's profiles show, read with one query per table over the shard's id range."""
+def _profile_tables(conn: sqlite3.Connection, rng: tuple[str, str], as_of: str) -> dict[str, dict[str, list[sqlite3.Row]]]:
+    """Every row a shard's profiles show, read with one query per table over the shard's id range. Awards and
+    history are newest first by award_day: a record dated after the data date (as_of) stands at its publication
+    date, its award date shown as published."""
+    day = award_day(as_of)
     queries = {
         "names": ("SELECT organization_id, raw_name, source, n FROM organization_names WHERE organization_id >= ? "
                   "AND organization_id < ? ORDER BY organization_id, n DESC, raw_name, source", "organization_id"),
@@ -1337,9 +1421,9 @@ def _profile_tables(conn: sqlite3.Connection, rng: tuple[str, str]) -> dict[str,
         "years": ("SELECT * FROM organization_years WHERE organization_id >= ? AND organization_id < ? "
                   "ORDER BY organization_id, year DESC, source", "organization_id"),
         "awards": ("SELECT * FROM x_awards WHERE org >= ? AND org < ? "
-                   "ORDER BY org, awarded DESC, published DESC, reference", "org"),
+                   f"ORDER BY org, {day} DESC, published DESC, reference", "org"),
         "history": ("SELECT * FROM x_history WHERE org >= ? AND org < ? "
-                    "ORDER BY org, awarded DESC, published DESC, reference", "org"),
+                    f"ORDER BY org, {day} DESC, published DESC, reference", "org"),
         "contracts": ("SELECT c.*, p.top FROM contracts c LEFT JOIN x_proc p ON p.owner_org = c.owner_org "
                       "AND p.procurement_id = c.procurement_id WHERE c.organization_id >= ? AND c.organization_id < ? "
                       "ORDER BY c.organization_id, c.contract_date DESC, c.owner_org, c.reference", "organization_id"),
@@ -1431,7 +1515,7 @@ def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, i
         rng = _id_range(key)
         orgs = conn.execute(f"SELECT {', '.join(ORG_FIELDS)} FROM organizations WHERE id >= ? AND id < ? ORDER BY id",
                             rng).fetchall()
-        tables = _profile_tables(conn, rng)
+        tables = _profile_tables(conn, rng, m.as_of)
         non_cad: dict[str, dict[str, int]] = defaultdict(dict)
         for source, temp in (("awards", "x_awards"), ("history", "x_history")):
             for oid, n in conn.execute(
@@ -1679,9 +1763,11 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
     for s in summaries:
         bid = s["id"]
         b = m.buyers[bid]
+        # As awards/recent.json: the page lists them by award date, so one dated after the data date stays out.
         recent = [row for r in conn.execute(
-            "SELECT * FROM x_awards WHERE buyer_id = ? ORDER BY published DESC, awarded DESC, reference LIMIT ?",
-            (bid, BUYER_AWARDS * 2)) if (row := award_row(m, "awards", r))][:BUYER_AWARDS]
+            "SELECT * FROM x_awards WHERE buyer_id = ? AND COALESCE(substr(awarded, 1, 10), '') <= ? "
+            "ORDER BY published DESC, awarded DESC, reference LIMIT ?",
+            (bid, m.as_of, BUYER_AWARDS * 2)) if (row := award_row(m, "awards", r))][:BUYER_AWARDS]
         _dump(out / "buyers" / f"{bid}.json", {
             "buyer": {**s, "ckan_org": b["ckan_org"], "department_number": b["department_number"]},
             "years": [{"year": y["year"], "source": y["source"], "n": y["n"], "total": _money(y["total"]),
@@ -1996,6 +2082,8 @@ def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: st
         # One per reference, as awards/<year>/index.json counts the year's rows.
         "awards_year": conn.execute("SELECT COUNT(*) FROM x_awards WHERE substr(awarded, 1, 4) = ?",
                                     (str(m.year),)).fetchone()[0],
+        # The notices awards/erroneous.json lists, all of them (the file holds ERRONEOUS_AWARDS at most).
+        "awards_erroneous": counts["awards_erroneous"],
         "history": conn.execute("SELECT COUNT(*) FROM x_history").fetchone()[0],
         "contracts": conn.execute("SELECT COUNT(*) FROM contracts").fetchone()[0],
         "grants": conn.execute("SELECT COUNT(*) FROM x_grants").fetchone()[0],

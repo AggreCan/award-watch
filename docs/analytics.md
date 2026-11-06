@@ -67,7 +67,12 @@ manifest gives the bytes sent):
 - `fy`, `fq`: the federal fiscal year (April to March, named by the calendar
   year it starts in: 2025 is 2025-26) and its quarter (1 is April to June),
   from the award date (notices and history), the contract date (published
-  contracts) or the agreement start (grants). Null without a date.
+  contracts) or the agreement start (grants). Null without a date. A notice
+  or history record whose award date falls after the data date takes its
+  publication date instead (`records_db.NOTICE_DAY`): in every such row seen
+  the award date is the contract's end date entered in the award-date
+  field, so the record counts in the year it appeared, and `rec_details.day`
+  and `rec_classes.day` carry the same date.
 - `bid`: the buyer, a 40-bit number from the buyer id (`rec_buyers` maps it
   back). For PSPC contract history the buyer is the client department, as on
   the buyer pages. A buyer keeps one number: when the buyers stage merges

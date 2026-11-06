@@ -31,6 +31,7 @@ const PAGES: [string, string, string, string][] = [
   ["/tenders/cb-100-10000001", "<h1>Translation services for regional offices</h1>", "<h1>Services de traduction pour les bureaux régionaux</h1>", "stats.json"],
   ["/awards", "<h1>Award Notices</h1>", "<h1>Avis d’attribution</h1>", "awards/recent.json"],
   ["/awards/2026", "<h1>Award Notices in 2026</h1>", "<h1>Avis d’attribution en 2026</h1>", "awards/2026/index.json"],
+  ["/awards/erroneous", "<h1>Erroneous Submissions</h1>", "<h1>Soumissions erronées</h1>", "awards/erroneous.json"],
   ["/awards/2026?page=2", "Interpretation services, regional consultations", "interprétation, consultations régionales", "awards/2026/2.json"],
   ["/awards/cb-400-40000004", "<h1>Translation standing offer, official languages</h1>", "<h1>Offre à commandes de traduction, langues officielles</h1>", "stats.json"],
   ["/expiring", "<h1>Contracts Ending Soon</h1>", "<h1>Contrats prenant fin bientôt</h1>", "expiring/index.json"],

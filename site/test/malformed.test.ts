@@ -12,7 +12,7 @@ const BODIES = ["{", "null", "[]", "{}", '"text"', "[1,2,3]", '{"rows":5,"buyers
 
 // The pages each file feeds (and the API routes that pass it through or read it).
 const READERS: Record<string, string[]> = {
-  "stats.json": ["/", "/tenders", "/awards", "/data", "/cite", "/api/stats"],
+  "stats.json": ["/", "/tenders", "/awards", "/awards/erroneous", "/data", "/cite", "/api/stats"],
   "tenders/open-first.json": ["/tenders", "/tenders?segment=82&q=x", "/tenders?page=2"],
   "tenders/open-levels.json": ["/segments/82", "/tenders?code=8211", "/tenders?code=82"],
   "tenders/new/2026-10-31.json": ["/tenders/new"],
@@ -21,9 +21,12 @@ const READERS: Record<string, string[]> = {
   "tenders/f3d.json": ["/tenders/en578-123456-a-1", "/api/tenders/en578-123456-a-1"],
   "contracts/557.json": ["/awards/23240-220799-001-im", "/history/23240-220799-001-im"],
   "awards/recent.json": ["/awards"],
+  "awards/erroneous.json": ["/awards/erroneous"],
   "awards/2026/index.json": ["/awards/2026", "/awards/2026?page=2"],
   "awards/2026/1.json": ["/awards/2026"],
-  "awards/2026/2.json": ["/awards/2026?page=2"],
+  "awards/2026/2.json": ["/awards/2026?page=2", "/awards/2026?sort=oldest"],
+  "awards/2026/value/1.json": ["/awards/2026?sort=largest", "/awards/2026?sort=smallest&page=2"],
+  "awards/2026/value/2.json": ["/awards/2026?sort=largest&page=2", "/awards/2026?sort=smallest"],
   "profiles/a00.json": ["/organizations/org-a000000001", "/organizations/org-a000000001/respond", "/api/organizations/org-a000000001"],
   "aliases/a0.json": ["/organizations/org-a00000000f"],
   "directory/index.json": ["/organizations", "/organizations/org-a000000001"],

@@ -9,6 +9,7 @@ import aliases from "./fixtures/aliases-a00.json";
 import awards2026Page1 from "./fixtures/awards-2026-1.json";
 import awards2026Page2 from "./fixtures/awards-2026-2.json";
 import awards2026 from "./fixtures/awards-2026-index.json";
+import awardsErroneous from "./fixtures/awards-erroneous.json";
 import awardsRecent from "./fixtures/awards-recent.json";
 import buyer from "./fixtures/buyer-pwgsc-tpsgc.json";
 import buyers from "./fixtures/buyers-index.json";
@@ -70,10 +71,17 @@ export const FILES: Record<string, unknown> = {
   "tenders/f3d.json": tenderConverted,
   "contracts/557.json": contractsConverted,
   "awards/recent.json": awardsRecent,
+  // The notices dated after the data date, listed apart (two, as stats.json counts them).
+  "awards/erroneous.json": awardsErroneous,
   // A year in pages of 500 rows; the fixture's pages are small, two of them.
   "awards/2026/index.json": awards2026,
   "awards/2026/1.json": awards2026Page1,
   "awards/2026/2.json": awards2026Page2,
+  // The same year by value: the fixture's rows already run largest first, so
+  // the two files are the date set's (test/sort.test.ts sets a year whose
+  // orders differ).
+  "awards/2026/value/1.json": awards2026Page1,
+  "awards/2026/value/2.json": awards2026Page2,
   "profiles/a00.json": profiles,
   "aliases/a0.json": aliases,
   "directory/index.json": directory,

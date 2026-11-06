@@ -3225,6 +3225,32 @@ const STRINGS = {
   "records.sort_oldest": { en: "Oldest first", fr: "Les plus anciens d'abord" },
   "instruments.sort_expiry_desc": { en: "Latest expiry", fr: "Expiration la plus lointaine" },
   "instruments.sort_holders_asc": { en: "Fewest holders", fr: "Le moins de titulaires" },
+
+  // -- award notices dated after the data date, listed apart (src/pages/awards.tsx, awards/erroneous.json) ----
+  "erroneous.title": { en: "Erroneous Submissions", fr: "Soumissions erronées" },
+  "erroneous.lead": {
+    en: "Award notices whose award date falls after the data date ({date}). In the rows seen so far the award date usually matches the contract's end date, so the end date was entered in the award-date field; a notice dated a day or two ahead leaves the list as the date passes. The rows are shown as published; elsewhere on the site they are ordered by their publication date and left out of the newest lists.",
+    fr: "Avis d'attribution dont la date d'attribution tombe après la date des données ({date}). Dans les lignes observées jusqu'ici, la date d'attribution correspond le plus souvent à la date de fin du contrat : la date de fin a donc été saisie dans le champ de la date d'attribution; un avis daté d'un jour ou deux à l'avance quitte la liste quand la date passe. Les lignes sont présentées telles que publiées; ailleurs sur le site, elles sont classées selon leur date de publication et exclues des listes des plus récents.",
+  },
+  "erroneous.panel": { en: "Notices Dated After the Data Date", fr: "Avis datés après la date des données" },
+  "erroneous.none": { en: "None at the moment.", fr: "Aucun pour le moment." },
+  // The line on /awards beside the value note, linking the page; shown only when there is one.
+  "erroneous.note_one": {
+    en: "{n} notice carries an award date after the data date and is listed apart.",
+    fr: "{n} avis porte une date d'attribution postérieure à la date des données et est présenté à part.",
+  },
+  "erroneous.note_many": {
+    en: "{n} notices carry an award date after the data date and are listed apart.",
+    fr: "{n} avis portent une date d'attribution postérieure à la date des données et sont présentés à part.",
+  },
+  "erroneous.col_awarded": { en: "Award date (as published)", fr: "Date d'attribution (telle que publiée)" },
+  "erroneous.col_start": { en: "Start", fr: "Début" },
+  "erroneous.col_end": { en: "End", fr: "Fin" },
+  // The counting rule beside the analytics' fiscal years (pages/methodology.tsx, docs/analytics.md).
+  "methodology.analytics_late_award": {
+    en: "A notice or contract history record whose award date falls after the data date, which in every such record seen is the contract's end date entered in the award-date field, is counted in the fiscal year and quarter of its publication date.",
+    fr: "Un avis ou un dossier de l'historique des contrats dont la date d'attribution tombe après la date des données, qui dans chaque dossier observé est la date de fin du contrat saisie dans le champ de la date d'attribution, est compté dans l'exercice et le trimestre de sa date de publication.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

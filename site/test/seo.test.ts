@@ -39,6 +39,7 @@ const PAGES: [string, string, string][] = [
   ["/tenders/cb-100-10000001", `${O}/tenders/cb-100-10000001`, "Translation services for regional offices | Award Watch"],
   ["/awards", `${O}/awards`, "Federal Contract Awards: Who Won | Award Watch"],
   ["/awards/2026", `${O}/awards/2026`, "Award Notices in 2026 | Award Watch"],
+  ["/awards/erroneous", `${O}/awards/erroneous`, "Erroneous Award Notice Submissions | Award Watch"],
   ["/awards/cb-400-40000004", `${O}/awards/cb-400-40000004`, "Translation standing offer, official languages | Award Watch"],
   ["/expiring", `${O}/expiring`, "Federal Contracts Ending Soon, with Incumbents | Award Watch"],
   ["/expiring/3m", `${O}/expiring/3m`, "Federal Contracts Ending Within 3 Months | Award Watch"],

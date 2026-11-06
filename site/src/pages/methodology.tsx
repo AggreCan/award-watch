@@ -110,7 +110,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           <h2 id="analytics">{t(lang, "methodology.toc_analytics")}</h2>
           <p>{t(lang, "methodology.analytics_intro")}</p>
           <List lang={lang} vars={{ "methodology.analytics_entrants": { n: ENTRANT_LOOKBACK }, "methodology.analytics_pro": { n: FREE_YEARS } }} keys={[
-            "methodology.analytics_fiscal", "methodology.analytics_period", "methodology.analytics_counting", "methodology.analytics_sources",
+            "methodology.analytics_fiscal", "methodology.analytics_late_award", "methodology.analytics_period", "methodology.analytics_counting", "methodology.analytics_sources",
             "methodology.analytics_segments", "methodology.analytics_shares", "methodology.analytics_values", "methodology.analytics_growth",
             "methodology.analytics_records", "methodology.analytics_due", "methodology.analytics_entrants", "methodology.analytics_people",
             "methodology.analytics_pro", "methodology.analytics_date",

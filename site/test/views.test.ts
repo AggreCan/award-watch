@@ -40,6 +40,7 @@ describe("route templates", () => {
     expect(routeTemplate("GET", "/tenders/cb-100-10000001")).toEqual({ route: "/tenders/:reference", kind: "page" });
     expect(routeTemplate("GET", "/awards/2026")).toEqual({ route: "/awards/:year", kind: "page" });
     expect(routeTemplate("GET", "/awards/cb-400-40000004")).toEqual({ route: "/awards/:reference", kind: "page" });
+    expect(routeTemplate("GET", "/awards/erroneous")).toEqual({ route: "/awards/erroneous", kind: "page" });
     expect(routeTemplate("GET", "/history/w8472-000633")).toEqual({ route: "/history/:reference", kind: "page" });
     expect(routeTemplate("GET", "/organizations/org-a000000001")).toEqual({ route: "/organizations/:id", kind: "page" });
     expect(routeTemplate("GET", "/organizations/org-a000000001/respond")).toEqual({ route: "/organizations/:id/respond", kind: "page" });
