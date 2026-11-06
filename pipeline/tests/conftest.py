@@ -21,6 +21,10 @@ class FakeResponse:
 class FakeSession:
     """Serves bytes by exact URL; anything else is a 404. Records every call."""
 
+    def mount(self, prefix, adapter):
+        """The sosa stage mounts an adapter for its certificate; the fake has no transport to give it to."""
+        self.mounted = getattr(self, "mounted", []) + [(prefix, adapter)]
+
     def __init__(self, mapping: dict[str, bytes | FakeResponse]) -> None:
         self.mapping = mapping
         self.calls: list[tuple[str, dict]] = []
