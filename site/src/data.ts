@@ -495,8 +495,16 @@ export interface BuyerSummary {
   total_history?: number | null;
   total_contracts: number | null;
   total_grants: number | null;
+  // The lobbying communication reports naming it; absent from older exports.
+  n_lobbying?: number;
 }
 export interface BuyerIndex { buyers: BuyerSummary[] }
+// A name the buyer also appears under (sources/buyers.py, buyer_aliases.csv):
+// note "former" marks a former name; a spelling the sources carry has none.
+export interface BuyerAlias { name: string; note: string | null }
+// kind "institution": no open.canada.ca organization, and only the lobbying
+// registry names it (Members of the House of Commons, offices of Parliament).
+export const INSTITUTION = "institution";
 export interface BuyerYear extends YearFigure { n_organizations: number | null }
 export interface Buyer {
   buyer: BuyerSummary & { ckan_org: string | null; department_number: string | null };
@@ -506,6 +514,8 @@ export interface Buyer {
   recent_awards: AwardRow[];
   // The contracts ending within 12 months; absent from older exports.
   expiring?: ExpiringPart;
+  // The names it also appears under; absent from older exports.
+  aliases?: BuyerAlias[];
 }
 
 export interface CategorySummary {
@@ -1079,7 +1089,10 @@ const isBuyerSummary = (v: unknown): v is BuyerSummary => isObj(v) && isStr(v.id
   isStr(v.name_en) && isStrOrNull(v.name_fr) && isStrOrNull(v.acronym_en) && isStrOrNull(v.acronym_fr) &&
   isStrOrNull(v.kind) && isCount(v.n_tenders) && optional(v.n_open_tenders, isCount) && isCount(v.n_awards) &&
   isCount(v.n_history) && isCount(v.n_contracts) && isCount(v.n_grants) && isNumOrNull(v.total_awards) &&
-  optional(v.total_history, isNumOrNull) && isNumOrNull(v.total_contracts) && isNumOrNull(v.total_grants);
+  optional(v.total_history, isNumOrNull) && isNumOrNull(v.total_contracts) && isNumOrNull(v.total_grants) &&
+  optional(v.n_lobbying, isCount);
+
+const isBuyerAlias = (v: unknown): v is BuyerAlias => isObj(v) && isStr(v.name) && v.name.length > 0 && isStrOrNull(v.note);
 
 export async function loadBuyers(env: Env): Promise<BuyerIndex | null> {
   const doc = await loadJson<unknown>(env, "buyers/index.json");
@@ -1095,7 +1108,8 @@ export async function loadBuyer(env: Env, id: string): Promise<Buyer | null> {
     isListOf(v.years, (y) => isYearFigure(y) && isNumOrNull((y as unknown as Record<string, unknown>).n_organizations)) &&
     isObj(v.top_organizations) &&
     Object.entries(v.top_organizations).every(([k, rows]) => isMoneySource(k) && isListOf(rows, isOrgTotal)) &&
-    isCount(v.open_tenders) && isListOf(v.recent_awards, isAwardRow) && optional(v.expiring, isExpiringPart);
+    isCount(v.open_tenders) && isListOf(v.recent_awards, isAwardRow) && optional(v.expiring, isExpiringPart) &&
+    optional(v.aliases, (a) => isListOf(a, isBuyerAlias));
   return ok ? (v as unknown as Buyer) : null;
 }
 

@@ -73,7 +73,7 @@ from .export import scrub
 from .export_static import BUYER_ID_RE, excerpt, full_codes, read_segments, url_reference
 from .normalize import squash, to_int
 from .search_db import sql_literal
-from .sources import buyers, canadabuys_rows, matching
+from .sources import buyers, canadabuys_rows
 
 log = logging.getLogger(__name__)
 
@@ -274,7 +274,7 @@ class BuyerLookup:
     def resolve(self, raw_en: object, raw_fr: object = None) -> str | None:
         """The buyer id buyers.resolve gives the spelling, or None where it gives none or would make one."""
         en, fr = squash(raw_en), squash(raw_fr)
-        en, fr = ("" if matching.is_placeholder(en) else en), ("" if matching.is_placeholder(fr) else fr)
+        en, fr = ("" if buyers.is_placeholder_name(en) else en), ("" if buyers.is_placeholder_name(fr) else fr)
         if not en and not fr:
             return None
         for name in (en, fr):

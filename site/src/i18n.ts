@@ -2991,6 +2991,30 @@ const STRINGS = {
     en: "{link}: saved searches sent daily or weekly, and the notices CanadaBuys posts during the day.",
     fr: "{link} : les recherches enregistrées envoyées chaque jour ou chaque semaine, et les avis qu'AchatsCanada publie pendant la journée.",
   },
+
+  // -- buyer merges: one buyer per institution, its other names, the institutions listed apart (2026-11-06) --
+  "buyers.panel_departments": {
+    en: "Departments, Agencies and Crown Corporations",
+    fr: "Ministères, organismes et sociétés d'État",
+  },
+  "buyers.panel_institutions": { en: "Other Institutions", fr: "Autres institutions" },
+  "buyers.institutions_note": {
+    en: "Institutions the lobbying registry names that publish no tenders or contracts in these sources: offices of Parliament, Members of the House of Commons and the like.",
+    fr: "Institutions que nomme le registre des lobbyistes et qui ne publient ni appel d'offres ni contrat dans ces sources : bureaux du Parlement, députés de la Chambre des communes et autres.",
+  },
+  "buyers.col_institution": { en: "Institution name", fr: "Nom de l'institution" },
+  "buyers.col_lobbying": { en: "Lobbying reports", fr: "Rapports de lobbying" },
+  "buyer.kind_institution": { en: "Institution named in lobbying reports", fr: "Institution nommée dans des rapports de lobbying" },
+  "buyer.also": { en: "Also appears as:", fr: "Apparaît aussi sous :" },
+  "buyer.former_name": { en: "former name", fr: "ancien nom" },
+  "buyer.lobbying": {
+    en: "Lobbying communication reports naming this institution: {n}.",
+    fr: "Rapports de communication de lobbying nommant cette institution : {n}.",
+  },
+  "methodology.buyers_merges": {
+    en: "One institution is one buyer, whatever name it appears under. A reviewed list of aliases ties former names to the department that carries their work today (Revenue Canada to the Canada Revenue Agency, HRSDC to Employment and Social Development Canada) and the other ways the sources write a name (Department of National Defense, Parks Canada Agency). When two buyer IDs turn out to be one institution, their records are joined under one ID, the old ID's pages redirect to it, and its page lists the other names under Also appears as. Institutions the lobbying registry names that publish no tenders or contracts, such as offices of Parliament, are listed apart from the departments.",
+    fr: "Une institution est un seul acheteur, quel que soit le nom sous lequel elle paraît. Une liste révisée d'alias relie les anciens noms au ministère qui fait leur travail aujourd'hui (Revenu Canada à l'Agence du revenu du Canada, RHDCC à Emploi et Développement social Canada) et les autres façons dont les sources écrivent un nom (Department of National Defense, Agence Parcs Canada). Lorsque deux identifiants d'acheteur désignent une même institution, leurs dossiers sont réunis sous un seul identifiant, les pages de l'ancien redirigent vers lui, et sa page donne les autres noms sous Apparaît aussi sous. Les institutions que nomme le registre des lobbyistes et qui ne publient ni appel d'offres ni contrat, comme les bureaux du Parlement, sont présentées à part des ministères.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

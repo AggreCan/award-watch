@@ -68,6 +68,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
 
           <h2 id="buyers">{t(lang, "methodology.toc_buyers")}</h2>
           <p>{t(lang, "methodology.buyers_text")}</p>
+          <p>{t(lang, "methodology.buyers_merges")}</p>
           <p>{t(lang, "methodology.buyers_history")}</p>
 
           <h2 id="counting">{t(lang, "methodology.toc_counting")}</h2>

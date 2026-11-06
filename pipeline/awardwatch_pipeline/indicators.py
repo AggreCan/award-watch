@@ -107,7 +107,7 @@ _POSITIVE = (
     "SUM(CASE WHEN v < 0 THEN 1 ELSE 0 END)"
 )
 BUYER_FIELDS = ("n_tenders", "n_awards", "n_history", "n_contracts", "n_grants", "total_awards", "total_contracts",
-                "total_grants", "n_awards_no_value", "n_contracts_no_value", "n_grants_no_value")
+                "total_grants", "n_awards_no_value", "n_contracts_no_value", "n_grants_no_value", "n_lobbying")
 
 
 def load_records(conn: sqlite3.Connection, table: str) -> None:
@@ -139,6 +139,15 @@ def _buyer_figures(conn: sqlite3.Connection) -> dict[str, dict[str, object]]:
         "AND amendment = (SELECT MAX(y.amendment) FROM tenders y WHERE y.reference = t.reference) GROUP BY buyer_id"
     ):
         figures.setdefault(buyer, {})["n_tenders"] = n
+    # The lobbying reports that name a buyer among the institutions lobbied
+    # (buyer_ids, sources/lobbying.py, each id once a report): what lists an
+    # institution only the registry names (sources/buyers.refresh_kinds).
+    for buyer, n in conn.execute(
+        "SELECT j.value, COUNT(*) FROM lobbying_communications l, json_each(l.buyer_ids) j "
+        "WHERE l.buyer_ids IS NOT NULL AND json_valid(l.buyer_ids) AND json_type(l.buyer_ids) = 'array' "
+        "AND j.type = 'text' GROUP BY j.value"
+    ):
+        figures.setdefault(buyer, {})["n_lobbying"] = n
     return figures
 
 

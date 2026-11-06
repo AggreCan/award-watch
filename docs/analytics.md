@@ -68,7 +68,18 @@ manifest gives the bytes sent):
   contracts) or the agreement start (grants). Null without a date.
 - `bid`: the buyer, a 40-bit number from the buyer id (`rec_buyers` maps it
   back). For PSPC contract history the buyer is the client department, as on
-  the buyer pages.
+  the buyer pages. A buyer keeps one number: when the buyers stage merges
+  another id into it (`sources/buyers.merge`: a former name such as Revenue
+  Canada, a second spelling such as "Department of National Defense", a CKAN
+  organization listed twice), the pipeline database moves the retired id's
+  records to the surviving id in one transaction, so the next sync finds
+  each moved row's hash changed and sends it again under the survivor's
+  number, deletes the retired id's `rec_buyers` row, and moves the summary
+  rows (`rec_buyer_quarters`, `rec_buyer_years`, `rec_due`) and the record
+  tables (`rec_details`, `rec_classes`, `rec_contracts`, `rec_expiring`) the
+  same way. Nothing is kept under a retired number, and the survivor's
+  figures are the sum of the parts. A retired id's analytics and records
+  pages redirect through `buyers/aliases.json`.
 - `oid`: the organization, the ten hex digits of its id read as a number
   (`org-00000000ff` is 255). Null when the supplier is withheld or names no
   organization.
@@ -214,6 +225,7 @@ the measured figures.
 |---|---|
 | A first load or full reload | about 500 MB of SQL in about 100 batches for the analytics tables (phase 1: 290 MB in about 60); about 3.2 million rows and 9 million index entries written. The record tables and the published contracts' pages add about 1.1 GB in about 230 batches and 5.3 million rows, sent as ordinary changes on their first night; a full reload after that sends both, about 1.6 GB in about 330 batches. Counted as D1 bills it, a full reload of all twelve tables is about 25 million row writes, half of the 50 million a month the paid plan includes, which is why a LAYOUT change waits for room in the month |
 | A night | the records whose figures, organization, buyer, flag, reference or title changed, the `rec_due` rows that moved, and the record-table, radar-window and published-contract rows that changed: thousands to tens of thousands of rows, one or two batches |
+| A night with buyer merges | the same, plus every record of each retired buyer id in `records` and the record tables, and its summary rows: the first night of the buyer de-duplication (2026-11) moves the former Status of Women Canada's published contracts and grants, three CKAN organizations listed twice, and the made buyers for National Defence and Parks Canada spellings, an estimated 10,000 to 30,000 rows, a few batches; later nights merge only what is new |
 | The count check | one count of each table: about 3.2 million rows read a night for the analytics tables, about 8.5 million with the rest |
 | Database size | about 600 MB for the analytics tables (phase 1: about 400 MB); about 2 GB with the record tables and the published contracts' pages |
 | The ledger in the pipeline database | about 3.2 million rows, about 70 MB, for the analytics tables (a row's hash covers phase 2's new columns, so they did not grow it); the record tables and the published contracts' pages add about 5.3 million rows |

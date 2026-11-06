@@ -40,6 +40,9 @@ Old Port of Montreal,canadabuys,old-port-of-montreal-corporation,Old Port of Mon
 Senate of Canada,canadabuys,senate-of-canada,Senate of Canada,Sénat du Canada,,
 Parliamentary Protective Service,canadabuys,parliamentary-protective-service,Parliamentary Protective Service,Service de protection parlementaire,PPS,SPP
 Parlementary Protective Services,canadabuys,parliamentary-protective-service,Parliamentary Protective Service,Service de protection parlementaire,PPS,SPP
+# An institution only the lobbying registry names (listed apart as kind "institution"); the row gives
+# it its French name, which a buyer made from the registry's English spelling lacks.
+Members of the House of Commons,lobbying,members-of-the-house-of-commons,Members of the House of Commons,Députés de la Chambre des communes,,
 # Former names and acronyms of CKAN organizations.
 Public Works and Government Services Canada,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC
 Travaux publics et Services gouvernementaux Canada,canadabuys,pwgsc-tpsgc,Public Services and Procurement Canada,Services publics et Approvisionnement Canada,PSPC,SPAC

@@ -86,7 +86,12 @@ log = logging.getLogger(__name__)
 SPEC = WeeklyFile("lobbying", config.LOBBYING_URL, "communications_ocl_cal.zip", "communications_ocl_cal.zip")
 CHECK_EVERY_DAYS = SPEC.check_every_days
 REFUSAL_HOLD_DAYS = 7
-OTHER_INSTITUTION = {"other", "autre", "other / autre", "autre / other"}
+# The registry's choices for an institution not on its list, compared folded
+# (accents, case and runs of spaces left out): the institution is then the
+# one written in the "other" column beside it, and none when that is blank.
+# "Other (Specify)" was missing until 2026-11-06 and made a buyer "other".
+OTHER_INSTITUTION = {"other", "autre", "other / autre", "autre / other", "other (specify)", "autre (preciser)",
+                     "other (specify) / autre (preciser)", "autre (preciser) / other (specify)"}
 # The member whose date says how recent a copy of the zip is (file_date).
 PRIMARY_FILE = "communication_primaryexport.csv"
 # The archive's index is a small answer: one that takes longer is passed over.
@@ -359,14 +364,22 @@ def _primary_row(row: list[str], cols: dict[str, int], reports: dict[str, _Repor
     report.previous = _blank(_at(row, cols, "previous")) or report.previous
 
 
+def is_other_institution(text: object) -> bool:
+    """The registry's "Other" choice in any of its forms (OTHER_INSTITUTION), alone or as the first of an
+    "English|French" pair: it names no institution."""
+    def folded(value: object) -> str:
+        return " ".join(fold_accents(str(value or "")).casefold().split())
+    return folded(text) in OTHER_INSTITUTION or folded(matching.first_language(text)) in OTHER_INSTITUTION
+
+
 def _secondary_row(row: list[str], cols: dict[str, int], report: _Report, keep: Callable[[str], str],
                    stats: LobbyingStats) -> None:
     if any(f in cols for f in DPOH_FIELDS):
         name = _blank(_at(row, cols, "dpoh")) or squash(
             f"{_blank(_at(row, cols, 'dpoh_first'))} {_blank(_at(row, cols, 'dpoh_last'))}")
         institution = _blank(_at(row, cols, "institution"))
-        if not institution or institution.casefold() in OTHER_INSTITUTION:
-            institution = _blank(_at(row, cols, "other_institution")) or institution
+        if not institution or is_other_institution(institution):
+            institution = _blank(_at(row, cols, "other_institution"))
         title = _blank(_at(row, cols, "dpoh_title"))
         if name or institution:
             stats.dpoh_rows += 1

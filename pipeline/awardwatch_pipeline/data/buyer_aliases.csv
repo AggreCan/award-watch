@@ -1,0 +1,54 @@
+# Buyer aliases, reviewed by hand, read by sources/buyers.py on every buyers stage.
+# One row per name a source writes for an institution that the CKAN titles, the acronyms and
+# buyers.csv do not tie to its buyer, or tie to it only by a rule a reader cannot see:
+#   alias      the name as a source writes it; matched as written, in any case, and by its key
+#              (buyers.name_key: case, accents, punctuation, "Department of" and "Canada" do not count),
+#              in every source (CanadaBuys, the lobbying registry, a buyer the stage made)
+#   buyer_id   the buyer it names: a CKAN organization name or a buyers.csv id. Blank: the alias is a
+#              placeholder that names no institution, so a record carrying it has no buyer
+#   note       former (a former name of the buyer) | spelling (another way of writing its name) |
+#              acronym | part (a unit inside it) | placeholder. A buyer page lists its aliases under
+#              "Also appears as" with "former name" beside a former one; placeholders are never shown
+#   why        why the row is right
+# A buyer whose own name is an alias of another (a buyer made for "Revenue Canada", the CKAN organization
+# "Status of Women Canada") is merged into that one: its records move, its id redirects, and
+# data/out/review/buyer-merges.txt lists the merge with this row as its reason.
+alias,buyer_id,note,why
+# National Defence: every way CanadaBuys and the registry write it, so one buyer holds DND's totals.
+Department of National Defence,dnd-mdn,spelling,the department's legal name; CKAN titles it National Defence
+Department of National Defense,dnd-mdn,spelling,the American spelling of defence on CanadaBuys notices
+Ministère de la Défense nationale,dnd-mdn,spelling,the department's legal name in French
+National Defence Headquarters,dnd-mdn,part,the department's headquarters in Ottawa (NDHQ)
+National Defense Headquarters,dnd-mdn,part,the headquarters in the American spelling
+Quartier général de la Défense nationale,dnd-mdn,part,the headquarters in French (QGDN)
+DND,dnd-mdn,acronym,the department's English acronym standing alone
+MDN,dnd-mdn,acronym,the department's French acronym standing alone
+Canadian Armed Forces,caf-facdnd,spelling,the forces' usual name; CKAN titles them Canadian Forces
+Forces armées canadiennes,caf-facdnd,spelling,the usual name in French; CKAN titles them Forces canadiennes
+# Parks Canada: the agency's legal name made a second buyer beside CKAN's "Parks Canada".
+Parks Canada Agency,pc,spelling,the agency's legal name; CKAN titles it Parks Canada
+Agence Parcs Canada,pc,spelling,the legal name in French; CKAN titles it Parcs Canada
+# Former names the lobbying registry still lists, each with the department that carries its work today.
+Revenue Canada,cra-arc,former,the Department of National Revenue until 1999; the Canada Revenue Agency since 2003
+Revenu Canada,cra-arc,former,Revenue Canada in French
+Canada Customs and Revenue Agency,cra-arc,former,the agency's name from 1999 to 2003 when customs went to the CBSA
+Agence des douanes et du revenu du Canada,cra-arc,former,the name from 1999 to 2003 in French
+Human Resources Development Canada,esdc-edsc,former,the department until 2003; its two successors were joined again as ESDC
+HRDC,esdc-edsc,former,the acronym of Human Resources Development Canada
+Human Resources and Skills Development Canada,esdc-edsc,former,the department's name from 2003 to 2013 (2006 to 2008 excepted); ESDC since 2013
+HRSDC,esdc-edsc,former,the acronym of Human Resources and Skills Development Canada
+Ressources humaines et Développement des compétences Canada,esdc-edsc,former,Human Resources and Skills Development Canada in French
+RHDCC,esdc-edsc,former,the French acronym of Human Resources and Skills Development Canada
+Human Resources and Social Development Canada,esdc-edsc,former,the department's name from 2006 to 2008
+International Trade Canada,dfatd-maecd,former,a department from 2003 to 2006; its work went back to Foreign Affairs and International Trade
+Commerce international Canada,dfatd-maecd,former,International Trade Canada in French
+Public Safety and Emergency Preparedness Canada,ps-sp,former,the department's name from 2003; Public Safety Canada since 2005
+Sécurité publique et Protection civile Canada,ps-sp,former,the name from 2003 in French
+Solicitor General Canada,ps-sp,former,the department that became Public Safety and Emergency Preparedness in 2003
+Status of Women Canada,wage,former,renamed Women and Gender Equality Canada in 2018; CKAN still lists both organizations
+Condition féminine Canada,wage,former,Status of Women Canada in French
+# Names CKAN writes another way.
+Prime Minister's Office,pmo-cpm,spelling,the registry's name for it; CKAN titles it Office of the Prime Minister
+# The registry's "Other" choice: the institution is the one written beside it, never a buyer of its own.
+Other (Specify),,placeholder,the registry's choice for an institution not on its list; a buyer "other" was made for it on 2026-11-06
+Autre (Préciser),,placeholder,the same choice in French

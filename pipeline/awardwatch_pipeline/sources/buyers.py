@@ -42,6 +42,56 @@ Crown corporation that is not a CKAN organization). A spelling resolved by
 rule 6 before CKAN was loaded, or before the seed covered it, is resolved
 again on the next buyers stage, and its records follow it to the right buyer
 (or to no buyer, when it names no institution).
+
+Aliases. The second curated seed, awardwatch_pipeline/data/buyer_aliases.csv,
+lists the names of a buyer that no rule above ties to it by itself: former
+names with the department that carries their work today (Revenue Canada and
+the Canada Revenue Agency, HRSDC and ESDC), the ways CanadaBuys writes
+National Defence, the legal name "Parks Canada Agency", and the registry's
+placeholder "Other (Specify)" (a blank buyer_id: no buyer). Each row has a
+note (former, spelling, acronym, part, placeholder) and a reason. Its names
+are titles to the resolver (TITLE_SOURCES, source 'alias' in buyer_names), so
+rules 2 and 4 match them as written and by key in every source; a placeholder
+is read as no name at all (is_placeholder_name).
+
+Merges (merge, every buyers stage, after CKAN, the seed and the aliases, in
+one transaction). One institution under two buyer ids splits the totals a
+reader quotes, so the stage joins them, by rules a fresh checkout reproduces
+from CKAN and the two seeds:
+
+1. alias: a buyer whose own English or French name is an alias of another
+   buyer (by key) is that buyer: a buyer made for "Revenue Canada", the CKAN
+   organization "Status of Women Canada".
+2. ckan_twin: CKAN organizations whose English titles have one key, and whose
+   French titles agree where both have one, are one buyer (CKAN lists the
+   Transportation Appeal Tribunal of Canada as tatc and as tatc-tatc). The
+   survivor is the survivor of the night before, then a buyer the seeds
+   name, then one with a department number, then the one with more records,
+   then the shorter id.
+3. name: a buyer made by rule 6 (no CKAN organization, not in buyers.csv)
+   whose own name now resolves by rules 2 to 4 to a CKAN or seed buyer is
+   that buyer, even when one of its spellings resolves to nothing by itself
+   (the French half of a pair). One whose spellings resolve to a third buyer
+   is listed for review instead: a wrong merge is worse than a missing one.
+4. spellings: a made buyer whose every spelling now resolves to one other
+   buyer is that buyer.
+5. no_institution: a made buyer whose every spelling reads as no institution
+   (non_institution, a placeholder) is deleted and its records keep no buyer.
+
+Each spelling of a made buyer is also re-pointed by itself (rule 1 then
+finds the right buyer on the next load). A merge moves the buyer_id of every
+row of every source (BUYER_COLUMNS, the lobbying reports' buyer_ids), its
+names in buyer_names, and drops its derived rows; the retired id becomes a
+buyer_aliases row (with its names, which the live buyer's page lists), so
+its page, its API path and its analytics redirect. Every merge, and every
+made buyer left as it is, is written to data/out/review/buyer-merges.txt;
+the run's notices name the merges that are new tonight.
+
+Institutions. A buyer with no CKAN organization that only the lobbying
+registry names (Members of the House of Commons, offices of Parliament) has
+kind 'institution' (refresh_kinds): the buyers list shows it apart from the
+departments, agencies and Crown corporations that publish tenders and
+contracts.
 """
 
 from __future__ import annotations
@@ -52,6 +102,8 @@ import json
 import logging
 import re
 import sqlite3
+from collections import defaultdict
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
@@ -66,6 +118,9 @@ log = logging.getLogger(__name__)
 
 SEED_PATH = config.PACKAGE_DATA / "buyers.csv"
 SEED_COLUMNS = ("raw_name", "source", "buyer_id", "name_en", "name_fr", "acronym_en", "acronym_fr")
+ALIAS_PATH = config.PACKAGE_DATA / "buyer_aliases.csv"
+ALIAS_COLUMNS = ("alias", "buyer_id", "note", "why")
+ALIAS_NOTES = ("former", "spelling", "acronym", "part", "placeholder")
 REFRESH_DAYS = 30
 # Shorter than the refresh, so a refresh revalidates every cached answer while
 # a run retried the same day reads them from the cache.
@@ -74,8 +129,14 @@ META_LOADED = "buyers_loaded_at"
 # When the CKAN organization list was last read, whether or not every
 # organization_show answered (the Data page shows it).
 META_READ = "buyers:read_at"
-# Spellings matched against titles and acronyms, never resolved by them.
-TITLE_SOURCES = ("ckan", "seed")
+# Names matched against as titles (rules 2 and 4), never a spelling a record
+# carries: CKAN's titles, the seed's names, the alias seed's names.
+TITLE_SOURCES = ("ckan", "seed", "alias")
+# Why a buyer was merged into another (buyer_aliases.reason), in the order the rules apply.
+MERGE_REASONS = ("alias", "ckan_twin", "name", "spellings", "no_institution")
+REVIEW_FILE = "buyer-merges.txt"
+# buyers.kind of a buyer that only the lobbying registry names (refresh_kinds).
+INSTITUTION = "institution"
 
 # The ids an earlier seed gave Crown corporations that CKAN lists under its
 # own organization (the seed points at CKAN's since 2026-11): aliases, so a
@@ -91,8 +152,8 @@ SEED_REPOINTED = {
     "parc-downsview-park": "pdp",
 }
 
-# Every column that points at a buyer, for moving records when a buyer made
-# by rule 4 turns out to be another.
+# Every column that points at a buyer, for moving records when merge retires
+# a buyer into another (or into none).
 BUYER_COLUMNS = (
     ("tenders", "buyer_id"), ("awards", "buyer_id"), ("contract_history", "buyer_id"),
     ("contract_history", "client_id"), ("contracts", "buyer_id"), ("grants", "buyer_id"),
@@ -343,6 +404,82 @@ def public_spelling(text: str | None) -> str | None:
     return None if non_institution(raw) in PRIVATE_REASONS else raw
 
 
+_EMAIL_RE = re.compile(r"\S@\S")
+_PHONE_RE = re.compile(r"\d[\d\s().-]{6,}\d")
+
+
+@lru_cache(maxsize=8192)
+def shown_spelling(text: str | None) -> str | None:
+    """A buyer's spelling fit to list on its page ("Also appears as"), or None.
+
+    Stricter than public_spelling, because the page lists a spelling as a
+    name of the institution: none that names or locates a person anywhere in
+    it (an attention line after the name, a part between separators that
+    reads as a person's name), and none with an email address or a telephone
+    number.
+    """
+    raw = public_spelling(text)
+    if raw is None or _ATTENTION_RE.search(raw) or _EMAIL_RE.search(raw) or _PHONE_RE.search(raw):
+        return None
+    parts = [squash(p) for p in _SEPARATOR_RE.split(raw) for p in _COMMA_RE.split(p) if squash(p)]
+    if any(non_institution(p) in PRIVATE_REASONS for p in parts):
+        return None
+    return raw
+
+
+# ---------------------------------------------------------------------------
+# The alias seed (awardwatch_pipeline/data/buyer_aliases.csv)
+# ---------------------------------------------------------------------------
+
+def read_aliases(path: Path | None = None) -> list[dict[str, str]]:
+    """The alias seed's rows ('#' lines are comments).
+
+    A row that breaks the file's rules raises ValueError, so a bad edit fails
+    the buyers stage rather than merging the wrong buyers: a note outside
+    ALIAS_NOTES, a placeholder with a buyer or a buyer-less row that is not a
+    placeholder, a row with no reason, and one name (by key) given two buyers.
+    """
+    src = path or ALIAS_PATH
+    if not src.exists():
+        return []
+    lines = [line for line in src.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+    rows: list[dict[str, str]] = []
+    targets: dict[str, str] = {}
+    for rec in csv.DictReader(io.StringIO("\n".join(lines))):
+        row = {k: squash(rec.get(k)) for k in ALIAS_COLUMNS}
+        if not row["alias"]:
+            continue
+        where = f"{src.name}: {row['alias']!r}"
+        if row["note"] not in ALIAS_NOTES:
+            raise ValueError(f"{where}: the note {row['note']!r} is not one of {', '.join(ALIAS_NOTES)}")
+        if (row["note"] == "placeholder") == bool(row["buyer_id"]):
+            raise ValueError(f"{where}: a placeholder names no buyer, and every other row names one")
+        if not row["why"]:
+            raise ValueError(f"{where}: every row says why")
+        key = name_key(row["alias"])
+        if not key:
+            raise ValueError(f"{where}: the name has no key (buyers.name_key)")
+        if targets.setdefault(key, row["buyer_id"]) != row["buyer_id"]:
+            raise ValueError(f"{where}: the name is given to {targets[key] or 'no buyer'} on another row")
+        rows.append(row)
+    return rows
+
+
+@lru_cache(maxsize=4)
+def _placeholder_keys(path: str) -> frozenset[str]:
+    return frozenset(name_key(r["alias"]) for r in read_aliases(Path(path)) if not r["buyer_id"])
+
+
+def is_placeholder_name(text: object) -> bool:
+    """A source's way of naming no institution: matching.is_placeholder's blanks ("N/A", "TBD"), or a
+    placeholder row of the alias seed ("Other (Specify)", the lobbying registry's choice for an
+    institution not on its list), however it is written."""
+    if matching.is_placeholder(text):
+        return True
+    raw = squash(text)
+    return bool(raw) and name_key(raw) in _placeholder_keys(str(ALIAS_PATH))
+
+
 # ---------------------------------------------------------------------------
 # The key index: every CKAN title and seed name by its key (tier "known"), and
 # every buyer rule 6 made by its names' keys (tier "made"). A temporary table,
@@ -350,9 +487,14 @@ def public_spelling(text: str | None) -> str | None:
 # change.
 # ---------------------------------------------------------------------------
 
+def _titles_in() -> str:
+    """The SQL list of TITLE_SOURCES, for a query that names them (they are constants, never input)."""
+    return ", ".join(f"'{s}'" for s in TITLE_SOURCES)
+
+
 def _index_stamp(conn: sqlite3.Connection) -> str:
     known = conn.execute("SELECT COUNT(*), COALESCE(SUM(length(raw_name) + length(buyer_id)), 0) FROM buyer_names "
-                         "WHERE source IN ('ckan', 'seed')").fetchone()
+                         f"WHERE source IN ({_titles_in()})").fetchone()
     every = conn.execute("SELECT COUNT(*), COALESCE(SUM(length(id) + length(name_en)), 0) FROM buyers").fetchone()
     return f"{known[0]}:{known[1]}:{every[0]}:{every[1]}"
 
@@ -372,7 +514,7 @@ def _ensure_keys(conn: sqlite3.Connection) -> None:
     conn.execute("DROP TABLE IF EXISTS temp.buyer_keys")
     conn.execute("CREATE TEMP TABLE buyer_keys (key TEXT NOT NULL, buyer_id TEXT NOT NULL, tier TEXT NOT NULL)")
     rows = {(name_key(raw), bid, "known") for raw, bid in conn.execute(
-        "SELECT raw_name, buyer_id FROM buyer_names WHERE source IN ('ckan', 'seed')")}
+        f"SELECT raw_name, buyer_id FROM buyer_names WHERE source IN ({_titles_in()})")}
     # An acronym of more than one word is a name ("FedDev Ontario", "VIA Rail"):
     # one word alone is matched as an acronym (_by_bare_acronym), where the
     # English and French acronyms tell apart the buyers that share one.
@@ -537,7 +679,8 @@ def resolve(
 ) -> str | None:
     """The buyer a source's spelling of an institution names; None when both spellings are blank."""
     en, fr = (squash(raw) for raw in (raw_en, raw_fr))
-    en, fr = ("" if matching.is_placeholder(en) else en), ("" if matching.is_placeholder(fr) else fr)
+    # A placeholder ("N/A", the registry's "Other (Specify)") names nothing, so it counts as blank.
+    en, fr = ("" if is_placeholder_name(en) else en), ("" if is_placeholder_name(fr) else fr)
     if not en and not fr:
         return None
     hit = _lookup(conn, [n for n in (en, fr) if n], source) or _match(conn, en, fr)
@@ -554,10 +697,13 @@ def resolve(
     bid = _keyed(conn, name_key(_PARENS_RE.sub(" ", en or fr)), "made", set())
     if bid is None:
         bid = slugify(name_en) or slugify(name_fr) or "buyer"
+        # An institution only the lobbying registry names is listed apart from the
+        # departments from the start (refresh_kinds keeps it so each night).
+        kind = INSTITUTION if source == "lobbying" else None
         conn.execute(
-            "INSERT INTO buyers (id, name_en, name_fr, acronym_en, acronym_fr, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(id) DO NOTHING",
-            (bid, name_en, name_fr, acronym_en, acronym_fr, now or now_iso()),
+            "INSERT INTO buyers (id, name_en, name_fr, acronym_en, acronym_fr, kind, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+            (bid, name_en, name_fr, acronym_en, acronym_fr, kind, now or now_iso()),
         )
         _note(conn, f"buyer {bid} made for '{en or fr}'")
     _record(conn, bid, source, en, fr)
@@ -568,11 +714,18 @@ def for_owner_org(conn: sqlite3.Connection, owner_org: str, title: str | None, *
     """The buyer of a proactive-publication row: its owner_org is the open.canada.ca organization name.
 
     Created from the "English | French" title when CKAN did not list it (a
-    run without CKAN, or an organization created since the last load).
+    run without CKAN, or an organization created since the last load). An
+    organization the buyers stage merged into another (a CKAN twin, a former
+    name) gives the buyer it went to, so a reload of the publications never
+    makes the retired buyer again.
     """
     bid = squash(owner_org)
     if conn.execute("SELECT 1 FROM buyers WHERE id = ?", (bid,)).fetchone():
         return bid
+    moved = conn.execute("SELECT a.new_id FROM buyer_aliases a JOIN buyers b ON b.id = a.new_id WHERE a.old_id = ?",
+                         (bid,)).fetchone()
+    if moved:
+        return moved[0]
     parts = [squash(p) for p in str(title or "").split("|")]
     name_en = parts[0] if parts and parts[0] else bid
     name_fr = parts[1] if len(parts) > 1 and parts[1] else None
@@ -671,7 +824,7 @@ def load_seed(conn: sqlite3.Connection, rows: list[dict[str, str]], *, now: str)
 
     A seed mapping wins over any earlier resolution of the same spelling; a
     spelling it takes from a buyer made by rule 6 (or named by an earlier
-    seed) is noted, so reresolve moves that buyer's records with it. Each
+    seed) is noted, so merge moves that buyer's records with it. Each
     spelling is also kept as a seed name, so rule 4 matches it however it is
     written ("PWGSC", "Public Works & Government Services Canada (PWGSC)"),
     and the seed names are the current file's alone.
@@ -708,73 +861,272 @@ def load_seed(conn: sqlite3.Connection, rows: list[dict[str, str]], *, now: str)
     return len(rows)
 
 
-def reresolve(conn: sqlite3.Connection, seed_ids: set[str], *, now: str | None = None) -> list[str]:
-    """Resolve again the spellings that went to a buyer made by rule 6, and move its records when it is now another.
+def load_aliases(conn: sqlite3.Connection, rows: list[dict[str, str]]) -> list[str]:
+    """Map the alias seed's names (source 'alias' in buyer_names), each to its buyer; returns the rows not applied.
 
-    A made buyer is one with no CKAN organization that the seed does not
-    name. When every spelling of it now resolves to one other buyer, its
-    records move there and it is deleted. When every spelling of it now reads
-    as no institution (non_institution), its records keep their raw spellings
-    and point at no buyer, and it is deleted. When they split, the records
-    stay and are resolved again as their files are read again. Each buyer
-    deleted for another goes into buyer_aliases.
+    The alias names are titles to the resolver (TITLE_SOURCES): matched as
+    written (rule 2) and by key (rule 4), never as a spelling a record
+    carries, and they are the current file's alone. A row whose buyer is not
+    in the database (a CKAN organization not loaded, as on a samples run) is
+    left out tonight and listed in the review file. Placeholder rows map
+    nothing here: is_placeholder_name reads them.
     """
-    made = {r[0] for r in conn.execute("SELECT id FROM buyers WHERE ckan_org IS NULL")} - seed_ids
+    conn.execute("DELETE FROM buyer_names WHERE source = 'alias'")
+    live = {r[0] for r in conn.execute("SELECT id FROM buyers")}
+    unapplied: list[str] = []
+    for row in rows:
+        if not row["buyer_id"]:
+            continue
+        if row["buyer_id"] not in live:
+            unapplied.append(f"{row['alias']}\t{row['buyer_id']}\tno buyer {row['buyer_id']} in the database tonight")
+            continue
+        conn.execute("INSERT INTO buyer_names (raw_name, source, buyer_id) VALUES (?, 'alias', ?) "
+                     "ON CONFLICT(raw_name, source) DO UPDATE SET buyer_id = excluded.buyer_id",
+                     (row["alias"], row["buyer_id"]))
+    forget_keys(conn)
+    return unapplied
+
+
+# ---------------------------------------------------------------------------
+# Merges: one institution under two buyer ids becomes one buyer
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class BuyerMerge:
+    old: str
+    new: str | None             # None: the buyer named no institution, so its records keep no buyer
+    reason: str                 # MERGE_REASONS
+    evidence: str               # the alias row, the shared title, the name or the spellings that decided it
+    name_en: str | None         # the retired buyer's names, which the live buyer's page lists
+    name_fr: str | None
+
+
+@dataclass
+class MergeOutcome:
+    merges: list[BuyerMerge] = field(default_factory=list)
+    review: list[str] = field(default_factory=list)      # made buyers left as they are, one line each
+    unapplied: list[str] = field(default_factory=list)   # alias rows naming no buyer in the database
+    moved: int = 0                                       # record rows re-pointed
+
+    def new_since(self, previous: dict[str, str]) -> list[BuyerMerge]:
+        """The merges that were not already in buyer_aliases with the same target."""
+        return [m for m in self.merges if m.new is None or previous.get(m.old) != m.new]
+
+
+def merge(conn: sqlite3.Connection, seed_ids: set[str], *, now: str | None = None,
+          aliases: list[dict[str, str]] | None = None) -> MergeOutcome:
+    """The night's buyer merges (the module docstring's rules 1 to 5), applied in one transaction.
+
+    seed_ids are the buyers buyers.csv defines; aliases the alias seed's
+    rows (read_aliases). Returns what was merged and what was left for
+    review; the caller writes the review file.
+    """
+    stamp = now or now_iso()
+    outcome = MergeOutcome()
+    try:
+        forget_keys(conn)
+        rows = {r["id"]: r for r in conn.execute(
+            "SELECT id, name_en, name_fr, ckan_org, department_number FROM buyers")}
+        ckan = {bid for bid, r in rows.items() if r["ckan_org"]}
+        made = set(rows) - ckan - seed_ids
+        alias_rows = aliases or []
+        earlier = {r[0] for r in conn.execute("SELECT DISTINCT new_id FROM buyer_aliases")}
+        named = seed_ids | {a["buyer_id"] for a in alias_rows if a["buyer_id"]}
+        chosen: dict[str, tuple[str | None, str, str]] = {}
+        records = _RecordCounts(conn)
+        _by_alias(rows, alias_rows, chosen)
+        outcome.review += _ckan_twins(conn, rows, ckan, chosen, earlier, named, records)
+        outcome.review += _made(conn, rows, made, chosen, records)
+        final = _follow(chosen)
+        outcome.merges = [BuyerMerge(old, new, reason, evidence, rows[old]["name_en"], rows[old]["name_fr"])
+                          for old, (new, reason, evidence) in sorted(final.items())]
+        outcome.moved = _apply(conn, outcome.merges, stamp)
+        forget_keys(conn)
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    return outcome
+
+
+def _by_alias(rows: dict[str, sqlite3.Row], aliases: list[dict[str, str]],
+              chosen: dict[str, tuple[str | None, str, str]]) -> None:
+    """Rule 1: a buyer whose own English or French name is, by key, an alias of another buyer."""
+    by_key: dict[str, dict[str, str]] = {}
+    for a in aliases:
+        if a["buyer_id"] and a["buyer_id"] in rows:
+            by_key.setdefault(name_key(a["alias"]), a)
+    for bid in sorted(rows):
+        r = rows[bid]
+        for name in (r["name_en"], r["name_fr"]):
+            a = by_key.get(name_key(name)) if name else None
+            if a is not None and a["buyer_id"] != bid:
+                chosen[bid] = (a["buyer_id"], "alias", f"{a['note']}: {a['alias']} ({a['why']})")
+                break
+
+
+class _RecordCounts:
+    """Each buyer's record rows across BUYER_COLUMNS, read in one pass the first time one is asked: the
+    contract history's buyer_id has no index, and a night may ask about dozens of buyers."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+        self.counts: dict[str, int] | None = None
+
+    def __call__(self, bid: str) -> int:
+        if self.counts is None:
+            self.counts = defaultdict(int)
+            for table, column in BUYER_COLUMNS:
+                for b, n in self.conn.execute(
+                        f"SELECT {column}, COUNT(*) FROM {table} WHERE {column} IS NOT NULL GROUP BY {column}"):
+                    self.counts[b] += n
+        return self.counts.get(bid, 0)
+
+
+def _ckan_twins(conn: sqlite3.Connection, rows: dict[str, sqlite3.Row], ckan: set[str],
+                chosen: dict[str, tuple[str | None, str, str]], earlier: set[str], named: set[str],
+                records: _RecordCounts) -> list[str]:
+    """Rule 2: CKAN organizations whose English titles share a key and whose French titles agree where both
+    have one. Returns the review lines of those whose French titles disagree."""
+    groups: dict[str, list[str]] = defaultdict(list)
+    for bid in sorted(ckan - set(chosen)):
+        key = name_key(rows[bid]["name_en"])
+        if key:
+            groups[key].append(bid)
+    review: list[str] = []
+    for key, members in sorted(groups.items()):
+        if len(members) < 2:
+            continue
+        counts = {b: records(b) for b in members}
+        survivor = min(members, key=lambda b: (b not in earlier, b not in named, not rows[b]["department_number"],
+                                               -counts[b], len(b), b))
+        fr = name_key(rows[survivor]["name_fr"]) if rows[survivor]["name_fr"] else ""
+        for b in members:
+            if b == survivor:
+                continue
+            other = name_key(rows[b]["name_fr"]) if rows[b]["name_fr"] else ""
+            if fr and other and fr != other:
+                review.append(f"{b}\t{rows[b]['name_en']}\t{counts[b]}\tthe English title of {survivor}, "
+                              f"another French title ({rows[b]['name_fr']} / {rows[survivor]['name_fr']})")
+                continue
+            chosen[b] = (survivor, "ckan_twin", f"CKAN title as {survivor}: {rows[b]['name_en']}")
+    return review
+
+
+def _made(conn: sqlite3.Connection, rows: dict[str, sqlite3.Row], made: set[str],
+          chosen: dict[str, tuple[str | None, str, str]], records: _RecordCounts) -> list[str]:
+    """Rules 3 to 5, for the buyers made by rule 6 that rule 1 left; re-points each of their spellings by
+    itself on the way. Returns the review lines of those left as they are."""
     conn.execute("CREATE TEMP TABLE IF NOT EXISTS buyer_seed_moves (old TEXT NOT NULL, new TEXT NOT NULL)")
-    moves = conn.execute("SELECT old, new FROM buyer_seed_moves ORDER BY rowid").fetchall()
+    moves: dict[str, set[str]] = defaultdict(set)
+    for old, new in conn.execute("SELECT old, new FROM buyer_seed_moves ORDER BY rowid").fetchall():
+        if old != new:
+            moves[old].add(new)
     conn.execute("DELETE FROM buyer_seed_moves")
-    if not made:
-        return []
-    forget_keys(conn)
-    targets: dict[str, set[str]] = {}
-    for old, new in moves:
-        if old in made and new != old:
-            targets.setdefault(old, set()).add(new)
-    dropped: set[str] = set()
-    for raw, source, old in conn.execute(
-        "SELECT raw_name, source, buyer_id FROM buyer_names WHERE source NOT IN ('ckan', 'seed')"
-    ).fetchall():
-        if old not in made:
+    review: list[str] = []
+    marks = _titles_in()
+    for bid in sorted(made - set(chosen)):
+        r = rows[bid]
+        spellings = conn.execute(f"SELECT raw_name, source FROM buyer_names WHERE buyer_id = ? AND source NOT IN ({marks})",
+                                 (bid,)).fetchall()
+        # A seed row that took a spelling from this buyer said where it goes.
+        to: set[str] = set(moves.get(bid, set()))
+        left: list[str] = []
+        none = 0
+        for raw, source in spellings:
+            new = _match(conn, raw, "", made)
+            if new:
+                conn.execute("UPDATE buyer_names SET buyer_id = ? WHERE raw_name = ? AND source = ?", (new, raw, source))
+                to.add(new)
+            elif non_institution(raw) or is_placeholder_name(raw):
+                conn.execute("DELETE FROM buyer_names WHERE raw_name = ? AND source = ?", (raw, source))
+                none += 1
+            else:
+                left.append(raw)
+        target = _match(conn, r["name_en"] or "", r["name_fr"] or "", made)
+        if target and to <= {target}:
+            chosen[bid] = (target, "name", f"its name {r['name_en']!r} is {target}'s")
+        elif target:
+            review.append(f"{bid}\t{r['name_en']}\t{records(bid)}\tits name is {target}'s but its "
+                          f"spellings name {', '.join(sorted(to - {target}))}")
+        elif len(to) == 1 and not left and not none:
+            shown = "; ".join(raw for raw, _ in spellings)
+            chosen[bid] = (next(iter(to)), "spellings", f"every spelling: {shown[:300]}")
+        elif not to and not left and (none or not records(bid)):
+            chosen[bid] = (None, "no_institution",
+                           "every spelling reads as no institution" if none else "no spelling and no record left")
+        else:
+            if to:
+                why = f"its spellings name {', '.join(sorted(to))} and others nothing"
+            elif left and all(source == "lobbying" for _, source in spellings):
+                why = "only the lobbying registry names it: kept as an institution; a buyer_aliases.csv row merges it"
+            elif left:
+                why = "no CKAN or seed name matches it; a row of buyers.csv or buyer_aliases.csv places it"
+            else:
+                why = "records but no spelling left; a row of buyer_aliases.csv with its name places it"
+            review.append(f"{bid}\t{r['name_en']}\t{records(bid)}\t{why}")
+    return review
+
+
+def _follow(chosen: dict[str, tuple[str | None, str, str]]) -> dict[str, tuple[str | None, str, str]]:
+    """Each merge with its target followed to the buyer that stays (a target merged in turn); a loop merges none
+    of its members."""
+    final: dict[str, tuple[str | None, str, str]] = {}
+    for old, (new, reason, evidence) in chosen.items():
+        seen = {old}
+        target = new
+        while target is not None and target in chosen and target not in seen:
+            seen.add(target)
+            target = chosen[target][0]
+        if target is not None and target in seen:
             continue
-        new = _match(conn, raw, "", made)
-        if new and new != old:
-            conn.execute("UPDATE buyer_names SET buyer_id = ? WHERE raw_name = ? AND source = ?", (new, raw, source))
-            targets.setdefault(old, set()).add(new)
-        elif new is None and non_institution(raw):
-            conn.execute("DELETE FROM buyer_names WHERE raw_name = ? AND source = ?", (raw, source))
-            dropped.add(old)
-    merged = []
-    for old in sorted(set(targets) | dropped):
-        left = conn.execute("SELECT COUNT(*) FROM buyer_names WHERE buyer_id = ?", (old,)).fetchone()[0]
-        news = targets.get(old, set())
-        if left or len(news) > 1 or (news and old in dropped):
-            continue
-        new = next(iter(news)) if news else None
-        for table, column in BUYER_COLUMNS:
-            conn.execute(f"UPDATE {table} SET {column} = ? WHERE {column} = ?", (new, old))
-        _replace_in_lobbying(conn, old, new)
+        final[old] = (target, reason, evidence)
+    return final
+
+
+def _apply(conn: sqlite3.Connection, merges: list[BuyerMerge], stamp: str) -> int:
+    """Move every row of every source off the merged buyers, re-point their names, drop their derived rows and
+    the buyers themselves, and keep each retired id as an alias. Returns the record rows moved."""
+    if not merges:
+        return 0
+    conn.execute("DROP TABLE IF EXISTS temp.buyer_merge_map")
+    conn.execute("CREATE TEMP TABLE buyer_merge_map (old TEXT PRIMARY KEY, new TEXT)")
+    conn.executemany("INSERT INTO temp.buyer_merge_map (old, new) VALUES (?, ?)", [(m.old, m.new) for m in merges])
+    moved = 0
+    for table, column in BUYER_COLUMNS:
+        moved += conn.execute(
+            f"UPDATE {table} SET {column} = (SELECT m.new FROM temp.buyer_merge_map m WHERE m.old = {table}.{column}) "
+            f"WHERE {column} IN (SELECT old FROM temp.buyer_merge_map)").rowcount
+    for m in merges:
+        _replace_in_lobbying(conn, m.old, m.new)
+        if m.new:
+            conn.execute("UPDATE buyer_names SET buyer_id = ? WHERE buyer_id = ?", (m.new, m.old))
+        else:
+            conn.execute("DELETE FROM buyer_names WHERE buyer_id = ?", (m.old,))
         for table, column in DERIVED_BUYER_COLUMNS:
-            conn.execute(f"DELETE FROM {table} WHERE {column} = ?", (old,))
-        conn.execute("DELETE FROM buyers WHERE id = ?", (old,))
-        if new:
-            _alias(conn, old, new, "merged", now)
-        merged.append(f"{old} -> {new or 'no buyer'}")
-    forget_keys(conn)
-    conn.commit()
-    return merged
+            conn.execute(f"DELETE FROM {table} WHERE {column} = ?", (m.old,))
+        conn.execute("DELETE FROM buyers WHERE id = ?", (m.old,))
+        if m.new:
+            _alias(conn, m.old, m.new, m.reason, stamp, m.name_en, m.name_fr)
+        else:
+            conn.execute("DELETE FROM buyer_aliases WHERE old_id = ?", (m.old,))
+    conn.execute("DROP TABLE temp.buyer_merge_map")
+    return moved
 
 
-def _alias(conn: sqlite3.Connection, old: str, new: str, reason: str, now: str | None) -> None:
+def _alias(conn: sqlite3.Connection, old: str, new: str, reason: str, now: str | None,
+           name_en: str | None = None, name_fr: str | None = None) -> None:
     conn.execute(
-        "INSERT INTO buyer_aliases (old_id, new_id, reason, updated_at) VALUES (?, ?, ?, ?) "
+        "INSERT INTO buyer_aliases (old_id, new_id, reason, updated_at, name_en, name_fr) VALUES (?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(old_id) DO UPDATE SET new_id = excluded.new_id, reason = excluded.reason, "
-        "updated_at = excluded.updated_at",
-        (old, new, reason, now or now_iso()),
+        "updated_at = excluded.updated_at, name_en = COALESCE(excluded.name_en, buyer_aliases.name_en), "
+        "name_fr = COALESCE(excluded.name_fr, buyer_aliases.name_fr)",
+        (old, new, reason, now or now_iso(), name_en, name_fr),
     )
 
 
 def refresh_aliases(conn: sqlite3.Connection, *, now: str | None = None) -> int:
-    """buyer_aliases as the buyers stage leaves it: the moves of every night (reresolve), the seed's
+    """buyer_aliases as the buyers stage leaves it: the merges of every night (merge), the seed's
     re-pointed ids (SEED_REPOINTED), each followed to the live buyer it ends at.
 
     An alias whose old id is a buyer again, or whose chain ends at no buyer or
@@ -817,6 +1169,65 @@ def _replace_in_lobbying(conn: sqlite3.Connection, old: str, new: str | None) ->
                      (json.dumps(out, ensure_ascii=False) if out else None, comm))
 
 
+def refresh_kinds(conn: sqlite3.Connection) -> int:
+    """kind 'institution' for each buyer with no CKAN organization that only the lobbying registry names
+    (every spelling it has is a lobbying one, apart from the seeds' names); kind cleared from one that a
+    record source names since. Returns the institutions."""
+    titles = _titles_in()
+    only_lobbying = (
+        "ckan_org IS NULL "
+        "AND EXISTS (SELECT 1 FROM buyer_names n WHERE n.buyer_id = buyers.id AND n.source = 'lobbying') "
+        f"AND NOT EXISTS (SELECT 1 FROM buyer_names n WHERE n.buyer_id = buyers.id AND n.source NOT IN ('lobbying', {titles}))"
+    )
+    conn.execute(f"UPDATE buyers SET kind = '{INSTITUTION}' WHERE kind IS NOT '{INSTITUTION}' AND {only_lobbying}")
+    conn.execute(f"UPDATE buyers SET kind = NULL WHERE kind = '{INSTITUTION}' AND NOT ({only_lobbying})")
+    conn.commit()
+    return conn.execute(f"SELECT COUNT(*) FROM buyers WHERE kind = '{INSTITUTION}'").fetchone()[0]
+
+
+def write_review(conn: sqlite3.Connection, outcome: MergeOutcome, path: Path, *, stamp: str) -> str | None:
+    """Write (or, with nothing to list, remove) the operator's list of buyer merges; returns its path as shown.
+
+    Every retired id in buyer_aliases (the merges of every night, with their
+    reason), tonight's buyers retired with no buyer, the made buyers left as
+    they are, and the alias rows not applied. No step publishes it.
+    """
+    aliases = conn.execute(
+        "SELECT a.old_id, a.new_id, a.reason, a.name_en, a.updated_at, b.name_en AS to_name FROM buyer_aliases a "
+        "LEFT JOIN buyers b ON b.id = a.new_id ORDER BY a.new_id, a.old_id").fetchall()
+    retired = [m for m in outcome.merges if m.new is None]
+    if not aliases and not retired and not outcome.review and not outcome.unapplied:
+        path.unlink(missing_ok=True)
+        return None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"# Buyer merges, run of {stamp}: {len(aliases)} retired buyer ids, each sent on to the buyer that holds "
+        f"its records; {len(outcome.merges)} merged tonight. For the operator: no step publishes this file.",
+        "# Reasons: alias (buyer_aliases.csv names it), ckan_twin (CKAN lists one institution twice), name (a made "
+        "buyer's own name is another's), spellings (every spelling is another's), seed (an id buyers.csv used to give).",
+        "# A wrong merge is undone by fixing the row of awardwatch_pipeline/data/buyer_aliases.csv or buyers.csv that "
+        "caused it; a made buyer is placed by adding one.",
+        "# reason\told_id\told_name\tnew_id\tnew_name\tsince",
+    ]
+    lines += ["\t".join((r["reason"] or "", r["old_id"], r["name_en"] or "", r["new_id"], r["to_name"] or "",
+                         (r["updated_at"] or "")[:10])) for r in aliases]
+    if retired:
+        lines += [f"# Retired tonight with no buyer: {len(retired)} (every spelling names no institution; the records "
+                  "keep their spellings)", "# old_id\told_name\twhy"]
+        lines += [f"{m.old}\t{m.name_en or ''}\t{m.evidence}" for m in retired]
+    if outcome.review:
+        lines += [f"# Not merged, for review: {len(outcome.review)} buyers", "# id\tname\trecords\twhy"]
+        lines += sorted(outcome.review)
+    if outcome.unapplied:
+        lines += [f"# Alias rows not applied tonight: {len(outcome.unapplied)}", "# alias\tbuyer_id\twhy"]
+        lines += outcome.unapplied
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    try:
+        return path.relative_to(config.REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def _seed_review(conn: sqlite3.Connection, seed_ids: set[str], ckan_ids: set[str]) -> list[str]:
     """Seed buyers outside CKAN whose acronym or name a CKAN organization also has: worth a look."""
     lines = []
@@ -832,8 +1243,8 @@ def _seed_review(conn: sqlite3.Connection, seed_ids: set[str], ckan_ids: set[str
 
 
 def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | None = None,
-        offline: bool = False) -> dict[str, int]:
-    """The buyers stage: CKAN organizations when due, then the seed, then the spellings made before either."""
+        offline: bool = False, review_dir: Path | None = None) -> dict[str, int]:
+    """The buyers stage: CKAN organizations when due, then the seed and the aliases, then the night's merges."""
     stamp = now or now_iso()
     before = conn.execute("SELECT COUNT(*) FROM buyers").fetchone()[0]
     notices: list[str] = []
@@ -854,16 +1265,26 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | Non
     seed = read_seed()
     seed_ids = {row["buyer_id"] for row in seed}
     load_seed(conn, seed, now=stamp)
-    merged = reresolve(conn, seed_ids, now=stamp)
-    if merged:
-        notices.append("buyers merged: " + ", ".join(merged))
+    alias_rows = read_aliases()
+    unapplied = load_aliases(conn, alias_rows)
+    previous = dict(conn.execute("SELECT old_id, new_id FROM buyer_aliases").fetchall())
+    outcome = merge(conn, seed_ids, now=stamp, aliases=alias_rows)
+    outcome.unapplied = unapplied
     aliases = refresh_aliases(conn, now=stamp)
+    institutions = refresh_kinds(conn)
+    shown = write_review(conn, outcome, (review_dir or config.OUT_DIR / "review") / REVIEW_FILE, stamp=stamp)
+    new = outcome.new_since(previous)
+    if new:
+        listed = ", ".join(f"{m.old} -> {m.new or 'no buyer'} ({m.reason})" for m in new)
+        notices.append(f"buyers merged: {listed}" + (f"; every merge is listed in {shown}" if shown else ""))
     if loaded:
         notices += _seed_review(conn, seed_ids, set(loaded))
     total = conn.execute("SELECT COUNT(*) FROM buyers").fetchone()[0]
     last = get_meta(conn, META_LOADED) or "never"
     log_run(conn, "buyers",
-            detail=f"buyers={total} ckan_loaded={len(loaded)} seed_rows={len(seed)} merged={len(merged)} "
-                   f"aliases={aliases} ckan_last_loaded={last}",
+            detail=f"buyers={total} ckan_loaded={len(loaded)} seed_rows={len(seed)} alias_rows={len(alias_rows)} "
+                   f"merged={len(outcome.merges)} merged_new={len(new)} review={len(outcome.review)} "
+                   f"aliases={aliases} institutions={institutions} ckan_last_loaded={last}",
             rows_in=total, rows_new=max(total - before, 0), notice=" | ".join(notices) or None)
-    return {"buyers": total, "ckan": len(loaded), "seed": len(seed), "merged": len(merged)}
+    return {"buyers": total, "ckan": len(loaded), "seed": len(seed), "merged": len(outcome.merges),
+            "merged_new": len(new), "review": len(outcome.review), "institutions": institutions}

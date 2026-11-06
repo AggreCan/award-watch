@@ -1,8 +1,11 @@
-// /buyers: every federal institution with its counters, from buyers/index.json.
+// /buyers: every federal institution with its counters, from buyers/index.json:
+// the departments, agencies and Crown corporations first, then, apart, the
+// institutions only the lobbying registry names (kind "institution").
 // /buyers/:id: one institution's yearly figures per source, the organizations
 // it paid most in each, its contracts ending soon (when the file carries
-// them), its open notices and newest award notices. Each source keeps its own
-// column; nothing adds two sources together.
+// them), its open notices and newest award notices, and the other names it
+// appears under. Each source keeps its own column; nothing adds two sources
+// together.
 
 import type { Context } from "hono";
 import { accountsEnabled } from "../account/switch";
@@ -10,7 +13,7 @@ import { WatchControl, watchControl } from "../account/watch_pages";
 import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
 import { Table } from "../columns";
 import { MONEY_SOURCES } from "../constants";
-import { BUYER_ID_RE, loadBuyer, loadBuyerAlias, loadBuyers, loadStats, type BuyerSummary } from "../data";
+import { BUYER_ID_RE, INSTITUTION, loadBuyer, loadBuyerAlias, loadBuyers, loadStats, type BuyerAlias, type BuyerSummary } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoney, fmtMoneyShort, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
@@ -31,7 +34,25 @@ const KIND: Record<string, Key> = {
   agency: "buyer.kind_agency",
   crown: "buyer.kind_crown",
   other: "buyer.kind_other",
+  [INSTITUTION]: "buyer.kind_institution",
 };
+
+// "Also appears as": the other names, a former one marked as such.
+function AlsoAppearsAs({ lang, aliases }: { lang: Lang; aliases: BuyerAlias[] }) {
+  if (!aliases.length) return null;
+  return (
+    <p class="page-note buyer-aliases">
+      {t(lang, "buyer.also")}{" "}
+      {aliases.map((a, i) => (
+        <>
+          {i ? "; " : null}
+          <span>{a.name}</span>
+          {a.note === "former" ? <span class="muted"> ({t(lang, "buyer.former_name")})</span> : null}
+        </>
+      ))}
+    </p>
+  );
+}
 
 export function buyerName(lang: Lang, b: Pick<BuyerSummary, "name_en" | "name_fr" | "acronym_en" | "acronym_fr">): string {
   return pick(lang, b.name_en, b.name_fr) ?? b.name_en;
@@ -54,7 +75,12 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
   // The departments with the most records first; ?sort=name for A to Z.
   const byName = c.req.query("sort") === "name";
   const name = (a: BuyerSummary, b: BuyerSummary) => buyerName(lang, a).localeCompare(buyerName(lang, b), numberLocale(lang));
-  const rows = [...idx.buyers].sort(byName ? name : (a, b) => buyerRecords(b) - buyerRecords(a) || name(a, b));
+  const sorted = [...idx.buyers].sort(byName ? name : (a, b) => buyerRecords(b) - buyerRecords(a) || name(a, b));
+  // The institutions only the lobbying registry names go in a list of their own,
+  // so the departments' list holds the institutions that publish what is counted.
+  const rows = sorted.filter((b) => b.kind !== INSTITUTION);
+  const institutions = [...idx.buyers].filter((b) => b.kind === INSTITUTION)
+    .sort(byName ? name : (a, b) => (b.n_lobbying ?? 0) - (a.n_lobbying ?? 0) || name(a, b));
   const n = (v: number) => fmtInt(v, lang);
   const cell = (count: number, total: number | null | undefined) => (
     <>
@@ -70,7 +96,7 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
         actions={<a href="/downloads/buyers.csv" class="btn">{t(lang, "buyers.csv")}</a>}>
         <p class="page-note"><SourcesSeparate lang={lang} /> {t(lang, "buyers.note")}</p>
       </PageHead>
-      <Panel title={t(lang, "buyers.panel")} count={n(rows.length)}
+      <Panel title={t(lang, institutions.length ? "buyers.panel_departments" : "buyers.panel")} count={n(rows.length)}
         tools={<nav class="tabs tabs-small" aria-label={t(lang, "common.order")}>
           <a href={sortHref("")} aria-current={byName ? undefined : "page"}>{t(lang, "common.order_records")}</a>
           <a href={sortHref("name")} aria-current={byName ? "page" : undefined}>{t(lang, "common.order_name")}</a>
@@ -101,6 +127,27 @@ export async function buyersIndex(c: Context<AppEnv>): Promise<Response> {
         </Table>
       </PhonePages>
       </Panel>
+      {institutions.length ? (
+        <Panel id="institutions" title={t(lang, "buyers.panel_institutions")} count={n(institutions.length)}>
+          <p class="muted small">{t(lang, "buyers.institutions_note")}</p>
+          <Table cols={[
+            { kind: "main", label: t(lang, "buyers.col_institution") },
+            { kind: "count", label: t(lang, "buyers.col_lobbying") },
+          ]}>
+            <tbody>
+              {institutions.map((b) => (
+                <tr>
+                  <td data-label={t(lang, "buyers.col_institution")}>
+                    <a href={`/buyers/${b.id}`}>{buyerName(lang, b)}</a>
+                    {acronym(lang, b) ? <span class="muted"> ({acronym(lang, b)})</span> : null}
+                  </td>
+                  <td data-label={t(lang, "buyers.col_lobbying")} class="mono num">{n(b.n_lobbying ?? 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </Panel>
+      ) : null}
       <PhonePagerScript lang={lang} />
     </Layout>,
   );
@@ -187,6 +234,10 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
         </>}>
         {span ? <p class="page-note">{t(lang, "buyer.seen", { first: String(span.first), last: String(span.last) })}</p> : null}
         <WatchControl lang={lang} state={watch} kind="buyer" target={b.buyer.id} />
+        {b.buyer.n_lobbying ? (
+          <p class="page-note">{t(lang, "buyer.lobbying", { n: n(b.buyer.n_lobbying) })}</p>
+        ) : null}
+        <AlsoAppearsAs lang={lang} aliases={b.aliases ?? []} />
       </PageHead>
 
       {/* A tile opens the source's largest values when the page has them. */}

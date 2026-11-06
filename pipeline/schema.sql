@@ -140,7 +140,8 @@ CREATE TABLE IF NOT EXISTS buyers (
   acronym_fr TEXT,
   ckan_org TEXT,                                 -- open.canada.ca organization name, when known
   department_number TEXT,
-  kind TEXT,                                     -- department | agency | crown | other
+  kind TEXT,                                     -- institution: no CKAN organization, and only the lobbying registry
+                                                 -- names it (sources/buyers.refresh_kinds); NULL otherwise
   n_tenders INTEGER NOT NULL DEFAULT 0,
   n_awards INTEGER NOT NULL DEFAULT 0,
   n_history INTEGER NOT NULL DEFAULT 0,
@@ -152,27 +153,34 @@ CREATE TABLE IF NOT EXISTS buyers (
   n_awards_no_value INTEGER NOT NULL DEFAULT 0,  -- records counted in n_* whose source published no value
   n_contracts_no_value INTEGER NOT NULL DEFAULT 0,
   n_grants_no_value INTEGER NOT NULL DEFAULT 0,
+  n_lobbying INTEGER NOT NULL DEFAULT 0,         -- lobbying communication reports naming it (indicators.py)
   updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS buyer_names (
   raw_name TEXT NOT NULL,
-  source TEXT NOT NULL,                          -- canadabuys | ckan | lobbying | seed
+  source TEXT NOT NULL,                          -- canadabuys | lobbying (spellings records carry) | ckan | seed |
+                                                 -- alias (titles: buyers.TITLE_SOURCES; alias is buyer_aliases.csv)
   buyer_id TEXT NOT NULL REFERENCES buyers(id),
   PRIMARY KEY (raw_name, source)
 );
 
 -- Buyer ids retired by the buyers stage, each with the live buyer that took
 -- its records, so a link to an old buyer page can be sent on
--- (sources/buyers.refresh_aliases). Kept from night to night: each night adds
--- its moves and the seed's re-pointed ids, follows chains to the live id and
--- drops an alias that leads nowhere or whose old id is a buyer again.
--- export_static writes it as buyers/aliases.json.
+-- (sources/buyers.merge and refresh_aliases). Kept from night to night: each
+-- night adds its merges and the seed's re-pointed ids, follows chains to the
+-- live id and drops an alias that leads nowhere or whose old id is a buyer
+-- again. export_static writes it as buyers/aliases.json, and the names of the
+-- retired buyer on the live buyer's page ("Also appears as").
 CREATE TABLE IF NOT EXISTS buyer_aliases (
   old_id TEXT PRIMARY KEY,
   new_id TEXT NOT NULL,
-  reason TEXT,                                   -- merged (its spellings resolve to new_id) | seed (re-pointed in the seed)
-  updated_at TEXT
+  reason TEXT,                                   -- buyers.MERGE_REASONS: alias | ckan_twin | name | spellings |
+                                                 -- seed (an id buyers.csv used to give); merged on databases from
+                                                 -- before 2026-11-06 (its spellings resolved to new_id)
+  updated_at TEXT,
+  name_en TEXT,                                  -- the retired buyer's names when it was merged
+  name_fr TEXT
 );
 
 -- ---------------------------------------------------------------------------

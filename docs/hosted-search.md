@@ -27,10 +27,16 @@ Two tables, one row each per:
   record count); and the per-source totals as the profile shows them.
 - **buyer** (`search_buyers`): every buyer in the export's
   `buyers/index.json`, which is every buyer with a page. The row holds the
-  English and French names, both acronyms, every spelling the sources use
-  (`buyer_names`), the buyer ids retired into it (`buyers/aliases.json`),
-  the open notices, the record counts and the totals as `/buyers` shows
-  them.
+  English and French names, both acronyms, the reviewed aliases of
+  `pipeline/awardwatch_pipeline/data/buyer_aliases.csv` ("Parks Canada
+  Agency", "DND", "Revenue Canada" for the Canada Revenue Agency), the names
+  of the buyers merged into it and the buyer ids retired into it
+  (`buyer_aliases`, `buyers/aliases.json`), then every other spelling the
+  sources use (`buyer_names`), in that order so the spelling cap drops a
+  source spelling first; the open notices, the record counts and the totals
+  as `/buyers` shows them. Since the buyer merges (2026-11-06), searching a
+  former name or a second spelling finds the one buyer that holds its
+  records.
 
 Aliases. An organization merged into another (`merges.py`) or retired by a
 normalization change (`migrate.py`) is a row of `organization_aliases`. Its

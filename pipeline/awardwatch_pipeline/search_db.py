@@ -334,10 +334,20 @@ def read_buyer_index(static_dir: Path) -> list[dict]:
 
 
 def buyer_rows(conn: sqlite3.Connection, static_dir: Path) -> Iterator[dict]:
-    """One search row per buyer with a page, in id order."""
+    """One search row per buyer with a page, in id order.
+
+    alt lists, after the French name and the acronyms, the reviewed aliases
+    (buyer_aliases.csv: "Parks Canada Agency", "DND", "Revenue Canada"), the
+    retired ids and the names of the buyers merged into it, then every other
+    spelling; the cap drops a spelling before any of those.
+    """
     spellings: dict[str, list[str]] = {}
-    for bid, raw in conn.execute("SELECT buyer_id, raw_name FROM buyer_names ORDER BY buyer_id, raw_name"):
-        spellings.setdefault(bid, []).append(raw)
+    curated: dict[str, list[str]] = {}
+    for bid, raw, source in conn.execute("SELECT buyer_id, raw_name, source FROM buyer_names "
+                                         "ORDER BY buyer_id, source != 'alias', raw_name"):
+        (curated if source == "alias" else spellings).setdefault(bid, []).append(raw)
+    for new, en, fr in conn.execute("SELECT new_id, name_en, name_fr FROM buyer_aliases ORDER BY new_id, old_id"):
+        curated.setdefault(new, []).extend(n for n in (en, fr) if n)
     retired = read_buyer_aliases(static_dir)
     rows = []
     for b in read_buyer_index(static_dir):
@@ -349,8 +359,8 @@ def buyer_rows(conn: sqlite3.Connection, static_dir: Path) -> Iterator[dict]:
         name_fr = _text(b.get("name_fr"))
         acronyms = [a for a in (_text(b.get("acronym_en")), _text(b.get("acronym_fr"))) if a]
         primary = [name, *(x for x in (name_fr, *acronyms) if x)]
-        # The retired ids come before the spellings, so the cap drops a spelling before a retired id.
-        alt = spelling_list(name, [*primary[1:], *retired.get(bid, []), *spellings.get(bid, [])])
+        # The aliases and retired ids come before the spellings, so the cap drops a spelling first.
+        alt = spelling_list(name, [*primary[1:], *curated.get(bid, []), *retired.get(bid, []), *spellings.get(bid, [])])
         counts = [_count(b.get(k)) for k in ("n_tenders", "n_open_tenders", "n_awards", "n_history", "n_contracts", "n_grants")]
         folds: list[str] = []
         for p in primary:

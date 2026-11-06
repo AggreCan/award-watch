@@ -47,7 +47,10 @@ change there. Output tree (under data/out/static):
                                 (merges.py); the site redirects a missing profile by it
   directory/...                 organizations A to Z by province (directory.py)
   buyers/index.json, buyers/<id>.json   the listed buyers (export.LISTED_BUYER): those with an open notice,
-                                an award notice, a contract history record, a published contract or a grant
+                                an award notice, a contract history record, a published contract or a grant,
+                                and the institutions only the lobbying registry names (kind "institution",
+                                with n_lobbying); a buyer file's "aliases" are the names it also appears under
+                                (buyer_aliases_of)
   buyers/aliases.json           {"aliases": {old buyer id: listed buyer id}}: the buyer ids the buyers stage
                                 retired (buyer_aliases, chains followed), for a permanent redirect; an alias
                                 whose target is not listed, or whose old id is listed again, is left out
@@ -147,6 +150,7 @@ from .db import get_meta, log_run, set_meta
 from .export import SUMS, listed_buyer_ids, register_functions, scrub, scrub_doc
 from .feeds import write_feeds
 from .normalize import closing_day, tender_status_on
+from .sources import buyers as buyer_rules
 from .sources.buyers import public_spelling
 
 log = logging.getLogger(__name__)
@@ -180,6 +184,8 @@ PROFILE_PLACES = 10
 PROFILE_BUYERS = 10
 BUYER_TOP = 25
 BUYER_AWARDS = 50
+# The other names a buyer page lists at most ("Also appears as").
+BUYER_ALIASES = 12
 CATEGORY_TOP = 25
 RANK_ROWS = 100
 RANK_BUYERS = 50
@@ -1557,7 +1563,71 @@ def top_organizations_year(m: Model, totals: Totals) -> list[dict]:
 
 BUYER_FIELDS = ("id", "name_en", "name_fr", "acronym_en", "acronym_fr", "kind", "n_tenders", "n_awards", "n_history",
                 "n_contracts", "n_grants", "total_awards", "total_contracts", "total_grants", "n_awards_no_value",
-                "n_contracts_no_value", "n_grants_no_value")
+                "n_contracts_no_value", "n_grants_no_value", "n_lobbying")
+
+# The spellings the record sources carry for a buyer, with how many record rows carry each: the
+# contracting entity of a tender or award notice, the client department of a PSPC history record.
+_BUYER_SPELLINGS_SQL = (
+    "SELECT b, raw, COUNT(*) AS n FROM ("
+    "SELECT buyer_id AS b, buyer_raw_en AS raw FROM tenders WHERE buyer_id IS NOT NULL "
+    "UNION ALL SELECT buyer_id, buyer_raw_fr FROM tenders WHERE buyer_id IS NOT NULL "
+    "UNION ALL SELECT buyer_id, buyer_raw_en FROM awards WHERE buyer_id IS NOT NULL "
+    "UNION ALL SELECT buyer_id, buyer_raw_fr FROM awards WHERE buyer_id IS NOT NULL "
+    "UNION ALL SELECT client_id, client_raw_en FROM contract_history WHERE client_id IS NOT NULL "
+    "UNION ALL SELECT client_id, client_raw_fr FROM contract_history WHERE client_id IS NOT NULL"
+    ") WHERE raw IS NOT NULL AND raw != '' GROUP BY b, raw ORDER BY b, n DESC, raw"
+)
+
+
+def buyer_aliases_of(m: Model, listed: Collection[str]) -> dict[str, list[dict]]:
+    """The other names each listed buyer appears under, as {"name", "note"}, for "Also appears as" on its page.
+
+    First the alias seed's names for it (awardwatch_pipeline/data/buyer_aliases.csv, in the file's order;
+    note "former" on a former name, else the row's note), then the names of the buyers merged into it
+    (buyer_aliases), then the spellings its records carry most. A source spelling is shown only when
+    buyers.shown_spelling allows it (nothing that names or locates a person) and when it is not the
+    buyer's own name or another name already listed by key (buyers.name_key: "Department of National
+    Defence (DND)" is "National Defence"). At most BUYER_ALIASES a buyer.
+    """
+    out: dict[str, list[dict]] = defaultdict(list)
+    keys: dict[str, set[str]] = {}
+
+    def start(bid: str) -> set[str] | None:
+        if bid not in listed or bid not in m.buyers:
+            return None
+        if bid not in keys:
+            b = m.buyers[bid]
+            keys[bid] = {buyer_rules.name_key(x) for x in (b["name_en"], b["name_fr"], b["acronym_en"], b["acronym_fr"]) if x}
+        return keys[bid]
+
+    def add(bid: str, name: object, note: str | None, *, curated: bool) -> None:
+        seen = start(bid)
+        text = _text(name)
+        if seen is None or not text or len(out[bid]) >= BUYER_ALIASES:
+            return
+        b = m.buyers[bid]
+        if text.casefold() in {(x or "").casefold() for x in (b["name_en"], b["name_fr"], b["acronym_en"], b["acronym_fr"])}:
+            return
+        key = buyer_rules.name_key(buyer_rules._PARENS_RE.sub(" ", text)) or buyer_rules.name_key(text)
+        if not curated and key in seen:
+            return
+        if any(a["name"].casefold() == text.casefold() for a in out[bid]):
+            return
+        seen.add(key)
+        out[bid].append({"name": text, "note": note})
+
+    notes = {r["alias"]: r["note"] for r in buyer_rules.read_aliases()}
+    applied = dict(m.conn.execute("SELECT raw_name, buyer_id FROM buyer_names WHERE source = 'alias'").fetchall())
+    for alias, note in notes.items():
+        if alias in applied:
+            add(applied[alias], alias, note, curated=True)
+    for r in m.conn.execute("SELECT new_id, name_en, name_fr FROM buyer_aliases ORDER BY updated_at, old_id"):
+        for name in (r["name_en"], r["name_fr"]):
+            add(r["new_id"], name, None, curated=True)
+    for bid, raw, _n in m.conn.execute(_BUYER_SPELLINGS_SQL):
+        if bid in listed and len(out[bid]) < BUYER_ALIASES and (shown := buyer_rules.shown_spelling(raw)):
+            add(bid, shown, None, curated=False)
+    return dict(out)
 
 
 def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> dict[str, int]:
@@ -1590,6 +1660,7 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
                 cells[bid].append((oid, n, total, nv))
         for bid, items in cells.items():
             top[bid][source] = _top(items, BUYER_TOP, _by_value)
+    also = buyer_aliases_of(m, listed)
     for s in summaries:
         bid = s["id"]
         b = m.buyers[bid]
@@ -1608,11 +1679,12 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
             "open_tenders": s["n_open_tenders"],
             "recent_awards": recent,
             "expiring": m.expiring_part("buyer_id", bid),
+            "aliases": also.get(bid, []),
         })
-    aliases = {old: new for old, new in conn.execute("SELECT old_id, new_id FROM buyer_aliases ORDER BY old_id")
+    retired = {old: new for old, new in conn.execute("SELECT old_id, new_id FROM buyer_aliases ORDER BY old_id")
                if new in listed and old not in listed and _buyer_id(old)}
-    _dump(out / "buyers" / "aliases.json", {"aliases": aliases})
-    return {"buyers": len(summaries), "buyer_aliases": len(aliases)}
+    _dump(out / "buyers" / "aliases.json", {"aliases": retired})
+    return {"buyers": len(summaries), "buyer_aliases": len(retired)}
 
 
 def write_categories(m: Model, out: Path, open_rows: list[dict]) -> dict[str, int]:

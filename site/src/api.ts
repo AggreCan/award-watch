@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { BUYER_ID_RE, SEGMENT_RE, assetResponse, loadAlias, loadProfile, loadTender } from "./data";
+import { BUYER_ID_RE, SEGMENT_RE, assetResponse, loadAlias, loadBuyerAlias, loadProfile, loadTender } from "./data";
 import { SEGMENTS } from "./constants";
 import type { AppEnv } from "./env";
 import { SITE_ORIGIN } from "./seo";
@@ -46,10 +46,17 @@ api.get("/tenders/:reference", async (c) => {
   return tender ? c.json(withoutContacts(tender)) : c.json({ error: "not found" }, 404);
 });
 
-api.get("/buyers/:id", (c) => {
+// A buyer id the pipeline retired (merged into another: a former name, a
+// second spelling, a CKAN organization listed twice) redirects to the id that
+// took its records, as the buyer page does (buyers/aliases.json).
+api.get("/buyers/:id", async (c) => {
   const id = c.req.param("id") ?? "";
   if (!BUYER_ID_RE.test(id) || id.length > 80) return c.json({ error: "not found" }, 404);
-  return passThrough(c, `buyers/${id}.json`, 404);
+  const res = await assetResponse(c.env, `buyers/${id}.json`);
+  if (res) return new Response(res.body, { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } });
+  const live = await loadBuyerAlias(c.env, id);
+  if (live) return c.redirect(`/api/buyers/${live}`, 301);
+  return c.json({ error: "not found" }, 404);
 });
 
 api.get("/categories/:nn", (c) => {

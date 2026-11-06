@@ -412,7 +412,8 @@ def test_every_buyer_retired_for_another_is_kept_as_an_alias_to_the_live_buyer(r
     conn.commit()
     buyers.run(conn, None, now=NOW, offline=True)
     aliases = {r["old_id"]: (r["new_id"], r["reason"]) for r in conn.execute("SELECT * FROM buyer_aliases")}
-    assert aliases["public-works-and-government-services-canada"] == ("pwgsc-tpsgc", "merged")
+    # Its own name is PWGSC's former name (buyers.csv), so the reason is "name" (buyers.MERGE_REASONS).
+    assert aliases["public-works-and-government-services-canada"] == ("pwgsc-tpsgc", "name")
     assert aliases["older-pspc-id"][0] == "pwgsc-tpsgc"
     assert aliases["export-development-canada"] == ("edc", "seed") and aliases["telefilm-canada"] == ("tf", "seed")
     # No alias for a buyer that went to no buyer (a person), none leading nowhere, none for a live id.

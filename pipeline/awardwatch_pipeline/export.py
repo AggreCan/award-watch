@@ -25,7 +25,8 @@ and the site serves only these names):
   organizations.csv       one row per organization: names, main place, counters and totals by source,
                           and beside each total the count of records whose source published no value
   buyers.csv              one row per buyer with a record in a column the buyers list shows (listed_buyer_ids):
-                          names, acronyms, counters and totals by source, with the same no-value counts
+                          names, acronyms, kind, counters and totals by source, with the same no-value counts,
+                          and the lobbying reports that name it
   expiring-12m.csv        the expiring-contracts radar: every contract ending within 365 days, listed
                           once across the three sources (expiring.py), soonest end first, with the
                           client department and the value flag
@@ -278,16 +279,19 @@ EXPIRING_3M = (_EXPIRING_SELECT + " WHERE substr(end, 1, 10) BETWEEN :as_of AND 
 # static export) when it has a record in a column the buyers list shows: an
 # open tender notice on the data date, an award notice, a contract history
 # record, a published contract or a grant. One whose only records are tender
-# notices that have closed shows zero in every column and is left out.
+# notices that have closed shows zero in every column and is left out. An
+# institution only the lobbying registry names (kind 'institution',
+# sources/buyers.refresh_kinds) is listed apart while a report names it.
 LISTED_BUYER = """
     (b.n_awards > 0 OR b.n_history > 0 OR b.n_contracts > 0 OR b.n_grants > 0
+     OR (b.kind = 'institution' AND b.n_lobbying > 0)
      OR EXISTS (SELECT 1 FROM tenders t WHERE t.buyer_id = b.id
                 AND tender_status_on(t.status, t.closing, :as_of) = 'open'
                 AND t.amendment = (SELECT MAX(y.amendment) FROM tenders y WHERE y.reference = t.reference)))"""
 BUYERS = f"""
     SELECT id, name_en, name_fr, acronym_en, acronym_fr, ckan_org, department_number, kind, n_tenders, n_awards,
            total_awards, n_awards_no_value, n_history, n_contracts, total_contracts, n_contracts_no_value, n_grants,
-           total_grants, n_grants_no_value
+           total_grants, n_grants_no_value, n_lobbying
     FROM buyers b WHERE {LISTED_BUYER} ORDER BY id"""
 # The raw spellings of a buyer the CSVs print: blank when they name or locate a person.
 RAW_BUYER_COLUMNS = frozenset({"buyer_raw_en", "client_raw_en"})
