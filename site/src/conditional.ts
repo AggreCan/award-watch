@@ -36,7 +36,11 @@ function hex(bytes: ArrayBuffer): string {
 // records did not change keeps its tag, and a crawler coming back still gets
 // its 304. A browser that gets one shows its own copy, whose figures
 // public/refresh.js rewrites from the visitor's clock. The labels stay in.
-const REFRESH_LEFT = /<span class="refresh-left">[^<]*<\/span>/g;
+// While a run is under way the figure holds its two forms ("Since 13:45" and
+// "Under way since 13:45", each a span) in place of the countdown, and is
+// left out the same way, so the page keeps its tag across the run's start;
+// the timers' data stamps (data-data-at) stay in, since a new one means new data.
+const REFRESH_LEFT = /<span class="refresh-left">(?:[^<]|<span class="refresh-(?:short|full)">[^<]*<\/span>)*<\/span>/g;
 
 export async function bodyEtag(body: ArrayBuffer): Promise<string> {
   const text = new TextDecoder().decode(body);

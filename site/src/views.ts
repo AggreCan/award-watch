@@ -120,7 +120,8 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   if (path === "/data/feeds/index.json") return { route: path, kind: "file" };
   const radar = /^\/data\/expiring\/(6m|12m)\/[^/]+$/.exec(path);
   if (radar) return { route: `/data/expiring/${radar[1]}/:file`, kind: "file" };
-  if (path === "/robots.txt" || path === "/llms.txt") return { route: path, kind: "file" };
+  // The timers' stamps (src/refresh.tsx), which a page asks for while a run is under way.
+  if (path === "/robots.txt" || path === "/llms.txt" || path === "/refresh.json") return { route: path, kind: "file" };
   if (/^\/sitemap(?:-[0-9]+)?\.xml$/.test(path)) return { route: "/sitemap.xml", kind: "file" };
   // The standing offers and supply arrangements (pages/instruments.tsx): the numbers folded into the template.
   if (path === "/instruments") return { route: path, kind: "page" };

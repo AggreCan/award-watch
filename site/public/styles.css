@@ -1076,7 +1076,19 @@ ul.documents li:last-child { margin-bottom: 0; }
    1200 and hold the field at its floor, under its placeholder, at 1280, so
    from 1200 to 1439 a French label shows its short form; the English ones
    are whole everywhere. Measured with the widest figures ("23 h 59 min",
-   "maintenant"), the field keeps 234 px or more and its placeholder whole. */
+   "maintenant"), the field keeps 234 px or more and its placeholder whole.
+   While a run is under way the figure reads "Under way since 13:45" or
+   "En cours depuis 13:45", short ("Since 13:45", "Depuis 13:45") from 1200
+   to 1439 like the labels; no figure wraps (nowrap here and on the figure).
+   Measured 2026-11-07 for a signed-in reader (the plan after the wordmark,
+   the theme button, the Pro chip), the field keeps 233 px or more in that
+   state: 233 in French at 1200, 383 in English at 1440, where the whole
+   English figure is wider than its label. Once a run's data is in, a link
+   to reload goes after the timers (public/refresh.js), short ("Reload",
+   "Recharger") to 1599 px: whole, the French one pushes the bar 52 px past
+   its edge at 1440. With it the field keeps 160 px (its floor) or more:
+   170 in French at 1200 with the countdown back, 160 with the other timer
+   still under way. */
 .refresh-timers { display: none; }
 @media (min-width: 1200px) {
   .refresh-timers { display: flex; align-items: center; gap: 24px; margin-left: 8px; white-space: nowrap; }
@@ -1089,11 +1101,17 @@ ul.documents li:last-child { margin-bottom: 0; }
 .refresh { display: flex; align-items: center; gap: 16px; }
 .refresh-line { display: flex; flex-direction: column; align-items: flex-start; }
 .refresh-label { font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.refresh-left { font-size: 14px; line-height: 18px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.refresh-left { font-size: 14px; line-height: 18px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 a.refresh { color: inherit; text-decoration: none; }
 a.refresh > .pro-tag { margin-left: 0; }
 a.refresh:hover .refresh-label { color: var(--ink); }
 a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offset: 2px; }
+.refresh-reload .refresh-short { display: inline; }
+.refresh-reload .refresh-full { display: none; }
+@media (min-width: 1600px) {
+  .refresh-reload .refresh-short { display: none; }
+  .refresh-reload .refresh-full { display: inline; }
+}
 
 /* -- the same-day mark (src/pro.tsx, SameDayMark) ------------------------------
    A bolt before the title of each notice from the day's same-day refresh:

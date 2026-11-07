@@ -320,3 +320,42 @@ describe("a paid request", () => {
     }
   });
 });
+
+// The top bar's sub-daily timer (src/refresh.tsx): a page drawn from the
+// same-day notices carries the last cut's stamp (the newest run that went
+// through, intraday_runs), and reads a cut as under way from its scheduled
+// time until a later run is in. The tests' clock is 16:00 UTC, so the 15:45
+// cut is the last one due.
+describe("the sub-daily timer on a page with the band", () => {
+  const sameDay = (page: string) =>
+    /<a class="refresh"[^>]*data-refresh-key="same_day"[^>]*>[\s\S]*?<span class="refresh-left">((?:[^<]|<span class="refresh-(?:short|full)">[^<]*<\/span>)*)<\/span>/.exec(page);
+  const addRun = (id: string, at: string, ok: number) =>
+    SEARCH.prepare("INSERT INTO intraday_runs (id, at, ok) VALUES (?, ?, ?)").bind(`timer-${id}`, at, ok).run();
+
+  it("counts down once the cut is in, and reads it under way while it is not, in both languages", async () => {
+    try {
+      await addRun("in", "2026-10-31T15:52:10Z", 1);
+      plan.value = "pro";
+      const done = sameDay(await html("/tenders"));
+      expect(done?.[0]).toContain('data-refresh-key="same_day" data-data-at="2026-10-31T15:52:10Z"');
+      expect(done?.[1]).toBe("1h 45m");
+      // The 15:45 run failed: the newest run that went through is the 13:45 cut's.
+      await SEARCH.prepare("DELETE FROM intraday_runs WHERE id LIKE 'timer-%'").run();
+      await addRun("old", "2026-10-31T13:51:00Z", 1);
+      await addRun("failed", "2026-10-31T15:53:00Z", 0);
+      const en = sameDay(await html("/tenders"));
+      expect(en?.[0]).toContain('data-data-at="2026-10-31T13:51:00Z"');
+      expect(en?.[1]).toBe('<span class="refresh-short">Since 15:45</span><span class="refresh-full">Under way since 15:45</span>');
+      const fr = sameDay(await html("/tenders/new?lang=fr"));
+      expect(nbsp(fr?.[1] ?? "")).toBe('<span class="refresh-short">Depuis 15:45</span><span class="refresh-full">En cours depuis 15:45</span>');
+      expect(fr?.[1]).not.toContain(EM_DASH);
+      // A free reader's page shows no same-day notice, so its timer has no stamp and counts down as before.
+      plan.value = "free";
+      const free = sameDay(await html("/tenders"));
+      expect(free?.[0]).not.toContain("data-data-at");
+      expect(free?.[1]).toBe("1h 45m");
+    } finally {
+      await SEARCH.prepare("DELETE FROM intraday_runs WHERE id LIKE 'timer-%'").run();
+    }
+  });
+});

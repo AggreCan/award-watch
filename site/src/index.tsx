@@ -42,6 +42,7 @@ import { tenderPage } from "./pages/tender";
 import { newTendersPage, tendersPage } from "./pages/tenders";
 import { watchlistPage } from "./pages/watchlist";
 import { llmsTxt, robotsTxt } from "./seo";
+import { refreshStampsRoute } from "./refresh";
 import { contractSitemap, sitemapFile } from "./sitemaps";
 import { proPage } from "./pages/pro";
 import { instrumentRoute, instrumentsCsv, instrumentsIndex } from "./pages/instruments";
@@ -226,6 +227,9 @@ app.get("/terms", termsPage);
 app.get("/privacy", privacyPage);
 app.get("/corrections", (c) => correctionsForm(c));
 app.post("/corrections", correctionsSubmit);
+// The data stamps the top bar's timers ask for while a run is under way
+// (src/refresh.tsx): public, a minute's cache, the pages' rate cap.
+app.get("/refresh.json", refreshStampsRoute);
 app.get("/robots.txt", robotsTxt);
 app.get("/llms.txt", llmsTxt);
 app.get("/:file{sitemap(?:-[0-9]+)?\\.xml}", sitemapFile);

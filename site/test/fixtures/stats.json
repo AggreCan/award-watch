@@ -126,14 +126,14 @@
    "detail": "open=3 new=1",
    "ok": 1,
    "rows_new": 1,
-   "run_at": "2026-10-31T00:41:12Z",
+   "run_at": "2026-10-31T12:41:12Z",
    "source": "tenders"
   },
   {
    "detail": "refused",
    "ok": 0,
    "rows_new": null,
-   "run_at": "2026-10-31T00:44:03Z",
+   "run_at": "2026-10-31T12:44:03Z",
    "source": "lobbying"
   }
  ],

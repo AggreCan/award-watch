@@ -108,10 +108,12 @@ describe("the top bar", () => {
     expect(lines(html)).toEqual([["Daily refresh", "20h 30m"], ["Sub-daily refresh", "1h 45m"]]);
     const bar = timers(html);
     expect(html.indexOf('<span class="asof">')).toBeLessThan(html.indexOf('<span class="refresh-timers"'));
-    expect(bar).toContain(`<a class="refresh" href="${SAME_DAY_HREF}" data-refresh-runs="${SAME_DAY_RUNS_UTC.join(" ")}" data-now="now">`);
+    // Each timer names its field of /refresh.json; the daily one carries the nightly's stamp
+    // (the fixture's newest run row), the sub-daily one none on a page without the same-day band.
+    expect(bar).toContain(`<a class="refresh" href="${SAME_DAY_HREF}" data-refresh-runs="${SAME_DAY_RUNS_UTC.join(" ")}" data-now="now" data-refresh-key="same_day">`);
     // The chip is the shared one (src/pro.tsx), after the label and the figure; its markup is held by test/pro-mark.test.ts.
     expect(bar).toContain('<span class="refresh-left">1h 45m</span></span> <span class="pro-tag">');
-    expect(bar).toContain('<span class="refresh" data-refresh-runs="12:30" data-now="now">');
+    expect(bar).toContain('<span class="refresh" data-refresh-runs="12:30" data-now="now" data-refresh-key="daily" data-data-at="2026-10-31T12:44:03Z">');
     // The script needs no label: the figure's forms only, no template with the words around it.
     expect(bar).toContain(`data-hm="${JSON.stringify(["", "h", "h ", "m", "m"]).replace(/"/g, "&quot;")}"`);
     expect(bar).not.toContain("data-in=");
@@ -157,7 +159,7 @@ describe("the top bar", () => {
     expect(css).toMatch(/\na\.refresh > \.pro-tag \{ margin-left: 0; \}/);
     expect(css).toMatch(/\n\.refresh-line \{ display: flex; flex-direction: column; align-items: flex-start; \}/);
     expect(css).toMatch(/\n\.refresh-label \{ font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0\.06em; text-transform: uppercase; color: var\(--muted\); \}/);
-    expect(css).toMatch(/\n\.refresh-left \{ font-size: 14px; line-height: 18px; font-weight: 600; color: var\(--ink\); font-variant-numeric: tabular-nums; \}/);
+    expect(css).toMatch(/\n\.refresh-left \{ font-size: 14px; line-height: 18px; font-weight: 600; color: var\(--ink\); font-variant-numeric: tabular-nums; white-space: nowrap; \}/);
     // A French label's short form from 1200 to 1439 px, the whole label from 1440.
     expect(css).toMatch(/\n\.refresh-full \{ display: none; \}\n@media \(min-width: 1440px\) \{\n  \.refresh-short \{ display: none; \}\n  \.refresh-full \{ display: inline; \}\n\}/);
   });

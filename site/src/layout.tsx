@@ -12,7 +12,7 @@ import { accountsEnabled } from "./account/switch";
 import { ProTag } from "./pro";
 import { clockOf } from "./closing";
 import { type TableUse, TableUseContext } from "./columns";
-import { RefreshTimers } from "./refresh";
+import { type RefreshStamps, RefreshTimers } from "./refresh";
 import { templatePieces } from "../public/refresh.js";
 
 // The formatting helpers live with the dictionary; pages import them from here.
@@ -242,8 +242,17 @@ const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, lang, tit
 // page() (the error handler) the rail shows its links bare. now is the
 // page's clock (clockOf), which the top bar's timers count from.
 // accountsOn: the accounts switch, for the top bar's same-day timer (refresh.tsx).
-export type Shell = { rail: RailCounts | null; here: string; account?: RailAccount; now?: number; accountsOn?: boolean };
+// stamps: the data the page was built from, for both timers (refresh.tsx).
+export type Shell = {
+  rail: RailCounts | null; here: string; account?: RailAccount; now?: number; accountsOn?: boolean; stamps?: RefreshStamps;
+};
 export const RailContext = createContext<Shell | null>(null);
+
+// The nightly's stamp from the rail's read of stats.json, and the last
+// same-day cut's when the page drew the band (pages/intraday.tsx).
+function pageStamps(c: Context<AppEnv>, rail: RailCounts | null): RefreshStamps {
+  return { daily: rail?.dataAt ?? null, same_day: c.get("sameDayAt") ?? null };
+}
 
 // A path and its query as one view: the language and the page number left
 // out (they show the same view), the other parameters in a fixed order.
@@ -426,7 +435,7 @@ const SortScript: FC<{ lang: Lang; tables: TableUse }> = ({ lang, tables }) =>
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 30;
+export const STYLES_VERSION = 31;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -478,7 +487,7 @@ export const Layout: FC<
           <TopbarSearch lang={lang} query={props.query} />
           <div class="topbar-meta">
             <span class="asof">{t(lang, "nav.data_date", { date: props.dataAsOf ?? t(lang, "common.na") })}</span>
-            <RefreshTimers lang={lang} now={shell?.now ?? Date.now()} on={shell?.accountsOn ?? false} />
+            <RefreshTimers lang={lang} now={shell?.now ?? Date.now()} on={shell?.accountsOn ?? false} stamps={shell?.stamps} />
             <a href={`?lang=${lang === "fr" ? "en" : "fr"}`} class="lang-toggle" rel="nofollow">
               {t(lang, "nav.lang")}
             </a>
@@ -554,7 +563,10 @@ export async function page(c: Context<AppEnv>, body: unknown, status = 200): Pro
     rail = null;
   }
   const url = new URL(c.req.url);
-  const shell: Shell = { rail, here: viewKey(`${url.pathname}${url.search}`), now: clockOf(c.env).now, accountsOn: accountsEnabled(c.env) };
+  const shell: Shell = {
+    rail, here: viewKey(`${url.pathname}${url.search}`), now: clockOf(c.env).now, accountsOn: accountsEnabled(c.env),
+    stamps: pageStamps(c, rail),
+  };
   c.header("Cache-Control", status === 200 ? "public, max-age=300" : "no-store");
   varyOnCookie(c);
   // Accounts: undefined while the switch is off, and nothing is read. A page
@@ -637,7 +649,10 @@ export async function publicPage(c: Context<AppEnv>, body: unknown, status = 200
     rail = null;
   }
   const url = new URL(c.req.url);
-  const shell: Shell = { rail, here: viewKey(`${url.pathname}${url.search}`), now: clockOf(c.env).now, accountsOn: accountsEnabled(c.env) };
+  const shell: Shell = {
+    rail, here: viewKey(`${url.pathname}${url.search}`), now: clockOf(c.env).now, accountsOn: accountsEnabled(c.env),
+    stamps: pageStamps(c, rail),
+  };
   // What railAccount gives a request with no session.
   if (shell.accountsOn) shell.account = { email: null, plan: null };
   c.header("Cache-Control", status === 200 ? `public, max-age=${maxAge}` : "no-store");

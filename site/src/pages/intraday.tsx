@@ -27,7 +27,7 @@ import { type Clock, closesAtUtc, closingText, closingTime, tenderState } from "
 import { DAY_RE, type ProvinceCounts, loadNewTenders, loadOpenFirst, provinceCounts, publishedReference } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, pick, t, tn, type Key, type Lang } from "../i18n";
-import { type IntradayView, loadIntraday, mergeIntraday } from "../intraday";
+import { type IntradayView, loadIntraday, loadLastCut, mergeIntraday } from "../intraday";
 import { Panel, StatusBadge } from "../layout";
 import { type PlaceQuery, placedIn } from "../places";
 import { allowsIntraday, requestPlan } from "../plan";
@@ -94,12 +94,17 @@ export async function sameDayView(
   const db = c.env.SEARCH;
   if (!db || !dataAsOf || !DAY_RE.test(dataAsOf)) return null;
   let rows;
+  let cut: string | null;
   try {
-    rows = await loadIntraday(db, dataAsOf);
+    [rows, cut] = await Promise.all([loadIntraday(db, dataAsOf), loadLastCut(db)]);
   } catch (e) {
     console.error(`intraday: query failed (${faultSummary(e)})`);
     return null;
   }
+  // The page now shows the cuts read up to this one, with or without rows:
+  // its stamp for the top bar's sub-daily timer (src/refresh.tsx), which
+  // page() hands to the shell. No other page carries one.
+  if (cut) c.set("sameDayAt", cut);
   if (!rows.length) return null;
   const [firstSeen, first] = await Promise.all([loadNewTenders(c.env, dataAsOf), loadOpenFirst(c.env)]);
   const merged = mergeIntraday([...(firstSeen ?? []), ...(first?.rows ?? [])], rows);

@@ -102,5 +102,8 @@ export interface Env {
 
 export type AppEnv = {
   Bindings: Env;
-  Variables: { lang: Lang };
+  // sameDayAt: the last same-day cut's time, set by the band (pages/intraday.tsx
+  // sameDayView) when a page shows the same-day notices; page() hands it to
+  // the top bar's sub-daily timer (src/refresh.tsx).
+  Variables: { lang: Lang; sameDayAt?: string };
 };

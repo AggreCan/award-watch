@@ -3505,6 +3505,18 @@ const STRINGS = {
     en: "No same-day notice read since this morning's refresh matches the province filter ({places}).",
     fr: "Aucun avis du jour lu depuis la mise à jour de ce matin ne correspond au filtre de province ({places}).",
   },
+
+  // -- the top bar's timers while a run is under way (src/refresh.tsx, public/refresh.js) --
+  // The figure under the label from a run's scheduled time until its data is
+  // in, the time on the visitor's clock; the label above says which run. The
+  // short form shows from 1200 to 1439 px, where the bar is tight, the whole
+  // one from 1440; neither wraps (the widths are in public/styles.css).
+  "refresh.since": { en: "Under way since {time}", fr: "En cours depuis {time}" },
+  "refresh.since_short": { en: "Since {time}", fr: "Depuis {time}" },
+  // The link after the timers once a run's data is in, since the page still
+  // shows the older data; the short form to 1599 px.
+  "refresh.reload": { en: "Reload for the new data", fr: "Recharger pour les nouvelles données" },
+  "refresh.reload_short": { en: "Reload", fr: "Recharger" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

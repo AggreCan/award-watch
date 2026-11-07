@@ -1417,6 +1417,24 @@ export interface RailCounts {
   // Whether the lobbying registry has been read: the footer names only the
   // sources that have.
   lobbyingLoaded?: boolean;
+  // Not a count: the nightly's stamp (dataStamp), for the top bar's daily
+  // timer, taken here because the shell reads stats.json through this call.
+  dataAt?: string;
+}
+
+// The nightly's stamp on stats.json: the newest time in its run log (the
+// stages' rows, which every run of the pipeline writes before the export
+// reads them), as "2026-11-07T13:02:11Z", or null when no row's time reads.
+// The run that wrote it began at a scheduled time before this instant, and
+// the file reaches the site only after it, so the top bar's daily timer
+// (src/refresh.tsx) reads a run as under way until a newer stamp is served.
+export function dataStamp(stats: Pick<Stats, "runs">): string | null {
+  let newest: number | null = null;
+  for (const r of stats.runs) {
+    const ms = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(r.run_at) ? Date.parse(r.run_at) : Number.NaN;
+    if (Number.isFinite(ms) && (newest === null || ms > newest)) newest = ms;
+  }
+  return newest === null ? null : `${new Date(newest).toISOString().slice(0, 19)}Z`;
 }
 
 // The open notices closing soon at the page's clock (src/closing.ts): counted
@@ -1457,6 +1475,7 @@ export async function loadRail(env: Env): Promise<RailCounts | null> {
     organizations: counts.organizations,
     buyers: counts.buyers,
     lobbyingLoaded: sourceLoaded("lobbying", null, stats) === true,
+    dataAt: dataStamp(stats) ?? undefined,
   };
 }
 

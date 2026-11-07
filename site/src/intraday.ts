@@ -102,6 +102,26 @@ export async function loadIntraday(db: D1Database, dataAsOf: string): Promise<In
   });
 }
 
+// The last cut's time: when the newest run of the intraday workflow that
+// went through ended (intraday_runs.at, UTC with seconds and a Z), the
+// stamp of the same-day data a page shows (the sub-daily timer in
+// src/refresh.tsx). Constant, nothing bound; a run that failed is left out,
+// since its notices are not in.
+export const LAST_CUT_SQL = "SELECT MAX(at) AS at FROM intraday_runs WHERE ok = 1";
+
+// The stamp, or null for none, one that does not read, or a fault: a timer
+// without it counts down as it did before stamps, so a fault is not logged
+// on every request that asks.
+export async function loadLastCut(db: D1Database): Promise<string | null> {
+  try {
+    const row = await db.prepare(LAST_CUT_SQL).first<Record<string, unknown>>();
+    const at = row?.at;
+    return typeof at === "string" && SEEN_RE.test(at) ? at : null;
+  } catch {
+    return null;
+  }
+}
+
 // The band's rows: each notice at the newest version read, set against the
 // list the nightly published (open). A reference that list does not hold is
 // new; one it holds at a lower amendment is amended, and its version here
