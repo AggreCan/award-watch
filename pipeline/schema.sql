@@ -229,6 +229,10 @@ CREATE TABLE IF NOT EXISTS tenders (
   contact_phone TEXT,
   description_en TEXT,
   description_fr TEXT,
+  attachments TEXT,                              -- JSON list of the notice's document URLs (attachment-piecesJointes,
+                                                 -- the English column then the French, each URL once in file order,
+                                                 -- 50 at most); only https links to canada.ca, *.canada.ca or *.gc.ca
+                                                 -- are kept, the rest counted in the run log; NULL when none
   source_file TEXT NOT NULL,                     -- the file the row was last read from
   first_seen TEXT NOT NULL,                      -- run date the version first appeared
   last_seen TEXT NOT NULL,                       -- run date the version was last present in a file

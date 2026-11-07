@@ -59,6 +59,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
             "methodology.src_contracts", "methodology.src_grants", "methodology.src_lobbying", "methodology.src_registry",
           ]} />
           <p>{tj(lang, "methodology.sources_more", { data: <a href="/data#sources">{t(lang, "nav.data")}</a> })}</p>
+          <p>{t(lang, "methodology.tender_documents")}</p>
 
           <h2 id="organizations">{t(lang, "methodology.toc_organizations")}</h2>
           <p>{t(lang, "methodology.org_text")}</p>

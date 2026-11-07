@@ -1031,6 +1031,10 @@ td.c-type .type-name { display: block; }
 td.c-type abbr.type-name { text-decoration: none; }
 td.c-type .type-method { display: block; font-size: 12px; line-height: 16px; color: var(--muted); }
 .countdown.countdown-far { font-weight: 400; color: var(--ink-2); }
+/* A tender notice's documents (pages/tender.tsx): one link a line, a long file
+   name broken anywhere so the panel never scrolls sideways on a phone. */
+ul.documents li { margin: 0 0 4px; overflow-wrap: anywhere; }
+ul.documents li:last-child { margin-bottom: 0; }
 @media (min-width: 700px) and (max-width: 1279px) {
   .md-only { display: block; }
 }

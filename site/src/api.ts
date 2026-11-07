@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { BUYER_ID_RE, SEGMENT_RE, assetResponse, loadAlias, loadBuyerAlias, loadProfile, loadTender } from "./data";
+import { BUYER_ID_RE, SEGMENT_RE, assetResponse, loadAlias, loadBuyerAlias, loadProfile, loadTender, tenderAttachments } from "./data";
 import { SEGMENTS } from "./constants";
 import type { AppEnv } from "./env";
 import { SITE_ORIGIN } from "./seo";
@@ -40,10 +40,14 @@ export function withoutContacts<T extends object>(record: T): Partial<T> {
   return Object.fromEntries(Object.entries(record).filter(([k]) => !k.startsWith("contact"))) as Partial<T>;
 }
 
-// References match in any case, as on the notice pages.
+// References match in any case, as on the notice pages. The documents are
+// the ones the page links, each checked the same way (data.tenderAttachments).
 api.get("/tenders/:reference", async (c) => {
   const tender = await loadTender(c.env, c.req.param("reference") ?? "");
-  return tender ? c.json(withoutContacts(tender)) : c.json({ error: "not found" }, 404);
+  if (!tender) return c.json({ error: "not found" }, 404);
+  const out: Record<string, unknown> = withoutContacts(tender);
+  if ("attachments" in tender) out.attachments = tenderAttachments(tender);
+  return c.json(out);
 });
 
 // A buyer id the pipeline retired (merged into another: a former name, a

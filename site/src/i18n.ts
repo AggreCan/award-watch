@@ -3293,6 +3293,27 @@ const STRINGS = {
   "plans.pro_briefing": { en: "Weekly briefing by email", fr: "Bulletin hebdomadaire par courriel" },
   "plans.pro_org": { en: "Your organization's page", fr: "La page de votre organisation" },
   "plans.pro_bugs": { en: "Bug report form", fr: "Formulaire de signalement de bogue" },
+  // -- a tender notice's documents (src/pages/tender.tsx): the links the
+  // CanadaBuys file names for the notice, the hosts they are on, and the line
+  // beside them saying when the notice closes. The time left is the lists'
+  // figure (closing.ts closesLine, countdownText) in words that open a line.
+  "tender.documents": { en: "Documents", fr: "Documents" },
+  "tender.documents_one": { en: "{n} document", fr: "{n} document" },
+  "tender.documents_many": { en: "{n} documents", fr: "{n} documents" },
+  "tender.documents_on": { en: "On {hosts}", fr: "Sur {hosts}" },
+  "tender.documents_canadabuys": { en: "CanadaBuys", fr: "AchatsCanada" },
+  "tender.documents_none": { en: "The documents are on {notice}.", fr: "Les documents se trouvent dans {notice}." },
+  "tender.documents_none_link": { en: "the CanadaBuys notice", fr: "l'avis publié sur AchatsCanada" },
+  "tender.closes_in_min": { en: "Closes in {m} min", fr: "Clôture dans {m} min" },
+  "tender.closes_in_hm": { en: "Closes in {h} h {m} min", fr: "Clôture dans {h} h {m} min" },
+  "tender.closes_in_day": { en: "Closes in 1 day", fr: "Clôture dans 1 jour" },
+  "tender.closes_in_days": { en: "Closes in {n} days", fr: "Clôture dans {n} jours" },
+  "tender.closes_today_at": { en: "Closes today at {time}", fr: "Clôture aujourd'hui à {time}" },
+  "tender.closes_today": { en: "Closes today", fr: "Clôture aujourd'hui" },
+  "methodology.tender_documents": {
+    en: "A tender notice's page lists the documents the CanadaBuys data file names for the notice, as links to where CanadaBuys or another Government of Canada site keeps them. A link to any other site is left out. The page links each file and does not copy it; an amendment can add or replace documents, and the notice on CanadaBuys is the record.",
+    fr: "La page d'un avis d'appel d'offres énumère les documents que le fichier de données d'AchatsCanada nomme pour l'avis, sous forme de liens vers l'endroit où AchatsCanada ou un autre site du gouvernement du Canada les conserve. Un lien vers tout autre site est écarté. La page renvoie à chaque fichier sans le copier; une modification peut ajouter ou remplacer des documents, et l'avis sur AchatsCanada fait foi.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;
@@ -3327,6 +3348,10 @@ export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "citepage.style.bibtex",
   "citepage.style.ris",
   "col.type",
+  // A tender notice's documents: the same word in both languages.
+  "tender.documents",
+  "tender.documents_one",
+  "tender.documents_many",
 ]);
 
 export function allKeys(): Key[] {

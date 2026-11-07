@@ -34,7 +34,10 @@ change there. Output tree (under data/out/static):
                                 carrying a code in it and its name as the notices give it (the segment
                                 pages' levels and the tender list's code filter read it)
   tenders/new/<day>.json        the notices first seen on each of the last 30 days
-  tenders/<abc>.json            every notice in the database, detail form, sharded on the reference
+  tenders/<abc>.json            every notice in the database, detail form, sharded on the reference; a notice
+                                that names documents carries attachments [{url, name}] (tender_attachments: the
+                                newest version's links, https on a Government of Canada host, 50 at most; name is
+                                the last segment of the URL's path, percent-decoded); one with none has no such key
   contracts/<abc>.json          award notices and contract history records, detail form, same sharding,
                                 keyed "award:<reference>" and "history:<reference>"
   awards/recent.json            the 500 most recently published award notices whose award date is not after
@@ -168,6 +171,7 @@ from collections.abc import Callable, Collection, Iterable, Sequence
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 from xml.sax.saxutils import escape
 
 from . import config, directory, expiring, indicators, organizations, sosa_export, value_checks
@@ -177,6 +181,7 @@ from .feeds import write_feeds
 from .normalize import closing_day, tender_status_on
 from .sources import buyers as buyer_rules
 from .sources.buyers import public_spelling
+from .sources.canadabuys_rows import ATTACHMENTS_MAX, government_url
 from .sources.sosa import stem as sosa_stem
 
 log = logging.getLogger(__name__)
@@ -1167,9 +1172,30 @@ _TENDER_LISTS = ("trade_agreements_en", "trade_agreements_fr", "regions_opportun
                  "regions_delivery_en", "regions_delivery_fr", "end_users_en", "end_users_fr")
 
 
+def attachment_name(url: str) -> str:
+    """A document's name as the page shows it: the last segment of the URL's path, percent-decoded
+    ("w8703-270117-rfp-demo-kit%2C-bangalore-torpedo-en.pdf" reads with its comma); the host when the path
+    names none."""
+    parts = urlsplit(url)
+    name = unquote(parts.path.rstrip("/").rsplit("/", 1)[-1]).strip()
+    return name or parts.hostname or url
+
+
+def tender_attachments(versions: Sequence[sqlite3.Row]) -> list[dict]:
+    """The notice's documents as {url, name}: the links of the newest version that names any (a version read
+    before the column existed, or whose row left the cell blank, does not hide its predecessor's), each
+    checked again with the loader's rule so no other host reaches a page, ATTACHMENTS_MAX at most."""
+    for v in reversed(versions):
+        urls = [u for raw in _list(v["attachments"]) or [] if (u := government_url(raw))]
+        if urls:
+            return [{"url": u, "name": attachment_name(u)} for u in dict.fromkeys(urls)][:ATTACHMENTS_MAX]
+    return []
+
+
 def tender_detail(m: Model, ref: str, versions: list[sqlite3.Row], codes: list[str],
                   related: dict[str, list[dict]]) -> dict:
-    """A notice as it stands (its newest amendment) with its versions. The contact columns are never read.
+    """A notice as it stands (its newest amendment) with its versions and its documents. The contact columns
+    are never read.
 
     status is the notice's status on the data date and source_status the one
     its file states; each version in amendments keeps the status stored for it.
@@ -1195,6 +1221,9 @@ def tender_detail(m: Model, ref: str, versions: list[sqlite3.Row], codes: list[s
     })
     if ref != v["reference"]:
         d["reference_published"] = v["reference"]
+    documents = tender_attachments(versions)
+    if documents:
+        d["attachments"] = documents
     return d
 
 

@@ -9,7 +9,7 @@ import { METHOD_SHORT, MONEY_SOURCES, NOTICE_TYPE_SHORT, type MoneySource } from
 import { type AwardRow, type OrgTotal, type TenderRow, type YearFigure, publishedReference } from "../data";
 import { buyerPath } from "../crosslinks";
 import { fmtInt, fmtMoney, fmtPct, pick, provinceName, segmentLabel, segmentShort, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
-import { type Clock, closesAtUtc, closingText, closingTime, countdownLine, tenderState } from "../closing";
+import { type Clock, closesAtUtc, closesLineWords, closingText, closingTime, countdownLine, tenderState } from "../closing";
 import { ClientData, CompetitiveFlag, StatusBadge } from "../layout";
 
 // -- links to the record ---------------------------------------------------------
@@ -465,16 +465,18 @@ export const TenderTable: FC<{
 
 // The countdown under each closing-soon time (public/countdown.js) and the
 // words it writes, once per page that shows one. Without the script the
-// server's chip stands.
+// server's chip stands. line: the page also has the line beside a notice's
+// documents (closing.ts closesLine), which opens with its own words.
 export const COUNTDOWN_KEYS: readonly Key[] = [
   "countdown.in_min", "countdown.in_hm", "countdown.in_day", "countdown.in_days", "countdown.today_at", "status.closed",
 ];
 
-export const CountdownScript: FC<{ lang: Lang }> = ({ lang }) => (
+export const CountdownScript: FC<{ lang: Lang; line?: boolean }> = ({ lang, line }) => (
   <>
     <ClientData id="countdown-i18n" data={{
       locale: lang === "fr" ? "fr-CA" : "en-CA",
       words: Object.fromEntries(COUNTDOWN_KEYS.map((k) => [k.replace(/^countdown\./, ""), t(lang, k)])),
+      ...(line ? { line: closesLineWords(lang) } : {}),
     }} />
     <script type="module" src="/countdown.js"></script>
   </>

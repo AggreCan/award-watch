@@ -111,3 +111,35 @@ export function countdownLine(closing: string | null | undefined, clock: Clock, 
 export function closingHasZone(closing: string | null | undefined): boolean {
   return !!closingParts(closing)?.zone;
 }
+
+// The words of the line beside a notice's documents: countdownText's, opening
+// a line ("Closes in 2 days"). public/countdown.js gets them as the "line"
+// set of its JSON block, for the element marked data-words="line".
+export function closesLineWords(lang: Lang): { in_min: string; in_hm: string; in_day: string; in_days: string; today_at: string } {
+  return {
+    in_min: t(lang, "tender.closes_in_min"), in_hm: t(lang, "tender.closes_in_hm"), in_day: t(lang, "tender.closes_in_day"),
+    in_days: t(lang, "tender.closes_in_days"), today_at: t(lang, "tender.closes_today_at"),
+  };
+}
+
+// The line beside a notice's documents (pages/tender.tsx), at the page's
+// clock: the time left as the lists write it (the same countdownText, so the
+// figure is theirs: whole days from 24 hours out, the time on the closing
+// day, hours and minutes in the last hours), "Closing date passed" once the
+// closing has passed, and for a closing with a date and no time "Closes
+// <date>", or "Closes today" on that Eastern date. Null without a closing,
+// or for a notice no longer open whose closing is still ahead (cancelled,
+// awarded): its status says it. An amended closing is the newest version's,
+// so it moves the line.
+export function closesLine(status: string, closing: string | null | undefined, clock: Clock, lang: Lang): string | null {
+  if (!closing) return null;
+  if (closingPassed(closing, clock)) return t(lang, "status.closed");
+  const state = tenderState(status, closing, clock);
+  if (state !== "open" && state !== "closing") return null;
+  const at = closingInstant(closing);
+  if (at === null) {
+    const day = closingParts(closing)?.day;
+    return day === clock.today ? t(lang, "tender.closes_today") : t(lang, "tender.lead_closes", { date: closingText(closing, lang) });
+  }
+  return countdownText(at, clock.now, closingTime(closing, lang) ?? "", closesLineWords(lang)) ?? t(lang, "status.closed");
+}

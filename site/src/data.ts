@@ -330,6 +330,72 @@ export interface TenderDetail {
   codes: CodeRow[];
   amendments: TenderVersion[];
   related_awards: RelatedAward[];
+  // The documents the CanadaBuys file names for the notice (export_static.tender_attachments).
+  // Absent from a file exported before the field, and from a notice with none:
+  // read it through tenderAttachments, which checks each one.
+  attachments?: unknown;
+}
+
+// A tender notice's document: its link and the file name the page shows.
+export interface Attachment {
+  url: string;
+  name: string;
+}
+
+export const ATTACHMENTS_MAX = 50;
+// Hosts a document may be linked on: canada.ca and its subdomains, and the
+// gc.ca subdomains (Shared Services Canada's buying portal is one). The
+// pipeline keeps only these (canadabuys_rows.government_url); the page checks
+// again so a link to any other host never renders, whatever a file holds.
+const GOV_HOST = /^(?:(?:[a-z0-9-]+\.)*canada\.ca|(?:[a-z0-9-]+\.)+gc\.ca)$/;
+
+// A document link as the page may show it, or null: https on a Government of
+// Canada host, no user name, password or other port, and no "@" anywhere, so
+// no address reaches the page through a link.
+export function documentUrl(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length > 2000 || /@|%40|\s/i.test(raw)) return null;
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" || u.username || u.password || (u.port !== "" && u.port !== "443")) return null;
+  return GOV_HOST.test(u.hostname) ? u.href : null;
+}
+
+// The name a document shows when its file gives none: the last segment of
+// its path, decoded, else the host.
+function documentName(url: string): string {
+  const u = new URL(url);
+  const last = u.pathname.replace(/\/+$/, "").split("/").pop() ?? "";
+  let name = last;
+  try {
+    name = decodeURIComponent(last);
+  } catch {
+    // A malformed escape: the segment as written.
+  }
+  return name.trim() || u.hostname;
+}
+
+// A notice's documents, each link checked, each URL once, ATTACHMENTS_MAX at
+// most. A detail file from before the field, or one whose field does not
+// read, gives none: the page then points at the CanadaBuys notice.
+export function tenderAttachments(d: TenderDetail): Attachment[] {
+  const list = d.attachments;
+  if (!Array.isArray(list)) return [];
+  const out: Attachment[] = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    if (!isObj(item)) continue;
+    const url = documentUrl(item.url);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const name = typeof item.name === "string" && item.name.trim() ? item.name.trim() : documentName(url);
+    out.push({ url, name });
+    if (out.length >= ATTACHMENTS_MAX) break;
+  }
+  return out;
 }
 
 export interface ContractVersion {

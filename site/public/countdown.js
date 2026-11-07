@@ -14,6 +14,11 @@
    public/tenders.js draws its own rows and its detail panel with the same
    marks and sends "aw:rows" after each draw, so they are read at once.
 
+   A notice page's Documents panel opens with a line of its own (closing.ts
+   closesLine), marked data-words="line": the same figure in the words of the
+   block's "line" set ("Closes in 3 h 12 min"), and when the time comes the
+   line reads "Closing date passed" instead of going.
+
    The words come from the page's JSON block (id "countdown-i18n"), so the
    script holds no copy of its own in either language. */
 import { countdownText } from "./closing.js";
@@ -21,14 +26,22 @@ import { countdownText } from "./closing.js";
 let data = {};
 try { data = JSON.parse(document.getElementById("countdown-i18n").textContent) || {}; } catch (e) { data = {}; }
 const words = data.words || {};
+const lineWords = data.line || words;
 let number = null;
 try { number = new Intl.NumberFormat(data.locale || "en-CA"); } catch (e) { number = null; }
 const closed = new Set();
 
+function isLine(host) {
+  return host.getAttribute("data-words") === "line";
+}
+
 function closeNotice(ref, host) {
   host.removeAttribute("data-closes");
   const line = host.querySelector(".countdown");
-  if (line) line.remove();
+  if (line && isLine(host) && words["status.closed"]) {
+    line.className = "countdown countdown-far";
+    line.textContent = words["status.closed"];
+  } else if (line) line.remove();
   if (!ref) return;
   for (const chip of document.querySelectorAll(".badge[data-notice]")) {
     if (chip.getAttribute("data-notice") !== ref) continue;
@@ -53,7 +66,7 @@ function tick() {
   for (const host of document.querySelectorAll("[data-closes]")) {
     const at = Date.parse(host.getAttribute("data-closes") || "");
     if (!Number.isFinite(at)) continue;
-    const text = countdownText(at, now, host.getAttribute("data-time") || "", words);
+    const text = countdownText(at, now, host.getAttribute("data-time") || "", isLine(host) ? lineWords : words);
     if (text === null) {
       closeNotice(host.getAttribute("data-notice") || "", host);
       continue;

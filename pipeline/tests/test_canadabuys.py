@@ -223,6 +223,93 @@ def test_history_rows_keep_the_client_and_resolve_it_from_the_english_list(conn,
     assert first["buyer_raw_fr"] == "Ministère des Travaux publics et des Services gouvernementaux (SPAC)"
 
 
+# -- a tender's documents ------------------------------------------------------
+
+CB = "https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/"
+# Kept apart so no address-shaped text sits in this file (site/test/hardening-rulings.test.ts reads it).
+AT = "@"
+
+
+def attachments_of(conn, reference):
+    raw = conn.execute("SELECT attachments FROM tenders WHERE reference = ?", (reference,)).fetchone()[0]
+    return None if raw is None else json.loads(raw)
+
+
+def test_a_tenders_documents_come_from_the_attachment_columns_english_then_french(conn, fixtures):
+    columns = canadabuys.COLUMNS["tenders"]
+    assert (columns["attachments_en"], columns["attachments_fr"]) == \
+        ("attachment-piecesJointes-eng", "attachment-piecesJointes-fra")
+    stats = canadabuys.load_file(conn, "tenders", fixtures / FILES["tenders"], "new.csv", now=DAY1)
+    assert stats.missing == [] and stats.attachments_dropped == 0
+    assert attachments_of(conn, "cb-418-22395949") == [f"{CB}111694/30008545_npp.pdf", f"{CB}111694/30008545_apm_.pdf"]
+    # The same file in both columns is kept once.
+    assert attachments_of(conn, "cb-694-71129009") == [f"{CB}111623/w2294-26-aa005---npp.pdf"]
+    # Several to a cell, split at the commas between links; a comma inside a name is written %2C and stays.
+    heron = attachments_of(conn, "cb-713-39227575")
+    assert len(heron) == 4 and heron[0] == f"{CB}111738/bch2026-11-heron-structural-engineering-rfp-v1.0.pdf"
+    assert heron[1].endswith("schedule-10%2C-exhibit-1-en-v1.0%2867309913.1.xlsx")
+    assert heron[3] == f"{CB}111738/bch2026-11-heron-genie-structures-ddp-v1.0.pdf"
+    # Another Government of Canada host (Shared Services Canada's portal) is kept.
+    ssc = attachments_of(conn, "SSC-26-00035342:T")
+    assert ssc and all(u.startswith("https://sscp2pspc.ssc-spc.gc.ca/") for u in ssc)
+    # A notice that names none stores NULL.
+    assert attachments_of(conn, "cb-504-3988252") is None
+
+
+def test_document_links_off_government_hosts_are_dropped_and_counted(conn, fixtures, tmp_path):
+    header, rows = read_csv(fixtures / FILES["tenders"])
+    row = dict(rows[0], **{
+        "attachment-piecesJointes-eng": ",".join([
+            f"{CB}1/a.pdf",
+            "http://canadabuys.canada.ca/plain-http.pdf",            # not https
+            "https://example.com/elsewhere.pdf",                     # another host
+            "https://canadabuys.canada.ca.example.com/lookalike.pdf",
+            "https://notgc.ca/lookalike.pdf",
+            f"https://someone{AT}canadabuys.canada.ca/userinfo.pdf",  # a user name in the link
+            "https://canadabuys.canada.ca:8443/port.pdf",
+            "mailto:officer@example.invalid",                        # an address, never a document
+            "https://canadabuys.canada.ca/files/officer%40example.invalid.pdf",
+            "https://canada.ca/en/b.pdf",
+            "https://www.tpsgc-pwgsc.gc.ca/c.pdf",
+        ]),
+        "attachment-piecesJointes-fra": f"*{CB}1/a.pdf\n*https://achatscanada.canada.ca/d.pdf",
+    })
+    stats = canadabuys.load_file(conn, "tenders", write_csv(tmp_path / "t.csv", header, [row]), "open.csv", now=DAY1)
+    assert stats.attachments_dropped == 8
+    assert attachments_of(conn, row["referenceNumber-numeroReference"]) == [
+        f"{CB}1/a.pdf", "https://canada.ca/en/b.pdf", "https://www.tpsgc-pwgsc.gc.ca/c.pdf",
+        "https://achatscanada.canada.ca/d.pdf",
+    ]
+    # The count goes to the stage's log row; the links refused are stored nowhere.
+    stage = canadabuys.StageStats("tenders", attachments_dropped=stats.attachments_dropped)
+    assert "attachments_dropped=8" in stage.detail()
+    text = "\n".join(str(v) for r in conn.execute("SELECT * FROM tenders") for v in tuple(r))
+    assert "example.com" not in text and "officer" not in text and "8443" not in text
+
+
+def test_a_notices_documents_are_deduplicated_and_capped(conn, fixtures, tmp_path):
+    header, rows = read_csv(fixtures / FILES["tenders"])
+    english = [f"{CB}9/en-{i:02d}.pdf" for i in range(40)]
+    french = [f"{CB}9/fr-{i:02d}.pdf" for i in range(20)]
+    row = dict(rows[0], **{
+        "attachment-piecesJointes-eng": ",".join(english + english[:5]),
+        "attachment-piecesJointes-fra": ",".join(english[:3] + french),
+    })
+    canadabuys.load_file(conn, "tenders", write_csv(tmp_path / "t.csv", header, [row]), "open.csv", now=DAY1)
+    kept = attachments_of(conn, row["referenceNumber-numeroReference"])
+    assert kept == (english + french)[:50] and len(set(kept)) == 50
+
+
+def test_a_file_without_the_attachment_columns_loads_and_says_so(conn, fixtures, tmp_path):
+    header, rows = read_csv(fixtures / FILES["tenders"])
+    drop = {"attachment-piecesJointes-eng", "attachment-piecesJointes-fra"}
+    trimmed = [h for h in header if h not in drop]
+    path = write_csv(tmp_path / "t.csv", trimmed, [{h: r[h] for h in trimmed} for r in rows])
+    stats = canadabuys.load_file(conn, "tenders", path, "open.csv", now=DAY1)
+    assert stats.rows == len(rows) and stats.missing == ["attachments_en", "attachments_fr"]
+    assert conn.execute("SELECT COUNT(*) FROM tenders WHERE attachments IS NOT NULL").fetchone()[0] == 0
+
+
 def test_a_file_without_its_key_columns_is_refused(conn, tmp_path):
     path = tmp_path / "x.csv"
     path.write_text('"title-titre-eng","something"\n"a","b"\n', encoding="utf-8")

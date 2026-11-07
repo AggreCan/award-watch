@@ -41,7 +41,10 @@ log. UNSPSC codes go to the *_codes tables and unspsc_codes
 (trimmed to their significant digits: 81110000 is the family 8111), GSIN
 codes to gsin_codes, and the delivery regions to provinces through
 normalize.region_provinces. Descriptions are cut at 600 characters. Contacts
-are stored for the operator and never exported.
+are stored for the operator and never exported. A tender's documents are
+stored as the links the file names that point at a Government of Canada host
+(canadabuys_rows.attachments); the others are counted in the log row
+(attachments_dropped) and dropped.
 
 Tender status comes from the file. After the open file is read, an open
 tender absent from it whose closing has passed becomes expired; the weekly
@@ -214,6 +217,8 @@ class FileStats:
     excluded: int = 0
     skipped: int = 0
     redacted: int = 0  # withheld names replaced in titles and descriptions
+    # Document links refused for pointing off the Government of Canada's hosts (canadabuys_rows.government_url).
+    attachments_dropped: int = 0
     missing: list[str] = field(default_factory=list)
     # Rows per buyer spelling (English, French) that resolved to no buyer.
     unbought: Counter = field(default_factory=Counter)
@@ -238,6 +243,7 @@ class _Context:
     gsin: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
     sql: dict[tuple, str] = field(default_factory=dict)
     unbought: Counter = field(default_factory=Counter)
+    attachments_dropped: int = 0
 
     def buyer(self, en: object, fr: object) -> str | None:
         key = (squash(en), squash(fr))
@@ -261,6 +267,10 @@ def _common(ctx: _Context, get: Callable[[str], str]) -> tuple[dict[str, object]
 
 def _tender(ctx: _Context, get: Callable[[str], str], rec: dict[str, object]) -> None:
     rec.update(canadabuys_rows.tender_fields(get, ctx.buyer(get("buyer_en"), get("buyer_fr"))))
+    # The documents the notice names; a link off the Government of Canada's hosts is counted, never stored.
+    urls, dropped = canadabuys_rows.attachments(get)
+    rec["attachments"] = _json(urls)
+    ctx.attachments_dropped += dropped
 
 
 def _supplier(get: Callable[[str], str]) -> tuple[str | None, tuple[str, str, str, str], str | None]:
@@ -510,6 +520,7 @@ def load_file(conn: sqlite3.Connection, stage: str, path: Path, source_file: str
     _flush_codes(ctx)
     conn.commit()
     stats.unbought = ctx.unbought
+    stats.attachments_dropped = ctx.attachments_dropped
     return stats
 
 
@@ -608,6 +619,7 @@ class StageStats:
     skipped: int = 0
     expired: int = 0
     redacted: int = 0
+    attachments_dropped: int = 0
     notices: list[str] = field(default_factory=list)
 
     def detail(self) -> str:
@@ -616,7 +628,7 @@ class StageStats:
             parts.append(f"unchanged={','.join(self.unchanged)}")
         parts.append(f"rows={self.rows} new={self.new} withheld={self.excluded} skipped={self.skipped}")
         if self.stage == "tenders":
-            parts.append(f"expired={self.expired}")
+            parts.append(f"expired={self.expired} attachments_dropped={self.attachments_dropped}")
         else:
             parts.append(f"redacted={self.redacted}")
         return " ".join(parts)
@@ -699,6 +711,7 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, stage: str, *, no
         stats.excluded += fs.excluded
         stats.skipped += fs.skipped
         stats.redacted += fs.redacted
+        stats.attachments_dropped += fs.attachments_dropped
         unbought.update(fs.unbought)
         if fs.missing:
             stats.notices.append(f"{f.name} lacks {', '.join(fs.missing)}")

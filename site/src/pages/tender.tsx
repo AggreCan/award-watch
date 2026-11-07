@@ -1,18 +1,20 @@
 // /tenders/:reference: one notice as it stands (its newest amendment), its
-// amendment history, its codes and the award notices that name the same
-// solicitation. The government contact on a notice is never shown here, even
-// if a file carried it: the CanadaBuys notice page is the place for it, and
-// the page links there.
+// documents, its amendment history, its codes and the award notices that name
+// the same solicitation. The government contact on a notice is never shown
+// here, even if a file carried it: the CanadaBuys notice page is the place for
+// it, and the page links there.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { WatchControl, watchControl } from "../account/watch_pages";
 import { Table } from "../columns";
-import { REFERENCE_RE, loadOpenFirst, loadStats, loadTender, publishedReference, type TenderDetail } from "../data";
+import {
+  REFERENCE_RE, loadOpenFirst, loadStats, loadTender, publishedReference, tenderAttachments, type Attachment, type TenderDetail,
+} from "../data";
 import { buyerPath } from "../crosslinks";
 import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, segmentLabel, t, tj, tn, type Key, type Lang } from "../i18n";
-import { clockOf, closesAtUtc, closingTime, tenderState } from "../closing";
+import { clockOf, closesAtUtc, closesLine, closingTime, tenderState, type Clock } from "../closing";
 import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { EarlierAwards, loadEarlierAwards } from "./backbone";
 import { closingStart } from "../calendar";
@@ -47,6 +49,49 @@ function lines(items: readonly string[]): unknown {
   return items.length ? <ul class="plain">{items.map((s) => <li>{s}</li>)}</ul> : null;
 }
 
+// Where a notice's documents are kept, as the panel's foot names it: CanadaBuys
+// by its name in the page language, any other host as written.
+function documentHost(lang: Lang, url: string): string {
+  const host = new URL(url).hostname;
+  return host === "canadabuys.canada.ca" || host === "achatscanada.canada.ca" ? t(lang, "tender.documents_canadabuys") : host;
+}
+
+// The notice's documents, under the key facts: each file the CanadaBuys data
+// names for it, linked where the government keeps it, and first the line that
+// says when the notice closes (closing.ts closesLine, the lists' figure). While
+// the notice closes soon the line carries the closing instant, so
+// public/countdown.js keeps it current as it does the time under Key Dates.
+// A notice with no documents in the file, or a detail file from before the
+// field, points at the notice on CanadaBuys, which has them.
+const DocumentsPanel: FC<{
+  lang: Lang; d: TenderDetail; documents: readonly Attachment[]; clock: Clock; closes: string | null; notice: string | undefined;
+  noticeUrl: string;
+}> = ({ lang, d, documents, clock, closes, notice, noticeUrl }) => {
+  const line = closesLine(d.status, d.closing, clock, lang);
+  // Amber within the closing-soon window, as the lists mark it; a day count further out, or a date passed, plain.
+  const soon = tenderState(d.status, d.closing, clock) === "closing";
+  const hosts = [...new Set(documents.map((a) => documentHost(lang, a.url)))];
+  return (
+    <Panel title={t(lang, "tender.documents")} class="tender-documents"
+      count={documents.length ? tn(lang, "tender.documents_one", "tender.documents_many", documents.length, { n: fmtInt(documents.length, lang) }) : undefined}
+      foot={documents.length ? t(lang, "tender.documents_on", { hosts: hosts.join(", ") }) : undefined}>
+      {line ? (
+        <p class="documents-closing" data-closes={closes ?? undefined} data-time={closes ? closingTime(d.closing, lang) ?? undefined : undefined}
+          data-notice={closes ? notice : undefined} data-words={closes ? "line" : undefined}>
+          <span class={soon ? "countdown" : "countdown countdown-far"}>{line}</span>
+        </p>
+      ) : null}
+      {documents.length ? (
+        <ul class="plain documents">
+          {documents.map((a) => <li><a href={a.url} rel="nofollow noopener">{a.name}</a></li>)}
+        </ul>
+      ) : (
+        <p>{tj(lang, "tender.documents_none", { notice: <a href={noticeUrl} rel="noopener">{t(lang, "tender.documents_none_link")}</a> })}</p>
+      )}
+    </Panel>
+  );
+};
+
 export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const raw = c.req.param("reference") ?? "";
@@ -70,6 +115,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
     <> · <a href={tenderIcsPath(d.reference, lang)} class="small" rel="nofollow">{t(lang, "cal.add")}</a></>
   ) : null;
   const shownRef = publishedReference(d);
+  const noticeUrl = tenderNoticeUrl(shownRef, lang);
   const title = pick(lang, d.title_en, d.title_fr) ?? shownRef;
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: shownRef }];
   const description = pick(lang, d.description_en, d.description_fr);
@@ -104,7 +150,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
             categories || null,
           ].filter((x) => x !== null).map((x, i) => <>{i > 0 ? " · " : null}{x}</>)}
         </>}
-        actions={<a href={tenderNoticeUrl(shownRef, lang)} class="btn btn-primary" rel="noopener">{t(lang, "tender.on_canadabuys")}</a>}>
+        actions={<a href={noticeUrl} class="btn btn-primary" rel="noopener">{t(lang, "tender.on_canadabuys")}</a>}>
         <p class="page-note">
           <span class="mono">{shownRef}</span>
           {d.amendment > 0 ? ` · ${t(lang, "tender.amendment_n", { n: d.amendment })}` : null}
@@ -148,6 +194,8 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
           </dl>
         </Panel>
       </div>
+
+      <DocumentsPanel lang={lang} d={d} documents={tenderAttachments(d)} clock={clock} closes={closes} notice={notice} noticeUrl={noticeUrl} />
 
       {description_}
 
@@ -262,7 +310,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         })}{" "}
         {tn(lang, "tender.versions_one", "tender.versions_many", versions.length, { n: fmtInt(versions.length, lang) })}
       </p>
-      {closes ? <CountdownScript lang={lang} /> : null}
+      {closes ? <CountdownScript lang={lang} line /> : null}
     </Layout>,
   );
 }

@@ -160,7 +160,12 @@ def tender_detail(v, key):
             and every(v["codes"], code_row)
             and every(v["amendments"], lambda a: num(a["amendment"]) and s_or_none(a["published"]) and s(a["first_seen"]))
             and every(v["related_awards"], lambda a: ref(a["reference"]) and org_or_none(a["organization_id"])
-                      and num_or_none(a["value"]) and s_or_none(a["currency"])))
+                      and num_or_none(a["value"]) and s_or_none(a["currency"]))
+            and ("attachments" not in v or every(v["attachments"], attachment)))
+
+
+def attachment(a):
+    return isinstance(a, dict) and s(a.get("url")) and a["url"].startswith("https://") and s(a.get("name")) and a["name"]
 
 
 def contract_detail(v, kind, key):
@@ -611,6 +616,47 @@ def test_a_tender_detail_has_its_versions_codes_and_related_awards(exported):
     assert [(a["reference"], a["organization_id"]) for a in d["related_awards"]] == [("AW-2", ids[NORTH])]
     contract = load(out, f"contracts/{es.reference_shard('aw-2')}.json")["award:aw-2"]
     assert contract["tender_reference"] == "cb-100-1"
+
+
+CB = "https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/"
+
+
+def test_a_tender_detail_lists_its_documents_by_name(conn, tmp_path):
+    seed(conn)
+    # cb-100-1: the first version names two documents, the amendment none (the newest that names any stands);
+    # COLON_REF: a link from another host, written into the database by hand, never reaches the file.
+    conn.execute("UPDATE tenders SET attachments = ? WHERE reference = 'cb-100-1' AND amendment = 0", (json.dumps([
+        f"{CB}111717/w8703-270117-rfp-demo-kit%2C-bangalore-torpedo-en.pdf",
+        "https://sscp2pspc.ssc-spc.gc.ca/page.aspx/en/fil/download_public/359FE376-8B8E-4262-8BA7-FF84512C5F6C",
+    ]),))
+    conn.execute("UPDATE tenders SET attachments = ? WHERE reference = ?", (json.dumps([
+        "https://example.com/elsewhere.pdf", f"{CB}2/a%20b.pdf", f"{CB}2/a%20b.pdf",
+    ]), COLON_REF))
+    conn.commit()
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    d = load(out, f"tenders/{es.reference_shard('cb-100-1')}.json")["cb-100-1"]
+    assert d["amendment"] == 1 and tender_detail(d, "cb-100-1")
+    assert d["attachments"] == [
+        {"url": f"{CB}111717/w8703-270117-rfp-demo-kit%2C-bangalore-torpedo-en.pdf",
+         "name": "w8703-270117-rfp-demo-kit,-bangalore-torpedo-en.pdf"},
+        {"url": "https://sscp2pspc.ssc-spc.gc.ca/page.aspx/en/fil/download_public/359FE376-8B8E-4262-8BA7-FF84512C5F6C",
+         "name": "359FE376-8B8E-4262-8BA7-FF84512C5F6C"},
+    ]
+    colon = load(out, f"tenders/{es.reference_shard('SSC-26-00035339-T')}.json")["ssc-26-00035339-t"]
+    assert colon["attachments"] == [{"url": f"{CB}2/a%20b.pdf", "name": "a b.pdf"}]
+    # A notice that names no document carries no key; the list rows never carry one.
+    hull = load(out, f"tenders/{es.reference_shard('cb-200-2')}.json")["cb-200-2"]
+    assert "attachments" not in hull and tender_detail(hull, "cb-200-2")
+    assert all("attachments" not in r for r in load(out, "tenders/open.json"))
+    text = "\n".join(p.read_text(encoding="utf-8") for p in out.rglob("*.json"))
+    assert "example.com" not in text and CONTACT_EMAIL not in text
+
+
+def test_a_documents_name_is_its_last_path_segment_decoded():
+    assert es.attachment_name(f"{CB}111714/30008413---rfq-%28en_final.pdf") == "30008413---rfq-(en_final.pdf"
+    assert es.attachment_name("https://canadabuys.canada.ca/docs/") == "docs"
+    assert es.attachment_name("https://canadabuys.canada.ca") == "canadabuys.canada.ca"
 
 
 def test_a_withheld_supplier_is_null_flagged_and_linked_to_nothing(exported):

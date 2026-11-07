@@ -11,6 +11,11 @@ the refresh through its lookup.
 
 The headers are bilingual ("title-titre-eng"); a row is one version of a
 notice, keyed by its reference number and amendment number (REQUIRED).
+
+A tender notice's documents (attachment-piecesJointes, one column a
+language) are links the notice page shows, so only an https link to a
+Government of Canada host is kept (government_url); attachments counts the
+rest, which the nightly logs and never stores.
 """
 
 from __future__ import annotations
@@ -22,10 +27,20 @@ import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import IO
+from urllib.parse import unquote, urlsplit
 
 from ..normalize import iso_date, iso_datetime, region_provinces, squash, star_list, tender_status
 
 DESCRIPTION_MAX = 600
+# The documents kept for a notice version, at most: a solicitation with more
+# is rare, and a detail shard stays small (the Worker parses about 300 KB a request).
+ATTACHMENTS_MAX = 50
+# Hosts a document link may point at: CanadaBuys and the departments' own
+# portals (Shared Services Canada's buying portal is sscp2pspc.ssc-spc.gc.ca).
+# The page links each one, so nothing outside the Government of Canada is kept.
+GOVERNMENT_HOSTS = ("canada.ca",)
+GOVERNMENT_SUFFIXES = (".gc.ca", ".canada.ca")
+URL_MAX = 2000
 
 # A row as the loaders read it: the field's name in COLUMNS in, the cell's text (stripped, "" when absent) out.
 Getter = Callable[[str], str]
@@ -103,6 +118,9 @@ COLUMNS: dict[str, dict[str, str]] = {
         "regions_opportunity_fr": "regionsOfOpportunity-regionAppelOffres-fra",
         "description_en": "tenderDescription-descriptionAppelOffres-eng",
         "description_fr": "tenderDescription-descriptionAppelOffres-fra",
+        # Comma-separated URLs; a comma inside a file name is written %2C.
+        "attachments_en": "attachment-piecesJointes-eng",
+        "attachments_fr": "attachment-piecesJointes-fra",
     },
     "awards": {
         **_COMMON, **_CONTRACT, **_CONTACTS,
@@ -234,6 +252,53 @@ def tender_fields(get: Getter, buyer_id: str | None) -> dict[str, object]:
         "contact_email": text(get("contact_email")),
         "contact_phone": text(get("contact_phone")),
     }
+
+
+# A cell's URLs: split at a comma, a newline or a space only where a scheme
+# follows, so a raw comma inside a file name (the files write %2C) does not cut a link.
+_URL_SPLIT = re.compile(r"[\s,]+(?=\*?[A-Za-z][A-Za-z0-9+.\-]*:)")
+
+
+def government_url(raw: object) -> str | None:
+    """A document link as the page may show it, or None: https, on a Government of Canada host (canada.ca, a
+    *.canada.ca or *.gc.ca name), no user name, password or port but 443, and no "@" anywhere, so no address
+    reaches the page through a link."""
+    text = str(raw or "").strip().lstrip("*").strip()
+    if not text or len(text) > URL_MAX or any(ch.isspace() or ord(ch) < 32 for ch in text):
+        return None
+    try:
+        parts = urlsplit(text)
+        port = parts.port
+    except ValueError:
+        return None
+    host = (parts.hostname or "").lower().rstrip(".")
+    if parts.scheme.lower() != "https" or port not in (None, 443) or "@" in parts.netloc:
+        return None
+    if host not in GOVERNMENT_HOSTS and not host.endswith(GOVERNMENT_SUFFIXES):
+        return None
+    if "@" in unquote(text):
+        return None
+    return text
+
+
+def attachments(get: Getter) -> tuple[list[str], int]:
+    """A tender notice version's documents: the English column's links, then the French column's, each URL once
+    in file order, ATTACHMENTS_MAX at most; and how many the cells named that government_url refused."""
+    kept: list[str] = []
+    seen: set[str] = set()
+    dropped = 0
+    for field in ("attachments_en", "attachments_fr"):
+        for piece in _URL_SPLIT.split(get(field)):
+            if not piece.strip().lstrip("*").strip():
+                continue
+            url = government_url(piece)
+            if url is None:
+                dropped += 1
+            elif url not in seen:
+                seen.add(url)
+                if len(kept) < ATTACHMENTS_MAX:
+                    kept.append(url)
+    return kept, dropped
 
 
 # ---------------------------------------------------------------------------
