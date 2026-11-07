@@ -23,7 +23,8 @@ import { tenderInstruments } from "../instruments";
 import { TenderInstrumentsPanel } from "./instruments";
 import { tenderSeo } from "../seo";
 import {
-  BuyerLink, CountdownScript, closingHasZone, closingText, money, otherLanguageMark, provincesText, sourceFileText, tenderNoticeUrl,
+  BuyerLink, CountdownScript, closingHasZone, closingText, derivedPlacesText, money, otherLanguageMark, provincesText, sourceFileText,
+  tenderNoticeUrl,
 } from "./shared";
 
 // A field and its value as a definition-list row; an empty value leaves the
@@ -210,6 +211,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         <Row lang={lang} k="tender.regions_opportunity" v={lines(listOf(lang, d.regions_opportunity_en, d.regions_opportunity_fr))} />
         <Row lang={lang} k="tender.regions_delivery" v={lines(listOf(lang, d.regions_delivery_en, d.regions_delivery_fr))} />
         <Row lang={lang} k="col.region" v={provincesText(lang, d.provinces)} />
+        <Row lang={lang} k="places.derived_row" v={derivedPlacesText(lang, d)} />
         <Row lang={lang} k="tender.gsin" v={d.gsin ? `${d.gsin} ${pick(lang, d.gsin_desc_en, d.gsin_desc_fr) ?? ""}`.trim() : null} />
       </dl>
       </Panel>

@@ -6,7 +6,7 @@ import type { FC, PropsWithChildren } from "hono/jsx";
 import { ProTag, SameDayMark } from "../pro";
 import { type Column, type HeadSort, type MaybeColumn, type Rest, type Sorting, Table, restClass } from "../columns";
 import { METHOD_SHORT, MONEY_SOURCES, NOTICE_TYPE_SHORT, type MoneySource } from "../constants";
-import { type AwardRow, type OrgTotal, type TenderRow, type YearFigure, publishedReference } from "../data";
+import { type AwardRow, type DerivedPlaces, type OrgTotal, type PlaceSource, type TenderRow, type YearFigure, publishedReference } from "../data";
 import { buyerPath } from "../crosslinks";
 import { fmtInt, fmtMoney, fmtPct, pick, provinceName, segmentLabel, segmentShort, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { type Clock, closesAtUtc, closesLineWords, closingText, closingTime, countdownLine, tenderState } from "../closing";
@@ -144,8 +144,28 @@ export function orList(lang: Lang, items: readonly string[]): string {
 export const Count: FC<{ lang: Lang; n: number | null | undefined }> = ({ lang, n }) =>
   n ? <>{fmtInt(n, lang)}</> : <span class="zero"><span aria-hidden="true">–</span><span class="visually-hidden">0</span></span>;
 
-export function provincesText(lang: Lang, provinces: readonly string[]): string {
-  return provinces.length ? provinces.map((p) => provinceName(lang, p)).join(", ") : t(lang, "common.national");
+// The provinces a record's regions of delivery state, then the ones derived
+// from another field (pipeline places.py), each marked; "Canada-wide or not
+// stated" when there are neither.
+export function provincesText(lang: Lang, provinces: readonly string[], derived: readonly string[] = []): string {
+  const names = [
+    ...provinces.map((p) => provinceName(lang, p)),
+    ...derived.map((p) => t(lang, "places.derived_mark", { name: provinceName(lang, p) })),
+  ];
+  return names.length ? names.join(", ") : t(lang, "common.national");
+}
+
+const PLACE_FROM_KEY: Record<PlaceSource, Key> = {
+  delivery: "places.from_delivery", opportunity: "places.from_opportunity", land_claims: "places.from_land_claims",
+  dcc_office: "places.from_dcc_office",
+};
+
+// A detail page's line for the derived provinces, naming the field they come
+// from; null on a record that has none.
+export function derivedPlacesText(lang: Lang, d: DerivedPlaces): string | null {
+  if (!d.provinces_derived?.length || !d.provinces_from) return null;
+  const names = d.provinces_derived.map((p) => provinceName(lang, p)).join(", ");
+  return t(lang, "places.derived_value", { names, from: t(lang, PLACE_FROM_KEY[d.provinces_from]) });
 }
 
 export const BuyerLink: FC<{ lang: Lang; id: string | null; en: string | null; fr: string | null }> = ({ lang, id, en, fr }) => {
@@ -441,7 +461,7 @@ export const TenderTable: FC<{
                 <BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} />
                 {/* Beside the detail panel the provinces column rests; they show here instead. On the home
                     lists they show here too while the column rests on a medium screen (md-only). */}
-                <span class={home ? "split-only md-only muted small" : "split-only muted small"}>{provincesText(lang, r.provinces)}</span>
+                <span class={home ? "split-only md-only muted small" : "split-only muted small"}>{provincesText(lang, r.provinces, r.provinces_derived)}</span>
               </td>
               <td data-label={t(lang, "col.closing")} class="mono c-date" data-closes={closes ?? undefined}
                 data-time={closes ? closingTime(r.closing, lang) ?? undefined : undefined} data-notice={closes ? r.reference.toLowerCase() : undefined}>
@@ -452,7 +472,7 @@ export const TenderTable: FC<{
                 {far !== null ? <span class="countdown countdown-far">{far}</span> : null}
               </td>
               {home ? null : <td data-label={t(lang, "col.published")} class="mono c-pub mdh">{r.published ?? ""}</td>}
-              <td data-label={t(lang, "col.region")} class={home ? "c-region mdh" : "c-region"}>{provincesText(lang, r.provinces)}</td>
+              <td data-label={t(lang, "col.region")} class={home ? "c-region mdh" : "c-region"}>{provincesText(lang, r.provinces, r.provinces_derived)}</td>
             </tr>
           );
         })}

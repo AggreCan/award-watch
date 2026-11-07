@@ -60,6 +60,12 @@ export interface TenderQuery {
   // or not stated, about half of them) stay in the list. On unless the
   // address says national=0.
   national: boolean;
+  // Whether a province filter reads the provinces derived from another field
+  // (a city the regions of delivery name, a notice's regions of opportunity, a
+  // Defence Construction Canada regional office: pipeline places.py) beside
+  // the stated ones. On unless the address says
+  // derived=0.
+  derived: boolean;
   buyer: string;
   type: string;
   method: string;
@@ -98,6 +104,7 @@ export function readTenderQuery(url: URL): TenderQuery {
   // The form sends national=0 from a hidden field and national=1 from the
   // ticked box, so either 1 or no value at all keeps the notices in.
   const national = url.searchParams.getAll("national");
+  const derived = url.searchParams.getAll("derived");
   return {
     q: get("q").slice(0, MAX_TEXT),
     category: all("category", CATEGORY_ORDER),
@@ -105,6 +112,7 @@ export function readTenderQuery(url: URL): TenderQuery {
     code: CODE_RE.test(code) ? code : "",
     province: all("province", PROVINCES),
     national: national.length === 0 || national.includes("1"),
+    derived: derived.length === 0 || derived.includes("1"),
     buyer: BUYER_ID_RE.test(buyer) && buyer.length <= 80 ? buyer : "",
     type: get("type").slice(0, 200),
     method: get("method").slice(0, 200),
@@ -123,7 +131,8 @@ export function fold(s: string): string {
 // clock. Each of category, segment and province keeps a notice that carries
 // any one of its values. The text filter reads the title and the start of
 // the description in both languages and the reference, as published too. A
-// province keeps the notices that name none unless national is off. The code filter is a
+// province reads a notice's stated provinces and, unless derived is off, its
+// derived ones; it keeps the notices that have none unless national is off. The code filter is a
 // prefix of any of a notice's UNSPSC codes. The closing window counts from
 // the Eastern date and leaves out a notice whose closing time has passed.
 // By closing date, such a notice goes after the ones still open.
@@ -134,7 +143,10 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock:
     if (q.category.length && !q.category.some((v) => r.category.includes(v))) return false;
     if (q.segment.length && !q.segment.some((v) => r.segments.includes(v))) return false;
     if (q.code && !(r.codes ?? []).some((c) => c.startsWith(q.code))) return false;
-    if (q.province.length && !q.province.some((v) => r.provinces.includes(v)) && !(q.national && r.provinces.length === 0)) return false;
+    if (q.province.length) {
+      const placed = q.derived && r.provinces_derived ? [...r.provinces, ...r.provinces_derived] : r.provinces;
+      if (!q.province.some((v) => placed.includes(v)) && !(q.national && placed.length === 0)) return false;
+    }
     if (q.buyer && r.buyer_id !== q.buyer) return false;
     if (q.type && r.notice_type_en !== q.type) return false;
     if (q.method && r.method_en !== q.method) return false;
@@ -178,8 +190,8 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock:
 }
 
 // The URL of a view: only the values set, keys in a fixed order and a key's
-// values once each in theirs; national=0 only where it changes the list,
-// beside a province.
+// values once each in theirs; national=0 and derived=0 only where they change
+// the list, beside a province.
 export function tenderQueryString(q: TenderQuery, pageNo = q.page): string {
   const p = new URLSearchParams();
   for (const k of ["q", "category", "segment", "code", "province", "buyer", "type", "method", "closing"] as const) {
@@ -188,6 +200,7 @@ export function tenderQueryString(q: TenderQuery, pageNo = q.page): string {
     else if (v) p.set(k, v);
   }
   if (q.province.length && !q.national) p.set("national", "0");
+  if (q.province.length && !q.derived) p.set("derived", "0");
   if (q.sort !== "closing") p.set("sort", q.sort);
   if (pageNo > 1) p.set("page", String(pageNo));
   const s = p.toString();
@@ -218,6 +231,8 @@ export function tenderOptions(facets: OpenFirst["facets"], lang: Lang) {
 // Every string tenders.js draws, handed over in the page's JSON block.
 export const TENDERS_CLIENT_KEYS: readonly Key[] = [
   "col.notice", "col.buyer", "col.closing", "col.published", "col.region", "common.national", "common.not_stated",
+  "places.derived_mark", "places.derived_row", "places.derived_value", "places.from_delivery", "places.from_opportunity",
+  "places.from_dcc_office",
   "common.time", "common.zone_et", "common.other_lang_only", "segment.chip", "tenders.filter_segment", "tenders.filter_family",
   "tenders.filter_class",
   "status.open", "status.closing", "status.closed", "tenders.count_one", "tenders.count_many", "tenders.none_match", "tenders.page_of",
@@ -297,7 +312,7 @@ export function codeChip(lang: Lang, code: string, name: string | null): { label
 function activeChips(q: TenderQuery, opts: ReturnType<typeof tenderOptions>, lang: Lang, code: string | null): Chip[] {
   const named = (list: Option[], v: string) => list.find((o) => o.value === v)?.label ?? v;
   const chips: Chip[] = [];
-  const one = (key: Exclude<keyof TenderQuery, MultiKey | "national" | "sort" | "page">, label: Key, value: string) =>
+  const one = (key: Exclude<keyof TenderQuery, MultiKey | "national" | "derived" | "sort" | "page">, label: Key, value: string) =>
     chips.push({ label: t(lang, label), value, without: { ...q, [key]: "", page: 1 } });
   const each = (key: MultiKey, label: Key, list: Option[]) => {
     for (const v of q[key]) chips.push({ label: t(lang, label), value: named(list, v), without: { ...q, [key]: q[key].filter((x) => x !== v), page: 1 } });
@@ -401,6 +416,14 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
               <input type="hidden" name="national" value="0" />
               <input type="checkbox" name="national" value="1" checked={q.national} />
               <span>{t(lang, "tenders.include_national")}</span>
+            </label>
+          </div>
+          <div class="field field-check">
+            <span class="field-label" aria-hidden="true">&nbsp;</span>
+            <label class="check">
+              <input type="hidden" name="derived" value="0" />
+              <input type="checkbox" name="derived" value="1" checked={q.derived} />
+              <span>{t(lang, "tenders.include_derived")}</span>
             </label>
           </div>
           <Select name="buyer" label="tenders.filter_buyer" any="tenders.any" opts={opts.buyer} value={q.buyer} lang={lang} />

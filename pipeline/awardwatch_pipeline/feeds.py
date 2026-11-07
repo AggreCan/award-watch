@@ -16,7 +16,8 @@ Three events, each its own feed:
 
 Scopes: Canada (always written), UNSPSC segment (a notice with codes in two
 segments is in both), province of delivery (tenders only: an award notice's
-delivery regions are often blank) and buyer (the expiring feeds: Canada,
+delivery regions are often blank; stated or derived, as the tenders page's
+province filter reads them, places.py) and buyer (the expiring feeds: Canada,
 segment and buyer). A scoped feed whose newest entry
 was first seen more than FRESH_DAYS ago is not written, so the folder holds
 the feeds someone could still be waiting on rather than one per buyer and
@@ -329,7 +330,7 @@ def tender_entries(conn: sqlite3.Connection, look: _Lookups, cutoff: str, max_en
     """The notices newest first by the night first seen; with today, a notice whose closing day is before it is left out."""
     sql = (
         "SELECT t.reference, t.title_en, t.title_fr, t.published, t.closing, t.buyer_id, t.buyer_raw_en, "
-        "t.buyer_raw_fr, t.provinces, "
+        "t.buyer_raw_fr, t.provinces, t.provinces_derived, "
         "(SELECT MIN(z.first_seen) FROM tenders z WHERE z.reference = t.reference) AS first_sight, "
         "(SELECT group_concat(c.unspsc, ' ') FROM tender_codes c WHERE c.reference = t.reference "
         "AND c.amendment = t.amendment) AS codes "
@@ -353,7 +354,8 @@ def tender_entries(conn: sqlite3.Connection, look: _Lookups, cutoff: str, max_en
                                    f"Référence {r['reference']}") if p)
         scopes = [CANADA]
         scopes += [look.segment_scopes[s] for s in _segments(r["codes"], look.segments)]
-        scopes += [look.province_scopes[p] for p in sorted(set(_list(r["provinces"]))) if p in PROVINCE_CODES]
+        placed = set(_list(r["provinces"])) | set(_list(r["provinces_derived"]))
+        scopes += [look.province_scopes[p] for p in sorted(placed) if p in PROVINCE_CODES]
         if b := look.buyer(r["buyer_id"]):
             scopes.append(b)
         out.append(Entry(

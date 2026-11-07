@@ -29,7 +29,8 @@ from pathlib import Path
 from typing import IO
 from urllib.parse import unquote, urlsplit
 
-from ..normalize import iso_date, iso_datetime, region_provinces, squash, star_list, tender_status
+from .. import places
+from ..normalize import iso_date, iso_datetime, squash, star_list, tender_status
 
 DESCRIPTION_MAX = 600
 # The documents kept for a notice version, at most: a solicitation with more
@@ -226,7 +227,9 @@ def common_fields(get: Getter) -> tuple[dict[str, object], list[Coded], list[Cod
         "trade_agreements_fr": json_list(star_list(get("trade_agreements_fr"))),
         "regions_delivery_en": json_list(delivery_en),
         "regions_delivery_fr": json_list(delivery_fr),
-        "provinces": json_list(region_provinces(delivery_en + delivery_fr)),
+        # provinces, provinces_derived and provinces_from (places.py); a
+        # tender's are read again with its regions of opportunity (tender_fields).
+        **places.fields(delivery_en + delivery_fr),
         "description_en": cut(get("description_en")),
         "description_fr": cut(get("description_fr")),
     }
@@ -235,14 +238,20 @@ def common_fields(get: Getter) -> tuple[dict[str, object], list[Coded], list[Cod
 
 def tender_fields(get: Getter, buyer_id: str | None) -> dict[str, object]:
     """The fields of a tender notice beyond the common ones, with the buyer the caller resolved. The
-    contacts are stored for the operator and never exported."""
+    contacts are stored for the operator and never exported. The three province columns replace the common
+    ones: a notice whose regions of delivery name nothing reads its regions of opportunity, then, for a
+    Defence Construction Canada notice, its regional office (places.derive)."""
+    opportunity_en, opportunity_fr = star_list(get("regions_opportunity_en")), star_list(get("regions_opportunity_fr"))
+    delivery = star_list(get("regions_delivery_en")) + star_list(get("regions_delivery_fr"))
+    office = places.dcc_office_provinces(buyer_id, get("buyer_en"), get("buyer_fr"))
     return {
         "closing": iso_datetime(get("closing")),
         "start_expected": iso_date(get("start_expected")),
         "end_expected": iso_date(get("end_expected")),
         "status": tender_status(get("status") or get("status_fr")),
-        "regions_opportunity_en": json_list(star_list(get("regions_opportunity_en"))),
-        "regions_opportunity_fr": json_list(star_list(get("regions_opportunity_fr"))),
+        "regions_opportunity_en": json_list(opportunity_en),
+        "regions_opportunity_fr": json_list(opportunity_fr),
+        **places.fields(delivery, opportunity_en + opportunity_fr, office),
         "buyer_id": buyer_id,
         "buyer_raw_en": text(get("buyer_en")),
         "buyer_raw_fr": text(get("buyer_fr")),

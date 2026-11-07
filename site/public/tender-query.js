@@ -61,19 +61,23 @@ export function clean(raw) {
   s.sort = SORTS.indexOf(raw.sort) >= 0 ? raw.sort : "closing";
   // The Canada-wide notices stay in unless the address or the box says otherwise.
   s.national = raw.national !== false;
+  // A province reads the derived provinces too unless the address or the box says otherwise.
+  s.derived = raw.derived !== false;
   var page = parseInt(raw.page || "1", 10);
   s.page = page >= 1 && page <= 10000 ? page : 1;
   return s;
 }
 
 // As readTenderQuery(): national=0 alone turns the Canada-wide notices out;
-// a 1 beside it (the ticked box) keeps them.
+// a 1 beside it (the ticked box) keeps them. derived reads the same way.
 export function readSearch(search) {
   var p = new URLSearchParams(search);
   var raw = {};
   FIELDS.concat(["sort", "page"]).forEach(function (k) { raw[k] = MULTI.indexOf(k) >= 0 ? p.getAll(k) : p.get(k) || ""; });
   var national = p.getAll("national");
   raw.national = national.length === 0 || national.indexOf("1") >= 0;
+  var derived = p.getAll("derived");
+  raw.derived = derived.length === 0 || derived.indexOf("1") >= 0;
   return clean(raw);
 }
 
@@ -85,6 +89,7 @@ export function queryString(s, page) {
     else if (s[k]) p.set(k, s[k]);
   });
   if (s.province.length && !s.national) p.set("national", "0");
+  if (s.province.length && !s.derived) p.set("derived", "0");
   if (s.sort !== "closing") p.set("sort", s.sort);
   if (page > 1) p.set("page", String(page));
   var q = p.toString();
@@ -104,8 +109,11 @@ export function filterRows(all, s, now) {
     if (s.category.length && !s.category.some(function (v) { return r.category.indexOf(v) >= 0; })) return false;
     if (s.segment.length && !s.segment.some(function (v) { return r.segments.indexOf(v) >= 0; })) return false;
     if (s.code && !(r.codes || []).some(function (c) { return String(c).indexOf(s.code) === 0; })) return false;
-    if (s.province.length && !s.province.some(function (v) { return r.provinces.indexOf(v) >= 0; }) &&
-      !(s.national && !r.provinces.length)) return false;
+    if (s.province.length) {
+      // The stated provinces, and the derived ones unless the view leaves them out.
+      var placed = s.derived && r.provinces_derived ? r.provinces.concat(r.provinces_derived) : r.provinces;
+      if (!s.province.some(function (v) { return placed.indexOf(v) >= 0; }) && !(s.national && !placed.length)) return false;
+    }
     if (s.buyer && r.buyer_id !== s.buyer) return false;
     if (s.type && r.notice_type_en !== s.type) return false;
     if (s.method && r.method_en !== s.method) return false;

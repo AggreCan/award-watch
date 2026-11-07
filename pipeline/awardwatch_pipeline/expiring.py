@@ -29,6 +29,10 @@ CLAUDE.md "Expiring-contracts radar" is the rule; this module follows it:
   name as published when none matches).
 * value_flag is "check" when value_checks.py flagged the contract
   (value_flags); the value stays, and the export leaves it out of the totals.
+* provinces are the ones the newest version's regions of delivery state;
+  provinces_derived and provinces_from are the derived ones (places.py): an
+  award notice's or history record's as stored, a published contract's from
+  its land claims agreement area (published contracts name no region).
 * value is the counted value in the row's own currency; value_growth is that
   value over the original amount, minus 1, NULL when either is unknown or the
   original is zero. The original amount is the original version's value by
@@ -60,7 +64,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from . import config, organizations
+from . import config, organizations, places
 from .db import log_run, now_iso
 from .sources.buyers import public_spelling
 
@@ -87,8 +91,8 @@ INSTRUMENTS = {
 COLUMNS = ("source_key", "kind", "reference", "title_en", "title_fr", "organization_id", "organization",
            "supplier_withheld", "buyer_id", "buyer_en", "buyer_fr", "start", "end", "days_left", "value", "currency",
            "competitive", "method_en", "method_fr", "instrument_en", "instrument_fr", "n_amendments", "value_growth",
-           "contract_number", "tender_reference", "segments", "provinces", "entered_3m", "client_buyer_id",
-           "client_buyer_name", "client_buyer_name_fr", "value_flag", "computed_at")
+           "contract_number", "tender_reference", "segments", "provinces", "provinces_derived", "provinces_from",
+           "entered_3m", "client_buyer_id", "client_buyer_name", "client_buyer_name_fr", "value_flag", "computed_at")
 REVIEW_FILE = "expiring-duplicates.txt"
 
 
@@ -201,7 +205,7 @@ def notice_candidates(conn: sqlite3.Connection, kind: str, names: _Names, first:
         "SELECT n.reference, n.title_en, n.title_fr, n.org, n.supplier_withheld, n.buyer_id, n.buyer_raw_en, "
         f"n.buyer_raw_fr, {client}, n.start, substr(n.\"end\", 1, 10) AS end_day, n.amount, n.total_value, "
         "n.currency, n.competitive, n.method_en, n.method_fr, n.instrument_type_en, n.instrument_type_fr, "
-        "n.contract_number, n.solicitation, n.provinces, "
+        "n.contract_number, n.solicitation, n.provinces, n.provinces_derived, n.provinces_from, "
         f"(SELECT COUNT(*) FROM {table} z WHERE z.reference = n.reference) AS versions, "
         f"(SELECT CASE WHEN z.total_value > 0 THEN z.total_value ELSE z.amount END FROM {table} z "
         "WHERE z.reference = n.reference ORDER BY z.amendment LIMIT 1) AS original, "
@@ -237,6 +241,7 @@ def notice_candidates(conn: sqlite3.Connection, kind: str, names: _Names, first:
             "tender_reference": names.tenders.get(_sol(r["solicitation"]) or ""),
             "segments": json.dumps(_segments(r["codes"])),
             "provinces": json.dumps(json.loads(r["provinces"]) if r["provinces"] else []),
+            "provinces_derived": r["provinces_derived"] or None, "provinces_from": r["provinces_from"] or None,
             "value_flag": "check" if (kind, r["reference"]) in names.flags else None,
         }
         buyers = frozenset(b for b in (r["buyer_id"], r["client_id"]) if b)
@@ -275,7 +280,7 @@ def contract_candidates(conn: sqlite3.Connection, names: _Names, first: str, las
         "FROM g) "
         "SELECT owner_org, reference, procurement_id, vendor_withheld, organization_id, buyer_id, period_start, "
         "substr(delivery_date, 1, 10) AS end_day, competitive, description_en, description_fr, versions, group_value, "
-        "original, instrument FROM r WHERE rn = 1 AND substr(delivery_date, 1, 10) BETWEEN ? AND ? "
+        "original, instrument, land_claims FROM r WHERE rn = 1 AND substr(delivery_date, 1, 10) BETWEEN ? AND ? "
         "ORDER BY end_day, owner_org, reference"
     )
     out: list[Candidate] = []
@@ -290,6 +295,9 @@ def contract_candidates(conn: sqlite3.Connection, names: _Names, first: str, las
         instrument = INSTRUMENTS.get(str(r["instrument"] or "").upper(), (None, None))
         numbers = tuple(dict.fromkeys(n for n in (contract_number(r["procurement_id"]), contract_number(r["reference"])) if n))
         value = r["group_value"]
+        # A published contract names no region of delivery; its land claims
+        # agreement area is the one field that places it.
+        claimed = places.land_claim_provinces(r["land_claims"])
         row = {
             "kind": "contract", "reference": reference, "title_en": r["description_en"],
             "title_fr": r["description_fr"], "organization_id": org,
@@ -300,6 +308,8 @@ def contract_candidates(conn: sqlite3.Connection, names: _Names, first: str, las
             "instrument_fr": instrument[1], "n_amendments": max((r["versions"] or 1) - 1, 0),
             "value_growth": growth(value, r["original"]), "contract_number": numbers[0] if numbers else None,
             "tender_reference": None, "segments": "[]", "provinces": "[]",
+            "provinces_derived": json.dumps(claimed) if claimed else None,
+            "provinces_from": places.FROM_LAND_CLAIMS if claimed else None,
             "value_flag": "check" if ("contract", f"{r['owner_org']}:{r['procurement_id']}") in names.flags else None,
         }
         buyers = frozenset([r["buyer_id"]]) if r["buyer_id"] else frozenset()

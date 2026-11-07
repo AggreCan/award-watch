@@ -805,7 +805,7 @@ async function wholeWindow(c: Context<AppEnv>, window: ExpiringWindow, today: st
 export const RADAR_CSV_COLUMNS = [
   "kind", "reference", "title_en", "title_fr", "organization_id", "organization", "buyer_id", "buyer_en", "buyer_fr", "client_buyer_id",
   "client_buyer_name", "start", "end", "days_left", "value", "currency", "competitive", "method_en", "instrument_en", "n_amendments",
-  "value_growth", "segments", "provinces", "value_flag",
+  "value_growth", "segments", "provinces", "provinces_derived", "provinces_from", "value_flag",
 ] as const;
 
 export async function filteredCsvAllowed(c: Context<AppEnv>, window: ExpiringWindow): Promise<boolean> {

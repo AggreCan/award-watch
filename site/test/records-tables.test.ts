@@ -376,7 +376,7 @@ describe("the radar over its whole window", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
     const lines = (await res.text()).trim().split("\r\n");
-    expect(lines[0]).toBe("kind,reference,title_en,title_fr,organization_id,organization,buyer_id,buyer_en,buyer_fr,client_buyer_id,client_buyer_name,start,end,days_left,value,currency,competitive,method_en,instrument_en,n_amendments,value_growth,segments,provinces,value_flag");
+    expect(lines[0]).toBe("kind,reference,title_en,title_fr,organization_id,organization,buyer_id,buyer_en,buyer_fr,client_buyer_id,client_buyer_name,start,end,days_left,value,currency,competitive,method_en,instrument_en,n_amendments,value_growth,segments,provinces,provinces_derived,provinces_from,value_flag");
     expect(lines.slice(1).map((l) => l.split(",")[1])).toEqual(["C-3", "RADAR-1", "RADAR-5"]);
     expect(lines[1]).toContain(",2027-01-10,71,1500000,CAD,0,");
   });

@@ -38,7 +38,9 @@ and the site serves only these names):
 
 Every CSV opens with a UTF-8 byte-order mark, so a spreadsheet reads the
 French names as written, and a list field (provinces, segments, end users) is
-its values joined by "; " ("SK; MB"), never a JSON array. A value the source
+its values joined by "; " ("SK; MB"), never a JSON array. provinces are the
+ones a record's regions of delivery state; provinces_derived the ones derived
+from another field, which provinces_from names (places.py). A value the source
 did not publish is an empty cell, never 0. SHA256SUMS is computed on the bytes
 written, mark included. The award, history and published contract files
 carry value_flag ("check" when value_checks.py flagged the contract's value).
@@ -187,7 +189,8 @@ FIXED_FILES = ("open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-
 OPEN_TENDERS = """
     SELECT t.reference, t.amendment, t.solicitation, t.title_en, t.title_fr, t.published, t.closing, t.amended,
            t.status, t.category, t.notice_type_en, t.method_en, t.selection_en, t.limited_reason_en,
-           t.trade_agreements_en, t.regions_delivery_en, t.provinces, t.buyer_id, b.name_en AS buyer_name_en,
+           t.trade_agreements_en, t.regions_delivery_en, t.provinces, t.provinces_derived, t.provinces_from,
+           t.buyer_id, b.name_en AS buyer_name_en,
            b.name_fr AS buyer_name_fr, t.buyer_raw_en, t.end_users_en,
            (SELECT group_concat(c.unspsc, ' ') FROM tender_codes c WHERE c.reference = t.reference
               AND c.amendment = t.amendment) AS unspsc,
@@ -206,7 +209,7 @@ _CONTRACT_COLUMNS = """
     a.supplier_city, a.supplier_province, a.supplier_country,
     (SELECT group_concat(c.unspsc, ' ') FROM {codes} c WHERE c.reference = a.reference
        AND c.amendment = a.amendment) AS unspsc,
-    a.gsin, a.provinces, a.source_file, a.first_seen, a.last_seen"""
+    a.gsin, a.provinces, a.provinces_derived, a.provinces_from, a.source_file, a.first_seen, a.last_seen"""
 
 _FLAG = "(SELECT 'check' FROM value_flags f WHERE f.kind = '{kind}' AND f.key = a.reference) AS value_flag,"
 # The yearly files' queries without the year test and the order, which _yearly_query adds.
@@ -264,8 +267,8 @@ ORGANIZATIONS = """
 _EXPIRING_SELECT = """
     SELECT kind, reference, title_en, title_fr, organization_id, organization, supplier_withheld, buyer_id, buyer_en,
            buyer_fr, start, end, days_left, value, currency, competitive, method_en, instrument_en, n_amendments,
-           value_growth, tender_reference, segments, provinces, client_buyer_id, client_buyer_name,
-           client_buyer_name_fr, value_flag
+           value_growth, tender_reference, segments, provinces, provinces_derived, provinces_from, client_buyer_id,
+           client_buyer_name, client_buyer_name_fr, value_flag
     FROM expiring_contracts"""
 EXPIRING = _EXPIRING_SELECT + " ORDER BY end, source_key"
 # The 3-month file: the rows that end on or after the data date and within the

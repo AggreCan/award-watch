@@ -16,7 +16,9 @@ import { CompetitiveFlag, Layout, PageHead, Panel, StatusBadge, lowerRedirect, n
 import { contractSeo } from "../seo";
 import { windowOf } from "./expiring";
 import { contractIcsPath } from "./ics";
-import { BuyerLink, awardNoticeUrl, datasetUrl, instrumentText, money, otherLanguageMark, provincesText, sourceFileText } from "./shared";
+import {
+  BuyerLink, awardNoticeUrl, datasetUrl, derivedPlacesText, instrumentText, money, otherLanguageMark, provincesText, sourceFileText,
+} from "./shared";
 
 // Days from one ISO date to another.
 function daysBetween(from: string, to: string): number {
@@ -182,6 +184,7 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
         <Row lang={lang} k="tender.trade_agreements" v={listOf(lang, d.trade_agreements_en, d.trade_agreements_fr)} />
         <Row lang={lang} k="tender.regions_delivery" v={listOf(lang, d.regions_delivery_en, d.regions_delivery_fr)} />
         <Row lang={lang} k="col.region" v={provincesText(lang, d.provinces)} />
+        <Row lang={lang} k="places.derived_row" v={derivedPlacesText(lang, d)} />
         <Row lang={lang} k="tender.gsin" v={d.gsin ? `${d.gsin} ${pick(lang, d.gsin_desc_en, d.gsin_desc_fr) ?? ""}`.trim() : null} />
       </dl>
       </Panel>

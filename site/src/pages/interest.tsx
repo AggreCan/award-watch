@@ -160,6 +160,10 @@ async function tendersFilter(env: Env, lang: Lang, url: URL): Promise<InterestFi
       pairs.push(["national", "0"]);
       named.push(t(lang, "interest.national_out"));
     }
+    if (!q.derived) {
+      pairs.push(["derived", "0"]);
+      named.push(t(lang, "interest.derived_out"));
+    }
   }
   if (q.buyer) {
     const name = await buyerName(env, lang, q.buyer, facet(facets?.buyer, q.buyer));

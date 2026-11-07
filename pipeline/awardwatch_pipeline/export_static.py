@@ -323,6 +323,16 @@ def _codes(text: object) -> list[str]:
     return _list(text) or []
 
 
+def _places(row: dict, r: sqlite3.Row) -> dict:
+    """The derived provinces beside the stated ones (places.py), only on a row that has them: provinces_derived,
+    never one of its provinces, and provinces_from, the field they come from."""
+    derived = [p for p in _codes(r["provinces_derived"]) if p not in row["provinces"]]
+    if derived and r["provinces_from"]:
+        row["provinces_derived"] = derived
+        row["provinces_from"] = r["provinces_from"]
+    return row
+
+
 def _joined(text: object, sep: str) -> str | None:
     """A JSON list column (the GSIN codes and their descriptions) as one string, which the site shows."""
     items = _list(text)
@@ -484,7 +494,7 @@ def _materialize(conn: sqlite3.Connection, as_of: str) -> None:
             "CASE WHEN n.supplier_withheld = 1 THEN NULL ELSE n.org END AS org, n.supplier_withheld, "
             "n.title_en, n.title_fr, n.buyer_id, n.buyer_raw_en, n.buyer_raw_fr, " + extra +
             "n.published, n.awarded, n.start, n.\"end\", n.currency, n.status, n.competitive, n.instrument_type_en, "
-            "n.instrument_type_fr, n.provinces, "
+            "n.instrument_type_fr, n.provinces, n.provinces_derived, n.provinces_from, "
             f"{shown} AS value, {organizations.award_value(kind)} AS v, {organizations.AWARD_NO_VALUE} AS nv, "
             f"{organizations.award_flagged(kind)} AS flag, "
             f"(SELECT MIN(z.first_seen) FROM {table} z WHERE z.reference = n.reference) AS first_sight, "
@@ -665,6 +675,7 @@ def tender_row(m: Model, r: sqlite3.Row, *, status: bool = False, words: bool = 
         "method_en": r["method_en"], "method_fr": r["method_fr"], "segments": m.segments_of(r["codes"]),
         "provinces": _codes(r["provinces"]), "first_seen": r["first_sight"],
     }
+    _places(row, r)
     if ref != r["reference"]:
         row["reference_published"] = r["reference"]
     if words:
@@ -701,6 +712,7 @@ def award_row(m: Model, kind: str, r: sqlite3.Row) -> dict | None:
         "instrument_en": r["instrument_type_en"], "instrument_fr": r["instrument_type_fr"],
         "segments": m.segments_of(r["codes"]), "provinces": _codes(r["provinces"]), "status": r["status"] or "unknown",
     }
+    _places(row, r)
     if ref != r["reference"]:
         row["reference_published"] = r["reference"]
     if r["supplier_withheld"]:
@@ -816,6 +828,7 @@ def expiring_row(m: Model, r: sqlite3.Row) -> tuple[dict, float | None] | None:
         "tender_reference": m.refs["tenders"].get(r["tender_reference"]) if r["tender_reference"] else None,
         "segments": [s for s in _codes(r["segments"]) if s in m.segments], "provinces": _codes(r["provinces"]),
     }
+    _places(row, r)
     if withheld:
         row["supplier_withheld"] = True
     if kind != "contract" and ref != r["reference"]:
@@ -1033,13 +1046,15 @@ FACETS = ("category", "segment", "province", "buyer", "notice_type", "method")
 def tender_facets(rows: list[dict]) -> dict[str, list[dict]]:
     """Counts over every open notice for the filter bar: a code for category,
     segment and province; a buyer id with its names; the English text of a
-    notice type or method with both labels. Most notices first."""
+    notice type or method with both labels. Most notices first. A province
+    counts the notices that state it or have it derived, as the filter reads
+    them unless asked for the stated ones alone."""
     counts: dict[str, Counter] = {f: Counter() for f in FACETS}
     labels: dict[str, dict[str, tuple[str | None, str | None]]] = {f: {} for f in FACETS}
     for r in rows:
         counts["category"].update(set(r["category"]))
         counts["segment"].update(set(r["segments"]))
-        counts["province"].update(set(r["provinces"]))
+        counts["province"].update(set(r["provinces"]) | set(r.get("provinces_derived") or ()))
         if r["buyer_id"]:
             counts["buyer"][r["buyer_id"]] += 1
             labels["buyer"].setdefault(r["buyer_id"], (r["buyer_en"], r["buyer_fr"]))
@@ -1219,6 +1234,7 @@ def tender_detail(m: Model, ref: str, versions: list[sqlite3.Row], codes: list[s
                         "title_fr": x["title_fr"], "first_seen": x["first_seen"]} for x in versions],
         "related_awards": related.get(_sol(v["solicitation"]) or "", []),
     })
+    _places(d, v)
     if ref != v["reference"]:
         d["reference_published"] = v["reference"]
     documents = tender_attachments(versions)
@@ -1308,6 +1324,7 @@ def contract_detail(m: Model, kind: str, ref: str, versions: list[sqlite3.Row], 
                        for x in versions],
         "tender_reference": tenders.get(_sol(v["solicitation"]) or ""),
     })
+    _places(d, v)
     if withheld:
         d["supplier_withheld"] = True
     _value_flag(d, v["reference"] in m.flags["award" if kind == "awards" else "history"])

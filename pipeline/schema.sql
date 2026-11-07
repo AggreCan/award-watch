@@ -218,7 +218,11 @@ CREATE TABLE IF NOT EXISTS tenders (
   regions_opportunity_fr TEXT,
   regions_delivery_en TEXT,                      -- JSON list
   regions_delivery_fr TEXT,
-  provinces TEXT,                                -- JSON list of two-letter codes derived from the delivery regions
+  provinces TEXT,                                -- JSON list of two-letter codes the delivery regions name (stated)
+  provinces_derived TEXT,                        -- JSON list of codes derived from another field, never a stated one
+                                                 -- (places.py); NULL when none
+  provinces_from TEXT,                           -- the field they come from: delivery (a city it names) | opportunity
+                                                 -- | dcc_office (a Defence Construction Canada regional office)
   buyer_id TEXT REFERENCES buyers(id),
   buyer_raw_en TEXT,
   buyer_raw_fr TEXT,
@@ -295,6 +299,8 @@ CREATE TABLE IF NOT EXISTS awards (
   regions_delivery_en TEXT,
   regions_delivery_fr TEXT,
   provinces TEXT,
+  provinces_derived TEXT,                        -- as on tenders: the codes a city in the delivery regions gives
+  provinces_from TEXT,                           -- delivery, or NULL
   supplier_raw TEXT,                             -- supplierLegalName as published
   supplier_street TEXT,
   supplier_city TEXT,
@@ -381,6 +387,8 @@ CREATE TABLE IF NOT EXISTS contract_history (
   regions_delivery_en TEXT,
   regions_delivery_fr TEXT,
   provinces TEXT,
+  provinces_derived TEXT,                        -- as on tenders: the codes a city in the delivery regions gives
+  provinces_from TEXT,                           -- delivery, or NULL
   supplier_raw TEXT,                             -- supplierLegalName
   supplier_standardized TEXT,                    -- supplierStandardizedName, blank on most rows
   supplier_operating TEXT,
@@ -782,7 +790,9 @@ CREATE TABLE IF NOT EXISTS expiring_contracts (
   contract_number TEXT,                          -- what the duplicate rule compares (normalized), when the source gives one
   tender_reference TEXT,                         -- the matched tender notice's reference (through tenders.solicitation), as published
   segments TEXT,                                 -- JSON list of two-digit UNSPSC segments
-  provinces TEXT,                                -- JSON list of delivery provinces
+  provinces TEXT,                                -- JSON list of delivery provinces (stated)
+  provinces_derived TEXT,                        -- JSON list of derived codes (places.py), NULL when none
+  provinces_from TEXT,                           -- delivery | opportunity | land_claims (a published contract's), or NULL
   entered_3m TEXT,                               -- the data date on which the row entered the 3-month window (the feed's
                                                  -- entry date, carried over between rebuilds); NULL outside the window
   client_buyer_id TEXT,                          -- the client department: from a published contract or history record

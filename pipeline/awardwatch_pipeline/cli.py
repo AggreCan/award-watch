@@ -24,7 +24,7 @@ from .db import connect, log_run
 from .http import PoliteClient
 from .sources import buyers, canadabuys, registry_federal
 from . import indicators
-from . import expiring, export, export_static, migrate
+from . import expiring, export, export_static, migrate, places
 from . import link_sample, records_db, search_db
 from .sources import contracts, grants, lobbying, matching, sosa
 
@@ -141,6 +141,9 @@ def run(conn: sqlite3.Connection, selected: list[str], *, samples: Path | None =
     # Before any stage writes an id: a change to the name rules moves every
     # record to its new id first (a no-op on a current database).
     ok = _stage(conn, "migrate", lambda: migrate.ensure_current(conn))
+    # A changed place rule derives every stored notice's provinces again (a
+    # no-op on a current database); the loaders derive each row they read.
+    ok &= _stage(conn, "places", lambda: places.ensure_current(conn))
     # A changed person test: every loader reads its files again, so which rows
     # are withheld is recomputed (a no-op when the version is current).
     if matching.refresh_person_test(conn):

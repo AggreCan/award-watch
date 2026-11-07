@@ -19,6 +19,7 @@ import { categoryLabel, fmtInt, fmtMoney, fmtMoneyShort, pick, provinceName, seg
 import { instrumentPath, instrumentQueryString } from "../instruments";
 import { CONTACT_EMAIL } from "../pages/docs";
 import { type ExpiringQuery, contractReference, growthPct, sitePath } from "../pages/expiring";
+import { provincesText } from "../pages/shared";
 import { CODE_RE } from "../pages/tenders";
 import { fiscalLabel } from "../records_db";
 import type { BriefingData, BriefingSubject, Quarter } from "./briefings";
@@ -337,7 +338,8 @@ const tenderLink = (o: { site: string; lang: Lang }, r: TenderRow) => siteLink(o
 function tenderLines(lang: Lang, r: TenderRow, dataDate: string) {
   const title = pick(lang, r.title_en, r.title_fr) ?? publishedReference(r);
   const buyer = pick(lang, r.buyer_en, r.buyer_fr) ?? t(lang, "common.not_stated");
-  const where = r.provinces.length ? r.provinces.map((p) => provinceName(lang, p)).join(", ") : t(lang, "common.national");
+  // The stated provinces, then the derived ones marked, as the tender list shows them.
+  const where = provincesText(lang, r.provinces, r.provinces_derived);
   const closes = closesText(lang, r.closing);
   const left = timeLeft(lang, r.closing, dataDate);
   const chips = r.segments.slice(0, MAX_CHIPS).map((code) => `${code} ${segmentShort(lang, code)}`);

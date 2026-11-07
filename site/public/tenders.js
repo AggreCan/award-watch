@@ -175,6 +175,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
 
   function readUrl() { return readSearch(location.search); }
   var nationalBox = form.querySelector('input[type="checkbox"][name="national"]');
+  var derivedBox = form.querySelector('input[type="checkbox"][name="derived"]');
   // A key with several values shows "Several (n)" in its select; choosing
   // anything else there replaces them with that choice.
   function multiSelect(k) { return form.querySelector('select[name="' + k + '"]'); }
@@ -191,6 +192,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
       raw[k] = field && "value" in field ? field.value : "";
     });
     raw.national = nationalBox ? nationalBox.checked : true;
+    raw.derived = derivedBox ? derivedBox.checked : true;
     return clean(raw);
   }
   function writeMulti(k) {
@@ -221,6 +223,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
       if (k === "sort" && field && "value" in field && field.value !== state.sort) field.value = "closing";
     });
     if (nationalBox) nationalBox.checked = state.national;
+    if (derivedBox) derivedBox.checked = state.derived;
   }
   function query(s, page) { return queryString(s, page); }
 
@@ -249,9 +252,19 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
     tr.appendChild(td);
     return td;
   }
-  function provincesText(list) {
-    var names = (list || []).map(function (p) { return (LABELS.provinces && LABELS.provinces[p]) || p; });
+  function provinceLabel(p) { return (LABELS.provinces && LABELS.provinces[p]) || p; }
+  // As provincesText in src/pages/shared.tsx: the stated provinces, then the derived ones, each marked.
+  function provincesText(list, derived) {
+    var names = (list || []).map(provinceLabel).concat((derived || []).map(function (p) {
+      return tx("places.derived_mark", { name: provinceLabel(p) });
+    }));
     return names.length ? names.join(", ") : tx("common.national");
+  }
+  // As derivedPlacesText: the derived provinces and the field they come from; null when there are none.
+  var PLACE_FROM = { delivery: "places.from_delivery", opportunity: "places.from_opportunity", dcc_office: "places.from_dcc_office" };
+  function derivedText(d) {
+    if (!d.provinces_derived || !d.provinces_derived.length || !PLACE_FROM[d.provinces_from]) return null;
+    return tx("places.derived_value", { names: d.provinces_derived.map(provinceLabel).join(", "), from: tx(PLACE_FROM[d.provinces_from]) });
   }
   // The words countdownText fills, as countdown.js reads them.
   function countdownWords() {
@@ -290,7 +303,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
     });
     var buyer = cell(tr, "col.buyer", "c-buyer");
     buyer.appendChild(buyerNode(r.buyer_id, r.buyer_en, r.buyer_fr));
-    buyer.appendChild(el("span", "split-only muted small", provincesText(r.provinces)));
+    buyer.appendChild(el("span", "split-only muted small", provincesText(r.provinces, r.provinces_derived)));
     var closing = cell(tr, "col.closing", "mono c-date");
     var state = stateOf(r.closing);
     var ref = r.reference.toLowerCase();
@@ -307,7 +320,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
       }
     }
     cell(tr, "col.published", "mono c-pub mdh").textContent = r.published || "";
-    cell(tr, "col.region", "c-region").textContent = provincesText(r.provinces);
+    cell(tr, "col.region", "c-region").textContent = provincesText(r.provinces, r.provinces_derived);
     return tr;
   }
   function table(list) {
@@ -665,6 +678,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
     kv(dl, "tender.method", pick(d.method_en, d.method_fr));
     kv(dl, "tender.selection", pick(d.selection_en, d.selection_fr));
     kv(dl, "tender.regions_delivery", pickList(d.regions_delivery_en, d.regions_delivery_fr));
+    kv(dl, "places.derived_row", derivedText(d));
     kv(dl, "tender.trade_agreements", pickList(d.trade_agreements_en, d.trade_agreements_fr));
     kv(dl, "tender.solicitation", d.solicitation || null);
     detail.appendChild(dl);

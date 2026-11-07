@@ -1860,8 +1860,8 @@ const STRINGS = {
     fr: "Les statuts des attributions et de l'historique des contrats (actif, expiré, annulé) sont ceux de la source.",
   },
   "methodology.status_regions": {
-    en: "Regions of delivery map to provinces: a province named in either language to itself, and the National Capital Region to Ontario and Quebec. \"Canada\", a blank or a city name maps to no province.",
-    fr: "Les régions de livraison sont associées aux provinces : une province nommée dans l'une ou l'autre langue à elle-même, et la région de la capitale nationale à l'Ontario et au Québec. « Canada », un champ vide ou un nom de ville ne correspond à aucune province.",
+    en: "Regions of delivery map to provinces: a province named in either language to itself, and the National Capital Region to Ontario and Quebec. These are the provinces a record states. \"Canada\", a blank or a country states none, and neither does a city, which gives a derived province instead.",
+    fr: "Les régions de livraison sont associées aux provinces : une province nommée dans l'une ou l'autre langue à elle-même, et la région de la capitale nationale à l'Ontario et au Québec. Ce sont les provinces qu'un dossier indique. « Canada », un champ vide ou un pays n'en indique aucune, pas plus qu'une ville, qui donne plutôt une province déduite.",
   },
   "methodology.expiring_intro": {
     en: "The list of contracts ending soon is built from the end dates and suppliers the sources already give, by these rules:",
@@ -3314,6 +3314,64 @@ const STRINGS = {
     en: "A tender notice's page lists the documents the CanadaBuys data file names for the notice, as links to where CanadaBuys or another Government of Canada site keeps them. A link to any other site is left out. The page links each file and does not copy it; an amendment can add or replace documents, and the notice on CanadaBuys is the record.",
     fr: "La page d'un avis d'appel d'offres énumère les documents que le fichier de données d'AchatsCanada nomme pour l'avis, sous forme de liens vers l'endroit où AchatsCanada ou un autre site du gouvernement du Canada les conserve. Un lien vers tout autre site est écarté. La page renvoie à chaque fichier sans le copier; une modification peut ajouter ou remplacer des documents, et l'avis sur AchatsCanada fait foi.",
   },
+  // Provinces derived from another field than the regions of delivery (pipeline places.py), shown apart
+  // from the stated ones. "par déduction" agrees with a province and a territory alike.
+  "places.derived_mark": { en: "{name} (derived)", fr: "{name} (par déduction)" },
+  "places.derived_row": { en: "Derived provinces", fr: "Provinces déduites" },
+  "places.derived_value": { en: "{names} (derived from {from})", fr: "{names} (d'après {from})" },
+  "places.from_delivery": { en: "a city named in the regions of delivery", fr: "une ville nommée dans les régions de livraison" },
+  "places.from_opportunity": { en: "the regions of opportunity", fr: "les régions de l'appel d'offres" },
+  "places.from_land_claims": {
+    en: "the land claims agreement area",
+    fr: "la région visée par l'entente sur les revendications territoriales",
+  },
+  "places.from_dcc_office": {
+    en: "the Defence Construction Canada regional office",
+    fr: "le bureau régional de Construction de Défense Canada",
+  },
+  "tenders.include_derived": { en: "Include provinces derived from other fields", fr: "Inclure les provinces déduites d'autres champs" },
+  "interest.derived_out": { en: "Derived provinces: left out", fr: "Provinces déduites : exclues" },
+  "keyed.p_derived": {
+    en: "With a province given, 1 (the default) also matches the provinces derived from other fields (a city in the regions of delivery, the regions of opportunity, a Defence Construction Canada regional office) and 0 reads the stated ones alone",
+    fr: "Avec une province donnée, 1 (par défaut) retient aussi les provinces déduites d'autres champs (une ville des régions de livraison, les régions de l'appel d'offres, un bureau régional de Construction de Défense Canada) et 0 ne lit que les provinces indiquées",
+  },
+  "methodology.places_intro": {
+    en: "Where a record states no province, or names a city in a province it does not state, the site derives provinces from the fields that say where the work is delivered. A derived province is kept apart from the stated ones and marked \"derived\" wherever it shows:",
+    fr: "Lorsqu'un dossier n'indique aucune province, ou nomme une ville d'une province qu'il n'indique pas, le site déduit des provinces des champs qui disent où le travail est livré. Une province déduite est gardée à part des provinces indiquées et marquée « par déduction » partout où elle paraît :",
+  },
+  "methodology.places_city": {
+    en: "A city in the regions of delivery gives the province CanadaBuys files it under in its own list of locations: Esquimalt gives British Columbia, Ottawa gives Ontario and Gatineau gives Quebec. Burlington, Cornwall and Windsor, which that list files under two provinces each, give none.",
+    fr: "Une ville des régions de livraison donne la province sous laquelle AchatsCanada la classe dans sa propre liste de lieux : Esquimalt donne la Colombie-Britannique, Ottawa l'Ontario et Gatineau le Québec. Burlington, Cornwall et Windsor, que cette liste classe chacune sous deux provinces, n'en donnent aucune.",
+  },
+  "methodology.places_opportunity": {
+    en: "A tender notice whose regions of delivery are blank or unspecified takes the provinces and cities of its second list of regions, the regions of the call for tenders.",
+    fr: "Un avis d'appel d'offres dont les régions de livraison sont vides ou non spécifiées prend les provinces et les villes de sa seconde liste de régions, les régions de l'appel d'offres.",
+  },
+  "methodology.places_land_claims": {
+    en: "A published contract names no region of delivery. One delivered in a comprehensive land claims agreement area takes that area's province or territory: the Nunavut Agreement gives Nunavut, and the Inuvialuit Final Agreement gives the Northwest Territories and Yukon.",
+    fr: "Un contrat divulgué ne nomme aucune région de livraison. Celui qui est livré dans une région visée par une entente sur les revendications territoriales globales prend la province ou le territoire de cette région : l'Accord du Nunavut donne le Nunavut, et la Convention définitive des Inuvialuits donne les Territoires du Nord-Ouest et le Yukon.",
+  },
+  "methodology.places_dcc": {
+    en: "Defence Construction Canada's notices name no region at all, and its regional offices carry the region of the work in their names. A notice from one of them takes that region's provinces when nothing above places it: Pacific gives British Columbia; Western gives Alberta, Saskatchewan and Manitoba; Ontario gives Ontario; National Capital gives Ontario and Quebec; Atlantic gives Nova Scotia, New Brunswick, Prince Edward Island and Newfoundland and Labrador. Its head office gives none. This is the one buyer whose office is read.",
+    fr: "Les avis de Construction de Défense Canada ne nomment aucune région, et ses bureaux régionaux portent la région des travaux dans leur nom. Un avis de l'un d'eux prend les provinces de cette région quand rien de ce qui précède ne le situe : Pacifique donne la Colombie-Britannique; Ouest, l'Alberta, la Saskatchewan et le Manitoba; Ontario, l'Ontario; capitale nationale, l'Ontario et le Québec; Atlantique, la Nouvelle-Écosse, le Nouveau-Brunswick, l'Île-du-Prince-Édouard et Terre-Neuve-et-Labrador. Son siège social n'en donne aucune. C'est le seul acheteur dont le bureau est lu.",
+  },
+  "methodology.places_never": {
+    en: "Never read for a place: the contracting office's address and the supplier's (where a buyer or a seller sits), the end user's address (a head office in Ottawa or Gatineau on nearly every notice that gives one), a title or a description. A name gives a province only when it matches a whole entry of these lists.",
+    fr: "Jamais lus pour situer un dossier : l'adresse du bureau contractant et celle du fournisseur (où siège un acheteur ou un vendeur), l'adresse de l'utilisateur final (un siège social à Ottawa ou à Gatineau sur presque chaque avis qui en donne une), un titre ou une description. Un nom ne donne une province que s'il correspond en entier à une entrée de ces listes.",
+  },
+  "methodology.places_filter": {
+    en: "The province filter of the tender list reads the stated and the derived provinces together unless its box for derived provinces is unticked. A notice with neither stays under \"Canada-wide or not stated\".",
+    fr: "Le filtre de province de la liste des appels d'offres lit ensemble les provinces indiquées et déduites, sauf si sa case des provinces déduites est décochée. Un avis qui n'a ni les unes ni les autres reste sous « Tout le Canada ou non indiqué ».",
+  },
+  "methodology.places_counts": {
+    en: "In the files of 2026-11-06, 467 of the 854 open notices stated no province, and 167 of them were placed (67 by a Defence Construction Canada regional office), leaving 300. Of the award notices since 2022-08-08, 15,743 of 29,254 stated none and 4,088 were placed; of PSPC's contract history since June 2023, 7,624 of 14,518 stated none and 2,189 were placed. Of the 7,178 contracts ending within 12 months on 2026-11-05, 6,338 had no province and at least 308 were placed. Published contracts make up 5,577 of the 7,178, and 98 of those name a land claims agreement area.",
+    fr: "Dans les fichiers du 2026-11-06, 467 des 854 avis ouverts n'indiquaient aucune province, et 167 d'entre eux ont été situés (67 par un bureau régional de Construction de Défense Canada), ce qui en laisse 300. Parmi les avis d'attribution depuis le 2022-08-08, 15 743 sur 29 254 n'en indiquaient aucune et 4 088 ont été situés; dans l'historique des contrats de SPAC depuis juin 2023, 7 624 sur 14 518 n'en indiquaient aucune et 2 189 ont été situés. Parmi les 7 178 contrats prenant fin d'ici 12 mois au 2026-11-05, 6 338 n'avaient aucune province et au moins 308 ont été situés. Les contrats divulgués en forment 5 577 sur 7 178, et 98 d'entre eux nomment une région visée par une entente sur les revendications territoriales.",
+  },
+  "methodology.src_dcc": {
+    en: "Defence Construction Canada posts its tender notices on CanadaBuys, but its award notices are not in the CanadaBuys award file (none from 2022-08-08 to 2026-11-06), and the proactive publication of contracts lists none of its contracts. It lists the contracts it awarded recently in a PDF on its own {link} page.",
+    fr: "Construction de Défense Canada publie ses avis d'appel d'offres sur AchatsCanada, mais ses avis d'attribution ne figurent pas dans le fichier des attributions d'AchatsCanada (aucun du 2022-08-08 au 2026-11-06), et la divulgation proactive des contrats ne présente aucun de ses contrats. Elle présente les contrats qu'elle a attribués récemment dans un PDF, sur sa propre page {link}.",
+  },
+  "methodology.src_dcc_link": { en: "Contract Activity", fr: "Activité contractuelle" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

@@ -16,6 +16,17 @@ import { EXPIRING_TEASER_ROWS } from "./expiring";
 // "Contracts ending soon" section states the radar's rules the same way
 // (CLAUDE.md "Expiring-contracts radar"). The "Analytics" section states the
 // rules the analytics views count by (src/records_db.ts, docs/analytics.md).
+// The "Derived provinces" part of "Statuses and Regions" states the place
+// rule of the pipeline's places.py; its figures were counted on the files of
+// 2026-11-06.
+
+// Defence Construction Canada's own page of recent awards (a PDF it links),
+// read 2026-11-06: neither CanadaBuys' award file nor the proactive
+// publication carries its awards.
+const DCC_CONTRACTS = {
+  en: "https://www.dcc-cdc.gc.ca/industry/contract-activity",
+  fr: "https://www.cdc-dcc.gc.ca/industrie/activit%C3%A9-contractuelle",
+} as const;
 
 const TOC: [string, Key][] = [
   ["sources", "methodology.toc_sources"],
@@ -58,6 +69,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
             "methodology.src_tenders", "methodology.src_same_day", "methodology.src_awards", "methodology.src_history",
             "methodology.src_contracts", "methodology.src_grants", "methodology.src_lobbying", "methodology.src_registry",
           ]} />
+          <p>{tj(lang, "methodology.src_dcc", { link: <a href={DCC_CONTRACTS[lang]} rel="noopener">{t(lang, "methodology.src_dcc_link")}</a> })}</p>
           <p>{tj(lang, "methodology.sources_more", { data: <a href="/data#sources">{t(lang, "nav.data")}</a> })}</p>
           <p>{t(lang, "methodology.tender_documents")}</p>
 
@@ -99,6 +111,14 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           <p>{t(lang, "methodology.status_past")}</p>
           <p>{t(lang, "methodology.status_awards")}</p>
           <p>{t(lang, "methodology.status_regions")}</p>
+          <h3 id="places">{t(lang, "places.derived_row")}</h3>
+          <p>{t(lang, "methodology.places_intro")}</p>
+          <List lang={lang} keys={[
+            "methodology.places_city", "methodology.places_opportunity", "methodology.places_land_claims", "methodology.places_dcc",
+            "methodology.places_never",
+          ]} />
+          <p>{t(lang, "methodology.places_filter")}</p>
+          <p>{t(lang, "methodology.places_counts")}</p>
 
           <h2 id="expiring">{t(lang, "methodology.toc_expiring")}</h2>
           <p>{t(lang, "methodology.expiring_intro")}</p>

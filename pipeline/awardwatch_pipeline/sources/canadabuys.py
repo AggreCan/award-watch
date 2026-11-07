@@ -40,7 +40,9 @@ the record with no buyer and is listed in the same review file, never in the
 log. UNSPSC codes go to the *_codes tables and unspsc_codes
 (trimmed to their significant digits: 81110000 is the family 8111), GSIN
 codes to gsin_codes, and the delivery regions to provinces through
-normalize.region_provinces. Descriptions are cut at 600 characters. Contacts
+normalize.region_provinces, with the provinces derived from a city they
+name, or from a tender's regions of opportunity, kept apart
+(places.derive). Descriptions are cut at 600 characters. Contacts
 are stored for the operator and never exported. A tender's documents are
 stored as the links the file names that point at a Government of Canada host
 (canadabuys_rows.attachments); the others are counted in the log row

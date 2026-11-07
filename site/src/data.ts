@@ -33,8 +33,26 @@ export function competitiveOf(v: Competitive | undefined): boolean | null {
   return v === true || v === 1 ? true : v === false || v === 0 ? false : null;
 }
 
+// Where a record's work is delivered, besides the provinces its regions of
+// delivery state (`provinces`): the ones derived from another field
+// (pipeline places.py), never one of `provinces`, and the field they come
+// from: "delivery" a city the regions of delivery name, "opportunity" a
+// notice's regions of opportunity, "land_claims" a published contract's land
+// claims agreement area, "dcc_office" the Defence Construction Canada regional
+// office that issued a notice. Present only on a row that has some.
+export const PLACE_SOURCES = ["delivery", "opportunity", "land_claims", "dcc_office"] as const;
+export type PlaceSource = (typeof PLACE_SOURCES)[number];
+export interface DerivedPlaces {
+  provinces_derived?: string[];
+  provinces_from?: PlaceSource;
+}
+const isPlaceSource = (v: unknown): v is PlaceSource => (PLACE_SOURCES as readonly unknown[]).includes(v);
+// Both or neither, as the export writes them.
+const isDerivedPlaces = (r: Record<string, unknown>): boolean =>
+  r.provinces_derived === undefined ? r.provinces_from === undefined : isStrList(r.provinces_derived) && isPlaceSource(r.provinces_from);
+
 // One open (or newly published) notice, list fields only.
-export interface TenderRow {
+export interface TenderRow extends DerivedPlaces {
   reference: string;
   // The reference as published, when it holds a character a URL path cannot
   // ("/" or ":"); `reference` is then its URL-safe form. Shown on pages and
@@ -72,7 +90,7 @@ export interface TenderRow {
 // One award notice or contract history row as a list row. On contract
 // history rows the buyer is the client department (the end user); the
 // contracting entity is always Public Services and Procurement Canada.
-export interface AwardRow {
+export interface AwardRow extends DerivedPlaces {
   reference: string;
   reference_published?: string;
   title_en: string | null;
@@ -285,7 +303,7 @@ export interface RelatedAward {
 
 // A notice as it stands (its newest amendment), every exported column. The
 // contact fields are never exported; the page links to CanadaBuys for them.
-export interface TenderDetail {
+export interface TenderDetail extends DerivedPlaces {
   reference: string;
   reference_published?: string;
   amendment: number;
@@ -410,7 +428,7 @@ export interface ContractVersion {
 
 // An award notice ("award:<reference>") or a contract history record
 // ("history:<reference>"), at its newest amendment.
-export interface ContractDetail {
+export interface ContractDetail extends DerivedPlaces {
   kind: "award" | "history";
   reference: string;
   reference_published?: string;
@@ -640,7 +658,7 @@ export type ExpiringKind = (typeof EXPIRING_KINDS)[number];
 
 // One contract whose newest version ends within 12 months of the data date,
 // listed once whichever sources hold it.
-export interface ExpiringRow {
+export interface ExpiringRow extends DerivedPlaces {
   kind: ExpiringKind;
   // As published; for a published contract "owner_org:reference", since its
   // reference is unique within one department only. An award or history
@@ -874,7 +892,7 @@ export const isTenderRow = (r: unknown): r is TenderRow => isObj(r) && isRef(r.r
   isStrOrNull(r.title_en) && isStrOrNull(r.title_fr) && isBuyerIdOrNull(r.buyer_id) && isStrOrNull(r.buyer_en) &&
   isStrOrNull(r.buyer_fr) && isStrOrNull(r.published) && isStrOrNull(r.closing) && isStrList(r.category) &&
   isStrOrNull(r.notice_type_en) && isStrOrNull(r.notice_type_fr) && isStrOrNull(r.method_en) && isStrOrNull(r.method_fr) &&
-  isStrList(r.segments) && isStrList(r.provinces) && isStr(r.first_seen) && optional(r.status, isStr) &&
+  isStrList(r.segments) && isStrList(r.provinces) && isDerivedPlaces(r) && isStr(r.first_seen) && optional(r.status, isStr) &&
   optional(r.excerpt_en, isStrOrNull) && optional(r.excerpt_fr, isStrOrNull) && optional(r.codes, isStrList);
 
 export const isAwardRow = (r: unknown): r is AwardRow => isObj(r) && isRef(r.reference) &&
@@ -882,7 +900,7 @@ export const isAwardRow = (r: unknown): r is AwardRow => isObj(r) && isRef(r.ref
   isStrOrNull(r.title_fr) && isOrgIdOrNull(r.organization_id) && isStrOrNull(r.organization) && isBuyerIdOrNull(r.buyer_id) &&
   isStrOrNull(r.buyer_en) && isStrOrNull(r.buyer_fr) && isStrOrNull(r.awarded) && isNumOrNull(r.value) &&
   isStrOrNull(r.currency) && isCompetitive(r.competitive) && isStrOrNull(r.instrument_en) && isStrOrNull(r.instrument_fr) &&
-  isStrList(r.segments) && isStrList(r.provinces) && optional(r.status, isStr) &&
+  isStrList(r.segments) && isStrList(r.provinces) && isDerivedPlaces(r) && optional(r.status, isStr) &&
   optional(r.published, isStrOrNull) && optional(r.start, isStrOrNull) && optional(r.end, isStrOrNull);
 
 // A row of awards/erroneous.json: a list row that carries the publication
@@ -997,7 +1015,8 @@ const isTenderDetail = (v: unknown, reference: string): v is TenderDetail => isO
   isStrListOrNull(v.end_users_en) && isStrListOrNull(v.end_users_fr) &&
   isStrOrNull(v.published) && isStrOrNull(v.closing) && isStrOrNull(v.amended) && isStrOrNull(v.start_expected) &&
   isStrOrNull(v.end_expected) && isStr(v.status) && isStrOrNull(v.gsin) && isStrOrNull(v.gsin_desc_en) &&
-  isStrOrNull(v.gsin_desc_fr) && isStrList(v.category) && isStrList(v.provinces) && isBuyerIdOrNull(v.buyer_id) &&
+  isStrOrNull(v.gsin_desc_fr) && isStrList(v.category) && isStrList(v.provinces) && isDerivedPlaces(v) &&
+  isBuyerIdOrNull(v.buyer_id) &&
   isStrOrNull(v.buyer_en) && isStrOrNull(v.buyer_fr) && isStr(v.source_file) && isStr(v.first_seen) && isStr(v.last_seen) &&
   isListOf(v.codes, isCodeRow) && isListOf(v.amendments, isTenderVersion) && isListOf(v.related_awards, isRelatedAward);
 
@@ -1030,7 +1049,8 @@ const isContractDetail = (v: unknown, kind: "award" | "history", reference: stri
   isNumOrNull(v.amount) && isNumOrNull(v.total_value) && isNumOrNull(v.value) && isStrOrNull(v.currency) && isStr(v.status) &&
   isStrOrNull(v.instrument_type_en) && isStrOrNull(v.instrument_type_fr) && isStrOrNull(v.amendment_type_en) &&
   isStrOrNull(v.amendment_type_fr) && isStrOrNull(v.gsin) && isStrOrNull(v.gsin_desc_en) && isStrOrNull(v.gsin_desc_fr) &&
-  isStrList(v.category) && isCompetitive(v.competitive) && isStrList(v.provinces) && isOrgIdOrNull(v.organization_id) &&
+  isStrList(v.category) && isCompetitive(v.competitive) && isStrList(v.provinces) && isDerivedPlaces(v) &&
+  isOrgIdOrNull(v.organization_id) &&
   isStrOrNull(v.supplier) && optional(v.supplier_operating, isStrOrNull) && isStrOrNull(v.supplier_city) &&
   isStrOrNull(v.supplier_province) && isStrOrNull(v.supplier_country) && isBuyerIdOrNull(v.buyer_id) &&
   isStrOrNull(v.buyer_en) && isStrOrNull(v.buyer_fr) && optional(v.client_id, isBuyerIdOrNull) &&
@@ -1267,7 +1287,8 @@ export const isExpiringRow = (r: unknown): r is ExpiringRow => isObj(r) && isExp
   isStrOrNull(r.start) && isDay(r.end) && isCount(r.days_left) && isNumOrNull(r.value) && isStrOrNull(r.currency) &&
   isCompetitive(r.competitive) && isStrOrNull(r.method_en) && isStrOrNull(r.method_fr) && isStrOrNull(r.instrument_en) &&
   isStrOrNull(r.instrument_fr) && isCount(r.n_amendments) && isNumOrNull(r.value_growth) &&
-  optional(r.tender_reference, (x) => x === null || isRef(x)) && isStrList(r.segments) && isStrList(r.provinces);
+  optional(r.tender_reference, (x) => x === null || isRef(x)) && isStrList(r.segments) && isStrList(r.provinces) &&
+  isDerivedPlaces(r);
 
 // The part of a buyer file or a profile: never more rows than it counts.
 const isExpiringPart = (v: unknown): v is ExpiringPart => isObj(v) && isCount(v.n) && isNumOrNull(v.total) &&

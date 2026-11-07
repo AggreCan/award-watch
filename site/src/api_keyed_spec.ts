@@ -40,7 +40,7 @@ export type KeyedEndpoint = { path: string; text: Key; params: readonly string[]
 export const KEYED_ENDPOINTS: readonly KeyedEndpoint[] = [
   {
     path: "/api/v1/tenders/open", text: "keyed.ep_open",
-    params: ["category", "segment", "province", "national", "code", "buyer", "type", "method", "closing", "q", "sort", "page"],
+    params: ["category", "segment", "province", "national", "derived", "code", "buyer", "type", "method", "closing", "q", "sort", "page"],
   },
   { path: "/api/v1/tenders/new", text: "keyed.ep_new", params: ["day", "page"] },
   { path: "/api/v1/expiring/{3m|6m|12m}", text: "keyed.ep_expiring", params: ["page"] },
@@ -56,6 +56,7 @@ export const KEYED_PARAMS: readonly [string, Key][] = [
   ["segment", "keyed.p_segment"],
   ["province", "keyed.p_province"],
   ["national", "keyed.p_national"],
+  ["derived", "keyed.p_derived"],
   ["code", "keyed.p_code"],
   ["buyer", "keyed.p_buyer"],
   ["type", "keyed.p_type"],
