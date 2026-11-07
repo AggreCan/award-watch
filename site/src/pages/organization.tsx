@@ -9,7 +9,7 @@ import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { accountsEnabled } from "../account/switch";
 import { WatchControl, watchControl } from "../account/watch_pages";
-import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
+import { ChartStack, type Panel as ChartPanel, ShortMoney, moneyTip, recordsText, yearLabels } from "../chart";
 import { Table, restClass } from "../columns";
 import { MONEY_SOURCES, PROVINCES, type MoneySource, type SourceKey } from "../constants";
 import { buyerPath, directoryCode, directoryPath, loadDirectories } from "../crosslinks";
@@ -99,7 +99,7 @@ const YearChart: FC<{ lang: Lang; years: readonly YearFigure[] }> = ({ lang, yea
     title: sourceLabel(lang, s),
     bars: withValue.filter((y) => y.source === s).map((y) => ({
       x0: y.year, x1: y.year + 1, value: y.total ?? 0,
-      title: `${y.year}: ${fmtMoney(y.total ?? 0, lang)}`,
+      title: moneyTip(lang, sourceLabel(lang, s), String(y.year), y.total ?? 0, recordsText(lang, y.n)),
     })),
   }));
   const labels = yearLabels(first, last);
@@ -539,10 +539,9 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           const body = (
             <>
               <span class="tile-label">{sourceLabel(lang, s)}</span>
-              <span class="tile-value">
-                {!read(s) ? t(lang, "common.not_loaded_short")
-                  : s === "lobbying" ? n(counts.lobbying) : fmtMoneyShort(counts[s] ? totals[s] ?? 0 : 0, lang)}
-              </span>
+              {!read(s) ? <span class="tile-value">{t(lang, "common.not_loaded_short")}</span>
+                : s === "lobbying" ? <span class="tile-value">{n(counts.lobbying)}</span>
+                : <ShortMoney lang={lang} value={counts[s] ? totals[s] ?? 0 : 0} class="tile-value" />}
               <span class="tile-note">
                 {!read(s) ? "" : s === "lobbying"
                   ? tn(lang, "org.tile_reports_one", "org.tile_reports_many", counts.lobbying, { n: n(counts.lobbying) })

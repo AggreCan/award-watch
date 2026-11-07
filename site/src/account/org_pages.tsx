@@ -14,12 +14,12 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
-import { ChartStack, barGap, fiscalAxis, type Panel as ChartPanel } from "../chart";
+import { ChartStack, barGap, fiscalAxis, partOf, recordsText, tipHead, tipText, type Panel as ChartPanel, type YearPoint } from "../chart";
 import { Table } from "../columns";
 import { MONEY_SOURCES, SEGMENT_CODES, type MoneySource } from "../constants";
 import { type ExpiringRow, type Profile, loadBuyers, loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, fmtMoneyShort, fmtPct, pick, provinceName, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
+import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, provinceName, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { PageHead, Panel, todayOf } from "../layout";
 import { csvCell } from "../pages/analytics";
 import { ExpiringNote, ExpiringTable, RADAR_CSV_COLUMNS, contractReference, radarRow } from "../pages/expiring";
@@ -177,13 +177,17 @@ const Locked: FC<{ lang: Lang; title: Key; text: string }> = ({ lang, title, tex
 
 // Bars a fiscal year apart, one panel each (one scale when shared): the
 // analytics views' chart (pages/analytics.tsx YearChart) on the same pieces.
-const YearBars: FC<{ lang: Lang; first: number; last: number; panels: { title: string; values: [number, number][] }[]; fmt: (v: number) => string; shared?: boolean }> = ({
+// fmt writes the axis; each value brings its tip's exact figures, under a
+// head that names the year as the table does (the last one "to date").
+const YearBars: FC<{ lang: Lang; first: number; last: number; panels: { title: string; values: YearPoint[] }[]; fmt: (v: number) => string; shared?: boolean }> = ({
   lang, first, last, panels, fmt, shared,
 }) => {
   const axis = fiscalAxis(first, last, (y) => fiscalLabel(lang, y));
   const stack: ChartPanel[] = panels.map((p) => ({
     title: p.title,
-    bars: p.values.filter(([, v]) => v > 0).map(([year, v]) => ({ x0: year, x1: year + 1, value: v, title: `${fiscalLabel(lang, year)}: ${fmt(v)}` })),
+    bars: p.values.filter(([, v]) => v > 0).map(([year, v, figures]) => ({
+      x0: year, x1: year + 1, value: v, title: tipText(tipHead(lang, p.title, fyLabel(lang, year, last)), figures),
+    })),
   }));
   return (
     <div class="chart">
@@ -214,7 +218,8 @@ const YearsBlock: FC<{ lang: Lang; rows: Row[]; first: number; current: number; 
         <YearBars lang={lang} first={first} last={current} fmt={(v) => fmtMoneyShort(v, lang)}
           panels={sources.map((s) => ({
             title: t(lang, "analytics.chart_years", { source: sourceLabel(lang, s) }),
-            values: rows.filter((r) => int(r.src) === SOURCE_NUMBER[s]).map((r): [number, number] => [int(r.fy), int(r.cents) / 100]),
+            values: rows.filter((r) => int(r.src) === SOURCE_NUMBER[s])
+              .map((r): YearPoint => [int(r.fy), int(r.cents) / 100, [fmtMoney(int(r.cents) / 100, lang), recordsText(lang, int(r.n))]]),
           }))} />
         <div class="table-wrap">
           <Table cols={[
@@ -336,7 +341,11 @@ const ShareBlock: FC<{
           <YearBars lang={lang} first={f.first} last={f.current} shared fmt={pct}
             panels={orgs.map((o) => ({
               title: o.name,
-              values: years.filter((fy) => (whole.get(fy) ?? 0) > 0).map((fy): [number, number] => [fy, (int(part(o.oid, fy)?.cents) / (whole.get(fy) ?? 1)) * 100]),
+              values: years.filter((fy) => (whole.get(fy) ?? 0) > 0).map((fy): YearPoint => {
+                const c = int(part(o.oid, fy)?.cents);
+                const w = whole.get(fy) ?? 1;
+                return [fy, (c / w) * 100, [partOf(lang, c, w, (v) => money(lang, v / 100))]];
+              }),
             }))} />
           <div class="table-wrap">
             <Table cols={[

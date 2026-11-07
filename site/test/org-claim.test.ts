@@ -485,6 +485,23 @@ describe("the page", () => {
     expect(BUYERS_SHOWN).toBe(25);
   });
 
+  // The tips (src/chart.tsx, public/tooltip.js): each bar's SVG <title> is the
+  // series and the fiscal year over the exact figures.
+  it("gives the charts' bars their exact figures as their tip: the value and its records, the share and its parts", async () => {
+    const marks = (html: string) => [...html.matchAll(/<rect\b[^>]*><title>([^<]*)<\/title>/g)].map((m) => decode(m[1]));
+    const tips = marks(await text(await page(pro)));
+    expect(tips).toContain("Award notices: value by fiscal year, 2024-25\n$1,000,000\n1 record");
+    expect(tips).toContain("Published contracts: value by fiscal year, 2026-27 (to date)\n$12,345\n1 record");
+    // The share of segment 81: a quarter of $2,000,000 in 2025-26, all of $1,000,000 in 2024-25.
+    expect(tips).toContain(`${NAME1}, 2025-26\n$500,000 of $2,000,000 (25%)`);
+    expect(tips).toContain(`${NAME1}, 2024-25\n$1,000,000 of $1,000,000 (100%)`);
+    for (const t of tips) expect(t, t).not.toMatch(/\d[MB]\b/);
+    // text() reads the typographic apostrophe as a straight one.
+    const fr = marks(await text(await page(pro, "/account/organization?lang=fr")));
+    expect(fr).toContain("Avis d'attribution : valeur par exercice, 2024-2025\n1 000 000 $\n1 dossier");
+    expect(fr).toContain(`${NAME1}, 2025-2026\n500 000 $ sur 2 000 000 $ (25 %)`);
+  });
+
   it("shows the share of a chosen segment and source, and says when there is no record to compare", async () => {
     await send(pro, "/account/organization/segment", { segment: "43" });
     const html = await text(await page(pro, "/account/organization?source=history"));

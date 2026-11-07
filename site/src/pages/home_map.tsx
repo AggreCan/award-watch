@@ -19,9 +19,13 @@
 // /tenders/same-day (its free view carries the Pro card) for anyone else.
 // The SVG is hidden from assistive technology and its links from the tab
 // order: the table beside it carries the same figures and links, sortable,
-// and is all a phone shows (the map is hidden below 700 px).
+// and is all a phone shows (the map is hidden below 700 px). Each province
+// carries its tip as its <title>: its name over the layer's count of it,
+// worded as the layer's caption words the national one (public/tooltip.js
+// shows it in the site's box, src/chart.tsx).
 
 import type { FC } from "hono/jsx";
+import { tipText, useTips } from "../chart";
 import { INSET_EXTENT, INSET_FRAME, INSET_PATHS, MAP_HEIGHT, MAP_LABELS, MAP_PATHS, MAP_WIDTH, type MaritimeProvince } from "../canada_map";
 import { type Column, Table, minWidths } from "../columns";
 import { CLOSING_SOON_DAYS, PROVINCES } from "../constants";
@@ -43,6 +47,8 @@ export interface MapLayer {
   label: string;
   // The line over the legend: the layer's notices.
   caption: string;
+  // A count of the layer's notices in the caption's words, for a province's tip.
+  count: (n: number) => string;
   counts: ProvinceCounts;
   href: (code: Province) => string;
   pro: boolean;
@@ -89,28 +95,31 @@ const placeOf = (code: Province): PlaceQuery => ({ province: [code], national: f
 // day of /tenders/new.
 export function mapLayers(lang: Lang, map: Record<StatsMapLayer, ProvinceCounts>, sameDay: ProvinceCounts | null,
   proSameDay: boolean, today: string): MapLayer[] {
+  const newToday = (n: number) => tn(lang, "map.caption_new_today_one", "map.caption_new_today_many", n, { n: fmtInt(n, lang) });
+  const open = (n: number) => tn(lang, "map.caption_open_one", "map.caption_open_many", n, { n: fmtInt(n, lang) });
+  const closing = (n: number) => tn(lang, "map.caption_closing_one", "map.caption_closing_many", n, { n: fmtInt(n, lang), days: CLOSING_SOON_DAYS });
   const layers: MapLayer[] = [
     {
       id: "new_today", label: t(lang, "map.layer_new_today"), counts: map.new_today, pro: false,
-      caption: tn(lang, "map.caption_new_today_one", "map.caption_new_today_many", map.new_today.n, { n: fmtInt(map.new_today.n, lang) }),
+      caption: newToday(map.new_today.n), count: newToday,
       href: (code) => newDayHref(today, today, placeOf(code)),
     },
     {
       id: "open", label: t(lang, "map.layer_open"), counts: map.open, pro: false,
-      caption: tn(lang, "map.caption_open_one", "map.caption_open_many", map.open.n, { n: fmtInt(map.open.n, lang) }),
+      caption: open(map.open.n), count: open,
       href: (code) => `/tenders${tenderQueryString({ ...BLANK, ...placeOf(code) })}`,
     },
     {
       id: "closing_7d", label: t(lang, "map.layer_closing", { n: CLOSING_SOON_DAYS }), counts: map.closing_7d, pro: false,
-      caption: tn(lang, "map.caption_closing_one", "map.caption_closing_many", map.closing_7d.n,
-        { n: fmtInt(map.closing_7d.n, lang), days: CLOSING_SOON_DAYS }),
+      caption: closing(map.closing_7d.n), count: closing,
       href: (code) => `/tenders${tenderQueryString({ ...BLANK, ...placeOf(code), closing: String(CLOSING_SOON_DAYS) })}`,
     },
   ];
   if (sameDay) {
+    const posted = (n: number) => tn(lang, "intraday.heading_one", "intraday.heading_many", n, { n: fmtInt(n, lang) });
     layers.push({
       id: "same_day", label: t(lang, "map.layer_same_day"), counts: sameDay, pro: true,
-      caption: tn(lang, "intraday.heading_one", "intraday.heading_many", sameDay.n, { n: fmtInt(sameDay.n, lang) }),
+      caption: posted(sameDay.n), count: posted,
       href: (code) => (proSameDay ? sameDayHref(placeOf(code)) : SAME_DAY_PATH),
     });
   }
@@ -133,10 +142,15 @@ const MARITIMES: readonly MaritimeProvince[] = ["NB", "NS", "PE"];
 const LABEL_UP = 2;
 const LABEL_LINE = 22;
 
-// A province on one layer: its fill, as a link to its list when it has a notice.
-const Shape: FC<{ layer: MapLayer; code: Province; def: string; top: number }> = ({ layer, code, def, top }) => {
+// A province on one layer: its fill, as a link to its list when it has a
+// notice, and its tip, the province's name over the layer's count.
+const Shape: FC<{ lang: Lang; layer: MapLayer; code: Province; def: string; top: number }> = ({ lang, layer, code, def, top }) => {
   const n = countOf(layer.counts, code);
-  const shape = <use href={`#${def}`} class={`cmap-s${mapStep(n, top)}`} />;
+  const shape = (
+    <use href={`#${def}`} class={`cmap-s${mapStep(n, top)}`}>
+      <title>{tipText(provinceName(lang, code), [layer.count(n)])}</title>
+    </use>
+  );
   return n > 0 ? <a href={layer.href(code)} tabindex={-1}>{shape}</a> : shape;
 };
 
@@ -151,6 +165,7 @@ const Label: FC<{ lang: Lang; layer: MapLayer; code: Province }> = ({ lang, laye
 };
 
 export const CanadaMapPanel: FC<{ lang: Lang; layers: readonly MapLayer[] }> = ({ lang, layers }) => {
+  useTips();
   const shown = firstLayer(layers);
   const tops = new Map(layers.map((l) => [l.id, topOf(l.counts)]));
   const main = PROVINCES.filter((p) => !MAP_LABELS[p].inset);
@@ -163,7 +178,7 @@ export const CanadaMapPanel: FC<{ lang: Lang; layers: readonly MapLayer[] }> = (
       foot={<p>{tj(lang, "map.source", { link: <a href={BOUNDARY_URL[lang]}>{t(lang, "map.source_link")}</a> })}</p>}>
       {/* Beside the map, the table keeps the least width of its columns. */}
       <div class="cmap" id="canada-map" data-layer={shown} style={`--cmap-list-min:${minWidths(cols).all}px`}>
-        <div class="cmap-figure">
+        <div class="cmap-figure" data-tip="">
           <div class="cmap-toggles" role="group" aria-label={t(lang, "map.layers")}>
             {layers.map((l) => (
               <button type="button" class="btn" data-map-layer={l.id} aria-pressed={l.id === shown ? "true" : "false"}>
@@ -180,7 +195,7 @@ export const CanadaMapPanel: FC<{ lang: Lang; layers: readonly MapLayer[] }> = (
             </defs>
             {layers.map((l) => (
               <g class="cmap-layer" data-for={l.id}>
-                {PROVINCES.map((p) => <Shape layer={l} code={p} def={`cm-${p}`} top={tops.get(l.id)!} />)}
+                {PROVINCES.map((p) => <Shape lang={lang} layer={l} code={p} def={`cm-${p}`} top={tops.get(l.id)!} />)}
                 {main.map((p) => <Label lang={lang} layer={l} code={p} />)}
               </g>
             ))}
@@ -189,7 +204,7 @@ export const CanadaMapPanel: FC<{ lang: Lang; layers: readonly MapLayer[] }> = (
             <rect class="cmap-inset" x={INSET_FRAME.x} y={INSET_FRAME.y} width={INSET_FRAME.w} height={INSET_FRAME.h} />
             {layers.map((l) => (
               <g class="cmap-layer" data-for={l.id}>
-                {MARITIMES.map((p) => <Shape layer={l} code={p} def={`cmi-${p}`} top={tops.get(l.id)!} />)}
+                {MARITIMES.map((p) => <Shape lang={lang} layer={l} code={p} def={`cmi-${p}`} top={tops.get(l.id)!} />)}
                 {inset.map((p) => <Label lang={lang} layer={l} code={p} />)}
               </g>
             ))}

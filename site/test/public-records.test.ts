@@ -32,7 +32,8 @@ describe("organization profile", () => {
 
   it("shows one tile per source, in short form, and says the sources are never added", async () => {
     const page = await html("/organizations/org-a000000001");
-    expect(page).toContain('<span class="tile-label">Published contracts</span><span class="tile-value">$1.9M</span><span class="tile-note">101 records</span>');
+    // The short form with its exact value as its title, for the tip; $250,000 is exact as it stands.
+    expect(page).toContain('<span class="tile-label">Published contracts</span><span class="tile-value" title="$1,875,000" data-tip="">$1.9M</span><span class="tile-note">101 records</span>');
     expect(page).toContain('<span class="tile-label">Award notices</span><span class="tile-value">$250,000</span><span class="tile-note">1 record</span>');
     expect(page).toContain('<p class="tiles-note">Each source is totalled separately (<a href="/methodology#counting">Methodology</a>).</p>');
     expect(page).not.toMatch(/Total across|Grand total/);

@@ -3628,6 +3628,18 @@ const STRINGS = {
     fr: "Les {n} premières sur {total}; la {search} les énumère toutes.",
   },
   "analytics.search_page": { en: "search page", fr: "page de recherche" },
+  // A chart mark's tip (src/chart.tsx, public/tooltip.js): the head, the
+  // panel's series and the mark's period, over the exact figures.
+  "tip.head": { en: "{label}, {period}", fr: "{label}, {period}" },
+  // A share with its parts: "$1,234,567 of $3,600,000 (34%)".
+  "tip.part_of": { en: "{part} of {whole} ({pct})", fr: "{part} sur {whole} ({pct})" },
+  "tip.share_of_period": { en: "{pct} of the period's value", fr: "{pct} de la valeur de la période" },
+  "tip.contracts_one": { en: "{n} contract", fr: "{n} contrat" },
+  "tip.contracts_many": { en: "{n} contracts", fr: "{n} contrats" },
+  "tip.valued_one": { en: "{n} record with a value", fr: "{n} dossier avec une valeur" },
+  "tip.valued_many": { en: "{n} records with a value", fr: "{n} dossiers avec une valeur" },
+  "tip.compared_one": { en: "{n} record compared", fr: "{n} dossier comparé" },
+  "tip.compared_many": { en: "{n} records compared", fr: "{n} dossiers comparés" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;
@@ -3639,6 +3651,7 @@ type Vars = Record<string, string | number>;
 export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "account.plan_tag_pro", // the plan subscript after the wordmark reads the same in both
   "pro.tag", // the plan's name on the Pro chip
+  "tip.head", // a chart tip's series and period, joined by a comma in both
   "site.name",
   "nav.segments",
   "common.page_n",

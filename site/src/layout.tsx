@@ -14,6 +14,7 @@ import { clockOf } from "./closing";
 import { type TableUse, TableUseContext } from "./columns";
 import { type RefreshStamps, RefreshTimers } from "./refresh";
 import { templatePieces } from "../public/refresh.js";
+import { TIP_ID } from "../public/tooltip.js";
 
 // The formatting helpers live with the dictionary; pages import them from here.
 export { fmtInt, fmtMoney, fmtMoneyShort, pick } from "./i18n";
@@ -436,9 +437,21 @@ const SortScript: FC<{ lang: Lang; tables: TableUse }> = ({ lang, tables }) =>
     </>
   ) : null;
 
+// public/tooltip.js and the one box it fills, on a page that draws a tip: a
+// chart, the home map or a short-form figure (src/chart.tsx useTips marks it
+// while the content renders). The box stays hidden and empty without the
+// script; each mark's own title is the fallback then.
+const TipScript: FC<{ tables: TableUse }> = ({ tables }) =>
+  tables.tips ? (
+    <>
+      <div id={TIP_ID} class="tip" role="tooltip" hidden></div>
+      <script type="module" src="/tooltip.js"></script>
+    </>
+  ) : null;
+
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 36;
+export const STYLES_VERSION = 37;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -538,6 +551,7 @@ export const Layout: FC<
           </div>
         </div>
         <SortScript lang={lang} tables={tables} />
+        <TipScript tables={tables} />
       </body>
     </html>
   );

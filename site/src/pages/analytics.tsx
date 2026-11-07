@@ -43,7 +43,10 @@
 import type { Context } from "hono";
 import { ProTag } from "../pro";
 import type { FC } from "hono/jsx";
-import { ChartStack, RankedBars, barGap, fiscalAxis, type Panel as ChartPanel, type RankedBar } from "../chart";
+import {
+  ChartStack, RankedBars, barGap, fiscalAxis, moneyTip, partOf, recordsText, tipHead, tipText, type Panel as ChartPanel, type RankedBar,
+  type YearPoint,
+} from "../chart";
 import { Table } from "../columns";
 import { MONEY_SOURCES, type MoneySource } from "../constants";
 import { BUYER_ID_RE, ORG_ID_RE, SEGMENT_RE, loadBuyer, loadBuyerAlias, loadProfile, loadStats, type Stats } from "../data";
@@ -325,12 +328,14 @@ const quarterX = (year: number, q: number) => year * 4 + q - 1;
 
 const QuarterChart: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, rows, frame }) => {
   const axis = fiscalAxis(frame.first, frame.last, (y) => fiscalLabel(lang, y), 4);
+  const title = t(lang, "analytics.chart_quarters", { source: sourceLabel(lang, frame.source) });
   const bars = rows.filter((r) => int(r.cents) > 0).map((r) => {
     const x = quarterX(int(r.fy), int(r.fq));
     const value = int(r.cents) / 100;
-    return { x0: x, x1: x + 1, value, title: `${fiscalLabel(lang, int(r.fy))} ${t(lang, "analytics.quarter", { n: int(r.fq) })}: ${fmtMoney(value, lang)}` };
+    const period = `${fiscalLabel(lang, int(r.fy))} ${t(lang, "analytics.quarter", { n: int(r.fq) })}`;
+    return { x0: x, x1: x + 1, value, title: moneyTip(lang, title, period, value, recordsText(lang, int(r.n))) };
   });
-  const panel: ChartPanel = { title: t(lang, "analytics.chart_quarters", { source: sourceLabel(lang, frame.source) }), bars };
+  const panel: ChartPanel = { title, bars };
   return (
     <div class="chart">
       <ChartStack domain={[frame.first * 4, (frame.last + 1) * 4]} panels={[panel]} height={140} xLabels={axis.labels} grid={axis.grid}
@@ -339,14 +344,18 @@ const QuarterChart: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
   );
 };
 
-// Bars a fiscal year apart, one panel each (one scale when shared).
-const YearChart: FC<{ lang: Lang; frame: Frame; panels: { title: string; values: [number, number][] }[]; fmt: (v: number) => string; shared?: boolean }> = ({
+// Bars a fiscal year apart, one panel each (one scale when shared). fmt
+// writes the axis; each value brings its tip's exact figures, and the head
+// names the year as the tables do (the current one "to date").
+const YearChart: FC<{ lang: Lang; frame: Frame; panels: { title: string; values: YearPoint[] }[]; fmt: (v: number) => string; shared?: boolean }> = ({
   lang, frame, panels, fmt, shared,
 }) => {
   const axis = fiscalAxis(frame.first, frame.last, (y) => fiscalLabel(lang, y));
   const stack: ChartPanel[] = panels.map((p) => ({
     title: p.title,
-    bars: p.values.filter(([, v]) => v > 0).map(([year, v]) => ({ x0: year, x1: year + 1, value: v, title: `${fiscalLabel(lang, year)}: ${fmt(v)}` })),
+    bars: p.values.filter(([, v]) => v > 0).map(([year, v, figures]) => ({
+      x0: year, x1: year + 1, value: v, title: tipText(tipHead(lang, p.title, fy(lang, year, frame.current)), figures),
+    })),
   }));
   return (
     <div class="chart">
@@ -356,12 +365,12 @@ const YearChart: FC<{ lang: Lang; frame: Frame; panels: { title: string; values:
   );
 };
 
-const ShareLines: FC<{ lang: Lang; frame: Frame; panels: { title: string; values: [number, number][] }[] }> = ({ lang, frame, panels }) => {
+const ShareLines: FC<{ lang: Lang; frame: Frame; panels: { title: string; values: YearPoint[] }[] }> = ({ lang, frame, panels }) => {
   const axis = fiscalAxis(frame.first, frame.last, (y) => fiscalLabel(lang, y));
   const pct = (v: number) => t(lang, "pct", { n: Math.round(v) });
   const stack: ChartPanel[] = panels.map((p) => ({
     title: p.title,
-    line: p.values.map(([year, v]) => ({ x: year + 0.5, value: v, title: `${fiscalLabel(lang, year)}: ${pct(v)}` })),
+    line: p.values.map(([year, v, figures]) => ({ x: year + 0.5, value: v, title: tipText(tipHead(lang, p.title, fy(lang, year, frame.current)), figures) })),
   }));
   return (
     <div class="chart">
@@ -397,10 +406,13 @@ const RankTable: FC<{ lang: Lang; head: string; rows: { label: unknown; n: numbe
   </div>
 );
 
-function rankBars(lang: Lang, rows: { label: unknown; name: string; cents: unknown; share: string }[]): RankedBar[] {
+// A row's tip: the name over the exact value, the records it adds up and its
+// share of the period's value.
+function rankBars(lang: Lang, rows: { label: unknown; name: string; n: number; cents: unknown; share: string }[]): RankedBar[] {
   return rows.map((r) => {
     const value = dollars(r.cents) ?? 0;
-    return { label: r.label, value, text: fmtMoneyShort(value, lang), note: r.share, title: `${r.name}: ${money(lang, dollars(r.cents))}` };
+    const figures = [money(lang, dollars(r.cents)), recordsText(lang, r.n), ...(r.share ? [t(lang, "tip.share_of_period", { pct: r.share })] : [])];
+    return { label: r.label, value, text: fmtMoneyShort(value, lang), note: r.share, title: tipText(r.name, figures) };
   });
 }
 
@@ -414,13 +426,14 @@ const none = (lang: Lang) => <p class="muted">{t(lang, "analytics.none")}</p>;
 // the count of records they rest on.
 const ValuesPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = ({ lang, rows, frame, csv }) => {
   const average = (r: Row) => (int(r.n_pos) > 0 ? Math.round(int(r.pos) / int(r.n_pos)) / 100 : null);
+  const valued = (r: Row) => tn(lang, "tip.valued_one", "tip.valued_many", int(r.n_pos), { n: fmtInt(int(r.n_pos), lang) });
   return (
     <Panel title={t(lang, "analytics.panel_values")} tools={rows.length ? <CsvLink lang={lang} href={csv} /> : undefined}
       foot={<span>{t(lang, "analytics.foot_values")}</span>}>
       {rows.some((r) => int(r.n_pos) > 0) ? <>
         <YearChart lang={lang} frame={frame} fmt={(v) => fmtMoneyShort(v, lang)} panels={[
-          { title: t(lang, "analytics.chart_median"), values: rows.map((r) => [int(r.fy), int(r.med) / 100]) },
-          { title: t(lang, "analytics.chart_average"), values: rows.map((r) => [int(r.fy), average(r) ?? 0]) },
+          { title: t(lang, "analytics.chart_median"), values: rows.map((r): YearPoint => [int(r.fy), int(r.med) / 100, [fmtMoney(int(r.med) / 100, lang), valued(r)]]) },
+          { title: t(lang, "analytics.chart_average"), values: rows.map((r): YearPoint => [int(r.fy), average(r) ?? 0, [fmtMoney(average(r) ?? 0, lang), valued(r)]]) },
         ]} />
         <div class="table-wrap">
           <Table cols={[
@@ -454,14 +467,21 @@ const ValuesPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = 
 const GrowthPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = ({ lang, rows, frame, csv }) => {
   const amended = AMENDED_SOURCES.includes(frame.source);
   const n = (v: number) => fmtInt(v, lang);
+  const compared = (r: Row) => tn(lang, "tip.compared_one", "tip.compared_many", int(r.n_compared), { n: n(int(r.n_compared)) });
   return (
     <Panel title={t(lang, "analytics.panel_growth")} tools={amended && rows.length ? <CsvLink lang={lang} href={csv} /> : undefined}
       foot={amended ? <span>{t(lang, "analytics.foot_growth")}</span> : undefined}>
       {!amended ? <p class="muted">{t(lang, "analytics.no_growth")}</p> : !rows.length ? none(lang) : <>
         {rows.some((r) => int(r.first_cents) > 0) ? (
           <YearChart lang={lang} frame={frame} shared fmt={(v) => fmtMoneyShort(v, lang)} panels={[
-            { title: t(lang, "analytics.chart_growth_first"), values: rows.map((r) => [int(r.fy), int(r.first_cents) / 100]) },
-            { title: t(lang, "analytics.chart_growth_last"), values: rows.map((r) => [int(r.fy), int(r.last_cents) / 100]) },
+            {
+              title: t(lang, "analytics.chart_growth_first"),
+              values: rows.map((r): YearPoint => [int(r.fy), int(r.first_cents) / 100, [fmtMoney(int(r.first_cents) / 100, lang), compared(r)]]),
+            },
+            {
+              title: t(lang, "analytics.chart_growth_last"),
+              values: rows.map((r): YearPoint => [int(r.fy), int(r.last_cents) / 100, [fmtMoney(int(r.last_cents) / 100, lang), compared(r)]]),
+            },
           ]} />
         ) : <p class="muted">{t(lang, "analytics.growth_none")}</p>}
         <div class="table-wrap">
@@ -599,6 +619,7 @@ const DuePanel: FC<{ lang: Lang; rows: Row[]; from: string; radarDay: string; fi
     return { at, year, q, label, ends, n: int(row?.n), cents: row ? num(row.cents) : null, noValue: int(row?.n_no_value), window: windowOf(days) };
   });
   const value = (cents: number | null) => (cents === null ? 0 : cents / 100);
+  const contracts = (n: number) => tn(lang, "tip.contracts_one", "tip.contracts_many", n, { n: fmtInt(n, lang) });
   const axis = quarters.map((x, k) => ({ x: x.at + 0.5, text: x.label, minor: k % 2 === 1, phone: k === 0 || k === DUE_QUARTERS - 1 }));
   const grid = quarters.filter((x, k) => k > 0 && x.q === 1).map((x) => x.at);
   const any = quarters.some((x) => x.n > 0);
@@ -612,14 +633,20 @@ const DuePanel: FC<{ lang: Lang; rows: Row[]; from: string; radarDay: string; fi
             fmt={(v) => fmtMoneyShort(v, lang)} gap={barGap(DUE_QUARTERS)} panels={[
               {
                 title: t(lang, "analytics.chart_due_value"),
-                bars: quarters.filter((x) => value(x.cents) > 0).map((x) => ({ x0: x.at, x1: x.at + 1, value: value(x.cents), title: `${x.label}: ${fmtMoney(value(x.cents), lang)}` })),
+                bars: quarters.filter((x) => value(x.cents) > 0).map((x) => ({
+                  x0: x.at, x1: x.at + 1, value: value(x.cents),
+                  title: moneyTip(lang, t(lang, "analytics.chart_due_value"), x.label, value(x.cents), contracts(x.n)),
+                })),
               },
             ]} />
           <ChartStack domain={[start, start + DUE_QUARTERS]} xLabels={axis} grid={grid} height={80} aria={t(lang, "analytics.due_aria")}
             fmt={(v) => fmtInt(v, lang)} gap={barGap(DUE_QUARTERS)} panels={[
               {
                 title: t(lang, "analytics.chart_due_count"),
-                bars: quarters.filter((x) => x.n > 0).map((x) => ({ x0: x.at, x1: x.at + 1, value: x.n, title: `${x.label}: ${fmtInt(x.n, lang)}` })),
+                bars: quarters.filter((x) => x.n > 0).map((x) => ({
+                  x0: x.at, x1: x.at + 1, value: x.n,
+                  title: tipText(tipHead(lang, t(lang, "analytics.chart_due_count"), x.label), [contracts(x.n), ...(x.cents !== null ? [fmtMoney(value(x.cents), lang)] : [])]),
+                })),
               },
             ]} />
         </div>
@@ -832,10 +859,12 @@ const QuarterTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
 };
 
 const CompetitionView: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, rows, frame }) => {
-  const byCount: [number, number][] = rows.filter((r) => int(r.n) > 0).map((r) => [int(r.fy), (int(r.n_nc) / int(r.n)) * 100]);
-  const byValue: [number, number][] = rows.filter((r) => int(r.pos) > 0).map((r) => [int(r.fy), (int(r.pos_nc) / int(r.pos)) * 100]);
   const n = (v: number) => fmtInt(v, lang);
   const m = (v: number) => fmtMoney(v / 100, lang);
+  const byCount: YearPoint[] = rows.filter((r) => int(r.n) > 0)
+    .map((r) => [int(r.fy), (int(r.n_nc) / int(r.n)) * 100, [partOf(lang, int(r.n_nc), int(r.n), n)]]);
+  const byValue: YearPoint[] = rows.filter((r) => int(r.pos) > 0)
+    .map((r) => [int(r.fy), (int(r.pos_nc) / int(r.pos)) * 100, [partOf(lang, int(r.pos_nc), int(r.pos), m)]]);
   return (
     <>
       <ShareLines lang={lang} frame={frame} panels={[
@@ -963,7 +992,10 @@ export async function organizationAnalytics(c: Context<AppEnv>): Promise<Respons
     <Panel title={t(lang, "analytics.panel_years")} tools={pro ? <CsvLink lang={lang} href={csv("years")} /> : undefined}>
       {years.length ? (
         <YearChart lang={lang} frame={frame} fmt={(v) => fmtMoneyShort(v, lang)}
-          panels={[{ title: t(lang, "analytics.chart_years", { source: sourceLabel(lang, frame.source) }), values: years.map((r) => [int(r.fy), int(r.cents) / 100]) }]} />
+          panels={[{
+            title: t(lang, "analytics.chart_years", { source: sourceLabel(lang, frame.source) }),
+            values: years.map((r): YearPoint => [int(r.fy), int(r.cents) / 100, [fmtMoney(int(r.cents) / 100, lang), recordsText(lang, int(r.n))]]),
+          }]} />
       ) : <p class="muted">{t(lang, "analytics.none")}</p>}
       {pro && years.length ? <OrgYearTable lang={lang} rows={years} frame={frame} /> : null}
       {pro ? null : <FreeNote lang={lang} view="organization" signedIn={await signedIn(c)} asked={frame.asked} />}
@@ -1064,7 +1096,9 @@ const SharePanel: FC<{
     const mine = shareRows.filter((r) => num(r.oid) === o);
     return {
       title: label(o),
-      values: mine.filter((r) => int(r.seg_cents) > 0).map((r): [number, number] => [int(r.fy), (int(r.cents) / int(r.seg_cents)) * 100]),
+      values: mine.filter((r) => int(r.seg_cents) > 0).map((r): YearPoint => [
+        int(r.fy), (int(r.cents) / int(r.seg_cents)) * 100, [partOf(lang, int(r.cents), int(r.seg_cents), (v) => fmtMoney(v / 100, lang))],
+      ]),
       n: mine.reduce((s, r) => s + int(r.n), 0),
       cents: mine.reduce((s, r) => s + int(r.cents), 0),
     };
@@ -1177,8 +1211,8 @@ export async function segmentAnalytics(c: Context<AppEnv>): Promise<Response> {
       foot={<span>{t(lang, "analytics.foot_activity")}</span>}>
       {years.length ? (
         <YearChart lang={lang} frame={frame} fmt={(v) => fmtInt(v, lang)} panels={[
-          { title: t(lang, "analytics.chart_buyers"), values: years.map((r) => [int(r.fy), int(r.n_buyers)]) },
-          { title: t(lang, "analytics.chart_orgs"), values: years.map((r) => [int(r.fy), int(r.n_orgs)]) },
+          { title: t(lang, "analytics.chart_buyers"), values: years.map((r): YearPoint => [int(r.fy), int(r.n_buyers), [fmtInt(int(r.n_buyers), lang)]]) },
+          { title: t(lang, "analytics.chart_orgs"), values: years.map((r): YearPoint => [int(r.fy), int(r.n_orgs), [fmtInt(int(r.n_orgs), lang)]]) },
         ]} />
       ) : <p class="muted">{t(lang, "analytics.none")}</p>}
       {pro && years.length ? <SegmentYearTable lang={lang} rows={years} frame={frame} /> : null}

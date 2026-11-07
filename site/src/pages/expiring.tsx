@@ -34,6 +34,7 @@ import type { FC } from "hono/jsx";
 import { allowed } from "../account/entitlements";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
+import { ShortMoney } from "../chart";
 import { type HeadSort, type Rest, type SortOrders, Table, headSort, restClass } from "../columns";
 import { PROVINCES, SEGMENTS } from "../constants";
 import {
@@ -42,7 +43,7 @@ import {
   type Stats,
 } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, fmtMoneyShort, numberLocale, pick, provinceName, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
+import { fmtInt, numberLocale, pick, provinceName, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, addDays, noDataPage, notFoundPage, page, PageHead, Panel, todayOf, varyOnCookie } from "../layout";
 import { DEEP_WINDOWS, radarWindowLocked, requestPlan } from "../plan";
 import { dollars, num, orgIdOf, orgNumber } from "../records_db";
@@ -581,7 +582,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
   const twelve = windows.find((w) => w.window === "12m");
   const lead = !twelve ? t(lang, "expiring.lead_plain", { date: leadDate })
     : twelve.total === null ? t(lang, "expiring.lead_no_total", { n: n(twelve.n), date: leadDate })
-    : t(lang, "expiring.lead", { n: n(twelve.n), total: fmtMoneyShort(twelve.total, lang), date: leadDate });
+    : tj(lang, "expiring.lead", { n: n(twelve.n), total: <ShortMoney lang={lang} value={twelve.total} />, date: leadDate });
 
   return page(
     c,
@@ -603,7 +604,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
               </span>
               <span class="tile-value">{n(w.n)}</span>
               <span class="tile-note">
-                {t(lang, "expiring.tile_total", { total: w.total === null ? t(lang, "common.not_stated") : fmtMoneyShort(w.total, lang) })}
+                {tj(lang, "expiring.tile_total", { total: w.total === null ? t(lang, "common.not_stated") : <ShortMoney lang={lang} value={w.total} /> })}
               </span>
             </a>
           ))}
@@ -911,13 +912,13 @@ const WindowHead: FC<{
 // What Pro adds on a window's free view, in figures: all the window's
 // contracts, and how many of them, worth how much, end beyond the free
 // 3-month list. Without the 3-month figures it names the count alone.
-function proTeaserText(lang: Lang, window: ExpiringWindow, idx: ExpiringWindowIndex, three: ExpiringWindowIndex | null): string {
+function proTeaserText(lang: Lang, window: ExpiringWindow, idx: ExpiringWindowIndex, three: ExpiringWindowIndex | null): unknown {
   const all = fmtInt(idx.rows, lang);
   const beyond = three ? idx.rows - three.rows : 0;
   if (!three || beyond <= 0) return t(lang, "expiring.pro_text_all", { all });
   const vars = { all, beyond: fmtInt(beyond, lang), months: fmtInt(Number(window.slice(0, -1)), lang) };
   return idx.total !== null && three.total !== null
-    ? t(lang, "expiring.pro_text", { ...vars, total_beyond: fmtMoneyShort(idx.total - three.total, lang) })
+    ? tj(lang, "expiring.pro_text", { ...vars, total_beyond: <ShortMoney lang={lang} value={idx.total - three.total} /> })
     : t(lang, "expiring.pro_text_no_total", vars);
 }
 

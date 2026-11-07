@@ -11,12 +11,12 @@ import type { Context } from "hono";
 import { accountsEnabled } from "../account/switch";
 import { BriefingPanel, briefingControl } from "../account/briefing_pages";
 import { WatchControl, watchControl } from "../account/watch_pages";
-import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
+import { ChartStack, type Panel as ChartPanel, ShortMoney, moneyTip, recordsText, yearLabels } from "../chart";
 import { Table } from "../columns";
 import { MONEY_SOURCES } from "../constants";
 import { BUYER_ID_RE, INSTITUTION, loadBuyer, loadBuyerAlias, loadBuyers, loadStats, type BuyerAlias, type BuyerSummary } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, fmtMoney, fmtMoneyShort, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
+import { fmtInt, fmtMoneyShort, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { ProTag } from "../pro";
 import { buyerSeo, pageSeo } from "../seo";
@@ -187,7 +187,9 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
     const last = Math.max(...withValue.map((y) => y.year));
     const panels: ChartPanel[] = MONEY_SOURCES.filter((s) => withValue.some((y) => y.source === s)).map((s) => ({
       title: sourceLabel(lang, s),
-      bars: withValue.filter((y) => y.source === s).map((y) => ({ x0: y.year, x1: y.year + 1, value: y.total ?? 0, title: `${y.year}: ${fmtMoney(y.total ?? 0, lang)}` })),
+      bars: withValue.filter((y) => y.source === s).map((y) => ({
+        x0: y.year, x1: y.year + 1, value: y.total ?? 0, title: moneyTip(lang, sourceLabel(lang, s), String(y.year), y.total ?? 0, recordsText(lang, y.n)),
+      })),
     }));
     chart = (
       <div class="chart">
@@ -250,7 +252,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
           const body = (
             <>
               <span class="tile-label">{sourceLabel(lang, s)}</span>
-              <span class="tile-value">{fmtMoneyShort(totals[s] ?? 0, lang)}</span>
+              <ShortMoney lang={lang} value={totals[s] ?? 0} class="tile-value" />
               <span class="tile-note">{tn(lang, "org.tile_records_one", "org.tile_records_many", counts[s], { n: n(counts[s]) })}</span>
             </>
           );

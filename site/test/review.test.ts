@@ -63,7 +63,9 @@ describe("controls", () => {
 
 describe("the home tiles", () => {
   it("carry what the rail beside them does not, each note short enough for one line at 1440 px, in both languages", async () => {
-    const notes = (html: string) => [...html.matchAll(/<span class="tile-note">([^<]*)<\/span>/g)].map((m) => nbsp(m[1]));
+    // A note's short-form figure is a span of its own (with its exact value as its title): the text is read.
+    const notes = (html: string) => [...html.matchAll(/<span class="tile-note">((?:[^<]|<span[^>]*>[^<]*<\/span>)*)<\/span>/g)]
+      .map((m) => nbsp(m[1].replace(/<[^>]+>/g, "")));
     // How many of the notices closing soon close today, and the value of the year's award notices and of the contracts ending.
     expect(notes(await text("/"))).toEqual(["None closes today", "Published on CanadaBuys this year", "Worth $4.9M"]);
     expect(notes(await text("/?lang=fr"))).toEqual(["Aucun ne ferme aujourd’hui", "Publiés sur AchatsCanada cette année", "Valeur : 4,9 M$"]);

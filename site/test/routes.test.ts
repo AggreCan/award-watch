@@ -547,7 +547,9 @@ describe("home", () => {
   // A tile's side figures, label then figure, as the page writes them.
   const side = (html: string, href: string) => {
     const tile = html.match(new RegExp(`<a class="tile[^"]*" href="${href.replace(/[?]/g, "\\?")}">([\\s\\S]*?)</a>`))?.[1] ?? "";
-    return [...tile.matchAll(/<span class="tile-side-label">([^<]*)<\/span><span class="tile-side-value">([^<]*)<\/span>/g)].map((m) => [nbsp(m[1]), nbsp(m[2])]);
+    // A short-form figure is a span of its own (its exact value as its title): the text is read.
+    return [...tile.matchAll(/<span class="tile-side-label">([^<]*)<\/span><span class="tile-side-value">((?:[^<]|<span[^>]*>[^<]*<\/span>)*)<\/span>/g)]
+      .map((m) => [nbsp(m[1]), nbsp(m[2].replace(/<[^>]+>/g, ""))]);
   };
 
   it("sets figures beside each tile's own from the files the page reads, in both languages", async () => {

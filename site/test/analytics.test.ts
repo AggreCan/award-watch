@@ -538,6 +538,63 @@ describe("the Pro view", () => {
     expect(html).toMatch(new RegExp(`2026-27 \\(to date\\)</td>(?:<td[^>]*>[^<]*</td>){4}<td data-label="Organizations" class="mono num">${y26}</td>`));
   });
 
+  // The tips (src/chart.tsx, public/tooltip.js): each mark's SVG <title>, and
+  // each ranked bar's title, is its head (the series and the period) over the
+  // exact figures, every one worked out here from the rows.
+  it("gives every chart's marks their exact figures as their tip: quarters, years, shares, ranked bars and the quarters ahead", async () => {
+    await sessions();
+    const marks = (html: string) => [...html.matchAll(/<(?:rect|line)\b[^>]*><title>([^<]*)<\/title>/g)].map((m) => decode(m[1]));
+    const rows = (html: string) => [...html.matchAll(/<li title="([^"]*)">/g)].map((m) => decode(m[1]));
+    const recs = (n: number) => `${n} record${n === 1 ? "" : "s"}`;
+    const buyer = (await page(`${VIEWS[0]}?source=history`, { cookie: proCookie })).html;
+    const tips = marks(buyer);
+    expect(buyer.match(/data-tip="keys"/g)?.length ?? 0).toBeGreaterThanOrEqual(7);
+    const pspc = RECS.filter((r) => r.src === 2 && r.bid === PSPC && r.extra === 0 && r.fy >= LAST - 9);
+    // A quarter's bar: its value and its records.
+    const q = pspc.filter((r) => r.fy === 2025 && r.fq === 2);
+    expect(tips).toContain(`PSPC contract history: value by fiscal quarter, 2025-26 Q2\n${money(sum(q))}\n${recs(q.length)}`);
+    // The median and the average of a year, with the records they rest on.
+    const values = pspc.filter((r) => r.fy === 2025).map((r) => r.cents ?? 0).filter((c) => c > 0);
+    const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length) / 100;
+    expect(tips).toContain(`Median value, 2025-26\n${money(median(values) / 100)}\n${values.length} records with a value`);
+    expect(tips).toContain(`Average value, 2025-26\n${money(avg)}\n${values.length} records with a value`);
+    // A share's point: the part of the whole, and the share.
+    const y25 = pspc.filter((r) => r.fy === 2025);
+    const nc = y25.filter((r) => r.comp === 0).length;
+    expect(tips).toContain(`Non-competitive share, by count, 2025-26\n${nc} of ${y25.length} (${Math.round((nc / y25.length) * 100)}%)`);
+    // The current fiscal year named as the tables name it.
+    expect(tips.some((t) => t.startsWith("Median value, 2026-27 (to date)\n"))).toBe(true);
+    // The amended records' first and newest values.
+    expect(tips.some((t) => /^Amended records: value of the first version, \d{4}-\d\d(?: \(to date\))?\n\$[\d,]+\n\d+ records? compared$/.test(t))).toBe(true);
+    // The quarters ahead: the count and the value, each with the other.
+    expect(tips).toContain("Contracts ending, Q2 2028-29\n1 contract\n$333,000");
+    expect(tips).toContain("Value of the contracts ending, Q2 2028-29\n$333,000\n1 contract");
+    // A ranked bar: the name over the exact value, its records and its share of the period's value.
+    const total = sum(pspc);
+    const mine = pspc.filter((r) => r.oid === oid(A1));
+    expect(rows(buyer)).toContain(`Exemplar Translation Services Inc.\n${money(sum(mine))}\n${recs(mine.length)}\n${Math.round((sum(mine) / total) * 100)}% of the period's value`);
+    // Never the short form in a tip.
+    for (const t of [...tips, ...rows(buyer)]) expect(t, t).not.toMatch(/\d[MB]\b/);
+
+    // An organization's years, and its share of a segment with the parts.
+    const org = (await page(`${VIEWS[1]}?source=history&years=10&segment=82`, { cookie: proCookie })).html;
+    const seg82 = RECS.filter((r) => r.src === 2 && r.sid === 82 && r.fy === 2025);
+    const part = sum(seg82.filter((r) => r.oid === oid(A1)));
+    expect(marks(org)).toContain(`Exemplar Translation Services Inc., 2025-26\n${money(part)} of ${money(sum(seg82))} (${Math.round((part / sum(seg82)) * 100)}%)`);
+    expect(marks(org).some((t) => /^PSPC contract history: value by fiscal year, 2025-26\n\$[\d,]+\n\d+ records?$/.test(t))).toBe(true);
+    // A segment's counts by year.
+    const segment = marks((await page(`${VIEWS[2]}?source=history`, { cookie: proCookie })).html);
+    expect(segment.some((t) => /^Buyers with a record, 2025-26\n\d+$/.test(t))).toBe(true);
+    expect(segment.some((t) => /^Organizations with a record, 2025-26\n\d+$/.test(t))).toBe(true);
+
+    // French.
+    const fr = marks((await page(`${VIEWS[0]}?lang=fr&source=history`, { cookie: proCookie })).html);
+    expect(fr).toContain("Contrats prenant fin, T2 2028-2029\n1 contrat\n333 000 $");
+    expect(fr).toContain("Valeur des contrats prenant fin, T2 2028-2029\n333 000 $\n1 contrat");
+    expect(fr.some((t) => t.startsWith("Valeur médiane, 2025-2026\n"))).toBe(true);
+    for (const t of fr) expect(t, t).not.toContain(EM_DASH);
+  });
+
   it("reads the French view in French", async () => {
     for (const view of VIEWS) {
       const { html } = await page(`${view}?lang=fr&source=history`, { cookie: proCookie });

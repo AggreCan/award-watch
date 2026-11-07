@@ -135,8 +135,10 @@ export function headSort(orders: SortOrders, current: string, column: string, hr
 }
 
 // Whether a table on the page sorts in the browser, for the layout, which
-// then loads public/sort.js and its words after the content (src/layout.tsx).
-export type TableUse = { sortable: boolean };
+// then loads public/sort.js and its words after the content (src/layout.tsx);
+// and whether the page draws a tip (a chart, the home map or a short-form
+// figure, src/chart.tsx useTips), for which it loads public/tooltip.js.
+export type TableUse = { sortable: boolean; tips?: boolean };
 export const TableUseContext = createContext<TableUse | null>(null);
 
 // For a page whose sortable table a client script draws after load (the

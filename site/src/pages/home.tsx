@@ -5,7 +5,8 @@ import { clockOf, closingSoonByDay, tenderState } from "../closing";
 import { CLOSING_SOON_DAYS } from "../constants";
 import { STATS_LIST_ROWS, closingSoonTotal, loadExpiringIndex, loadOpenFirst, loadRail, loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, fmtMoneyShort, t, tj, tn, type Key, type Lang } from "../i18n";
+import { ShortMoney } from "../chart";
+import { fmtInt, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, noDataPage, page, todayOf } from "../layout";
 import { allowsIntraday, requestPlan } from "../plan";
 import { sameDayHours } from "../pro";
@@ -31,8 +32,9 @@ const HELD: { count: CountKey; label: Key; note: Key; href: string }[] = [
 // the contracts ending within 3 months. side: the figures beside the main
 // one, a label and a figure a line, each from a file the page already reads;
 // a tile whose export lacks them has none.
-type Side = { label: string; value: string }[];
-type Tile = { label: string; note: string; href: string; value: number; soon?: boolean; side?: Side };
+// A note or a side figure may hold a short-form amount with its exact value as its tip (src/chart.tsx ShortMoney).
+type Side = { label: string; value: unknown }[];
+type Tile = { label: string; note: unknown; href: string; value: number; soon?: boolean; side?: Side };
 
 const Empty = ({ lang, k }: { lang: Lang; k: Key }) => <p class="muted">{t(lang, k)}</p>;
 
@@ -60,7 +62,7 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   // The year's count as the rail reads it: its own field, else the year's award index.
   const awardsYear = rail?.awardsYear;
   const awardsYearTotal = typeof stats.totals?.awards_year === "number" ? stats.totals.awards_year : null;
-  const row = (label: string, value: string) => ({ label, value });
+  const row = (label: string, value: unknown) => ({ label, value });
   // Closing soon by closing day, from the export's closing times only: with
   // the ones closing today (the note) the three add up to the figure, which
   // the rows of open-first.json do not guarantee.
@@ -72,7 +74,7 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   const suppliers = stats.counts.awards_year_suppliers;
   const awardsSide: Side = [
     ...(n30 !== undefined ? [row(t(lang, "home.side_30d"), fmtInt(n30, lang))] : []),
-    ...(n30 !== undefined && typeof total30 === "number" ? [row(t(lang, "home.side_worth"), fmtMoneyShort(total30, lang))] : []),
+    ...(n30 !== undefined && typeof total30 === "number" ? [row(t(lang, "home.side_worth"), <ShortMoney lang={lang} value={total30} />)] : []),
     ...(suppliers !== undefined ? [row(t(lang, "home.side_suppliers"), fmtInt(suppliers, lang))] : []),
   ];
   // The radar's longer windows, which the rail gives only in part, and the
@@ -102,14 +104,16 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   if (awardsYear !== undefined) {
     tiles.push({
       label: t(lang, "rail.awards_year_full", { year }), href: `/awards/${year}`, value: awardsYear,
-      note: awardsYearTotal !== null ? t(lang, "home.tile_value", { total: fmtMoneyShort(awardsYearTotal, lang) }) : t(lang, "home.tile_awards_year_note"),
+      note: awardsYearTotal !== null
+        ? tj(lang, "home.tile_value", { total: <ShortMoney lang={lang} value={awardsYearTotal} /> }) : t(lang, "home.tile_awards_year_note"),
       side: awardsSide.length ? awardsSide : undefined,
     });
   }
   if (expiring) {
     tiles.push({
       label: t(lang, "home.tile_expiring"), href: "/expiring/3m", value: expiring.n,
-      note: expiring.total === null ? t(lang, "home.tile_expiring_note") : t(lang, "home.tile_value", { total: fmtMoneyShort(expiring.total, lang) }),
+      note: expiring.total === null ? t(lang, "home.tile_expiring_note")
+        : tj(lang, "home.tile_value", { total: <ShortMoney lang={lang} value={expiring.total} /> }),
       side: endingSide.length ? endingSide : undefined,
     });
   }
@@ -162,11 +166,11 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
             <a class={tile.soon ? "tile tile-soon" : "tile"} href={tile.href}>
               <span class="tile-label">{tile.label}</span>
               <span class="tile-value" data-soon-count={tile.soon ? "" : undefined}>{fmtInt(tile.value, lang)}</span>
-              <span class="tile-note">{tile.note}</span>
+              <span class="tile-note">{tile.note as any}</span>
               {tile.side ? (
                 <span class="tile-side">
                   {tile.side.map((s) => (
-                    <span class="tile-side-row"><span class="tile-side-label">{s.label}</span><span class="tile-side-value">{s.value}</span></span>
+                    <span class="tile-side-row"><span class="tile-side-label">{s.label}</span><span class="tile-side-value">{s.value as any}</span></span>
                   ))}
                 </span>
               ) : null}

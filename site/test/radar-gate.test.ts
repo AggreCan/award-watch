@@ -276,7 +276,9 @@ describe("with the switch on and no session", () => {
       // What Pro adds, as the plan cards: Free beside Pro, the price and where to sign in.
       const panel = proPanel(page);
       // In figures: all the window's contracts, and those beyond the free 3-month list (the 3 base rows) with their value.
-      expect(panel, path).toContain(`<p>Pro lists all ${WINDOWS[window].rows}, ${WINDOWS[window].rows - 3} of them ending 3 to ${window === "6m" ? 6 : 12} months out (${window === "6m" ? "$6.6M" : "$9.1M"}), with every filter and the 12-month CSV.</p>`);
+      // The value in short form, its exact figure as its title for the tip.
+      const value = window === "6m" ? '<span title="$6,600,000" data-tip="">$6.6M</span>' : '<span title="$9,100,000" data-tip="">$9.1M</span>';
+      expect(panel, path).toContain(`<p>Pro lists all ${WINDOWS[window].rows}, ${WINDOWS[window].rows - 3} of them ending 3 to ${window === "6m" ? 6 : 12} months out (${value}), with every filter and the 12-month CSV.</p>`);
       expect(panel, path).toContain('<p>The <a href="/expiring/3m">3-month list</a>, its feeds and every window&#39;s count and total stay free.</p>');
       const pro = proCard(panel);
       expect(pro, path).toContain("<span>Contracts ending: 6- and 12-month lists</span>");
@@ -316,7 +318,8 @@ describe("with the switch on and no session", () => {
       expect(page).toContain("Les 10 premiers par date de fin, les mêmes que dans la liste de 3 mois.");
       const panel = proPanel(page);
       expect(panel).toContain("<h2>Offert avec le forfait Pro</h2>");
-      expect(panel).toContain(`<p>Pro les énumère tous les ${WINDOWS[window].rows}, dont ${WINDOWS[window].rows - 3} prennent fin dans 3 à ${window === "6m" ? 6 : 12} mois (${window === "6m" ? "6,6 M$" : "9,1 M$"}), avec tous les filtres et le CSV de 12 mois.</p>`);
+      const value = window === "6m" ? '<span title="6 600 000 $" data-tip="">6,6 M$</span>' : '<span title="9 100 000 $" data-tip="">9,1 M$</span>';
+      expect(panel).toContain(`<p>Pro les énumère tous les ${WINDOWS[window].rows}, dont ${WINDOWS[window].rows - 3} prennent fin dans 3 à ${window === "6m" ? 6 : 12} mois (${value}), avec tous les filtres et le CSV de 12 mois.</p>`);
       expect(freeCard(panel)).toContain("<h3>Gratuit</h3>");
       const pro = proCard(panel);
       expect(pro).toContain("<span>25 recherches enregistrées, par courriel</span>");

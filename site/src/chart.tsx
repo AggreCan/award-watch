@@ -5,11 +5,23 @@
 // by percentage. An SVG scaled to the page would scale its text with it, so a
 // 12 px label would read at 6 px on a phone; HTML text keeps its size at any
 // width. Colours come from custom properties in the stylesheet, so the charts
-// follow the light and dark themes. No script runs: hovering a bar shows its
-// SVG <title>, and every figure is in the table under the chart.
+// follow the light and dark themes. Every figure is in the table under the
+// chart.
+//
+// Each bar and point carries its tip as its SVG <title>: a head line (the
+// panel's series and the period) over the exact figures, one a line (the
+// full money value with its cents rule, never the tiles' short form, and
+// the count or the parts of a share). Without a script the browser shows
+// that title after its own delay; public/tooltip.js shows the same lines at
+// once in the site's box, on hover, on a tap and on keyboard focus. An
+// element marked data-tip holds tips: a chart's SVG (data-tip="keys", whose
+// marks the arrow keys step through), the ranked bars, the home map, and a
+// short-form figure (ShortMoney), which is its own tip.
 
 import { raw } from "hono/html";
-import type { FC } from "hono/jsx";
+import { useContext, type FC } from "hono/jsx";
+import { TableUseContext } from "./columns";
+import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, t, tn, type Lang } from "./i18n";
 
 const W = 1000;
 const H = 100;
@@ -56,6 +68,7 @@ export interface Bar {
   value: number;
   // A file covering several quarters, drawn lighter at its average per quarter.
   light?: boolean;
+  // The tip's lines (tipText): the head, then the exact figures.
   title: string;
 }
 
@@ -64,6 +77,62 @@ export interface LinePoint {
   value: number;
   title: string;
 }
+
+// A fiscal year's figure for the charts a year apart (pages/analytics.tsx
+// YearChart, account/org_pages.tsx YearBars): the year, the value drawn and
+// the tip's exact figures under its head.
+export type YearPoint = [year: number, value: number, figures: string[]];
+
+// -- tips ------------------------------------------------------------------------------
+
+// A tip's text, one line each: the head (what the figure is and its period),
+// then the exact figures. The script shows the head in the muted type and
+// the figures in ink; a tip of one line is a figure alone.
+export function tipText(head: string | null, figures: readonly string[]): string {
+  return [head, ...figures].filter((s): s is string => !!s).join("\n");
+}
+
+// The head of a chart mark's tip: the panel's series and the mark's period.
+export function tipHead(lang: Lang, label: string, period: string): string {
+  return t(lang, "tip.head", { label, period });
+}
+
+// "12 records", the count a figure adds up.
+export function recordsText(lang: Lang, n: number): string {
+  return tn(lang, "org.tile_records_one", "org.tile_records_many", n, { n: fmtInt(n, lang) });
+}
+
+// The tip of a money mark: the series and the period over the exact value
+// and, where the caller has one, the count it adds up.
+export function moneyTip(lang: Lang, label: string, period: string, value: number, count?: string): string {
+  return tipText(tipHead(lang, label, period), [fmtMoney(value, lang), ...(count ? [count] : [])]);
+}
+
+// A share with its parts, "$1,234,567 of $3,600,000 (34%)", each part as fmt
+// writes it; the part alone where the whole is not positive.
+export function partOf(lang: Lang, part: number, whole: number, fmt: (v: number) => string): string {
+  const pct = fmtPct(part, whole, lang);
+  return pct ? t(lang, "tip.part_of", { part: fmt(part), whole: fmt(whole), pct }) : fmt(part);
+}
+
+// Tells the layout this page draws a tip, so it loads public/tooltip.js and
+// the box it fills after the content (src/layout.tsx), as a sortable table
+// loads public/sort.js.
+export function useTips(): void {
+  const use = useContext(TableUseContext);
+  if (use) use.tips = true;
+}
+
+// A money figure in the tiles' short form ($4.5M, 4,5 M$) with its exact
+// value as its title, which the script shows as the tip. Below a million the
+// short form is the whole amount and the figure carries no title.
+export const ShortMoney: FC<{ lang: Lang; value: number; class?: string }> = ({ lang, value, class: cls }) => {
+  const text = fmtMoneyShort(value, lang);
+  const exact = fmtMoney(value, lang);
+  if (text === exact) return cls ? <span class={cls}>{text}</span> : <>{text}</>;
+  useTips();
+  return <span class={cls} title={exact} data-tip="">{text}</span>;
+};
 
 export interface Panel {
   title: string;
@@ -199,6 +268,7 @@ export const ChartStack: FC<{
   // so a bar stays a thin mark rather than a block (barGap).
   gap?: number;
 }> = ({ domain, panels, height, xLabels, grid = [], markers = [], fmt, aria, shared, gap: barGapUnits }) => {
+  useTips();
   const span = domain[1] - domain[0];
   const sx = (x: number) => ((x - domain[0]) / span) * W;
   const pct = (x: number) => ((x - domain[0]) / span) * 100;
@@ -254,7 +324,7 @@ export const ChartStack: FC<{
               </div>
               <div class="chart-plot" style={`height:${height}px`}>
                 <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${p.title}. ${aria}`} focusable="false"
-                  >{raw(marks(p, ticks, top, grid, markers, sx, gap))}</svg>
+                  data-tip="keys">{raw(marks(p, ticks, top, grid, markers, sx, gap))}</svg>
               </div>
             </div>
           </>
@@ -327,7 +397,8 @@ export function barGap(slots: number, px = 24, plot = 720): number {
 export interface RankedBar {
   label: unknown;
   value: number;
-  // The figure printed at the bar's end; title is the line a hover shows.
+  // The figure printed at the bar's end, in the short form; title is the tip
+  // (tipText): the name over the exact value, the count and the share.
   text: string;
   title: string;
   note?: string;
@@ -338,11 +409,13 @@ export interface RankedBar {
 // the figure at its end in text ink. HTML rather than SVG, so a long name
 // wraps and the type keeps its size at any width. A value at or below zero
 // draws no bar and keeps its figure. The table under the chart carries every
-// value, so the hover line is never the only way to read one.
+// value, so the tip is never the only way to read one. A row's tip shows on
+// hover and when the link in its label takes the keyboard focus.
 export const RankedBars: FC<{ rows: readonly RankedBar[]; aria: string }> = ({ rows, aria }) => {
+  useTips();
   const top = Math.max(0, ...rows.map((r) => r.value));
   return (
-    <ol class="rank-bars" aria-label={aria}>
+    <ol class="rank-bars" aria-label={aria} data-tip="">
       {rows.map((r) => (
         <li title={r.title}>
           <span class="rank-label">{r.label as any}</span>

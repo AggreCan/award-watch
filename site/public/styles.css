@@ -888,6 +888,35 @@ tr[data-phone-cut] { display: none !important; }
 .figures { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 13px; line-height: 20px; color: var(--ink-2); }
 .figures b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
+/* -- the tip (public/tooltip.js, src/chart.tsx) ------------------------------
+   One box a page, over a chart's bar or point, a province of the map, a
+   ranked bar or a short-form figure: the head (what the figure is and its
+   period) in muted type over the exact figures, the first in ink at the
+   table's size. The panel's ground and the stronger border, square, no
+   shadow, as every box on the site. Fixed to the window, placed by the
+   script inside it, never wider than the window less 8 px a side; the
+   pointer passes through it. It sets no display, so [hidden] hides it. */
+.tip {
+  position: fixed; z-index: 40; left: 0; top: 0; max-width: min(18rem, calc(100vw - 16px)); padding: 6px 8px;
+  background: var(--panel); border: 1px solid var(--border-2); color: var(--ink);
+  font-size: 12px; line-height: 16px; overflow-wrap: anywhere; pointer-events: none;
+}
+.tip-head { display: block; color: var(--muted); }
+.tip-figure { display: block; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tip-main { font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ink); }
+/* The mark the tip is about, in the ink step past the chart's hue (darker in
+   light, lighter in dark): a bar or a ranked bar filled, a point larger, a
+   province edged as on hover. */
+.chart-plot .bar.tip-on { fill: var(--ink); }
+.chart-plot .bar-light.tip-on { fill: var(--chart-bar); }
+.chart-plot .dot.tip-on { stroke: var(--ink); stroke-width: 10; }
+.rank-bars li.tip-on .rank-bar { background: var(--ink); }
+.cmap-svg use.tip-on { stroke: var(--ink); stroke-width: 2.5; }
+/* A chart's marks take the keyboard focus (the script makes each panel one
+   stop): the filled mark and the tip are its sign, so the browser's box
+   around the mark is not drawn. */
+.chart-plot svg [tabindex]:focus { outline: none; }
+
 /* -- phones: one column, labelled blocks, 16 px gutter --------------------- */
 @media (max-width: 699px) {
   :root { --gutter: 16px; }

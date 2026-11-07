@@ -31,9 +31,10 @@ describe("/expiring", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("<h1>Contracts Ending Soon</h1>");
-    expect(html).toContain("<p class=\"lead\">8 federal contracts, worth $12.5M, end within 12 months of the data date (2026-10-31), each with the supplier that holds it.</p>");
+    // A short-form figure carries its exact value as its title, for the tip.
+    expect(html).toContain("<p class=\"lead\">8 federal contracts, worth <span title=\"$12,450,000\" data-tip=\"\">$12.5M</span>, end within 12 months of the data date (2026-10-31), each with the supplier that holds it.</p>");
     // One tile per window: the count, the value, a link to the window.
-    expect(html).toContain('<a class="tile" href="/expiring/3m"><span class="tile-label">Within 3 months</span><span class="tile-value">3</span><span class="tile-note">Value $4.9M</span></a>');
+    expect(html).toContain('<a class="tile" href="/expiring/3m"><span class="tile-label">Within 3 months</span><span class="tile-value">3</span><span class="tile-note">Value <span title="$4,910,500" data-tip="">$4.9M</span></span></a>');
     expect(html).toContain('<a class="tile" href="/expiring/6m"><span class="tile-label">Within 6 months</span><span class="tile-value">5</span>');
     expect(html).toContain('<a class="tile" href="/expiring/12m"><span class="tile-label">Within 12 months</span><span class="tile-value">8</span>');
     // The 3-month list, soonest end first, whatever the file's order.
@@ -62,7 +63,7 @@ describe("/expiring", () => {
   it("speaks French", async () => {
     const html = nbsp(await text("/expiring?lang=fr"));
     expect(html).toContain("<h1>Contrats prenant fin bientôt</h1>");
-    expect(html).toContain('<span class="tile-label">D’ici 3 mois</span><span class="tile-value">3</span><span class="tile-note">Valeur : 4,9 M$</span>');
+    expect(html).toContain('<span class="tile-label">D’ici 3 mois</span><span class="tile-value">3</span><span class="tile-note">Valeur : <span title="4 910 500 $" data-tip="">4,9 M$</span></span>');
     expect(html).toContain("Particulier, nom non divulgué");
     expect(html).toContain("<h2>Contrats prenant fin d’ici 3 mois</h2>");
     expect(html).toContain('<a href="/buyers/dnd-mdn">Défense nationale</a>');
@@ -336,7 +337,7 @@ describe("home, feeds, methodology and the downloads", () => {
   it("shows the 3-month tile on the home page when the index is published", async () => {
     const html = await text("/");
     // With the window's value, which the rail beside it does not give.
-    expect(html).toContain('<a class="tile" href="/expiring/3m"><span class="tile-label">Ending within 3 months</span><span class="tile-value">3</span><span class="tile-note">Worth $4.9M</span>');
+    expect(html).toContain('<a class="tile" href="/expiring/3m"><span class="tile-label">Ending within 3 months</span><span class="tile-value">3</span><span class="tile-note">Worth <span title="$4,910,500" data-tip="">$4.9M</span></span>');
     // After the year's award notices tile.
     expect(html.indexOf('<a class="tile" href="/expiring/3m"')).toBeGreaterThan(html.indexOf('<span class="tile-label">Award notices in 2026</span>'));
     expect(nbsp(await text("/?lang=fr"))).toContain('<span class="tile-label">Contrats prenant fin d’ici 3 mois</span>');
