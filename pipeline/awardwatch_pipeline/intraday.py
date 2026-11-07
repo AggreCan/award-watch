@@ -25,7 +25,10 @@ file, intraday/lookup.json.gz. The commands:
            write the SQL batch: one upsert per version keyed (reference,
            amendment), so a batch applied twice leaves the same rows, and a
            delete for a notice whose newest version in the file is no longer
-           open (cancelled, awarded, expired).
+           open (cancelled, awarded, expired). A column added to the table
+           after the operator first applied the schema (ADDED) is written
+           only once the live table has it, read just before with
+           COLUMNS_SQL.
   record   (the intraday job, last) the run row in intraday_runs: when, the
            file's validators, the rows read, new and read again, ok, and a
            detail line saying what happened or which step failed.
@@ -96,8 +99,17 @@ TABLES = (TABLE, RUNS)
 COLUMNS = (
     "reference", "reference_published", "amendment", "seen_at", "published", "closing", "title_en", "title_fr",
     "buyer_id", "buyer_name", "buyer_name_fr", "category", "notice_type_en", "notice_type_fr", "method_en",
-    "method_fr", "segments", "provinces", "codes", "excerpt_en", "excerpt_fr",
+    "method_fr", "segments", "provinces", "codes", "excerpt_en", "excerpt_fr", "provinces_derived",
 )
+# The columns added to intraday_tenders after the operator first applied the
+# schema; each reaches the live table only through the statement the schema
+# file's comment names, run by hand. Until then the refresh leaves it out of
+# its upserts (written_columns), so a cut is never refused for a column the
+# table does not have yet.
+ADDED = ("provinces_derived",)
+# The table's columns as D1 holds them, read before the parse (the workflow
+# runs exactly this text; pipeline/tests/test_intraday.py holds the two equal).
+COLUMNS_SQL = f"PRAGMA table_info({TABLE})"
 # Kept as first written when a version is read again: its key, and when it was first read.
 KEPT = ("reference", "amendment", "seen_at")
 RUN_COLUMNS = ("id", "at", "file_last_modified", "file_etag", "rows_read", "rows_new", "rows_updated", "ok", "detail")
@@ -347,7 +359,10 @@ class BuyerLookup:
         """(id, English name, French name) as a list row shows the contracting entity: a listed buyer's id
         and names, else no id and the spellings as published, a spelling that names or locates a person
         left out (buyers.public_spelling, as the export does)."""
-        bid = self.resolve(raw_en, raw_fr)
+        return self.label(self.resolve(raw_en, raw_fr), raw_en, raw_fr)
+
+    def label(self, bid: str | None, raw_en: object, raw_fr: object) -> tuple[str | None, str | None, str | None]:
+        """buyer() for a spelling already resolved to bid."""
         if bid is not None and bid in self.labels:
             en, fr = self.labels[bid]
             return bid, en, fr
@@ -450,16 +465,21 @@ def notice_row(get: canadabuys_rows.Getter, lookup: BuyerLookup, seen_at: str,
     The fields are the export's list fields (export_static.tender_row with
     words): the URL form of the reference and the published one beside it
     when they differ, titles and excerpts scrubbed of contacts, the segments
-    and the full codes from the trimmed UNSPSC codes, the provinces from the
-    regions of delivery.
+    and the full codes from the trimmed UNSPSC codes, the provinces the
+    regions of delivery state, and beside them the provinces derived as the
+    nightly loader derives them (canadabuys_rows.tender_fields, places.py:
+    a city of delivery, the regions of opportunity, a Defence Construction
+    Canada regional office), never one of the stated ones.
     """
     published_ref = squash(get("reference"))
     ref = url_reference(published_ref)
     if not ref:
         return None
     rec, codes, _ = canadabuys_rows.common_fields(get)
-    tender = canadabuys_rows.tender_fields(get, None)
-    buyer_id, buyer_en, buyer_fr = lookup.buyer(tender["buyer_raw_en"], tender["buyer_raw_fr"])
+    # The buyer first: the regional office is read only for the buyer the nightly resolves the spelling to.
+    resolved = lookup.resolve(canadabuys_rows.text(get("buyer_en")), canadabuys_rows.text(get("buyer_fr")))
+    tender = canadabuys_rows.tender_fields(get, resolved)
+    buyer_id, buyer_en, buyer_fr = lookup.label(resolved, tender["buyer_raw_en"], tender["buyer_raw_fr"])
     trimmed = [c for c, _, _ in codes]
     known = set(segments)
     row = {
@@ -480,10 +500,11 @@ def notice_row(get: canadabuys_rows.Getter, lookup: BuyerLookup, seen_at: str,
         "method_en": rec["method_en"],
         "method_fr": rec["method_fr"],
         "segments": _list_text(sorted({c[:2] for c in trimmed if c[:2] in known})),
-        "provinces": _list_text(rec["provinces"]),
+        "provinces": _list_text(tender["provinces"]),
         "codes": _list_text(full_codes(" ".join(trimmed))),
         "excerpt_en": excerpt(rec["description_en"], "en"),
         "excerpt_fr": excerpt(rec["description_fr"], "fr"),
+        "provinces_derived": _list_text(tender["provinces_derived"]),
     }
     return row, str(tender["status"])
 
@@ -539,14 +560,31 @@ def _chunks(items: Sequence[str], head: str, tail: str, max_items: int, max_byte
 
 
 def upsert_statements(rows: Sequence[dict], *, max_rows: int = MAX_ROWS_PER_UPSERT,
-                      max_bytes: int = MAX_STATEMENT_BYTES) -> list[str]:
-    """The rows as multi-row upserts. A version already there keeps its key and seen_at and takes every other
-    field from the file, so applying the same statements twice leaves the same rows."""
-    head = f"INSERT INTO {TABLE} ({', '.join(COLUMNS)}) VALUES "
-    sets = ", ".join(f"{c} = excluded.{c}" for c in COLUMNS if c not in KEPT)
+                      max_bytes: int = MAX_STATEMENT_BYTES, columns: Sequence[str] = COLUMNS) -> list[str]:
+    """The rows as multi-row upserts of the given columns (written_columns). A version already there keeps its
+    key and seen_at and takes every other field from the file, so applying the same statements twice leaves the
+    same rows."""
+    head = f"INSERT INTO {TABLE} ({', '.join(columns)}) VALUES "
+    sets = ", ".join(f"{c} = excluded.{c}" for c in columns if c not in KEPT)
     tail = f" ON CONFLICT (reference, amendment) DO UPDATE SET {sets};"
-    tuples = ["(" + ", ".join(sql_literal(row[c]) for c in COLUMNS) + ")" for row in rows]
+    tuples = ["(" + ", ".join(sql_literal(row[c]) for c in columns) + ")" for row in rows]
     return list(_chunks(tuples, head, tail, max_rows, max_bytes))
+
+
+def read_columns(text: str) -> set[str] | None:
+    """The column names in Wrangler's answer to COLUMNS_SQL; None for an answer that holds none."""
+    try:
+        rows = parse_wrangler_json(text)
+    except ValueError:
+        return None
+    return {r["name"] for r in rows if isinstance(r.get("name"), str)} or None
+
+
+def written_columns(have: set[str] | None) -> tuple[str, ...]:
+    """The columns a batch writes: every one of COLUMNS the live table has. An ADDED column the table lacks, or
+    every ADDED column when its columns could not be read (have None), is left out; the other columns are the
+    ones the operator applied first, which every live table has."""
+    return tuple(c for c in COLUMNS if c not in ADDED or (have is not None and c in have))
 
 
 def delete_statements(references: Sequence[str], *, max_keys: int = MAX_KEYS_PER_DELETE,
@@ -555,19 +593,20 @@ def delete_statements(references: Sequence[str], *, max_keys: int = MAX_KEYS_PER
                         max_keys, max_bytes))
 
 
-def batch_sql(parsed: Parsed) -> list[str]:
+def batch_sql(parsed: Parsed, columns: Sequence[str] = COLUMNS) -> list[str]:
     """The statements of one run: the deletes, then the upserts."""
-    return delete_statements(parsed.closed) + upsert_statements(parsed.rows)
+    return delete_statements(parsed.closed) + upsert_statements(parsed.rows, columns=columns)
 
 
 def refresh(csv_path: Path, lookup_path: Path | None, state: State, out_dir: Path, *,
-            now: datetime | None = None) -> dict:
+            now: datetime | None = None, columns: tuple[str, ...] = COLUMNS, columns_state: str = "current") -> dict:
     """Parse the file, write batch.sql (empty when there is nothing to write) and refresh.json; return the
-    summary refresh.json holds."""
+    summary refresh.json holds. columns are the ones the batch writes (written_columns); columns_state says
+    how they were found ("read" from D1, "unread", or "current": the schema file's, unasked)."""
     lookup, lookup_state = BuyerLookup.read(lookup_path)
     seen_at = stamp(now or datetime.now(timezone.utc))
     parsed = read_notices(csv_path, lookup, seen_at)
-    statements = batch_sql(parsed)
+    statements = batch_sql(parsed, columns)
     out_dir.mkdir(parents=True, exist_ok=True)
     # Bytes, not text mode: Windows would write a newline inside a title as CRLF and change the value.
     (out_dir / "batch.sql").write_bytes("".join(s + "\n" for s in statements).encode("utf-8"))
@@ -585,6 +624,9 @@ def refresh(csv_path: Path, lookup_path: Path | None, state: State, out_dir: Pat
         "lookup": lookup_state,
         "lookup_as_of": lookup.as_of,
         "statements": len(statements),
+        "derived": sum(1 for r in parsed.rows if r["provinces_derived"] != "[]"),
+        "columns": columns_state,
+        "left_out": [c for c in COLUMNS if c not in columns],
     }
     (out_dir / "refresh.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     return summary
@@ -626,6 +668,10 @@ def run_row(run_id: str, at: str, fetched: dict | None, refreshed: dict | None, 
         row["detail"] = (f"{row['rows_read']} rows read: {row['rows_new']} new, {row['rows_updated']} read again, "
                          f"{r.get('closed', 0)} no longer open, {r.get('skipped', 0)} without a reference; "
                          f"{r.get('unresolved', 0)} with a buyer as published (no listed buyer); lookup {lookup}")
+        left = r.get("left_out")
+        if isinstance(left, list) and left and all(isinstance(c, str) for c in left):
+            why = "the table's columns could not be read" if r.get("columns") == "unread" else "not in the table yet"
+            row["detail"] += f"; {', '.join(left)} not written ({why})"
     else:
         step = failed[0] if failed else ("refresh" if steps.get("refresh") != "success" else "apply")
         row["detail"] = f"failed at {step}; the next run fetches the file again"
@@ -693,6 +739,9 @@ def build_parser() -> argparse.ArgumentParser:
     rf.add_argument("--lookup", default=None, help="the lookup from R2; missing means buyers as published")
     rf.add_argument("--state", required=True, help="Wrangler's --json answer to STATE_SQL")
     rf.add_argument("--out", required=True, help="the job's folder (batch.sql and refresh.json)")
+    rf.add_argument("--columns", default=None,
+                    help="Wrangler's --json answer to COLUMNS_SQL; when given, a column added since (ADDED) is written "
+                         "only if it lists it, and a missing or unreadable answer leaves the added columns out")
     rf.add_argument("--now", default=None, help="the run's time (ISO), for tests")
     rc = sub.add_parser("record", help="write the run's row in intraday_runs")
     rc.add_argument("--run-id", required=True)
@@ -745,12 +794,20 @@ def _fetch(args: argparse.Namespace) -> int:
 
 def _refresh(args: argparse.Namespace) -> int:
     state = read_state(Path(args.state).read_text(encoding="utf-8"))
+    columns, columns_state = COLUMNS, "current"
+    if args.columns is not None:
+        path = Path(args.columns)
+        have = read_columns(path.read_text(encoding="utf-8")) if path.is_file() else None
+        columns, columns_state = written_columns(have), "read" if have is not None else "unread"
     summary = refresh(Path(args.csv), Path(args.lookup) if args.lookup else None, state, Path(args.out),
-                      now=_now(args.now))
+                      now=_now(args.now), columns=columns, columns_state=columns_state)
     _output(statements=str(summary["statements"]))
     log.info("refresh: %s", json.dumps(summary))
     if summary["missing_columns"]:
         log.warning("refresh: the file lacks %s", ", ".join(summary["missing_columns"]))
+    if summary["left_out"]:
+        log.warning("refresh: %s not written (%s)", ", ".join(summary["left_out"]),
+                    "the table's columns could not be read" if columns_state == "unread" else "not in the table yet")
     return 0
 
 

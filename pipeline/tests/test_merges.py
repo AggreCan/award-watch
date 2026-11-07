@@ -3,6 +3,7 @@ the reviewed seed and its keep-apart rows, survivors that do not flip, merges un
 goes, the aliases the site redirects by, and the names that are not organizations."""
 
 import json
+from datetime import date
 
 import pytest
 
@@ -250,6 +251,53 @@ def test_a_merged_id_is_exported_as_an_alias_the_site_redirects_by(conn, tmp_pat
     assert export_static.write_aliases(conn, out) == {"alias_shards": 1}
     shard = json.loads((out / "aliases" / f"{bilingual[4:6]}.json").read_text(encoding="utf-8"))
     assert shard == {bilingual: ltd}
+
+
+def test_the_survivors_profile_names_the_profiles_merged_into_it_with_their_notes(conn, tmp_path, monkeypatch):
+    """"Also appears as": the survivor's profile carries each retired profile's name (its most common
+    spelling, read from the records that moved), the seed's note and the rule, names with a note first; the
+    redirect shards keep their plain ids."""
+    path = tmp_path / "organization_aliases.csv"
+    monkeypatch.setattr(merges, "SEED_PATH", path)
+    new = contract(conn, "R1", "Tidewater Logistics Inc.")
+    contract(conn, "R2", "Tidewater Logistics Inc.")
+    old = contract(conn, "R3", "Harbourline Freight Inc.")
+    contract(conn, "R4", "Harbourline Freight Inc.")
+    assert contract(conn, "R5", "HARBOURLINE FREIGHT INC") == old
+    path.write_text("from_norm,to_norm,reason,note\nharbourline freight,tidewater logistics,renamed in 2024,former\n",
+                    encoding="utf-8")
+    ltd = grant(conn, "G1", "IBM CANADA LTD.", bn=IBM_BN)
+    grant(conn, "G2", "IBM CANADA LTD.", bn=IBM_BN)
+    bilingual = grant(conn, "G3", "IBM CANADA LIMITED/IBM CANADA LIMITÉE", bn=IBM_BN)
+    alone = contract(conn, "Q1", "Quillfeather Holdings Inc.")
+    run(conn, tmp_path)
+    out = tmp_path / "static"
+    export_static.export_static(conn, out, csv_dir=tmp_path / "no-csv")
+
+    def profile(oid):
+        return json.loads((out / "profiles" / f"{export_static.shard_key(oid)}.json").read_text(encoding="utf-8"))[oid]
+
+    assert profile(new)["aliases"] == [{"id": old, "name": "Harbourline Freight Inc.", "note": "former", "reason": "seed"}]
+    # A rule's merge has no note; the name is the spelling its own profile showed.
+    assert profile(ltd)["aliases"] == [
+        {"id": bilingual, "name": "IBM CANADA LIMITED/IBM CANADA LIMITÉE", "note": None, "reason": "business_number"}]
+    assert "aliases" not in profile(alone) and "aliases_total_rows" not in profile(new)
+    for retired, live in ((old, new), (bilingual, ltd)):
+        shard = json.loads((out / "aliases" / f"{retired[4:6]}.json").read_text(encoding="utf-8"))
+        assert shard[retired] == live
+    # Past the cap the count says how many: the name with a note first, then by records.
+    third = contract(conn, "R6", "Tidewater Logistik Inc.")
+    path.write_text("from_norm,to_norm,reason,note\nharbourline freight,tidewater logistics,renamed in 2024,former\n"
+                    "tidewater logistik,tidewater logistics,typo,\n", encoding="utf-8")
+    run(conn, tmp_path, T2)
+    model = export_static.Model(conn, date(2026, 11, 2))
+    try:
+        assert [a["id"] for a in export_static.profile_aliases(conn, model)[new][0]] == [old, third]
+        monkeypatch.setattr(export_static, "PROFILE_ALIASES", 1)
+        listed, total = export_static.profile_aliases(conn, model)[new]
+    finally:
+        export_static.drop_temp(conn)
+    assert [a["id"] for a in listed] == [old] and total == 2
 
 
 def test_names_that_are_not_organizations_keep_their_records_and_no_organization(conn, tmp_path, seed_file):

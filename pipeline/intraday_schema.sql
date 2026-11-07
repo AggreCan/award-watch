@@ -13,6 +13,14 @@
 --   cd site && npx wrangler d1 execute awardwatch-search --remote --file ../pipeline/intraday_schema.sql
 -- A change to a table here is applied the same way, by hand; the tables hold
 -- two days of rows, so dropping and recreating them costs only those days.
+--
+-- provinces_derived came after the table: on a database made before it, add
+-- it once (docs/intraday.md, "The tables, and applying the schema"; the
+-- statement is not idempotent, and a second run only answers "duplicate
+-- column name"):
+--   cd site && npx wrangler d1 execute awardwatch-search --remote --command "ALTER TABLE intraday_tenders ADD COLUMN provinces_derived TEXT NOT NULL DEFAULT '[]'"
+-- Until then the job reads the table's columns before each refresh
+-- (intraday.COLUMNS_SQL) and leaves the column out of its upserts.
 
 -- One row per version of a notice the new notices file listed, keyed by
 -- reference and amendment like the nightly's tenders table. The fields are
@@ -49,6 +57,11 @@ CREATE TABLE IF NOT EXISTS intraday_tenders (
   codes TEXT NOT NULL DEFAULT '[]',              -- the UNSPSC codes, trimmed to their significant digits
   excerpt_en TEXT,
   excerpt_fr TEXT,
+  -- The provinces derived from the notice's other fields as the nightly
+  -- derives them (places.py: a city of delivery, the regions of opportunity,
+  -- a Defence Construction Canada regional office), never one of provinces.
+  -- Last, where ALTER TABLE puts it on a table made before it.
+  provinces_derived TEXT NOT NULL DEFAULT '[]',
   PRIMARY KEY (reference, amendment)
 );
 -- The site reads the rows first read since the nightly's data date; the nightly prunes by the same column.

@@ -34,7 +34,9 @@
 # validators (and the versions the table holds) from D1; fetch the file with
 # a conditional request carrying them, stopping at a 304 with a run row of
 # zero rows; fetch the buyer lookup the nightly saves to R2 (without it the
-# buyers keep their names as published); parse and resolve (python -m
+# buyers keep their names as published); read the table's columns, so a
+# column added since the schema was first applied is written only once the
+# operator has added it to D1; parse and resolve (python -m
 # awardwatch_pipeline.intraday refresh, with the nightly loader's own column
 # map and normalizers); apply the SQL batch with wrangler d1 execute
 # --remote; record the run row. No database restore: the job runs without
@@ -231,13 +233,28 @@ jobs:
           echo "The buyer lookup could not be downloaded; the buyers keep their names as published:"
           cat "$OUT/lookup.log"
 
+      # The table's columns as D1 holds them (intraday.COLUMNS_SQL, read
+      # only). A column added to intraday_schema.sql after the table was made
+      # reaches D1 only by the operator's ALTER TABLE (docs/intraday.md); until
+      # the answer lists it the parse leaves it out of the upserts, so no cut
+      # is refused for it. A failed read leaves those columns out too and the
+      # run goes on: the run row says what was not written.
+      - name: Read the same-day table's columns
+        id: columns
+        if: ${{ steps.gate.outputs.active == 'true' && steps.fetch.outputs.changed == 'true' }}
+        continue-on-error: true
+        working-directory: site
+        run: |
+          rm -f "$OUT/columns.json"
+          "$WRANGLER" d1 execute awardwatch-search --remote --json --command "PRAGMA table_info(intraday_tenders)" > "$OUT/columns.json"
+
       - name: Parse the notices and write the upserts
         id: refresh
         if: ${{ steps.gate.outputs.active == 'true' && steps.fetch.outputs.changed == 'true' }}
         continue-on-error: true
         run: |
           python -m awardwatch_pipeline.intraday refresh --csv "$OUT/new.csv" --lookup "$OUT/lookup.json.gz" \
-            --state "$OUT/state.json" --out "$OUT"
+            --state "$OUT/state.json" --columns "$OUT/columns.json" --out "$OUT"
 
       # INSERT ... ON CONFLICT DO UPDATE throughout, so a batch applied twice
       # leaves the same rows. Skipped when the file held nothing to write, and

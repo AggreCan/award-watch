@@ -24,7 +24,11 @@ the per-organization feeds and the radar's filters (site/src/records_tables.ts):
 rec_details (each record's date, reference and title beside its figures),
 rec_classes (the UNSPSC classes of each notice and history record) and
 rec_expiring (the radar's 12-month window, read from the static export's
-window files so the site's two views of the radar cannot disagree).
+window files so the site's two views of the radar cannot disagree). Beside
+the last, rec_expiring_prov holds each window row's provinces, stated and
+derived (places.py), one row each, for the radar's province filter: a table
+of its own, because a column added to rec_expiring reaches D1 only through
+a full reload.
 
 A record's date (records.fy and fq, rec_details.day, rec_classes.day) is its
 award date for an award notice or a history record, its contract date for a
@@ -89,7 +93,7 @@ import math
 import re
 import secrets
 import sqlite3
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -100,7 +104,7 @@ from .db import connect, get_meta, now_iso, set_meta, today_iso
 from .export import scrub
 from .export_static import BUYER_ID_RE, NEW_LAG_DAYS, ORG_ID_RE, RefMap, read_segments
 from .indicators import RULES_VERSION
-from .normalize import closing_day, tender_status_on
+from .normalize import PROVINCE_CODES, closing_day, tender_status_on
 from .search_db import (
     MAX_BATCH_BYTES, MAX_BATCH_STATEMENTS, MAX_KEYS_PER_DELETE, MAX_STATEMENT_BYTES, _BatchWriter, _grouped, sql_literal,
 )
@@ -151,18 +155,21 @@ INSTRUMENTS = Table(14, "rec_instruments", "k", ("agr", "type_en", "type_fr", "d
                                                  "user_en", "user_fr", "buyer", "start", "expiry", "segs", "tref", "n", "nw",
                                                  "seen", "last", "calls"))
 HOLDERS = Table(15, "rec_holders", "k", ("ik", "oid", "name", "op", "region", "region_en", "region_fr", "seen"))
+# One row per radar row and province: k is the row's rec_expiring.k, so the
+# table needs a key of its own for the ledger (pk), which the site never reads.
+EXPIRING_PROV = Table(16, "rec_expiring_prov", "pk", ("k", "prov", "derived"))
 TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE, DETAILS, CLASSES, EXPIRING, CONTRACTS, GSIN,
-          EVENTS, INSTRUMENTS, HOLDERS)
+          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV)
 BY_CODE = {t.code: t for t in TABLES}
 
 # The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
 # so); 2: the amendment, reference and title columns, the median columns and
 # rec_buyer_years, rec_due. Recorded in meta (META_LAYOUT) by the full load
 # that wrote it; a sync that finds another reloads in full by itself. The
-# tables added beside them (rec_details to rec_gsin, then rec_events, rec_instruments and rec_holders) leave it
-# at 2: no table D1 holds changed form, the nightly schema creates a missing
+# tables added beside them (rec_details to rec_gsin, then rec_events, rec_instruments, rec_holders and
+# rec_expiring_prov) leave it at 2: no table D1 holds changed form, the nightly schema creates a missing
 # table, and its rows are all new to the ledger, so the ordinary changes fill
-# it. A column added to any of the fifteen raises it.
+# it. A column added to any of the sixteen raises it.
 LAYOUT = 2
 
 # The source numbers the site's records_db.ts SOURCE_NUMBER repeats.
@@ -598,6 +605,28 @@ def expiring_row(r: object) -> tuple | None:
     )
 
 
+def _province_set(value: object) -> set[str]:
+    return {p for p in value if isinstance(p, str) and p in PROVINCE_CODES} if isinstance(value, list) else set()
+
+
+def expiring_province_rows(window: Iterable[tuple]) -> Iterator[tuple]:
+    """rec_expiring_prov's rows for rec_expiring's (expiring_row's tuples), in EXPIRING_PROV.written order.
+
+    Read from the row's own JSON (its last column), so the filter and the row
+    shown can never disagree: one row per province the row states
+    (provinces, derived 0) and per province derived from its other fields
+    (provinces_derived, derived 1). A code that is not one of the thirteen
+    provinces and territories is left out, and a derived code the row also
+    states is the stated one.
+    """
+    for row in window:
+        k, data = row[0], json.loads(row[-1])
+        stated = _province_set(data.get("provinces"))
+        derived = _province_set(data.get("provinces_derived")) - stated
+        for prov in sorted(stated | derived):
+            yield key_of(f"expiring-prov:{k}:{prov}"), k, prov, 1 if prov in derived else 0
+
+
 # -- the published contracts' pages (rec_contracts, rec_gsin) -----------------------
 
 # One row per row of the contracts table, keyed as its records row is
@@ -782,7 +811,7 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
     today is the data date the contracts ending are counted from (the radar's day),
     and the one an award date after it is read against (NOTICE_DAY).
     static_dir is the static export (default data/out/static), whose 12-month
-    radar window becomes rec_expiring.
+    radar window becomes rec_expiring and rec_expiring_prov.
     """
     day = today or date.fromisoformat(today_iso()[:10])
     as_of = day.isoformat()
@@ -873,6 +902,7 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
     if len({r[0] for r in window}) != len(window):
         raise ValueError("two rows of the radar's window have the same kind and reference")
     fill(EXPIRING, iter(window))
+    fill(EXPIRING_PROV, expiring_province_rows(window))
 
     # The published contracts' pages, and the names of the GSIN codes they carry.
     left_out = {"grants_withheld": counts.grants_withheld, "bad_buyers": counts.bad_buyers}

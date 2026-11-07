@@ -247,8 +247,10 @@ operator console (`/admin`) does not show these yet.
    schema (new tables, `LAYOUT` unchanged), sent as ordinary changes.
 3. The first file loads quietly (no gained events); the second starts the
    lost events.
-4. Optional: `rec_holders` has no index by organization, so the watches'
-   calendar feed reads `rec_instruments` whole (a few thousand rows) for an
-   organization's instruments. `CREATE INDEX IF NOT EXISTS rec_holders_org ON
-   rec_holders (oid) WHERE oid IS NOT NULL;` in `records_schema.sql` would let
-   it seek; nothing needs it at today's size.
+4. Nothing to add by hand for the indexes either: `records_schema.sql`
+   holds `rec_holders_org (oid)` for an organization's instruments,
+   `rec_instruments_expiry (expiry)` for the statements that list the
+   instruments ending in a window (the briefings, the watches' calendar and
+   feed, which then read the window's rows and not the whole table) and
+   `rec_instruments_buyer (buyer, expiry)` for a buyer's briefing, each
+   `IF NOT EXISTS`, so the nightly adds them with no reload.

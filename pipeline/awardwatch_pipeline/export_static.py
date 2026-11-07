@@ -67,12 +67,22 @@ change there. Output tree (under data/out/static):
                                 corporate family (families.py) carries family {name, members: [{id,
                                 display_name, n_records, note}]}, the members by records, itself among them,
                                 FAMILY_MEMBERS at most, each with its own count and never a combined figure
-                                (profile_families); a profile in no family has no such key
+                                (profile_families); a profile in no family has no such key. A profile that
+                                other profiles were merged into (merges.py) carries aliases [{id, name, note,
+                                reason}], for "Also appears as": id the retired id (its redirect below), name
+                                the name its own profile showed, note the seed's word for the tie (spelling,
+                                former, short, branch; null for a rule's merge), reason the merge's rule
+                                (business_number, truncation, spelling, seed); names with a note first, then
+                                by records, PROFILE_ALIASES at most, aliases_total_rows beside them when more
+                                (profile_aliases); a profile nothing was merged into has neither key
   aliases/<ab>.json             retired organization id -> the live id that took its records, sharded on the
                                 id's characters 5 and 6 (256 files at most: 27,000 merged ids on 4,096
                                 shards pushed the export past the file cap on 2026-11-02): retired by a
                                 normalization change (migrate.py) or merged into another organization
-                                (merges.py); the site redirects a missing profile by it
+                                (merges.py); the site redirects a missing profile by it. The names travel
+                                on the live profile (aliases above), not here: these shards are keyed by
+                                the retired id, which the live profile cannot look up, and the redirect
+                                reads each value as an id
   directory/...                 organizations A to Z by province (directory.py)
   buyers/index.json, buyers/<id>.json   the listed buyers (export.LISTED_BUYER): those with an open notice,
                                 an award notice, a contract history record, a published contract or a grant,
@@ -191,10 +201,11 @@ from . import config, directory, expiring, indicators, organizations, sosa_expor
 from .db import get_meta, log_run, set_meta
 from .export import SUMS, listed_buyer_ids, register_functions, scrub, scrub_doc
 from .feeds import write_feeds
-from .normalize import PROVINCE_CODES, closing_day, tender_status_on
+from .normalize import PROVINCE_CODES, closing_day, norm_name, org_id, tender_status_on
 from .sources import buyers as buyer_rules
 from .sources.buyers import public_spelling
 from .sources.canadabuys_rows import ATTACHMENTS_MAX, government_url
+from .sources.matching import is_person_name
 from .sources.sosa import stem as sosa_stem
 
 log = logging.getLogger(__name__)
@@ -230,6 +241,8 @@ PROFILE_PLACES = 10
 PROFILE_BUYERS = 10
 # A profile's family block lists at most this many members (families.py).
 FAMILY_MEMBERS = 50
+# The profiles merged into an organization that its profile lists at most ("Also appears as", profile_aliases).
+PROFILE_ALIASES = 12
 BUYER_TOP = 25
 BUYER_AWARDS = 50
 # The other names a buyer page lists at most ("Also appears as").
@@ -1618,11 +1631,58 @@ def profile_families(conn: sqlite3.Connection, m: Model) -> dict[str, dict]:
     return out
 
 
+def profile_aliases(conn: sqlite3.Connection, m: Model) -> dict[str, tuple[list[dict], int]]:
+    """Per live organization, the profiles merged into it (merges.py) as {"id", "name", "note", "reason"},
+    for "Also appears as" on its profile, and how many there are; PROFILE_ALIASES at most are listed.
+
+    id is the retired id, its redirect in aliases/<ab>.json (chains followed). name is the name its own
+    profile showed: its records now sit under the survivor, so it is read from the survivor's spellings
+    (organization_names) that normalize to the retired id, the most common first, as recompute picks a
+    display name (organizations._display_names). Merges only: an id retired by a normalization change
+    (reason NULL) came from rules no longer in force, so no spelling gives it. A name that reads as a
+    person is left out. note is the seed's word for the tie (merges.SEED_NOTES: spelling, former, short,
+    branch), null for a rule's merge; reason is the merge's rule (business_number, truncation, spelling,
+    seed). The names with a note come first (a former name is what a reader most wants told), then the
+    rest, each group by how many records carry the name.
+    """
+    resolved = resolve_aliases(conn)
+    merged = {old: (reason, note) for old, reason, note in conn.execute(
+        "SELECT old_id, reason, note FROM organization_aliases WHERE reason IS NOT NULL")}
+    wanted: dict[str, set[str]] = defaultdict(set)
+    for old, live in resolved.items():
+        if old in merged and live in m.orgs and ORG_ID_RE.match(old) and ORG_ID_RE.match(live):
+            wanted[live].add(old)
+    best: dict[str, tuple[tuple, str, str]] = {}
+    for live, raw, n in conn.execute("SELECT organization_id, raw_name, SUM(n) FROM organization_names "
+                                     "GROUP BY organization_id, raw_name"):
+        olds = wanted.get(live)
+        if not olds or not raw:
+            continue
+        norm = norm_name(raw)
+        old = org_id(norm) if norm else None
+        if old not in olds:
+            continue
+        rank = (-n, 0 if raw != raw.upper() and raw != raw.lower() else 1, raw)
+        if old not in best or rank < best[old][0]:
+            best[old] = (rank, live, raw)
+    lists: dict[str, list[tuple[tuple, dict]]] = defaultdict(list)
+    for old, (rank, live, raw) in best.items():
+        name = _text(raw)
+        if not name or is_person_name(name):
+            continue
+        reason, note = merged[old]
+        lists[live].append(((0 if note else 1, rank[0], name.casefold(), old),
+                            {"id": old, "name": name, "note": note or None, "reason": reason}))
+    return {live: ([a for _, a in sorted(items, key=lambda x: x[0])][:PROFILE_ALIASES], len(items))
+            for live, items in lists.items()}
+
+
 def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, int]:
     """profiles/<abc>.json: every organization's profile, one shard per three hex digits of its id."""
     keys = sorted({shard_key(oid) for oid in m.orgs})
     held = sosa_export.organization_parts(conn)
     family = profile_families(conn, m)
+    also = profile_aliases(conn, m)
     written = largest_bytes = 0
     over: list[str] = []
     for key in keys:
@@ -1644,6 +1704,10 @@ def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, i
                 p["instruments"] = held[oid]
             if oid in family:
                 p["family"] = family[oid]
+            if oid in also:
+                p["aliases"], total = also[oid]
+                if total > len(p["aliases"]):
+                    p["aliases_total_rows"] = total
         size = _dump(out / "profiles" / f"{key}.json", shard)
         written += 1
         largest_bytes = max(largest_bytes, size)

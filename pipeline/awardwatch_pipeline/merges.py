@@ -67,10 +67,11 @@ The night's work, in one transaction (apply):
    reason, note), reviewed by hand, is applied last: from_norm's organization
    joins to_norm's. A row with an empty to_norm keeps from_norm out of rules
    3 to 5 and out of the candidates below. The note (SEED_NOTES: spelling,
-   former, short, branch) says what the name is to the one it joins, for a
-   profile's "also appears as" line once the export carries it; it is kept
-   on the merge's alias row (organization_aliases.note), which the alias
-   download (export.py, organization-aliases.csv) publishes.
+   former, short, branch) says what the name is to the one it joins; it is
+   kept on the merge's alias row (organization_aliases.note), which the alias
+   download (export.py, organization-aliases.csv) publishes, and the
+   survivor's profile carries it beside the retired profile's name for its
+   "also appears as" line (export_static.profile_aliases).
 
 After the rules, the review file lists the candidates no rule may merge, for
 the seed: names one or two edits apart in a long word (a place in common

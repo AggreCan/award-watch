@@ -115,15 +115,20 @@ gh workflow run intraday.yml -f force=true
    run that went through, and the versions `intraday_tenders` holds
    (`intraday.STATE_SQL`, one statement).
 2. Fetches the file with a conditional request carrying those validators,
-   with the pipeline's named user agent. A 304 (unchanged) skips to step 6.
+   with the pipeline's named user agent. A 304 (unchanged) skips to step 7.
 3. Fetches the buyer lookup from R2 (`intraday/lookup.json.gz`). When R2 has
    none yet, or cannot be read after three tries, the run goes on and every
    buyer keeps its name as published.
-4. Parses the file with the nightly loader's own column map and normalizers,
-   resolves each contracting entity through the lookup, and writes the SQL
-   batch (`intraday refresh`).
-5. Applies the batch with `wrangler d1 execute awardwatch-search --remote`.
-6. Records the run row in `intraday_runs` (`intraday record`).
+4. Reads the columns `intraday_tenders` has in D1 (`intraday.COLUMNS_SQL`,
+   `PRAGMA table_info(intraday_tenders)`), so a column added to the schema
+   after the table was made is written only once the operator has added it
+   (see "Columns added later").
+5. Parses the file with the nightly loader's own column map and normalizers,
+   resolves each contracting entity through the lookup, derives the
+   provinces as the nightly does, and writes the SQL batch
+   (`intraday refresh`).
+6. Applies the batch with `wrangler d1 execute awardwatch-search --remote`.
+7. Records the run row in `intraday_runs` (`intraday record`).
 
 The job restores no database and writes nothing else: no `status.json`, no
 commit, no deploy, no R2 upload.
@@ -203,8 +208,13 @@ resolver's order unchanged, and `test_intraday.py` would still hold it to
 
 - `intraday_tenders`: one row per version read (reference, amendment), with
   the open list's fields (titles, buyer, dates, category, notice type,
-  method, segments, provinces, codes, excerpts) and `seen_at`. List columns
-  hold JSON text. Indexed on `seen_at`.
+  method, segments, provinces, codes, excerpts), `seen_at`, and
+  `provinces_derived`: the provinces derived from the notice's other fields
+  as the nightly derives them (`places.py`: a city of delivery, the regions
+  of opportunity, a Defence Construction Canada regional office, read
+  through the shared parser with the buyer the lookup resolves), never one
+  of `provinces`, `[]` when none. List columns hold JSON text. Indexed on
+  `seen_at`.
 - `intraday_runs`: one row per run: `id` (GitHub run id and attempt), `at`,
   `file_last_modified`, `file_etag`, `rows_read`, `rows_new`,
   `rows_updated` (versions read again), `ok`, `detail`.
@@ -222,6 +232,33 @@ The second command lists the two tables and their two indexes. Every
 statement is `IF NOT EXISTS`, so applying the file again changes nothing. A
 later change to a table is applied the same way; the tables hold two days of
 rows, so dropping and recreating one costs only those days.
+
+### Columns added later
+
+`CREATE TABLE IF NOT EXISTS` leaves a table that exists as it is, so a column
+added to `intraday_tenders` after the operator first applied the file reaches
+D1 only through a statement run once by hand. `provinces_derived` (2026-11-07)
+is the first:
+
+```
+cd site
+npx wrangler d1 execute awardwatch-search --remote --command "ALTER TABLE intraday_tenders ADD COLUMN provinces_derived TEXT NOT NULL DEFAULT '[]'"
+npx wrangler d1 execute awardwatch-search --remote --command "PRAGMA table_info(intraday_tenders)"
+```
+
+The second command lists the columns, `provinces_derived` last. The
+statement is not idempotent: a second run only answers "duplicate column
+name". The rows already there read `[]` until the next changed cut writes
+them again (the file is cumulative, so every notice of the day is written).
+
+The job does not wait on it. Before each parse it reads the table's columns
+(step 4 above, `PRAGMA table_info(intraday_tenders)`) and writes a column
+listed in `intraday.ADDED` only when the answer lists it, so a run before the
+statement leaves `provinces_derived` out of its upserts and goes through.
+The run row's `detail` then ends "; provinces_derived not written (not in
+the table yet)", or "(the table's columns could not be read)" when the read
+failed. A later added column goes into `intraday.ADDED`, at the end of the
+table in `intraday_schema.sql`, with its statement here.
 
 The search sync never names these tables. Its full reload drops its own two
 tables and their full-text indexes and nothing else
@@ -253,7 +290,9 @@ The `detail` column reads one of:
 - `<n> rows read: <n> new, <n> read again, <n> no longer open, <n> without a reference; <n> with a buyer as published (no listed buyer); lookup <date>`:
   the file was read and applied. "lookup missing, buyers as published" or
   "lookup unreadable, buyers as published" in place of the date means the
-  run had no lookup.
+  run had no lookup. "; provinces_derived not written (...)" at the end means
+  the table lacks the column or its columns could not be read (see "Columns
+  added later").
 - `failed at <step>; the next run fetches the file again`: a step failed
   (`ok` is 0).
 - `the new notices file could not be fetched`: the host answered with an
@@ -267,7 +306,10 @@ the apply carry `continue-on-error`, so when one fails the run goes on to
 and the run ends green: GitHub sends no email for it. The steps that need the
 failed step's output are skipped (after a failed fetch, the lookup, the parse
 and the apply; after a failed parse, the apply, which also checks the parse's
-own outcome, so a missing or partial batch is never applied).
+own outcome, so a missing or partial batch is never applied). "Read the
+same-day table's columns" carries `continue-on-error` too, and its failure
+is no failure of the run: the parse leaves the added columns out, the run
+goes through, and the row's `detail` says what was not written.
 
 "Read the last run from the search database" carries `continue-on-error` as
 well. When it fails (the search database is down, or its binding is wrong),
@@ -368,7 +410,9 @@ log names the fault by its code only.
 
 The home page's Canada map counts the same notices for every reader:
 its Same day layer (the Pro chip on its button) shows, per province, the
-band's notices by the provinces they state (the intraday job derives none),
+band's notices by the provinces they state (the intraday job writes the
+derived ones to `provinces_derived` since 2026-11-07; the layer counts them
+once the Worker reads that column),
 and its province links open `/tenders/same-day?province=XX&national=0` for
 a Pro reader and the plain page, with the Pro panel, for anyone else. The
 figures come from `sameDayMapCounts` in `site/src/pages/intraday.tsx`: the

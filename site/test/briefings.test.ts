@@ -307,8 +307,10 @@ describe("the briefing's statements", () => {
     ] as [string, string, string[]][]) {
       expect(sql, name).toMatch(/LIMIT 10$/);
       const steps = await plan(sql, binds);
-      // No index serves expiry, segment or end user: the one table read once (a few thousand rows), no other table touched.
-      expect(steps.filter((s) => /^(SCAN|SEARCH) (?!\(subquery)/.test(s)), `${name}\n${steps.join("\n")}`).toEqual(["SCAN rec_instruments"]);
+      // The expiry index (or the buyer-and-expiry one) narrows the window; the one table is the only one touched.
+      const reads = steps.filter((s) => /^(SCAN|SEARCH) (?!\(subquery)/.test(s));
+      expect(reads, `${name}\n${steps.join("\n")}`).toHaveLength(1);
+      expect(reads[0], name).toMatch(/^SEARCH rec_instruments USING INDEX rec_instruments_(expiry|buyer) /);
     }
     // Twelve of one segment in the window: ten listed, the soonest first, all twelve counted and linked.
     const extra = Array.from({ length: 12 }, (_, i) => instrument({

@@ -437,6 +437,26 @@ def test_the_schema_applies_twice_unchanged_and_names_only_its_tables():
         assert [r[1] for r in db.execute(f"PRAGMA table_info({t.name})")] == list(t.written), t.name
 
 
+def test_the_instruments_ending_in_a_window_are_read_through_their_indexes():
+    """The shapes of the site's statements (account/briefings.ts, account/feeds.ts): a window of expiry dates
+    seeks its rows rather than reading the table, and a buyer's briefing seeks the buyer within the window."""
+    db = d1()
+
+    def plan(sql: str, *binds) -> str:
+        return " | ".join(r[3] for r in db.execute("EXPLAIN QUERY PLAN " + sql, binds))
+
+    window = ("2026-11-07", "2027-05-08")
+    tail = "n > 0 AND expiry BETWEEN ? AND ? ORDER BY expiry, agr LIMIT 10"
+    segment = plan(f"SELECT agr, COUNT(*) OVER () FROM rec_instruments WHERE instr(segs, ?) > 0 AND {tail}", " 81 ", *window)
+    assert "SEARCH rec_instruments USING INDEX rec_instruments_expiry (expiry>? AND expiry<?)" in segment, segment
+    buyer = plan(f"SELECT agr, COUNT(*) OVER () FROM rec_instruments WHERE buyer = ? AND (? = '' OR instr(segs, ?) > 0) "
+                 f"AND {tail}", "dfo-mpo", "", "", *window)
+    assert "SEARCH rec_instruments USING INDEX rec_instruments_buyer (buyer=? AND expiry>? AND expiry<?)" in buyer, buyer
+    calendar = plan("SELECT i.agr, h.oid FROM rec_instruments i CROSS JOIN rec_holders h ON h.ik = i.k "
+                    "WHERE i.expiry BETWEEN ? AND ? AND h.oid IN (?, ?) GROUP BY i.k, h.oid", *window, 1, 2)
+    assert "SEARCH i USING INDEX rec_instruments_expiry (expiry>? AND expiry<?)" in calendar and "SCAN i" not in calendar, calendar
+
+
 # -- the commands and the run ------------------------------------------------------------
 
 
@@ -755,3 +775,48 @@ def test_the_radars_window_is_read_from_the_static_export_without_its_day_count(
     _window(static, {"rows": []})
     with pytest.raises(ValueError, match="not a list"):
         rd.sync(conn, tmp_path / "records", static_dir=static)
+
+
+def test_the_radars_provinces_are_one_row_each_stated_or_derived_and_follow_their_row(seeded, tmp_path):
+    conn, ids = seeded
+    static = tmp_path / "static"
+    base = {"title_en": "T", "title_fr": None, "organization": None, "organization_id": None, "buyer_en": None,
+            "buyer_fr": None, "start": None, "days_left": 9, "value": 1000.0, "currency": None, "competitive": True,
+            "method_en": None, "method_fr": None, "instrument_en": "Contract", "instrument_fr": None, "n_amendments": 0,
+            "value_growth": None, "segments": [], "buyer_id": "dnd-mdn"}
+    national = {**base, "kind": "award", "reference": "AW-NCR", "end": "2027-01-15", "provinces": ["ON", "QC"]}
+    # A derived code the row also states is the stated one; a code that is no province is left out.
+    city = {**base, "kind": "history", "reference": "PW-CITY", "end": "2027-02-01", "provinces": ["NS", "XX"],
+            "provinces_derived": ["BC", "NS", "ZZ"], "provinces_from": "delivery"}
+    claims = {**base, "kind": "contract", "reference": "dnd-mdn:C-9", "end": "2027-03-01", "provinces": [],
+              "provinces_derived": ["NU"], "provinces_from": "land_claims"}
+    unplaced = {**base, "kind": "award", "reference": "AW-NONE", "end": "2027-04-01", "provinces": []}
+    _window(static, [national, city, claims, unplaced])
+    db = d1()
+    manifest = night(conn, tmp_path / "records", db, static_dir=static)
+    assert manifest["expected"]["rec_expiring_prov"] == 5
+
+    def provinces() -> dict[str, list[tuple[str, int]]]:
+        refs = {k: json.loads(j)["reference"] for k, j in db.execute("SELECT k, j FROM rec_expiring")}
+        out: dict[str, list[tuple[str, int]]] = {}
+        for k, prov, derived in db.execute("SELECT k, prov, derived FROM rec_expiring_prov ORDER BY k, prov"):
+            out.setdefault(refs[k], []).append((prov, derived))
+        return out
+
+    assert provinces() == {"AW-NCR": [("ON", 0), ("QC", 0)], "PW-CITY": [("BC", 1), ("NS", 0)],
+                           "dnd-mdn:C-9": [("NU", 1)]}
+    # The filter's statement seeks the province through its index and joins the row by its key.
+    plan = " ".join(r[3] for r in db.execute(
+        "EXPLAIN QUERY PLAN SELECT e.j FROM rec_expiring_prov p JOIN rec_expiring e ON e.k = p.k WHERE p.prov = ? "
+        "AND p.derived = 0", ("ON",)))
+    assert "rec_expiring_prov_prov (prov=?)" in plan and "SCAN" not in plan, plan
+    # A night with nothing changed sends nothing; a province the source now states is one row sent again,
+    # and a row that leaves the window takes its provinces with it.
+    assert night(conn, tmp_path / "records", db, static_dir=static)["upserts"]["rec_expiring_prov"] == 0
+    _window(static, [national, {**city, "provinces": ["BC", "NS"], "provinces_derived": None, "provinces_from": None}, unplaced])
+    manifest = night(conn, tmp_path / "records", db, static_dir=static)
+    assert (manifest["upserts"]["rec_expiring_prov"], manifest["deletes"]["rec_expiring_prov"]) == (1, 1)
+    assert provinces() == {"AW-NCR": [("ON", 0), ("QC", 0)], "PW-CITY": [("BC", 0), ("NS", 0)]}
+    # The rows read from the window rows themselves, so the two tables never disagree.
+    window = list(rd.expiring_rows(static))
+    assert {k for _, k, _, _ in rd.expiring_province_rows(window)} <= {r[0] for r in window}

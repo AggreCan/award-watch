@@ -203,6 +203,21 @@ CREATE INDEX IF NOT EXISTS rec_expiring_end ON rec_expiring (endd);
 CREATE INDEX IF NOT EXISTS rec_expiring_buyer ON rec_expiring (buyer, endd) WHERE buyer IS NOT NULL;
 CREATE INDEX IF NOT EXISTS rec_expiring_client ON rec_expiring (client, endd) WHERE client IS NOT NULL;
 
+-- The provinces of each row of rec_expiring, one row per row and province or
+-- territory: those its source states (derived 0) and those derived from its
+-- other fields (derived 1, places.py), read from the row's own JSON, so the
+-- radar's province filter seeks a province's rows (rec_expiring_prov_prov)
+-- instead of reading every row. A table beside rec_expiring rather than a
+-- column of it: rec_expiring keeps its form, and a new table reaches D1
+-- through the nightly sync's ordinary changes, with no full reload.
+CREATE TABLE IF NOT EXISTS rec_expiring_prov (
+  pk INTEGER PRIMARY KEY,                        -- key_of('expiring-prov:<k>:<prov>'), the sync's key; never read by the site
+  k INTEGER NOT NULL,                            -- rec_expiring.k of the row
+  prov TEXT NOT NULL,                            -- the two-letter code: AB BC MB NB NL NS NT NU ON PE QC SK YT
+  derived INTEGER NOT NULL DEFAULT 0             -- 1 when derived from another field, 0 when the source states it
+);
+CREATE INDEX IF NOT EXISTS rec_expiring_prov_prov ON rec_expiring_prov (prov, k);
+
 -- The page of each published contract (/contracts/<department>/<reference>,
 -- site/src/pages/published.tsx): one row per row of the contracts table,
 -- keyed as its row of records is, with every field the page shows. A
@@ -329,6 +344,15 @@ CREATE TABLE IF NOT EXISTS rec_instruments (
   calls TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS rec_instruments_agr ON rec_instruments (agr);
+-- The statements that list instruments ending in a window (the briefings'
+-- section, the watches' calendar and feed) read only the window's rows
+-- through the first, rather than the whole table; a buyer's briefing reads
+-- only that buyer's rows in the window through the second (partial: an
+-- instrument whose end user names no buyer is never asked for by one).
+-- Indexes only, so the nightly's IF NOT EXISTS adds them to a database that
+-- has the table, with no reload.
+CREATE INDEX IF NOT EXISTS rec_instruments_expiry ON rec_instruments (expiry);
+CREATE INDEX IF NOT EXISTS rec_instruments_buyer ON rec_instruments (buyer, expiry) WHERE buyer IS NOT NULL;
 
 -- Its active holders whose names are shown, one row per region; a holder
 -- withheld as a person has no row (rec_instruments.nw counts it).

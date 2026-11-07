@@ -798,10 +798,9 @@ watches' feed as the feed reads them.
   `WATCH_INSTRUMENTS_SQL`: the organizations' numbers in 25 slots (27 bound
   values), one row per instrument and holder organization with its regions'
   names, soonest first, at most 500, with `COUNT(*) OVER ()` for the cap's
-  last event. `rec_holders` has no index by organization, so the statement
-  reads `rec_instruments` whole (a few thousand rows) and each instrument's
-  holders through `rec_holders_instrument`; an index on `rec_holders (oid)`
-  would let it seek, and is the operator's to add. UID
+  last event. The statement reads the instruments ending in the window
+  through `rec_instruments_expiry (expiry)` (CROSS JOIN keeps them the outer
+  table) and each one's holders through `rec_holders_instrument`. UID
   `instrument-sosa:<agreement>:<organization id>@awardwatch.ca`, so two
   followed organizations on one instrument are two events; `SEQUENCE` 0,
   since the records database does not carry the count of file publications
@@ -1833,11 +1832,11 @@ French). A row is
 ```
 
 with the number escaped as one path segment; "none" when nothing ends in the
-window, and then no link. `rec_instruments` has no index by expiry, segment or
-end user, so the statement reads the table once (a few thousand rows: the
-active instruments and those lapsed within 90 days, as the watches' calendar
-statement does) and sorts its matches for the first 10; `COUNT(*) OVER ()`
-counts all of them.
+window, and then no link. A segment's statement reads the instruments ending
+in the window through `rec_instruments_expiry (expiry)`, a buyer's through
+`rec_instruments_buyer (buyer, expiry)`, and sorts its matches for the first
+10; `COUNT(*) OVER ()` counts all of them. No index serves the segment, which
+is tested on each row of the window.
 
 Subject: `{name} this week: {n} new notices, {n} awards, {n} contracts ending
 next quarter` (each part only when not zero); in French `{name} cette

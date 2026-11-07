@@ -157,6 +157,9 @@ def test_a_refresh_row_is_the_row_the_export_lists_for_the_same_notice(conn, fix
             assert row[k] == want[k], (row["reference"], k)
         for k in ("category", "segments", "provinces", "codes"):
             assert json.loads(row[k]) == want[k], (row["reference"], k)
+        # The derived provinces are the nightly's (places.py through the shared parser); the export leaves the
+        # key out of a row with none, the table holds "[]".
+        assert json.loads(row["provinces_derived"]) == want.get("provinces_derived", []), row["reference"]
         assert (row["buyer_id"], row["buyer_name"], row["buyer_name_fr"]) == (want["buyer_id"], want["buyer_en"],
                                                                              want["buyer_fr"])
         assert row["seen_at"] == "2026-10-30T15:45:00Z"
@@ -164,6 +167,32 @@ def test_a_refresh_row_is_the_row_the_export_lists_for_the_same_notice(conn, fix
     ssc = next(r for r in parsed.rows if r["reference_published"] == "SSC-26-00035339:T")
     assert ssc["reference"] == "SSC-26-00035339-T"
     assert {r["reference"]: r["amendment"] for r in parsed.rows if r["amendment"]} == AMENDED
+    # Not a comparison of empty lists: the fixture has notices placed only by a city of delivery or by their
+    # regions of opportunity.
+    assert sum(1 for r in parsed.rows if r["provinces_derived"] != "[]") >= 2
+
+
+def test_a_same_day_row_derives_its_provinces_as_the_nightly_does(fixtures, tmp_path):
+    header, rows = read_csv(fixtures / NEW)
+    cols = canadabuys_rows.COLUMNS["tenders"]
+    office = "Defence Construction Canada - Pacific Region"
+    base = {**rows[0], cols["regions_delivery_en"]: "", cols["regions_delivery_fr"]: "",
+            cols["regions_opportunity_en"]: "", cols["regions_opportunity_fr"]: ""}
+    city = {**base, REFERENCE: "cb-1-00000001", cols["regions_delivery_en"]: "*Esquimalt\n*Canada"}
+    opportunity = {**base, REFERENCE: "cb-1-00000002", cols["regions_opportunity_en"]: "*Alberta"}
+    stated = {**base, REFERENCE: "cb-1-00000003", cols["regions_delivery_en"]: "*British Columbia\n*Esquimalt"}
+    dcc = {**base, REFERENCE: "cb-1-00000004", cols["buyer_en"]: office, cols["buyer_fr"]: office}
+    path = write_csv(tmp_path / "places.csv", header, [city, opportunity, stated, dcc])
+    lookup = intraday.BuyerLookup({"version": intraday.LOOKUP_VERSION, "spellings": {office: "dcc-cdc"},
+                                   "buyers": {"dcc-cdc": ["Defence Construction Canada", "Construction de Défense Canada"]}})
+    by = {r["reference"]: r for r in intraday.read_notices(path, lookup, "2026-10-30T15:45:00Z").rows}
+    got = {ref: (json.loads(r["provinces"]), json.loads(r["provinces_derived"])) for ref, r in by.items()}
+    assert got == {"cb-1-00000001": ([], ["BC"]), "cb-1-00000002": ([], ["AB"]), "cb-1-00000003": (["BC"], []),
+                   "cb-1-00000004": ([], ["BC"])}
+    assert by["cb-1-00000004"]["buyer_id"] == "dcc-cdc"
+    # The office is read only for the buyer the spelling resolves to: unresolved, the notice stays unplaced.
+    unresolved = {r["reference"]: r for r in intraday.read_notices(path, intraday.BuyerLookup(), "x").rows}
+    assert unresolved["cb-1-00000004"]["provinces_derived"] == "[]" and unresolved["cb-1-00000004"]["buyer_id"] is None
 
 
 # -- the buyer lookup ------------------------------------------------------------------------------
@@ -408,6 +437,60 @@ def test_the_refresh_command_writes_the_batch_and_says_how_many_statements(fixtu
                           "--out", str(tmp_path / "empty")]) == 0
     assert outputs.read_text(encoding="utf-8") == "statements=0\n"
     assert (tmp_path / "empty" / "batch.sql").read_bytes() == b""
+    # A columns answer that cannot be read (the workflow's read failed) leaves the added columns out, and the
+    # summary says so; one that lists them writes them.
+    for n, (answer, found, left) in enumerate(((None, "unread", ["provinces_derived"]),
+                                               ("", "unread", ["provinces_derived"]),
+                                               (wrangler_answer(db, intraday.COLUMNS_SQL), "read", []))):
+        columns = tmp_path / f"columns-{n}.json"
+        if answer is not None:
+            columns.write_text(answer, encoding="utf-8")
+        out = tmp_path / f"cols-{n}"
+        assert intraday.main(["refresh", "--csv", str(fixtures / NEW), "--state", str(state), "--columns", str(columns),
+                              "--out", str(out)]) == 0
+        summary = json.loads((out / "refresh.json").read_text(encoding="utf-8"))
+        assert (summary["columns"], summary["left_out"]) == (found, left), n
+        assert ("provinces_derived" in (out / "batch.sql").read_text(encoding="utf-8")) == (not left), n
+
+
+def test_a_column_added_since_is_written_only_once_the_live_table_has_it(fixtures, tmp_path):
+    # The table as the operator first made it, before provinces_derived.
+    live = d1()
+    live.execute("ALTER TABLE intraday_tenders DROP COLUMN provinces_derived")
+    have = intraday.read_columns(wrangler_answer(live, intraday.COLUMNS_SQL))
+    assert have == set(intraday.COLUMNS) - {"provinces_derived"}
+    summary, _ = run_cut(tmp_path, fixtures / NEW, live, intraday.written_columns(have), "before")
+    assert len(stored(live)) == 25 and summary["left_out"] == ["provinces_derived"] and summary["derived"] >= 2
+    row = intraday.run_row("1-1", "x", {"changed": True}, summary, STEPS_APPLIED)
+    assert row["ok"] == 1 and row["detail"].endswith("; provinces_derived not written (not in the table yet)")
+    # The operator's statement, as the schema file and the docs print it, adds the column; the rows already
+    # there read "[]" until the next cut writes them.
+    statement = re.search(r'--command "(ALTER TABLE intraday_tenders ADD COLUMN [^"]+)"',
+                          SCHEMA.read_text(encoding="utf-8")).group(1)
+    assert f'--remote --command "{statement}"' in (REPO / "docs" / "intraday.md").read_text(encoding="utf-8")
+    live.execute(statement)
+    assert {r["provinces_derived"] for r in stored(live)} == {"[]"}
+    have = intraday.read_columns(wrangler_answer(live, intraday.COLUMNS_SQL))
+    assert intraday.written_columns(have) == intraday.COLUMNS
+    summary, _ = run_cut(tmp_path, fixtures / NEW, live, intraday.written_columns(have), "after")
+    assert summary["left_out"] == [] and sum(r["provinces_derived"] != "[]" for r in stored(live)) == summary["derived"]
+    assert "not written" not in intraday.run_row("2-1", "x", {"changed": True}, summary, STEPS_APPLIED)["detail"]
+    # The table the schema file makes today has every column, the added one where ALTER TABLE puts it.
+    assert [r["name"] for r in d1().execute(intraday.COLUMNS_SQL)] == [r["name"] for r in live.execute(intraday.COLUMNS_SQL)]
+    # Columns that could not be read leave every added column out.
+    assert intraday.read_columns("wrangler: authentication error") is None
+    assert intraday.written_columns(None) == tuple(c for c in intraday.COLUMNS if c not in intraday.ADDED)
+    unread = intraday.run_row("3-1", "x", {"changed": True}, {**summary, "columns": "unread", "left_out": ["provinces_derived"]},
+                              STEPS_APPLIED)
+    assert unread["detail"].endswith("; provinces_derived not written (the table's columns could not be read)")
+
+
+def run_cut(tmp_path, csv_path, db, columns, name):
+    state = intraday.read_state(wrangler_answer(db))
+    out = tmp_path / name
+    summary = intraday.refresh(csv_path, None, state, out, now=SEEN, columns=columns, columns_state="read")
+    db.executescript((out / "batch.sql").read_text(encoding="utf-8"))
+    return summary, out
 
 
 # -- the state, the run row and the prune ------------------------------------------------------------
@@ -586,7 +669,7 @@ def test_every_r2_and_d1_command_reaches_the_remote_store():
     text = WORKFLOW.read_text(encoding="utf-8")
     commands = [line.strip() for line in text.splitlines()
                 if not line.lstrip().startswith("#") and re.search(r"\b(r2 object|d1 execute)\b", line)]
-    assert len(commands) == 4
+    assert len(commands) == 5
     for line in commands:
         # The site's pinned Wrangler, and the remote store.
         assert re.search(r'"\$WRANGLER" (r2 object get|d1 execute) ', line) and " --remote " in line, line
@@ -598,7 +681,8 @@ def test_the_workflow_runs_the_steps_in_order_on_the_right_conditions():
     names = [line.strip()[len("- name: "):] for line in text.splitlines() if line.strip().startswith("- name: ")]
     order = ["Install the pipeline", "Install the site's tools", "Read the last run from the search database",
              "Fetch the new notices file when it changed", "Fetch the buyer lookup from R2",
-             "Parse the notices and write the upserts", "Apply the upserts to the search database", "Record the run"]
+             "Read the same-day table's columns", "Parse the notices and write the upserts",
+             "Apply the upserts to the search database", "Record the run"]
     assert [n for n in names if n in order] == order
     state = step(text, "Read the last run from the search database")
     assert f'"$WRANGLER" d1 execute awardwatch-search --remote --json --command "{intraday.STATE_SQL}" > "$OUT/state.json"' in state
@@ -612,9 +696,18 @@ def test_the_workflow_runs_the_steps_in_order_on_the_right_conditions():
     assert "if: ${{ steps.gate.outputs.active == 'true' && steps.fetch.outputs.changed == 'true' }}" in lookup
     assert f'r2 object get --remote "$BUCKET/{intraday.LOOKUP_KEY}" --file "$OUT/lookup.json.gz"' in lookup
     assert 'grep -qi "specified key does not exist"' in lookup
+    columns = step(text, "Read the same-day table's columns")
+    assert "if: ${{ steps.gate.outputs.active == 'true' && steps.fetch.outputs.changed == 'true' }}" in columns
+    assert "working-directory: site" in columns and "continue-on-error: true" in columns
+    assert (f'"$WRANGLER" d1 execute awardwatch-search --remote --json --command "{intraday.COLUMNS_SQL}" '
+            '> "$OUT/columns.json"') in columns
+    # Read only: the job never changes the table's form; the operator does (docs/intraday.md).
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    assert "ALTER TABLE" not in code and "intraday_schema.sql" not in code
     refresh = step(text, "Parse the notices and write the upserts")
     assert "if: ${{ steps.gate.outputs.active == 'true' && steps.fetch.outputs.changed == 'true' }}" in refresh
     assert "python -m awardwatch_pipeline.intraday refresh --csv \"$OUT/new.csv\" --lookup \"$OUT/lookup.json.gz\"" in refresh
+    assert '--columns "$OUT/columns.json"' in refresh
     apply = step(text, "Apply the upserts to the search database")
     # The parse's own outcome, not the job's state: after a parse that failed under continue-on-error the job is
     # still a success, and a missing or partial batch must not be applied.
@@ -722,13 +815,17 @@ def recorded(job: dict) -> dict | None:
 def test_a_failed_cut_is_a_row_and_the_run_stays_green():
     text = WORKFLOW.read_text(encoding="utf-8")
     flagged = [s.get("id") or s.get("name") or s.get("uses") for s in steps_of(text) if s.get("continue-on-error") == "true"]
-    assert flagged == ["state", "fetch", "lookup", "refresh", "apply"]
+    assert flagged == ["state", "fetch", "lookup", "columns", "refresh", "apply"]
     clean = simulate(text)
     assert not clean["failed"] and recorded(clean)["ok"] == 1
+    # The columns read failing stops nothing: the parse leaves the added columns out (and says so in the row).
+    job = simulate(text, fail=("columns",))
+    assert not job["failed"] and job["outcomes"]["refresh"] == job["outcomes"]["apply"] == "success"
+    assert recorded(job)["ok"] == 1
     # Each of the four steps failing: green, the record still runs, ok 0 and the step named; the steps that
     # need the failed one's output are skipped, the batch is never applied after a failed parse.
     for name, detail, skipped in (
-        ("fetch", "the new notices file could not be fetched", {"lookup", "refresh", "apply"}),
+        ("fetch", "the new notices file could not be fetched", {"lookup", "columns", "refresh", "apply"}),
         ("lookup", "failed at lookup; the next run fetches the file again", set()),
         ("refresh", "failed at refresh; the next run fetches the file again", {"apply"}),
         ("apply", "failed at apply; the next run fetches the file again", set()),

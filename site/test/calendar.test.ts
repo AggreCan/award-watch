@@ -971,7 +971,8 @@ describe("the watches' feed", () => {
     // rec_holders has no index by organization: rec_instruments (a few thousand rows) is the outer table, and each
     // instrument's holders are sought through rec_holders_instrument; rec_holders is never scanned.
     expect(steps.filter((s) => /^SCAN h\b|^SCAN rec_holders\b/.test(s)), text).toEqual([]);
-    expect(text).toMatch(/^SCAN i$/m);
+    // The expiry index narrows the window since 2026-11-07 (records_schema.sql rec_instruments_expiry).
+    expect(text).toMatch(/^SEARCH i USING INDEX rec_instruments_expiry /m);
     expect(text).toMatch(/SEARCH h USING (COVERING )?INDEX rec_holders_instrument \(ik=\?\)/);
   });
 

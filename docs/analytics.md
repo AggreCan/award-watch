@@ -43,6 +43,7 @@ reads it, with prepared statements.
 | `rec_details` | counted record with a date that names a buyer or an organization: its date, reference and title beside its figures (the record tables, the feeds) | about 2.4 million |
 | `rec_classes` | UNSPSC class of an award notice or history record that names a buyer (the earlier awards on a tender) | about 1.5 million |
 | `rec_expiring` | row of the radar's 12-month window, as the static export writes it | about 20,000 |
+| `rec_expiring_prov` | row of `rec_expiring` (its `k`) and province or territory the row names: stated by its source (`derived` 0) or derived from its other fields (`derived` 1, `places.py`); `pk` is the sync's key | a few thousand (about 1,150 of the window's 7,178 rows were placed on 2026-11-06, most in one or two provinces) |
 | `rec_contracts` | published contract row: every field its page shows (`/contracts/<department>/<reference>`) | about 1.34 million |
 | `rec_gsin` | GSIN code a published contract carries: its names | about 10,000 at most |
 | `rec_events` | thing that happened on a data date of the last 90 to an organization, a buyer, a single record or a tender notice, plus a count row past 100 a subject a day (*Events*) | thousands a night, a few hundred thousand |
@@ -486,9 +487,15 @@ deeper windows keep their ten-row tease without Pro.
 
 `rec_expiring` is written from the static export's 12-month window files by
 the same nightly sync (`records-sync --static`), so the two views of the
-radar never disagree. When the records database is missing, loading or
-failing, a filtered view filters the window file's page as before and says
-so.
+radar never disagree. `rec_expiring_prov` is written beside it from each
+row's own `provinces` and `provinces_derived` (`records_db.expiring_province_rows`):
+one row per row and province, `derived` 1 for a derived one (a code the row
+also states counts as stated), indexed by `rec_expiring_prov_prov (prov, k)`
+so a province filter seeks the province's rows and joins `rec_expiring` by
+`k`. It is a table of its own because `rec_expiring` keeps its columns: a
+column added there reaches D1 only through a full reload. When the records
+database is missing, loading or failing, a filtered view filters the window
+file's page as before and says so.
 
 ## Earlier awards, incumbents and organization feeds
 
