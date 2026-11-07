@@ -65,10 +65,10 @@ describe("the province filter", () => {
   it("offers the box on the tenders page, ticked unless the address says derived=0", async () => {
     const on = await page("/tenders");
     expect(on).toContain('<input type="checkbox" name="derived" value="1" checked=""/>');
-    expect(on).toContain("Include provinces derived from other fields");
+    expect(on).toContain("Include derived provinces");
     const off = await page("/tenders?province=BC&derived=0");
     expect(off).toContain('<input type="checkbox" name="derived" value="1"/>');
-    expect(await page("/tenders?lang=fr")).toContain("Inclure les provinces déduites d’autres champs");
+    expect(await page("/tenders?lang=fr")).toContain("Inclure les provinces déduites");
   });
 });
 

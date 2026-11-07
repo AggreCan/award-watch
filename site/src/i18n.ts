@@ -3342,7 +3342,8 @@ const STRINGS = {
     en: "the Defence Construction Canada regional office",
     fr: "le bureau régional de Construction de Défense Canada",
   },
-  "tenders.include_derived": { en: "Include provinces derived from other fields", fr: "Inclure les provinces déduites d'autres champs" },
+  // Short, so the checkbox stays on one line beside the province select on a small screen (operator, 2026-11-07); the full rule is on the methodology page.
+  "tenders.include_derived": { en: "Include derived provinces", fr: "Inclure les provinces déduites" },
   "interest.derived_out": { en: "Derived provinces: left out", fr: "Provinces déduites : exclues" },
   "keyed.p_derived": {
     en: "With a province given, 1 (the default) also matches the provinces derived from other fields (a city in the regions of delivery, the regions of opportunity, a Defence Construction Canada regional office) and 0 reads the stated ones alone",
