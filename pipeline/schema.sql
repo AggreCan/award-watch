@@ -741,8 +741,8 @@ CREATE TABLE IF NOT EXISTS organization_aliases (
   new_id TEXT NOT NULL,
   normalize_version INTEGER NOT NULL,            -- the normalization in force when old_id was retired
   created_at TEXT NOT NULL,
-  reason TEXT                                    -- NULL: a normalization change; business_number | truncation | seed:
-                                                 -- a merge, rebuilt every night by merges.py
+  reason TEXT                                    -- NULL: a normalization change; business_number | truncation |
+                                                 -- spelling | seed: a merge, rebuilt every night by merges.py
 );
 
 -- Values to check (value_checks.py), rebuilt whole every night: a record

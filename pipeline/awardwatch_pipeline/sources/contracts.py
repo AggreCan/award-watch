@@ -504,6 +504,7 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
         name = text(get("vendor_name"))
         if matching.is_placeholder(name):
             name = None
+        name, filed = matching.filed_name(name)
         place = organizations.place_key(get("country_of_vendor"), None, None, get("vendor_postal_code"))
         withheld = bool(name) and matching.is_person_name(name)
         person = name if withheld else None
@@ -567,9 +568,9 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
             "organization_id": org,
             "loaded_at": stamp,
         }
-        if person:
+        if person or filed:
             # The description and comments may name the vendor too.
-            stats.redacted += redact_fields(get, rec, [person], CONTRACT_FREE_TEXT)
+            stats.redacted += redact_fields(get, rec, [p for p in (person, filed) if p], CONTRACT_FREE_TEXT)
         yield tuple(rec[c] for c in COLUMNS)
 
 

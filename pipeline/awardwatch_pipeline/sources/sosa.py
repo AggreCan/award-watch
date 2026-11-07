@@ -100,7 +100,7 @@ TEXT_MAX = 600
 # The holder key depends on the name rules and the person test: when either
 # changes, the next file is applied quietly (no events) so a re-keyed row is
 # not reported as one lost and one gained.
-KEYS_VERSION = f"{NORMALIZE_VERSION}.{matching.PERSON_TEST_VERSION}"
+KEYS_VERSION = f"{NORMALIZE_VERSION}.{matching.person_test_stamp()}"
 
 META_PUBLISHED = "sosa:published"        # the publication date of the file applied last
 META_ROWS = "sosa:rows"                  # its holder rows, which the hold rule compares
@@ -254,7 +254,7 @@ def read_file(path: Path, drops: matching.PersonDrops, result: LoadResult, *, pa
     with csv_rows(path, REQUIRED, OPTIONAL, path.name, stats, partial_tail=partial_tail) as getters:
         for get in getters:
             agreement = squash(get("agreement-number"))
-            legal = matching.first_language(get("supplier-legal-name"))
+            legal = matching.filed_name(matching.first_language(get("supplier-legal-name")))[0] or ""
             if not agreement or not legal or matching.is_placeholder(legal):
                 result.skipped += 1
                 continue

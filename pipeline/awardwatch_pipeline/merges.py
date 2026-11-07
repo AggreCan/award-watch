@@ -49,9 +49,32 @@ The night's work, in one transaction (apply):
    venture when it does not, stays apart and is listed for review. A name cut
    at a word boundary reads like a whole name ("THE BELL TELEPHONE COMPANY
    OF") and is left to the seed.
-5. Seed. awardwatch_pipeline/data/organization_aliases.csv (from_norm, to_norm,
-   reason), reviewed by hand, is applied last: from_norm's organization joins
-   to_norm's. A row with an empty to_norm keeps from_norm out of rules 3 and 4.
+5. Spelling. Organizations whose spellings share a match key (match_key.py:
+   the first legal name of a spelling, abbreviations expanded, a bracketed
+   acronym, a vendor code or the words after a complete legal name left out,
+   the name in its other language set aside, spaces removed) are one: "Stantec
+   Cnslt.Ltd." and "Stantec Consulting Ltd.", "KPMG LLP, T4348" and "KPMG LLP".
+   A spelling naming a joint venture or two companies, a key with no
+   distinctive word and an organization with a spelling that reads as a person
+   get no key. Run as config.ORG_SPELLING_MERGE says: "shadow" (the default)
+   lists the groups it would merge in the review file and merges nothing,
+   "on" merges them, "off" leaves the rule out. Each group in the file carries
+   its key, the steps that made it (spacing, abbreviation, both languages,
+   words after the form, vendor code, acronym), whether a city or postal code
+   of the members agrees, their provinces, ids, names and records.
+6. Seed. awardwatch_pipeline/data/organization_aliases.csv (from_norm, to_norm,
+   reason, note), reviewed by hand, is applied last: from_norm's organization
+   joins to_norm's. A row with an empty to_norm keeps from_norm out of rules
+   3 to 5 and out of the candidates below. The note (SEED_NOTES: spelling,
+   former, short, branch) says what the name is to the one it joins, for a
+   profile's "also appears as" line once the export carries it.
+
+After the rules, the review file lists the candidates no rule may merge, for
+the seed: names one or two edits apart in a long word (a place in common
+first), short forms of one to three longer names, names that end in a place
+word, operating names that are another organization's name, and
+organizations that hold different amendments of one contract (a likely rename
+or assignment). Each comes with the seed row that would merge it.
 
 Each organization merged away becomes a row of organization_aliases (old_id,
 new_id, reason), which the export writes as aliases/<abc>.json so a link to
@@ -76,9 +99,11 @@ from __future__ import annotations
 
 import bisect
 import csv
+import io
 import logging
 import re
 import sqlite3
+from array import array
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -86,8 +111,12 @@ from pathlib import Path
 
 from . import config, organizations
 from .db import now_iso
+from .match_key import STOP_WORDS, Key, distinctive, edit_distance, match_key, strip_places
 from .migrate import ID_COLUMNS, new_id
-from .normalize import LEGAL_SUFFIXES, NORMALIZE_VERSION, has_legal_form, norm_name, org_id, slugify, squash
+from .normalize import (
+    LEGAL_SUFFIXES, NORMALIZE_VERSION, has_legal_form, norm_name, org_id, slugify, split_trade_name, squash,
+)
+from .sources import matching
 from .sources.matching import GENERIC_WORDS
 
 log = logging.getLogger(__name__)
@@ -96,15 +125,32 @@ log = logging.getLogger(__name__)
 CUT = 35
 SEED_PATH = config.PACKAGE_DATA / "organization_aliases.csv"
 REVIEW_FILE = "organization-merges.txt"
-REASONS = ("business_number", "truncation", "seed")
+REASONS = ("business_number", "truncation", "spelling", "seed")
+SPELLING_MODES = ("shadow", "on", "off")
+SEED_COLUMNS = ("from_norm", "to_norm", "reason", "note")
+# What a merged name is to the one it joins: another way of writing it, a
+# former name, a short form, a branch or division's name.
+SEED_NOTES = ("spelling", "former", "short", "branch")
+# The candidates for the seed: the kinds, in the order the review file lists
+# them, and the seed note each suggests.
+CANDIDATE_KINDS = {"operating": "", "former": "former", "place": "branch", "short": "short", "typo": "spelling"}
+# At most this many candidates of each kind are listed (a place in common first, then the largest).
+CANDIDATE_LIMIT = 1000
+# A typo pair: keys of this many characters or more, and every word that differs this long on both sides
+# ("communicatons" for "communications"; not "Ferme Cario" for "Ferme Carlin", two farms).
+TYPO_MIN_KEY = 10
+TYPO_MIN_WORD = 7
+# A short form is listed when it starts this many longer names or fewer; more is a family of firms.
+SHORT_MAX = 3
+# Names ending in a place word are listed when this many organizations or fewer share the rest.
+PLACE_MAX = 6
+# The typo search sorts its hashes in this many slices, to bound its memory.
+TYPO_PASSES = 4
 # The start of a legal form, as a cut leaves it at the end of a name: "c" of "co", "in" of "inc", "limi" of "limited".
 SUFFIX_STARTS = frozenset(s[:i] for s in LEGAL_SUFFIXES for i in range(1, len(s)))
 # A candidate naming a joint venture is never taken by a cut name that does not name one.
 JOINT_RE = re.compile(r"\b(?:joint venture|jointventure|coentreprise|consortium|jv)\b")
 TEMP_TABLES = ("merge_ids", "merge_map")
-# Words that name no one organization, besides matching.GENERIC_WORDS.
-STOP_WORDS = frozenset({"the", "of", "for", "and", "et", "de", "la", "le", "les", "du", "des", "an", "in", "on", "at",
-                        "to", "canada", "canadian", "canadien", "canadienne"})
 # The places on the records of the organizations in temp.merge_ids: (organization, city, postal code).
 PLACE_SQL = (
     "SELECT organization_id, supplier_city, supplier_postal FROM awards "
@@ -122,17 +168,57 @@ PLACE_SQL = (
 class Merge:
     from_id: str
     to_id: str            # the survivor, after every merge of the night
-    reason: str           # business_number | truncation | seed
-    evidence: str         # the business number, the cut spelling, or the seed row's reason
+    reason: str           # business_number | truncation | spelling | seed
+    evidence: str         # the business number, the cut spelling, the key and its steps, or the seed row's reason
+
+
+@dataclass(frozen=True)
+class SeedRow:
+    from_norm: str
+    to_norm: str
+    reason: str
+    note: str             # one of SEED_NOTES, or empty
+
+
+@dataclass
+class SpellingGroup:
+    """Organizations sharing a match key (the spelling rule), the survivor first."""
+    key: str
+    steps: tuple[str, ...]
+    members: list[str]
+    place: str = ""                   # "city", "postal" or "city, postal": what two members have in common
+    provinces: dict[str, list[str]] = field(default_factory=dict)
+
+    @property
+    def overlap(self) -> str:
+        """Whether two members share a province: yes, no, or unknown (fewer than two have one)."""
+        seen = [set(p) for p in self.provinces.values() if p]
+        if len(seen) < 2:
+            return "unknown"
+        return "yes" if any(a & b for i, a in enumerate(seen) for b in seen[i + 1:]) else "no"
+
+
+@dataclass
+class Candidate:
+    """A pair no rule may merge, listed for the seed: from_id would join to_id."""
+    kind: str             # one of CANDIDATE_KINDS
+    from_id: str
+    to_id: str
+    detail: str
+    place: str = ""       # what the two have in common: "city", "postal", "city, postal" or ""
 
 
 @dataclass
 class Outcome:
     merges: list[Merge] = field(default_factory=list)
     names: dict[str, str] = field(default_factory=dict)       # display names, as the records name each
+    norms: dict[str, str] = field(default_factory=dict)       # normalized names, for the seed rows suggested
     records: dict[str, int] = field(default_factory=dict)     # each organization's own records
     review: list[str] = field(default_factory=list)           # organizations left apart for review, one line each
-    unapplied: list[str] = field(default_factory=list)        # seed rows that name no organization
+    unapplied: list[str] = field(default_factory=list)        # seed rows that name no organization or break a rule
+    spelling: list[SpellingGroup] = field(default_factory=list)
+    spelling_mode: str = "shadow"
+    candidates: list[Candidate] = field(default_factory=list)
     restored: int = 0
     cleared: int = 0
     moved: int = 0
@@ -140,28 +226,38 @@ class Outcome:
     def counts(self) -> dict[str, int]:
         by = Counter(m.reason for m in self.merges)
         return {"merged": len(self.merges), **{f"merged_{r}": by.get(r, 0) for r in REASONS},
-                "merge_review": len(self.review), "records_moved": self.moved, "not_organizations": self.cleared}
+                "merge_review": len(self.review), "records_moved": self.moved, "not_organizations": self.cleared,
+                "spelling_groups": len(self.spelling), "seed_candidates": len(self.candidates)}
 
 
-def read_seed(path: Path | None = None) -> tuple[list[tuple[str, str, str]], set[str]]:
-    """The seed's merges (from_norm, to_norm, reason) and the names it keeps apart (rows with no to_norm)."""
-    rows: list[tuple[str, str, str]] = []
+def read_seed(path: Path | None = None) -> tuple[list[SeedRow], set[str], list[str]]:
+    """The seed's merges, the names it keeps apart (rows with no to_norm), and the rows it cannot apply.
+
+    Lines starting with '#' are comments. A merge row whose note is not one of
+    SEED_NOTES is not applied: it is listed in the review file with the reason,
+    and the rest of the seed still applies.
+    """
+    rows: list[SeedRow] = []
     apart: set[str] = set()
+    bad: list[str] = []
     p = path or SEED_PATH
     if not p.exists():
-        return rows, apart
-    with p.open(encoding="utf-8", newline="") as fh:
-        for r in csv.DictReader(fh):
-            # Written normalized; normalizing again is a no-op on a normalized name and
-            # forgives a row typed as the name is published.
-            src, dst = norm_name(squash(r.get("from_norm"))), norm_name(squash(r.get("to_norm")))
-            if not src:
-                continue
-            if not dst:
-                apart.add(src)
-            elif dst != src:
-                rows.append((src, dst, squash(r.get("reason"))))
-    return rows, apart
+        return rows, apart, bad
+    lines = [line for line in p.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+    for r in csv.DictReader(io.StringIO("\n".join(lines))):
+        # Written normalized; normalizing again is a no-op on a normalized name and
+        # forgives a row typed as the name is published.
+        src, dst = norm_name(squash(r.get("from_norm"))), norm_name(squash(r.get("to_norm")))
+        note = squash(r.get("note")).casefold()
+        if not src:
+            continue
+        if not dst:
+            apart.add(src)
+        elif note and note not in SEED_NOTES:
+            bad.append(f"{src}\t{dst}\tthe note {note!r} is not one of {', '.join(SEED_NOTES)}")
+        elif dst != src:
+            rows.append(SeedRow(src, dst, squash(r.get("reason")), note))
+    return rows, apart, bad
 
 
 def _ids_table(conn: sqlite3.Connection, ids: Iterable[str]) -> None:
@@ -374,10 +470,271 @@ def _by_truncation(forest: _Forest, cuts: dict[str, list[str]], norms: dict[str,
     return review
 
 
-def apply(conn: sqlite3.Connection, *, now: str | None = None, seed_path: Path | None = None) -> Outcome:
-    """Restore, clear, decide the night's merges and move the records; the caller commits (organizations.run)."""
+def _spellings(conn: sqlite3.Connection, live: set[str]) -> dict[str, set[str]]:
+    """Each organization's own legal spellings, as its records write them (operating names are not read)."""
+    out: dict[str, set[str]] = defaultdict(set)
+    for table, column in ID_COLUMNS:
+        for oid, raw in conn.execute(f"SELECT DISTINCT organization_id, {column} FROM {table} "
+                                     f"WHERE organization_id IS NOT NULL AND {column} IS NOT NULL"):
+            if oid in live:
+                out[oid].add(raw)
+    return out
+
+
+# Marks a spelling that reads as a person in _keys' cache.
+_PERSON = Key("", (), frozenset())
+
+
+def _keys(spellings: dict[str, set[str]], apart: set[str]) -> dict[str, list[Key]]:
+    """The match keys of each organization's spellings; none for one kept apart by the seed or one with a
+    spelling that reads as a person (the loaders withhold those, so it means the person test changed)."""
+    cache: dict[str, Key | None] = {}
+    out: dict[str, list[Key]] = {}
+    for oid, raws in spellings.items():
+        if oid in apart:
+            continue
+        keys: list[Key] = []
+        for raw in raws:
+            text = matching.first_language(raw)
+            if text not in cache:
+                cache[text] = _PERSON if matching.is_person_name(text) else match_key(text)
+            key = cache[text]
+            if key is _PERSON:
+                keys = []
+                break
+            if key is not None:
+                keys.append(key)
+        if keys:
+            out[oid] = keys
+    return out
+
+
+def _by_spelling(forest: _Forest, keys: dict[str, list[Key]], rank: dict[str, tuple], earlier: set[str],
+                 *, join: bool) -> list[SpellingGroup]:
+    """The spelling rule: the organizations whose spellings share a match key, each group's survivor first; joined only
+    when join is set (config.ORG_SPELLING_MERGE "on")."""
+    roots_of: dict[str, set[str]] = defaultdict(set)
+    by_root_keys: dict[str, list[Key]] = defaultdict(list)
+    for oid, ks in keys.items():
+        r = forest.root(oid)
+        by_root_keys[r].extend(ks)
+        for k in ks:
+            roots_of[k.key].add(r)
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        while parent.get(x, x) != x:
+            parent[x] = parent.get(parent[x], parent[x])
+            x = parent[x]
+        return x
+
+    # An organization whose spellings give two keys joins the groups of both.
+    shared_keys = {k: roots for k, roots in roots_of.items() if len(roots) > 1}
+    for roots in shared_keys.values():
+        first, *rest = sorted(roots)
+        for r in rest:
+            a, b = find(first), find(r)
+            if a != b:
+                parent[max(a, b)] = min(a, b)
+    members: dict[str, set[str]] = defaultdict(set)
+    shared_by: dict[str, list[str]] = defaultdict(list)
+    for k, roots in shared_keys.items():
+        head = find(next(iter(roots)))
+        members[head] |= roots
+        shared_by[head].append(k)
+    groups: list[SpellingGroup] = []
+    for head in sorted(members):
+        group = members[head]
+        shared = sorted(shared_by[head])
+        made = [k for r in group for k in by_root_keys[r] if k.key in shared]
+        union = frozenset().union(*(k.steps for k in made))
+        steps = set(union - frozenset.intersection(*(k.steps for k in made))) or set(union)
+        if any(len({k.words for k in made if k.key == s}) > 1 for s in shared):
+            steps.add("spacing")
+        pool = [m for m in group if m in earlier] or list(group)
+        survivor = min(pool, key=rank.__getitem__)
+        ordered = [survivor] + sorted((m for m in group if m != survivor), key=rank.__getitem__)
+        key = shared[0] if len(shared) == 1 else " | ".join(shared)
+        groups.append(SpellingGroup(key, tuple(sorted(steps)), ordered))
+        if join:
+            for m in ordered[1:]:
+                forest.join(m, survivor, "spelling", f"{key} ({', '.join(sorted(steps)) or 'same key'})")
+    return groups
+
+
+def _candidates(conn: sqlite3.Connection, forest: _Forest, keys: dict[str, list[Key]],
+                spellings: dict[str, set[str]], rank: dict[str, tuple], groups: list[SpellingGroup],
+                seed: list[SeedRow], apart: set[str]) -> list[Candidate]:
+    """The pairs no rule may merge, for the operator to accept into the seed or keep apart."""
+    root = forest.root
+    in_group = {m: i for i, g in enumerate(groups) for m in g.members}
+    seeded = {frozenset((org_id(r.from_norm), org_id(r.to_norm))) for r in seed}
+    seen: set[frozenset[str]] = set()
+    out: list[Candidate] = []
+
+    def add(kind: str, a: str, b: str, detail: str, *, by_rank: bool) -> None:
+        a, b = root(a), root(b)
+        pair = frozenset((a, b))
+        if a == b or a in apart or b in apart or pair in seen or pair in seeded:
+            return
+        if a in in_group and in_group[a] == in_group.get(b):
+            return  # listed with its spelling group already
+        if by_rank and rank[a] < rank[b]:
+            a, b = b, a  # the one with fewer records joins the other
+        seen.add(pair)
+        out.append(Candidate(kind, a, b, detail))
+
+    roots_of: dict[str, set[str]] = defaultdict(set)
+    words_of: dict[str, tuple[str, ...]] = {}
+    for oid, ks in keys.items():
+        for k in ks:
+            roots_of[k.key].add(root(oid))
+            words_of.setdefault(k.key, k.words)
+
+    # Operating names: "1019837 ONTARIO INC O/A DYNAMIC PERSONNEL CONSULTANTS" beside "DYNAMIC PERSONNEL
+    # CONSULTANTS". Usually one business, but a trade name is not unique across provinces.
+    for oid in sorted(keys):
+        for raw in sorted(spellings.get(oid, ())):
+            operating = split_trade_name(matching.first_language(raw))[1]
+            if not operating or matching.is_person_name(operating):
+                continue
+            k = match_key(operating)
+            for other in sorted(roots_of.get(k.key, ())) if k else ():
+                add("operating", oid, other, f"operates as {operating}", by_rank=True)
+
+    # Likely renames or assignments: one contract whose amendments name two organizations, the earlier first.
+    pairs: Counter[tuple[str, str]] = Counter()
+    example: dict[tuple[str, str], str] = {}
+    for table in ("awards", "contract_history"):
+        last_ref, last_root = None, None
+        for ref, oid in conn.execute(f"SELECT reference, organization_id FROM {table} "
+                                     "WHERE organization_id IS NOT NULL ORDER BY reference, amendment"):
+            r = root(oid)
+            if ref == last_ref and r != last_root and last_root is not None:
+                pairs[(last_root, r)] += 1
+                example.setdefault((last_root, r), ref)
+            last_ref, last_root = ref, r
+    for (a, b), n in sorted(pairs.items()):
+        add("former", a, b, f"{n} contracts amended from one to the other, e.g. {example[(a, b)]}", by_rank=False)
+
+    # Names ending in a place word ("Cofomo Ottawa" beside "Cofomo Inc."), each to the one without it.
+    stripped: dict[str, set[str]] = defaultdict(set)
+    for key, words in words_of.items():
+        base = strip_places(words)
+        if base != words and any(distinctive(w) for w in base):
+            stripped["".join(base)] |= roots_of[key]
+    for base, branches in sorted(stripped.items()):
+        plain = roots_of.get(base, set())
+        everyone = branches | plain
+        if not 2 <= len(everyone) <= PLACE_MAX:
+            continue  # a family of separate bodies (a university's campuses, the Commissionaires divisions)
+        target = min(plain or everyone, key=rank.__getitem__)
+        for r in sorted(everyone - {target}):
+            add("place", r, target, f"the same name without its place words ({base})", by_rank=False)
+
+    # Short forms: "Simex" beside "Simex Defence Inc.", when it starts at most SHORT_MAX longer names.
+    entries = sorted((" ".join(words) + " ", key) for key, words in words_of.items())
+    starts = [e[0] for e in entries]
+    for key, words in sorted(words_of.items()):
+        prefix = " ".join(words) + " "
+        i = bisect.bisect_left(starts, prefix)
+        longer: list[str] = []
+        while i < len(entries) and starts[i].startswith(prefix) and len(longer) <= SHORT_MAX:
+            if entries[i][1] != key:
+                longer.append(entries[i][1])
+            i += 1
+        if 1 <= len(longer) <= SHORT_MAX:
+            for other in longer:
+                for a in sorted(roots_of[key]):
+                    for b in sorted(roots_of[other]):
+                        add("short", a, b, f"a short form of {len(longer)} longer name(s)", by_rank=False)
+
+    # Typos: keys one or two edits apart (a transposition counts one) in long words.
+    for ka, kb, d in _typo_pairs(sorted(k for k in words_of if len(k) >= TYPO_MIN_KEY
+                                        and not re.search(r"\d{5}", k)), words_of):
+        for a in sorted(roots_of[ka]):
+            for b in sorted(roots_of[kb]):
+                add("typo", a, b, f"{d} edit(s)", by_rank=True)
+    return out
+
+
+def _typo_pairs(pool: list[str], words_of: dict[str, tuple[str, ...]]) -> list[tuple[str, str, int]]:
+    """Keys of pool one or two edits apart, every differing word TYPO_MIN_WORD long on both sides.
+
+    Two keys within two edits share a string with one character deleted from
+    each (or from neither, or from one), so only keys whose deletions hash
+    alike are compared, never every pair. The hashes sit in two flat arrays
+    (about 12 bytes a deletion: some 80 MB for 300,000 keys) and are sorted in
+    TYPO_PASSES slices, so no dictionary of millions of strings is built. A
+    numbered company ("1234567 ontario") is left out by the caller: one digit
+    apart is another company.
+    """
+    hashes, owners = array("q"), array("i")
+    for i, k in enumerate(pool):
+        for v in {k, *(k[:j] + k[j + 1:] for j in range(len(k)))}:
+            hashes.append(hash(v))
+            owners.append(i)
+    width = max(len(pool), 1).bit_length()
+    mask = (1 << width) - 1
+    close: set[tuple[int, int]] = set()
+    for part in range(TYPO_PASSES):
+        entries = sorted(((h // TYPO_PASSES) << width) | o for h, o in zip(hashes, owners) if h % TYPO_PASSES == part)
+        start = 0
+        for x in range(1, len(entries) + 1):
+            if x == len(entries) or entries[x] >> width != entries[start] >> width:
+                ids = sorted({entries[y] & mask for y in range(start, x)})
+                # A deletion shared by dozens of keys says nothing about any two of them.
+                if 1 < len(ids) <= 50:
+                    close.update((a, b) for n, a in enumerate(ids) for b in ids[n + 1:])
+                start = x
+    out: list[tuple[str, str, int]] = []
+    for a, b in sorted(close):
+        ka, kb = pool[a], pool[b]
+        d = edit_distance(ka, kb)
+        if not d:
+            continue
+        wa, wb = words_of[ka], words_of[kb]
+        only_a, only_b = [w for w in wa if w not in wb], [w for w in wb if w not in wa]
+        if only_a and only_b and all(len(w) >= TYPO_MIN_WORD for w in only_a + only_b):
+            out.append((ka, kb, d))
+    return out
+
+
+def _mark_places(conn: sqlite3.Connection, groups: list[SpellingGroup], candidates: list[Candidate]) -> None:
+    """Fill in what the members of each group, and the two sides of each candidate, have in common, and the
+    groups' provinces (organization_places)."""
+    ids = sorted({m for g in groups for m in g.members} | {c.from_id for c in candidates}
+                 | {c.to_id for c in candidates})
+    if not ids:
+        return
+    places = _places(conn, ids)
+    provinces: dict[str, set[str]] = defaultdict(set)
+    for oid, province in conn.execute("SELECT organization_id, province FROM organization_places "
+                                      "WHERE organization_id IN (SELECT id FROM temp.merge_ids) AND province != ''"):
+        provinces[oid].add(province)
+
+    def common(members: list[str]) -> str:
+        counts = Counter(p for m in members for p in places.get(m, set()))
+        return ", ".join(sorted({p.split(":", 1)[0] for p, n in counts.items() if n > 1}))
+
+    for g in groups:
+        g.place = common(g.members)
+        g.provinces = {m: sorted(provinces.get(m, ())) for m in g.members}
+    for c in candidates:
+        c.place = common([c.from_id, c.to_id])
+
+
+def apply(conn: sqlite3.Connection, *, now: str | None = None, seed_path: Path | None = None,
+          spelling: str | None = None) -> Outcome:
+    """Restore, clear, decide the night's merges and move the records; the caller commits (organizations.run).
+
+    spelling is the spelling rule's mode (SPELLING_MODES), config.ORG_SPELLING_MERGE when not given.
+    """
     stamp = now or now_iso()
-    outcome = Outcome()
+    mode = spelling or config.ORG_SPELLING_MERGE
+    if mode not in SPELLING_MODES:
+        raise ValueError(f"ORG_SPELLING_MERGE is {mode!r}, not one of {', '.join(SPELLING_MODES)}")
+    outcome = Outcome(spelling_mode=mode)
     previous = _previous(conn)
     try:
         outcome.restored = _restore(conn, stamp)
@@ -386,7 +743,7 @@ def apply(conn: sqlite3.Connection, *, now: str | None = None, seed_path: Path |
         live = set(records)
         norms = {oid: n for oid, n in conn.execute("SELECT id, norm_name FROM organizations") if oid in live}
         names = {oid: n for oid, n in conn.execute("SELECT id, display_name FROM organizations") if oid in live}
-        seed, apart_names = read_seed(seed_path)
+        seed, apart_names, outcome.unapplied = read_seed(seed_path)
         apart = {org_id(n) for n in apart_names}
         rank = {oid: (-records[oid], -len(norms.get(oid, "")), oid) for oid in live}
         earlier = {new for new, _ in previous.values()}
@@ -397,18 +754,28 @@ def apply(conn: sqlite3.Connection, *, now: str | None = None, seed_path: Path |
         places = _places(conn, sorted(oid for oid, bn in numbers.items() if shared[bn] > 1 and oid in live))
         outcome.review = _by_business_number(forest, numbers, live, apart, rank, earlier, norms, places, names, records)
         outcome.review += _by_truncation(forest, _cut_names(conn, live), norms, live, apart, previous, names, records)
-        for src, dst, reason in seed:
-            a, b = org_id(src), org_id(dst)
+        spellings = _spellings(conn, live)
+        keys = _keys(spellings, apart)
+        groups = _by_spelling(forest, keys, rank, earlier, join=mode == "on") if mode != "off" else []
+        for row in seed:
+            a, b = org_id(row.from_norm), org_id(row.to_norm)
             if a not in live or b not in live:
-                outcome.unapplied.append(f"{src}\t{dst}\t{'from_norm' if a not in live else 'to_norm'} names "
-                                         "no organization with records")
+                outcome.unapplied.append(f"{row.from_norm}\t{row.to_norm}\t{'from_norm' if a not in live else 'to_norm'} "
+                                         "names no organization with records")
                 continue
-            forest.join(a, b, "seed", reason)
+            forest.join(a, b, "seed", row.reason)
+        # In shadow, a group the seed has joined since is no longer news.
+        outcome.spelling = [g for g in groups if mode == "on" or len({forest.root(m) for m in g.members}) > 1]
+        outcome.candidates = _candidates(conn, forest, keys, spellings, rank, outcome.spelling, seed, apart)
+        _mark_places(conn, outcome.spelling, outcome.candidates)
 
         final = {oid: forest.root(oid) for oid in forest.parent}
         outcome.merges = [Merge(oid, final[oid], *forest.link[oid]) for oid in sorted(final)]
-        outcome.names = {oid: names.get(oid, "") for oid in {*final, *final.values()}}
-        outcome.records = {oid: records.get(oid, 0) for oid in outcome.names}
+        shown = {*final, *final.values(), *(m for g in outcome.spelling for m in g.members),
+                 *(c.from_id for c in outcome.candidates), *(c.to_id for c in outcome.candidates)}
+        outcome.names = {oid: names.get(oid, "") for oid in shown}
+        outcome.norms = {oid: norms.get(oid, "") for oid in shown}
+        outcome.records = {oid: records.get(oid, 0) for oid in shown}
         outcome.moved = _move(conn, final)
         _aliases(conn, outcome.merges, previous, live, stamp)
     finally:
@@ -445,7 +812,7 @@ def _aliases(conn: sqlite3.Connection, merges: list[Merge], previous: dict[str, 
 
 def write_review(outcome: Outcome, path: Path, *, stamp: str) -> str | None:
     """Write (or, with nothing to list, remove) the operator's list of merges; returns the log's notice."""
-    if not outcome.merges and not outcome.review and not outcome.unapplied:
+    if not (outcome.merges or outcome.review or outcome.unapplied or outcome.spelling or outcome.candidates):
         path.unlink(missing_ok=True)
         return None
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -470,11 +837,72 @@ def write_review(outcome: Outcome, path: Path, *, stamp: str) -> str | None:
     if outcome.unapplied:
         lines += [f"# Seed rows not applied: {len(outcome.unapplied)}", "# from_norm\tto_norm\twhy"]
         lines += outcome.unapplied
+    lines += _spelling_lines(outcome)
+    lines += _candidate_lines(outcome)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     try:
         shown = path.relative_to(config.REPO_ROOT).as_posix()
     except ValueError:
         shown = str(path)
+    joining = sum(len(g.members) - 1 for g in outcome.spelling)
     return (f"{len(outcome.merges)} organizations merged into others "
             f"({', '.join(f'{r} {by.get(r, 0)}' for r in REASONS)}), {len(outcome.review)} left for review, "
-            f"{len(outcome.unapplied)} seed rows not applied; listed in {shown}")
+            f"{len(outcome.unapplied)} seed rows not applied, spelling rule {outcome.spelling_mode}: "
+            f"{len(outcome.spelling)} groups ({joining} organizations to join another), "
+            f"{len(outcome.candidates)} candidates for the seed; listed in {shown}")
+
+
+def _spelling_lines(outcome: Outcome) -> list[str]:
+    """The spelling rule's groups, those whose members' provinces never overlap first: one line per organization."""
+    if not outcome.spelling:
+        return []
+    joining = sum(len(g.members) - 1 for g in outcome.spelling)
+    state = ("merged (each merge is also listed above)" if outcome.spelling_mode == "on" else
+             "shadow, nothing merged until config.ORG_SPELLING_MERGE is \"on\"")
+    lines = [
+        f"# Spelling rule ({state}): {len(outcome.spelling)} groups sharing a match key, "
+        f"{joining} organizations to join the first of their group.",
+        "# place: a city or postal code two members have in common (blank: none). provinces_overlap: no lists a",
+        "# group whose members were never seen in one province, the ones to read first. A wrong group is kept",
+        "# apart by a seed row with the member's normalized name as from_norm and an empty to_norm.",
+        "# key\tsteps\tplace\tprovinces_overlap\trole\tid\tname\trecords\tprovinces",
+    ]
+    order = {"no": 0, "unknown": 1, "yes": 2}
+    for g in sorted(outcome.spelling, key=lambda g: (order[g.overlap], bool(g.place), g.key)):
+        for i, m in enumerate(g.members):
+            lines.append("\t".join((g.key, ", ".join(g.steps), g.place, g.overlap, "survivor" if i == 0 else "joins",
+                                    m, outcome.names.get(m, ""), str(outcome.records.get(m, 0)),
+                                    ",".join(g.provinces.get(m, [])))))
+    return lines
+
+
+def _candidate_lines(outcome: Outcome) -> list[str]:
+    """The candidates for the seed, by kind; at most CANDIDATE_LIMIT of each, a place in common first."""
+    if not outcome.candidates:
+        return []
+    by = Counter(c.kind for c in outcome.candidates)
+    lines = [
+        f"# Candidates for the seed, which no rule merges: {len(outcome.candidates)} pairs "
+        f"({', '.join(f'{k} {by.get(k, 0)}' for k in CANDIDATE_KINDS)}); at most {CANDIDATE_LIMIT} of each kind "
+        "listed, a place in common first.",
+        "# A pair that is one organization: copy its seed_row into awardwatch_pipeline/data/organization_aliases.csv",
+        "# and write the reason in (from_norm,to_norm,reason,note). A pair to keep apart: a row with from_norm and an",
+        "# empty to_norm. operating: an operating name that is another organization's name; former: one contract's",
+        "# amendments name both (a rename or an assignment); place: the same name without its place words; short: a",
+        "# short form; typo: one or two edits apart.",
+        "# kind\tplace\tfrom_id\tfrom_name\tfrom_records\tto_id\tto_name\tto_records\tdetail\tseed_row",
+    ]
+    kinds = list(CANDIDATE_KINDS)
+    ranked = sorted(outcome.candidates, key=lambda c: (
+        kinds.index(c.kind), not c.place, -max(outcome.records.get(c.from_id, 0), outcome.records.get(c.to_id, 0)),
+        c.from_id, c.to_id))
+    listed: Counter[str] = Counter()
+    for c in ranked:
+        listed[c.kind] += 1
+        if listed[c.kind] > CANDIDATE_LIMIT:
+            continue
+        row = f"{outcome.norms.get(c.from_id, '')},{outcome.norms.get(c.to_id, '')},,{CANDIDATE_KINDS[c.kind]}"
+        lines.append("\t".join((c.kind, c.place, c.from_id, outcome.names.get(c.from_id, ""),
+                                str(outcome.records.get(c.from_id, 0)), c.to_id, outcome.names.get(c.to_id, ""),
+                                str(outcome.records.get(c.to_id, 0)), c.detail, row)))
+    return lines

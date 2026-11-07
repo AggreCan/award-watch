@@ -89,6 +89,12 @@ SUPPLIER_WORDS = {
     "profil", "team", "drain", "flight", "usa", "america", "americas", "iberia", "toronto", "ottawa",
     "montreal", "calgary", "edmonton", "vancouver", "winnipeg", "gatineau", "mississauga", "saskatoon",
     "fer", "titane", "acier", "bois", "metal", "metaux", "courier", "couriers",
+    # Quebec trades written before the owner's name ("FERBLANTERIE <GIVEN> <SURNAME>"),
+    # which the capitals-surname-first reading would take for a person.
+    "ferblanterie", "ebenisterie", "menuiserie", "maconnerie", "debosselage", "boucherie", "quincaillerie",
+    "pharmacie", "entreprise", "distribution", "distributions", "peinture", "electricien", "excavation",
+    "excavations", "toitures", "vitrerie", "climatisation", "chauffage", "soudure", "usinage", "atelier",
+    "ateliers", "serrurerie", "arpentage", "carrosserie",
 }
 # Company forms abroad that normalize.LEGAL_SUFFIXES leaves out (it strips
 # its forms from every name; these are only read here, as a name's last word).
@@ -106,16 +112,43 @@ PUBLIC_BUSINESS_WORDS = (BUSINESS_WORDS - {"law"}) | {_key(w) for w in SUPPLIER_
 # three; a longer name is read as a firm's.
 PERSON_MAX_WORDS = 3
 # "&", "and", "et" join the names in a firm's ("Ernst & Young", "Rio Tinto Fer
-# et Titane"); a name carrying one is never read as two people.
+# et Titane"); a legal part carrying one is read as two people only in the
+# shape "<Given> and <Given> <Surname>" (COUPLE_RE).
 CONNECTOR_RE = re.compile(r"&|\band\b|\bet\b", re.I)
+# "<Given> and <Given> <Surname>": two people sharing a surname. Both given
+# names must be on the list, so "Rose and Thistle Pub" stays a firm.
+COUPLE_RE = re.compile(r"^\s*([^\W\d_][^\W\d_'’-]*)\s+(?:and|et|&)\s+([^\W\d_].*?)\s*$", re.I)
+# "s/n" (sous le nom), the marker Quebec farm and sole-proprietor filings put
+# before a trade name ("<Given> <Surname> (s/n Ferme X)"). The person test
+# reads the part before it, as it does before the markers normalize knows (o/a,
+# d/b/a, faisant affaire sous). norm_name does not split on it: that would move
+# the ids of the firms that write it (a NORMALIZE_VERSION change).
+SOUS_LE_NOM_RE = re.compile(r"(?<![\w.])s\s*/\s*n(?!\w)", re.I)
+# A bracketed group that ends a name: "<person> (<farm or firm>)". The bracket
+# is the name the person trades under or works for, and its words do not make
+# the person's name a business's.
+TRAILING_BRACKET_RE = re.compile(r"^(?P<head>.*?[^\W_].*?)\s*\((?P<inner>[^()]*)\)[\s.,;:]*$")
+BRACKET_KEPT_RE = re.compile(r"^\s*(?:[A-Z]{2,8}|.*\d.*)\s*$")
 NOT_PERSONS_PATH = config.PACKAGE_DATA / "not_persons.csv"
 GIVEN_NAMES_PATH = config.PACKAGE_DATA / "given_names.txt"
 # Raised whenever is_person_name reads a name differently (its rules, the
 # given-name list, not_persons.csv) or a withheld row keeps something else
 # (5: the name is also taken out of the row's free text; 6: a name that carries
-# an email address is withheld too), so that the next run reads every file
-# again and recomputes the withheld rows (refresh_person_test).
-PERSON_TEST_VERSION = 6
+# an email address is withheld too; 7: the legal part alone is read, before
+# "s/n" and without a bracket that ends the name, a list of people split by
+# slashes is read person by person, "<Given> and <Given> <Surname>" and
+# "<SURNAME> <GIVEN> <GIVEN>" read as people), so that the next run reads
+# every file again and recomputes the withheld rows (refresh_person_test).
+PERSON_TEST_VERSION = 7
+# What becomes of "<person> (<firm with a legal form>)", a record filed under a
+# person's name with the firm they own or work for in brackets ("<Surname>,
+# <Given> (<Firm> Ltd.)"). "withhold" (the default until the operator decides):
+# the whole name is withheld, the firm with it. "firm": the record is filed
+# under the bracketed firm (filed_name) and the person's name is taken out of
+# its free text. Changing this line is the whole switch: the stored person
+# test version carries it (person_test_stamp), so the next run reads every
+# file again under the new choice.
+PERSON_WITH_FIRM = "withhold"
 # An email address written in a name field ("labanalyzer@example.invalid",
 # "Canada@softreseller.example.invalid"): a contact detail, often a person's, withheld like a
 # person's name.
@@ -196,16 +229,21 @@ def refresh_person_test(conn: sqlite3.Connection) -> bool:
     for one more read, and stores PERSON_TEST_VERSION. True when it did so.
     """
     stored = conn.execute("SELECT value FROM meta WHERE key = ?", (PERSON_TEST_KEY,)).fetchone()
-    if stored is not None and stored[0] == str(PERSON_TEST_VERSION):
+    if stored is not None and stored[0] == person_test_stamp():
         return False
     for pattern in SKIP_KEY_PATTERNS:
         conn.execute("DELETE FROM meta WHERE key LIKE ?", (pattern,))
     conn.executemany(
         "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        [(REREAD_LEGACY_KEY, "awards,history"), (PERSON_TEST_KEY, str(PERSON_TEST_VERSION))],
+        [(REREAD_LEGACY_KEY, "awards,history"), (PERSON_TEST_KEY, person_test_stamp())],
     )
     conn.commit()
     return True
+
+
+def person_test_stamp() -> str:
+    """What refresh_person_test stores: PERSON_TEST_VERSION, marked when PERSON_WITH_FIRM is not the default."""
+    return str(PERSON_TEST_VERSION) if PERSON_WITH_FIRM == "withhold" else f"{PERSON_TEST_VERSION}-firm"
 
 
 # What a withheld name becomes in the free text of its own record.
@@ -221,9 +259,14 @@ def _person_words(part: str) -> list[str]:
 
 
 def _people(name: str) -> list[tuple[list[str], list[str]]]:
-    """The people a withheld name holds, each as (given names, surname)."""
+    """The people a withheld name holds, each as (given names, surname).
+
+    Read from the part the person test reads (person_legal_part), so a firm or
+    farm in brackets or after a trade-name marker is not taken for a name.
+    """
+    text = first_language(name)
     out: list[tuple[list[str], list[str]]] = []
-    for part in re.split(r"[;/]", first_language(name)):
+    for part in re.split(r"[;/]", person_legal_part(text) or text):
         if "," in part:
             last, first = (_person_words(p) for p in part.split(",", 1))
             if len(last) >= 2 and len(first) >= 2:
@@ -231,10 +274,16 @@ def _people(name: str) -> list[tuple[list[str], list[str]]]:
                 out += [(last[:-1], last[-1:]), (first[:-1], first[-1:])]
             elif last and first:
                 out.append((first, last))
-        else:
-            words = _person_words(part)
-            if len(words) >= 2:
-                out.append((words[:-1], words[-1:]))
+            continue
+        words = _person_words(part)
+        if len(words) >= 4 and words[1].casefold() in ("and", "et", "&"):
+            # "<Given> and <Given> <Surname>": each given name with the surname.
+            out += [(words[:1], words[-1:]), (words[2:-1], words[-1:])]
+        elif len(words) >= 2:
+            out.append((words[:-1], words[-1:]))
+            if len(words) == 3 and part.upper() == part:
+                # "<SURNAME> <GIVEN> <GIVEN>": the free text may write it given names first.
+                out.append((words[1:], words[:1]))
     return out
 
 
@@ -321,12 +370,24 @@ def carries_given_name(legal: str) -> bool:
                 return True
             candidates.append(after[0])
     for word in candidates:
-        if _short(word):
+        if _short(word) or _listed_given_name(word):
             return True
-        key = given_name_key(word)
-        if key in names or key.split("-")[0] in names:
-            return True
+    # "<SURNAME> <GIVEN> <GIVEN>": some files write a person surname first, in
+    # capitals and without the comma. Read so only when both words after the
+    # first are given names, since few firms' names end in two.
+    if ("," not in tokens and len(words) == 3 and legal == legal.upper()
+            and all(_listed_given_name(w) for w in words[1:])):
+        return True
     return any(len(re.sub(r"[^\w]", "", w)) == 1 for w in words)
+
+
+def _listed_given_name(word: str) -> bool:
+    """The word, or the first part of a compound one, is on the given-name list (any word, with no list)."""
+    names = given_names()
+    if not names:
+        return True
+    key = given_name_key(word)
+    return key in names or key.split("-")[0] in names
 
 
 @lru_cache(maxsize=1)
@@ -348,7 +409,8 @@ def is_person_name(name: object) -> bool:
     hold, so that a firm is not withheld for lacking a legal form:
 
     * not a placeholder, and not on the list in data/not_persons.csv;
-    * no connector ("&", "and", "et") anywhere in the name;
+    * no connector ("&", "and", "et") in the legal part, except in the shape
+      "<Given> and <Given> <Surname>" (COUPLE_RE);
     * at most PERSON_MAX_WORDS words once the legal part is normalized, and
       no digit;
     * no legal form (normalize.LEGAL_SUFFIXES, which holds the forms used
@@ -357,14 +419,88 @@ def is_person_name(name: object) -> bool:
     * household.reads_as_person reads the legal part as a person;
     * and the legal part carries a given name (carries_given_name): without
       one, "Eastern Partitions" and "Surrey Place" read as people.
+
+    The legal part is person_legal_part: the name before a trade-name marker
+    ("s/n" included) and without a bracketed group that ends it, so "<Given>
+    <Surname> (s/n Ferme X)", "<Given> <Surname> (o/a X and Y)" and "<Surname>,
+    <Given> (<Firm> Ltd.)" are read on the person's name alone and withheld
+    whole (PERSON_WITH_FIRM). A list of people split by slashes or semicolons
+    is withheld when every part reads as a person.
     """
     if EMAIL_IN_NAME_RE.search(str(name or "")):
         return True
     text = first_language(name)
-    if not text or is_placeholder(text) or CONNECTOR_RE.search(text):
+    if not text or is_placeholder(text) or norm_name(text) in not_persons():
         return False
+    legal = person_legal_part(text)
+    if not legal:
+        return False
+    # People listed with slashes or semicolons, as many as there are: each part
+    # is read on its own (the whole-name test below stops at three).
+    parts = [p.strip() for p in re.split(r"[/;]", legal) if p.strip()]
+    if len(parts) > 1 and all(_reads_as_one(p) for p in parts):
+        return True
+    return _reads_as_one(legal)
+
+
+def person_legal_part(text: str) -> str:
+    """The part of a name the person test reads: the legal part before a trade-name marker
+    (normalize.split_trade_name, and "s/n"), without a bracketed group that ends it."""
     legal = split_trade_name(text)[0]
-    if norm_name(text) in not_persons() or re.search(r'[\d_"“”]', legal) or has_legal_form(legal):
+    marker = SOUS_LE_NOM_RE.search(legal)
+    if marker and re.search(r"[^\W_]", legal[:marker.start()]):
+        legal = legal[:marker.start()].rstrip(" ,;:-(/\\").strip()
+    bracket = TRAILING_BRACKET_RE.match(legal)
+    # An acronym or a number in the bracket stays, as before: "Morgan Corker
+    # Varnholt (MCV)" is a firm by its acronym, "<name> (2009)" by its year.
+    if bracket and not BRACKET_KEPT_RE.match(bracket.group("inner")):
+        legal = bracket.group("head").rstrip(" ,;:-/\\").strip()
+    return legal
+
+
+def person_with_firm(name: object) -> tuple[str, str] | None:
+    """(person, firm) when a name is a person's followed by a bracketed firm with a legal form."""
+    text = first_language(name)
+    bracket = TRAILING_BRACKET_RE.match(split_trade_name(text)[0]) if text else None
+    if not bracket:
+        return None
+    firm = bracket.group("inner").strip()
+    person = person_legal_part(text)
+    if not has_legal_form(firm) or not person or not is_person_name(person):
+        return None
+    return person, firm
+
+
+def filed_name(name: str | None) -> tuple[str | None, str | None]:
+    """(the name a record is filed under, a person's name taken out of it, or None).
+
+    Under PERSON_WITH_FIRM = "firm", "<person> (<firm with a legal form>)" is
+    filed under the firm, and the person comes back for the caller to take out
+    of the record's free text. Otherwise the name is unchanged and the person
+    test withholds it whole.
+    """
+    if PERSON_WITH_FIRM != "firm" or not name:
+        return name, None
+    split = person_with_firm(name)
+    return (split[1], split[0]) if split else (name, None)
+
+
+def _couple(legal: str) -> bool:
+    """"<Given> and <Given> <Surname>", both given names on the list."""
+    m = COUPLE_RE.match(legal)
+    if not m or CONNECTOR_RE.search(m.group(2)):
+        return False
+    rest = m.group(2)
+    words = rest.split()
+    return (2 <= len(words) <= 3 and _listed_given_name(m.group(1)) and _listed_given_name(words[0])
+            and _reads_as_one(rest))
+
+
+def _reads_as_one(legal: str) -> bool:
+    """The test on a legal part: one person, or two or three written in one name."""
+    if CONNECTOR_RE.search(legal):
+        return _couple(legal)
+    if re.search(r'[\d_"“”]', legal) or has_legal_form(legal):
         return False
     # The word limit applies to each person named: "Priya Sandhu, Arjun
     # Sandhu" is two people, "Smith, John A." one written surname first.

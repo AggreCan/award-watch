@@ -275,14 +275,16 @@ def _tender(ctx: _Context, get: Callable[[str], str], rec: dict[str, object]) ->
     ctx.attachments_dropped += dropped
 
 
-def _supplier(get: Callable[[str], str]) -> tuple[str | None, tuple[str, str, str, str], str | None]:
-    """The supplier's name, its address as organizations key it, and the street."""
+def _supplier(get: Callable[[str], str]) -> tuple[str | None, tuple[str, str, str, str], str | None, str | None]:
+    """The supplier's name, its address as organizations key it, the street, and a person's name taken
+    out of the supplier's (matching.filed_name)."""
     name = _text(get("supplier_en")) or _text(get("supplier_fr"))
     if matching.is_placeholder(name):
         name = None
+    name, filed = matching.filed_name(name)
     place = organizations.place_key(get("supplier_country"), get("supplier_province"), get("supplier_city"),
                                     get("supplier_postal"))
-    return name, place, _text(get("supplier_street"))
+    return name, place, _text(get("supplier_street")), filed
 
 
 def _contract(ctx: _Context, get: Callable[[str], str], rec: dict[str, object]) -> None:
@@ -435,7 +437,7 @@ def _load_row(ctx: _Context, get: Callable[[str], str], stats: FileStats) -> Non
             f"SELECT {', '.join(_SUPPLIER_FIELDS)}, organization_id FROM {table} WHERE reference = ? AND amendment = ?",
             key,
         ).fetchone()
-        name, place, street = _supplier(get)
+        name, place, street, filed = _supplier(get)
         withheld = bool(name) and matching.is_person_name(name)
     else:
         prev = conn.execute(f"SELECT 1 FROM {table} WHERE reference = ? AND amendment = ?", key).fetchone()
@@ -459,7 +461,7 @@ def _load_row(ctx: _Context, get: Callable[[str], str], stats: FileStats) -> Non
         persons = _persons_named(stage, get, name, True)
         stats.redacted += _redact_free_text(get, rec, persons) + _redact_other_versions(conn, table, key, persons)
     elif supplied:
-        persons = _persons_named(stage, get, name, False)
+        persons = _persons_named(stage, get, name, False) + ([filed] if filed else [])
         if persons:
             stats.redacted += _redact_free_text(get, rec, persons)
         current = (name, *(v or None for v in place))

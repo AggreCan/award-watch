@@ -434,6 +434,8 @@ def load_zip(conn: sqlite3.Connection, path: Path, *, now: str | None = None,
             client = matching.first_language(report.client_en or report.client_fr)
             if matching.is_placeholder(client):
                 client = ""
+            client, filed = matching.filed_name(client)
+            client = client or ""
             withheld = bool(client) and matching.is_person_name(client)
             subjects = report.subjects
             if withheld:
@@ -449,6 +451,10 @@ def load_zip(conn: sqlite3.Connection, path: Path, *, now: str | None = None,
             else:
                 client_raw = client or None
                 org = organizations.upsert(conn, client, source="lobbying", now=stamp) if client else None
+                if filed:
+                    redacted = [matching.redact(s, [filed]) for s in subjects]
+                    subjects = [s for s, _ in redacted]
+                    stats.redacted += sum(n for _, n in redacted)
             institutions = list(dict.fromkeys(inst for _, _, inst in report.dpoh if inst))
             buyer_ids = list(dict.fromkeys(b for b in (buyer(inst) for inst in institutions) if b))
             dpoh = [{"name": name or None, "title": title or None, "institution": inst or None}

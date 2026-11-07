@@ -165,6 +165,53 @@ def test_the_stage_counts_individuals_and_withheld_rows_and_lists_only_the_withh
         assert name not in log["notice"] and name not in log["detail"]
 
 
+def test_the_six_shapes_of_person_test_7_are_withheld_and_counted(conn, fixtures, tmp_path, out_dir):
+    """Each shape that passed the person test before version 7 (test_matching.SIX_PATTERNS, invented names),
+    written as the recipient of a for-profit agreement: withheld, counted with the other withheld rows,
+    listed for review, and found nowhere in the database."""
+    from test_matching import SIX_PATTERNS
+
+    header, rows = read_csv(fixtures / FIXTURE)
+    template = next(r for r in rows if r["ref_number"] == "199-2020-2021-Q4-CSGC17320680")
+    for i, name in enumerate(SIX_PATTERNS.values()):
+        rows.append({**template, "ref_number": f"199-2020-2021-Q4-TEST{i:04d}", "recipient_legal_name": name,
+                     "recipient_operating_name": "", "recipient_business_number": ""})
+    samples = tmp_path / "s"
+    samples.mkdir()
+    write_csv(samples / "grants-head.csv", header, rows)
+    assert grants.run(conn, None, now=DAY1, samples=samples).state == "read"
+    n = len(SIX_PATTERNS)
+    log = conn.execute("SELECT detail, rows_in, excluded FROM sources_log").fetchone()
+    assert (log["rows_in"], log["excluded"]) == (30 + n, 2 + n)
+    assert f"stored={29 + n} withheld={1 + n} dropped_individuals=1" in log["detail"]
+    review = out_dir / "review" / "grants-persons.txt"
+    listed = [line for line in review.read_text(encoding="utf-8").splitlines() if not line.startswith("#")]
+    assert listed == ["Daniel Ashdale", *SIX_PATTERNS.values()]
+    for word in ("Quentaro", "Brisavel", "Tolmandre", "Ostrevik", "Pellivant", "Corrabin", "Zorblax"):
+        for table, column in (("organizations", "display_name"), ("organization_names", "raw_name"),
+                              ("grants", "legal_name")):
+            assert conn.execute(f"SELECT 1 FROM {table} WHERE {column} LIKE ?", (f"%{word}%",)).fetchone() is None
+        assert word not in log["detail"]
+
+
+def test_the_bracketed_firm_switch_files_the_agreement_under_the_firm(conn, fixtures, tmp_path, monkeypatch):
+    from awardwatch_pipeline.sources import matching
+
+    monkeypatch.setattr(matching, "PERSON_WITH_FIRM", "firm")
+    header, rows = read_csv(fixtures / FIXTURE)
+    template = next(r for r in rows if r["ref_number"] == "199-2020-2021-Q4-CSGC17320680")
+    row = {**template, "ref_number": "199-2020-2021-Q4-TESTFIRM", "recipient_operating_name": "",
+           "recipient_business_number": "", "recipient_legal_name": "Quentaro, Laura (Zorblax Holdings Ltd.)",
+           "description_en": "Laura Quentaro will lead the project for Zorblax Holdings."}
+    stats = grants.load_file(conn, write_csv(tmp_path / "g.csv", header, [row]), now=DAY1)
+    assert (stats.stored, stats.withheld, stats.redacted) == (1, 0, 1)
+    got = versions(conn)[("199-2020-2021-Q4-TESTFIRM", 0)]
+    assert (got["legal_name"], got["recipient_withheld"]) == ("Zorblax Holdings Ltd.", 0)
+    assert got["organization_id"] == org_id(norm_name("Zorblax Holdings Ltd."))
+    assert got["description_en"] == "[name withheld] will lead the project for Zorblax Holdings."
+    assert conn.execute("SELECT 1 FROM organization_names WHERE raw_name LIKE '%Quentaro%'").fetchone() is None
+
+
 def test_the_file_is_checked_weekly(conn, fixtures, fake_client, tmp_path):
     body = (fixtures / FIXTURE).read_bytes()
     stamped = {"Last-Modified": "Fri, 30 Oct 2026 02:00:00 GMT", "ETag": '"g1"'}

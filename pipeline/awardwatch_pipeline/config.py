@@ -111,3 +111,10 @@ SOSA_CA_PEM = PACKAGE_DATA / "sosa_intermediate.pem"
 # A file whose rows fell by more than the hold rule allows is held for review;
 # the operator releases it by writing its publication date (YYYY-MM-DD) here.
 SOSA_RELEASE = PACKAGE_DATA / "sosa_release.txt"
+
+# The organizations' spelling rule (merges.py, the fourth merge rule: one match
+# key, any place). "shadow" lists the groups it would merge in
+# data/out/review/organization-merges.txt and merges nothing; "on" merges
+# them; "off" leaves the rule out. Shadow until the operator has read a
+# night's groups (every group whose provinces never overlap, and a sample).
+ORG_SPELLING_MERGE = "shadow"

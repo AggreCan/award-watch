@@ -147,7 +147,7 @@ def run(conn: sqlite3.Connection, selected: list[str], *, samples: Path | None =
     # A changed person test: every loader reads its files again, so which rows
     # are withheld is recomputed (a no-op when the version is current).
     if matching.refresh_person_test(conn):
-        log.info("person test version %s: every file is read again", matching.PERSON_TEST_VERSION)
+        log.info("person test version %s: every file is read again", matching.person_test_stamp())
     for stage in stages:
         ok &= _stage(conn, stage, runners[stage])
     return 0 if ok else 1

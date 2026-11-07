@@ -1,2 +1,12 @@
-from_norm,to_norm,reason
-coradixtechnology consulting,coradix technology consulting,the same name with the space between Coradix and Technology left out
+# Organization aliases, reviewed by hand, read by merges.py in the organizations stage every night.
+# One row per pair of organizations no rule may merge on its own: the candidates the night lists at the end of
+# data/out/review/organization-merges.txt (each with the seed row that would merge it), and any found by hand.
+#   from_norm  the normalized name (normalize.norm_name) of the organization that joins the other
+#   to_norm    the normalized name of the one it joins. Blank: from_norm is kept apart, out of every merge rule
+#              and out of the candidates list
+#   reason     why the row is right
+#   note       what from_norm's name is to to_norm's: spelling (another way of writing it) | former (a former
+#              name) | short (a short form) | branch (a branch or division's name). Blank on a keep-apart row.
+#              A row with any other note is not applied and is listed in the review file
+from_norm,to_norm,reason,note
+coradixtechnology consulting,coradix technology consulting,the same name with the space between Coradix and Technology left out,spelling

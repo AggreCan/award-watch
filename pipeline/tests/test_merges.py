@@ -159,13 +159,38 @@ def test_the_seed_merges_by_hand_and_an_empty_to_norm_keeps_an_organization_apar
 
 
 def test_the_committed_seed_file_has_a_header_and_rows_that_read(tmp_path):
-    rows, apart = merges.read_seed()
+    rows, apart, bad = merges.read_seed()
     text = merges.SEED_PATH.read_text(encoding="utf-8")
-    assert text.splitlines()[0] == "from_norm,to_norm,reason" and "#" not in text
-    assert rows == [("coradixtechnology consulting", "coradix technology consulting",
-                     "the same name with the space between Coradix and Technology left out")]
-    assert apart == set()
-    assert all(norm_name(src) == src and norm_name(dst) == dst for src, dst, _ in rows)
+    header = [line for line in text.splitlines() if not line.startswith("#")][0]
+    assert header == ",".join(merges.SEED_COLUMNS) == "from_norm,to_norm,reason,note"
+    assert rows == [merges.SeedRow("coradixtechnology consulting", "coradix technology consulting",
+                                   "the same name with the space between Coradix and Technology left out", "spelling")]
+    assert apart == set() and bad == []
+    assert all(norm_name(r.from_norm) == r.from_norm and norm_name(r.to_norm) == r.to_norm for r in rows)
+    assert all(r.note in merges.SEED_NOTES for r in rows)
+    # The notes the file's comment lists are the ones the reader accepts.
+    assert all(note in text for note in merges.SEED_NOTES)
+
+
+def test_the_seed_reads_comments_and_notes_and_lists_a_row_with_an_unknown_note(tmp_path):
+    path = tmp_path / "seed.csv"
+    path.write_text("# a comment line\nfrom_norm,to_norm,reason,note\n"
+                    "# rows below\n"
+                    "Glimmer Post Ltd.,glimmerpost,the space,spelling\n"
+                    "old harbour freight,new harbour freight,renamed in 2024,former\n"
+                    "quillfeather west,quillfeather,,branch\n"
+                    "kept apart co,,two different firms,\n"
+                    "odd note,glimmerpost,why,nickname\n", encoding="utf-8")
+    rows, apart, bad = merges.read_seed(path)
+    assert [(r.from_norm, r.to_norm, r.note) for r in rows] == [
+        ("glimmer post", "glimmerpost", "spelling"), ("old harbour freight", "new harbour freight", "former"),
+        ("quillfeather west", "quillfeather", "branch")]
+    assert apart == {"kept apart"}  # normalized: "co" is a legal form
+    assert bad == ["odd note\tglimmerpost\tthe note 'nickname' is not one of spelling, former, short, branch"]
+    # A file written before the note column still reads, every note blank.
+    old = tmp_path / "old.csv"
+    old.write_text("from_norm,to_norm,reason\nnorth harbour,south harbour,why\n", encoding="utf-8")
+    assert merges.read_seed(old) == ([merges.SeedRow("north harbour", "south harbour", "why", "")], set(), [])
 
 
 def test_the_survivor_does_not_flip_and_the_alias_row_is_the_only_memory(conn, tmp_path, seed_file):
@@ -203,7 +228,9 @@ def test_a_merge_whose_evidence_is_gone_is_undone_on_the_next_run(conn, tmp_path
     assert records_of(conn, typo) == 1 and records_of(conn, coradix) == 1
     row = conn.execute("SELECT display_name, n_contracts FROM organizations WHERE id = ?", (typo,)).fetchone()
     assert tuple(row) == ("CoradixTechnology Consulting Ltd", 1)
-    assert not (tmp_path / "review" / merges.REVIEW_FILE).exists()
+    # No merge is listed any more; the spelling rule, in shadow, lists the pair as one it would merge.
+    review = (tmp_path / "review" / merges.REVIEW_FILE).read_text(encoding="utf-8")
+    assert "seed\t" not in review and f"\tjoins\t{typo}\t" in review
 
 
 def test_a_merged_id_is_exported_as_an_alias_the_site_redirects_by(conn, tmp_path, seed_file):
@@ -236,3 +263,171 @@ def test_names_that_are_not_organizations_keep_their_records_and_no_organization
     row = conn.execute("SELECT supplier_raw, organization_id, supplier_withheld FROM awards WHERE reference = 'GEN-1'").fetchone()
     assert tuple(row) == ("GENERIC PSPC-MANAGE SUPPLIER ACCOUNT", None, 0)
     assert {r[0] for r in conn.execute("SELECT id FROM organizations")} == {kept}
+
+
+# -- the spelling rule (shadow by default) and the candidates for the seed ---------------------------------
+#
+# Invented firm names in the shapes the 2026-11-01 samples showed; the public institutions and the two Bell
+# companies are the analysis's own rejected pairs.
+
+SPELLING_HEADER = "# key\tsteps\tplace\tprovinces_overlap\trole\tid\tname\trecords\tprovinces"
+CANDIDATE_HEADER = "# kind\tplace\tfrom_id\tfrom_name\tfrom_records\tto_id\tto_name\tto_records\tdetail\tseed_row"
+
+
+def award_at(conn, ref, name, *, city, postal, province, amendment=0):
+    oid = organizations.upsert(conn, name, source="awards", country="CA", province=province, city=city,
+                               postal_code=postal)
+    conn.execute("INSERT INTO awards (reference, amendment, supplier_raw, supplier_country, supplier_province, "
+                 "supplier_city, supplier_postal, organization_id, amount, total_value, currency, status, awarded, "
+                 "source_file, first_seen, last_seen) VALUES (?, ?, ?, 'CA', ?, ?, ?, ?, 1000, 1000, 'CAD', 'active', "
+                 "'2025-01-01', 'f', '2026-10-31', '2026-10-31')",
+                 (ref, amendment, name, province, city, postal, oid))
+    return oid
+
+
+def section(review, header):
+    """The data lines of the review file's section under a column header line."""
+    lines = review.splitlines()
+    out = []
+    for line in lines[lines.index(header) + 1:]:
+        if line.startswith("#"):
+            break
+        out.append(line.split("\t"))
+    return out
+
+
+@pytest.fixture
+def spelling_world(conn):
+    """Three groups the spelling rule forms, and the pairs its guards must refuse."""
+    ids = {
+        "quill_short": award_at(conn, "Q1", "Quillfeather Cnslt.Ltd.", city="Ottawa", postal="K1A 0B1", province="ON"),
+        "quill": award_at(conn, "Q2", "Quillfeather Consulting Ltd.", city="Ottawa", postal="K1A 0B1", province="ON"),
+        "glimmer": contract(conn, "G1", "GLIMMERPOST LTD"),
+        "glimmer_spaced": award_at(conn, "G2", "GLIMMER POST LTD.", city="Montréal", postal="H2X 1Y4", province="QC"),
+        "bright_code": contract(conn, "B1", "Brightmoor LLP, T4348"),
+        "bright": contract(conn, "B2", "Brightmoor LLP"),
+    }
+    award_at(conn, "Q3", "Quillfeather Consulting Ltd.", city="Ottawa", postal="K1A 0B1", province="ON")
+    contract(conn, "B3", "Brightmoor LLP")
+    # Refused: Quebec farms one letter apart, universities with place words, Bell Canada and Bell Textron.
+    for ref, name in (("F1", "Ferme Valco inc."), ("F2", "Ferme Valdo inc."), ("U1", "University of Toronto"),
+                      ("U2", "University of Ottawa"), ("L1", "Bell Canada"), ("L2", "Bell Textron Canada Limited")):
+        ids[name] = contract(conn, ref, name)
+    return ids
+
+
+def test_the_spelling_rule_in_shadow_lists_its_groups_and_merges_nothing(conn, tmp_path, seed_file, spelling_world):
+    ids = spelling_world
+    before = {oid: records_of(conn, oid) for oid in ids.values()}
+    result = run(conn, tmp_path)
+    assert merges.config.ORG_SPELLING_MERGE == "shadow"
+    assert (result["merged"], result["merged_spelling"], result["spelling_groups"]) == (0, 0, 3)
+    assert aliases(conn) == {} and {oid: records_of(conn, oid) for oid in ids.values()} == before
+    review = (tmp_path / "review" / merges.REVIEW_FILE).read_text(encoding="utf-8")
+    assert '# Spelling rule (shadow, nothing merged until config.ORG_SPELLING_MERGE is "on"): 3 groups' in review
+    rows = section(review, SPELLING_HEADER)
+    assert all(len(r) == 9 for r in rows) and len(rows) == 6
+    # The group whose members were never seen in one province comes first; each group's survivor leads it.
+    assert [(r[0], r[1], r[2], r[3], r[4]) for r in rows[:2]] == [
+        ("glimmerpost", "spacing", "", "no", "survivor"), ("glimmerpost", "spacing", "", "no", "joins")]
+    assert {rows[0][5], rows[1][5]} == {ids["glimmer"], ids["glimmer_spaced"]}
+    by_key = {}
+    for r in rows:
+        by_key.setdefault(r[0], []).append(r)
+    assert by_key["quillfeatherconsulting"] == [
+        ["quillfeatherconsulting", "abbreviation", "city, postal", "yes", "survivor", ids["quill"],
+         "Quillfeather Consulting Ltd.", "2", "ON"],
+        ["quillfeatherconsulting", "abbreviation", "city, postal", "yes", "joins", ids["quill_short"],
+         "Quillfeather Cnslt.Ltd.", "1", "ON"]]
+    assert [(r[1], r[2], r[4], r[5]) for r in by_key["brightmoor"]] == [
+        ("vendor code", "", "survivor", ids["bright"]), ("vendor code", "", "joins", ids["bright_code"])]
+    for name in ("Ferme Valco", "Ferme Valdo", "University of", "Bell "):
+        assert not any(name in r[6] for r in rows), name
+    log = conn.execute("SELECT detail, notice FROM sources_log WHERE source = 'organizations'").fetchone()
+    assert "spelling_groups=3" in log["detail"] and "spelling rule shadow: 3 groups (3 organizations" in log["notice"]
+
+
+def test_the_spelling_rule_on_merges_its_groups_and_off_leaves_them(conn, tmp_path, seed_file, spelling_world,
+                                                                     monkeypatch):
+    ids = spelling_world
+    monkeypatch.setattr(merges.config, "ORG_SPELLING_MERGE", "off")
+    result = run(conn, tmp_path, T1)
+    assert (result["merged"], result["spelling_groups"]) == (0, 0)
+    monkeypatch.setattr(merges.config, "ORG_SPELLING_MERGE", "on")
+    result = run(conn, tmp_path, T2)
+    assert (result["merged_spelling"], result["spelling_groups"]) == (3, 3)
+    merged = aliases(conn)
+    assert merged[ids["quill_short"]] == (ids["quill"], "spelling")
+    assert merged[ids["bright_code"]] == (ids["bright"], "spelling")
+    assert len(merged) == 3 and {ids["glimmer"], ids["glimmer_spaced"]} & set(merged)
+    assert records_of(conn, ids["quill"]) == 3 and records_of(conn, ids["bright"]) == 3
+    review = (tmp_path / "review" / merges.REVIEW_FILE).read_text(encoding="utf-8")
+    assert f"spelling\t{ids['quill_short']}\tQuillfeather Cnslt.Ltd.\t1\t{ids['quill']}\t" in review
+    assert "quillfeatherconsulting (abbreviation)" in review and "# Spelling rule (merged" in review
+    # The next night keeps the same survivors; a typo in the flag stops the stage before anything moves.
+    run(conn, tmp_path, T3)
+    assert aliases(conn) == merged
+    monkeypatch.setattr(merges.config, "ORG_SPELLING_MERGE", "yes")
+    with pytest.raises(ValueError, match="ORG_SPELLING_MERGE"):
+        run(conn, tmp_path, T4)
+    assert aliases(conn) == merged
+
+
+def test_a_person_named_spelling_or_a_keep_apart_row_gives_no_key(conn, tmp_path, seed_file):
+    firm = contract(conn, "P1", "Laura Quentaro Inc.")
+    branch = contract(conn, "P2", "LAURA QUENTARO INC. (WEST)")
+    run(conn, tmp_path, T1)
+    review = (tmp_path / "review" / merges.REVIEW_FILE).read_text(encoding="utf-8")
+    assert {r[5] for r in section(review, SPELLING_HEADER)} == {firm, branch}
+    # A spelling stored before the person test read it so ("Laura Quentaro", the same normalized name): the
+    # organization gets no key, and the other spelling has no one to join.
+    conn.execute("INSERT INTO contracts (owner_org, reference, vendor_raw, vendor_country, value, contract_date, "
+                 "organization_id, loaded_at) VALUES ('dept-x', 'P3', 'Laura Quentaro', 'CA', 1000, '2025-06-01', ?, ?)",
+                 (firm, T1))
+    assert run(conn, tmp_path, T2)["spelling_groups"] == 0
+    conn.execute("DELETE FROM contracts WHERE reference = 'P3'")
+    seed_file(("laura quentaro inc west", "", "a different firm"))
+    assert run(conn, tmp_path, T3)["spelling_groups"] == 0
+
+
+def test_the_candidates_for_the_seed_are_listed_by_kind_with_the_row_that_would_merge_them(conn, tmp_path, seed_file):
+    typo = contract(conn, "T1", "Keplerline Communicatons Ltd")
+    right = contract(conn, "T2", "Keplerline Communications Ltd.")
+    contract(conn, "T3", "Keplerline Communications Ltd.")
+    numbered = contract(conn, "O1", "1019837 ONTARIO INC O/A DYNAMIC TEMPS CONSULTANTS")
+    contract(conn, "O2", "1019837 ONTARIO INC O/A DYNAMIC TEMPS CONSULTANTS")
+    trade = contract(conn, "O3", "DYNAMIC TEMPS CONSULTANTS")
+    branch = contract(conn, "C1", "Cofremo Ottawa")
+    head = award_at(conn, "C2", "COFREMO INC.", city="Ottawa", postal="K1A 0B1", province="ON")
+    short = contract(conn, "S1", "Simtex")
+    full = award_at(conn, "S2", "Simtex Defence Inc.", city="Halifax", postal="B3H 4R2", province="NS")
+    old = award_at(conn, "R1", "Harbourline Freight Inc.", city="Halifax", postal="B3H 4R2", province="NS")
+    new = award_at(conn, "R1", "Tidewater Logistics Inc.", city="Halifax", postal="B3H 4R2", province="NS",
+                   amendment=1)
+    for ref, name in (("F1", "Ferme Valco inc."), ("F2", "Ferme Valdo inc."), ("L1", "Bell Canada"),
+                      ("L2", "Bell Textron Canada Limited")):
+        contract(conn, ref, name)
+    result = run(conn, tmp_path, T1)
+    assert result["merged"] == 0 and result["seed_candidates"] == 5
+    review = (tmp_path / "review" / merges.REVIEW_FILE).read_text(encoding="utf-8")
+    rows = section(review, CANDIDATE_HEADER)
+    assert all(len(r) == 10 for r in rows)
+    got = {(r[0], r[2], r[5]): (r[1], r[9]) for r in rows}
+    assert got == {
+        ("operating", trade, numbered): ("", "dynamic temps consultants,1019837 ontario,,"),
+        ("former", old, new): ("city, postal", "harbourline freight,tidewater logistics,,former"),
+        ("place", branch, head): ("", "cofremo ottawa,cofremo,,branch"),
+        ("short", short, full): ("", "simtex,simtex defence,,short"),
+        ("typo", typo, right): ("", "keplerline communicatons,keplerline communications,,spelling"),
+    }
+    assert [r[0] for r in rows] == list(merges.CANDIDATE_KINDS)  # listed kind by kind
+    # The farms one letter apart (short words) and Bell Canada with Bell Textron are no candidates.
+    assert not any("Ferme" in r[3] or "Bell" in r[3] for r in rows)
+    # A row accepted into the seed merges the pair, and a keep-apart row drops it from the list.
+    seed_file(("keplerline communicatons", "keplerline communications", "a letter left out"),
+              ("simtex", "", "another firm"))
+    result = run(conn, tmp_path, T2)
+    assert result["merged_seed"] == 1 and aliases(conn) == {typo: (right, "seed")}
+    kinds = [r[0] for r in section((tmp_path / "review" / merges.REVIEW_FILE).read_text(encoding="utf-8"),
+                                   CANDIDATE_HEADER)]
+    assert kinds == ["operating", "former", "place"]

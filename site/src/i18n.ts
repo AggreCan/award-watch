@@ -1759,8 +1759,8 @@ const STRINGS = {
     fr: "Chaque fournisseur, bénéficiaire de subvention et client de lobbying devient une organisation par nom légal normalisé, toutes sources confondues :",
   },
   "methodology.org_rule_name": {
-    en: "The name is normalized. A trade name after \"o/a\" or \"doing business as\" is split off, accents are folded, and punctuation and connectors (and, et, &) are dropped. Numbered-company jurisdictions are written one way, and legal suffixes (Inc., Ltd., Ltée) are removed.",
-    fr: "Le nom est normalisé. Une dénomination commerciale après « s/n » ou « faisant affaire sous » est séparée, les accents sont retirés, et la ponctuation et les connecteurs (and, et, &) sont supprimés. Les juridictions des sociétés à numéro sont écrites d'une seule façon, et les suffixes juridiques (Inc., Ltd., Ltée) sont enlevés.",
+    en: "The name is normalized. A trade name after \"o/a\" or \"doing business as\" is split off, accents are folded, and punctuation and connectors (and, et, &) are dropped. Numbered-company jurisdictions are written one way, and legal suffixes (Inc., Ltd., Ltée) are removed. Whether a name is a private individual's is read from its legal part alone: the words before a trade-name marker (\"o/a\", \"d/b/a\", \"faisant affaire sous\" or \"s/n\"), without a name in brackets at its end.",
+    fr: "Le nom est normalisé. Une dénomination commerciale après « f.a.s. » ou « faisant affaire sous » est séparée, les accents sont retirés, et la ponctuation et les connecteurs (and, et, &) sont supprimés. Les juridictions des sociétés à numéro sont écrites d'une seule façon, et les suffixes juridiques (Inc., Ltd., Ltée) sont enlevés. Un nom est lu comme celui d'un particulier d'après sa seule partie légale : les mots avant un marqueur de dénomination commerciale (« s/n », « faisant affaire sous », « o/a » ou « d/b/a »), sans le nom entre parenthèses qui le termine.",
   },
   "methodology.org_rule_id": {
     en: "The organization's ID is org- followed by the first ten hexadecimal digits of the SHA-1 of the normalized name, so it stays the same from one night to the next.",

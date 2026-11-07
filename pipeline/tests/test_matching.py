@@ -137,6 +137,86 @@ def test_a_new_person_test_makes_every_loader_read_its_files_again(conn):
 
 
 
+# The six shapes that passed the person test before version 7, with invented names (the given names are on
+# the list, the surnames on none). Each was a private individual published under a firm's profile.
+SIX_PATTERNS = {
+    "person (firm with a legal form)": "Quentaro, Laura (Zorblax Holdings Ltd.)",
+    "person (s/n farm)": "Marie Brisavel (s/n Ferme Brisavel)",
+    "person s/n farm, no bracket": "Marie Brisavel s/n Ferme du Ruisseau",
+    "person (farm)": "Paul Tolmandre (Ferme Tolmandre)",
+    "person (o/a name with and)": "Anne Ostrevik (o/a Ostrevik and Daughters Catering)",
+    "people listed with slashes": "Laura Quentaro/Marie Brisavel/Paul Tolmandre/Anne Ostrevik/Louis Dunmarrow",
+    "SURNAME GIVEN GIVEN": "PELLIVANT LOUIS MARIE",
+    "Given and Given Surname": "Laura and Paul Corrabin",
+    "Given et Given Surname": "Marie et Louis Corrabin",
+}
+
+
+@pytest.mark.parametrize("name", SIX_PATTERNS.values(), ids=SIX_PATTERNS.keys())
+def test_the_six_shapes_that_used_to_pass_are_withheld(name):
+    assert matching.is_person_name(name) is True
+    assert matching.business_name(name) is None
+
+
+@pytest.mark.parametrize("name", [
+    "9123-4567 Québec inc. s/n Ferme Brisavel",     # a numbered company trading as a farm
+    "Thermo Quill Scientific (Mississauga) Inc.",    # a bracket before the legal form
+    "Pellucid Water Systems Inc. (PWS)",             # a firm with its acronym
+    "Morgan Corker Varnholt (MCV)",                  # surnames of a firm, its acronym in brackets
+    "Rose and Thistle Pub",                          # "and" between a given name and a firm's words
+    "Varnholt & Corrabin",                           # two surnames joined: a firm
+    "FERBLANTERIE LOUIS MARIE",                      # a trade written before the owner's name
+    "Zorblax Holdings Ltd./Corrabin Foods Inc.",     # two firms with a slash
+    "Zorblax A/S",                                   # a form written with its slash
+])
+def test_the_new_readings_leave_these_firms_alone(name):
+    assert matching.is_person_name(name) is False
+
+
+def test_the_legal_part_is_read_before_s_n_and_without_a_bracket_that_ends_the_name():
+    assert matching.person_legal_part("Marie Brisavel (s/n Ferme Brisavel)") == "Marie Brisavel"
+    assert matching.person_legal_part("Marie Brisavel S/N Ferme du Ruisseau") == "Marie Brisavel"
+    assert matching.person_legal_part("Quentaro, Laura (Zorblax Holdings Ltd.)") == "Quentaro, Laura"
+    assert matching.person_legal_part("Anne Ostrevik (o/a Ostrevik and Daughters)") == "Anne Ostrevik"
+    # An acronym or a number in the bracket stays, as before.
+    assert matching.person_legal_part("Morgan Corker Varnholt (MCV)") == "Morgan Corker Varnholt (MCV)"
+    # norm_name does not split on "s/n" (that would move ids): the identity is unchanged.
+    from awardwatch_pipeline.normalize import norm_name
+    assert norm_name("9123-4567 Québec inc. s/n Ferme Brisavel") == "9123 4567 quebec inc sn ferme brisavel"
+
+
+def test_a_withheld_name_of_each_new_shape_is_taken_out_of_free_text():
+    assert matching.redact("Paid to Paul Corrabin and to Laura Corrabin", ["Laura and Paul Corrabin"]) == \
+        ("Paid to [name withheld] and to [name withheld]", 2)
+    assert matching.redact("Louis Marie Pellivant, owner", ["PELLIVANT LOUIS MARIE"])[1] == 1
+    assert matching.redact("Laura Quentaro of Zorblax Holdings Ltd.", ["Quentaro, Laura (Zorblax Holdings Ltd.)"]) == \
+        ("[name withheld] of Zorblax Holdings Ltd.", 1)
+    assert matching.redact("Marie Brisavel, Ferme Brisavel", ["Marie Brisavel (s/n Ferme Brisavel)"]) == \
+        ("[name withheld], Ferme Brisavel", 1)
+
+
+def test_the_bracketed_firm_switch(monkeypatch, conn):
+    from awardwatch_pipeline.db import get_meta
+    name = SIX_PATTERNS["person (firm with a legal form)"]
+    # The default withholds the whole name: nothing is filed under the firm.
+    assert matching.PERSON_WITH_FIRM == "withhold"
+    assert matching.filed_name(name) == (name, None)
+    assert matching.person_test_stamp() == str(matching.PERSON_TEST_VERSION)
+    assert matching.person_with_firm(name) == ("Quentaro, Laura", "Zorblax Holdings Ltd.")
+    assert matching.refresh_person_test(conn) is True and matching.refresh_person_test(conn) is False
+    # The one-line switch files the record under the firm and hands back the person to take out of its text.
+    monkeypatch.setattr(matching, "PERSON_WITH_FIRM", "firm")
+    assert matching.filed_name(name) == ("Zorblax Holdings Ltd.", "Quentaro, Laura")
+    assert matching.is_person_name(name) is True  # the whole string still names the person
+    # A farm or trade name without a legal form is no firm to file under: still withheld whole.
+    farm = SIX_PATTERNS["person (farm)"]
+    assert matching.filed_name(farm) == (farm, None)
+    # Flipping it changes the stored version, so the next run reads every file again.
+    assert matching.person_test_stamp() == f"{matching.PERSON_TEST_VERSION}-firm"
+    assert matching.refresh_person_test(conn) is True
+    assert get_meta(conn, matching.PERSON_TEST_KEY) == f"{matching.PERSON_TEST_VERSION}-firm"
+
+
 def test_a_name_that_carries_an_email_address_is_withheld():
     from awardwatch_pipeline.sources import matching
     for name in ("labanalyzer@example.invalid", "Canada@softreseller.example.invalid", "sbuyer@example.invalid",

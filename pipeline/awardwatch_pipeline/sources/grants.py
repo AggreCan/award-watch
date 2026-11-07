@@ -115,6 +115,8 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
         legal = matching.first_language(get("recipient_legal_name"))
         if matching.is_placeholder(legal):
             legal = ""
+        legal, filed = matching.filed_name(legal)
+        legal = legal or ""
         raw_operating = matching.first_language(get("recipient_operating_name"))
         if matching.is_placeholder(raw_operating):
             raw_operating = ""
@@ -142,6 +144,8 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
         else:
             # An operating name dropped as a person's is that person's name.
             persons = [raw_operating] if raw_operating and matching.is_person_name(raw_operating) else []
+            if filed:
+                persons.append(filed)
             legal_out, city_out, postal_out = legal or None, place[2] or None, place[3] or None
             org = organizations.upsert(conn, legal, source="grants", country=get("recipient_country"),
                                        province=province, city=city, postal_code=postal or get("recipient_postal_code"),
