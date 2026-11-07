@@ -14,8 +14,9 @@
 // buyer id that is a buyer id, days and quarters from the data date), read
 // through the subject's index (rec_events_segment or _buyer by subject and
 // day, rec_expiring_end or _buyer by end date, records_segment or
-// records_buyer by subject, source and one fiscal year; rec_instruments,
-// which has no index by expiry, segment or end user, is read whole), and
+// records_buyer by subject, source and one fiscal year; rec_instruments by
+// rec_instruments_expiry, or rec_instruments_buyer for a buyer, then the
+// segment on the rows in the window), and
 // ended by a LIMIT of SECTION_ROWS rows (the per-source totals at most
 // SECTION_ROWS too). A briefing reads one batch: the state row and its eight
 // statements (seven for a buyer narrowed to a segment, which rec_due does not

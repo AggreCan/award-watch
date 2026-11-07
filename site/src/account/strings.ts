@@ -1949,4 +1949,8 @@ export const ACCOUNT_STRINGS = {
     en: "The standing offers and supply arrangements it holds now, soonest expiry first, with the type, regions and end user of each and the CSV file.",
     fr: "Les offres à commandes et arrangements en matière d'approvisionnement qu'elle détient maintenant, l'expiration la plus proche d'abord, avec le type, les régions et l'utilisateur final de chacun et le fichier CSV.",
   },
+
+  // A new notice's closing date in the watch mail, which follows it with the
+  // time left (digests.ts watchEventLines with the send clock).
+  "watches.line_closing_date": { en: "Closing date {date}", fr: "Date de clôture : {date}" },
 } as const satisfies Record<string, { en: string; fr: string }>;

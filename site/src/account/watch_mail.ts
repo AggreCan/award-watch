@@ -28,6 +28,7 @@
 // Log lines name counts and dates only, never an address or a label.
 
 import { addDays } from "../../public/closing.js";
+import { clockAt } from "../closing";
 import type { Env } from "../env";
 import { segmentShort, type Lang } from "../i18n";
 import { ROWS_MAX, STOP_CODES, isDue, sendWithHeaders, spanStart } from "./deliveries";
@@ -277,7 +278,10 @@ export async function runWatchMail(
         continue;
       }
       const stopUrl = siteLink(site, `/account/stop?w=${a.user_id}&t=${secret}`, lang);
-      const message = watchDigest({ lang, to: a.email, site, dataDate, stopUrl, groups, total, watched: all.length, opening });
+      // The send time is the clock each notice's time left is read at.
+      const message = watchDigest({
+        lang, to: a.email, site, dataDate, stopUrl, groups, total, watched: all.length, opening, clock: clockAt(now.getTime()),
+      });
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {
         held = null;

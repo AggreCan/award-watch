@@ -12,7 +12,7 @@
 // it chose and the links it made, so the messages can be tested on their own.
 
 import { addDays, closingParts } from "../../public/closing.js";
-import { closingTime } from "../closing";
+import { type Clock, closesLine, closingText, closingTime } from "../closing";
 import { CATEGORIES, PROVINCES, SEGMENTS } from "../constants";
 import { type ExpiringRow, type TenderRow, publishedReference } from "../data";
 import { categoryLabel, fmtInt, fmtMoney, fmtMoneyShort, pick, provinceName, segmentShort, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
@@ -600,6 +600,8 @@ export interface WatchDigest {
   watched: number;
   // A block the message opens with, before the watches (opening below).
   opening?: DigestOpening | null;
+  // The send time, for the time left on each notice's closing (watchEventLines).
+  clock?: Clock;
 }
 
 // The block a watch message opens with: the "Your organization" block
@@ -636,8 +638,11 @@ export const EVENT_KEY: Readonly<Record<EventKind, Key>> = {
 // and after, its change and an end date that moved; a closing that moved; a
 // notice's winner; a standing offer's type and region, description, expiry
 // and holders, under its agreement number); the data date it was first seen,
-// and the account's other watches the same event reached.
-export function watchEventLines(lang: Lang, r: EventRow): { title: string; line2: string; line3: string } {
+// and the account's other watches the same event reached. With a clock (the
+// message, at its send time), a new or amended notice's row also says the
+// time left by the tender page's rule (noticeTimeLeft), and names its date
+// as the closing date so the two do not both open with "Closes".
+export function watchEventLines(lang: Lang, r: EventRow, clock?: Clock): { title: string; line2: string; line3: string } {
   const money = (cents: number) => fmtMoney(cents / 100, lang);
   const day = (v: string | null) => (v ? v.slice(0, 10) : null);
   const what: string[] = [t(lang, EVENT_KEY[r.kind])];
@@ -658,12 +663,17 @@ export function watchEventLines(lang: Lang, r: EventRow): { title: string; line2
     value();
     if (r.other) what.push(r.other);
   } else if (r.kind === "notice") {
-    if (r.closing) what.push(t(lang, "watches.line_closes", { date: day(r.closing)! }));
+    if (r.closing) what.push(t(lang, clock ? "watches.line_closing_date" : "watches.line_closes", { date: day(r.closing)! }));
   } else if (r.kind === "notice_amended") {
     if (r.oclosing && r.closing) what.push(t(lang, "watches.line_closing_moved", { from: day(r.oclosing)!, to: day(r.closing)! }));
     else if (r.other) what.push(t(lang, "watches.line_title_changed"));
     else if (r.namd) what.push(t(lang, "watches.line_amendment", { n: fmtInt(r.namd, lang) }));
-  } else if (r.kind === "notice_closed") {
+  }
+  if (clock && r.closing && (r.kind === "notice" || r.kind === "notice_amended")) {
+    const left = noticeTimeLeft(lang, r.closing, clock);
+    if (left) what.push(left);
+  }
+  if (r.kind === "notice_closed") {
     if (r.closing) what.push(t(lang, "watches.line_closed", { date: day(r.closing)! }));
   } else if (r.kind === "notice_awarded") {
     what.push(r.other ? t(lang, "watches.line_awarded", { name: r.other }) : t(lang, "watches.line_withheld"));
@@ -683,6 +693,17 @@ export function watchEventLines(lang: Lang, r: EventRow): { title: string; line2
   if (r.also?.length) when.push(t(lang, "watches.also", { labels: r.also.join(", ") }));
   const title = instrument ?? pick(lang, r.title, r.title_fr) ?? t(lang, "common.not_stated");
   return { title, line2: what.join(" · "), line3: when.join(" · ") };
+}
+
+// The time left on a notice's closing at the clock, as the tender page's
+// documents line words it (closing.ts closesLine, the notice taken as open:
+// a cancelled or awarded one is a row of its own kind): "Closes in 20 days",
+// "Closes today at 14:00 ET", "Closes today", "Closing date passed". A closing
+// with a date and no time that is not today reads as that date alone, which
+// the row already gives, so it adds nothing.
+export function noticeTimeLeft(lang: Lang, closing: string, clock: Clock): string | null {
+  const line = closesLine("open", closing, clock, lang);
+  return line === t(lang, "tender.lead_closes", { date: closingText(closing, lang) }) ? null : line;
 }
 
 // An amendment's change in dollars and in percent of the value before:
@@ -725,11 +746,11 @@ export function watchDigest(o: WatchDigest): DigestMessage {
     for (const e of g.events) {
       if (e.rows.length) {
         html.push(rows(e.rows.map((r, i) => {
-          const l = watchEventLines(lang, r);
+          const l = watchEventLines(lang, r, o.clock);
           return row(l.title, siteLink(o.site, r.path, lang), escapeHtml(l.line2), escapeHtml(l.line3), i === 0);
         })));
         for (const r of e.rows) {
-          const l = watchEventLines(lang, r);
+          const l = watchEventLines(lang, r, o.clock);
           lines.push(`- ${l.title}\n  ${l.line2}\n  ${l.line3}\n  ${siteLink(o.site, r.path, lang)}`);
         }
       }

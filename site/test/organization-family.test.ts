@@ -4,7 +4,7 @@
 // in a family; a profile without it, and an export from before families,
 // show no section.
 import { describe, expect, it } from "vitest";
-import { profileFamily } from "../src/data";
+import { profileAliases, profileFamily } from "../src/data";
 import { app } from "../src/index";
 import { familyTie } from "../src/pages/organization";
 import profiles from "./fixtures/profiles-a00.json";
@@ -113,5 +113,112 @@ describe("a profile's corporate family", () => {
     expect(familyTie("en", "Joint-Venture")).toBe("Joint venture");
     expect(familyTie("en", "parent")).toBe("");
     expect(familyTie("fr", null)).toBe("");
+  });
+});
+
+// "Also appears as" (the alias export carrying names, 2026-11-07): the names
+// of the retired ids whose records the profile took, each with the alias
+// seed's note word, under the profile's head; nothing when the export has no
+// names. The families paragraph on the methodology page beside it.
+describe("the names a profile also appears under", () => {
+  // The export's shape: {id, name, note, reason}, the ones with a note first, at most 12, and
+  // aliases_total_rows when there are more.
+  const ALIASES = [
+    { id: "org-a00000000f", name: "Exemplar Translations Ltd.", note: "former", reason: "seed" },
+    { id: "org-a00000000c", name: "EXEMPLAR TRANSLATION SERVICES INC", note: "spelling", reason: "spelling" },
+    { id: "org-a00000000b", name: "Exemplar TS", note: "short", reason: "seed" },
+    { id: "org-a00000000a", name: "Exemplar Translation Services Inc. Atlantic Branch", note: "branch", reason: "seed" },
+    // No seed word (a merge made by a rule): the name alone.
+    { id: "org-a000000009", name: "Exemplar Translation Svcs", note: null, reason: "truncation" },
+  ];
+  const withAliases = (aliases: unknown, total?: number) => {
+    const shard = structuredClone(profiles) as Record<string, Record<string, unknown>>;
+    shard[ID].aliases = aliases;
+    if (total !== undefined) shard[ID].aliases_total_rows = total;
+    return testEnv(makeFakeAssets({}, { "profiles/a00.json": shard }));
+  };
+  const line = (html: string) => /<p class="page-note org-aliases">([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
+
+  it("lists each retired name with its note word under the head, in both languages", async () => {
+    const html = await profilePage(withAliases(ALIASES));
+    expect(line(html)).toBe(
+      "Also appears as: <span>Exemplar Translations Ltd.</span><span class=\"muted\"> (former name)</span>; " +
+      "<span>EXEMPLAR TRANSLATION SERVICES INC</span><span class=\"muted\"> (spelling)</span>; " +
+      "<span>Exemplar TS</span><span class=\"muted\"> (short form)</span>; " +
+      "<span>Exemplar Translation Services Inc. Atlantic Branch</span><span class=\"muted\"> (branch)</span>; " +
+      "<span>Exemplar Translation Svcs</span>",
+    );
+    // Under the head's title, before the first panel.
+    expect(html.indexOf("org-aliases")).toBeGreaterThan(html.indexOf("<h1"));
+    expect(html.indexOf("org-aliases")).toBeLessThan(html.indexOf('<section class="tiles"'));
+    // A name listed here is not listed again among the spellings the records carry.
+    expect(html).not.toContain("Also recorded as:");
+    const fr = await profilePage(withAliases(ALIASES), "fr");
+    expect(line(fr)).toContain("Apparaît aussi sous : <span>Exemplar Translations Ltd.</span><span class=\"muted\"> (ancien nom)</span>");
+    for (const word of ["(graphie)", "(forme abrégée)", "(succursale)"]) expect(line(fr)).toContain(word);
+    for (const english of ["Also appears as", "former name", "short form"]) expect(fr).not.toContain(english);
+    for (const page of [html, fr]) expect(page).not.toContain(EM_DASH);
+  });
+
+  it("lists what the export lists and says how many more from aliases_total_rows, each name once and never the profile's own", async () => {
+    const twelve = [
+      { id: "org-b000000000", name: "Exemplar Translation Services Inc.", note: "spelling", reason: "seed" },
+      ...Array.from({ length: 10 }, (_, i) => ({ id: `org-b0000000${String(i + 1).padStart(2, "0")}`, name: `Exemplar Name ${i + 1}`, note: "spelling", reason: "seed" })),
+      { id: "org-b000000099", name: "exemplar  name 1", note: "former", reason: "seed" },
+    ];
+    const text = line(await profilePage(withAliases(twelve, 20)));
+    expect(text).not.toContain("<span>Exemplar Translation Services Inc.</span>");
+    expect(text.match(/<span>Exemplar Name/g)).toHaveLength(10);
+    expect(text).toContain("<span>Exemplar Name 10</span>");
+    expect(text).not.toContain("former name");
+    // 20 retired ids, 12 listed: 8 more.
+    expect(text).toContain('<span class="muted">; and 8 more</span>');
+    expect(line(await profilePage(withAliases(twelve, 20), "fr"))).toContain("et 8 autres");
+    // No total, or one no larger than the list: nothing more to say.
+    for (const total of [undefined, 12, 3]) expect(line(await profilePage(withAliases(twelve, total)))).not.toContain("more");
+    // A list longer than the export's cap shows its first 12 and counts the rest.
+    const long = Array.from({ length: 15 }, (_, i) => ({ id: `org-c0000000${String(i).padStart(2, "0")}`, name: `Long Name ${i}`, note: null }));
+    const longLine = line(await profilePage(withAliases(long)));
+    expect(longLine.match(/<span>Long Name/g)).toHaveLength(12);
+    expect(longLine).toContain("; and 3 more");
+  });
+
+  it("is absent when the export carries no names, and a malformed field never takes the profile down", async () => {
+    const plain = await profilePage(testEnv());
+    expect(plain).not.toContain("org-aliases");
+    expect(plain).toContain("Also recorded as:");
+    for (const bad of [null, "Exemplar", {}, [], [null, 3, { name: "" }, { note: "former" }, { name: 7 }]]) {
+      const res = await app.request(`/organizations/${ID}`, {}, withAliases(bad));
+      expect(res.status, JSON.stringify(bad)).toBe(200);
+      expect(await res.text(), JSON.stringify(bad)).not.toContain("org-aliases");
+    }
+  });
+
+  it("reads the field tolerantly: the seed's four words, any other word or none showing the name alone", () => {
+    expect(profileAliases({})).toEqual({ names: [], more: 0 });
+    expect(profileAliases({ aliases: [{ name: " A  Name ", note: "former" }, { name: "B", note: "typo" }, { name: "C" }], aliases_total_rows: 5 }))
+      .toEqual({ names: [{ name: "A Name", note: "former" }, { name: "B", note: null }, { name: "C", note: null }], more: 2 });
+    expect(profileAliases({ aliases: [{ name: "A" }], aliases_total_rows: "many" })).toEqual({ names: [{ name: "A", note: null }], more: 0 });
+  });
+
+  it("redirects a retired id whose alias entry carries its name and note beside the live id", async () => {
+    const env = testEnv(makeFakeAssets({}, {
+      "aliases/a0.json": { "org-a00000000f": { to: ID, name: "Exemplar Translations Ltd.", note: "former" }, "org-a00000000e": { to: "org-a00000000e" } },
+    }));
+    const moved = await app.request("/organizations/org-a00000000f", {}, env);
+    expect(moved.status).toBe(301);
+    expect(moved.headers.get("location")).toBe(`/organizations/${ID}`);
+    // An entry pointing at itself is still no alias.
+    expect((await app.request("/organizations/org-a00000000e", {}, env)).status).toBe(404);
+  });
+
+  it("explains families on the methodology page's identity section, in both languages", async () => {
+    const en = nbsp(await (await app.request("/methodology", {}, testEnv())).text());
+    const identity = en.slice(en.indexOf('<h2 id="organizations">'), en.indexOf('<h2 id="buyers">'));
+    expect(identity).toContain("Some organizations belong to a corporate family");
+    expect(identity).toContain("are never added together.");
+    const fr = nbsp(await (await app.request("/methodology?lang=fr", {}, testEnv())).text());
+    expect(fr).toContain("Certaines organisations appartiennent à une famille d");
+    expect(fr).not.toContain("Some organizations belong to a corporate family");
   });
 });

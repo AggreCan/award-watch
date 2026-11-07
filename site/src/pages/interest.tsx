@@ -209,6 +209,16 @@ async function expiringFilter(env: Env, lang: Lang, url: URL): Promise<InterestF
     segment = `${q.segment} ${segmentLabel(lang, q.segment)}`;
     pairs.push(["segment", q.segment]);
   }
+  // The province, and its derived provinces left out when the box was
+  // unticked, as the tender list's filter saves them.
+  if (q.province) {
+    pairs.push(["province", q.province]);
+    extras.push(pair(lang, "col.province", provinceName(lang, q.province)));
+    if (!q.derived) {
+      pairs.push(["derived", "0"]);
+      extras.push(t(lang, "interest.derived_out"));
+    }
+  }
   if (q.competitive) {
     pairs.push(["competitive", q.competitive]);
     extras.push(pair(lang, "col.method", t(lang, COMPETITIVE_LABEL[q.competitive])));

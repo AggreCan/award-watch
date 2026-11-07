@@ -78,6 +78,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           <List lang={lang} keys={["methodology.org_rule_name", "methodology.org_rule_id", "methodology.org_rule_place", "methodology.org_rule_display"]} />
           <p>{t(lang, "methodology.org_shared")}</p>
           <p>{t(lang, "methodology.org_registry")}</p>
+          <p>{t(lang, "methodology.org_families")}</p>
 
           <h2 id="buyers">{t(lang, "methodology.toc_buyers")}</h2>
           <p>{t(lang, "methodology.buyers_text")}</p>

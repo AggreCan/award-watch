@@ -61,4 +61,10 @@ export const CALENDAR_STRINGS = {
   "cal.d_end_user": { en: "End user: {v}", fr: "Utilisateur final : {v}" },
   "cal.d_expiry": { en: "Expiry: {v}", fr: "Expiration : {v}" },
   "cal.d_holders": { en: "Active holders: {n}", fr: "Titulaires actifs : {n}" },
+
+  // The cap's event when one event is left out (src/calendar.ts capped): a
+  // feed whose statements left a single row unread beside the ones it kept.
+  "cal.more_closing_one": { en: "Award Watch: 1 more closing date, see the site", fr: "Award Watch : 1 autre date de clôture, voir le site" },
+  "cal.more_end_one": { en: "Award Watch: 1 more end date, see the site", fr: "Award Watch : 1 autre date de fin, voir le site" },
+  "cal.more_dates_one": { en: "Award Watch: 1 more date, see the site", fr: "Award Watch : 1 autre date, voir le site" },
 } as const satisfies Record<string, { en: string; fr: string }>;

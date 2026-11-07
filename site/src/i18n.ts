@@ -1788,8 +1788,8 @@ const STRINGS = {
     en: "A match in the federal corporate registry is a match on the normalized name, graded exact, probable or possible. It points to a registry record and does not establish identity.",
     fr: "Une correspondance dans le registre fédéral des sociétés est une correspondance sur le nom normalisé, qualifiée d'exacte, de probable ou de possible. Elle renvoie à un dossier du registre et n'établit pas l'identité.",
   },
-  // Appended to the identity paragraph for the methodology page to render
-  // when profiles show families (the pipeline's families stage and the
+  // The methodology page's identity section, after the registry paragraph:
+  // how profiles show families (the pipeline's families stage and the
   // profile's "family" block; the seed is
   // pipeline/awardwatch_pipeline/data/organization_families.csv).
   "methodology.org_families": {
@@ -3569,6 +3569,21 @@ const STRINGS = {
   "incumbents.pro_capped": {
     en: "First {n} of {all} shown; Pro lists the {max} largest.",
     fr: "{n} des {all} affichés; Pro énumère les {max} plus importants.",
+  },
+  // "Also appears as" on a profile (pages/organization.tsx AlsoAppearsAs): the
+  // names of the retired ids whose records it took, each with the alias
+  // seed's note word (organization_aliases.csv: former, spelling, short, branch).
+  "org.also_appears": { en: "Also appears as:", fr: "Apparaît aussi sous :" },
+  "org.also_appears_more": { en: "and {n} more", fr: "et {n} autres" },
+  "org.alias_former": { en: "former name", fr: "ancien nom" },
+  "org.alias_spelling": { en: "spelling", fr: "graphie" },
+  "org.alias_short": { en: "short form", fr: "forme abrégée" },
+  "org.alias_branch": { en: "branch", fr: "succursale" },
+  // The radar's province filter (pages/expiring.tsx) on a records database
+  // that does not hold the province table yet: the filter is set aside.
+  "expiring.province_unavailable": {
+    en: "The province filter is not available yet; the list shows every province.",
+    fr: "Le filtre par province n'est pas encore offert; la liste présente toutes les provinces.",
   },
 } as const satisfies Record<string, Entry>;
 

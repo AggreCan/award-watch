@@ -212,9 +212,13 @@ export function claimFrame(today: string): ClaimFrame {
 
 // The radar's own filter for the organization's contracts ending within 12
 // months: what /expiring/12m?supplier=<id> reads (pages/expiring.tsx
-// radarParams with that query alone).
+// radarParams with that query alone, so no province and the derived ones
+// counted).
 export function endingParams(oid: number, f: ClaimFrame): RadarParams {
-  return { first: f.today, last: f.endLast, buyer: "", client: "", oid, segment: "", comp: -1, band: null, kind: 0, fye: true, sosa: true };
+  return {
+    first: f.today, last: f.endLast, buyer: "", client: "", oid, segment: "", comp: -1, band: null, kind: 0, fye: true, sosa: true, prov: "",
+    derived: true,
+  };
 }
 
 // The share statement's binds: the segment (or, for the largest, a value the

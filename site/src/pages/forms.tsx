@@ -357,6 +357,30 @@ export async function latestCorrections(env: Env, n: number): Promise<Correction
   }
 }
 
+// -- a profile's public corrections log ---------------------------------------------------
+
+// The published rows a profile lists under "Corrections". A merge report is
+// left out even when published: it names a business the reader says does
+// not belong on the profile, which the operator reviews and the nightly's
+// merge rules act on; the profile is not the place to print it. A database
+// without the kind column (published_corrections_old) keeps a report as a
+// correction whose text starts with MERGE_MARKER, so the marker leaves it out
+// too, there and after the ALTER TABLE gives those rows the default kind.
+export interface PublishedCorrection { submitted_at: string; page: string | null; text: string }
+export const PUBLISHED_CORRECTIONS_SQL =
+  "SELECT submitted_at, page, text FROM corrections WHERE organization_id = ? AND published = 1 AND kind <> 'merge' ORDER BY submitted_at DESC";
+export const PUBLISHED_CORRECTIONS_OLD_SQL =
+  "SELECT submitted_at, page, text FROM corrections WHERE organization_id = ? AND published = 1 ORDER BY submitted_at DESC";
+
+export function publicCorrections(rows: readonly Record<string, unknown>[]): PublishedCorrection[] {
+  return rows
+    .filter((r) => typeof r.text === "string" && !r.text.startsWith(MERGE_MARKER) && typeof r.submitted_at === "string")
+    .map((r) => ({ submitted_at: r.submitted_at as string, page: typeof r.page === "string" ? r.page : null, text: r.text as string }));
+}
+
+// Whether a statement failed for want of the kind column, so the caller reads again without it.
+export const correctionsColumnMissing = missingColumn;
+
 async function thanks(c: Context<AppEnv>, message: Key, back: string): Promise<Response> {
   const lang = c.get("lang");
   c.header("Cache-Control", "no-store");

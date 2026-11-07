@@ -656,7 +656,8 @@ describe("the watch mail", () => {
     expect(text).toContain("- Boots\n  Contract amended · $120,000 to $268,000 (+$148,000, +123%) · end moved from 2026-12-31 to 2027-01-20 · amendment 1\n  First seen 2026-10-31");
     expect(text).not.toContain("Small change");
     expect(text).not.toContain("Old notice");
-    expect(text).toContain("- Survey services\n  New tender notice · Closes 2026-11-20\n  First seen 2026-10-31");
+    // The time left is read at the send time (TEST_NOW, noon Eastern on the data date) by the tender page's rule.
+    expect(text).toContain("- Survey services\n  New tender notice · Closing date 2026-11-20 · Closes in 20 days\n  First seen 2026-10-31");
     expect(text).not.toContain("- Translation");
     const row = await mailRow(user);
     expect(row).toMatchObject({ last_day: DAY, last_status: "sent", last_items: 3 });
@@ -732,8 +733,48 @@ describe("the watch mail", () => {
     const text = mail.to(email)[0].text!;
     expect(text).toContain("Contract cancelled · Value before $300,000");
     expect(text).toContain("Contract ended · Ended 2026-10-30 · Value $300,000 · Acme Defence Inc.");
-    expect(text).toContain("Tender notice amended · Closing moved from 2026-11-05 to 2026-11-20");
-    expect(text).toContain("Tender notice awarded · Awarded to Harbour Survey Inc. · Value $25,000");
+    expect(text).toContain("Tender notice amended · Closing moved from 2026-11-05 to 2026-11-20 · Closes in 20 days\n");
+    expect(text).toContain("Tender notice awarded · Awarded to Harbour Survey Inc. · Value $25,000\n");
+  });
+
+  it("says the time left on each new or amended notice's closing at the send time, as the tender page does, in both languages", async () => {
+    quiet();
+    const mail = fakeMail();
+    const email = newEmail("m-closing");
+    const user = await makeUser(email);
+    const french = newEmail("m-closing-fr");
+    const userFr = await makeUser(french, { lang: "fr" });
+    for (const u of [user, userFr]) await watch(u, "buyer", "dnd-mdn", "National Defence", { events: "notice,notice_amended" });
+    // TEST_NOW is 2026-10-31 16:00 UTC, noon Eastern: 20 days and 3 hours before the first closing (EST after November 1).
+    await events([
+      { kind: "notice", buyer: "dnd-mdn", closing: "2026-11-20T14:00:00", title: "Far closing", path: "/tenders/cb-c1", ref: "tender:cb-c1" },
+      { kind: "notice", buyer: "dnd-mdn", closing: "2026-10-31T18:00:00", title: "Closing this afternoon", path: "/tenders/cb-c2", ref: "tender:cb-c2" },
+      { kind: "notice", buyer: "dnd-mdn", closing: "2026-10-31T12:30:00", title: "Closing within the hour", path: "/tenders/cb-c3", ref: "tender:cb-c3" },
+      { kind: "notice", buyer: "dnd-mdn", closing: "2026-10-30T14:00:00", title: "Closed yesterday", path: "/tenders/cb-c4", ref: "tender:cb-c4" },
+      { kind: "notice", buyer: "dnd-mdn", closing: "2026-10-31", title: "Date only today", path: "/tenders/cb-c5", ref: "tender:cb-c5" },
+      { kind: "notice", buyer: "dnd-mdn", closing: "2026-11-25", title: "Date only later", path: "/tenders/cb-c6", ref: "tender:cb-c6" },
+      { kind: "notice_amended", buyer: "dnd-mdn", closing: "2026-11-02T14:00:00", oclosing: "2026-11-01T14:00:00", title: "Moved closing",
+        path: "/tenders/cb-c7", ref: "tender:cb-c7" },
+    ]);
+    await runDeliveries(jobEnv(mail.binding));
+    const text = mail.to(email)[0].text!;
+    expect(text).toContain("- Far closing\n  New tender notice · Closing date 2026-11-20 · Closes in 20 days\n");
+    expect(text).toContain("- Closing this afternoon\n  New tender notice · Closing date 2026-10-31 · Closes today at 18:00 ET\n");
+    expect(text).toContain("- Closing within the hour\n  New tender notice · Closing date 2026-10-31 · Closes in 30 min\n");
+    expect(text).toContain("- Closed yesterday\n  New tender notice · Closing date 2026-10-30 · Closing date passed\n");
+    expect(text).toContain("- Date only today\n  New tender notice · Closing date 2026-10-31 · Closes today\n");
+    // A date with no time that is not today says nothing the date does not.
+    expect(text).toContain("- Date only later\n  New tender notice · Closing date 2026-11-25\n");
+    // 2026-11-02 14:00 EST is 19:00 UTC: 2 days and 3 hours out.
+    expect(text).toContain("- Moved closing\n  Tender notice amended · Closing moved from 2026-11-01 to 2026-11-02 · Closes in 2 days\n");
+    // The HTML part carries the same line.
+    expect(mail.to(email)[0].html).toContain("New tender notice · Closing date 2026-11-20 · Closes in 20 days");
+    const fr = nbsp(mail.to(french)[0].text!);
+    expect(fr).toContain(" · Date de clôture : 2026-11-20 · Clôture dans 20 jours\n");
+    expect(fr).toContain("Date de clôture : 2026-10-30 · Date de clôture passée\n");
+    expect(fr).toContain("Clôture aujourd");
+    expect(fr).not.toContain("Closes in");
+    for (const m of [mail.to(email)[0], mail.to(french)[0]]) for (const part of [m.subject, m.html!, m.text!]) expect(part).not.toContain(EM_DASH);
   });
 
   it("is written in the account's language", async () => {

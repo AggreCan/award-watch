@@ -13,11 +13,13 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { orgNumber } from "../src/records_db";
 import { bucketFor } from "../src/limits";
 import {
-  BUYER_INCUMBENTS_SQL, CONTRACT_VERSIONS_MAX, EARLIER_AWARDS_SQL, ORG_FEED_SQL, PUBLISHED_CONTRACT_SQL, RADAR_PAGE_ROWS, SEGMENT_INCUMBENTS_SQL, TABLE_SQL,
+  BUYER_INCUMBENTS_SQL, CONTRACT_VERSIONS_MAX, EARLIER_AWARDS_SQL, ORG_FEED_SQL, PUBLISHED_CONTRACT_SQL, RADAR_PAGE_ROWS, RADAR_PROV_SQL,
+  SEGMENT_INCUMBENTS_SQL, TABLE_SQL,
 } from "../src/records_tables";
 import { recordHref, recordTitle, shownReference } from "../src/pages/records";
 import { contractPath } from "../src/pages/shared";
 import { get, grantPro, newEmail, offEnv, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
+import { FILES, makeFakeAssets } from "./assets";
 import { applySql } from "./setup";
 
 useAccountsDb();
@@ -55,15 +57,18 @@ const CONTRACTS: Contract[] = [
 interface Ending {
   k: number; end: string; kind: "award" | "history" | "contract"; oid: string | null; buyer: string; client: string; value: number | null;
   comp: 0 | 1 | null; so?: boolean; m31?: boolean; segs?: string[];
+  // The provinces its source states, and the ones derived from another field (rec_expiring_prov).
+  prov?: string[]; derived?: string[];
 }
 // The fixtures' 3-month window file is the one the site has; contract 4
 // carries the March 31 mark whatever its date, and contract 6 ends after the
 // 3-month window.
 const ENDING: Ending[] = [
-  { k: 1, end: "2026-11-15", kind: "award", oid: A1, buyer: "pwgsc-tpsgc", client: "dnd-mdn", value: 250_000, comp: 1, segs: ["80"] },
-  { k: 2, end: "2026-12-01", kind: "history", oid: null, buyer: "dnd-mdn", client: "dnd-mdn", value: 40_000, comp: 0 },
-  { k: 3, end: "2027-01-10", kind: "contract", oid: A1, buyer: "dnd-mdn", client: "dnd-mdn", value: 1_500_000, comp: 0, so: true },
-  { k: 4, end: "2027-01-20", kind: "award", oid: "org-b000000001", buyer: "pwgsc-tpsgc", client: "hc-sc", value: 9_000_000, comp: 1, m31: true, segs: ["43", "81"] },
+  { k: 1, end: "2026-11-15", kind: "award", oid: A1, buyer: "pwgsc-tpsgc", client: "dnd-mdn", value: 250_000, comp: 1, segs: ["80"], prov: ["BC"] },
+  { k: 2, end: "2026-12-01", kind: "history", oid: null, buyer: "dnd-mdn", client: "dnd-mdn", value: 40_000, comp: 0, derived: ["ON"] },
+  { k: 3, end: "2027-01-10", kind: "contract", oid: A1, buyer: "dnd-mdn", client: "dnd-mdn", value: 1_500_000, comp: 0, so: true, derived: ["BC"] },
+  { k: 4, end: "2027-01-20", kind: "award", oid: "org-b000000001", buyer: "pwgsc-tpsgc", client: "hc-sc", value: 9_000_000, comp: 1, m31: true, segs: ["43", "81"],
+    prov: ["ON"], derived: ["BC"] },
   { k: 5, end: "2027-01-25", kind: "award", oid: A1, buyer: "pwgsc-tpsgc", client: "hc-sc", value: null, comp: null },
   { k: 6, end: "2027-06-30", kind: "award", oid: A1, buyer: "pwgsc-tpsgc", client: "dnd-mdn", value: 5_000, comp: 1 },
   // Four organizations in segment 82 at Fisheries and Oceans, after the 3-month window: the incumbents' tease.
@@ -79,8 +84,22 @@ function endingRow(e: Ending): Record<string, unknown> {
     organization_id: e.oid, organization: e.oid ? `Org ${e.oid.slice(-1)}` : null, supplier_withheld: e.oid === null, buyer_id: e.buyer,
     buyer_en: e.buyer, buyer_fr: null, start: "2025-01-01", end: e.end, value: e.value, currency: "CAD", competitive: e.comp,
     method_en: null, method_fr: null, instrument_en: e.so ? "Standing offer" : "Contract", instrument_fr: null, n_amendments: 0, value_growth: null,
-    segments: e.segs ?? [], provinces: [], client_buyer_id: e.client, client_buyer_name: e.client === "hc-sc" ? "Health Canada" : "National Defence",
+    segments: e.segs ?? [], provinces: e.prov ?? [], client_buyer_id: e.client, client_buyer_name: e.client === "hc-sc" ? "Health Canada" : "National Defence",
+    ...(e.derived ? { provinces_derived: e.derived, provinces_from: "delivery" } : {}),
   };
+}
+
+// The province table of the pipeline's records schema (pipeline/records_schema.sql), made
+// here when the schema file in this tree does not carry it yet.
+const PROV_DDL = [
+  "CREATE TABLE IF NOT EXISTS rec_expiring_prov (pk INTEGER PRIMARY KEY, k INTEGER NOT NULL, prov TEXT NOT NULL, derived INTEGER NOT NULL DEFAULT 0)",
+  "CREATE INDEX IF NOT EXISTS rec_expiring_prov_prov ON rec_expiring_prov (prov, k)",
+];
+async function seedProvinces(): Promise<void> {
+  for (const sql of PROV_DDL) await RECORDS.prepare(sql).run();
+  await RECORDS.prepare("DELETE FROM rec_expiring_prov").run();
+  const rows = ENDING.flatMap((e) => [...(e.prov ?? []).map((p) => [e.k, p, 0] as const), ...(e.derived ?? []).map((p) => [e.k, p, 1] as const)]);
+  await RECORDS.batch(rows.map(([k, prov, derived]) => RECORDS.prepare("INSERT INTO rec_expiring_prov (k, prov, derived) VALUES (?, ?, ?)").bind(k, prov, derived)));
 }
 
 // The record tables' rows (rec_details): the profile's organization at three
@@ -113,6 +132,7 @@ async function seed(state = "ready"): Promise<void> {
   ).bind(e.k, e.end, e.oid ? orgNumber(e.oid) : null, e.buyer, e.client, e.segs?.length ? ` ${e.segs.join(" ")} ` : "", KIND_N[e.kind], e.comp,
     e.value === null ? null : e.value * 100, e.value === null ? null : e.value * 100, e.value === null ? 1 : 0, e.so ? 1 : 0,
     e.m31 ? 1 : 0, JSON.stringify(endingRow(e)))));
+  await seedProvinces();
   await RECORDS.batch([
     ...CONTRACTS.map((c) => RECORDS.prepare(
       "INSERT INTO rec_contracts (k, dept, ref, pid, bid, oid, wh, cdate, start, endd, value, orig, amend, proc, comp, ctype, gsin, agr, trade, ltr, " +
@@ -384,13 +404,142 @@ describe("the radar over its whole window", () => {
   it("reads every statement through the window's index, bounded", async () => {
     for (const sql of TABLE_SQL) expect(sql, sql).toMatch(/LIMIT \d+( OFFSET \?\d+)?$/);
     const binds: (string | number)[] = ["2026-10-31", "2027-10-31", "", "", -1, "", -1, -1, -1, 0, 1, 1, 0];
-    for (const sql of TABLE_SQL.filter((q) => q.includes("FROM rec_expiring"))) {
+    // The province statements bind two values more; their own test reads them.
+    for (const sql of TABLE_SQL.filter((q) => q.includes("FROM rec_expiring") && !RADAR_PROV_SQL.includes(q))) {
       const n = Math.max(...[...sql.matchAll(/\?(\d+)/g)].map((m) => Number(m[1])));
       const steps = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...binds.slice(0, n)).all()).results ?? [])
         .map((r) => String((r as { detail?: unknown }).detail));
       const text = steps.join("\n");
       expect(steps.filter((s) => /^SCAN (rec_expiring|records|rec_\w+)\b/.test(s) && !/USING/.test(s)), `${sql}\n${text}`).toEqual([]);
       expect(text, sql).toMatch(/rec_expiring_(end|buyer|client)/);
+    }
+  });
+});
+
+// The province filter (rec_expiring_prov): contract 1 states BC; 2 has ON
+// derived; 3 has BC derived; 4 states ON and has BC derived; 5 names none.
+describe("the radar's province filter", () => {
+  const titles = (html: string) => [...html.matchAll(/>Contract (\d)<\/a>/g)].map((m) => Number(m[1]));
+
+  it("filters the whole window by a stated or derived province, the derived ones left out on request", async () => {
+    const bc = await page("/expiring/3m?province=BC");
+    expect(bc.res.status).toBe(200);
+    expect(titles(bc.html)).toEqual([1, 3, 4]);
+    expect(bc.html).toContain("3 contracts match");
+    expect(bc.html).toContain("worth $10,750,000");
+    expect(titles((await page("/expiring/3m?province=bc&derived=0")).html)).toEqual([1]);
+    expect(titles((await page("/expiring/3m?province=ON")).html)).toEqual([2, 4]);
+    expect(titles((await page("/expiring/3m?province=ON&derived=0")).html)).toEqual([4]);
+    // With the other filters and the orders.
+    expect(titles((await page(`/expiring/3m?province=BC&supplier=${A1}`)).html)).toEqual([1, 3]);
+    expect(titles((await page("/expiring/3m?province=BC&sort=value")).html)).toEqual([4, 3, 1]);
+    expect(titles((await page("/expiring/3m?province=YT")).html)).toEqual([]);
+    // A code that is not a province reads as no filter.
+    expect(titles((await page("/expiring/3m?province=XX&sort=end")).html)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("offers the province and the derived box beside the tender list's, keeps both in the address, and chips the province", async () => {
+    const { html } = await page("/expiring/3m?province=BC&derived=0");
+    expect(html).toContain('<span class="field-label">Province</span><select name="province"><option value="">All</option>');
+    expect(html).toContain('<option value="BC" selected="">British Columbia</option>');
+    expect(html).toContain('<input type="hidden" name="derived" value="0"/><input type="checkbox" name="derived" value="1"/><span>Include derived provinces</span>');
+    // The chip, its link without the province (and so without derived=0), and the pages and heads keeping both.
+    expect(html).toContain('<a class="fchip" href="/expiring/3m" aria-label="Remove filter: British Columbia"><span>Province</span> <b>British Columbia</b>');
+    expect(html).toContain('<th class="k-date"><a href="/expiring/3m?province=BC&derived=0&sort=end" class="th-sort" rel="nofollow">');
+    expect(html).toContain('<th class="k-value num"><a href="/expiring/3m?province=BC&derived=0&sort=value-asc" class="th-sort" rel="nofollow">');
+    const plain = await page("/expiring/3m");
+    // Without a filter the box is ticked and the province counted from the loaded page's rows.
+    expect(plain.html).toContain('<input type="checkbox" name="derived" value="1" checked=""/>');
+    expect(plain.html).toMatch(/<option value="BC">British Columbia \(\d+\)<\/option>/);
+    const fr = nbsp((await page("/expiring/3m?province=BC&lang=fr")).html);
+    expect(fr).toContain('<select name="province"><option value="">Toutes</option>');
+    expect(fr).toContain("Inclure les provinces déduites");
+    expect(fr).toContain("<b>Colombie-Britannique</b>");
+    for (const p of [html, fr]) expect(p).not.toContain(EM_DASH);
+  });
+
+  it("filters the window file's page by the rows' own provinces when the records database cannot answer", async () => {
+    const { res, html } = await page("/expiring/3m?province=BC", { env: { ...offEnv(), RECORDS: undefined } });
+    expect(res.status).toBe(200);
+    expect(html).toContain("The filters apply to the");
+    expect(html).toContain("Diesel engine overhaul, patrol vessel");
+    expect(html).not.toContain("Satellite communications terminal maintenance");
+  });
+
+  it("is free on the 3-month window, Pro's on the deeper windows as the other filters are, and in the matches' CSV", async () => {
+    // The fixtures' 12-month window: the 3-month file's rows under the deeper window's names.
+    const deep = onEnv({ ASSETS: makeFakeAssets({}, {
+      "expiring/12m/index.json": { ...(FILES["expiring/3m/index.json"] as object), window: "12m" }, "expiring/12m/1.json": FILES["expiring/3m/1.json"],
+    }) });
+    const free = await signIn(newEmail("free-radar-prov"));
+    const free3m = decode(nbsp(await (await get("/expiring/3m?province=BC", { cookie: free, env: onEnv() })).text()));
+    expect(titles(free3m)).toEqual([1, 3, 4]);
+    // A deeper window's free view sets the filter aside and says so.
+    const free12m = decode(nbsp(await (await get("/expiring/12m?province=BC", { cookie: free, env: deep })).text()));
+    expect(free12m).not.toContain('<select name="province">');
+    expect(free12m).toContain("Filters and later pages are part of Pro, so this address shows the window's first contracts.");
+    expect(titles(free12m)).toEqual([]);
+    expect((await get("/expiring/12m/rows.csv?province=BC", { cookie: free, env: deep })).status).toBe(404);
+    const email = newEmail("pro-radar-prov");
+    const pro = await signIn(email);
+    await grantPro(email);
+    const pro12m = decode(nbsp(await (await get("/expiring/12m?province=BC", { cookie: pro, env: deep })).text()));
+    expect(titles(pro12m)).toEqual([1, 3, 4]);
+    expect(pro12m).toContain('href="/expiring/12m/rows.csv?province=BC" rel="nofollow">Download these contracts (CSV)</a>');
+    const res = await get("/expiring/3m/rows.csv?province=BC&derived=0", { cookie: pro, env: onEnv() });
+    expect(res.status).toBe(200);
+    const lines = (await res.text()).trim().split("\r\n");
+    expect(lines.slice(1).map((l) => l.split(",")[1])).toEqual(["RADAR-1"]);
+    expect(lines[1]).toContain(",BC,");
+    const all = (await (await get("/expiring/3m/rows.csv?province=BC&sort=value", { cookie: pro, env: onEnv() })).text()).trim().split("\r\n");
+    expect(all.slice(1).map((l) => l.split(",")[1])).toEqual(["RADAR-4", "C-3", "RADAR-1"]);
+  });
+
+  it("degrades to no province filter while the records database has no province table", async () => {
+    const error = console.error;
+    console.error = () => undefined;
+    await RECORDS.prepare("DROP TABLE rec_expiring_prov").run();
+    try {
+      const { res, html } = await page("/expiring/3m?province=BC&derived=0");
+      expect(res.status).toBe(200);
+      expect(titles(html)).toEqual([1, 2, 3, 4, 5]);
+      expect(html).toContain("The province filter is not available yet; the list shows every province.");
+      expect(html).not.toContain('<select name="province">');
+      expect(html).not.toContain("<b>British Columbia</b>");
+      // The other filters still apply over the whole window.
+      expect(titles((await page(`/expiring/3m?province=BC&supplier=${A1}`)).html)).toEqual([1, 3, 5]);
+      // Without a province the page reads as it always did.
+      const plain = await page(`/expiring/3m?supplier=${A1}`);
+      expect(plain.html).not.toContain("not available yet");
+      expect(plain.html).toContain('<select name="province">');
+      const email = newEmail("pro-radar-noprov");
+      const pro = await signIn(email);
+      await grantPro(email);
+      const csv = await get("/expiring/3m/rows.csv?province=BC", { cookie: pro, env: onEnv() });
+      expect(csv.status).toBe(200);
+      expect((await csv.text()).trim().split("\r\n")).toHaveLength(6);
+      const fr = nbsp((await page("/expiring/3m?province=BC&lang=fr")).html);
+      expect(fr).toContain("Le filtre par province n");
+    } finally {
+      console.error = error;
+      await seedProvinces();
+    }
+  });
+
+  it("joins the window's rows to the province table through its (prov, k) index, bounded", async () => {
+    expect(RADAR_PROV_SQL).toHaveLength(9);
+    for (const sql of RADAR_PROV_SQL) {
+      expect(sql, sql).toMatch(/LIMIT \d+( OFFSET \?15)?$/);
+      expect(sql).toContain("k IN (SELECT k FROM rec_expiring_prov WHERE prov = ?13 AND derived <= ?14)");
+      const n = Math.max(...[...sql.matchAll(/\?(\d+)/g)].map((m) => Number(m[1])));
+      const binds: (string | number)[] = ["2026-10-31", "2027-10-31", "", "", -1, "", -1, -1, -1, 0, 1, 1, "BC", 1, 0];
+      expect(n).toBe(sql.includes("OFFSET") ? 15 : 14);
+      const steps = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...binds.slice(0, n)).all()).results ?? [])
+        .map((r) => String((r as { detail?: unknown }).detail));
+      const text = steps.join("\n");
+      expect(steps.filter((s) => /^SCAN (rec_expiring|rec_expiring_prov)\b/.test(s) && !/USING/.test(s)), `${sql}\n${text}`).toEqual([]);
+      expect(text, `${sql}\n${text}`).toMatch(/SEARCH rec_expiring_prov USING (COVERING )?INDEX \w+ \(prov=\?/);
+      expect(text, `${sql}\n${text}`).toMatch(/rec_expiring_end|INTEGER PRIMARY KEY/);
     }
   });
 });

@@ -209,6 +209,52 @@ describe("a merge report", () => {
   });
 });
 
+describe("a profile's public corrections log", () => {
+  const corrections = (html: string) => html.slice(html.indexOf('<h2 id="corrections">'), html.indexOf("</section>", html.indexOf('<h2 id="corrections">')));
+  const insert = (text: string, kind: string | null, at: string) => (kind
+    ? DB.prepare("INSERT INTO corrections (organization_id, page, text, contact, submitted_at, published, kind, name) VALUES (?, ?, ?, NULL, ?, 1, ?, ?)")
+      .bind(OTHER, `/organizations/${OTHER}`, text, at, kind, kind === "merge" ? "Some Other Firm Ltd." : null)
+    : DB.prepare("INSERT INTO corrections (organization_id, page, text, contact, submitted_at, published) VALUES (?, ?, ?, NULL, ?, 1)")
+      .bind(OTHER, `/organizations/${OTHER}`, text, at));
+
+  it("leaves out merge reports, published or not, and the marked ones a database without the kind column kept", async () => {
+    await DB.batch([
+      insert("The city on this profile was corrected.", "correction", "2026-10-20T10:00:00.000Z"),
+      insert("Published merge note, never on the page.", "merge", "2026-10-21T10:00:00.000Z"),
+      insert(`${MERGE_MARKER} Marked Name Inc.\nKept before the columns.`, "correction", "2026-10-22T10:00:00.000Z"),
+    ]);
+    const log = corrections(await page(`/organizations/${OTHER}`));
+    expect(log).toContain("The city on this profile was corrected.");
+    expect(log).toContain("Received 2026-10-20");
+    expect(log).not.toContain("Published merge note");
+    expect(log).not.toContain(MERGE_MARKER);
+    expect(log).not.toContain("Marked Name Inc.");
+    expect(log).not.toContain("Some Other Firm");
+  });
+
+  it("reads the log without the kind column on a database made before it, the marked rows still left out", async () => {
+    await DB.prepare("ALTER TABLE corrections RENAME TO corrections_with_kind").run();
+    try {
+      await DB.prepare(
+        "CREATE TABLE corrections (id INTEGER PRIMARY KEY AUTOINCREMENT, organization_id TEXT, page TEXT, text TEXT NOT NULL, contact TEXT, submitted_at TEXT NOT NULL, published INTEGER NOT NULL DEFAULT 0)",
+      ).run();
+      await DB.batch([
+        insert("An older database's correction.", null, "2026-10-23T10:00:00.000Z"),
+        insert(`${MERGE_MARKER} Older Marked Ltd.`, null, "2026-10-24T10:00:00.000Z"),
+      ]);
+      const html = await page(`/organizations/${OTHER}`);
+      const log = corrections(html);
+      expect(log).toContain("An older database's correction.");
+      expect(log).not.toContain("Older Marked Ltd.");
+      // The responses read in the same batch still come back.
+      expect(html).toContain('<h2 id="responses">');
+    } finally {
+      await DB.prepare("DROP TABLE IF EXISTS corrections").run();
+      await DB.prepare("ALTER TABLE corrections_with_kind RENAME TO corrections").run();
+    }
+  });
+});
+
 describe("the operator console", () => {
   it("lists merge reports and corrections with the profile linked, newest first, in both languages", async () => {
     await post(report("Console Listed Name Ltd.", "Seen in the console <b>note</b>."));

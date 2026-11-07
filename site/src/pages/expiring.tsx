@@ -9,7 +9,8 @@
 // (expiring/<window>/<n>.json, 500 rows each, soonest end first) with
 // expiring/<window>/index.json for the page count, so no request parses a
 // whole window. The filters in the URL (buyer, client department,
-// organization, segment, competitive, value band, source, the two marks)
+// organization, segment, province with or without the derived ones,
+// competitive, value band, source, the two marks)
 // and the orders (by end date or by value, either way, which the table's
 // heads set too) apply to the whole window, read from the records
 // database (rec_expiring, src/records_tables.ts), RADAR_PAGE_ROWS to a page,
@@ -34,14 +35,14 @@ import { allowed } from "../account/entitlements";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
 import { type HeadSort, type Rest, type SortOrders, Table, headSort, restClass } from "../columns";
-import { SEGMENTS } from "../constants";
+import { PROVINCES, SEGMENTS } from "../constants";
 import {
   BUYER_ID_RE, EXPIRING_KINDS, EXPIRING_WINDOWS, ORG_ID_RE, SEGMENT_RE, isExpiringRow, isExpiringWindow, loadExpiringIndex, loadExpiringPage,
   loadExpiringWindow, loadStats, type ExpiringKind, type ExpiringPart, type ExpiringRow, type ExpiringWindow, type ExpiringWindowIndex,
   type Stats,
 } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, fmtMoneyShort, numberLocale, pick, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
+import { fmtInt, fmtMoneyShort, numberLocale, pick, provinceName, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, addDays, noDataPage, notFoundPage, page, PageHead, Panel, todayOf, varyOnCookie } from "../layout";
 import { DEEP_WINDOWS, radarWindowLocked, requestPlan } from "../plan";
 import { dollars, num, orgIdOf, orgNumber } from "../records_db";
@@ -125,6 +126,11 @@ export interface ExpiringQuery {
   // The organization (an id) and the client department (a buyer id).
   supplier: string;
   client: string;
+  // A province's code, or "" for none; derived: whether a province derived
+  // from another field (pipeline places.py) counts beside the stated ones,
+  // on unless the address says derived=0, as on the tender list.
+  province: string;
+  derived: boolean;
   // Whether contracts ending on March 31 and standing offers and supply
   // arrangements stay in the list: on unless the address says fye=0 or sosa=0.
   fye: boolean;
@@ -171,6 +177,7 @@ export function readExpiringQuery(url: URL): ExpiringQuery {
   const kind = get("kind").toLowerCase();
   const supplier = get("supplier").toLowerCase();
   const client = get("client").toLowerCase();
+  const province = get("province").toUpperCase();
   // The form sends 0 from a hidden field and 1 from a ticked box, so a 1 or
   // no value at all keeps the rows in.
   const kept = (k: string) => {
@@ -187,30 +194,35 @@ export function readExpiringQuery(url: URL): ExpiringQuery {
     kind: (EXPIRING_KINDS as readonly string[]).includes(kind) ? (kind as ExpiringKind) : "",
     supplier: ORG_ID_RE.test(supplier) ? supplier : "",
     client: BUYER_ID_RE.test(client) && client.length <= 80 ? client : "",
+    province: (PROVINCES as readonly string[]).includes(province) ? province : "",
+    derived: kept("derived"),
     sort: RADAR_ORDERS.find((o) => o[0] === get("sort").toLowerCase())?.[0] ?? "",
   };
 }
 
-const FILTER_KEYS = ["buyer", "client", "supplier", "segment", "competitive", "value", "kind"] as const;
+const FILTER_KEYS = ["buyer", "client", "supplier", "segment", "province", "competitive", "value", "kind"] as const;
 // The toolbar's name for each filter, on its chip.
 const FILTER_LABEL: Record<(typeof FILTER_KEYS)[number], Key> = {
   buyer: "tenders.filter_buyer", segment: "tenders.filter_segment", competitive: "col.method", value: "expiring.filter_value", kind: "col.source",
-  supplier: "col.supplier", client: "col.client",
+  supplier: "col.supplier", client: "col.client", province: "col.province",
 };
 
 // A window with nothing filtered: what a bare /expiring/<window> reads as.
 const NO_FILTERS: ExpiringQuery = {
-  buyer: "", segment: "", competitive: "", value: "", kind: "", supplier: "", client: "", fye: true, sosa: true, sort: "",
+  buyer: "", segment: "", competitive: "", value: "", kind: "", supplier: "", client: "", province: "", derived: true, fye: true, sosa: true,
+  sort: "",
 };
 
 export function isFiltered(q: ExpiringQuery): boolean {
   return FILTER_KEYS.some((k) => q[k] !== "") || !q.fye || !q.sosa;
 }
 
-// The URL of a view: only the values set, in a fixed order, then the page.
+// The URL of a view: only the values set, in a fixed order, then the page;
+// derived=0 only beside a province, where it changes the list.
 export function expiringQueryString(q: ExpiringQuery, pageNo = 1): string {
   const p = new URLSearchParams();
   for (const k of FILTER_KEYS) if (q[k]) p.set(k, q[k]);
+  if (q.province && !q.derived) p.set("derived", "0");
   if (!q.fye) p.set("fye", "0");
   if (!q.sosa) p.set("sosa", "0");
   if (q.sort) p.set("sort", q.sort);
@@ -294,10 +306,18 @@ export function orderExpiring(rows: readonly ExpiringRow[], order: RadarOrder): 
   return soonest;
 }
 
+// The provinces a row is filed under: the ones its source states, and the
+// ones derived from another field unless the filter leaves those out (the
+// same rows rec_expiring_prov holds for the records database's statements).
+export function rowProvinces(r: Pick<ExpiringRow, "provinces" | "provinces_derived">, derived: boolean): string[] {
+  return derived && r.provinces_derived ? [...r.provinces, ...r.provinces_derived] : r.provinces;
+}
+
 export function filterExpiring(rows: readonly ExpiringRow[], q: ExpiringQuery): ExpiringRow[] {
   return rows.filter((r) => {
     if (q.buyer && r.buyer_id !== q.buyer) return false;
     if (q.segment && !r.segments.includes(q.segment)) return false;
+    if (q.province && !rowProvinces(r, q.derived).includes(q.province)) return false;
     if (q.competitive && competitiveOfRow(r) !== q.competitive) return false;
     if (q.value && valueBand(r) !== q.value) return false;
     if (q.kind && r.kind !== q.kind) return false;
@@ -699,6 +719,10 @@ function options(rows: readonly ExpiringRow[], q: ExpiringQuery, lang: Lang) {
     ).sort(byLabel),
     segment: tally(rows.flatMap((r) => r.segments.map((s): [string, string] => [s, `${s} ${segmentLabel(lang, s)}`])), q.segment, (v) => `${v} ${segmentLabel(lang, v)}`)
       .sort((a, b) => a.value.localeCompare(b.value)),
+    // Every province in PROVINCES order, a row counted in each it is filed under.
+    province: PROVINCES.map((p): Option => ({
+      value: p, label: provinceName(lang, p), n: rows.filter((r) => rowProvinces(r, q.derived).includes(p)).length,
+    })),
     competitive: fixed(COMPETITIVE_FILTERS, (v) => t(lang, COMPETITIVE_LABEL[v]), competitiveOfRow),
     value: fixed(VALUE_BANDS, (v) => t(lang, BAND_LABEL[v]), valueBand),
     kind: fixed(EXPIRING_KINDS, (v) => sourceLabel(lang, KIND_SOURCE[v]), (r) => r.kind),
@@ -732,7 +756,7 @@ export function radarParams(window: ExpiringWindow, today: string, q: ExpiringQu
     first: today, last: addDays(today, WINDOW_DAYS[window]), buyer: q.buyer, client: q.client,
     oid: q.supplier ? orgNumber(q.supplier) ?? -1 : -1, segment: q.segment,
     comp: q.competitive ? COMP_NUMBER[q.competitive] : -1, band: q.value ? BAND_CENTS[q.value] : null,
-    kind: q.kind ? KIND_NUMBER[q.kind] : 0, fye: q.fye, sosa: q.sosa,
+    kind: q.kind ? KIND_NUMBER[q.kind] : 0, fye: q.fye, sosa: q.sosa, prov: q.province, derived: q.derived,
   };
 }
 
@@ -753,11 +777,15 @@ export function radarRow(r: Row, today: string): ExpiringRow | null {
   return isExpiringRow(out) ? out : null;
 }
 
-type Whole = { rows: ExpiringRow[]; n: number; total: number | null; noValue: number; opts: ReturnType<typeof options> };
+// noProvinces: the view named a province and the records database does not
+// hold the province table yet, so the matches are the window's without it.
+type Whole = { rows: ExpiringRow[]; n: number; total: number | null; noValue: number; opts: ReturnType<typeof options>; noProvinces: boolean };
 
 // The form's choices from the whole window: the buyers, clients and
 // organizations the window names, and the window's counts by flag, source,
-// band and mark; the segments are the ones the page's rows carry.
+// band and mark; the segments are the ones the page's rows carry, and the
+// provinces every one, without a count (counting them would read the
+// province table for every view, filtered or not).
 function wholeOptions(read: Extract<Read, { state: "ready" }>, page: ReturnType<typeof options>, q: ExpiringQuery, lang: Lang) {
   const [facetRows, buyerRows, clientRows, supplierRows] = read.rows.slice(2, 6);
   const f = facetRows?.[0] ?? {};
@@ -781,6 +809,7 @@ function wholeOptions(read: Extract<Read, { state: "ready" }>, page: ReturnType<
     client: named(clientRows, q.client),
     supplier: suppliers,
     segment: page.segment.map((o) => ({ ...o, n: null })),
+    province: page.province.map((o) => ({ ...o, n: null })),
     competitive: COMPETITIVE_FILTERS.map((v) => ({ value: v, label: t(lang, COMPETITIVE_LABEL[v]), n: count(`c${COMP_NUMBER[v]}`) })),
     value: VALUE_BANDS.map((v, i) => ({ value: v, label: t(lang, BAND_LABEL[v]), n: count(`b${i + 1}`) })),
     kind: EXPIRING_KINDS.map((v) => ({ value: v, label: sourceLabel(lang, KIND_SOURCE[v]), n: count(`k${KIND_NUMBER[v]}`) })),
@@ -800,7 +829,7 @@ async function wholeWindow(c: Context<AppEnv>, window: ExpiringWindow, today: st
   return {
     rows: (read.rows[0] ?? []).map((r) => radarRow(r, today)).filter((r): r is ExpiringRow => r !== null),
     n: num(total.n) ?? 0, total: dollars(total.cents), noValue: num(total.n_no_value) ?? 0,
-    opts: wholeOptions(read, page, q, lang),
+    opts: wholeOptions(read, page, q, lang), noProvinces: !!read.noProvinces,
   };
 }
 
@@ -985,12 +1014,16 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   const months = t(lang, WINDOW_MONTHS[window]);
   const title = t(lang, WINDOW_TITLE[window]);
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "expiring.title"), path: "/expiring" }, { name: title }];
-  const prevPath = n > 1 ? `${path}${expiringQueryString(q, n - 1)}` : null;
-  const nextPath = n < pages ? `${path}${expiringQueryString(q, n + 1)}` : null;
+  // A province the records database cannot filter by yet (its nightly has
+  // not made rec_expiring_prov) is set aside: the matches are the window's
+  // without it, and the form, the chips and the links say the same.
+  const view: ExpiringQuery = whole?.noProvinces ? { ...q, province: "" } : q;
+  const prevPath = n > 1 ? `${path}${expiringQueryString(view, n - 1)}` : null;
+  const nextPath = n < pages ? `${path}${expiringQueryString(view, n + 1)}` : null;
   // A filtered, sorted or later view is a view of the window's first page.
   const noindex = viewOnly || c.req.query("page") !== undefined;
   const opts = whole ? whole.opts : viewOnly ? options(sorted, q, lang) : pageOpts;
-  const active = FILTER_KEYS.filter((k) => q[k]).length + (q.fye ? 0 : 1) + (q.sosa ? 0 : 1);
+  const active = FILTER_KEYS.filter((k) => view[k]).length + (view.fye ? 0 : 1) + (view.sosa ? 0 : 1);
   // Unfiltered, the phone pager counts the window's contracts and steps
   // through its server pages; over the whole window, the matches; filtered
   // within a page, the page's matches.
@@ -999,11 +1032,11 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
     : viewOnly ? undefined : {
       offset: (n - 1) * EXPIRING_PAGE_ROWS, total: idx.rows, prev: prevPath, next: nextPath, replaces: "radar-pager",
     };
-  const csvPath = `${path}/rows.csv${expiringQueryString(q)}`;
+  const csvPath = `${path}/rows.csv${expiringQueryString(view)}`;
   // The 3-month list's own rows are all in the free 3-month file.
   const csv: CsvWindow = window === "3m" ? "3m" : "12m";
   // The heads the window orders by, each a link to the same view in its next order, from the first page.
-  const sortHref = (v: string) => `${path}${expiringQueryString({ ...q, sort: v as RadarOrder })}`;
+  const sortHref = (v: string) => `${path}${expiringQueryString({ ...view, sort: v as RadarOrder })}`;
   const sorts = { end: headSort(RADAR_ORDERS, q.sort, "end", sortHref), value: headSort(RADAR_ORDERS, q.sort, "value", sortHref) };
 
   return page(
@@ -1016,13 +1049,28 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
       </>}>
       <WindowHead lang={lang} crumbs={crumbs} title={title} idx={idx} months={months} date={date} csv={csv} />
       <form method="get" action={path} class="toolbar">
-        <WindowLinks lang={lang} current={window} q={q} pro={accountsEnabled(c.env)} />
+        <WindowLinks lang={lang} current={window} q={view} pro={accountsEnabled(c.env)} />
         <FiltersFold lang={lang} active={active}>
         <div class="toolbar-fields">
           <Select name="buyer" label="tenders.filter_buyer" opts={opts.buyer} value={q.buyer} lang={lang} />
           <Select name="client" label="col.client" opts={opts.client} value={q.client} lang={lang} />
           <Select name="supplier" label="col.supplier" opts={opts.supplier} value={q.supplier} lang={lang} />
           <Select name="segment" label="tenders.filter_segment" opts={opts.segment} value={q.segment} lang={lang} />
+          {/* The province, as the tender list offers it, with its derived-provinces box; gone while
+              the records database cannot filter by it. */}
+          {whole?.noProvinces ? null : (
+            <>
+              <Select name="province" label="col.province" any="tenders.any_f" opts={opts.province} value={view.province} lang={lang} />
+              <div class="field field-check">
+                <span class="field-label" aria-hidden="true">&nbsp;</span>
+                <label class="check">
+                  <input type="hidden" name="derived" value="0" />
+                  <input type="checkbox" name="derived" value="1" checked={q.derived} />
+                  <span>{t(lang, "tenders.include_derived")}</span>
+                </label>
+              </div>
+            </>
+          )}
           <Select name="competitive" label="col.method" any="tenders.any_f" opts={opts.competitive} value={q.competitive} lang={lang} />
           <Select name="value" label="expiring.filter_value" any="tenders.any_f" opts={opts.value} value={q.value} lang={lang} />
           <Select name="kind" label="col.source" any="tenders.any_f" opts={opts.kind} value={q.kind} lang={lang} />
@@ -1058,20 +1106,20 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
         </div>
         <p class="toolbar-note">{t(lang, "expiring.band_note")}</p>
         </FiltersFold>
-        {filtered ? (
+        {isFiltered(view) ? (
           <div class="toolbar-chips">
             <span class="chips-label">{t(lang, "tenders.filters_active")}</span>
-            {FILTER_KEYS.filter((k) => q[k]).map((k) => {
-              const value = (opts[k] as Option[]).find((o) => o.value === q[k])?.label ?? q[k];
+            {FILTER_KEYS.filter((k) => view[k]).map((k) => {
+              const value = (opts[k] as Option[]).find((o) => o.value === view[k])?.label ?? view[k];
               return (
-                <a class="fchip" href={`${path}${expiringQueryString({ ...q, [k]: "" })}`} aria-label={t(lang, "tenders.remove_filter", { name: value })}>
+                <a class="fchip" href={`${path}${expiringQueryString({ ...view, [k]: "" })}`} aria-label={t(lang, "tenders.remove_filter", { name: value })}>
                   <span>{t(lang, FILTER_LABEL[k])}</span> <b>{value}</b>
                   <span class="fchip-x" aria-hidden="true">×</span>
                 </a>
               );
             })}
-            {([["fye", "expiring.chip_fye"], ["sosa", "expiring.chip_sosa"]] as const).filter(([k]) => !q[k]).map(([k, label]) => (
-              <a class="fchip" href={`${path}${expiringQueryString({ ...q, [k]: true })}`}
+            {([["fye", "expiring.chip_fye"], ["sosa", "expiring.chip_sosa"]] as const).filter(([k]) => !view[k]).map(([k, label]) => (
+              <a class="fchip" href={`${path}${expiringQueryString({ ...view, [k]: true })}`}
                 aria-label={t(lang, "tenders.remove_filter", { name: t(lang, label) })}>
                 <span>{t(lang, label)}</span> <b>{t(lang, "expiring.chip_left_out")}</b>
                 <span class="fchip-x" aria-hidden="true">×</span>
@@ -1100,6 +1148,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
               total: whole.total === null ? t(lang, "common.not_stated") : money(lang, whole.total),
             })}
             {whole.noValue ? <> {t(lang, "expiring.whole_no_value", { n: fmtInt(whole.noValue, lang) })}</> : null}
+            {whole.noProvinces ? <> {t(lang, "expiring.province_unavailable")}</> : null}
           </p>
         ) : viewOnly ? (
           <p class="muted small" aria-live="polite">

@@ -584,6 +584,11 @@ export interface Profile {
   // The corporate family the curated seed places it in; absent from older
   // exports and from a profile in no family. Read through profileFamily.
   family?: unknown;
+  // The names of the retired ids whose records it took, with the seed's
+  // note, and how many in all when the list stops; absent from older
+  // exports. Read through profileAliases.
+  aliases?: unknown;
+  aliases_total_rows?: unknown;
 }
 
 // -- corporate families ------------------------------------------------------------
@@ -598,6 +603,48 @@ export interface Family { name: string; members: FamilyMember[] }
 const isFamilyMember = (m: unknown): m is FamilyMember => isObj(m) && isStr(m.id) && ORG_ID_RE.test(m.id) &&
   isStr(m.display_name) && m.display_name.trim() !== "" && isNum(m.n_records) && Number.isInteger(m.n_records) && m.n_records >= 0 &&
   (m.note === undefined || isStrOrNull(m.note));
+
+// -- names it also appears under ---------------------------------------------------
+
+// The names of the retired ids whose records a profile took, as the export
+// writes them on the profile: `aliases`, a list of {id, name, note, reason}
+// (at most ALIASES_MAX, the ones with a note first), and `aliases_total_rows`
+// when there are more. note is the alias seed's word (organization_aliases.csv):
+// "spelling", "former", "short" or "branch"; null, or any other word, shows
+// the name alone. An export without the field has no names and the line
+// stays off.
+export const ALIAS_NOTES = ["former", "spelling", "short", "branch"] as const;
+export const ALIASES_MAX = 12;
+export type AliasNote = (typeof ALIAS_NOTES)[number];
+export interface OrgAlias { name: string; note: AliasNote | null }
+export interface OrgAliases { names: OrgAlias[]; more: number }
+
+// The names, once each (case and spacing aside) and never the profile's own
+// display name, in the export's order, at most ALIASES_MAX; more counts the
+// retired ids the list leaves out (aliases_total_rows past the list's length,
+// and any entry past ALIASES_MAX). A malformed entry is skipped rather than
+// taking the profile down, and a field that is not a list reads as none.
+export function profileAliases(profile: unknown): OrgAliases {
+  const v = isObj(profile) ? profile.aliases : undefined;
+  if (!Array.isArray(v)) return { names: [], more: 0 };
+  const own = isObj(profile) && isObj(profile.organization) && isStr(profile.organization.display_name)
+    ? fold(profile.organization.display_name) : "";
+  const seen = new Set<string>([own]);
+  const names: OrgAlias[] = [];
+  for (const a of v.slice(0, ALIASES_MAX)) {
+    if (!isObj(a) || !isStr(a.name)) continue;
+    const name = a.name.replace(/\s+/g, " ").trim();
+    const key = fold(name);
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    names.push({ name, note: (ALIAS_NOTES as readonly unknown[]).includes(a.note) ? (a.note as AliasNote) : null });
+  }
+  const total = isObj(profile) && isNum(profile.aliases_total_rows) && Number.isInteger(profile.aliases_total_rows)
+    ? profile.aliases_total_rows : v.length;
+  const listed = Math.min(v.length, ALIASES_MAX);
+  return { names, more: names.length ? Math.max(0, Math.max(total, v.length) - listed) : 0 };
+}
+const fold = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
 
 // The profile's family, or null: the profile renders without the section
 // when the export predates families, the profile is in none, or the field
@@ -1233,10 +1280,14 @@ export async function loadBuyerAlias(env: Env, id: string): Promise<string | nul
   return typeof live === "string" && BUYER_ID_RE.test(live) && live.length <= 80 && live !== id ? live : null;
 }
 
+// An entry is the live id as the export writes it; an object naming the id
+// as "to" (or "to_id") reads the same, so a shard written with more beside
+// the id keeps its redirects rather than sending the old links to a 404.
 export async function loadAlias(env: Env, id: string): Promise<string | null> {
   if (!ORG_ID_RE.test(id)) return null;
   const shard = await loadJson<Record<string, unknown>>(env, `aliases/${id.slice(4, 6)}.json`);
-  const live: unknown = isObj(shard) ? shard[id] : null;
+  const entry: unknown = isObj(shard) ? shard[id] : null;
+  const live: unknown = isObj(entry) ? entry.to ?? entry.to_id : entry;
   return typeof live === "string" && ORG_ID_RE.test(live) && live !== id ? live : null;
 }
 

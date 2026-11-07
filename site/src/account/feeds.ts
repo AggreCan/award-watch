@@ -47,8 +47,8 @@
 import { addDays } from "../../public/closing.js";
 import { closingPassed, type Clock } from "../closing";
 import {
-  type CalEvent, FEED_EVENTS_MAX, type MoreKind, UID_HOST, capped, contractEvent, detailFacts, expiringFacts, instrumentEvent, instrumentFacts,
-  noticeEvent, publishedFacts, writeCalendar,
+  type CalEvent, FEED_EVENTS_MAX, type MoreKind, UID_HOST, capped, cappedLength, contractEvent, detailFacts, expiringFacts, instrumentEvent,
+  instrumentFacts, noticeEvent, publishedFacts, writeCalendar,
 } from "../calendar";
 import { BUYER_ID_RE, loadContract, loadOpenList, type TenderRow } from "../data";
 import type { Env } from "../env";
@@ -353,11 +353,9 @@ export const INSTRUMENT_SLOTS = TARGET_SLOTS;
 // INSTRUMENT_DAYS later (?2): one row per instrument and holder organization,
 // the names of its regions gathered (char(31) between them), soonest expiry
 // first, at most FEED_EVENTS_MAX rows, COUNT(*) OVER () counting every match
-// so the cap's last event can say how many more. rec_holders has no index by
-// organization and rec_instruments none by expiry, so the statement reads
-// rec_instruments whole (a few thousand rows; CROSS JOIN keeps it the outer
-// table) and the holders of each instrument in the window through
-// rec_holders_instrument.
+// so the cap's last event can say how many more. rec_instruments_expiry
+// narrows the instruments to the window (CROSS JOIN keeps them the outer
+// table) and the holders of each come through rec_holders_instrument.
 export const WATCH_INSTRUMENTS_SQL =
   "SELECT i.agr, i.type_en, i.type_fr, i.desc_en, i.desc_fr, i.user_en, i.user_fr, i.start, i.expiry, i.n, h.oid, " +
   "MIN(h.name) AS name, group_concat(COALESCE(h.region_en, h.region), char(31)) AS regions_en, " +
@@ -497,7 +495,7 @@ export async function feedEvents(env: Env, feed: Pick<FeedState, "kind" | "searc
 export async function feedSize(env: Env, feed: Pick<FeedState, "kind" | "searches" | "watches">, ctx: EventContext): Promise<number | null> {
   try {
     const { events, beyond } = await feedEvents(env, feed, ctx);
-    return Math.min(events.length + beyond, FEED_EVENTS_MAX);
+    return cappedLength(events.length, beyond);
   } catch {
     return null;
   }

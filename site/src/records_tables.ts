@@ -96,9 +96,36 @@ const RADAR_ORDER: Record<RadarSort, Record<SortDir, { rows: string; csv: string
   end: { asc: { rows: RADAR_ROWS_END_SQL, csv: RADAR_CSV_END_SQL }, desc: { rows: RADAR_ROWS_END_DESC_SQL, csv: RADAR_CSV_END_DESC_SQL } },
   value: { desc: { rows: RADAR_ROWS_VALUE_SQL, csv: RADAR_CSV_VALUE_SQL }, asc: { rows: RADAR_ROWS_VALUE_ASC_SQL, csv: RADAR_CSV_VALUE_ASC_SQL } },
 };
-const radarOrder = (sort: RadarSort, dir?: SortDir) => RADAR_ORDER[sort][dir ?? (sort === "value" ? "desc" : "asc")];
 // How many match, what their counted values add up to, and how many have no value.
 export const RADAR_TOTAL_SQL = `SELECT COUNT(*) AS n, SUM(cents) AS cents, SUM(nv) AS n_no_value FROM rec_expiring WHERE ${RADAR_WHERE} LIMIT 1`;
+
+// The province filter. rec_expiring_prov holds one row per row of the window
+// (k, rec_expiring.k) and province (prov, a two-letter code), derived 0 when
+// the source states the province and 1 when the pipeline derived it from
+// another field (places.py), indexed on (prov, k). ?13 the province's code;
+// ?14 1 to count a derived province too (the tender list's "Include derived
+// provinces"), 0 for the stated ones alone. The window's rows join it by key
+// through that index, as a set, so a row holding the province both ways is
+// one row; every other condition and the LIMIT stay the window's. Only a view
+// that names a province reads these statements, so a records database whose
+// nightly has not made the table yet answers every other view as before.
+const RADAR_PROV_WHERE = `${RADAR_WHERE} AND k IN (SELECT k FROM rec_expiring_prov WHERE prov = ?13 AND derived <= ?14)`;
+// ?15 the offset of a page.
+const provRows = (order: string) => `SELECT endd, j FROM rec_expiring WHERE ${RADAR_PROV_WHERE} ${order} LIMIT ${RADAR_PAGE_ROWS} OFFSET ?15`;
+const provCsv = (order: string) => `SELECT endd, j FROM rec_expiring WHERE ${RADAR_PROV_WHERE} ${order} LIMIT ${RADAR_CSV_MAX}`;
+export const RADAR_PROV_ROWS_END_SQL = provRows(BY_END);
+export const RADAR_PROV_TOTAL_SQL = `SELECT COUNT(*) AS n, SUM(cents) AS cents, SUM(nv) AS n_no_value FROM rec_expiring WHERE ${RADAR_PROV_WHERE} LIMIT 1`;
+const RADAR_PROV_ORDER: Record<RadarSort, Record<SortDir, { rows: string; csv: string }>> = {
+  end: { asc: { rows: RADAR_PROV_ROWS_END_SQL, csv: provCsv(BY_END) }, desc: { rows: provRows(BY_END_DESC), csv: provCsv(BY_END_DESC) } },
+  value: { desc: { rows: provRows(BY_VALUE), csv: provCsv(BY_VALUE) }, asc: { rows: provRows(BY_VALUE_ASC), csv: provCsv(BY_VALUE_ASC) } },
+};
+// Every province statement, for the tests that read their plans and their bounds.
+export const RADAR_PROV_SQL: readonly string[] = [
+  RADAR_PROV_TOTAL_SQL, ...Object.values(RADAR_PROV_ORDER).flatMap((o) => Object.values(o).flatMap((s) => [s.rows, s.csv])),
+];
+
+const radarOrder = (sort: RadarSort, dir?: SortDir, prov = false) =>
+  (prov ? RADAR_PROV_ORDER : RADAR_ORDER)[sort][dir ?? (sort === "value" ? "desc" : "asc")];
 
 // The window's own counts for the form's choices (?1 ?2 the window), the
 // filters set aside: by competitive flag, source, value band (the bands of
@@ -123,9 +150,11 @@ export const RADAR_SUPPLIERS_SQL =
   `WHERE endd BETWEEN ?1 AND ?2 AND oid IS NOT NULL GROUP BY oid ORDER BY cents DESC, n DESC, oid LIMIT ${RADAR_OPTIONS_MAX}) e ` +
   `LEFT JOIN rec_orgs o ON o.oid = e.oid ORDER BY e.cents DESC, e.n DESC, e.oid LIMIT ${RADAR_OPTIONS_MAX}`;
 
+// prov: a province's code, or '' (or absent) for none; derived: whether a
+// province derived from another field counts, as on the tender list.
 export interface RadarParams {
   first: string; last: string; buyer: string; client: string; oid: number; segment: string; comp: number;
-  band: [number, number] | null; kind: number; fye: boolean; sosa: boolean;
+  band: [number, number] | null; kind: number; fye: boolean; sosa: boolean; prov?: string; derived?: boolean;
 }
 
 export function radarBinds(p: RadarParams): (string | number)[] {
@@ -133,23 +162,42 @@ export function radarBinds(p: RadarParams): (string | number)[] {
     p.band ? p.band[1] : -1, p.kind, p.fye ? 1 : 0, p.sosa ? 1 : 0];
 }
 
-// One batch: the state row, the page of matches, their count and total, and the form's choices.
-export function readRadar(env: Env, p: RadarParams, sort: RadarSort, offset: number, dir?: SortDir): Promise<Read> {
-  const binds = radarBinds(p);
-  const span = [p.first, p.last];
-  const queries: Query[] = [
-    { sql: radarOrder(sort, dir).rows, params: [...binds, offset] },
-    { sql: RADAR_TOTAL_SQL, params: binds },
-    { sql: RADAR_FACETS_SQL, params: span },
-    { sql: RADAR_BUYERS_SQL, params: span },
-    { sql: RADAR_CLIENTS_SQL, params: span },
-    { sql: RADAR_SUPPLIERS_SQL, params: span },
-  ];
-  return readRecords(env, queries);
+// The binds of the province statements: the window's, then ?13 and ?14.
+export function radarProvBinds(p: RadarParams): (string | number)[] {
+  return [...radarBinds(p), p.prov ?? "", p.derived === false ? 0 : 1];
 }
 
-export function readRadarCsv(env: Env, p: RadarParams, sort: RadarSort, dir?: SortDir): Promise<Read> {
-  return readRecords(env, [{ sql: radarOrder(sort, dir).csv, params: radarBinds(p) }]);
+// A read of the window; noProvinces when the view named a province and the
+// records database does not hold rec_expiring_prov yet, so the read was made
+// again without it (the province set aside, as a missing table elsewhere
+// degrades to the page without what it holds).
+export type RadarRead = Read & { noProvinces?: true };
+
+async function withoutMissingProvinces(env: Env, p: RadarParams, queries: (prov: boolean) => Query[]): Promise<RadarRead> {
+  const prov = !!p.prov;
+  const read = await readRecords(env, queries(prov));
+  if (!prov || read.state !== "failed" || !read.noTable) return read;
+  return { ...(await readRecords(env, queries(false))), noProvinces: true };
+}
+
+// One batch: the state row, the page of matches, their count and total, and the form's choices.
+export function readRadar(env: Env, p: RadarParams, sort: RadarSort, offset: number, dir?: SortDir): Promise<RadarRead> {
+  const span = [p.first, p.last];
+  return withoutMissingProvinces(env, p, (prov) => {
+    const binds = prov ? radarProvBinds(p) : radarBinds(p);
+    return [
+      { sql: radarOrder(sort, dir, prov).rows, params: [...binds, offset] },
+      { sql: prov ? RADAR_PROV_TOTAL_SQL : RADAR_TOTAL_SQL, params: binds },
+      { sql: RADAR_FACETS_SQL, params: span },
+      { sql: RADAR_BUYERS_SQL, params: span },
+      { sql: RADAR_CLIENTS_SQL, params: span },
+      { sql: RADAR_SUPPLIERS_SQL, params: span },
+    ];
+  });
+}
+
+export function readRadarCsv(env: Env, p: RadarParams, sort: RadarSort, dir?: SortDir): Promise<RadarRead> {
+  return withoutMissingProvinces(env, p, (prov) => [{ sql: radarOrder(sort, dir, prov).csv, params: prov ? radarProvBinds(p) : radarBinds(p) }]);
 }
 
 // -- the record tables of a profile and a buyer (pages/records.tsx) --------------------
@@ -331,7 +379,7 @@ export const TABLE_SQL: readonly string[] = [
   PUBLISHED_CONTRACT_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
   RADAR_ROWS_END_DESC_SQL, RADAR_ROWS_VALUE_ASC_SQL, RADAR_CSV_END_DESC_SQL, RADAR_CSV_VALUE_ASC_SQL,
   RADAR_FACETS_SQL, RADAR_BUYERS_SQL, RADAR_CLIENTS_SQL, RADAR_SUPPLIERS_SQL,
-  ...Object.values(RECORDS_SQL.organization), ...Object.values(RECORDS_SQL.buyer),
+  ...Object.values(RECORDS_SQL.organization), ...Object.values(RECORDS_SQL.buyer), ...RADAR_PROV_SQL,
 ];
 
 export type { Query, Read, Row };

@@ -13,7 +13,10 @@ import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
 import { Table, restClass } from "../columns";
 import { MONEY_SOURCES, PROVINCES, type MoneySource, type SourceKey } from "../constants";
 import { buyerPath, directoryCode, directoryPath, loadDirectories } from "../crosslinks";
-import { type Family, loadAlias, loadProfile, loadStats, profileFamily, sourceLoaded, type Profile, type YearFigure } from "../data";
+import {
+  type AliasNote, type Family, type OrgAliases, loadAlias, loadProfile, loadStats, profileAliases, profileFamily, sourceLoaded, type Profile,
+  type YearFigure,
+} from "../data";
 import type { AppEnv } from "../env";
 import {
   fmtInt, fmtMoney, fmtMoneyShort, pick, provinceName, sourceLabel, t, tj, tn, type Key, type Lang,
@@ -21,6 +24,9 @@ import {
 import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { organizationSeo } from "../seo";
 import { ExpiringSection, MoreInWindow } from "./expiring";
+import {
+  PUBLISHED_CORRECTIONS_OLD_SQL, PUBLISHED_CORRECTIONS_SQL, type PublishedCorrection, correctionsColumnMissing, publicCorrections,
+} from "./forms";
 import { InterestPanel, interestFilter } from "./interest";
 import {
   AnalyticsLink, AwardTable, BuyerLink, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, contractPath, contractSearchUrl, datasetUrl,
@@ -105,25 +111,61 @@ const YearChart: FC<{ lang: Lang; years: readonly YearFigure[] }> = ({ lang, yea
 };
 
 interface ResponseRow { submitted_at: string; text: string }
-interface CorrectionRow { submitted_at: string; page: string | null; text: string }
 
-// The published responses and corrections from the forms database. A storage
-// failure reads as none: the profile renders from the static files alone.
-async function siteRows(c: Context<AppEnv>, id: string): Promise<{ responses: ResponseRow[]; corrections: CorrectionRow[] }> {
-  if (!c.env.DB) return { responses: [], corrections: [] };
+// The published responses and corrections from the forms database, merge
+// reports left out (forms.tsx publicCorrections). A database made before the
+// kind column answers the first batch with "no such column", and the second
+// reads without it. A storage failure reads as none: the profile renders
+// from the static files alone.
+async function siteRows(c: Context<AppEnv>, id: string): Promise<{ responses: ResponseRow[]; corrections: PublishedCorrection[] }> {
+  const db = c.env.DB;
+  if (!db) return { responses: [], corrections: [] };
+  const read = (corrections: string) => db.batch([
+    db.prepare("SELECT submitted_at, text FROM organization_responses WHERE organization_id = ? AND published = 1 ORDER BY submitted_at DESC").bind(id),
+    db.prepare(corrections).bind(id),
+  ]);
   try {
-    const [responses, corrections] = await c.env.DB.batch([
-      c.env.DB.prepare("SELECT submitted_at, text FROM organization_responses WHERE organization_id = ? AND published = 1 ORDER BY submitted_at DESC").bind(id),
-      c.env.DB.prepare("SELECT submitted_at, page, text FROM corrections WHERE organization_id = ? AND published = 1 ORDER BY submitted_at DESC").bind(id),
-    ]);
+    let results: D1Result[];
+    try {
+      results = await read(PUBLISHED_CORRECTIONS_SQL);
+    } catch (e) {
+      if (!correctionsColumnMissing(e)) throw e;
+      results = await read(PUBLISHED_CORRECTIONS_OLD_SQL);
+    }
+    const [responses, corrections] = results;
     return {
       responses: (responses.results ?? []) as unknown as ResponseRow[],
-      corrections: (corrections.results ?? []) as unknown as CorrectionRow[],
+      corrections: publicCorrections((corrections.results ?? []) as Record<string, unknown>[]),
     };
   } catch {
     return { responses: [], corrections: [] };
   }
 }
+
+// The names of the retired ids whose records the profile took, each with the
+// seed's word for the tie (data.ts profileAliases), as many as the export
+// lists and how many more it counts. Nothing when the export carries no name.
+const ALIAS_NOTE: Record<AliasNote, Key> = {
+  former: "org.alias_former", spelling: "org.alias_spelling", short: "org.alias_short", branch: "org.alias_branch",
+};
+
+export const AlsoAppearsAs: FC<{ lang: Lang; aliases: OrgAliases }> = ({ lang, aliases }) => {
+  const { names: shown, more } = aliases;
+  if (!shown.length) return null;
+  return (
+    <p class="page-note org-aliases">
+      {t(lang, "org.also_appears")}{" "}
+      {shown.map((a, i) => (
+        <>
+          {i ? "; " : null}
+          <span>{a.name}</span>
+          {a.note ? <span class="muted"> ({t(lang, ALIAS_NOTE[a.note])})</span> : null}
+        </>
+      ))}
+      {more > 0 ? <span class="muted">{"; "}{t(lang, "org.also_appears_more", { n: fmtInt(more, lang) })}</span> : null}
+    </p>
+  );
+};
 
 // A retired organization id redirects to the id that took its records, so old
 // links and bookmarks still reach the profile. Only the language query is
@@ -287,7 +329,11 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
     { name: directoryName(lang, dirCode), path: dirListed ? directoryPath(dirCode) : undefined },
     { name: o.display_name },
   ];
-  const otherNames = [...new Set(profile.names.map((n) => n.name).filter((n) => n !== o.display_name))];
+  // A retired id's name is listed once, in "Also appears as" with its note,
+  // not again among the spellings its records carry.
+  const aliases = profileAliases(profile);
+  const aliasNames = new Set(aliases.names.map((a) => a.name.toLowerCase()));
+  const otherNames = [...new Set(profile.names.map((n) => n.name).filter((n) => n !== o.display_name && !aliasNames.has(n.toLowerCase())))];
   const places = mergedPlaces(profile.places);
   const placeCount = addressCount(profile.places, profile.places_total_rows);
   const counts: Record<SourceKey, number> = {
@@ -477,6 +523,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           <a href={`/data/feeds/organizations/${o.id}.xml`} class="btn" rel="nofollow">{t(lang, "orgfeed.button")}</a>
         </>}>
         {otherNames.length ? <p class="page-note">{t(lang, "org.also_recorded")} {otherNames.join(" · ")}</p> : null}
+        <AlsoAppearsAs lang={lang} aliases={aliases} />
         <p class="page-note">
           {t(lang, "org.seen", { first: o.first_seen ?? t(lang, "common.na"), last: o.last_seen ?? t(lang, "common.na") })}
           {o.business_number ? ` ${t(lang, "org.business_number", { bn: o.business_number })}` : ""}

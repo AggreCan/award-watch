@@ -11,7 +11,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { addDays } from "../public/closing.js";
 import { closesAtUtc } from "../src/closing";
 import {
-  type CalEvent, FEED_EVENTS_MAX, capped, contractEvent, escapeText, foldLine, noticeEvent, writeCalendar,
+  type CalEvent, FEED_EVENTS_MAX, capped, cappedLength, contractEvent, escapeText, foldLine, noticeEvent, writeCalendar,
 } from "../src/calendar";
 import {
   ENDS_SLOTS, type FeedRow, INSTRUMENT_DAYS, INSTRUMENT_SLOTS, WATCH_ENDS_SQL, WATCH_INSTRUMENTS_SQL, endsBinds, forgetFeeds, instrumentBinds,
@@ -151,6 +151,47 @@ describe("the file's format", () => {
     expect(capped("fr", many, { uid: "more-x@awardwatch.ca", kind: "end", dataDate: "2026-10-31", url: BASE }).at(-1)!.summary)
       .toBe("Award Watch : 121 autres dates de fin, voir le site");
     expect(capped("en", many.slice(0, 500), { uid: "m", kind: "closing", dataDate: "2026-10-31", url: BASE })).toHaveLength(500);
+  });
+
+  it("says the true remainder at the cap's edge: exactly the cap, one more, and rows left unread beside fewer given", () => {
+    const given = (n: number): CalEvent[] => Array.from({ length: n }, (_, i) => ({
+      uid: `contract-award-e${String(i).padStart(4, "0")}@awardwatch.ca`, sequence: 0, start: { day: addDays("2026-11-01", Math.floor(i / 2)) },
+      summary: `Ends: ${i}`, description: "", url: `${BASE}/awards/e${i}`, categories: ["Award Watch"],
+    }));
+    const more = (beyond = 0) => ({ uid: "more-x@awardwatch.ca", kind: "end" as const, dataDate: "2026-10-31", url: `${BASE}/account/watches`, beyond });
+    const capEvent = (list: CalEvent[]) => list.filter((e) => e.uid === "more-x@awardwatch.ca");
+    // Exactly FEED_EVENTS_MAX, none unread: every one, and no cap event.
+    const exact = capped("en", given(FEED_EVENTS_MAX), more());
+    expect(exact).toHaveLength(FEED_EVENTS_MAX);
+    expect(capEvent(exact)).toEqual([]);
+    expect(cappedLength(FEED_EVENTS_MAX, 0)).toBe(FEED_EVENTS_MAX);
+    // One more: 499 kept and 2 left out (the one past the cap and the one the cap event takes the place of).
+    const over = capped("en", given(FEED_EVENTS_MAX + 1), more());
+    expect(over).toHaveLength(FEED_EVENTS_MAX);
+    expect(capEvent(over).map((e) => [e.summary, e.description])).toEqual([[
+      "Award Watch: 2 more end dates, see the site",
+      `This feed holds the ${FEED_EVENTS_MAX - 1} soonest dates. The rest are on the site: ${BASE}/account/watches`,
+    ]]);
+    expect(over.at(-2)!.summary).toBe(`Ends: ${FEED_EVENTS_MAX - 2}`);
+    expect(cappedLength(FEED_EVENTS_MAX + 1, 0)).toBe(FEED_EVENTS_MAX);
+    // A statement that hit its LIMIT with one row unread, and one row read that added no event (the same UID as a
+    // followed record's, or a row that does not parse): 499 given and 1 unread. The file still says the one is left out.
+    const edge = capped("en", given(FEED_EVENTS_MAX - 1), more(1));
+    expect(edge).toHaveLength(FEED_EVENTS_MAX);
+    expect(capEvent(edge)[0].summary).toBe("Award Watch: 1 more end date, see the site");
+    expect(nbsp(capped("fr", given(FEED_EVENTS_MAX - 1), more(1)).at(-1)!.summary)).toBe("Award Watch : 1 autre date de fin, voir le site");
+    expect(cappedLength(FEED_EVENTS_MAX - 1, 1)).toBe(FEED_EVENTS_MAX);
+    // Fewer given than the cap with rows unread: every given one kept, the description naming how many.
+    const few = capped("en", given(300), more(50));
+    expect(few).toHaveLength(301);
+    expect(capEvent(few).map((e) => [e.summary, e.description])).toEqual([[
+      "Award Watch: 50 more end dates, see the site", `This feed holds the 300 soonest dates. The rest are on the site: ${BASE}/account/watches`,
+    ]]);
+    expect(cappedLength(300, 50)).toBe(301);
+    // Far over: the cap's count is everything given or unread less the 499 kept.
+    expect(capEvent(capped("en", given(700), more(80)))[0].summary).toBe(`Award Watch: ${700 + 80 - (FEED_EVENTS_MAX - 1)} more end dates, see the site`);
+    expect(cappedLength(700, 80)).toBe(FEED_EVENTS_MAX);
+    expect(cappedLength(0, 0)).toBe(0);
   });
 
   it("cuts a description at 1,000 characters", () => {
@@ -864,6 +905,73 @@ describe("the watches' feed", () => {
     expect(last.startDate.toString()).toBe(DAY);
     expect(last.description).toBe(`This feed holds the 499 soonest dates. The rest are on the site: ${LOCAL}/account/watches`);
     expect(await (await get("/account/watches", { cookie: a.cookie })).text()).toContain("500 events today");
+  });
+
+  it("holds exactly FEED_EVENTS_MAX radar rows whole, and cuts one more to 499 and a cap counting 2", async () => {
+    const a = await proAccount("wfeed-edge", []);
+    await follow(a.user, "buyer", "dfo-mpo");
+    const feed = await watchFeed(a);
+    const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ k: 3000 + i, end: addDays(DAY, 1 + (i % 300)), title: `Hull ${i}`, oid: ORG_B, buyer: "dfo-mpo" }));
+    await radar(rows(FEED_EVENTS_MAX));
+    const exact = events(wellFormed(await (await get(feedPath(feed))).text()));
+    expect(exact).toHaveLength(FEED_EVENTS_MAX);
+    expect(exact.filter((e) => e.uid.startsWith("more-"))).toEqual([]);
+    expect(await (await get("/account/watches", { cookie: a.cookie })).text()).toContain(`${FEED_EVENTS_MAX} events today`);
+    // The statement reads FEED_EVENTS_MAX rows and counts 501: one unread, so 499 kept and 2 out of the file.
+    await radar(rows(FEED_EVENTS_MAX + 1));
+    const over = events(wellFormed(await (await get(feedPath(feed))).text()));
+    expect(over).toHaveLength(FEED_EVENTS_MAX);
+    expect(over.at(-1)!.summary).toBe("Award Watch: 2 more end dates, see the site");
+    expect(over.filter((e) => e.uid.startsWith("contract-"))).toHaveLength(FEED_EVENTS_MAX - 1);
+    expect(await (await get("/account/watches", { cookie: a.cookie })).text()).toContain(`${FEED_EVENTS_MAX} events today`);
+  });
+
+  it("counts the instruments statement's own rows by instrument and holder, not by holder row, at the cap's edge", async () => {
+    // A holder with no other instrument, in two regions of each: two rec_holders rows, one group, one event per instrument.
+    const HOLDER = "org-c000000777";
+    const fill = async (from: number, to: number) => {
+      const stmts: D1PreparedStatement[] = [];
+      for (let i = from; i < to; i++) {
+        stmts.push(
+          RECORDS.prepare("INSERT INTO rec_instruments (k, agr, type_en, start, expiry, n, nw) VALUES (?, ?, 'Supply Arrangement', '2024-04-01', ?, 2, 0)")
+            .bind(50_000 + i, `EDGE-${String(i).padStart(4, "0")}`, addDays(DAY, 1 + (i % 150))),
+          ...["BC", "AB"].map((region, r) => RECORDS.prepare(
+            "INSERT INTO rec_holders (k, ik, oid, name, region, region_en, region_fr, seen) VALUES (?, ?, ?, 'Edge Holder Ltd.', ?, ?, ?, '2026-10-30')",
+          ).bind(60_000 + 2 * i + r, 50_000 + i, orgNumber(HOLDER), region, region, region)),
+        );
+      }
+      for (let i = 0; i < stmts.length; i += 100) await RECORDS.batch(stmts.slice(i, i + 100));
+    };
+    const clear = () => RECORDS.batch([
+      RECORDS.prepare("DELETE FROM rec_holders WHERE k >= 60000"), RECORDS.prepare("DELETE FROM rec_instruments WHERE k >= 50000"),
+    ]);
+    await clear();
+    try {
+      await radar([]);
+      const a = await proAccount("wfeed-inst-edge", []);
+      await follow(a.user, "organization", HOLDER, { events: "instrument_expires_6m" });
+      const feed = await watchFeed(a);
+      await fill(0, FEED_EVENTS_MAX);
+      // The statement's count is its groups: FEED_EVENTS_MAX of them, read whole.
+      const binds = instrumentBinds(DAY, [orgNumber(HOLDER)!]);
+      const read = (await RECORDS.prepare(WATCH_INSTRUMENTS_SQL).bind(...binds).all<{ total: number }>()).results;
+      expect(read).toHaveLength(FEED_EVENTS_MAX);
+      expect(read[0].total).toBe(FEED_EVENTS_MAX);
+      const exact = events(wellFormed(await (await get(feedPath(feed))).text()));
+      expect(exact).toHaveLength(FEED_EVENTS_MAX);
+      expect(exact.every((e) => e.uid.startsWith("instrument-"))).toBe(true);
+      // One more instrument: 1,002 holder rows, 501 groups, 500 read; 499 kept and the cap counting 2.
+      await fill(FEED_EVENTS_MAX, FEED_EVENTS_MAX + 1);
+      const more = (await RECORDS.prepare(WATCH_INSTRUMENTS_SQL).bind(...binds).all<{ total: number }>()).results;
+      expect(more).toHaveLength(FEED_EVENTS_MAX);
+      expect(more[0].total).toBe(FEED_EVENTS_MAX + 1);
+      const over = events(wellFormed(await (await get(feedPath(feed))).text()));
+      expect(over).toHaveLength(FEED_EVENTS_MAX);
+      expect(over.at(-1)!.summary).toBe("Award Watch: 2 more end dates, see the site");
+      expect(over.at(-1)!.description).toBe(`This feed holds the ${FEED_EVENTS_MAX - 1} soonest dates. The rest are on the site: ${LOCAL}/account/watches`);
+    } finally {
+      await clear();
+    }
   });
 
   it("answers 503, never an empty calendar, while the records database is not ready", async () => {

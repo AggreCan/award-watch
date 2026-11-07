@@ -275,10 +275,14 @@ export type Row = Record<string, unknown>;
 
 // "absent": no binding; "loading": a full reload is under way or the first
 // load never finished; "failed": a statement failed (no table, an outage).
-// The page answers each the same way, with what the reader can do.
+// The page answers each the same way, with what the reader can do. noTable
+// marks a failure for want of a table, so a reader of a table newer than the
+// nightly that makes it can read again without it.
 export type Read =
   | { state: "ready"; asOf: string | null; rows: Row[][] }
-  | { state: "absent" | "loading" | "failed" };
+  | { state: "absent" | "loading" | "failed"; noTable?: true };
+
+const noSuchTable = (e: unknown): boolean => /no such table/i.test(String((e as { message?: unknown })?.message ?? e));
 
 // The state row and the statements in one batch, so a view is one round trip
 // to D1. Nothing here throws.
@@ -290,7 +294,7 @@ export async function readRecords(env: Env, queries: readonly Query[]): Promise<
     results = await db.batch<Row>([db.prepare(STATE_SQL), ...queries.map((q) => db.prepare(q.sql).bind(...q.params))]);
   } catch (e) {
     console.error(`records: query failed (${faultSummary(e)})`);
-    return { state: "failed" };
+    return noSuchTable(e) ? { state: "failed", noTable: true } : { state: "failed" };
   }
   const meta = new Map((results[0]?.results ?? []).map((r) => [String(r.key), String(r.value)]));
   if (meta.get("state") !== "ready") return { state: "loading" };

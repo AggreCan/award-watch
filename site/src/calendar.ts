@@ -23,7 +23,7 @@
 import { addDays, closingInstant, closingParts } from "../public/closing.js";
 import { DAY_RE, publishedReference, type ContractDetail, type ExpiringKind, type ExpiringRow, type TenderRow } from "./data";
 import type { Env } from "./env";
-import { fmtInt, pick, segmentShort, sourceLabel, t, type Lang } from "./i18n";
+import { fmtInt, pick, segmentShort, sourceLabel, t, tn, type Key, type Lang } from "./i18n";
 import { instrumentPath } from "./instruments";
 import { KIND_SOURCE, contractReference, growthPct, sitePath } from "./pages/expiring";
 import { contractPath, money, provincesText, tenderNoticeUrl } from "./pages/shared";
@@ -476,25 +476,44 @@ export type MoreKind = "closing" | "end" | "dates";
 // reader matched but did not read, each one later than all of those given (a
 // watchlist feed reads the soonest FEED_EVENTS_MAX rows of the radar and
 // counts the rest), so the cap cuts them first.
+//
+// The cap event comes whenever events are left out: more given than the file
+// holds, or any matched and not read. The second can happen with fewer given
+// than the cap: a statement that hit its LIMIT gives FEED_EVENTS_MAX rows, but
+// one that is the same event as a followed record's (the same UID, kept once)
+// or that does not read as an event adds none, so the given and the unread
+// can sum to FEED_EVENTS_MAX or less and still leave rows out of the file.
+// The remainder is every event given or unread less the ones kept; the
+// description names how many are kept.
 export function capped(
   lang: Lang, events: readonly CalEvent[],
   more: { uid: string; kind: MoreKind; dataDate: string; url: string; beyond?: number },
 ): CalEvent[] {
   const sorted = soonestFirst(events);
   const beyond = Math.max(0, more.beyond ?? 0);
-  if (sorted.length + beyond <= FEED_EVENTS_MAX) return sorted;
+  if (beyond === 0 && sorted.length <= FEED_EVENTS_MAX) return sorted;
   const kept = sorted.slice(0, FEED_EVENTS_MAX - 1);
-  const n = fmtInt(sorted.length + beyond - kept.length, lang);
-  const key = more.kind === "closing" ? "cal.more_closing" : more.kind === "end" ? "cal.more_end" : "cal.more_dates";
+  const rest = sorted.length + beyond - kept.length;
+  const [one, many]: [Key, Key] = more.kind === "closing" ? ["cal.more_closing_one", "cal.more_closing"]
+    : more.kind === "end" ? ["cal.more_end_one", "cal.more_end"] : ["cal.more_dates_one", "cal.more_dates"];
+  const description = t(lang, "cal.more_text", { max: fmtInt(kept.length, lang), url: more.url });
   kept.push({
     uid: more.uid,
     // The day moves with each data date; the sequence rises with it.
     sequence: Math.round(Date.parse(`${more.dataDate}T00:00:00Z`) / 86_400_000) || 0,
     start: { day: more.dataDate },
-    summary: t(lang, key, { n }),
-    description: t(lang, "cal.more_text", { max: fmtInt(FEED_EVENTS_MAX - 1, lang), url: more.url }),
+    summary: tn(lang, one, many, rest, { n: fmtInt(rest, lang) }),
+    description,
     url: more.url,
     categories: [t(lang, "site.name")],
   });
   return kept;
+}
+
+// How many events the file capped() writes holds: all of them when they fit
+// and none was left unread, else the kept ones and the cap's own event. The
+// feed pages' "N events today" counts with it, so they agree with the file.
+export function cappedLength(given: number, beyond = 0): number {
+  if (beyond <= 0 && given <= FEED_EVENTS_MAX) return given;
+  return Math.min(given, FEED_EVENTS_MAX - 1) + 1;
 }
