@@ -911,7 +911,8 @@ describe("the console's figures", () => {
       { kind: "notice", buyer: "dnd-mdn", more: 5, ref: "count:notice:dnd-mdn", path: "/buyers/dnd-mdn" },
     ]);
     await runDeliveries(jobEnv(fakeMail().binding));
-    const ov = await watchOverview(onEnv() as never);
+    // The week is counted from the fixtures' clock, not the machine's: the runs above are stamped on the data date.
+    const ov = await watchOverview(onEnv() as never, new Date(`${DAY}T23:59:59Z`));
     expect(ov?.byKind.find((k) => k.kind === "organization")?.n).toBeGreaterThanOrEqual(1);
     expect(ov?.mailOn).toBeGreaterThanOrEqual(1);
     expect(ov?.week.find((r) => r.status === "sent")?.n).toBeGreaterThanOrEqual(1);

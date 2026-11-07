@@ -33,6 +33,7 @@ import { csvCell } from "./analytics";
 import { BuyerLink, contractPath, grantUrl, money } from "./shared";
 
 const METHODS = ["OB", "TC", "ST", "TN", "AC"] as const;
+type Method = (typeof METHODS)[number];
 const METHOD_NAME: Record<(typeof METHODS)[number], Key> = {
   OB: "method.open", TC: "method.traditional", ST: "method.selective", TN: "method.non_competitive", AC: "method.acan",
 };
@@ -186,7 +187,8 @@ const RecordRows: FC<{ lang: Lang; view: RecordsView; rows: Row[]; sorts?: { dat
               <td data-label={t(lang, "col.value")} class="mono num">{cents === null ? t(lang, "common.not_stated") : money(lang, cents)}</td>
               <td data-label={t(lang, "col.method")}>
                 {src === 4 ? "" : <CompetitiveFlag lang={lang} value={num(r.comp) as 0 | 1 | null} />}
-                {str(r.meth) ? <> <span class="mono muted small">{str(r.meth)}</span></> : null}
+                {/* A published contract's procedure is a code (TN, OB, ...): its name, with the code as the title; other sources' methods are words already. */}
+                {str(r.meth) ? <> <span class={METHOD_NAME[str(r.meth) as Method] ? "muted small" : "mono muted small"} title={METHOD_NAME[str(r.meth) as Method] ? str(r.meth) ?? undefined : undefined}>{METHOD_NAME[str(r.meth) as Method] ? t(lang, METHOD_NAME[str(r.meth) as Method]) : str(r.meth)}</span></> : null}
               </td>
             </tr>
           );

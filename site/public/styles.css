@@ -1326,6 +1326,10 @@ html.js .cmap-toggles { display: flex; }
 /* Provinces part on a hairline of the panel's ground; the one under the pointer takes an ink edge. */
 .cmap-svg use { stroke: var(--map-line); stroke-width: 1.5; stroke-linejoin: round; }
 .cmap-svg a:hover use { stroke: var(--ink); stroke-width: 2.5; }
+/* A clicked province took the browser's focus rectangle around its bounding box; the
+   outline goes and the keyboard focus draws the same stroke as hover (operator, 2026-11-07). */
+.cmap-svg a:focus { outline: none; }
+.cmap-svg a:focus-visible use { stroke: var(--ink); stroke-width: 2.5; }
 .cmap-s0 { fill: var(--map-0); }
 .cmap-s1 { fill: var(--map-1); }
 .cmap-s2 { fill: var(--map-2); }
