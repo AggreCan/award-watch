@@ -31,6 +31,25 @@ instrument at one delivery point. The columns read are the dictionary's:
 the dates, the delivery point code or the legal name is refused before
 anything is written.
 
+The file as published in 2026 departs from the dictionary
+in three ways, and the stage reads both forms:
+
+- `agreement-type_en` holds the acronym (`NISO`, `NMSO`, `RISO`, `RMSO`,
+  `DISO`, `SA`) where the dictionary spells the type out. `sosa.type_code`
+  knows a type by either, and `sosa.TYPES` names each in both languages
+  (`NISO` is a national individual standing offer, a type the dictionary
+  does not list). A type known by neither keeps the file's words.
+- `commodity` holds UNSPSC codes, several joined by "; ", and the two
+  descriptions their names as "code - name" pieces, each field in literal
+  double quotes. The stage strips the quotes and keeps the codes whole
+  (`sosa.commodity_codes`, `sosa.commodity_names`); a GSIN from the
+  dictionary's layout reads the same way.
+- `delivery-point-code` holds `CA` for the whole country and a code stored
+  as `RCNNCR` (its letters) for the National Capital Region, where the dictionary
+  has `NA` and `NC`, and country codes such as `US`. The site names `CA`
+  and `RCNNCR` as it names `NA` and `NC`, and any other code by the file's
+  own `delivery-point_en` or `_fr`.
+
 The file lists active instruments only, so the history is what the tables
 keep of each week's file.
 
@@ -64,8 +83,9 @@ with verification and the host name check still on.
 
 - A holder row is keyed by the agreement number, the normalized legal name
   (`normalize.norm_name`) and the delivery point code (`CA-BC` read as
-  `BC`; `FD` foreign, `NA` national, `NC` national capital). A profile counts
-  agreement numbers, not rows.
+  `BC`; `FD` foreign, `NA` national, `NC` national capital, `CA` and
+  `RCNNCR` the current file's national and national capital). A profile
+  counts agreement numbers, not rows.
 - A legal name that reads as a person (`matching.is_person_name`, the rule
   of the award notices) is withheld everywhere: no name is stored, the key
   carries a hash of the normalized name so the row is the same row next
@@ -82,16 +102,17 @@ with verification and the host name check still on.
   whose instrument's expiry has passed. A lost row is kept 90 days, marked,
   then deleted; an instrument left with no row goes with it. A row that
   comes back into a later file is held again, with no new event.
-- Segments. The file carries a GSIN, not UNSPSC. An instrument inherits the
+- Segments. The dictionary's file carried a GSIN; the current one carries
+  UNSPSC commodity codes, which the pages show with their names but which
+  do not set the segments. An instrument inherits the
   segments of the award and tender notices whose solicitation or contract
   number has the agreement number's stem (the part before the first `/`,
   spaces and case folded; at least six letters or digits). The newest tender
   notice of the stem is the instrument's RFSO or RFSA notice. An instrument
   no notice shares its stem with has no segment and is listed under "no
-  segment" with its GSIN. A GSIN-to-UNSPSC crosswalk, if PSPC still publishes
-  one under the OGL, would give those instruments a segment from their
-  commodity and would let a segment carry instruments whose RFSO predates the
-  notices the pipeline holds; it is not used.
+  segment" (1,013 of 3,787 on 2026-11-07). Reading the segments from an
+  instrument's own UNSPSC commodity codes would give those one; it is not
+  done.
 - Call-ups. A published contract whose `standing_offer_number`, spaces and
   case folded, equals the agreement number is a call-up against it. They are
   counted per holder organization over ten fiscal years, valued by the
@@ -121,7 +142,8 @@ The records sync turns them into the watches' events
 `rec_events` row on the holder organization (`oid`), each with `ref`
 `sosa:<agreement>`, the expiry in `endd`, the description in `title` and
 `title_fr` (120 characters), the type and the region's name in `other` and
-`other_fr` ("Regional Master Standing Offer · British Columbia"), and the
+`other_fr` ("Regional master standing offer · British Columbia", the type
+named by `sosa.TYPES` whatever the file wrote), and the
 instrument's page as `path`. `rec_events` keeps its columns: no `LAYOUT`
 change, no reload.
 
@@ -147,7 +169,7 @@ gets them in the watch mail:
 
 ```
 - E60ZT-120002/001/ZT
-  Gained a standing offer or supply arrangement · Regional Master Standing Offer · British Columbia · Environmental consulting services · expires 2028-03-31 · 14 holders
+  Gained a standing offer or supply arrangement · Regional master standing offer · British Columbia · Environmental consulting services · expires 2028-03-31 · 14 holders
   First seen 2026-11-07
   https://awardwatch.ca/instruments/E60ZT-120002%2F001%2FZT
 ```
@@ -169,9 +191,9 @@ event per instrument and organization, UID
 
 | Address | What | Reads |
 |---|---|---|
-| `/instruments` | every active instrument, filtered by type, region, segment (or none), commodity, end user and expiry within 3, 6 or 12 months; sorted by expiry or holders; 100 a page; the lead names the source, its weekly cadence and the file's date | `instruments/index.json` |
+| `/instruments` | every active instrument with its segment chips, filtered by type, region (by name, in the page's language), segment (or none), one commodity code, end user and expiry within 3, 6 or 12 months; sorted by expiry or holders; 100 a page; the commodity codes with their names, the first three in the list; the lead names the source, its weekly cadence and the file's date | `instruments/index.json` (one row per instrument: the type code, and the file's words for a type the stage does not know; the commodity codes; and the names of the types, the codes and the delivery points once each) |
 | `/instruments/rows.csv` | the view as CSV, at most 10,000 rows (Pro) | the same file |
-| `/instruments/<agreement>` | type, descriptions in both languages, GSIN, end user, start, expiry and days left, the RFSO notice, the inherited segments; the holders (linked to the profile, regions, first seen, call-ups and their value), persons withheld as a count, the call-ups of other vendors; the source cited | `rec_instruments`, `rec_holders` |
+| `/instruments/<agreement>` | type, descriptions in both languages, the commodity codes with their names (`gsin` holds the codes, `gsin_en` and `gsin_fr` the "code - name" pieces), end user, start, expiry and days left, the RFSO notice, the inherited segments; the holders (linked to the profile, regions, first seen, call-ups and their value), persons withheld as a count, the call-ups of other vendors; the source cited | `rec_instruments`, `rec_holders` |
 | `/instruments/<agreement>/holders.csv` | the holders as CSV (Pro) | the same |
 | profile | "Holds N active standing offers or supply arrangements" in the head, and a section of every instrument held (soonest expiry first) and the ones no longer held within 90 days | `instruments` in the profile shard |
 | segment page | "Holders in this segment": the 25 organizations with the most active instruments carrying the segment, with the count and the soonest expiry, after the incumbents | `holders` in `categories/<nn>.json` |

@@ -25,10 +25,11 @@ import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, pick, provinceName, segmentLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import {
-  AGREEMENT_MAX, HOLDER_ROWS_MAX, HOLDERS_CSV_MAX, INSTRUMENT_CSV_MAX, INSTRUMENT_ORDERS, INSTRUMENT_PAGE_ROWS, OTHER_REGIONS, TYPE_CODES, WITHIN_DAYS,
-  activeFilters, callsOf, daysLeft, filterInstruments, instrumentPath, instrumentQueryString, isAgreement, loadInstrumentIndex,
+  AGREEMENT_MAX, HOLDER_ROWS_MAX, HOLDERS_CSV_MAX, INSTRUMENT_CSV_MAX, INSTRUMENT_ORDERS, INSTRUMENT_PAGE_ROWS, OTHER_REGIONS, REGION_ALIASES,
+  TYPE_CODES, TYPES_BY_ACRONYM, WITHIN_DAYS,
+  activeFilters, callsOf, commodityList, daysLeft, filterInstruments, instrumentPath, instrumentQueryString, isAgreement, loadInstrumentIndex,
   readHoldersCsv, readInstrument, readInstrumentQuery, sortInstruments, type Calls, type HeldInstrument, type HoldersPart,
-  type InstrumentIndex, type InstrumentQuery, type InstrumentRow, type ProfileInstruments, type Row, type TenderInstrument,
+  type InstrumentIndex, type InstrumentQuery, type InstrumentRow, type Named, type ProfileInstruments, type Row, type TenderInstrument,
   type TypeCode, type Within,
 } from "../instruments";
 import { Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
@@ -37,7 +38,7 @@ import { ProNote } from "../pro";
 import { dollars, num, orgIdOf } from "../records_db";
 import { canonicalUrl } from "../seo";
 import { csvCell } from "./analytics";
-import { FiltersFold, money } from "./shared";
+import { FiltersFold, SegmentChips, SegmentNote, money } from "./shared";
 
 // The government's own pages for the source: its search, and the open data record.
 export const SOSA_SEARCH_URL = "https://sosa.canadabuys.canada.ca/";
@@ -47,8 +48,8 @@ export const sosaDatasetUrl = (lang: Lang): string => `https://open.canada.ca/da
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 
 const TYPE_KEY: Record<TypeCode, Key> = {
-  SA: "instruments.type_SA", NMSO: "instruments.type_NMSO", DISO: "instruments.type_DISO", RISO: "instruments.type_RISO",
-  RMSO: "instruments.type_RMSO", OTHER: "instruments.type_OTHER",
+  SA: "instruments.type_SA", NMSO: "instruments.type_NMSO", NISO: "instruments.type_NISO", DISO: "instruments.type_DISO",
+  RISO: "instruments.type_RISO", RMSO: "instruments.type_RMSO", OTHER: "instruments.type_OTHER",
 };
 const REGION_KEY: Record<(typeof OTHER_REGIONS)[number], Key> = {
   FD: "instruments.region_FD", NA: "instruments.region_NA", NC: "instruments.region_NC",
@@ -59,11 +60,52 @@ export function typeLabel(lang: Lang, code: TypeCode, en?: string | null, fr?: s
   return code === "OTHER" ? pick(lang, en, fr) ?? t(lang, TYPE_KEY.OTHER) : t(lang, TYPE_KEY[code]);
 }
 
-export function regionName(lang: Lang, code: string): string {
+// A delivery point by name in the page's language: a province or territory,
+// and the whole country, the capital region and foreign delivery in the
+// site's words, whichever code the file wrote for them; any other code (a
+// country) by the file's own name when the caller has it, else the name the
+// runtime gives the country code, else as written.
+export function regionName(lang: Lang, code: string, named?: Named | null): string {
   if (!code) return t(lang, "common.not_stated");
-  if ((OTHER_REGIONS as readonly string[]).includes(code)) return t(lang, REGION_KEY[code as (typeof OTHER_REGIONS)[number]]);
-  return provinceName(lang, code);
+  const province = provinceName(lang, code);
+  if (province !== code) return province;
+  const special = (OTHER_REGIONS as readonly string[]).includes(code) ? (code as (typeof OTHER_REGIONS)[number]) : REGION_ALIASES[code];
+  if (special) return t(lang, REGION_KEY[special]);
+  return (named ? pick(lang, named.en, named.fr) : null) ?? countryName(lang, code) ?? code;
 }
+
+// Built once per language and kept: the formatter holds no request's data.
+const COUNTRY_NAMES = new Map<Lang, Intl.DisplayNames | null>();
+function countryName(lang: Lang, code: string): string | null {
+  if (!/^[A-Z]{2}$/.test(code)) return null;
+  let names = COUNTRY_NAMES.get(lang);
+  if (names === undefined) {
+    try {
+      names = new Intl.DisplayNames([lang], { type: "region", fallback: "none" });
+    } catch {
+      names = null;
+    }
+    COUNTRY_NAMES.set(lang, names);
+  }
+  try {
+    return names?.of(code) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// An instrument's commodity codes with their names, the first few in a list's cell.
+const COMMODITY_SHOWN = 3;
+const CommodityText: FC<{ lang: Lang; items: readonly { code: string; name: string | null }[]; max?: number }> = ({ lang, items, max }) => {
+  if (!items.length) return <>{t(lang, "common.not_stated")}</>;
+  const shown = max ? items.slice(0, max) : items;
+  return (
+    <>
+      {shown.map((c, i) => <>{i ? "; " : ""}<span class="mono">{c.code}</span>{c.name ? ` ${c.name}` : ""}</>)}
+      {items.length > shown.length ? ` ${t(lang, "instruments.commodity_more", { n: fmtInt(items.length - shown.length, lang) })}` : ""}
+    </>
+  );
+};
 
 export function expiryText(lang: Lang, expiry: string | null, today: string): string {
   if (!expiry) return t(lang, "common.not_stated");
@@ -113,14 +155,14 @@ function indexOptions(idx: InstrumentIndex, lang: Lang) {
   const types = counted(rows.map((r) => r.type));
   const regions = counted(rows.flatMap((r) => r.regions));
   const segments = counted(rows.flatMap((r) => (r.segments.length ? r.segments : ["none"])));
-  const commodities = counted(rows.flatMap((r) => (r.commodity ? [r.commodity] : [])));
+  const commodities = counted(rows.flatMap((r) => r.commodity));
   const users = counted(rows.flatMap((r) => (r.end_user ? [r.end_user] : [])));
   const named = (m: Record<string, { en: string | null; fr: string | null }>, k: string) => pick(lang, m[k]?.en, m[k]?.fr);
   return {
-    type: TYPE_CODES.filter((k) => types.has(k)).map((k) => ({
-      value: k, label: typeLabel(lang, k, idx.types[k]?.en, idx.types[k]?.fr), n: types.get(k) ?? 0,
-    })),
-    region: [...regions].map(([k, n]) => ({ value: k, label: regionName(lang, k), n })).sort((a, b) => (a.label < b.label ? -1 : 1)),
+    // OTHER gathers every type the pipeline does not know, so its choice reads as the generic name.
+    type: TYPE_CODES.filter((k) => types.has(k)).map((k) => ({ value: k, label: typeLabel(lang, k), n: types.get(k) ?? 0 })),
+    region: [...regions].map(([k, n]) => ({ value: k, label: regionName(lang, k, idx.region_names?.[k]), n }))
+      .sort((a, b) => (a.label < b.label ? -1 : 1)),
     segment: [...segments].map(([k, n]) => ({ value: k, label: k === "none" ? t(lang, "instruments.no_segment") : `${k} ${segmentLabel(lang, k)}`, n }))
       .sort((a, b) => (a.value === "none" ? 1 : b.value === "none" ? -1 : a.value < b.value ? -1 : 1)),
     commodity: [...commodities].map(([k, n]) => ({ value: k, label: named(idx.commodities, k) ? `${k} ${named(idx.commodities, k)}` : k, n }))
@@ -156,23 +198,25 @@ const InstrumentsTable: FC<{
     ]}>
       <tbody>
         {rows.map((r) => {
-          const commodity = r.commodity ? pick(lang, idx.commodities[r.commodity]?.en, idx.commodities[r.commodity]?.fr) : null;
+          const commodities = r.commodity.map((code) => ({ code, name: pick(lang, idx.commodities[code]?.en, idx.commodities[code]?.fr) }));
           const user = r.end_user ? idx.end_users[r.end_user] : undefined;
           return (
             <tr>
               <td data-label={t(lang, "instruments.col_instrument")}>
                 <a href={instrumentPath(r.agreement)}>{pick(lang, r.description_en, r.description_fr) ?? r.agreement}</a>
-                <br /><span class="mono muted">{r.agreement}</span>
+                <br /><span class="mono muted">{r.agreement}</span> <SegmentChips lang={lang} codes={r.segments} />
               </td>
-              <td data-label={t(lang, "instruments.col_type")}>{typeLabel(lang, r.type, idx.types[r.type]?.en, idx.types[r.type]?.fr)}</td>
+              <td data-label={t(lang, "instruments.col_type")}>{typeLabel(lang, r.type, r.type_en, r.type_fr)}</td>
               <td data-label={t(lang, "instruments.col_commodity")} class="lgh">
-                {r.commodity ? <><span class="mono">{r.commodity}</span>{commodity ? ` ${commodity}` : ""}</> : t(lang, "common.not_stated")}
+                <CommodityText lang={lang} items={commodities} max={COMMODITY_SHOWN} />
               </td>
               <td data-label={t(lang, "instruments.col_user")} class="xlh">
                 {user ? (user.buyer_id ? <a href={`/buyers/${user.buyer_id}`}>{pick(lang, user.en, user.fr)}</a> : pick(lang, user.en, user.fr))
                   : t(lang, "common.not_stated")}
               </td>
-              <td data-label={t(lang, "instruments.col_regions")} class="mdh">{r.regions.map((x) => regionName(lang, x)).join(", ")}</td>
+              <td data-label={t(lang, "instruments.col_regions")} class="mdh">
+                {r.regions.map((x) => regionName(lang, x, idx.region_names?.[x])).join(", ")}
+              </td>
               <td data-label={t(lang, "instruments.col_expiry")} class="mono">{expiryText(lang, r.expiry, today)}</td>
               <td data-label={t(lang, "instruments.col_holders")} class="mono num">
                 {r.n_holders_withheld
@@ -314,6 +358,7 @@ export async function instrumentsIndex(c: Context<AppEnv>): Promise<Response> {
             </p>
           ) : accountsEnabled(c.env) ? <ProCsvNote lang={lang} text="instruments.csv_pro" signedIn={!!account?.email} /> : null
         ) : null}
+        <SegmentNote lang={lang} rows={shown} />
         {shown.length ? <InstrumentsTable lang={lang} rows={shown} idx={idx} today={today} sorts={sorts} />
           : <p class="muted">{t(lang, idx.rows.length ? "instruments.none" : "instruments.none_published")}</p>}
       </Panel>
@@ -339,12 +384,16 @@ export async function instrumentsCsv(c: Context<AppEnv>): Promise<Response> {
   const today = todayOf(idx.as_of);
   const rows = sortInstruments(filterInstruments(idx.rows, q, today), q.sort).slice(0, INSTRUMENT_CSV_MAX);
   const origin = new URL(c.req.url).origin;
+  // Several codes in one cell: the codes space-separated like the regions, their names as "code - name" pieces.
+  const named = (codes: readonly string[], k: "en" | "fr") =>
+    codes.filter((c) => idx.commodities[c]?.[k]).map((c) => `${c} - ${idx.commodities[c][k]}`).join("; ") || null;
   const lines = rows.map((r) => {
     const user = r.end_user ? idx.end_users[r.end_user] : undefined;
-    const commodity = r.commodity ? idx.commodities[r.commodity] : undefined;
+    const typeEn = r.type === "OTHER" ? r.type_en ?? null : idx.types[r.type]?.en ?? null;
+    const typeFr = r.type === "OTHER" ? r.type_fr ?? null : idx.types[r.type]?.fr ?? null;
     return [
-      r.agreement, r.type, idx.types[r.type]?.en ?? null, idx.types[r.type]?.fr ?? null, r.description_en, r.description_fr, r.commodity,
-      commodity?.en ?? null, commodity?.fr ?? null, user?.en ?? null, user?.fr ?? null, user?.buyer_id ?? null, r.regions.join(" "),
+      r.agreement, r.type, typeEn, typeFr, r.description_en, r.description_fr, r.commodity.join(" ") || null,
+      named(r.commodity, "en"), named(r.commodity, "fr"), user?.en ?? null, user?.fr ?? null, user?.buyer_id ?? null, r.regions.join(" "),
       r.segments.join(" "), r.start, r.expiry, daysLeft(r.expiry, today), r.n_holders, r.n_holders_withheld, `${origin}${instrumentPath(r.agreement)}`,
     ].map(csvCell).join(",");
   });
@@ -361,7 +410,8 @@ export async function instrumentsCsv(c: Context<AppEnv>): Promise<Response> {
 // -- /instruments/<agreement> ----------------------------------------------------------------
 
 // The holder rows (one a region) as one line a holder, regions joined, the earliest first sight.
-interface Holder { oid: number | null; name: string; op: string | null; regions: string[]; seen: string }
+// names keeps the file's own name of each region code, for the codes the site does not name itself.
+interface Holder { oid: number | null; name: string; op: string | null; regions: string[]; seen: string; names: Record<string, Named> }
 
 export function groupHolders(rows: readonly Row[]): Holder[] {
   const by = new Map<string, Holder>();
@@ -372,12 +422,14 @@ export function groupHolders(rows: readonly Row[]): Holder[] {
     const key = `${oid ?? ""}|${name}`;
     const region = str(r.region) ?? "";
     const seen = str(r.seen) ?? "";
+    const named = { en: str(r.region_en), fr: str(r.region_fr) };
     const h = by.get(key);
     if (h) {
       if (!h.regions.includes(region)) h.regions.push(region);
       if (seen && (!h.seen || seen < h.seen)) h.seen = seen;
+      h.names[region] ??= named;
     } else {
-      by.set(key, { oid, name, op: str(r.op), regions: [region], seen });
+      by.set(key, { oid, name, op: str(r.op), regions: [region], seen, names: { [region]: named } });
     }
   }
   return [...by.values()];
@@ -455,8 +507,10 @@ async function instrumentPage(c: Context<AppEnv>, agreement: string): Promise<Re
   const buyer = str(d.buyer);
   const user = pick(lang, str(d.user_en), str(d.user_fr));
   const tref = str(d.tref);
-  const gsin = str(d.gsin);
-  const gsinName = pick(lang, str(d.gsin_en), str(d.gsin_fr));
+  // The names in the page's language, the other language's for a code it does not name.
+  const own = commodityList(str(d.gsin), lang === "fr" ? str(d.gsin_fr) : str(d.gsin_en));
+  const otherLang = new Map(commodityList(str(d.gsin), lang === "fr" ? str(d.gsin_en) : str(d.gsin_fr)).map((c) => [c.code, c.name]));
+  const commodities = own.map((c) => ({ code: c.code, name: c.name ?? otherLang.get(c.code) ?? null }));
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of}
@@ -484,7 +538,7 @@ async function instrumentPage(c: Context<AppEnv>, agreement: string): Promise<Re
           <Detail lang={lang} k="instruments.col_type" v={type} />
           <Detail lang={lang} k="instrument.description_en" v={str(d.desc_en)} />
           <Detail lang={lang} k="instrument.description_fr" v={str(d.desc_fr)} />
-          <Detail lang={lang} k="instrument.commodity" v={gsin ? <><span class="mono">{gsin}</span>{gsinName ? ` ${gsinName}` : ""}</> : null} />
+          <Detail lang={lang} k="instrument.commodity" v={commodities.length ? <CommodityText lang={lang} items={commodities} /> : null} />
           <Detail lang={lang} k="instruments.col_user" v={user ? (buyer ? <a href={`/buyers/${buyer}`}>{user}</a> : user) : null} />
           <Detail lang={lang} k="instrument.start" v={str(d.start)} />
           <Detail lang={lang} k="instruments.col_expiry" v={expiryText(lang, str(d.expiry), today)} />
@@ -492,7 +546,7 @@ async function instrumentPage(c: Context<AppEnv>, agreement: string): Promise<Re
           <dt>{t(lang, "instrument.segments")}</dt>
           <dd>{segs.length
             ? segs.map((s, i) => <>{i ? ", " : ""}<a href={`/segments/${s}`}>{`${s} ${segmentLabel(lang, s)}`}</a></>)
-            : t(lang, "instrument.no_segment", { gsin: gsin ?? t(lang, "common.not_stated") })}</dd>
+            : t(lang, "instrument.no_segment")}</dd>
           <Detail lang={lang} k="instrument.first_seen" v={str(d.seen)} />
         </dl>
       </Panel>
@@ -524,7 +578,7 @@ async function instrumentPage(c: Context<AppEnv>, agreement: string): Promise<Re
                         {h.oid !== null ? <a href={`/organizations/${orgIdOf(h.oid)}`}>{h.name}</a> : h.name}
                         {h.op ? <><br /><span class="muted small">{t(lang, "instrument.operating", { name: h.op })}</span></> : null}
                       </td>
-                      <td data-label={t(lang, "instruments.col_regions")}>{h.regions.map((x) => regionName(lang, x)).join(", ")}</td>
+                      <td data-label={t(lang, "instruments.col_regions")}>{h.regions.map((x) => regionName(lang, x, h.names[x])).join(", ")}</td>
                       <td data-label={t(lang, "instrument.col_first_seen")} class="mono mdh">{h.seen}</td>
                       <td data-label={t(lang, "instrument.col_calls")} class="mono num">
                         {h.oid === null ? t(lang, "instrument.no_profile") : fmtInt(mine?.n ?? 0, lang)}
@@ -553,15 +607,20 @@ async function instrumentPage(c: Context<AppEnv>, agreement: string): Promise<Re
   );
 }
 
-// The type code the pipeline gives (sources/sosa.type_code), from the English type.
+// The type code the pipeline gives (sources/sosa.type_code), from the English
+// type: its acronym as the current file writes it ("NISO"), else the words of
+// the name the data dictionary and the pipeline spell out.
+const TYPE_WORDS: readonly [string, TypeCode][] = [
+  ["supply arrangement", "SA"], ["national master", "NMSO"], ["national individual", "NISO"], ["departmental individual", "DISO"],
+  ["regional individual", "RISO"], ["regional master", "RMSO"],
+];
 export function typeCodeOf(typeEn: string | null): TypeCode {
+  for (const token of (typeEn ?? "").match(/[A-Za-z]+/g) ?? []) {
+    const code = TYPES_BY_ACRONYM.get(token.toUpperCase());
+    if (code) return code;
+  }
   const text = (typeEn ?? "").toLowerCase();
-  if (text.includes("supply arrangement")) return "SA";
-  if (text.includes("national master")) return "NMSO";
-  if (text.includes("departmental individual")) return "DISO";
-  if (text.includes("regional individual")) return "RISO";
-  if (text.includes("regional master")) return "RMSO";
-  return "OTHER";
+  return TYPE_WORDS.find(([words]) => text.includes(words))?.[1] ?? "OTHER";
 }
 
 export const HOLDERS_CSV_COLUMNS = [

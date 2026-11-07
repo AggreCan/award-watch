@@ -312,8 +312,8 @@ CREATE TABLE IF NOT EXISTS rec_instruments (
   type_fr TEXT,
   desc_en TEXT,                                  -- the description, one line, at most 120 characters
   desc_fr TEXT,
-  gsin TEXT,                                     -- the commodity's GSIN
-  gsin_en TEXT,
+  gsin TEXT,                                     -- the commodity codes, "; " between them (UNSPSC in the current file, a GSIN before)
+  gsin_en TEXT,                                  -- their names as "code - name" pieces, "; " between them
   gsin_fr TEXT,
   user_en TEXT,                                  -- the end user as published
   user_fr TEXT,

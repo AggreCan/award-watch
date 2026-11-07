@@ -32,10 +32,15 @@ export const AGREEMENT_MAX = 120;
 export const WITHIN_DAYS = { "3": 91, "6": 182, "12": 365 } as const;
 export type Within = keyof typeof WITHIN_DAYS;
 
-export const TYPE_CODES = ["SA", "NMSO", "DISO", "RISO", "RMSO", "OTHER"] as const;
+export const TYPE_CODES = ["SA", "NMSO", "NISO", "DISO", "RISO", "RMSO", "OTHER"] as const;
 export type TypeCode = (typeof TYPE_CODES)[number];
+// The acronyms a type is known by: every code but OTHER.
+export const TYPES_BY_ACRONYM: ReadonlyMap<string, TypeCode> = new Map(TYPE_CODES.filter((c) => c !== "OTHER").map((c) => [c, c]));
 // The delivery point codes beside the provinces and territories: foreign, national, national capital.
 export const OTHER_REGIONS = ["FD", "NA", "NC"] as const;
+// Two of them as the file published in 2026 writes them: CA for the whole
+// country and RCNNCR (the stored letters of its code) for the capital region.
+export const REGION_ALIASES: Record<string, (typeof OTHER_REGIONS)[number]> = { CA: "NA", RCNNCR: "NC" };
 
 const CONTROL_RE = /[\u0000-\u001f\u007f]/;
 export function isAgreement(v: unknown): v is string {
@@ -52,9 +57,13 @@ export function instrumentPath(agreement: string): string {
 export interface InstrumentRow {
   agreement: string;
   type: TypeCode;
+  // The file's own words, on a row whose type is OTHER only.
+  type_en?: string | null;
+  type_fr?: string | null;
   description_en: string | null;
   description_fr: string | null;
-  commodity: string | null;
+  // The commodity codes as the file writes them (UNSPSC in the current file, a GSIN in older ones).
+  commodity: string[];
   end_user: string | null;
   regions: string[];
   segments: string[];
@@ -73,39 +82,73 @@ export interface InstrumentIndex {
   status: "ok" | "held" | "failed" | "none";
   source: string;
   types: Record<string, Named>;
+  // One name per commodity code.
   commodities: Record<string, Named>;
   end_users: Record<string, Named & { buyer_id: string | null }>;
+  // The file's own names of its delivery point codes.
+  region_names?: Record<string, Named>;
   rows: InstrumentRow[];
 }
 
 // A delivery point code as the pipeline writes it (sources/sosa.region_code).
 const REGION_RE = /^[A-Z0-9]{0,8}$/;
+// A commodity code (sources/sosa.COMMODITY_CODE_RE).
+export const COMMODITY_RE = /^[A-Za-z0-9][A-Za-z0-9.-]{0,39}$/;
 const isCount = (v: unknown): v is number => isNum(v) && Number.isInteger(v) && v >= 0;
 const isDayOrNull = (v: unknown): boolean => v === null || (isStr(v) && /^\d{4}-\d{2}-\d{2}$/.test(v));
 const isCodes = (v: unknown, re: RegExp): boolean => isListOf(v, (x) => isStr(x) && re.test(x));
 const isNamed = (v: unknown): v is Named => isObj(v) && isStrOrNull(v.en ?? null) && isStrOrNull(v.fr ?? null);
 const isType = (v: unknown): v is TypeCode => (TYPE_CODES as readonly unknown[]).includes(v);
 
+// A file written before 2026-11-08 holds one commodity string a row, in the
+// source file's quotes ('"25111900; 81100000"'); loadInstrumentIndex reads it
+// as the list of codes it names (upgradeIndex).
+const isCommodity = (v: unknown): boolean => isCodes(v, COMMODITY_RE) || isStrOrNull(v);
+
 export const isInstrumentRow = (r: unknown): r is InstrumentRow => isObj(r) && isAgreement(r.agreement) && isType(r.type) &&
-  isStrOrNull(r.description_en) && isStrOrNull(r.description_fr) && isStrOrNull(r.commodity) && isStrOrNull(r.end_user) &&
+  optional(r.type_en, isStrOrNull) && optional(r.type_fr, isStrOrNull) &&
+  isStrOrNull(r.description_en) && isStrOrNull(r.description_fr) && isCommodity(r.commodity) && isStrOrNull(r.end_user) &&
   isCodes(r.regions, REGION_RE) && isCodes(r.segments, /^\d{2}$/) && isDayOrNull(r.start) && isDayOrNull(r.expiry) &&
   isCount(r.n_holders) && isCount(r.n_holders_withheld);
 
 // A kept file is the same frozen object on every hit (data.ts loadJson), so
-// its rows are checked once per isolate, not on every request.
-const checked = new WeakSet<object>();
+// its rows are checked, and an older file's read in today's form, once per
+// isolate, not on every request.
+const checked = new WeakMap<object, InstrumentIndex>();
 
 export async function loadInstrumentIndex(env: Env): Promise<InstrumentIndex | null> {
   const v = await loadJson<unknown>(env, "instruments/index.json");
   if (!isObj(v)) return null;
-  if (checked.has(v)) return v as unknown as InstrumentIndex;
+  const known = checked.get(v);
+  if (known) return known;
   const ok = isStr(v.as_of) && isDayOrNull(v.published) && ["ok", "held", "failed", "none"].includes(v.status) && isStr(v.source) &&
     isObj(v.types) && Object.values(v.types).every(isNamed) && isObj(v.commodities) && Object.values(v.commodities).every(isNamed) &&
     isObj(v.end_users) && Object.values(v.end_users).every((u) => isNamed(u) && isStrOrNull((u as any).buyer_id ?? null)) &&
-    isListOf(v.rows, isInstrumentRow);
+    optional(v.region_names, (x) => isObj(x) && Object.values(x).every(isNamed)) && isListOf(v.rows, isInstrumentRow);
   if (!ok) return null;
-  checked.add(v);
-  return v as unknown as InstrumentIndex;
+  const idx = upgradeIndex(v as unknown as InstrumentIndex);
+  checked.set(v, idx);
+  return idx;
+}
+
+// An index whose rows hold one commodity string (written before 2026-11-08)
+// in today's form: each row's codes as a list and the names per code, read out
+// of the old keys and names as the instrument page reads rec_instruments. The
+// Worker can then be deployed before the nightly writes the new file.
+function upgradeIndex(idx: InstrumentIndex): InstrumentIndex {
+  const old = (c: unknown): c is string | null => !Array.isArray(c);
+  if (!idx.rows.some((r) => old(r.commodity))) return idx;
+  const commodities: Record<string, Named> = {};
+  for (const [key, named] of Object.entries(idx.commodities)) {
+    for (const lang of ["en", "fr"] as const) {
+      for (const c of commodityList(key, named[lang])) {
+        const entry = (commodities[c.code] ??= { en: null, fr: null });
+        entry[lang] ??= c.name;
+      }
+    }
+  }
+  const rows = idx.rows.map((r) => (old(r.commodity) ? { ...r, commodity: commodityList(r.commodity, null).map((c) => c.code) } : r));
+  return { ...idx, commodities, rows };
 }
 
 export interface HeldInstrument {
@@ -181,7 +224,8 @@ export function readInstrumentQuery(url: URL): InstrumentQuery {
   };
   const within = get("within", /^(?:3|6|12)$/) as "" | Within;
   return {
-    type: get("type", /^[A-Z]{2,5}$/), region: get("region", /^[A-Z]{2}$/), segment: get("segment", /^(?:\d{2}|none)$/),
+    // A region is a province or territory, or one of the file's own codes (RCNNCR, US).
+    type: get("type", /^[A-Z]{2,5}$/), region: get("region", /^[A-Z0-9]{2,8}$/), segment: get("segment", /^(?:\d{2}|none)$/),
     commodity: get("commodity", /^[A-Za-z0-9.-]{1,40}$/), user: get("user", /^[a-z0-9:-]{1,80}$/), within,
     sort: get("sort", /^(?:expiry|expiry-desc|holders|holders-asc)$/) as "" | InstrumentOrder,
   };
@@ -210,7 +254,7 @@ export function filterInstruments(rows: readonly InstrumentRow[], q: InstrumentQ
     if (q.type && r.type !== q.type) return false;
     if (q.region && !r.regions.includes(q.region)) return false;
     if (q.segment === "none" ? r.segments.length > 0 : q.segment && !r.segments.includes(q.segment)) return false;
-    if (q.commodity && r.commodity !== q.commodity) return false;
+    if (q.commodity && !r.commodity.includes(q.commodity)) return false;
     if (q.user && r.end_user !== q.user) return false;
     if (q.within) {
       const left = daysLeft(r.expiry, today);
@@ -258,6 +302,29 @@ export function readInstrument(env: Env, agreement: string): Promise<Read> {
 
 export function readHoldersCsv(env: Env, agreement: string): Promise<Read> {
   return readRecords(env, [{ sql: INSTRUMENT_SQL, params: [agreement] }, { sql: HOLDERS_CSV_SQL, params: [agreement] }]);
+}
+
+// One instrument's commodity codes with their names, from rec_instruments.gsin
+// ("25111900; 81100000") and gsin_en or gsin_fr ("25111900 - Marine craft
+// systems; 81100000 - Professional engineering services"), the pipeline's
+// pieces (sosa_export.instrument_rows). A row written before the pipeline
+// cleaned the file's quotes reads the same, and a lone code's plain
+// description is its name.
+const QUOTES_RE = /^["\u201c\u201d\s]+|["\u201c\u201d\s]+$/g;
+export function commodityList(codesText: string | null, namesText: string | null): { code: string; name: string | null }[] {
+  const codes: string[] = [];
+  for (const piece of (codesText ?? "").split(/[;,|\n]/)) {
+    const code = piece.replace(QUOTES_RE, "");
+    if (COMMODITY_RE.test(code) && !codes.includes(code)) codes.push(code);
+  }
+  const text = (namesText ?? "").replace(QUOTES_RE, "");
+  const names = new Map<string, string>();
+  for (const piece of text.split(/;\s*(?=[A-Za-z0-9.-]+\s+-\s)/)) {
+    const m = /^([A-Za-z0-9.-]+)\s+-\s+(.+)$/s.exec(piece.replace(QUOTES_RE, ""));
+    if (m && codes.includes(m[1]) && !names.has(m[1])) names.set(m[1], m[2].replace(QUOTES_RE, ""));
+  }
+  if (names.size === 0 && codes.length === 1 && text) names.set(codes[0], text);
+  return codes.map((code) => ({ code, name: names.get(code) ?? null }));
 }
 
 // Every statement here, for the tests that read their plans.

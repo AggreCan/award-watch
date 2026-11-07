@@ -6,13 +6,17 @@
 // and section, the segment and buyer blocks and the tender notice's line from
 // the parts the export adds to their files; the two CSV files Pro's and the
 // pages free; both languages and no em-dash; and every statement's plan.
+// Then the layout of the file as published in 2026: types
+// as acronyms, UNSPSC commodity codes in literal quotes, and delivery point
+// codes the data dictionary does not list (CA, RCNNCR, countries).
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { app } from "../src/index";
 import {
-  HOLDERS_CSV_SQL, HOLDERS_SQL, INSTRUMENT_SQL, INSTRUMENT_STATEMENTS, filterInstruments, instrumentPath, readInstrumentQuery,
+  HOLDERS_CSV_SQL, HOLDERS_SQL, INSTRUMENT_SQL, INSTRUMENT_STATEMENTS, commodityList, filterInstruments, instrumentPath, readInstrumentQuery,
   sortInstruments, type InstrumentRow,
 } from "../src/instruments";
+import { regionName, typeCodeOf } from "../src/pages/instruments";
 import { bucketFor } from "../src/limits";
 import { PRO_INCLUDES } from "../src/pro";
 import { orgNumber } from "../src/records_db";
@@ -31,21 +35,22 @@ const RMSO = "E60ZT-120002/001/ZT";
 const SA = "E60ZT-120003/001/ZT";
 const NMSO = "EZ899-250380/001/ZM";
 const SECRET = "E60ZT-999999/001/ZT";
+const NISO = "CW0000001";
 const A1 = "org-a000000001";
 const A2 = "org-a000000002";
 
 const PSPC = { en: "Public Services and Procurement Canada", fr: "Services publics et Approvisionnement Canada", buyer_id: "pwgsc-tpsgc" };
 const row = (r: Partial<InstrumentRow> & { agreement: string }): InstrumentRow => ({
-  type: "RMSO", description_en: null, description_fr: null, commodity: null, end_user: null, regions: [], segments: [], start: null,
+  type: "RMSO", description_en: null, description_fr: null, commodity: [], end_user: null, regions: [], segments: [], start: null,
   expiry: null, n_holders: 1, n_holders_withheld: 0, ...r,
 });
 const ROWS: InstrumentRow[] = [
-  row({ agreement: SA, type: "SA", description_en: "Geospatial data services", description_fr: "Services de données géospatiales", commodity: "N7010",
+  row({ agreement: SA, type: "SA", description_en: "Geospatial data services", description_fr: "Services de données géospatiales", commodity: ["N7010"],
     end_user: "n:all-government-departments", regions: ["NA"], expiry: "2026-12-31" }),
-  row({ agreement: NMSO, type: "NMSO", description_en: "Translation services", description_fr: "Services de traduction", commodity: "N7010",
+  row({ agreement: NMSO, type: "NMSO", description_en: "Translation services", description_fr: "Services de traduction", commodity: ["N7010"],
     end_user: "pwgsc-tpsgc", regions: ["NC"], segments: ["43"], expiry: "2027-06-30" }),
   row({ agreement: RMSO, description_en: "Environmental consulting services", description_fr: "Services d'experts-conseils en environnement",
-    commodity: "R109C", end_user: "pwgsc-tpsgc", regions: ["AB", "BC"], expiry: "2028-03-31", n_holders: 3, n_holders_withheld: 1 }),
+    commodity: ["R109C"], end_user: "pwgsc-tpsgc", regions: ["AB", "BC"], expiry: "2028-03-31", n_holders: 3, n_holders_withheld: 1 }),
 ];
 const INDEX = {
   as_of: "2026-10-31", published: "2026-10-30", status: "ok", source: "https://sosa.canadabuys.canada.ca/",
@@ -125,6 +130,17 @@ async function seed(state = "ready"): Promise<void> {
       "Colombie-Britannique", "2026-10-30"),
     RECORDS.prepare(holder).bind(13, 1, null, "Coastal Geomatics Limited", null, "BC", "British Columbia", "Colombie-Britannique", "2026-11-06"),
     RECORDS.prepare(holder).bind(21, 2, orgNumber(A1), "Exemplar Translation Services Inc.", null, "NC", "National Capital Region", null, "2026-10-30"),
+    // The current file's layout as the records database held it before the pipeline cleaned it: the type's
+    // acronym, the commodity codes and names in the file's literal quotes, the file's own region codes.
+    RECORDS.prepare(inst).bind(4, NISO, "NISO", "NISO", "Marine engine monitoring parts and service", null, '"25111900; 81100000"',
+      '"25111900 - Marine craft systems and subassemblies; 81100000 - Professional engineering services"',
+      '"25111900 - Systèmes et sous-ensembles pour embarcations; 81100000 - Services d\'ingénierie professionnelle"', null, null, null,
+      "2024-11-12", "2027-11-16", "", null, 1, 0, "2026-10-29", "2026-10-29", null),
+    RECORDS.prepare(holder).bind(41, 4, null, "Harbour Marine Systems Ltd.", null, "RCNNCR", "National Capital Region", "Région de la capitale nationale",
+      "2026-10-29"),
+    RECORDS.prepare(holder).bind(42, 4, null, "Harbour Marine Systems Ltd.", null, "CA", "Canada", "Canada", "2026-10-29"),
+    RECORDS.prepare(holder).bind(43, 4, null, "Harbour Marine Systems Ltd.", null, "EF", "Delivery point named by the file", "Point de livraison nommé par le fichier",
+      "2026-10-29"),
     RECORDS.prepare("INSERT INTO rec_meta (key, value) VALUES ('state', ?), ('as_of', '2026-10-31'), ('rules', '2')").bind(state),
   ]);
 }
@@ -226,7 +242,8 @@ describe("an instrument's page", () => {
     expect(html).toContain("$150,000");
     expect(html).toContain("Call-ups by vendors that are not holders with a profile here: 2, $15,000.");
     expect(html).toContain("Call-ups recorded in the published contracts naming this instrument, over ten fiscal years");
-    expect(html).toContain("None: no award or tender notice shares its solicitation number (GSIN R109C)");
+    expect(html).toContain("None: no award or tender notice shares its solicitation number</dd>");
+    expect(html).toContain('<dt>Commodity</dt><dd><span class="mono">R109C</span> Environmental consulting services</dd>');
     expect(html).toContain('href="https://sosa.canadabuys.canada.ca/"');
     expect(html).toContain("Open Government Licence");
   });
@@ -374,5 +391,132 @@ describe("both languages", () => {
         expect(html, `${path} ${lang}`).not.toContain(EM_DASH);
       }
     }
+  });
+});
+
+// The file as published in 2026: what the review of
+// 2026-11-07 found on /instruments (every type read "NISO", the commodity
+// column printed its codes in their quotes, the region filter listed raw
+// codes) and what the page now makes of it.
+describe("the layout of the current file", () => {
+  const live = (r: Partial<InstrumentRow> & { agreement: string }) => row({ start: "2024-11-12", n_holders: 1, ...r });
+  const LIVE = {
+    ...INDEX,
+    types: {
+      NISO: { en: "National individual standing offer", fr: "Offre à commandes individuelle nationale" },
+      NMSO: { en: "National master standing offer", fr: "Offre à commandes principale et nationale" },
+    },
+    commodities: {
+      "25111900": { en: "Marine craft systems and subassemblies", fr: "Systèmes et sous-ensembles pour embarcations" },
+      "81100000": { en: "Professional engineering services", fr: "Services d'ingénierie professionnelle" },
+      "43230000": { en: "Software", fr: "Logiciels" },
+      "43211500": { en: "Computers", fr: null },
+      "43211600": { en: "Computer accessories", fr: null },
+      "43222600": { en: "Network service equipment", fr: null },
+    },
+    region_names: {
+      CA: { en: "Canada", fr: "Canada" }, RCNNCR: { en: "National Capital Region", fr: "Région de la capitale nationale" },
+      US: { en: "United States of America", fr: "États-Unis d'Amérique" }, EF: { en: "Delivery point named by the file", fr: "Point de livraison nommé par le fichier" },
+    },
+    rows: [
+      live({ agreement: "CW0000001", type: "NISO", description_en: "Marine engine monitoring parts and service", commodity: ["25111900", "81100000"],
+        regions: ["BC", "RCNNCR"], expiry: "2026-11-16" }),
+      live({ agreement: "CW0000002", type: "NMSO", description_en: "Computers and software", commodity: ["43230000", "43211500", "43211600", "43222600", "81100000"],
+        regions: ["CA", "US"], segments: ["43", "81"], expiry: "2027-03-31", n_holders: 12 }),
+      live({ agreement: "CW0000003", type: "OTHER", type_en: "Framework agreement", type_fr: "Accord-cadre", description_en: "Training",
+        regions: ["EF"], expiry: "2027-06-30" }),
+    ],
+  };
+  const e = () => off({ "instruments/index.json": LIVE });
+
+  it("names each type in the page's language and lists the real types in the filter", async () => {
+    const { html } = await page("/instruments", e());
+    const cells = [...html.matchAll(/<td data-label="Instrument type">([^<]*)<\/td>/g)].map((m) => m[1]);
+    expect(cells).toEqual(["National individual standing offer", "National master standing offer", "Framework agreement"]);
+    expect(html).toContain('<option value="NISO">National individual standing offer (1)</option>');
+    expect(html).toContain('<option value="NMSO">National master standing offer (1)</option>');
+    expect(html).toContain('<option value="OTHER">Other type (1)</option>');
+    expect(shownAgreements((await page("/instruments?type=NISO", e())).html)).toEqual(["CW0000001"]);
+    const fr = (await page("/instruments?lang=fr", e())).html;
+    expect(fr).toContain("Offre à commandes individuelle nationale");
+    expect(fr).toContain("Accord-cadre");
+    // The acronym the records database held before the pipeline's names reach it reads as the name too.
+    expect([typeCodeOf("NISO"), typeCodeOf("Regional Master Standing Offer"), typeCodeOf("Supply arrangement (SA)"), typeCodeOf("Accord")])
+      .toEqual(["NISO", "RMSO", "SA", "OTHER"]);
+  });
+
+  it("prints each commodity code with its name, never the file's quotes, and filters by one code", async () => {
+    const { html } = await page("/instruments", e());
+    expect(html).toContain(">Commodity</th>");
+    expect(html).not.toContain("GSIN");
+    // The old page printed the codes and names in the file's quotes.
+    expect(html).not.toContain('mono">"');
+    expect(html).not.toContain(' "25111900 - ');
+    expect(html).toContain('<span class="mono">25111900</span> Marine craft systems and subassemblies; <span class="mono">81100000</span> Professional engineering services');
+    // The first three codes of a long list, then how many more.
+    expect(html).toContain('<span class="mono">43211600</span> Computer accessories and 2 more');
+    expect(shownAgreements((await page("/instruments?commodity=81100000", e())).html)).toEqual(["CW0000001", "CW0000002"]);
+    expect(html).toContain('<option value="81100000">81100000 Professional engineering services (2)</option>');
+    // The segments are the chips the other lists carry, explained once above the table.
+    expect(html).toContain('<a href="/segments/43" class="chip"');
+    expect(html).toContain("The tags after a reference are UNSPSC segments");
+    expect(commodityList('"39121000; 41100000; 41110000; 41120000;', '"39121000 - Power conditioning equipment; 41100000 - Laboratory equipment"'))
+      .toEqual([{ code: "39121000", name: "Power conditioning equipment" }, { code: "41100000", name: "Laboratory equipment" },
+        { code: "41110000", name: null }, { code: "41120000", name: null }]);
+  });
+
+  it("names every region in the filter and the table in the page's language", async () => {
+    const { html } = await page("/instruments", e());
+    const options = (lang: string, src: string) => {
+      const select = src.slice(src.indexOf('<select name="region">'), src.indexOf("</select>", src.indexOf('<select name="region">')));
+      return [...select.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].map((m) => `${m[1]}=${m[2]}`).slice(1);
+    };
+    expect(options("en", html)).toEqual(["BC=British Columbia (1)", "EF=Delivery point named by the file (1)", "CA=National (all regions) (1)",
+      "RCNNCR=National Capital Region (1)", "US=United States of America (1)"]);
+    const fr = (await page("/instruments?lang=fr", e())).html;
+    expect(options("fr", fr)).toContain("RCNNCR=Région de la capitale nationale (1)");
+    expect(options("fr", fr)).toContain("US=États-Unis d'Amérique (1)");
+    expect(options("fr", fr)).toContain("CA=National (toutes les régions) (1)");
+    expect(html).toContain("British Columbia, National Capital Region");
+    // The file's own codes are a filter as the provinces are.
+    expect(shownAgreements((await page("/instruments?region=RCNNCR", e())).html)).toEqual(["CW0000001"]);
+    expect(shownAgreements((await page("/instruments?region=US", e())).html)).toEqual(["CW0000002"]);
+    expect((await page("/instruments?region=RCNNCR", e())).html).toContain("<span>Region</span> <b>National Capital Region</b>");
+    // The dictionary's codes and the current file's name the same places; a country the file does not name
+    // reads by the runtime's name for it, and a code no one names as written.
+    expect([regionName("en", "CA"), regionName("en", "NA"), regionName("fr", "RCNNCR"), regionName("en", "FD"), regionName("fr", "FD")])
+      .toEqual(["National (all regions)", "National (all regions)", "Région de la capitale nationale", "Outside Canada", "Hors du Canada"]);
+    expect([regionName("en", "MX"), regionName("fr", "US")]).toEqual(["Mexico", "États-Unis"]);
+    expect([regionName("en", "EF"), regionName("en", "EF", { en: "Named", fr: null })]).toEqual(["EF", "Named"]);
+  });
+
+  it("reads an index written before the fix, so the Worker can be deployed ahead of the nightly", async () => {
+    // As the export wrote it until 2026-11-07: one commodity string a row in the source file's quotes, keyed so
+    // in the names, and every type OTHER under the first one's words.
+    const before = {
+      ...INDEX, types: { OTHER: { en: "NISO", fr: "NISO" } },
+      commodities: { '"25111900; 81100000"': { en: '"25111900 - Marine craft systems and subassemblies; 81100000 - Professional engineering services"', fr: null } },
+      rows: [{ ...live({ agreement: "CW0000001", type: "OTHER", regions: ["RCNNCR"], expiry: "2026-11-16" }), commodity: '"25111900; 81100000"' }],
+    };
+    const { res, html } = await page("/instruments", off({ "instruments/index.json": before }));
+    expect(res.status).toBe(200);
+    expect(html).toContain('<span class="mono">25111900</span> Marine craft systems and subassemblies; <span class="mono">81100000</span> Professional engineering services');
+    expect(html).not.toContain('mono">"');
+    expect(html).toContain("<td data-label=\"Instrument type\">Other type</td>");
+    expect(html).toContain('<option value="RCNNCR">National Capital Region (1)</option>');
+    expect(shownAgreements((await page("/instruments?commodity=81100000", off({ "instruments/index.json": before }))).html)).toEqual(["CW0000001"]);
+  });
+
+  it("shows an instrument the records database held in the file's quotes and acronyms by name", async () => {
+    const { html } = await page(instrumentPath(NISO));
+    expect(html).toContain("<dt>Instrument type</dt><dd>National individual standing offer</dd>");
+    expect(html).toContain('<dt>Commodity</dt><dd><span class="mono">25111900</span> Marine craft systems and subassemblies; ' +
+      '<span class="mono">81100000</span> Professional engineering services</dd>');
+    expect(html).not.toContain('mono">"');
+    expect(html).toContain("National (all regions), Delivery point named by the file, National Capital Region");
+    const fr = (await page(`${instrumentPath(NISO)}?lang=fr`)).html;
+    expect(fr).toContain("Offre à commandes individuelle nationale");
+    expect(fr).toContain(`<span class="mono">81100000</span> Services d'ingénierie professionnelle`);
+    expect(fr).toContain("National (toutes les régions), Point de livraison nommé par le fichier, Région de la capitale nationale");
   });
 });

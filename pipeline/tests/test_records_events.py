@@ -389,7 +389,7 @@ def test_a_gained_or_lost_instrument_is_its_holders_event_once_and_the_first_fil
     second = night(w, "2026-11-08")
     gained = [{"day": "2026-11-08", "kind": "instrument_gained", "oid": holder(COASTAL), "ref": f"sosa:{RMSO}", "endd": "2028-03-31",
                "title": "Environmental consulting services", "title_fr": "Services d'experts-conseils en environnement",
-               "other": "Regional Master Standing Offer · Alberta", "other_fr": "Offre à commandes principale régionale · Alberta",
+               "other": "Regional master standing offer · Alberta", "other_fr": "Offre à commandes principale régionale · Alberta",
                "path": RMSO_PATH}]
     assert sosa_rows(w, "instrument_gained") == gained and second["events"]["instrument_gained"] == 1
     assert night(w, "2026-11-09")["events"]["instrument_gained"] == 0 and sosa_rows(w, "instrument_gained") == gained
@@ -402,7 +402,7 @@ def test_a_gained_or_lost_instrument_is_its_holders_event_once_and_the_first_fil
     assert sosa_rows(w, "instrument_lost") == [{
         "day": "2026-11-21", "kind": "instrument_lost", "oid": holder(COASTAL), "ref": f"sosa:{RMSO}", "endd": "2028-03-31",
         "title": "Environmental consulting services", "title_fr": "Services d'experts-conseils en environnement",
-        "other": "Regional Master Standing Offer · British Columbia",
+        "other": "Regional master standing offer · British Columbia",
         "other_fr": "Offre à commandes principale régionale · Colombie-Britannique", "path": RMSO_PATH}]
     assert third["events"]["instrument_lost"] == 1 and night(w, "2026-11-22")["events"]["instrument_lost"] == 0
     # The pipeline's copies agree with D1's.
@@ -423,15 +423,32 @@ def test_an_instruments_expiry_crosses_the_6_month_line_once_per_holder_and_neve
               "horizon": 182, "path": RMSO_PATH}
     # Exemplar holds it in two regions and gets one event naming both; the person withheld gets none.
     expected = sorted([
-        {**common, "oid": holder(EXEMPLAR), "other": "Regional Master Standing Offer · Alberta, British Columbia",
+        {**common, "oid": holder(EXEMPLAR), "other": "Regional master standing offer · Alberta, British Columbia",
          "other_fr": "Offre à commandes principale régionale · Alberta, Colombie-Britannique"},
-        {**common, "oid": holder(COASTAL), "other": "Regional Master Standing Offer · British Columbia",
+        {**common, "oid": holder(COASTAL), "other": "Regional master standing offer · British Columbia",
          "other_fr": "Offre à commandes principale régionale · Colombie-Britannique"},
     ], key=lambda r: (r["oid"], r["other"]))
     assert sorted(sosa_rows(w, "instrument_expires_6m"), key=lambda r: (r["oid"], r["other"])) == expected
     assert crossed["events"]["instrument_expires_6m"] == 2
     assert night(w, "2026-11-02")["events"]["instrument_expires_6m"] == 0
     assert rd.INSTRUMENT_LINE == 182
+
+
+def test_an_instrument_event_names_the_type_the_current_file_writes_as_an_acronym(holders_world, fixtures):
+    """The file as published in 2026 writes "RMSO" and wraps some names in quotes; the watch
+    mail's line names the type and the regions in each language all the same."""
+    w = holders_world
+    sosa_file(w, fixtures / "sosa_head.csv", "2026-10-31")
+    night(w, "2026-10-31")
+    w["conn"].execute("UPDATE sosa_instruments SET type_en = 'RMSO', type_fr = 'OCPR', expiry = '2027-05-02' WHERE agreement_number = ?",
+                      (RMSO,))
+    w["conn"].execute("UPDATE sosa_holders SET delivery_point_en = '\"British Columbia\"' WHERE delivery_point_code = 'BC'")
+    w["conn"].commit()
+    night(w, "2026-11-01")
+    lines = {(r["other"], r["other_fr"]) for r in sosa_rows(w, "instrument_expires_6m")}
+    assert lines == {
+        ("Regional master standing offer · Alberta, British Columbia", "Offre à commandes principale régionale · Alberta, Colombie-Britannique"),
+        ("Regional master standing offer · British Columbia", "Offre à commandes principale régionale · Colombie-Britannique")}
 
 
 def test_more_than_100_instrument_events_for_one_organization_keep_100_and_a_count_row(world):

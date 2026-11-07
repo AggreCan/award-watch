@@ -97,6 +97,9 @@ HOLD_FALL = 0.30
 STEM_MIN = 6
 CALLUP_YEARS = 10
 TEXT_MAX = 600
+# One instrument's commodity codes, "; " between them (about 50 UNSPSC codes), and their names.
+COMMODITY_MAX = 500
+COMMODITY_TEXT_MAX = 4000
 # The holder key depends on the name rules and the person test: when either
 # changes, the next file is applied quietly (no events) so a re-keyed row is
 # not reported as one lost and one gained.
@@ -110,13 +113,29 @@ META_HELD = "sosa:held"                  # the publication date of a file held f
 META_FILE_ROWS = "sosa:file_rows"        # data rows in the file applied last
 META_FILES = "sosa:files"                # how many publications have been applied
 
-# The instrument types the dictionary names, by the words that tell them apart.
-TYPE_CODES = (
-    ("supply arrangement", "SA"), ("national master", "NMSO"), ("departmental individual", "DISO"),
-    ("regional individual", "RISO"), ("regional master", "RMSO"),
+# The instrument types and their names in both languages. The data dictionary
+# spells a type out ("Regional Master Standing Offer"); the file published
+# in 2026 writes the acronym alone ("NISO", "RMSO"), so a
+# type is known by either (type_code).
+TYPES: dict[str, tuple[str, str]] = {
+    "SA": ("Supply arrangement", "Arrangement en matière d'approvisionnement"),
+    "NMSO": ("National master standing offer", "Offre à commandes principale et nationale"),
+    "NISO": ("National individual standing offer", "Offre à commandes individuelle nationale"),
+    "DISO": ("Departmental individual standing offer", "Offre à commandes individuelle ministérielle"),
+    "RISO": ("Regional individual standing offer", "Offre à commandes individuelle régionale"),
+    "RMSO": ("Regional master standing offer", "Offre à commandes principale régionale"),
+}
+# The words that tell the spelled-out types apart, tried after the acronyms.
+TYPE_WORDS = (
+    ("supply arrangement", "SA"), ("national master", "NMSO"), ("national individual", "NISO"),
+    ("departmental individual", "DISO"), ("regional individual", "RISO"), ("regional master", "RMSO"),
 )
 # Delivery point codes beside the provinces and territories: foreign, national, national capital.
 OTHER_REGIONS = ("FD", "NA", "NC")
+# A commodity code as the site's address takes it (site/src/instruments.ts readInstrumentQuery).
+COMMODITY_CODE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]{0,39}")
+# The characters the file wraps some fields in ('"25111900; 81100000"'), never part of a value.
+QUOTES = "\"\u201c\u201d"
 
 
 # ---------------------------------------------------------------------------
@@ -135,13 +154,57 @@ def stem(number: object) -> str | None:
     return text if len(re.sub(r"[^0-9a-z]", "", text)) >= STEM_MIN else None
 
 
+def unquote(raw: object) -> str:
+    """A field without the literal quotes the file wraps some values in ('"25111900"' -> '25111900'), squashed."""
+    return squash(squash(raw).strip(QUOTES))
+
+
 def type_code(type_en: object) -> str:
-    """SA, NMSO, DISO, RISO, RMSO, or OTHER for a type the dictionary does not name."""
-    text = squash(type_en).casefold()
-    for words, code in TYPE_CODES:
-        if words in text:
+    """SA, NMSO, NISO, DISO, RISO, RMSO, or OTHER for a type neither its acronym nor its words name."""
+    text = unquote(type_en)
+    for token in re.findall(r"[A-Za-z]+", text):
+        if token.upper() in TYPES:
+            return token.upper()
+    folded = text.casefold()
+    for words, code in TYPE_WORDS:
+        if words in folded:
             return code
     return "OTHER"
+
+
+def type_names(type_en: object, type_fr: object) -> tuple[str | None, str | None]:
+    """A known type's names in both languages; another type as the file wrote it."""
+    code = type_code(type_en)
+    if code in TYPES:
+        return TYPES[code]
+    return unquote(type_en) or None, unquote(type_fr) or None
+
+
+def commodity_codes(raw: object) -> list[str]:
+    """The commodity codes of a field, in the file's order without repeats: '"43230000; 81112200"' gives
+    ['43230000', '81112200']. The file as published in 2026 carries UNSPSC codes here and the
+    data dictionary a GSIN; either is kept as written. A piece that is not a code is dropped."""
+    out: list[str] = []
+    for piece in re.split(r"[;,|\n]", str(raw or "")):
+        code = unquote(piece)
+        if COMMODITY_CODE_RE.fullmatch(code) and code not in out:
+            out.append(code)
+    return out
+
+
+def commodity_names(codes: list[str], raw: object) -> dict[str, str]:
+    """Each code's name from a description field: '"25111900 - Marine craft systems; 81100000 - Engineering"'
+    names both codes. A description with no "code - name" piece is the name of a lone code."""
+    text = unquote(raw)
+    names: dict[str, str] = {}
+    # A semicolon starts a piece only where a code and " - " follow it, so one inside a name stays.
+    for piece in re.split(r";\s*(?=[A-Za-z0-9.-]+\s+-\s)", text):
+        m = re.fullmatch(r"([A-Za-z0-9.-]+)\s+-\s+(.+)", unquote(piece))
+        if m and m.group(1) in codes and m.group(1) not in names:
+            names[m.group(1)] = unquote(m.group(2))
+    if not names and len(codes) == 1 and text:
+        names[codes[0]] = text
+    return names
 
 
 def region_code(raw: object) -> str:
@@ -264,11 +327,13 @@ def read_file(path: Path, drops: matching.PersonDrops, result: LoadResult, *, pa
             if agreement not in parsed.instruments:
                 parsed.instruments[agreement] = Instrument(
                     agreement=agreement,
-                    type_en=_text(get("agreement-type_en"), 200), type_fr=_text(get("agreement-type_fr"), 200),
+                    type_en=_text(unquote(get("agreement-type_en")), 200),
+                    type_fr=_text(unquote(get("agreement-type_fr")), 200),
                     description_en=_text(get("sosa-description_en")), description_fr=_text(get("sosa-description_fr")),
-                    commodity=_text(get("commodity"), 40),
-                    commodity_en=_text(get("commodity-description_en"), 300),
-                    commodity_fr=_text(get("commodity-description_fr"), 300),
+                    # The codes cleaned and whole: one instrument can carry a dozen, each named in the descriptions.
+                    commodity=_text("; ".join(commodity_codes(get("commodity"))), COMMODITY_MAX),
+                    commodity_en=_text(unquote(get("commodity-description_en")), COMMODITY_TEXT_MAX),
+                    commodity_fr=_text(unquote(get("commodity-description_fr")), COMMODITY_TEXT_MAX),
                     end_user_en=_text(get("end-user-entity_en"), 300), end_user_fr=_text(get("end-user-entity_fr"), 300),
                     start=iso_date(get("award-date")), expiry=iso_date(get("expiry-date")),
                 )
@@ -287,16 +352,16 @@ def read_file(path: Path, drops: matching.PersonDrops, result: LoadResult, *, pa
             if withheld:
                 drops.add(legal)
                 key = (agreement, person_key(norm), region)
-                holding = Holding(agreement, key[1], region, None, None, None, _text(get("delivery-point_en"), 200),
-                                  _text(get("delivery-point_fr"), 200), True)
+                holding = Holding(agreement, key[1], region, None, None, None, _text(unquote(get("delivery-point_en")), 200),
+                                  _text(unquote(get("delivery-point_fr")), 200), True)
             else:
                 operating = _text(get("supplier-operating-name"), 300)
                 if operating and matching.is_person_name(operating):
                     operating = None
                 key = (agreement, norm, region)
                 holding = Holding(agreement, norm, region, _text(legal, 300), operating,
-                                  _text(get("supplier-standardized-name"), 300), _text(get("delivery-point_en"), 200),
-                                  _text(get("delivery-point_fr"), 200), False)
+                                  _text(get("supplier-standardized-name"), 300), _text(unquote(get("delivery-point_en")), 200),
+                                  _text(unquote(get("delivery-point_fr")), 200), False)
             parsed.holdings[key] = holding
     result.rows = stats.rows
     result.skipped += stats.skipped

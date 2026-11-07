@@ -221,7 +221,7 @@ describe("the standing offers' pages with the switch off", () => {
     const index = {
       as_of: "2026-10-31", published: "2026-10-30", status: "ok", source: "https://sosa.canadabuys.canada.ca/", types: {}, commodities: {},
       end_users: {}, rows: [{ agreement: "E60ZT-120002/001/ZT", type: "RMSO", description_en: "Environmental consulting services",
-        description_fr: null, commodity: null, end_user: null, regions: ["BC"], segments: [], start: null, expiry: "2028-03-31", n_holders: 2,
+        description_fr: null, commodity: [], end_user: null, regions: ["BC"], segments: [], start: null, expiry: "2028-03-31", n_holders: 2,
         n_holders_withheld: 0 }],
     };
     const assets = makeFakeAssets({}, { "instruments/index.json": index });

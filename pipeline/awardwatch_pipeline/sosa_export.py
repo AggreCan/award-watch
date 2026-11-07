@@ -4,8 +4,9 @@ The static export (export_static) writes, from the sosa tables (sources/sosa.py)
 
   instruments/index.json   every instrument with an active holder, for /instruments and its filters and CSV:
                            the file's publication date, the stage's outcome (ok, held, failed, none), the
-                           names of the types, commodities and end users once each, and one row per
-                           instrument (number, type, description cut at DESCRIPTION_CHARS, GSIN, end user,
+                           names of the types, commodity codes, end users and delivery points once each, and
+                           one row per instrument (number, type code and, for a type the stage does not know,
+                           the file's words, description cut at DESCRIPTION_CHARS, commodity codes, end user,
                            regions, segments, start, expiry, holders, persons withheld)
   profiles/<abc>.json      "instruments" on a profile whose organization holds one: the active ones with
                            the organization's regions and the expiry, soonest first, and the ones it no
@@ -28,7 +29,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterator
 from datetime import date
 from urllib.parse import quote
@@ -38,6 +39,8 @@ from .normalize import slugify
 from .sources import sosa
 
 DESCRIPTION_CHARS = 120
+# The commodity names of one instrument on the records row: "code - name" pieces, "; " between them.
+COMMODITY_CHARS = 2000
 # The longest agreement number the site's address takes (site/src/instruments.ts AGREEMENT_MAX).
 AGREEMENT_MAX = 120
 HOLDERS_TOP = 25
@@ -88,6 +91,39 @@ def _gsin_names(conn: sqlite3.Connection) -> dict[str, tuple[str | None, str | N
     return {r[0]: (r[1], r[2]) for r in conn.execute("SELECT code, desc_en, desc_fr FROM gsin_codes")}
 
 
+def commodity_parts(r: sqlite3.Row, gsin: dict[str, tuple[str | None, str | None]]) -> tuple[list[str], dict, dict]:
+    """An instrument's commodity codes and each one's English and French names: from the file's descriptions
+    ("code - name" pieces), else the GSIN table's. Read from the stored text, so a value stored before the
+    stage cleaned it (in the file's quotes, a list cut at 40 characters) reads clean until the next file."""
+    codes = sosa.commodity_codes(r["commodity"])
+    en = sosa.commodity_names(codes, r["commodity_en"])
+    fr = sosa.commodity_names(codes, r["commodity_fr"])
+    for code in codes:
+        if code not in en and code not in fr and code in gsin:
+            e, f = gsin[code]
+            if e:
+                en[code] = e
+            if f:
+                fr[code] = f
+    return codes, en, fr
+
+
+def _region_names(conn: sqlite3.Connection) -> dict[str, dict]:
+    """Each delivery point code's names as the file writes them, the most frequent spelling, for the codes the
+    site has no name of its own for (a country, the file's own codes for the whole country and the capital)."""
+    seen: dict[str, Counter] = defaultdict(Counter)
+    for code, en, fr in conn.execute("SELECT delivery_point_code, delivery_point_en, delivery_point_fr FROM sosa_holders "
+                                     "WHERE lost_on IS NULL"):
+        en, fr = sosa.unquote(en) or None, sosa.unquote(fr) or None
+        if code and (en or fr):
+            seen[code][(en or "", fr or "")] += 1
+    out = {}
+    for code, spellings in sorted(seen.items()):
+        (en, fr), _ = min(spellings.items(), key=lambda kv: (-kv[1], kv[0]))
+        out[code] = {"en": short(en or None, 200), "fr": short(fr or None, 200)}
+    return out
+
+
 def index_doc(conn: sqlite3.Connection, as_of: str) -> dict:
     """instruments/index.json."""
     regions = _regions(conn)
@@ -100,28 +136,34 @@ def index_doc(conn: sqlite3.Connection, as_of: str) -> dict:
         if not addressable(r["agreement_number"]):
             continue
         code = sosa.type_code(r["type_en"])
-        if code not in types or (code == "OTHER" and r["type_en"]):
-            types.setdefault(code, {"en": r["type_en"], "fr": r["type_fr"]})
-        commodity = r["commodity"]
-        if commodity and commodity not in commodities:
-            en, fr = r["commodity_en"], r["commodity_fr"]
-            if not en and not fr:
-                en, fr = gsin.get(commodity, (None, None))
-            commodities[commodity] = {"en": short(en, 200), "fr": short(fr, 200)}
+        type_en, type_fr = sosa.type_names(r["type_en"], r["type_fr"])
+        # One name per known type. The types the stage does not know share the code OTHER, so each such row
+        # carries its own words rather than one of them standing for all (every row read "NISO" that way).
+        if code != "OTHER":
+            types.setdefault(code, {"en": type_en, "fr": type_fr})
+        codes, names_en, names_fr = commodity_parts(r, gsin)
+        for c in codes:
+            named = commodities.setdefault(c, {"en": None, "fr": None})
+            named["en"] = named["en"] or short(names_en.get(c), 200)
+            named["fr"] = named["fr"] or short(names_fr.get(c), 200)
         user = end_user_key(r["end_user_buyer_id"], r["end_user_en"], r["end_user_fr"])
         if user and user not in users:
             users[user] = {"en": short(r["end_user_en"], 200), "fr": short(r["end_user_fr"], 200),
                            "buyer_id": r["end_user_buyer_id"]}
-        rows.append({
+        row = {
             "agreement": r["agreement_number"], "type": code,
             "description_en": short(r["description_en"]), "description_fr": short(r["description_fr"]),
-            "commodity": commodity, "end_user": user, "regions": regions.get(r["agreement_number"], []),
+            "commodity": codes, "end_user": user, "regions": regions.get(r["agreement_number"], []),
             "segments": sosa.segments_of(r["segments"]), "start": r["start"], "expiry": r["expiry"],
             "n_holders": r["n_holders"], "n_holders_withheld": r["n_holders_withheld"],
-        })
+        }
+        if code == "OTHER":
+            row["type_en"], row["type_fr"] = short(type_en, 200), short(type_fr, 200)
+        rows.append(row)
     return {
         "as_of": as_of, "published": get_meta(conn, sosa.META_PUBLISHED), "status": sosa.stage_outcome(conn),
-        "source": SEARCH_URL, "types": types, "commodities": commodities, "end_users": users, "rows": rows,
+        "source": SEARCH_URL, "types": types, "commodities": commodities, "end_users": users,
+        "region_names": _region_names(conn), "rows": rows,
     }
 
 
@@ -142,7 +184,8 @@ def organization_parts(conn: sqlite3.Connection) -> dict[str, dict]:
 
     def row(a: str, regions: set[str]) -> dict:
         r = info[a]
-        return {"agreement": a, "type": sosa.type_code(r["type_en"]), "type_en": r["type_en"], "type_fr": r["type_fr"],
+        type_en, type_fr = sosa.type_names(r["type_en"], r["type_fr"])
+        return {"agreement": a, "type": sosa.type_code(r["type_en"]), "type_en": type_en, "type_fr": type_fr,
                 "description_en": short(r["description_en"]), "description_fr": short(r["description_fr"]),
                 "regions": sorted(x for x in regions if x), "expiry": r["expiry"]}
 
@@ -224,13 +267,17 @@ def instrument_rows(conn: sqlite3.Connection, key_of, org_number, tender_url) ->
     for r in conn.execute("SELECT * FROM sosa_instruments ORDER BY agreement_number"):
         a = r["agreement_number"]
         segs = sosa.segments_of(r["segments"])
-        en, fr = r["commodity_en"], r["commodity_fr"]
-        if not en and not fr and r["commodity"]:
-            en, fr = gsin.get(r["commodity"], (None, None))
+        codes, names_en, names_fr = commodity_parts(r, gsin)
+        # gsin holds the codes and gsin_en and gsin_fr their names as "code - name" pieces, which the page reads
+        # back one code at a time (site/src/instruments.ts commodityList).
+        en = "; ".join(f"{c} - {names_en[c]}" for c in codes if c in names_en)
+        fr = "; ".join(f"{c} - {names_fr[c]}" for c in codes if c in names_fr)
+        type_en, type_fr = sosa.type_names(r["type_en"], r["type_fr"])
         mine = sorted(calls.get(a, []), key=lambda c: (-(c[2] or 0), -c[1], c[0] is None, c[0] or 0))
         yield (
-            key_of(f"sosa:{a}"), a, short(r["type_en"], 200), short(r["type_fr"], 200), short(r["description_en"]),
-            short(r["description_fr"]), r["commodity"], short(en, 200), short(fr, 200), short(r["end_user_en"], 200),
+            key_of(f"sosa:{a}"), a, short(type_en, 200), short(type_fr, 200), short(r["description_en"]),
+            short(r["description_fr"]), "; ".join(codes) or None, short(en, COMMODITY_CHARS), short(fr, COMMODITY_CHARS),
+            short(r["end_user_en"], 200),
             short(r["end_user_fr"], 200), r["end_user_buyer_id"], r["start"], r["expiry"],
             f" {' '.join(segs)} " if segs else "", tender_url(r["tender_reference"]) if r["tender_reference"] else None,
             r["n_holders"], r["n_holders_withheld"], r["first_seen"], r["last_seen"],

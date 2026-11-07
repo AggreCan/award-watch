@@ -396,7 +396,8 @@ def test_the_export_and_the_records_rows(conn, fixtures):
         "end_user": "pwgsc-tpsgc"}
     assert doc["end_users"]["pwgsc-tpsgc"]["buyer_id"] == "pwgsc-tpsgc"
     assert doc["rows"][0]["end_user"] == "n:all-government-departments"
-    assert doc["types"]["SA"] == {"en": "Supply Arrangement", "fr": "Arrangement en matière d'approvisionnement"}
+    assert doc["types"]["SA"] == {"en": "Supply arrangement", "fr": "Arrangement en matière d'approvisionnement"}
+    assert rmso["commodity"] == ["R109C"] and doc["commodities"]["R109C"]["en"] == "Environmental consulting services"
     part = sosa_export.organization_parts(conn)[oid(EXEMPLAR)]
     assert part["n"] == 2 and [(r["agreement"], r["regions"]) for r in part["rows"]] == [(NMSO, ["NC"]), (RMSO, ["AB", "BC"])]
     assert sosa_export.segment_holders(conn)["43"] == {
@@ -414,6 +415,120 @@ def test_the_export_and_the_records_rows(conn, fixtures):
     hrows = list(sosa_export.holder_rows(conn, records_db.key_of, records_db.org_number))
     assert all(len(r) == len(records_db.HOLDERS.written) for r in hrows)
     assert {r[1] for r in hrows} <= {by[a]["k"] for a in by}
+
+
+# -- the layout of the current file --------------------------------------------------------
+# The file as published in 2026 departs from the data
+# dictionary: the type is its acronym, the commodity column holds UNSPSC
+# codes and the descriptions their names, each in literal quotes, and the
+# delivery point codes include CA, RCNNCR and countries. The review of
+# 2026-11-07 found every row of /instruments typed "NISO", the codes printed
+# in their quotes and the region filter in raw codes. The rows below copy
+# that layout; every name is invented.
+
+NISO = "CW0000001"
+NMSO_LIVE = "CW0000002"
+OTHER_LIVE = "CW0000003"
+MARINE_EN = '"25111900 - Marine craft systems and subassemblies; 81100000 - Professional engineering services"'
+MARINE_FR = '"25111900 - Systèmes et sous-ensembles pour embarcations; 81100000 - Services d\'ingénierie professionnelle"'
+
+
+def live_week(fixtures: Path, tmp_path: Path) -> Path:
+    _, base = read_csv(fixtures / FIXTURE)
+    first = {**base[0], "supplier-operating-name": "", "supplier-standardized-name": ""}
+    niso = {**first, "agreement-number": NISO, "agreement-type_en": "NISO", "agreement-type_fr": "OCIN",
+            "commodity": '"25111900; 81100000"', "commodity-description_en": MARINE_EN, "commodity-description_fr": MARINE_FR,
+            "sosa-description_en": "Marine engine monitoring parts and service", "sosa-description_fr": ""}
+    nmso = {**first, "agreement-number": NMSO_LIVE, "agreement-type_en": '"NMSO"', "agreement-type_fr": "OCPN",
+            "supplier-legal-name": COASTAL, "commodity": '"43230000"', "commodity-description_en": '"43230000 - Software"',
+            "commodity-description_fr": '"43230000 - Logiciels"'}
+    other = {**first, "agreement-number": OTHER_LIVE, "agreement-type_en": "Framework agreement",
+             "agreement-type_fr": "Accord-cadre", "commodity": "", "commodity-description_en": "", "commodity-description_fr": "",
+             "delivery-point-code": "CA-ON", "delivery-point_en": "Ontario", "delivery-point_fr": "Ontario"}
+    rows = [
+        {**niso, "delivery-point-code": "RCN-NCR", "delivery-point_en": '"National Capital Region"',
+         "delivery-point_fr": "Région de la capitale nationale"},
+        {**niso, "delivery-point-code": "CA-BC", "delivery-point_en": "British Columbia", "delivery-point_fr": "Colombie-Britannique"},
+        {**nmso, "delivery-point-code": "CA", "delivery-point_en": "Canada", "delivery-point_fr": "Canada"},
+        {**nmso, "delivery-point-code": "US", "delivery-point_en": "United States", "delivery-point_fr": "États-Unis"},
+        other,
+    ]
+    return week(fixtures, tmp_path, "2026-10-30", rows=rows)
+
+
+def test_the_current_files_acronyms_quotes_and_region_codes_reach_the_site_as_names(conn, fixtures, tmp_path):
+    profiles(conn, EXEMPLAR, COASTAL)
+    apply_week(conn, live_week(fixtures, tmp_path))
+    # The stage keeps the codes clean and whole, the names without the file's quotes.
+    inst = conn.execute("SELECT type_en, commodity, commodity_en FROM sosa_instruments WHERE agreement_number = ?", (NISO,)).fetchone()
+    assert tuple(inst) == ("NISO", "25111900; 81100000", MARINE_EN.strip('"'))
+    rows = holders(conn)
+    assert rows[(NISO, EXEMPLAR, "RCNNCR")]["delivery_point_en"] == "National Capital Region"
+    assert {k[2] for k in rows if k[0] == NMSO_LIVE} == {"CA", "US"}
+
+    doc = sosa_export.index_doc(conn, DAY)
+    by = {r["agreement"]: r for r in doc["rows"]}
+    # Each type is its own code, named in both languages; a type the stage does not know keeps the file's words.
+    assert [by[a]["type"] for a in (NISO, NMSO_LIVE, OTHER_LIVE)] == ["NISO", "NMSO", "OTHER"]
+    assert doc["types"] == {"NISO": {"en": "National individual standing offer", "fr": "Offre à commandes individuelle nationale"},
+                            "NMSO": {"en": "National master standing offer", "fr": "Offre à commandes principale et nationale"}}
+    assert (by[OTHER_LIVE]["type_en"], by[OTHER_LIVE]["type_fr"]) == ("Framework agreement", "Accord-cadre")
+    assert "type_en" not in by[NISO]
+    # The commodity is the list of codes, each named once; no value keeps a quote.
+    assert by[NISO]["commodity"] == ["25111900", "81100000"] and by[OTHER_LIVE]["commodity"] == []
+    assert doc["commodities"]["81100000"] == {"en": "Professional engineering services", "fr": "Services d'ingénierie professionnelle"}
+    assert doc["commodities"]["43230000"] == {"en": "Software", "fr": "Logiciels"}
+    # The file's own name for each delivery point code, for the codes the site does not name itself.
+    assert doc["region_names"]["RCNNCR"] == {"en": "National Capital Region", "fr": "Région de la capitale nationale"}
+    assert doc["region_names"]["US"] == {"en": "United States", "fr": "États-Unis"}
+    assert doc["region_names"]["CA"] == {"en": "Canada", "fr": "Canada"}
+    assert sorted(by[NISO]["regions"]) == ["BC", "RCNNCR"]
+    shown = json.dumps({k: doc[k] for k in ("types", "commodities", "region_names")}, ensure_ascii=False)
+    assert '\\"' not in shown and not any('"' in c for r in doc["rows"] for c in r["commodity"])
+
+    # The profile and the records rows carry the names too, and the records row the codes and their names.
+    part = sosa_export.organization_parts(conn)[oid(EXEMPLAR)]
+    assert {r["agreement"]: r["type_en"] for r in part["rows"]}[NISO] == "National individual standing offer"
+    rec = {r[1]: dict(zip(records_db.INSTRUMENTS.written, r))
+           for r in sosa_export.instrument_rows(conn, records_db.key_of, records_db.org_number, lambda ref: ref)}
+    assert {k: rec[NISO][k] for k in ("type_en", "type_fr", "gsin", "gsin_en", "gsin_fr")} == {
+        "type_en": "National individual standing offer", "type_fr": "Offre à commandes individuelle nationale",
+        "gsin": "25111900; 81100000",
+        "gsin_en": "25111900 - Marine craft systems and subassemblies; 81100000 - Professional engineering services",
+        "gsin_fr": "25111900 - Systèmes et sous-ensembles pour embarcations; 81100000 - Services d'ingénierie professionnelle"}
+    assert (rec[OTHER_LIVE]["type_en"], rec[OTHER_LIVE]["gsin"]) == ("Framework agreement", None)
+
+
+def test_the_type_commodity_and_quote_rules():
+    assert [sosa.type_code(t) for t in ("NISO", '"RMSO"', "Supply Arrangement (SA)", "National Individual Standing Offer",
+                                         "Regional Master Standing Offer", "Standing offer", "")] == [
+        "NISO", "RMSO", "SA", "NISO", "RMSO", "OTHER", "OTHER"]
+    assert sosa.type_names("RISO", None) == sosa.TYPES["RISO"]
+    assert sosa.type_names('"Framework agreement"', "Accord-cadre") == ("Framework agreement", "Accord-cadre")
+    assert sosa.unquote(' "National Capital Region" ') == "National Capital Region"
+    assert sosa.commodity_codes('"43230000; 81112200"') == ["43230000", "81112200"]
+    assert sosa.commodity_codes("N7010") == ["N7010"] and sosa.commodity_codes(None) == []
+    # A value cut short (the stage once kept 40 characters) loses the empty piece, not a code.
+    assert sosa.commodity_codes('"39121000; 41100000; 41110000; 41120000;') == ["39121000", "41100000", "41110000", "41120000"]
+    # A semicolon inside a name stays in it; a lone code's plain description is its name.
+    assert sosa.commodity_names(["11111111", "22222222"], '"11111111 - Nuts; bolts; 22222222 - Washers"') == {
+        "11111111": "Nuts; bolts", "22222222": "Washers"}
+    assert sosa.commodity_names(["R109C"], "Environmental consulting services") == {"R109C": "Environmental consulting services"}
+    assert sosa.commodity_names(["11111111", "22222222"], "Hardware") == {}
+
+
+def test_a_commodity_stored_in_the_files_quotes_reads_clean_tonight(conn, fixtures):
+    """The file is applied once a week: the codes stored before the stage cleaned them read clean from the next export."""
+    apply_week(conn, fixtures / FIXTURE)
+    conn.execute("UPDATE sosa_instruments SET commodity = ?, commodity_en = ? WHERE agreement_number = ?",
+                 ('"39121000; 41100000; 41110000; 41120000;', '"39121000 - Power conditioning equipment; 41100000 - Laboratory '
+                  'and scientific equipment"', RMSO))
+    conn.commit()
+    doc = sosa_export.index_doc(conn, DAY)
+    rmso = {r["agreement"]: r for r in doc["rows"]}[RMSO]
+    assert rmso["commodity"] == ["39121000", "41100000", "41110000", "41120000"]
+    assert doc["commodities"]["41100000"]["en"] == "Laboratory and scientific equipment"
+    assert doc["commodities"]["41110000"] == {"en": None, "fr": None}
 
 
 def test_the_records_sync_carries_the_instruments(conn, fixtures, tmp_path):

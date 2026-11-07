@@ -1320,12 +1320,14 @@ def _instrument_events(conn: sqlite3.Connection, found: _Found, lo: str | None, 
 
     def add(identity: str, kind: str, agreement: str, number: int, endd: object, en: list[str], fr: list[str], **more) -> None:
         inst = info.get(agreement)
+        # The type's names, not the acronym the file writes ("NISO"), so the watch mail reads in either language.
+        type_en, type_fr = sosa.type_names(inst["type_en"], inst["type_fr"]) if inst else (None, None)
         found.add(identity, kind, ref=f"sosa:{agreement}", path=sosa_export.instrument_path(agreement), oid=number,
                   endd=endd or (inst["expiry"] if inst else None),
                   title=title_of(inst["description_en"], None) if inst else None,
                   title_fr=title_of(inst["description_fr"], None) if inst else None,
-                  other=_instrument_other(inst["type_en"] if inst else None, en),
-                  other_fr=_instrument_other(inst["type_fr"] if inst else None, fr), **more)
+                  other=_instrument_other(type_en, [sosa.unquote(x) for x in en]),
+                  other_fr=_instrument_other(type_fr, [sosa.unquote(x) for x in fr]), **more)
 
     marks = ", ".join("?" * len(INSTRUMENT_EVENTS))
     for r in conn.execute(
