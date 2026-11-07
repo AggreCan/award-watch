@@ -112,7 +112,7 @@ export const RefreshTimers: FC<{ lang: Lang; now: number; on: boolean; stamps?: 
       <a class="refresh" href={on ? SAME_DAY_HREF : "/tenders"} data-refresh-runs={SAME_DAY_RUNS_UTC.join(" ")} data-now={words.now}
         data-refresh-key="same_day" data-data-at={sameDay}>
         <Line lang={lang} label="refresh.same_day_label" short="refresh.same_day_label_short" figure={refreshFigure(now, SAME_DAY_RUNS_UTC, sameDay, words)} />
-        {on ? <> <ProTag lang={lang} /></> : null}
+        {on ? <ProTag lang={lang} /> : null}
       </a>
       <script type="module" src="/refresh.js"></script>
     </span>

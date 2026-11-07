@@ -368,7 +368,7 @@ describe("where the form is linked", () => {
       ["en", "Bug reports", "Report a bug", "(paid plan)"], ["fr", "Rapports de bogue", "Signaler un bogue", "(forfait payant)"],
     ] as const) {
       const overview = nbsp(decode(await (await get(`/account?lang=${lang}`, { cookie })).text()));
-      const row = new RegExp(`<dt>${field}</dt><dd><a href="/account/bug">${link} <span class="pro-tag"><svg [^>]*><path [^>]*></path></svg>Pro<span class="visually-hidden"> \\${hidden.slice(0, -1)}\\)</span></span></a></dd>`);
+      const row = new RegExp(`<dt>${field}</dt><dd><a href="/account/bug">${link}<span class="pro-tag"><svg [^>]*><path [^>]*></path></svg>Pro<span class="visually-hidden"> \\${hidden.slice(0, -1)}\\)</span></span></a></dd>`);
       expect(overview, lang).toMatch(row);
     }
   });

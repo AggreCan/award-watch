@@ -8,7 +8,7 @@ import type { AppEnv } from "../env";
 import { decimal, fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, noDataPage, page, todayOf } from "../layout";
 import { allowsRadarDepth, requestPlan } from "../plan";
-import { ProNote, ProTag } from "../pro";
+import { ProNote } from "../pro";
 import { type DataSet, ODLA_URL, OGL_URL, datasetJsonLd, pageSeo } from "../seo";
 import { KeyedApiDocs } from "./keyed_api";
 import { datasetUrl } from "./shared";
@@ -277,7 +277,8 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                       <td data-label={t(lang, "data.col_file")}><a href={fileHref(d)} class="mono">{d.file}</a></td>
                       <td data-label={t(lang, "data.col_contents")}>
                         {t(lang, d.contents)}
-                        {d.paid && pro ? <>{" "}<ProTag lang={lang} /><br /><span class="muted small">{t(lang, "data.file.pro_on")}</span></> : null}
+                        {/* The chip starts the note's line, as in a gate note; after the contents a wrap left it alone on a line, 6 px in. */}
+                        {d.paid && pro ? <ProNote lang={lang}>{t(lang, "data.file.pro_on")}</ProNote> : null}
                         {d.note && !(d.paid && pro) ? <><br /><span class="muted small">{t(lang, d.note)}</span></> : null}
                       </td>
                       {/* Sorted in the page by the bytes: the units the size is written in differ from row to row. */}

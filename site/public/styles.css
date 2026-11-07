@@ -979,19 +979,39 @@ tr[data-phone-cut] { display: none !important; }
    panel is 5.3:1 light and 9.3:1 dark, and at least 4.7:1 on every ground
    the chip sits on (page, head band, selected row). The chip has no hover or
    focus of its own: the link it sits in carries the focus ring. The tokens
-   swap with the theme, so there is no dark rule. */
+   swap with the theme, so there is no dark rule.
+   Spacing, one rule for every page: 6 px between the chip and whatever is
+   beside it (a label, a count, a sentence), from the chip's own margins. The
+   markup puts no word space beside a chip, so the gap does not change with
+   the type size around it, and no page sets a margin of its own. */
 .pro-tag {
-  display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 6px;
+  display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; margin: 0 6px; padding: 0 6px;
   border: 1px solid var(--accent); border-radius: 0; background: var(--panel); color: var(--accent);
   font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; font-variant-numeric: normal;
   text-transform: none; text-decoration: none; white-space: nowrap; vertical-align: middle;
 }
 .pro-tag svg { display: block; flex: none; width: 11px; height: 11px; fill: currentColor; }
-/* After a label (a tab, a link, a heading) the word space and 2 px make 6. */
-a > .pro-tag, h2 > .pro-tag { margin-left: 2px; }
-/* In the rail the chip takes the count's slot, right-aligned, 8 px before a
-   count; flattened below 1000 px it follows the label inside the item. */
-.rail-item > .pro-tag { margin-left: auto; }
+/* The exceptions, where something else already makes the space, so the
+   margin on that side would double it. A chip that ends a link: what follows
+   is the link's neighbour (a tab's gap, the head's padding, a sentence's
+   period), and a margin would only run a tab's underline past the chip or
+   float the period off it. */
+a > .pro-tag:last-child { margin-right: 0; }
+/* A gate note starts with the chip, at the column's edge. */
+.pro-note .pro-tag { margin-left: 0; }
+/* Boxes that space their items with a gap of their own: a button, a tile's
+   label and the plan card's head band (8 px), the panel head's tools and the
+   top bar's timer (16 px). */
+.btn > .pro-tag, a.tile .tile-label > .pro-tag, .plan-card-head > .pro-tag, .panel-tools > .pro-tag, a.refresh > .pro-tag { margin: 0; }
+/* In the rail the chip takes the count's slot, right-aligned, the item's
+   8 px gap before a count; flattened below 1000 px it follows the label
+   inside the item at the item's 12 px gap. */
+.rail-item > .pro-tag { margin: 0 0 0 auto; }
+/* An eyebrow that carries the chip spaces it with a 6 px gap, so a chip
+   alone (the Pro page) starts at the column's edge and a chip after a word
+   (an analytics view) stands 6 px from it. */
+.eyebrow:has(> .pro-tag) { display: flex; align-items: center; gap: 6px; }
+.eyebrow > .pro-tag { margin: 0; }
 /* A gate note: the chip first, one sentence, a link. Muted small type, no
    box; the line is as tall as the chip. */
 /* No measure cap: a tease line with its link wraps only at the panel's edge (operator, 2026-11-07). */
@@ -1107,7 +1127,6 @@ ul.documents li:last-child { margin-bottom: 0; }
 .refresh-label { font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .refresh-left { font-size: 14px; line-height: 18px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 a.refresh { color: inherit; text-decoration: none; }
-a.refresh > .pro-tag { margin-left: 0; }
 a.refresh:hover .refresh-label { color: var(--ink); }
 a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offset: 2px; }
 .refresh-reload .refresh-short { display: inline; }

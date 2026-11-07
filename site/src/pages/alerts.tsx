@@ -246,7 +246,7 @@ async function alertsView(c: Context<AppEnv>, state: ListsState, status: 200 | 4
           <p>{t(lang, "alerts.register_intro")}</p>
           <ListsBody lang={lang} data={data} {...state} />
 
-          <h2 id="cover">{t(lang, "alerts.toc_cover")}{accountsEnabled(c.env) ? <>{" "}<ProTag lang={lang} /></> : null}</h2>
+          <h2 id="cover">{t(lang, "alerts.toc_cover")}{accountsEnabled(c.env) ? <ProTag lang={lang} /> : null}</h2>
           <p>{t(lang, "alerts.cover_intro")}</p>
           <ul>
             <li>{t(lang, "alerts.cover_tenders")}</li>

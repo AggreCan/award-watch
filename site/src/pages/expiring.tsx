@@ -526,7 +526,7 @@ export const MoreInWindow: FC<{ lang: Lang; part: ExpiringPart; pro?: boolean }>
     <>
       {tj(lang, more === 1 ? "expiring.part_more_one" : "expiring.part_more_many", {
         more: fmtInt(more, lang),
-        list: <a href="/expiring/12m">{t(lang, "expiring.list_link_12m")}{pro ? <>{" "}<ProTag lang={lang} /></> : null}</a>,
+        list: <a href="/expiring/12m">{t(lang, "expiring.list_link_12m")}{pro ? <ProTag lang={lang} /> : null}</a>,
       })}
     </>
   );
@@ -551,7 +551,7 @@ const WindowLinks: FC<{ lang: Lang; current: ExpiringWindow; q: ExpiringQuery; p
   <nav aria-label={t(lang, "expiring.windows_nav")} class="tabs toolbar-row">
     {EXPIRING_WINDOWS.map((w) => (
       <a href={`/expiring/${w}${expiringQueryString(q)}`} aria-current={w === current ? "page" : undefined}>
-        {t(lang, WINDOW_LABEL[w])}{pro && DEEP_WINDOWS.includes(w) ? <>{" "}<ProTag lang={lang} /></> : null}
+        {t(lang, WINDOW_LABEL[w])}{pro && DEEP_WINDOWS.includes(w) ? <ProTag lang={lang} /> : null}
       </a>
     ))}
   </nav>
@@ -599,7 +599,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
           {windows.map((w) => (
             <a class="tile" href={`/expiring/${w.window}`}>
               <span class="tile-label">
-                {t(lang, WINDOW_LABEL[w.window])}{pro && DEEP_WINDOWS.includes(w.window) ? <>{" "}<ProTag lang={lang} /></> : null}
+                {t(lang, WINDOW_LABEL[w.window])}{pro && DEEP_WINDOWS.includes(w.window) ? <ProTag lang={lang} /> : null}
               </span>
               <span class="tile-value">{n(w.n)}</span>
               <span class="tile-note">

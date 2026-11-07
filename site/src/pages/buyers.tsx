@@ -262,7 +262,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
       {b.expiring ? (
         <ExpiringSection lang={lang} part={b.expiring} heading="buyer.expiring" buyer={false} phoneRows={PHONE_ROWS}
           link={<a href={`/expiring/12m?buyer=${b.buyer.id}`}>
-            {t(lang, "buyer.expiring_all")}{accountsEnabled(c.env) ? <>{" "}<ProTag lang={lang} /></> : null}
+            {t(lang, "buyer.expiring_all")}{accountsEnabled(c.env) ? <ProTag lang={lang} /> : null}
           </a>} />
       ) : null}
 

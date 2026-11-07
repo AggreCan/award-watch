@@ -313,7 +313,7 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
 const FreeNote: FC<{ lang: Lang; view: View; signedIn: boolean; asked: boolean }> = ({ lang, view, signedIn, asked }) => (
   <div class="pro-note">
     {asked ? <p>{t(lang, "analytics.free_asked", { n: FREE_YEARS })}</p> : null}
-    <p><ProTag lang={lang} /> {t(lang, `analytics.free_${view}` as Key, { n: FREE_YEARS })} {t(lang, `analytics.free_more_${view}` as Key)}</p>
+    <p><ProTag lang={lang} />{t(lang, `analytics.free_${view}` as Key, { n: FREE_YEARS })} {t(lang, `analytics.free_more_${view}` as Key)}</p>
     <p><ProLink lang={lang} signedIn={signedIn} /></p>
   </div>
 );

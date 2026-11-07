@@ -112,7 +112,7 @@ describe("the top bar", () => {
     // (the fixture's newest run row), the sub-daily one none on a page without the same-day band.
     expect(bar).toContain(`<a class="refresh" href="${SAME_DAY_HREF}" data-refresh-runs="${SAME_DAY_RUNS_UTC.join(" ")}" data-now="now" data-refresh-key="same_day">`);
     // The chip is the shared one (src/pro.tsx), after the label and the figure; its markup is held by test/pro-mark.test.ts.
-    expect(bar).toContain('<span class="refresh-left">1h 45m</span></span> <span class="pro-tag">');
+    expect(bar).toContain('<span class="refresh-left">1h 45m</span></span><span class="pro-tag">');
     expect(bar).toContain('<span class="refresh" data-refresh-runs="12:30" data-now="now" data-refresh-key="daily" data-data-at="2026-10-31T12:44:03Z">');
     // The script needs no label: the figure's forms only, no template with the words around it.
     expect(bar).toContain(`data-hm="${JSON.stringify(["", "h", "h ", "m", "m"]).replace(/"/g, "&quot;")}"`);
@@ -154,9 +154,10 @@ describe("the top bar", () => {
     const css = env.STYLES_CSS;
     expect(css).toMatch(/\n\.refresh-timers \{ display: none; \}\n@media \(min-width: 1200px\) \{\n  \.refresh-timers \{ display: flex; align-items: center; gap: 24px; margin-left: 8px; white-space: nowrap; \}\n\}/);
     expect(css).not.toMatch(/\.refresh-timers \{[^}]*flex-direction: column/);
-    // 16 px from the second block's lines to its chip, in place of the 2 px a chip takes after a label.
+    // 16 px from the second block's lines to its chip: the block's gap, with the chip's own margins
+    // zeroed among the other boxes that space their items with a gap (the Pro mark's block).
     expect(css).toMatch(/\n\.refresh \{ display: flex; align-items: center; gap: 16px; \}/);
-    expect(css).toMatch(/\na\.refresh > \.pro-tag \{ margin-left: 0; \}/);
+    expect(css).toMatch(/, a\.refresh > \.pro-tag \{ margin: 0; \}/);
     expect(css).toMatch(/\n\.refresh-line \{ display: flex; flex-direction: column; align-items: flex-start; \}/);
     expect(css).toMatch(/\n\.refresh-label \{ font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0\.06em; text-transform: uppercase; color: var\(--muted\); \}/);
     expect(css).toMatch(/\n\.refresh-left \{ font-size: 14px; line-height: 18px; font-weight: 600; color: var\(--ink\); font-variant-numeric: tabular-nums; white-space: nowrap; \}/);

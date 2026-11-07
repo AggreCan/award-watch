@@ -34,7 +34,9 @@ import { SAME_DAY_RUNS_UTC } from "./refresh";
 export const PRO_GLYPH_PATH = "M3 6.2 6 2h4l3 4.2L8 14.5z";
 
 // The word, then the long form for assistive technology ("Pro (paid
-// plan)"). The glyph is hidden from it, so it reads the word once.
+// plan)"). The glyph is hidden from it, so it reads the word once. A
+// caller puts no word space beside the chip: its margins make the 6 px
+// on either side (public/styles.css), and a space would add to them.
 export const ProTag: FC<{ lang: Lang }> = ({ lang }) => (
   <span class="pro-tag">
     <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d={PRO_GLYPH_PATH} /></svg>
@@ -69,7 +71,7 @@ export const SameDayLegend: FC<{ lang: Lang }> = ({ lang }) => <span>{t(lang, "s
 // A gate note: the chip, one sentence, and where to go from it. The
 // children may be tj()'s pieces (a sentence with a link in it).
 export const ProNote: FC<{ lang: Lang; children?: unknown }> = ({ lang, children }) => (
-  <p class="pro-note"><ProTag lang={lang} />{" "}{children as any}</p>
+  <p class="pro-note"><ProTag lang={lang} />{children as any}</p>
 );
 
 // -- the plans, row by row --------------------------------------------------------

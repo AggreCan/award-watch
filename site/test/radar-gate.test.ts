@@ -141,7 +141,7 @@ const html = async (path: string, env: object, cookie?: string) => (await get(pa
 // in"), the wordmark a signed-in reader's plan, the footer a Pro reader's
 // bug report link, and the tabs and tiles of the deep windows the Pro chip
 // (for every reader); the rest of the page is what is compared.
-const CHIP = / <span class="pro-tag"><svg[^>]*><path[^>]*><\/path><\/svg>Pro<span class="visually-hidden"> \((?:paid plan|forfait payant)\)<\/span><\/span>/g;
+const CHIP = /<span class="pro-tag"><svg[^>]*><path[^>]*><\/path><\/svg>Pro<span class="visually-hidden"> \((?:paid plan|forfait payant)\)<\/span><\/span>/g;
 const noRail = (page: string) =>
   page.replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "")
     .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(/<a href="\/pro">[^<]*<\/a>/, "").replace(CHIP, "")

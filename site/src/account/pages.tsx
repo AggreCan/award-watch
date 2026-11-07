@@ -190,7 +190,7 @@ export function overviewView(
           <dt>{t(lang, "bugs.field")}</dt>
           <dd>
             <a href="/account/bug">
-              {t(lang, "bugs.link")}{allowed(account, "bug_reports") ? null : <>{" "}<ProTag lang={lang} /></>}
+              {t(lang, "bugs.link")}{allowed(account, "bug_reports") ? null : <ProTag lang={lang} />}
             </a>
           </dd>
         </dl>
@@ -202,7 +202,7 @@ export function overviewView(
             <span class="num">{t(lang, "account.searches_n", { n: fmtInt(counts.searches, lang), cap: fmtInt(counts.cap, lang) })}</span>
           </li>
           <li>
-            <a href="/account/keys">{t(lang, "account.keys")}{allowed(account, "api") ? null : <>{" "}<ProTag lang={lang} /></>}</a>
+            <a href="/account/keys">{t(lang, "account.keys")}{allowed(account, "api") ? null : <ProTag lang={lang} />}</a>
             <span class="num">{fmtInt(counts.keys, lang)}</span>
           </li>
           {counts.watches === undefined || counts.watches === null ? null : (

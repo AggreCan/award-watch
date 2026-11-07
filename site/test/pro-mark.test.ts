@@ -135,6 +135,30 @@ describe("the chip's stylesheet", () => {
     expect(STYLES_VERSION).toBeGreaterThanOrEqual(14);
   });
 
+  it("stands 6 px from whatever is beside it by its own margins, every exception in the Pro mark's block and none in a page's rule", () => {
+    const [chip] = rulesFor("pro-tag").filter((r) => r.selector === ".pro-tag");
+    expect(decl(chip.body, "margin")).toBe("0 6px");
+    // Every rule in the stylesheet that sets a margin on the chip, and the margins it sets: the chip's
+    // 6 px, or none on the side something else already spaces (the end of a link, the start of a
+    // gate note, a box with a gap of its own, the rail's count slot).
+    const margins = rulesFor("pro-tag")
+      .map((r) => [r.selector, r.body.split(";").map((d) => d.trim()).filter((d) => /^margin(?:-[a-z]+)?\s*:/.test(d)).join("; ")])
+      .filter(([, m]) => m);
+    expect(margins).toEqual([
+      [".pro-tag", "margin: 0 6px"],
+      ["a > .pro-tag:last-child", "margin-right: 0"],
+      [".pro-note .pro-tag", "margin-left: 0"],
+      [".btn > .pro-tag, a.tile .tile-label > .pro-tag, .plan-card-head > .pro-tag, .panel-tools > .pro-tag, a.refresh > .pro-tag", "margin: 0"],
+      [".rail-item > .pro-tag", "margin: 0 0 0 auto"],
+      [".eyebrow > .pro-tag", "margin: 0"],
+    ]);
+    const block = /\/\* -- the Pro mark[\s\S]*?(?=\/\* -- )/.exec(STYLES)?.[0] ?? "";
+    for (const [selector] of margins) expect(block, selector).toContain(`\n${selector} {`);
+    // An eyebrow that carries the chip spaces it with the same 6 px, as a gap.
+    const [eyebrow] = rulesFor("pro-tag").filter((r) => r.selector === ".eyebrow:has(> .pro-tag)");
+    expect(decl(eyebrow.body, "gap")).toBe("6px");
+  });
+
   it("swaps with the theme through the tokens alone, both of which every theme defines", () => {
     for (const block of [/:root \{[\s\S]*?\n\}/, /:root\[data-theme="dark"\] \{[\s\S]*?\n\}/]) {
       const body = block.exec(STYLES)?.[0] ?? "";
@@ -173,6 +197,26 @@ describe("the chip's markup", () => {
     const sameDay = await get("/tenders/same-day", { env: testEnv(radar()) });
     expect(sameDay.status).toBe(404);
     expect(await sameDay.text()).toContain("<h1>Page Not Found</h1>");
+  });
+
+  it("has no word space on either side on the pages that draw it, so its margins alone make the gap", async () => {
+    await sessions();
+    const profiles = clone(FILES["profiles/a00.json"]) as Record<string, any>;
+    profiles["org-a000000001"].expiring.n = 30;
+    const pages: [string, object, string | undefined][] = [
+      ["/expiring", on(), undefined], ["/expiring/6m", paid(), freeCookie], ["/tenders", on(), undefined], ["/tenders/same-day", paid(), undefined],
+      ["/data", on(), undefined], ["/alerts", on(), undefined], ["/buyers/pwgsc-tpsgc", on(), undefined],
+      ["/organizations/org-a000000001", on({ ASSETS: radar({ "profiles/a00.json": profiles }) }), undefined],
+      ["/account", on(), freeCookie], ["/account/keys", on(), freeCookie], ["/pro", paid(), freeCookie], ["/account/billing", paid(), freeCookie],
+    ];
+    for (const lang of ["en", "fr"]) {
+      for (const [path, e, cookie] of pages) {
+        const page = await (await get(`${path}?lang=${lang}`, { env: e, cookie })).text();
+        expect(chips(page), `${path} ${lang}`).toBeGreaterThan(0);
+        expect(page, `${path} ${lang}`).not.toMatch(/[\s  ]<span class="pro-tag">/);
+        expect(page, `${path} ${lang}`).not.toMatch(/<span class="visually-hidden"> \((?:paid plan|forfait payant)\)<\/span><\/span>[\s  ]/);
+      }
+    }
   });
 });
 
@@ -291,17 +335,17 @@ describe("the radar's tabs and tiles", () => {
     for (const [who, cookie] of READERS()) {
       const overview = await html("/expiring", { env: on(), cookie });
       expect(overview, who).toContain('<a class="tile" href="/expiring/3m"><span class="tile-label">Within 3 months</span>');
-      expect(overview, who).toContain(`<a class="tile" href="/expiring/6m"><span class="tile-label">Within 6 months ${CHIP_EN}</span>`);
-      expect(overview, who).toContain(`<a class="tile" href="/expiring/12m"><span class="tile-label">Within 12 months ${CHIP_EN}</span>`);
+      expect(overview, who).toContain(`<a class="tile" href="/expiring/6m"><span class="tile-label">Within 6 months${CHIP_EN}</span>`);
+      expect(overview, who).toContain(`<a class="tile" href="/expiring/12m"><span class="tile-label">Within 12 months${CHIP_EN}</span>`);
       for (const path of ["/expiring/3m", "/expiring/6m", "/expiring/12m"]) {
         const tabs = tabsOf(await html(path, { env: on(), cookie }));
-        expect(tabs, `${who} ${path}`).toContain(`>Within 6 months ${CHIP_EN}</a>`);
-        expect(tabs, `${who} ${path}`).toContain(`>Within 12 months ${CHIP_EN}</a>`);
+        expect(tabs, `${who} ${path}`).toContain(`>Within 6 months${CHIP_EN}</a>`);
+        expect(tabs, `${who} ${path}`).toContain(`>Within 12 months${CHIP_EN}</a>`);
         expect(tabs, `${who} ${path}`).toMatch(/>Within 3 months<\/a>/);
       }
     }
     const fr = await html("/expiring?lang=fr", { env: on() });
-    expect(fr).toContain(`<span class="tile-label">D’ici 6 mois ${CHIP_FR}</span>`);
+    expect(fr).toContain(`<span class="tile-label">D’ici 6 mois${CHIP_FR}</span>`);
   });
 
   it("name the price on the tease panel's Pro card from the variables while a checkout can be made, and say Pro is not on sale otherwise", async () => {
@@ -548,15 +592,15 @@ describe("the links to the 12-month list", () => {
     profiles["org-a000000001"].expiring.n = 30;
     const assets = radar({ "profiles/a00.json": profiles });
     const onPage = await html("/organizations/org-a000000001", { env: on({ ASSETS: assets }) });
-    expect(onPage).toContain(`The other 29 are in <a href="/expiring/12m">the 12-month list ${CHIP_EN}</a>.`);
+    expect(onPage).toContain(`The other 29 are in <a href="/expiring/12m">the 12-month list${CHIP_EN}</a>.`);
     const fr = await html("/organizations/org-a000000001?lang=fr", { env: on({ ASSETS: assets }) });
-    expect(fr).toContain(`Les 29 autres se trouvent dans <a href="/expiring/12m">la liste de 12 mois ${CHIP_FR}</a>.`);
+    expect(fr).toContain(`Les 29 autres se trouvent dans <a href="/expiring/12m">la liste de 12 mois${CHIP_FR}</a>.`);
     const off = await html("/organizations/org-a000000001", { env: testEnv(assets) });
     expect(off).toContain('The other 29 are in <a href="/expiring/12m">the 12-month list</a>.');
     const buyer = await html("/buyers/pwgsc-tpsgc", { env: on() });
-    expect(buyer).toContain(`<a href="/expiring/12m?buyer=pwgsc-tpsgc">This buyer's contracts in the 12-month list ${CHIP_EN}</a>`.replace("'", "&#39;"));
+    expect(buyer).toContain(`<a href="/expiring/12m?buyer=pwgsc-tpsgc">This buyer's contracts in the 12-month list${CHIP_EN}</a>`.replace("'", "&#39;"));
     const buyerFr = await html("/buyers/pwgsc-tpsgc?lang=fr", { env: on() });
-    expect(buyerFr).toContain(`Les contrats de cet acheteur dans la liste de 12 mois ${CHIP_FR}</a>`);
+    expect(buyerFr).toContain(`Les contrats de cet acheteur dans la liste de 12 mois${CHIP_FR}</a>`);
     expect(chips(await html("/buyers/pwgsc-tpsgc", { env: testEnv(radar()) }))).toBe(0);
   });
 });
@@ -585,8 +629,8 @@ describe("same-day notices", () => {
   it("add one gate note to the tender lists' head for a reader without the feature, linking the page", async () => {
     await sessions();
     const note = (lang: "en" | "fr") => lang === "en"
-      ? `<p class="pro-note">${CHIP_EN} <a href="/tenders/same-day">Same-day notices</a>: the notices CanadaBuys posts during the day show above this list, read every two hours.</p>`
-      : `<p class="pro-note">${CHIP_FR} <a href="/tenders/same-day">Avis du jour</a> : les avis publiés sur AchatsCanada pendant la journée paraissent au-dessus de cette liste, lus toutes les deux heures.</p>`;
+      ? `<p class="pro-note">${CHIP_EN}<a href="/tenders/same-day">Same-day notices</a>: the notices CanadaBuys posts during the day show above this list, read every two hours.</p>`
+      : `<p class="pro-note">${CHIP_FR}<a href="/tenders/same-day">Avis du jour</a> : les avis publiés sur AchatsCanada pendant la journée paraissent au-dessus de cette liste, lus toutes les deux heures.</p>`;
     for (const [who, cookie] of [["no session", undefined], ["free", freeCookie]] as const) {
       for (const lang of ["en", "fr"] as const) {
         for (const path of ["/tenders", "/tenders/new"]) {
@@ -681,13 +725,13 @@ describe("the Data page", () => {
     for (const [who, cookie] of [["no session", undefined], ["free", freeCookie]] as const) {
       const r = row(await html("/data", { env: on(), cookie }));
       expect(r, who).toContain('<a href="/expiring/12m" class="mono">expiring-12m.csv</a>');
-      expect(r, who).toContain(`one row each, listed once across sources ${CHIP_EN}<br/><span class="muted small">Part of Pro. The 3-month file is free.</span>`);
+      expect(r, who).toContain(`one row each, listed once across sources<p class="pro-note">${CHIP_EN}Part of Pro. The 3-month file is free.</p>`);
     }
     const pro = row(await html("/data", { env: on(), cookie: proCookie }));
     expect(pro).toContain('<a href="/downloads/expiring-12m.csv" class="mono">expiring-12m.csv</a>');
     expect(chips(pro)).toBe(1);
     const fr = row(await html("/data?lang=fr", { env: on() }));
-    expect(fr).toContain(`${CHIP_FR}<br/><span class="muted small">Fait partie de Pro. Le fichier de 3 mois est gratuit.</span>`);
+    expect(fr).toContain(`<p class="pro-note">${CHIP_FR}Fait partie de Pro. Le fichier de 3 mois est gratuit.</p>`);
     // The file's own address still answers 404 to such a request.
     expect((await get("/downloads/expiring-12m.csv", { env: on() })).status).toBe(404);
     // Exactly two chips on the page outside the rail: the file's row and the line on keys.
@@ -696,10 +740,10 @@ describe("the Data page", () => {
 
   it("says in one line, with the chip, that API keys come with Pro", async () => {
     const en = decode(await html("/data", { env: on() }));
-    expect(en).toContain(`<p class="pro-note">${CHIP_EN} <a href="/account/keys">API keys</a> come with Pro and open the keyed API below.</p>`);
+    expect(en).toContain(`<p class="pro-note">${CHIP_EN}<a href="/account/keys">API keys</a> come with Pro and open the keyed API below.</p>`);
     expect(en.indexOf("API keys</a> come with Pro")).toBeGreaterThan(en.indexOf("Each address may make 60 API requests a minute."));
     const fr = decode(await html("/data?lang=fr", { env: on() }));
-    expect(fr).toContain(`<p class="pro-note">${CHIP_FR} Les <a href="/account/keys">clés d’API</a> sont offertes avec le forfait Pro et ouvrent l’API avec clé ci-dessous.</p>`);
+    expect(fr).toContain(`<p class="pro-note">${CHIP_FR}Les <a href="/account/keys">clés d’API</a> sont offertes avec le forfait Pro et ouvrent l’API avec clé ci-dessous.</p>`);
   });
 });
 
@@ -715,22 +759,22 @@ describe("the Email lists page", () => {
 
   it("adds, after the lists saved, one line saying delivery is part of Pro, with the sign-in link", async () => {
     const en = decode(await (await choose("en", newEmail("lists-pro"), on())).text());
-    expect(en).toContain(`<p class="pro-note">${CHIP_EN} Delivery is part of Pro. <a href="/account/sign-in">Sign in</a> with this address to start it.</p>`);
+    expect(en).toContain(`<p class="pro-note">${CHIP_EN}Delivery is part of Pro. <a href="/account/sign-in">Sign in</a> with this address to start it.</p>`);
     const fr = decode(nbsp(await (await choose("fr", newEmail("lists-pro-fr"), on())).text()));
-    expect(fr).toContain(`<p class="pro-note">${CHIP_FR} L’envoi fait partie de Pro. <a href="/account/sign-in">Connectez-vous</a> avec cette adresse pour le lancer.</p>`);
+    expect(fr).toContain(`<p class="pro-note">${CHIP_FR}L’envoi fait partie de Pro. <a href="/account/sign-in">Connectez-vous</a> avec cette adresse pour le lancer.</p>`);
     // The script's answer, the block alone, carries it too.
     const fragment = await choose("en", newEmail("lists-frag"), on(), { "x-interest-fragment": "1" });
     expect(fragment.headers.get("x-interest-fragment")).toBe("1");
-    expect(decode(await fragment.text())).toContain(`<p class="pro-note">${CHIP_EN} Delivery is part of Pro.`);
+    expect(decode(await fragment.text())).toContain(`<p class="pro-note">${CHIP_EN}Delivery is part of Pro.`);
     // Switch off: nothing to sign in to, so no line.
     expect(await (await choose("en", newEmail("lists-off"), testEnv(radar()))).text()).not.toContain("pro-note");
   });
 
   it("marks the section on what Pro delivers, the only chip in the page's body", async () => {
     const en = await html("/alerts", { env: on() });
-    expect(en).toContain(`<h2 id="cover">What Pro Delivers ${CHIP_EN}</h2>`);
+    expect(en).toContain(`<h2 id="cover">What Pro Delivers${CHIP_EN}</h2>`);
     expect(chips(mainOf(en))).toBe(1);
-    expect(await html("/alerts?lang=fr", { env: on() })).toContain(`<h2 id="cover">Ce que Pro envoie ${CHIP_FR}</h2>`);
+    expect(await html("/alerts?lang=fr", { env: on() })).toContain(`<h2 id="cover">Ce que Pro envoie${CHIP_FR}</h2>`);
   });
 });
 
@@ -740,10 +784,10 @@ describe("a Free account", () => {
   it("sees API keys and Report a bug on its overview with the chip; a Pro account sees them without", async () => {
     await sessions();
     const free = decode(await html("/account", { cookie: freeCookie }));
-    expect(free).toContain(`<a href="/account/keys">API keys ${CHIP_EN}</a>`);
-    expect(free).toContain(`<dd><a href="/account/bug">Report a bug ${CHIP_EN}</a></dd>`);
+    expect(free).toContain(`<a href="/account/keys">API keys${CHIP_EN}</a>`);
+    expect(free).toContain(`<dd><a href="/account/bug">Report a bug${CHIP_EN}</a></dd>`);
     const fr = decode(await html("/account?lang=fr", { cookie: freeCookie }));
-    expect(fr).toContain(`<a href="/account/keys">Clés d’API ${CHIP_FR}</a>`);
+    expect(fr).toContain(`<a href="/account/keys">Clés d’API${CHIP_FR}</a>`);
     const pro = decode(await html("/account", { cookie: proCookie }));
     expect(pro).toContain('<a href="/account/keys">API keys</a>');
     expect(chips(mainOf(pro))).toBe(0);
@@ -755,13 +799,13 @@ describe("a Free account", () => {
     const token = await csrf(cookie, "/account/searches");
     for (const url of ["/tenders?segment=82", "/expiring", "/segments/82"]) await post("/account/searches", { csrf: token, url }, { cookie });
     const page = decode(await html("/account/searches", { cookie }));
-    expect(page).toContain(`<div class="panel-foot"><p class="pro-note">${CHIP_EN} This account holds 3 of 3 saved searches. Pro holds up to 25 and sends them by email, daily or weekly. <a href="/account/billing">Plans and prices</a></p></div>`);
+    expect(page).toContain(`<div class="panel-foot"><p class="pro-note">${CHIP_EN}This account holds 3 of 3 saved searches. Pro holds up to 25 and sends them by email, daily or weekly. <a href="/account/billing">Plans and prices</a></p></div>`);
     // The tender list is a kind the delivery job serves: its delivery reads Off in a note, no select.
-    expect(page).toContain(`<p class="pro-note">${CHIP_EN} Off. Email delivery is part of Pro. <a href="/account/billing">Plans and prices</a></p>`);
+    expect(page).toContain(`<p class="pro-note">${CHIP_EN}Off. Email delivery is part of Pro. <a href="/account/billing">Plans and prices</a></p>`);
     expect(page).not.toContain('<select name="deliver"');
     const fr = decode(await html("/account/searches?lang=fr", { cookie }));
-    expect(fr).toContain(`${CHIP_FR} Recherches enregistrées de ce compte : 3 sur 3. Pro en conserve jusqu’à 25 et les envoie par courriel, chaque jour ou chaque semaine.`);
-    expect(fr).toContain(`${CHIP_FR} Désactivé. L’envoi par courriel fait partie de Pro.`);
+    expect(fr).toContain(`${CHIP_FR}Recherches enregistrées de ce compte : 3 sur 3. Pro en conserve jusqu’à 25 et les envoie par courriel, chaque jour ou chaque semaine.`);
+    expect(fr).toContain(`${CHIP_FR}Désactivé. L’envoi par courriel fait partie de Pro.`);
     // Pro: the select, the plain cap line, no chip.
     await grantPro(email);
     const pro = decode(await html("/account/searches", { cookie }));

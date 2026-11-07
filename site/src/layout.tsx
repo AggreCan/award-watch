@@ -435,7 +435,7 @@ const SortScript: FC<{ lang: Lang; tables: TableUse }> = ({ lang, tables }) =>
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 33;
+export const STYLES_VERSION = 34;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
