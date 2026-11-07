@@ -65,9 +65,16 @@ export function downloadSizes(stats: Stats): Map<string, { bytes: number; rows: 
 // under the contents. paid: part of Pro once the accounts switch is on
 // (index.tsx serves the 12-month radar file by that rule), so the dataset
 // metadata for search engines leaves it out and a crawler never meets the gate.
-export const DOWNLOADS: { file: string; contents: Key; note?: Key; paid?: boolean }[] = [
+// listed: a file newer than the page, shown only once the export's list of
+// downloads (stats.json "downloads") names it, since a deploy ships before the
+// nightly that first writes it; the route serves it by name either way, a
+// missing object answering the route's 404. The alias map is one (operator
+// ruling of 2026-11-07: a free download, ids and reasons, no record data);
+// it stays out of the dataset metadata, which names the record files.
+export const DOWNLOADS: { file: string; contents: Key; note?: Key; paid?: boolean; listed?: boolean }[] = [
   { file: "open-tenders.csv", contents: "data.file.open_tenders" },
   { file: "organizations.csv", contents: "data.file.organizations" },
+  { file: "organization-aliases.csv", contents: "data.file.aliases", note: "data.file.aliases_note", listed: true },
   { file: "buyers.csv", contents: "data.file.buyers" },
   { file: "expiring-3m.csv", contents: "data.file.expiring_3m" },
   { file: "expiring-12m.csv", contents: "data.file.expiring", note: "data.file.pro", paid: true },
@@ -262,7 +269,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
               sizes.size > 0 && { kind: "count", label: t(lang, "data.col_rows") },
             ]}>
               <tbody>
-                {DOWNLOADS.map((d) => {
+                {DOWNLOADS.filter((d) => !d.listed || sizes.has(d.file)).map((d) => {
                   const size = sizeOf(d.file);
                   return (
                     <tr>

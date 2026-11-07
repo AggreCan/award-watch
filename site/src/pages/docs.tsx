@@ -185,6 +185,7 @@ export function privacyPage(c: Context<AppEnv>): Promise<Response> {
         <>
           <p>{t(lang, "privacy.form_response")}</p>
           <p>{t(lang, "privacy.form_correction")}</p>
+          <p>{t(lang, "privacy.form_merge")}</p>
           <p>{t(lang, "privacy.form_review")}</p>
         </>
       ),

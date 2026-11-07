@@ -838,6 +838,20 @@ CREATE TABLE IF NOT EXISTS organization_responses (
 );
 CREATE INDEX IF NOT EXISTS idx_responses_org ON organization_responses(organization_id, published);
 
+-- The corrections form (site/src/pages/forms.tsx) and, since 2026-11-07, the
+-- "Report a wrong merge" button's report on the same page (kind 'merge': the
+-- profile in organization_id, its path in page, the name said not to belong
+-- in name, the optional note in text, '' when none; no contact is asked, and
+-- the name and the note are scrubbed of email addresses and telephone
+-- numbers before they are stored).
+--
+-- kind and name came after the table: on a database made before them, add
+-- them once (docs/site-deploy.md, The forms database; neither statement is
+-- idempotent, and a second run only answers "duplicate column name"):
+--   ALTER TABLE corrections ADD COLUMN kind TEXT NOT NULL DEFAULT 'correction'
+--   ALTER TABLE corrections ADD COLUMN name TEXT
+-- Until then the site keeps a merge report as a plain correction whose text
+-- starts "[merge] " and the name.
 CREATE TABLE IF NOT EXISTS corrections (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   organization_id TEXT,
@@ -845,7 +859,9 @@ CREATE TABLE IF NOT EXISTS corrections (
   text TEXT NOT NULL,
   contact TEXT,
   submitted_at TEXT NOT NULL,
-  published INTEGER NOT NULL DEFAULT 0
+  published INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL DEFAULT 'correction',       -- correction | merge
+  name TEXT                                      -- a merge report's name that does not belong, at most 300 characters
 );
 CREATE INDEX IF NOT EXISTS idx_corrections_org ON corrections(organization_id, published);
 

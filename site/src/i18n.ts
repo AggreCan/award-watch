@@ -2417,7 +2417,7 @@ const STRINGS = {
     en: "The corrections form stores the page or record named, the correction, the organization when the page names one, the time it was received and the email address when one is given. The email address is used only to follow up on the correction, and it is never shown.",
     fr: "Le formulaire de correction conserve la page ou le dossier indiqué, la correction, l'organisation lorsque la page en nomme une, l'heure de réception et l'adresse courriel lorsqu'elle est donnée. L'adresse courriel sert uniquement à donner suite à la correction, et elle n'est jamais affichée.",
   },
-  "privacy.form_review": { en: "Both are reviewed before anything is published.", fr: "Les deux sont examinés avant toute publication." },
+  "privacy.form_review": { en: "Each is reviewed before anything is published.", fr: "Chacun est examiné avant toute publication." },
   "privacy.toc_interest": { en: "Alert Interest", fr: "Intérêt pour les alertes" },
   "privacy.interest_kept": {
     en: "The alerts form stores the email address, the saved filter and the site's wording of it, the language of the page, the time it was received and a random token for the links in later messages. Once the message saying accounts are open has gone to the address, it stores when. It stores no IP address, browser identification or visitor code.",
@@ -3372,6 +3372,85 @@ const STRINGS = {
     fr: "Construction de Défense Canada publie ses avis d'appel d'offres sur AchatsCanada, mais ses avis d'attribution ne figurent pas dans le fichier des attributions d'AchatsCanada (aucun du 2022-08-08 au 2026-11-06), et la divulgation proactive des contrats ne présente aucun de ses contrats. Elle présente les contrats qu'elle a attribués récemment dans un PDF, sur sa propre page {link}.",
   },
   "methodology.src_dcc_link": { en: "Contract Activity", fr: "Activité contractuelle" },
+  // -- organization identity (operator rulings of 2026-11-07): the "Report a
+  // wrong merge" button on every profile and the form it opens
+  // (src/pages/forms.tsx, the corrections page with ?merge=), the corporate
+  // family section (src/pages/organization.tsx FamilyPanel), the merge
+  // reports in the operator console, and the alias download on the Data page.
+  "org.wrong_merge": { en: "Report a wrong merge", fr: "Signaler une fusion erronée" },
+  "merge.title": { en: "Report a Wrong Merge", fr: "Signaler une fusion erronée" },
+  "merge.intro": {
+    en: "{organization} joins records published under more than one name. If a name on it belongs to a different business, say which one. The profile stays as it is until the report is reviewed.",
+    fr: "{organization} réunit des dossiers publiés sous plus d'un nom. Si un nom de ce profil appartient à une autre entreprise, indiquez lequel. Le profil reste tel quel jusqu'à l'examen du signalement.",
+  },
+  "merge.panel": { en: "Wrong Merge", fr: "Fusion erronée" },
+  "merge.profile": { en: "Profile", fr: "Profil" },
+  "merge.name": { en: "Which name does not belong here?", fr: "Quel nom n'a pas sa place ici?" },
+  "merge.name_hint": {
+    en: "One line, as the name appears on the profile or in a record.",
+    fr: "Une ligne, tel que le nom paraît sur le profil ou dans un dossier.",
+  },
+  "merge.note": { en: "Note (optional)", fr: "Note (facultative)" },
+  "merge.note_hint": {
+    en: "How you know, or where the other business's records are. Email addresses and telephone numbers are removed before the report is stored.",
+    fr: "Comment vous le savez, ou où se trouvent les dossiers de l'autre entreprise. Les adresses courriel et les numéros de téléphone sont retirés avant l'enregistrement du signalement.",
+  },
+  "merge.no_email": {
+    en: "No email address is asked for, and no account is needed.",
+    fr: "Aucune adresse courriel n'est demandée, et aucun compte n'est nécessaire.",
+  },
+  "merge.send": { en: "Send the report", fr: "Envoyer le signalement" },
+  "merge.other": { en: "To report another error, use the {form}.", fr: "Pour signaler une autre erreur, utilisez le {form}." },
+  "merge.other_link": { en: "corrections form", fr: "formulaire de correction" },
+  "merge.err_name": {
+    en: "Write the name that does not belong on this profile.",
+    fr: "Écrivez le nom qui n'a pas sa place dans ce profil.",
+  },
+  "merge.err_profile": {
+    en: "The profile in the report was not found. Open the form from the profile's page.",
+    fr: "Le profil du signalement est introuvable. Ouvrez le formulaire depuis la page du profil.",
+  },
+  "merge.thanks": {
+    en: "The report was received. The profile stays as it is until the report is reviewed.",
+    fr: "Le signalement a été reçu. Le profil reste tel quel jusqu'à son examen.",
+  },
+  "privacy.form_merge": {
+    en: "The wrong merge report stores the profile, the name said not to belong, the note when one is given and the time it was received. It asks for no email address, and an email address or telephone number written into the name or the note is removed before it is stored.",
+    fr: "Le signalement de fusion erronée conserve le profil, le nom signalé, la note lorsqu'elle est donnée et l'heure de réception. Il ne demande aucune adresse courriel, et une adresse courriel ou un numéro de téléphone écrit dans le nom ou la note est retiré avant l'enregistrement.",
+  },
+  "org.family": { en: "Corporate Family", fr: "Famille d'entreprises" },
+  "org.family_lead": { en: "Profiles grouped under {name}.", fr: "Profils regroupés sous {name}." },
+  "org.family_one": { en: "{n} profile", fr: "{n} profil" },
+  "org.family_many": { en: "{n} profiles", fr: "{n} profils" },
+  "org.family_tie": { en: "Relationship", fr: "Lien" },
+  "org.family_self": { en: "this profile", fr: "ce profil" },
+  "org.family_subsidiary": { en: "Subsidiary", fr: "Filiale" },
+  "org.family_affiliate": { en: "Affiliate", fr: "Société affiliée" },
+  "org.family_joint_venture": { en: "Joint venture", fr: "Coentreprise" },
+  "org.family_foot": {
+    en: "Each member's figures are its own; the site adds nothing across profiles.",
+    fr: "Les chiffres de chaque membre sont les siens; le site n'additionne rien d'un profil à l'autre.",
+  },
+  "admin.panel_corrections": { en: "Corrections and Merge Reports", fr: "Corrections et signalements de fusion" },
+  "admin.col_kind": { en: "Kind", fr: "Type" },
+  "admin.col_profile": { en: "Profile", fr: "Profil" },
+  "admin.col_published": { en: "Published", fr: "Publié" },
+  "admin.col_row": { en: "Row", fr: "Ligne" },
+  "admin.kind_correction": { en: "Correction", fr: "Demande de correction" },
+  "admin.kind_merge": { en: "Wrong merge", fr: "Fusion erronée" },
+  "admin.merge_name": { en: "Name: {name}", fr: "Nom : {name}" },
+  "admin.corrections_none": {
+    en: "No correction or merge report yet.",
+    fr: "Aucune correction ni aucun signalement de fusion pour l'instant.",
+  },
+  "data.file.aliases": {
+    en: "Organization aliases: the profile ids the site joined, with the reason",
+    fr: "Alias des organisations : les identifiants de profil que le site a réunis, avec le motif",
+  },
+  "data.file.aliases_note": {
+    en: "One row per joined id: the id its records moved to, the reason, a note and the date of the join. Ids only, no record data.",
+    fr: "Une ligne par identifiant réuni : l'identifiant qui a reçu ses dossiers, le motif, une note et la date de la réunion. Des identifiants seulement, aucune donnée de dossier.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

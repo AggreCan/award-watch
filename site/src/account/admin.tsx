@@ -10,7 +10,8 @@
 //      memory), and its address is listed;
 //   5. when ACCESS_AUD is set: the token's address is the session's.
 //
-//   GET  /admin                                        counts, the last audit events, the search box (?q=)
+//   GET  /admin                                        counts, the last audit events, the search box (?q=),
+//                                                      the newest corrections and merge reports (forms database)
 //   GET  /admin/accounts                               every account, filtered, sorted, 50 to a page
 //   GET  /admin/accounts.csv                           the same view as CSV, at most 10,000 rows
 //   GET  /admin/users/:id                              one account: rows, plan, subscription, activity, actions
@@ -42,6 +43,7 @@ import type { AppEnv } from "../env";
 import { fmtInt, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { CONTACT_EMAIL } from "../pages/docs";
+import { type CorrectionListRow, latestCorrections } from "../pages/forms";
 import { EMAIL_MAX, normalizeEmail } from "../pages/interest";
 import { accessEmail, accessRequired } from "./admin_access";
 import { ANNOUNCE_MAX, type AnnounceCounts, accountsOpenMessage, announceCounts, announceLinks, missingColumn, runAnnouncement } from "./announce";
@@ -303,6 +305,34 @@ const ClaimPanel = ({ lang, claim }: { lang: Lang; claim: Claim | false | null |
   </Panel>
 ));
 
+// The newest rows of the forms database's corrections table, both kinds
+// (pages/forms.tsx latestCorrections): a correction's page and text, a merge
+// report's name and note, each with the profile it names linked, so the
+// operator reads the profile before deciding. Publishing a row, or keeping
+// two names apart in the seed, is done by hand; the Row column is the id an
+// UPDATE names.
+export const OVERVIEW_CORRECTION_ROWS = 20;
+
+const CorrectionsPanel = ({ lang, rows }: { lang: Lang; rows: CorrectionListRow[] | null }) => (rows === null ? null : (
+  <Panel title={t(lang, "admin.panel_corrections")} count={fmtInt(rows.length, lang)}>
+    {rows.length ? (
+      <Table heads={[t(lang, "admin.col_time"), t(lang, "admin.col_kind"), t(lang, "admin.col_profile"), t(lang, "admin.col_page"),
+        t(lang, "admin.col_report"), t(lang, "admin.col_published"), t(lang, "admin.col_row")]}
+        rows={rows.map((r) => [
+          <span class="mono">{stamp(r.submitted_at)}</span>,
+          t(lang, r.kind === "merge" ? "admin.kind_merge" : "admin.kind_correction"),
+          r.organization_id ? <a href={`/organizations/${r.organization_id}`} class="mono">{r.organization_id}</a> : <span class="muted">-</span>,
+          r.page ?? "",
+          r.kind === "merge"
+            ? <>{t(lang, "admin.merge_name", { name: r.name ?? "" })}{r.text ? <><br /><span class="muted">{r.text}</span></> : null}</>
+            : r.text,
+          t(lang, r.published ? "admin.yes" : "admin.no"),
+          <span class="mono">{String(r.id)}</span>,
+        ])} />
+    ) : <p class="muted">{t(lang, "admin.corrections_none")}</p>}
+  </Panel>
+));
+
 // "search 3, all 1": the live calendar feeds by kind, as stored.
 const feedKinds = (lang: Lang, f: FeedCounts) =>
   f.byKind.length ? f.byKind.map((k) => `${k.kind} ${fmtInt(k.n, lang)}`).join(", ") : t(lang, "admin.none");
@@ -311,6 +341,7 @@ function overviewView(
   lang: Lang, o: Overview, search: { q: string; hits: UserHit[] | null }, w: WatchesSeen = { ov: null, events: null }, feeds: FeedCounts | null = null,
   claims: ClaimOverview | null = null,
   briefings: BriefingOverview | null = null,
+  corrections: CorrectionListRow[] | null = null,
 ) {
   const subs = o.subscriptions.length
     ? o.subscriptions.map((s) => `${s.status} ${fmtInt(s.n, lang)}`).join(", ")
@@ -385,6 +416,7 @@ function overviewView(
           ) : <p class="muted">{t(lang, "admin.bugs_none")}</p>}
         </Panel>
       )}
+      <CorrectionsPanel lang={lang} rows={corrections} />
     </>
   );
 }
@@ -393,11 +425,11 @@ admin.get("/", async (c) => {
   const lang = c.get("lang");
   return guarded(c, async () => {
     const q = (c.req.query("q") ?? "").trim().slice(0, EMAIL_MAX);
-    const [o, hits, ov, events, feeds, claims, briefings] = await Promise.all([
+    const [o, hits, ov, events, feeds, claims, briefings, corrections] = await Promise.all([
       overview(c.env), q ? findUsers(c.env, q) : Promise.resolve(null), watchOverview(c.env), eventCounts(c.env), feedCounts(c.env),
-      claimOverview(c.env), briefingOverview(c.env),
+      claimOverview(c.env), briefingOverview(c.env), latestCorrections(c.env, OVERVIEW_CORRECTION_ROWS),
     ]);
-    return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }, { ov, events }, feeds, claims, briefings));
+    return adminPage(c, t(lang, "admin.title"), overviewView(lang, o, { q, hits }, { ov, events }, feeds, claims, briefings, corrections));
   });
 });
 

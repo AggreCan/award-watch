@@ -208,3 +208,26 @@ To roll back by hand: the dashboard (Workers & Pages, `award-watch`,
 Deployments, the version listed as live before, Rollback), or
 `npx wrangler rollback <version id>` from `site/` with the token in the
 environment.
+
+## The forms database
+
+The forms database (`award-watch`) takes its schema by hand, never from a
+deploy. A column added to one of its tables in `pipeline/schema.sql` reaches
+an existing database only through a statement the operator runs once, from
+`site/` with a token that can edit D1. Neither statement below is
+idempotent: a second run only answers "duplicate column name".
+
+The wrong merge reports (2026-11-07) added two columns to `corrections`:
+`kind` (`correction` or `merge`) and `name` (the name a reader says does not
+belong on the profile).
+
+```
+cd site
+npx wrangler d1 execute award-watch --remote --command "ALTER TABLE corrections ADD COLUMN kind TEXT NOT NULL DEFAULT 'correction'"
+npx wrangler d1 execute award-watch --remote --command "ALTER TABLE corrections ADD COLUMN name TEXT"
+```
+
+Until both have run, the site still keeps a report: it is stored as a plain
+correction whose text starts `[merge] ` and the name, and the operator
+console lists every row as a correction. Rows stored that way stay as they
+are after the columns are added.

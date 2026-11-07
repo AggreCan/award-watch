@@ -547,6 +547,34 @@ export interface Profile {
   loaded?: Partial<Record<string, boolean>>;
   lobbying_loaded?: boolean;
   registry_loaded?: boolean;
+  // The corporate family the curated seed places it in; absent from older
+  // exports and from a profile in no family. Read through profileFamily.
+  family?: unknown;
+}
+
+// -- corporate families ------------------------------------------------------------
+
+// A family member as the export writes it: its own profile and its own
+// record count, never a figure added across members (operator ruling of
+// 2026-11-07). note is the seed's word for its tie: subsidiary, affiliate or
+// joint venture; null or another word shows no word.
+export interface FamilyMember { id: string; display_name: string; n_records: number; note: string | null }
+export interface Family { name: string; members: FamilyMember[] }
+
+const isFamilyMember = (m: unknown): m is FamilyMember => isObj(m) && isStr(m.id) && ORG_ID_RE.test(m.id) &&
+  isStr(m.display_name) && m.display_name.trim() !== "" && isNum(m.n_records) && Number.isInteger(m.n_records) && m.n_records >= 0 &&
+  (m.note === undefined || isStrOrNull(m.note));
+
+// The profile's family, or null: the profile renders without the section
+// when the export predates families, the profile is in none, or the field
+// is the wrong shape (a bad family never takes the profile down with it).
+export function profileFamily(profile: unknown): Family | null {
+  const v = isObj(profile) ? profile.family : undefined;
+  if (!isObj(v) || !isStr(v.name) || !v.name.trim() || !isListOf(v.members, isFamilyMember) || v.members.length === 0) return null;
+  return {
+    name: v.name,
+    members: (v.members as FamilyMember[]).map((m) => ({ id: m.id, display_name: m.display_name, n_records: m.n_records, note: m.note ?? null })),
+  };
 }
 
 // Whether a source was ever read, when the files say so: the profile's own

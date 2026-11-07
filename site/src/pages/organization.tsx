@@ -13,7 +13,7 @@ import { ChartStack, type Panel as ChartPanel, yearLabels } from "../chart";
 import { Table, restClass } from "../columns";
 import { MONEY_SOURCES, PROVINCES, type MoneySource, type SourceKey } from "../constants";
 import { buyerPath, directoryCode, directoryPath, loadDirectories } from "../crosslinks";
-import { loadAlias, loadProfile, loadStats, sourceLoaded, type Profile, type YearFigure } from "../data";
+import { type Family, loadAlias, loadProfile, loadStats, profileFamily, sourceLoaded, type Profile, type YearFigure } from "../data";
 import type { AppEnv } from "../env";
 import {
   fmtInt, fmtMoney, fmtMoneyShort, pick, provinceName, sourceLabel, t, tj, tn, type Key, type Lang,
@@ -209,6 +209,58 @@ function placeText(lang: Lang, p: { country: string | null; province: string | n
   const country = p.country && p.country !== "CA" ? p.country : null;
   return [p.city, prov, country].filter(Boolean).join(", ") || t(lang, "common.not_stated");
 }
+
+// The seed's words for a member's tie to its family; another word, or none,
+// shows nothing rather than an untranslated code.
+const FAMILY_TIE: Record<string, Key> = {
+  subsidiary: "org.family_subsidiary", affiliate: "org.family_affiliate", "joint venture": "org.family_joint_venture",
+};
+
+export function familyTie(lang: Lang, note: string | null): string {
+  const key = note ? FAMILY_TIE[note.trim().toLowerCase().replace(/[_-]+/g, " ")] : undefined;
+  return key ? t(lang, key) : "";
+}
+
+// A profile's corporate family (operator ruling of 2026-11-07): the members
+// side by side in the export's order (most records first), each linked to its
+// own profile with its own record count. No total row and no figure added
+// across members: each profile's records are its own organization's, the
+// rule that keeps sources apart (CLAUDE.md rule 5) held across profiles too.
+export const FamilyPanel: FC<{ lang: Lang; family: Family | null; self: string }> = ({ lang, family, self }) => {
+  if (!family) return null;
+  const n = family.members.length;
+  return (
+    <Panel id="family" title={t(lang, "org.family")} count={tn(lang, "org.family_one", "org.family_many", n, { n: fmtInt(n, lang) })}
+      foot={t(lang, "org.family_foot")}>
+      <p class="muted small">{tj(lang, "org.family_lead", { name: <strong>{family.name}</strong> })}</p>
+      <div class="table-wrap bordered">
+        <Table class="family" cols={[
+          { kind: "main", label: t(lang, "col.organization") },
+          { kind: "label", label: t(lang, "org.family_tie") },
+          { kind: "count", label: t(lang, "col.records") },
+        ]}>
+          <tbody>
+            {family.members.map((m) => {
+              // The profile's own row is named, not linked, and says so in words.
+              const own = m.id === self;
+              return (
+                <tr class={own ? "family-self" : undefined}>
+                  <td data-label={t(lang, "col.organization")}>
+                    {own
+                      ? <>{m.display_name} <span class="muted small">({t(lang, "org.family_self")})</span></>
+                      : <a href={`/organizations/${m.id}`}>{m.display_name}</a>}
+                  </td>
+                  <td data-label={t(lang, "org.family_tie")}>{familyTie(lang, m.note)}</td>
+                  <td data-label={t(lang, "col.records")} class="mono num">{fmtInt(m.n_records, lang)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      </div>
+    </Panel>
+  );
+};
 
 export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
@@ -418,6 +470,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           </button>
           <a href={`/organizations/${o.id}/respond`} class="btn">{t(lang, "org.respond")}</a>
           <a href={`/corrections?organization=${o.id}`} class="btn">{t(lang, "org.correct")}</a>
+          {/* Every reader, signed in or not: a merge joins records on evidence, and a reader who knows a name is another business's says so here. */}
+          <a href={`/corrections?merge=${o.id}`} class="btn" rel="nofollow">{t(lang, "org.wrong_merge")}</a>
           <AnalyticsLink lang={lang} href={`/organizations/${o.id}/analytics`} on={accountsEnabled(c.env)} />
           <a href={`/organizations/${o.id}/records`} class="btn" rel="nofollow">{t(lang, "records.link")}</a>
           <a href={`/data/feeds/organizations/${o.id}.xml`} class="btn" rel="nofollow">{t(lang, "orgfeed.button")}</a>
@@ -560,6 +614,9 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           ) : <p class="muted">{t(lang, registryRead ? "registry.none" : "common.not_loaded")}</p>}
         </Panel>
       </div>
+
+      {/* Only when the export places the profile in a family; an older export has no such field. */}
+      <FamilyPanel lang={lang} family={profileFamily(profile)} self={o.id} />
 
       <div class="panel-grid">
         <Panel id="responses" title={t(lang, "org.responses")} foot={<a href={`/organizations/${o.id}/respond`}>{t(lang, "org.respond")}</a>}>

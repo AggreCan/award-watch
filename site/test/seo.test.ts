@@ -144,7 +144,9 @@ describe("page metadata", () => {
     expect(dataset.dateModified).toBe("2026-10-31");
     // The free files only: the paid 12-month radar file is left out; the checksums are no dataset.
     const files = dataset.hasPart.flatMap((p: any) => p.distribution.map((d: any) => d.name));
-    for (const d of DOWNLOADS.filter((d) => !d.paid && d.file.endsWith(".csv"))) expect(files).toContain(d.file);
+    // The alias map (listed) is ids, no records, and stays out of the record sets.
+    for (const d of DOWNLOADS.filter((d) => !d.paid && !d.listed && d.file.endsWith(".csv"))) expect(files).toContain(d.file);
+    expect(files).not.toContain("organization-aliases.csv");
     expect(files).not.toContain("expiring-12m.csv");
     for (const part of dataset.hasPart) {
       expect(part.license).toBe(dataset.license);

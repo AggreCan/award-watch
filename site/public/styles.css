@@ -1250,3 +1250,11 @@ th[aria-sort="descending"] .th-sort::after {
   .plan-card .plan-buttons { align-self: start; margin-top: 0; }
   .plan-card .plan-note { align-self: start; }
 }
+/* A profile's corporate family (src/pages/organization.tsx FamilyPanel): the
+   profile's own row in bold, its name followed by "this profile" in words,
+   so the mark rests on no colour. */
+.family tr.family-self > td { font-weight: 600; }
+.family tr.family-self > td .muted { font-weight: 400; }
+/* The merge report's profile id (src/pages/forms.tsx): sent with the form,
+   never typed, so it reads as a value rather than a field. */
+.stack input[readonly] { background: var(--band); color: var(--ink-2); }

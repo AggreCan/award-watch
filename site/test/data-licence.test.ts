@@ -18,9 +18,9 @@ const section = (html: string, id: string) => {
 describe("data page", () => {
   it("lists the fixed downloads and allows the yearly files by name only", () => {
     expect(DOWNLOADS.map((d) => d.file)).toEqual([
-      "open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv", "expiring-12m.csv", "SHA256SUMS",
+      "open-tenders.csv", "organizations.csv", "organization-aliases.csv", "buyers.csv", "expiring-3m.csv", "expiring-12m.csv", "SHA256SUMS",
     ]);
-    for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "expiring-3m.csv", "expiring-12m.csv", "SHA256SUMS",
+    for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "organization-aliases.csv", "expiring-3m.csv", "expiring-12m.csv", "SHA256SUMS",
       "mirror/x.csv", "awards-before-2012.csv", "awards-after-2026.csv", "history-before-2009.csv", "contracts-2024.csv",
       "grants-2005.csv", "contracts-before-2004.csv", "grants-after-2026.csv", "contracts-undated.csv", "grants-2024-2.csv",
       "contracts-undated-3.csv"]) {
@@ -92,7 +92,8 @@ describe("data page", () => {
   it("lists the downloads, the API and the yearly files, and starts the changelog empty", async () => {
     const html = await (await get("/data")).text();
     const downloads = section(html, "downloads");
-    for (const d of DOWNLOADS) expect(downloads).toContain(`<a href="/downloads/${d.file}" class="mono">${d.file}</a>`);
+    // A file the export does not list yet (the fixtures' stats.json lists none) waits for it.
+    for (const d of DOWNLOADS.filter((d) => !d.listed)) expect(downloads).toContain(`<a href="/downloads/${d.file}" class="mono">${d.file}</a>`);
     expect(downloads).toContain('<a class="mono" href="/downloads/awards-2026.csv">awards-2026.csv</a>');
     expect(downloads).toContain('<a class="mono" href="/downloads/awards-2012.csv">awards-2012.csv</a>');
     expect(downloads).toContain('<a class="mono" href="/downloads/history-2009.csv">history-2009.csv</a>');
