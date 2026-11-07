@@ -1389,3 +1389,9 @@ html.js .cmap-toggles { display: flex; }
   .restack.cmap-table td.num::before { float: none; flex: 0 1 auto; width: auto; margin-left: 0; }
   .cmap-national-row td { border-top: 0; }
 }
+
+/* The analytics index (pages/analytics_index.tsx): the views of each panel as a
+   list in columns of at least 16rem, one column on a phone; an entry never splits
+   across two. The panel gives the list its 16 px margin. */
+.view-list { columns: 3 16rem; column-gap: 32px; padding: 0; list-style: none; }
+.view-list li { break-inside: avoid; margin: 0 0 4px; line-height: 20px; overflow-wrap: anywhere; }

@@ -61,6 +61,8 @@ const PAGES = new Set([
   "/awards/erroneous",
   // The search page: its query string is never stored, only the route.
   "/search",
+  // The index of the analytics views (pages/analytics_index.tsx); its query is never stored either.
+  "/analytics",
 ]);
 const API_FIXED = new Set(["/api/stats"]);
 const DOWNLOAD_FILES = new Set(DOWNLOADS.map((d) => d.file));

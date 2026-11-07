@@ -3585,6 +3585,49 @@ const STRINGS = {
     en: "The province filter is not available yet; the list shows every province.",
     fr: "Le filtre par province n'est pas encore offert; la liste présente toutes les provinces.",
   },
+  // The rail's Analytics item and the index of the analytics views it opens
+  // (pages/analytics_index.tsx): the lead, the gate note for a reader whose
+  // plan lacks the views, the search box, and the lists' lines.
+  "rail.analytics": { en: "Analytics", fr: "Analyses" },
+  "analytics.index_lead": {
+    en: "Charts of one buyer, one organization or one UNSPSC segment over federal fiscal years, one source at a time.",
+    fr: "Graphiques d'un acheteur, d'une organisation ou d'un segment UNSPSC par exercice fédéral, une source à la fois.",
+  },
+  "analytics.index_free": {
+    en: "Each view's first chart is free for the latest {free} fiscal years; Pro shows every chart for up to {max}.",
+    fr: "Le premier graphique de chaque vue est gratuit sur les {free} derniers exercices; Pro les montre tous sur {max}.",
+  },
+  "analytics.find_label": { en: "Find a buyer, an organization or a segment", fr: "Trouver un acheteur, une organisation ou un segment" },
+  "analytics.find_submit": { en: "Find", fr: "Trouver" },
+  "analytics.find_note": {
+    en: "A name, the address of a buyer, organization or segment page, or a two-digit segment code; an address or a code opens its view.",
+    fr: "Un nom, l'adresse de la page d'un acheteur, d'une organisation ou d'un segment, ou le code à deux chiffres d'un segment; une adresse ou un code ouvre sa vue.",
+  },
+  "analytics.buyers_unavailable": {
+    en: "The list of buyers is not available right now.",
+    fr: "La liste des acheteurs n'est pas disponible pour le moment.",
+  },
+  "analytics.orgs_text": {
+    en: "Each organization's profile links its view. Find one by name above, or in the {directory}.",
+    fr: "Le profil de chaque organisation mène à sa vue. Trouvez-en une par son nom ci-dessus ou dans le {directory}.",
+  },
+  "analytics.orgs_directory": { en: "directory", fr: "répertoire" },
+  "analytics.orgs_largest": { en: "Largest award notice values in {year}:", fr: "Valeurs d'avis d'attribution les plus élevées en {year} :" },
+  "analytics.yours_page": { en: "Its page in your account", fr: "Sa page dans votre compte" },
+  "analytics.all_views": { en: "All views", fr: "Toutes les vues" },
+  "analytics.no_match": {
+    en: "No buyer, organization or segment matches “{q}”.",
+    fr: "Aucun acheteur, aucune organisation et aucun segment ne correspond à « {q} ».",
+  },
+  "analytics.orgs_unavailable": {
+    en: "Organization search is not available right now; the {directory} lists every organization.",
+    fr: "La recherche d'organisations n'est pas disponible pour le moment; le {directory} les énumère toutes.",
+  },
+  "analytics.orgs_more": {
+    en: "The first {n} of {total}; the {search} lists them all.",
+    fr: "Les {n} premières sur {total}; la {search} les énumère toutes.",
+  },
+  "analytics.search_page": { en: "search page", fr: "page de recherche" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

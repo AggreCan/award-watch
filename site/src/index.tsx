@@ -15,6 +15,7 @@ import { runWatchdog } from "./watchdog";
 import { langFrom, t, tj } from "./i18n";
 import { Layout, PageHead, page } from "./layout";
 import { analyticsCsv, buyerAnalytics, organizationAnalytics, segmentAnalytics } from "./pages/analytics";
+import { analyticsIndex } from "./pages/analytics_index";
 import { awardsPage, awardsYearPage, erroneousAwardsPage } from "./pages/awards";
 import { buyerPage, buyersIndex } from "./pages/buyers";
 import { segmentPage, segmentsIndex } from "./pages/segments";
@@ -175,6 +176,9 @@ app.get("/segments", segmentsIndex);
 app.get("/segments/:nn", segmentPage);
 app.get("/segments/:nn/analytics", segmentAnalytics);
 app.get("/segments/:nn/analytics/:table{[a-z]+\\.csv}", (c) => analyticsCsv(c, "segment"));
+// The index of the views, the rail's Analytics item (pages/analytics_index.tsx):
+// the site's 404 while the accounts switch is off, as the views are.
+app.get("/analytics", analyticsIndex);
 // The UNSPSC segment pages were /categories until "category" was kept for
 // the CanadaBuys field alone; old links move for good, the query kept.
 app.get("/categories", (c) => movedTo(c, "/segments"));

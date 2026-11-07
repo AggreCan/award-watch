@@ -39,7 +39,7 @@ type Both = Record<Lang, string>;
 
 export type PageKey =
   | "home" | "tenders" | "tenders_new" | "same_day" | "awards" | "awards_erroneous" | "expiring" | "organizations" | "buyers"
-  | "segments" | "rankings"
+  | "segments" | "rankings" | "analytics"
   | "feeds" | "watchlist" | "methodology" | "data" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts" | "pro";
 
 // A result list shows about 60 characters of a title; the whole <title>,
@@ -143,6 +143,15 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     description: {
       en: "The organizations with the most contract awards, published contracts and grants, by value and by count, each source ranked on its own.",
       fr: "Les organisations qui comptent le plus d'attributions, de contrats publiés et de subventions, en valeur et en nombre, chaque source à part.",
+    },
+  },
+  // The index of the analytics views (pages/analytics_index.tsx), while the accounts switch is on.
+  analytics: {
+    path: "/analytics",
+    name: { en: "Analytics by Buyer, Organization and Segment", fr: "Analyses par acheteur, organisation et segment" },
+    description: {
+      en: "Charts of federal contracts and grants by fiscal year for each buyer, organization and UNSPSC segment, one source at a time.",
+      fr: "Graphiques des contrats et subventions fédéraux par exercice pour chaque acheteur, organisation et segment UNSPSC, une source à la fois.",
     },
   },
   feeds: {

@@ -21,6 +21,9 @@ Disallow: /admin
 Disallow: /buyers/*/analytics
 Disallow: /organizations/*/analytics
 Disallow: /segments/*/analytics
+# Their index stays open; a search on it (?q=) reads the search database.
+Disallow: /analytics?
+Allow: /analytics?lang=fr$
 # A filtered tender list, a paged or filtered ranking, a day of new notices
 # and a correction form opened from a profile (?organization=) each name the
 # plain page as their canonical URL, so crawlers need not walk the query
@@ -48,6 +51,8 @@ Disallow: /admin
 Disallow: /buyers/*/analytics
 Disallow: /organizations/*/analytics
 Disallow: /segments/*/analytics
+Disallow: /analytics?
+Allow: /analytics?lang=fr$
 Disallow: /tenders?
 Allow: /tenders?lang=fr$
 Disallow: /tenders/new?

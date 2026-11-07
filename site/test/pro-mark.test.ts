@@ -277,7 +277,8 @@ describe("free pages", () => {
 
 // -- the rail ---------------------------------------------------------------------------------
 
-const PRO_PAGES = ["/expiring/6m", "/expiring/12m", "/tenders/same-day"];
+// The index of the analytics views (pages/analytics_index.tsx) is one: the views come with Pro.
+const PRO_PAGES = ["/expiring/6m", "/expiring/12m", "/tenders/same-day", "/analytics"];
 
 describe("the rail", () => {
   it("lists every Pro entry, clickable, with exactly one chip, for every reader and in both languages", async () => {

@@ -190,13 +190,15 @@ request without the feature sees each view's first chart for the latest
 three fiscal years and a line on each other chart, with a link to
 `/account/billing` (signed out, `/account/sign-in`); the CSV files answer
 404 to it. `site/test/analytics.test.ts` proves both states
-(`docs/analytics.md`).
+(`docs/analytics.md`). Their index, `/analytics`, follows the same switch:
+off, the site's 404 and no rail item; on, the rail's Browse group lists it
+for every reader (`site/test/analytics-index.test.ts`).
 
 While the switch is on, whatever leads to a page that comes with Pro
 carries the Pro chip (`site/src/pro.tsx`), for every reader: the rail's
 entries for the 6- and 12-month windows (each with its own count; the
-"Contracts ending" parent has none), for `/tenders/same-day` and for the
-Email lists, the radar's 6- and 12-month tabs and overview tiles, and the
+"Contracts ending" parent has none), for `/tenders/same-day`, for the
+analytics index (`/analytics`) and for the Email lists, the radar's 6- and 12-month tabs and overview tiles, and the
 links to the 12-month list on profiles and buyer pages. The free view's
 panel names the price from `PRICE_MONTHLY_CAD` and `PRICE_YEARLY_CAD`,
 taxes added at checkout, and leaves the line out when the checkout would

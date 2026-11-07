@@ -64,7 +64,7 @@ both languages; the last column is the page that answers.
 | See who won | who won a government contract, contract award notices | contrats attribués gouvernement du Canada, avis d'attribution | `/awards`, award pages, organization profiles |
 | Contracts coming back to market | contracts expiring, federal contract renewals, recompete, incumbent | contrats qui prennent fin, renouvellement de contrats fédéraux | `/expiring` and its three windows, `/pro` |
 | A competitor's or a supplier's record | supplier contract history, competitor contract awards | historique des contrats d'un fournisseur | organization profiles and their record tables |
-| A department's spending and suppliers | department contracts, PSPC contracts, DND contracts | contrats d'un ministère, contrats de SPAC | `/buyers` and buyer pages |
+| A department's spending and suppliers | department contracts, PSPC contracts, DND contracts | contrats d'un ministère, contrats de SPAC | `/buyers` and buyer pages, `/analytics` |
 | Contracts over $10,000 | proactive disclosure contracts, contracts over $10,000 | contrats de plus de 10 000 $, divulgation proactive | published contract pages, buyer pages, `/data` |
 | Work in one category | UNSPSC tenders, IT tenders, construction tenders | appels d'offres par catégorie | `/segments` and segment pages |
 | Lobbying behind a supplier | lobbying registry search, lobbying communications | registre des lobbyistes, communications de lobbying | organization profiles |
@@ -121,8 +121,8 @@ alternative text, for Open Graph and the Twitter summary card.
 
 - the export's parts, now 25,000 pages each, served with every page twice,
   English then French, each entry carrying the alternates of both, so a part
-  holds at most the protocol's 50,000 addresses; the Pro page and the
-  same-day page are listed with the fixed pages;
+  holds at most the protocol's 50,000 addresses; the Pro page, the
+  same-day page and the analytics index are listed with the fixed pages;
 - 128 parts for the published contracts, `/sitemap-contracts-1.xml` to
   `/sitemap-contracts-128.xml`, read from the records database. Each part is
   a fixed slice of the record key, so its address never changes and it holds

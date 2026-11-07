@@ -139,12 +139,14 @@ async function sessions(): Promise<void> {
 const html = async (path: string, env: object, cookie?: string) => (await get(path, { env, cookie })).text();
 // Once the switch is on, the rail carries the signed-in address (or "Sign
 // in"), the wordmark a signed-in reader's plan, the footer a Pro reader's
-// bug report link, and the tabs and tiles of the deep windows the Pro chip
-// (for every reader); the rest of the page is what is compared.
+// bug report link and the analytics index's link, and the tabs and tiles
+// of the deep windows the Pro chip (for every reader); the rest of the
+// page is what is compared.
 const CHIP = /<span class="pro-tag"><svg[^>]*><path[^>]*><\/path><\/svg>Pro<span class="visually-hidden"> \((?:paid plan|forfait payant)\)<\/span><\/span>/g;
 const noRail = (page: string) =>
   page.replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "")
-    .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(/<a href="\/pro">[^<]*<\/a>/, "").replace(CHIP, "")
+    .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(/<a href="\/pro">[^<]*<\/a>/, "").replace(/<a href="\/analytics">[^<]*<\/a>/, "")
+    .replace(CHIP, "")
     .replace(/<p class="interest-pro">[\s\S]*?<\/p>/g, "")
     // The top bar's same-day timer leads to the tease while the switch is on and to the list while it is off.
     .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');

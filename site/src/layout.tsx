@@ -353,6 +353,9 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
   const browse: RailEntry[] = [
     { href: "/segments", label: t(lang, "nav.segments"), section: "/segments" },
     { href: "/rankings", label: t(lang, "nav.rankings"), section: "/rankings" },
+    // The analytics views' index (pages/analytics_index.tsx), the chip in the count's
+    // slot: listed for every reader once Pro exists, since the views exist only then.
+    ...(paid ? [{ href: "/analytics", label: t(lang, "rail.analytics"), section: "/analytics", pro: true }] : []),
     { href: "/feeds", label: t(lang, "nav.feeds"), section: "/feeds" },
     // The Email lists page, reachable without scrolling to a page's foot (operator, 2026-11-02).
     { href: "/alerts", label: t(lang, "rail.email_lists"), section: "/alerts" },
@@ -435,7 +438,7 @@ const SortScript: FC<{ lang: Lang; tables: TableUse }> = ({ lang, tables }) =>
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 34;
+export const STYLES_VERSION = 36;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -512,6 +515,8 @@ export const Layout: FC<
                 <span class="footer-links">
                   <a href="/segments">{t(lang, "nav.segments")}</a>
                   <a href="/rankings">{t(lang, "nav.rankings")}</a>
+                  {/* The rail's Browse group hides on a phone, where these links stand in for it; no chip here. */}
+                  <FooterAnalyticsLink lang={lang} on={shell?.accountsOn ?? false} />
                   <a href="/methodology">{t(lang, "footer.methodology")}</a>
                   <a href="/data#downloads">{t(lang, "footer.download")}</a>
                   <a href="/feeds">{t(lang, "footer.feeds")}</a>
@@ -635,6 +640,12 @@ export const SocialImage: FC<{ lang: Lang }> = ({ lang }) => (
 // switch is on: nothing is Pro while it is off, and the page is the 404.
 export const FooterProLink: FC<{ lang: Lang; on: boolean }> = ({ lang, on }) =>
   on ? <a href="/pro">{t(lang, "footer.pro")}</a> : null;
+
+// The footer's link to the analytics views' index (pages/analytics_index.tsx),
+// the rail's Analytics item where the rail's Browse group is hidden (a phone);
+// while the switch is off the index is the 404, so there is no link.
+export const FooterAnalyticsLink: FC<{ lang: Lang; on: boolean }> = ({ lang, on }) =>
+  on ? <a href="/analytics">{t(lang, "rail.analytics")}</a> : null;
 
 // A page that is the same for every reader, signed in or not (the weekly
 // briefing's public sample, account/briefing_pages.tsx): the shell page()

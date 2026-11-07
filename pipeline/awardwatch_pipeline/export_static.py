@@ -283,16 +283,16 @@ TEMP_TABLES = ("x_tenders", "x_awards", "x_history", "x_grants", "x_records", "x
 # which site/test/seo-intent.test.ts holds equal to this).
 SITEMAP_MAX_URLS = 25_000
 SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
-# /pro and /tenders/same-day answer while the site's accounts switch is on, as
-# it is in production; the published contracts' pages are listed by the
-# Worker from the records database (/sitemap-contracts-<n>.xml).
+# /pro, /tenders/same-day and /analytics answer while the site's accounts
+# switch is on, as it is in production; the published contracts' pages are
+# listed by the Worker from the records database (/sitemap-contracts-<n>.xml).
 SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous", "/expiring",
-                 "/organizations", "/buyers", "/segments", "/rankings", "/feeds", "/watchlist", "/data", "/methodology",
-                 "/cite", "/corrections", "/about", "/terms", "/privacy", "/alerts", "/pro"]
+                 "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/watchlist", "/data",
+                 "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy", "/alerts", "/pro"]
 # Pages whose content follows the nightly data carry its date; the others
 # change only with the code, so they carry none rather than a false one.
 SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/awards/erroneous", "/expiring", "/organizations",
-                       "/buyers", "/segments", "/rankings", "/feeds", "/data"}
+                       "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/data"}
 
 
 # -- small helpers ------------------------------------------------------------------

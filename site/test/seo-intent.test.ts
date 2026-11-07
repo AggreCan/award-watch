@@ -56,7 +56,7 @@ const payEnv = (extra: Record<string, unknown> = {}) => onEnv({ ...PAY, ...extra
 const SECTIONS = [
   "/", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous", "/expiring", "/expiring/3m",
   "/organizations", "/buyers", "/segments", "/rankings", "/feeds", "/alerts", "/watchlist", "/methodology", "/data", "/cite",
-  "/corrections", "/about", "/terms", "/privacy", "/pro",
+  "/corrections", "/about", "/terms", "/privacy", "/pro", "/analytics",
 ];
 
 describe("result-list titles and descriptions", () => {
@@ -393,10 +393,10 @@ describe("the sitemap parts", () => {
     expect(withLanguages(`<urlset><url><loc>${O}/tenders?segment=82</loc></url></urlset>`)).toContain(`<url><loc>${O}/tenders?segment=82</loc></url>`);
   });
 
-  it("hold the pipeline to the same size, and list the Pro page and the same-day page", () => {
+  it("hold the pipeline to the same size, and list the Pro page, the same-day page and the analytics index", () => {
     expect(/^SITEMAP_MAX_URLS = ([0-9_]+)$/m.exec(exportStatic)?.[1]?.replace(/_/g, "")).toBe(String(SITEMAP_PART_MAX));
     const pages = /^SITEMAP_PAGES = \[([\s\S]*?)\]/m.exec(exportStatic)?.[1] ?? "";
-    for (const path of ["/pro", "/tenders/same-day", "/expiring", "/data"]) expect(pages).toContain(`"${path}"`);
+    for (const path of ["/pro", "/tenders/same-day", "/analytics", "/expiring", "/data"]) expect(pages).toContain(`"${path}"`);
   });
 });
 

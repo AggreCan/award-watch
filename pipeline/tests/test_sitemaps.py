@@ -63,6 +63,8 @@ def test_static_export_writes_the_sitemaps(conn, tmp_path):
     # The alerts page changes with the code only, so it carries no date; nor do the Pro page and the same-day page.
     assert entries[f"{BASE}/alerts"] is None
     assert entries[f"{BASE}/pro"] is None and entries[f"{BASE}/tenders/same-day"] is None
+    # The analytics index lists the buyers the night wrote, so it carries the data date.
+    assert entries[f"{BASE}/analytics"] == "2026-10-31"
     # The site takes no donations: there is no support page to list.
     assert "/support" not in es.SITEMAP_PAGES and f"{BASE}/support" not in entries
     for oid in ids.values():

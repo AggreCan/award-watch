@@ -141,19 +141,24 @@ describe("with the switch off", () => {
 
 describe("with the switch on", () => {
   // Besides the account item, the switch brings the Pro marks (src/pro.tsx):
-  // the chip on the rail's Pro entries, the rail's same-day entry, the gate
-  // note in the tender list's head, and on a profile the link to its
-  // analytics view, marked Pro (nothing a free reader is offered is hidden;
-  // operator's ruling of 2026-11-03, docs/analytics.md); and the links to the
+  // the chip on the rail's Pro entries, the rail's same-day and Analytics
+  // entries, the gate note in the tender list's head, the footer's link to
+  // the analytics index, and on a profile the link to its analytics view,
+  // marked Pro (nothing a free reader is offered is hidden; operator's
+  // ruling of 2026-11-03, docs/analytics.md); and the links to the
   // Pro page, in the footer and as the home page's email line (docs/seo.md).
   // Nothing else changes.
   const CHIP = / ?<span class="pro-tag">[\s\S]*?<\/span><\/span>/g;
   const SAME_DAY_ITEM = /<li><a class="rail-item rail-child" href="\/tenders\/same-day">[\s\S]*?<\/a><\/li>/;
+  // The index of the analytics views (pages/analytics_index.tsx), in the rail's Browse group.
+  const ANALYTICS_ITEM = /<li><a class="rail-item" href="\/analytics">[\s\S]*?<\/a><\/li>/;
   const NOTE = /<p class="pro-note">[\s\S]*?<\/p>/;
   // The line under an email-list form that offers the plan, with the switch on (pages/interest.tsx).
   const INTEREST_PRO = /<p class="interest-pro">[\s\S]*?<\/p>/g;
   const ANALYTICS = /<a href="\/organizations\/org-a000000001\/analytics" class="btn" rel="nofollow">Analytics<\/a>/;
   const FOOTER_PRO = '<a href="/pro">Pro plan</a>';
+  // The footer's link to the analytics index, which stands in for the rail's Browse item on a phone.
+  const FOOTER_ANALYTICS = '<a href="/analytics">Analytics</a>';
   const HOME_PRO = /<li class="home-do-pro">[\s\S]*?<\/li>/;
   // The home head's first button: the email alerts while Pro exists, the Atom feeds while it does not.
   const HOME_BUTTON = '<a href="/pro" class="btn">Email alerts with Pro</a>';
@@ -171,16 +176,18 @@ describe("with the switch on", () => {
       const item = '<li><a class="rail-item rail-account" href="/account/sign-in"><span class="rail-label">Sign in</span></a></li>';
       expect(on.body, path).toContain(item);
       const rail = /<nav class="rail"[\s\S]*?<\/nav>/.exec(on.body)?.[0] ?? "";
-      expect(rail.match(/class="pro-tag"/g), path).toHaveLength(4);
+      expect(rail.match(/class="pro-tag"/g), path).toHaveLength(5);
       expect(rail, path).toMatch(SAME_DAY_ITEM);
+      expect(rail, path).toMatch(ANALYTICS_ITEM);
       expect(NOTE.test(on.body), path).toBe(path === "/tenders");
       // The top bar's same-day timer leads to the tease while the switch is on and to the list while it is off.
       expect(on.body, path).toContain(FOOTER_PRO);
+      expect(on.body, path).toContain(FOOTER_ANALYTICS);
       expect(HOME_PRO.test(on.body), path).toBe(path === "/");
       expect(on.body.includes(HOME_BUTTON), path).toBe(path === "/");
       expect(FOLLOW.test(on.body), path).toBe(path.startsWith("/organizations/"));
-      const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(NOTE, "").replace(INTEREST_PRO, "")
-        .replace(FOOTER_PRO, "").replace(HOME_PRO, "").replace(FOLLOW, "").replace(HOME_BUTTON, HOME_FEEDS)
+      const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(ANALYTICS_ITEM, "").replace(NOTE, "").replace(INTEREST_PRO, "")
+        .replace(FOOTER_PRO, "").replace(FOOTER_ANALYTICS, "").replace(HOME_PRO, "").replace(FOLLOW, "").replace(HOME_BUTTON, HOME_FEEDS)
         .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');
       expect(ANALYTICS.test(stripped), path).toBe(path.startsWith("/organizations/"));
       expect(off.body, path).not.toContain("pro-tag");

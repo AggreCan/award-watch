@@ -302,6 +302,51 @@ file adds how many of the compared records grew. Pro only: any other request
 gets the site's 404. The files are downloads for the per-address limit (ten
 a minute) and are sent `private, no-store`.
 
+## The index
+
+`/analytics` lists the views a reader can open, and the rail's Browse group
+links it as "Analytics" with the Pro chip in the count's slot
+(`site/src/pages/analytics_index.tsx`). It answers only while the accounts
+switch is on, as the views do: off, it is the site's 404 and the rail has no
+item. On, every reader gets the same page:
+
+| Panel | What it lists | Read from |
+|---|---|---|
+| Your Organization | for a signed-in account that has named its organization (`docs/accounts.md`, *Your organization*), that organization's view and its page in the account | the accounts database (`org_claims`) and the profile |
+| Buyers | every buyer with a record in one of the four money sources, by name in the page's language, with its acronym | `buyers/index.json` |
+| Organizations | a line on finding one (by name in the search box, or in the directory; every profile links its view), then the organizations with the largest award notice values of the data year | `stats.json` (`top_organizations_year`) |
+| Segments | the 57 UNSPSC segments, in code order | the site's own list of segments |
+
+Each entry links its view with `rel="nofollow"`. A reader whose plan lacks
+`analytics` gets one gate note under the head, the only chip in the page's
+body: each view's first chart is free for the latest three fiscal years
+(`FREE_YEARS`) and Pro shows every chart for up to ten (`MAX_YEARS`), with a
+link to `/account/sign-in?next=/account/billing`. A Pro reader gets no note.
+Saved views per account do not exist yet; they will be one more panel.
+
+The search box is a GET to the same page (`?q=`):
+
+- an organization id, the address of a profile, a buyer page or a segment
+  page, a buyer id the list holds or a two-digit segment code goes straight
+  to that view (302);
+- otherwise buyers and segments are matched here (every word in a name,
+  acronym or code, either language, the last word as a prefix) and
+  organizations through the search database's statements (the count and the
+  first page, one batch); a query that matches exactly one view goes to it;
+- anything else lists the matches by kind, the first 25 organizations with a
+  link to `/search` for the rest, and says when nothing matched.
+
+A missing `buyers/index.json` or `stats.json` leaves a plain line in its
+panel and the page answers 200; a search database that cannot answer is a
+line in the organizations' panel, the matches page is then sent `no-store`,
+and nothing goes straight to a view on a match it could not count. The page
+never reads the records database. The plain page is a section page for
+search engines (its title and description, the sitemap with the data date);
+a query is `noindex`, and `robots.txt` disallows `/analytics?` but
+`?lang=fr`, since each query reads the search database. The views roll-up
+counts it as the route `/analytics`. `site/test/analytics-index.test.ts`
+holds all of this.
+
 ## Bounds
 
 - At most ten fiscal years in any statement, at most 40 quarter rows, top
