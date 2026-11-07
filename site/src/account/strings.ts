@@ -1774,7 +1774,10 @@ export const ACCOUNT_STRINGS = {
   },
   "briefing.subscribe": { en: "Save this briefing", fr: "Enregistrer ce bulletin" },
   "briefing.subscribed": { en: "Briefing saved", fr: "Bulletin enregistré" },
-  "briefing.control_out": { en: "Signing in makes an account if there is none.", fr: "La connexion crée un compte s'il n'y en a pas." },
+  "briefing.control_out": {
+    en: "Saved to your account on sign-in; signing in makes an account if there is none.",
+    fr: "Enregistré dans votre compte à la connexion; la connexion crée un compte s'il n'y en a pas.",
+  },
   "briefing.control_pro": { en: "Sent each Monday by email.", fr: "Envoyé chaque lundi par courriel." },
   "briefing.control_free": {
     en: "A Free account keeps the briefing on its searches page; the weekly email is part of Pro.",

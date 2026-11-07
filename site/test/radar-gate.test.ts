@@ -145,6 +145,7 @@ const CHIP = / <span class="pro-tag"><svg[^>]*><path[^>]*><\/path><\/svg>Pro<spa
 const noRail = (page: string) =>
   page.replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "")
     .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(/<a href="\/pro">[^<]*<\/a>/, "").replace(CHIP, "")
+    .replace(/<p class="interest-pro">[\s\S]*?<\/p>/g, "")
     // The top bar's same-day timer leads to the tease while the switch is on and to the list while it is off.
     .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');
 const pageHead = (page: string) => /<header class="page-head">[\s\S]*?<\/header>/.exec(page)?.[0] ?? "";

@@ -1012,7 +1012,7 @@ const STRINGS = {
     fr: "La vue complète couvre jusqu'à dix exercices, avec un tableau sous chaque graphique : les principaux acheteurs et organisations du segment, les organisations nouvelles et un fichier CSV de chaque tableau.",
   },
   "analytics.pro_billing": { en: "See the Pro plan on the billing page", fr: "Voir le forfait Pro sur la page de facturation" },
-  "analytics.pro_sign_in": { en: "Sign in to subscribe to Pro", fr: "Se connecter pour s'abonner à Pro" },
+  "analytics.pro_sign_in": { en: "Subscribe to Pro", fr: "S'abonner à Pro" },
   "analytics.tease_buyer_segments": {
     en: "The buyer's value in each UNSPSC segment, the ten largest, with their shares.",
     fr: "La valeur de l'acheteur dans chaque segment UNSPSC, les dix principaux, avec leurs parts.",
@@ -2052,10 +2052,12 @@ const STRINGS = {
   "interest.email": { en: "Email address", fr: "Adresse courriel" },
   "interest.submit": { en: "Save this list", fr: "Enregistrer cette liste" },
   "interest.note": {
-    en: "This form sends nothing. Sign in with this address and the list waits in your account as a saved search; with Pro it arrives by email. The {privacy} page says what the form keeps.",
-    fr: "Ce formulaire n'envoie rien. Connectez-vous avec cette adresse et la liste vous attend dans votre compte comme recherche enregistrée; avec Pro, elle arrive par courriel. La page {privacy} indique ce que conserve le formulaire.",
+    en: "Saved to your account as a saved search when you sign in with this address; with Pro it arrives by email. The {privacy} page says what the form keeps.",
+    fr: "Enregistrée dans votre compte comme recherche enregistrée quand vous vous connectez avec cette adresse; avec Pro, elle arrive par courriel. La page {privacy} indique ce que conserve le formulaire.",
   },
   "interest.done": { en: "Noted: {email}, for {label}.", fr: "C'est noté : {email}, pour {label}." },
+  // The Pro line under the email-list and briefing forms (operator, 2026-11-07: the panels did not point to Pro).
+  "interest.pro_line": { en: "Email delivery is part of Pro.", fr: "L'envoi par courriel fait partie de Pro." },
   "interest.watch_note": {
     en: "For a list in this browser without email, use Save in this browser.",
     fr: "Pour une liste conservée dans ce navigateur, sans courriel, utilisez Enregistrer dans ce navigateur.",
@@ -2174,8 +2176,8 @@ const STRINGS = {
   "lists.err_none": { en: "Choose at least one list.", fr: "Choisissez au moins une liste." },
   // Under the chooser: interest.note for several lists.
   "lists.note": {
-    en: "This form sends nothing. Sign in with this address and the lists wait in your account as saved searches; with Pro they arrive by email. The {privacy} page says what the form keeps.",
-    fr: "Ce formulaire n'envoie rien. Connectez-vous avec cette adresse et les listes vous attendent dans votre compte comme recherches enregistrées; avec Pro, elles arrivent par courriel. La page {privacy} indique ce que conserve le formulaire.",
+    en: "Saved to your account as saved searches when you sign in with this address; with Pro they arrive by email. The {privacy} page says what the form keeps.",
+    fr: "Enregistrées dans votre compte comme recherches enregistrées quand vous vous connectez avec cette adresse; avec Pro, elles arrivent par courriel. La page {privacy} indique ce que conserve le formulaire.",
   },
 
   // -- citing -------------------------------------------------------------------------------------
@@ -2894,8 +2896,8 @@ const STRINGS = {
   },
   "incumbents.soonest": { en: "Soonest end", fr: "Fin la plus proche" },
   "incumbents.pro": {
-    en: "The first {n} of {all} holders are shown. Pro lists all {all}.",
-    fr: "Les {n} premiers des {all} titulaires sont affichés. Pro les énumère tous les {all}.",
+    en: "First {n} of {all} shown; Pro lists all {all}.",
+    fr: "{n} des {all} affichés; Pro les énumère tous les {all}.",
   },
   "orgfeed.title": { en: "Records", fr: "Dossiers" },
   "orgfeed.subtitle": {
@@ -3565,8 +3567,8 @@ const STRINGS = {
   // incumbents.pro when more organizations hold the contracts than the list
   // keeps (INCUMBENTS_MAX): Pro sees the largest {max}, not all of them.
   "incumbents.pro_capped": {
-    en: "The first {n} of {all} holders are shown. Pro lists the {max} largest.",
-    fr: "Les {n} premiers des {all} titulaires sont affichés. Pro énumère les {max} plus importants.",
+    en: "First {n} of {all} shown; Pro lists the {max} largest.",
+    fr: "{n} des {all} affichés; Pro énumère les {max} plus importants.",
   },
 } as const satisfies Record<string, Entry>;
 

@@ -25,7 +25,8 @@
 // rows.
 
 import type { Context } from "hono";
-import type { FC } from "hono/jsx";
+import { type FC, useContext } from "hono/jsx";
+import { accountsEnabled } from "../account/switch";
 import { isOwnAddress } from "../api";
 import { readForm } from "../body";
 import { SEGMENTS } from "../constants";
@@ -34,7 +35,7 @@ import {
 } from "../data";
 import type { AppEnv, Env } from "../env";
 import { categoryLabel, pick, provinceName, segmentLabel, sourceLabel, t, tj, type Key, type Lang } from "../i18n";
-import { Layout, PageHead, Panel, page } from "../layout";
+import { Layout, PageHead, Panel, RailContext, page } from "../layout";
 import { clip } from "../seo";
 import { BAND_LABEL, COMPETITIVE_LABEL, KIND_SOURCE, readExpiringQuery } from "./expiring";
 import { orList } from "./shared";
@@ -283,7 +284,7 @@ function labelInSentence(label: string): string {
   return label.charAt(0).toLowerCase() + label.slice(1);
 }
 
-export const InterestBody: FC<{ lang: Lang; filter: InterestFilter } & InterestState> = ({ lang, filter, done, error, email }) => {
+export const InterestBody: FC<{ lang: Lang; filter: InterestFilter; on?: boolean } & InterestState> = ({ lang, filter, on, done, error, email }) => {
   const follow = filter.kind === "tenders";
   return (
     <div class="interest-body" data-interest="">
@@ -308,6 +309,9 @@ export const InterestBody: FC<{ lang: Lang; filter: InterestFilter } & InterestS
         </form>
       )}
       <p class="interest-note">{tj(lang, "interest.note", { privacy: <a href="/privacy#interest">{t(lang, "footer.privacy")}</a> })}</p>
+      {/* With the accounts switch on, the line that offers the plan (operator, 2026-11-07); its own class, so the
+          switch guards strip it (test/accounts-switch.test.ts, test/radar-gate.test.ts) and the chip rule stays (none here). */}
+      {on ? <p class="interest-pro">{t(lang, "interest.pro_line")} <a href="/account/sign-in?next=/account/billing">{t(lang, "expiring.pro_sign_in")}</a></p> : null}
       {/* A profile's head offers the watchlist too; the two differ in where the list is kept. */}
       {filter.kind === "organization" ? <p class="interest-note">{t(lang, "interest.watch_note")}</p> : null}
     </div>
@@ -316,15 +320,19 @@ export const InterestBody: FC<{ lang: Lang; filter: InterestFilter } & InterestS
 
 // The block as a page shows it: a panel under its head band, the link to the
 // page that explains alerts, and the script that keeps the reader on the page.
-export const InterestPanel: FC<{ lang: Lang; filter: InterestFilter | null } & InterestState> = ({ lang, filter, ...state }) =>
-  filter ? (
+export const InterestPanel: FC<{ lang: Lang; filter: InterestFilter | null } & InterestState> = ({ lang, filter, ...state }) => {
+  // Offered with the switch on, to a reader who does not hold Pro (a Pro reader has the delivery already).
+  const shell = useContext(RailContext);
+  const on = (shell?.accountsOn ?? false) && shell?.account?.plan !== "pro";
+  return filter ? (
     <>
       <Panel title={t(lang, "interest.title")} class="interest" tools={<a href="/alerts">{t(lang, "interest.about")}</a>}>
-        <InterestBody lang={lang} filter={filter} {...state} />
+        <InterestBody lang={lang} filter={filter} on={on} {...state} />
       </Panel>
       <script src="/interest.js" defer></script>
     </>
   ) : null;
+};
 
 // -- the post -----------------------------------------------------------------
 
@@ -355,7 +363,7 @@ async function answer(
   if (fragment) {
     c.header("Cache-Control", "no-store");
     c.header("X-Interest-Fragment", "1");
-    return c.html(<InterestBody lang={lang} filter={filter} {...state} />, status);
+    return c.html(<InterestBody lang={lang} filter={filter} on={accountsEnabled(c.env)} {...state} />, status);
   }
   const stats = await loadStats(c.env).catch(() => null);
   const res = await page(

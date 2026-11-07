@@ -150,6 +150,8 @@ describe("with the switch on", () => {
   const CHIP = / ?<span class="pro-tag">[\s\S]*?<\/span><\/span>/g;
   const SAME_DAY_ITEM = /<li><a class="rail-item rail-child" href="\/tenders\/same-day">[\s\S]*?<\/a><\/li>/;
   const NOTE = /<p class="pro-note">[\s\S]*?<\/p>/;
+  // The line under an email-list form that offers the plan, with the switch on (pages/interest.tsx).
+  const INTEREST_PRO = /<p class="interest-pro">[\s\S]*?<\/p>/g;
   const ANALYTICS = /<a href="\/organizations\/org-a000000001\/analytics" class="btn" rel="nofollow">Analytics<\/a>/;
   const FOOTER_PRO = '<a href="/pro">Pro plan</a>';
   const HOME_PRO = /<li class="home-do-pro">[\s\S]*?<\/li>/;
@@ -177,7 +179,7 @@ describe("with the switch on", () => {
       expect(HOME_PRO.test(on.body), path).toBe(path === "/");
       expect(on.body.includes(HOME_BUTTON), path).toBe(path === "/");
       expect(FOLLOW.test(on.body), path).toBe(path.startsWith("/organizations/"));
-      const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(NOTE, "")
+      const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(NOTE, "").replace(INTEREST_PRO, "")
         .replace(FOOTER_PRO, "").replace(HOME_PRO, "").replace(FOLLOW, "").replace(HOME_BUTTON, HOME_FEEDS)
         .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');
       expect(ANALYTICS.test(stripped), path).toBe(path.startsWith("/organizations/"));

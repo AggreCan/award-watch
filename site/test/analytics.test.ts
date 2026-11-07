@@ -311,7 +311,7 @@ describe("the free view", () => {
         expect(html, who).not.toContain(".csv");
         for (const title of locked[view]) expect(decode(html), who).toContain(`${title}<span class="pro-tag">`);
         expect(html, who).toContain('class="pro-note"');
-        expect(html, who).toContain(cookie ? 'href="/account/billing">See the Pro plan on the billing page' : 'href="/account/sign-in">Sign in to subscribe to Pro');
+        expect(html, who).toContain(cookie ? 'href="/account/billing">See the Pro plan on the billing page' : 'href="/account/sign-in">Subscribe to Pro');
         expect(html, who).toContain('<meta name="robots" content="noindex"/>');
         expect(res.headers.get("cache-control"), who).toBe(cookie ? "private, no-store" : "public, max-age=300");
         expect(res.headers.get("vary"), who).toContain("Cookie");
@@ -549,7 +549,7 @@ describe("the Pro view", () => {
       expect(html).not.toContain(EM_DASH);
     }
     const free = (await page(`${VIEWS[0]}?lang=fr`)).html;
-    expect(free).toContain("Se connecter pour s’abonner à Pro");
+    expect(free).toContain("S’abonner à Pro");
     expect(free).not.toContain("Sign in to subscribe");
   });
 });

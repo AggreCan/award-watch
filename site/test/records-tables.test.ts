@@ -534,7 +534,7 @@ describe("the earlier awards, the incumbents and the organization feeds", () => 
     const free = await signIn(newEmail("free-incumbents"));
     const tease = decode(nbsp(await (await get("/segments/82", { cookie: free, env: onEnv() })).text())).split("Who Holds the Contracts")[1] ?? "";
     expect([...tease.matchAll(/href="\/organizations\/(org-c\d+)"/g)]).toHaveLength(3);
-    expect(tease).toContain("The first 3 of 4 holders are shown. Pro lists all 4.");
+    expect(tease).toContain("First 3 of 4 shown; Pro lists all 4.");
     const email = newEmail("pro-incumbents");
     const pro = await signIn(email);
     await grantPro(email);

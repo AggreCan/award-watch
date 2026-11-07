@@ -113,7 +113,7 @@ describe("the alerts block on each page", () => {
     expect(block.match(/<button/g)).toHaveLength(1);
     expect(block.match(/<input name="email"/g)).toHaveLength(1);
     expect(block).toContain(
-      'This form sends nothing. Sign in with this address and the list waits in your account as a saved search; with Pro it arrives by email. The <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+      'Saved to your account as a saved search when you sign in with this address; with Pro it arrives by email. The <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
     );
     expect(block).toContain('<a href="/alerts">How email lists work</a>');
     // The script only keeps the reader on the page; the form posts without it.
@@ -259,7 +259,7 @@ describe("POST /interest", () => {
     expect(html).toContain(
       '<p class="interest-done" role="status">Noted: fragment@example.ca, for new tender notices and award notices in segment 82 Editorial and Design and Graphic and Fine Art Services.</p>',
     );
-    expect(html).toContain("This form sends nothing. Sign in with this address and the list waits in your account as a saved search; with Pro it arrives by email.");
+    expect(html).toContain("Saved to your account as a saved search when you sign in with this address; with Pro it arrives by email.");
     const bad = await post({ email: "nope", kind: "segment", params: "/segments/82", lang: "en" }, { "x-interest-fragment": "1" });
     expect(bad.status).toBe(400);
     const again = await bad.text();
@@ -316,7 +316,7 @@ describe("the alerts page and the privacy page", () => {
       "and the lists are there, ready to add to the account's saved searches; delivery by email comes with Pro.");
     // The chooser's note names the lists, several of them.
     expect(html).toContain(
-      'This form sends nothing. Sign in with this address and the lists wait in your account as saved searches; with Pro they arrive by email. The <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+      'Saved to your account as saved searches when you sign in with this address; with Pro they arrive by email. The <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
     );
     for (const href of ["/tenders", "/expiring", "/organizations", "/buyers", "/segments", "/privacy#interest"]) {
       expect(html, href).toContain(`<a href="${href}">`);
@@ -424,10 +424,10 @@ describe("the email lists as part of Pro", () => {
     // Every page's block says it in one sentence, the same in each place.
     for (const path of BLOCK_PAGES) {
       expect(block(await text(path)), path).toContain(
-        'This form sends nothing. Sign in with this address and the list waits in your account as a saved search; with Pro it arrives by email. The <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+        'Saved to your account as a saved search when you sign in with this address; with Pro it arrives by email. The <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
       );
       expect(nbsp(block(await text(fr(path)))), path).toContain(
-        "Ce formulaire n’envoie rien. Connectez-vous avec cette adresse et la liste vous attend dans votre compte comme recherche enregistrée; avec Pro, elle arrive par courriel. " +
+        "Enregistrée dans votre compte comme recherche enregistrée quand vous vous connectez avec cette adresse; avec Pro, elle arrive par courriel. " +
         'La page <a href="/privacy#interest">Confidentialité</a> indique ce que conserve le formulaire.',
       );
     }

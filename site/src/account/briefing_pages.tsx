@@ -72,11 +72,15 @@ export const BriefingPanel: FC<{ lang: Lang; state: BriefingControlState | null;
   if (!state) return null;
   let body: unknown;
   if (state.at === "out") {
+    // The weekly email is Pro's: the line under the button says so and offers the plan (operator, 2026-11-07).
     body = (
-      <div class="briefing-control">
-        <a href={`/account/sign-in?next=${encodeURIComponent(state.next)}`} class="btn">{t(lang, "briefing.subscribe")}</a>
-        <span class="muted small">{t(lang, "briefing.control_out")}</span>
-      </div>
+      <>
+        <div class="briefing-control">
+          <a href={`/account/sign-in?next=${encodeURIComponent(state.next)}`} class="btn">{t(lang, "briefing.subscribe")}</a>
+          <span class="muted small">{t(lang, "briefing.control_out")}</span>
+        </div>
+        <ProNote lang={lang}>{t(lang, "interest.pro_line")} <a href="/account/sign-in?next=/account/billing">{t(lang, "expiring.pro_sign_in")}</a></ProNote>
+      </>
     );
   } else if (state.id) {
     body = (
