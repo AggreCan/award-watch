@@ -1176,7 +1176,7 @@ th[aria-sort="descending"] .th-sort::after {
    own, and the grid gives back as much below. */
 .plan-cards {
   --plan-head-h: 28px; --plan-head-pad: 4px; --plan-name-above: 6px; --plan-for-below: 2px; --plan-row-first: 1px;
-  --plan-row-lh: 0.9; --plan-buttons-above: 8px; --plan-foot: 10px;
+  --plan-row-lh: 2.0; --plan-buttons-above: 8px; --plan-foot: 10px;
   display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 var(--gutter); align-items: stretch;
   max-width: calc(3 * 360px + 2 * var(--gutter));
 }
