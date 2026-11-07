@@ -3451,6 +3451,47 @@ const STRINGS = {
     en: "One row per joined id: the id its records moved to, the reason, a note and the date of the join. Ids only, no record data.",
     fr: "Une ligne par identifiant réuni : l'identifiant qui a reçu ses dossiers, le motif, une note et la date de la réunion. Des identifiants seulement, aucune donnée de dossier.",
   },
+
+  // -- the home page's Canada map (src/pages/home_map.tsx) ------------------------------
+  "map.heading": { en: "Tender Notices by Province", fr: "Avis d'appel d'offres par province" },
+  "map.layers": { en: "Map layer", fr: "Couche de la carte" },
+  "map.layer_new_today": { en: "New today", fr: "Nouveaux aujourd'hui" },
+  "map.layer_open": { en: "Open", fr: "Ouverts" },
+  "map.layer_closing": { en: "Closing within {n} days", fr: "Clôture d'ici {n} jours" },
+  "map.layer_same_day": { en: "Same day", fr: "Du jour" },
+  // The line over the legend, for the layer shown; the same-day layer's is the band's own heading.
+  "map.caption_new_today_one": { en: "{n} new notice today", fr: "{n} nouvel avis aujourd'hui" },
+  "map.caption_new_today_many": { en: "{n} new notices today", fr: "{n} nouveaux avis aujourd'hui" },
+  "map.caption_open_one": { en: "{n} open notice", fr: "{n} avis ouvert" },
+  "map.caption_open_many": { en: "{n} open notices", fr: "{n} avis ouverts" },
+  "map.caption_closing_one": { en: "{n} notice closing within {days} days", fr: "{n} avis qui ferme d'ici {days} jours" },
+  "map.caption_closing_many": { en: "{n} notices closing within {days} days", fr: "{n} avis qui ferment d'ici {days} jours" },
+  "map.national": { en: "Canada-wide or not stated: {n}", fr: "Tout le Canada ou non indiqué : {n}" },
+  "map.several": { en: "A notice in several provinces counts in each.", fr: "Un avis visant plusieurs provinces compte dans chacune." },
+  "map.derived": {
+    en: "Provinces stated, or derived from other fields ({methodology}).",
+    fr: "Provinces indiquées, ou déduites d'autres champs ({methodology}).",
+  },
+  "map.same_day_stated": {
+    en: "Same-day notices count the provinces they state.",
+    fr: "Les avis du jour comptent les provinces qu'ils indiquent.",
+  },
+  "map.legend": { en: "Notices per province", fr: "Avis par province" },
+  "map.range": { en: "{lo} to {hi}", fr: "{lo} à {hi}" },
+  "map.source": {
+    en: "Boundaries adapted from Statistics Canada, {link}, 2021. This does not constitute an endorsement by Statistics Canada of this product.",
+    fr: "Limites adaptées de Statistique Canada, {link}, 2021. Cela ne constitue pas une approbation de ce produit par Statistique Canada.",
+  },
+  "map.source_link": { en: "Census Boundary Files", fr: "Fichiers des limites du recensement" },
+  // A day list the map opened for a province, when none of its notices is placed there.
+  "tenders.new_none_place": {
+    en: "No notice of this day matches the province filter ({places}).",
+    fr: "Aucun avis de ce jour ne correspond au filtre de province ({places}).",
+  },
+  "sameday.none_place": {
+    en: "No same-day notice read since this morning's refresh matches the province filter ({places}).",
+    fr: "Aucun avis du jour lu depuis la mise à jour de ce matin ne correspond au filtre de province ({places}).",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

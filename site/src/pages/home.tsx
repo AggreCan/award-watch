@@ -7,9 +7,12 @@ import { STATS_LIST_ROWS, closingSoonTotal, loadExpiringIndex, loadOpenFirst, lo
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoneyShort, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, noDataPage, page, todayOf } from "../layout";
+import { allowsIntraday, requestPlan } from "../plan";
 import { homeJsonLd, pageSeo } from "../seo";
 import { newestFirst } from "./awards";
 import { FeedLinks } from "./feeds";
+import { CanadaMapPanel, mapLayers } from "./home_map";
+import { sameDayMapCounts } from "./intraday";
 import { AwardTable, CountdownScript, OrgTotalTable, SegmentNote, TenderTable } from "./shared";
 
 type CountKey = "contracts" | "grants" | "history";
@@ -127,6 +130,12 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   // The newest award notices by award date (stats.json picks them so, leaving
   // out a date past the data date), in the order of the Awarded column.
   const recentAwards = newestFirst(stats.recent_awards);
+  // The Canada map, when the export writes its counts (an older one has none
+  // and the page has no map). Its same-day layer is counted for every reader;
+  // the plan is read only to pick where that layer's links lead.
+  const sameDay = stats.map ? await sameDayMapCounts(c, stats.data_as_of) : null;
+  const proSameDay = sameDay ? allowsIntraday(await requestPlan(c)) : false;
+  const mapLayerList = stats.map ? mapLayers(lang, stats.map, sameDay, proSameDay, today) : null;
   // The note on the segment chips, once: in the foot of the first list that
   // has them, so the rows start right under the head band.
   const chipsFirst = newToday.some((r) => r.segments.length);
@@ -141,6 +150,8 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
           <a href="/feeds" class="btn">{t(lang, "feeds.button_all")}</a>
           <a href="/data#downloads" class="btn">{t(lang, "footer.download")}</a>
         </>} />
+
+      {mapLayerList ? <CanadaMapPanel lang={lang} layers={mapLayerList} /> : null}
 
       {tiles.length ? (
         <section class="tiles" aria-label={t(lang, "home.tiles_label")}>
@@ -224,8 +235,8 @@ export function homeLead(lang: Lang, organizations: number | undefined): string 
 // What a reader can do here, one line a task, each led by its link: the
 // tasks search brings readers for. The email line leads to the Pro page
 // while the accounts switch is on and is left out while it is off (nothing
-// is Pro then). It names Pro in words and carries no chip: the Pro-mark
-// ruling leaves the home page without one (test/pro-mark.test.ts).
+// is Pro then). It names Pro in words and carries no chip: the home page's
+// one chip is on the map's Same day button (test/pro-mark.test.ts).
 const HOME_DO: readonly { text: Key; link: Key; href: string }[] = [
   { text: "home.do_tenders", link: "home.do_tenders_link", href: "/tenders" },
   { text: "home.do_awards", link: "home.do_awards_link", href: "/awards" },

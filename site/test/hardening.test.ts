@@ -27,7 +27,10 @@ import wranglerConfig from "../wrangler.jsonc?raw";
 import {
   ACCOUNTS, DB, csrf, get, grantPro, newEmail, nextIp, onEnv, post, requestCode, sessionCookie, signIn, useAccountsDb, userId,
 } from "./accounts-helpers";
+import { FILES, makeFakeAssets } from "./assets";
+import STATS_MAP from "./fixtures/stats-map.json";
 import { applySql } from "./setup";
+import { forgetSameDayCounts } from "../src/pages/intraday";
 
 useAccountsDb();
 
@@ -357,6 +360,31 @@ describe("the paid rows have one reader", () => {
       expect(showsPaid(r.body.replaceAll(PAID.reference, "")), path).toBe(false);
       expect(intradayReads(r), path).toEqual([]);
     }
+  });
+
+  // The home page's Canada map counts the same-day notices by province for
+  // every reader (its same-day layer, src/pages/intraday.tsx
+  // sameDayMapCounts): the one place outside the band that reads the rows.
+  // It reads them through the band's own statement, at most once while the
+  // counts are kept, and draws figures only.
+  it("reach the home page's map as counts alone: one statement while they are kept, none of their words, for every reader", async () => {
+    const { cookie: pro } = await proSession("band-map");
+    const assets = makeFakeAssets({}, { "stats.json": { ...(FILES["stats.json"] as object), map: STATS_MAP } });
+    for (const cookie of [undefined, pro]) {
+      forgetSameDayCounts();
+      const first = await render("/", cookie, { ASSETS: assets });
+      expect(first.sql).toEqual([INTRADAY_SQL]);
+      expect(showsPaid(first.body)).toBe(false);
+      // The paid notice states Manitoba: its count is in the same-day column of the map's table.
+      const row = /<tr><td data-label="Province">Manitoba<\/td>[\s\S]*?<\/tr>/.exec(first.body)?.[0] ?? "";
+      expect(row).toMatch(/<td data-label="Same day" class="num"><a href="[^"]*">1<\/a><\/td><\/tr>$/);
+      const again = await render("/", cookie, { ASSETS: assets });
+      expect(again.sql).toEqual([]);
+      expect(showsPaid(again.body)).toBe(false);
+    }
+    // An export from before the map draws none and reads nothing.
+    forgetSameDayCounts();
+    expect(intradayReads(await render("/", pro))).toEqual([]);
   });
 });
 

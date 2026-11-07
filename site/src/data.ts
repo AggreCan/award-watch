@@ -6,7 +6,7 @@
 // says "not published" or "not found", never a server error.
 
 import { type Clock, clockOf, closingSoonCount } from "./closing";
-import { DIRECTORY_CODES, MONEY_SOURCES, SEGMENTS, SOURCES, type MoneySource, type SourceKey } from "./constants";
+import { DIRECTORY_CODES, MONEY_SOURCES, PROVINCES, SEGMENTS, SOURCES, type MoneySource, type SourceKey } from "./constants";
 import type { Env } from "./env";
 import { isBool, isListOf, isNum, isNumOrNull, isObj, isStr, isStrOrNull, optional } from "./valid";
 
@@ -222,6 +222,36 @@ export interface OpenFirst {
   facets: Record<FacetName, FacetCount[]>;
 }
 
+// One layer of the home page's Canada map (src/pages/home_map.tsx): n, the
+// notices; provinces, each of the thirteen codes with the notices placed in
+// it by a stated province or a derived one, a notice placed in several
+// counted in each; not_stated, the notices placed in none (Canada-wide or not
+// stated). stats.json carries the layers the nightly counts
+// (STATS_MAP_LAYERS, pipeline export_static.province_map); the same-day layer
+// is counted here from the intraday rows (sameDayMapCounts in
+// src/pages/intraday.tsx), by provinceCounts below.
+export interface ProvinceCounts {
+  n: number;
+  not_stated: number;
+  provinces: Partial<Record<string, number>>;
+}
+export const STATS_MAP_LAYERS = ["new_today", "open", "closing_7d"] as const;
+export type StatsMapLayer = (typeof STATS_MAP_LAYERS)[number];
+
+// The rows by province, as the pipeline counts a layer: a row's stated and
+// derived provinces together, each province once per row, and a row placed
+// in none of the thirteen counted once in not_stated.
+export function provinceCounts(rows: readonly TenderRow[]): ProvinceCounts {
+  const provinces: Record<string, number> = Object.fromEntries(PROVINCES.map((p) => [p, 0]));
+  let notStated = 0;
+  for (const r of rows) {
+    const placed = new Set([...r.provinces, ...(r.provinces_derived ?? [])].filter((p) => p in provinces));
+    if (!placed.size) notStated += 1;
+    for (const p of placed) provinces[p] += 1;
+  }
+  return { n: rows.length, not_stated: notStated, provinces };
+}
+
 // awards/<year>/index.json: how many pages of award rows the year has (500 to
 // a page, newest award date first) and how many rows in all.
 export interface AwardYear {
@@ -274,6 +304,10 @@ export interface Stats {
   // Each file of the Data page's downloads as the export found it: its size in
   // bytes and, for a CSV file, its rows under the header. Absent from older exports.
   downloads?: { file: string; bytes: number; rows: number | null }[];
+  // The home page's Canada map, a layer per list (ProvinceCounts above).
+  // Absent from older exports, and dropped when it does not read: the home
+  // page then has no map.
+  map?: Record<StatsMapLayer, ProvinceCounts>;
 }
 
 export interface CodeRow { code: string; desc_en: string | null; desc_fr: string | null }
@@ -974,6 +1008,11 @@ const STAT_LISTS: [keyof Stats, (v: unknown) => boolean][] = [
     optional(r.loaded, isBool)],
 ];
 
+const PROVINCE_SET: ReadonlySet<string> = new Set(PROVINCES);
+const isProvinceCounts = (v: unknown): v is ProvinceCounts => isObj(v) && isCount(v.n) && isCount(v.not_stated) &&
+  isObj(v.provinces) && Object.entries(v.provinces).every(([code, n]) => PROVINCE_SET.has(code) && isCount(n));
+const isStatsMap = (v: unknown): boolean => isObj(v) && STATS_MAP_LAYERS.every((layer) => isProvinceCounts(v[layer]));
+
 // Every page reads the data date from here, so the file is required only to
 // be an object with a counts object; a count that is not a number reads as
 // absent and a list that does not read as empty, each hiding its own part of
@@ -988,10 +1027,13 @@ export async function loadStats(env: Env): Promise<Stats | null> {
   // The closing times are optional: a list that does not read is left out, so the rail falls back to the counts.
   const badTimes = stats.closing_soon_times !== undefined &&
     !checkOnce(stats.closing_soon_times, "stats.closing_soon_times", (v) => isListOf(v, isStr));
-  if (badCounts.length === 0 && badLists.length === 0 && !badTimes) return stats as unknown as Stats;
+  // So is the map: one that does not read, every layer of it, is left out and the home page draws none.
+  const badMap = stats.map !== undefined && !checkOnce(stats.map, "stats.map", isStatsMap);
+  if (badCounts.length === 0 && badLists.length === 0 && !badTimes && !badMap) return stats as unknown as Stats;
   const fixed: Record<string, unknown> = { ...stats, counts: Object.fromEntries(Object.entries(counts).filter(([, v]) => isNum(v))) };
   for (const k of badLists) fixed[k] = [];
   if (badTimes) delete fixed.closing_soon_times;
+  if (badMap) delete fixed.map;
   return fixed as unknown as Stats;
 }
 

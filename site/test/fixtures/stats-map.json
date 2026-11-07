@@ -1,0 +1,17 @@
+{
+ "closing_7d": {
+  "n": 120,
+  "not_stated": 40,
+  "provinces": {"AB": 6, "BC": 14, "MB": 4, "NB": 3, "NL": 3, "NS": 7, "NT": 2, "NU": 3, "ON": 38, "PE": 1, "QC": 17, "SK": 2, "YT": 0}
+ },
+ "new_today": {
+  "n": 46,
+  "not_stated": 15,
+  "provinces": {"AB": 3, "BC": 6, "MB": 2, "NB": 1, "NL": 1, "NS": 3, "NT": 0, "NU": 1, "ON": 14, "PE": 0, "QC": 7, "SK": 1, "YT": 0}
+ },
+ "open": {
+  "n": 854,
+  "not_stated": 300,
+  "provinces": {"AB": 45, "BC": 90, "MB": 25, "NB": 22, "NL": 20, "NS": 48, "NT": 14, "NU": 16, "ON": 260, "PE": 8, "QC": 120, "SK": 18, "YT": 9}
+ }
+}

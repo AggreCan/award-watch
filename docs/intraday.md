@@ -343,7 +343,9 @@ only.
   or a higher amendment is left out. The title opens the notice on
   CanadaBuys, since the site has no page for it until the next nightly. A
   buyer the lookup did not match shows its name as published, without a
-  link. Nothing is added to the home page, the feeds or search. A page with
+  link. Nothing of a notice is added to the home page, the feeds or search;
+  the home page's Canada map shows the band's notices as counts by province
+  (below). A page with
   the band is a signed-in reader's, so it goes out `Cache-Control: private,
   no-store` and no shared cache keeps it (`site/test/hardening.test.ts`).
 
@@ -363,3 +365,16 @@ data date (`tenders/new/<date>.json`) and its first open notices
 (`tenders/open-first.json`); the full open list stays the browser's. When D1
 is missing or fails, a paid request gets the free page with no error; the
 log names the fault by its code only.
+
+The home page's Canada map counts the same notices for every reader:
+its Same day layer (the Pro chip on its button) shows, per province, the
+band's notices by the provinces they state (the intraday job derives none),
+and its province links open `/tenders/same-day?province=XX&national=0` for
+a Pro reader and the plain page, with the Pro panel, for anyone else. The
+figures come from `sameDayMapCounts` in `site/src/pages/intraday.tsx`: the
+band's own statement and merge, at most `MAX_ROWS` rows, read at most once
+an isolate in ten minutes for a data date (a failed read is kept as long,
+and the layer is left out), and only while the accounts switch is on.
+Nothing but the figures leaves that function (`site/test/hardening.test.ts`).
+On a morning before the first cut, or while no Pro plan is live and the job
+skips its work, the layer reads zero.

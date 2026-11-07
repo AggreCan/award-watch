@@ -21,9 +21,18 @@ change there. Output tree (under data/out/static):
                                 each with last_read, last_modified as an ISO instant, last_modified_http as
                                 the publisher sent it, and loaded), totals (awards_year: the data year's
                                 award notices by the counting rules, CAD; awards_30d: the notices
-                                counts.awards_30d counts, the same way) and downloads (each file of the CSV
+                                counts.awards_30d counts, the same way), downloads (each file of the CSV
                                 export the Data page offers: file, bytes, and rows under the header, the
-                                lines of SHA256SUMS; empty when the CSV folder is missing)
+                                lines of SHA256SUMS; empty when the CSV folder is missing) and map (the home
+                                page's Canada map, province_map: for each of its layers new_today, the
+                                notices first seen on the data date as tenders/new/<data date>.json lists
+                                them, open, every open notice, and closing_7d, the notices of closing_soon,
+                                an object {n, not_stated, provinces}: n the layer's notices, provinces every
+                                one of the thirteen codes with the notices placed in it, stated or derived,
+                                zeros kept, a notice placed in several provinces counted in each, and
+                                not_stated the notices placed in none, Canada-wide or not stated. The fourth
+                                layer, the same-day notices, is the site's own: it counts the rows the
+                                intraday job writes, which this file never sees)
   tenders/open.json             every notice open on the data date as a list row (read by the browser only)
   tenders/open-first.json       the open notices closing by the day after the data date and the 50 after
                                 them, the number open, and the facet counts over all of them (what
@@ -178,7 +187,7 @@ from . import config, directory, expiring, indicators, organizations, sosa_expor
 from .db import get_meta, log_run, set_meta
 from .export import SUMS, listed_buyer_ids, register_functions, scrub, scrub_doc
 from .feeds import write_feeds
-from .normalize import closing_day, tender_status_on
+from .normalize import PROVINCE_CODES, closing_day, tender_status_on
 from .sources import buyers as buyer_rules
 from .sources.buyers import public_spelling
 from .sources.canadabuys_rows import ATTACHMENTS_MAX, government_url
@@ -959,6 +968,32 @@ def closing_soon_times(m: Model, open_rows: list[dict]) -> list[str]:
     return [r["closing"] for r in open_rows if (day := closing_day(r["closing"])) and m.as_of <= day <= end]
 
 
+def province_counts(rows: Iterable[dict]) -> dict:
+    """One layer of the home page's Canada map: n, the notices; provinces, each of the thirteen province and
+    territory codes with the notices placed in it, by a stated province or a derived one (the province filter's
+    default reading), zeros kept so the site never reads a missing code as a guess; and not_stated, the notices
+    placed in none. A notice placed in several provinces counts in each, so the provinces can add up to more
+    than n; one placed in none counts once, in not_stated, so n - not_stated notices are on the map."""
+    provinces = dict.fromkeys(sorted(PROVINCE_CODES), 0)
+    n = not_stated = 0
+    for r in rows:
+        n += 1
+        placed = {p for p in (*r["provinces"], *(r.get("provinces_derived") or ())) if p in provinces}
+        if not placed:
+            not_stated += 1
+        for p in placed:
+            provinces[p] += 1
+    return {"n": n, "not_stated": not_stated, "provinces": provinces}
+
+
+def province_map(m: Model, open_rows: list[dict], new_today: list[dict]) -> dict:
+    """stats.json "map": the layers of the home page's Canada map the nightly can count. new_today is every row
+    of tenders/new/<data date>.json (a notice closed since counts too, as /tenders/new lists it), open every
+    open notice, closing_7d the closing-soon notices of the data date."""
+    return {"new_today": province_counts(new_today), "open": province_counts(open_rows),
+            "closing_7d": province_counts(closing_soon(m, open_rows))}
+
+
 def open_first(m: Model, open_rows: list[dict]) -> list[dict]:
     """The rows of tenders/open-first.json: every open notice closing by OPEN_FIRST_MARGIN_DAYS after the data
     date (open_rows is soonest first), then OPEN_FIRST_ROWS more."""
@@ -1032,6 +1067,7 @@ def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[
             "SELECT SUM(v) FROM x_awards WHERE substr(awarded, 1, 4) = ?", (str(m.year),)).fetchone()[0]),
                    "awards_30d": _money(recent_v)},
         "downloads": downloads or [],
+        "map": province_map(m, open_rows, new_today),
     }
     _dump(out / "stats.json", stats)
     return stats

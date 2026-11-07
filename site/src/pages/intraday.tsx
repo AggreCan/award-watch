@@ -14,16 +14,22 @@
 // query, no file), so its page is the page without the feature. A paid
 // request whose D1 query fails gets the free view too: the failure is
 // logged by its code alone and the page carries no error.
+//
+// The one other reader is sameDayMapCounts, for the home page's map: the
+// same rows counted by province for every reader, figures only, read at
+// most once an isolate every few minutes.
 
 import type { Context } from "hono";
 import type { Child, FC } from "hono/jsx";
+import { accountsEnabled } from "../account/switch";
 import { Table } from "../columns";
 import { type Clock, closesAtUtc, closingText, closingTime, tenderState } from "../closing";
-import { DAY_RE, loadNewTenders, loadOpenFirst, publishedReference } from "../data";
+import { DAY_RE, type ProvinceCounts, loadNewTenders, loadOpenFirst, provinceCounts, publishedReference } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, pick, t, tn, type Key, type Lang } from "../i18n";
 import { type IntradayView, loadIntraday, mergeIntraday } from "../intraday";
 import { Panel, StatusBadge } from "../layout";
+import { type PlaceQuery, placedIn } from "../places";
 import { allowsIntraday, requestPlan } from "../plan";
 import { SameDayLegend, SameDayMark } from "../pro";
 import { faultSummary } from "../search_db";
@@ -78,7 +84,12 @@ export const IntradayBand: FC<{ lang: Lang; rows: readonly IntradayView[]; clock
 // about 1 MB) stays the browser's: the Worker never parses it.
 export type SameDayView = { band: Child; marked: ReadonlySet<string> };
 
-export async function sameDayView(c: Context<AppEnv>, dataAsOf: string | null | undefined, clock: Clock): Promise<SameDayView | null> {
+// places: the province filter of the page the band sits on (a list the home
+// page's map opened), which keeps the band's rows placed there. The rows
+// carry the provinces their notices state; the intraday job derives none.
+export async function sameDayView(
+  c: Context<AppEnv>, dataAsOf: string | null | undefined, clock: Clock, places?: PlaceQuery,
+): Promise<SameDayView | null> {
   if (!allowsIntraday(await requestPlan(c))) return null;
   const db = c.env.SEARCH;
   if (!db || !dataAsOf || !DAY_RE.test(dataAsOf)) return null;
@@ -91,7 +102,8 @@ export async function sameDayView(c: Context<AppEnv>, dataAsOf: string | null | 
   }
   if (!rows.length) return null;
   const [firstSeen, first] = await Promise.all([loadNewTenders(c.env, dataAsOf), loadOpenFirst(c.env)]);
-  const shown = mergeIntraday([...(firstSeen ?? []), ...(first?.rows ?? [])], rows);
+  const merged = mergeIntraday([...(firstSeen ?? []), ...(first?.rows ?? [])], rows);
+  const shown = places ? merged.filter((r) => placedIn(r, places)) : merged;
   if (!shown.length) return null;
   return {
     band: <IntradayBand lang={c.get("lang")} rows={shown} clock={clock} />,
@@ -101,4 +113,44 @@ export async function sameDayView(c: Context<AppEnv>, dataAsOf: string | null | 
 
 export async function intradayBand(c: Context<AppEnv>, dataAsOf: string | null | undefined, clock: Clock): Promise<Child> {
   return (await sameDayView(c, dataAsOf, clock))?.band ?? null;
+}
+
+// -- the home page's map ----------------------------------------------------------------
+
+// The same-day layer of the home page's map (src/pages/home_map.tsx), shown
+// to every reader as a count: the band's notices, the ones /tenders/same-day
+// lists to a Pro reader, by the provinces they state. Figures only: no row
+// leaves this function. The rows come through the band's own statement, read
+// at most once an isolate in SAME_DAY_COUNTS_MS for a data date (the cuts
+// come every two hours), so the home page does not read the table on every
+// request; at most MAX_ROWS rows (src/intraday.ts), so the count is bounded.
+// Null, and nothing read, while the accounts switch is off (nothing is Pro,
+// and the map draws no same-day layer), without the binding or a data date;
+// null when the read fails, kept for the same time so an outage is not
+// retried on every request.
+export const SAME_DAY_COUNTS_MS = 10 * 60 * 1000;
+
+let keptCounts: { day: string; at: number; counts: ProvinceCounts | null } | null = null;
+
+// For the tests: the next call reads the rows again.
+export function forgetSameDayCounts(): void {
+  keptCounts = null;
+}
+
+export async function sameDayMapCounts(c: Context<AppEnv>, dataAsOf: string | null | undefined): Promise<ProvinceCounts | null> {
+  if (!accountsEnabled(c.env)) return null;
+  const db = c.env.SEARCH;
+  if (!db || !dataAsOf || !DAY_RE.test(dataAsOf)) return null;
+  const now = Date.now();
+  if (keptCounts && keptCounts.day === dataAsOf && now - keptCounts.at < SAME_DAY_COUNTS_MS) return keptCounts.counts;
+  let counts: ProvinceCounts | null = null;
+  try {
+    const rows = await loadIntraday(db, dataAsOf);
+    const [firstSeen, first] = rows.length ? await Promise.all([loadNewTenders(c.env, dataAsOf), loadOpenFirst(c.env)]) : [null, null];
+    counts = provinceCounts(mergeIntraday([...(firstSeen ?? []), ...(first?.rows ?? [])], rows));
+  } catch (e) {
+    console.error(`intraday: map counts failed (${faultSummary(e)})`);
+  }
+  keptCounts = { day: dataAsOf, at: now, counts };
+  return counts;
 }

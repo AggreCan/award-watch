@@ -1023,3 +1023,73 @@ def test_the_open_levels_count_each_family_and_class_once_a_notice_with_the_name
     assert (by_code["8111"]["en"], by_code["8111"]["fr"]) == ("Computer services", "Services informatiques")
     assert by_code["811115"]["en"] is None and by_code["811115"]["fr"] is None
     assert es.LEVEL_DIGITS == (4, 6) and len(levels) <= es.LEVELS_MAX
+
+
+# -- the home page's Canada map -----------------------------------------------------------------
+
+PROVINCES = ["AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT"]
+
+
+def test_a_map_layer_counts_a_notice_in_each_province_it_is_placed_in_and_once_when_placed_in_none():
+    rows = [
+        {"provinces": ["BC"]},
+        {"provinces": [], "provinces_derived": ["BC"]},
+        {"provinces": ["ON", "QC"]},
+        {"provinces": ["ON"], "provinces_derived": ["NS"]},
+        {"provinces": []},
+        {"provinces": ["XX"]},
+    ]
+    layer = es.province_counts(rows)
+    assert layer["n"] == 6
+    # Canada-wide or not stated: the notice with none, and the one whose only code is not a province's.
+    assert layer["not_stated"] == 2
+    # Every code, zeros kept; the stated and the derived both count, and the two-province notice counts twice.
+    assert layer["provinces"] == {**dict.fromkeys(PROVINCES, 0), "BC": 2, "ON": 2, "QC": 1, "NS": 1}
+    assert list(layer["provinces"]) == PROVINCES
+    assert sum(layer["provinces"].values()) == 6 > layer["n"] - layer["not_stated"]
+    assert es.province_counts([]) == {"n": 0, "not_stated": 0, "provinces": dict.fromkeys(PROVINCES, 0)}
+
+
+def test_stats_map_counts_the_new_open_and_closing_soon_notices_by_province_stated_or_derived(conn, tmp_path):
+    """stats.json "map", the home page's Canada map: a layer per list the nightly writes, each notice counted in
+    every province it is placed in, by a stated province or a derived one, and the notices placed in none apart.
+    The seed's open notices: cb-100-1, cb-300-3 and the colon reference in ON, cb-200-2 in BC (new today and
+    closing within the week), the colon reference new today too."""
+    seed(conn)
+    tender(conn, "cb-map-two", 0, title="Two provinces", published="2026-10-31", closing="2026-11-04T14:00:00",
+           provinces=("ON", "QC"))
+    tender(conn, "cb-map-derived", 0, title="Placed by a city", closing="2026-11-25T14:00:00", first_seen="2026-10-29",
+           provinces=())
+    tender(conn, "cb-map-none", 0, title="Canada-wide", published="2026-10-31", closing="2026-11-06T14:00:00", provinces=())
+    tender(conn, "cb-map-both", 0, title="Stated and derived", published="2026-10-31", closing="2026-12-01T14:00:00",
+           provinces=("ON",))
+    conn.execute("UPDATE tenders SET provinces_derived = '[\"NS\"]', provinces_from = 'delivery' "
+                 "WHERE reference = 'cb-map-derived'")
+    conn.execute("UPDATE tenders SET provinces_derived = '[\"QC\"]', provinces_from = 'delivery' "
+                 "WHERE reference = 'cb-map-both'")
+    conn.commit()
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    stats = load(out, "stats.json")
+    layers = stats["map"]
+    assert set(layers) == {"new_today", "open", "closing_7d"}
+    zero = dict.fromkeys(PROVINCES, 0)
+
+    assert layers["open"] == {"n": 8, "not_stated": 1, "provinces": {**zero, "ON": 5, "BC": 1, "QC": 2, "NS": 1}}
+    assert layers["new_today"] == {"n": 5, "not_stated": 1, "provinces": {**zero, "BC": 1, "ON": 3, "QC": 2}}
+    assert layers["closing_7d"] == {"n": 3, "not_stated": 1, "provinces": {**zero, "BC": 1, "ON": 1, "QC": 1}}
+    # Each layer is its list: the open count, the day's file, the closing-soon count.
+    assert layers["open"]["n"] == stats["counts"]["tenders_open"] == len(load(out, "tenders/open.json"))
+    assert layers["new_today"]["n"] == len(load(out, "tenders/new/2026-10-31.json")) == stats["counts"]["tenders_new_today"]
+    assert layers["closing_7d"]["n"] == stats["counts"]["tenders_closing_soon"]
+    # The province filter's facet reads the open notices the same way.
+    facet = {f["value"]: f["n"] for f in load(out, "tenders/open-first.json")["facets"]["province"]}
+    assert facet == {code: n for code, n in layers["open"]["provinces"].items() if n}
+
+
+def test_an_empty_export_maps_every_province_at_zero(tmp_path):
+    conn = connect(memory=True)
+    out = tmp_path / "static"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    empty = {"n": 0, "not_stated": 0, "provinces": dict.fromkeys(PROVINCES, 0)}
+    assert load(out, "stats.json")["map"] == {"new_today": empty, "open": empty, "closing_7d": empty}

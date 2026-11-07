@@ -1,7 +1,8 @@
 // The Pro mark (src/pro.tsx) and where it goes. The chip marks a boundary
 // the reader is at: the rail's entries that lead to a page that comes with
 // Pro, the radar's deep-window tabs and tiles, the links to the 12-month
-// list, gate notes, tease panels, and a Free account's overview rows. Never
+// list, gate notes, tease panels, a Free account's overview rows, and the
+// Same day button of the home page's Canada map. Never
 // on anything free, never in a table's records, never twice in one panel
 // head or one link, never in a hover-only surface, never interactive on its
 // own, and nowhere at all while the accounts switch is off.
@@ -27,7 +28,9 @@ import { SAME_DAY_RUNS_UTC } from "../src/refresh";
 import { routeTemplate } from "../src/views";
 import { csrf, decode, get, grantPro, nbsp, newEmail, nextIp, onEnv, post, signIn, useAccountsDb } from "./accounts-helpers";
 import { FILES, makeFakeAssets, testEnv } from "./assets";
+import STATS_MAP from "./fixtures/stats-map.json";
 import { applySql } from "./setup";
+import { forgetSameDayCounts } from "../src/pages/intraday";
 
 useAccountsDb();
 
@@ -191,6 +194,25 @@ describe("free pages", () => {
     const tabs = tabsOf(await html("/expiring/3m", { env: on() }));
     expect(tabs).toContain('<a href="/expiring/3m" aria-current="page">Within 3 months</a>');
     expect(chips(tabs)).toBe(2);
+  });
+
+  it("leave the home page one chip, on its Canada map's Same day button, for every reader, and none while the switch is off", async () => {
+    await sessions();
+    await applySql(SEARCH, INTRADAY_SCHEMA);
+    const files = { "stats.json": { ...(FILES["stats.json"] as object), map: STATS_MAP } };
+    for (const [, cookie] of READERS()) {
+      for (const path of ["/", "/?lang=fr"]) {
+        forgetSameDayCounts();
+        const rest = mainOf(await html(path, { env: on({ ASSETS: radar(files) }), cookie }));
+        expect(chips(rest), path).toBe(1);
+        const button = /<button type="button" class="btn" data-map-layer="same_day"[^>]*>[\s\S]*?<\/button>/.exec(rest)?.[0] ?? "";
+        expect(chips(button), path).toBe(1);
+      }
+    }
+    forgetSameDayCounts();
+    const switchedOff = await html("/", { env: testEnv(radar(files)) });
+    expect(chips(switchedOff)).toBe(0);
+    expect(switchedOff).toContain('id="canada-map"');
   });
 
   it("never put the chip inside the teaser's records, and never twice in a link or a panel head", async () => {

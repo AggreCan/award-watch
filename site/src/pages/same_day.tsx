@@ -3,8 +3,9 @@
 // head lead somewhere for every reader.
 //
 // A request whose plan carries the feature (src/plan.ts) gets the band
-// /tenders draws above its list (intradayBand in src/pages/intraday.tsx),
-// or a line saying none has been read yet. Any other request gets the head,
+// /tenders draws above its list (sameDayView in src/pages/intraday.tsx),
+// kept to the provinces the address asks for (the home page's map links a
+// province here), or a line saying none has been read yet. Any other request gets the head,
 // the cadence line and what Pro adds with its price (src/pro.tsx); that view
 // reads nothing past what every page reads: no D1 query and no notice file.
 // Every view ends on the legend of the same-day mark, the bolt on the band's
@@ -21,12 +22,21 @@ import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { t, tj, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, noDataPage, page } from "../layout";
+import { PlaceChips, type PlaceQuery, placeNames, placeParams, readPlaceQuery } from "../places";
 import { allowsIntraday, requestPlan } from "../plan";
 import { ProNote, ProPanel, SameDayLegend, checkoutPrice } from "../pro";
 import { breadcrumbJsonLd, pageSeo } from "../seo";
-import { intradayBand } from "./intraday";
+import { sameDayView } from "./intraday";
 
 export const SAME_DAY_PATH = "/tenders/same-day";
+
+// The page with a province filter (src/places.tsx), as the home page's map
+// links a Pro reader to it; a reader without Pro gets the free view whatever
+// the address asks, so the map links that reader to the plain page.
+export function sameDayHref(places: PlaceQuery): string {
+  const s = new URLSearchParams(placeParams(places)).toString();
+  return s ? `${SAME_DAY_PATH}?${s}` : SAME_DAY_PATH;
+}
 
 // The gate note in the head of /tenders and /tenders/new, where a Pro
 // reader gets the band instead: one line, no box, linking this page.
@@ -52,11 +62,20 @@ export async function sameDayPage(c: Context<AppEnv>): Promise<Response> {
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "rail.open"), path: "/tenders" }, { name: title }];
   let body: unknown;
   if (allowsIntraday(await requestPlan(c))) {
-    const band = await intradayBand(c, stats.data_as_of, clockOf(c.env));
-    body = band ?? (
-      <Panel title={t(lang, "rail.same_day_full")} foot={<SameDayLegend lang={lang} />}>
-        <p class="muted">{t(lang, "sameday.none")}</p>
-      </Panel>
+    // A province the home page's map asks for keeps the band's notices placed there.
+    const places = readPlaceQuery(new URL(c.req.url));
+    const band = (await sameDayView(c, stats.data_as_of, clockOf(c.env), places))?.band;
+    body = (
+      <>
+        <PlaceChips lang={lang} q={places} href={(q) => sameDayHref(q)} />
+        {band ?? (
+          <Panel title={t(lang, "rail.same_day_full")} foot={<SameDayLegend lang={lang} />}>
+            <p class="muted">
+              {places.province.length ? t(lang, "sameday.none_place", { places: placeNames(lang, places) }) : t(lang, "sameday.none")}
+            </p>
+          </Panel>
+        )}
+      </>
     );
   } else {
     const account = await railAccount(c).catch(() => undefined);

@@ -74,6 +74,16 @@
   /* Charts: one hue, a lighter step for a partial year. */
   --chart-bar: #334155;
   --chart-bar-light: #cbd5e1;
+  /* The home page's Canada map: a province with no notice on a step of the
+     paper, then four steps of the charts' slate, lighter to darker as the
+     count grows; the steps differ in lightness alone. */
+  --map-0: #e7e3d9;
+  --map-1: #cbd5e1;
+  --map-2: #94a3b8;
+  --map-3: #64748b;
+  --map-4: #334155;
+  /* The line between provinces: visible on the lightest step and on the darkest (operator, 2026-11-07). */
+  --map-line: #9c9486;
   --topbar: 56px;
   /* Wide enough for the longest label and its count on one line in both
      languages (measured: 256 px is the floor at 1440; 264 leaves margin). */
@@ -108,6 +118,13 @@
   --check: #34d399;
   --chart-bar: #94a3b8;
   --chart-bar-light: #334155;
+  /* The map's steps run the other way on the dark ground: the most notices the lightest. */
+  --map-0: #1e2738;
+  --map-1: #3a4a62;
+  --map-2: #566883;
+  --map-3: #7a8ca6;
+  --map-4: #aebbcd;
+  --map-line: #0f172a;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -131,6 +148,12 @@
     --check: #34d399;
     --chart-bar: #94a3b8;
     --chart-bar-light: #334155;
+    --map-0: #1e2738;
+    --map-1: #3a4a62;
+    --map-2: #566883;
+    --map-3: #7a8ca6;
+    --map-4: #aebbcd;
+  --map-line: #0f172a;
     color-scheme: dark;
   }
 }
@@ -1258,3 +1281,66 @@ th[aria-sort="descending"] .th-sort::after {
 /* The merge report's profile id (src/pages/forms.tsx): sent with the form,
    never typed, so it reads as a value rather than a field. */
 .stack input[readonly] { background: var(--band); color: var(--ink-2); }
+
+/* -- the home page's Canada map (src/pages/home_map.tsx) ---------------------
+   The map beside its table from 1400 px, the table never narrower than its
+   columns (--cmap-list-min, written by the server from the column system),
+   the table under the map below that, and the table alone below 700 px.
+   Every layer is in the markup: the wrapper's data-layer names the one shown
+   (public/canada-map.js sets it), and each [data-for] part of another layer
+   is hidden. The buttons show only with the script; without it the first
+   layer stays, with its caption over it. */
+.cmap { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gutter); align-items: start; }
+@media (min-width: 1400px) { .cmap { grid-template-columns: minmax(0, 1fr) minmax(var(--cmap-list-min, 0px), 1fr); } }
+.cmap-figure { min-width: 0; max-width: 640px; }
+.cmap:not([data-layer="new_today"]) [data-for="new_today"],
+.cmap:not([data-layer="open"]) [data-for="open"],
+.cmap:not([data-layer="closing_7d"]) [data-for="closing_7d"],
+.cmap:not([data-layer="same_day"]) [data-for="same_day"] { display: none; }
+.cmap-toggles { display: none; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+html.js .cmap-toggles { display: flex; }
+.cmap-caption { margin: 0 0 8px; font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ink); }
+.cmap-svg { display: block; width: 100%; height: auto; }
+/* Provinces part on a hairline of the panel's ground; the one under the pointer takes an ink edge. */
+.cmap-svg use { stroke: var(--map-line); stroke-width: 1.5; stroke-linejoin: round; }
+.cmap-svg a:hover use { stroke: var(--ink); stroke-width: 2.5; }
+.cmap-s0 { fill: var(--map-0); }
+.cmap-s1 { fill: var(--map-1); }
+.cmap-s2 { fill: var(--map-2); }
+.cmap-s3 { fill: var(--map-3); }
+.cmap-s4 { fill: var(--map-4); }
+/* The code over its count, in ink on a halo of the panel's ground, so it reads on every step. */
+.cmap-label {
+  font-size: 22px; font-weight: 600; fill: var(--ink); text-anchor: middle; pointer-events: none;
+  stroke: var(--panel); stroke-width: 5px; stroke-linejoin: round; paint-order: stroke;
+}
+.cmap-count { font-weight: 500; font-variant-numeric: tabular-nums; }
+.cmap-inset { fill: var(--panel); stroke: var(--border-2); stroke-width: 1.5; }
+.cmap-extent { fill: none; stroke: var(--muted); stroke-width: 1.2; }
+.cmap-key { margin-top: 8px; }
+.cmap-national { margin: 0 0 8px; font-size: 13px; line-height: 20px; color: var(--ink); }
+.cmap-legend {
+  display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; list-style: none;
+  font-size: 12px; line-height: 16px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.cmap-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.cmap-sw { flex: none; width: 16px; height: 12px; border: 1px solid var(--border-2); }
+.cmap-sw.cmap-s0 { background: var(--map-0); }
+.cmap-sw.cmap-s1 { background: var(--map-1); }
+.cmap-sw.cmap-s2 { background: var(--map-2); }
+.cmap-sw.cmap-s3 { background: var(--map-3); }
+.cmap-sw.cmap-s4 { background: var(--map-4); }
+.cmap-list { min-width: 0; }
+.cmap-list .table-wrap { border: 1px solid var(--border); }
+.cmap-national-row td { border-top: 1px solid var(--border-2); color: var(--ink-2); }
+.cmap-panel .cmap-note { margin-top: 0; font-size: 12px; line-height: 16px; color: var(--muted); }
+@media (max-width: 699px) {
+  .cmap-figure { display: none; }
+  /* A province a block: its name across, then its four figures two a line. */
+  .restack.cmap-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+  .restack.cmap-table td:first-child { grid-column: 1 / -1; }
+  /* Half a block is too narrow for the 7rem label column: each figure sits right of its label instead. */
+  .restack.cmap-table td.num { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-left: 0; }
+  .restack.cmap-table td.num::before { float: none; flex: 0 1 auto; width: auto; margin-left: 0; }
+  .cmap-national-row td { border-top: 0; }
+}

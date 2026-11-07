@@ -27,6 +27,7 @@ import type { AppEnv } from "../env";
 import {
   categoryLabel, clientStrings, fmtInt, numberLocale, pick, provinceName, segmentLabel, segmentShort, t, tj, tn, type Key, type Lang,
 } from "../i18n";
+import { PlaceChips, type PlaceQuery, placeNames, placeParams, placedIn, readPlaceQuery } from "../places";
 import { type Clock, clockOf, closingPassed, tenderState } from "../closing";
 import { ClientData, Layout, PageHead, Panel, addDays, noDataPage, page, todayOf } from "../layout";
 import { pageSeo } from "../seo";
@@ -101,18 +102,13 @@ export function readTenderQuery(url: URL): TenderQuery {
   const closing = get("closing");
   const pageNo = Number(get("page"));
   const code = get("code");
-  // The form sends national=0 from a hidden field and national=1 from the
-  // ticked box, so either 1 or no value at all keeps the notices in.
-  const national = url.searchParams.getAll("national");
-  const derived = url.searchParams.getAll("derived");
   return {
     q: get("q").slice(0, MAX_TEXT),
     category: all("category", CATEGORY_ORDER),
     segment: all("segment", SEGMENT_CODES),
     code: CODE_RE.test(code) ? code : "",
-    province: all("province", PROVINCES),
-    national: national.length === 0 || national.includes("1"),
-    derived: derived.length === 0 || derived.includes("1"),
+    // The province, national and derived keys, read as the day lists read them (src/places.tsx).
+    ...readPlaceQuery(url),
     buyer: BUYER_ID_RE.test(buyer) && buyer.length <= 80 ? buyer : "",
     type: get("type").slice(0, 200),
     method: get("method").slice(0, 200),
@@ -143,10 +139,7 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock:
     if (q.category.length && !q.category.some((v) => r.category.includes(v))) return false;
     if (q.segment.length && !q.segment.some((v) => r.segments.includes(v))) return false;
     if (q.code && !(r.codes ?? []).some((c) => c.startsWith(q.code))) return false;
-    if (q.province.length) {
-      const placed = q.derived && r.provinces_derived ? [...r.provinces, ...r.provinces_derived] : r.provinces;
-      if (!q.province.some((v) => placed.includes(v)) && !(q.national && placed.length === 0)) return false;
-    }
+    if (!placedIn(r, q)) return false;
     if (q.buyer && r.buyer_id !== q.buyer) return false;
     if (q.type && r.notice_type_en !== q.type) return false;
     if (q.method && r.method_en !== q.method) return false;
@@ -525,6 +518,14 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
 // How many days /tenders/new offers: the pipeline keeps 30 day files.
 export const NEW_DAYS = 30;
 
+// A day's address on /tenders/new, with the province filter the home page's
+// map can set: the newest day has no day key.
+export function newDayHref(day: string, latest: string, places: PlaceQuery): string {
+  const p = new URLSearchParams([...(day === latest ? [] : [["day", day] as [string, string]]), ...placeParams(places)]);
+  const s = p.toString();
+  return s ? `/tenders/new?${s}` : "/tenders/new";
+}
+
 export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
@@ -533,20 +534,23 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
   const days = Array.from({ length: NEW_DAYS }, (_, i) => addDays(latest, -i));
   const asked = c.req.query("day") ?? "";
   const day = DAY_RE.test(asked) && days.includes(asked) ? asked : latest;
+  // The provinces the home page's map asks for, read as the tender list reads them.
+  const places = readPlaceQuery(new URL(c.req.url));
   // A notice whose closing has passed ("closed" in the file, or still "open"
   // with a closing time now past) goes last.
   const loaded = await loadNewTenders(c.env, day);
   const clock = clockOf(c.env);
   const passed = (r: TenderRow) => r.status === "closed" || (r.status === "open" && closingPassed(r.closing, clock));
-  const rows = loaded ? [...loaded.filter((r) => !passed(r)), ...loaded.filter(passed)] : null;
+  const kept = loaded ? loaded.filter((r) => placedIn(r, places)) : null;
+  const rows = kept ? [...kept.filter((r) => !passed(r)), ...kept.filter(passed)] : null;
   // The same-day notices for a paid request, on the newest day's view only;
   // a notice of the band that the day's list holds too carries its mark there.
-  const intraday = day === latest ? await sameDayView(c, stats.data_as_of, clock) : null;
+  const intraday = day === latest ? await sameDayView(c, stats.data_as_of, clock, places) : null;
   const sameDay = await sameDayNoted(c);
   const title = t(lang, "tenders.new_title");
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: title }];
-  // Day views other than the newest are views of the same page.
-  const seo = pageSeo("tenders_new", lang, day === latest ? {} : { noindex: true });
+  // Day views other than the newest, and a province's, are views of the same page.
+  const seo = pageSeo("tenders_new", lang, day === latest && !places.province.length ? {} : { noindex: true });
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active="/tenders" seo={seo} head={<FeedLinks lang={lang} />}>
@@ -559,18 +563,21 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
         <ul class="quick-links day-list">
           {days.map((d) => (
             <li>
-              {d === day ? <span aria-current="page" class="mono">{d}</span> : <a class="mono" href={d === latest ? "/tenders/new" : `/tenders/new?day=${d}`}>{d}</a>}
+              {d === day ? <span aria-current="page" class="mono">{d}</span> : <a class="mono" href={newDayHref(d, latest, places)}>{d}</a>}
             </li>
           ))}
         </ul>
       </nav>
+      <PlaceChips lang={lang} q={places} href={(q) => newDayHref(day, latest, q)} />
       {intraday?.band}
       <Panel title={t(lang, "tenders.new_day", { day })}
         count={rows && rows.length ? tn(lang, "tenders.count_one", "tenders.count_many", rows.length, { n: fmtInt(rows.length, lang) }) : undefined}>
         {rows === null ? (
           <p class="muted">{t(lang, "tenders.new_missing")}</p>
         ) : rows.length === 0 ? (
-          <p class="muted">{t(lang, "tenders.new_none")}</p>
+          <p class="muted">
+            {places.province.length ? t(lang, "tenders.new_none_place", { places: placeNames(lang, places) }) : t(lang, "tenders.new_none")}
+          </p>
         ) : (
           <TenderTable lang={lang} rows={rows} clock={clock} status marked={intraday?.marked} />
         )}
