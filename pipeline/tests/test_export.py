@@ -24,7 +24,7 @@ def test_the_downloads_and_their_sums(conn, tmp_path):
     names = sorted(p.name for p in out.iterdir())
     assert names == ["SHA256SUMS", "awards-2024.csv", "awards-2025.csv", "awards-2026.csv", "buyers.csv",
                      "contracts-2025.csv", "expiring-12m.csv", "expiring-3m.csv", "grants-2026.csv", "history-2026.csv",
-                     "open-tenders.csv", "organizations.csv"]
+                     "open-tenders.csv", "organization-aliases.csv", "organizations.csv"]
     assert all(export.YEAR_RE.match(n) for n in names if n.startswith(("awards-", "history-", "contracts-", "grants-")))
     assert counts["open-tenders.csv"] == 4 and counts["awards-2026.csv"] == 4 and counts["organizations.csv"] == 3
     sums = (out / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
@@ -34,7 +34,7 @@ def test_the_downloads_and_their_sums(conn, tmp_path):
         assert hashlib.sha256((out / name).read_bytes()).hexdigest() == digest
     assert not list(out.glob("*.partial"))
     log = conn.execute("SELECT source, rows_new FROM sources_log").fetchall()
-    assert [tuple(r) for r in log] == [("export_csv", 11)]
+    assert [tuple(r) for r in log] == [("export_csv", 12)]
 
 
 def test_the_3_month_file_is_the_12_month_file_cut_to_the_3_month_window(conn, tmp_path):
@@ -165,3 +165,37 @@ def test_buyers_csv_lists_only_buyers_with_records_and_never_a_person_spelling(c
     assert "Aarondeep Maan" not in "".join(p.read_text(encoding="utf-8") for p in out.glob("*.csv"))
     # Another spelling stays as written.
     assert next(r for r in rows(out / "awards-2026.csv") if r["reference"] == "AW-2")["buyer_raw_en"] == "Raw buyer"
+
+
+def test_the_alias_map_is_a_free_download_of_ids_and_nothing_else(conn, tmp_path):
+    """The operator's ruling of 2026-11-07: the alias map (from_id, to_id, reason, note, since), chains followed to
+    the live id as the site's redirects follow them, listed in SHA256SUMS and the Data page's list, no record data."""
+    from awardwatch_pipeline import export_static
+
+    ids = seed(conn)
+    live = sorted(ids.values())[0]
+    conn.executemany(
+        "INSERT INTO organization_aliases (old_id, new_id, normalize_version, created_at, reason, note) VALUES (?, ?, ?, ?, ?, ?)",
+        [("org-00000000a1", "org-00000000a2", 1, "2026-10-20T00:00:00Z", None, None),   # a normalization change...
+         ("org-00000000a2", live, 2, "2026-11-02T00:00:00Z", "seed", "former"),          # ...then a seed merge
+         ("org-00000000b1", live, 2, "2026-11-07T12:40:00Z", "spelling", None),
+         ("org-00000000c1", "org-00000000ff", 2, "2026-11-07T12:40:00Z", "seed", None)])  # leads nowhere: left out
+    out = tmp_path / "csv"
+    counts = export.export_csv(conn, out, today=TODAY)
+    assert counts[export.ALIASES_FILE] == 3
+    got = rows(out / export.ALIASES_FILE)
+    assert list(got[0]) == ["from_id", "to_id", "reason", "note", "since"]
+    assert [tuple(r.values()) for r in got] == [
+        ("org-00000000a1", live, "normalization", "", "2026-10-20"),
+        ("org-00000000a2", live, "seed", "former", "2026-11-02"),
+        ("org-00000000b1", live, "spelling", "", "2026-11-07")]
+    # The same map as the redirects (aliases/<ab>.json).
+    assert {r["from_id"]: r["to_id"] for r in got} == export_static.resolve_aliases(conn)
+    assert (out / export.ALIASES_FILE).read_bytes().startswith(b"\xef\xbb\xbf")
+    sums = (out / export.SUMS).read_text(encoding="utf-8")
+    assert f"  {export.ALIASES_FILE}\n" in sums
+    assert export.ALIASES_FILE in [d["file"] for d in export_static.download_files(out, counts)]
+    # Ids, a reason, a note and a date: no name, place or value.
+    text = (out / export.ALIASES_FILE).read_text(encoding="utf-8-sig")
+    assert all(re.fullmatch(r"(org-[0-9a-f]{10},){2}[a-z_]+,[a-z]*,\d{4}-\d{2}-\d{2}", line)
+               for line in text.splitlines()[1:])

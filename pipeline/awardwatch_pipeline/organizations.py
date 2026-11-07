@@ -66,6 +66,7 @@ import sqlite3
 from collections import Counter, defaultdict
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import config
 from .db import log_run, now_iso
@@ -74,6 +75,9 @@ from .normalize import (
     split_trade_name, squash,
 )
 from .sources import matching
+
+if TYPE_CHECKING:
+    from .http import PoliteClient
 
 log = logging.getLogger(__name__)
 
@@ -294,7 +298,7 @@ def _remove_orphans(conn: sqlite3.Connection) -> int:
         chunk = gone[i:i + 500]
         marks = ",".join("?" * len(chunk))
         for table in ("organization_names", "organization_places", "registry_matches", "registry_checks",
-                      "organization_years"):
+                      "organization_years", "organization_families"):
             conn.execute(f"DELETE FROM {table} WHERE organization_id IN ({marks})", chunk)
         conn.execute(f"DELETE FROM organizations WHERE id IN ({marks})", chunk)
     return len(gone)
@@ -517,26 +521,35 @@ def recompute(conn: sqlite3.Connection, *, now: str | None = None) -> dict[str, 
     return {"organizations": len(rows), "updated": len(changed), "removed": removed}
 
 
-def run(conn: sqlite3.Connection, *, now: str | None = None, review_dir: Path | None = None) -> dict[str, int]:
-    """The organizations stage: the merges, the value checks, then the rebuild, in one transaction.
+def run(conn: sqlite3.Connection, *, now: str | None = None, review_dir: Path | None = None,
+        orgbook: PoliteClient | None = None) -> dict[str, int]:
+    """The organizations stage: the merges, the value checks, then the rebuild, in one transaction, and the
+    review lists after it.
 
     The merges (merges.py) move the night's records onto the organizations
     they are joined to, and the value checks (value_checks.py) list the values
     no total may add, before recompute writes the rows: so a row changes, and
     its updated_at moves, only when its figures changed since the night before.
-    The review lists go to review_dir (default data/out/review).
+    The review lists go to review_dir (default data/out/review). Before they
+    are written, the registry check (registry_review.py) marks each pair the
+    merges list: the local registry rows are read before the rebuild removes
+    the merged-away organizations' rows, and OrgBook BC is searched through
+    orgbook (registry_review.orgbook_client; None asks nothing) after the
+    transaction, so a slow or failing search never holds the rebuild.
     """
-    from . import merges, value_checks
+    from . import merges, registry_review, value_checks
 
     stamp = now or now_iso()
     review = review_dir or config.OUT_DIR / "review"
     try:
         merged = merges.apply(conn, now=stamp)
+        local = registry_review.snapshot(conn, merged)
         flags = value_checks.compute(conn, now=stamp)
         result = recompute(conn, now=stamp)
     except BaseException:
         conn.rollback()
         raise
+    registry_review.check(conn, merged, local, client=orgbook, now=stamp)
     notices = [n for n in (merges.write_review(merged, review / merges.REVIEW_FILE, stamp=stamp),
                            value_checks.write_review(flags, review / value_checks.REVIEW_FILE, stamp=stamp)) if n]
     result.update(merged.counts())

@@ -377,7 +377,8 @@ const DATASET_KEYWORDS: Record<Lang, string[]> = {
 // the site's (hasPart), with its files, its licence and the government
 // dataset it is read from. The 12-month radar file is Pro's and is left out;
 // the 3-month file stands for the radar.
-export const DATA_SETS = ["open-tenders", "awards", "history", "contracts", "grants", "organizations", "buyers", "expiring-3m"] as const;
+export const DATA_SETS = ["open-tenders", "awards", "history", "contracts", "grants", "organizations", "organization-aliases",
+  "buyers", "expiring-3m"] as const;
 export type DataSetId = (typeof DATA_SETS)[number];
 export type DataSet = { id: DataSetId; files: readonly string[]; basedOn: readonly string[]; from?: number };
 
@@ -422,6 +423,13 @@ const SET_TEXT: Record<DataSetId, { name: Both; description: Both }> = {
     description: {
       en: "One row per organization named in the federal records the site reads: its stable ID, name, place, and its counts and totals in each source, each source counted on its own.",
       fr: "Une ligne par organisation nommée dans les dossiers fédéraux que lit le site : identifiant stable, nom, lieu, et ses nombres et totaux dans chaque source, comptés séparément.",
+    },
+  },
+  "organization-aliases": {
+    name: { en: "Organization ID Aliases", fr: "Alias des identifiants d'organisation" },
+    description: {
+      en: "One row per organization ID the site has retired, with the ID that holds its records now, the reason (a merge or a change to the name rules), a note and the date since. IDs only, no record data.",
+      fr: "Une ligne par identifiant d'organisation que le site a retiré, avec l'identifiant qui détient ses dossiers, le motif (une fusion ou un changement des règles de nom), une note et la date de début. Identifiants seulement.",
     },
   },
   buyers: {

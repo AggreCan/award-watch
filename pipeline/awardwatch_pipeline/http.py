@@ -300,6 +300,14 @@ class PoliteClient:
         to many unrelated hosts, where one host's failures say nothing of the next."""
         self._consecutive_failures = 0
 
+    def single_attempt(self) -> PoliteClient:
+        """A client on this one's session, user agent, spacing rules and clock that tries each request once
+        and raises at the first failure: for a check that skips what it cannot read rather than wait on
+        retries (registry_review's OrgBook searches)."""
+        return PoliteClient(session=self.session, cache_dir=self.cache_dir, delays=self.delays,
+                            default_delay=self.default_delay, max_consecutive_failures=1, max_attempts=1,
+                            sleep=self._sleep, clock=self._clock, user_agent=self.user_agent)
+
     def forget(self, url: str) -> None:
         """Drop a cached response, so a body that turned out unusable is fetched again."""
         for path in self._cache_paths(url):

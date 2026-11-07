@@ -56,25 +56,33 @@ The night's work, in one transaction (apply):
    Cnslt.Ltd." and "Stantec Consulting Ltd.", "KPMG LLP, T4348" and "KPMG LLP".
    A spelling naming a joint venture or two companies, a key with no
    distinctive word and an organization with a spelling that reads as a person
-   get no key. Run as config.ORG_SPELLING_MERGE says: "shadow" (the default)
-   lists the groups it would merge in the review file and merges nothing,
-   "on" merges them, "off" leaves the rule out. Each group in the file carries
-   its key, the steps that made it (spacing, abbreviation, both languages,
-   words after the form, vendor code, acronym), whether a city or postal code
-   of the members agrees, their provinces, ids, names and records.
+   get no key. Run as config.ORG_SPELLING_MERGE says: "on" (the default since
+   the operator's ruling of 2026-11-07) merges them, "shadow" lists the groups
+   it would merge in the review file and merges nothing, "off" leaves the rule
+   out. Either way each group stays in the file, the record of what merged,
+   with its key, the steps that made it (spacing, abbreviation, both
+   languages, words after the form, vendor code, acronym), whether a city or
+   postal code of the members agrees, their provinces, ids, names and records.
 6. Seed. awardwatch_pipeline/data/organization_aliases.csv (from_norm, to_norm,
    reason, note), reviewed by hand, is applied last: from_norm's organization
    joins to_norm's. A row with an empty to_norm keeps from_norm out of rules
    3 to 5 and out of the candidates below. The note (SEED_NOTES: spelling,
    former, short, branch) says what the name is to the one it joins, for a
-   profile's "also appears as" line once the export carries it.
+   profile's "also appears as" line once the export carries it; it is kept
+   on the merge's alias row (organization_aliases.note), which the alias
+   download (export.py, organization-aliases.csv) publishes.
 
 After the rules, the review file lists the candidates no rule may merge, for
 the seed: names one or two edits apart in a long word (a place in common
 first), short forms of one to three longer names, names that end in a place
 word, operating names that are another organization's name, and
 organizations that hold different amendments of one contract (a likely rename
-or assignment). Each comes with the seed row that would merge it.
+or assignment). Each comes with the seed row that would merge it. Each pair
+in the file (a group member beside its survivor, a candidate) also carries
+what the registries say of the two names (registry_review.py): the same
+registry record, different records, or unknown. The file's headline counts go
+to organization-merges.json beside it, which the semi-monthly review in the
+nightly workflow reads.
 
 Each organization merged away becomes a row of organization_aliases (old_id,
 new_id, reason), which the export writes as aliases/<abc>.json so a link to
@@ -100,6 +108,7 @@ from __future__ import annotations
 import bisect
 import csv
 import io
+import json
 import logging
 import re
 import sqlite3
@@ -125,6 +134,8 @@ log = logging.getLogger(__name__)
 CUT = 35
 SEED_PATH = config.PACKAGE_DATA / "organization_aliases.csv"
 REVIEW_FILE = "organization-merges.txt"
+# The review file's headline counts, for the semi-monthly line of the daily check's email (nightly.org_review).
+SUMMARY_FILE = "organization-merges.json"
 REASONS = ("business_number", "truncation", "spelling", "seed")
 SPELLING_MODES = ("shadow", "on", "off")
 SEED_COLUMNS = ("from_norm", "to_norm", "reason", "note")
@@ -170,6 +181,7 @@ class Merge:
     to_id: str            # the survivor, after every merge of the night
     reason: str           # business_number | truncation | spelling | seed
     evidence: str         # the business number, the cut spelling, the key and its steps, or the seed row's reason
+    note: str = ""        # a seed merge's note (SEED_NOTES); blank for the rules, whose reason says what they are
 
 
 @dataclass(frozen=True)
@@ -219,6 +231,10 @@ class Outcome:
     spelling: list[SpellingGroup] = field(default_factory=list)
     spelling_mode: str = "shadow"
     candidates: list[Candidate] = field(default_factory=list)
+    # What the registries say of each pair the file lists (registry_review.check): (from_id, to_id) -> the
+    # verdict, with the registration numbers that made it in brackets.
+    registry: dict[tuple[str, str], str] = field(default_factory=dict)
+    registry_counts: dict[str, int] = field(default_factory=dict)
     restored: int = 0
     cleared: int = 0
     moved: int = 0
@@ -228,6 +244,20 @@ class Outcome:
         return {"merged": len(self.merges), **{f"merged_{r}": by.get(r, 0) for r in REASONS},
                 "merge_review": len(self.review), "records_moved": self.moved, "not_organizations": self.cleared,
                 "spelling_groups": len(self.spelling), "seed_candidates": len(self.candidates)}
+
+    def headline(self, stamp: str) -> dict[str, object]:
+        """The counts the semi-monthly review line carries (SUMMARY_FILE): the spelling groups and whether they
+        merged, the candidates for the seed by kind, and what the registry check found."""
+        by_kind = Counter(c.kind for c in self.candidates)
+        return {
+            "run": stamp,
+            "spelling_mode": self.spelling_mode,
+            "spelling_groups": len(self.spelling),
+            "spelling_joined": sum(len(g.members) - 1 for g in self.spelling),
+            "merged": len(self.merges),
+            "candidates": {k: by_kind.get(k, 0) for k in CANDIDATE_KINDS},
+            "registry": dict(self.registry_counts),
+        }
 
 
 def read_seed(path: Path | None = None) -> tuple[list[SeedRow], set[str], list[str]]:
@@ -358,18 +388,18 @@ class _Forest:
 
     def __init__(self) -> None:
         self.parent: dict[str, str] = {}
-        self.link: dict[str, tuple[str, str]] = {}
+        self.link: dict[str, tuple[str, str, str]] = {}
 
     def root(self, oid: str) -> str:
         while oid in self.parent:
             oid = self.parent[oid]
         return oid
 
-    def join(self, child: str, into: str, reason: str, evidence: str) -> None:
+    def join(self, child: str, into: str, reason: str, evidence: str, note: str = "") -> None:
         a, b = self.root(child), self.root(into)
         if a != b:
             self.parent[a] = b
-            self.link[a] = (reason, evidence)
+            self.link[a] = (reason, evidence, note)
 
 
 def _words(norm: str) -> frozenset[str]:
@@ -763,7 +793,7 @@ def apply(conn: sqlite3.Connection, *, now: str | None = None, seed_path: Path |
                 outcome.unapplied.append(f"{row.from_norm}\t{row.to_norm}\t{'from_norm' if a not in live else 'to_norm'} "
                                          "names no organization with records")
                 continue
-            forest.join(a, b, "seed", row.reason)
+            forest.join(a, b, "seed", row.reason, row.note)
         # In shadow, a group the seed has joined since is no longer news.
         outcome.spelling = [g for g in groups if mode == "on" or len({forest.root(m) for m in g.members}) > 1]
         outcome.candidates = _candidates(conn, forest, keys, spellings, rank, outcome.spelling, seed, apart)
@@ -798,24 +828,39 @@ def _move(conn: sqlite3.Connection, final: dict[str, str]) -> int:
 
 def _aliases(conn: sqlite3.Connection, merges: list[Merge], previous: dict[str, tuple[str, str]], live: set[str],
              stamp: str) -> None:
-    """Write tonight's merges as aliases; delete an earlier merge's alias once its id has records of its own again."""
-    rows = [(m.from_id, m.to_id, NORMALIZE_VERSION, stamp, m.reason) for m in merges
+    """Write tonight's merges as aliases; delete an earlier merge's alias once its id has records of its own again.
+
+    created_at moves only when a merge is new or changed its survivor or reason, so it reads as the date the
+    alias holds since (the download's since column); a seed row whose note changed rewrites the note alone."""
+    rows = [(m.from_id, m.to_id, NORMALIZE_VERSION, stamp, m.reason, m.note or None) for m in merges
             if previous.get(m.from_id) != (m.to_id, m.reason)]
     conn.executemany(
-        "INSERT INTO organization_aliases (old_id, new_id, normalize_version, created_at, reason) VALUES (?, ?, ?, ?, ?) "
+        "INSERT INTO organization_aliases (old_id, new_id, normalize_version, created_at, reason, note) "
+        "VALUES (?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(old_id) DO UPDATE SET new_id = excluded.new_id, normalize_version = excluded.normalize_version, "
-        "created_at = excluded.created_at, reason = excluded.reason", rows)
+        "created_at = excluded.created_at, reason = excluded.reason, note = excluded.note", rows)
+    notes = {r[0]: r[1] or "" for r in conn.execute(
+        "SELECT old_id, note FROM organization_aliases WHERE reason IS NOT NULL")}
+    conn.executemany("UPDATE organization_aliases SET note = ? WHERE old_id = ?",
+                     [(m.note or None, m.from_id) for m in merges
+                      if previous.get(m.from_id) == (m.to_id, m.reason) and notes.get(m.from_id, "") != m.note])
     tonight = {m.from_id for m in merges}
     undone = [(old,) for old in previous if old not in tonight and old in live]
     conn.executemany("DELETE FROM organization_aliases WHERE old_id = ? AND reason IS NOT NULL", undone)
 
 
 def write_review(outcome: Outcome, path: Path, *, stamp: str) -> str | None:
-    """Write (or, with nothing to list, remove) the operator's list of merges; returns the log's notice."""
-    if not (outcome.merges or outcome.review or outcome.unapplied or outcome.spelling or outcome.candidates):
+    """Write (or, with nothing to list, remove) the operator's list of merges; returns the log's notice.
+
+    The headline counts go to SUMMARY_FILE beside it every night, "listed" false when there was nothing to
+    list, so the semi-monthly review can tell a quiet night from a stage that did not run."""
+    listed = bool(outcome.merges or outcome.review or outcome.unapplied or outcome.spelling or outcome.candidates)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    summary = {**outcome.headline(stamp), "listed": listed}
+    path.with_name(SUMMARY_FILE).write_text(json.dumps(summary, sort_keys=True, indent=1) + "\n", encoding="utf-8")
+    if not listed:
         path.unlink(missing_ok=True)
         return None
-    path.parent.mkdir(parents=True, exist_ok=True)
     by = Counter(m.reason for m in outcome.merges)
     lines = [
         f"# Organization merges, run of {stamp}: {len(outcome.merges)} organizations merged into others "
@@ -852,6 +897,39 @@ def write_review(outcome: Outcome, path: Path, *, stamp: str) -> str | None:
             f"{len(outcome.candidates)} candidates for the seed; listed in {shown}")
 
 
+def ordered_groups(outcome: Outcome) -> list[SpellingGroup]:
+    """The spelling groups in the review file's order: those whose members' provinces never overlap first."""
+    order = {"no": 0, "unknown": 1, "yes": 2}
+    return sorted(outcome.spelling, key=lambda g: (order[g.overlap], bool(g.place), g.key))
+
+
+def listed_candidates(outcome: Outcome) -> list[Candidate]:
+    """The candidates the review file lists: by kind, a place in common first, then the largest, at most
+    CANDIDATE_LIMIT of each kind."""
+    kinds = list(CANDIDATE_KINDS)
+    ranked = sorted(outcome.candidates, key=lambda c: (
+        kinds.index(c.kind), not c.place, -max(outcome.records.get(c.from_id, 0), outcome.records.get(c.to_id, 0)),
+        c.from_id, c.to_id))
+    listed: Counter[str] = Counter()
+    out: list[Candidate] = []
+    for c in ranked:
+        listed[c.kind] += 1
+        if listed[c.kind] <= CANDIDATE_LIMIT:
+            out.append(c)
+    return out
+
+
+def review_pairs(outcome: Outcome) -> list[tuple[str, str]]:
+    """Every pair the review file lists, in its order: each group member beside its group's survivor, then each
+    candidate (from_id, to_id). The registry check marks these."""
+    pairs = [(m, g.members[0]) for g in ordered_groups(outcome) for m in g.members[1:]]
+    return pairs + [(c.from_id, c.to_id) for c in listed_candidates(outcome)]
+
+
+REGISTRY_NOTE = ("# registry: what the registries say of the pair (registry_review.py; never published): the same "
+                 "registry record, different records, or unknown, with the registration numbers that decided it.")
+
+
 def _spelling_lines(outcome: Outcome) -> list[str]:
     """The spelling rule's groups, those whose members' provinces never overlap first: one line per organization."""
     if not outcome.spelling:
@@ -865,14 +943,15 @@ def _spelling_lines(outcome: Outcome) -> list[str]:
         "# place: a city or postal code two members have in common (blank: none). provinces_overlap: no lists a",
         "# group whose members were never seen in one province, the ones to read first. A wrong group is kept",
         "# apart by a seed row with the member's normalized name as from_norm and an empty to_norm.",
-        "# key\tsteps\tplace\tprovinces_overlap\trole\tid\tname\trecords\tprovinces",
+        REGISTRY_NOTE + " A member is checked against its survivor.",
+        "# key\tsteps\tplace\tprovinces_overlap\trole\tid\tname\trecords\tprovinces\tregistry",
     ]
-    order = {"no": 0, "unknown": 1, "yes": 2}
-    for g in sorted(outcome.spelling, key=lambda g: (order[g.overlap], bool(g.place), g.key)):
+    for g in ordered_groups(outcome):
         for i, m in enumerate(g.members):
             lines.append("\t".join((g.key, ", ".join(g.steps), g.place, g.overlap, "survivor" if i == 0 else "joins",
                                     m, outcome.names.get(m, ""), str(outcome.records.get(m, 0)),
-                                    ",".join(g.provinces.get(m, [])))))
+                                    ",".join(g.provinces.get(m, [])),
+                                    "" if i == 0 else outcome.registry.get((m, g.members[0]), ""))))
     return lines
 
 
@@ -890,19 +969,13 @@ def _candidate_lines(outcome: Outcome) -> list[str]:
         "# empty to_norm. operating: an operating name that is another organization's name; former: one contract's",
         "# amendments name both (a rename or an assignment); place: the same name without its place words; short: a",
         "# short form; typo: one or two edits apart.",
-        "# kind\tplace\tfrom_id\tfrom_name\tfrom_records\tto_id\tto_name\tto_records\tdetail\tseed_row",
+        REGISTRY_NOTE,
+        "# kind\tplace\tfrom_id\tfrom_name\tfrom_records\tto_id\tto_name\tto_records\tdetail\tseed_row\tregistry",
     ]
-    kinds = list(CANDIDATE_KINDS)
-    ranked = sorted(outcome.candidates, key=lambda c: (
-        kinds.index(c.kind), not c.place, -max(outcome.records.get(c.from_id, 0), outcome.records.get(c.to_id, 0)),
-        c.from_id, c.to_id))
-    listed: Counter[str] = Counter()
-    for c in ranked:
-        listed[c.kind] += 1
-        if listed[c.kind] > CANDIDATE_LIMIT:
-            continue
+    for c in listed_candidates(outcome):
         row = f"{outcome.norms.get(c.from_id, '')},{outcome.norms.get(c.to_id, '')},,{CANDIDATE_KINDS[c.kind]}"
         lines.append("\t".join((c.kind, c.place, c.from_id, outcome.names.get(c.from_id, ""),
                                 str(outcome.records.get(c.from_id, 0)), c.to_id, outcome.names.get(c.to_id, ""),
-                                str(outcome.records.get(c.to_id, 0)), c.detail, row)))
+                                str(outcome.records.get(c.to_id, 0)), c.detail, row,
+                                outcome.registry.get((c.from_id, c.to_id), ""))))
     return lines

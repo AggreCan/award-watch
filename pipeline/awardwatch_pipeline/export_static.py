@@ -63,7 +63,11 @@ change there. Output tree (under data/out/static):
                                 set has one file more than the date set at most. The site reads the
                                 largest values in file order, the smallest by reversing the first
                                 valued_pages files, and the oldest by reversing the date set
-  profiles/<abc>.json           organization profiles, sharded on the id's characters 5 to 7
+  profiles/<abc>.json           organization profiles, sharded on the id's characters 5 to 7; a member of a
+                                corporate family (families.py) carries family {name, members: [{id,
+                                display_name, n_records, note}]}, the members by records, itself among them,
+                                FAMILY_MEMBERS at most, each with its own count and never a combined figure
+                                (profile_families); a profile in no family has no such key
   aliases/<ab>.json             retired organization id -> the live id that took its records, sharded on the
                                 id's characters 5 and 6 (256 files at most: 27,000 merged ids on 4,096
                                 shards pushed the export past the file cap on 2026-11-02): retired by a
@@ -224,6 +228,8 @@ LOBBYING_ROWS = 50
 PROFILE_NAMES = 10
 PROFILE_PLACES = 10
 PROFILE_BUYERS = 10
+# A profile's family block lists at most this many members (families.py).
+FAMILY_MEMBERS = 50
 BUYER_TOP = 25
 BUYER_AWARDS = 50
 # The other names a buyer page lists at most ("Also appears as").
@@ -1587,10 +1593,36 @@ def _profile_extra(m: Model, p: dict, checks: dict[str, int]) -> dict:
     return p
 
 
+def profile_families(conn: sqlite3.Connection, m: Model) -> dict[str, dict]:
+    """The "family" block of each organization in a family (families.py): the family's name and its members,
+    the profile itself among them, by records (the directory's n_records: the records of every source
+    counted, no value added), each with its own count and note, FAMILY_MEMBERS at most. No figure adds the
+    members together. A member the export does not list is left out."""
+    by_family: dict[str, list[dict]] = defaultdict(list)
+    for r in conn.execute(
+            "SELECT f.family, f.organization_id, f.note, o.display_name, "
+            "o.n_awards + o.n_history + o.n_contracts + o.n_grants + o.n_lobbying AS n_records "
+            "FROM organization_families f JOIN organizations o ON o.id = f.organization_id"):
+        if r["organization_id"] in m.orgs and ORG_ID_RE.match(r["organization_id"]):
+            by_family[r["family"]].append({"id": r["organization_id"], "display_name": r["display_name"],
+                                           "n_records": r["n_records"] or 0, "note": r["note"]})
+    out: dict[str, dict] = {}
+    for family, members in by_family.items():
+        members.sort(key=lambda x: (-x["n_records"], x["display_name"].casefold(), x["id"]))
+        shown = members[:FAMILY_MEMBERS]
+        for member in members[FAMILY_MEMBERS:]:
+            # A member past the cap still names its family, with itself last in the list.
+            out[member["id"]] = {"name": family, "members": shown[:FAMILY_MEMBERS - 1] + [member]}
+        for member in shown:
+            out[member["id"]] = {"name": family, "members": shown}
+    return out
+
+
 def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, int]:
     """profiles/<abc>.json: every organization's profile, one shard per three hex digits of its id."""
     keys = sorted({shard_key(oid) for oid in m.orgs})
     held = sosa_export.organization_parts(conn)
+    family = profile_families(conn, m)
     written = largest_bytes = 0
     over: list[str] = []
     for key in keys:
@@ -1610,6 +1642,8 @@ def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, i
         for oid, p in shard.items():
             if oid in held:
                 p["instruments"] = held[oid]
+            if oid in family:
+                p["family"] = family[oid]
         size = _dump(out / "profiles" / f"{key}.json", shard)
         written += 1
         largest_bytes = max(largest_bytes, size)

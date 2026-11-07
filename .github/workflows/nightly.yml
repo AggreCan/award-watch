@@ -20,8 +20,8 @@
 # pipeline stage (the buyers, the CanadaBuys tender and award notices and contract
 # history, the published contracts, the grants and contributions, the
 # lobbying communications, the federal corporations registry, then the
-# organizations, the standing offers and supply arrangements, the yearly
-# figures and the export), check the database and
+# organizations, the standing offers and supply arrangements, the corporate
+# families, the yearly figures and the export), check the database and
 # the export, sync the hosted search database (D1, the changed rows only),
 # sync the records database the analytics views read (D1, the changed rows
 # only), record the Worker version serving traffic, deploy the Worker
@@ -31,8 +31,9 @@
 # pages changed, check a sample of the government pages the site links to
 # (docs/link-sampling.md), save the database (in parts), the public files
 # (the static bundle, also in parts, and the CSV downloads) and the review
-# files back to R2, keep the audience counts of the finished days in R2 when
-# the analytics token exists, count the alert sign-ups in the forms database,
+# files back to R2 (the organization merges list on the 1st and the 16th
+# only, under its data date), keep the audience counts of the finished days
+# in R2 when the analytics token exists, count the alert sign-ups in the forms database,
 # append Search Console's daily figures when its key exists, write the
 # monthly audience report on the first run of a month, run the monthly expiry
 # checks on the first of a month, write the run status, and report the items
@@ -787,7 +788,8 @@ jobs:
       # else. They never enter the bundle (only data/out/static is packed),
       # the download cache or the repository, and this step prints none of
       # them. After the pipeline whatever it did, so a night that failed later
-      # still leaves its list; it never stops the run.
+      # still leaves its list; it never stops the run. The organization merges
+      # list is left to the next step, which saves it twice a month.
       - name: Save the review files to R2 (private)
         id: review
         if: ${{ !cancelled() && steps.pipeline.outcome != 'skipped' }}
@@ -795,8 +797,31 @@ jobs:
         run: |
           shopt -s nullglob
           for f in data/out/review/*.txt; do
+            [ "$(basename "$f")" = "organization-merges.txt" ] && continue
             "$WRANGLER" r2 object put --remote "$BUCKET/review/$(basename "$f")" --file "$f" > /dev/null
           done
+
+      # The semi-monthly organization review (operator ruling of 2026-11-07):
+      # on a data date whose day is the 1st or the 16th, the merges review
+      # file (the spelling groups, the candidates for the seed and the
+      # registry check of each pair) goes to the private review/ prefix as
+      # organization-merges-<data date>.txt, which no route on the site
+      # reads; other nights it stays on the runner. org-review prints that
+      # object name only when one is due and the file exists, and writes
+      # "failed" as the outcome until the upload has worked; the run status
+      # turns its headline counts and the object name into a notice, a line
+      # of the daily check's email. It never stops the run.
+      - name: Save the semi-monthly organization review to R2 (private)
+        id: org_review
+        if: ${{ !cancelled() && steps.pipeline.outcome != 'skipped' }}
+        continue-on-error: true
+        run: |
+          object=$(python -m awardwatch_pipeline.nightly org-review --db data/awardwatch.sqlite \
+            --review data/out/review/organization-merges.txt --out-dir data/out/org_review)
+          if [ -n "$object" ]; then
+            "$WRANGLER" r2 object put --remote "$BUCKET/$object" --file data/out/review/organization-merges.txt > /dev/null
+            echo "saved" > data/out/org_review/last_outcome.txt
+          fi
 
       # The audience counts (docs/search-engines.md, section 6). Analytics
       # Engine keeps the Worker's data points for three months; this keeps
@@ -1037,7 +1062,10 @@ jobs:
       # it was. link_sample is the link sample's outcome ("checked N, M
       # broken", "failed" or "not run") and link_sample_broken the links that
       # answered 404 or 410 (an item needing attention and a notice; a failed
-      # sample is a notice). Written whatever happened above. The roll-up,
+      # sample is a notice). organization_review is the semi-monthly
+      # organization review's outcome ("saved", "failed", "no file", "not
+      # due" or "not run"); on a due night its headline counts and R2 object
+      # are a notice. Written whatever happened above. The roll-up,
       # Search Console, report, IndexNow, rollback, the two same-day steps and
       # the link sample write "failed" before they start, so a step stopped by
       # its time limit still reads as failed.
@@ -1052,6 +1080,7 @@ jobs:
             --intraday-lookup-bytes data/out/intraday/lookup_bytes.txt \
             --intraday-prune-outcome data/out/intraday/prune_outcome.txt \
             --link-sample-outcome data/out/links/last_outcome.txt --link-sample-broken data/out/links/broken.json \
+            --org-review-outcome data/out/org_review/last_outcome.txt --org-review-summary data/out/org_review/summary.json \
             --indexnow-outcome data/out/indexnow/last_outcome.txt \
             --search-console-outcome data/out/search_console/last_outcome.txt \
             --views-report-outcome data/out/report/last_outcome.txt \

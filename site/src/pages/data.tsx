@@ -174,6 +174,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
       id: s, files: years(firstYear[s]).map((y) => `${s}-${y}.csv`), basedOn: src(s), from: firstYear[s],
     })),
     { id: "organizations", files: ["organizations.csv"], basedOn: src("awards", "history", "contracts", "grants", "lobbying") },
+    { id: "organization-aliases", files: ["organization-aliases.csv"], basedOn: src("awards", "history", "contracts", "grants", "lobbying") },
     { id: "buyers", files: ["buyers.csv"], basedOn: src("tenders", "awards", "history", "contracts", "grants") },
     { id: "expiring-3m", files: ["expiring-3m.csv"], basedOn: src("awards", "history", "contracts") },
   ];

@@ -165,12 +165,18 @@ def test_the_stage_counts_individuals_and_withheld_rows_and_lists_only_the_withh
         assert name not in log["notice"] and name not in log["detail"]
 
 
-def test_the_six_shapes_of_person_test_7_are_withheld_and_counted(conn, fixtures, tmp_path, out_dir):
+@pytest.mark.parametrize("with_firm", ["firm", "withhold"])
+def test_the_six_shapes_of_person_test_7_are_withheld_and_counted(conn, fixtures, tmp_path, out_dir, monkeypatch,
+                                                                   with_firm):
     """Each shape that passed the person test before version 7 (test_matching.SIX_PATTERNS, invented names),
     written as the recipient of a for-profit agreement: withheld, counted with the other withheld rows,
-    listed for review, and found nowhere in the database."""
+    listed for review, and found nowhere in the database. Both ways of the bracketed-firm switch: under "firm"
+    (the default) the one name with a firm in brackets is filed under the firm and the person is in no row;
+    under "withhold" it is withheld whole, the firm with it."""
+    from awardwatch_pipeline.sources import matching
     from test_matching import SIX_PATTERNS
 
+    monkeypatch.setattr(matching, "PERSON_WITH_FIRM", with_firm)
     header, rows = read_csv(fixtures / FIXTURE)
     template = next(r for r in rows if r["ref_number"] == "199-2020-2021-Q4-CSGC17320680")
     for i, name in enumerate(SIX_PATTERNS.values()):
@@ -181,17 +187,26 @@ def test_the_six_shapes_of_person_test_7_are_withheld_and_counted(conn, fixtures
     write_csv(samples / "grants-head.csv", header, rows)
     assert grants.run(conn, None, now=DAY1, samples=samples).state == "read"
     n = len(SIX_PATTERNS)
+    filed = 1 if with_firm == "firm" else 0
     log = conn.execute("SELECT detail, rows_in, excluded FROM sources_log").fetchone()
-    assert (log["rows_in"], log["excluded"]) == (30 + n, 2 + n)
-    assert f"stored={29 + n} withheld={1 + n} dropped_individuals=1" in log["detail"]
+    assert (log["rows_in"], log["excluded"]) == (30 + n, 2 + n - filed)
+    assert f"stored={29 + n} withheld={1 + n - filed} dropped_individuals=1" in log["detail"]
     review = out_dir / "review" / "grants-persons.txt"
     listed = [line for line in review.read_text(encoding="utf-8").splitlines() if not line.startswith("#")]
-    assert listed == ["Daniel Ashdale", *SIX_PATTERNS.values()]
+    withheld = [v for k, v in SIX_PATTERNS.items() if not (filed and k == "person (firm with a legal form)")]
+    assert listed == ["Daniel Ashdale", *withheld]
     for word in ("Quentaro", "Brisavel", "Tolmandre", "Ostrevik", "Pellivant", "Corrabin", "Zorblax"):
         for table, column in (("organizations", "display_name"), ("organization_names", "raw_name"),
                               ("grants", "legal_name")):
-            assert conn.execute(f"SELECT 1 FROM {table} WHERE {column} LIKE ?", (f"%{word}%",)).fetchone() is None
+            found = conn.execute(f"SELECT 1 FROM {table} WHERE {column} LIKE ?", (f"%{word}%",)).fetchone()
+            # Only the firm's own name is stored, and only when the record is filed under it.
+            assert (found is not None) == (word == "Zorblax" and bool(filed)), (word, table)
         assert word not in log["detail"]
+    firm = versions(conn).get(("199-2020-2021-Q4-TEST0000", 0))
+    if filed:
+        assert (firm["legal_name"], firm["recipient_withheld"]) == ("Zorblax Holdings Ltd.", 0)
+    else:
+        assert firm["legal_name"] is None and firm["organization_id"] is None and firm["recipient_withheld"] == 1
 
 
 def test_the_bracketed_firm_switch_files_the_agreement_under_the_firm(conn, fixtures, tmp_path, monkeypatch):

@@ -35,6 +35,12 @@ one, and always leaves a status file the site's daily check can read.
   smoke     fetch the live site after a deploy: verdict ok, broken or
             unverifiable (resilience.smoke).
   checks    the monthly expiry checks of the tokens and the domain.
+  org-review
+            the semi-monthly organization review: on a data date whose day
+            is the 1st or the 16th, print the R2 object the workflow puts
+            the merges review file under; write the record and the outcome
+            the status reads (its counts become a notice, a line of the
+            daily check's email).
   attention list the items needing attention and write the GitHub issue's
             texts; exits 1 when there are any. The run's notices are
             printed beside them and never counted.
@@ -163,6 +169,19 @@ INTRADAY_NOTICES = {
     "intraday_lookup": "the buyer lookup for the same-day refresh was not saved; the intraday job keeps the one R2 has",
     "intraday_prune": "the same-day notices older than two days were not pruned; the next run prunes them",
 }
+
+# The semi-monthly organization review (the operator's ruling of 2026-11-07): on a
+# data date whose day of the month is one of ORG_REVIEW_DAYS, the workflow puts
+# the merges review file (merges.REVIEW_FILE; its headline counts are
+# merges.SUMMARY_FILE beside it) in R2 under ORG_REVIEW_OBJECT, and the run
+# status carries the counts as a notice, a line of the daily check's email.
+# Other nights the file stays on the runner. The names are written here, not
+# imported, because this module loads only the standard library;
+# test_nightly holds them equal to merges'.
+ORG_REVIEW_DAYS = (1, 16)
+ORG_REVIEW_FILE = "organization-merges.txt"
+ORG_REVIEW_SUMMARY = "organization-merges.json"
+ORG_REVIEW_OBJECT = "review/organization-merges-{date}.txt"
 
 STEP_DETAIL = {
     "restore": "the database could not be restored, so nothing else ran",
@@ -597,6 +616,7 @@ def run_status(
     intraday_lookup: str | None = None, intraday_prune: str | None = None,
     intraday_lookup_bytes: int | None = None,
     link_sample: str | None = None, link_sample_broken: list[dict[str, Any]] | None = None,
+    org_review: str | None = None, org_review_record: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """status.json for the site's daily check. Every input may be missing: the
     status then says what is missing rather than failing to be written.
@@ -649,7 +669,15 @@ def run_status(
     is an item needing attention (resilience.attention_items lists up to ten)
     and one notice, the daily check's email line; it never marks the run not
     ok, since the site published what it should and a retry would find the
-    same pages missing. A failed sample is a notice."""
+    same pages missing. A failed sample is a notice.
+
+    org_review is the semi-monthly organization review's outcome ("saved",
+    "failed", "no file", "not due"; "not run" when the step did not run) and
+    org_review_record what org_review wrote (summary.json). On a due night it
+    adds one notice, the daily check's email line (org_review_notice): the
+    headline counts and the R2 object, or why there is none. Never an item
+    needing attention: the review is for the operator, and the site is
+    untouched by it."""
     stages: list[dict[str, Any]] = []
     notices: list[dict[str, str]] = []
     for name, result in steps.items():
@@ -700,6 +728,7 @@ def run_status(
     # else a sample that did not finish.
     link_notices = ([{"source": "link_sample", "detail": LINK_BROKEN_NOTICE.format(n=len(broken))}] if broken
                     else [{"source": "link_sample", "detail": LINK_FAILED_NOTICE}] if link_sample == "failed" else [])
+    review_notice = org_review_notice(org_review, org_review_record)
     return {
         "run_at": stamp,
         "stages": stages,
@@ -717,6 +746,8 @@ def run_status(
         # that answered 404 or 410, which the attention item lists.
         "link_sample": link_sample or "not run",
         "link_sample_broken": broken,
+        # The semi-monthly organization review's outcome; its counts are a notice on a due night.
+        "organization_review": org_review or "not run",
         "views_rollup": views or "not run",
         "search_console": search_console or "not run",
         "views_report": views_report or "not run",
@@ -736,7 +767,8 @@ def run_status(
         "notices": notices + ([{"source": "interest", "detail": INTEREST_NOTICE}] if interest_tried and not interest else [])
         + [{"source": name, "detail": text} for name, text in INTRADAY_NOTICES.items() if intraday[name] == "failed"]
         + ([{"source": "records_sync", "detail": RECORDS_NOTICE}] if records == "no database" else [])
-        + link_notices,
+        + link_notices
+        + ([review_notice] if review_notice else []),
         "ok": all(s["ok"] for s in stages) and verdict != "broken",
     }
 
@@ -752,6 +784,101 @@ def _notices(conn: sqlite3.Connection, started: str) -> list[dict[str, str]]:
     # A stage may record several notices on one row, joined by " | ".
     return [{"source": s, "detail": part.strip()[:NOTICE_PART_MAX]} for s, n in rows
             for part in (n or "").split(" | ") if part.strip()]
+
+
+# -- the semi-monthly organization review ------------------------------------
+
+
+def data_date_of(db: Path, fallback: date | None = None) -> str:
+    """The data date the export recorded (meta data_as_of), else fallback (UTC today). Read without writing:
+    the database is the one the save step packs."""
+    day = (fallback or datetime.now(timezone.utc).date()).isoformat()
+    if not db.is_file():
+        return day
+    try:
+        conn = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+        try:
+            row = conn.execute("SELECT value FROM meta WHERE key = 'data_as_of'").fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return day
+    value = str(row[0]) if row and row[0] else ""
+    return value[:10] if re.match(r"^\d{4}-\d{2}-\d{2}", value) else day
+
+
+def org_review_due(data_date: str) -> bool:
+    """The day rule: the review goes to R2 on a data date whose day of the month is in ORG_REVIEW_DAYS."""
+    try:
+        return date.fromisoformat(data_date[:10]).day in ORG_REVIEW_DAYS
+    except (TypeError, ValueError):
+        return False
+
+
+def org_review(db: Path, review: Path, out_dir: Path, *, data_date: str | None = None) -> dict[str, Any]:
+    """Decide tonight's semi-monthly review and write what the workflow and the status read: summary.json (the
+    data date, whether it is due, the R2 object, the review file's headline counts) and last_outcome.txt ("not
+    due", "no file", or "failed" until the upload rewrites it "saved"). Returns the record."""
+    day = data_date or data_date_of(db)
+    due = org_review_due(day)
+    counts = _read_json(str(review.with_name(ORG_REVIEW_SUMMARY)))
+    record = {
+        "data_date": day,
+        "due": due,
+        "object": ORG_REVIEW_OBJECT.format(date=day) if due else None,
+        "file": review.is_file(),
+        "summary": counts if isinstance(counts, dict) else None,
+    }
+    outcome = "not due" if not due else "failed" if record["file"] else "no file"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _write_json(out_dir / "summary.json", record)
+    (out_dir / "last_outcome.txt").write_text(outcome + "\n", encoding="utf-8")
+    return record
+
+
+def _num(value: Any) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+
+def org_review_counts(summary: dict[str, Any] | None) -> str:
+    """The headline counts in one line: the spelling groups (merged or not), the candidates by kind, the registry
+    check's verdicts."""
+    if not isinstance(summary, dict):
+        return "no counts (the organizations stage wrote none tonight)"
+    mode = str(summary.get("spelling_mode") or "unknown")
+    groups, joined = _num(summary.get("spelling_groups")), _num(summary.get("spelling_joined"))
+    merged = "merged" if mode == "on" else f"not merged (spelling rule {mode})"
+    kinds = summary.get("candidates") if isinstance(summary.get("candidates"), dict) else {}
+    candidates = ", ".join(f"{k} {_num(v)}" for k, v in kinds.items()) or "none"
+    reg = summary.get("registry") if isinstance(summary.get("registry"), dict) else {}
+    if reg.get("failed"):
+        registry = "the registry check failed"
+    else:
+        registry = (f"registry check of {_num(reg.get('pairs'))} pairs: {_num(reg.get('same'))} same record, "
+                    f"{_num(reg.get('different'))} different records ({_num(reg.get('different_merged'))} in a merged "
+                    f"group), {_num(reg.get('unknown'))} unknown; {_num(reg.get('orgbook_searched'))} OrgBook searches"
+                    + (" (stopped at a failure)" if reg.get("orgbook_failed") else ""))
+    return (f"{groups} spelling groups {merged} ({joined} organizations joining another); candidates for the seed: "
+            f"{candidates}; {registry}")
+
+
+def org_review_notice(outcome: str | None, record: dict[str, Any] | None) -> dict[str, str] | None:
+    """The daily check's email line for a due night (None on any other): the headline counts and the R2 object."""
+    if outcome not in ("saved", "failed", "no file") or not isinstance(record, dict):
+        return None
+    day = str(record.get("data_date") or "")
+    obj = str(record.get("object") or ORG_REVIEW_OBJECT.format(date=day))
+    summary = record.get("summary") if isinstance(record.get("summary"), dict) else None
+    if outcome == "saved":
+        detail = f"semi-monthly review of {day}: {org_review_counts(summary)}; saved to R2 as {obj}"
+    elif outcome == "failed":
+        detail = f"the semi-monthly review of {day} was not saved to R2 as {obj}; {org_review_counts(summary)}"
+    elif summary is not None and summary.get("listed") is False:
+        detail = f"semi-monthly review of {day}: nothing to list tonight (no merge, group or candidate), so no file"
+    else:
+        detail = (f"the semi-monthly review of {day} is due, but the organizations stage wrote no review file "
+                  "tonight; the next due night writes one")
+    return {"source": "organization_review", "detail": detail[:NOTICE_PART_MAX]}
 
 
 # -- alert sign-ups ---------------------------------------------------------
@@ -997,6 +1124,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--intraday-prune-outcome", default=None, help="the same-day refresh prune's outcome file")
     s.add_argument("--link-sample-outcome", default=None, help="the link sample's outcome file")
     s.add_argument("--link-sample-broken", default=None, help="the link sample's broken.json")
+    s.add_argument("--org-review-outcome", default=None, help="the semi-monthly organization review's outcome file")
+    s.add_argument("--org-review-summary", default=None, help="the summary.json org-review wrote")
     s.add_argument("--views-outcome", default=None, help="the audience roll-up's outcome file")
     s.add_argument("--indexnow-outcome", default=None, help="the IndexNow submission's outcome file")
     s.add_argument("--search-console-outcome", default=None, help="the Search Console import's outcome file")
@@ -1041,6 +1170,12 @@ def build_parser() -> argparse.ArgumentParser:
     sm.add_argument("--out", required=True)
     sm.add_argument("--settle", type=float, default=resilience.SMOKE_SETTLE_S,
                     help="seconds to wait before the first request")
+    orv = sub.add_parser("org-review", help="the semi-monthly organization review: print the R2 object to put "
+                                            "the review file under when one is due tonight, nothing otherwise")
+    orv.add_argument("--db", required=True, help="tonight's database, for the data date (meta data_as_of)")
+    orv.add_argument("--review", required=True, help="the merges review file (data/out/review/organization-merges.txt)")
+    orv.add_argument("--out-dir", required=True, help="where summary.json and last_outcome.txt are written")
+    orv.add_argument("--data-date", default=None, help="YYYY-MM-DD (default: the database's data date, else UTC today)")
     ck = sub.add_parser("checks", help="the monthly expiry checks (the first day of a month, UTC)")
     ck.add_argument("--today", required=True, help="today's UTC date, YYYY-MM-DD")
     ck.add_argument("--domain", default=resilience.domain_of(config.SITE_URL),
@@ -1106,9 +1241,24 @@ def main(argv: list[str] | None = None) -> int:
         "status": _status, "gate": _gate, "live-version": _live_version, "smoke": _smoke, "checks": _checks,
         "attention": _attention, "notices": _notice_section, "site-bundle-check": _site_bundle_check,
         "indexnow": _indexnow, "rollup-views": _rollup_views, "import-search-console": _import_search_console,
-        "views-report": _views_report,
+        "views-report": _views_report, "org-review": _org_review,
     }
     return handlers[args.command](args)
+
+
+def _org_review(args: argparse.Namespace) -> int:
+    """Prints the object name alone on stdout (the workflow's upload reads it), and only when a review is due
+    and its file exists; logs go to stderr. Always exits 0: the review never stops the run."""
+    try:
+        record = org_review(Path(args.db), Path(args.review), Path(args.out_dir), data_date=args.data_date)
+    except Exception as exc:
+        log.warning("org-review: %s", exc)
+        return 0
+    log.info("org-review: data date %s, %s", record["data_date"],
+             "due" if record["due"] else "not due (the 1st and the 16th only)")
+    if record["due"] and record["file"]:
+        print(record["object"])
+    return 0
 
 
 def _pack(args: argparse.Namespace) -> int:
@@ -1202,7 +1352,8 @@ def _status(args: argparse.Namespace) -> int:
                         intraday_prune=_read(args.intraday_prune_outcome),
                         intraday_lookup_bytes=read_byte_count(args.intraday_lookup_bytes),
                         link_sample=_read(args.link_sample_outcome),
-                        link_sample_broken=read_broken_links(args.link_sample_broken))
+                        link_sample_broken=read_broken_links(args.link_sample_broken),
+                        org_review=_read(args.org_review_outcome), org_review_record=_read_json(args.org_review_summary))
     _write_json(Path(args.out), status)
     print(json.dumps(status, indent=1))
     return 0

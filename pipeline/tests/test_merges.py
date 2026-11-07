@@ -26,6 +26,13 @@ def seed_file(tmp_path, monkeypatch):
     return write
 
 
+@pytest.fixture
+def shadow(monkeypatch):
+    """The spelling rule in shadow, for the tests about the other rules and the seed: on (the default since
+    2026-11-07) it would merge their spacing variants before the seed is read."""
+    monkeypatch.setattr(merges.config, "ORG_SPELLING_MERGE", "shadow")
+
+
 def contract(conn, ref, name, *, value=1000.0, owner="dept-x"):
     oid = organizations.upsert(conn, name, source="contracts", country="CA", postal_code="K1A 0B1")
     conn.execute("INSERT INTO contracts (owner_org, reference, vendor_raw, vendor_country, value, contract_date, "
@@ -140,7 +147,7 @@ def test_a_cut_name_with_two_candidates_or_a_joint_venture_is_left_for_review(co
     assert f"{firm}\tROBERTSON MARTIN ARCHITECTS INCORPO\t1\ta candidate names a joint venture\t{jv}" in review
 
 
-def test_the_seed_merges_by_hand_and_an_empty_to_norm_keeps_an_organization_apart(conn, tmp_path, seed_file):
+def test_the_seed_merges_by_hand_and_an_empty_to_norm_keeps_an_organization_apart(conn, tmp_path, seed_file, shadow):
     coradix = contract(conn, "C1", "CORADIX TECHNOLOGY CONSULTING LTD.")
     contract(conn, "C2", "CORADIX TECHNOLOGY CONSULTING LTD.")
     typo = contract(conn, "C3", "CoradixTechnology Consulting Ltd")
@@ -216,7 +223,7 @@ def test_the_survivor_does_not_flip_and_the_alias_row_is_the_only_memory(conn, t
     assert aliases(conn) == {big: (small, "business_number")} and records_of(conn, small) == 7
 
 
-def test_a_merge_whose_evidence_is_gone_is_undone_on_the_next_run(conn, tmp_path, seed_file):
+def test_a_merge_whose_evidence_is_gone_is_undone_on_the_next_run(conn, tmp_path, seed_file, shadow):
     coradix = contract(conn, "C1", "CORADIX TECHNOLOGY CONSULTING LTD.")
     typo = contract(conn, "C2", "CoradixTechnology Consulting Ltd")
     seed_file(("coradixtechnology consulting", "coradix technology consulting", "a space left out"))
@@ -270,8 +277,9 @@ def test_names_that_are_not_organizations_keep_their_records_and_no_organization
 # Invented firm names in the shapes the 2026-11-01 samples showed; the public institutions and the two Bell
 # companies are the analysis's own rejected pairs.
 
-SPELLING_HEADER = "# key\tsteps\tplace\tprovinces_overlap\trole\tid\tname\trecords\tprovinces"
-CANDIDATE_HEADER = "# kind\tplace\tfrom_id\tfrom_name\tfrom_records\tto_id\tto_name\tto_records\tdetail\tseed_row"
+SPELLING_HEADER = "# key\tsteps\tplace\tprovinces_overlap\trole\tid\tname\trecords\tprovinces\tregistry"
+CANDIDATE_HEADER = ("# kind\tplace\tfrom_id\tfrom_name\tfrom_records\tto_id\tto_name\tto_records\tdetail\tseed_row"
+                    "\tregistry")
 
 
 def award_at(conn, ref, name, *, city, postal, province, amendment=0):
@@ -316,17 +324,17 @@ def spelling_world(conn):
     return ids
 
 
-def test_the_spelling_rule_in_shadow_lists_its_groups_and_merges_nothing(conn, tmp_path, seed_file, spelling_world):
+def test_the_spelling_rule_in_shadow_lists_its_groups_and_merges_nothing(conn, tmp_path, seed_file, spelling_world,
+                                                                          shadow):
     ids = spelling_world
     before = {oid: records_of(conn, oid) for oid in ids.values()}
     result = run(conn, tmp_path)
-    assert merges.config.ORG_SPELLING_MERGE == "shadow"
     assert (result["merged"], result["merged_spelling"], result["spelling_groups"]) == (0, 0, 3)
     assert aliases(conn) == {} and {oid: records_of(conn, oid) for oid in ids.values()} == before
     review = (tmp_path / "review" / merges.REVIEW_FILE).read_text(encoding="utf-8")
     assert '# Spelling rule (shadow, nothing merged until config.ORG_SPELLING_MERGE is "on"): 3 groups' in review
     rows = section(review, SPELLING_HEADER)
-    assert all(len(r) == 9 for r in rows) and len(rows) == 6
+    assert all(len(r) == 10 for r in rows) and len(rows) == 6
     # The group whose members were never seen in one province comes first; each group's survivor leads it.
     assert [(r[0], r[1], r[2], r[3], r[4]) for r in rows[:2]] == [
         ("glimmerpost", "spacing", "", "no", "survivor"), ("glimmerpost", "spacing", "", "no", "joins")]
@@ -336,9 +344,9 @@ def test_the_spelling_rule_in_shadow_lists_its_groups_and_merges_nothing(conn, t
         by_key.setdefault(r[0], []).append(r)
     assert by_key["quillfeatherconsulting"] == [
         ["quillfeatherconsulting", "abbreviation", "city, postal", "yes", "survivor", ids["quill"],
-         "Quillfeather Consulting Ltd.", "2", "ON"],
+         "Quillfeather Consulting Ltd.", "2", "ON", ""],
         ["quillfeatherconsulting", "abbreviation", "city, postal", "yes", "joins", ids["quill_short"],
-         "Quillfeather Cnslt.Ltd.", "1", "ON"]]
+         "Quillfeather Cnslt.Ltd.", "1", "ON", "unknown"]]
     assert [(r[1], r[2], r[4], r[5]) for r in by_key["brightmoor"]] == [
         ("vendor code", "", "survivor", ids["bright"]), ("vendor code", "", "joins", ids["bright_code"])]
     for name in ("Ferme Valco", "Ferme Valdo", "University of", "Bell "):
@@ -373,7 +381,7 @@ def test_the_spelling_rule_on_merges_its_groups_and_off_leaves_them(conn, tmp_pa
     assert aliases(conn) == merged
 
 
-def test_a_person_named_spelling_or_a_keep_apart_row_gives_no_key(conn, tmp_path, seed_file):
+def test_a_person_named_spelling_or_a_keep_apart_row_gives_no_key(conn, tmp_path, seed_file, shadow):
     firm = contract(conn, "P1", "Laura Quentaro Inc.")
     branch = contract(conn, "P2", "LAURA QUENTARO INC. (WEST)")
     run(conn, tmp_path, T1)
@@ -411,7 +419,7 @@ def test_the_candidates_for_the_seed_are_listed_by_kind_with_the_row_that_would_
     assert result["merged"] == 0 and result["seed_candidates"] == 5
     review = (tmp_path / "review" / merges.REVIEW_FILE).read_text(encoding="utf-8")
     rows = section(review, CANDIDATE_HEADER)
-    assert all(len(r) == 10 for r in rows)
+    assert all(len(r) == 11 for r in rows) and {r[10] for r in rows} == {"unknown"}
     got = {(r[0], r[2], r[5]): (r[1], r[9]) for r in rows}
     assert got == {
         ("operating", trade, numbered): ("", "dynamic temps consultants,1019837 ontario,,"),
@@ -431,3 +439,68 @@ def test_the_candidates_for_the_seed_are_listed_by_kind_with_the_row_that_would_
     kinds = [r[0] for r in section((tmp_path / "review" / merges.REVIEW_FILE).read_text(encoding="utf-8"),
                                    CANDIDATE_HEADER)]
     assert kinds == ["operating", "former", "place"]
+
+
+# -- the operator's identity rulings of 2026-11-07 ------------------------------------------------------
+
+
+def test_the_spelling_rule_is_on_and_the_review_file_still_lists_every_group(conn, tmp_path, seed_file, spelling_world):
+    """Ruling 1: the spelling rule merges by default, and the file keeps each group (the shadow section's
+    columns) as the record of what merged, beside the merges list and the run log's counts."""
+    ids = spelling_world
+    assert merges.config.ORG_SPELLING_MERGE == "on"
+    result = run(conn, tmp_path)
+    assert (result["merged_spelling"], result["spelling_groups"]) == (3, 3)
+    review = (tmp_path / "review" / merges.REVIEW_FILE).read_text(encoding="utf-8")
+    assert "# Spelling rule (merged (each merge is also listed above)): 3 groups sharing a match key" in review
+    rows = section(review, SPELLING_HEADER)
+    assert len(rows) == 6 and {r[5] for r in rows} == {ids[k] for k in ("quill_short", "quill", "glimmer",
+                                                                         "glimmer_spaced", "bright_code", "bright")}
+    joined = {r[5]: r for r in rows if r[4] == "joins"}
+    assert all(aliases(conn)[oid][1] == "spelling" for oid in joined)
+    log = conn.execute("SELECT detail, notice FROM sources_log WHERE source = 'organizations'").fetchone()
+    assert "merged_spelling=3" in log["detail"] and "spelling rule on: 3 groups (3 organizations" in log["notice"]
+    summary = json.loads((tmp_path / "review" / merges.SUMMARY_FILE).read_text(encoding="utf-8"))
+    assert (summary["spelling_mode"], summary["spelling_groups"], summary["spelling_joined"]) == ("on", 3, 3)
+
+
+def test_legal_forms_of_one_name_stay_one_organization(conn, tmp_path, seed_file):
+    """Ruling 2: different legal forms of one name share a profile ("Deloitte Inc." and "Deloitte LLP"). The
+    id is made from the name without its legal form, so no merge is needed and none is made."""
+    assert org_id(norm_name("Deloitte Inc.")) == org_id(norm_name("Deloitte LLP"))
+    forms = ("Quarrystone Inc.", "QUARRYSTONE LLP", "Quarrystone Ltd", "Quarrystone S.E.N.C.R.L.", "Quarrystone Ltée")
+    oids = {contract(conn, f"Q{i}", name) for i, name in enumerate(forms)}
+    assert len(oids) == 1
+    result = run(conn, tmp_path)
+    [oid] = oids
+    assert result["merged"] == 0 and aliases(conn) == {}
+    assert records_of(conn, oid) == len(forms)
+    names = {r[0] for r in conn.execute("SELECT raw_name FROM organization_names WHERE organization_id = ?", (oid,))}
+    assert names == set(forms)
+
+
+def test_a_seed_merge_keeps_its_note_on_the_alias_row_and_the_download(conn, tmp_path, monkeypatch):
+    """The seed's note travels with the merge to organization_aliases and the alias download; a changed note
+    rewrites the note and leaves the date the merge holds since."""
+    from awardwatch_pipeline import export
+
+    path = tmp_path / "organization_aliases.csv"
+    monkeypatch.setattr(merges, "SEED_PATH", path)
+    old = contract(conn, "R1", "Harbourline Freight Inc.")
+    new = contract(conn, "R2", "Tidewater Logistics Inc.")
+    contract(conn, "R3", "Tidewater Logistics Inc.")
+    path.write_text("from_norm,to_norm,reason,note\nharbourline freight,tidewater logistics,renamed in 2024,former\n",
+                    encoding="utf-8")
+    run(conn, tmp_path, T1)
+    assert tuple(conn.execute("SELECT new_id, reason, note, created_at FROM organization_aliases WHERE old_id = ?",
+                              (old,)).fetchone()) == (new, "seed", "former", T1)
+    path.write_text("from_norm,to_norm,reason,note\nharbourline freight,tidewater logistics,the same name,spelling\n",
+                    encoding="utf-8")
+    run(conn, tmp_path, T2)
+    assert tuple(conn.execute("SELECT note, created_at FROM organization_aliases WHERE old_id = ?",
+                              (old,)).fetchone()) == ("spelling", T1)
+    out = tmp_path / "csv"
+    out.mkdir()
+    assert export.write_alias_map(conn, out / export.ALIASES_FILE) == 1
+    text = (out / export.ALIASES_FILE).read_text(encoding="utf-8-sig")
+    assert text == f"from_id,to_id,reason,note,since\n{old},{new},seed,spelling,{T1[:10]}\n"

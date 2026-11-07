@@ -1606,6 +1606,11 @@ const STRINGS = {
     en: "Every organization with its counts and totals per source",
     fr: "Toutes les organisations avec leurs nombres et totaux par source",
   },
+  // The alias map: one row per retired organization ID and the ID that holds its records now.
+  "data.file.organization_aliases": {
+    en: "Every retired organization ID and the ID that replaced it, with the reason, a note and the date since: IDs only",
+    fr: "Chaque identifiant d'organisation retiré et celui qui l'a remplacé, avec le motif, une note et la date de début : identifiants seulement",
+  },
   "data.file.buyers": { en: "Every buyer with its counts and totals per source", fr: "Tous les acheteurs avec leurs nombres et totaux par source" },
   "data.file.expiring_3m": {
     en: "Every contract ending within 3 months of the data date, in the 12-month file's columns",
@@ -1781,6 +1786,14 @@ const STRINGS = {
   "methodology.org_registry": {
     en: "A match in the federal corporate registry is a match on the normalized name, graded exact, probable or possible. It points to a registry record and does not establish identity.",
     fr: "Une correspondance dans le registre fédéral des sociétés est une correspondance sur le nom normalisé, qualifiée d'exacte, de probable ou de possible. Elle renvoie à un dossier du registre et n'établit pas l'identité.",
+  },
+  // Appended to the identity paragraph for the methodology page to render
+  // when profiles show families (the pipeline's families stage and the
+  // profile's "family" block; the seed is
+  // pipeline/awardwatch_pipeline/data/organization_families.csv).
+  "methodology.org_families": {
+    en: "Some organizations belong to a corporate family: separate legal entities of one brand, such as a parent's subsidiaries, its affiliates and the joint ventures it is a party to. Families come from a list kept by hand, one row per member with its family, its relation (subsidiary, affiliate or joint venture) and a source: a public document, or the member's own name when the name states the relation. Names alone never make a family. A profile in a family lists the other members, each with its own count of records. The members' figures are never added together.",
+    fr: "Certaines organisations appartiennent à une famille d'entreprises : des entités juridiques distinctes d'une même marque, comme les filiales d'une société mère, ses sociétés affiliées et les coentreprises auxquelles elle participe. Les familles proviennent d'une liste tenue à la main, une ligne par membre avec sa famille, sa relation (filiale, société affiliée ou coentreprise) et une source : un document public, ou le nom du membre lorsque ce nom énonce la relation. Les noms seuls ne forment jamais une famille. Le profil d'un membre présente les autres membres, chacun avec son propre nombre de dossiers. Les chiffres des membres ne sont jamais additionnés.",
   },
   "methodology.buyers_text": {
     en: "Each federal institution is one buyer. Its ID is its open.canada.ca organization name where it has one (dnd-mdn, pwgsc-tpsgc). CanadaBuys names a buyer with its acronym in parentheses. The acronym joins it to the open.canada.ca list, and a reviewed list maps the names that do not line up. Every spelling a source uses is kept, so the mapping can be checked.",

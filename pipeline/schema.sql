@@ -87,8 +87,9 @@ CREATE TABLE IF NOT EXISTS organization_places (
   PRIMARY KEY (organization_id, country, province, city, postal_code)
 );
 
--- Corporate registry lookups (sources/registry_federal.py; BC OrgBook and the
--- Quebec register may follow).
+-- Corporate registry lookups (sources/registry_federal.py). Profiles export
+-- these rows, so a registry whose terms forbid republishing never writes here
+-- (OrgBook BC's answers go to orgbook_lookups; the Quebec register is not read).
 CREATE TABLE IF NOT EXISTS registry_matches (
   organization_id TEXT NOT NULL REFERENCES organizations(id),
   registry TEXT NOT NULL,                        -- corporations_canada | bc_orgbook | quebec_req
@@ -108,6 +109,34 @@ CREATE TABLE IF NOT EXISTS registry_checks (
   checked_at TEXT NOT NULL,
   PRIMARY KEY (organization_id, registry)
 );
+
+-- OrgBook BC searches made by the registry check of the organization review
+-- (registry_review.py): one row per name searched, kept so a name is asked
+-- for again only after ORGBOOK_RECHECK_DAYS and a night never spends more
+-- than config.ORGBOOK_BUDGET searches. OrgBook's data is under the Access
+-- Only licence (reproduction needs written permission), so no export reads
+-- this table: it feeds the operator's private review file and nothing else.
+CREATE TABLE IF NOT EXISTS orgbook_lookups (
+  query TEXT PRIMARY KEY,                        -- the normalized name searched (normalize.norm_name)
+  registration TEXT,                             -- OrgBook's source_id when exactly one registration carries the
+                                                 -- name; NULL when none or several do
+  legal_name TEXT,                               -- the registration's name that matched
+  matches INTEGER NOT NULL,                      -- registrations whose names matched (0, 1 or more)
+  fetched_at TEXT NOT NULL
+);
+
+-- Corporate families (families.py, the families stage), rebuilt whole every
+-- night from the curated seed awardwatch_pipeline/data/organization_families.csv,
+-- each row with a source. Profiles list a family's members side by side with
+-- their own figures; nothing adds members' figures together.
+CREATE TABLE IF NOT EXISTS organization_families (
+  family TEXT NOT NULL,                          -- the family's name as the seed writes it ("Stantec")
+  organization_id TEXT NOT NULL,                 -- a live organization (a merged member's survivor)
+  note TEXT NOT NULL,                            -- subsidiary | affiliate | joint venture
+  source TEXT NOT NULL,                          -- a URL, or "name" when the name itself says so
+  PRIMARY KEY (family, organization_id)
+);
+CREATE INDEX IF NOT EXISTS idx_org_families_org ON organization_families(organization_id);
 
 -- Corporations Canada open-data extract (business corporations under the
 -- Canada Business Corporations Act), matched to organizations by normalized name.
@@ -735,14 +764,16 @@ CREATE TABLE IF NOT EXISTS directory_pages (
 -- Organization ids retired by a normalization change (migrate.py) or merged
 -- into another organization (merges.py), each with the id that took over its
 -- records, so a link to an old profile can be sent on. export_static writes
--- it, chains followed to the live id, as aliases/<abc>.json.
+-- it, chains followed to the live id, as aliases/<abc>.json, and export.py as
+-- the public download organization-aliases.csv (ids, reason, note, since).
 CREATE TABLE IF NOT EXISTS organization_aliases (
   old_id TEXT PRIMARY KEY,
   new_id TEXT NOT NULL,
   normalize_version INTEGER NOT NULL,            -- the normalization in force when old_id was retired
-  created_at TEXT NOT NULL,
-  reason TEXT                                    -- NULL: a normalization change; business_number | truncation |
+  created_at TEXT NOT NULL,                      -- when this mapping began (kept while it holds)
+  reason TEXT,                                   -- NULL: a normalization change; business_number | truncation |
                                                  -- spelling | seed: a merge, rebuilt every night by merges.py
+  note TEXT                                      -- a seed merge's note: spelling | former | short | branch
 );
 
 -- Values to check (value_checks.py), rebuilt whole every night: a record

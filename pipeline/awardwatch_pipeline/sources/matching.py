@@ -142,13 +142,14 @@ GIVEN_NAMES_PATH = config.PACKAGE_DATA / "given_names.txt"
 PERSON_TEST_VERSION = 7
 # What becomes of "<person> (<firm with a legal form>)", a record filed under a
 # person's name with the firm they own or work for in brackets ("<Surname>,
-# <Given> (<Firm> Ltd.)"). "withhold" (the default until the operator decides):
-# the whole name is withheld, the firm with it. "firm": the record is filed
-# under the bracketed firm (filed_name) and the person's name is taken out of
-# its free text. Changing this line is the whole switch: the stored person
-# test version carries it (person_test_stamp), so the next run reads every
-# file again under the new choice.
-PERSON_WITH_FIRM = "withhold"
+# <Given> (<Firm> Ltd.)"). "firm" (the operator's ruling of 2026-11-07): the
+# record is filed under the bracketed firm (filed_name) and the person's name
+# is taken out of its free text, so the firm's work is not lost with the
+# person's name. "withhold": the whole name is withheld, the firm with it.
+# Changing this line is the whole switch: the stored person test version
+# carries it (person_test_stamp), so the next run reads every file again
+# under the new choice.
+PERSON_WITH_FIRM = "firm"
 # An email address written in a name field ("labanalyzer@example.invalid",
 # "Canada@softreseller.example.invalid"): a contact detail, often a person's, withheld like a
 # person's name.
@@ -242,7 +243,11 @@ def refresh_person_test(conn: sqlite3.Connection) -> bool:
 
 
 def person_test_stamp() -> str:
-    """What refresh_person_test stores: PERSON_TEST_VERSION, marked when PERSON_WITH_FIRM is not the default."""
+    """What refresh_person_test stores: PERSON_TEST_VERSION, marked "-firm" when PERSON_WITH_FIRM is "firm".
+
+    The mark is what makes a flip of the switch, either way, a new version: a
+    database last run under "withhold" holds "7", so the first run under
+    "firm" finds "7-firm" missing and reads every file again (and back)."""
     return str(PERSON_TEST_VERSION) if PERSON_WITH_FIRM == "withhold" else f"{PERSON_TEST_VERSION}-firm"
 
 

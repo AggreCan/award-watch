@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import config, organizations
+from . import config, families, organizations, registry_review
 from .db import connect, log_run
 from .http import PoliteClient
 from .sources import buyers, canadabuys, registry_federal
@@ -30,9 +30,10 @@ from .sources import contracts, grants, lobbying, matching, sosa
 
 log = logging.getLogger("awardwatch_pipeline")
 # sosa after organizations: its holders link to profiles by name, and tonight's
-# merges and removals are known only then.
+# merges and removals are known only then. families after them too: a member
+# merged tonight counts as the organization that took its records.
 STAGES = ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry",
-          "organizations", "sosa", "indicators", "expiring", "export"]
+          "organizations", "sosa", "families", "indicators", "expiring", "export"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -121,10 +122,14 @@ def stage_runners(conn: sqlite3.Connection, client: PoliteClient | None,
         "lobbying": lambda: lobbying.run(conn, client, samples=samples),
         # A 260 MB download can fail; the rest of the night still runs.
         "registry": lambda: registry_federal.run(conn, client, download=not offline),
-        "organizations": lambda: organizations.run(conn),
+        # The review file's registry check searches OrgBook BC on a client of
+        # its own (one attempt a request); a samples run asks nothing.
+        "organizations": lambda: organizations.run(
+            conn, orgbook=None if offline else registry_review.orgbook_client(client)),
         # Standing offers and supply arrangements: the weekly file, applied
         # when its publication date moves, and the nightly upkeep of its holders.
         "sosa": lambda: sosa.run(conn, client, samples=samples),
+        "families": lambda: families.run(conn),
         "indicators": lambda: indicators.run(conn),
         "expiring": lambda: expiring.run(conn),
         "export": lambda: _export(conn),

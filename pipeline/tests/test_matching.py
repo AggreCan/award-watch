@@ -127,7 +127,7 @@ def test_a_new_person_test_makes_every_loader_read_its_files_again(conn):
     assert [k for k in skip_keys if get_meta(conn, k) is not None] == []
     assert get_meta(conn, "lobbying:refused_until") == "2026-11-08"
     assert get_meta(conn, "lobbying:file_date") == "2026-11-02T06:25:12"
-    assert get_meta(conn, matching.PERSON_TEST_KEY) == str(matching.PERSON_TEST_VERSION)
+    assert get_meta(conn, matching.PERSON_TEST_KEY) == matching.person_test_stamp()
     # The legacy file, read only on a first load otherwise, is planned again, and so is the complete file.
     assert [f.kind for f in canadabuys.plan(conn, "awards", night)] == ["legacy", "complete", "fy"]
     # Once the version is stored, nothing more is cleared.
@@ -195,26 +195,30 @@ def test_a_withheld_name_of_each_new_shape_is_taken_out_of_free_text():
         ("[name withheld], Ferme Brisavel", 1)
 
 
-def test_the_bracketed_firm_switch(monkeypatch, conn):
+def test_the_bracketed_firm_switch_files_under_the_firm_by_default_and_withholds_when_flipped(monkeypatch, conn):
     from awardwatch_pipeline.db import get_meta
     name = SIX_PATTERNS["person (firm with a legal form)"]
-    # The default withholds the whole name: nothing is filed under the firm.
-    assert matching.PERSON_WITH_FIRM == "withhold"
-    assert matching.filed_name(name) == (name, None)
-    assert matching.person_test_stamp() == str(matching.PERSON_TEST_VERSION)
     assert matching.person_with_firm(name) == ("Quentaro, Laura", "Zorblax Holdings Ltd.")
-    assert matching.refresh_person_test(conn) is True and matching.refresh_person_test(conn) is False
-    # The one-line switch files the record under the firm and hands back the person to take out of its text.
-    monkeypatch.setattr(matching, "PERSON_WITH_FIRM", "firm")
+    # The operator's ruling of 2026-11-07: the record is filed under the firm, and the person comes back for the
+    # caller to take out of the record's text.
+    assert matching.PERSON_WITH_FIRM == "firm"
     assert matching.filed_name(name) == ("Zorblax Holdings Ltd.", "Quentaro, Laura")
     assert matching.is_person_name(name) is True  # the whole string still names the person
     # A farm or trade name without a legal form is no firm to file under: still withheld whole.
     farm = SIX_PATTERNS["person (farm)"]
     assert matching.filed_name(farm) == (farm, None)
-    # Flipping it changes the stored version, so the next run reads every file again.
     assert matching.person_test_stamp() == f"{matching.PERSON_TEST_VERSION}-firm"
-    assert matching.refresh_person_test(conn) is True
+    # A database last run under "withhold" holds the bare version: the first run under "firm" reads every file
+    # again, and the one after it nothing more.
+    conn.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (matching.PERSON_TEST_KEY, str(matching.PERSON_TEST_VERSION)))
+    assert matching.refresh_person_test(conn) is True and matching.refresh_person_test(conn) is False
     assert get_meta(conn, matching.PERSON_TEST_KEY) == f"{matching.PERSON_TEST_VERSION}-firm"
+    # Flipped back to "withhold", the whole name is withheld and the stored version changes again.
+    monkeypatch.setattr(matching, "PERSON_WITH_FIRM", "withhold")
+    assert matching.filed_name(name) == (name, None)
+    assert matching.person_test_stamp() == str(matching.PERSON_TEST_VERSION)
+    assert matching.refresh_person_test(conn) is True
+    assert get_meta(conn, matching.PERSON_TEST_KEY) == str(matching.PERSON_TEST_VERSION)
 
 
 def test_a_name_that_carries_an_email_address_is_withheld():

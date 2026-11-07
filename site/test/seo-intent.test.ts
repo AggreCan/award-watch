@@ -147,7 +147,7 @@ describe("structured data", () => {
       const ogl = lang === "fr" ? "https://ouvert.canada.ca/fr/licence-du-gouvernement-ouvert-canada"
         : "https://open.canada.ca/en/open-government-licence-canada";
       expect(dataset.hasPart.map((p: any) => p["@id"].split("#")[1])).toEqual([
-        "open-tenders", "awards", "history", "contracts", "grants", "organizations", "buyers", "expiring-3m",
+        "open-tenders", "awards", "history", "contracts", "grants", "organizations", "organization-aliases", "buyers", "expiring-3m",
       ]);
       for (const part of dataset.hasPart) {
         expect(part["@type"]).toBe("Dataset");

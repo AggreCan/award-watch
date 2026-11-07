@@ -113,8 +113,14 @@ SOSA_CA_PEM = PACKAGE_DATA / "sosa_intermediate.pem"
 SOSA_RELEASE = PACKAGE_DATA / "sosa_release.txt"
 
 # The organizations' spelling rule (merges.py, the fourth merge rule: one match
-# key, any place). "shadow" lists the groups it would merge in
-# data/out/review/organization-merges.txt and merges nothing; "on" merges
-# them; "off" leaves the rule out. Shadow until the operator has read a
-# night's groups (every group whose provinces never overlap, and a sample).
-ORG_SPELLING_MERGE = "shadow"
+# key, any place). "on" merges the groups and still lists each one in
+# data/out/review/organization-merges.txt, so the file stays the record of
+# what merged; "shadow" lists them and merges nothing; "off" leaves the rule
+# out. On since the operator's ruling of 2026-11-07, after the shadow nights;
+# a reader flags a wrong merge from the profile, and a seed row with an empty
+# to_norm keeps a pair apart.
+ORG_SPELLING_MERGE = "on"
+# The registry check of the review file (registry_review.py): at most this many
+# OrgBook BC searches a night, the rest left to the cache and the nights after.
+ORGBOOK_BUDGET = 200
+ORGBOOK_TIMEOUT_S = 10.0

@@ -16,7 +16,10 @@ def read(path):
 
 
 def test_every_csv_round_trips_through_the_csv_module_with_utf_8_sig(conn, tmp_path):
-    seed(conn)
+    ids = seed(conn)
+    # A retired id, so the alias map has a row like every other file.
+    conn.execute("INSERT INTO organization_aliases (old_id, new_id, normalize_version, created_at, reason, note) "
+                 "VALUES ('org-00000000aa', ?, 1, '2026-11-02T00:00:00Z', 'seed', 'former')", (next(iter(ids.values())),))
     out = tmp_path / "csv"
     export.export_csv(conn, out)
     for path in out.glob("*.csv"):
@@ -79,7 +82,7 @@ def test_award_dates_after_the_data_year_share_one_file_and_every_file_is_offere
     assert [r["reference"] for r in read(out / "awards-after-2026.csv")] == ["LATE-1", "LATE-2"]
     assert counts["awards-before-2012.csv"] == 1
     # The names site/src/pages/data.tsx offers (DOWNLOADS and YEARLY_DOWNLOAD).
-    offered = re.compile(r"^(open-tenders|organizations|buyers|expiring-3m|expiring-12m)\.csv$|"
+    offered = re.compile(r"^(open-tenders|organizations|organization-aliases|buyers|expiring-3m|expiring-12m)\.csv$|"
                          r"^(awards|history|contracts|grants)-(\d{4}|before-\d{4}|after-\d{4}|undated)(-[2-9])?\.csv$")
     sums = [line.split("  ")[1] for line in (out / "SHA256SUMS").read_text(encoding="utf-8").splitlines()]
     assert sums and all(offered.match(n) for n in sums)

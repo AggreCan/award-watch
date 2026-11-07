@@ -146,7 +146,8 @@ describe("page metadata", () => {
     const files = dataset.hasPart.flatMap((p: any) => p.distribution.map((d: any) => d.name));
     // The alias map (listed) is ids, no records, and stays out of the record sets.
     for (const d of DOWNLOADS.filter((d) => !d.paid && !d.listed && d.file.endsWith(".csv"))) expect(files).toContain(d.file);
-    expect(files).not.toContain("organization-aliases.csv");
+    // The alias map is a dataset part of its own (seo.ts DATA_SETS): ids and reasons, no record data.
+    expect(files).toContain("organization-aliases.csv");
     expect(files).not.toContain("expiring-12m.csv");
     for (const part of dataset.hasPart) {
       expect(part.license).toBe(dataset.license);

@@ -33,6 +33,13 @@ and the site serves only these names):
   expiring-3m.csv         the same columns for the rows ending within the 3-month window of the data
                           date (expiring.WINDOWS), as the site's 3-month list counts them: the file the
                           site keeps free once the 6- and 12-month windows are part of its paid plan
+  organization-aliases.csv  the alias map: every retired organization id and the live id that holds its
+                          records now (export_static.resolve_aliases, chains followed), with the reason
+                          (business_number, truncation, spelling, seed, or normalization for a change to
+                          the name rules), the seed's note (spelling, former, short, branch; blank for the
+                          rules), and since (the date the mapping began). Ids only and no record data,
+                          so the file is free and nothing a paid plan holds is in it. A reader of an older
+                          download maps its organization_id to the live one with it
   SHA256SUMS              sha256sum's format: "<hex>  <file>" per line, sorted by file name; every file
                           in it is one the Data page offers
 
@@ -443,6 +450,33 @@ def _yearly_files(conn: sqlite3.Connection, prefix: str, last: int | None = None
     return files
 
 
+ALIASES_FILE = "organization-aliases.csv"
+ALIAS_COLUMNS = ("from_id", "to_id", "reason", "note", "since")
+
+
+def write_alias_map(conn: sqlite3.Connection, path: Path) -> int:
+    """organization-aliases.csv: one row per retired id the site redirects (export_static.resolve_aliases, so the
+    file and aliases/<ab>.json agree), sorted by from_id; returns its rows. reason NULL is a normalization change."""
+    from .export_static import ORG_ID_RE, resolve_aliases  # export_static imports this module at load
+
+    resolved = resolve_aliases(conn)
+    own = {r[0]: r for r in conn.execute("SELECT old_id, reason, note, created_at FROM organization_aliases")}
+    rows = []
+    for old in sorted(resolved):
+        new = resolved[old]
+        if not (ORG_ID_RE.match(old) and ORG_ID_RE.match(new)):
+            continue
+        _, reason, note, created = own[old]
+        rows.append((old, new, reason or "normalization", note or "", (created or "")[:10]))
+    partial = path.with_name(path.name + ".partial")
+    with partial.open("w", newline="", encoding="utf-8-sig") as fh:
+        writer = csv.writer(fh, lineterminator="\n")
+        writer.writerow(ALIAS_COLUMNS)
+        writer.writerows(rows)
+    partial.replace(path)
+    return len(rows)
+
+
 def write_sums(out: Path) -> int:
     lines = []
     for path in sorted(out.iterdir(), key=lambda p: p.name):
@@ -468,6 +502,7 @@ def export_csv(conn: sqlite3.Connection, out_dir: Path | None = None, *, today: 
     counts["expiring-3m.csv"] = _write(out / "expiring-3m.csv", conn.execute(
         EXPIRING_3M, {"as_of": as_of, "span": f"+{EXPIRING_3M_DAYS} days"}))
     counts["expiring-12m.csv"] = _write(out / "expiring-12m.csv", conn.execute(EXPIRING))
+    counts[ALIASES_FILE] = write_alias_map(conn, out / ALIASES_FILE)
     # A yearly file from an earlier night whose year no longer has rows (a
     # date corrected upstream) would otherwise be uploaded again.
     for stale in out.glob("*.csv"):

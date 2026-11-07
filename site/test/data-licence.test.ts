@@ -89,6 +89,20 @@ describe("data page", () => {
     expect(html).not.toContain(EM_DASH);
   });
 
+  it("offers the alias map free, in both languages, with its size from the export's list", async () => {
+    const downloads = [{ file: "organization-aliases.csv", bytes: 2048, rows: 12 }];
+    const env = withFiles({ "stats.json": { ...stats, downloads } });
+    const en = section(await (await app.request("/data", {}, env)).text(), "downloads");
+    expect(en).toContain('<a href="/downloads/organization-aliases.csv" class="mono">organization-aliases.csv</a>');
+    expect(en).toContain("Organization aliases: the profile ids the site joined, with the reason");
+    expect(en).toContain('<td data-label="Size" class="mono num" data-sort="2048">2 KB</td><td data-label="Rows" class="mono num">12</td>');
+    const fr = nbsp(section(await (await app.request("/data?lang=fr", {}, env)).text(), "downloads"));
+    // French typography may turn the apostrophes; the words around them are the test.
+    expect(fr).toMatch(new RegExp("Alias des organisations : les identifian"));
+    expect(DOWNLOADS.find((d) => d.file === "organization-aliases.csv")?.paid).toBeUndefined();
+    expect(downloadAllowed("organization-aliases.csv")).toBe(true);
+  });
+
   it("lists the downloads, the API and the yearly files, and starts the changelog empty", async () => {
     const html = await (await get("/data")).text();
     const downloads = section(html, "downloads");

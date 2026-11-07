@@ -8,7 +8,7 @@ import os
 import sqlite3
 import time
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -394,7 +394,7 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
     make_db(db)
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
     assert set(status) == {"run_at", "stages", "steps", "search_sync", "records_sync", "intraday_lookup", "intraday_prune",
-                           "intraday_lookup_bytes", "link_sample", "link_sample_broken",
+                           "intraday_lookup_bytes", "link_sample", "link_sample_broken", "organization_review",
                            "views_rollup", "search_console", "views_report", "indexnow", "interest", "restore",
                            "smoke", "smoke_detail", "version_before", "rollback", "deploy_rolled_back", "checks",
                            "notices", "ok"}
@@ -869,9 +869,119 @@ def test_the_review_files_go_to_the_private_prefix_and_nowhere_else():
         "id: review",
         "for f in data/out/review/*.txt; do",
         '"$WRANGLER" r2 object put --remote "$BUCKET/review/$(basename "$f")" --file "$f" > /dev/null',
+        # The organization merges list: the 1st and the 16th only, under its data date (the object org-review
+        # prints is review/organization-merges-<date>.txt, ORG_REVIEW_OBJECT).
+        "- name: Save the semi-monthly organization review to R2 (private)",
+        "id: org_review",
+        "object=$(python -m awardwatch_pipeline.nightly org-review --db data/awardwatch.sqlite \\",
+        "--review data/out/review/organization-merges.txt --out-dir data/out/org_review)",
+        '"$WRANGLER" r2 object put --remote "$BUCKET/$object" --file data/out/review/organization-merges.txt > /dev/null',
+        'echo "saved" > data/out/org_review/last_outcome.txt',
+        "--org-review-outcome data/out/org_review/last_outcome.txt --org-review-summary data/out/org_review/summary.json \\",
     ]
+    # The nightly loop leaves the merges list to the semi-monthly step.
+    assert '[ "$(basename "$f")" = "organization-merges.txt" ] && continue' in step(
+        text, "Save the review files to R2 (private)")
+    assert nightly.ORG_REVIEW_OBJECT.startswith("review/")
     # The bundle is the static folder alone.
     assert "tar -czf data/out/static.tar.gz -C data/out static" in step(text, "Bundle the static data for the site")
+
+
+# -- the semi-monthly organization review (operator ruling of 2026-11-07) ------------------------------
+
+
+def test_the_organization_review_is_due_on_the_1st_and_the_16th_only():
+    from awardwatch_pipeline import merges
+
+    due = [day for day in range(1, 32) if nightly.org_review_due(f"2026-12-{day:02d}")]
+    assert due == [1, 16]
+    assert nightly.org_review_due("2027-01-01") and nightly.org_review_due("2026-02-16T12:30:00Z")
+    for day in ("2026-11-15", "2026-11-17", "2026-11-30", "", "not a date", "2026-13-01"):
+        assert not nightly.org_review_due(day), day
+    # The names nightly writes out (it loads only the standard library) are merges' own.
+    assert (nightly.ORG_REVIEW_FILE, nightly.ORG_REVIEW_SUMMARY) == (merges.REVIEW_FILE, merges.SUMMARY_FILE)
+
+
+def org_review_world(tmp_path, data_date, *, summary=True, review=True):
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+    conn = connect(db)
+    conn.execute("INSERT INTO meta (key, value) VALUES ('data_as_of', ?)", (data_date,))
+    conn.commit()
+    conn.close()
+    folder = tmp_path / "review"
+    folder.mkdir()
+    if review:
+        (folder / "organization-merges.txt").write_text("# Organization merges\n", encoding="utf-8")
+    if summary:
+        (folder / "organization-merges.json").write_text(json.dumps({
+            "run": "2026-11-16T12:40:00Z", "spelling_mode": "on", "spelling_groups": 12, "spelling_joined": 14,
+            "merged": 30, "listed": True,
+            "candidates": {"operating": 3, "former": 1, "place": 2, "short": 5, "typo": 4},
+            "registry": {"pairs": 29, "same": 6, "different": 2, "unknown": 21, "different_merged": 1,
+                         "orgbook_searched": 150, "orgbook_failed": 0}}), encoding="utf-8")
+    return db, folder / "organization-merges.txt", tmp_path / "org_review"
+
+
+def test_the_organization_review_goes_to_r2_under_its_data_date_and_the_email_carries_its_counts(tmp_path, capsys):
+    db, review, out = org_review_world(tmp_path, "2026-11-16")
+    assert nightly.main(["org-review", "--db", str(db), "--review", str(review), "--out-dir", str(out)]) == 0
+    # stdout is the object name alone, which the workflow's upload reads.
+    assert capsys.readouterr().out == "review/organization-merges-2026-11-16.txt\n"
+    assert (out / "last_outcome.txt").read_text(encoding="utf-8").strip() == "failed"  # until the upload says saved
+    record = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert (record["data_date"], record["due"], record["object"]) == (
+        "2026-11-16", True, "review/organization-merges-2026-11-16.txt")
+    (out / "last_outcome.txt").write_text("saved\n", encoding="utf-8")
+    status_file = tmp_path / "status.json"
+    assert nightly.main(["status", "--db", str(db), "--org-review-outcome", str(out / "last_outcome.txt"),
+                         "--org-review-summary", str(out / "summary.json"), "--out", str(status_file)]) == 0
+    status = json.loads(status_file.read_text(encoding="utf-8"))
+    assert status["organization_review"] == "saved"
+    [line] = [n for n in status["notices"] if n["source"] == "organization_review"]
+    assert line["detail"] == (
+        "semi-monthly review of 2026-11-16: 12 spelling groups merged (14 organizations joining another); "
+        "candidates for the seed: operating 3, former 1, place 2, short 5, typo 4; registry check of 29 pairs: "
+        "6 same record, 2 different records (1 in a merged group), 21 unknown; 150 OrgBook searches; "
+        "saved to R2 as review/organization-merges-2026-11-16.txt")
+    # Information, never an item needing attention, and the run stays ok.
+    clean = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"},
+                               org_review="saved", org_review_record=record)
+    assert clean["ok"] is True and resilience.attention_items(clean) == []
+    assert [n["source"] for n in clean["notices"]] == ["organization_review"]
+    # An upload that did not work says so, with the counts.
+    failed = nightly.run_status(db, None, None, {}, org_review="failed", org_review_record=record)
+    [line] = [n for n in failed["notices"] if n["source"] == "organization_review"]
+    assert line["detail"].startswith("the semi-monthly review of 2026-11-16 was not saved to R2 as "
+                                     "review/organization-merges-2026-11-16.txt; 12 spelling groups merged")
+
+
+def test_other_nights_keep_the_organization_review_on_the_runner_and_add_no_line(tmp_path, capsys):
+    db, review, out = org_review_world(tmp_path, "2026-11-17")
+    assert nightly.main(["org-review", "--db", str(db), "--review", str(review), "--out-dir", str(out)]) == 0
+    assert capsys.readouterr().out == ""
+    assert (out / "last_outcome.txt").read_text(encoding="utf-8").strip() == "not due"
+    record = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    for outcome in ("not due", None):
+        status = nightly.run_status(db, None, None, {}, org_review=outcome, org_review_record=record)
+        assert not [n for n in status["notices"] if n["source"] == "organization_review"]
+    assert nightly.run_status(db, None, None, {})["organization_review"] == "not run"
+
+
+def test_a_due_night_without_a_review_file_says_why_and_uploads_nothing(tmp_path, capsys):
+    db, review, out = org_review_world(tmp_path, "2026-12-01", review=False, summary=False)
+    assert nightly.main(["org-review", "--db", str(db), "--review", str(review), "--out-dir", str(out)]) == 0
+    assert capsys.readouterr().out == ""
+    record = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    status = nightly.run_status(db, None, None, {}, org_review="no file", org_review_record=record)
+    [line] = [n for n in status["notices"] if n["source"] == "organization_review"]
+    assert "is due, but the organizations stage wrote no review file" in line["detail"]
+    # A quiet night (nothing to list) says that instead.
+    quiet = {**record, "summary": {"listed": False, "spelling_mode": "on"}}
+    status = nightly.run_status(db, None, None, {}, org_review="no file", org_review_record=quiet)
+    assert "nothing to list tonight" in status["notices"][-1]["detail"]
+    # The data date comes from the database; a database without one falls back to the date given.
+    assert nightly.data_date_of(tmp_path / "missing.sqlite", date(2026, 11, 16)) == "2026-11-16"
 
 
 # -- the same-day refresh's two nightly steps (docs/intraday.md) -------------------------------

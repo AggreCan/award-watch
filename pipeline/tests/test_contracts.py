@@ -315,3 +315,32 @@ def test_a_vendor_named_by_an_email_address_is_withheld_like_a_person(conn, fixt
     assert "Canada@softreseller.example.invalid" in review
     log = conn.execute("SELECT detail, notice FROM sources_log").fetchone()
     assert "softreseller" not in log["notice"] and "softreseller" not in log["detail"]
+
+
+@pytest.mark.parametrize("with_firm", ["firm", "withhold"])
+def test_a_person_with_a_bracketed_firm_files_under_the_firm_or_is_withheld(conn, fixtures, tmp_path, monkeypatch,
+                                                                             with_firm):
+    """The shape of test_matching.SIX_PATTERNS (invented names) as a published contract's vendor, both ways of
+    the switch: "firm" (the default) files the row under the firm and takes the person out of every free-text
+    field; "withhold" withholds the vendor whole. The person is in no row either way."""
+    from awardwatch_pipeline.sources import matching
+
+    monkeypatch.setattr(matching, "PERSON_WITH_FIRM", with_firm)
+    header, rows = read_csv(fixtures / FIXTURE)
+    reference = rows[0]["reference_number"]
+    rows[0].update({"vendor_name": "Quentaro, Laura (Zorblax Holdings Ltd.)",
+                    "description_en": "Advice from Laura Quentaro on the archive move",
+                    "comments_en": "Laura Quentaro, Zorblax Holdings Ltd., Ottawa"})
+    stats = contracts.load_file(conn, write_csv(tmp_path / "c.csv", header, rows), now=DAY1)
+    row = by_ref(conn)[reference]
+    if with_firm == "firm":
+        assert (row["vendor_raw"], row["vendor_withheld"]) == ("Zorblax Holdings Ltd.", 0)
+        assert row["organization_id"] == org_id(norm_name("Zorblax Holdings Ltd."))
+        assert stats.redacted == 2
+        assert row["description_en"] == "Advice from [name withheld] on the archive move"
+        assert row["comments_en"] == "[name withheld], Zorblax Holdings Ltd., Ottawa"
+    else:
+        assert (row["vendor_raw"], row["organization_id"], row["vendor_withheld"]) == (None, None, 1)
+    for table, column in (("organizations", "display_name"), ("organization_names", "raw_name"),
+                          ("contracts", "vendor_raw"), ("contracts", "description_en"), ("contracts", "comments_en")):
+        assert conn.execute(f"SELECT 1 FROM {table} WHERE {column} LIKE '%Quentaro%'").fetchone() is None

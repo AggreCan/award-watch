@@ -1,0 +1,29 @@
+# Corporate families, curated by hand, read by the families stage (families.py) every night after the merges.
+# A family groups organizations that are separate legal entities of one brand: a profile lists the other
+# members of its family side by side, each with its own figures. No figure is ever added across members.
+# Different spellings of one entity are not a family: they belong in organization_aliases.csv.
+#   family      the family's name as profiles show it ("Stantec"); every row of a family writes it the same way
+#   member_norm the member's normalized name (normalize.norm_name, as organization_aliases.csv writes names;
+#               a name typed as published is normalized on reading)
+#   note        what the member is to the family: subsidiary | affiliate | joint venture. A row with any other
+#               note is skipped with a log line
+#   source      where the relation is stated: a URL (an annual report, a registry record, the firm's own page),
+#               or "name" when the member's name itself says so ("<brand> Architecture Ltd.", "<brand> ... in
+#               joint venture"). A row with no source is skipped
+# A member whose name matches no organization with records is skipped with a log line (it may appear later);
+# a member merged into another organization counts as that one. An organization is in one family at most:
+# a second family naming it is skipped with a log line.
+#
+# Seeded 2026-11-07 with three engineering brands, from the profiles whose names begin with the brand (in
+# the samples build and on the site in November 2026): "joint venture" where the name names another firm, a
+# JV or a consortium, "subsidiary" otherwise. A spelling the spelling rule merges ("Stantec Cnslt.Ltd.") is
+# the same organization and gets no row of its own.
+family,member_norm,note,source
+Stantec,stantec consulting,subsidiary,name
+Stantec,stantec architecture,subsidiary,name
+Stantec,stantec canada,subsidiary,name
+Stantec,stantec consulting ltd parsons inc in joint venture,joint venture,name
+Tetra Tech,tetra tech canada,subsidiary,name
+Tetra Tech,tetra tech qi,subsidiary,name
+McElhanney,mcelhanney,subsidiary,name
+McElhanney,mcelhanney consulting services,subsidiary,name
