@@ -92,6 +92,12 @@ export async function billingLine(env: Env, userId: string, now = new Date()): P
 // pages can never print one figure two ways.
 const figure = decimal;
 
+// The yearly price's monthly equivalent, to the cent, from the configured
+// figure ("189.99" is "15.83"), so the yearly button names both.
+export function perMonth(yearly: string): string {
+  return (Math.round(Number(yearly) * 100 / 12) / 100).toFixed(2);
+}
+
 // What every billing form carries: the session's CSRF value, and the page's
 // language, which sets the language of Stripe's page too.
 const Hidden = ({ account, lang }: { account: Account; lang: Lang }) => (
@@ -149,7 +155,9 @@ export function billingView(
                     <Hidden account={account} lang={lang} />
                     <input type="hidden" name="interval" value={interval} />
                     <button type="submit" class={interval === "monthly" ? "btn btn-primary" : "btn"}>
-                      {t(lang, interval === "monthly" ? "billing.monthly" : "billing.yearly", { price: figure(lang, offer[interval]) })}
+                      {t(lang, interval === "monthly" ? "billing.monthly" : "billing.yearly", {
+                        price: figure(lang, offer[interval]), per_month: figure(lang, perMonth(offer.yearly)),
+                      })}
                     </button>
                   </form>
                 ))}

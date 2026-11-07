@@ -31,7 +31,7 @@ describe("/expiring", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("<h1>Contracts Ending Soon</h1>");
-    expect(html).toContain("falls within 12 months of the data date (2026-10-31)");
+    expect(html).toContain("<p class=\"lead\">8 federal contracts, worth $12.5M, end within 12 months of the data date (2026-10-31), each with the supplier that holds it.</p>");
     // One tile per window: the count, the value, a link to the window.
     expect(html).toContain('<a class="tile" href="/expiring/3m"><span class="tile-label">Within 3 months</span><span class="tile-value">3</span><span class="tile-note">Value $4.9M</span></a>');
     expect(html).toContain('<a class="tile" href="/expiring/6m"><span class="tile-label">Within 6 months</span><span class="tile-value">5</span>');
@@ -50,7 +50,7 @@ describe("/expiring", () => {
     // The CSV (the free 3-month file; the 12-month one is part of Pro once accounts open) and the feeds.
     expect(html).toContain('<a href="/downloads/expiring-3m.csv" class="btn">Download contracts ending within 3 months (CSV)</a>');
     expect(html).not.toContain("/downloads/expiring-12m.csv");
-    expect(html).toContain('<a href="/data/feeds/canada/expiring.xml" class="btn">Atom feed of contracts entering the 3-month window</a>');
+    expect(html).toContain('<a href="/data/feeds/canada/expiring.xml" class="btn">Atom feed of contracts now within 3 months of their end</a>');
     expect(html).toContain('<a href="/feeds#expiring">Feeds by buyer and by segment</a>');
     expect(head(html)).toContain('<link rel="alternate" type="application/atom+xml" title="Contracts ending within 3 months (Atom feed)" href="/data/feeds/canada/expiring.xml"/>');
     expect(head(html)).toContain('<link rel="canonical" href="https://awardwatch.ca/expiring"/>');

@@ -99,7 +99,7 @@ describe("result-list titles and descriptions", () => {
     }
     expect(expiringWindowSeo("/expiring/12m", "x", "en", [], { n: 1, months: "12", date: "2026-10-31", noindex: false }).title)
       .toBe("Federal Contracts Ending Within 12 Months | Award Watch");
-    expect(titles["/pro"]).toBe("Pro: Tender Alerts and Contracts Ending | Award Watch");
+    expect(titles["/pro"]).toBe("Pro: Federal Tender Alerts and Recompetes | Award Watch");
     const fr = nbsp(titleOf(headOf(await html("/tenders?lang=fr"))));
     expect(fr).toBe("Appels d’offres ouverts d’AchatsCanada | Award Watch");
     // The page's own heading stays as it was; only the result list changes.
@@ -189,9 +189,14 @@ describe("the Pro page", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("public, max-age=300");
     const page = decode(await res.text());
-    expect(page).toContain("<h1>Pro: What the Paid Plan Adds</h1>");
+    expect(page).toContain("<h1>Pro: Email Alerts on Tenders, Awards and Contracts Ending</h1>");
+    expect(page).toContain("Pro emails you new notices that match your saved searches, and each award, amendment or end date within 6 or 12 months");
     expect(page).toContain('<p class="pro-price">Pro is CA$21.50 a month or CA$215.00 a year, taxes added at checkout.</p>');
-    expect(page).toContain('<a href="/account/sign-in" class="btn btn-primary">Sign in or create an account</a>');
+    // The way in for a reader not signed in: Subscribe, through the sign-in page back to billing, the steps under it.
+    expect(page).toContain('<a href="/account/sign-in?next=/account/billing" class="btn btn-primary">Subscribe to Pro</a>');
+    expect(page).toContain("Enter your email, type the 6-digit code the site sends, then pay monthly or yearly on Stripe's page. There is no password.");
+    expect(page).toContain("<h3>What arrives by email, and when?</h3>");
+    expect(page).toContain("<h3>Can I cancel?</h3><p>Yes, at any time: Plan and Billing in your account opens Stripe's page, where you cancel.");
     // What Pro includes is the plan cards, straight under the section's head:
     // Free beside Pro, every line of the Pro card one of proIncludes, the
     // price on its price line, and no link to the page itself.
@@ -240,7 +245,7 @@ describe("the Pro page", () => {
 
   it("prints the figures with a decimal comma in French", async () => {
     const page = nbsp(decode(await html("/pro?lang=fr", payEnv())));
-    expect(page).toContain("<h1>Pro : ce qu’ajoute le forfait payant</h1>");
+    expect(page).toContain("<h1>Pro : alertes par courriel sur les appels d’offres, attributions et fins de contrat</h1>");
     expect(page).toContain("Pro coûte 21,50 $ CA par mois ou 215,00 $ CA par année, taxes ajoutées au paiement.");
     const [product, faq] = jsonLd(page);
     // The markup keeps the decimal point, as schema.org reads a price.
@@ -292,17 +297,17 @@ describe("links to the Pro page", () => {
   it("follow the sign-in button of a tease panel for a reader not signed in", async () => {
     const page = await html("/tenders/same-day");
     const panel = /<section class="panel pro-panel">[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
-    expect(panel).toContain('<a href="/account/sign-in" class="btn btn-primary">Sign in or create an account</a> <a href="/pro" class="btn">About Pro</a>');
+    expect(panel).toContain('<a href="/account/sign-in?next=/account/billing" class="btn btn-primary">Subscribe to Pro</a> <a href="/pro" class="btn">About Pro</a>');
   });
 });
 
 describe("the home page", () => {
-  it("leads with what a reader comes for, counting the organizations from stats.json", async () => {
+  it("leads with what a reader comes for, counting the contracts ending within 12 months from the expiring index", async () => {
     const page = decode(await html("/"));
-    expect(page).toContain("who won the contracts awarded after them, and the contracts ending within a year");
-    expect(page).toContain("for each of the 2 organizations the records name");
+    expect(page).toContain("<h1>Federal Tenders, Who Won, and Contracts Ending</h1>");
+    expect(page).toContain("Every tender open on CanadaBuys, who won each federal contract, and the 8 contracts ending within 12 months with the supplier that holds each one.");
     const fr = nbsp(decode(await html("/?lang=fr")));
-    expect(fr).toContain("pour chacune des 2 organisations que nomment les dossiers");
+    expect(fr).toContain("et les 8 contrats qui prennent fin d’ici 12 mois, avec le fournisseur qui détient chacun.");
   });
 
   it("says what a reader can do, each line led by its link, with the email line only while Pro exists", async () => {
@@ -310,7 +315,10 @@ describe("the home page", () => {
     const panel = /<section class="panel home-do">[\s\S]*?<\/section>/.exec(on)?.[0] ?? "";
     expect(panel).toContain("<h2>What You Can Do Here</h2>");
     for (const href of ["/tenders", "/awards", "/expiring"]) expect(panel).toContain(`<li><a href="${href}">`);
-    expect(panel).toContain('<li class="home-do-pro"><a href="/pro">Get it by email with Pro</a>: saved searches sent daily or weekly');
+    expect(panel).toContain('<li class="home-do-pro"><a href="/pro">Get it by email with Pro</a>: new notices matching your searches, and the awards, ' +
+      "amendments and end dates of what you follow, daily or weekly. Same-day notices show on the site every 2 hours.</li>");
+    // The head's first button leads to the Pro page while the switch is on, to the feeds while it is off.
+    expect(on).toContain('<a href="/pro" class="btn">Email alerts with Pro</a>');
     expect(panel).not.toContain("pro-tag");
     // The cards come first, then these lines, then the lists.
     expect(on.indexOf('class="tiles"')).toBeLessThan(on.indexOf("home-do"));
@@ -318,6 +326,8 @@ describe("the home page", () => {
     const off = decode(await html("/", offEnv()));
     expect(off).toContain("<h2>What You Can Do Here</h2>");
     expect(off).not.toContain("home-do-pro");
+    expect(off).toContain('<a href="/feeds" class="btn">Atom feeds</a>');
+    expect(off).not.toContain("Email alerts with Pro");
     const fr = nbsp(decode(await html("/?lang=fr")));
     expect(fr).toContain("<h2>Ce que vous pouvez faire ici</h2>");
     expect(fr).toContain('<a href="/pro">Tout recevoir par courriel avec Pro</a> :');

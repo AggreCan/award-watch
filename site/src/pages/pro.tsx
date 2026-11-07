@@ -23,7 +23,8 @@ import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { decimal, fmtInt, t, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
-import { PLAN_ROWS, PlanCards, PriceLine, ProTag, type PlanReader, type ProPrice, checkoutPrice, planCards, planLine } from "../pro";
+import { PLAN_ROWS, PlanCards, PriceLine, ProTag, SUBSCRIBE_PATH, type PlanReader, type ProPrice, checkoutPrice, planCards, planLine } from "../pro";
+import { MAX_YEARS } from "../records_db";
 import { type Faq, pageSeo, proJsonLd } from "../seo";
 
 export const PRO_PATH = "/pro";
@@ -42,29 +43,30 @@ export function proFaq(lang: Lang, price: ProPrice | null): Faq[] {
     ...(price
       ? [qa("propage.q_price", t(lang, "propage.a_price", { monthly: decimal(lang, price.monthly), yearly: decimal(lang, price.yearly) }))]
       : []),
-    qa("propage.q_free", t(lang, "propage.a_free")),
+    qa("propage.q_mail", t(lang, "propage.a_mail")),
     qa("propage.q_alerts", t(lang, "propage.a_alerts", { n: fmtInt(RULES.pro.saved_searches, lang) })),
     qa("propage.q_recompete", t(lang, "propage.a_recompete")),
     qa("propage.q_source", t(lang, "propage.a_source")),
-    qa("propage.q_cancel", t(lang, "billing.renewal")),
+    qa("propage.q_cancel", t(lang, "propage.a_cancel")),
     qa("propage.q_seller", t(lang, "propage.a_seller")),
   ];
 }
 
 type Reader = PlanReader;
 
-// The way in: sign in (an account is made the same way), the billing page for
-// a free account, the account for a Pro one.
+// The way in: Subscribe, through the sign-in page (an account is made the
+// same way) returning to the billing page; the billing page for a free
+// account; the account for a Pro one.
 const Action: FC<{ lang: Lang; reader: Reader }> = ({ lang, reader }) =>
   reader === "pro" ? <a href="/account" class="btn">{t(lang, "expiring.pro_account")}</a>
     : reader === "free" ? <a href="/account/billing" class="btn btn-primary">{t(lang, "propage.billing")}</a>
-    : <a href="/account/sign-in" class="btn btn-primary">{t(lang, "expiring.pro_sign_in")}</a>;
+    : <a href={SUBSCRIBE_PATH} class="btn btn-primary">{t(lang, "expiring.pro_sign_in")}</a>;
 
 const Offer: FC<{ lang: Lang; price: ProPrice | null; reader: Reader }> = ({ lang, price, reader }) => (
   <div class="pro-offer">
     {price ? <PriceLine lang={lang} price={price} /> : <p>{t(lang, "billing.unavailable")}</p>}
     {price || reader !== "out" ? <p class="pro-offer-actions"><Action lang={lang} reader={reader} /></p> : null}
-    {price && reader === "out" ? <p class="muted small">{t(lang, "propage.sign_in_note")}</p> : null}
+    {price && reader === "out" ? <p class="muted small">{t(lang, "propage.subscribe_steps")}</p> : null}
   </div>
 );
 
@@ -84,7 +86,7 @@ export async function proPage(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats?.data_as_of ?? null} seo={seo}>
-      <PageHead lang={lang} eyebrow={<ProTag lang={lang} />} title={title} lead={t(lang, "propage.lead")} />
+      <PageHead lang={lang} eyebrow={<ProTag lang={lang} />} title={title} lead={t(lang, "propage.lead", { years: fmtInt(MAX_YEARS, lang) })} />
       <div class="doc-layout doc-alone">
         <div class="doc">
           <h2 id="includes">{t(lang, "billing.panel_pro")}</h2>
@@ -92,8 +94,8 @@ export async function proPage(c: Context<AppEnv>): Promise<Response> {
           <p><SampleLine lang={lang} text="briefing.pro_sample" link="briefing.sample_link_text" /></p>
           <h2 id="who">{t(lang, "propage.who_title")}</h2>
           <ul>
-            <li>{t(lang, "propage.who_bid")}</li>
             <li>{t(lang, "propage.who_capture")}</li>
+            <li>{t(lang, "propage.who_bid")}</li>
             <li>{t(lang, "propage.who_research")}</li>
           </ul>
           <h2 id="free">{t(lang, "propage.free_title")}</h2>

@@ -263,7 +263,7 @@ describe("with the switch on and no session", () => {
       // The ten soonest, in end order, and none after them.
       expect(shownRefs(page), path).toEqual(WINDOWS[window].shown);
       expect(hasHidden(page), path).toEqual([]);
-      expect(page, path).toContain("The first 10 by end date.");
+      expect(page, path).toContain("The first 10 by end date, the same as the 3-month list.");
       // No filters, no pages: the tabs to the other windows stay.
       expect(page, path).not.toContain('<form method="get"');
       expect(page, path).not.toContain('id="radar-pager"');
@@ -272,16 +272,17 @@ describe("with the switch on and no session", () => {
       expect(page, path).toContain('<nav aria-label="Windows" class="tabs toolbar-row"><a href="/expiring/3m">Within 3 months</a>');
       // What Pro adds, as the plan cards: Free beside Pro, the price and where to sign in.
       const panel = proPanel(page);
-      expect(panel, path).toContain("<p>The full list, with its filters and pages, is part of Pro, the site&#39;s paid plan.</p>");
+      // In figures: all the window's contracts, and those beyond the free 3-month list (the 3 base rows) with their value.
+      expect(panel, path).toContain(`<p>Pro lists all ${WINDOWS[window].rows}, ${WINDOWS[window].rows - 3} of them ending 3 to ${window === "6m" ? 6 : 12} months out (${window === "6m" ? "$6.6M" : "$9.1M"}), with every filter and the 12-month CSV.</p>`);
       expect(panel, path).toContain('<p>The <a href="/expiring/3m">3-month list</a>, its feeds and every window&#39;s count and total stay free.</p>');
       const pro = proCard(panel);
       expect(pro, path).toContain("<span>Contracts ending: 6- and 12-month lists</span>");
       expect(pro, path).toContain("<span>Contracts ending: the 12-month CSV</span>");
       expect(pro, path).toContain("<span>Tender notices, same day, every 2 hours</span>");
       expect(pro, path).toContain("<span>25 saved searches, by email</span>");
-      expect(pro, path).toContain("<span>Bug report form</span>");
+      expect(pro, path).toContain("<span>A form to report a site problem</span>");
       expect(freeCard(panel), path).toContain("<span>Contracts ending: the 3-month list</span>");
-      expect(pro, path).toContain('<a href="/account/sign-in" class="btn btn-primary">Sign in or create an account</a>');
+      expect(pro, path).toContain('<a href="/account/sign-in?next=/account/billing" class="btn btn-primary">Subscribe to Pro</a>');
       // The chip in the head's tools, beside the title, and on the Pro card's head band.
       expect(panel, path).toContain('<h2>Part of Pro</h2><div class="panel-tools"><span class="pro-tag">');
       expect(panel.match(/class="pro-tag"/g), path).toHaveLength(2);
@@ -292,7 +293,8 @@ describe("with the switch on and no session", () => {
       const price = `<span class="plan-figure"><strong class="plan-amount">CA$${MONTHLY}</strong> a month or CA$${YEARLY} a year</span>`;
       expect(pro, path).toContain(price);
       expect(pro, path).toContain('<p class="plan-for">For people who bid, or follow who wins.</p>');
-      expect(pro, path).toContain('<p class="plan-note">Taxes added at checkout.');
+      expect(pro, path).toContain('<p class="plan-note">Enter your email, type the 6-digit code the site sends, then pay monthly or yearly on Stripe');
+      expect(pro, path).toContain("There is no password. Taxes added at checkout.");
       expect(pro.indexOf(price), path).toBeLessThan(pro.indexOf("btn-primary"));
       // Two figures for Pro and Free's CA$0, nothing else.
       expect(panel.match(/CA\$/g), path).toHaveLength(3);
@@ -308,21 +310,22 @@ describe("with the switch on and no session", () => {
       expect(headText(page)).toBe(headText(nbsp(await html(`/expiring/${window}?lang=fr`, off()))));
       expect(csvButton(page)).toBe('<a href="/downloads/expiring-3m.csv" class="btn">Télécharger les contrats prenant fin d’ici 3 mois (CSV)</a>');
       expect(shownRefs(page)).toEqual(WINDOWS[window].shown);
-      expect(page).toContain("Les 10 premiers par date de fin.");
+      expect(page).toContain("Les 10 premiers par date de fin, les mêmes que dans la liste de 3 mois.");
       const panel = proPanel(page);
       expect(panel).toContain("<h2>Offert avec le forfait Pro</h2>");
-      expect(panel).toContain("<p>La liste complète, avec ses filtres et ses pages, fait partie de Pro, le forfait payant du site.</p>");
+      expect(panel).toContain(`<p>Pro les énumère tous les ${WINDOWS[window].rows}, dont ${WINDOWS[window].rows - 3} prennent fin dans 3 à ${window === "6m" ? 6 : 12} mois (${window === "6m" ? "6,6 M$" : "9,1 M$"}), avec tous les filtres et le CSV de 12 mois.</p>`);
       expect(freeCard(panel)).toContain("<h3>Gratuit</h3>");
       const pro = proCard(panel);
       expect(pro).toContain("<span>25 recherches enregistrées, par courriel</span>");
       expect(pro).toContain("<span>Contrats prenant fin : CSV de 12 mois</span>");
       expect(panel).toContain('<a href="/expiring/3m">liste de 3 mois</a>');
-      expect(pro).toContain('<a href="/account/sign-in" class="btn btn-primary">Se connecter ou créer un compte</a>');
-      expect(pro).toContain("<span>Formulaire de signalement de bogue</span>");
+      expect(pro).toContain('<a href="/account/sign-in?next=/account/billing" class="btn btn-primary">S’abonner à Pro</a>');
+      expect(pro).toContain("<span>Formulaire pour signaler un problème</span>");
       // The figures with a decimal comma, as the billing page prints them.
       const fr = (s: string) => s.replace(".", ",");
       expect(pro).toContain(`<strong class="plan-amount">${fr(MONTHLY)} $ CA</strong> par mois ou ${fr(YEARLY)} $ CA par année</span>`);
-      expect(pro).toContain('<p class="plan-note">Taxes ajoutées au paiement.');
+      expect(pro).toContain('<p class="plan-note">Entrez votre adresse courriel, saisissez le code à 6 chiffres');
+      expect(pro).toContain("Il n’y a pas de mot de passe. Taxes ajoutées au paiement.");
       expect(panel).toContain('<span class="visually-hidden"> (forfait payant)</span>');
       expect(page).not.toContain("Part of Pro");
       expect(page).not.toContain(EM_DASH);
@@ -541,7 +544,7 @@ describe("the feeds", () => {
   it("cover the 3-month window, and stay open and listed for a free request", async () => {
     await sessions();
     const methodology = await html("/methodology", off());
-    expect(methodology).toContain("The feeds carry the contracts that entered the 3-month window since the previous run");
+    expect(methodology).toContain("The feeds carry the contracts that came within 3 months of their end since the previous run");
     for (const cookie of [undefined, freeCookie]) {
       const feed = await get("/data/feeds/canada/expiring.xml", { env: on(), cookie });
       expect(feed.status).toBe(200);
@@ -549,7 +552,7 @@ describe("the feeds", () => {
       expect(noRail(await html("/feeds", on(), cookie))).toBe(noRail(await html("/feeds", off())));
     }
     const overview = await html("/expiring", on());
-    expect(overview).toContain('<a href="/data/feeds/canada/expiring.xml" class="btn">Atom feed of contracts entering the 3-month window</a>');
+    expect(overview).toContain('<a href="/data/feeds/canada/expiring.xml" class="btn">Atom feed of contracts now within 3 months of their end</a>');
   });
 });
 

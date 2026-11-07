@@ -189,8 +189,8 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/alerts",
     name: { en: "Email Alerts for New Federal Tenders", fr: "Alertes courriel des appels d'offres fédéraux" },
     description: {
-      en: "Email lists of new federal tender notices by category, segment and province, and of contracts entering the 3-month window. Delivery is part of Pro.",
-      fr: "Listes par courriel des nouveaux appels d'offres fédéraux par catégorie, segment et province, et des contrats à 3 mois. L'envoi fait partie de Pro.",
+      en: "Email lists of new federal tender notices by category, segment and province, and of contracts now within 3 months of their end. Delivery is part of Pro.",
+      fr: "Listes par courriel des nouveaux appels d'offres fédéraux par catégorie, segment et province, et des contrats à 3 mois de leur fin. Envoi avec Pro.",
     },
   },
   methodology: {
@@ -227,10 +227,10 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
   },
   pro: {
     path: "/pro",
-    name: { en: "Pro: Tender Alerts and Contracts Ending", fr: "Pro : alertes et contrats prenant fin" },
+    name: { en: "Pro: Federal Tender Alerts and Recompetes", fr: "Pro : alertes et remises en concurrence" },
     description: {
-      en: "Pro adds same-day tender notices, the 6- and 12-month lists of contracts ending (the recompetes ahead), watchlists, email alerts, analytics and an API.",
-      fr: "Pro ajoute les avis du jour même, les listes de 6 et 12 mois des contrats prenant fin (les remises en concurrence), les suivis, les alertes et une API.",
+      en: "Email alerts on new federal tenders and on the suppliers, buyers and contracts you follow, plus 12 months of contracts ending: the recompetes ahead.",
+      fr: "Alertes par courriel sur les appels d'offres fédéraux et sur les fournisseurs, acheteurs et contrats suivis, et 12 mois de remises en concurrence.",
     },
   },
 };
@@ -654,10 +654,27 @@ export function organizationDescription(profile: Profile, lang: Lang): string {
   return room >= 20 ? clip(o.display_name, room) + body : clip(o.display_name + body, DESCRIPTION_MAX);
 }
 
+// The result-list title of a profile or a buyer page: the name and what the
+// page holds ("National Defence: Contracts and Tenders | Award Watch"), so
+// it meets a search for a department's or a supplier's contracts. A long
+// name drops the site's name, then the words, rather than pass TITLE_MAX.
+// The name is used exactly as recorded, never retouched by the French
+// typography.
+const RECORD_TITLE_WORDS: Record<"organization" | "buyer", Both> = {
+  organization: { en: "Contracts and Grants", fr: "contrats et subventions" },
+  buyer: { en: "Contracts and Tenders", fr: "contrats et appels d'offres" },
+};
+
+export function recordTitle(name: string, kind: "organization" | "buyer", lang: Lang): string {
+  const named = `${name}${lang === "fr" ? FR_COLON : ": "}${local(lang, RECORD_TITLE_WORDS[kind])}`;
+  return [pageTitle(named), named].find((s) => s.length <= TITLE_MAX) ?? pageTitle(name);
+}
+
 export function organizationSeo(profile: Profile, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
   const o = profile.organization;
   return {
     path: `/organizations/${o.id}`,
+    title: recordTitle(o.display_name, "organization", lang),
     description: organizationDescription(profile, lang),
     socialTitle: o.display_name,
     jsonLd: [breadcrumbJsonLd(crumbs)],
@@ -712,7 +729,7 @@ export function buyerSeo(b: Buyer, lang: Lang, crumbs: { name: string; path?: st
   const name = pick(lang, b.buyer.name_en, b.buyer.name_fr) ?? b.buyer.id;
   return {
     path: `/buyers/${b.buyer.id}`,
-    title: pageTitle(name),
+    title: recordTitle(name, "buyer", lang),
     socialTitle: name,
     description: clip(t(lang, "buyer.description", { name })),
     jsonLd: [breadcrumbJsonLd(crumbs)],

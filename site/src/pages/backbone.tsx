@@ -198,7 +198,10 @@ export const IncumbentsPanel: FC<{ lang: Lang; inc: Incumbents }> = ({ lang, inc
           </div>
           {inc.locked && inc.nOrgs > inc.rows.length ? (
             <ProNote lang={lang}>
-              {t(lang, "incumbents.pro", { n: INCUMBENTS_TEASE })}{" "}
+              {/* Pro's list keeps the largest INCUMBENTS_MAX, so it lists them all only up to that many. */}
+              {t(lang, inc.nOrgs > INCUMBENTS_MAX ? "incumbents.pro_capped" : "incumbents.pro", {
+                n: INCUMBENTS_TEASE, all: fmtInt(inc.nOrgs, lang), max: INCUMBENTS_MAX,
+              })}{" "}
               <a href={inc.signedIn ? "/account/billing" : "/account/sign-in"}>{t(lang, inc.signedIn ? "analytics.pro_billing" : "analytics.pro_sign_in")}</a>
             </ProNote>
           ) : null}

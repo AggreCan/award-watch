@@ -60,7 +60,7 @@ describe("a profile", () => {
       '<h2 id="responses">', '<h2 id="corrections">',
     ]))).toBe(true);
     // The alerts form follows the lists, with the quieter button.
-    expect(html).toContain('<button type="submit" class="btn">Notify me</button>');
+    expect(html).toContain('<button type="submit" class="btn">Save this list</button>');
     // The main buyers under their source's sub-head, and a phone keeps the table.
     expect(html).toContain('<tr class="group-row"><th colspan="3" scope="colgroup" class="group-head">Published contracts</th></tr>');
     expect(html).toMatch(/<h2 id="buyers">[^]*?<table class="cols compact"/);
@@ -94,7 +94,7 @@ describe("a buyer page", () => {
     ]))).toBe(true);
     // The span of its records, its feed buttons, and tiles that open the source's largest values.
     expect(html).toContain('<p class="page-note">Records from 2025 to 2026.</p>');
-    expect(html).toContain('href="/data/feeds/buyer/pwgsc-tpsgc/expiring.xml" class="btn">Atom feed of contracts entering the 3-month window</a>');
+    expect(html).toContain('href="/data/feeds/buyer/pwgsc-tpsgc/expiring.xml" class="btn">Atom feed of contracts now within 3 months of their end</a>');
     expect(html).toContain('<a class="tile" href="#top-awards"><span class="tile-label">Award notices</span>');
     expect(html).toContain('<div class="tile"><span class="tile-label">Published contracts</span>');
   });
@@ -108,10 +108,10 @@ describe("the lists", () => {
     ]) {
       const html = await text(path);
       expect(html.indexOf("<h2>Email Lists</h2>"), path).toBeGreaterThan(html.indexOf(list));
-      expect(html, path).toContain('<button type="submit" class="btn">Notify me</button>');
+      expect(html, path).toContain('<button type="submit" class="btn">Save this list</button>');
     }
     // On /alerts the chooser is the page's own action.
-    expect(await text("/alerts")).toContain('<button type="submit" class="btn btn-primary">Sign me up</button>');
+    expect(await text("/alerts")).toContain('<button type="submit" class="btn btn-primary">Save these lists</button>');
   });
 
   it("move the radar's rule to the list's foot, and only under rows", async () => {

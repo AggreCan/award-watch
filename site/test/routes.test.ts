@@ -25,7 +25,7 @@ const EM_DASH = String.fromCharCode(0x2014);
 
 // [path, English phrase, French phrase, file whose absence makes it 503]
 const PAGES: [string, string, string, string][] = [
-  ["/", "Federal Tenders, Contracts and Grants, by Organization", "Appels d’offres, contrats et subventions du fédéral, par organisation", "stats.json"],
+  ["/", "Federal Tenders, Who Won, and Contracts Ending", "Appels d’offres fédéraux, attributions et contrats prenant fin", "stats.json"],
   ["/tenders", "<h1>Open Tender Notices</h1>", "<h1>Avis d’appel d’offres ouverts</h1>", "tenders/open-first.json"],
   ["/tenders/new", "<h1>New Tender Notices</h1>", "<h1>Nouveaux avis d’appel d’offres</h1>", "stats.json"],
   ["/tenders/cb-100-10000001", "<h1>Translation services for regional offices</h1>", "<h1>Services de traduction pour les bureaux régionaux</h1>", "stats.json"],

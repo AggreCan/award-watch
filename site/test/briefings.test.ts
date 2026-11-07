@@ -366,7 +366,7 @@ New to the list this week: 2.
 - Ground survey
   Harbour Survey Inc. · National Defence · ends 2027-01-10 · Not stated · 1 amendment
   https://awardwatch.ca/history/w8486-1234
-On the 6-month radar: https://awardwatch.ca/expiring/6m?segment=81
+In the 6-month list of contracts ending: https://awardwatch.ca/expiring/6m?segment=81
 
 Notable amendments this week: 2
 - Hydrotechnical assessment, Big Qualicum River
@@ -432,7 +432,7 @@ Nouveaux dans la liste cette semaine : 2.
 - Levé au sol
   Harbour Survey Inc. · Défense nationale · prend fin le 2027-01-10 · Non indiqué · 1 modification
   https://awardwatch.ca/history/w8486-1234?lang=fr
-Dans le radar sur 6 mois : https://awardwatch.ca/expiring/6m?segment=81&lang=fr
+Dans la liste de 6 mois des contrats prenant fin : https://awardwatch.ca/expiring/6m?segment=81&lang=fr
 
 Modifications notables cette semaine : 2
 - Évaluation hydrotechnique, rivière Big Qualicum
@@ -473,7 +473,7 @@ describe("the message", () => {
     expect(read.state).toBe("ready");
     if (read.state !== "ready") return;
     const en = briefingDigest({ lang: "en", to: "a@example.com", site: SITE, stopUrl: `${SITE}/account/stop?b=B&t=T`, briefing: segment81, name: "81 Engineering", data: read.data });
-    expect(en.subject).toBe("Weekly briefing, 81 Engineering: 2 new notices, 2 awards, 3 contracts ending next quarter");
+    expect(en.subject).toBe("81 Engineering this week: 2 new notices, 2 awards, 3 contracts ending next quarter");
     expect(en.text).toBe(EXPECTED_EN);
     expect(en.html).toContain(">Awards this week: 2. Next quarter, Q4 2026-27: 3 contracts ending, $1.1M; new to the list: 2.</div>");
     expect(en.headers).toEqual({
@@ -482,7 +482,7 @@ describe("the message", () => {
     const fr = briefingDigest({
       lang: "fr", to: "a@example.com", site: SITE, stopUrl: `${SITE}/account/stop?b=B&t=T&lang=fr`, briefing: segment81, name: "81 Ingénierie", data: read.data,
     });
-    expect(nbsp(fr.subject)).toBe("Bulletin hebdomadaire, 81 Ingénierie : 2 nouveaux avis, 2 attributions, 3 contrats prenant fin le trimestre prochain");
+    expect(nbsp(fr.subject)).toBe("81 Ingénierie cette semaine : 2 nouveaux avis, 2 attributions, 3 contrats prenant fin le trimestre prochain");
     expect(nbsp(fr.text)).toBe(EXPECTED_FR);
     for (const m of [en, fr]) for (const part of [m.subject, m.text, m.html]) expect(part).not.toContain(EM_DASH);
     // The marks and the totals are in the HTML part too, each value escaped.
@@ -579,7 +579,7 @@ describe("the message", () => {
     expect(read.data.ending).toMatchObject({ n: 1, cents: 100_000_000, nv: 0, fresh: 1 });
     const m = briefingDigest({ lang: "en", to: "a@example.com", site: SITE, stopUrl: `${SITE}/s`, briefing: narrowed, name: "Fisheries and Oceans Canada · 81 Engineering", data: read.data });
     expect(m.text.split("Published contracts and grants carry no segment, so a briefing narrowed to one leaves them out.").length).toBe(2);
-    expect(m.text).toContain("On the 6-month radar: https://awardwatch.ca/expiring/6m?buyer=dfo-mpo&segment=81");
+    expect(m.text).toContain("In the 6-month list of contracts ending: https://awardwatch.ca/expiring/6m?buyer=dfo-mpo&segment=81");
     // Its instruments: the buyer's as end user, in the segment; the end user is the buyer, so the line leaves it out.
     expect(read.data.instruments.rows.map((r) => r.agr)).toEqual(["E60ZT-120002/001/ZT", "F5211-200001/002/VAN"]);
     expect(m.text).toContain("Standing offers and supply arrangements ending within 6 months: 2\n" +
@@ -616,7 +616,7 @@ describe("the run", () => {
     expect(mail.to(email)).toHaveLength(1);
     const [m] = mail.to(email);
     const row = await stateOf(id);
-    expect(m.subject).toBe("Weekly briefing, 81 Engineering: 2 new notices, 2 awards, 3 contracts ending next quarter");
+    expect(m.subject).toBe("81 Engineering this week: 2 new notices, 2 awards, 3 contracts ending next quarter");
     expect(m.headers?.["List-Unsubscribe"]).toBe(`<mailto:contact@awardwatch.ca>, <${SITE}/account/stop?b=${id}&t=${row!.secret}>`);
     expect(m.text).toContain(`Stop this briefing: ${SITE}/account/stop?b=${id}&t=${row!.secret}`);
     expect(row!.last_delivered_at?.slice(0, 10)).toBe(D);
@@ -644,7 +644,7 @@ describe("the run", () => {
     const report = await runAt(mail.binding);
     expect(report.report).toMatchObject({ sent: 1, empty: 1 });
     const [m] = mail.to(email);
-    expect(m.subject).toBe("Weekly briefing, 72 Construction: 1 contract ending next quarter");
+    expect(m.subject).toBe("72 Construction this week: 1 contract ending next quarter");
     for (const line of ["New notices this week: none", "Awards this week: none", "Notable amendments this week: none",
       "Standing offers and supply arrangements ending within 6 months: none",
       "Contracts ending next quarter, Q4 2026-27 (January to March 2027): 1, $200,000", "- Roof repair\n  Roofing Ltd. · Public Services and Procurement Canada · ends 2027-02-01 · $200,000"]) {
@@ -738,7 +738,7 @@ describe("subscribing", () => {
     const row = await ACCOUNTS.prepare("SELECT kind, subject, segment, label, deliver FROM briefings WHERE user_id = ?").bind(user).first();
     expect(row).toEqual({ kind: "segment", subject: "82", segment: "", label: "82 Editorial and design", deliver: "off" });
     const after = await (await get("/segments/82", { cookie })).text();
-    expect(after).toContain(">Subscribed</a>");
+    expect(after).toContain(">Briefing saved</a>");
     // The searches page lists it with the gate note; turning it on is Pro's.
     const searches = await (await get("/account/searches", { cookie })).text();
     expect(searches).toContain('id="briefings"');
@@ -763,7 +763,7 @@ describe("subscribing", () => {
 
   it("sends a reader not signed in to sign in and back", async () => {
     const html = await (await get("/segments/82")).text();
-    expect(html).toContain('<a href="/account/sign-in?next=%2Fsegments%2F82" class="btn">Subscribe</a>');
+    expect(html).toContain('<a href="/account/sign-in?next=%2Fsegments%2F82" class="btn">Save this briefing</a>');
   });
 
   it("stops a briefing from its link, on a POST or a one-click post, and keeps it on the searches page", async () => {
@@ -815,7 +815,7 @@ describe("the public sample", () => {
   });
 
   it("is linked from the Pro page and the email lists page", async () => {
-    expect(await (await get("/pro")).text()).toContain('<a href="/pro/briefing-sample">A sample of the weekly briefing</a>');
+    expect(await (await get("/pro")).text()).toContain('<a href="/pro/briefing-sample">a sample of the weekly briefing</a>');
     expect(await (await get("/alerts")).text()).toContain('<a href="/pro/briefing-sample">this week&#39;s sample</a>');
   });
 });

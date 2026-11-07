@@ -20,6 +20,7 @@ import { allKeys, rawEntry, SAME_IN_BOTH, t, type Key } from "../src/i18n";
 import { app } from "../src/index";
 import { STYLES_VERSION } from "../src/layout";
 import { RULES } from "../src/account/entitlements";
+import { COMPETITORS_MAX } from "../src/account/org_claim";
 import { KEY_PER_DAY } from "../src/api_keyed_spec";
 import { EXPIRING_WINDOWS } from "../src/data";
 import { PLAN_CARD_ROWS, PLAN_LINE_MAX, PLAN_ROWS, PRO_GLYPH_PATH, PRO_INCLUDES, planLine, proPrice } from "../src/pro";
@@ -319,10 +320,12 @@ describe("the radar's tabs and tiles", () => {
     expect(await at({}, "en", on)).toBe(none);
     expect(await at({}, "fr", on)).toBe('<span class="muted">Pas encore en vente</span>');
     expect(proPrice({ ...testEnv(radar()), PRICE_MONTHLY_CAD: "" } as never)).toBeNull();
-    // The taxes are named with the price, in the note under the buttons, and only with it.
+    // The taxes are named with the price, in the note under the buttons, and only with it; a reader
+    // not signed in reads the steps from the Subscribe button to Stripe's page first.
     const withPrice = cardsOf(teaseOf(await html("/expiring/6m", { env: paid() })))[1];
     expect(withPrice).toContain('<p class="plan-for">For people who bid, or follow who wins.</p>');
-    expect(withPrice).toContain('<p class="plan-note">Taxes added at checkout. Monthly or yearly, cancel any time. Sold through Link on behalf of Allwater Software Inc.</p>');
+    expect(withPrice).toContain('<p class="plan-note">Enter your email, type the 6-digit code the site sends, then pay monthly or yearly on Stripe&#39;s page. There is no password. ' +
+      'Taxes added at checkout. Monthly or yearly, cancel any time. Sold through Link on behalf of Allwater Software Inc.</p>');
     const withoutPrice = cardsOf(teaseOf(await html("/expiring/6m", { env: on() })))[1];
     expect(withoutPrice).toContain('<p class="plan-for">For people who bid, or follow who wins.</p>');
     expect(withoutPrice).not.toContain("plan-note");
@@ -407,9 +410,9 @@ describe("the plan cards", () => {
     expect(free).toContain(`<span>${RULES.free.saved_searches} saved searches, on the site</span>`);
     expect(pro).toContain(`<span>${RULES.pro.saved_searches} saved searches, by email</span>`);
     expect(free).toContain(`<span>${RULES.free.watchlists} watches, on the site</span>`);
-    expect(pro).toContain(`<span>${RULES.pro.watchlists} watches, events by email</span>`);
+    expect(pro).toContain(`<span>${RULES.pro.watchlists} watches, each change by email</span>`);
     // Analytics: the fiscal years Free sees against every view.
-    expect(free).toContain(`<span>Analytics: first block, ${FREE_YEARS} fiscal years</span>`);
+    expect(free).toContain(`<span>Analytics: first chart, ${FREE_YEARS} fiscal years</span>`);
     expect(pro).toContain(`<span>Analytics: every view, ${MAX_YEARS} fiscal years</span>`);
     // The keyed API's daily limit, from api_keyed_spec, against the open API.
     expect(free).toContain("<span>Open JSON API</span>");
@@ -426,10 +429,12 @@ describe("the plan cards", () => {
     const [freeFr, proFr] = await at("fr");
     expect(freeFr).toContain(`<span>${RULES.free.saved_searches} recherches enregistrées, sur le site</span>`);
     expect(proFr).toContain(`<span>${RULES.pro.saved_searches} recherches enregistrées, par courriel</span>`);
-    expect(proFr).toContain(`<span>API à clé : ${KEY_PER_DAY.toLocaleString("fr-CA").replace(/\s/g, " ")} requêtes par jour</span>`);
+    expect(proFr).toContain(`<span>API avec clé : ${KEY_PER_DAY.toLocaleString("fr-CA").replace(/\s/g, " ")} requêtes par jour</span>`);
+    // Your organization's page beside the competitors it compares, as many as org_claim allows.
+    expect(pro).toContain(`<span>Your organization beside ${COMPETITORS_MAX} others</span>`);
     // Every figure on a card is one of the plans' or the constants', or a window's months.
     const figures = new Set([RULES.free.saved_searches, RULES.pro.saved_searches, RULES.free.watchlists, RULES.pro.watchlists, FREE_YEARS, MAX_YEARS,
-      KEY_PER_DAY, hours, 3, 6, 12].map(String));
+      KEY_PER_DAY, hours, COMPETITORS_MAX, 3, 6, 12].map(String));
     for (const card of [free, pro, freeFr, proFr]) {
       for (const { text } of rowsOf(card)) {
         for (const n of text.match(/[0-9][0-9 ,]*[0-9]|[0-9]/g) ?? []) expect(figures, `${n} in "${text}"`).toContain(n.replace(/[ ,]/g, ""));
@@ -622,14 +627,16 @@ describe("same-day notices", () => {
       expect(free).toContain("<span>Tender notices, nightly</span>");
       expect(pro).toContain("<span>Tender notices, same day, every 2 hours</span>");
       expect(pro).toContain(`<strong class="plan-amount">CA$${PRICE[1]}</strong> a month or CA$${PRICE[2]} a year`);
-      expect(pro).toContain('<p class="plan-note">Taxes added at checkout. Monthly or yearly, cancel any time. Sold through Link on behalf of Allwater Software Inc.</p>');
+      // Signed out, the steps from the Subscribe button to Stripe's page come first.
+      const steps = cookie ? "" : "Enter your email, type the 6-digit code the site sends, then pay monthly or yearly on Stripe's page. There is no password. ";
+      expect(pro).toContain(`<p class="plan-note">${steps}Taxes added at checkout. Monthly or yearly, cancel any time. Sold through Link on behalf of Allwater Software Inc.</p>`);
       // Signed out: an account on Free's card, sign-in and the Pro page
       // (pages/pro.tsx) on Pro's. A Free session: its account, the billing page.
       expect(free.match(/class="btn/g), who).toHaveLength(1);
       expect(pro.match(/class="btn/g), who).toHaveLength(2);
       expect(free).toContain(cookie ? '<a href="/account" class="btn">Your account</a>' : '<a href="/account/sign-in" class="btn">Create a free account</a>');
       expect(pro).toContain(cookie ? '<a href="/account/billing" class="btn btn-primary">Plan and billing</a> <a href="/pro" class="btn">About Pro</a>'
-        : '<a href="/account/sign-in" class="btn btn-primary">Sign in or create an account</a> <a href="/pro" class="btn">About Pro</a>');
+        : '<a href="/account/sign-in?next=/account/billing" class="btn btn-primary">Subscribe to Pro</a> <a href="/pro" class="btn">About Pro</a>');
       expect(free.includes('<span class="plan-current">Your plan</span>'), who).toBe(!!cookie);
       expect(page).not.toContain("intraday");
     }

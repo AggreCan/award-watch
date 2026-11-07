@@ -54,14 +54,14 @@ describe("the alerts block on each page", () => {
   // [path, kind, params, English label, French label]
   const CASES: [string, string, string, string, string][] = [
     ["/expiring", "expiring", "/expiring/3m",
-      "Contracts entering the 3-month window for every buyer and segment",
-      "Contrats qui entrent dans la période de 3 mois pour tous les acheteurs et segments"],
+      "Contracts now within 3 months of their end for every buyer and segment",
+      "Contrats désormais à moins de 3 mois de leur fin pour tous les acheteurs et segments"],
     ["/expiring/3m?value=1m-10m&buyer=dnd-mdn&color=red", "expiring", "/expiring/3m?buyer=dnd-mdn&value=1m-10m",
-      "Contracts entering the 3-month window for National Defence (Value: $1 million to under $10 million)",
-      "Contrats qui entrent dans la période de 3 mois pour Défense nationale (Valeur : De 1 à moins de 10 millions de dollars)"],
+      "Contracts now within 3 months of their end for National Defence (Value: $1 million to under $10 million)",
+      "Contrats désormais à moins de 3 mois de leur fin pour Défense nationale (Valeur : De 1 à moins de 10 millions de dollars)"],
     ["/expiring/3m?segment=43&competitive=no", "expiring", "/expiring/3m?competitive=no&segment=43",
-      "Contracts entering the 3-month window in segment 43 Information Technology Broadcasting and Telecommunications (Competition: Non-competitive)",
-      "Contrats qui entrent dans la période de 3 mois dans le segment 43 Technologies de l’information, radiodiffusion et télécommunications (Mise en concurrence : Non concurrentiel)"],
+      "Contracts now within 3 months of their end in segment 43 Information Technology Broadcasting and Telecommunications (Competition: Non-competitive)",
+      "Contrats désormais à moins de 3 mois de leur fin dans le segment 43 Technologies de l’information, radiodiffusion et télécommunications (Mise en concurrence : Non concurrentiel)"],
     ["/tenders", "tenders", "/tenders", "Every new tender notice", "Chaque nouvel avis d’appel d’offres"],
     ["/tenders?sort=published&segment=82&closing=7&page=3", "tenders", "/tenders?segment=82",
       "New tender notices matching UNSPSC segment: 82 Editorial and Design and Graphic and Fine Art Services",
@@ -113,7 +113,7 @@ describe("the alerts block on each page", () => {
     expect(block.match(/<button/g)).toHaveLength(1);
     expect(block.match(/<input name="email"/g)).toHaveLength(1);
     expect(block).toContain(
-      'Email lists are part of Pro. Sign in with this address and the list is waiting in your account as a saved search; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+      'This form sends nothing. Sign in with this address and the list waits in your account as a saved search; with Pro it arrives by email. The <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
     );
     expect(block).toContain('<a href="/alerts">How email lists work</a>');
     // The script only keeps the reader on the page; the form posts without it.
@@ -136,7 +136,7 @@ describe("POST /interest", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     const html = await res.text();
     // The line repeats the address as stored and the filter, so a mistyped address shows.
-    expect(html).toContain('<p class="interest-done" role="status">Noted: reader.one@example.ca, for contracts entering the 3-month window for National Defence.</p>');
+    expect(html).toContain('<p class="interest-done" role="status">Noted: reader.one@example.ca, for contracts now within 3 months of their end for National Defence.</p>');
     expect(html).toContain('<a href="/expiring/3m?buyer=dnd-mdn" class="btn">Back to the page</a>');
     expect(html).not.toContain('name="email"');
     const [row] = await rows("reader.one@example.ca");
@@ -145,7 +145,7 @@ describe("POST /interest", () => {
     );
     expect(row.kind).toBe("expiring");
     expect(row.params).toBe("/expiring/3m?buyer=dnd-mdn");
-    expect(row.label).toBe("Contracts entering the 3-month window for National Defence");
+    expect(row.label).toBe("Contracts now within 3 months of their end for National Defence");
     expect(row.lang).toBe("en");
     expect(row.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     expect(row.token).toMatch(/^[0-9a-f]{32}$/);
@@ -211,10 +211,10 @@ describe("POST /interest", () => {
     expect(year.status).toBe(200);
     const stored = await rows("allowlist@example.ca");
     expect(stored[1].params).toBe("/expiring/3m?kind=award");
-    expect(stored[1].label).toBe("Contracts entering the 3-month window for every buyer and segment (Source: Award notices)");
+    expect(stored[1].label).toBe("Contracts now within 3 months of their end for every buyer and segment (Source: Award notices)");
     expect(stored[2].params).toBe("/expiring/12m?buyer=dnd-mdn&segment=82");
     expect(stored[2].label).toBe(
-      "Contracts entering the 12-month window for National Defence in segment 82 Editorial and Design and Graphic and Fine Art Services",
+      "Contracts now within 12 months of their end for National Defence in segment 82 Editorial and Design and Graphic and Fine Art Services",
     );
   });
 
@@ -259,7 +259,7 @@ describe("POST /interest", () => {
     expect(html).toContain(
       '<p class="interest-done" role="status">Noted: fragment@example.ca, for new tender notices and award notices in segment 82 Editorial and Design and Graphic and Fine Art Services.</p>',
     );
-    expect(html).toContain("Email lists are part of Pro. Sign in with this address and the list is waiting in your account as a saved search;");
+    expect(html).toContain("This form sends nothing. Sign in with this address and the list waits in your account as a saved search; with Pro it arrives by email.");
     const bad = await post({ email: "nope", kind: "segment", params: "/segments/82", lang: "en" }, { "x-interest-fragment": "1" });
     expect(bad.status).toBe(400);
     const again = await bad.text();
@@ -309,14 +309,14 @@ describe("the alerts page and the privacy page", () => {
     expect(html).toContain('<div class="doc-layout doc-alone"><div class="doc"><h2 id="register">Choose Your Lists</h2>');
     expect(html).toContain('<h2 id="cover">What Pro Delivers</h2>');
     expect(html).toContain("On the Pro plan, each list is a saved search on your account, sent by email each day or each week with what is new in it.");
-    expect(html).toContain("Contracts entering the 3-, 6- or 12-month window of contracts ending soon, for one buyer, one segment or every contract.");
+    expect(html).toContain("Contracts now within 3, 6 or 12 months of their end, for one buyer, one segment or every contract.");
     expect(html).toContain("New records naming an organization you watch: an award notice, a contract or a grant.");
     // decode(): the apostrophe in "account's" is an entity in the page.
     expect(decode(html)).toContain("The form keeps the address and each list chosen, and sends nothing itself. Sign in with the same address, now or later, " +
       "and the lists are there, ready to add to the account's saved searches; delivery by email comes with Pro.");
     // The chooser's note names the lists, several of them.
     expect(html).toContain(
-      'Email lists are part of Pro. Sign in with this address and the lists are waiting in your account as saved searches; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+      'This form sends nothing. Sign in with this address and the lists wait in your account as saved searches; with Pro they arrive by email. The <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
     );
     for (const href of ["/tenders", "/expiring", "/organizations", "/buyers", "/segments", "/privacy#interest"]) {
       expect(html, href).toContain(`<a href="${href}">`);
@@ -424,11 +424,11 @@ describe("the email lists as part of Pro", () => {
     // Every page's block says it in one sentence, the same in each place.
     for (const path of BLOCK_PAGES) {
       expect(block(await text(path)), path).toContain(
-        'Email lists are part of Pro. Sign in with this address and the list is waiting in your account as a saved search; the <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
+        'This form sends nothing. Sign in with this address and the list waits in your account as a saved search; with Pro it arrives by email. The <a href="/privacy#interest">Privacy</a> page says what the form keeps.',
       );
       expect(nbsp(block(await text(fr(path)))), path).toContain(
-        "Les listes de diffusion font partie de Pro. Connectez-vous avec cette adresse et la liste vous attend dans votre compte comme recherche enregistrée; " +
-        'la page <a href="/privacy#interest">Confidentialité</a> indique ce que conserve le formulaire.',
+        "Ce formulaire n’envoie rien. Connectez-vous avec cette adresse et la liste vous attend dans votre compte comme recherche enregistrée; avec Pro, elle arrive par courriel. " +
+        'La page <a href="/privacy#interest">Confidentialité</a> indique ce que conserve le formulaire.',
       );
     }
   });
@@ -452,7 +452,7 @@ describe("the Email lists page's chooser", () => {
     // Each list is named as its row will be; no list for every new award notice, which no kind covers.
     expect(form).toContain('value="tenders"/><span>Every new tender notice</span>');
     expect(form).toContain('value="matching"/><span>New tender notices matching filters</span>');
-    expect(form).toContain('value="expiring"/><span>Contracts entering the 3-month window for every buyer and segment</span>');
+    expect(form).toContain('value="expiring"/><span>Contracts now within 3 months of their end for every buyer and segment</span>');
     expect(form).not.toMatch(/value="awards?"/);
     expect(form).toContain("<span>Goods</span>");
     expect(form).toContain("<span>Include Canada-wide or not stated</span>");
@@ -468,7 +468,7 @@ describe("the Email lists page's chooser", () => {
     expect(form).toContain('<div class="hp"><label>Leave this field empty<input name="website" type="text" tabindex="-1" autocomplete="off"/></label></div>');
     expect(form).toContain('<div class="interest-form"><label class="field interest-field"><span class="field-label">Email address</span><input name="email" type="email" required="" maxlength="254" autocomplete="email"');
     expect(form.match(/<button/g)).toHaveLength(1);
-    expect(form).toContain('<button type="submit" class="btn btn-primary">Sign me up</button>');
+    expect(form).toContain('<button type="submit" class="btn btn-primary">Save these lists</button>');
     expect(html).toContain('<script src="/interest.js" defer=""></script>');
 
     const french = nbsp(await text("/alerts?lang=fr"));
@@ -477,14 +477,14 @@ describe("the Email lists page's chooser", () => {
     expect(formFr).toContain('<input type="hidden" name="lang" value="fr"/>');
     expect(formFr).toContain("<span>Chaque nouvel avis d’appel d’offres</span>");
     expect(formFr).toContain("<span>Nouveaux avis d’appel d’offres correspondant à des filtres</span>");
-    expect(formFr).toContain("<span>Contrats qui entrent dans la période de 3 mois pour tous les acheteurs et segments</span>");
+    expect(formFr).toContain("<span>Contrats désormais à moins de 3 mois de leur fin pour tous les acheteurs et segments</span>");
     expect(formFr).toContain('<legend class="field-label">Catégorie</legend>');
     expect(formFr).toContain("<span>Biens</span>");
     expect(formFr).toContain('<span class="field-label">Segment UNSPSC</span>');
     expect(formFr).toContain('<span class="field-label">Province de livraison</span>');
     expect(options(formFr, "province")).toEqual(["BC: Colombie-Britannique (1)", "ON: Ontario (1)", "QC: Québec (1)"]);
     expect(formFr).toContain("Maintenez la touche Ctrl (Cmd sur un Mac) pour choisir plusieurs segments ou provinces.");
-    expect(formFr).toContain('<button type="submit" class="btn btn-primary">Inscrivez-moi</button>');
+    expect(formFr).toContain('<button type="submit" class="btn btn-primary">Enregistrer ces listes</button>');
   });
 
   it("saves one row per list ticked, with the kinds, filters and labels the pages' own blocks save", async () => {
@@ -502,7 +502,7 @@ describe("the Email lists page's chooser", () => {
       '<div class="interest-done" role="status"><p>Saved for three.lists@example.ca:</p><ul class="lists-saved">' +
       "<li>Every new tender notice</li>" +
       "<li>New tender notices matching Category: Goods; UNSPSC segment: 82 Editorial and Design and Graphic and Fine Art Services; Province of delivery: Quebec</li>" +
-      "<li>Contracts entering the 3-month window for every buyer and segment</li></ul></div>",
+      "<li>Contracts now within 3 months of their end for every buyer and segment</li></ul></div>",
     );
     expect(html).not.toContain('name="email"');
     const stored = await rows("three.lists@example.ca");

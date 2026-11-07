@@ -189,7 +189,7 @@ describe("a published contract's page", () => {
     const { html } = await page(contractPath("dnd-mdn", FIRST));
     expect(html).toContain("2026-12-15");
     expect(html).not.toContain('href="/expiring/3m" class="small"');
-    expect(html).toContain("The radar reads a contract's end from its newest version");
+    expect(html).toContain("The list of contracts ending reads a contract's end from its newest version");
     expect(html).toContain("<p>Two-year term.</p><p>Option years not exercised.</p>");
     expect(html).toContain(`href="${contractPath("dnd-mdn", SECOND)}">${SECOND}</a> <span class="tag">Newest</span>`);
   });
@@ -534,13 +534,13 @@ describe("the earlier awards, the incumbents and the organization feeds", () => 
     const free = await signIn(newEmail("free-incumbents"));
     const tease = decode(nbsp(await (await get("/segments/82", { cookie: free, env: onEnv() })).text())).split("Who Holds the Contracts")[1] ?? "";
     expect([...tease.matchAll(/href="\/organizations\/(org-c\d+)"/g)]).toHaveLength(3);
-    expect(tease).toContain("The first 3 are shown. The whole list is part of Pro.");
+    expect(tease).toContain("The first 3 of 4 holders are shown. Pro lists all 4.");
     const email = newEmail("pro-incumbents");
     const pro = await signIn(email);
     await grantPro(email);
     const full = decode(nbsp(await (await get("/segments/82", { cookie: pro, env: onEnv() })).text())).split("Who Holds the Contracts")[1] ?? "";
     expect([...full.matchAll(/href="\/organizations\/(org-c\d+)"/g)]).toHaveLength(4);
-    expect(full).not.toContain("part of Pro");
+    expect(full).not.toContain("Pro lists all");
   });
 
   it("serve an organization's newest records as Atom, cached an hour, in the feed bucket", async () => {

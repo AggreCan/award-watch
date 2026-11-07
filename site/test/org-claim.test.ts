@@ -860,7 +860,7 @@ describe("the weekly block of the watch mail", () => {
     // Beside watch events the block comes first and the watches' own subject stays.
     const group = { kind: "organization" as const, label: NAME2, path: `/organizations/${A2}`, events: [] };
     const both = watchDigest({ ...base("en", weekOpening("en", SITE, A1, NAME1, week.facts), [group]), total: 1 });
-    expect(both.subject).toBe(`1 watchlist event: ${NAME2}`);
+    expect(both.subject).toBe(`1 update on what you follow: ${NAME2}`);
     expect(both.text.indexOf(`Your organization: ${NAME1}`)).toBeLessThan(both.text.indexOf("Your Watches"));
     // Without a block the message is what it was.
     const plain = { ...base("en", undefined, [group]), total: 1 };

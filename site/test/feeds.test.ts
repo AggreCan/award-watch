@@ -92,14 +92,14 @@ describe("watchlist page", () => {
 describe("watch button on the profile", () => {
   it("carries its labels and stays hidden until the script shows it", async () => {
     const page = await html("/organizations/org-a000000001");
-    // "Add to watchlist", titled with where the list is kept, so it reads apart from the email alerts.
+    // "Save in this browser", titled with where the list is kept, so it reads apart from the email alerts.
     expect(page).toContain('id="watch-toggle" style="display:none" title="Kept in this browser" data-organization="org-a000000001"');
-    expect(page).toContain('data-label-on="On your watchlist" data-label-off="Add to watchlist"');
+    expect(page).toContain('data-label-on="Saved in this browser" data-label-off="Save in this browser"');
     expect(page).toContain(`data-label-full="Watchlist full (${WATCH_MAX})"`);
     expect(page).toContain('<script src="/watchlist.js" defer=""></script>');
-    expect(page).toContain("For a list in this browser without email, use Add to watchlist.");
+    expect(page).toContain("For a list in this browser without email, use Save in this browser.");
     const fr = await html("/organizations/org-a000000001?lang=fr");
-    expect(fr).toContain('data-label-on="Dans votre liste de suivi" data-label-off="Ajouter à la liste de suivi"');
+    expect(fr).toContain('data-label-on="Enregistrée dans ce navigateur" data-label-off="Enregistrer dans ce navigateur"');
   });
 });
 

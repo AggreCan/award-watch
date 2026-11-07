@@ -83,10 +83,10 @@ describe("the bug report page", () => {
     expect(html).not.toContain('name="text"');
     // The billing page's plan cards list the form on Pro's card, and as lacking on Free's.
     const billing = decode(await (await get("/account/billing", { cookie })).text());
-    expect(billing).toContain("<li><svg class=\"plan-mark\" viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" aria-hidden=\"true\"><path d=\"M6.5 11.3 3.2 8l1.1-1.1 2.2 2.2 5.2-5.2 1.1 1.1z\"></path></svg><span>Bug report form</span></li>");
-    expect(billing).toContain('<span class="visually-hidden">Not in this plan: </span>Bug report form</span>');
+    expect(billing).toContain("<li><svg class=\"plan-mark\" viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" aria-hidden=\"true\"><path d=\"M6.5 11.3 3.2 8l1.1-1.1 2.2 2.2 5.2-5.2 1.1 1.1z\"></path></svg><span>A form to report a site problem</span></li>");
+    expect(billing).toContain('<span class="visually-hidden">Not in this plan: </span>A form to report a site problem</span>');
     const billingFr = nbsp(decode(await (await get("/account/billing?lang=fr", { cookie })).text()));
-    expect(billingFr).toContain("<span>Formulaire de signalement de bogue</span>");
+    expect(billingFr).toContain("<span>Formulaire pour signaler un problème</span>");
     const { handed, binding } = fakeAlerts();
     const refused = await post("/account/bug", { csrf: await csrf(cookie), text: "The list is empty." }, { cookie, env: alertsEnv(binding) });
     expect(refused.status).toBe(403);

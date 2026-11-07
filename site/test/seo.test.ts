@@ -4,7 +4,7 @@ import type { Profile } from "../src/data";
 import { app } from "../src/index";
 import { DOWNLOADS } from "../src/pages/data";
 import { scriptJson } from "../src/layout";
-import { DESCRIPTION_MAX, SITE_ORIGIN, breadcrumbJsonLd, organizationDescription } from "../src/seo";
+import { DESCRIPTION_MAX, SITE_ORIGIN, TITLE_MAX, breadcrumbJsonLd, organizationDescription, recordTitle } from "../src/seo";
 import { emptyAssets, fakeAssets, testEnv } from "./assets";
 import profileFixtures from "./fixtures/profiles-a00.json";
 import sitemapPart from "./fixtures/sitemap-1.xml?raw";
@@ -46,7 +46,7 @@ const PAGES: [string, string, string][] = [
   ["/history/w8472-000633", `${O}/history/w8472-000633`, "Vessel refit, mid-shore patrol | Award Watch"],
   ["/organizations", `${O}/organizations`, "Federal Suppliers and Grant Recipients | Award Watch"],
   ["/organizations/directory/on", `${O}/organizations/directory/on`, "Organizations A to Z: Ontario | Award Watch"],
-  ["/organizations/org-a000000001", `${O}/organizations/org-a000000001`, "Exemplar Translation Services Inc. | Award Watch"],
+  ["/organizations/org-a000000001", `${O}/organizations/org-a000000001`, "Exemplar Translation Services Inc.: Contracts and Grants"],
   ["/buyers", `${O}/buyers`, "Federal Buyers: Departments and Agencies | Award Watch"],
   ["/buyers/pwgsc-tpsgc", `${O}/buyers/pwgsc-tpsgc`, "Public Services and Procurement Canada | Award Watch"],
   ["/segments", `${O}/segments`, "Federal Tenders and Awards by UNSPSC Segment | Award Watch"],
@@ -122,6 +122,19 @@ describe("page metadata", () => {
     expect(organizationDescription(none, "en")).toContain(": no records with an amount.");
     // Records describe; the description judges nothing.
     for (const word of ["suspicious", "flag", "risk"]) expect(organizationDescription(p, "en").toLowerCase()).not.toContain(word);
+  });
+
+  it("title a profile and a buyer page by what they hold, dropping the site's name, then the words, to fit a result list", () => {
+    expect(recordTitle("National Defence", "buyer", "en")).toBe("National Defence: Contracts and Tenders | Award Watch");
+    // French runs longer: the site's name goes first.
+    expect(recordTitle("Défense nationale", "buyer", "fr").replace(/[\u00a0\u202f]/g, " ")).toBe("Défense nationale : contrats et appels d’offres");
+    expect(recordTitle("Pêches", "buyer", "fr").replace(/[\u00a0\u202f]/g, " ")).toBe("Pêches : contrats et appels d’offres | Award Watch");
+    expect(recordTitle("Exemplar Works Ltd.", "organization", "en")).toBe("Exemplar Works Ltd.: Contracts and Grants | Award Watch");
+    expect(recordTitle("Exemplar Translation Services Inc.", "organization", "en")).toBe("Exemplar Translation Services Inc.: Contracts and Grants");
+    expect(recordTitle("Public Services and Procurement Canada", "buyer", "en")).toBe("Public Services and Procurement Canada | Award Watch");
+    for (const lang of ["en", "fr"] as const) {
+      for (const n of [1, 20, 37, 45]) expect(recordTitle("A".repeat(n), "buyer", lang).length).toBeLessThanOrEqual(TITLE_MAX);
+    }
   });
 
   it("the home page names Allwater Software Inc. as publisher with the site's logo, never a person", async () => {

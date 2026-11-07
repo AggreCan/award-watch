@@ -731,8 +731,8 @@ describe("the rest of the site", () => {
     expect(meth).toContain("none in the 9 fiscal years before");
     expect(meth).toContain("for the latest 3 fiscal years");
     const billing = await (await get("/account/billing", { cookie: freeCookie })).text();
-    // On the billing page's plan cards: Free's first block for three fiscal years, Pro's every view.
-    expect(decode(billing)).toContain("<span>Analytics: first block, 3 fiscal years</span>");
+    // On the billing page's plan cards: Free's first chart for three fiscal years, Pro's every view.
+    expect(decode(billing)).toContain("<span>Analytics: first chart, 3 fiscal years</span>");
     expect(decode(billing)).toContain("<span>Analytics: every view, 10 fiscal years</span>");
     const robots = await (await app.request("/robots.txt", {}, env)).text();
     for (const rule of ["Disallow: /buyers/*/analytics", "Disallow: /organizations/*/analytics", "Disallow: /segments/*/analytics"]) {

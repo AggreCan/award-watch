@@ -556,13 +556,19 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
   const n = (v: number) => fmtInt(v, lang);
   const byBuyerName = (b: (typeof idx.by_buyer)[number]) => pick(lang, b.buyer_en, b.buyer_fr) ?? b.buyer_id ?? t(lang, "common.not_stated");
   const pro = accountsEnabled(c.env);
+  // The head opens on the 12-month figure and its value, when the index has them.
+  const leadDate = /^\d{4}-\d{2}-\d{2}/.test(idx.as_of) ? idx.as_of.slice(0, 10) : todayOf(stats.data_as_of);
+  const twelve = windows.find((w) => w.window === "12m");
+  const lead = !twelve ? t(lang, "expiring.lead_plain", { date: leadDate })
+    : twelve.total === null ? t(lang, "expiring.lead_no_total", { n: n(twelve.n), date: leadDate })
+    : t(lang, "expiring.lead", { n: n(twelve.n), total: fmtMoneyShort(twelve.total, lang), date: leadDate });
 
   return page(
     c,
     <Layout lang={lang} title={t(lang, "expiring.title")} dataAsOf={stats.data_as_of} active="/expiring" seo={pageSeo("expiring", lang)}
       head={feeds.national ? <FeedLink lang={lang} /> : null}>
       <PageHead lang={lang} title={t(lang, "expiring.title")}
-        lead={t(lang, "expiring.lead", { date: /^\d{4}-\d{2}-\d{2}/.test(idx.as_of) ? idx.as_of.slice(0, 10) : todayOf(stats.data_as_of) })}
+        lead={lead}
         actions={<>
           <a href={`/downloads/${EXPIRING_CSV_3M}`} class="btn">{t(lang, "expiring.download_3m")}</a>
           {feeds.national ? <a href={`/data/${EXPIRING_FEED}`} class="btn">{t(lang, "expiring.feed")}</a> : null}
@@ -590,7 +596,7 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
           <p class="muted">{t(lang, "expiring.list_missing")}</p>
         ) : shown.length ? (
           <>
-            <p class="muted small">{t(lang, "expiring.first_note", { n: n(shown.length) })}</p>
+            <p class="muted small">{t(lang, "expiring.first_note_3m", { n: n(shown.length) })}</p>
             <ExpiringTable lang={lang} rows={shown} csv="3m" />
           </>
         ) : (
@@ -873,6 +879,19 @@ const WindowHead: FC<{
     actions={<a href={`/downloads/${CSV_FILE[csv]}`} class="btn">{t(lang, CSV_DOWNLOAD[csv])}</a>} />
 );
 
+// What Pro adds on a window's free view, in figures: all the window's
+// contracts, and how many of them, worth how much, end beyond the free
+// 3-month list. Without the 3-month figures it names the count alone.
+function proTeaserText(lang: Lang, window: ExpiringWindow, idx: ExpiringWindowIndex, three: ExpiringWindowIndex | null): string {
+  const all = fmtInt(idx.rows, lang);
+  const beyond = three ? idx.rows - three.rows : 0;
+  if (!three || beyond <= 0) return t(lang, "expiring.pro_text_all", { all });
+  const vars = { all, beyond: fmtInt(beyond, lang), months: fmtInt(Number(window.slice(0, -1)), lang) };
+  return idx.total !== null && three.total !== null
+    ? t(lang, "expiring.pro_text", { ...vars, total_beyond: fmtMoneyShort(idx.total - three.total, lang) })
+    : t(lang, "expiring.pro_text_no_total", vars);
+}
+
 // The free view of a 6- or 12-month window, once the accounts switch is on,
 // for a request whose plan lacks radar_depth (src/plan.ts): the head the full
 // list has, the window tabs, the first rows by end date, and what Pro adds.
@@ -883,7 +902,7 @@ const WindowHead: FC<{
 // reader signs in. A signed-in reader's page is private (page()).
 async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats: Stats): Promise<Response> {
   const lang = c.get("lang");
-  const idx = await loadExpiringWindow(c.env, window);
+  const [idx, three] = await Promise.all([loadExpiringWindow(c.env, window), loadExpiringWindow(c.env, "3m").catch(() => null)]);
   if (!idx) return noDataPage(c, "expiring.title");
   const rows = idx.pages === 0 ? [] : await loadExpiringPage(c.env, window, 1);
   if (!rows) return noDataPage(c, "expiring.title");
@@ -916,7 +935,7 @@ async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats:
           <p class="muted">{t(lang, "expiring.none_window")}</p>
         )}
       </Panel>
-      <ProPanel lang={lang} signedIn={!!account?.email} price={checkoutPrice(c.env)} text={t(lang, "expiring.pro_text")}
+      <ProPanel lang={lang} signedIn={!!account?.email} price={checkoutPrice(c.env)} text={proTeaserText(lang, window, idx, three)}
         free={tj(lang, "expiring.pro_free", { list: <a href="/expiring/3m">{t(lang, "expiring.pro_free_list")}</a> })} />
     </Layout>,
   );

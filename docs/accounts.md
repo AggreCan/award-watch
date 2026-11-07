@@ -575,7 +575,7 @@ is what is delivered:
   row in `delivery_marks`, and lists each source and fiscal year whose count
   rose: by how many, the count now, and the counted value now, newest year
   first, each row linking the entity's analytics view on that source. The
-  subject names how many more records in all. A count that fell (a record
+  subject names how many new records in all ("{n} new records"). A count that fell (a record
   withdrawn) is not reported. A year the previous counts did not read (the
   window moved at the turn of a fiscal year) is not compared.
 - A first delivery has nothing to compare with: it keeps the counts and
@@ -1558,8 +1558,9 @@ row (kept 90 days). Until the records database is ready at today's data date
 (absent, loading, failed, stale) every account waits unclaimed and the run's
 report says why (`watch.records`).
 
-Subject: `{n} watchlist events: {first two watch labels}` (`1 watchlist
-event: {label}`); in French `{n} événements de suivi : ...`. Each row: the
+Subject: `{n} updates on what you follow: {first two watch labels}` (`1 update
+on what you follow: {label}`); in French `{n} nouveautés sur ce que vous
+suivez : ...`. Each row: the
 title linking its page; what happened with its figures (an amendment's value
 before and after with the change in dollars and percent, the end date moved
 and the amendment number; a cancellation's value before; an end date; a
@@ -1838,9 +1839,9 @@ active instruments and those lapsed within 90 days, as the watches' calendar
 statement does) and sorts its matches for the first 10; `COUNT(*) OVER ()`
 counts all of them.
 
-Subject: `Weekly briefing, {name}: {n} new notices, {n} awards, {n} contracts
-ending next quarter` (each part only when not zero); in French `Bulletin
-hebdomadaire, {name} : ...`. The preview line names the awards and the
+Subject: `{name} this week: {n} new notices, {n} awards, {n} contracts ending
+next quarter` (each part only when not zero); in French `{name} cette
+semaine : ...`. The preview line names the awards and the
 quarter's count, total and new rows. The footer: "You receive this each week
 for a briefing in your account.", the searches page, and the stop link.
 

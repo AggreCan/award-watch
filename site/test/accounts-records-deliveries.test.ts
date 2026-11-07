@@ -286,7 +286,7 @@ describe("an organization search", () => {
     const report = await runDeliveries(jobEnv(mail.binding));
     expect(report.outcome).toBe("done");
     const [m] = mail.to(email);
-    expect(m.subject).toBe("3 more records: Exemplar Works Ltd.");
+    expect(m.subject).toBe("3 new records: Exemplar Works Ltd.");
     expect(await deliveriesOf(search)).toEqual([{ status: "sent", items: 3 }]);
     expect((await markOf(search))?.counts).toEqual(ORG_NOW);
     expect((await markOf(search))?.asOf).toBe(DAY);
@@ -359,7 +359,7 @@ describe("an organization search", () => {
     await setMark(search, { "3:2026": [3, 3_000_000], "3:2025": [2, 2_000_000] }, { asOf: "2026-10-28" });
     await runDeliveries(jobEnv(mail.binding));
     const [m] = mail.to(email);
-    expect(nbsp(m.subject)).toBe("4 dossiers de plus : Exemplar Works Ltd.");
+    expect(nbsp(m.subject)).toBe("4 nouveaux dossiers : Exemplar Works Ltd.");
     const text = nbsp(m.text!);
     expect(text).toContain("Nouveaux dossiers qui nomment Exemplar Works Ltd.");
     expect(text).toContain("4 dossiers de plus qu’à la mise à jour du 2026-10-28, par source et par exercice financier fédéral.");
@@ -379,7 +379,7 @@ describe("a buyer search", () => {
     await setMark(search, { "3:2026": [4, 4_000_000], "3:2025": [2, 2_000_000], "1:2024": [1, 1_000_000] });
     await runDeliveries(jobEnv(mail.binding));
     const [m] = mail.to(email);
-    expect(m.subject).toBe("1 more record: National Defence");
+    expect(m.subject).toBe("1 new record: National Defence");
     expect(decode(m.html!)).toContain("New records from National Defence");
     expect(m.text).toContain("- Published contracts, 2026-27\n  1 more, 5 in all");
     expect(m.text).not.toContain("Grants");
@@ -399,7 +399,7 @@ describe("a segment search", () => {
     const files = week({ [DAY]: [tender("cb-43-0001"), tender("cb-72-0001", { segments: ["72"] })] });
     await runDeliveries(jobEnv(mail.binding, files));
     const [m] = mail.to(email);
-    expect(m.subject).toBe("1 new tender notice, 2 more records: 43 IT and telecom");
+    expect(m.subject).toBe("1 new tender notice, 2 new records: 43 IT and telecom");
     const html = decode(m.html!);
     expect(html).toContain("New in segment 43 IT and telecom");
     expect(html.indexOf("New tender notices")).toBeLessThan(html.indexOf("Records counted"));
@@ -438,7 +438,7 @@ describe("the message's rows", () => {
     });
     expect(m.html.match(/<tr><td class="rule"/g)).toHaveLength(ROWS_MAX);
     expect(decode(m.html)).toContain(`<a href="${SITE}/tenders?segment=43" style="color:#334155;">And 30 more on the site</a>`);
-    expect(m.subject).toBe("60 new tender notices, 20 more records: 43 IT and telecom");
+    expect(m.subject).toBe("60 new tender notices, 20 new records: 43 IT and telecom");
   });
 });
 

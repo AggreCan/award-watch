@@ -461,7 +461,7 @@ describe("an organization's standing offers and supply arrangements", () => {
     await events(rows(0xe000000006));
     await runDeliveries(jobEnv(mail.binding));
     const [m] = mail.to(en);
-    expect(m.subject).toBe("3 watchlist events: Exemplar Environmental Consulting Ltd.");
+    expect(m.subject).toBe("3 updates on what you follow: Exemplar Environmental Consulting Ltd.");
     expect(m.text).toContain(`- ${RMSO}\n  Gained a standing offer or supply arrangement · ${RMSO_EN} · British Columbia · ` +
       `Environmental consulting services · expires 2028-03-31 · 14 holders\n  First seen ${DAY}\n  ${SITE}/instruments/E60ZT-120002%2F001%2FZT`);
     expect(m.text).toContain(`- ${RMSO}\n  No longer holds a standing offer or supply arrangement · ${RMSO_EN} · Alberta · ` +
@@ -488,7 +488,7 @@ describe("an organization's standing offers and supply arrangements", () => {
     await events([bc, { ...bc, other: `${RMSO_EN} · Saskatchewan`, other_fr: `${RMSO_FR} · Saskatchewan` }]);
     await runDeliveries(jobEnv(mail.binding));
     const [m] = mail.to(email);
-    expect(m.subject).toBe("2 watchlist events: Two Regions Ltd.");
+    expect(m.subject).toBe("2 updates on what you follow: Two Regions Ltd.");
     expect(m.text).toContain(`${RMSO_EN} · British Columbia · Environmental consulting services`);
     expect(m.text).toContain(`${RMSO_EN} · Saskatchewan · Environmental consulting services`);
     expect(m.text).not.toContain("Also on your watch");
@@ -647,9 +647,9 @@ describe("the watch mail", () => {
     expect(mail.to(email)).toHaveLength(1);
     const [m] = mail.to(email);
     // The organization comes before the buyer, so the award both reach is listed under it and named on the buyer's.
-    expect(m.subject).toBe("3 watchlist events: Exemplar Works Ltd., National Defence");
+    expect(m.subject).toBe("3 updates on what you follow: Exemplar Works Ltd., National Defence");
     const text = m.text!;
-    expect(text).toContain("3 events on 2 of the 4 pages you follow. Data date 2026-10-31.");
+    expect(text).toContain("3 updates on 2 of the 4 pages you follow. Data date 2026-10-31.");
     expect(text.indexOf("Exemplar Works Ltd. · Organization")).toBeLessThan(text.indexOf("National Defence · Buyer"));
     expect(text).toContain("- Hull repair\n  New award or contract · Value $1,250,000\n  First seen 2026-10-31 · Also on your watch of National Defence\n  https://awardwatch.ca/awards/aw-1");
     expect(text.split("- Hull repair").length).toBe(2);
@@ -683,7 +683,7 @@ describe("the watch mail", () => {
     const [m] = mail.to(email);
     expect(m.subject).toMatch(/^Your organization this week: /);
     expect(m.text).toMatch(/^Your organization: [^\n]+\n  New records naming you this week: 1 \(1 award notice\) · https:\/\/awardwatch\.ca\/organizations\/org-a000000001\/records\n/);
-    expect(m.text).not.toContain("events on");
+    expect(m.text).not.toContain("updates on");
     for (const part of [m.subject, m.html!, m.text!]) expect(part).not.toContain(EM_DASH);
     // The data date is a Saturday: a daily account gets no block on it, and an empty daily message stays unsent.
     const other = newEmail("m-org-daily");
@@ -709,7 +709,7 @@ describe("the watch mail", () => {
     ]);
     await runDeliveries(jobEnv(mail.binding));
     const [m] = mail.to(email);
-    expect(m.subject).toBe("2 watchlist events: National Defence · 43 IT and telecom");
+    expect(m.subject).toBe("2 updates on what you follow: National Defence · 43 IT and telecom");
     expect(m.text).toContain("Servers");
     expect(m.text).toContain("Small IT change");
     expect(m.text).not.toContain("Hull plates");
@@ -745,9 +745,9 @@ describe("the watch mail", () => {
     await events([{ kind: "amended", src: 2, buyer: "dnd-mdn", cents: 26_800_000, ocents: 12_000_000, title: "Bottes", path: "/history/h-1" }]);
     await runDeliveries(jobEnv(mail.binding));
     const [m] = mail.to(email);
-    expect(nbsp(m.subject)).toBe("1 événement de suivi : Défense nationale");
+    expect(nbsp(m.subject)).toBe("1 nouveauté sur ce que vous suivez : Défense nationale");
     const text = nbsp(m.text!);
-    expect(text).toContain("1 événement sur 1 des 1 pages que vous suivez. Date des données : 2026-10-31.");
+    expect(text).toContain("1 nouveauté sur 1 des 1 pages que vous suivez. Date des données : 2026-10-31.");
     expect(text).toContain("Contrat modifié · de 120 000 $ à 268 000 $ (+148 000 $, +123 %)");
     expect(text).toContain(`${SITE}/history/h-1?lang=fr`);
     expect(text).toContain("« Vu pour la première fois »");
@@ -766,7 +766,7 @@ describe("the watch mail", () => {
     ]);
     await runDeliveries(jobEnv(mail.binding));
     const [m] = mail.to(email);
-    expect(m.subject).toBe("152 watchlist events: National Defence");
+    expect(m.subject).toBe("152 updates on what you follow: National Defence");
     expect(m.text).toContain(`New tender notice: 150 more on the page: ${SITE}/buyers/dnd-mdn`);
   });
 
@@ -833,7 +833,7 @@ describe("the watch mail", () => {
     await events(rows);
     await runDeliveries(jobEnv(mail.binding));
     const [m] = mail.to(email);
-    expect(m.subject.startsWith("72 watchlist events: Busy 1, Busy 2")).toBe(true);
+    expect(m.subject.startsWith("72 updates on what you follow: Busy 1, Busy 2")).toBe(true);
     expect(m.html!.match(/<tr><td class="rule"/g)).toHaveLength(50);
     expect(m.text).toContain("New award or contract: 2 more on the page");
     expect(m.text).toContain("New award or contract: 12 more on the page");

@@ -25,7 +25,7 @@ import { EXPIRING_WINDOWS } from "./data";
 import type { Env } from "./env";
 import { decimal, fmtInt, numberLocale, t, tj, type Key, type Lang } from "./i18n";
 import { Panel } from "./layout";
-import { FREE_YEARS, MAX_YEARS } from "./records_db";
+import { FREE_YEARS, MAX_RIVALS, MAX_YEARS } from "./records_db";
 import { SAME_DAY_RUNS_UTC } from "./refresh";
 
 // The glyph before the word, one path on a 16-unit box drawn at 11 px in
@@ -95,7 +95,7 @@ export const PLAN_LINE_MAX = 44;
 // ("3m" is 3), and the same-day cadence in hours, from the first two cuts of
 // its schedule (src/refresh.tsx); read when a row is drawn.
 const windowMonths = (i: number, lang: Lang) => fmtInt(Number(EXPIRING_WINDOWS[i].slice(0, -1)), lang);
-const sameDayHours = (lang: Lang) => {
+export const sameDayHours = (lang: Lang) => {
   const [a, b] = SAME_DAY_RUNS_UTC.slice(0, 2).map((s) => Number(s.slice(0, 2)));
   return fmtInt(b - a, lang);
 };
@@ -139,8 +139,9 @@ export const PLAN_ROWS: readonly PlanRow[] = [
   { feature: "export_filtered", free: { key: "plans.free_instruments" }, pro: { key: "plans.pro_instruments" } },
   // A weekly briefing is a delivery, as a saved search's mail is (src/account/briefings.ts).
   { feature: "delivery", free: null, pro: { key: "plans.pro_briefing" } },
-  // The blocks of "Your organization" past its first (src/account/org_pages.tsx).
-  { feature: "analytics", free: null, pro: { key: "plans.pro_org" } },
+  // The blocks of "Your organization" past its first (src/account/org_pages.tsx),
+  // with the organizations it sits beside (COMPETITORS_MAX in account/org_claim.ts is MAX_RIVALS).
+  { feature: "analytics", free: null, pro: { key: "plans.pro_org", vars: count(() => MAX_RIVALS) } },
   { feature: "bug_reports", free: null, pro: { key: "plans.pro_bugs" } },
 ];
 
@@ -260,16 +261,20 @@ export type PlanReader = "out" | "free" | "pro";
 export type PlanPlace = "tease" | "pro_page" | "billing";
 
 // Free and Pro as every page draws them. The links: an account is made at
-// the sign-in page; a Free account goes to its billing page, or on that page
-// to its Subscribe panel while Pro is on sale; a reader's own plan has no
-// way to buy it; the Pro page is offered everywhere but on itself. The
+// the sign-in page; Pro's button for a reader not signed in is the sign-in
+// page returning to billing (SUBSCRIBE_PATH), with the three steps under it
+// while Pro is on sale; a Free account goes to its billing page, or on that
+// page to its Subscribe panel while Pro is on sale; a reader's own plan has
+// no way to buy it; the Pro page is offered everywhere but on itself. The
 // billing page's head already links the account, so its cards do not.
+export const SUBSCRIBE_PATH = "/account/sign-in?next=/account/billing";
+
 export function planCards(lang: Lang, o: { price: ProPrice | null; reader: PlanReader; place: PlanPlace }): PlanCard[] {
   const { price, reader, place } = o;
   const go = (href: string, key: Key, primary = false): PlanAction => ({ href, label: t(lang, key), primary });
   const account = place === "billing" ? [] : [go("/account", "expiring.pro_account")];
   const about = reader !== "pro" && place !== "pro_page" ? [go("/pro", "pro.about_button")] : [];
-  const buy = reader === "out" ? [go("/account/sign-in", "expiring.pro_sign_in", true)]
+  const buy = reader === "out" ? [go(SUBSCRIBE_PATH, "expiring.pro_sign_in", true)]
     : place !== "billing" ? [go("/account/billing", "propage.billing", true)]
     : price ? [go("#subscribe", "billing.panel_subscribe", true)] : [];
   const figure = (n: string) => t(lang, "plans.figure", { n: decimal(lang, n) });
@@ -294,8 +299,11 @@ export function planCards(lang: Lang, o: { price: ProPrice | null; reader: PlanR
       forLine: t(lang, "plans.pro_for"),
       current: reader === "pro",
       actions: reader === "pro" ? account : [...buy, ...about],
-      // The taxes named with the price, so no amount appears only at checkout, and who sells it.
-      note: price && reader !== "pro" ? t(lang, "plans.seller") : null,
+      // The taxes named with the price, so no amount appears only at checkout, and who sells it;
+      // for a reader not signed in, the steps from the button to Stripe's page first.
+      note: price && reader !== "pro"
+        ? (reader === "out" ? `${t(lang, "propage.subscribe_steps")} ${t(lang, "plans.seller")}` : t(lang, "plans.seller"))
+        : null,
     },
   ];
 }

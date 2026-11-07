@@ -132,7 +132,7 @@ describe("the home lists' rows", () => {
 
   it("put the segment note in the first list's foot, once", async () => {
     const html = await text("/");
-    const note = "The tags after a reference are UNSPSC segments, by number and short name.";
+    const note = "The tags after a reference are UNSPSC segments (the categories buyers code each notice with), by number and short name.";
     expect(html.split(note)).toHaveLength(2);
     expect(panel(html, "New Tender Notices Today")).toContain(`<div class="panel-foot"><p class="muted small">${note}</p></div>`);
     // A day with no segment on its new notices: the note goes to the closing-soon list's foot.

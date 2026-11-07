@@ -146,7 +146,7 @@ describe("the UNSPSC segment pages", () => {
   });
 
   it("explain the segment chips once on a page, name each chip by number and short name, and leave out the page's own", async () => {
-    const note = /The tags after a reference are UNSPSC segments, by number and short name\./g;
+    const note = /The tags after a reference are UNSPSC segments \(the categories buyers code each notice with\), by number and short name\./g;
     // The segment's own page: every row would carry its chip, so none does, and nothing is left to explain.
     const own = await text("/segments/82");
     expect(own).not.toContain('<a href="/segments/82" class="chip"');

@@ -8,6 +8,7 @@ import type { AppEnv } from "../env";
 import { fmtInt, fmtMoneyShort, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, noDataPage, page, todayOf } from "../layout";
 import { allowsIntraday, requestPlan } from "../plan";
+import { sameDayHours } from "../pro";
 import { homeJsonLd, pageSeo } from "../seo";
 import { newestFirst } from "./awards";
 import { FeedLinks } from "./feeds";
@@ -141,13 +142,15 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
   const chipsFirst = newToday.some((r) => r.segments.length);
   const chipsSoon = !chipsFirst && closingSoon.some((r) => r.segments.length);
 
+  // The head's first button: the email alerts while Pro exists, else the feeds.
+  const pro = accountsEnabled(c.env);
   return page(
     c,
     <Layout lang={lang} title={t(lang, "site.name")} dataAsOf={stats.data_as_of} seo={pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] })}
       head={<FeedLinks lang={lang} />}>
-      <PageHead lang={lang} title={t(lang, "home.title")} lead={homeLead(lang, stats.counts.organizations)}
+      <PageHead lang={lang} title={t(lang, "home.title")} lead={homeLead(lang, n12)}
         actions={<>
-          <a href="/feeds" class="btn">{t(lang, "feeds.button_all")}</a>
+          {pro ? <a href="/pro" class="btn">{t(lang, "home.pro_button")}</a> : <a href="/feeds" class="btn">{t(lang, "feeds.button_all")}</a>}
           <a href="/data#downloads" class="btn">{t(lang, "footer.download")}</a>
         </>} />
 
@@ -172,7 +175,7 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
         </section>
       ) : null}
 
-      <HomeDo lang={lang} pro={accountsEnabled(c.env)} />
+      <HomeDo lang={lang} pro={pro} />
 
       <Panel title={t(lang, "home.new_heading")} tools={<a href="/tenders/new">{t(lang, "home.new_all")}</a>}
         foot={chipsFirst ? <SegmentNote lang={lang} rows={newToday} /> : undefined}>
@@ -227,9 +230,10 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
 
 // -- search framing (docs/seo.md) -------------------------------------------------
 
-// The lead, with the organizations stats.json counts when it carries them.
-export function homeLead(lang: Lang, organizations: number | undefined): string {
-  return organizations ? t(lang, "home.lead_n", { n: fmtInt(organizations, lang) }) : t(lang, "home.lead");
+// The lead, with the contracts ending within 12 months when the expiring
+// index counts them: the figure a bidder acts on.
+export function homeLead(lang: Lang, ending12m: number | undefined): string {
+  return ending12m ? t(lang, "home.lead_n", { n: fmtInt(ending12m, lang) }) : t(lang, "home.lead");
 }
 
 // What a reader can do here, one line a task, each led by its link: the
@@ -248,7 +252,7 @@ export const HomeDo: FC<{ lang: Lang; pro: boolean }> = ({ lang, pro }) => (
     <ul class="home-do-list">
       {HOME_DO.map((d) => <li>{tj(lang, d.text, { link: <a href={d.href}>{t(lang, d.link)}</a> })}</li>)}
       {pro ? (
-        <li class="home-do-pro">{tj(lang, "home.do_pro", { link: <a href="/pro">{t(lang, "home.do_pro_link")}</a> })}</li>
+        <li class="home-do-pro">{tj(lang, "home.do_pro", { link: <a href="/pro">{t(lang, "home.do_pro_link")}</a>, h: sameDayHours(lang) })}</li>
       ) : null}
     </ul>
   </Panel>

@@ -169,7 +169,7 @@ describe("the alerts form's rows", () => {
       "Segment UNSPSC : 43 Technologies de l’information, radiodiffusion et télécommunications ou 82 Services de rédaction, de design, de graphisme et de beaux-arts; " +
       "Province de livraison : Québec; Tout le Canada ou non indiqué : exclus",
     );
-    expect(french).toContain("Contrats qui entrent dans la période de 3 mois pour tous les acheteurs et segments");
+    expect(french).toContain("Contrats désormais à moins de 3 mois de leur fin pour tous les acheteurs et segments");
     const done = await post("/account/searches/import", { csrf: await csrf(cookie, "/account/searches") }, { cookie });
     expect(done.headers.get("location")).toBe("/account/searches?m=imported");
     const saved = await searches(email);

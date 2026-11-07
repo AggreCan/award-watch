@@ -50,7 +50,7 @@ describe("controls", () => {
     expect(styles).toContain(".interest-body > .interest-form, .lists-form > .interest-form { display: flex;");
     const fr = nbsp(await text("/alerts?lang=fr"));
     expect(fr).toMatch(/<form method="post" action="\/interest" class="lists-form"[^>]*>[\s\S]*<div class="interest-form"><label class="field interest-field">/);
-    expect(fr).toContain('<button type="submit" class="btn btn-primary">Inscrivez-moi</button>');
+    expect(fr).toContain('<button type="submit" class="btn btn-primary">Enregistrer ces listes</button>');
   });
 
   it("give a select that takes several values the same room on both sides and no chevron", () => {

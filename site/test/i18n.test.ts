@@ -53,7 +53,7 @@ const SENTINELS = [
   "Amendments and value change",
   "How email lists work",
   "Every new tender notice",
-  "Contracts entering the",
+  "Contracts now within",
 ];
 
 const FRENCH_PAGES = [
@@ -285,7 +285,7 @@ describe("rendered French pages", () => {
 
   it("say the expected French on the main pages", async () => {
     const home = nbsp(await (await get("/?lang=fr")).text());
-    expect(home).toContain("<h1>Appels d’offres, contrats et subventions du fédéral, par organisation</h1>");
+    expect(home).toContain("<h1>Appels d’offres fédéraux, attributions et contrats prenant fin</h1>");
     expect(home).toContain("Avis d’appel d’offres ouverts");
     expect(home).toContain("5 883");
     expect(home).toContain("Clôture prochaine");

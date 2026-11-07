@@ -558,7 +558,7 @@ describe("the billing page", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     const html = decode(await res.text());
     expect(html).toContain("Monthly, CA$12 a month");
-    expect(html).toContain("Yearly, CA$120.50 a year");
+    expect(html).toContain("Yearly, CA$120.50 a year (CA$10.04 a month)");
     expect(html).toContain("Prices in Canadian dollars. Taxes added at checkout.");
     expect(html).toContain("Allwater Software Inc.");
     expect(html.match(/action="\/account\/billing\/checkout"/g)).toHaveLength(2);
@@ -579,7 +579,7 @@ describe("the billing page", () => {
     expect(html).toContain('<h2 id="subscribe">Subscribe to Pro</h2>');
     const fr = nbsp(decode(await (await get("/account/billing?lang=fr", { cookie, env: payEnv() })).text()));
     expect(fr).toContain("Mensuel, 12 $ CA par mois");
-    expect(fr).toContain("Annuel, 120,50 $ CA par année");
+    expect(fr).toContain("Annuel, 120,50 $ CA par année (10,04 $ CA par mois)");
     expect(fr).toContain("Prix en dollars canadiens. Taxes ajoutées au paiement.");
     const [freeFr, proFr] = cardsOf(fr);
     expect(freeFr).toContain('<h3>Gratuit</h3><span class="plan-current">Votre forfait</span>');

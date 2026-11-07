@@ -471,7 +471,7 @@ describe("the tender digest", () => {
 describe("the radar digest", () => {
   it("in English: the subject, the rows and their links, the button and the plain text", () => {
     const m = expiringDigest(expiringInput("en"));
-    expect(m.subject).toBe("3 contracts entering the 3-month window: National Defence");
+    expect(m.subject).toBe("3 contracts now within 3 months of their end: National Defence");
     expect(m.html).toContain(">Contracts ending within 3 months</h1>");
     expect(m.html).toContain("3 contracts whose end date now falls within 3 months of the data date, under your saved search <b>Contracts entering the 3-month window for National Defence</b>. Weekly. Data date 2026-10-31.");
     expect(m.html).toContain(`<a class="ink" href="${SITE}/awards/cb-500-50000001"`);
@@ -484,7 +484,7 @@ describe("the radar digest", () => {
     expect(m.html).toContain("Ends 2027-01-30 · $188,345 · Award notice");
     expect(m.html).toContain("Ends 2027-01-25 · Not stated · Published contract");
     expect(m.html).toContain(`<a href="${SITE}/expiring/3m?buyer=dnd-mdn" style="display:inline-block;`);
-    expect(m.html).toContain(">Open the radar</a>");
+    expect(m.html).toContain(">See the contracts ending</a>");
     expect(m.html).toContain("You receive this each week for a saved search in your account.");
     expect(m.html).not.toContain("more on the site");
     expect(m.text).toContain([
@@ -493,21 +493,21 @@ describe("the radar digest", () => {
       "  Ends 2027-01-30 · $188,345 · Award notice",
       `  ${SITE}/awards/cb-500-50000001`,
     ].join("\n"));
-    expect(m.text).toContain(`Open the radar: ${SITE}/expiring/3m?buyer=dnd-mdn\n\nA contract's value is the one on its newest amendment. Nothing is summed across sources.\n\n`);
+    expect(m.text).toContain(`See the contracts ending: ${SITE}/expiring/3m?buyer=dnd-mdn\n\nA contract's value is the one on its newest amendment. Nothing is summed across sources.\n\n`);
     expect(m.headers["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
   });
 
   it("in French", () => {
     const m = expiringDigest(expiringInput("fr"));
-    expect(nbsp(m.subject)).toBe("3 contrats entrant dans la fenêtre de 3 mois : Défense nationale");
+    expect(nbsp(m.subject)).toBe("3 contrats désormais à moins de 3 mois de leur fin : Défense nationale");
     const html = nbsp(decode(m.html));
     expect(html).toContain(">Contrats prenant fin d’ici 3 mois</h1>");
     expect(html).toContain("Chaque semaine. Date des données : 2026-10-31.");
     expect(html).toContain(`<a class="ink" href="${SITE}/awards/cb-500-50000001?lang=fr"`);
     expect(html).toContain(`<a class="ink" href="${SITE}/contracts/dnd-mdn/C-2026-0099?lang=fr"`);
     expect(html).toContain("Prend fin le 2027-01-30 · 188 345 $ · Avis d’attribution");
-    expect(html).toContain(">Ouvrir le radar</a>");
-    expect(nbsp(m.text)).toContain(`Ouvrir le radar : ${SITE}/expiring/3m?buyer=dnd-mdn&lang=fr`);
+    expect(html).toContain(">Voir les contrats prenant fin</a>");
+    expect(nbsp(m.text)).toContain(`Voir les contrats prenant fin : ${SITE}/expiring/3m?buyer=dnd-mdn&lang=fr`);
     expect(m.text + m.html).not.toContain(EM_DASH);
   });
 
@@ -547,7 +547,7 @@ describe("the delivery cron", () => {
     const env = jobEnv(mail.binding, week({ [DAY]: [tender("cb-800-80000001")] }));
     await cron(env);
     const sent = mail.to(email);
-    expect(sent.map((m) => m.subject).sort()).toEqual(["1 new tender notice: 72 Construction", "3 contracts entering the 3-month window: National Defence"]);
+    expect(sent.map((m) => m.subject).sort()).toEqual(["1 new tender notice: 72 Construction", "3 contracts now within 3 months of their end: National Defence"]);
     for (const m of sent) {
       expect(m.from).toEqual({ email: FROM, name: "Award Watch" });
       expect(m.replyTo).toBe("contact@awardwatch.ca");

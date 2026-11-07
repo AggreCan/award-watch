@@ -646,7 +646,7 @@ function contract(reference: string, end: string): ExpiringRow {
 }
 
 // The published files of the run's week: one new notice on the run's day,
-// one contract entering the 3-month window.
+// one contract now within 3 months of its end.
 function runFiles(without: string[] = []): Record<string, unknown> {
   const files: Record<string, unknown> = { "stats.json": { ...stats, data_as_of: RUN_DAY } };
   for (let i = 0; i <= 8; i++) files[`tenders/new/${addDays(RUN_DAY, -i)}.json`] = i === 0 ? [tender("cb-900-90000777")] : [];
@@ -751,7 +751,7 @@ describe("the delivery job", () => {
     } finally {
       quiet.mockRestore();
     }
-    expect(mail.handed.map((m) => m.subject.split(":")[0]).sort()).toEqual(["1 contract entering the 3-month window", "1 new tender notice"]);
+    expect(mail.handed.map((m) => m.subject.split(":")[0]).sort()).toEqual(["1 contract now within 3 months of its end", "1 new tender notice"]);
     for (const id of [tenders, radar]) {
       expect((await ACCOUNTS.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE saved_search_id = ? AND status = 'sent'").bind(id).first<{ n: number }>())?.n).toBe(1);
     }

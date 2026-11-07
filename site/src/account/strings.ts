@@ -473,20 +473,20 @@ export const ACCOUNT_STRINGS = {
   "digest.scope_code": { en: "UNSPSC code {code}", fr: "code UNSPSC {code}" },
   "digest.expiring_title": { en: "Contracts ending within {n} months", fr: "Contrats prenant fin d'ici {n} mois" },
   "digest.expiring_subject_one": {
-    en: "1 contract entering the {months}-month window: {scope}",
-    fr: "1 contrat entrant dans la fenêtre de {months} mois : {scope}",
+    en: "1 contract now within {months} months of its end: {scope}",
+    fr: "1 contrat désormais à moins de {months} mois de sa fin : {scope}",
   },
   "digest.expiring_subject_many": {
-    en: "{n} contracts entering the {months}-month window: {scope}",
-    fr: "{n} contrats entrant dans la fenêtre de {months} mois : {scope}",
+    en: "{n} contracts now within {months} months of their end: {scope}",
+    fr: "{n} contrats désormais à moins de {months} mois de leur fin : {scope}",
   },
   "digest.expiring_subject_all_one": {
-    en: "1 contract entering the {months}-month window",
-    fr: "1 contrat entrant dans la fenêtre de {months} mois",
+    en: "1 contract now within {months} months of its end",
+    fr: "1 contrat désormais à moins de {months} mois de sa fin",
   },
   "digest.expiring_subject_all_many": {
-    en: "{n} contracts entering the {months}-month window",
-    fr: "{n} contrats entrant dans la fenêtre de {months} mois",
+    en: "{n} contracts now within {months} months of their end",
+    fr: "{n} contrats désormais à moins de {months} mois de leur fin",
   },
   "digest.expiring_intro_one": {
     en: "1 contract whose end date now falls within {months} months of the data date, under your saved search {label}. {cadence} Data date {date}.",
@@ -499,7 +499,7 @@ export const ACCOUNT_STRINGS = {
   "digest.cadence_daily": { en: "Daily.", fr: "Chaque jour." },
   "digest.cadence_weekly": { en: "Weekly.", fr: "Chaque semaine." },
   "digest.ends": { en: "Ends {date}", fr: "Prend fin le {date}" },
-  "digest.expiring_button": { en: "Open the radar", fr: "Ouvrir le radar" },
+  "digest.expiring_button": { en: "See the contracts ending", fr: "Voir les contrats prenant fin" },
   "digest.expiring_note": {
     en: "A contract's value is the one on its newest amendment. Nothing is summed across sources.",
     fr: "La valeur d'un contrat est celle de sa plus récente modification. Rien n'est additionné entre les sources.",
@@ -527,8 +527,8 @@ export const ACCOUNT_STRINGS = {
   "digest.records_title_buyer": { en: "New records from {name}", fr: "Nouveaux dossiers de {name}" },
   "digest.records_title_segment": { en: "New in segment {name}", fr: "Nouveautés du segment {name}" },
   "digest.records_subject": { en: "{what}: {scope}", fr: "{what} : {scope}" },
-  "digest.records_subject_one": { en: "1 more record", fr: "1 dossier de plus" },
-  "digest.records_subject_many": { en: "{n} more records", fr: "{n} dossiers de plus" },
+  "digest.records_subject_one": { en: "1 new record", fr: "1 nouveau dossier" },
+  "digest.records_subject_many": { en: "{n} new records", fr: "{n} nouveaux dossiers" },
   "digest.records_lead": {
     en: "Your saved search {label}. Data date {date}.",
     fr: "Votre recherche enregistrée {label}. Date des données : {date}.",
@@ -593,7 +593,7 @@ export const ACCOUNT_STRINGS = {
   },
   "billing.panel_subscribe": { en: "Subscribe to Pro", fr: "S'abonner à Pro" },
   "billing.monthly": { en: "Monthly, CA${price} a month", fr: "Mensuel, {price} $ CA par mois" },
-  "billing.yearly": { en: "Yearly, CA${price} a year", fr: "Annuel, {price} $ CA par année" },
+  "billing.yearly": { en: "Yearly, CA${price} a year (CA${per_month} a month)", fr: "Annuel, {price} $ CA par année ({per_month} $ CA par mois)" },
   "billing.taxes": {
     en: "Prices in Canadian dollars. Taxes added at checkout.",
     fr: "Prix en dollars canadiens. Taxes ajoutées au paiement.",
@@ -1333,16 +1333,16 @@ export const ACCOUNT_STRINGS = {
   "watches.manage": { en: "Manage your watches", fr: "Gérer vos suivis" },
 
   // The message.
-  "watches.digest_subject_one": { en: "1 watchlist event: {labels}", fr: "1 événement de suivi : {labels}" },
-  "watches.digest_subject_many": { en: "{n} watchlist events: {labels}", fr: "{n} événements de suivi : {labels}" },
+  "watches.digest_subject_one": { en: "1 update on what you follow: {labels}", fr: "1 nouveauté sur ce que vous suivez : {labels}" },
+  "watches.digest_subject_many": { en: "{n} updates on what you follow: {labels}", fr: "{n} nouveautés sur ce que vous suivez : {labels}" },
   "watches.digest_title": { en: "Your Watches", fr: "Vos suivis" },
   "watches.digest_lead_one": {
-    en: "1 event on 1 of the {all} pages you follow. Data date {date}.",
-    fr: "1 événement sur 1 des {all} pages que vous suivez. Date des données : {date}.",
+    en: "1 update on 1 of the {all} pages you follow. Data date {date}.",
+    fr: "1 nouveauté sur 1 des {all} pages que vous suivez. Date des données : {date}.",
   },
   "watches.digest_lead_many": {
-    en: "{n} events on {w} of the {all} pages you follow. Data date {date}.",
-    fr: "{n} événements sur {w} des {all} pages que vous suivez. Date des données : {date}.",
+    en: "{n} updates on {w} of the {all} pages you follow. Data date {date}.",
+    fr: "{n} nouveautés sur {w} des {all} pages que vous suivez. Date des données : {date}.",
   },
   "watches.digest_button": { en: "Open your watches", fr: "Ouvrir vos suivis" },
   "watches.digest_note": {
@@ -1671,7 +1671,7 @@ export const ACCOUNT_STRINGS = {
 
   // -- weekly briefings (briefings.ts, briefing_pages.tsx, digests.ts briefingDigest) -----------
   // The message.
-  "briefing.subject": { en: "Weekly briefing, {name}: {what}", fr: "Bulletin hebdomadaire, {name} : {what}" },
+  "briefing.subject": { en: "{name} this week: {what}", fr: "{name} cette semaine : {what}" },
   "briefing.subj_notices_one": { en: "1 new notice", fr: "1 nouvel avis" },
   "briefing.subj_notices_many": { en: "{n} new notices", fr: "{n} nouveaux avis" },
   "briefing.subj_awards_one": { en: "1 award", fr: "1 attribution" },
@@ -1724,7 +1724,7 @@ export const ACCOUNT_STRINGS = {
   "briefing.ending_fresh": { en: "New to the list this week: {n}.", fr: "Nouveaux dans la liste cette semaine : {n}." },
   "briefing.ends": { en: "ends {date}", fr: "prend fin le {date}" },
   "briefing.fresh": { en: "new this week", fr: "nouveau cette semaine" },
-  "briefing.radar_link": { en: "On the 6-month radar", fr: "Dans le radar sur 6 mois" },
+  "briefing.radar_link": { en: "In the 6-month list of contracts ending", fr: "Dans la liste de 6 mois des contrats prenant fin" },
   "briefing.turn": {
     en: "The fiscal quarter turns on {date}; next week's briefing lists {quarter} ({months}).",
     fr: "Le trimestre financier change le {date}; le bulletin de la semaine prochaine présente le {quarter} ({months}).",
@@ -1772,8 +1772,8 @@ export const ACCOUNT_STRINGS = {
     en: "One email each Monday about this buyer, or one of its segments: the week's new notices, the awards with their winners and values, the contracts ending next fiscal quarter with their holders, the notable amendments, the fiscal year's largest records and the standing offers and supply arrangements ending within 6 months.",
     fr: "Un courriel chaque lundi sur cet acheteur, ou l'un de ses segments : les nouveaux avis de la semaine, les attributions avec leurs gagnants et leurs valeurs, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables, les dossiers les plus importants de l'exercice et les offres à commandes et arrangements en matière d'approvisionnement prenant fin d'ici 6 mois.",
   },
-  "briefing.subscribe": { en: "Subscribe", fr: "S'abonner" },
-  "briefing.subscribed": { en: "Subscribed", fr: "Abonné" },
+  "briefing.subscribe": { en: "Save this briefing", fr: "Enregistrer ce bulletin" },
+  "briefing.subscribed": { en: "Briefing saved", fr: "Bulletin enregistré" },
   "briefing.control_out": { en: "Signing in makes an account if there is none.", fr: "La connexion crée un compte s'il n'y en a pas." },
   "briefing.control_pro": { en: "Sent each Monday by email.", fr: "Envoyé chaque lundi par courriel." },
   "briefing.control_free": {
@@ -1864,8 +1864,8 @@ export const ACCOUNT_STRINGS = {
     en: "A weekly briefing by email for a segment or a buyer: the week's new notices, the awards with their winners, the contracts ending next fiscal quarter with their holders, the notable amendments, the fiscal year's largest records and the standing offers and supply arrangements ending within 6 months.",
     fr: "Un bulletin hebdomadaire par courriel pour un segment ou un acheteur : les nouveaux avis de la semaine, les attributions avec leurs gagnants, les contrats prenant fin au prochain trimestre financier avec leurs titulaires, les modifications notables, les dossiers les plus importants de l'exercice et les offres à commandes et arrangements en matière d'approvisionnement prenant fin d'ici 6 mois.",
   },
-  "briefing.pro_sample": { en: "This week's sample briefing, for one segment: {link}.", fr: "L'exemple de bulletin de cette semaine, pour un segment : {link}." },
-  "briefing.sample_link_text": { en: "A sample of the weekly briefing", fr: "Un exemple du bulletin hebdomadaire" },
+  "briefing.pro_sample": { en: "Read {link}, built from this week's data for one segment.", fr: "Lisez {link}, construit avec les données de cette semaine pour un segment." },
+  "briefing.sample_link_text": { en: "a sample of the weekly briefing", fr: "un exemple du bulletin hebdomadaire" },
   "briefing.alerts_line": {
     en: "A weekly briefing of one segment or one buyer, with its notices, awards, contracts ending next quarter and amendments in one message: {link}.",
     fr: "Un bulletin hebdomadaire d'un segment ou d'un acheteur, avec ses avis, attributions, contrats prenant fin le trimestre prochain et modifications en un message : {link}.",

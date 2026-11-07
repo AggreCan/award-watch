@@ -121,8 +121,8 @@ const STRINGS = {
   },
   "common.other_lang_only": { en: "(in French only)", fr: "(en anglais seulement)" },
   "common.segment_chips_note": {
-    en: "The tags after a reference are UNSPSC segments, by number and short name.",
-    fr: "Les étiquettes qui suivent une référence sont des segments UNSPSC, par numéro et nom abrégé.",
+    en: "The tags after a reference are UNSPSC segments (the categories buyers code each notice with), by number and short name.",
+    fr: "Les étiquettes qui suivent une référence sont des segments UNSPSC (les catégories que les acheteurs attribuent à chaque avis), par numéro et nom abrégé.",
   },
   "common.not_loaded": { en: "This source has not been loaded yet.", fr: "Cette source n'a pas encore été chargée." },
   "common.not_loaded_short": { en: "Not loaded", fr: "Non chargé" },
@@ -296,12 +296,13 @@ const STRINGS = {
   },
 
   // -- home ----------------------------------------------------------------------------
-  "home.title": { en: "Federal Tenders, Contracts and Grants, by Organization", fr: "Appels d'offres, contrats et subventions du fédéral, par organisation" },
+  "home.title": { en: "Federal Tenders, Who Won, and Contracts Ending", fr: "Appels d'offres fédéraux, attributions et contrats prenant fin" },
   // The lead names what a reader comes for (docs/seo.md); home.lead_n, with
-  // the organizations counted in stats.json, when the export carries the count.
+  // the contracts ending within 12 months counted in the expiring index, when
+  // the export carries the count.
   "home.lead": {
-    en: "The tender notices open on CanadaBuys, who won the contracts awarded after them, and the contracts ending within a year, with a page for each department and for each organization the records name. From the Government of Canada's open data, refreshed nightly.",
-    fr: "Les avis d'appel d'offres ouverts sur AchatsCanada, qui a remporté les contrats attribués ensuite et les contrats qui prennent fin d'ici un an, avec une page pour chaque ministère et pour chaque organisation que nomment les dossiers. D'après les données ouvertes du gouvernement du Canada, mises à jour chaque nuit.",
+    en: "Every tender open on CanadaBuys, who won each federal contract, and the contracts ending within 12 months with the supplier that holds each one. Free to read, from the Government of Canada's open data, refreshed nightly.",
+    fr: "Tous les appels d'offres ouverts sur AchatsCanada, qui a remporté chaque contrat fédéral et les contrats qui prennent fin d'ici 12 mois, avec le fournisseur qui détient chacun. Gratuit, d'après les données ouvertes du gouvernement du Canada, mis à jour chaque nuit.",
   },
   "home.quick_open": { en: "Open tenders", fr: "Appels d'offres ouverts" },
   "home.quick_closing": { en: "Closing this week", fr: "Clôture cette semaine" },
@@ -685,8 +686,8 @@ const STRINGS = {
   // -- contracts ending soon (the radar; its rules are on the Methodology page) ----------
   "expiring.title": { en: "Contracts Ending Soon", fr: "Contrats prenant fin bientôt" },
   "expiring.lead": {
-    en: "Contracts whose end date, as last amended, falls within 12 months of the data date ({date}): award notices, PSPC contract history and published contracts.",
-    fr: "Contrats dont la date de fin, à la plus récente modification, tombe dans les 12 mois suivant la date des données ({date}) : avis d'attribution, historique des contrats de SPAC et contrats publiés.",
+    en: "{n} federal contracts, worth {total}, end within 12 months of the data date ({date}), each with the supplier that holds it.",
+    fr: "{n} contrats fédéraux, d'une valeur de {total}, prennent fin d'ici 12 mois après la date des données ({date}), chacun avec le fournisseur qui le détient.",
   },
   "expiring.value_note": {
     en: "Each contract is listed once, from the source the {rules} prefer, with the value that source's counting rules give. Totals add those values in Canadian dollars. A contract in another currency shows its own currency and is left out of them.",
@@ -710,12 +711,12 @@ const STRINGS = {
     fr: "Télécharger les contrats prenant fin d'ici 3 mois (CSV)",
   },
   "expiring.feed": {
-    en: "Atom feed of contracts entering the 3-month window",
-    fr: "Fil Atom des contrats qui entrent dans la période de 3 mois",
+    en: "Atom feed of contracts now within 3 months of their end",
+    fr: "Fil Atom des contrats désormais à moins de 3 mois de leur fin",
   },
   "expiring.feeds_all": { en: "Feeds by buyer and by segment", fr: "Fils par acheteur et par segment" },
   "expiring.first_heading": { en: "Ending Within 3 Months", fr: "Contrats prenant fin d'ici 3 mois" },
-  "expiring.first_note": { en: "The first {n} by end date.", fr: "Les {n} premiers par date de fin." },
+  "expiring.first_note": { en: "The first {n} by end date, the same as the 3-month list.", fr: "Les {n} premiers par date de fin, les mêmes que dans la liste de 3 mois." },
   "expiring.first_all": { en: "All contracts ending within 3 months", fr: "Tous les contrats prenant fin d'ici 3 mois" },
   "expiring.list_missing": { en: "The list for this window is not published yet.", fr: "La liste de cette période n'est pas encore publiée." },
   "expiring.none_window": { en: "No contract ends within this window.", fr: "Aucun contrat ne prend fin dans cette période." },
@@ -828,8 +829,8 @@ const STRINGS = {
   },
   "expiring.pro_title": { en: "Part of Pro", fr: "Offert avec le forfait Pro" },
   "expiring.pro_text": {
-    en: "The full list, with its filters and pages, is part of Pro, the site's paid plan.",
-    fr: "La liste complète, avec ses filtres et ses pages, fait partie de Pro, le forfait payant du site.",
+    en: "Pro lists all {all}, {beyond} of them ending 3 to {months} months out ({total_beyond}), with every filter and the 12-month CSV.",
+    fr: "Pro les énumère tous les {all}, dont {beyond} prennent fin dans 3 à {months} mois ({total_beyond}), avec tous les filtres et le CSV de 12 mois.",
   },
   "expiring.pro_includes": { en: "Pro includes:", fr: "Le forfait Pro comprend :" },
   "expiring.pro_radar": {
@@ -853,7 +854,7 @@ const STRINGS = {
     fr: "La {list}, ses fils ainsi que le nombre et le total de chaque période restent gratuits.",
   },
   "expiring.pro_free_list": { en: "3-month list", fr: "liste de 3 mois" },
-  "expiring.pro_sign_in": { en: "Sign in or create an account", fr: "Se connecter ou créer un compte" },
+  "expiring.pro_sign_in": { en: "Subscribe to Pro", fr: "S'abonner à Pro" },
   "expiring.pro_account": { en: "Your account", fr: "Votre compte" },
   // The Pro mark and the tease panel (src/pro.tsx). {monthly} and {yearly}
   // are the operator's figures from wrangler.jsonc, never written here.
@@ -1192,8 +1193,8 @@ const STRINGS = {
   "lobby.registrant": { en: "Registrant", fr: "Déclarant" },
 
   // -- watchlist (the strings watchlist.js draws come through the page) --------------
-  "watch.on": { en: "On your watchlist", fr: "Dans votre liste de suivi" },
-  "watch.off": { en: "Add to watchlist", fr: "Ajouter à la liste de suivi" },
+  "watch.on": { en: "Saved in this browser", fr: "Enregistrée dans ce navigateur" },
+  "watch.off": { en: "Save in this browser", fr: "Enregistrer dans ce navigateur" },
   "watch.button_title": { en: "Kept in this browser", fr: "Conservée dans ce navigateur" },
   "watch.full": { en: "Watchlist full ({max})", fr: "Liste de suivi pleine ({max})" },
   "watch.title": { en: "Watchlist", fr: "Liste de suivi" },
@@ -1905,8 +1906,8 @@ const STRINGS = {
     fr: "La valeur affichée est celle que retiennent les règles ci-dessus pour la source du dossier. Le total d'une période additionne les valeurs des contrats qu'elle présente, chacun compté une seule fois, en dollars canadiens.",
   },
   "methodology.expiring_feeds": {
-    en: "The feeds carry the contracts that entered the 3-month window since the previous run, so a reader sees each contract once, about 90 days before it ends.",
-    fr: "Les fils contiennent les contrats entrés dans la période de 3 mois depuis l'exécution précédente; un lecteur voit donc chaque contrat une seule fois, environ 90 jours avant sa fin.",
+    en: "The feeds carry the contracts that came within 3 months of their end since the previous run, so a reader sees each contract once, about 90 days before it ends.",
+    fr: "Les fils contiennent les contrats passés à moins de 3 mois de leur fin depuis l'exécution précédente; un lecteur voit donc chaque contrat une seule fois, environ 90 jours avant sa fin.",
   },
   "methodology.expiring_claim": {
     en: "An end date is the date the record states. A contract can be extended, renewed or replaced, and the list says nothing about what follows its end.",
@@ -2049,15 +2050,15 @@ const STRINGS = {
   "interest.title": { en: "Email Lists", fr: "Listes de diffusion" },
   "interest.about": { en: "How email lists work", fr: "Comment fonctionnent les listes" },
   "interest.email": { en: "Email address", fr: "Adresse courriel" },
-  "interest.submit": { en: "Notify me", fr: "M'avertir" },
+  "interest.submit": { en: "Save this list", fr: "Enregistrer cette liste" },
   "interest.note": {
-    en: "Email lists are part of Pro. Sign in with this address and the list is waiting in your account as a saved search; the {privacy} page says what the form keeps.",
-    fr: "Les listes de diffusion font partie de Pro. Connectez-vous avec cette adresse et la liste vous attend dans votre compte comme recherche enregistrée; la page {privacy} indique ce que conserve le formulaire.",
+    en: "This form sends nothing. Sign in with this address and the list waits in your account as a saved search; with Pro it arrives by email. The {privacy} page says what the form keeps.",
+    fr: "Ce formulaire n'envoie rien. Connectez-vous avec cette adresse et la liste vous attend dans votre compte comme recherche enregistrée; avec Pro, elle arrive par courriel. La page {privacy} indique ce que conserve le formulaire.",
   },
   "interest.done": { en: "Noted: {email}, for {label}.", fr: "C'est noté : {email}, pour {label}." },
   "interest.watch_note": {
-    en: "For a list in this browser without email, use Add to watchlist.",
-    fr: "Pour une liste conservée dans ce navigateur, sans courriel, utilisez Ajouter à la liste de suivi.",
+    en: "For a list in this browser without email, use Save in this browser.",
+    fr: "Pour une liste conservée dans ce navigateur, sans courriel, utilisez Enregistrer dans ce navigateur.",
   },
   "interest.err_email": { en: "Enter a complete email address.", fr: "Entrez une adresse courriel complète." },
   "interest.err_rejected": { en: "The form could not be sent. Try again.", fr: "Le formulaire n'a pas pu être envoyé. Réessayez." },
@@ -2075,7 +2076,7 @@ const STRINGS = {
     fr: "Nouveaux avis d'appel d'offres dont le titre contient les mots recherchés, correspondant à {filters}",
   },
   "interest.follow_some": { en: "New tender notices matching the filters above", fr: "Nouveaux avis d'appel d'offres correspondant aux filtres ci-dessus" },
-  "interest.label_expiring": { en: "Contracts entering the {n}-month window {scope}", fr: "Contrats qui entrent dans la période de {n} mois {scope}" },
+  "interest.label_expiring": { en: "Contracts now within {n} months of their end {scope}", fr: "Contrats désormais à moins de {n} mois de leur fin {scope}" },
   // Beside the provinces when the "Include Canada-wide or not stated" box is unticked.
   "interest.national_out": { en: "Canada-wide or not stated: left out", fr: "Tout le Canada ou non indiqué : exclus" },
   "interest.scope_all": { en: "for every buyer and segment", fr: "pour tous les acheteurs et segments" },
@@ -2106,8 +2107,8 @@ const STRINGS = {
     fr: "Les nouveaux avis d'appel d'offres : tous, ou ceux qui correspondent aux filtres de la liste des avis ouverts (mots du titre, catégorie, segment, province, acheteur, type d'avis, méthode d'approvisionnement).",
   },
   "alerts.cover_expiring": {
-    en: "Contracts entering the 3-, 6- or 12-month window of contracts ending soon, for one buyer, one segment or every contract.",
-    fr: "Les contrats qui entrent dans la période de 3, 6 ou 12 mois des contrats prenant fin bientôt, pour un acheteur, un segment ou tous les contrats.",
+    en: "Contracts now within 3, 6 or 12 months of their end, for one buyer, one segment or every contract.",
+    fr: "Les contrats désormais à moins de 3, 6 ou 12 mois de leur fin, pour un acheteur, un segment ou tous les contrats.",
   },
   "alerts.cover_organizations": {
     en: "New records naming an organization you watch: an award notice, a contract or a grant.",
@@ -2136,8 +2137,8 @@ const STRINGS = {
     fr: "{link} : les nouveaux avis qui correspondent aux filtres de la liste.",
   },
   "alerts.where_expiring": {
-    en: "{link} and its windows: contracts entering the window shown, for the buyer or segment chosen or for every contract.",
-    fr: "{link} et ses périodes : les contrats qui entrent dans la période affichée, pour l'acheteur ou le segment choisi ou pour tous les contrats.",
+    en: "{link} and its 3-, 6- and 12-month lists: the contracts each list adds, for the buyer or segment chosen or for every contract.",
+    fr: "{link} et ses listes de 3, 6 et 12 mois : les contrats que chaque liste ajoute, pour l'acheteur ou le segment choisi ou pour tous les contrats.",
   },
   "alerts.where_profiles": { en: "Every {link}: new records naming the organization.", fr: "Chaque {link} : les nouveaux dossiers qui nomment l'organisation." },
   "alerts.where_more": {
@@ -2161,7 +2162,7 @@ const STRINGS = {
     en: "Hold Ctrl (Cmd on a Mac) to choose several segments or provinces.",
     fr: "Maintenez la touche Ctrl (Cmd sur un Mac) pour choisir plusieurs segments ou provinces.",
   },
-  "lists.submit": { en: "Sign me up", fr: "Inscrivez-moi" },
+  "lists.submit": { en: "Save these lists", fr: "Enregistrer ces listes" },
   // Above the list of the lists saved, so a mistyped address shows.
   "lists.done": { en: "Saved for {email}:", fr: "C'est noté pour {email} :" },
   // Under the lists saved, while the accounts switch is on.
@@ -2173,8 +2174,8 @@ const STRINGS = {
   "lists.err_none": { en: "Choose at least one list.", fr: "Choisissez au moins une liste." },
   // Under the chooser: interest.note for several lists.
   "lists.note": {
-    en: "Email lists are part of Pro. Sign in with this address and the lists are waiting in your account as saved searches; the {privacy} page says what the form keeps.",
-    fr: "Les listes de diffusion font partie de Pro. Connectez-vous avec cette adresse et les listes vous attendent dans votre compte comme recherches enregistrées; la page {privacy} indique ce que conserve le formulaire.",
+    en: "This form sends nothing. Sign in with this address and the lists wait in your account as saved searches; with Pro they arrive by email. The {privacy} page says what the form keeps.",
+    fr: "Ce formulaire n'envoie rien. Connectez-vous avec cette adresse et les listes vous attendent dans votre compte comme recherches enregistrées; avec Pro, elles arrivent par courriel. La page {privacy} indique ce que conserve le formulaire.",
   },
 
   // -- citing -------------------------------------------------------------------------------------
@@ -2765,8 +2766,8 @@ const STRINGS = {
   "published.contract_date": { en: "Contract date", fr: "Date du contrat" },
   "published.period": { en: "Reporting period", fr: "Période de déclaration" },
   "published.window_newest": {
-    en: "The radar reads a contract's end from its newest version, listed below.",
-    fr: "Le radar lit la fin d'un contrat dans sa version la plus récente, présentée ci-dessous.",
+    en: "The list of contracts ending reads a contract's end from its newest version, listed below.",
+    fr: "La liste des contrats prenant fin lit la fin d'un contrat dans sa version la plus récente, présentée ci-dessous.",
   },
   "published.procedure": { en: "Solicitation procedure", fr: "Mode d'invitation" },
   "published.commodity": { en: "Commodity type", fr: "Type de marchandise" },
@@ -2884,17 +2885,17 @@ const STRINGS = {
   "incumbents.unavailable": { en: "This list is not available right now.", fr: "Cette liste n'est pas disponible pour le moment." },
   "incumbents.none": { en: "No contract naming an organization ends within 12 months.", fr: "Aucun contrat nommant une organisation ne prend fin d'ici 12 mois." },
   "incumbents.note_one": {
-    en: "{n} organization holds the contracts ending within 12 months, from the radar; the largest values first, up to {max}.",
-    fr: "{n} organisation détient les contrats qui prennent fin d'ici 12 mois, selon le radar; les valeurs les plus élevées d'abord, jusqu'à {max}.",
+    en: "{n} organization holds the contracts ending within 12 months, from the list of contracts ending; the largest values first, up to {max}.",
+    fr: "{n} organisation détient les contrats qui prennent fin d'ici 12 mois, selon la liste des contrats prenant fin; les valeurs les plus élevées d'abord, jusqu'à {max}.",
   },
   "incumbents.note_many": {
-    en: "{n} organizations hold the contracts ending within 12 months, from the radar; the largest values first, up to {max}.",
-    fr: "{n} organisations détiennent les contrats qui prennent fin d'ici 12 mois, selon le radar; les valeurs les plus élevées d'abord, jusqu'à {max}.",
+    en: "{n} organizations hold the contracts ending within 12 months, from the list of contracts ending; the largest values first, up to {max}.",
+    fr: "{n} organisations détiennent les contrats qui prennent fin d'ici 12 mois, selon la liste des contrats prenant fin; les valeurs les plus élevées d'abord, jusqu'à {max}.",
   },
   "incumbents.soonest": { en: "Soonest end", fr: "Fin la plus proche" },
   "incumbents.pro": {
-    en: "The first {n} are shown. The whole list is part of Pro.",
-    fr: "Les {n} premières sont affichées. La liste complète fait partie de Pro.",
+    en: "The first {n} of {all} holders are shown. Pro lists all {all}.",
+    fr: "Les {n} premiers des {all} titulaires sont affichés. Pro les énumère tous les {all}.",
   },
   "orgfeed.title": { en: "Records", fr: "Dossiers" },
   "orgfeed.subtitle": {
@@ -2908,10 +2909,10 @@ const STRINGS = {
   // figures from wrangler.jsonc, never written here.
   "footer.pro": { en: "Pro plan", fr: "Forfait Pro" },
   "pro.about_button": { en: "About Pro", fr: "À propos de Pro" },
-  "propage.title": { en: "Pro: What the Paid Plan Adds", fr: "Pro : ce qu'ajoute le forfait payant" },
+  "propage.title": { en: "Pro: Email Alerts on Tenders, Awards and Contracts Ending", fr: "Pro : alertes par courriel sur les appels d'offres, attributions et fins de contrat" },
   "propage.lead": {
-    en: "Pro is the paid plan of Award Watch, for people who bid on federal work or follow who wins it. It adds same-day tender notices, the full lists of contracts ending within 6 and 12 months, saved searches sent by email, analytics of each buyer, organization and segment, and a keyed API. Every page you can read today stays free.",
-    fr: "Pro est le forfait payant d'Award Watch, pour qui soumissionne aux marchés fédéraux ou suit qui les remporte. Il ajoute les avis d'appel d'offres du jour même, les listes complètes des contrats prenant fin d'ici 6 et 12 mois, l'envoi des recherches enregistrées par courriel, les analyses de chaque acheteur, organisation et segment, et une API à clé. Toutes les pages que vous lisez aujourd'hui restent gratuites.",
+    en: "Pro emails you new notices that match your saved searches, and each award, amendment or end date within 6 or 12 months for the organizations, buyers and contracts you follow. It also opens the full 12-month list of contracts ending, {years} fiscal years of analytics and a keyed API. Every page you can read today stays free.",
+    fr: "Pro vous envoie par courriel les nouveaux avis qui correspondent à vos recherches enregistrées, et chaque attribution, modification ou fin à 6 ou 12 mois des organisations, acheteurs et contrats que vous suivez. Il ouvre aussi la liste complète des contrats prenant fin d'ici 12 mois, {years} exercices d'analyses et une API avec clé. Toutes les pages que vous lisez aujourd'hui restent gratuites.",
   },
   "propage.records": {
     en: "Every record of an organization or a buyer in one table, with its filters, its pages and a CSV file; the Free plan sees the newest {n}.",
@@ -2923,7 +2924,7 @@ const STRINGS = {
   },
   "propage.api": {
     en: "A keyed API for scripts: the open tenders, each day's new notices, the contracts ending in each window, search, and each organization's and buyer's records, up to {day} requests a day and {minute} a minute.",
-    fr: "Une API à clé pour les scripts : les appels d'offres ouverts, les nouveaux avis de chaque jour, les contrats prenant fin dans chaque période, la recherche et les dossiers de chaque organisation et acheteur, jusqu'à {day} requêtes par jour et {minute} par minute.",
+    fr: "Une API avec clé pour les scripts : les appels d'offres ouverts, les nouveaux avis de chaque jour, les contrats prenant fin dans chaque période, la recherche et les dossiers de chaque organisation et acheteur, jusqu'à {day} requêtes par jour et {minute} par minute.",
   },
   "propage.feeds": {
     en: "A calendar feed of each saved tender search for Google Calendar, Outlook or Apple Calendar: each open notice's closing as an event, moved when an amendment moves it. Any notice or contract page also offers its date as a file, free.",
@@ -2931,8 +2932,8 @@ const STRINGS = {
   },
   "propage.who_title": { en: "Who It Is For", fr: "À qui il s'adresse" },
   "propage.who_bid": {
-    en: "Bid writers and small suppliers who want a notice the day CanadaBuys posts it, not the next morning.",
-    fr: "Les rédacteurs de soumissions et les petits fournisseurs qui veulent un avis le jour où AchatsCanada le publie, et non le lendemain.",
+    en: "Bid writers and small suppliers who want matching notices by email and closing dates in their calendar.",
+    fr: "Les rédacteurs de soumissions et les petits fournisseurs qui veulent les avis correspondants par courriel et les dates de clôture dans leur agenda.",
   },
   "propage.who_capture": {
     en: "Capture and business development staff who track the recompetes in their field: which contracts end within the year, who holds them and how they were awarded.",
@@ -2958,15 +2959,10 @@ const STRINGS = {
     en: "CA${monthly} a month or CA${yearly} a year, in Canadian dollars. Taxes are added at checkout according to the buyer's location.",
     fr: "{monthly} $ CA par mois ou {yearly} $ CA par année, en dollars canadiens. Les taxes sont ajoutées au paiement selon le lieu de l'acheteur.",
   },
-  "propage.q_free": { en: "Do I need Pro to read the site?", fr: "Faut-il Pro pour consulter le site?" },
-  "propage.a_free": {
-    en: "No. Every page stays free to read without an account, along with the CSV downloads, the open JSON API and the Atom feeds.",
-    fr: "Non. Toutes les pages restent gratuites, sans compte, tout comme les téléchargements CSV, l'API JSON ouverte et les fils Atom.",
-  },
   "propage.q_alerts": { en: "How do the email alerts work?", fr: "Comment fonctionnent les alertes par courriel?" },
   "propage.a_alerts": {
-    en: "Save a filtered tender list or radar window, or an organization, a buyer or a segment, and choose daily or weekly email. Each message lists what is new since the last one. Pro keeps up to {n} saved searches.",
-    fr: "Enregistrez une liste d'appels d'offres ou une période du radar filtrée, ou une organisation, un acheteur ou un segment, puis choisissez un courriel quotidien ou hebdomadaire. Chaque message énumère ce qui est nouveau depuis le précédent. Pro conserve jusqu'à {n} recherches.",
+    en: "Save a filtered tender list or a filtered list of contracts ending, or an organization, a buyer or a segment, and choose daily or weekly email. Each message lists what is new since the last one. Pro keeps up to {n} saved searches.",
+    fr: "Enregistrez une liste filtrée d'appels d'offres ou une liste filtrée de contrats prenant fin, ou une organisation, un acheteur ou un segment, puis choisissez un courriel quotidien ou hebdomadaire. Chaque message énumère ce qui est nouveau depuis le précédent. Pro conserve jusqu'à {n} recherches.",
   },
   "propage.q_source": { en: "Where does the data come from?", fr: "D'où viennent les données?" },
   "propage.a_source": {
@@ -2977,8 +2973,8 @@ const STRINGS = {
   // the radar's pages describe end dates and give no advice (test/expiring.test.ts ADVICE).
   "propage.q_recompete": { en: "Does Pro show recompetes?", fr: "Pro montre-t-il les remises en concurrence?" },
   "propage.a_recompete": {
-    en: "Yes. The 6- and 12-month windows list every contract ending in the period with its holder, its buyer and how it was awarded, and the analytics show a buyer's or a segment's contracts ending by quarter. Watch an organization or a buyer and Pro writes to you as its contracts near their end.",
-    fr: "Oui. Les périodes de 6 et 12 mois énumèrent chaque contrat qui prend fin, avec son détenteur, son acheteur et sa méthode d'attribution, et les analyses montrent les contrats d'un acheteur ou d'un segment qui prennent fin par trimestre. Suivez une organisation ou un acheteur et Pro vous écrit quand ses contrats approchent de leur fin.",
+    en: "Yes. The 6- and 12-month lists of contracts ending name every contract ending in the period with its holder, its buyer and how it was awarded, and the analytics show a buyer's or a segment's contracts ending by quarter. Watch an organization or a buyer and Pro writes to you as its contracts near their end.",
+    fr: "Oui. Les listes de 6 et 12 mois des contrats prenant fin énumèrent chaque contrat qui prend fin, avec son détenteur, son acheteur et sa méthode d'attribution, et les analyses montrent les contrats d'un acheteur ou d'un segment qui prennent fin par trimestre. Suivez une organisation ou un acheteur et Pro vous écrit quand ses contrats approchent de leur fin.",
   },
   "propage.q_cancel": { en: "Can I cancel?", fr: "Puis-je annuler?" },
   "propage.q_seller": { en: "Who sells Pro?", fr: "Qui vend Pro?" },
@@ -2987,8 +2983,8 @@ const STRINGS = {
     fr: "Pro est vendu par l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le compte d'Allwater Software Inc., la société de la Colombie-Britannique qui publie Award Watch. Les données de carte vont à Stripe et n'atteignent jamais ce site; Link envoie les reçus.",
   },
   "home.lead_n": {
-    en: "The tender notices open on CanadaBuys, who won the contracts awarded after them, and the contracts ending within a year, with a page for each department and for each of the {n} organizations the records name. From the Government of Canada's open data, refreshed nightly.",
-    fr: "Les avis d'appel d'offres ouverts sur AchatsCanada, qui a remporté les contrats attribués ensuite et les contrats qui prennent fin d'ici un an, avec une page pour chaque ministère et pour chacune des {n} organisations que nomment les dossiers. D'après les données ouvertes du gouvernement du Canada, mises à jour chaque nuit.",
+    en: "Every tender open on CanadaBuys, who won each federal contract, and the {n} contracts ending within 12 months with the supplier that holds each one. Free to read, from the Government of Canada's open data, refreshed nightly.",
+    fr: "Tous les appels d'offres ouverts sur AchatsCanada, qui a remporté chaque contrat fédéral et les {n} contrats qui prennent fin d'ici 12 mois, avec le fournisseur qui détient chacun. Gratuit, d'après les données ouvertes du gouvernement du Canada, mis à jour chaque nuit.",
   },
   "home.do_heading": { en: "What You Can Do Here", fr: "Ce que vous pouvez faire ici" },
   "home.do_tenders_link": { en: "Watch tenders", fr: "Suivre les appels d'offres" },
@@ -3008,8 +3004,8 @@ const STRINGS = {
   },
   "home.do_pro_link": { en: "Get it by email with Pro", fr: "Tout recevoir par courriel avec Pro" },
   "home.do_pro": {
-    en: "{link}: saved searches sent daily or weekly, and the notices CanadaBuys posts during the day.",
-    fr: "{link} : les recherches enregistrées envoyées chaque jour ou chaque semaine, et les avis qu'AchatsCanada publie pendant la journée.",
+    en: "{link}: new notices matching your searches, and the awards, amendments and end dates of what you follow, daily or weekly. Same-day notices show on the site every {h} hours.",
+    fr: "{link} : les nouveaux avis correspondant à vos recherches, et les attributions, modifications et dates de fin de ce que vous suivez, chaque jour ou chaque semaine. Les avis du jour paraissent sur le site toutes les {h} heures.",
   },
 
   // -- buyer merges: one buyer per institution, its other names, the institutions listed apart (2026-11-06) --
@@ -3296,18 +3292,18 @@ const STRINGS = {
   "plans.free_searches": { en: "{n} saved searches, on the site", fr: "{n} recherches enregistrées, sur le site" },
   "plans.pro_searches": { en: "{n} saved searches, by email", fr: "{n} recherches enregistrées, par courriel" },
   "plans.free_watches": { en: "{n} watches, on the site", fr: "{n} suivis, sur le site" },
-  "plans.pro_watches": { en: "{n} watches, events by email", fr: "{n} suivis, événements par courriel" },
+  "plans.pro_watches": { en: "{n} watches, each change by email", fr: "{n} suivis, chaque changement par courriel" },
   "plans.free_feeds": { en: "A calendar file per notice or contract", fr: "Fichier de calendrier par avis ou contrat" },
   "plans.pro_feeds": { en: "Calendar feeds of searches and watches", fr: "Flux de calendrier : recherches et suivis" },
-  "plans.free_analytics": { en: "Analytics: first block, {n} fiscal years", fr: "Analyses : premier bloc, {n} exercices" },
+  "plans.free_analytics": { en: "Analytics: first chart, {n} fiscal years", fr: "Analyses : premier graphique, {n} exercices" },
   "plans.pro_analytics": { en: "Analytics: every view, {n} fiscal years", fr: "Analyses : toutes les vues, {n} exercices" },
   "plans.free_api": { en: "Open JSON API", fr: "API JSON ouverte" },
-  "plans.pro_api": { en: "Keyed API: {day} requests a day", fr: "API à clé : {day} requêtes par jour" },
+  "plans.pro_api": { en: "Keyed API: {day} requests a day", fr: "API avec clé : {day} requêtes par jour" },
   "plans.free_instruments": { en: "Standing offer pages", fr: "Pages des offres à commandes" },
   "plans.pro_instruments": { en: "Standing offer CSV files", fr: "Fichiers CSV des offres à commandes" },
   "plans.pro_briefing": { en: "Weekly briefing by email", fr: "Bulletin hebdomadaire par courriel" },
-  "plans.pro_org": { en: "Your organization's page", fr: "La page de votre organisation" },
-  "plans.pro_bugs": { en: "Bug report form", fr: "Formulaire de signalement de bogue" },
+  "plans.pro_org": { en: "Your organization beside {n} others", fr: "Votre organisation à côté de {n} autres" },
+  "plans.pro_bugs": { en: "A form to report a site problem", fr: "Formulaire pour signaler un problème" },
   // -- a tender notice's documents (src/pages/tender.tsx): the links the
   // CanadaBuys file names for the notice, the hosts they are on, and the line
   // beside them saying when the notice closes. The time left is the lists'
@@ -3520,6 +3516,58 @@ const STRINGS = {
   // shows the older data; the short form to 1599 px.
   "refresh.reload": { en: "Reload for the new data", fr: "Recharger pour les nouvelles données" },
   "refresh.reload_short": { en: "Reload", fr: "Recharger" },
+
+  // -- the prose review of 2026-11-07 (notes/prose-review.md): the strings it added --
+  // The home head's first button while the accounts switch is on (the Atom
+  // feeds button while it is off).
+  "home.pro_button": { en: "Email alerts with Pro", fr: "Alertes par courriel avec Pro" },
+  // Under the Pro card's Subscribe button for a reader not signed in, and
+  // under the Pro page's last one: the three steps to a subscription.
+  "propage.subscribe_steps": {
+    en: "Enter your email, type the 6-digit code the site sends, then pay monthly or yearly on Stripe's page. There is no password.",
+    fr: "Entrez votre adresse courriel, saisissez le code à 6 chiffres que le site envoie, puis payez au mois ou à l'année sur la page de Stripe. Il n'y a pas de mot de passe.",
+  },
+  // The Pro page's questions: what the mail holds and when it comes (the
+  // delivery cron starts at 15:00 UTC), and how to cancel.
+  "propage.q_mail": { en: "What arrives by email, and when?", fr: "Qu'est-ce qui arrive par courriel, et quand?" },
+  "propage.a_mail": {
+    en: "One message per saved search, daily or weekly, sent late morning Eastern time after the day's refresh, with only what is new; a day with nothing new sends nothing. Watches arrive together in one message; a briefing comes on Mondays.",
+    fr: "Un message par recherche enregistrée, chaque jour ou chaque semaine, envoyé en fin de matinée (heure de l'Est) après la mise à jour du jour, avec seulement ce qui est nouveau; un jour sans nouveauté n'envoie rien. Les suivis arrivent ensemble dans un message; un bulletin arrive le lundi.",
+  },
+  "propage.a_cancel": {
+    en: "Yes, at any time: Plan and Billing in your account opens Stripe's page, where you cancel. Pro stays on to the end of the period paid, which is not refunded, and nothing more is charged.",
+    fr: "Oui, en tout temps : Forfait et facturation, dans votre compte, ouvre la page de Stripe, où vous annulez. Pro reste actif jusqu'à la fin de la période payée, qui n'est pas remboursée, et rien d'autre n'est facturé.",
+  },
+  // The 3-month panel on /expiring, where expiring.first_note's comparison
+  // with the 3-month list would name the list itself.
+  "expiring.first_note_3m": { en: "The first {n} by end date.", fr: "Les {n} premiers par date de fin." },
+  // expiring.pro_text without the value beyond 3 months (a window or the
+  // 3-month list with no total), and without the count beyond 3 months
+  // (the 3-month figures not read).
+  "expiring.pro_text_no_total": {
+    en: "Pro lists all {all}, {beyond} of them ending 3 to {months} months out, with every filter and the 12-month CSV.",
+    fr: "Pro les énumère tous les {all}, dont {beyond} prennent fin dans 3 à {months} mois, avec tous les filtres et le CSV de 12 mois.",
+  },
+  "expiring.pro_text_all": {
+    en: "Pro lists all {all}, with every filter and the 12-month CSV.",
+    fr: "Pro les énumère tous les {all}, avec tous les filtres et le CSV de 12 mois.",
+  },
+  // expiring.lead without a total (the 12-month window has none), and as it
+  // read before the review when the index carries no 12-month window.
+  "expiring.lead_no_total": {
+    en: "{n} federal contracts end within 12 months of the data date ({date}), each with the supplier that holds it.",
+    fr: "{n} contrats fédéraux prennent fin d'ici 12 mois après la date des données ({date}), chacun avec le fournisseur qui le détient.",
+  },
+  "expiring.lead_plain": {
+    en: "Contracts whose end date, as last amended, falls within 12 months of the data date ({date}): award notices, PSPC contract history and published contracts.",
+    fr: "Contrats dont la date de fin, à la plus récente modification, tombe dans les 12 mois suivant la date des données ({date}) : avis d'attribution, historique des contrats de SPAC et contrats publiés.",
+  },
+  // incumbents.pro when more organizations hold the contracts than the list
+  // keeps (INCUMBENTS_MAX): Pro sees the largest {max}, not all of them.
+  "incumbents.pro_capped": {
+    en: "The first {n} of {all} holders are shown. Pro lists the {max} largest.",
+    fr: "Les {n} premiers des {all} titulaires sont affichés. Pro énumère les {max} plus importants.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;
