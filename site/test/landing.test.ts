@@ -278,7 +278,7 @@ describe("the hero, the figures and the shots", () => {
     const ending = /<span>Ending within 3 months<\/span>[\s\S]*?<\/div><\/div>(?=<\/div>)/.exec(page)?.[0] ?? "";
     expect([...ending.matchAll(/<span class="lp-rt[^"]*">([^<]*)</g)].map((m) => m[1])).toEqual(["20 days left", "45 days left", "81 days left"]);
     // The profile of stats.json's first organization of the year, with the other names its records carry.
-    expect(page).toContain('<div class="lp-nm">Exemplar Translation Services Inc.</div>');
+    expect(page).toContain(`<div class="lp-nm"><a href="/organizations/${(FILES["stats.json"] as any).top_organizations_year[0].id}">Exemplar Translation Services Inc.</a></div>`);
     expect(page).toContain('<p class="lp-al">Also recorded as: EXEMPLAR TRANSLATION SERVICES INC</p>');
     expect(page).toContain("<span>Published contracts</span><b class=\"num\">$1.9M</b><small>101 records</small>");
   });
@@ -425,5 +425,18 @@ describe("the writing and the files", () => {
     expect(LANDING_CSS).toContain(".lp-close { background: var(--navy);");
     // Motion stops for a reader who asks for less of it.
     expect(LANDING_CSS).toContain("@media (prefers-reduced-motion: reduce)");
+  });
+
+  it("links the company shot's name, Follow and Analytics where the profile's own controls lead, in both switch states", async () => {
+    const stats = FILES["stats.json"] as any;
+    const id = stats.top_organizations_year[0].id as string;
+    const onPage = await html("/", on());
+    expect(onPage).toContain(`<div class="lp-nm"><a href="/organizations/${id}">`);
+    expect(onPage).toContain(`<a class="lp-btn lp-btn-sm lp-btn-fill" href="/account/sign-in?next=${encodeURIComponent(`/organizations/${id}`)}">Follow</a>`);
+    expect(onPage).toContain(`<a class="lp-btn lp-btn-sm" href="/organizations/${id}/analytics" rel="nofollow">Analytics</a>`);
+    expect(onPage).not.toContain('<div class="lp-shot" aria-hidden="true"><div class="lp-profile">');
+    const offPage = await html("/", off());
+    expect(offPage).toContain(`<a class="lp-btn lp-btn-sm lp-btn-fill" href="/organizations/${id}">`);
+    expect(offPage).not.toContain(`/organizations/${id}/analytics`);
   });
 });

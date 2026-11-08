@@ -124,6 +124,8 @@ p { margin: 0; }
 .lp-btn-fill { background: var(--em); border-color: var(--em); color: var(--em-ink); }
 .lp-btn-fill:hover { border-color: var(--em); filter: brightness(1.06); }
 .lp-btn-sm { min-height: 40px; padding: 7px 16px; font-size: 14px; }
+.lp-nm a { color: inherit; text-decoration: none; }
+.lp-nm a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .lp-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--em); text-decoration: none; }
 .lp-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .lp-link svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }

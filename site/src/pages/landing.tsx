@@ -60,7 +60,7 @@ import { money, provincesText } from "./shared";
 
 // The stylesheet's version: bump it with any change to public/landing.css so
 // a cached copy is never paired with new markup.
-export const LANDING_VERSION = 1;
+export const LANDING_VERSION = 2;
 
 // The display face, self-hosted beside Inter (public/fonts, SIL Open Font
 // License in BricolageGrotesque-OFL.txt), preloaded by this page alone.
@@ -279,15 +279,25 @@ const ProfileShot: FC<{ lang: Lang; profile: Profile; on: boolean; lobbying: boo
   if (lobbying && org.n_lobbying > 0) {
     tiles.push({ label: sourceLabel(lang, "lobbying"), value: fmtInt(org.n_lobbying, lang), note: t(lang, "landing.tile_reports") });
   }
+  // The shot's controls lead where the profile's own would: Follow to the
+  // sign-in with the profile as the way back (the profile's control for a
+  // reader without a session, account/watch_pages.tsx), Analytics to the
+  // organization's view, and with the switch off the watchlist's button to
+  // the profile, where the watchlist script runs. Links, so the shot is not
+  // hidden from assistive technology.
+  const profilePath = `/organizations/${org.id}`;
   return (
-    <div class="lp-shot" aria-hidden="true">
+    <div class="lp-shot">
       <div class="lp-profile">
-        <div class="lp-nm">{org.display_name}</div>
+        <div class="lp-nm"><a href={profilePath}>{org.display_name}</a></div>
         {others.length ? <p class="lp-al">{`${t(lang, "org.also_recorded")} ${others.join(", ")}`}</p> : null}
         <div class="lp-acts">
           {on
-            ? <><span class="lp-btn lp-btn-sm lp-btn-fill">{t(lang, "watches.button")}</span><span class="lp-btn lp-btn-sm">{t(lang, "rail.analytics")}</span></>
-            : <span class="lp-btn lp-btn-sm lp-btn-fill">{t(lang, "watch.off")}</span>}
+            ? <>
+              <a class="lp-btn lp-btn-sm lp-btn-fill" href={`/account/sign-in?next=${encodeURIComponent(profilePath)}`}>{t(lang, "watches.button")}</a>
+              <a class="lp-btn lp-btn-sm" href={`${profilePath}/analytics`} rel="nofollow">{t(lang, "rail.analytics")}</a>
+            </>
+            : <a class="lp-btn lp-btn-sm lp-btn-fill" href={profilePath}>{t(lang, "watch.off")}</a>}
         </div>
       </div>
       {tiles.length ? (
