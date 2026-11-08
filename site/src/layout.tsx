@@ -370,7 +370,8 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
   return (
     <nav class="rail" aria-label={t(lang, "nav.main_label")}>
       <div class="rail-group">
-        <p class="rail-head" id="rail-index">{t(lang, "rail.index")}</p>
+        {/* The Overview group's head opens the day's overview (pages/home.tsx at /overview, for every reader); the other heads are labels. */}
+        <p class="rail-head" id="rail-index"><a href="/overview" aria-current={here === "/overview" || here === "/" ? "page" : undefined}>{t(lang, "rail.index")}</a></p>
         <ul aria-labelledby="rail-index" class="rail-tree">
           {index.map((e) => (
             <li class={e.children ? "rail-parent" : undefined}>
@@ -455,7 +456,7 @@ const TipScript: FC<{ tables: TableUse }> = ({ tables }) =>
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 38;
+export const STYLES_VERSION = 39;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one

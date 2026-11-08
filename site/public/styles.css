@@ -357,6 +357,10 @@ main { flex: 1 0 auto; min-width: 0; padding: 0 var(--gutter) var(--gutter); }
 .rail-group { padding: 8px 0; }
 .rail-group + .rail-group { border-top: 1px solid var(--border); }
 .rail-head { margin: 0; padding: 8px var(--gutter) 4px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+/* The Overview head is a link to the day's overview: the head's own type, underlined on hover, the accent when it is the page. */
+.rail-head a { color: inherit; text-decoration: none; }
+.rail-head a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.rail-head a[aria-current="page"] { color: var(--accent); }
 .rail ul { list-style: none; margin: 0; padding: 0; }
 .rail li { margin: 0; }
 .rail-item {

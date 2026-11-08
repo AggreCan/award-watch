@@ -144,7 +144,7 @@ describe("every page", () => {
     expect(nav).toContain('<a class="rail-item rail-child" href="/expiring/6m"><span class="rail-label"><span class="rail-short">6 months</span><span class="rail-full">Ending within 6 months</span></span><span class="rail-n">5</span></a>');
     expect(nav).toContain('<a class="rail-item rail-child" href="/expiring/12m"><span class="rail-label"><span class="rail-short">12 months</span><span class="rail-full">Ending within 12 months</span></span><span class="rail-n">8</span></a>');
     // The home page is none of the rail's items.
-    expect(nav).not.toContain("aria-current");
+    expect(nav).not.toMatch(/class="rail-item[^"]*"[^>]*aria-current/);  // the Overview head's link is the page at "/"; no rail item is
     expect(nav).not.toContain("rail-ancestor");
     expect(nav).toContain('<span class="rail-n" data-watch-count="" hidden=""></span>');
     // While the accounts switch is off nothing is Pro, so nothing carries the chip.

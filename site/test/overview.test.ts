@@ -121,8 +121,9 @@ describe("the route", () => {
     for (const lang of LANGS) {
       for (const env of [testEnv(), onEnv()]) {
         const rail = railOf(await (await request(`/overview${q(lang)}`, env)).text());
-        expect(rail, lang).toContain(`<p class="rail-head" id="rail-index">${t(lang, "rail.index")}</p>`);
-        expect(rail, lang).not.toContain('aria-current="page"');
+        expect(rail, lang).toContain(`<p class="rail-head" id="rail-index"><a href="/overview" aria-current="page">${t(lang, "rail.index")}</a></p>`);
+        // The head's link is the page; no rail item is.
+        expect(rail, lang).not.toMatch(/class="rail-item[^"]*"[^>]*aria-current="page"/);
         expect(rail, lang).toBe(railOf(await (await request(`/${q(lang)}`, env, undefined, "home")).text()));
       }
     }
