@@ -38,7 +38,7 @@ export interface Seo {
 type Both = Record<Lang, string>;
 
 export type PageKey =
-  | "home" | "tenders" | "tenders_new" | "same_day" | "awards" | "awards_erroneous" | "expiring" | "organizations" | "buyers"
+  | "home" | "overview" | "tenders" | "tenders_new" | "same_day" | "awards" | "awards_erroneous" | "expiring" | "organizations" | "buyers"
   | "segments" | "rankings" | "analytics"
   | "feeds" | "watchlist" | "methodology" | "data" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts" | "pro";
 
@@ -62,6 +62,21 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     description: {
       en: "Every federal tender, award and grant in Canada (CanadaBuys, open.canada.ca), in one place. Who won, and what ends within a year. Free, updated nightly.",
       fr: "Appels d'offres, attributions et subventions fédéraux (AchatsCanada, ouvert.canada.ca). Qui a gagné, ce qui finit d'ici un an. Gratuit, mis à jour la nuit.",
+    },
+  },
+  // The app home at its own address, the same page for every reader (pages/home.tsx,
+  // docs/landing.md). "/" keeps the site's result-list text and the WebSite markup;
+  // this one names the day's overview and carries no structured data, as the section pages do.
+  overview: {
+    path: "/overview",
+    name: "rail.index",
+    title: {
+      en: "Today's Federal Tenders, Awards and Contracts Ending",
+      fr: "Appels d'offres, attributions et fins de contrat du jour",
+    },
+    description: {
+      en: "The day's overview: open federal tenders by province on a map, the notices new today and closing soon, the newest awards and contracts ending in 3 months.",
+      fr: "Vue d'ensemble du jour : appels d'offres fédéraux ouverts par province, avis nouveaux et sur le point de fermer, attributions récentes et fins de contrat.",
     },
   },
   tenders: {

@@ -105,6 +105,16 @@ language alternates, the social card and the `WebSite` and publisher
 markup, so the result-list text and the structured data for `/` are
 unchanged; a test holds the two heads equal.
 
+**The overview, `/overview`.** The original home is at `/overview` for every
+reader, signed in or not. It is a section page in the result list: the
+title "Today's Federal Tenders, Awards and Contracts Ending" ("Appels
+d'offres, attributions et fins de contrat du jour"), a description that
+calls it the day's overview (open tenders by province on the map, the
+notices new today and closing soon, the newest awards and the contracts
+ending within 3 months), its own canonical address and language pair, and
+no structured data. It is listed in the sitemap with the data date, after
+`/`.
+
 **The Pro page, `/pro`.** What Pro includes, each line a feature the plans
 grant; who it is for; what stays free; the price as the billing page prints
 it (from the two price figures the site is configured with, taxes added at
@@ -144,8 +154,9 @@ data, where a square logo is wanted.
 
 - the export's parts, now 25,000 pages each, served with every page twice,
   English then French, each entry carrying the alternates of both, so a part
-  holds at most the protocol's 50,000 addresses; the Pro page, the
-  same-day page and the analytics index are listed with the fixed pages;
+  holds at most the protocol's 50,000 addresses; the overview, the Pro
+  page, the same-day page and the analytics index are listed with the
+  fixed pages;
 - 128 parts for the published contracts, `/sitemap-contracts-1.xml` to
   `/sitemap-contracts-128.xml`, read from the records database. Each part is
   a fixed slice of the record key, so its address never changes and it holds

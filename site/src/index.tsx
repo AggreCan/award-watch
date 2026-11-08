@@ -28,6 +28,7 @@ import { DOWNLOADS, YEARLY_DOWNLOAD, dataPage } from "./pages/data";
 import { directoryPage, organizationsIndex } from "./pages/directory";
 import { EXPIRING_CSV, expiringFile, expiringPage, expiringRowsCsv, expiringWindowPage } from "./pages/expiring";
 import { feedsPage } from "./pages/feeds";
+import { overviewPage } from "./pages/home";
 import { correctionsForm, correctionsSubmit, respondPage, respondSubmit } from "./pages/forms";
 import { rootPage, ultraSubmit } from "./pages/landing";
 import { contractIcs, publishedContractIcs, tenderIcs } from "./pages/ics";
@@ -127,6 +128,12 @@ app.route("/admin", admin);
 // The landing page for a reader without a signed-in session, the app home
 // for a signed-in one (pages/landing.tsx rootPage, docs/landing.md).
 app.get("/", rootPage);
+// The app home at its own address, for every reader in both switch states
+// (pages/home.tsx overviewPage, docs/landing.md). page() caches it as it
+// caches "/" for a signed-in reader: public for 5 minutes without a session,
+// private once the shell names a signed-in address, Vary: Cookie while the
+// switch is on.
+app.get("/overview", overviewPage);
 // The open notices, filtered in the browser after the first view; the
 // notices first seen each day; one notice. /tenders/new is registered
 // before /tenders/:reference, which would read "new" as a reference.

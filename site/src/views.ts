@@ -63,6 +63,8 @@ const PAGES = new Set([
   "/search",
   // The index of the analytics views (pages/analytics_index.tsx); its query is never stored either.
   "/analytics",
+  // The app home at its own address (pages/home.tsx), counted apart from "/", where a reader without a session gets the landing page.
+  "/overview",
 ]);
 const API_FIXED = new Set(["/api/stats"]);
 const DOWNLOAD_FILES = new Set(DOWNLOADS.map((d) => d.file));

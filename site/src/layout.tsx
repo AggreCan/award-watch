@@ -480,6 +480,8 @@ export const FooterRow: FC<{ lang: Lang; lobbyingLoaded: boolean; on: boolean; b
       <a href="/data#sources">{t(lang, "footer.sources_link")}</a>
     </span>
     <span class="footer-links">
+      {/* The app home's own address (pages/home.tsx overviewPage), which "/" gives a signed-in reader only. */}
+      <a href="/overview">{t(lang, "rail.index")}</a>
       <a href="/segments">{t(lang, "nav.segments")}</a>
       <a href="/rankings">{t(lang, "nav.rankings")}</a>
       {/* The rail's Browse group hides on a phone, where these links stand in for it; no chip here. */}

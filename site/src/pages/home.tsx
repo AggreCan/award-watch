@@ -38,7 +38,16 @@ type Tile = { label: string; note: unknown; href: string; value: number; soon?: 
 
 const Empty = ({ lang, k }: { lang: Lang; k: Key }) => <p class="muted">{t(lang, k)}</p>;
 
-export async function homePage(c: Context<AppEnv>): Promise<Response> {
+// The app home answers at two addresses with one body (docs/landing.md): "/"
+// for a signed-in reader (pages/landing.tsx rootPage), and /overview for
+// every reader, signed in or not, whatever the accounts switch says. Only the
+// head differs: "/" keeps the result-list text and the WebSite markup the
+// landing page carries too, and /overview names itself (seo.ts PAGES.overview).
+// One parameter each, so a route that passes Hono's next() reaches neither.
+export const homePage = (c: Context<AppEnv>): Promise<Response> => appHome(c, "home");
+export const overviewPage = (c: Context<AppEnv>): Promise<Response> => appHome(c, "overview");
+
+async function appHome(c: Context<AppEnv>, at: "home" | "overview"): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
   if (!stats) return noDataPage(c, "site.name");
@@ -148,9 +157,10 @@ export async function homePage(c: Context<AppEnv>): Promise<Response> {
 
   // The head's first button: the email alerts while Pro exists, else the feeds.
   const pro = accountsEnabled(c.env);
+  const seo = at === "home" ? pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] }) : pageSeo("overview", lang);
   return page(
     c,
-    <Layout lang={lang} title={t(lang, "site.name")} dataAsOf={stats.data_as_of} seo={pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] })}
+    <Layout lang={lang} title={t(lang, "site.name")} dataAsOf={stats.data_as_of} seo={seo}
       head={<FeedLinks lang={lang} />}>
       <PageHead lang={lang} title={t(lang, "home.title")} lead={homeLead(lang, n12)}
         actions={<>

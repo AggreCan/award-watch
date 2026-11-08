@@ -286,13 +286,15 @@ SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 # /pro, /tenders/same-day and /analytics answer while the site's accounts
 # switch is on, as it is in production; the published contracts' pages are
 # listed by the Worker from the records database (/sitemap-contracts-<n>.xml).
-SITEMAP_PAGES = ["/", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous", "/expiring",
-                 "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/watchlist", "/data",
-                 "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy", "/alerts", "/pro"]
+# /overview is the site's app home at its own address, the same page for every
+# reader; "/" is the landing page for a reader without a session.
+SITEMAP_PAGES = ["/", "/overview", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous",
+                 "/expiring", "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/watchlist",
+                 "/data", "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy", "/alerts", "/pro"]
 # Pages whose content follows the nightly data carry its date; the others
 # change only with the code, so they carry none rather than a false one.
-SITEMAP_DATED_PAGES = {"/", "/tenders", "/tenders/new", "/awards", "/awards/erroneous", "/expiring", "/organizations",
-                       "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/data"}
+SITEMAP_DATED_PAGES = {"/", "/overview", "/tenders", "/tenders/new", "/awards", "/awards/erroneous", "/expiring",
+                       "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/data"}
 
 
 # -- small helpers ------------------------------------------------------------------

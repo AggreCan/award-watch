@@ -5,7 +5,8 @@
 // from the live rows, the three steps, the plan cards and a closing band,
 // then the site's footer. A signed-in reader gets the app home
 // (pages/home.tsx) at the same address, so both answers carry Vary: Cookie
-// while the accounts switch is on.
+// while the accounts switch is on. Every reader finds the app home at
+// /overview too, the nav's first link and the footer's.
 //
 // It reads stats.json (a missing file is the no-data page, as on the app
 // home), the expiring index and the 3-month window's first page (the free
@@ -68,7 +69,7 @@ import { money, provincesText } from "./shared";
 
 // The stylesheet's version: bump it with any change to public/landing.css so
 // a cached copy is never paired with new markup.
-export const LANDING_VERSION = 3;
+export const LANDING_VERSION = 5;
 
 // The display face, self-hosted beside Inter (public/fonts, SIL Open Font
 // License in BricolageGrotesque-OFL.txt), preloaded by this page alone.
@@ -551,6 +552,8 @@ export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, endi
           <div class="lp-wrap">
             <a class="lp-brand" href="/" aria-label={t(lang, "site.name")}><BrandWordmark name={t(lang, "site.name")} /><BrandMark /></a>
             <nav class="lp-links" aria-label={t(lang, "nav.main_label")}>
+              {/* The app home's own address, worded as the rail's group (pages/home.tsx overviewPage). */}
+              <a href="/overview">{t(lang, "landing.nav_overview")}</a>
               <a href="/tenders">{t(lang, "nav.tenders")}</a>
               <a href="/awards">{t(lang, "nav.awards")}</a>
               <a href="/expiring">{t(lang, "rail.expiring")}</a>

@@ -3816,6 +3816,8 @@ const STRINGS = {
     en: "The Ultra card among the plans on the home page keeps an address the same way, with the plan's name in place of a filter. That address gets one message when Ultra opens, with the same link to unsubscribe, and the row stores when it went. The card's address is not sent the message saying accounts are open, and it is not offered to an account as a saved search.",
     fr: "La carte Ultra, parmi les forfaits de la page d'accueil, conserve une adresse de la même façon, avec le nom du forfait à la place d'un filtre. Cette adresse reçoit un seul message à l'ouverture d'Ultra, avec le même lien de désabonnement, et la ligne en conserve le moment. L'adresse de la carte ne reçoit pas le message annonçant l'ouverture des comptes et n'est pas proposée à un compte comme recherche enregistrée.",
   },
+  // The landing page's nav: a short word for the overview, so the French bar stays on one line.
+  "landing.nav_overview": { en: "Overview", fr: "Aperçu" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

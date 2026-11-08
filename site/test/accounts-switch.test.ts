@@ -14,7 +14,7 @@ import { LANDING_SWITCH_PIECES, homeRequest, landingCore } from "./home";
 useAccountsDb();
 
 const PUBLIC_PAGES = [
-  "/", "/tenders", "/tenders?segment=82", "/awards", "/expiring", "/organizations", "/organizations/org-a000000001",
+  "/", "/overview", "/overview?lang=fr", "/tenders", "/tenders?segment=82", "/awards", "/expiring", "/organizations", "/organizations/org-a000000001",
   "/buyers/pwgsc-tpsgc", "/segments/82", "/alerts", "/watchlist", "/about", "/terms", "/privacy", "/data", "/corrections",
   "/nothing-here", "/?lang=fr", "/privacy?lang=fr",
   // A notice's and a contract's pages carry their calendar file's link whatever the switch (pages/ics.ts).
@@ -171,7 +171,9 @@ describe("with the switch on", () => {
 
   it("opens the routes and adds the account item, the Pro marks and a profile's analytics link, and nothing else on a public page", async () => {
     expect((await get("/account/sign-in")).status).toBe(200);
-    for (const path of ["/", "/tenders", "/organizations/org-a000000001", "/nothing-here"]) {
+    // The app home: "/" here through test/home.ts, and at its own address /overview through the app itself.
+    const appHome = (path: string) => path === "/" || path === "/overview";
+    for (const path of ["/", "/overview", "/tenders", "/organizations/org-a000000001", "/nothing-here"]) {
       const on = await render(path, onEnv(), undefined, true);
       const off = await render(path, testEnv(), undefined, true);
       expect(on.status, path).toBe(off.status);
@@ -186,8 +188,8 @@ describe("with the switch on", () => {
       // The top bar's same-day timer leads to the tease while the switch is on and to the list while it is off.
       expect(on.body, path).toContain(FOOTER_PRO);
       expect(on.body, path).toContain(FOOTER_ANALYTICS);
-      expect(HOME_PRO.test(on.body), path).toBe(path === "/");
-      expect(on.body.includes(HOME_BUTTON), path).toBe(path === "/");
+      expect(HOME_PRO.test(on.body), path).toBe(appHome(path));
+      expect(on.body.includes(HOME_BUTTON), path).toBe(appHome(path));
       expect(FOLLOW.test(on.body), path).toBe(path.startsWith("/organizations/"));
       const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(ANALYTICS_ITEM, "").replace(NOTE, "").replace(INTEREST_PRO, "")
         .replace(FOOTER_PRO, "").replace(FOOTER_ANALYTICS, "").replace(HOME_PRO, "").replace(FOLLOW, "").replace(HOME_BUTTON, HOME_FEEDS)

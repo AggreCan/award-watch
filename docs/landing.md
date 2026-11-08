@@ -12,11 +12,26 @@ home. Both answers carry `Vary: Cookie` while the switch is on
 (`varyOnCookie`), so a cache never hands one to the other's reader. The
 landing page is cached publicly for 5 minutes, as other pages are.
 
+The original home is at `/overview` for every reader (operator, 2026-11-08):
+signed in or not, in both switch states, `overviewPage` answers with the app
+home's body, cached as `/` caches it for that reader (public for 5 minutes
+without a session, `private, no-store` once the shell names a signed-in
+address, `Vary: Cookie` while the switch is on). Only its head differs: its
+own title ("Today's Federal Tenders, Awards and Contracts Ending", "Appels
+d'offres, attributions et fins de contrat du jour"), a description that
+calls it the day's overview, the canonical address `/overview` with its
+language pair, and no structured data; the `WebSite` and publisher markup
+stays with `/`. The landing page's nav (first, before Tenders) and the
+footer of every page link to it as "Overview" ("Vue d'ensemble"), the rail
+group's own word (`rail.index`). The rail marks no item there, as at `/`. It
+is in the sitemap with the data date, and the views count it as its own
+route.
+
 ## What it shows, and what it reads
 
-In order: the nav (the wordmark, Tenders, Awards, Contracts ending, and with
-the switch on Analytics and Pro; the language and theme switches; Sign in;
-"Track tenders free"), the hero (the claim, the search box, the Canada map
+In order: the nav (the wordmark, Overview, Tenders, Awards, Contracts ending,
+and with the switch on Analytics and Pro; the language and theme switches;
+Sign in; "Track tenders free"), the hero (the claim, the search box, the Canada map
 of open tenders), the scrolling band of forty organizations, four figures,
 three feature bands each with a product shot, the three steps, the plan
 cards, the closing band and the site's footer links.
@@ -138,6 +153,14 @@ dark as `styles.css` does: `data-theme` on the root, set by `public/theme.js`
 from the choice saved in the browser (shared with the app pages), else the
 system setting. The hero and the closing band stay navy in both modes.
 
+The nav's links show from 1241 px and wrap onto a second line inside the
+bar's 64 px when the bar runs short. In French with the switch on, the six
+links and four controls need 1,306 px (dark) to 1,327 px (light) against the
+1,168 px the 1200 px column leaves (measured in Edge with Inter, 2026-11-08;
+1,174 to 1,195 px before Overview joined them, already over), so there the
+links take two lines; in English (1,118 px at most) and in French with the
+switch off (1,068 px) they keep one.
+
 Display type is Bricolage Grotesque, self-hosted beside Inter:
 `site/public/fonts/BricolageGrotesque-Variable.woff2`, from the variable
 file in the google/fonts repository (`ofl/bricolagegrotesque`), its width
@@ -158,4 +181,7 @@ the search form, the head the app home carries, the no-data page, the
 shipped files and the Ultra card's form markup. `test/interest-ultra.test.ts`
 holds the form's post and every reader of its row. `test/cpu-budget.test.ts` times the page with the 3-month
 window's page at its production size. The tests of the app home's content
-reach it through `test/home.ts`.
+reach it through `test/home.ts`. `test/overview.test.ts` holds `/overview`:
+every reader in both languages and both switch states, its body equal to
+the app home's for the same reader, its caching, its head, the nav and
+footer links and its route in the views.

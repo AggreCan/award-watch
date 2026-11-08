@@ -60,6 +60,9 @@ def test_static_export_writes_the_sitemaps(conn, tmp_path):
     assert counts["sitemap_files"] == 1 and counts["sitemap_urls"] == len(urls) == len(set(urls))
     assert urls[:len(es.SITEMAP_PAGES)] == [BASE + p for p in es.SITEMAP_PAGES]
     assert entries[f"{BASE}/"] == "2026-10-31" and entries[f"{BASE}/methodology"] is None
+    # The app home at its own address, listed right after "/" and dated like it: its map, tiles and lists follow the night's data.
+    assert urls[1] == f"{BASE}/overview" and entries[f"{BASE}/overview"] == "2026-10-31"
+    assert "/overview" in es.SITEMAP_DATED_PAGES
     # The alerts page changes with the code only, so it carries no date; nor do the Pro page and the same-day page.
     assert entries[f"{BASE}/alerts"] is None
     assert entries[f"{BASE}/pro"] is None and entries[f"{BASE}/tenders/same-day"] is None

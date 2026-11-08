@@ -55,7 +55,7 @@ const payEnv = (extra: Record<string, unknown> = {}) => onEnv({ ...PAY, ...extra
 // and 12-month windows have no fixture files here; their result-list titles
 // come from the same function as the 3-month window's (checked below).
 const SECTIONS = [
-  "/", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous", "/expiring", "/expiring/3m",
+  "/", "/overview", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous", "/expiring", "/expiring/3m",
   "/organizations", "/buyers", "/segments", "/rankings", "/feeds", "/alerts", "/watchlist", "/methodology", "/data", "/cite",
   "/corrections", "/about", "/terms", "/privacy", "/pro", "/analytics",
 ];
@@ -87,6 +87,8 @@ describe("result-list titles and descriptions", () => {
   it("name what a reader searches for", async () => {
     const titles = Object.fromEntries(await Promise.all(SECTIONS.map(async (p) => [p, titleOf(headOf(await html(p)))])));
     expect(titles["/"]).toBe("Award Watch: Federal Tenders, Awards and Contracts Ending");
+    // The app home at its own address names the day, apart from the site's own title at "/".
+    expect(titles["/overview"]).toBe("Today's Federal Tenders, Awards and Contracts Ending");
     expect(titles["/tenders"]).toContain("CanadaBuys");
     expect(titles["/awards"]).toContain("Who Won");
     expect(titles["/expiring/3m"]).toBe("Federal Contracts Ending Within 3 Months | Award Watch");
@@ -337,7 +339,7 @@ describe("the home page", () => {
 
 describe("language alternates", () => {
   it("pair each page's two versions both ways, each naming itself as canonical", async () => {
-    for (const path of ["/", "/tenders", "/pro", "/data", "/organizations/org-a000000001", "/expiring/3m", "/segments/82", "/tenders/same-day"]) {
+    for (const path of ["/", "/overview", "/tenders", "/pro", "/data", "/organizations/org-a000000001", "/expiring/3m", "/segments/82", "/tenders/same-day"]) {
       const en = headOf(await html(path, payEnv()));
       const fr = headOf(await html(`${path}?lang=fr`, payEnv()));
       const pair = { en: `${O}${path}`, fr: `${O}${path}?lang=fr`, "x-default": `${O}${path}` };
@@ -441,10 +443,13 @@ describe("the sitemap parts", () => {
     expect(withLanguages(`<urlset><url><loc>${O}/tenders?segment=82</loc></url></urlset>`)).toContain(`<url><loc>${O}/tenders?segment=82</loc></url>`);
   });
 
-  it("hold the pipeline to the same size, and list the Pro page, the same-day page and the analytics index", () => {
+  it("hold the pipeline to the same size, and list the Pro page, the same-day page, the analytics index and the overview", () => {
     expect(/^SITEMAP_MAX_URLS = ([0-9_]+)$/m.exec(exportStatic)?.[1]?.replace(/_/g, "")).toBe(String(SITEMAP_PART_MAX));
     const pages = /^SITEMAP_PAGES = \[([\s\S]*?)\]/m.exec(exportStatic)?.[1] ?? "";
-    for (const path of ["/pro", "/tenders/same-day", "/analytics", "/expiring", "/data"]) expect(pages).toContain(`"${path}"`);
+    for (const path of ["/pro", "/tenders/same-day", "/analytics", "/expiring", "/data", "/overview"]) expect(pages).toContain(`"${path}"`);
+    // The overview follows the night's data, so it carries the data date as "/" does.
+    const dated = /^SITEMAP_DATED_PAGES = \{([\s\S]*?)\}/m.exec(exportStatic)?.[1] ?? "";
+    for (const path of ["/", "/overview"]) expect(dated).toContain(`"${path}"`);
   });
 });
 

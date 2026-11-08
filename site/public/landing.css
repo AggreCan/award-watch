@@ -141,13 +141,16 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 
 /* -- nav --------------------------------------------------------------------- */
 .lp-nav { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--navy) 94%, transparent); backdrop-filter: blur(8px); color: var(--on-navy); }
-.lp-nav .lp-wrap { display: flex; align-items: center; gap: 20px; min-height: 64px; }
+/* The bar's row runs wider than the content column, so the French links keep one line at 1440 px. */
+.lp-nav .lp-wrap { display: flex; align-items: center; gap: 20px; min-height: 64px; max-width: 1320px; }
 .lp-brand { display: inline-flex; align-items: center; color: #ffffff; text-decoration: none; flex: none; }
 .lp-brand .brand-wordmark { display: block; width: auto; height: 26px; }
 /* The mark alone stands in for the wordmark on the narrowest phones. */
 .lp-brand .brand-mark { display: none; width: 32px; height: 32px; }
 .lp-brand .mark-check { fill: var(--em-bright); }
-.lp-links { display: flex; gap: 18px; font-size: 15px; font-weight: 500; }
+/* The links take a second line inside the bar's 64 px when the bar runs short of room
+   (French with the accounts switch on), rather than push the page wider than the screen. */
+.lp-links { display: flex; gap: 0 18px; font-size: 15px; font-weight: 500; }
 .lp-links a { text-decoration: none; color: var(--on-navy-2); white-space: nowrap; }
 .lp-links a:hover { color: #ffffff; }
 .lp-nav-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
@@ -359,7 +362,7 @@ html.js .theme-toggle { display: inline-flex; }
 /* -- narrower screens -------------------------------------------------------- */
 /* The nav's links go first, before the bar would run wider than the screen;
    the hero and the bands lead to the same pages. */
-@media (max-width: 1240px) {
+@media (max-width: 1360px) {
   .lp-links { display: none; }
 }
 @media (max-width: 1000px) {
