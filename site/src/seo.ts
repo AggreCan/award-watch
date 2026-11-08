@@ -60,8 +60,8 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
       fr: "Award Watch : appels d'offres et contrats fédéraux du Canada",
     },
     description: {
-      en: "Canadian federal tenders from CanadaBuys, who won each contract, and the contracts ending within a year, by supplier and department. Updated nightly.",
-      fr: "Appels d'offres d'AchatsCanada, contrats attribués et contrats qui prennent fin d'ici un an, par fournisseur et par ministère. Mis à jour chaque nuit.",
+      en: "Every federal tender, award and grant in Canada (CanadaBuys, open.canada.ca), in one place. Who won, and what ends within a year. Free, updated nightly.",
+      fr: "Appels d'offres, attributions et subventions fédéraux (AchatsCanada, ouvert.canada.ca). Qui a gagné, ce qui finit d'ici un an. Gratuit, mis à jour la nuit.",
     },
   },
   tenders: {
@@ -309,6 +309,13 @@ export function absoluteUrl(path: string): string {
 export const PUBLISHER_NAME = "Allwater Software Inc.";
 export const LOGO_PATH = "/brand/mark-512.png";
 export const LOGO_SIZE = 512;
+// The card every shared link shows (public/brand/og-home.png): the wordmark,
+// the claim and the map of open tenders, at 1200 x 630, the shape Open Graph
+// readers and Twitter's large-image card expect. The square mark above stays
+// the logo wherever a logo is wanted.
+export const SOCIAL_CARD_URL = `${SITE_ORIGIN}/brand/og-home.png`;
+export const SOCIAL_CARD_WIDTH = 1200;
+export const SOCIAL_CARD_HEIGHT = 630;
 const ORG_ID = `${SITE_ORIGIN}/#organization`;
 
 function publisher(lang: Lang): Record<string, unknown> {

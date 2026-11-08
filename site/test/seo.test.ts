@@ -193,7 +193,7 @@ describe("page metadata", () => {
     }
     const missing = await headOf("/nothing-here");
     expect(missing).not.toContain('rel="canonical"');
-    expect(meta(missing, "description")).toContain("Canadian federal tenders from CanadaBuys");
+    expect(meta(missing, "description")).toContain("Every federal tender, award and grant in Canada");
   });
 
   it("JSON-LD text cannot close its script element", () => {

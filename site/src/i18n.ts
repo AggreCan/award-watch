@@ -3640,6 +3640,11 @@ const STRINGS = {
   "tip.valued_many": { en: "{n} records with a value", fr: "{n} dossiers avec une valeur" },
   "tip.compared_one": { en: "{n} record compared", fr: "{n} dossier comparé" },
   "tip.compared_many": { en: "{n} records compared", fr: "{n} dossiers comparés" },
+  // The alternative text of the card a shared link shows (layout.tsx, SocialImage).
+  "social.image_alt": {
+    en: "Award Watch: federal tenders, awards and contracts in Canada",
+    fr: "Award Watch : appels d'offres, attributions et contrats fédéraux au Canada",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

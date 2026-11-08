@@ -87,6 +87,16 @@ Ending", "Open Federal Tenders from CanadaBuys", "Federal Contract Awards:
 Who Won", "Federal Contracts Ending Within 12 Months". The page headings are
 unchanged; only the result-list text moved.
 
+Since 2026-11-08 the home page's description leads with the search, names
+both sources and says the site is free: "Search every Canadian federal
+tender, contract award and grant (CanadaBuys, open.canada.ca). Who won, and
+what ends within a year. Free, updated nightly." (153 characters). The
+French carries the same points in 155: "Appels d'offres, attributions et
+subventions fédéraux (AchatsCanada, ouvert.canada.ca). Qui a gagné, ce qui
+finit d'ici un an. Gratuit, mis à jour la nuit." Pages with no description
+of their own (errors, the thank-you page) and the `WebSite` markup carry
+the same text.
+
 **The Pro page, `/pro`.** What Pro includes, each line a feature the plans
 grant; who it is for; what stays free; the price as the billing page prints
 it (from the two price figures the site is configured with, taxes added at
@@ -114,8 +124,13 @@ other engines and assistants read.
 `x-default`, and both versions name the same three addresses, so each pair
 confirms the other.
 
-**Social cards.** The brand mark at 512 px, with its size, type and
-alternative text, for Open Graph and the Twitter summary card.
+**Social cards.** Since 2026-11-08 every page shares one 1200 by 630 card:
+the wordmark, the line "Find your next federal tender. See who won the last
+one." and the map of open tenders by province. The tags give its type, size
+and alternative text in the page's language ("Award Watch: federal tenders,
+awards and contracts in Canada"), and the Twitter card is the large-image
+kind. The 512 px square mark stays the publisher's logo in the structured
+data, where a square logo is wanted.
 
 **Sitemaps.** `/sitemap.xml` is an index of two kinds of part:
 
@@ -151,7 +166,8 @@ Pro.
    known, not indexed.
 3. Run Google's Rich Results Test on `/pro` and `/data` once the deploy is
    live, and the URL Inspection tool on one page in each language.
-4. A wide social image (1200 by 630) would fill a shared card better than
-   the square mark; it needs a design.
+4. Done 2026-11-08: the 1200 by 630 card replaced the square mark as the
+   shared image. Check one page in a card validator (or by sharing a link)
+   once the deploy is live; platforms cache a card for days.
 5. Done 2026-11-06: the Pro page says "recompete" (its "who it is for" line,
    a question, the description); the radar's pages still never do.

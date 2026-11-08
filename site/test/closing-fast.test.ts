@@ -51,7 +51,9 @@ function valuesAround(now: number): string[] {
 }
 
 describe("the closing states match public/closing.js", () => {
-  it("for closingPassed and the state, every value at every clock, read twice", () => {
+  // About 4.7 s alone, past vitest's 5 s default when the whole suite shares
+  // the cores; the time is not under test here (cpu-budget.test.ts times it).
+  it("for closingPassed and the state, every value at every clock, read twice", { timeout: 30_000 }, () => {
     let checked = 0;
     for (const now of NOWS) {
       const clock = clockAt(now);

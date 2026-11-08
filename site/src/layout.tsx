@@ -5,7 +5,9 @@ import { CLOSING_SOON_DAYS } from "./constants";
 import { type Competitive, type RailCounts, competitiveOf, loadRail } from "./data";
 import type { AppEnv } from "./env";
 import { competitiveLabel, fmtInt, statusLabel, t, type Key, type Lang } from "./i18n";
-import { LOGO_PATH, LOGO_SIZE, type Seo, absoluteUrl, alternates, canonicalUrl, defaultDescription, pageTitle } from "./seo";
+import {
+  SOCIAL_CARD_HEIGHT, SOCIAL_CARD_URL, SOCIAL_CARD_WIDTH, type Seo, alternates, canonicalUrl, defaultDescription, pageTitle,
+} from "./seo";
 import { allowed } from "./account/entitlements";
 import { type RailAccount, railAccount } from "./account/session";
 import { accountsEnabled } from "./account/switch";
@@ -225,7 +227,7 @@ const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, lang, tit
       <meta property="og:description" content={seo.description} />
       <meta property="og:locale" content={lang === "fr" ? "fr_CA" : "en_CA"} />
       <meta property="og:locale:alternate" content={lang === "fr" ? "en_CA" : "fr_CA"} />
-      <meta name="twitter:card" content="summary" />
+      <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={socialTitle} />
       <meta name="twitter:description" content={seo.description} />
       <SocialImage lang={lang} />
@@ -634,19 +636,20 @@ export function lowerRedirect(c: Context<AppEnv>, path: string): Response | null
 
 // -- search framing (docs/seo.md) -------------------------------------------------
 
-// The image a shared link shows: the brand mark at 512 px square
-// (public/brand/mark-512.png), which a "summary" card shows as is and Open
-// Graph readers take at its stated size. The alt text is the site's name,
-// which is what the mark says.
+// The image a shared link shows, the same on every page: the 1200 x 630 card
+// (public/brand/og-home.png) with the wordmark, the claim and the map of open
+// tenders, for Open Graph readers at its stated size and Twitter's
+// large-image card. The square mark stays the publisher's logo in the
+// structured data (seo.ts). The alt text says what the card shows.
 export const SocialImage: FC<{ lang: Lang }> = ({ lang }) => (
   <>
-    <meta property="og:image" content={absoluteUrl(LOGO_PATH)} />
+    <meta property="og:image" content={SOCIAL_CARD_URL} />
     <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content={String(LOGO_SIZE)} />
-    <meta property="og:image:height" content={String(LOGO_SIZE)} />
-    <meta property="og:image:alt" content={t(lang, "site.name")} />
-    <meta name="twitter:image" content={absoluteUrl(LOGO_PATH)} />
-    <meta name="twitter:image:alt" content={t(lang, "site.name")} />
+    <meta property="og:image:width" content={String(SOCIAL_CARD_WIDTH)} />
+    <meta property="og:image:height" content={String(SOCIAL_CARD_HEIGHT)} />
+    <meta property="og:image:alt" content={t(lang, "social.image_alt")} />
+    <meta name="twitter:image" content={SOCIAL_CARD_URL} />
+    <meta name="twitter:image:alt" content={t(lang, "social.image_alt")} />
   </>
 );
 

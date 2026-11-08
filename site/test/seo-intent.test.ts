@@ -1,8 +1,8 @@
 // Search framing (docs/seo.md): the result-list titles and descriptions of
 // the section pages in both languages, the structured data, the Pro page and
-// its price, the language alternates, the sitemaps with their French entries
-// and the published contracts' parts, the footer's link and the home page's
-// lines. test/seo.test.ts keeps the per-page metadata it already held.
+// its price, the language alternates, the social card, the sitemaps with
+// their French entries and the published contracts' parts, the footer's link
+// and the home page's lines. test/seo.test.ts keeps the per-page metadata it already held.
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { RULES } from "../src/account/entitlements";
@@ -347,14 +347,61 @@ describe("language alternates", () => {
       expect(metaOf(fr, "og:locale")).toBe("fr_CA");
     }
   });
+});
 
-  it("share the brand mark as the Open Graph and Twitter image", async () => {
-    const head = headOf(await html("/pro"));
-    expect(metaOf(head, "og:image")).toBe(`${O}/brand/mark-512.png`);
-    expect(metaOf(head, "og:image:width")).toBe("512");
-    expect(metaOf(head, "og:image:alt")).toBe("Award Watch");
-    expect(metaOf(head, "twitter:card")).toBe("summary");
-    expect(metaOf(head, "twitter:image")).toBe(`${O}/brand/mark-512.png`);
+// -- social cards ------------------------------------------------------------------------------
+
+// A PNG's width and height, from the IHDR chunk that follows the 8-byte signature.
+const pngSize = (bytes: ArrayBuffer) => {
+  const view = new DataView(bytes);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+};
+
+describe("social cards", () => {
+  it("share the 1200 x 630 card as a large-image card on every section page, in both languages", async () => {
+    const card = `${O}/brand/og-home.png`;
+    const alt = {
+      en: "Award Watch: federal tenders, awards and contracts in Canada",
+      fr: "Award Watch : appels d’offres, attributions et contrats fédéraux au Canada",
+    };
+    for (const lang of ["en", "fr"] as const) {
+      for (const path of SECTIONS) {
+        const url = lang === "fr" ? `${path}?lang=fr` : path;
+        const head = headOf(await html(url, payEnv()));
+        expect(metaOf(head, "twitter:card"), url).toBe("summary_large_image");
+        expect(metaOf(head, "og:image"), url).toBe(card);
+        expect(metaOf(head, "og:image:type"), url).toBe("image/png");
+        expect(metaOf(head, "og:image:width"), url).toBe("1200");
+        expect(metaOf(head, "og:image:height"), url).toBe("630");
+        expect(metaOf(head, "twitter:image"), url).toBe(card);
+        expect(nbsp(metaOf(head, "og:image:alt")), url).toBe(alt[lang]);
+        expect(nbsp(metaOf(head, "twitter:image:alt")), url).toBe(alt[lang]);
+        // No social tag names the square mark any more.
+        expect(head, url).not.toMatch(/<meta (?:name|property)="(?:og|twitter):[^"]*" content="[^"]*mark-512/);
+      }
+    }
+    // The card is served, at the size the tags state.
+    const assets = (env as unknown as { ASSETS: Fetcher }).ASSETS;
+    const res = await assets.fetch(new Request(card));
+    expect(res.status).toBe(200);
+    expect(pngSize(await res.arrayBuffer())).toEqual({ width: 1200, height: 630 });
+  });
+
+  it("keep the square mark as the publisher's logo in the structured data", async () => {
+    const logo = { "@type": "ImageObject", url: `${O}/brand/mark-512.png`, width: 512, height: 512 };
+    for (const lang of ["en", "fr"] as const) {
+      const q = lang === "fr" ? "?lang=fr" : "";
+      const [graph] = jsonLd(await html(`/${q}`));
+      expect(graph["@graph"].find((n: any) => n["@type"] === "Organization").logo, lang).toEqual(logo);
+      const [dataset] = jsonLd(await html(`/data${q}`, offEnv()));
+      expect(dataset.publisher.logo, lang).toEqual(logo);
+      const [product] = jsonLd(await html(`/pro${q}`, payEnv()));
+      for (const o of product.offers) expect(o.seller.logo, lang).toEqual(logo);
+    }
+    const assets = (env as unknown as { ASSETS: Fetcher }).ASSETS;
+    const res = await assets.fetch(new Request(`${O}/brand/mark-512.png`));
+    expect(res.status).toBe(200);
+    expect(pngSize(await res.arrayBuffer())).toEqual({ width: 512, height: 512 });
   });
 });
 
