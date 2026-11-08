@@ -292,3 +292,21 @@ export function signInMessage(
   ].join("\n");
   return { to, subject, text, html, lang };
 }
+
+// -- the address-change notice ------------------------------------------------
+//
+// Sent by the operator console when it changes an account's address
+// (admin.tsx): plain, in the account's language, with the sign-in page's
+// address and the contact address. It names no other address.
+export function addressNotice(lang: Lang, to: string, base: string): MailMessage {
+  const link = `${base}/account/sign-in${lang === "fr" ? "?lang=fr" : ""}`;
+  const body = t(lang, "admin.mail_body");
+  const signIn = t(lang, "admin.mail_sign_in", { link });
+  const contact = t(lang, "admin.mail_contact", { contact: CONTACT_EMAIL });
+  const html =
+    `<!doctype html><html lang="${lang}"><body style="font-family: sans-serif; line-height: 1.5;">` +
+    `<p>${escapeHtml(body)}</p>` +
+    `<p><a href="${escapeHtml(link)}">${escapeHtml(t(lang, "account.sign_in"))}</a></p>` +
+    `<p>${escapeHtml(contact)}</p></body></html>`;
+  return { to, subject: t(lang, "admin.mail_subject"), text: `${body}\n\n${signIn}\n\n${contact}\n`, html, lang };
+}

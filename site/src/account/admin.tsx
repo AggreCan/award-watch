@@ -25,6 +25,15 @@
 //   POST /admin/announce                               send the next run of it (confirm=yes; announce.tsx)
 //   GET  /admin/announce?kind=ultra                    the same for the Ultra message (the Ultra card's addresses)
 //   POST /admin/announce with kind=ultra               send the next run of that one
+//   GET  /admin/mail-check                             the live mail check: what it sends, the form
+//   POST /admin/mail-check                             one message of each template to MAIL_TEST_TO (mail_check.ts), JSON
+//
+// One address has a second way in: a POST to /admin/mail-check that carries
+// an Authorization header is judged by the mail-check workflow's token alone
+// (mail_check.ts mailCheckTokenAdmits: conditions 1 and 2, the token, and,
+// while ACCESS_AUD is set, a token Access signed, a service token's
+// included), never by a session, and needs no CSRF value since no cookie
+// admits it. No other address reads that header.
 //
 // Every POST needs an Origin header naming the site (a browser always sends
 // one with a form post, so a post without one is refused here, unlike the
@@ -44,7 +53,6 @@ import { loadStats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
-import { CONTACT_EMAIL } from "../pages/docs";
 import { type CorrectionListRow, latestCorrections } from "../pages/forms";
 import { EMAIL_MAX, normalizeEmail } from "../pages/interest";
 import { accessEmail, accessRequired } from "./admin_access";
@@ -68,7 +76,10 @@ import { type FeedCounts, type FeedView, feedCounts, userFeeds } from "./feeds";
 import { CLAIM_TOP_N, type Claim, type ClaimOverview, claimDetail, claimOverview } from "./org_claim";
 import { planLabel } from "./pages";
 import { deleteAccount } from "./routes";
-import { type MailMessage, isLocalHost, senderFor } from "./sender";
+import {
+  MAIL_CHECK_TEMPLATES, type MailCheckOutcome, type MailCheckTemplate, mailCheckTo, mailCheckTokenAdmits, runMailCheck,
+} from "./mail_check";
+import { addressNotice, isLocalHost, senderFor } from "./sender";
 import { type Account, csrfValid, readSession, revokeAllSessions } from "./session";
 import { accountsEnabled } from "./switch";
 
@@ -79,6 +90,10 @@ export const REASON_MAX = 200;
 
 // The operator a request was admitted for, set by the guard below.
 const operators = new WeakMap<Request, Account>();
+// The requests the mail-check workflow's token admitted: POST
+// /admin/mail-check alone, with no session and so no operator.
+const byToken = new WeakSet<Request>();
+const MAIL_CHECK_PATH = "/admin/mail-check";
 
 async function admitted(c: Context<AppEnv>): Promise<Account | null> {
   if (!accountsEnabled(c.env)) return null;
@@ -106,9 +121,14 @@ async function admitted(c: Context<AppEnv>): Promise<Account | null> {
 }
 
 admin.use("*", async (c, next) => {
-  const op = await admitted(c);
-  if (!op) return c.notFound();
-  operators.set(c.req.raw, op);
+  if (c.req.method === "POST" && c.req.path === MAIL_CHECK_PATH && c.req.header("authorization") !== undefined) {
+    if (!(await mailCheckTokenAdmits(c.env, c.req.raw.headers))) return c.notFound();
+    byToken.add(c.req.raw);
+  } else {
+    const op = await admitted(c);
+    if (!op) return c.notFound();
+    operators.set(c.req.raw, op);
+  }
   await next();
   c.header("Cache-Control", "no-store");
   c.header("X-Robots-Tag", "noindex, nofollow");
@@ -358,6 +378,7 @@ function overviewView(
           <a href="/admin/accounts" class="btn">{t(lang, "admin.accounts_link")}</a>
           <a href="/admin/announce" class="btn">{t(lang, "admin.announce_link")}</a>
           <a href="/admin/announce?kind=ultra" class="btn">{t(lang, "admin.announce_ultra_link")}</a>
+          <a href={MAIL_CHECK_PATH} class="btn">{t(lang, "admin.mail_check_link")}</a>
         </>} />
       <Panel title={t(lang, "admin.panel_find")} class="panel-form">
         <form method="get" action="/admin" class="stack" role="search">
@@ -1059,23 +1080,9 @@ function emailView(lang: Lang, op: Account, user: UserRow, mailOn: boolean, extr
 // binding on the site; the stub (no binding or no sending address) cannot.
 const mailOn = (c: Context<AppEnv>) => senderFor(c.env, c.req.url).kind !== "stub";
 
-const escapeHtml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-
-// The notice to the new address: plain, in the account's language, with the
-// sign-in page's address and the contact address. It names no other address.
-export function addressNotice(lang: Lang, to: string, base: string): MailMessage {
-  const link = `${base}/account/sign-in${lang === "fr" ? "?lang=fr" : ""}`;
-  const body = t(lang, "admin.mail_body");
-  const signIn = t(lang, "admin.mail_sign_in", { link });
-  const contact = t(lang, "admin.mail_contact", { contact: CONTACT_EMAIL });
-  const html =
-    `<!doctype html><html lang="${lang}"><body style="font-family: sans-serif; line-height: 1.5;">` +
-    `<p>${escapeHtml(body)}</p>` +
-    `<p><a href="${escapeHtml(link)}">${escapeHtml(t(lang, "account.sign_in"))}</a></p>` +
-    `<p>${escapeHtml(contact)}</p></body></html>`;
-  return { to, subject: t(lang, "admin.mail_subject"), text: `${body}\n\n${signIn}\n\n${contact}\n`, html, lang };
-}
+// The notice to the new address lives in sender.ts beside the other messages
+// (the live mail check sends it too); exported here as before.
+export { addressNotice };
 
 admin.get("/users/:id/email", (c) =>
   guarded(c, async () => {
@@ -1451,5 +1458,90 @@ admin.post("/announce", async (c) => {
     }
     if (r.stopped) p.set("stopped", r.stopped);
     return c.redirect(`/admin/announce?${p}`, 303);
+  });
+});
+
+// -- the live mail check (mail_check.ts, docs/mail.md) -------------------------------------------------
+
+const MAIL_CHECK_NAME: Record<MailCheckTemplate, Key> = {
+  sign_in: "admin.mail_check_t_sign_in", tenders_daily: "admin.mail_check_t_tenders", expiring_weekly: "admin.mail_check_t_expiring",
+  records: "admin.mail_check_t_records", watch: "admin.mail_check_t_watch", briefing: "admin.mail_check_t_briefing",
+  accounts_open: "admin.mail_check_t_accounts_open", ultra_open: "admin.mail_check_t_ultra_open", address_notice: "admin.mail_check_t_address",
+};
+
+// What the check sends and where, never the address itself, and the form.
+// The answer to the form is the route's JSON.
+function mailCheckView(lang: Lang, op: Account, s: { addressSet: boolean; sender: string }) {
+  const n = fmtInt(MAIL_CHECK_TEMPLATES.length, lang);
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "admin.mail_check_title")} lead={t(lang, "admin.mail_check_lead", { n })}
+        actions={<a href="/admin" class="btn">{t(lang, "admin.title")}</a>} />
+      <Panel title={t(lang, "admin.panel_what")} class="panel-form">
+        <ul class="account-list">
+          <li>{t(lang, s.addressSet ? "admin.mail_check_address_set" : "admin.mail_check_address_unset")}</li>
+          <li>{t(lang, "admin.mail_check_sender", { kind: s.sender })}</li>
+          <li>{t(lang, "admin.mail_check_answer")}</li>
+        </ul>
+        <ol class="account-list">{MAIL_CHECK_TEMPLATES.map((k) => <li>{t(lang, MAIL_CHECK_NAME[k])}</li>)}</ol>
+        {s.addressSet ? (
+          <form method="post" action={MAIL_CHECK_PATH} class="stack">
+            <Csrf op={op} />
+            <label>
+              {t(lang, "admin.mail_check_language")}
+              <select name="language">
+                <option value="en" selected={lang === "en"}>{t(lang, "admin.lang_en")}</option>
+                <option value="fr" selected={lang === "fr"}>{t(lang, "admin.lang_fr")}</option>
+              </select>
+            </label>
+            <button type="submit" class="btn btn-primary">{t(lang, "admin.mail_check_button", { n })}</button>
+          </form>
+        ) : null}
+      </Panel>
+    </>
+  );
+}
+
+admin.get("/mail-check", (c) => {
+  const lang = c.get("lang");
+  return adminPage(c, t(lang, "admin.mail_check_title"),
+    mailCheckView(lang, operatorOf(c), { addressSet: mailCheckTo(c.env) !== null, sender: senderFor(c.env, c.req.url).kind }));
+});
+
+// The workflow's post (byToken) is a form with language=en|fr, or no body at
+// all; the console's is operatorForm's, Origin and CSRF checked. Either way
+// the messages go to MAIL_TEST_TO alone, and an audit row records the run by
+// its counts (by the operator's user id, or by "token"), never an address.
+admin.post("/mail-check", async (c) => {
+  let by: string;
+  let fields: Record<string, string> = {};
+  if (byToken.has(c.req.raw)) {
+    by = "token";
+    if (c.req.header("content-type") !== undefined) {
+      const form = await readForm(c);
+      if (!form.ok) return c.json({ ok: false, error: "not_a_form" }, form.status);
+      fields = form.fields;
+    }
+  } else {
+    const form = await operatorForm(c);
+    if (form instanceof Response) return form;
+    by = form.op.userId;
+    fields = form.fields;
+  }
+  const lang = c.get("lang");
+  const language: Lang = fields.language === "fr" ? "fr" : "en";
+  return guarded(c, async () => {
+    const to = mailCheckTo(c.env);
+    if (!to) {
+      await operatorAudit(c.env, null, "operator_mail_check", by, "no test address, nothing sent");
+      return c.json({ ok: false, error: "no_test_address", message: t(lang, "admin.mail_check_no_address") }, 400);
+    }
+    const run = await runMailCheck(c.env, c.req.url, { to, site: siteBase(c), lang: language });
+    const count = (r: MailCheckOutcome) => run.results.filter((x) => x.result === r).length;
+    await operatorAudit(c.env, null, "operator_mail_check", by, `${count("sent")} sent, ${count("refused")} refused, ${count("stubbed")} stubbed`);
+    return c.json({
+      ok: run.results.every((r) => r.result === "sent"), sender: run.sender, language,
+      results: run.results.map((r) => (r.reason === null ? { template: r.template, result: r.result } : r)),
+    });
   });
 });

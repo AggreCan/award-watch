@@ -8,6 +8,7 @@
     "db:local": "wrangler d1 execute award-watch --local --file=../pipeline/schema.sql && wrangler d1 execute award-watch --local --file=./seed/dev_seed.sql && wrangler d1 execute awardwatch-search --local --file=../pipeline/search_schema.sql && wrangler d1 execute awardwatch-records --local --file=../pipeline/records_schema.sql &&wrangler d1 execute awardwatch-accounts --local --file=./accounts_schema.sql && wrangler d1 execute awardwatch-accounts --local --file=./seed/accounts_dev.sql",
     "search:local": "node scripts/load-search-local.mjs",
     "test": "vitest run",
+    "test:mail": "vitest run --config vitest.mail.config.ts",
     "typecheck": "tsc --noEmit",
     "deploy": "wrangler deploy",
     "data:local": "node scripts/copy-data.mjs"

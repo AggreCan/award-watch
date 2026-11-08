@@ -14,6 +14,7 @@ declare namespace Cloudflare {
     STYLES_CSS: string;
     LANDING_CSS: string;
     PUBLIC_FILES: string;
+    SUITES: string;
   }
 }
 

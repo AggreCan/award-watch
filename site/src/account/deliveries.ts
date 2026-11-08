@@ -78,6 +78,13 @@ export const ROWS_MAX = 50;
 export const SPAN_DAYS_MAX = 7;
 // A weekly search is due again this many days after its last delivery.
 export const WEEK_DAYS = 7;
+// The messages a run may still send once the parts named have run: the cap
+// less every message they sent or tried, never below zero. The watch mail
+// gets roomAfter(the saved searches) and the briefings roomAfter(the saved
+// searches, the watch mail), so the three parts share the one cap
+// (test-mail/caps.test.ts holds the arithmetic).
+export const roomAfter = (...parts: ({ sent: number; failed: number } | null | undefined)[]): number =>
+  Math.max(0, RUN_MESSAGES_MAX - parts.reduce((n, p) => n + (p ? p.sent + p.failed : 0), 0));
 // Refusals that mean the account's sending is spent for now: the run stops
 // and the next hour goes on. Any other refusal fails that one message.
 export const STOP_CODES: ReadonlySet<string> = new Set(["E_DAILY_LIMIT_EXCEEDED", "E_RATE_LIMIT_EXCEEDED"]);
@@ -534,7 +541,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   if (!stop) {
     try {
       const watch = await runWatchMail(env, {
-        site, dataDate, now, plans, room: RUN_MESSAGES_MAX - report.sent - report.failed, capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
+        site, dataDate, now, plans, room: roomAfter(report), capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
       });
       report.watch = watch.report;
       if (watch.stop) {
@@ -548,9 +555,8 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   }
   if (!stop) {
     try {
-      const used = report.sent + report.failed + (report.watch ? report.watch.sent + report.watch.failed : 0);
       const brief = await runBriefings(env, {
-        site, dataDate, now, plans, room: RUN_MESSAGES_MAX - used, capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
+        site, dataDate, now, plans, room: roomAfter(report, report.watch), capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
       });
       report.briefing = brief.report;
       if (brief.stop) {

@@ -1,0 +1,132 @@
+# The live mail check (docs/mail.md): one real message of each template the
+# site sends, to the operator's test inbox and to no other address. This job
+# asks the deployed Worker to send them (POST /admin/mail-check) and fails
+# when any template's result is not "sent", so GitHub's failed-workflow email
+# goes out; the operator reads the inbox for the rest (each subject starts
+# with "[mail check]"). The job sends no mail itself and never sees the
+# address: the Worker holds it (MAIL_TEST_TO) and answers with each
+# template's result alone.
+#
+# Triggers: weekly, Monday at 14:00 UTC, an hour before the delivery runs and
+# the weekly briefings start (15:00 UTC), so a refusal shows before readers'
+# messages go; and by hand (the Actions tab, repository writers only), with
+# the language of the messages as an input. No push trigger, and nothing on
+# the site starts it.
+#
+# How the request gets in: Cloudflare Access guards /admin, so the request
+# carries an Access service token (CF-Access-Client-Id and
+# CF-Access-Client-Secret), which the Access application admits through a
+# Service Auth policy; the Worker then checks Access's signed token and the
+# bearer token of this job, compared in constant time, on this one address
+# only. A service token alone or a bearer token alone opens nothing.
+#
+# Secrets: MAIL_CHECK_TOKEN (the bearer token, a random value of at least 32
+# characters; the same value is the Worker secret MAIL_CHECK_TOKEN, set with
+# wrangler secret put); CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET (the
+# Access service token; needed while Access guards /admin). Variables:
+# SITE_URL. The Worker's MAIL_TEST_TO (the test inbox) is the repository
+# secret of that name, passed to the Worker by both deploys; this job never
+# reads it. Nothing here prints a token or an address.
+
+name: mail-check
+
+on:
+  schedule:
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+    inputs:
+      language:
+        description: "Language of the messages"
+        required: false
+        type: choice
+        options: [en, fr]
+        default: en
+
+# Nothing is checked out, written or opened.
+permissions:
+  contents: read
+
+concurrency:
+  group: mail-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Told only whether each secret is set, never given one.
+      - name: Check the secrets
+        env:
+          TOKEN_SET: ${{ secrets.MAIL_CHECK_TOKEN != '' }}
+          ACCESS_ID_SET: ${{ secrets.CF_ACCESS_CLIENT_ID != '' }}
+          ACCESS_SECRET_SET: ${{ secrets.CF_ACCESS_CLIENT_SECRET != '' }}
+        run: |
+          if [ "$TOKEN_SET" != "true" ]; then
+            echo "::error::The secret MAIL_CHECK_TOKEN is not set, so nothing was asked (docs/mail.md)."
+            exit 1
+          fi
+          if [ "$ACCESS_ID_SET" != "$ACCESS_SECRET_SET" ]; then
+            echo "::error::CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET go together: set both or neither (docs/mail.md)."
+            exit 1
+          fi
+          if [ "$ACCESS_ID_SET" != "true" ]; then
+            echo "::warning::No Access service token is set; while Access guards /admin the request stops there."
+          fi
+
+      # The answer lists each template's result and names no address. curl
+      # does not follow redirects, so Access's redirect to its sign-in page
+      # shows as the status it is.
+      - name: Ask the site to send the check
+        env:
+          SITE: ${{ vars.SITE_URL || 'https://awardwatch.ca' }}
+          MAIL_CHECK_TOKEN: ${{ secrets.MAIL_CHECK_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          LANGUAGE: ${{ inputs.language || 'en' }}
+        run: |
+          case "$LANGUAGE" in
+            en|fr) ;;
+            *) echo "::error::The language must be en or fr."; exit 1 ;;
+          esac
+          out="$RUNNER_TEMP/mail-check.json"
+          set -- -sS --max-time 120 -o "$out" -w '%{http_code}' -X POST -H "Accept: application/json" \
+            -H "Authorization: Bearer $MAIL_CHECK_TOKEN" --data-urlencode "language=$LANGUAGE"
+          if [ -n "$CF_ACCESS_CLIENT_ID" ]; then
+            set -- "$@" -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET"
+          fi
+          status=$(curl "$@" "${SITE%/}/admin/mail-check") || status="000"
+          case "$status" in
+            200) ;;
+            400) echo "::error::The Worker has no test address (MAIL_TEST_TO), so nothing was sent. Set the repository secret MAIL_TEST_TO and deploy (docs/mail.md)."; exit 1 ;;
+            404) echo "::error::The site answered 404: the accounts switch is off, OPERATOR_EMAILS is unset, Access's token did not check out, or the token is not the Worker's MAIL_CHECK_TOKEN. Nothing was sent."; exit 1 ;;
+            301|302|303|307|308|401|403) echo "::error::Cloudflare Access stopped the request (HTTP $status): check the service token and the application's Service Auth policy (docs/mail.md). Nothing was sent."; exit 1 ;;
+            000) echo "::error::The site could not be reached."; exit 1 ;;
+            *) echo "::error::The site answered HTTP $status."; exit 1 ;;
+          esac
+          if ! jq -e '.results | type == "array"' "$out" > /dev/null 2>&1; then
+            echo "::error::The answer is not the mail check's JSON."
+            exit 1
+          fi
+          {
+            echo "### Mail check"
+            echo ""
+            echo "- Sender: $(jq -r '.sender' "$out")"
+            echo "- Language: $(jq -r '.language' "$out")"
+            echo ""
+            echo "| Template | Result | Reason |"
+            echo "|---|---|---|"
+            jq -r '.results[] | "| \(.template) | \(.result) | \(.reason // "") |"' "$out"
+          } >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.results[] | "\(.template): \(.result)\(if .reason then " (\(.reason))" else "" end)"' "$out"
+          count=$(jq '.results | length' "$out")
+          bad=$(jq '[.results[] | select(.result != "sent")] | length' "$out")
+          if [ "$count" -eq 0 ]; then
+            echo "::error::The answer lists no template."
+            exit 1
+          fi
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::$bad of $count templates were not sent; the run summary lists each one's result."
+            exit 1
+          fi
+          echo "All $count templates were sent to the test inbox. Read them there."

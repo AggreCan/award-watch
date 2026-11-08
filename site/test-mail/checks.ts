@@ -1,0 +1,208 @@
+// The checks every message the site sends is held to (docs/mail.md), shared
+// by the mail suite's files. A message is checked as it leaves through the
+// log sender (sender.ts logSender: the development outbox, the sent_mail
+// table), the sender a local run uses, so what is checked is what a sender
+// was handed.
+//
+// The two parts are compared in both directions. The text part's lines,
+// split at " · " and ", " with their links taken out, must each be found in
+// the HTML part's visible text; the HTML part's visible text, split the same
+// way and at every element, must each be found in the text part. A few lines
+// are worded for one part by design (the sign-in message's lead beside its
+// button, the text part's "Saved searches and delivery" line); a shape names
+// them by their dictionary keys, so the exception holds in both languages and
+// nothing else slips through it. The web links must be the same set in both
+// parts, the header's link to the home page aside (the text part has no
+// header), and an address the HTML part links with mailto: is written out in
+// the text part.
+import { expect } from "vitest";
+import { sendWithHeaders } from "../src/account/deliveries";
+import { deliveryHeaders, siteLink } from "../src/account/digests";
+import type { MailMessage } from "../src/account/sender";
+import { CODE_MINUTES } from "../src/account/signin";
+import { t, type Key, type Lang } from "../src/i18n";
+import { CONTACT_EMAIL } from "../src/pages/docs";
+import { decode, lastMail, nbsp, onEnv } from "../test/accounts-helpers";
+
+export const LOCAL = "http://localhost";
+// A subject must stay under this many characters, the mark of the live check included.
+export const SUBJECT_MAX = 100;
+// The only addresses a message may name: the site's two role addresses.
+export const ROLE_ADDRESSES: ReadonlySet<string> = new Set([CONTACT_EMAIL, "alerts@awardwatch.ca"]);
+const EM_DASH = String.fromCharCode(0x2014);
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g;
+const STOP_RE = /\/(?:account|interest)\/stop\?/;
+
+export type Sent = MailMessage & { headers?: Record<string, string> };
+
+// What a message is, for the checks.
+export interface Shape {
+  // The name the failures quote.
+  name: string;
+  // Where its links point, no trailing slash.
+  site: string;
+  // A list or watch delivery: a stop link in both parts, the reason line, and
+  // List-Unsubscribe while the stop link is https.
+  list: boolean;
+  // The reason the message came, in both parts; null for a message without one.
+  why: Key | null;
+  // The page that manages the delivery, a path on the site, in both parts.
+  manage?: string | null;
+  // Lines worded for one part by design, as dictionary keys and their values.
+  onePart?: readonly (readonly [Key, Record<string, string | number>?])[];
+}
+
+// -- reading the two parts ----------------------------------------------------------------------
+
+const BLOCK = "p|h1|h2|div|td|tr|li|ul|ol|table|body|html|title";
+const INLINE = "a|span|b";
+
+// The HTML part's visible text: the head and the hidden preheader left out,
+// images (the wordmarks' alternative text) left out, a line break at every
+// block element and, when fine, at every inline one too.
+function visible(html: string, fine: boolean): string {
+  const tags = fine ? `${BLOCK}|${INLINE}` : BLOCK;
+  return decode(html
+    .replace(/<head>[\s\S]*?<\/head>/i, "")
+    .replace(/<div style="display:none;[^"]*">[\s\S]*?<\/div>/i, "")
+    .replace(/<img\b[^>]*>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(new RegExp(`</?(?:${tags})\\b[^>]*>`, "gi"), "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " "));
+}
+
+const LINK_RE = /(?:https?:\/\/|mailto:)\S+/g;
+
+// A part's lines cut into the pieces compared: at line ends, " · " and ", ",
+// links out, list dashes and a closing colon off, spaces collapsed; pieces
+// with no letter or digit dropped.
+export function pieces(text: string): string[] {
+  return nbsp(text).split("\n")
+    .flatMap((line) => line.replace(LINK_RE, " ").split(/ · |, /))
+    .map((s) => s.replace(/\s+/g, " ").trim().replace(/^[-·,]\s*/, "").replace(/\s*[:·,]$/, "").trim())
+    .filter((s) => /[\p{L}\p{N}]/u.test(s));
+}
+
+// A part as running lines, links out and spaces collapsed, for finding a piece of the other part in it.
+const flow = (text: string) => nbsp(text).replace(LINK_RE, " ").split("\n").map((l) => l.replace(/\s+/g, " ").trim()).join("\n");
+
+// The links of each part. The header's two links to the home page (the
+// wordmark and the host name) are the HTML part's alone.
+const hrefs = (html: string) => [...html.matchAll(/\shref="([^"]*)"/g)].map((m) => decode(m[1]));
+
+export function htmlLinks(html: string, site: string, lang: Lang): Set<string> {
+  const home = new Set([site, `${site}/`, siteLink(site, "/", lang)]);
+  return new Set(hrefs(html).filter((u) => /^https?:\/\//.test(u) && !home.has(u)));
+}
+
+export function textLinks(text: string): Set<string> {
+  return new Set(text.match(/https?:\/\/\S+/g) ?? []);
+}
+
+// Every address a message names, in its subject, its text, its HTML and its links.
+export function addressesIn(m: Sent): string[] {
+  return [...new Set([m.subject, m.text, decode(m.html)].flatMap((s) => s.match(EMAIL_RE) ?? []))];
+}
+
+// -- the checks ------------------------------------------------------------------------------------
+
+export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: readonly string[] } = {}): void {
+  const what = `${shape.name} (${lang})`;
+
+  // The subject: present, one line, under SUBJECT_MAX characters.
+  expect(m.subject.trim(), `${what}: subject`).not.toBe("");
+  expect(m.subject, `${what}: subject on one line`).not.toMatch(/[\r\n]/);
+  expect([...m.subject].length, `${what}: subject length`).toBeLessThan(SUBJECT_MAX);
+  expect(m.lang, what).toBe(lang);
+  expect(m.html, what).toMatch(new RegExp(`<html lang="${lang}"`, "i"));
+
+  // No em-dash anywhere.
+  for (const [part, s] of [["subject", m.subject], ["text", m.text], ["html", m.html]] as const) {
+    expect(s.includes(EM_DASH), `${what}: an em-dash in the ${part}`).toBe(false);
+  }
+
+  // No address but the site's role addresses: never the reader's own, never another reader's.
+  for (const address of addressesIn(m)) expect(ROLE_ADDRESSES.has(address), `${what}: names ${address}`).toBe(true);
+  for (const other of o.others ?? []) {
+    expect(`${m.subject}\n${m.text}\n${decode(m.html)}`.includes(other), `${what}: names another reader`).toBe(false);
+  }
+
+  // The same links in both parts; nothing but web and mail links; the contact address in both or neither.
+  const inHtml = htmlLinks(m.html, shape.site, lang);
+  const inText = textLinks(m.text);
+  expect([...inText].sort(), `${what}: the links`).toEqual([...inHtml].sort());
+  for (const href of hrefs(m.html)) {
+    expect(/^(?:https?:\/\/|mailto:)/.test(href), `${what}: link ${href}`).toBe(true);
+    if (href.startsWith("mailto:")) expect(m.text.includes(href.slice("mailto:".length)), `${what}: ${href} in the text part`).toBe(true);
+  }
+  expect(m.text.includes(CONTACT_EMAIL), `${what}: the contact address`).toBe(visible(m.html, false).includes(CONTACT_EMAIL));
+
+  // The same lines in both parts, each direction.
+  const host = new URL(shape.site).host;
+  const skip = new Set((shape.onePart ?? []).flatMap(([key, vars]) => pieces(t(lang, key, vars))));
+  const textFlow = flow(m.text);
+  const htmlFlow = flow(visible(m.html, false));
+  for (const piece of pieces(visible(m.html, true))) {
+    if (piece === host || skip.has(piece)) continue;
+    expect(textFlow.includes(piece), `${what}: the HTML part's "${piece}" is not in the text part`).toBe(true);
+  }
+  for (const piece of pieces(m.text)) {
+    if (skip.has(piece)) continue;
+    expect(htmlFlow.includes(piece), `${what}: the text part's "${piece}" is not in the HTML part`).toBe(true);
+  }
+
+  // The reason the message came, in both parts.
+  if (shape.why) {
+    const why = nbsp(t(lang, shape.why));
+    expect(textFlow.includes(why), `${what}: the reason line in the text part`).toBe(true);
+    expect(htmlFlow.includes(why), `${what}: the reason line in the HTML part`).toBe(true);
+  }
+
+  // A list or watch delivery: its stop link in both parts (the link sets are
+  // equal), the page that manages it, and List-Unsubscribe while the link is https.
+  const stops = [...inHtml].filter((u) => STOP_RE.test(u));
+  const headers = m.headers ?? {};
+  if (shape.list) {
+    expect(stops, `${what}: one stop link`).toHaveLength(1);
+    const stop = stops[0];
+    if (stop.startsWith("https://")) expect(headers, `${what}: List-Unsubscribe`).toEqual(deliveryHeaders(stop));
+    else expect(headers["List-Unsubscribe"], `${what}: no List-Unsubscribe for an http link`).toBeUndefined();
+    if (shape.manage) {
+      const manage = siteLink(shape.site, shape.manage, lang);
+      expect(inHtml.has(manage) && inText.has(manage), `${what}: the manage link ${manage}`).toBe(true);
+    }
+  } else {
+    expect(stops, `${what}: no stop link`).toEqual([]);
+    expect(headers["List-Unsubscribe"], `${what}: no List-Unsubscribe`).toBeUndefined();
+  }
+}
+
+// The message handed to the log sender through the path the jobs use
+// (deliveries.ts sendWithHeaders, on a local host with MAIL_SENDER=log), then
+// read back from the outbox: what was stored is what was built.
+export async function viaLogSender(m: Sent): Promise<Sent> {
+  const sent = await sendWithHeaders(onEnv() as never, `${LOCAL}/test-mail`, { ...m, headers: m.headers ?? {} });
+  expect(sent).toEqual({ sent: true, code: null });
+  const row = await lastMail(m.to);
+  expect(row).toEqual({ to_addr: m.to, subject: m.subject, text: m.text, html: m.html, lang: m.lang });
+  return m;
+}
+
+// Each kind of message: what it is, for checkMessage. The cadence of a
+// saved-search delivery changes its reason line only.
+export const SHAPES = {
+  sign_in: {
+    list: false, why: "account.mail_why",
+    onePart: [["account.mail_lead", { minutes: CODE_MINUTES }], ["account.mail_button"], ["account.mail_text_link"]],
+  },
+  digest_daily: { list: true, why: "digest.why_daily", manage: "/account/searches", onePart: [["digest.text_searches"]] },
+  digest_weekly: { list: true, why: "digest.why_weekly", manage: "/account/searches", onePart: [["digest.text_searches"]] },
+  watch: { list: true, why: "watches.digest_why", manage: "/account/watches" },
+  briefing: { list: true, why: "briefing.why", manage: "/account/searches" },
+  accounts_open: { list: true, why: "announce.why", manage: null },
+  ultra_open: { list: true, why: "announce.ultra_why", manage: null },
+  address_notice: { list: false, why: null, onePart: [["account.sign_in"], ["admin.mail_sign_in", { link: "" }]] },
+} as const satisfies Record<string, Omit<Shape, "name" | "site">>;
+
+export const shapeOf = (kind: keyof typeof SHAPES, name: string, site: string): Shape => ({ ...SHAPES[kind], name, site });

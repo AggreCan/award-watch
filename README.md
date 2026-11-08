@@ -32,6 +32,10 @@ storage holds the downloads.
 
 Accounts (sign-in by an emailed code, saved searches, API keys) are built but
 not yet open; the switch `ACCOUNTS_ENABLED` keeps them off (`docs/accounts.md`).
+The mail they send is checked twice, apart from the deploy: a local suite
+renders every message in both languages (`npm run test:mail`), and a weekly
+workflow has the live site send one message of each template to the
+operator's test inbox (`docs/mail.md`).
 
 The address `/` shows a reader without a signed-in session the landing page
 and a signed-in reader the app home (`docs/landing.md`).

@@ -42,9 +42,13 @@
 #   a run that fails whenever anything could not be confirmed.
 #
 # Secrets: CLOUDFLARE_SITE_DEPLOY_TOKEN (docs/site-deploy.md lists its
-# permissions), CLOUDFLARE_ACCOUNT_ID (the one the nightly uses). Variables:
+# permissions), CLOUDFLARE_ACCOUNT_ID (the one the nightly uses), MAIL_TEST_TO
+# (optional: the live mail check's test inbox, passed to the Worker; a secret
+# so the address is masked in this public run log; docs/mail.md). Variables:
 # SITE_URL, CONTACT (the user agent of the checks), BRANDFETCH_CLIENT_ID (the
-# landing page's logos, passed to the Worker; docs/landing.md).
+# landing page's logos, passed to the Worker; docs/landing.md). The Worker
+# secret MAIL_CHECK_TOKEN (the mail-check workflow's bearer token) is set with
+# wrangler secret put, not here, and a deploy keeps it.
 
 name: deploy-site
 
@@ -233,16 +237,22 @@ jobs:
       # client id (docs/landing.md) comes from the repository variable of the
       # same name and goes to the Worker as a variable with --var, as the
       # nightly passes it; while the variable is empty nothing is passed and
-      # the page shows the organizations' names alone.
+      # the page shows the organizations' names alone. The live mail check's
+      # test inbox (docs/mail.md) goes the same way from the repository secret
+      # MAIL_TEST_TO, a secret so the address Wrangler prints among the
+      # bindings is masked in the log; unset, nothing is passed and the check
+      # answers 400.
       - name: Deploy the Worker
         id: deploy
         working-directory: site
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_SITE_DEPLOY_TOKEN }}
           BRANDFETCH_CLIENT_ID: ${{ vars.BRANDFETCH_CLIENT_ID }}
+          MAIL_TEST_TO: ${{ secrets.MAIL_TEST_TO }}
         run: |
           set --
           if [ -n "$BRANDFETCH_CLIENT_ID" ]; then set -- --var "BRANDFETCH_CLIENT_ID:$BRANDFETCH_CLIENT_ID"; fi
+          if [ -n "$MAIL_TEST_TO" ]; then set -- "$@" --var "MAIL_TEST_TO:$MAIL_TEST_TO"; fi
           for attempt in 1 2 3; do
             if "$WRANGLER" deploy "$@"; then exit 0; fi
             echo "deploy attempt $attempt failed; trying again in one minute"

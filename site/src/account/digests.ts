@@ -95,6 +95,26 @@ function short(title: string, max = 70): string {
   return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
+// A subject stays under SUBJECT_MAX characters, the live check's mark
+// included (mail_check.ts): an inbox cuts a longer one wherever it likes, so
+// one that would reach it is cut here, on a word, with an ellipsis. Only a
+// long scope, label or name gets that far (a search saved with many
+// provinces, a buyer's long name); the mail suite holds every message to it.
+export const SUBJECT_MAX = 100;
+export const fitSubject = (subject: string): string => short(subject, SUBJECT_MAX - 2);
+
+// A subject that lists counts (the briefing's, the records digest's) names as
+// many as fit under SUBJECT_MAX, the last ones left out first, rather than
+// cutting one in the middle; one that does not fit even with the first count
+// alone is cut as fitSubject cuts. The message itself carries every count.
+export function fitCounts(parts: readonly string[], subject: (shown: readonly string[]) => string): string {
+  for (let k = parts.length; k > 1; k--) {
+    const s = subject(parts.slice(0, k));
+    if (s.length < SUBJECT_MAX) return s;
+  }
+  return fitSubject(subject(parts.slice(0, 1)));
+}
+
 // The preview line a client shows beside the subject: the first two titles,
 // then how many more.
 function preheader(lang: Lang, titles: string[], total: number): string {
@@ -350,9 +370,9 @@ export function tenderDigest(o: TenderDigest): DigestMessage {
   const { lang } = o;
   const n = o.total;
   const scope = tenderScope(lang, o.params, o.rows);
-  const subject = scope
+  const subject = fitSubject(scope
     ? tn(lang, "digest.tenders_subject_one", "digest.tenders_subject_many", n, { n: fmtInt(n, lang), scope })
-    : tn(lang, "digest.tenders_subject_all_one", "digest.tenders_subject_all_many", n, { n: fmtInt(n, lang) });
+    : tn(lang, "digest.tenders_subject_all_one", "digest.tenders_subject_all_many", n, { n: fmtInt(n, lang) }));
   const since = o.since === addDays(o.dataDate, -1) ? t(lang, "digest.since_yesterday") : t(lang, "digest.since_day", { date: o.since });
   const intro = (label: string) =>
     tn(lang, "digest.tenders_intro_one", "digest.tenders_intro_many", n, { n: fmtInt(n, lang), since, label, date: o.dataDate });
@@ -432,9 +452,9 @@ export function expiringDigest(o: ExpiringDigest): DigestMessage {
   const { lang } = o;
   const n = o.total;
   const scope = expiringScope(lang, o.query, o.rows);
-  const subject = scope
+  const subject = fitSubject(scope
     ? tn(lang, "digest.expiring_subject_one", "digest.expiring_subject_many", n, { n: fmtInt(n, lang), months: o.months, scope })
-    : tn(lang, "digest.expiring_subject_all_one", "digest.expiring_subject_all_many", n, { n: fmtInt(n, lang), months: o.months });
+    : tn(lang, "digest.expiring_subject_all_one", "digest.expiring_subject_all_many", n, { n: fmtInt(n, lang), months: o.months }));
   const cadence = t(lang, o.cadence === "daily" ? "digest.cadence_daily" : "digest.cadence_weekly");
   const intro = (label: string) =>
     tn(lang, "digest.expiring_intro_one", "digest.expiring_intro_many", n, { n: fmtInt(n, lang), months: o.months, label, cadence, date: o.dataDate });
@@ -521,7 +541,7 @@ export function recordsDigest(o: RecordsDigest): DigestMessage {
     what.push(tn(lang, "digest.tenders_subject_all_one", "digest.tenders_subject_all_many", o.tenderTotal, { n: fmtInt(o.tenderTotal, lang) }));
   }
   if (o.more) what.push(tn(lang, "digest.records_subject_one", "digest.records_subject_many", o.more, { n: fmtInt(o.more, lang) }));
-  const subject = t(lang, "digest.records_subject", { what: what.join(", "), scope: o.name });
+  const subject = fitCounts(what, (shown) => t(lang, "digest.records_subject", { what: shown.join(", "), scope: o.name }));
   const title = t(lang, RECORDS_TITLE[o.kind], { name: o.name });
   const lead = (label: string) => t(lang, "digest.records_lead", { label, date: o.dataDate });
   const page = siteLink(o.site, o.params, lang);
@@ -727,8 +747,8 @@ export function watchDigest(o: WatchDigest): DigestMessage {
   const open = o.opening ?? null;
   const alone = open !== null && o.groups.length === 0;
   const labels = o.groups.slice(0, 2).map((g) => g.label).join(", ");
-  const subject = alone ? open.subject
-    : tn(lang, "watches.digest_subject_one", "watches.digest_subject_many", o.total, { n: fmtInt(o.total, lang), labels });
+  const subject = fitSubject(alone ? open.subject
+    : tn(lang, "watches.digest_subject_one", "watches.digest_subject_many", o.total, { n: fmtInt(o.total, lang), labels }));
   const title = t(lang, "watches.digest_title");
   const lead = tn(lang, "watches.digest_lead_one", "watches.digest_lead_many", o.total, {
     n: fmtInt(o.total, lang), w: fmtInt(o.groups.length, lang), all: fmtInt(o.watched, lang), date: o.dataDate,
@@ -1049,7 +1069,7 @@ export function briefingParts(o: Pick<BriefingDigest, "lang" | "site" | "briefin
     d.ending.n ? tn(lang, "briefing.subj_ending_one", "briefing.subj_ending_many", d.ending.n, { n: n(d.ending.n) }) : null,
   ]);
   if (!what.length && d.amended.n) what.push(tn(lang, "briefing.subj_amended_one", "briefing.subj_amended_many", d.amended.n, { n: n(d.amended.n) }));
-  const subject = t(lang, "briefing.subject", { name: o.name, what: what.join(", ") });
+  const subject = fitCounts(what, (shown) => t(lang, "briefing.subject", { name: o.name, what: shown.join(", ") }));
   const total = d.ending.cents === null ? t(lang, "briefing.no_total") : fmtMoneyShort(d.ending.cents / 100, lang);
   const preheader = joined([
     d.awards.n ? t(lang, "briefing.pre_awards", { n: n(d.awards.n) }) : null,

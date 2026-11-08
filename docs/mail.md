@@ -1,0 +1,262 @@
+# Mail checks
+
+Two checks cover the mail the site sends to readers, both apart from the
+deploy and from the default test suite:
+
+1. The mail suite, `site/test-mail/`: every message rendered in English
+   and French through the log sender and held to the same rules. Local, run
+   by hand with `npm run test:mail`.
+2. The live mail check, `/admin/mail-check`: the deployed Worker sends
+   one real message of each template to the operator's test inbox, through
+   Cloudflare Email Sending, and answers with each send's result. Run weekly
+   by `.github/workflows/mail-check.yml`, and by hand.
+
+The live check never sends to a reader: its one recipient is the address in
+`MAIL_TEST_TO`.
+
+No workflow runs either test suite. The default suite (`npm test`) is local
+too; the deploys run neither.
+
+## The mail suite
+
+```
+cd site
+npm run test:mail
+```
+
+The suite has its own config, `site/vitest.mail.config.ts`, which takes
+`test-mail/**/*.test.ts`, and the default config (`site/vitest.config.ts`)
+leaves the folder out twice: its include takes `test/**/*.test.ts` only and
+its exclude names `test-mail/**`. `site/test/mail-suite-apart.test.ts`, in the
+default suite, reads both configs' include and exclude and fails if a mail
+file could be picked by `npm test` or a default file by the mail suite. Both
+suites run in the same Workers pool with the same bindings and setup file.
+
+Every message goes through the log sender (`site/src/account/sender.ts`): the
+path a local run uses, which writes the message to the `sent_mail` table of
+the local accounts database. The suite reads the row back and checks what was
+stored, so what is checked is what a sender was handed.
+
+### What it renders
+
+Each in English and in French.
+
+| Message | Built from |
+|---|---|
+| The sign-in code | the sign-in page itself, `POST /account/sign-in` |
+| A saved search's tender notices, daily and weekly | the delivery tests' fixtures (`site/test/mail-fixtures.ts`) |
+| A saved search's contracts ending, weekly and daily | the same fixtures |
+| An organization's new records, a segment's new records and notices | the records digest |
+| The watch mail, with and without the "Your organization" block | the watch digest |
+| The weekly briefing | the briefing digest |
+| The accounts-open message | its console run, `runAnnouncement`, and with an https stop link |
+| The Ultra message | its console run (kind `ultra`), and with an https stop link |
+| The address-change notice | the console's notice |
+| The live check's nine messages | `site/src/account/mail_check.ts` |
+
+The operator's own alerts (the daily check's email and the bug reports, both
+through the `ALERTS` binding to the operator's address) are not reader mail
+and keep their own tests.
+
+### What each message is held to
+
+- The subject is present, on one line, and under 100 characters, the live
+  check's mark included. A briefing's or a records message's subject names
+  the counts that fit, the last ones left out first (the French briefing with
+  three counts reaches the limit); a subject built from a long saved filter,
+  label or name is cut on a word with an ellipsis (`fitCounts` and
+  `fitSubject` in `site/src/account/digests.ts`, `SUBJECT_MAX`).
+- The text and HTML parts carry the same lines and the same links, checked
+  both ways: each line of one part is found in the other. The few lines
+  worded for one part by design (the sign-in message's lead beside its
+  button, the text part's "Saved searches and delivery") are named by their
+  dictionary keys in `site/test-mail/checks.ts`, so the exception holds in
+  both languages and covers nothing else. The header's link to the home page
+  is the HTML part's alone.
+- A list or watch delivery (the saved searches, the records, the watch mail,
+  the briefing, the accounts-open and Ultra messages) carries its stop link
+  in both parts, the page that manages it (the saved searches page or the
+  watches page) where it has one, and the line saying why the reader received
+  it.
+- With an https stop link, the message carries `List-Unsubscribe` naming the
+  contact address and that same link, and `List-Unsubscribe-Post:
+  List-Unsubscribe=One-Click`. With an http link (a local run) it carries
+  neither, since Email Sending takes https links only.
+- No em-dash in the subject, the text or the HTML.
+- No address but the site's two role addresses, `contact@awardwatch.ca` and
+  `alerts@awardwatch.ca`: never the reader's own and never another reader's.
+  The accounts-open and Ultra runs send to several addresses at once, and
+  each message is checked against the others.
+
+`site/test-mail/caps.test.ts` holds the caps and their arithmetic:
+
+| Cap | Figure | Held |
+|---|---|---|
+| Messages in one delivery run (saved searches, then watch mail, then briefings) | `RUN_MESSAGES_MAX`, 300 | `roomAfter`: each part gets the cap less what the parts before it sent or tried, never below zero, and the three never pass 300 together |
+| Rows in one delivery message | `ROWS_MAX`, 50 | a search with 120 notices lists 50 and counts 70 more in both parts; a segment's counts come first; the watch mail's 50 run across every watch, each kind's rest on its own line |
+| Rows in one briefing section | `SECTION_ROWS`, 10 | 25 new notices list 10 and count 15 more |
+| Lists named in the accounts-open message | `LISTS_SHOWN`, 10 | twelve lists name ten and count two more |
+| Messages in one accounts-open or Ultra run | `ANNOUNCE_MAX`, 300 | runs capped at 2 send at most 2 each, each address once; what waited less what a run sent is what waits after it; account holders are passed over (accounts-open only) |
+| Sign-in codes an address may ask for in an hour | `CODES_PER_HOUR`, 5 | the sixth request answers 429 and sends nothing |
+| Messages in one live check | one per template, 9 | all to the one address, nothing to any other |
+
+The last part plants each fault the checks look for (an em-dash, another
+reader's address, a link or a line in one part only, the reason line or the
+stop link removed, `List-Unsubscribe` missing or naming another link, a
+subject of 100 characters, an empty subject) and checks that each one fails.
+
+Run the suite before shipping a change to a message, to a string a message
+uses (`site/src/account/strings.ts`), to the sender, or to a cap.
+
+## The live mail check
+
+`POST /admin/mail-check` sends one message of each template, through the
+sender a reader's message goes through (`sendWithHeaders` in
+`site/src/account/deliveries.ts`), to the address in the Worker variable
+`MAIL_TEST_TO`:
+
+1. the sign-in code
+2. a saved search's tender notices (daily)
+3. a saved search's contracts ending (weekly)
+4. a segment's new records
+5. the watch mail
+6. the weekly briefing
+7. the accounts-open message
+8. the Ultra message
+9. the address-change notice
+
+Each subject starts with `[mail check]`, the same tag in both languages, so
+the message is never taken for a reader's and an inbox rule can file it. The
+rows are fixed samples in `site/src/account/mail_check.ts`, dated on the day
+of the run; nothing is read from a file or a database, so the check proves
+the way out of the Worker and not the night's data. Every stop link names an
+id and a secret of zeros, which match no row: a click or a mail client's
+one-click post changes nothing.
+
+The answer is JSON and names no address:
+
+```json
+{
+  "ok": true,
+  "sender": "provider",
+  "language": "en",
+  "results": [
+    { "template": "sign_in", "result": "sent" },
+    { "template": "tenders_daily", "result": "refused", "reason": "E_RECIPIENT_NOT_ALLOWED" }
+  ]
+}
+```
+
+| Result | Meaning |
+|---|---|
+| `sent` | the sender took the message (Email Sending on the site; the local outbox on a local run) |
+| `refused` | Email Sending refused it; `reason` is its error code (`E_SENDER_NOT_VERIFIED`, `E_RECIPIENT_NOT_ALLOWED`, `E_DAILY_LIMIT_EXCEEDED`, ...) or `failed` without one |
+| `stubbed` | the `MAIL` binding or `MAIL_FROM` is missing, so nothing could leave (`reason` is `not_configured`) |
+
+A refusal does not stop the run: every template is tried, so the answer shows
+which ones the mail service takes. Each run writes an audit row,
+`operator_mail_check`, with its counts and who started it (`by <operator's
+user id>` or `by token`), never an address.
+
+The route answers:
+
+- the site's 404 while the accounts switch is off, as every `/admin` address
+  does, and to any request the gate below does not admit;
+- 400 with `{"ok": false, "error": "no_test_address"}` when `MAIL_TEST_TO`
+  is unset or is not an address, and sends nothing;
+- 403 to a console post without the session's CSRF value or the site's
+  `Origin`, as the other console actions do.
+
+### Who can start it
+
+- An operator, from the console: the "Mail check" button on `/admin`
+  leads to `/admin/mail-check`, which says whether the test address is set
+  (never the address), which sender would answer, and what is sent; its form
+  posts with the session's CSRF value, through the console's gate (*Who gets
+  in* in `docs/accounts.md`).
+- The workflow, with a token: a `POST` to `/admin/mail-check` that
+  carries an `Authorization` header is judged by that header alone, never by
+  a session. It is admitted when the accounts switch is on,
+  `OPERATOR_EMAILS` is set, the Worker secret `MAIL_CHECK_TOKEN` is set and at
+  least 32 characters long, the header is `Bearer <token>` with that value
+  (both are hashed and compared in constant time), and, while `ACCESS_AUD` is
+  set, the request carries a token Cloudflare Access signed for the
+  application (a service token's, which names no email, counts). No other
+  address reads the header: the token on `/admin`, on the console's page or
+  on any action is the site's 404. The token is never logged.
+
+### The workflow
+
+`.github/workflows/mail-check.yml` runs on Monday at 14:00 UTC, an hour
+before the delivery runs and the weekly briefings start, and by hand from the
+Actions tab, where the input `language` (`en` or `fr`) picks the messages'
+language. It posts to `<SITE_URL>/admin/mail-check` with the bearer token and
+the Access service token, writes each template's result to the run summary,
+and fails when any result is not `sent`, so GitHub's failed-workflow email
+goes out. It reads the secrets `MAIL_CHECK_TOKEN`, `CF_ACCESS_CLIENT_ID` and
+`CF_ACCESS_CLIENT_SECRET` and the variable `SITE_URL`; it never sees the test
+address.
+
+| The run says | What to do |
+|---|---|
+| The secret MAIL_CHECK_TOKEN is not set | add it (setting up, step 2) |
+| Cloudflare Access stopped the request | check the service token secrets and the Service Auth policy (step 3) |
+| The site answered 404 | the switch is off, `OPERATOR_EMAILS` is unset, Access's token did not check out, or the repository's token is not the Worker's |
+| The Worker has no test address | add the secret `MAIL_TEST_TO` and deploy (step 1) |
+| n of 9 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing |
+
+### Setting up
+
+1. The test inbox. Pick an address the operator reads and no reader
+   uses. Add it as the repository secret `MAIL_TEST_TO` (Settings, Secrets and
+   variables, Actions). Both deploys (`deploy-site.yml` and the nightly) pass
+   it to the Worker as `--var MAIL_TEST_TO:<address>` while the secret is set.
+   It is a secret and not a variable because the run logs of a public
+   repository are public and Wrangler prints each variable it deploys; a
+   secret is masked. The next deploy (a site-only deploy is enough) carries
+   it. Until the domain is onboarded for Email Sending, the address must be
+   one of the account's verified destination addresses.
+2. The token. Make a random value, for example `openssl rand -hex 32`.
+   Set it on the Worker with `cd site && npx wrangler secret put
+   MAIL_CHECK_TOKEN`, and add the same value as the repository secret
+   `MAIL_CHECK_TOKEN`. A deploy keeps the Worker secret. To change the token,
+   set both again; to stop the workflow's way in, delete the Worker secret.
+3. Access. In Zero Trust, Access controls, Service credentials, create a
+   service token, and add its Client ID and Client Secret as the repository
+   secrets `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`. In the
+   application in front of `/admin`, add a policy with the action Service
+   Auth that includes that service token. A service token alone opens
+   nothing on the site: the Worker still asks for the bearer token, on this
+   one address only.
+4. A first run. Start the workflow by hand, then read the inbox.
+
+### What the operator does with the inbox
+
+After each run, in the test inbox:
+
+- Nine messages arrived, each subject starting with `[mail check]`, none in
+  spam. A template the run reported `sent` that did not arrive is a delivery
+  problem past Email Sending: look in spam, then at the address's
+  suppression list in the dashboard.
+- Each message reads well in the mail client, in light and dark mode, and
+  its links point at the site.
+- The list messages show the client's unsubscribe control (from
+  `List-Unsubscribe`); using it on a mail check message changes nothing.
+- "Show original" (or the client's equivalent) shows SPF, DKIM and DMARC
+  passing for `awardwatch.ca`.
+- Now and then, run it by hand with `language` set to `fr` and read the
+  French messages.
+
+Then delete them. An inbox rule on `[mail check]` can file them in a folder of
+their own.
+
+### Why it never sends to a reader
+
+The recipient is the Worker's `MAIL_TEST_TO` alone: the route reads no
+address from a database, hands that address to every template, and sets it
+again on each message before the send. The answer names no address, the
+audit row names none, and nothing logs it. `site/test/accounts-admin.test.ts`
+("the live mail check") holds this: every message the binding is handed goes
+to `MAIL_TEST_TO`, the answer holds no `@`, the route is absent while the
+switch is off, and a wrong token, a token on any other address or a Worker
+without `MAIL_CHECK_TOKEN` gets the site's 404 and sends nothing.

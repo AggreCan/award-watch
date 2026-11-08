@@ -257,6 +257,11 @@ sender logs the error's code alone, never the address or the message; the
 audit trail records `mail_failed`; and the page answers 503 with "The
 message could not be sent. Try again in a few minutes."
 
+Every message the site sends is checked by the mail suite (`npm run
+test:mail` in `site/`) and, on the live site, by the weekly mail check, which
+sends one message of each template to the operator's test inbox and never to
+a reader (`docs/mail.md`).
+
 As shipped, `wrangler.jsonc` sets both the binding and `MAIL_FROM`, so the
 binding answers on the site and the stub only answers if one of them is
 removed. Until the domain is onboarded, Email Sending delivers only to the

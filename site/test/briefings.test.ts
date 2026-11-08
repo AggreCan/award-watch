@@ -484,7 +484,8 @@ describe("the message", () => {
     const fr = briefingDigest({
       lang: "fr", to: "a@example.com", site: SITE, stopUrl: `${SITE}/account/stop?b=B&t=T&lang=fr`, briefing: segment81, name: "81 Ingénierie", data: read.data,
     });
-    expect(nbsp(fr.subject)).toBe("81 Ingénierie cette semaine : 2 nouveaux avis, 2 attributions, 3 contrats prenant fin le trimestre prochain");
+    // The three counts would take the French subject past SUBJECT_MAX: it names the two that fit (digests.ts fitCounts).
+    expect(nbsp(fr.subject)).toBe("81 Ingénierie cette semaine : 2 nouveaux avis, 2 attributions");
     expect(nbsp(fr.text)).toBe(EXPECTED_FR);
     for (const m of [en, fr]) for (const part of [m.subject, m.text, m.html]) expect(part).not.toContain(EM_DASH);
     // The marks and the totals are in the HTML part too, each value escaped.

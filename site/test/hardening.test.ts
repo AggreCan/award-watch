@@ -907,7 +907,9 @@ describe("secrets and addresses", () => {
       // No shell tracing, and no secret variable echoed.
       expect(text, file).not.toMatch(/set -[a-z]*x/);
       for (const line of lines.filter((l) => /\b(?:echo|printf)\b/.test(l))) {
-        expect(line, file).not.toMatch(/\$\{?(?:CLOUDFLARE_API_TOKEN|CLOUDFLARE_SITE_DEPLOY_TOKEN|CLOUDFLARE_ANALYTICS_TOKEN|GSC_SERVICE_ACCOUNT_JSON|CLOUDFLARE_ACCOUNT_ID)\b/);
+        expect(line, file).not.toMatch(
+          /\$\{?(?:CLOUDFLARE_API_TOKEN|CLOUDFLARE_SITE_DEPLOY_TOKEN|CLOUDFLARE_ANALYTICS_TOKEN|GSC_SERVICE_ACCOUNT_JSON|CLOUDFLARE_ACCOUNT_ID|MAIL_CHECK_TOKEN|CF_ACCESS_CLIENT_ID|CF_ACCESS_CLIENT_SECRET|MAIL_TEST_TO)\b/,
+        );
       }
     }
   });

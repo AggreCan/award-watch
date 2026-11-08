@@ -106,6 +106,20 @@ export interface Env {
   // repository variable of the same name (`wrangler deploy --var`). Unset,
   // the band shows the names alone.
   BRANDFETCH_CLIENT_ID?: string;
+
+  // -- the live mail check (src/account/mail_check.ts, docs/mail.md) ----------
+  // The operator's test inbox: the one address POST /admin/mail-check sends
+  // to, one message of each template. Both deploys pass it to the Worker from
+  // the repository secret of the same name (`wrangler deploy --var`), a secret
+  // rather than a variable so the address never shows in the public run logs;
+  // never written into the repository. Unset, the route answers 400 and sends
+  // nothing.
+  MAIL_TEST_TO?: string;
+  // The bearer token the mail-check workflow sends to that route, its only
+  // use: set with `wrangler secret put`, the same value as the repository
+  // secret of the same name. Unset or shorter than MAIL_CHECK_TOKEN_MIN, the
+  // route takes no token and answers only an operator's session.
+  MAIL_CHECK_TOKEN?: string;
 }
 
 export type AppEnv = {

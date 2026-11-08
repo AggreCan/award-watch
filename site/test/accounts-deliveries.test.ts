@@ -13,16 +13,16 @@ import worker, { app } from "../src/index";
 import {
   DELIVERY_CRON, RUN_MESSAGES_MAX, expiringItems, isDue, publishedFiles, runDeliveries, spanStart, tenderItems,
 } from "../src/account/deliveries";
-import { deliveryHeaders, expiringDigest, tenderDigest } from "../src/account/digests";
+import { SUBJECT_MAX, deliveryHeaders, expiringDigest, tenderDigest, tenderScope } from "../src/account/digests";
 import { deleteSearch } from "../src/account/searches";
 import { clockAt } from "../src/closing";
-import type { ExpiringRow, TenderRow } from "../src/data";
-import { readExpiringQuery } from "../src/pages/expiring";
+import type { TenderRow } from "../src/data";
 import { interestFilter } from "../src/pages/interest";
 import { filterTenders, readTenderQuery } from "../src/pages/tenders";
 import wrangler from "../wrangler.jsonc?raw";
 import { ACCOUNTS, csrf, decode, get, grantPro, nbsp, newEmail, offEnv, onEnv, post, signIn, useAccountsDb, userId } from "./accounts-helpers";
 import { TEST_NOW, makeFakeAssets, testEnv } from "./assets";
+import { R1, R2, R3, R4, R5, STOP, TENDER_ROWS, contract, expiringInput, fakeMail, tender, tenderInput } from "./mail-fixtures";
 
 useAccountsDb();
 
@@ -37,22 +37,6 @@ const EM_DASH = String.fromCharCode(0x2014);
 let seq = 0;
 const hex = (n: number) => n.toString(16).padStart(32, "0");
 const nextId = () => hex(0xd0000000 + ++seq);
-
-type Handed = { from: unknown; to: string; replyTo?: unknown; subject: string; text?: string; html?: string; headers?: Record<string, string> };
-
-// A binding that keeps what it is handed; fail(to) names an error to throw for an address.
-function fakeMail(fail: (to: string) => unknown = () => undefined) {
-  const handed: Handed[] = [];
-  const binding = {
-    async send(message: Handed) {
-      handed.push(message);
-      const error = fail(message.to);
-      if (error !== undefined) throw error;
-      return { messageId: "<test@awardwatch.ca>" };
-    },
-  } as unknown as SendEmail;
-  return { handed, binding, to: (email: string) => handed.filter((m) => m.to === email) };
-}
 
 const refused = (code: string) => Object.assign(new Error("refused"), { code });
 
@@ -92,34 +76,9 @@ const searchRow = (id: string) =>
 const tokenOf = async (id: string) =>
   (await ACCOUNTS.prepare("SELECT secret FROM delivery_tokens WHERE search_id = ?").bind(id).first<{ secret: string }>())?.secret ?? null;
 
-function tender(reference: string, over: Partial<TenderRow> = {}): TenderRow {
-  return {
-    reference, amendment: 0, title_en: `Notice ${reference}`, title_fr: `Avis ${reference}`, buyer_id: "dfo-mpo",
-    buyer_en: "Fisheries and Oceans Canada", buyer_fr: "Pêches et Océans Canada", published: DAY, closing: "2026-11-26T14:00:00",
-    category: ["SRV"], notice_type_en: "Request for Proposal", notice_type_fr: "Demande de propositions",
-    method_en: "Competitive - Open bidding", method_fr: "Concurrentielle - Appel d'offres ouvert", segments: ["72"], provinces: ["BC"],
-    first_seen: DAY, status: "open", ...over,
-  };
-}
-
-function contract(kind: ExpiringRow["kind"], reference: string, end: string, over: Partial<ExpiringRow> = {}): ExpiringRow {
-  return {
-    kind, reference, title_en: `Contract ${reference}`, title_fr: `Contrat ${reference}`, organization_id: "org-b000000001",
-    organization: "Marathon Targets Inc.", buyer_id: "dnd-mdn", buyer_en: "National Defence", buyer_fr: "Défense nationale",
-    start: "2025-01-01", end, days_left: 0, value: 188345, currency: "CAD", competitive: 1, method_en: null, method_fr: null,
-    instrument_en: "Contract", instrument_fr: "Contrat", n_amendments: 0, value_growth: 0, tender_reference: null,
-    segments: ["46"], provinces: ["ON"], ...over,
-  };
-}
-
-// The radar's 3-month window in two pages, soonest end first. From the data
-// date 2026-10-31 the window reaches 2027-01-30; a day earlier it reached
-// 2027-01-29, a week earlier 2027-01-23.
-const R1 = contract("award", "cb-500-50000001", "2027-01-30", { title_en: "Robotics targets" });
-const R2 = contract("history", "W8486-091235", "2027-01-29", { organization: "JHT Defense Inc.", value: 90476 });
-const R3 = contract("contract", "dnd-mdn:C-2026-0099", "2027-01-25", { organization: null, organization_id: null, supplier_withheld: true, value: null });
-const R4 = contract("award", "cb-500-50000004", "2026-12-15");
-const R5 = contract("award", "cb-500-50000005", "2027-01-30", { buyer_id: "pwgsc-tpsgc", buyer_en: "Public Services and Procurement Canada" });
+// The tender notices, contracts R1 to R5 and digest inputs are shared with
+// the mail suite (test/mail-fixtures.ts). R1 to R5 make the radar's 3-month
+// window in two pages, soonest end first.
 const RADAR = {
   "expiring/3m/index.json": { window: "3m", pages: 2, rows: 5, total: 1000 },
   "expiring/3m/1.json": [R4, R3],
@@ -308,12 +267,16 @@ describe("the items of a tender search", () => {
 
   it("name every value of a repeated key in the subject, and only values the site knows", () => {
     const params = "/tenders?category=GD&category=SRV&province=ON&province=QC&segment=43&segment=82";
+    // The scope names every value; a subject that would reach SUBJECT_MAX is cut on a word (digests.ts fitSubject).
+    expect(tenderScope("en", params, TENDER_ROWS)).toBe("Goods, Services · 43 IT and telecom, 82 Editorial and design · Ontario, Quebec");
+    expect(nbsp(tenderScope("fr", params, TENDER_ROWS))).toBe("Biens, Services · 43 TI et télécommunications, 82 Rédaction et conception · Ontario, Québec");
     expect(tenderDigest({ ...tenderInput("en"), params }).subject).toBe(
-      "3 new tender notices: Goods, Services · 43 IT and telecom, 82 Editorial and design · Ontario, Quebec",
+      "3 new tender notices: Goods, Services · 43 IT and telecom, 82 Editorial and design · Ontario,…",
     );
     expect(nbsp(tenderDigest({ ...tenderInput("fr"), params }).subject)).toBe(
-      "3 nouveaux avis d’appel d’offres : Biens, Services · 43 TI et télécommunications, 82 Rédaction et conception · Ontario, Québec",
+      "3 nouveaux avis d’appel d’offres : Biens, Services · 43 TI et télécommunications, 82 Rédaction et…",
     );
+    for (const lang of ["en", "fr"] as const) expect([...tenderDigest({ ...tenderInput(lang), params }).subject].length).toBeLessThan(SUBJECT_MAX);
     // A value the site does not know never reaches a subject; title words are named, never quoted.
     expect(tenderDigest({ ...tenderInput("en"), params: "/tenders?province=ZZ&segment=99&category=<b>&q=secret+words" }).subject)
       .toBe("3 new tender notices: title words");
@@ -357,28 +320,6 @@ describe("the items of a radar search", () => {
 });
 
 // -- the messages ------------------------------------------------------------------------------
-
-const STOP = `${SITE}/account/stop?s=${"a".repeat(32)}&t=${"b".repeat(32)}`;
-const TENDER_ROWS = [
-  tender("cb-746-37313616", { title_en: "Solenoid Procurement", title_fr: "Achat de solénoïdes", buyer_en: "National Defence", buyer_fr: "Défense nationale", provinces: ["ON"], closing: "2026-11-03T14:00:00", segments: ["31"] }),
-  tender("cb-106-83883729", { title_en: "Power Distribution Upgrade", title_fr: "Mise à niveau de la distribution électrique", closing: "2026-11-16T14:00:00" }),
-];
-
-function tenderInput(lang: "en" | "fr") {
-  return {
-    lang, to: "reader@example.com", site: SITE, label: lang === "en" ? "New tender notices matching Province: British Columbia" : "Nouveaux avis",
-    params: "/tenders?province=BC&segment=72", cadence: "daily" as const, dataDate: DAY, stopUrl: lang === "fr" ? `${STOP}&lang=fr` : STOP, total: 3,
-    rows: TENDER_ROWS, since: "2026-10-30",
-  };
-}
-
-function expiringInput(lang: "en" | "fr") {
-  return {
-    lang, to: "reader@example.com", site: SITE, label: "Contracts entering the 3-month window for National Defence",
-    params: "/expiring/3m?buyer=dnd-mdn", cadence: "weekly" as const, dataDate: DAY, stopUrl: STOP, total: 3,
-    rows: [R1, R2, R3], months: 3, query: readExpiringQuery(new URL(`${SITE}/expiring/3m?buyer=dnd-mdn`)),
-  };
-}
 
 describe("the tender digest", () => {
   it("in English: the subject, the rows with amber time left within 7 days, the links, the button, the footer and both wordmarks", () => {

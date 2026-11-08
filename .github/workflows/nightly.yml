@@ -104,9 +104,12 @@
 # Analytics Read only, the audience roll-up, docs/search-engines.md section 6;
 # without it the step does nothing); GSC_SERVICE_ACCOUNT_JSON (a Google
 # service account's JSON key, added as a user of the Search Console property;
-# without it the import reports "no credentials"). The Worker secret
+# without it the import reports "no credentials"); MAIL_TEST_TO (the live mail
+# check's test inbox, passed to the Worker at the deploy; a secret so the
+# address is masked in this public run log; docs/mail.md). The Worker secret
 # VIEWS_SALT_KEY (the daily visitor code) is set with wrangler, not here; the
-# roll-up counts no unique visitors without it.
+# roll-up counts no unique visitors without it. The Worker secret
+# MAIL_CHECK_TOKEN (the mail-check workflow's bearer token) is set the same way.
 # Variables: SITE_URL, CONTACT (the user agent's site and contact page);
 # optional INDEXNOW_ENABLED, set to false to stop the IndexNow submission (it
 # runs unless the variable reads exactly "false"; the key is in the code, so
@@ -464,16 +467,20 @@ jobs:
       # The landing page's Brandfetch client id (docs/landing.md) goes to the
       # Worker as a variable, as the site-only deploy passes it: a deploy
       # without it would drop it, since wrangler.jsonc does not hold it. An
-      # empty repository variable passes nothing.
+      # empty repository variable passes nothing. The live mail check's test
+      # inbox (docs/mail.md) goes the same way from the repository secret
+      # MAIL_TEST_TO, masked in the log; unset, nothing is passed.
       - name: Deploy the Worker with the new data as assets
         id: deploy
         if: ${{ !cancelled() && steps.bundle.outcome == 'success' }}
         working-directory: site
         env:
           BRANDFETCH_CLIENT_ID: ${{ vars.BRANDFETCH_CLIENT_ID }}
+          MAIL_TEST_TO: ${{ secrets.MAIL_TEST_TO }}
         run: |
           set --
           if [ -n "$BRANDFETCH_CLIENT_ID" ]; then set -- --var "BRANDFETCH_CLIENT_ID:$BRANDFETCH_CLIENT_ID"; fi
+          if [ -n "$MAIL_TEST_TO" ]; then set -- "$@" --var "MAIL_TEST_TO:$MAIL_TEST_TO"; fi
           for attempt in 1 2 3; do
             if npx wrangler deploy "$@"; then exit 0; fi
             echo "deploy attempt $attempt failed; trying again in two minutes"

@@ -129,10 +129,12 @@ function jsonPart(s: string): Record<string, unknown> | null {
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-// The address in a request's Access token, lower-cased, once every check
-// above holds; null otherwise (and always while ACCESS_AUD or the team is
-// not set).
-export async function accessEmail(env: Pick<Env, "ACCESS_AUD" | "ACCESS_TEAM_DOMAIN">, headers: Headers, now: Date = new Date()): Promise<string | null> {
+// The claims of a request's Access token once its signature, issuer,
+// audience and times check out; null otherwise (and always while ACCESS_AUD
+// or the team is not set).
+async function verifiedClaims(
+  env: Pick<Env, "ACCESS_AUD" | "ACCESS_TEAM_DOMAIN">, headers: Headers, now: Date,
+): Promise<Record<string, unknown> | null> {
   const aud = env.ACCESS_AUD?.trim();
   const host = teamHost(env.ACCESS_TEAM_DOMAIN);
   const token = headers.get(ACCESS_HEADER)?.trim();
@@ -164,6 +166,24 @@ export async function accessEmail(env: Pick<Env, "ACCESS_AUD" | "ACCESS_TEAM_DOM
   if (nbf !== null && nbf > nowS + SKEW_S) return null;
   const iat = num(claims.iat);
   if (iat !== null && iat > nowS + SKEW_S) return null;
+  return claims;
+}
+
+// The address in a request's Access token, lower-cased, once every check
+// above holds; null otherwise (and always while ACCESS_AUD or the team is
+// not set).
+export async function accessEmail(env: Pick<Env, "ACCESS_AUD" | "ACCESS_TEAM_DOMAIN">, headers: Headers, now: Date = new Date()): Promise<string | null> {
+  const claims = await verifiedClaims(env, headers, now);
+  if (!claims) return null;
   const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
   return email && email.length <= 254 ? email : null;
+}
+
+// Whether a request carries a token Access signed for the application,
+// whoever it names: an operator's sign-in, or a service token, whose token
+// has no email claim. Only the mail check's token path asks this
+// (mail_check.ts mailCheckTokenAdmits): the mail-check workflow passes Access
+// with a service token, and its own bearer token is what admits it.
+export async function accessVerified(env: Pick<Env, "ACCESS_AUD" | "ACCESS_TEAM_DOMAIN">, headers: Headers, now: Date = new Date()): Promise<boolean> {
+  return (await verifiedClaims(env, headers, now)) !== null;
 }

@@ -1981,4 +1981,38 @@ export const ACCOUNT_STRINGS = {
     en: "You receive this because the address was entered on the Ultra card of the site's home page.",
     fr: "Vous recevez ce message parce que l'adresse a été saisie sur la carte Ultra de la page d'accueil du site.",
   },
+
+  // The live mail check (/admin/mail-check; src/account/mail_check.ts, docs/mail.md): one message of
+  // each template to the operator's test inbox, MAIL_TEST_TO, and to no other address.
+  "admin.mail_check_link": { en: "Mail check", fr: "Vérification du courriel" },
+  "admin.mail_check_title": { en: "Mail Check", fr: "Vérification du courriel" },
+  "admin.mail_check_lead": {
+    en: "Sends one real message of each template the site sends, {n} in all, to the test address set in MAIL_TEST_TO and to no other address, through the sender a reader's message goes through. Each subject starts with [mail check]. The stop links in them lead nowhere.",
+    fr: "Envoie un vrai message de chaque modèle que le site envoie, {n} en tout, à l'adresse d'essai définie dans MAIL_TEST_TO et à aucune autre adresse, par l'expéditeur qu'emprunte le message d'un lecteur. Chaque objet commence par [mail check]. Les liens d'arrêt qu'ils contiennent ne mènent nulle part.",
+  },
+  "admin.mail_check_address_set": { en: "The test address is set.", fr: "L'adresse d'essai est définie." },
+  "admin.mail_check_address_unset": {
+    en: "The test address is not set, so nothing can be sent. Set MAIL_TEST_TO as docs/mail.md describes.",
+    fr: "L'adresse d'essai n'est pas définie, donc rien ne peut être envoyé. Définissez MAIL_TEST_TO comme l'explique docs/mail.md.",
+  },
+  "admin.mail_check_sender": { en: "Sender: {kind}.", fr: "Expéditeur : {kind}." },
+  "admin.mail_check_answer": {
+    en: "The answer lists each message's result as JSON: sent, refused with the mail service's reason, or stubbed.",
+    fr: "La réponse donne le résultat de chaque message en JSON : envoyé (sent), refusé avec le motif du service de courriel (refused) ou simulé (stubbed).",
+  },
+  "admin.mail_check_language": { en: "Language of the messages", fr: "Langue des messages" },
+  "admin.mail_check_button": { en: "Send the {n} messages", fr: "Envoyer les {n} messages" },
+  "admin.mail_check_no_address": {
+    en: "MAIL_TEST_TO is not set, so nothing was sent.",
+    fr: "MAIL_TEST_TO n'est pas défini, donc rien n'a été envoyé.",
+  },
+  "admin.mail_check_t_sign_in": { en: "The sign-in code", fr: "Le code de connexion" },
+  "admin.mail_check_t_tenders": { en: "A saved search's tender notices, daily", fr: "Les avis d'appel d'offres d'une recherche enregistrée, chaque jour" },
+  "admin.mail_check_t_expiring": { en: "A saved search's contracts ending, weekly", fr: "Les contrats qui prennent fin d'une recherche enregistrée, chaque semaine" },
+  "admin.mail_check_t_records": { en: "A segment's new records", fr: "Les nouveaux dossiers d'un segment" },
+  "admin.mail_check_t_watch": { en: "The watch mail", fr: "Le courriel des suivis" },
+  "admin.mail_check_t_briefing": { en: "The weekly briefing", fr: "Le bulletin hebdomadaire" },
+  "admin.mail_check_t_accounts_open": { en: "The accounts-open message", fr: "Le message d'ouverture des comptes" },
+  "admin.mail_check_t_ultra_open": { en: "The Ultra message", fr: "Le message Ultra" },
+  "admin.mail_check_t_address": { en: "The address-change notice", fr: "L'avis de changement d'adresse" },
 } as const satisfies Record<string, { en: string; fr: string }>;

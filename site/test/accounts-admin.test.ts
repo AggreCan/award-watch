@@ -11,6 +11,7 @@ import { ACCOUNT_CSV_HEAD, REASON_MAX, REFERENCE_MAX, addressNotice } from "../s
 import { CERTS_TTL_MS, accessEmail, forgetAccessCerts, teamHost } from "../src/account/admin_access";
 import { ACCOUNT_CSV_ROWS, ACCOUNT_MAX_PAGE, ACCOUNT_PAGE_SIZE, isBlocked, pausedSearches } from "../src/account/admin_ops";
 import { refundKey } from "../src/account/admin_stripe";
+import { MAIL_CHECK_LISTS, MAIL_CHECK_MARK, MAIL_CHECK_TEMPLATES, MAIL_CHECK_TOKEN_MIN, mailCheckTokenAdmits } from "../src/account/mail_check";
 import { requireApiKey } from "../src/account/api_keys";
 import { runDeliveries } from "../src/account/deliveries";
 import { planOfRequest } from "../src/account/session";
@@ -19,10 +20,11 @@ import type { AppEnv } from "../src/env";
 import { app } from "../src/index";
 import robotsTxt from "../public/robots.txt?raw";
 import {
-  ACCOUNTS, csrf, decode, get, grantPro, lastMail, nbsp, newEmail, offEnv, onEnv, post, requestCode, sessionCookie, signIn, useAccountsDb,
-  userId,
+  ACCOUNTS, csrf, decode, get, grantPro, lastMail, nbsp, newEmail, nextIp, offEnv, onEnv, post, requestCode, sessionCookie, signIn,
+  useAccountsDb, userId,
 } from "./accounts-helpers";
 import { makeFakeAssets } from "./assets";
+import { fakeMail } from "./mail-fixtures";
 
 useAccountsDb();
 
@@ -194,12 +196,12 @@ const withToken = (jwt: string) => ({ "cf-access-jwt-assertion": jwt });
 const getPaths = (id: string) => [
   "/admin", "/admin?q=example", "/admin/accounts", "/admin/accounts?plan=pro&sort=address&page=2", "/admin/accounts.csv",
   `/admin/users/${id}`, `/admin/users/${id}/block`, `/admin/users/${id}/email`, `/admin/users/${id}/cancel`,
-  `/admin/users/${id}/refund`, `/admin/users/${id}/delete`, "/admin/nothing", "/admin/announce",
+  `/admin/users/${id}/refund`, `/admin/users/${id}/delete`, "/admin/nothing", "/admin/announce", "/admin/mail-check",
 ];
 const postPaths = (id: string) => [
   `/admin/users/${id}/grant`, `/admin/users/${id}/entitlements/${id}/revoke`, `/admin/users/${id}/sign-out`, `/admin/users/${id}/unblock`,
   `/admin/users/${id}/block`, `/admin/users/${id}/email`, `/admin/users/${id}/cancel`, `/admin/users/${id}/refund`, `/admin/users/${id}/delete`,
-  "/admin/announce",
+  "/admin/announce", "/admin/mail-check",
 ];
 
 // Every console address answers exactly as an unknown address does for the
@@ -1504,5 +1506,211 @@ describe("the docs", () => {
     const open = groups.filter((g) => /^Allow: \/$/m.test(g));
     expect(open).toHaveLength(2);
     for (const g of open) expect(g.split("\n")).toContain("Disallow: /admin");
+  });
+});
+
+// =========================================================================================
+// The live mail check (mail_check.ts, docs/mail.md)
+// =========================================================================================
+
+describe("the live mail check", () => {
+  const SITE_URL = "https://awardwatch.ca";
+  const CHECK_TOKEN = [...crypto.getRandomValues(new Uint8Array(24))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const lastCheckAudit = async () =>
+    (await ACCOUNTS.prepare("SELECT user_id, detail FROM audit WHERE event = 'operator_mail_check' ORDER BY id DESC LIMIT 1")
+      .first<{ user_id: string | null; detail: string }>()) ?? null;
+
+  // The site's own sending path (the binding, MAIL_SENDER unset), the test inbox set.
+  function checkEnv(base: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+    const mail = fakeMail();
+    const inbox = newEmail("test-inbox");
+    const env = {
+      ...base, MAIL: mail.binding, MAIL_FROM: "alerts@awardwatch.ca", MAIL_SENDER: undefined, MAIL_TEST_TO: inbox, SITE_URL,
+      MAIL_CHECK_TOKEN: CHECK_TOKEN, ...extra,
+    };
+    return { env, mail, inbox };
+  }
+
+  // The workflow's request: a POST to the live site with the bearer token, a form or no body.
+  function tokenPost(env: object, o: { token?: string | null; path?: string; method?: string; body?: string; headers?: Record<string, string> } = {}) {
+    const headers: Record<string, string> = { "cf-connecting-ip": nextIp(), ...o.headers };
+    if (o.token !== null) headers.authorization = `Bearer ${o.token ?? CHECK_TOKEN}`;
+    if (o.body !== undefined) headers["content-type"] = "application/x-www-form-urlencoded";
+    return app.request(`${SITE_URL}${o.path ?? "/admin/mail-check"}`, { method: o.method ?? "POST", headers, body: o.body }, env);
+  }
+
+  it("is the site's 404 while the switch is off, from a session or with the token, and sends nothing", async () => {
+    const op = await operator();
+    const { env, mail } = checkEnv({ ...offEnv(), OPERATOR_EMAILS: op.email });
+    expect((await get("/admin/mail-check", { cookie: op.cookie, env })).status).toBe(404);
+    expect((await post("/admin/mail-check", { csrf: op.csrf }, { cookie: op.cookie, env })).status).toBe(404);
+    expect((await tokenPost(env)).status).toBe(404);
+    expect(mail.handed).toEqual([]);
+  });
+
+  it("shows the operator what it sends and whether the test address is set, never the address", async () => {
+    const op = await operator();
+    const { env, inbox } = checkEnv(op.env);
+    const res = await get("/admin/mail-check", { cookie: op.cookie, env });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const html = await text(res);
+    expect(html).toContain("<h1>Mail Check</h1>");
+    expect(html).toContain("The test address is set.");
+    expect(html).toContain("Sender: provider.");
+    expect(html).toContain('action="/admin/mail-check"');
+    expect(html).toContain("Send the 9 messages");
+    expect(html).not.toContain(inbox);
+    const fr = await text(await get("/admin/mail-check?lang=fr", { cookie: op.cookie, env }));
+    expect(fr).toContain("Vérification du courriel");
+    expect(fr).not.toContain(EM_DASH);
+    const unset = await text(await get("/admin/mail-check", { cookie: op.cookie, env: { ...env, MAIL_TEST_TO: undefined } }));
+    expect(unset).toContain("The test address is not set, so nothing can be sent.");
+    expect(unset).not.toContain('action="/admin/mail-check"');
+    expect(await text(await adminGet(op, "/admin"))).toContain('href="/admin/mail-check"');
+  });
+
+  it("sends one message of each template to MAIL_TEST_TO alone from the console, and answers each result as JSON", async () => {
+    const op = await operator();
+    const { env, mail, inbox } = checkEnv(op.env);
+    const res = await post("/admin/mail-check", { csrf: op.csrf, language: "en" }, { cookie: op.cookie, env });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = await res.text();
+    expect(body).not.toContain(inbox);
+    expect(body).not.toContain("@");
+    expect(JSON.parse(body)).toEqual({
+      ok: true, sender: "provider", language: "en", results: MAIL_CHECK_TEMPLATES.map((template) => ({ template, result: "sent" })),
+    });
+    expect(mail.handed).toHaveLength(MAIL_CHECK_TEMPLATES.length);
+    for (const m of mail.handed) {
+      expect(m.to).toBe(inbox);
+      expect(m.from).toEqual({ email: "alerts@awardwatch.ca", name: "Award Watch" });
+      expect(m.subject.startsWith(`${MAIL_CHECK_MARK} `)).toBe(true);
+    }
+    expect(await lastCheckAudit()).toEqual({ user_id: null, detail: `by ${op.id}, 9 sent, 0 refused, 0 stubbed` });
+  });
+
+  it("refuses a console post without the CSRF value or the site's Origin, and sends nothing", async () => {
+    const op = await operator();
+    const { env, mail } = checkEnv(op.env);
+    expect((await post("/admin/mail-check", { csrf: "0".repeat(32) }, { cookie: op.cookie, env })).status).toBe(403);
+    expect((await post("/admin/mail-check", { csrf: op.csrf }, { cookie: op.cookie, env, origin: null })).status).toBe(403);
+    expect((await post("/admin/mail-check", { csrf: op.csrf }, { cookie: op.cookie, env, origin: "https://elsewhere.example" })).status).toBe(403);
+    expect(mail.handed).toEqual([]);
+  });
+
+  it("answers 400 and sends nothing without MAIL_TEST_TO or with a value that is not an address, and records that", async () => {
+    const op = await operator();
+    for (const value of [undefined, "", "not an address", "two@example.com, three@example.com"]) {
+      const { env, mail } = checkEnv(op.env, { MAIL_TEST_TO: value });
+      const res = await post("/admin/mail-check", { csrf: op.csrf }, { cookie: op.cookie, env });
+      expect(res.status, String(value)).toBe(400);
+      expect(await res.json()).toEqual({ ok: false, error: "no_test_address", message: "MAIL_TEST_TO is not set, so nothing was sent." });
+      expect(mail.handed).toEqual([]);
+      expect((await lastCheckAudit())?.detail).toBe(`by ${op.id}, no test address, nothing sent`);
+    }
+  });
+
+  it("reports a refusal with the mail service's code, and the stub as stubbed, trying every template", async () => {
+    const op = await operator();
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const refusing = fakeMail(() => Object.assign(new Error("not allowed"), { code: "E_RECIPIENT_NOT_ALLOWED" }));
+    const { env, inbox } = checkEnv(op.env, { MAIL: refusing.binding });
+    const refused = await (await post("/admin/mail-check", { csrf: op.csrf }, { cookie: op.cookie, env })).json() as Record<string, unknown>;
+    expect(refused).toEqual({
+      ok: false, sender: "provider", language: "en",
+      results: MAIL_CHECK_TEMPLATES.map((template) => ({ template, result: "refused", reason: "E_RECIPIENT_NOT_ALLOWED" })),
+    });
+    expect(refusing.handed.map((m) => m.to)).toEqual(MAIL_CHECK_TEMPLATES.map(() => inbox));
+    const stub = await (await post("/admin/mail-check", { csrf: op.csrf }, { cookie: op.cookie, env: { ...env, MAIL: undefined } })).json();
+    expect(stub).toEqual({
+      ok: false, sender: "stub", language: "en",
+      results: MAIL_CHECK_TEMPLATES.map((template) => ({ template, result: "stubbed", reason: "not_configured" })),
+    });
+    expect((await lastCheckAudit())?.detail).toBe(`by ${op.id}, 0 sent, 0 refused, 9 stubbed`);
+    expect(log.mock.calls.map((c) => c.join(" ")).join("\n")).not.toContain(inbox);
+  });
+
+  it("takes the workflow's token on that route alone, sends in the language asked, with List-Unsubscribe on the list messages", async () => {
+    const op = await operator();
+    const { env, mail, inbox } = checkEnv(op.env);
+    const logged = [vi.spyOn(console, "log"), vi.spyOn(console, "error")];
+    const res = await tokenPost(env, { body: "language=fr" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    const body = await res.json() as { ok: boolean; sender: string; language: string; results: unknown[] };
+    expect(body).toEqual({ ok: true, sender: "provider", language: "fr", results: MAIL_CHECK_TEMPLATES.map((template) => ({ template, result: "sent" })) });
+    expect(mail.handed).toHaveLength(MAIL_CHECK_TEMPLATES.length);
+    MAIL_CHECK_TEMPLATES.forEach((template, i) => {
+      const m = mail.handed[i];
+      expect(m.to, template).toBe(inbox);
+      // The links are the site's own https addresses, so the list messages carry List-Unsubscribe.
+      expect(m.headers?.["List-Unsubscribe"] !== undefined, template).toBe(MAIL_CHECK_LISTS.has(template));
+      expect(m.headers?.["Auto-Submitted"], template).toBe("auto-generated");
+    });
+    expect(mail.handed[0].subject).toBe(`${MAIL_CHECK_MARK} Votre code de connexion à Award Watch`);
+    expect(await lastCheckAudit()).toEqual({ user_id: null, detail: "by token, 9 sent, 0 refused, 0 stubbed" });
+    // No body at all is a check in English.
+    expect((await (await tokenPost(env)).json() as { language: string }).language).toBe("en");
+    // The token never reaches a log line.
+    for (const spy of logged) expect(spy.mock.calls.map((c) => c.join(" ")).join("\n")).not.toContain(CHECK_TOKEN);
+  });
+
+  it("answers the site's 404 to a wrong token, a token on any other address, or a Worker not set up for it, and sends nothing", async () => {
+    const op = await operator();
+    const { env, mail } = checkEnv(op.env);
+    type Case = [why: string, env: object, o: Parameters<typeof tokenPost>[1]];
+    const cases: Case[] = [
+      ["a wrong token", env, { token: CHECK_TOKEN.replace(/.$/, (c) => (c === "0" ? "1" : "0")) }],
+      ["the token with a character more", env, { token: `${CHECK_TOKEN}0` }],
+      ["no token", env, { token: null }],
+      ["not a bearer token", env, { token: null, headers: { authorization: CHECK_TOKEN } }],
+      ["the token on the console's page", env, { method: "GET" }],
+      ["the token on the overview", env, { path: "/admin" }],
+      ["the token on the announcement", env, { path: "/admin/announce", body: "confirm=yes" }],
+      ["the token on an account's action", env, { path: `/admin/users/${op.id}/sign-out` }],
+      ["MAIL_CHECK_TOKEN unset", { ...env, MAIL_CHECK_TOKEN: undefined }, { token: "" }],
+      ["MAIL_CHECK_TOKEN too short", { ...env, MAIL_CHECK_TOKEN: "x".repeat(MAIL_CHECK_TOKEN_MIN - 1) }, { token: "x".repeat(MAIL_CHECK_TOKEN_MIN - 1) }],
+      ["OPERATOR_EMAILS unset", { ...env, OPERATOR_EMAILS: undefined }, {}],
+      ["the switch off", { ...env, ACCOUNTS_ENABLED: "false" }, {}],
+    ];
+    for (const [why, caseEnv, o] of cases) {
+      // The page any unknown address gets, asked the same way in the same environment.
+      const plain = await (await tokenPost(caseEnv, { ...o, path: "/no-such-page" })).text();
+      expect(plain, why).toContain("<h1>Page Not Found</h1>");
+      const res = await tokenPost(caseEnv, o);
+      expect(res.status, why).toBe(404);
+      expect(await res.text(), why).toBe(plain);
+    }
+    expect(mail.handed).toEqual([]);
+  });
+
+  it("with ACCESS_AUD set: needs a token Access signed as well, a service token's (no email claim) included", async () => {
+    const op = await operator(accessEnv);
+    const { env, mail } = checkEnv(op.env);
+    const service = await token(claimsFor("", { email: undefined, common_name: "mail-check.access", sub: "" }));
+    expect((await tokenPost(env)).status).toBe(404);
+    expect((await tokenPost(env, { headers: withToken(await token(claimsFor("", { email: undefined }), { key: stranger.privateKey })) })).status).toBe(404);
+    expect((await tokenPost(env, { headers: withToken(await token(claimsFor("", { email: undefined, exp: nowS() - 5 }))) })).status).toBe(404);
+    expect(mail.handed).toEqual([]);
+    expect((await tokenPost(env, { headers: withToken(service) })).status).toBe(200);
+    expect(mail.handed).toHaveLength(MAIL_CHECK_TEMPLATES.length);
+    // The service token alone opens nothing: no session, no bearer token.
+    expect((await tokenPost(env, { token: null, headers: withToken(service) })).status).toBe(404);
+    expect((await get("/admin", { env, headers: withToken(service) })).status).toBe(404);
+    expect(await mailCheckTokenAdmits(env as never, new Headers({ authorization: `Bearer ${CHECK_TOKEN}`, ...withToken(service) }))).toBe(true);
+  });
+
+  it("is described in docs/mail.md: both layers, how to run them, the inbox, and the rule that it never sends to a reader", async () => {
+    const docs = ((await import("../../docs/mail.md?raw")).default as string).replace(/\s+/g, " ");
+    for (const s of [
+      "npm run test:mail", "site/test-mail/", "vitest.mail.config.ts", "`/admin/mail-check`", "MAIL_TEST_TO", "MAIL_CHECK_TOKEN",
+      "mail-check.yml", MAIL_CHECK_MARK, "never sends to a reader", "Service Auth",
+    ]) expect(docs, s).toContain(s);
+    expect(docs).not.toContain(EM_DASH);
+    for (const address of docs.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g) ?? []) {
+      expect(["contact@awardwatch.ca", "alerts@awardwatch.ca"], address).toContain(address);
+    }
   });
 });
