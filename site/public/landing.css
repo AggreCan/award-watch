@@ -294,9 +294,10 @@ html.js .theme-toggle { display: inline-flex; }
 
 /* -- plans (with the accounts switch on only) ---------------------------------
    The three cards are one grid and each card a subgrid of its five rows (name,
-   price, the "for" line, the list, the buttons), so each row sits level across
-   them. Free and Pro draw every row of PLAN_ROWS in order (src/pro.tsx), one
-   line each, so their lists line up row for row; Ultra's rows wrap. */
+   price, the "for" line, the list, the buttons or Ultra's form), so each row
+   sits level across them. Free and Pro draw every row of PLAN_ROWS in order
+   (src/pro.tsx), one line each, so their lists line up row for row; Ultra's
+   rows wrap. */
 .lp-pricing { background: var(--em-soft); padding-block: 72px; }
 .lp-pricing h2 { font-size: 40px; line-height: 1.08; margin: 8px 0; }
 .lp-pricing .lp-sub { font-size: 17px; line-height: 26px; color: var(--ink-2); margin-bottom: 32px; }
@@ -324,6 +325,22 @@ html.js .theme-toggle { display: inline-flex; }
 .lp-plan-acts { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; padding-top: 6px; }
 .lp-plan-ultra .lp-btn { border-color: var(--sap); color: var(--sap); }
 .lp-plans-note { margin-top: 16px; font-size: 13px; line-height: 20px; color: var(--muted); max-width: 72ch; }
+/* Ultra's form in its button's place (src/pages/landing.tsx UltraBox): the address over the card's button,
+   then, once posted, the line that says it is kept on the card's soft tint. A post without the script
+   lands on the card's anchor, clear of the sticky nav. */
+.lp-plan-ultra { scroll-margin-top: 88px; }
+.lp-ultra { align-self: end; display: grid; gap: 10px; min-width: 0; padding-top: 6px; }
+.lp-ultra-form { display: grid; gap: 10px; min-width: 0; }
+.lp-ultra .hp { position: absolute; left: -9999px; }
+.lp-ultra-field input { display: block; width: 100%; min-height: 48px; padding: 10px 14px; border-radius: var(--r-sm); border: 1.5px solid var(--line-2);
+  background: var(--page); color: var(--ink); font: inherit; font-size: 16px; }
+.lp-ultra-field input::placeholder { color: var(--muted); }
+.lp-ultra-field input:hover { border-color: var(--sap); }
+.lp-ultra-btn { width: 100%; }
+.lp-ultra-error { padding-left: 8px; border-left: 2px solid var(--ink-2); color: var(--ink); font-size: 13px; line-height: 18px; }
+.lp-ultra-done { padding: 12px 14px; border-radius: var(--r-sm); background: var(--sap-soft); }
+.lp-ultra-thanks { color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
+.lp-ultra-noted { margin-top: 2px; color: var(--ink-2); font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
 
 /* -- close ------------------------------------------------------------------- */
 .lp-close { background: var(--navy); color: var(--on-navy); padding-block: 72px; }

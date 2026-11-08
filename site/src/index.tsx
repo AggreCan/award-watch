@@ -29,9 +29,9 @@ import { directoryPage, organizationsIndex } from "./pages/directory";
 import { EXPIRING_CSV, expiringFile, expiringPage, expiringRowsCsv, expiringWindowPage } from "./pages/expiring";
 import { feedsPage } from "./pages/feeds";
 import { correctionsForm, correctionsSubmit, respondPage, respondSubmit } from "./pages/forms";
-import { rootPage } from "./pages/landing";
+import { rootPage, ultraSubmit } from "./pages/landing";
 import { contractIcs, publishedContractIcs, tenderIcs } from "./pages/ics";
-import { interestSubmit, readInterestPost } from "./pages/interest";
+import { ULTRA_KIND, field, interestSubmit, readInterestPost } from "./pages/interest";
 import { methodologyPage } from "./pages/methodology";
 import { organizationPage } from "./pages/organization";
 import { publishedContractPage } from "./pages/published";
@@ -215,16 +215,18 @@ app.get("/search", searchPage);
 // watchlist lives in the visitor's browser; this page is its shell.
 app.get("/feeds", feedsPage);
 app.get("/watchlist", watchlistPage);
-// Interest in email alerts: the Email lists page, and the post of both forms,
+// Interest in email alerts: the Email lists page, and the post of every form,
 // read once: the page's chooser saves several lists at once (place=lists,
-// pages/alerts.tsx), every other page's block saves its own filter
-// (pages/interest.tsx). The post answers in place; an address typed or
-// reloaded as a GET lands on the page.
+// pages/alerts.tsx), the landing page's Ultra card saves an address for the
+// Ultra message (kind=ultra, pages/landing.tsx), every other page's block
+// saves its own filter (pages/interest.tsx). The post answers in place; an
+// address typed or reloaded as a GET lands on the page.
 app.get("/alerts", alertsPage);
 app.post("/interest", async (c) => {
   const post = await readInterestPost(c);
   if (post instanceof Response) return post;
-  return post.place === "lists" ? listsSubmit(c, post) : interestSubmit(c, post);
+  if (post.place === "lists") return listsSubmit(c, post);
+  return field(post.body, "kind", 20) === ULTRA_KIND ? ultraSubmit(c, post) : interestSubmit(c, post);
 });
 app.get("/interest", (c) => c.redirect("/alerts", 302));
 // The link in the accounts-open message that takes an address off the email

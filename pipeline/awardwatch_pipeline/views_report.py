@@ -24,9 +24,10 @@ subscribers).
 
 Alert sign-ups: the count the nightly run read from the forms database just
 before the report (rows of the interest table, one per address and saved
-filter, and how many have not unsubscribed), as it stood when the report was
-written. It stays out of the one-line summary, which goes to the public
-LAST_RUN.md.
+filter, and how many have not unsubscribed; the landing page's Ultra card
+rows, which hold no filter, are left out by the workflow's query), as it stood
+when the report was written. It stays out of the one-line summary, which goes
+to the public LAST_RUN.md.
 """
 
 from __future__ import annotations
@@ -245,7 +246,8 @@ def render(month: str, months: list[Month], written: date, interest: dict[str, i
         "(records: award notices, contract history records, published contracts, grant agreements and lobbying "
         "communications, each counted in its own source and the five counts added).\n"
         "- Alert sign-ups: rows of the interest table of the forms database (the \"Get alerts by email\" form and "
-        "the Email lists page; one row per address and list, so an address on three lists counts three times) "
+        "the Email lists page, not the Ultra card's addresses; one row per address and list, so an address on three "
+        "lists counts three times) "
         "read by the nightly run just before this report, and how many of them have no unsubscribe date. A count, "
         "not a monthly figure.\n"
     )

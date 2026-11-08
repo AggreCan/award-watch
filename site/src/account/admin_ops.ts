@@ -30,7 +30,8 @@ export function operatorEmails(env: Pick<Env, "OPERATOR_EMAILS">): Set<string> {
 
 export type OperatorEvent =
   | "operator_granted" | "operator_revoked" | "operator_cancelled" | "operator_refunded" | "operator_blocked"
-  | "operator_unblocked" | "operator_email_changed" | "operator_signed_out" | "operator_deleted" | "operator_announced";
+  | "operator_unblocked" | "operator_email_changed" | "operator_signed_out" | "operator_deleted" | "operator_announced"
+  | "operator_announced_ultra";
 
 // The audit table of audit.ts, with its rule: a failure to write is logged
 // without detail and never fails the action that was taken. note is a short

@@ -5,7 +5,8 @@
 // it again until no address is left; nothing sends it on a schedule.
 //
 // The addresses are the interest table's, in the forms database (DB): each
-// address with a row not unsubscribed and no row marked, read in address
+// address with a row not unsubscribed and no row marked (the Ultra card's
+// rows aside, which are the Ultra message's; see below), read in address
 // order from a cursor, so a run moves past an address it passes over or that
 // the mail service refuses. An address holding an active account (the
 // accounts database's users) is passed over: its lists were offered to it at
@@ -27,6 +28,16 @@
 // one-click POST, marks every row of the address unsubscribed and replaces
 // the address with "removed:" and a hash under a random salt that is thrown
 // away, which is what the privacy page promises.
+//
+// The Ultra message is the second kind of run (kind "ultra", started from
+// /admin/announce?kind=ultra, never on a schedule): one message to each
+// address the landing page's Ultra card kept (the rows of kind ULTRA_KIND,
+// pages/landing.tsx), saying Ultra is open, with a link to the plans and the
+// same link off the lists. Each kind reads, claims and marks its own rows
+// only: the accounts-open message every row but the Ultra card's, the Ultra
+// message those alone, so one never marks the other's rows and an address on
+// both gets each once. An address holding an account is not passed over for
+// the Ultra message, since it asked for that message on the card.
 
 import type { Context } from "hono";
 import { readForm } from "../body";
@@ -35,6 +46,7 @@ import type { AppEnv, Env } from "../env";
 import { t, tn, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { CONTACT_EMAIL } from "../pages/docs";
+import { ULTRA_KIND } from "../pages/interest";
 import { STOP_CODES, sendWithHeaders } from "./deliveries";
 import { deliveryHeaders } from "./digests";
 import { randomHex, sha256Hex } from "./secrets";
@@ -46,27 +58,39 @@ export const PAGE_SIZE = 50;
 // Lists named in a message; a line counts the rest.
 export const LISTS_SHOWN = 10;
 
+// The two messages a run can send; "accounts" when nothing names one.
+export const ANNOUNCE_KINDS = ["accounts", "ultra"] as const;
+export type AnnounceKind = (typeof ANNOUNCE_KINDS)[number];
+export const announceKindOf = (v: unknown): AnnounceKind => (v === "ultra" ? "ultra" : "accounts");
+
 // -- the forms database --------------------------------------------------------------------
 
-// Each waiting address's first live row, for its token and its language, in
-// address order after ?1.
-export const WAITING_SQL =
+// The rows each kind reads, claims and marks. ULTRA_KIND is a fixed word of
+// the site's, never a visitor's, so it is written into the statements.
+const SCOPE: Record<AnnounceKind, string> = { accounts: `kind <> '${ULTRA_KIND}'`, ultra: `kind = '${ULTRA_KIND}'` };
+
+// Each waiting address's first live row of the kind's, for its token and its
+// language, in address order after ?1.
+export const waitingSql = (kind: AnnounceKind): string =>
   "SELECT email, token, lang FROM interest WHERE id IN (" +
-  "SELECT MIN(id) FROM interest WHERE unsubscribed_at IS NULL GROUP BY email HAVING MAX(notice_at) IS NULL) " +
+  `SELECT MIN(id) FROM interest WHERE unsubscribed_at IS NULL AND ${SCOPE[kind]} GROUP BY email HAVING MAX(notice_at) IS NULL) ` +
   "AND email > ?1 ORDER BY email LIMIT ?2";
 
-export const COUNT_WAITING_SQL =
-  "SELECT COUNT(*) AS n FROM (SELECT email FROM interest WHERE unsubscribed_at IS NULL GROUP BY email HAVING MAX(notice_at) IS NULL)";
+export const countWaitingSql = (kind: AnnounceKind): string =>
+  "SELECT COUNT(*) AS n FROM (SELECT email FROM interest WHERE unsubscribed_at IS NULL " +
+  `AND ${SCOPE[kind]} GROUP BY email HAVING MAX(notice_at) IS NULL)`;
 
-export const COUNT_SENT_SQL = "SELECT COUNT(DISTINCT email) AS n FROM interest WHERE notice_at IS NOT NULL";
+export const countSentSql = (kind: AnnounceKind): string =>
+  `SELECT COUNT(DISTINCT email) AS n FROM interest WHERE notice_at IS NOT NULL AND ${SCOPE[kind]}`;
 
-// The claim: every live row of the address marked, in one statement that
-// holds only while none of its rows is.
-export const CLAIM_SQL =
-  "UPDATE interest SET notice_at = ?1 WHERE email = ?2 AND unsubscribed_at IS NULL " +
-  "AND NOT EXISTS (SELECT 1 FROM interest x WHERE x.email = ?2 AND x.notice_at IS NOT NULL)";
+// The claim: every live row of the address and the kind marked, in one
+// statement that holds only while none of those rows is.
+export const claimSql = (kind: AnnounceKind): string =>
+  `UPDATE interest SET notice_at = ?1 WHERE email = ?2 AND unsubscribed_at IS NULL AND ${SCOPE[kind]} ` +
+  `AND NOT EXISTS (SELECT 1 FROM interest x WHERE x.email = ?2 AND x.${SCOPE[kind]} AND x.notice_at IS NOT NULL)`;
 
-export const RELEASE_SQL = "UPDATE interest SET notice_at = NULL WHERE email = ?1 AND notice_at = ?2";
+export const releaseSql = (kind: AnnounceKind): string =>
+  `UPDATE interest SET notice_at = NULL WHERE email = ?1 AND notice_at = ?2 AND ${SCOPE[kind]}`;
 
 const marks = (n: number) => Array.from({ length: n }, () => "?").join(", ");
 
@@ -74,8 +98,8 @@ type Waiting = { email: string; token: string; lang: string };
 
 export type AnnounceCounts = { waiting: number; sent: number };
 
-export async function announceCounts(env: Env): Promise<AnnounceCounts> {
-  const [waiting, sent] = await env.DB.batch<{ n: number }>([env.DB.prepare(COUNT_WAITING_SQL), env.DB.prepare(COUNT_SENT_SQL)]);
+export async function announceCounts(env: Env, kind: AnnounceKind = "accounts"): Promise<AnnounceCounts> {
+  const [waiting, sent] = await env.DB.batch<{ n: number }>([env.DB.prepare(countWaitingSql(kind)), env.DB.prepare(countSentSql(kind))]);
   return { waiting: Number(waiting.results?.[0]?.n ?? 0), sent: Number(sent.results?.[0]?.n ?? 0) };
 }
 
@@ -89,9 +113,11 @@ async function accountHolders(env: Env, emails: string[]): Promise<Set<string>> 
   return new Set((res.results ?? []).map((r) => r.email));
 }
 
+// The lists the accounts-open message names: the Ultra card's row is not one.
 async function listsOf(env: Env, emails: string[]): Promise<Map<string, string[]>> {
-  const res = await env.DB.prepare(`SELECT email, label FROM interest WHERE unsubscribed_at IS NULL AND email IN (${marks(emails.length)}) ORDER BY email, id`)
-    .bind(...emails).all<{ email: string; label: string }>();
+  const res = await env.DB.prepare(
+    `SELECT email, label FROM interest WHERE unsubscribed_at IS NULL AND ${SCOPE.accounts} AND email IN (${marks(emails.length)}) ORDER BY email, id`,
+  ).bind(...emails).all<{ email: string; label: string }>();
   const out = new Map<string, string[]>();
   for (const r of res.results ?? []) out.set(r.email, [...(out.get(r.email) ?? []), r.label]);
   return out;
@@ -147,13 +173,50 @@ export function accountsOpenMessage(lang: Lang, to: string, labels: readonly str
   return { to, subject: t(lang, "announce.subject"), text, html, lang, headers };
 }
 
+export type UltraLinks = { plans: string; stop: string };
+
+// The Ultra message's two links: the plans page and the link off the lists.
+export function ultraLinks(base: string, lang: Lang, token: string): UltraLinks {
+  const fr = lang === "fr";
+  return { plans: `${base}/pro${fr ? "?lang=fr" : ""}`, stop: `${base}/interest/stop?t=${token}${fr ? "&lang=fr" : ""}` };
+}
+
+// The Ultra message: Ultra is open, the address asked to be told, the plans
+// page, the only-message line with the link off the lists, and why it came.
+// Every line is the site's own; nothing in it was typed by a visitor.
+export function ultraOpenMessage(lang: Lang, to: string, links: UltraLinks): MailMessage & { headers: Record<string, string> } {
+  const plans = t(lang, "announce.ultra_plans");
+  const stop = t(lang, "announce.stop_link");
+  const tagline = `${t(lang, "site.name")} · ${t(lang, "site.tagline")}`;
+  const link = (label: string, url: string) => t(lang, "digest.text_link", { label, url });
+  const text = [
+    t(lang, "announce.ultra_lead"),
+    t(lang, "announce.ultra_asked"),
+    link(plans, links.plans),
+    `${t(lang, "announce.ultra_only")}\n${link(stop, links.stop)}`,
+    `${t(lang, "announce.ultra_why")}\n${tagline}\n${CONTACT_EMAIL}\n`,
+  ].join("\n\n");
+  const p = (html: string) => `<p>${html}</p>`;
+  const a = (url: string, label: string) => `<a href="${escapeHtml(url)}">${escapeHtml(label)}</a>`;
+  const html =
+    `<!doctype html><html lang="${lang}"><body style="font-family: sans-serif; line-height: 1.5;">` +
+    p(escapeHtml(t(lang, "announce.ultra_lead"))) +
+    p(escapeHtml(t(lang, "announce.ultra_asked"))) +
+    p(a(links.plans, plans)) +
+    p(`${escapeHtml(t(lang, "announce.ultra_only"))} ${a(links.stop, stop)}`) +
+    `<p style="color: #5b6b80; font-size: 13px;">${escapeHtml(t(lang, "announce.ultra_why"))}<br>${escapeHtml(tagline)} · ${a(`mailto:${CONTACT_EMAIL}`, CONTACT_EMAIL)}</p>` +
+    "</body></html>";
+  const headers = links.stop.startsWith("https://") ? deliveryHeaders(links.stop) : {};
+  return { to, subject: t(lang, "announce.ultra_subject"), text, html, lang, headers };
+}
+
 // -- the run -------------------------------------------------------------------------------------
 
 export interface AnnounceReport {
   sent: number;
   // Refused by the mail service for that address alone; it waits for the next run.
   failed: number;
-  // Passed over: the address holds an active account.
+  // Passed over: the address holds an active account (the accounts-open message only).
   accounts: number;
   // The limit code that ended the run, if one did.
   stopped: string | null;
@@ -161,39 +224,46 @@ export interface AnnounceReport {
   left: number;
 }
 
-// One run: at most ANNOUNCE_MAX messages (max, which the tests lower). base
-// is where the links point; requestUrl is the console request's, which picks
-// the sender (sender.ts). A database fault is thrown to the console, which
-// shows its 503 page; the addresses already sent keep their marks.
+// One run of a kind's message: at most ANNOUNCE_MAX messages (max, which the
+// tests lower). base is where the links point; requestUrl is the console
+// request's, which picks the sender (sender.ts). A database fault is thrown
+// to the console, which shows its 503 page; the addresses already sent keep
+// their marks.
 export async function runAnnouncement(
-  env: Env, base: string, requestUrl: string, now = new Date(), max = ANNOUNCE_MAX,
+  env: Env, base: string, requestUrl: string, now = new Date(), max = ANNOUNCE_MAX, kind: AnnounceKind = "accounts",
 ): Promise<AnnounceReport> {
   const report: AnnounceReport = { sent: 0, failed: 0, accounts: 0, stopped: null, left: 0 };
   const at = now.toISOString();
+  const ultra = kind === "ultra";
   let cursor = "";
   pages: while (report.sent + report.failed < max) {
-    const waiting = (await env.DB.prepare(WAITING_SQL).bind(cursor, PAGE_SIZE).all<Waiting>()).results ?? [];
+    const waiting = (await env.DB.prepare(waitingSql(kind)).bind(cursor, PAGE_SIZE).all<Waiting>()).results ?? [];
     if (!waiting.length) break;
     cursor = waiting[waiting.length - 1].email;
     const emails = waiting.map((w) => w.email);
-    const [holders, lists] = await Promise.all([accountHolders(env, emails), listsOf(env, emails)]);
+    // The Ultra message names no list and passes over no account holder, so it reads neither.
+    const [holders, lists] = ultra
+      ? [new Set<string>(), new Map<string, string[]>()]
+      : await Promise.all([accountHolders(env, emails), listsOf(env, emails)]);
     for (const w of waiting) {
       if (holders.has(w.email)) {
         report.accounts++;
         continue;
       }
       if (report.sent + report.failed >= max) break pages;
-      const claimed = await env.DB.prepare(CLAIM_SQL).bind(at, w.email).run();
+      const claimed = await env.DB.prepare(claimSql(kind)).bind(at, w.email).run();
       // Another run has it, or the address left the lists since the page was read.
       if (!claimed.meta?.changes) continue;
       const lang: Lang = w.lang === "fr" ? "fr" : "en";
-      const message = accountsOpenMessage(lang, w.email, lists.get(w.email) ?? [], announceLinks(base, lang, w.token));
+      const message = ultra
+        ? ultraOpenMessage(lang, w.email, ultraLinks(base, lang, w.token))
+        : accountsOpenMessage(lang, w.email, lists.get(w.email) ?? [], announceLinks(base, lang, w.token));
       const result = await sendWithHeaders(env, requestUrl, message);
       if (result.sent) {
         report.sent++;
         continue;
       }
-      await env.DB.prepare(RELEASE_SQL).bind(w.email, at).run();
+      await env.DB.prepare(releaseSql(kind)).bind(w.email, at).run();
       if (result.code && STOP_CODES.has(result.code)) {
         report.stopped = result.code;
         break pages;
@@ -202,7 +272,7 @@ export async function runAnnouncement(
     }
     if (waiting.length < PAGE_SIZE) break;
   }
-  report.left = (await announceCounts(env)).waiting;
+  report.left = (await announceCounts(env, kind)).waiting;
   return report;
 }
 
@@ -211,7 +281,7 @@ export async function runAnnouncement(
 const TOKEN_RE = /^[0-9a-f]{32}$/;
 const LABELS_MAX = 25;
 
-type StopTarget = { email: string; live: boolean; labels: string[] };
+type StopTarget = { email: string; live: boolean; lists: { kind: string; label: string }[] };
 
 // The address a token belongs to, and its lists while it is on them; null
 // for a token that matches no row.
@@ -220,11 +290,15 @@ async function stopTarget(env: Env, token: string): Promise<StopTarget | null> {
   const row = await env.DB.prepare("SELECT email, unsubscribed_at FROM interest WHERE token = ? LIMIT 1").bind(token)
     .first<{ email: string; unsubscribed_at: string | null }>();
   if (!row) return null;
-  if (row.unsubscribed_at) return { email: row.email, live: false, labels: [] };
-  const res = await env.DB.prepare(`SELECT label FROM interest WHERE email = ? AND unsubscribed_at IS NULL ORDER BY id LIMIT ${LABELS_MAX}`)
-    .bind(row.email).all<{ label: string }>();
-  return { email: row.email, live: true, labels: (res.results ?? []).map((r) => r.label) };
+  if (row.unsubscribed_at) return { email: row.email, live: false, lists: [] };
+  const res = await env.DB.prepare(`SELECT kind, label FROM interest WHERE email = ? AND unsubscribed_at IS NULL ORDER BY id LIMIT ${LABELS_MAX}`)
+    .bind(row.email).all<{ kind: string; label: string }>();
+  return { email: row.email, live: true, lists: res.results ?? [] };
 }
+
+// A list as the page names it: its label, but the Ultra card's row (whose
+// label is the plan's name alone) says what it is for.
+const listName = (lang: Lang, list: { kind: string; label: string }) => (list.kind === ULTRA_KIND ? t(lang, "interest.ultra_listed") : list.label);
 
 // Every row of the address: unsubscribed (the time kept where one was
 // already set) and the address replaced, so the rows still count in the
@@ -265,7 +339,7 @@ function stopView(lang: Lang, token: string, target: StopTarget) {
       <PageHead lang={lang} title={t(lang, "announce.stop_title")} lead={t(lang, target.live ? "announce.stop_lead" : "announce.stopped_lead")} />
       {target.live ? (
         <Panel title={t(lang, "announce.stop_panel")} class="panel-form">
-          <ul class="account-list">{target.labels.map((l) => <li>{l}</li>)}</ul>
+          <ul class="account-list">{target.lists.map((l) => <li>{listName(lang, l)}</li>)}</ul>
           <form method="post" action="/interest/stop" class="stack">
             <input type="hidden" name="t" value={token} />
             <input type="hidden" name="lang" value={lang} />

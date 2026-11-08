@@ -196,6 +196,8 @@ export function privacyPage(c: Context<AppEnv>): Promise<Response> {
         <>
           <p>{t(lang, "privacy.interest_kept")}</p>
           <p>{t(lang, "privacy.interest_use")}</p>
+          {/* The landing page's Ultra card keeps addresses in the same table; it exists only while accounts are open. */}
+          {accounts ? <p>{t(lang, "privacy.interest_ultra")}</p> : null}
           <p>{t(lang, "privacy.interest_shown")}</p>
           <p>{tj(lang, "privacy.interest_removal", { email: <Mail /> })}</p>
         </>

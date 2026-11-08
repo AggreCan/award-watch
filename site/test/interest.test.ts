@@ -683,7 +683,8 @@ describe("the Email lists page's chooser", () => {
     // The query the workflow's "Count the alert sign-ups" step runs against the forms database.
     const step = nightly.slice(nightly.indexOf("- name: Count the alert sign-ups"));
     const query = /--command "([^"]+)"/.exec(step)?.[1] ?? "";
-    expect(query).toBe("SELECT COUNT(*) AS n, SUM(unsubscribed_at IS NULL) AS live FROM interest");
+    // The landing page's Ultra card rows are left out (test/interest-ultra.test.ts).
+    expect(query).toBe("SELECT COUNT(*) AS n, SUM(unsubscribed_at IS NULL) AS live FROM interest WHERE kind <> 'ultra'");
     const count = async () => (await env.DB.prepare(query).first<{ n: number; live: number }>())!;
     const before = await count();
     expect((await choose([["lang", "en"], ["list", "tenders"], ["list", "matching"], ["segment", "43"], ["list", "expiring"], ["email", "counted@example.ca"]])).status).toBe(200);

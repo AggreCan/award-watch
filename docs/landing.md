@@ -57,10 +57,42 @@ With the switch on the page adds the three plan cards: Free and Pro draw
 every row of `PLAN_ROWS` in order, as the Pro page does, Pro with its price
 from the checkout's figures (or "Not on sale yet"); Ultra, in sapphire with
 the 2 x 2 tiles chip, reads "Price to be set" and "Coming soon", lists its
-planned scope and links "Tell me when Ultra opens" to the email lists page.
+planned scope and ends on a one-field form in place of a button (below).
 The chips sit on the plan cards only. Every piece the switch changes is
 listed in `LANDING_SWITCH_PIECES` (`site/test/home.ts`); the switch guards
 strip them and hold the rest of the page equal in both states.
+
+## The Ultra card's form
+
+One email field and the button "Tell me when Ultra opens" ("M'avertir à
+l'ouverture d'Ultra"), with the honeypot every form carries (operator,
+2026-11-08: the button became the box). It posts to `/interest` with
+`kind=ultra`; `index.tsx` hands such a post to `ultraSubmit` in
+`landing.tsx` after `readInterestPost` has refused another site's page, and
+the form cap holds the route as it holds every interest post. The address is
+normalized and checked as every email list checks it and kept as one row of
+the forms database's `interest` table: kind `ultra`, empty `params` (no
+filter), the label "Ultra" (the plan's name, the same in both languages),
+the form's language and a token. Nothing else is stored, and nothing a
+visitor types reaches a later message. The same address again stores
+nothing and answers the same.
+
+The answer puts the line "We will write to you when Ultra opens." ("Nous
+vous écrirons à l'ouverture d'Ultra.") and the address as kept in the
+form's place. `public/interest.js` (loaded inside the plan cards' section,
+so it comes and goes with them) posts with the `x-interest-fragment` header
+and gets the card's block alone; without the script the answer is the
+landing page with the card in its new state, at the form's address
+`/interest#ultra`, so the browser lands on the card. A bad address, the
+honeypot or a database fault comes back as the form with a line and the
+address as typed (400, 400, 503). With the switch off the card does not
+exist and such a post is refused as unreadable (400), as an unknown kind is.
+
+The row is not a saved search: an account's import passes it over
+(`importInterest`), the accounts-open message neither counts nor names it,
+the nightly's count of alert sign-ups leaves it out, and the page that takes
+an address off the lists names it "Ultra: we will write when it opens". Its
+one message is the Ultra message (docs/accounts.md, *The Ultra message*).
 
 ## The logos
 
@@ -121,7 +153,8 @@ a caching rule of its own.
 `site/test/landing.test.ts` holds the route (landing page or app home), both
 languages and both switch states, the band's links and wording, the logo
 addresses, the policy header, the map labels, the figures, the plan rows,
-the search form, the head the app home carries, the no-data page and the
-shipped files. `test/cpu-budget.test.ts` times the page with the 3-month
+the search form, the head the app home carries, the no-data page, the
+shipped files and the Ultra card's form markup. `test/interest-ultra.test.ts`
+holds the form's post and every reader of its row. `test/cpu-budget.test.ts` times the page with the 3-month
 window's page at its production size. The tests of the app home's content
 reach it through `test/home.ts`.

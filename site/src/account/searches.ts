@@ -12,7 +12,7 @@
 
 import type { Env } from "../env";
 import type { Lang } from "../i18n";
-import { INTEREST_KINDS, type InterestFilter, type InterestKind, kindOfPath } from "../pages/interest";
+import { INTEREST_KINDS, type InterestFilter, type InterestKind, ULTRA_KIND, kindOfPath } from "../pages/interest";
 import { SAVED_SEARCH_MAX, savedSearchCap } from "./entitlements";
 import { deleteFeeds } from "./feeds";
 import { missingTable } from "./records_deliveries";
@@ -118,8 +118,11 @@ export type InterestRow = { id: number; kind: string; params: string; label: str
 
 // A row the forms database holds is used only if it still reads as one the
 // form could have written: a known kind whose path matches it, within the
-// lengths the form keeps.
+// lengths the form keeps. The Ultra card's row (ULTRA_KIND, no filter) is an
+// address waiting for the Ultra message, not a saved search, so it is never
+// offered or imported; it stays in the table for that message.
 function readable(row: InterestRow): row is InterestRow & { kind: InterestKind } {
+  if (row.kind === ULTRA_KIND) return false;
   if (!(INTEREST_KINDS as readonly string[]).includes(row.kind)) return false;
   if (row.params.length > PARAMS_MAX || row.label.length > LABEL_MAX || !row.label.trim()) return false;
   const path = row.params.split("?")[0];

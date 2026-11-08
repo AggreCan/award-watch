@@ -834,7 +834,10 @@ link) and `admin.tsx` (the console page); the tests are
 ### Who gets it
 
 Each address in the forms database's `interest` table with a row not
-unsubscribed and no row marked `notice_at`, in address order. An address
+unsubscribed and no row marked `notice_at`, in address order, counting only
+the rows that are not the landing page's Ultra card's (kind `ultra`; *The
+Ultra message* below): those are never claimed, marked, counted or named by
+this message, and an address with only such a row does not get it. An address
 that holds an active account (`users` in the accounts database, the same
 lower-cased address) is passed over: its lists were offered to it when it
 signed in. A run sends at most 300 messages and stops there; the next run
@@ -915,8 +918,49 @@ account, <n> left`, and the page shows the same figures after it.
 3. Check what went:
 
    ```
-   npx wrangler d1 execute award-watch --remote --command "SELECT COUNT(DISTINCT email) AS sent FROM interest WHERE notice_at IS NOT NULL"
+   npx wrangler d1 execute award-watch --remote --command "SELECT COUNT(DISTINCT email) AS sent FROM interest WHERE notice_at IS NOT NULL AND kind <> 'ultra'"
    ```
+
+## The Ultra message
+
+The landing page's Ultra card keeps an address for one message when Ultra
+opens (docs/landing.md, *The Ultra card's form*): a row of the `interest`
+table with kind `ultra`, empty `params` and the label "Ultra". The message
+is the same job as the accounts-open message, of its own kind: the operator
+starts it from `/admin/announce?kind=ultra` (the overview links it as
+"Ultra message"), at most 300 messages a run, and runs it again until no
+address is left; nothing sends it on a schedule. Send it only once Ultra can
+be bought: the message says Ultra is open.
+
+- Who gets it: each address with an `ultra` row not unsubscribed and no
+  `ultra` row marked `notice_at`, in address order. An address holding an
+  account is not passed over, since it asked for this message on the card.
+- The claim, the give-back on a refused send and the stop at a daily or
+  rate limit work as for the accounts-open message, on the address's
+  `ultra` rows alone: one message never marks the other's rows, so an
+  address on the lists and on the card gets each message once.
+- The message, plain text and plain HTML in the language the address was
+  entered in: Ultra, the plan above Pro, is open; the address asked to be
+  told; "Plans and prices" with the link to `/pro`; that this is the only
+  message about Ultra, with the link off the lists
+  (`/interest/stop?t=<token of the address's first ultra row>`, also in
+  `List-Unsubscribe` with its one-click partner); why it came, the tagline
+  and the contact address. No price and nothing a visitor typed.
+- The console page: the count of addresses that have not had it, how many
+  it went to, the confirm box and button (the form carries `kind=ultra`),
+  and the message in English and in French. The accounts-open page and form
+  are unchanged and name no kind. A run writes the audit row
+  `operator_announced_ultra` with no user id and the detail `by <operator's
+  user id>, <n> sent, <n> not sent, <n> left`.
+- Check what went:
+
+  ```
+  npx wrangler d1 execute award-watch --remote --command "SELECT COUNT(DISTINCT email) AS sent FROM interest WHERE notice_at IS NOT NULL AND kind = 'ultra'"
+  ```
+
+The code is `site/src/account/announce.tsx` (`runAnnouncement` with the kind
+`ultra`, `ultraOpenMessage`) and `admin.tsx`; the tests are in
+`site/test/accounts-announce.test.ts` (*the Ultra message*).
 
 ## Phase 3: payments and the metered API
 

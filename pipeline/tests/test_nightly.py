@@ -841,8 +841,9 @@ def test_the_workflow_saves_the_bundle_in_parts():
 def test_the_workflow_counts_the_alert_sign_ups_and_never_fails_on_them():
     text = WORKFLOW.read_text(encoding="utf-8")
     count = step(text, "Count the alert sign-ups")
+    # The landing page's Ultra card rows (kind ultra) wait for one message and are not alert sign-ups.
     query = ('"$WRANGLER" d1 execute award-watch --remote --json --command '
-             '"SELECT COUNT(*) AS n, SUM(unsubscribed_at IS NULL) AS live FROM interest"')
+             '"SELECT COUNT(*) AS n, SUM(unsubscribed_at IS NULL) AS live FROM interest WHERE kind <> \'ultra\'"')
     assert query in count
     # Two numbers leave D1 and nothing else: no column of an address or a filter is named.
     assert "email" not in count and "params" not in count and "label" not in count

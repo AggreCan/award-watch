@@ -3805,6 +3805,17 @@ const STRINGS = {
     en: "The home page shows organizations' logos from Brandfetch's logo service. A visitor's browser fetches each logo from Brandfetch, which receives the request's address and this site's name as the referrer. The site sends Brandfetch nothing else.",
     fr: "La page d'accueil affiche les logos d'organisations provenant du service de logos de Brandfetch. Le navigateur du visiteur télécharge chaque logo chez Brandfetch, qui reçoit l'adresse de la requête et le nom de ce site comme référent. Le site n'envoie rien d'autre à Brandfetch.",
   },
+  // The Ultra card's form after a post (src/pages/landing.tsx UltraBox): the line in its place, and the
+  // address as kept, so a mistyped one shows.
+  "landing.ultra_done": { en: "We will write to you when Ultra opens.", fr: "Nous vous écrirons à l'ouverture d'Ultra." },
+  "landing.ultra_noted": { en: "Address noted: {email}", fr: "Adresse notée : {email}" },
+  // An address's Ultra row among its lists on the page that takes it off them (src/account/announce.tsx).
+  "interest.ultra_listed": { en: "Ultra: we will write when it opens", fr: "Ultra : nous écrirons à son ouverture" },
+  // The privacy page's line on the Ultra card's rows, while the accounts switch is on (the card exists only then).
+  "privacy.interest_ultra": {
+    en: "The Ultra card among the plans on the home page keeps an address the same way, with the plan's name in place of a filter. That address gets one message when Ultra opens, with the same link to unsubscribe, and the row stores when it went. The card's address is not sent the message saying accounts are open, and it is not offered to an account as a saved search.",
+    fr: "La carte Ultra, parmi les forfaits de la page d'accueil, conserve une adresse de la même façon, avec le nom du forfait à la place d'un filtre. Cette adresse reçoit un seul message à l'ouverture d'Ultra, avec le même lien de désabonnement, et la ligne en conserve le moment. L'adresse de la carte ne reçoit pas le message annonçant l'ouverture des comptes et n'est pas proposée à un compte comme recherche enregistrée.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

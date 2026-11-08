@@ -24,6 +24,11 @@
 // never fetches or stores a logo. The copy says the site holds records on
 // these organizations and never implies that they use or endorse it
 // (counsel's condition, 2026-11-08).
+//
+// The Ultra card holds a one-field form in its button's place (operator,
+// 2026-11-08): the address goes to /interest with kind=ultra (ultraSubmit
+// below), a row of the forms database's interest table like every email
+// list's, read later only by the Ultra message (account/announce.tsx).
 
 import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
@@ -43,7 +48,7 @@ import {
 import type { AppEnv } from "../env";
 import {
   competitiveLabel, decimal, fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, provinceName, sourceLabel, t, tj, tn,
-  type Lang,
+  type Key, type Lang,
 } from "../i18n";
 import { BrandMark, BrandWordmark, FooterRow, MetaTags, noDataPage, todayOf, varyOnCookie } from "../layout";
 import { LANDING_ORGS_A, LANDING_ORGS_B, type LandingOrg, brandfetchLogoUrl } from "../landing_orgs";
@@ -56,11 +61,14 @@ import { soonestFirst } from "./expiring";
 import { FeedLinks } from "./feeds";
 import { homePage } from "./home";
 import { mapStep, stepRanges } from "./home_map";
+import {
+  EMAIL_MAX, INSERT_INTEREST, type InterestPost, ULTRA_KIND, ULTRA_PARAMS, field, newToken, normalizeEmail,
+} from "./interest";
 import { money, provincesText } from "./shared";
 
 // The stylesheet's version: bump it with any change to public/landing.css so
 // a cached copy is never paired with new markup.
-export const LANDING_VERSION = 2;
+export const LANDING_VERSION = 3;
 
 // The display face, self-hosted beside Inter (public/fonts, SIL Open Font
 // License in BricolageGrotesque-OFL.txt), preloaded by this page alone.
@@ -82,7 +90,7 @@ const ALSO_NAMES = 4;
 // gets the app home too: it is a reader's tool, and the landing page only
 // introduces it.
 export async function rootPage(c: Context<AppEnv>): Promise<Response> {
-  return (await signedIn(c)) ? homePage(c) : landingPage(c);
+  return (await signedIn(c)) ? homePage(c) : landingPage(c, null, 200);
 }
 
 async function signedIn(c: Context<AppEnv>): Promise<boolean> {
@@ -330,7 +338,46 @@ export const ULTRA_ROWS = [
   "landing.everything_pro", "landing.ultra_builder", "landing.ultra_schedule", "landing.ultra_dashboard", "landing.ultra_caps",
 ] as const;
 
-const Plans: FC<{ lang: Lang; price: ProPrice | null }> = ({ lang, price }) => {
+// The Ultra card's form and what stands in its place after a post: the line
+// that says the address is kept, or the form again with the address as typed
+// and a line saying what to fix.
+export type UltraState = { done?: boolean; error?: Key; email?: string };
+
+// The anchor the form's address carries, so a post without the script lands
+// back on the card.
+export const ULTRA_ANCHOR = "ultra";
+
+// One address and the card's button, with the honeypot every form carries.
+// public/interest.js posts it with the x-interest-fragment header and puts
+// the block it answers with in this one's place; without the script the
+// answer is this page with the card in its new state. The error line carries
+// interest-error too, the class the script looks for to put the cursor back
+// in the field.
+export const UltraBox: FC<{ lang: Lang } & UltraState> = ({ lang, done, error, email }) => (
+  <div class="lp-ultra" data-interest="">
+    {error ? <p class="lp-ultra-error interest-error" role="alert">{t(lang, error)}</p> : null}
+    {done ? (
+      <div class="lp-ultra-done" role="status">
+        <p class="lp-ultra-thanks">{t(lang, "landing.ultra_done")}</p>
+        <p class="lp-ultra-noted">{t(lang, "landing.ultra_noted", { email: email ?? "" })}</p>
+      </div>
+    ) : (
+      <form method="post" action={`/interest#${ULTRA_ANCHOR}`} class="lp-ultra-form" data-interest-form="">
+        <input type="hidden" name="kind" value={ULTRA_KIND} />
+        <input type="hidden" name="lang" value={lang} />
+        <div class="hp"><label>{t(lang, "form.honeypot")}<input name="website" type="text" tabindex={-1} autocomplete="off" /></label></div>
+        <label class="lp-ultra-field">
+          <span class="visually-hidden">{t(lang, "interest.email")}</span>
+          <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false}
+            placeholder={t(lang, "interest.email")} value={email ?? ""} />
+        </label>
+        <button type="submit" class="lp-btn lp-ultra-btn">{t(lang, "landing.ultra_button")}</button>
+      </form>
+    )}
+  </div>
+);
+
+const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState }> = ({ lang, price, ultra }) => {
   const figure = (n: string) => t(lang, "plans.figure", { n: decimal(lang, n) });
   return (
     <section class="lp-pricing" aria-labelledby="lp-plans-h">
@@ -358,25 +405,29 @@ const Plans: FC<{ lang: Lang; price: ProPrice | null }> = ({ lang, price }) => {
               <a class="lp-btn" href="/pro">{t(lang, "landing.everything_pro")}</a>
             </p>
           </div>
-          <div class="lp-plan lp-plan-ultra">
+          <div class="lp-plan lp-plan-ultra" id={ULTRA_ANCHOR}>
             <h3 class="lp-plan-nm">{t(lang, "landing.ultra")}<UltraTag lang={lang} /></h3>
             <p class="lp-pr lp-pr-unset">{t(lang, "landing.ultra_price")} <span class="lp-soon-tag">{t(lang, "landing.ultra_soon")}</span></p>
             <p class="lp-for">{t(lang, "landing.ultra_for")}</p>
             <ul class="lp-plan-list lp-plan-list-wrap">
               {ULTRA_ROWS.map((k) => <li><Check /><span>{t(lang, k)}</span></li>)}
             </ul>
-            <p class="lp-plan-acts"><a class="lp-btn" href="/alerts">{t(lang, "landing.ultra_button")}</a></p>
+            <UltraBox lang={lang} {...ultra} />
           </div>
         </div>
         {price ? <p class="lp-plans-note">{t(lang, "plans.seller")}</p> : null}
       </div>
+      {/* Inside the section, so it comes and goes with the plan cards (test/home.ts LANDING_SWITCH_PIECES). */}
+      <script src="/interest.js" defer></script>
     </section>
   );
 };
 
 // -- the page ------------------------------------------------------------------------------
 
-export async function landingPage(c: Context<AppEnv>): Promise<Response> {
+// ultra is the Ultra card's state after a post without the script, answered
+// at the post's address and never cached; null for the page as "/" serves it.
+export async function landingPage(c: Context<AppEnv>, ultra: UltraState | null, status: 200 | 400 | 503): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
   if (!stats) return noDataPage(c, "site.name");
@@ -390,20 +441,59 @@ export async function landingPage(c: Context<AppEnv>): Promise<Response> {
   // The 3-month window's first page, as the radar's overview reads it: none
   // to read when the window is empty, null when the file is missing.
   const firstEnding = three && three.n > 0 ? await loadExpiringPage(c.env, "3m", 1).catch(() => null) : [];
-  c.header("Cache-Control", "public, max-age=300");
+  c.header("Cache-Control", ultra ? "no-store" : "public, max-age=300");
   varyOnCookie(c);
   return c.html(html`<!doctype html>${(
     <LandingDoc lang={lang} on={accountsEnabled(c.env)} stats={stats} clock={clock} endingN={three?.n} ending={firstEnding ?? []}
-      profile={profile} price={checkoutPrice(c.env)} logo={c.env.BRANDFETCH_CLIENT_ID?.trim() || null} />
-  ) as any}`);
+      profile={profile} price={checkoutPrice(c.env)} logo={c.env.BRANDFETCH_CLIENT_ID?.trim() || null} ultra={ultra} />
+  ) as any}`, status);
+}
+
+// -- the Ultra card's post -----------------------------------------------------------------
+
+// The card's block alone for interest.js, or the page with the card in its
+// new state. Never cached.
+async function ultraAnswer(c: Context<AppEnv>, state: UltraState, status: 200 | 400 | 503, fragment: boolean): Promise<Response> {
+  if (!fragment) return landingPage(c, state, status);
+  c.header("Cache-Control", "no-store");
+  c.header("X-Interest-Fragment", "1");
+  return c.html(<UltraBox lang={c.get("lang")} {...state} />, status);
+}
+
+// POST /interest with kind=ultra (index.tsx), after readInterestPost has
+// refused another site's page and read the form; the form cap holds the
+// route as it holds every interest post. The address is checked as every
+// email list checks it and kept as one row of the interest table: the kind
+// ULTRA_KIND, no filter, the plan's name as the label (the same word in both
+// languages) and a token for the link off the lists, so no text a visitor
+// typed reaches a later message. The same address again stores nothing and
+// answers the same. The card exists only with the accounts switch on: with
+// it off the post is refused as unreadable, as a kind the site does not
+// know is.
+export async function ultraSubmit(c: Context<AppEnv>, post: InterestPost): Promise<Response> {
+  const { body, fragment } = post;
+  const lang = c.get("lang");
+  if (!accountsEnabled(c.env)) return c.text(t(lang, "form.rejected"), 400);
+  const typed = field(body, "email", EMAIL_MAX + 50);
+  if (field(body, "website", 10)) return ultraAnswer(c, { error: "interest.err_rejected", email: typed.slice(0, EMAIL_MAX) }, 400, fragment);
+  const email = normalizeEmail(typed);
+  if (!email) return ultraAnswer(c, { error: "interest.err_email", email: typed.slice(0, EMAIL_MAX) }, 400, fragment);
+  try {
+    await c.env.DB.prepare(INSERT_INTEREST)
+      .bind(email, ULTRA_KIND, ULTRA_PARAMS, t(lang, "landing.ultra"), lang, new Date().toISOString(), newToken()).run();
+  } catch (e) {
+    console.error(`interest not stored: ${String(e).slice(0, 200)}`);
+    return ultraAnswer(c, { error: "form.err_unavailable", email }, 503, fragment);
+  }
+  return ultraAnswer(c, { done: true, email }, 200, fragment);
 }
 
 type DocProps = {
   lang: Lang; on: boolean; stats: Stats; clock: Clock; endingN: number | undefined; ending: readonly ExpiringRow[];
-  profile: Profile | null; price: ProPrice | null; logo: string | null;
+  profile: Profile | null; price: ProPrice | null; logo: string | null; ultra?: UltraState | null;
 };
 
-export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, ending, profile, price, logo }) => {
+export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null }) => {
   const counts = stats.counts;
   const seo = pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] });
   const lobbying = sourceLoaded("lobbying", null, stats) === true;
@@ -468,7 +558,8 @@ export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, endi
               {on ? <a class="lp-on" href="/pro">{t(lang, "pro.tag")}</a> : null}
             </nav>
             <div class="lp-nav-actions">
-              <a href={`?lang=${lang === "fr" ? "en" : "fr"}`} class="lang-toggle" rel="nofollow">{t(lang, "nav.lang")}</a>
+              {/* An answer to the Ultra card's post sits at /interest, so its switch names "/" outright. */}
+              <a href={`${ultra ? "/" : ""}?lang=${lang === "fr" ? "en" : "fr"}`} class="lang-toggle" rel="nofollow">{t(lang, "nav.lang")}</a>
               <button type="button" class="theme-toggle">
                 <span class="when-light">{t(lang, "nav.dark")}</span>
                 <span class="when-dark">{t(lang, "nav.light")}</span>
@@ -612,7 +703,7 @@ export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, endi
             </div>
           </section>
 
-          {on ? <Plans lang={lang} price={price} /> : null}
+          {on ? <Plans lang={lang} price={price} ultra={ultra ?? {}} /> : null}
 
           <section class="lp-close" aria-labelledby="lp-close-h">
             <div class="lp-wrap">

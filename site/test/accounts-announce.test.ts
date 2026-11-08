@@ -9,7 +9,9 @@
 // every address waiting, so each check reads its own addresses' rows and
 // messages; a run that must start from an empty queue drains it first.
 import { describe, expect, it, vi } from "vitest";
-import { ANNOUNCE_MAX, PAGE_SIZE, accountsOpenMessage, announceLinks, runAnnouncement } from "../src/account/announce";
+import {
+  ANNOUNCE_MAX, PAGE_SIZE, accountsOpenMessage, announceCounts, announceKindOf, announceLinks, runAnnouncement, ultraLinks, ultraOpenMessage,
+} from "../src/account/announce";
 import { bucketFor } from "../src/limits";
 import { INSERT_INTEREST, newToken } from "../src/pages/interest";
 import { ACCOUNTS, DB, csrf, decode, get, lastMail, nbsp, newEmail, offEnv, onEnv, post, signIn, useAccountsDb, userId } from "./accounts-helpers";
@@ -37,6 +39,8 @@ const LISTS: Record<string, [kind: string, params: string, en: string, fr: strin
     "Contrats qui entrent dans la période de 3 mois pour tous les acheteurs et segments"],
   segment: ["segment", "/segments/43", "New tender notices and award notices in segment 43 Information Technology",
     "Nouveaux avis d'appel d'offres et d'attribution dans le segment 43 Technologies de l'information"],
+  // The landing page's Ultra card row, as ultraSubmit keeps it: no filter, the plan's name.
+  ultra: ["ultra", "", "Ultra", "Ultra"],
 };
 
 let clock = 0;
@@ -98,6 +102,17 @@ async function drain(): Promise<void> {
   }
 }
 
+// The same for the Ultra message (kind "ultra").
+const runUltraBinding = (mail: SendEmail, max?: number) =>
+  runAnnouncement(bindingEnv(mail) as never, SITE, `${SITE}/admin/announce`, new Date(), max, "ultra");
+
+async function drainUltra(): Promise<void> {
+  for (let i = 0; i < 20; i++) {
+    const r = await runAnnouncement(onEnv() as never, LOCAL, `${LOCAL}/admin/announce`, new Date(), ANNOUNCE_MAX, "ultra");
+    if (r.sent + r.failed === 0) return;
+  }
+}
+
 const text = async (res: Response) => nbsp(decode(await res.text()));
 
 // -- the console ------------------------------------------------------------------------------------
@@ -115,6 +130,9 @@ describe("the console's page", () => {
     expect(html).toMatch(/Addresses that have not had it: [1-9]/);
     expect(html).toContain("Each address is marked when its message goes, so no run sends it twice.");
     expect(html).toContain('<form method="post" action="/admin/announce" class="stack">');
+    // The default kind: the form names none, as before the Ultra message existed.
+    expect(html).not.toContain('name="kind"');
+    expect(html).not.toContain("Ultra is open");
     expect(html).toContain(`Send up to ${ANNOUNCE_MAX} messages`);
     expect(html).toContain("Award Watch accounts are open");
     expect(html).toContain("Les comptes Award Watch sont ouverts");
@@ -283,6 +301,212 @@ describe("the message", () => {
     const fr = accountsOpenMessage("fr", "lecteur@example.com", labels.slice(0, 11), announceLinks(SITE, "fr", "b".repeat(32)));
     expect(fr.text).toContain("Et 1 autre.");
     expect(fr.headers["List-Unsubscribe"]).toBe(`<mailto:contact@awardwatch.ca>, <${SITE}/interest/stop?t=${"b".repeat(32)}&lang=fr>`);
+  });
+});
+
+// -- the Ultra message --------------------------------------------------------------------------------
+
+describe("the Ultra message", () => {
+  it("has its own console page: the counts, a form naming the kind, the message in both languages, linked from the overview", async () => {
+    const op = await operator();
+    await signUp(newEmail("ultra-page"), ["ultra"]);
+    const res = await get("/admin/announce?kind=ultra", { cookie: op.cookie, env: op.env });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const html = await text(res);
+    expect(html).toContain("Ultra Message");
+    expect(html).toContain("Send it only once Ultra can be bought.");
+    expect(html).toContain(`At most ${ANNOUNCE_MAX} a run; run it again to go on.`);
+    expect(html).toMatch(/Addresses that have not had it: [1-9][0-9,]*\. An address holding an account gets it too, since it asked on the card\./);
+    expect(html).toContain('<form method="post" action="/admin/announce" class="stack">');
+    expect(html).toContain('<input type="hidden" name="kind" value="ultra"/>');
+    expect(html).toContain("Ultra is open on Award Watch");
+    expect(html).toContain("Ultra est ouvert sur Award Watch");
+    expect(html).toContain(`Plans and prices: ${LOCAL}/pro`);
+    expect(html).toContain(`Forfaits et prix : ${LOCAL}/pro?lang=fr`);
+    expect(html).toContain(`${LOCAL}/interest/stop?t=${"0".repeat(32)}&lang=fr`);
+    expect(html).not.toContain("Award Watch accounts are open");
+    expect(html).not.toContain(EM_DASH);
+    const fr = nbsp(await text(await get("/admin/announce?kind=ultra&lang=fr", { cookie: op.cookie, env: op.env })));
+    expect(fr).toContain("Message Ultra");
+    expect(fr).toContain("Envoyez-le seulement quand Ultra peut être acheté.");
+    const overview = await text(await get("/admin", { cookie: op.cookie, env: op.env }));
+    expect(overview).toContain('<a href="/admin/announce" class="btn">Accounts-open message</a>');
+    expect(overview).toContain('<a href="/admin/announce?kind=ultra" class="btn">Ultra message</a>');
+    // A kind the console does not know is the accounts-open message.
+    expect(announceKindOf("ultra")).toBe("ultra");
+    for (const v of [undefined, "", "accounts", "ULTRA", "other"]) expect(announceKindOf(v), String(v)).toBe("accounts");
+    expect(await text(await get("/admin/announce?kind=other", { cookie: op.cookie, env: op.env }))).toContain("Accounts-Open Message");
+  });
+
+  it("sends nothing without the box ticked, the CSRF value or the site's Origin", async () => {
+    const op = await operator();
+    const email = newEmail("ultra-unticked");
+    await signUp(email, ["ultra"]);
+    const send = (fields: Record<string, string>, origin?: null) =>
+      post("/admin/announce", { kind: "ultra", ...fields }, { cookie: op.cookie, env: op.env, ...(origin === null ? { origin: null } : {}) });
+    const unticked = await send({ csrf: op.csrf });
+    expect(unticked.status).toBe(400);
+    expect(await text(unticked)).toContain("Ultra Message");
+    expect((await send({ csrf: "0".repeat(32), confirm: "yes" })).status).toBe(403);
+    expect((await send({ csrf: op.csrf, confirm: "yes" }, null)).status).toBe(403);
+    expect(await outbox(email)).toBe(0);
+    expect((await rowsOf(email))[0].notice_at).toBeNull();
+  });
+
+  it("goes from the console to each Ultra address, account holders included, in its language, marks its Ultra rows alone and writes the audit row", async () => {
+    const op = await operator();
+    const en = newEmail("ultra-en");
+    const fr = newEmail("ultra-fr");
+    const holder = newEmail("ultra-holder");
+    const both = newEmail("ultra-both");
+    const [enToken] = await signUp(en, ["ultra"]);
+    const [frToken] = await signUp(fr, ["ultra"], "fr");
+    await signUp(holder, ["ultra"]);
+    await holdAccount(holder);
+    const [bothList, bothUltra] = await signUp(both, ["all", "ultra"]);
+
+    const res = await post("/admin/announce", { csrf: op.csrf, confirm: "yes", kind: "ultra" }, { cookie: op.cookie, env: op.env });
+    expect(res.status).toBe(303);
+    const location = new URL(res.headers.get("location")!, LOCAL);
+    expect(location.pathname).toBe("/admin/announce");
+    expect(location.searchParams.get("kind")).toBe("ultra");
+    expect(location.searchParams.get("m")).toBe("done");
+    expect(location.searchParams.get("accounts")).toBeNull();
+    expect(Number(location.searchParams.get("sent"))).toBeGreaterThanOrEqual(4);
+    const after = await text(await get(`${location.pathname}${location.search}`, { cookie: op.cookie, env: op.env }));
+    expect(after).toContain("Ultra Message");
+    expect(after).toMatch(/Messages sent: [0-9]+\. Not sent: 0\. Addresses that have not had it: [0-9]+\./);
+    expect(after).not.toContain("holding an account:");
+
+    const m = (await lastMail(en))!;
+    expect(m.subject).toBe("Ultra is open on Award Watch");
+    expect(m.lang).toBe("en");
+    expect(m.text).toBe([
+      "Ultra, the plan above Pro, is open on Award Watch.",
+      "This address asked to be told when it opened.",
+      `Plans and prices: ${LOCAL}/pro`,
+      `This is the only message about Ultra.\nTake this address off the lists: ${LOCAL}/interest/stop?t=${enToken}`,
+      "You receive this because the address was entered on the Ultra card of the site's home page.\n" +
+      "Award Watch · Federal tenders, awards, contracts and grants, by organization.\ncontact@awardwatch.ca\n",
+    ].join("\n\n"));
+    expect(m.html).toContain(`<a href="${LOCAL}/pro">Plans and prices</a>`);
+    expect(m.html).toContain(`<a href="${LOCAL}/interest/stop?t=${enToken}">Take this address off the lists</a>`);
+    for (const part of [m.subject, m.text, m.html]) expect(part).not.toContain(EM_DASH);
+
+    const f = (await lastMail(fr))!;
+    expect(nbsp(f.subject)).toBe("Ultra est ouvert sur Award Watch");
+    expect(f.lang).toBe("fr");
+    expect(nbsp(f.text)).toContain("Ultra, le forfait au-dessus de Pro, est ouvert sur Award Watch.\n\nCette adresse a demandé à être avertie de son ouverture.");
+    expect(nbsp(f.text)).toContain(`Forfaits et prix : ${LOCAL}/pro?lang=fr`);
+    expect(nbsp(f.text)).toContain(`C’est le seul message au sujet d’Ultra.\nRetirer cette adresse des listes : ${LOCAL}/interest/stop?t=${frToken}&lang=fr`);
+    for (const part of [f.subject, f.text, f.html]) expect(part).not.toContain(EM_DASH);
+
+    // An account holder asked on the card, so it is not passed over.
+    expect((await lastMail(holder))?.subject).toBe("Ultra is open on Award Watch");
+    expect((await rowsOf(holder))[0].notice_at).not.toBeNull();
+    // An address on a list too: its Ultra row marked, its list's row left for the accounts-open message.
+    const b = (await lastMail(both))!;
+    expect(b.text).toContain(`/interest/stop?t=${bothUltra}`);
+    expect((await rowsOf(both)).map((r) => r.notice_at === null)).toEqual([true, false]);
+
+    const audit = await ACCOUNTS.prepare("SELECT user_id, detail FROM audit WHERE event = 'operator_announced_ultra' ORDER BY id DESC LIMIT 1")
+      .first<{ user_id: string | null; detail: string }>();
+    expect(audit?.user_id).toBeNull();
+    expect(audit?.detail).toMatch(new RegExp(`^by ${op.id}, [0-9]+ sent, 0 not sent, [0-9]+ left$`));
+    expect(audit?.detail).not.toContain("@");
+
+    // The next Ultra run sends none of them again.
+    expect((await post("/admin/announce", { csrf: op.csrf, confirm: "yes", kind: "ultra" }, { cookie: op.cookie, env: op.env })).status).toBe(303);
+    for (const e of [en, fr, holder, both]) expect(await outbox(e), e).toBe(1);
+
+    // The accounts-open message still goes to the address on a list, naming that list alone, and to no Ultra-only address.
+    await drain();
+    const open = (await lastMail(both))!;
+    expect(open.subject).toBe("Award Watch accounts are open");
+    expect(open.text).toContain("This address is signed up for these email lists:\n- Every new tender notice\n\nSign in with this address");
+    expect(open.text).not.toContain("Ultra");
+    expect(open.text).toContain(`/interest/stop?t=${bothList}`);
+    expect((await rowsOf(both)).every((r) => r.notice_at !== null)).toBe(true);
+    expect(await outbox(both)).toBe(2);
+    for (const e of [en, fr]) expect(await outbox(e), e).toBe(1);
+  });
+
+  it("is never what the accounts-open run sends: an Ultra-only address gets nothing from it, stays unmarked and is not counted", async () => {
+    await drain();
+    const only = newEmail("ultra-skip");
+    await signUp(only, ["ultra"]);
+    const before = await announceCounts(onEnv() as never);
+    const r = await runAnnouncement(onEnv() as never, LOCAL, `${LOCAL}/admin/announce`);
+    expect(r.sent).toBe(0);
+    expect(r.left).toBe(before.waiting);
+    expect(await outbox(only)).toBe(0);
+    expect((await rowsOf(only))[0].notice_at).toBeNull();
+    // The Ultra counts have it, waiting.
+    expect((await announceCounts(onEnv() as never, "ultra")).waiting).toBeGreaterThanOrEqual(1);
+    // Through the binding too, which is handed nothing for it.
+    const mail = fakeMail();
+    await runBinding(mail.binding);
+    expect(mail.to(only)).toHaveLength(0);
+  });
+
+  it("holds to its cap and goes on in the next run", async () => {
+    await drainUltra();
+    const three = [newEmail("ultra-cap"), newEmail("ultra-cap"), newEmail("ultra-cap")];
+    for (const email of three) await signUp(email, ["ultra"]);
+    const run = () => runAnnouncement(onEnv() as never, LOCAL, `${LOCAL}/admin/announce`, new Date(), 2, "ultra");
+    const first = await run();
+    expect(first.sent).toBe(2);
+    expect(first.left).toBe(1);
+    const second = await run();
+    expect(second.sent).toBe(1);
+    expect(second.left).toBe(0);
+    for (const email of three) expect((await rowsOf(email))[0].notice_at, email).not.toBeNull();
+  });
+
+  it("goes through the binding with the headers, stops at a daily limit, and gives the address back", async () => {
+    await drainUltra();
+    const email = newEmail("ultra-binding");
+    const [token] = await signUp(email, ["ultra"]);
+    const spent = fakeMail(() => refused("E_DAILY_LIMIT_EXCEEDED"));
+    const stopped = await runUltraBinding(spent.binding);
+    expect(stopped.stopped).toBe("E_DAILY_LIMIT_EXCEEDED");
+    expect(stopped.sent).toBe(0);
+    expect(spent.handed).toHaveLength(1);
+    expect((await rowsOf(email))[0].notice_at).toBeNull();
+    const suppressed = fakeMail(() => refused("E_RECIPIENT_SUPPRESSED"));
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    expect(await runUltraBinding(suppressed.binding)).toMatchObject({ sent: 0, failed: 1, stopped: null });
+    expect((await rowsOf(email))[0].notice_at).toBeNull();
+    const ok = fakeMail();
+    expect((await runUltraBinding(ok.binding)).sent).toBe(1);
+    const [m] = ok.to(email);
+    expect(m.subject).toBe("Ultra is open on Award Watch");
+    expect(m.from).toEqual({ email: "alerts@awardwatch.ca", name: "Award Watch" });
+    expect(m.headers?.["List-Unsubscribe"]).toBe(`<mailto:contact@awardwatch.ca>, <${SITE}/interest/stop?t=${token}>`);
+    expect(m.headers?.["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
+    expect((await rowsOf(email))[0].notice_at).not.toBeNull();
+  });
+
+  it("sends an address once when two runs meet", async () => {
+    await drainUltra();
+    const email = newEmail("ultra-meet");
+    await signUp(email, ["ultra"]);
+    const mail = fakeMail();
+    await Promise.all([runUltraBinding(mail.binding), runUltraBinding(mail.binding)]);
+    expect(mail.to(email)).toHaveLength(1);
+  });
+
+  it("is built from the site's own lines, with List-Unsubscribe only for an https link", () => {
+    const m = ultraOpenMessage("en", "reader@example.com", ultraLinks(LOCAL, "en", "a".repeat(32)));
+    expect(m.to).toBe("reader@example.com");
+    expect(m.headers).toEqual({});
+    expect(m.text).not.toContain("reader@example.com");
+    const fr = ultraOpenMessage("fr", "lecteur@example.com", ultraLinks(SITE, "fr", "b".repeat(32)));
+    expect(fr.lang).toBe("fr");
+    expect(fr.html).toContain('<html lang="fr">');
+    expect(fr.headers["List-Unsubscribe"]).toBe(`<mailto:contact@awardwatch.ca>, <${SITE}/interest/stop?t=${"b".repeat(32)}&lang=fr>`);
+    expect(ultraLinks(SITE, "fr", "c".repeat(32))).toEqual({ plans: `${SITE}/pro?lang=fr`, stop: `${SITE}/interest/stop?t=${"c".repeat(32)}&lang=fr` });
   });
 });
 

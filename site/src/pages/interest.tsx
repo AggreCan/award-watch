@@ -23,6 +23,13 @@
 // several lists at once; its handler reads the post with readInterestPost
 // and builds each list through interestFilter, so both forms save the same
 // rows.
+//
+// The landing page's Ultra card (pages/landing.tsx, ultraSubmit) posts here
+// too, with the kind ULTRA_KIND: a row of the same table holding the address,
+// no filter and the plan's name as the label. It is not a saved search, so
+// it stays out of INTEREST_KINDS: the account's import passes it over
+// (account/searches.ts), the accounts-open message leaves it out and the
+// Ultra message reads it alone (account/announce.tsx).
 
 import type { Context } from "hono";
 import { type FC, useContext } from "hono/jsx";
@@ -41,8 +48,13 @@ import { BAND_LABEL, COMPETITIVE_LABEL, KIND_SOURCE, readExpiringQuery } from ".
 import { orList } from "./shared";
 import { CATEGORY_ORDER, readTenderQuery } from "./tenders";
 
+// The kinds a page's block saves, each a filter an account can keep as a saved search.
 export const INTEREST_KINDS = ["tenders", "expiring", "organization", "buyer", "segment"] as const;
 export type InterestKind = (typeof INTEREST_KINDS)[number];
+
+// The Ultra card's waiting list: its kind, and its params, which hold no filter.
+export const ULTRA_KIND = "ultra";
+export const ULTRA_PARAMS = "";
 
 export interface InterestFilter {
   kind: InterestKind;

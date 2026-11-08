@@ -897,8 +897,9 @@ jobs:
 
       # The alert sign-ups (site/src/pages/interest.tsx): how many rows the
       # interest table of the forms database holds, and how many of them have
-      # not unsubscribed. The query returns those two numbers and nothing
-      # else, so no address leaves D1. The deploy token reads D1 already (the
+      # not unsubscribed, the landing page's Ultra card rows (kind ultra, an
+      # address waiting for one message, not an alert) left out. The query
+      # returns those two numbers and nothing else, so no address leaves D1. The deploy token reads D1 already (the
       # weekly snapshot exports it). Wrangler's JSON answer goes to
       # data/out/interest/count.json, which the run status (interest) and the
       # monthly audience report read; a query that fails three times leaves
@@ -915,7 +916,7 @@ jobs:
           mkdir -p "$out"
           rm -f "$out/count.json" "$out/answer.json"
           for attempt in 1 2 3; do
-            if "$WRANGLER" d1 execute award-watch --remote --json --command "SELECT COUNT(*) AS n, SUM(unsubscribed_at IS NULL) AS live FROM interest" > "$out/answer.json" 2> "$out/count.log"; then
+            if "$WRANGLER" d1 execute award-watch --remote --json --command "SELECT COUNT(*) AS n, SUM(unsubscribed_at IS NULL) AS live FROM interest WHERE kind <> 'ultra'" > "$out/answer.json" 2> "$out/count.log"; then
               mv "$out/answer.json" "$out/count.json"
               exit 0
             fi

@@ -1953,4 +1953,32 @@ export const ACCOUNT_STRINGS = {
   // A new notice's closing date in the watch mail, which follows it with the
   // time left (digests.ts watchEventLines with the send clock).
   "watches.line_closing_date": { en: "Closing date {date}", fr: "Date de clôture : {date}" },
+
+  // The Ultra message (/admin/announce?kind=ultra; src/account/announce.tsx): one message to each
+  // address the landing page's Ultra card kept, sent by the operator once Ultra can be bought.
+  "admin.announce_ultra_link": { en: "Ultra message", fr: "Message Ultra" },
+  "admin.announce_ultra_title": { en: "Ultra Message", fr: "Message Ultra" },
+  "admin.announce_ultra_lead": {
+    en: "One plain message to each address the Ultra card on the home page kept that has not had it, in the language it was entered in: Ultra is open, with a link to the plans. Send it only once Ultra can be bought. At most {n} a run; run it again to go on.",
+    fr: "Un message simple à chaque adresse conservée par la carte Ultra de la page d'accueil qui ne l'a pas encore reçu, dans la langue où elle a été saisie : Ultra est ouvert, avec un lien vers les forfaits. Envoyez-le seulement quand Ultra peut être acheté. Au plus {n} par passage; relancez-le pour continuer.",
+  },
+  "admin.announce_ultra_waiting": {
+    en: "Addresses that have not had it: {n}. An address holding an account gets it too, since it asked on the card.",
+    fr: "Adresses qui ne l'ont pas reçu : {n}. Une adresse qui a un compte le reçoit aussi, puisqu'elle l'a demandé sur la carte.",
+  },
+  "admin.announce_ultra_preview": { en: "The message: {lang}", fr: "Le message : {lang}" },
+  "admin.announce_ultra_done": {
+    en: "Messages sent: {sent}. Not sent: {failed}. Addresses that have not had it: {left}.",
+    fr: "Messages envoyés : {sent}. Non envoyés : {failed}. Adresses qui ne l'ont pas reçu : {left}.",
+  },
+  // The message itself, in the language the address was entered in. No price: the link leads to the plans.
+  "announce.ultra_subject": { en: "Ultra is open on Award Watch", fr: "Ultra est ouvert sur Award Watch" },
+  "announce.ultra_lead": { en: "Ultra, the plan above Pro, is open on Award Watch.", fr: "Ultra, le forfait au-dessus de Pro, est ouvert sur Award Watch." },
+  "announce.ultra_asked": { en: "This address asked to be told when it opened.", fr: "Cette adresse a demandé à être avertie de son ouverture." },
+  "announce.ultra_plans": { en: "Plans and prices", fr: "Forfaits et prix" },
+  "announce.ultra_only": { en: "This is the only message about Ultra.", fr: "C'est le seul message au sujet d'Ultra." },
+  "announce.ultra_why": {
+    en: "You receive this because the address was entered on the Ultra card of the site's home page.",
+    fr: "Vous recevez ce message parce que l'adresse a été saisie sur la carte Ultra de la page d'accueil du site.",
+  },
 } as const satisfies Record<string, { en: string; fr: string }>;

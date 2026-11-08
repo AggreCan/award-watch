@@ -908,7 +908,15 @@ CREATE INDEX IF NOT EXISTS idx_corrections_org ON corrections(organization_id, p
 -- by "removed:" and a hash under a random salt that is thrown away. No IP
 -- address, user agent or visitor code is kept, and the address is never
 -- shown. The nightly run reads the two counts only (rows, and rows not
--- unsubscribed).
+-- unsubscribed), the Ultra card's rows left out.
+--
+-- The landing page's Ultra card (site/src/pages/landing.tsx) keeps an address
+-- here too, as a row of kind ultra with empty params (no filter) and the
+-- plan's name as the label: not a saved search, so an account's import passes
+-- it over, and the accounts-open message neither counts nor marks it. Its one
+-- message is the Ultra message (the same job, kind ultra), which marks
+-- notice_at on the address's ultra rows alone, so each message marks only its
+-- own rows.
 --
 -- notice_at came after the table: on a database made before it, add it once
 -- (docs/accounts.md, The accounts-open message):
@@ -916,7 +924,7 @@ CREATE INDEX IF NOT EXISTS idx_corrections_org ON corrections(organization_id, p
 CREATE TABLE IF NOT EXISTS interest (
   id INTEGER PRIMARY KEY,
   email TEXT NOT NULL,                           -- trimmed and lower-cased, at most 254 characters
-  kind TEXT NOT NULL,                            -- tenders | expiring | organization | buyer | segment
+  kind TEXT NOT NULL,                            -- tenders | expiring | organization | buyer | segment | ultra
   params TEXT NOT NULL,                          -- the saved filter: the page's path and query, rebuilt by the site from
                                                  -- the filter keys it allows for the kind, keys sorted, no lang; on
                                                  -- /tenders category, segment and province may repeat (any one of
@@ -930,6 +938,7 @@ CREATE TABLE IF NOT EXISTS interest (
   confirmed_at TEXT,                             -- when the address confirmed (the confirmation ships with the alerts)
   unsubscribed_at TEXT,
   notice_at TEXT,                                -- when the accounts-open message went to the address, on the rows it had then
+                                                 -- (the Ultra message's time on the address's ultra rows)
   UNIQUE (email, kind, params)
 );
 

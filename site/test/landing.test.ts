@@ -346,7 +346,7 @@ describe("the two switch states", () => {
   it("draws Free and Pro row by row from PLAN_ROWS, and Ultra's rows, in both languages", async () => {
     for (const lang of ["en", "fr"] as const) {
       const pricing = nbsp(section(await html(lang === "fr" ? "/?lang=fr" : "/", paid()), "lp-pricing"));
-      const cards = [...pricing.matchAll(/<div class="lp-plan(?: [^"]*)?">([\s\S]*?)<\/div>/g)].map((m) => m[1]);
+      const cards = [...pricing.matchAll(/<div class="lp-plan(?: [^"]*)?"(?: id="[^"]*")?>([\s\S]*?)<\/div>/g)].map((m) => m[1]);
       expect(cards).toHaveLength(3);
       const rows = (card: string) => [...card.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)]
         .map((m) => nbsp(textOf(m[1])).replace(nbsp(`${t(lang, "plans.lacks")} `), ""));
@@ -365,7 +365,9 @@ describe("the two switch states", () => {
     expect(pricing).toContain(`<h3 class="lp-plan-nm">Ultra<span class="ultra-tag"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="${ULTRA_GLYPH_PATH}"></path></svg>Ultra<span class="visually-hidden"> (custom plan)</span></span></h3>`);
     expect(ULTRA_GLYPH_PATH).toBe("M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z");
     expect(pricing).toContain('<p class="lp-pr lp-pr-unset">Price to be set <span class="lp-soon-tag">Coming soon</span></p>');
-    expect(pricing).toContain('<a class="lp-btn" href="/alerts">Tell me when Ultra opens</a>');
+    // The button is the Ultra card's form now (operator, 2026-11-08), not a link to the email lists.
+    expect(pricing).toContain('<button type="submit" class="lp-btn lp-ultra-btn">Tell me when Ultra opens</button>');
+    expect(pricing).not.toContain('href="/alerts"');
     expect(pricing).toContain('<a class="lp-btn lp-btn-fill" href="/account/sign-in?next=/account/billing">Subscribe to Pro</a>');
     // Without a checkout the Pro card says Pro is not on sale and names no figure.
     const unpriced = section(await html("/", on()), "lp-pricing");
@@ -375,6 +377,58 @@ describe("the two switch states", () => {
     expect(LANDING_CSS).toContain(".ultra-tag { border-color: var(--sap); color: var(--sap); }");
     expect(LANDING_CSS).toMatch(/:root \{[^}]*--sap: #0f52ba;/);
     expect(LANDING_CSS).toMatch(/:root\[data-theme="dark"\] \{[^}]*--sap: #7eb0ff;/);
+  });
+});
+
+describe("the Ultra card's form", () => {
+  // The card's block: the form in the button's place (test/interest-ultra.test.ts holds its post).
+  const box = (page: string) => /<div class="lp-ultra" data-interest="">[\s\S]*?<\/form><\/div>/.exec(page)?.[0] ?? "(no form)";
+
+  it("holds one address field and the card's button, posting kind=ultra to /interest, in both languages", async () => {
+    for (const lang of ["en", "fr"] as const) {
+      const page = nbsp(await html(lang === "fr" ? "/?lang=fr" : "/", on()));
+      const form = decode(box(page));
+      const email = nbsp(t(lang, "interest.email"));
+      expect(form).toBe(
+        '<div class="lp-ultra" data-interest="">' +
+        '<form method="post" action="/interest#ultra" class="lp-ultra-form" data-interest-form="">' +
+        `<input type="hidden" name="kind" value="ultra"/><input type="hidden" name="lang" value="${lang}"/>` +
+        `<div class="hp"><label>${nbsp(t(lang, "form.honeypot"))}<input name="website" type="text" tabindex="-1" autocomplete="off"/></label></div>` +
+        `<label class="lp-ultra-field"><span class="visually-hidden">${email}</span>` +
+        `<input name="email" type="email" required="" maxlength="254" autocomplete="email" spellcheck="false" placeholder="${email}" value=""/></label>` +
+        `<button type="submit" class="lp-btn lp-ultra-btn">${nbsp(t(lang, "landing.ultra_button"))}</button>` +
+        "</form></div>",
+      );
+      // The block sits in the card's last row, under its list, on the card's anchor.
+      const card = /<div class="lp-plan lp-plan-ultra" id="ultra">[\s\S]*?<\/form><\/div><\/div>/.exec(page)?.[0] ?? "";
+      expect(card.indexOf("</ul>")).toBeGreaterThan(0);
+      expect(card.indexOf("</ul>")).toBeLessThan(card.indexOf('<div class="lp-ultra"'));
+      expect(page.match(/<input name="email"/g)).toHaveLength(1);
+    }
+    expect(decode(box(await html("/", on())))).toContain(">Tell me when Ultra opens</button>");
+    expect(nbsp(decode(box(await html("/?lang=fr", on()))))).toContain(">M’avertir à l’ouverture d’Ultra</button>");
+  });
+
+  it("loads the script that keeps the reader on the page inside the plan cards, so it comes and goes with them", async () => {
+    const page = await html("/", on());
+    expect(section(page, "lp-pricing")).toContain('<script src="/interest.js" defer=""></script>');
+    expect(page.match(/\/interest\.js/g)).toHaveLength(1);
+    for (const path of ["/", "/?lang=fr"]) {
+      const off_ = await html(path, off());
+      expect(off_, path).not.toContain("interest.js");
+      expect(off_, path).not.toContain("lp-ultra");
+      expect(off_, path).not.toContain('action="/interest');
+    }
+  });
+
+  it("styles the field, the button and the thanks line in the card's own classes, under a new stylesheet version", () => {
+    expect(LANDING_VERSION).toBe(3);
+    for (const rule of [".lp-ultra {", ".lp-ultra-form {", ".lp-ultra .hp {", ".lp-ultra-field input {", ".lp-ultra-btn {", ".lp-ultra-error {",
+      ".lp-ultra-done {", ".lp-ultra-thanks {", ".lp-ultra-noted {", ".lp-plan-ultra { scroll-margin-top:"]) {
+      expect(LANDING_CSS, rule).toContain(rule);
+    }
+    // The honeypot stays off screen, as on the Console pages.
+    expect(LANDING_CSS).toContain(".lp-ultra .hp { position: absolute; left: -9999px; }");
   });
 });
 

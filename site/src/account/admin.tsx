@@ -23,6 +23,8 @@
 //   POST /admin/users/:id/block | email | cancel | refund | delete   do it (confirm=yes from that page)
 //   GET  /admin/announce                               the accounts-open message: counts, preview, confirm form
 //   POST /admin/announce                               send the next run of it (confirm=yes; announce.tsx)
+//   GET  /admin/announce?kind=ultra                    the same for the Ultra message (the Ultra card's addresses)
+//   POST /admin/announce with kind=ultra               send the next run of that one
 //
 // Every POST needs an Origin header naming the site (a browser always sends
 // one with a form post, so a post without one is refused here, unlike the
@@ -46,7 +48,10 @@ import { CONTACT_EMAIL } from "../pages/docs";
 import { type CorrectionListRow, latestCorrections } from "../pages/forms";
 import { EMAIL_MAX, normalizeEmail } from "../pages/interest";
 import { accessEmail, accessRequired } from "./admin_access";
-import { ANNOUNCE_MAX, type AnnounceCounts, accountsOpenMessage, announceCounts, announceLinks, missingColumn, runAnnouncement } from "./announce";
+import {
+  ANNOUNCE_MAX, type AnnounceCounts, type AnnounceKind, accountsOpenMessage, announceCounts, announceKindOf, announceLinks, missingColumn,
+  runAnnouncement, ultraLinks, ultraOpenMessage,
+} from "./announce";
 import {
   type AccountFilter, type AccountListRow, type AccountQuery, type AccountSort, type AccountsPage, type BlockRow, type Overview,
   type UserDetail, type UserHit, type UserRow, ACCOUNT_CSV_ROWS, ACCOUNT_FILTERS, ACCOUNT_FILTER_NAMES, ACCOUNT_MAX_PAGE,
@@ -352,6 +357,7 @@ function overviewView(
         actions={<>
           <a href="/admin/accounts" class="btn">{t(lang, "admin.accounts_link")}</a>
           <a href="/admin/announce" class="btn">{t(lang, "admin.announce_link")}</a>
+          <a href="/admin/announce?kind=ultra" class="btn">{t(lang, "admin.announce_ultra_link")}</a>
         </>} />
       <Panel title={t(lang, "admin.panel_find")} class="panel-form">
         <form method="get" action="/admin" class="stack" role="search">
@@ -1322,16 +1328,24 @@ admin.post("/users/:id/delete", async (c) => {
   });
 });
 
-// -- the accounts-open message (announce.tsx) -----------------------------------------------------
+// -- the accounts-open message and the Ultra message (announce.tsx) -----------------------------------
 
 type AnnounceState = { counts: AnnounceCounts | null; refusal: Key | null; errors?: Key[]; notice?: string | null };
 
+// Each kind's page wording; the accounts-open message keeps the words it had.
+const ANNOUNCE_WORDS: Record<AnnounceKind, { title: Key; lead: Key; waiting: Key; preview: Key }> = {
+  accounts: { title: "admin.announce_title", lead: "admin.announce_lead", waiting: "admin.announce_waiting", preview: "admin.announce_preview" },
+  ultra: {
+    title: "admin.announce_ultra_title", lead: "admin.announce_ultra_lead", waiting: "admin.announce_ultra_waiting", preview: "admin.announce_ultra_preview",
+  },
+};
+
 // Mail that cannot leave (the stub sender) and a forms database without
 // notice_at are refusals: the page says so and offers no form.
-async function announceState(c: Context<AppEnv>): Promise<AnnounceState> {
+async function announceState(c: Context<AppEnv>, kind: AnnounceKind): Promise<AnnounceState> {
   let counts: AnnounceCounts;
   try {
-    counts = await announceCounts(c.env);
+    counts = await announceCounts(c.env, kind);
   } catch (e) {
     if (missingColumn(e)) return { counts: null, refusal: "admin.announce_no_column" };
     throw e;
@@ -1339,20 +1353,23 @@ async function announceState(c: Context<AppEnv>): Promise<AnnounceState> {
   return { counts, refusal: mailOn(c) ? null : "admin.announce_no_mail" };
 }
 
-// What a run will do, the counts, the form, and the message as an address
-// with one list would get it, in both languages.
-function announceView(lang: Lang, op: Account, base: string, s: AnnounceState) {
+// What a run will do, the counts, the form, and the message in both
+// languages: the accounts-open message as an address with one list would get
+// it, or the Ultra message. The form names the Ultra kind in a hidden field;
+// the accounts-open form names none, since that is the default.
+function announceView(lang: Lang, op: Account, base: string, s: AnnounceState, kind: AnnounceKind = "accounts") {
   const n = (v: number) => fmtInt(v, lang);
+  const words = ANNOUNCE_WORDS[kind];
   return (
     <>
-      <PageHead lang={lang} title={t(lang, "admin.announce_title")} lead={t(lang, "admin.announce_lead", { n: n(ANNOUNCE_MAX) })}
+      <PageHead lang={lang} title={t(lang, words.title)} lead={t(lang, words.lead, { n: n(ANNOUNCE_MAX) })}
         actions={<a href="/admin" class="btn">{t(lang, "admin.title")}</a>} />
       <Notice message={s.notice} />
       <Panel title={t(lang, "admin.panel_what")} class="panel-form">
         <Errors lang={lang} errors={s.refusal ? [s.refusal] : s.errors} />
         {s.counts ? (
           <ul class="account-list">
-            <li>{t(lang, "admin.announce_waiting", { n: n(s.counts.waiting) })}</li>
+            <li>{t(lang, words.waiting, { n: n(s.counts.waiting) })}</li>
             <li>{t(lang, "admin.announce_sent", { n: n(s.counts.sent) })}</li>
             <li>{t(lang, "admin.announce_mark")}</li>
             <li>{t(lang, "admin.announce_limit")}</li>
@@ -1361,6 +1378,7 @@ function announceView(lang: Lang, op: Account, base: string, s: AnnounceState) {
         {s.refusal ? null : (
           <form method="post" action="/admin/announce" class="stack">
             <Csrf op={op} />
+            {kind === "ultra" ? <input type="hidden" name="kind" value="ultra" /> : null}
             <ConfirmBox lang={lang} />
             <button type="submit" class="btn btn-primary">{t(lang, "admin.announce_button", { n: n(ANNOUNCE_MAX) })}</button>
           </form>
@@ -1368,9 +1386,12 @@ function announceView(lang: Lang, op: Account, base: string, s: AnnounceState) {
       </Panel>
       {(["en", "fr"] as const).map((l) => {
         // The preview shows the subject and the text, never a recipient.
-        const m = accountsOpenMessage(l, "", [t(l, "interest.label_tenders_all")], announceLinks(base, l, "0".repeat(32)));
+        const token = "0".repeat(32);
+        const m = kind === "ultra"
+          ? ultraOpenMessage(l, "", ultraLinks(base, l, token))
+          : accountsOpenMessage(l, "", [t(l, "interest.label_tenders_all")], announceLinks(base, l, token));
         return (
-          <Panel title={t(lang, "admin.announce_preview", { lang: t(lang, l === "fr" ? "admin.lang_fr" : "admin.lang_en") })}>
+          <Panel title={t(lang, words.preview, { lang: t(lang, l === "fr" ? "admin.lang_fr" : "admin.lang_en") })}>
             <p><strong>{m.subject}</strong></p>
             <pre class="cite-block">{m.text}</pre>
           </Panel>
@@ -1383,19 +1404,24 @@ function announceView(lang: Lang, op: Account, base: string, s: AnnounceState) {
 const STOP_CODE_RE = /^[A-Z0-9_]{1,64}$/;
 
 // The last run's figures come back in the address of the redirect after it.
-function announceNotice(c: Context<AppEnv>, lang: Lang): string | null {
+function announceNotice(c: Context<AppEnv>, lang: Lang, kind: AnnounceKind = "accounts"): string | null {
   if (c.req.query("m") !== "done") return null;
   const count = (k: string) => fmtInt(Math.max(0, Math.trunc(Number(c.req.query(k) ?? "0")) || 0), lang);
-  const done = t(lang, "admin.announce_done", { sent: count("sent"), failed: count("failed"), accounts: count("accounts"), left: count("left") });
+  const done = kind === "ultra"
+    ? t(lang, "admin.announce_ultra_done", { sent: count("sent"), failed: count("failed"), left: count("left") })
+    : t(lang, "admin.announce_done", { sent: count("sent"), failed: count("failed"), accounts: count("accounts"), left: count("left") });
   const code = c.req.query("stopped") ?? "";
   return STOP_CODE_RE.test(code) ? `${done} ${t(lang, "admin.announce_stopped", { code })}` : done;
 }
 
+// ?kind=ultra (or kind=ultra in the post) is the Ultra message; anything else the accounts-open one.
 admin.get("/announce", (c) =>
   guarded(c, async () => {
     const lang = c.get("lang");
-    const s = await announceState(c);
-    return adminPage(c, t(lang, "admin.announce_title"), announceView(lang, operatorOf(c), siteBase(c), { ...s, notice: announceNotice(c, lang) }));
+    const kind = announceKindOf(c.req.query("kind"));
+    const s = await announceState(c, kind);
+    return adminPage(c, t(lang, ANNOUNCE_WORDS[kind].title),
+      announceView(lang, operatorOf(c), siteBase(c), { ...s, notice: announceNotice(c, lang, kind) }, kind));
   }));
 
 admin.post("/announce", async (c) => {
@@ -1403,15 +1429,26 @@ admin.post("/announce", async (c) => {
   if (form instanceof Response) return form;
   const { op, fields } = form;
   const lang = c.get("lang");
+  const kind = announceKindOf(fields.kind);
   return guarded(c, async () => {
-    const s = await announceState(c);
-    const again = (errors: Key[]) => adminPage(c, t(lang, "admin.announce_title"), announceView(lang, op, siteBase(c), { ...s, errors }), 400);
+    const s = await announceState(c, kind);
+    const again = (errors: Key[]) =>
+      adminPage(c, t(lang, ANNOUNCE_WORDS[kind].title), announceView(lang, op, siteBase(c), { ...s, errors }, kind), 400);
     if (s.refusal) return again([]);
     if (!confirmed(fields)) return again(["admin.err_confirm"]);
-    const r = await runAnnouncement(c.env, siteBase(c), c.req.url);
-    await operatorAudit(c.env, null, "operator_announced", op.userId,
-      `${r.sent} sent, ${r.failed} not sent, ${r.accounts} holding an account, ${r.left} left${r.stopped ? ", stopped at a limit" : ""}`);
+    const r = await runAnnouncement(c.env, siteBase(c), c.req.url, new Date(), ANNOUNCE_MAX, kind);
+    if (kind === "ultra") {
+      await operatorAudit(c.env, null, "operator_announced_ultra", op.userId,
+        `${r.sent} sent, ${r.failed} not sent, ${r.left} left${r.stopped ? ", stopped at a limit" : ""}`);
+    } else {
+      await operatorAudit(c.env, null, "operator_announced", op.userId,
+        `${r.sent} sent, ${r.failed} not sent, ${r.accounts} holding an account, ${r.left} left${r.stopped ? ", stopped at a limit" : ""}`);
+    }
     const p = new URLSearchParams({ m: "done", sent: String(r.sent), failed: String(r.failed), accounts: String(r.accounts), left: String(r.left) });
+    if (kind === "ultra") {
+      p.delete("accounts");
+      p.set("kind", "ultra");
+    }
     if (r.stopped) p.set("stopped", r.stopped);
     return c.redirect(`/admin/announce?${p}`, 303);
   });
