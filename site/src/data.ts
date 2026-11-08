@@ -927,9 +927,20 @@ export async function loadJson<T>(env: Env, path: string): Promise<T | null> {
   }
   forget(path);
   let text: string;
-  let value: unknown;
   try {
     text = await res.text();
+  } catch (e) {
+    console.error(`asset ${path} is not valid JSON: ${String(e).slice(0, 200)}`);
+    return null;
+  }
+  return parseText(path, etag, text) as T | null;
+}
+
+// The rest of loadJson once the text is read: parsed, frozen, and kept under
+// its ETag when it has one and is not too large; null when it does not parse.
+function parseText(path: string, etag: string | null, text: string): unknown {
+  let value: unknown;
+  try {
     value = JSON.parse(text);
   } catch (e) {
     console.error(`asset ${path} is not valid JSON: ${String(e).slice(0, 200)}`);
@@ -937,7 +948,131 @@ export async function loadJson<T>(env: Env, path: string): Promise<T | null> {
   }
   if (typeof value === "object" && value !== null) deepFreeze(value);
   if (etag && text.length <= CACHE_MAX_ENTRY_CHARS) keep(path, { etag, value, chars: text.length });
-  return value as T;
+  return value;
+}
+
+// -- one entry of a shard -----------------------------------------------------------
+//
+// A page that shows one organization, notice or contract needs one entry of
+// its shard, and a profile shard holds about ninety organizations in about
+// 450 KB, most of it the few largest. Crawlers walk the profiles in no order,
+// so the shard is rarely kept from an earlier request, and parsing and
+// freezing the whole file for a 2 KB entry was a large part of a profile
+// page's time and of the garbage the isolate collects.
+//
+// The export writes each shard as compact JSON with every key once, so the
+// entry's key appears in the text as "<key>": right after the { or the , that
+// opens it. The value after it is found by matching its brackets, parsed
+// alone and frozen; nothing is kept. Whenever that does not give an entry
+// the caller accepts (the key is not there in that form, the brackets do not
+// close, the slice does not parse, or what it holds is not the entry asked
+// for), the whole file is read as loadJson reads it, so a page gets exactly
+// what the full parse would give.
+
+// The end (exclusive) of the object or array that opens at from, or -1.
+function valueEnd(text: string, from: number): number {
+  const open = text.charCodeAt(from);
+  if (open !== 123 && open !== 91) return -1;
+  let depth = 0;
+  for (let i = from; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c === 34) {
+      // A string: on to its closing quote, past any escaped character.
+      for (i++; i < text.length; i++) {
+        const s = text.charCodeAt(i);
+        if (s === 92) i++;
+        else if (s === 34) break;
+      }
+    } else if (c === 123 || c === 91) {
+      depth++;
+    } else if (c === 125 || c === 93) {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+  }
+  return -1;
+}
+
+// The value under key, cut from the shard's text, or undefined. Only from a
+// text shaped like a whole shard: it opens with a brace and ends with two,
+// its last entry's and its own. In the shards the export writes today two
+// closing braces in a row come only there (checked on the 2026-11-07 files:
+// an entry's last key, sorted, holds a list or a number), so a file cut short
+// in a broken deploy does not end that way; the full parse then finds it
+// broken and the page reads it as missing, as before.
+function sliceEntry(text: string, key: string): unknown {
+  let last = text.length - 1;
+  // JSON's whitespace: space, tab, line feed, carriage return.
+  while (last > 0 && [32, 9, 10, 13].includes(text.charCodeAt(last))) last--;
+  if (text.charCodeAt(0) !== 123 || text.charCodeAt(last) !== 125 || text.charCodeAt(last - 1) !== 125) return undefined;
+  const needle = `${JSON.stringify(key)}:`;
+  // The key must be a key of the shard itself, at depth one and outside any
+  // string: an entry may hold the same key inside (a map of organizations,
+  // a name in a string), and an accept check cannot tell a whole copy from
+  // the entry. The text is walked once up to each occurrence, string and
+  // bracket state carried along, until one is found at the top level.
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let i = 0;
+  for (let at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + 1)) {
+    for (; i < at; i++) {
+      const c = text.charCodeAt(i);
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (c === 92) escaped = true;
+        else if (c === 34) inString = false;
+      } else if (c === 34) inString = true;
+      else if (c === 123 || c === 91) depth++;
+      else if (c === 125 || c === 93) depth--;
+    }
+    if (inString || depth !== 1) continue;
+    const before = text.charCodeAt(at - 1);
+    if (before !== 123 && before !== 44) continue;
+    const start = at + needle.length;
+    const end = valueEnd(text, start);
+    if (end < 0) return undefined;
+    try {
+      return JSON.parse(text.slice(start, end));
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+// The entry under key in the shard at path, if accept takes it, else null.
+// lookup finds the entry in the parsed shard (an exact key, or entryFor's
+// match in any case) when the whole file has to be read. Frozen like
+// everything loadJson returns.
+export async function loadShardEntry(
+  env: Env, path: string, key: string, lookup: (shard: Record<string, unknown>) => unknown, accept: (v: unknown) => boolean,
+): Promise<unknown> {
+  const res = await assetResponse(env, path);
+  if (!res) return null;
+  const etag = res.headers.get("etag");
+  const hit = etag ? parsed.get(path) : undefined;
+  let value: unknown;
+  if (hit && hit.etag === etag) {
+    parsed.delete(path);
+    parsed.set(path, hit);
+    await res.body?.cancel().catch(() => undefined);
+    value = isObj(hit.value) ? lookup(hit.value as Record<string, unknown>) : null;
+    return accept(value) ? value : null;
+  }
+  forget(path);
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (e) {
+    console.error(`asset ${path} is not valid JSON: ${String(e).slice(0, 200)}`);
+    return null;
+  }
+  value = sliceEntry(text, key);
+  if (value !== undefined && accept(value)) return typeof value === "object" && value !== null ? deepFreeze(value) : value;
+  const shard = parseText(path, etag, text);
+  value = isObj(shard) ? lookup(shard as Record<string, unknown>) : null;
+  return accept(value) ? value : null;
 }
 
 // A kept file is the same frozen object on every hit, so a long list that
@@ -1143,10 +1278,9 @@ const isTenderDetail = (v: unknown, reference: string): v is TenderDetail => isO
 export async function loadTender(env: Env, reference: string): Promise<TenderDetail | null> {
   if (!REFERENCE_RE.test(reference)) return null;
   const key = reference.toLowerCase();
-  const shard = await loadJson<unknown>(env, `tenders/${await referenceShard(key)}.json`);
-  if (!isObj(shard)) return null;
-  const entry = entryFor(shard, key);
-  return isTenderDetail(entry, key) ? entry : null;
+  const entry = await loadShardEntry(env, `tenders/${await referenceShard(key)}.json`, key, (shard) => entryFor(shard, key),
+    (v) => isTenderDetail(v, key));
+  return entry as TenderDetail | null;
 }
 
 // -- award notices and contract history -------------------------------------------
@@ -1180,10 +1314,9 @@ const isContractDetail = (v: unknown, kind: "award" | "history", reference: stri
 export async function loadContract(env: Env, kind: "award" | "history", reference: string): Promise<ContractDetail | null> {
   if (!REFERENCE_RE.test(reference)) return null;
   const key = reference.toLowerCase();
-  const shard = await loadJson<unknown>(env, `contracts/${await referenceShard(key)}.json`);
-  if (!isObj(shard)) return null;
-  const entry = entryFor(shard, `${kind}:${key}`);
-  return isContractDetail(entry, kind, key) ? entry : null;
+  const entry = await loadShardEntry(env, `contracts/${await referenceShard(key)}.json`, `${kind}:${key}`,
+    (shard) => entryFor(shard, `${kind}:${key}`), (v) => isContractDetail(v, kind, key));
+  return entry as ContractDetail | null;
 }
 
 // awards/recent.json: the 500 newest award notices.
@@ -1259,9 +1392,8 @@ const isProfile = (p: unknown, id: string): p is Profile => isObj(p) && isOrgani
 
 export async function loadProfile(env: Env, id: string): Promise<Profile | null> {
   if (!ORG_ID_RE.test(id)) return null;
-  const shard = await loadJson<unknown>(env, `profiles/${id.slice(4, 7)}.json`);
-  const profile: unknown = isObj(shard) ? shard[id] : null;
-  return isProfile(profile, id) ? profile : null;
+  const entry = await loadShardEntry(env, `profiles/${id.slice(4, 7)}.json`, id, (shard) => shard[id], (v) => isProfile(v, id));
+  return entry as Profile | null;
 }
 
 // The id that took a retired organization id's records (ids move when the

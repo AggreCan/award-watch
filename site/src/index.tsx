@@ -12,7 +12,8 @@ import { measure } from "./views";
 import { DEEP_WINDOWS, radarWindowLocked } from "./plan";
 import { accountsEnabled } from "./account/switch";
 import { runWatchdog } from "./watchdog";
-import { langFrom, t, tj } from "./i18n";
+import { fmtInt, fmtMoney, langFrom, t, tj } from "./i18n";
+import { clockAt } from "./closing";
 import { Layout, PageHead, page } from "./layout";
 import { analyticsCsv, buyerAnalytics, organizationAnalytics, segmentAnalytics } from "./pages/analytics";
 import { analyticsIndex } from "./pages/analytics_index";
@@ -359,6 +360,25 @@ app.onError((err, c) => {
     500,
   );
 });
+
+// Work every isolate does once, done here at startup rather than in its
+// first request. Cloudflare runs a Worker's top level while the visitor's
+// TLS handshake completes and counts it as startup (startupCpuTimeUs in the
+// analytics, apart from the requests' CPU time). A new isolate's first
+// request is the slowest the site serves, and with deploys and quiet edge
+// locations more than one request in ten was one on 2026-11-07, so they set
+// the CPU time's 90th percentile. Nothing here changes what any request gets.
+// - The router's matcher, which Hono builds from every route on the first match.
+// - ICU's locale and time zone data, which the first Intl object an isolate
+//   makes loads (about 10 ms): the number formats every page uses and the
+//   Eastern time zone the closing times are read in, kept by i18n.ts and
+//   public/closing.js, so the pages reuse these very objects.
+app.router.match("GET", "/");
+for (const lang of ["en", "fr"] as const) {
+  fmtInt(0, lang);
+  fmtMoney(0, lang);
+}
+clockAt(0);
 
 export { app };
 

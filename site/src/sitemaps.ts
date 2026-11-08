@@ -43,16 +43,23 @@ export const SITEMAP_PART_MAX = 25_000;
 // is reached near 3.2 million). A power of two, so the ranges are exact.
 export const CONTRACT_PARTS = 128;
 
-const escapeXml = (s: string) =>
+// A part holds 25,000 addresses and most need no escaping, so a text with
+// nothing to escape is returned as it is rather than run through five replaces.
+const XML_SPECIAL = /[&<>"']/;
+const escapeXml = (s: string) => !XML_SPECIAL.test(s) ? s :
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-const unescapeXml = (s: string) =>
+const unescapeXml = (s: string) => !s.includes("&") ? s :
   s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 
+// The alternates every language version of a page carries, written once for both.
+function links(path: string): string {
+  return alternates(path).map((a) => `<xhtml:link rel="alternate" hreflang="${a.hreflang}" href="${escapeXml(a.href)}"/>`).join("");
+}
+
 // One page's entry in one language: its canonical address, its lastmod, and
-// the alternates every language version carries.
-function entry(path: string, lang: Lang, lastmod: string | null): string {
-  const links = alternates(path).map((a) => `<xhtml:link rel="alternate" hreflang="${a.hreflang}" href="${escapeXml(a.href)}"/>`).join("");
-  return `<url><loc>${escapeXml(canonicalUrl(path, lang))}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}${links}</url>`;
+// the alternates (links(path)).
+function entry(path: string, lang: Lang, lastmod: string | null, alt: string): string {
+  return `<url><loc>${escapeXml(canonicalUrl(path, lang))}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}${alt}</url>`;
 }
 
 function urlset(entries: string[]): string {
@@ -81,8 +88,9 @@ export function withLanguages(xml: string): string {
       continue;
     }
     const lastmod = mod && DATE_RE.test(mod) ? mod : null;
-    out.push(entry(url.pathname, "en", lastmod));
-    if (both) out.push(entry(url.pathname, "fr", lastmod));
+    const alt = links(url.pathname);
+    out.push(entry(url.pathname, "en", lastmod, alt));
+    if (both) out.push(entry(url.pathname, "fr", lastmod, alt));
   }
   return urlset(out);
 }
@@ -136,7 +144,8 @@ export async function contractSitemap(c: Context<AppEnv>): Promise<Response> {
     // Only an address the page answers 200 for (pages/published.tsx's checks).
     if (!BUYER_ID_RE.test(dept) || dept.length > 80 || !ref || ref.length > REF_MAX || CONTROL_RE.test(ref)) continue;
     const path = contractPath(dept, ref);
-    out.push(entry(path, "en", null), entry(path, "fr", null));
+    const alt = links(path);
+    out.push(entry(path, "en", null, alt), entry(path, "fr", null, alt));
   }
   return new Response(urlset(out), { headers: XML_HEADERS });
 }
