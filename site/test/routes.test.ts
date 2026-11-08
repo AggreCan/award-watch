@@ -3,6 +3,7 @@
 // file the page reads is missing.
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import type { TenderRow } from "../src/data";
 import {
   LOCKUP_WORD_PATH, MARK_CHECK_COLOUR, MARK_CHECK_PATH, MARK_INK_PATH, WORDMARK_CHECK_INDEX, WORDMARK_CHECK_PATH, WORDMARK_INK_PATHS,
@@ -17,7 +18,7 @@ import openTenders from "./fixtures/tenders-open.json";
 
 let address = 0;
 const get = (path: string, env = testEnv(), headers: Record<string, string> = {}) =>
-  app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.0.${(address++ % 250) + 1}`, ...headers } }, env);
+  homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.0.${(address++ % 250) + 1}`, ...headers } }, env);
 const text = async (path: string, env = testEnv()) => (await get(path, env)).text();
 const nbsp = (s: string) => s.replace(/[\u00a0\u202f]/g, " ");
 const decode = (s: string) => s.replace(/&amp;/g, "&");

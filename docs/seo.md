@@ -87,15 +87,23 @@ Ending", "Open Federal Tenders from CanadaBuys", "Federal Contract Awards:
 Who Won", "Federal Contracts Ending Within 12 Months". The page headings are
 unchanged; only the result-list text moved.
 
-Since 2026-11-08 the home page's description leads with the search, names
-both sources and says the site is free: "Search every Canadian federal
-tender, contract award and grant (CanadaBuys, open.canada.ca). Who won, and
-what ends within a year. Free, updated nightly." (153 characters). The
+Since 2026-11-08 the home page's description says what the site holds,
+names both sources and says the site is free: "Every federal tender, award
+and grant in Canada (CanadaBuys, open.canada.ca), in one place. Who won, and
+what ends within a year. Free, updated nightly." (152 characters). The
 French carries the same points in 155: "Appels d'offres, attributions et
 subventions fédéraux (AchatsCanada, ouvert.canada.ca). Qui a gagné, ce qui
 finit d'ici un an. Gratuit, mis à jour la nuit." Pages with no description
 of their own (errors, the thank-you page) and the `WebSite` markup carry
 the same text.
+
+**The landing page.** Since 2026-11-08 the address `/` shows a reader
+without a signed-in session (every crawler among them) the landing page
+(`docs/landing.md`) and a signed-in reader the app home. Both carry the
+same head: the title and description above, the canonical address, the
+language alternates, the social card and the `WebSite` and publisher
+markup, so the result-list text and the structured data for `/` are
+unchanged; a test holds the two heads equal.
 
 **The Pro page, `/pro`.** What Pro includes, each line a feature the plans
 grant; who it is for; what stays free; the price as the billing page prints

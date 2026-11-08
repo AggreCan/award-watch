@@ -185,8 +185,9 @@ def live_version(text: str) -> str | None:
 # -- smoke test ---------------------------------------------------------------
 
 SMOKE_PAGES = ("/", "/tenders", "/data")
-# Pages that print the data date (the layout's "Data as of"); the deploy
-# carried tonight's export only if they show it.
+# Pages that print the data date (the layout's "Data as of"; on "/", which a
+# check without a session gets as the landing page, its figures' "Counted on"
+# line); the deploy carried tonight's export only if they show it.
 DATED_PAGES = {"/", "/data"}
 SMOKE_RETRY_S = 30.0
 # A new version reaches every edge location within seconds of the deploy.

@@ -1,0 +1,380 @@
+/* Award Watch: the landing page (src/pages/landing.tsx, docs/landing.md), a
+   document of its own beside the Console pages' styles.css. A navy hero
+   carrying the Canada map of open tenders, then white and paper bands that
+   alternate, each with one short claim, one view of the real product built
+   from the live rows, and a button; a navy closing band. Display type is
+   Bricolage Grotesque, body and controls Inter, both self-hosted. Emerald is
+   the one accent, amber marks closing and end dates, sapphire is Ultra's.
+
+   Light and dark key as styles.css keys them: data-theme on the root (set by
+   public/theme.js from the choice saved in this browser, which the app pages
+   share) wins, otherwise the system setting. The hero and the closing band
+   stay navy in both. Bump LANDING_VERSION (src/pages/landing.tsx) with any
+   change here. */
+
+/* Inter, as styles.css declares it; Bricolage Grotesque (SIL Open Font
+   License, fonts/BricolageGrotesque-OFL.txt) from the google/fonts
+   repository's variable file, its width axis pinned at 100 and its weights
+   cut to 400 to 800, optical size kept, subset as Inter is to Basic Latin,
+   Latin-1, Latin Extended-A, general punctuation, the euro, trade mark,
+   arrows and check. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("/fonts/BricolageGrotesque-Variable.woff2") format("woff2");
+}
+
+/* -- tokens ------------------------------------------------------------------ */
+:root {
+  --page: #ffffff;
+  --paper: #f3f5f4;
+  --ink: #10202c;
+  --ink-2: #3d4c57;
+  --muted: #5f6f7a;
+  --line: #dde3e0;
+  --line-2: #c8d1cc;
+  --navy: #0c1b2a;
+  --navy-2: #122638;
+  --on-navy: #e8eef2;
+  --on-navy-2: #a9b8c4;
+  --em: #0f7b4f;
+  --em-bright: #2fc985;
+  --em-soft: #e3f3ea;
+  --em-ink: #ffffff;
+  --amber: #b45309;
+  --sap: #0f52ba;
+  --sap-soft: #e3ebf9;
+  /* The map on the navy card: a province with no notice, then four steps of one hue. */
+  --m0: #1b2f42;
+  --m1: #1e4d40;
+  --m2: #1f6f55;
+  --m3: #22986b;
+  --m4: #35c98a;
+  --display: "Bricolage Grotesque", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --body: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --r: 10px;
+  --r-sm: 8px;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --page: #0b1120;
+  --paper: #0f172a;
+  --ink: #e6edf3;
+  --ink-2: #c3cdd6;
+  --muted: #94a3b0;
+  --line: #1f2a3a;
+  --line-2: #334150;
+  --navy: #07111d;
+  --navy-2: #0e1b2b;
+  --em: #2fc985;
+  --em-soft: #10281f;
+  --em-ink: #07111d;
+  --amber: #f0b64a;
+  --sap: #7eb0ff;
+  --sap-soft: #13223d;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0b1120;
+    --paper: #0f172a;
+    --ink: #e6edf3;
+    --ink-2: #c3cdd6;
+    --muted: #94a3b0;
+    --line: #1f2a3a;
+    --line-2: #334150;
+    --navy: #07111d;
+    --navy-2: #0e1b2b;
+    --em: #2fc985;
+    --em-soft: #10281f;
+    --em-ink: #07111d;
+    --amber: #f0b64a;
+    --sap: #7eb0ff;
+    --sap-soft: #13223d;
+    color-scheme: dark;
+  }
+}
+
+/* -- base -------------------------------------------------------------------- */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 16px/26px var(--body); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+h1, h2, h3 { margin: 0; font-family: var(--display); font-weight: 800; letter-spacing: -.02em; text-wrap: balance; }
+p { margin: 0; }
+.lp-wrap { max-width: 1200px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip { position: absolute; left: -9999px; top: 8px; z-index: 30; padding: 4px 8px; background: var(--page); color: var(--ink); }
+.skip:focus { left: 8px; }
+
+.lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 22px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--line-2); background: var(--page); color: var(--ink); font: inherit; font-size: 16px; font-weight: 600; line-height: 24px;
+  text-decoration: none; white-space: nowrap; cursor: pointer; }
+.lp-btn:hover { border-color: var(--ink); }
+.lp-btn-fill { background: var(--em); border-color: var(--em); color: var(--em-ink); }
+.lp-btn-fill:hover { border-color: var(--em); filter: brightness(1.06); }
+.lp-btn-sm { min-height: 40px; padding: 7px 16px; font-size: 14px; }
+.lp-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--em); text-decoration: none; }
+.lp-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.lp-link svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--em-bright); outline-offset: 2px; }
+.lp-eyebrow { font-size: 13px; line-height: 18px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--em); }
+
+/* The plan chips: the Pro gem (src/pro.tsx ProTag) and Ultra's tiles, on the plan cards only. */
+.pro-tag, .ultra-tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; margin-left: 8px; padding: 0 7px; border-radius: 4px;
+  border: 1px solid var(--em); color: var(--em); font-family: var(--body); font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: .04em;
+  white-space: nowrap; vertical-align: middle; }
+.pro-tag svg, .ultra-tag svg { width: 11px; height: 11px; fill: currentColor; }
+.ultra-tag { border-color: var(--sap); color: var(--sap); }
+
+/* -- nav --------------------------------------------------------------------- */
+.lp-nav { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--navy) 94%, transparent); backdrop-filter: blur(8px); color: var(--on-navy); }
+.lp-nav .lp-wrap { display: flex; align-items: center; gap: 20px; min-height: 64px; }
+.lp-brand { display: inline-flex; align-items: center; color: #ffffff; text-decoration: none; flex: none; }
+.lp-brand .brand-wordmark { display: block; width: auto; height: 26px; }
+/* The mark alone stands in for the wordmark on the narrowest phones. */
+.lp-brand .brand-mark { display: none; width: 32px; height: 32px; }
+.lp-brand .mark-check { fill: var(--em-bright); }
+.lp-links { display: flex; gap: 18px; font-size: 15px; font-weight: 500; }
+.lp-links a { text-decoration: none; color: var(--on-navy-2); white-space: nowrap; }
+.lp-links a:hover { color: #ffffff; }
+.lp-nav-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.lp-nav .lp-btn { background: transparent; border-color: #ffffff55; color: #ffffff; }
+.lp-nav .lp-btn:hover { border-color: #ffffff; }
+.lang-toggle, .theme-toggle { display: inline-flex; align-items: center; min-height: 40px; padding: 7px 12px; border-radius: var(--r-sm); border: 1.5px solid #ffffff33;
+  background: transparent; color: var(--on-navy-2); font: inherit; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.lang-toggle:hover, .theme-toggle:hover { border-color: #ffffff; color: #ffffff; }
+/* The theme button works through public/theme.js, so it shows only once the script has run. */
+.theme-toggle { display: none; }
+html.js .theme-toggle { display: inline-flex; }
+.theme-toggle .when-dark { display: none; }
+:root[data-theme="dark"] .theme-toggle .when-light { display: none; }
+:root[data-theme="dark"] .theme-toggle .when-dark { display: inline; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .when-light { display: none; }
+  :root:not([data-theme="light"]) .theme-toggle .when-dark { display: inline; }
+}
+
+/* -- hero -------------------------------------------------------------------- */
+.lp-hero { background: radial-gradient(1200px 600px at 85% 20%, var(--navy-2), var(--navy) 60%); color: var(--on-navy); padding-block: 64px 72px; overflow: hidden; }
+.lp-hero .lp-wrap { display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 10fr); gap: 48px; align-items: center; }
+.lp-hero-solo .lp-wrap { grid-template-columns: minmax(0, 1fr); }
+.lp-hero .lp-eyebrow { color: var(--em-bright); }
+.lp-hero h1 { font-size: 64px; line-height: 1.02; color: #ffffff; margin: 16px 0 20px; }
+.lp-hero h1 em { font-style: normal; color: var(--em-bright); }
+.lp-lead { font-size: 19px; line-height: 30px; color: var(--on-navy-2); max-width: 52ch; }
+.lp-lead b { color: #ffffff; font-weight: 600; }
+.lp-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.lp-hero .lp-btn, .lp-close .lp-btn { background: transparent; border-color: #ffffff66; color: #ffffff; }
+.lp-hero .lp-btn:hover, .lp-close .lp-btn:hover { border-color: #ffffff; }
+/* The primary button on navy, after the outlined rules above so it keeps its fill. */
+.lp-nav .lp-btn-fill, .lp-hero .lp-btn-fill, .lp-close .lp-btn-fill { background: var(--em-bright); border-color: var(--em-bright); color: #07111d; }
+.lp-search { display: flex; gap: 8px; margin-top: 28px; max-width: 520px; }
+.lp-search input { flex: 1; min-width: 0; min-height: 48px; padding: 10px 14px; border-radius: var(--r-sm); border: 1.5px solid #ffffff4d; background: #ffffff12;
+  color: #ffffff; font: inherit; font-size: 16px; }
+.lp-search input::placeholder { color: #ffffff99; }
+.lp-note { margin-top: 14px; font-size: 14px; line-height: 20px; color: var(--on-navy-2); }
+
+.lp-mapcard { min-width: 0; background: #ffffff0d; border: 1px solid #ffffff1f; border-radius: var(--r); padding: 18px 18px 14px; }
+.lp-map-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 6px; }
+.lp-map-head b { font-family: var(--display); font-size: 34px; line-height: 40px; font-weight: 800; color: #ffffff; letter-spacing: -.02em; }
+.lp-map-head span { font-size: 14px; color: var(--on-navy-2); }
+.lp-map { display: block; width: 100%; height: auto; }
+.lp-map .pv { stroke: #0c1b2a; stroke-width: 1.2; stroke-linejoin: round; }
+.lp-map .s0, .lp-legend .s0 { fill: var(--m0); background: var(--m0); }
+.lp-map .s1, .lp-legend .s1 { fill: var(--m1); background: var(--m1); }
+.lp-map .s2, .lp-legend .s2 { fill: var(--m2); background: var(--m2); }
+.lp-map .s3, .lp-legend .s3 { fill: var(--m3); background: var(--m3); }
+.lp-map .s4, .lp-legend .s4 { fill: var(--m4); background: var(--m4); }
+.lp-map .lp-inset { fill: none; stroke: #ffffff40; stroke-width: 1.5; }
+.lp-map .lp-extent { fill: none; stroke: #ffffff40; stroke-width: 1.5; stroke-dasharray: 4 4; }
+.lp-map .lb { font: 700 20px var(--body); fill: #ffffffcc; text-anchor: middle; }
+.lp-map .ln { font: 800 26px var(--display); fill: #ffffff; text-anchor: middle; }
+/* On the brightest step the labels turn dark, so they keep their contrast. */
+.lp-map .lb.t4, .lp-map .ln.t4 { fill: #07111d; }
+.lp-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; line-height: 20px; color: var(--on-navy-2); }
+.lp-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+
+/* -- the band ---------------------------------------------------------------- */
+.lp-band { padding-block: 36px 28px; border-bottom: 1px solid var(--line); overflow: hidden; }
+.lp-band-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; margin-bottom: 14px; }
+.lp-band h2 { font-size: 22px; line-height: 30px; }
+.lp-sub { font-size: 14px; line-height: 22px; color: var(--muted); }
+.lp-marquee { position: relative; overflow: hidden; margin: 0 0 6px; }
+.lp-marquee::before, .lp-marquee::after { content: ""; position: absolute; top: 0; bottom: 0; width: 110px; z-index: 1; pointer-events: none; }
+.lp-marquee::before { left: 0; background: linear-gradient(90deg, var(--page), transparent); }
+.lp-marquee::after { right: 0; background: linear-gradient(270deg, var(--page), transparent); }
+.lp-track { display: flex; width: max-content; animation: lp-slide 70s linear infinite; }
+.lp-track.lp-rev { animation-name: lp-slide-rev; animation-duration: 84s; }
+.lp-marquee:hover .lp-track, .lp-marquee:focus-within .lp-track { animation-play-state: paused; }
+@keyframes lp-slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes lp-slide-rev { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+.lp-mark { display: inline-flex; align-items: center; gap: 12px; height: 64px; padding: 0 26px; color: var(--ink-2); text-decoration: none; white-space: nowrap;
+  font-family: var(--display); font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.lp-mark:hover { color: var(--em); }
+.lp-mark.caps { font-size: 16px; letter-spacing: .14em; text-transform: uppercase; }
+.lp-mark.light { font-family: var(--body); font-weight: 500; letter-spacing: 0; font-size: 21px; }
+.lp-mark.wide { font-family: var(--body); font-weight: 700; letter-spacing: .08em; font-size: 17px; text-transform: uppercase; }
+.lp-mark.serifish { font-weight: 700; font-style: italic; }
+/* Each organization's own mark from Brandfetch, on a white tile so a dark mark reads in both themes. */
+.lp-logo { width: 40px; height: 40px; border-radius: 9px; background: #ffffff; border: 1px solid var(--line); object-fit: contain; padding: 4px; flex: none; }
+.lp-dup { display: contents; }
+@media (prefers-reduced-motion: reduce) {
+  .lp-track { animation: none; width: auto; flex-wrap: wrap; justify-content: center; }
+  .lp-track > .lp-dup { display: none; }
+  .lp-marquee::before, .lp-marquee::after { display: none; }
+}
+.lp-band-foot { font-size: 12px; line-height: 16px; color: var(--muted); }
+
+/* -- figures ----------------------------------------------------------------- */
+.lp-stats { padding-block: 56px 24px; }
+.lp-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+.lp-stat b { display: block; font-family: var(--display); font-size: 56px; line-height: 1; font-weight: 800; letter-spacing: -.03em; }
+.lp-stat span { display: block; margin-top: 8px; font-size: 15px; line-height: 22px; color: var(--muted); }
+.lp-asof { margin-top: 20px; font-size: 13px; line-height: 20px; color: var(--muted); }
+
+/* -- feature bands ----------------------------------------------------------- */
+.lp-feat { padding-block: 72px; }
+.lp-feat.lp-paper { background: var(--paper); }
+.lp-feat .lp-wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: center; }
+.lp-feat.lp-flip .lp-wrap { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+.lp-feat.lp-flip .lp-copy { order: 2; }
+.lp-feat .lp-copy:only-child { grid-column: 1 / -1; }
+.lp-feat h2 { font-size: 40px; line-height: 1.08; margin: 10px 0 14px; }
+.lp-t { font-size: 17px; line-height: 28px; color: var(--ink-2); max-width: 44ch; }
+.lp-acts { display: flex; flex-wrap: wrap; gap: 16px 20px; align-items: center; margin-top: 22px; }
+/* The Pro line under a band, with the accounts switch on only; the plan is named in words, no chip. */
+.lp-pro { margin-top: 16px; font-size: 14px; line-height: 20px; color: var(--muted); }
+
+.lp-shot { background: var(--page); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 24px 60px -30px #0c1b2a55; overflow: hidden; min-width: 0; }
+.lp-shot-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line);
+  font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.lp-shot-head .lp-n { font-family: var(--display); font-size: 18px; letter-spacing: 0; text-transform: none; }
+.lp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 20px; }
+.lp-row:last-child { border-bottom: 0; }
+.lp-ti { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-su { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-rt { text-align: right; font-weight: 700; white-space: nowrap; }
+.lp-rt small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
+.lp-soon { color: var(--amber); }
+.lp-shot-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; min-width: 0; }
+.lp-shot-grid .lp-shot { box-shadow: none; }
+.lp-shot-grid .lp-shot:only-child { grid-column: 1 / -1; }
+.lp-profile { padding: 18px 20px 20px; }
+.lp-nm { font-family: var(--display); font-size: 26px; line-height: 32px; font-weight: 800; letter-spacing: -.02em; }
+.lp-al { font-size: 13px; line-height: 20px; color: var(--muted); margin-top: 4px; }
+.lp-profile .lp-acts { gap: 8px; margin-top: 14px; }
+.lp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+.lp-tile { padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.lp-tile:nth-child(odd) { border-right: 1px solid var(--line); }
+.lp-tile span { display: block; font-size: 12px; line-height: 16px; color: var(--muted); }
+.lp-tile b { display: block; font-family: var(--display); font-size: 26px; line-height: 32px; font-weight: 800; letter-spacing: -.02em; }
+.lp-tile small { font-size: 12px; color: var(--muted); }
+
+/* -- steps ------------------------------------------------------------------- */
+.lp-steps { padding-block: 64px; border-top: 1px solid var(--line); }
+.lp-steps h2 { font-size: 32px; line-height: 1.15; margin: 8px 0 28px; }
+.lp-step-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.lp-step { padding: 22px 22px 24px; border: 1px solid var(--line); border-radius: var(--r); background: var(--page); }
+.lp-step b { display: block; font-family: var(--display); font-size: 40px; line-height: 1; font-weight: 800; color: var(--em); margin-bottom: 12px; }
+.lp-step h3 { font-size: 19px; line-height: 26px; margin-bottom: 6px; }
+.lp-step p { font-size: 15px; line-height: 24px; color: var(--ink-2); }
+
+/* -- plans (with the accounts switch on only) ---------------------------------
+   The three cards are one grid and each card a subgrid of its five rows (name,
+   price, the "for" line, the list, the buttons), so each row sits level across
+   them. Free and Pro draw every row of PLAN_ROWS in order (src/pro.tsx), one
+   line each, so their lists line up row for row; Ultra's rows wrap. */
+.lp-pricing { background: var(--em-soft); padding-block: 72px; }
+.lp-pricing h2 { font-size: 40px; line-height: 1.08; margin: 8px 0; }
+.lp-pricing .lp-sub { font-size: 17px; line-height: 26px; color: var(--ink-2); margin-bottom: 32px; }
+.lp-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(5, auto); column-gap: 20px; }
+.lp-plan { grid-row: span 5; display: grid; grid-template-rows: subgrid; row-gap: 12px; min-width: 0; background: var(--page); border: 1.5px solid var(--line);
+  border-radius: var(--r); padding: 24px 22px 22px; }
+.lp-plan-pro { border-color: var(--em); box-shadow: 0 24px 60px -30px #0f7b4f66; }
+.lp-plan-ultra { border-color: var(--sap); }
+.lp-plan-nm { display: flex; align-items: center; font-size: 22px; line-height: 28px; }
+.lp-pr { font-family: var(--display); font-size: 44px; line-height: 1; font-weight: 800; letter-spacing: -.03em; }
+.lp-pr small { display: block; margin-top: 8px; font-family: var(--body); font-size: 14px; line-height: 20px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.lp-pr.lp-pr-unset { font-size: 22px; line-height: 44px; color: var(--muted); font-weight: 700; letter-spacing: -.01em; }
+.lp-soon-tag { display: inline-block; vertical-align: middle; padding: 2px 8px; border-radius: 4px; background: var(--sap-soft); color: var(--sap); font-family: var(--body);
+  font-size: 12px; line-height: 18px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.lp-for { color: var(--muted); font-size: 15px; line-height: 22px; }
+.lp-plan-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; align-content: start; gap: 8px; font-size: 14px; line-height: 20px; }
+.lp-plan-list li { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+.lp-plan-list li > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-plan-list-wrap li > span { white-space: normal; }
+.lp-ck { flex: none; width: 16px; height: 16px; margin-top: 2px; fill: var(--muted); }
+.lp-plan-pro .lp-ck { fill: var(--em); }
+.lp-plan-ultra .lp-ck { fill: var(--sap); }
+.lp-ck-none, .lp-plan-pro .lp-ck-none { fill: none; stroke: var(--line-2); stroke-width: 1.5; }
+.lp-lacks { color: var(--muted); }
+.lp-plan-acts { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; padding-top: 6px; }
+.lp-plan-ultra .lp-btn { border-color: var(--sap); color: var(--sap); }
+.lp-plans-note { margin-top: 16px; font-size: 13px; line-height: 20px; color: var(--muted); max-width: 72ch; }
+
+/* -- close ------------------------------------------------------------------- */
+.lp-close { background: var(--navy); color: var(--on-navy); padding-block: 72px; }
+.lp-close .lp-wrap { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 32px; align-items: center; }
+.lp-close h2 { font-size: 44px; line-height: 1.06; color: #ffffff; }
+.lp-close p { margin-top: 12px; font-size: 17px; line-height: 26px; color: var(--on-navy-2); }
+.lp-close .lp-cta { margin: 0; justify-content: flex-end; }
+
+/* -- footer (the site's links, src/layout.tsx FooterRow) ---------------------- */
+.lp-footer { padding-block: 28px 44px; font-size: 13px; line-height: 20px; color: var(--muted); border-top: 1px solid var(--line); }
+.lp-footer .footer-row { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+.lp-footer .footer-links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.lp-footer a { color: var(--muted); }
+.lp-footer a:hover { color: var(--ink); }
+
+/* -- narrower screens -------------------------------------------------------- */
+/* The nav's links go first, before the bar would run wider than the screen;
+   the hero and the bands lead to the same pages. */
+@media (max-width: 1240px) {
+  .lp-links { display: none; }
+}
+@media (max-width: 1000px) {
+  .lp-hero .lp-wrap, .lp-feat .lp-wrap, .lp-feat.lp-flip .lp-wrap, .lp-close .lp-wrap { grid-template-columns: minmax(0, 1fr); }
+  .lp-feat.lp-flip .lp-copy { order: 0; }
+  .lp-hero h1 { font-size: 48px; }
+  .lp-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-step-grid, .lp-shot-grid { grid-template-columns: minmax(0, 1fr); }
+  .lp-close .lp-cta { justify-content: flex-start; }
+  .lp-plans { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 20px; }
+  .lp-plan { grid-row: auto; grid-template-rows: none; display: flex; flex-direction: column; gap: 12px; }
+}
+@media (max-width: 640px) {
+  .lp-nav .lp-wrap { gap: 12px; min-height: 56px; }
+  .lp-brand .brand-wordmark { height: 20px; }
+  .lp-nav-actions { gap: 6px; }
+  .lp-nav-actions .lp-nav-cta { display: none; }
+  .lang-toggle, .theme-toggle, .lp-nav .lp-btn-sm { min-height: 36px; padding: 5px 9px; font-size: 13px; }
+  .lp-hero { padding-block: 40px 48px; }
+  .lp-hero h1 { font-size: 38px; }
+  .lp-lead { font-size: 17px; line-height: 27px; }
+  .lp-stat b { font-size: 40px; }
+  .lp-feat { padding-block: 56px; }
+  .lp-feat h2, .lp-pricing h2, .lp-close h2 { font-size: 30px; }
+  .lp-mark { height: 52px; padding: 0 16px; font-size: 18px; gap: 8px; }
+  .lp-logo { width: 32px; height: 32px; border-radius: 7px; padding: 3px; }
+  .lp-search { flex-direction: column; }
+  .lp-marquee::before, .lp-marquee::after { width: 40px; }
+  .lp-plan-list li > span { white-space: normal; }
+  /* A long button label wraps rather than push the page wider; the nav's stay on one line. */
+  .lp-btn { white-space: normal; text-align: center; }
+  .lp-nav .lp-btn { white-space: nowrap; }
+}
+@media (max-width: 420px) {
+  .lp-brand .brand-wordmark { display: none; }
+  .lp-brand .brand-mark { display: block; }
+}

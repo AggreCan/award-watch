@@ -29,7 +29,7 @@ import { directoryPage, organizationsIndex } from "./pages/directory";
 import { EXPIRING_CSV, expiringFile, expiringPage, expiringRowsCsv, expiringWindowPage } from "./pages/expiring";
 import { feedsPage } from "./pages/feeds";
 import { correctionsForm, correctionsSubmit, respondPage, respondSubmit } from "./pages/forms";
-import { homePage } from "./pages/home";
+import { rootPage } from "./pages/landing";
 import { contractIcs, publishedContractIcs, tenderIcs } from "./pages/ics";
 import { interestSubmit, readInterestPost } from "./pages/interest";
 import { methodologyPage } from "./pages/methodology";
@@ -63,46 +63,57 @@ function movedTo(c: Context<AppEnv>, path: string): Response {
   return c.redirect(`${path}${new URL(c.req.url).search}`, 301);
 }
 
-// The pages load nothing from third parties, and the policy says exactly that.
-app.use(
-  "*",
-  secureHeaders({
-    contentSecurityPolicy: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      frameAncestors: ["'none'"],
-      // 'self' on every page; the billing pages add Stripe's checkout and
-      // portal hosts while payments are set up, since a browser applies
-      // form-action to the redirect after a form post (account/stripe.ts).
-      formAction: [billingFormAction],
-      baseUri: ["'self'"],
-    },
-    referrerPolicy: "strict-origin-when-cross-origin",
-    xFrameOptions: "DENY",
-    crossOriginResourcePolicy: false,
-  }),
-);
+// The middleware every request passes through, in order, applied to the app
+// below. Exported so test/home.ts can serve the app home (pages/home.tsx),
+// which "/" gives a signed-in reader only, through the same middleware.
+export function siteMiddleware(app: Hono<AppEnv>): void {
+  // The pages load nothing from third parties, and the policy says exactly
+  // that, with one exception: the landing page's band shows organizations'
+  // logos as Brandfetch's Logo API links (pages/landing.tsx, docs/landing.md),
+  // images only. Referrer-Policy stays strict-origin-when-cross-origin, which
+  // sends Brandfetch the site's origin as its terms require and no path.
+  app.use(
+    "*",
+    secureHeaders({
+      contentSecurityPolicy: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https://cdn.brandfetch.io"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        // 'self' on every page; the billing pages add Stripe's checkout and
+        // portal hosts while payments are set up, since a browser applies
+        // form-action to the redirect after a form post (account/stripe.ts).
+        formAction: [billingFormAction],
+        baseUri: ["'self'"],
+      },
+      referrerPolicy: "strict-origin-when-cross-origin",
+      xFrameOptions: "DENY",
+      crossOriginResourcePolicy: false,
+    }),
+  );
 
-app.use("*", async (c, next) => {
-  const q = c.req.query("lang");
-  const lang = langFrom(q, getCookie(c, "lang"));
-  if (q === "fr" || q === "en") {
-    setCookie(c, "lang", lang, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "Lax" });
-  }
-  c.set("lang", lang);
-  await next();
-});
+  app.use("*", async (c, next) => {
+    const q = c.req.query("lang");
+    const lang = langFrom(q, getCookie(c, "lang"));
+    if (q === "fr" || q === "en") {
+      setCookie(c, "lang", lang, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "Lax" });
+    }
+    c.set("lang", lang);
+    await next();
+  });
 
-// After the language middleware so a 429 page still knows its language later.
-app.use("*", throttle);
-app.use("*", measure);
-// Inside measure, so a page answered 304 is counted with that status.
-app.use("*", conditional);
+  // After the language middleware so a 429 page still knows its language later.
+  app.use("*", throttle);
+  app.use("*", measure);
+  // Inside measure, so a page answered 304 is counted with that status.
+  app.use("*", conditional);
+}
+
+siteMiddleware(app);
 
 app.route("/api", api);
 // The keyed API (src/api_keyed.ts): after /api, whose middleware gives its
@@ -113,7 +124,9 @@ app.route("/api/v1", keyedApi);
 app.route("/account", account);
 app.route("/admin", admin);
 
-app.get("/", homePage);
+// The landing page for a reader without a signed-in session, the app home
+// for a signed-in one (pages/landing.tsx rootPage, docs/landing.md).
+app.get("/", rootPage);
 // The open notices, filtered in the browser after the first view; the
 // notices first seen each day; one notice. /tenders/new is registered
 // before /tenders/:reference, which would read "new" as a reference.

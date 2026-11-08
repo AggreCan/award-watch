@@ -1,6 +1,7 @@
 // A CPU guard per route: each page rendered from the test fixtures, scaled up
 // where a production file is large (the rail's 900 closing times, a profile
-// shard of 90 organizations, a sitemap part of 5,000 addresses), timed in
+// shard of 90 organizations, a sitemap part of 5,000 addresses, the 3-month
+// window's page of 500 contracts the landing page reads), timed in
 // this run and divided by a yardstick timed in the same run (a fixed
 // serialize-and-parse task), so a slower or busier machine moves both and the
 // ratio holds. This is a guard, NOT a production figure: the bounds sit well
@@ -12,6 +13,7 @@ import { clearClosingCache } from "../src/closing";
 import { clearParsedCache } from "../src/data";
 import { app } from "../src/index";
 import { FILES, TEST_NOW, testEnv } from "./assets";
+import { homeApp } from "./home";
 
 // -- the scaled-up files ------------------------------------------------------------
 
@@ -51,6 +53,13 @@ function bigSitemap(n: number): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`;
 }
 
+// A page of the 3-month window as the export writes it (500 rows), from the
+// fixture's rows under their own references: the landing page reads it.
+function bigExpiringPage(n: number): unknown[] {
+  const rows = FILES["expiring/3m/1.json"] as Record<string, unknown>[];
+  return Array.from({ length: n }, (_, i) => ({ ...rows[i % rows.length], reference: `cb-${700 + i}-${70000000 + i}` }));
+}
+
 // Every file written out once, with a fixed ETag, as the assets layer serves
 // a deploy's files: the shared fake (test/assets.ts) serializes and hashes a
 // file on each read, which here would time the fake rather than the Worker.
@@ -63,29 +72,40 @@ for (const [path, value] of Object.entries({
 })) BODIES[path] = JSON.stringify(value);
 BODIES["sitemaps/sitemap-1.xml"] = bigSitemap(5000);
 
-const assets = {
-  fetch: async (input: Request) => {
-    const path = new URL(input.url).pathname.replace(/^\/data\//, "");
-    const body = BODIES[path];
-    if (body === undefined) return new Response("not found", { status: 404 });
-    const type = path.endsWith(".xml") ? "application/xml" : "application/json";
-    return new Response(body, { headers: { "content-type": type, etag: `"v1-${path}"` } });
-  },
-} as unknown as Fetcher;
+// tag keeps each set's ETags its own, since the parsed files are kept by ETag.
+function assetsOf(bodies: Record<string, string>, tag: string): Fetcher {
+  return {
+    fetch: async (input: Request) => {
+      const path = new URL(input.url).pathname.replace(/^\/data\//, "");
+      const body = bodies[path];
+      if (body === undefined) return new Response("not found", { status: 404 });
+      const type = path.endsWith(".xml") ? "application/xml" : "application/json";
+      return new Response(body, { headers: { "content-type": type, etag: `"${tag}-${path}"` } });
+    },
+  } as unknown as Fetcher;
+}
+
+const assets = assetsOf(BODIES, "v1");
+// The landing page with the 3-month window's first page at its production
+// size; the radar page keeps the fixture's page, as its bound was set on it.
+const landingAssets = assetsOf({ ...BODIES, "expiring/3m/1.json": JSON.stringify(bigExpiringPage(500)) }, "v1-landing");
 
 // No database bindings: a page then reads no table (the radar reads its
 // window files, the search page answers that search is unavailable after
 // counting the open notices), so the time is the Worker's own work and not a
 // local database's round trips.
 const env = { ...testEnv(assets), DB: undefined, SEARCH: undefined, RECORDS: undefined, ACCOUNTS: undefined };
+const landingEnv = { ...env, ASSETS: landingAssets };
 
 // -- timing ---------------------------------------------------------------------------
 
 let address = 0;
-async function render(path: string): Promise<number> {
-  const res = await app.request(path, {
+// home: "/" answered by the app home, as a signed-in reader gets it (test/home.ts);
+// without it "/" is the landing page, there being no session here.
+async function render(path: string, home = false): Promise<number> {
+  const res = await (home ? homeApp : app).request(path, {
     headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}` },
-  }, env);
+  }, path === "/" && !home ? landingEnv : env);
   await res.arrayBuffer();
   return res.status;
 }
@@ -104,13 +124,13 @@ const yardstick = () => JSON.parse(JSON.stringify(ROWS));
 
 // A route's time over the yardstick's, batches of each taken in turn so a
 // change in the machine's load falls on both.
-async function ratio(path: string, per: number): Promise<number> {
-  for (let i = 0; i < 3; i++) await render(path);
+async function ratio(path: string, per: number, home = false): Promise<number> {
+  for (let i = 0; i < 3; i++) await render(path, home);
   const route: number[] = [];
   const yard: number[] = [];
   for (let b = 0; b < 5; b++) {
     yard.push(await batch(yardstick, 16));
-    route.push(await batch(() => render(path), per));
+    route.push(await batch(() => render(path, home), per));
   }
   return median(route) / median(yard);
 }
@@ -119,9 +139,13 @@ async function ratio(path: string, per: number): Promise<number> {
 // brackets), rounded up. The rail's closing count done the old way, one
 // Intl call after another for every notice, put /about at 23 and every page
 // over its bound (checked when this was written).
+// "/ (app home)" is the app home a signed-in reader gets at "/", with the
+// bound "/" had before the landing page; "/" is now the landing page, with
+// the 3-month window's page of 500 contracts (measured 2026-11-08).
 const BUDGET: [path: string, bound: number, per: number][] = [
   ["/about", 4.5, 16], // [1.4]
-  ["/", 10, 16], // [3.2]
+  ["/ (app home)", 10, 16], // [3.2]
+  ["/", 9, 16], // [2.8]
   ["/tenders", 9, 16], // [2.8]
   ["/organizations/org-a000000002", 11, 16], // [3.4]
   ["/organizations/org-a000000001", 22, 8], // [7.2]
@@ -138,12 +162,14 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     clearClosingCache();
     const over: string[] = [];
     const seen: string[] = [];
-    for (const [path, bound, per] of BUDGET) {
+    for (const [name, bound, per] of BUDGET) {
+      const home = name === "/ (app home)";
+      const path = home ? "/" : name;
       // The search page answers 503 without its database, after rendering in full.
-      expect([200, 503], path).toContain(await render(path));
-      const r = await ratio(path, per);
-      seen.push(`${path} ${r.toFixed(2)}`);
-      if (r > bound) over.push(`${path}: ${r.toFixed(2)} over ${bound}`);
+      expect([200, 503], name).toContain(await render(path, home));
+      const r = await ratio(path, per, home);
+      seen.push(`${name} ${r.toFixed(2)}`);
+      if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
     }
     expect(over, seen.join(", ")).toEqual([]);
   }, 120_000);

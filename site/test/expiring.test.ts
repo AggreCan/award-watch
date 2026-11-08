@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { ExpiringRow } from "../src/data";
 import { app, downloadAllowed } from "../src/index";
+import { homeRequest } from "./home";
 import {
   expiringQueryString, expiringRecordUrl, filterExpiring, growthPct, readExpiringQuery, soonestFirst, valueBand,
 } from "../src/pages/expiring";
@@ -14,7 +15,7 @@ import page1 from "./fixtures/expiring-3m-1.json";
 
 let address = 0;
 const get = (path: string, env = testEnv()) =>
-  app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.51.100.${(address++ % 250) + 1}` } }, env);
+  homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.51.100.${(address++ % 250) + 1}` } }, env);
 const text = async (path: string, env = testEnv()) => (await get(path, env)).text();
 const nbsp = (s: string) => s.replace(/[  ]/g, " ");
 const head = (html: string) => html.slice(0, html.indexOf("</head>"));

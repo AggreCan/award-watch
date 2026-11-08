@@ -3,6 +3,7 @@ import tendersJs from "../public/tenders.js?raw";
 import watchlistJs from "../public/watchlist.js?raw";
 import { SEGMENTS } from "../src/constants";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import {
   SAME_IN_BOTH, allKeys, categoryLabel, competitiveLabel, fmtInt, fmtMoney, fmtMoneyShort, fmtPct, frTypography, pick,
   provinceName, rawEntry, segmentLabel, sourceLabel, statusLabel, t, type Key,
@@ -16,7 +17,7 @@ const nbsp = (s: string) => s.replace(/[\u00a0\u202f]/g, " ");
 
 // A browser's navigation: the response form's GET answers browsers only (forms.tsx).
 const get = (path: string, headers: Record<string, string> = {}, env: object = testEnv()) =>
-  app.request(path, { headers: { "sec-fetch-mode": "navigate", ...headers } }, env);
+  homeRequest(path, { headers: { "sec-fetch-mode": "navigate", ...headers } }, env);
 const post = (path: string, fields: Record<string, string>, headers: Record<string, string> = {}) =>
   app.request(
     path,

@@ -105,8 +105,12 @@ writes state (`pack`, `status`, `attention`, `gate` and the others), `git`,
 `curl`, `npx` or the Cloudflare API directly; a Wrangler call is anything but
 the five forms above through the pinned binary; a part name reaches a key or
 a path without being checked against `static.tar.gz.NNN`; any secret other
-than the two above is read; or `CLOUDFLARE_API_TOKEN` (the variable Wrangler
-reads) is set from anything but the site deploy token. It also plants each
+than the two above is read; `CLOUDFLARE_API_TOKEN` (the variable Wrangler
+reads) is set from anything but the site deploy token; or the deploy's
+arguments carry anything but the landing page's Brandfetch client id, read
+from the repository variable `BRANDFETCH_CLIENT_ID` and passed as
+`--var BRANDFETCH_CLIENT_ID:<id>` only while the variable is set
+(`docs/landing.md`; the nightly's deploy passes it the same way). It also plants each
 of those changes in a copy of the file and checks that the guard catches it.
 The checks are textual: PyYAML is not a dependency of the pipeline.
 

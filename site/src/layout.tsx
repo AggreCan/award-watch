@@ -201,7 +201,9 @@ export const Panel: FC<PropsWithChildren<{
 
 // Search and social metadata. A page without an Seo object (errors, the
 // thank-you page) gets only the site description: no canonical, no cards.
-const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, lang, title }) => {
+// The landing page (pages/landing.tsx), a document of its own, draws the
+// same tags.
+export const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, lang, title }) => {
   if (!seo) return <meta name="description" content={defaultDescription(lang)} />;
   if (seo.noindex) {
     return (
@@ -466,6 +468,38 @@ export const TopbarSearch: FC<{ lang: Lang; query?: string }> = ({ lang, query }
   </form>
 );
 
+// The footer's row: the sources it names and the site's links, the same
+// under every railed page and on the landing page (pages/landing.tsx).
+// lobbyingLoaded: the registry has been read, so the sources line names it.
+// on: the accounts switch. bugLink: a signed-in Pro reader (src/account/bugs.tsx);
+// nothing for anyone else, so public pages keep every byte.
+export const FooterRow: FC<{ lang: Lang; lobbyingLoaded: boolean; on: boolean; bugLink: boolean }> = ({ lang, lobbyingLoaded, on, bugLink }) => (
+  <div class="footer-row">
+    <span class="footer-sources">
+      {t(lang, lobbyingLoaded ? "footer.sources" : "footer.sources_no_lobbying")}{" "}
+      <a href="/data#sources">{t(lang, "footer.sources_link")}</a>
+    </span>
+    <span class="footer-links">
+      <a href="/segments">{t(lang, "nav.segments")}</a>
+      <a href="/rankings">{t(lang, "nav.rankings")}</a>
+      {/* The rail's Browse group hides on a phone, where these links stand in for it; no chip here. */}
+      <FooterAnalyticsLink lang={lang} on={on} />
+      <a href="/methodology">{t(lang, "footer.methodology")}</a>
+      <a href="/data#downloads">{t(lang, "footer.download")}</a>
+      <a href="/feeds">{t(lang, "footer.feeds")}</a>
+      <a href="/alerts">{t(lang, "rail.email_lists")}</a>
+      <FooterProLink lang={lang} on={on} />
+      <a href="/watchlist">{t(lang, "footer.watchlist")}</a>
+      <a href="/corrections">{t(lang, "footer.corrections")}</a>
+      {bugLink ? <a href="/account/bug">{t(lang, "bugs.link")}</a> : null}
+      <a href="/cite">{t(lang, "footer.cite")}</a>
+      <a href="/about">{t(lang, "footer.about")}</a>
+      <a href="/terms">{t(lang, "footer.terms")}</a>
+      <a href="/privacy">{t(lang, "footer.privacy")}</a>
+    </span>
+  </div>
+);
+
 export const Layout: FC<
   PropsWithChildren<{ lang: Lang; title: string; dataAsOf: string | null; active?: string; head?: unknown; seo?: Seo; query?: string }>
 > = (props) => {
@@ -522,33 +556,8 @@ export const Layout: FC<
               <main id="main">{props.children}</main>
             </TableUseContext.Provider>
             <footer class="site-footer">
-              <div class="footer-row">
-                <span class="footer-sources">
-                  {t(lang, shell?.rail?.lobbyingLoaded ? "footer.sources" : "footer.sources_no_lobbying")}{" "}
-                  <a href="/data#sources">{t(lang, "footer.sources_link")}</a>
-                </span>
-                <span class="footer-links">
-                  <a href="/segments">{t(lang, "nav.segments")}</a>
-                  <a href="/rankings">{t(lang, "nav.rankings")}</a>
-                  {/* The rail's Browse group hides on a phone, where these links stand in for it; no chip here. */}
-                  <FooterAnalyticsLink lang={lang} on={shell?.accountsOn ?? false} />
-                  <a href="/methodology">{t(lang, "footer.methodology")}</a>
-                  <a href="/data#downloads">{t(lang, "footer.download")}</a>
-                  <a href="/feeds">{t(lang, "footer.feeds")}</a>
-                  <a href="/alerts">{t(lang, "rail.email_lists")}</a>
-                  <FooterProLink lang={lang} on={shell?.accountsOn ?? false} />
-                  <a href="/watchlist">{t(lang, "footer.watchlist")}</a>
-                  <a href="/corrections">{t(lang, "footer.corrections")}</a>
-                  {/* A signed-in Pro reader only (src/account/bugs.tsx); nothing for anyone else, so public pages keep every byte. */}
-                  {shell?.account?.email && shell.account.plan && allowed({ plan: shell.account.plan }, "bug_reports") ? (
-                    <a href="/account/bug">{t(lang, "bugs.link")}</a>
-                  ) : null}
-                  <a href="/cite">{t(lang, "footer.cite")}</a>
-                  <a href="/about">{t(lang, "footer.about")}</a>
-                  <a href="/terms">{t(lang, "footer.terms")}</a>
-                  <a href="/privacy">{t(lang, "footer.privacy")}</a>
-                </span>
-              </div>
+              <FooterRow lang={lang} lobbyingLoaded={!!shell?.rail?.lobbyingLoaded} on={shell?.accountsOn ?? false}
+                bugLink={!!(shell?.account?.email && shell.account.plan && allowed({ plan: shell.account.plan }, "bug_reports"))} />
             </footer>
           </div>
         </div>

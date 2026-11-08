@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { FORM_MAX_BYTES } from "../src/body";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { fakeAssets, testEnv } from "./assets";
 import profiles from "./fixtures/profiles-a00.json";
 
@@ -44,7 +45,7 @@ const brokenBucket = {
 
 let address = 1;
 const req = (path: string, envOver: Record<string, unknown> = {}, init: RequestInit = {}) =>
-  app.request(
+  homeRequest(
     path,
     // A browser's navigation unless the test says otherwise: the response form's GET answers browsers only.
     { ...init, headers: { "cf-connecting-ip": `203.0.113.${address++ % 250}`, "sec-fetch-mode": "navigate", ...(init.headers as Record<string, string>) } },

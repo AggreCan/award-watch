@@ -8,6 +8,7 @@ import { closingInstant, closingState, countdownText, easternDay } from "../publ
 import { clockAt, closesAtUtc, closingSoonCount, closingText, closingTime, tenderState } from "../src/closing";
 import type { TenderRow } from "../src/data";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { t } from "../src/i18n";
 import { filterTenders, readTenderQuery } from "../src/pages/tenders";
 import { FILES, makeFakeAssets, testEnv } from "./assets";
@@ -17,7 +18,7 @@ import openTenders from "./fixtures/tenders-open.json";
 
 let address = 0;
 const page = async (path: string, now: string, overrides: Record<string, unknown> = {}) =>
-  (await app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.7.${(address++ % 250) + 1}` } },
+  (await homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.7.${(address++ % 250) + 1}` } },
     testEnv(makeFakeAssets({}, overrides), now))).text();
 const at = (iso: string) => clockAt(Date.parse(iso));
 const nbsp = (s: string) => s.replace(/[  ]/g, " ");

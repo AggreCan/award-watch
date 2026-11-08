@@ -12,6 +12,8 @@ declare namespace Cloudflare {
     SCHEMA_SQL: string;
     SEED_SQL: string;
     STYLES_CSS: string;
+    LANDING_CSS: string;
+    PUBLIC_FILES: string;
   }
 }
 

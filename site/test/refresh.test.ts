@@ -10,17 +10,18 @@ import intraday from "../../.github/workflows/intraday.yml?raw";
 import { nextRunAt, refreshText, templatePieces } from "../public/refresh.js";
 import { bodyEtag } from "../src/conditional";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { DAILY_RUNS_UTC, SAME_DAY_HREF, SAME_DAY_RUNS_UTC, refreshWords } from "../src/refresh";
 import { fakeAssets, testEnv } from "./assets";
 
 let address = 0;
 const get = (path: string, now?: string, headers: Record<string, string> = {}) =>
-  app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.12.${(address++ % 250) + 1}`, ...headers } },
+  homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.12.${(address++ % 250) + 1}`, ...headers } },
     testEnv(fakeAssets, now));
 // The same request with the accounts switch on (the site runs that way): the
 // same-day timer then carries the Pro chip and leads to the tease page.
 const getOn = (path: string, now?: string) =>
-  app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.13.${(address++ % 250) + 1}` } },
+  homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.13.${(address++ % 250) + 1}` } },
     { ...testEnv(fakeAssets, now), ACCOUNTS_ENABLED: "true" });
 const nbsp = (s: string) => s.replace(/[  ]/g, " ");
 const timers = (html: string) => html.match(/<span class="refresh-timers"[\s\S]*?<script type="module" src="\/refresh.js"><\/script><\/span>/)?.[0] ?? "";

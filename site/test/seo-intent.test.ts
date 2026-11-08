@@ -7,6 +7,7 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { RULES } from "../src/account/entitlements";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { CONTRACT_SITEMAP_SQL } from "../src/records_tables";
 import { proIncludes } from "../src/pages/pro";
 import { DESCRIPTION_MAX, TITLE_MAX, expiringWindowSeo } from "../src/seo";
@@ -28,7 +29,7 @@ const RECORDS_SCHEMA = (env as unknown as { RECORDS_SCHEMA_SQL: string }).RECORD
 
 let address = 0;
 const get = (path: string, e: object = onEnv()) =>
-  app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `203.0.113.${(address++ % 250) + 1}` } }, e);
+  homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `203.0.113.${(address++ % 250) + 1}` } }, e);
 const html = async (path: string, e: object = onEnv()) => (await get(path, e)).text();
 const headOf = (page: string) => page.slice(0, page.indexOf("</head>"));
 const decode = (s: string) =>

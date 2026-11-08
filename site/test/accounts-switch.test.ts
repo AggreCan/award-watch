@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
 import { makeFakeAssets, testEnv } from "./assets";
 import { get, grantPro, newEmail, nextIp, onEnv, post, signIn, useAccountsDb } from "./accounts-helpers";
+import { LANDING_SWITCH_PIECES, homeRequest, landingCore } from "./home";
 
 useAccountsDb();
 
@@ -48,10 +49,11 @@ function trap<T>(what = "the accounts database") {
   return { used, binding };
 }
 
-async function render(path: string, env: object, cookie?: string) {
+// home: "/" answered by the app home (test/home.ts) rather than the landing page.
+async function render(path: string, env: object, cookie?: string, home = false) {
   const headers: Record<string, string> = { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() };
   if (cookie) headers.cookie = cookie;
-  const res = await app.request(path, { headers }, env);
+  const res = await (home ? homeRequest : app.request.bind(app))(path, { headers }, env);
   return { status: res.status, cache: res.headers.get("cache-control"), cookies: res.headers.getSetCookie(), body: await res.text() };
 }
 
@@ -114,7 +116,7 @@ describe("with the switch off", () => {
   });
 
   it("keeps the rail's lists at two items and the privacy page's 'No Accounts'", async () => {
-    const home = (await render("/", testEnv())).body;
+    const home = (await render("/", testEnv(), undefined, true)).body;
     const lists = home.slice(home.indexOf('id="rail-lists"'), home.indexOf("</nav>"));
     expect(lists.match(/<li>/g)).toHaveLength(2);
     const privacy = (await render("/privacy", testEnv())).body;
@@ -169,8 +171,8 @@ describe("with the switch on", () => {
   it("opens the routes and adds the account item, the Pro marks and a profile's analytics link, and nothing else on a public page", async () => {
     expect((await get("/account/sign-in")).status).toBe(200);
     for (const path of ["/", "/tenders", "/organizations/org-a000000001", "/nothing-here"]) {
-      const on = await render(path, onEnv());
-      const off = await render(path, testEnv());
+      const on = await render(path, onEnv(), undefined, true);
+      const off = await render(path, testEnv(), undefined, true);
       expect(on.status, path).toBe(off.status);
       expect(on.cache, path).toBe(off.cache);
       const item = '<li><a class="rail-item rail-account" href="/account/sign-in"><span class="rail-label">Sign in</span></a></li>';
@@ -193,6 +195,29 @@ describe("with the switch on", () => {
       expect(off.body, path).not.toContain("pro-tag");
       expect(off.body, path).not.toContain("/analytics");
       expect(stripped.replace(ANALYTICS, ""), path).toBe(off.body);
+    }
+  });
+
+  // The landing page, "/" for a reader not signed in (src/pages/landing.tsx):
+  // the switch brings its plan cards, its three Pro lines and the hero's note
+  // on accounts, the sign-in and the links to Pro and Analytics, the free
+  // account behind Track tenders free (the Atom feeds while off), the watch
+  // sentence, the profile shot's Follow and Analytics buttons, Pro's line in
+  // the third step and the footer's two links (test/home.ts
+  // LANDING_SWITCH_PIECES). Nothing else changes.
+  it("adds to the landing page its enumerated pieces and nothing else", async () => {
+    for (const path of ["/", "/?lang=fr"]) {
+      const on = await render(path, onEnv());
+      const off = await render(path, testEnv());
+      expect(on.status, path).toBe(200);
+      expect(on.cache, path).toBe(off.cache);
+      for (const piece of LANDING_SWITCH_PIECES.filter((p) => p.onOnly)) {
+        expect(on.body.match(piece.re), `${path} ${piece.what}`).not.toBeNull();
+        expect(off.body.match(piece.re), `${path} ${piece.what}`).toBeNull();
+      }
+      expect(off.body, path).not.toContain("pro-tag");
+      expect(off.body, path).not.toContain("/account");
+      expect(landingCore(on.body), path).toBe(landingCore(off.body));
     }
   });
 

@@ -461,13 +461,21 @@ jobs:
       # now and then after Wrangler's own retries, so the whole deploy is
       # tried three times with a pause between; files stored by a failed
       # attempt are not uploaded again, since assets are content-addressed.
+      # The landing page's Brandfetch client id (docs/landing.md) goes to the
+      # Worker as a variable, as the site-only deploy passes it: a deploy
+      # without it would drop it, since wrangler.jsonc does not hold it. An
+      # empty repository variable passes nothing.
       - name: Deploy the Worker with the new data as assets
         id: deploy
         if: ${{ !cancelled() && steps.bundle.outcome == 'success' }}
         working-directory: site
+        env:
+          BRANDFETCH_CLIENT_ID: ${{ vars.BRANDFETCH_CLIENT_ID }}
         run: |
+          set --
+          if [ -n "$BRANDFETCH_CLIENT_ID" ]; then set -- --var "BRANDFETCH_CLIENT_ID:$BRANDFETCH_CLIENT_ID"; fi
           for attempt in 1 2 3; do
-            if npx wrangler deploy; then exit 0; fi
+            if npx wrangler deploy "$@"; then exit 0; fi
             echo "deploy attempt $attempt failed; trying again in two minutes"
             sleep 120
           done

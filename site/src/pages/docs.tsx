@@ -164,6 +164,7 @@ export function privacyPage(c: Context<AppEnv>): Promise<Response> {
   // While accounts are open (src/account/switch.ts) the first section says what an account keeps,
   // and the second what paying for Pro gives Stripe and leaves on the site.
   const accounts = accountsEnabled(c.env);
+  const logos = !!c.env.BRANDFETCH_CLIENT_ID;
   return doc(c, "privacy", "privacy.title", "privacy.lead", (lang) => [
     accounts
       ? { id: "accounts", title: "account.privacy_toc", body: <AccountsPrivacy lang={lang} /> }
@@ -204,6 +205,8 @@ export function privacyPage(c: Context<AppEnv>): Promise<Response> {
       id: "third", title: "privacy.toc_third", body: (
         <>
           <p>{t(lang, "privacy.third")}</p>
+          {/* The landing page's logos (pages/landing.tsx), only while the Worker has a Brandfetch client id. */}
+          {logos ? <p>{t(lang, "privacy.logos")}</p> : null}
           <p>{t(lang, "privacy.hosting")}</p>
         </>
       ),

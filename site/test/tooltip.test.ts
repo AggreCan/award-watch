@@ -16,6 +16,7 @@ import { GAP, MARGIN, TIP_ID, markAt, markReach, placeTip, stepMark, tipLines } 
 import { ShortMoney, moneyTip, partOf, recordsText, tipHead, tipText } from "../src/chart";
 import { fmtInt, fmtMoney } from "../src/i18n";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { makeFakeAssets, testEnv } from "./assets";
 import profiles from "./fixtures/profiles-a00.json";
 import stats from "./fixtures/stats.json";
@@ -29,7 +30,7 @@ const BOX = `<div id="${TIP_ID}" class="tip" role="tooltip" hidden=""></div><scr
 
 let ip = 0;
 const html = async (path: string, e: object = testEnv()) =>
-  nbsp(await (await app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.51.100.${++ip % 250}` } }, e)).text());
+  nbsp(await (await homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.51.100.${++ip % 250}` } }, e)).text());
 // The tips of a page's chart marks and map provinces: their SVG <title>s.
 const svgTitles = (page: string) => [...page.matchAll(/<(?:rect|line|use)\b[^>]*><title>([^<]*)<\/title>/g)].map((m) => m[1]);
 

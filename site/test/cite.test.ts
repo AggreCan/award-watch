@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isoDate, styleDate, validCitation } from "../src/cite";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { emptyAssets, fakeAssets, testEnv } from "./assets";
 import stats from "./fixtures/stats.json";
 
@@ -29,7 +30,7 @@ function withStats(extra: object): Fetcher {
 const withCitation = (citation: unknown) => withStats({ citation });
 const dated = withStats({});
 
-const get = async (path: string, assets: Fetcher) => (await app.request(path, {}, testEnv(assets))).text();
+const get = async (path: string, assets: Fetcher) => (await homeRequest(path, {}, testEnv(assets))).text();
 
 describe("how to cite", () => {
   it("stays hidden until a DOI exists", async () => {
@@ -105,7 +106,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 describe("the /cite page", () => {
   it("answers in both languages, linked from the footer after Corrections", async () => {
     for (const [path, word] of [["/cite", "Cite"], ["/cite?lang=fr", "Citer"], ["/", "Cite"], ["/data?lang=fr", "Citer"]]) {
-      const res = await app.request(path, {}, testEnv(dated));
+      const res = await homeRequest(path, {}, testEnv(dated));
       expect(res.status, path).toBe(200);
       const html = await res.text();
       const footer = html.slice(html.indexOf('<footer class="site-footer">'));

@@ -30,6 +30,7 @@ import { PRO_INCLUDES } from "../src/pro";
 import { routeTemplate } from "../src/views";
 import { get, grantPro, nbsp, newEmail, nextIp, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { contentEtag, makeFakeAssets, testEnv } from "./assets";
+import { landingCore } from "./home";
 import page1 from "./fixtures/expiring-3m-1.json";
 
 useAccountsDb();
@@ -360,6 +361,34 @@ describe("with the switch on and no session", () => {
       expect(res.headers.get("cache-control"), path).toBe("public, max-age=300");
       expect(noRail(await res.text()), path).toBe(noRail(await html(path, off())));
     }
+  });
+
+  // The landing page (src/pages/landing.tsx), "/" for a reader not signed in:
+  // its ending shot is the 3-month window's first page; the deep windows are
+  // named only in its Pro line and the plan cards' rows; and with the
+  // switch's pieces stripped (test/home.ts LANDING_SWITCH_PIECES) it is the
+  // page a reader gets with the switch off.
+  it("keeps the landing page to the 3-month window, the deep ones named only in its Pro line and plan rows", async () => {
+    const landing = async (path: string, env: object) =>
+      app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() } }, env);
+    for (const path of ["/", "/?lang=fr"]) {
+      const paths: string[] = [];
+      const res = await landing(path, on(radarAssets(paths)));
+      expect(res.headers.get("cache-control"), path).toBe("public, max-age=300");
+      const body = await res.text();
+      expect(hasHidden(body), path).toEqual([]);
+      expect([...new Set(paths.filter((p) => p.startsWith("/data/expiring/")))].sort(), path)
+        .toEqual(["/data/expiring/3m/1.json", "/data/expiring/index.json"]);
+      expect(landingCore(body), path).toBe(landingCore(await (await landing(path, off())).text()));
+    }
+    const page = await (await landing("/", on())).text();
+    expect(page).toContain('<p class="lp-pro">Pro opens the 6- and 12-month lists and the CSV.</p>');
+    const pricing = /<section class="lp-pricing"[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
+    expect(pricing).toContain("<span>Contracts ending: 6- and 12-month lists</span>");
+    expect(pricing).toContain("<span>Contracts ending: the 12-month CSV</span>");
+    // Outside those two, the page names no deep window.
+    const rest = page.replace(pricing, "").replace(/<p class="lp-pro">[^<]*<\/p>/g, "");
+    expect(rest).not.toMatch(/6-month|12-month|\/expiring\/(?:6m|12m)/);
   });
 
   it("answers the site's 404 for a deep window's files, and reads none of them", async () => {

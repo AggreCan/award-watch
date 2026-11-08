@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import type { ExpiringRow, Profile, YearFigure } from "../src/data";
 import { t } from "../src/i18n";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { bucketFor } from "../src/limits";
 import { filterExpiring, fiscalYearEnd, readExpiringQuery, expiringQueryString, standingOffer } from "../src/pages/expiring";
 import { addressCount, mergedPlaces, placeKey, valueShare } from "../src/pages/organization";
@@ -19,7 +20,7 @@ import stats from "./fixtures/stats.json";
 const styles = env.STYLES_CSS;
 let address = 0;
 const get = (path: string, envOver = testEnv(), init: RequestInit = {}) =>
-  app.request(path, { ...init, headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.9.${(address++ % 250) + 1}` } }, envOver);
+  homeRequest(path, { ...init, headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.9.${(address++ % 250) + 1}` } }, envOver);
 const text = async (path: string, envOver = testEnv()) => (await get(path, envOver)).text();
 const withFiles = (overrides: Record<string, unknown>) => testEnv(makeFakeAssets({}, overrides));
 const nbsp = (s: string) => s.replace(/[  ]/g, " ");

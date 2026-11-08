@@ -4,6 +4,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { COLUMN_WIDTHS, MAIN_MIN, type Column, headClass, minWidths, tableStyle } from "../src/columns";
 import { homeTenderColumns, tenderColumns } from "../src/pages/shared";
 import { testEnv } from "./assets";
@@ -13,7 +14,7 @@ const styles = env.STYLES_CSS;
 
 let address = 0;
 const text = async (path: string) =>
-  (await app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.1.${(address++ % 250) + 1}` } }, testEnv())).text();
+  (await homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.1.${(address++ % 250) + 1}` } }, testEnv())).text();
 
 // Every page that draws a table, in both languages.
 const PAGES = [

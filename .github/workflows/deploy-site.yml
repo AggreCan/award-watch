@@ -43,7 +43,8 @@
 #
 # Secrets: CLOUDFLARE_SITE_DEPLOY_TOKEN (docs/site-deploy.md lists its
 # permissions), CLOUDFLARE_ACCOUNT_ID (the one the nightly uses). Variables:
-# SITE_URL, CONTACT (the user agent of the checks).
+# SITE_URL, CONTACT (the user agent of the checks), BRANDFETCH_CLIENT_ID (the
+# landing page's logos, passed to the Worker; docs/landing.md).
 
 name: deploy-site
 
@@ -228,15 +229,22 @@ jobs:
       # The nightly's deploy from site/: the Worker's code from main, with
       # site/public as its assets. The data files are the ones already live,
       # so their content hashes match and only changed files are uploaded.
-      # Tried three times, as in the nightly.
+      # Tried three times, as in the nightly. The landing page's Brandfetch
+      # client id (docs/landing.md) comes from the repository variable of the
+      # same name and goes to the Worker as a variable with --var, as the
+      # nightly passes it; while the variable is empty nothing is passed and
+      # the page shows the organizations' names alone.
       - name: Deploy the Worker
         id: deploy
         working-directory: site
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_SITE_DEPLOY_TOKEN }}
+          BRANDFETCH_CLIENT_ID: ${{ vars.BRANDFETCH_CLIENT_ID }}
         run: |
+          set --
+          if [ -n "$BRANDFETCH_CLIENT_ID" ]; then set -- --var "BRANDFETCH_CLIENT_ID:$BRANDFETCH_CLIENT_ID"; fi
           for attempt in 1 2 3; do
-            if "$WRANGLER" deploy; then exit 0; fi
+            if "$WRANGLER" deploy "$@"; then exit 0; fi
             echo "deploy attempt $attempt failed; trying again in one minute"
             sleep 60
           done

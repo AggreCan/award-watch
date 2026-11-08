@@ -7,13 +7,14 @@ import { METHOD_SHORT, NOTICE_TYPE_SHORT } from "../src/constants";
 import type { TenderRow } from "../src/data";
 import { allKeys, t, type Key } from "../src/i18n";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { methodShort, noticeTypeShort } from "../src/pages/shared";
 import { makeFakeAssets, testEnv } from "./assets";
 import stats from "./fixtures/stats.json";
 
 let address = 0;
 const text = async (path: string, overrides: Record<string, unknown> = {}) =>
-  (await app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.11.${(address++ % 250) + 1}` } },
+  (await homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.11.${(address++ % 250) + 1}` } },
     testEnv(makeFakeAssets({}, overrides)))).text();
 const nbsp = (s: string) => s.replace(/[  ]/g, " ");
 // One list's panel, from its head to the next panel.

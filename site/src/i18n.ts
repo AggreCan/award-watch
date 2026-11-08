@@ -3645,6 +3645,166 @@ const STRINGS = {
     en: "Award Watch: federal tenders, awards and contracts in Canada",
     fr: "Award Watch : appels d'offres, attributions et contrats fédéraux au Canada",
   },
+
+  // -- the landing page, the home for a reader not signed in (src/pages/landing.tsx, docs/landing.md)
+  "landing.cta_track": { en: "Track tenders free", fr: "Suivre les appels d'offres gratuitement" },
+  // The same button in the nav, where the French must be short to keep the bar on one line.
+  "landing.cta_track_nav": { en: "Track tenders free", fr: "Suivre gratuitement" },
+  "landing.eyebrow": { en: "Federal procurement data for Canada", fr: "Données des marchés publics fédéraux du Canada" },
+  "landing.h1_first": { en: "Find your next federal tender.", fr: "Trouvez votre prochain appel d'offres fédéral." },
+  // {last} is landing.h1_last, set in the accent.
+  "landing.h1_second": { en: "See who won {last}", fr: "Voyez qui a remporté {last}" },
+  "landing.h1_last": { en: "the last one.", fr: "le précédent." },
+  "landing.lead": {
+    en: "Every tender, award, contract and grant from CanadaBuys and open.canada.ca, read every night and searchable in one place. {free}",
+    fr: "Chaque appel d'offres, attribution, contrat et subvention d'AchatsCanada et d'ouvert.canada.ca, lus chaque nuit et consultables en un seul endroit. {free}",
+  },
+  "landing.lead_free": { en: "Free.", fr: "Gratuit." },
+  "landing.cta_plans": { en: "See Pro plans", fr: "Voir les forfaits Pro" },
+  "landing.note_search": { en: "No account needed to search.", fr: "Aucun compte n'est requis pour chercher." },
+  // With the accounts switch on only.
+  "landing.note_account": { en: "Free account, no credit card. Cancel Pro any time.", fr: "Compte gratuit, sans carte de crédit. Pro s'annule en tout temps." },
+  "landing.map_head_one": { en: "{n} open tender", fr: "{n} appel d'offres ouvert" },
+  "landing.map_head_many": { en: "{n} open tenders", fr: "{n} appels d'offres ouverts" },
+  "landing.map_sub": { en: "right now, by province", fr: "en ce moment, par province" },
+  "landing.map_label": { en: "Open tenders by province: {n} in all", fr: "Appels d'offres ouverts par province : {n} en tout" },
+  "landing.map_title_one": { en: "{province}: {n} open", fr: "{province} : {n} ouvert" },
+  "landing.map_title_many": { en: "{province}: {n} open", fr: "{province} : {n} ouverts" },
+  // The scrolling band. Counsel's condition (2026-11-08): the band says the site holds records on these
+  // organizations and never that they use or endorse it ("trusted by" and the like).
+  "landing.band_heading": {
+    en: "We have the records on the companies winning the biggest federal contracts",
+    fr: "Nous avons les dossiers des entreprises qui remportent les plus gros contrats fédéraux",
+  },
+  "landing.band_sub": {
+    en: "Click one for its awards, contracts, grants and lobbying, year by year.",
+    fr: "Cliquez sur l'une d'elles pour voir ses attributions, contrats, subventions et activités de lobbying, année par année.",
+  },
+  "landing.band_foot": {
+    en: "Forty of the largest award holders in the public records. Names and logos belong to their owners and appear here because the records cover these organizations. No endorsement is implied.",
+    fr: "Quarante des plus grands titulaires d'attributions dans les dossiers publics. Les noms et les logos appartiennent à leurs propriétaires et figurent ici parce que les dossiers visent ces organisations. Aucune approbation n'est sous-entendue.",
+  },
+  "landing.stats_label": { en: "What the records hold", fr: "Ce que contiennent les dossiers" },
+  // A count of a million or more in the figures' short form: "1.34M", "1,34 M".
+  "landing.count_m": { en: "{n}M", fr: "{n} M" },
+  "landing.stat_contracts": { en: "published contracts", fr: "contrats publiés" },
+  "landing.stat_grants": { en: "grants and contributions", fr: "subventions et contributions" },
+  "landing.stat_orgs": { en: "organizations, each with a page", fr: "organisations, chacune avec sa page" },
+  "landing.stat_awarded": { en: "awarded this year, in {n} notices", fr: "attribués cette année, en {n} avis" },
+  "landing.asof": {
+    en: "Counted on {date}. Plus {awards} award notices, {lobbying} lobbying records and {buyers} federal buyers.",
+    fr: "Comptés le {date}. S'y ajoutent {awards} avis d'attribution, {lobbying} dossiers de lobbying et {buyers} acheteurs fédéraux.",
+  },
+  "landing.asof_no_lobbying": {
+    en: "Counted on {date}. Plus {awards} award notices and {buyers} federal buyers.",
+    fr: "Comptés le {date}. S'y ajoutent {awards} avis d'attribution et {buyers} acheteurs fédéraux.",
+  },
+  "landing.asof_date": { en: "Counted on {date}.", fr: "Comptés le {date}." },
+  "landing.f1_heading": { en: "Find tenders before they close", fr: "Trouvez les appels d'offres avant leur clôture" },
+  "landing.f1_text": {
+    en: "Filter CanadaBuys notices by segment, province and closing date. Open the bid documents from each one.",
+    fr: "Filtrez les avis d'AchatsCanada par segment, province et date de clôture. Ouvrez les documents d'appel d'offres de chacun.",
+  },
+  "landing.f1_button": { en: "Browse {n} open tenders", fr: "Parcourir les {n} appels d'offres ouverts" },
+  "landing.browse_open": { en: "Browse open tenders", fr: "Parcourir les appels d'offres ouverts" },
+  // The three Pro lines, with the accounts switch on only, each naming its figure.
+  "landing.f1_pro": {
+    en: "Pro sees new notices within {h} hours of posting.",
+    fr: "Avec Pro, les nouveaux avis paraissent dans les {h} heures suivant leur publication.",
+  },
+  "landing.days_one": { en: "{n} day", fr: "{n} jour" },
+  "landing.days_many": { en: "{n} days", fr: "{n} jours" },
+  "landing.f2_eyebrow": { en: "Awards and contracts", fr: "Attributions et contrats" },
+  "landing.f2_heading": { en: "See who won, and what's about to end", fr: "Voyez qui a gagné, et ce qui prend bientôt fin" },
+  "landing.f2_text": {
+    en: "Every award notice with its winner and value. Every published contract by end date, with the amendments that grew it.",
+    fr: "Chaque avis d'attribution avec son titulaire et sa valeur. Chaque contrat publié par date de fin, avec les modifications qui l'ont fait croître.",
+  },
+  "landing.f2_button": { en: "See this month's awards", fr: "Voir les attributions du mois" },
+  "landing.f2_pro": { en: "Pro opens the {a}- and {b}-month lists and the CSV.", fr: "Pro ouvre les listes de {a} et de {b} mois et le fichier CSV." },
+  "landing.shot_awarded": { en: "Awarded, last 30 days", fr: "Attribués, 30 derniers jours" },
+  "landing.f3_eyebrow": { en: "Companies and buyers", fr: "Entreprises et acheteurs" },
+  "landing.f3_heading": { en: "Follow any company, or any department", fr: "Suivez une entreprise, ou un ministère" },
+  "landing.f3_text": {
+    en: "One page per organization: awards, contracts, grants and lobbying, under every name it files under.",
+    fr: "Une page par organisation : attributions, contrats, subventions et lobbying, sous chaque nom qui figure à ses dossiers.",
+  },
+  // With the accounts switch on only.
+  "landing.f3_watch": { en: "Watch it and get each change by email.", fr: "Suivez-la et recevez chaque changement par courriel." },
+  "landing.f3_button": { en: "Look up a company", fr: "Chercher une entreprise" },
+  "landing.f3_buyers": { en: "All {n} buyers", fr: "Les {n} acheteurs" },
+  "landing.f3_buyers_plain": { en: "All buyers", fr: "Tous les acheteurs" },
+  "landing.f3_pro": {
+    en: "Pro charts {years} fiscal years and watches {n} companies by email.",
+    fr: "Pro trace {years} exercices et suit {n} entreprises par courriel.",
+  },
+  "landing.tile_reports": { en: "reports", fr: "rapports" },
+  "landing.how_eyebrow": { en: "How it works", fr: "Comment ça marche" },
+  "landing.how_heading": { en: "Public records, read every night", fr: "Des dossiers publics, lus chaque nuit" },
+  "landing.step1_heading": { en: "We read the sources", fr: "Nous lisons les sources" },
+  // {time} is the nightly run's start (DAILY_RUNS_UTC in src/refresh.tsx), written by common.time.
+  "landing.step1_text": {
+    en: "CanadaBuys, open.canada.ca and the Registry of Lobbyists, every day at {time} UTC. Every row keeps its reference and a link to the original.",
+    fr: "AchatsCanada, ouvert.canada.ca et le Registre des lobbyistes, chaque jour à {time} UTC. Chaque ligne garde sa référence et un lien vers l'original.",
+  },
+  "landing.step1_text_no_lobbying": {
+    en: "CanadaBuys and open.canada.ca, every day at {time} UTC. Every row keeps its reference and a link to the original.",
+    fr: "AchatsCanada et ouvert.canada.ca, chaque jour à {time} UTC. Chaque ligne garde sa référence et un lien vers l'original.",
+  },
+  "landing.step2_heading": { en: "You search and filter", fr: "Vous cherchez et filtrez" },
+  "landing.step2_text": {
+    en: "By company, buyer, segment, province, closing date or value. No account needed to read any page.",
+    fr: "Par entreprise, acheteur, segment, province, date de clôture ou valeur. Aucun compte n'est requis pour lire une page.",
+  },
+  "landing.step3_heading": { en: "Changes come to you", fr: "Les changements viennent à vous" },
+  // With the accounts switch on; landing.step3_text_off while it is off, when nothing is Pro.
+  "landing.step3_text": {
+    en: "Save a search or watch a company. Pro delivers by email, calendar feed and API, and checks CanadaBuys every {h} hours.",
+    fr: "Enregistrez une recherche ou suivez une entreprise. Pro envoie par courriel, flux de calendrier et API, et consulte AchatsCanada toutes les {h} heures.",
+  },
+  "landing.step3_text_off": {
+    en: "Follow new notices by Atom feed, or keep organizations on a watchlist in this browser.",
+    fr: "Suivez les nouveaux avis par fil Atom, ou gardez des organisations dans une liste de suivi dans ce navigateur.",
+  },
+  // The plans, with the accounts switch on only.
+  "landing.plans_eyebrow": { en: "Plans", fr: "Forfaits" },
+  "landing.plans_heading": { en: "Start free. Upgrade when you bid.", fr: "Commencez gratuitement. Passez à Pro quand vous soumissionnez." },
+  "landing.plans_sub": {
+    en: "Every page is free to read. Pro is for people who bid on federal work or track who wins it.",
+    fr: "Chaque page se lit gratuitement. Pro s'adresse à qui soumissionne pour des marchés fédéraux ou suit qui les remporte.",
+  },
+  // After the monthly figure: "CA$18.99 a month, or CA$189.99 a year".
+  "landing.price_rest": { en: "a month, or {yearly} a year", fr: "par mois, ou {yearly} par année" },
+  "landing.everything_pro": { en: "Everything in Pro", fr: "Tout ce que comprend Pro" },
+  "landing.ultra": { en: "Ultra", fr: "Ultra" },
+  "landing.ultra_hidden": { en: "(custom plan)", fr: "(forfait sur mesure)" },
+  "landing.ultra_price": { en: "Price to be set", fr: "Prix à fixer" },
+  "landing.ultra_soon": { en: "Coming soon", fr: "Bientôt offert" },
+  "landing.ultra_for": {
+    en: "For teams that want their own views of the data, built and delivered.",
+    fr: "Pour les équipes qui veulent leurs propres vues des données, construites et livrées.",
+  },
+  "landing.ultra_builder": {
+    en: "A custom analytics builder: your measure, grouping, period and filters, saved as views",
+    fr: "Un générateur d'analyses sur mesure : votre mesure, regroupement, période et filtres, enregistrés comme vues",
+  },
+  "landing.ultra_schedule": { en: "Your saved views delivered by email on a schedule", fr: "Vos vues enregistrées envoyées par courriel selon un horaire" },
+  "landing.ultra_dashboard": {
+    en: "A custom dashboard in your account, built from the site's lists, views and panels",
+    fr: "Un tableau de bord sur mesure dans votre compte, fait des listes, vues et panneaux du site",
+  },
+  "landing.ultra_caps": {
+    en: "Saved searches, watches and API: figures set with the price",
+    fr: "Recherches enregistrées, suivis et API : chiffres fixés avec le prix",
+  },
+  "landing.ultra_button": { en: "Tell me when Ultra opens", fr: "M'avertir à l'ouverture d'Ultra" },
+  "landing.close_heading": { en: "Your next federal tender is already in here.", fr: "Votre prochain appel d'offres fédéral est déjà ici." },
+  "landing.close_text": { en: "Start free today. No card, no trial clock.", fr: "Commencez gratuitement dès aujourd'hui. Sans carte, sans période d'essai." },
+  // The privacy page's line while the landing page shows logos (BRANDFETCH_CLIENT_ID set).
+  "privacy.logos": {
+    en: "The home page shows organizations' logos from Brandfetch's logo service. A visitor's browser fetches each logo from Brandfetch, which receives the request's address and this site's name as the referrer. The site sends Brandfetch nothing else.",
+    fr: "La page d'accueil affiche les logos d'organisations provenant du service de logos de Brandfetch. Le navigateur du visiteur télécharge chaque logo chez Brandfetch, qui reçoit l'adresse de la requête et le nom de ce site comme référent. Le site n'envoie rien d'autre à Brandfetch.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;
@@ -3656,6 +3816,7 @@ type Vars = Record<string, string | number>;
 export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "account.plan_tag_pro", // the plan subscript after the wordmark reads the same in both
   "pro.tag", // the plan's name on the Pro chip
+  "landing.ultra", // the third plan's name, on its chip and card (src/pages/landing.tsx)
   "tip.head", // a chart tip's series and period, joined by a comma in both
   "site.name",
   "nav.segments",

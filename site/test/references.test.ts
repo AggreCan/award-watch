@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import tendersJs from "../public/tenders.js?raw";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { type TenderRow, publishedReference } from "../src/data";
 import { contractReference, expiringRecordUrl } from "../src/pages/expiring";
 import { filterTenders, readTenderQuery } from "../src/pages/tenders";
@@ -16,7 +17,7 @@ import tenderShard from "./fixtures/tenders-f3d.json";
 
 let address = 0;
 const get = (path: string, env = testEnv()) =>
-  app.request(path, { headers: { "cf-connecting-ip": `198.51.100.${(address++ % 250) + 1}` } }, env);
+  homeRequest(path, { headers: { "cf-connecting-ip": `198.51.100.${(address++ % 250) + 1}` } }, env);
 const text = async (path: string, env = testEnv()) => (await get(path, env)).text();
 
 const CONVERTED_TENDER = (tenderShard as Record<string, any>)["en578-123456-a-1"];

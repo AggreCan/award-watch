@@ -13,6 +13,7 @@ import { bodyEtag } from "../src/conditional";
 import { dataStamp } from "../src/data";
 import { t } from "../src/i18n";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { LAST_CUT_SQL, loadLastCut } from "../src/intraday";
 import { bucketFor } from "../src/limits";
 import {
@@ -126,7 +127,7 @@ const NO_RUNS = withRuns([]);
 
 let address = 0;
 const get = (path: string, opts: { now?: string; assets?: Fetcher; on?: boolean; headers?: Record<string, string> } = {}) =>
-  app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.40.${(address++ % 250) + 1}`, ...opts.headers } },
+  homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.40.${(address++ % 250) + 1}`, ...opts.headers } },
     { ...testEnv(opts.assets, opts.now), ...(opts.on ? { ACCOUNTS_ENABLED: "true" } : {}) });
 const timers = (html: string) => html.match(/<span class="refresh-timers"[\s\S]*?<script type="module" src="\/refresh.js"><\/script><\/span>/)?.[0] ?? "";
 // One timer, from its opening tag to the end of its figure.

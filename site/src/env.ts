@@ -98,6 +98,14 @@ export interface Env {
   // only while both price ids and both figures are set.
   PRICE_MONTHLY_CAD?: string;
   PRICE_YEARLY_CAD?: string;
+
+  // -- the landing page (src/pages/landing.tsx, docs/landing.md) ---------------
+  // Brandfetch's Logo API client id, for the logos in the landing page's
+  // scrolling band. Public by design (it sits in each <img> address), but
+  // never written into the repository: the deploy passes it from the
+  // repository variable of the same name (`wrangler deploy --var`). Unset,
+  // the band shows the names alone.
+  BRANDFETCH_CLIENT_ID?: string;
 }
 
 export type AppEnv = {

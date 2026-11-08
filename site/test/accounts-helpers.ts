@@ -9,6 +9,7 @@ import accountsSchema from "../accounts_schema.sql?raw";
 import accountsDev from "../seed/accounts_dev.sql?raw";
 import { app } from "../src/index";
 import { testEnv } from "./assets";
+import { homeRequest } from "./home";
 
 export const ACCOUNTS = (env as unknown as { ACCOUNTS: D1Database }).ACCOUNTS;
 export const DB = (env as unknown as { DB: D1Database }).DB;
@@ -48,10 +49,12 @@ export const newEmail = (tag = "reader") => `${tag}.${Date.now().toString(36)}.$
 
 type Opts = { cookie?: string; env?: object; ip?: string; origin?: string | null; headers?: Record<string, string> };
 
+// "/" is the app home here, signed in or not (test/home.ts); test/landing.test.ts
+// requests the landing page through the app itself.
 export async function get(path: string, o: Opts = {}): Promise<Response> {
   const headers: Record<string, string> = { "cf-connecting-ip": o.ip ?? nextIp(), "sec-fetch-mode": "navigate", ...o.headers };
   if (o.cookie) headers.cookie = o.cookie;
-  return app.request(path, { headers }, o.env ?? onEnv());
+  return homeRequest(path, { headers }, o.env ?? onEnv());
 }
 
 // A form post from the site's own page (Origin http://localhost) unless

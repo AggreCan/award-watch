@@ -9,6 +9,7 @@ import { clearOfAnchors } from "../src/chart";
 import { sourceLoaded, type Profile, type TenderRow } from "../src/data";
 import { t } from "../src/i18n";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { closingPassed, tenderState } from "../src/closing";
 import { viewKey } from "../src/layout";
 import { publisherDay } from "../src/pages/data";
@@ -24,10 +25,10 @@ import openFirst from "./fixtures/tenders-open-first.json";
 let address = 0;
 const NAVIGATE = { "sec-fetch-mode": "navigate" };
 const get = (path: string, env = testEnv(), headers: Record<string, string> = {}) =>
-  app.request(path, { headers: { ...NAVIGATE, "cf-connecting-ip": `198.51.100.${(address++ % 250) + 1}`, ...headers } }, env);
+  homeRequest(path, { headers: { ...NAVIGATE, "cf-connecting-ip": `198.51.100.${(address++ % 250) + 1}`, ...headers } }, env);
 const text = async (path: string, env = testEnv()) => (await get(path, env)).text();
 const post = (path: string, fields: Record<string, string>, headers: Record<string, string> = {}) =>
-  app.request(path, {
+  homeRequest(path, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", "cf-connecting-ip": `198.51.100.${(address++ % 250) + 1}`, ...headers },
     body: new URLSearchParams(fields).toString(),

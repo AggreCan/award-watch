@@ -33,6 +33,9 @@ storage holds the downloads.
 Accounts (sign-in by an emailed code, saved searches, API keys) are built but
 not yet open; the switch `ACCOUNTS_ENABLED` keeps them off (`docs/accounts.md`).
 
+The address `/` shows a reader without a signed-in session the landing page
+and a signed-in reader the app home (`docs/landing.md`).
+
 ## Quick start
 ```
 cd pipeline && pip install -e .[dev] && pytest

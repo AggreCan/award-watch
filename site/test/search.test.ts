@@ -6,6 +6,7 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { app } from "../src/index";
+import { homeRequest } from "./home";
 import { bucketFor } from "../src/limits";
 import {
   ANY_ROW_SQL, BUYER_COUNT_SQL, BUYER_SELECT_SQL, MAX_TERMS, ORG_COUNT_SQL, ORG_SELECT_SQL, PAGE_SIZE, buyerSelect, counts,
@@ -20,7 +21,7 @@ const SCHEMA = (env as unknown as { SEARCH_SCHEMA_SQL: string }).SEARCH_SCHEMA_S
 
 let address = 0;
 const get = (path: string, e: object = testEnv(), headers: Record<string, string> = {}) =>
-  app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.19.1.${(address++ % 250) + 1}`, ...headers } }, e);
+  homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.19.1.${(address++ % 250) + 1}`, ...headers } }, e);
 const nbsp = (s: string) => s.replace(/[  ]/g, " ");
 const EM_DASH = String.fromCharCode(0x2014);
 

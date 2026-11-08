@@ -224,7 +224,8 @@ ALLOWED_WRANGLER = {
         r'r2 object get --remote "\$BUCKET/static\.tar\.gz\.parts" --file "\$WORK/static\.tar\.gz\.parts" '),
     "r2 object get of a part": re.compile(r'r2 object get --remote "\$BUCKET/\$part" --file "\$WORK/\$part" '),
     "deployments status": re.compile(r"deployments status --json "),
-    "deploy": re.compile(r"deploy; "),
+    # "$@" holds the landing page's Brandfetch client id as --var, or nothing (ARGUMENT_LINES).
+    "deploy": re.compile(r'deploy "\$@"; '),
     "rollback": re.compile(r'rollback "\$VERSION_ID" --message "[^"$`\\]*" --yes; '),
 }
 ALLOWED_NIGHTLY = {"live-version", "smoke", "site-bundle-check", "join"}
@@ -232,6 +233,15 @@ ALLOWED_NIGHTLY = {"live-version", "smoke", "site-bundle-check", "join"}
 # they are static.tar.gz.NNN, before any of them reaches a key or a path.
 PART_LOOP = r"""for part in $(awk '{print $2}' "$WORK/static.tar.gz.parts" | grep -E '^static\.tar\.gz\.[0-9]{3}$'); do"""
 PART_BINDING = re.compile(r"\bfor\s+part\b|(?<![\w$])part=|\bread\s+(?:-\w+\s+)*part\b")
+# The only lines that set the deploy's arguments ("$@"): none, or the landing
+# page's Brandfetch client id as a Worker variable (docs/landing.md), read from
+# the repository variable through the step's environment.
+ARGUMENT_LINES = [
+    "set --",
+    'if [ -n "$BRANDFETCH_CLIENT_ID" ]; then set -- --var "BRANDFETCH_CLIENT_ID:$BRANDFETCH_CLIENT_ID"; fi',
+]
+ARGUMENT_BINDING = re.compile(r"\bset\s+--|\bshift\b|\bBRANDFETCH_CLIENT_ID\s*[:=]")
+BRANDFETCH_ENV = "BRANDFETCH_CLIENT_ID: ${{ vars.BRANDFETCH_CLIENT_ID }}"
 FORBIDDEN = [
     ("r2 object put", re.compile(r"r2\s+object\s+put")),
     ("r2 object delete", re.compile(r"r2\s+object\s+delete")),
@@ -335,6 +345,8 @@ def workflow_problems(text, nightly_text=None):
                 problems.append(f"nightly command {sub} is not allowed")
         if PART_BINDING.search(line) and line.strip() != PART_LOOP:
             problems.append(f"part may only come from the manifest through the name check: {line.strip()}")
+        if ARGUMENT_BINDING.search(line) and line.strip() not in ARGUMENT_LINES and line.strip() != BRANDFETCH_ENV:
+            problems.append(f"the deploy's arguments may only carry the Brandfetch client id: {line.strip()}")
     if sum(1 for line in lines if line.strip() == WRANGLER_ENV) != 1:
         problems.append("WRANGLER must be defined once, as the site's pinned binary")
     if [line.strip() for line in lines if line.strip().startswith("BUCKET:")] != ["BUCKET: awardwatch-data"]:
@@ -355,6 +367,8 @@ def test_the_workflow_uses_every_allowed_wrangler_form_and_the_four_helpers():
     assert len(calls) == 6  # manifest get, part get, status before, deploy, rollback, status after
     # The parts are named only by the checked loop, which the workflow has once.
     assert [line.strip() for line in code_lines(text) if PART_BINDING.search(line)] == [PART_LOOP]
+    # The deploy's arguments: the client id from the repository variable, or nothing.
+    assert [line.strip() for line in code_lines(text) if ARGUMENT_BINDING.search(line)] == [BRANDFETCH_ENV, *ARGUMENT_LINES]
     subs = set(re.findall(r"awardwatch_pipeline\.nightly\s+(\S+)", text))
     assert subs == ALLOWED_NIGHTLY
     # The parts are joined into the archive the unpack step reads.
@@ -395,9 +409,15 @@ PLANTED = [
     ("an R2 delete through npx", "        run: npm ci", "        run: npx wrangler r2 object delete --remote awardwatch-data/status.json"),
     ("a D1 command", '          ls -l "$WORK/static.tar.gz"',
      '          "$WRANGLER" d1 execute award-watch --remote --command "DELETE FROM corrections"'),
-    ("a second command on a line", '            if "$WRANGLER" deploy; then exit 0; fi',
-     '            if "$WRANGLER" deploy; then "$WRANGLER" r2 bucket delete awardwatch-data; fi'),
-    ("deploy flags", '            if "$WRANGLER" deploy; then exit 0; fi', '            if "$WRANGLER" deploy --assets ../other; then exit 0; fi'),
+    ("a second command on a line", '            if "$WRANGLER" deploy "$@"; then exit 0; fi',
+     '            if "$WRANGLER" deploy "$@"; then "$WRANGLER" r2 bucket delete awardwatch-data; fi'),
+    ("deploy flags", '            if "$WRANGLER" deploy "$@"; then exit 0; fi', '            if "$WRANGLER" deploy --assets ../other; then exit 0; fi'),
+    ("deploy flags through the arguments", 'set -- --var "BRANDFETCH_CLIENT_ID:$BRANDFETCH_CLIENT_ID"; fi',
+     'set -- --var "BRANDFETCH_CLIENT_ID:$BRANDFETCH_CLIENT_ID" --assets ../other; fi'),
+    ("arguments set elsewhere", "          for attempt in 1 2 3; do\n            if \"$WRANGLER\" deploy",
+     "          set -- --dispatch-namespace x\n          for attempt in 1 2 3; do\n            if \"$WRANGLER\" deploy"),
+    ("the client id from a secret", "BRANDFETCH_CLIENT_ID: ${{ vars.BRANDFETCH_CLIENT_ID }}",
+     "BRANDFETCH_CLIENT_ID: ${{ secrets.CLOUDFLARE_API_TOKEN }}"),
     ("the nightly's token", TOKEN_LINE, "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}"),
     ("a state-writing nightly command", "--out \"$WORK/version_before.txt\"",
      "--out \"$WORK/version_before.txt\"; python -m awardwatch_pipeline.nightly status --db x --out y"),
