@@ -165,8 +165,9 @@ describe("with the switch on", () => {
   // The home head's first button: the email alerts while Pro exists, the Atom feeds while it does not.
   const HOME_BUTTON = '<a href="/pro" class="btn">Email alerts with Pro</a>';
   const HOME_FEEDS = '<a href="/feeds" class="btn">Atom feeds</a>';
-  // The Follow control under a profile's head (account/watch_pages.tsx): for a reader not signed in, a link to sign in.
-  const FOLLOW = /<div class="watch-control"><a href="\/account\/sign-in\?next=[^"]*" class="btn">Follow<\/a>[\s\S]*?<\/div>/;
+  // The Follow control under a profile's head (account/watch_pages.tsx): for a reader not signed in, a link to sign in,
+  // the profile's one filled button.
+  const FOLLOW = /<div class="watch-control"><a href="\/account\/sign-in\?next=[^"]*" class="btn btn-primary">Follow<\/a>[\s\S]*?<\/div>/;
 
   it("opens the routes and adds the account item, the Pro marks and a profile's analytics link, and nothing else on a public page", async () => {
     expect((await get("/account/sign-in")).status).toBe(200);

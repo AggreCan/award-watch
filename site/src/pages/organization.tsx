@@ -528,7 +528,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           {t(lang, "org.seen", { first: o.first_seen ?? t(lang, "common.na"), last: o.last_seen ?? t(lang, "common.na") })}
           {o.business_number ? ` ${t(lang, "org.business_number", { bn: o.business_number })}` : ""}
         </p>
-        <WatchControl lang={lang} state={watch} kind="organization" target={o.id} />
+        <WatchControl lang={lang} state={watch} kind="organization" target={o.id} primary />
         <InstrumentsLine lang={lang} part={instruments} />
       </PageHead>
 

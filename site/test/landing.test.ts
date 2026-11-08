@@ -445,7 +445,7 @@ describe("the writing and the files", () => {
     expect(LANDING_CSS).not.toContain(EM_DASH);
   });
 
-  it("ships its stylesheet and the self-hosted display face, swapped in and preloaded by this page alone", async () => {
+  it("ships its stylesheet and the self-hosted display face, swapped in and preloaded", async () => {
     const files = new Map(PUBLIC_FILES.map((f) => [f.path, f]));
     expect(files.get("landing.css")?.bytes).toBeGreaterThan(1000);
     const font = files.get(DISPLAY_FONT.slice(1));
@@ -462,9 +462,11 @@ describe("the writing and the files", () => {
     expect(LANDING_CSS.match(/font-display: swap;/g)).toHaveLength(2);
     const page = await html("/", off());
     expect(page).toContain(`<link rel="preload" href="${DISPLAY_FONT}" as="font" type="font/woff2" crossorigin="anonymous"/>`);
-    // The app pages keep Inter alone.
+    // The app pages set their titles and tile figures in the same face since the identity pass of
+    // 2026-11-08 (public/styles.css declares it as this stylesheet does, test/identity.test.ts), and
+    // preload the same file; they never load this page's stylesheet.
     const other = await html("/tenders", off());
-    expect(other).not.toContain("Bricolage");
+    expect(other).toContain(`<link rel="preload" href="${DISPLAY_FONT}" as="font" type="font/woff2" crossorigin="anonymous"/>`);
     expect(other).not.toContain("landing.css");
   });
 

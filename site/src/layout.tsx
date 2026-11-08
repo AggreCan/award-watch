@@ -455,7 +455,7 @@ const TipScript: FC<{ tables: TableUse }> = ({ tables }) =>
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 37;
+export const STYLES_VERSION = 38;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -518,6 +518,8 @@ export const Layout: FC<
         <script src="/links.js" defer></script>
         <script src="/watchlist.js" defer></script>
         <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+        {/* The display face of every page's title (public/styles.css), fetched with Inter rather than once the title is laid out. */}
+        <link rel="preload" href="/fonts/BricolageGrotesque-Variable.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
         <link rel="icon" href="/favicon.ico" sizes="48x48" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

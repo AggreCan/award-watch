@@ -196,7 +196,7 @@ describe("the events statements", () => {
 describe("the Follow control and the watch routes", () => {
   it("send a reader not signed in to sign in and back, and give a signed-in reader the form", async () => {
     const out = await (await get(`/organizations/${ORG}`)).text();
-    expect(out).toContain(`<div class="watch-control"><a href="/account/sign-in?next=%2Forganizations%2F${ORG}" class="btn">Follow</a>`);
+    expect(out).toContain(`<div class="watch-control"><a href="/account/sign-in?next=%2Forganizations%2F${ORG}" class="btn btn-primary">Follow</a>`);
     const cookie = await signIn(newEmail("w-form"));
     const page = await (await get(`/organizations/${ORG}`, { cookie })).text();
     expect(page).toContain('<form method="post" action="/account/watches" class="watch-control">');

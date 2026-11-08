@@ -1,19 +1,35 @@
 /* Award Watch: the Console system. White panels on a near-white page, a
    sticky rail of live counts on the left, every region under a labelled head
-   band. Square corners, 1 px neutral borders, flat buttons, no shadows and no
-   gradients. Emerald is a structural signal (the 2 px rule under the top bar,
-   the inset edge of the active rail item and of the hovered or selected
-   table row) and keeps its meanings (the Open chip's outline, the Awarded
-   check, the mark's check); links are ink. Amber marks time pressure and
-   nothing else.
+   band. Panels, head bands, tables, tiles and the rail have square corners;
+   a control has 6 px (a button, a text or search field, a select) and the
+   Pro chip 4 px. 1 px neutral borders, no shadows and no gradients.
+
+   The top bar is navy in both themes, the landing page's navy (operator,
+   2026-11-08): the wordmark in white with its check in the bright emerald,
+   a 2 px rule of that emerald under the bar, and every control on it (the
+   search field, the data date, the timers, the Pro chip, the language and
+   theme buttons, the plan after the wordmark) in the bar's own tones, which
+   the .topbar rule gives the tokens they read.
+
+   One filled button a page: .btn-primary, emerald with white type in the
+   light theme and navy type in the dark (the filters' Apply, a profile's
+   Follow). Every other button is flat, an outline on the panel ground.
+   Elsewhere emerald is a structural signal (the inset edge of the active
+   rail item and of the hovered or selected table row) and keeps its
+   meanings (the Open chip's outline, the Awarded check, the mark's check);
+   links are ink. Amber marks time pressure and nothing else.
 
    One spacing system: a 24 px gutter and 8 px steps. Type scale: 12/16
    (labels, chips, captions, headers), 13/20 (tables, rail, controls), 14/24
-   (prose), 16/24 (the detail title), 24/32 (page titles), 32/40 (tile
-   figures). Inter throughout. Columns of figures, tile figures and counts
+   (prose), 16/24 (the detail title), 28/34 (page titles), 32/40 (tile
+   figures). Page titles and tile figures are set in the landing page's
+   display face, Bricolage Grotesque at 800; everything else, tables and the
+   rail included, in Inter. Columns of figures, tile figures and counts
    take tabular numerals; nothing else does, since Inter's tabular forms also
    set the hyphen, the comma, the colon and the space at figure width
-   ("Canada-wide" would read "Canada - wide", a date "2026 - 11 - 01"). */
+   ("Canada-wide" would read "Canada - wide", a date "2026 - 11 - 01").
+   Bricolage's default figures are proportional; its tabular set changes
+   the digits alone, so a tile figure's "$" and "." keep their widths. */
 
 /* Inter, self-hosted: the variable files of the 4.1 release, weights 100 to
    900, SIL Open Font License (fonts/OFL.txt). The system stack shows while
@@ -32,6 +48,18 @@
   font-weight: 100 900;
   font-display: swap;
   src: url("/fonts/InterVariable-Italic.woff2") format("woff2");
+}
+/* Bricolage Grotesque, the display face (SIL Open Font License,
+   fonts/BricolageGrotesque-OFL.txt), for page titles and tile figures. The
+   declaration is public/landing.css's, character for character, so the
+   landing page and the app pages load one file, cached once
+   (test/identity.test.ts holds the two equal). */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("/fonts/BricolageGrotesque-Variable.woff2") format("woff2");
 }
 
 /* -- tokens ------------------------------------------------------------------
@@ -71,6 +99,27 @@
   --field-h: 32px;
   /* The mark's check: the filed emerald, lifted with the accent in the dark. */
   --check: #0f7b4f;
+  /* The filled button (.btn-primary, one a page): the emerald under white
+     type, 5.3:1, and a step darker under the pointer, 6.6:1. Its edge is
+     4.6:1 on the page and 4.0 on the head band. */
+  --primary: #0f7b4f;
+  --primary-hover: #0c6a44;
+  --on-primary: #ffffff;
+  /* The top bar: the landing page's navy in both themes, a step lighter
+     under a control the pointer is on, and the tones the bar gives the
+     tokens its contents read (the .topbar rule). On the bar, and on the
+     hover step: white 17.4 and 15.4, the light ink 14.9 and 13.2, the muted
+     tone 7.8 and 6.9 (6.5 on the search field's fill), the bright emerald
+     8.1 and 7.2. A control's edge, white at 40%, is 3.8:1 on the bar and
+     3.3 on the hover step, past the 3:1 a boundary needs. */
+  --bar: #0c1b2a;
+  --bar-hover: #122638;
+  --on-bar: #ffffff;
+  --on-bar-2: #e8eef2;
+  --on-bar-muted: #9fb0bd;
+  --bar-accent: #2fc985;
+  --bar-field: #ffffff12;
+  --bar-edge: #ffffff66;
   /* Charts: one hue, a lighter step for a partial year. */
   --chart-bar: #334155;
   --chart-bar-light: #cbd5e1;
@@ -92,6 +141,9 @@
   /* A document's measure: every block in it runs this wide. */
   --measure: 880px;
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* The display face, for page titles and tile figures alone; Inter at the
+     same weight stands in while it loads. */
+  --display: "Bricolage Grotesque", "Inter", ui-sans-serif, system-ui, sans-serif;
   color-scheme: light;
 }
 /* Dark: a saved choice wins, otherwise the system setting. Ink 15.3 to 13.2,
@@ -116,6 +168,17 @@
   --on-amber: #0b1120;
   --field-border: #5b6b80;
   --check: #34d399;
+  /* The emerald lifted, navy type on it 8.9:1 and 10.4 on the lighter
+     step under the pointer. */
+  --primary: #2fc985;
+  --primary-hover: #5ad6a0;
+  --on-primary: #07111d;
+  /* The bar a step darker, the landing page's dark navy: white 19.0 (17.4
+     on the hover step), the light ink 16.2 (14.8), the muted tone 8.5 (7.8;
+     7.2 on the search field's fill), the bright emerald 8.9 (8.1); a
+     control's edge 3.8 (3.5). */
+  --bar: #07111d;
+  --bar-hover: #0e1b2b;
   --chart-bar: #94a3b8;
   --chart-bar-light: #334155;
   /* The map's steps run the other way on the dark ground: the most notices the lightest. */
@@ -146,6 +209,11 @@
     --on-amber: #0b1120;
     --field-border: #5b6b80;
     --check: #34d399;
+    --primary: #2fc985;
+    --primary-hover: #5ad6a0;
+    --on-primary: #07111d;
+    --bar: #07111d;
+    --bar-hover: #0e1b2b;
     --chart-bar: #94a3b8;
     --chart-bar-light: #334155;
     --map-0: #1e2738;
@@ -210,11 +278,24 @@ td.num, span.num { font-variant-numeric: tabular-nums; }
 .skip:focus { left: 8px; }
 kbd { display: inline-block; min-width: 20px; padding: 0 4px; border: 1px solid var(--border-2); background: var(--panel); color: var(--ink-2); font: inherit; font-size: 11px; line-height: 16px; font-weight: 500; text-align: center; }
 
-/* -- top bar: the lockup, data date, language and theme ------------------------ */
+/* -- top bar: the lockup, data date, language and theme ------------------------
+   Navy in both themes, a 2 px rule of the bright emerald under it. The bar
+   gives the tokens its contents read its own tones, so everything on it
+   keeps its usual rule: the panel ground is the bar, ink is white (the
+   wordmark, the timers' figures, the search field's text, a focus ring),
+   the secondary ink is the light ink (the two buttons), muted is the bar's
+   muted tone (the data date, the timers' labels, the placeholder, a free
+   plan), the accent and the check are the bright emerald (the rule, the
+   wordmark's check, the Pro chip, a Pro plan, the reload link), a
+   control's edge is white at 40%, and the hover ground is the bar's lighter
+   step. Nothing below the bar sees these values. */
 .topbar {
+  --panel: var(--bar); --hover: var(--bar-hover);
+  --ink: var(--on-bar); --ink-2: var(--on-bar-2); --muted: var(--on-bar-muted);
+  --accent: var(--bar-accent); --check: var(--bar-accent); --field-border: var(--bar-edge);
   display: flex; align-items: center; gap: 8px 16px;
   height: var(--topbar); padding: 0 var(--gutter);
-  background: var(--panel); border-bottom: 2px solid var(--accent);
+  background: var(--bar); color: var(--ink); border-bottom: 2px solid var(--accent);
 }
 /* The lockup is the link's only content: the mark and the name drawn as
    paths, 24 px tall, the ink in currentColor and the check in --check. */
@@ -228,12 +309,14 @@ kbd { display: inline-block; min-width: 20px; padding: 0 4px; border: 1px solid 
 .mark-check { fill: var(--check); }
 .topbar-meta { display: flex; align-items: center; gap: 8px 16px; margin-left: auto; font-size: 12px; line-height: 16px; color: var(--muted); }
 .asof { white-space: nowrap; }
+/* The language and theme buttons: outlined on the bar, the corners of every
+   control, the bar's lighter step and a whiter edge under the pointer. */
 .lang-toggle, .theme-toggle {
   display: inline-flex; align-items: center; height: 32px; padding: 0 12px;
-  border: 1px solid var(--field-border); border-radius: 0; background: var(--panel); color: var(--ink-2);
+  border: 1px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink-2);
   font: inherit; font-size: 12px; line-height: 16px; font-weight: 500; text-decoration: none; cursor: pointer;
 }
-.lang-toggle:hover, .theme-toggle:hover { border-color: var(--ink-2); color: var(--ink); }
+.lang-toggle:hover, .theme-toggle:hover { border-color: var(--ink-2); background: var(--hover); color: var(--ink); }
 /* The switch needs the script; without it the page follows the system setting and shows no button. */
 .theme-toggle { display: none; }
 html.js .theme-toggle { display: inline-flex; }
@@ -246,12 +329,14 @@ html.js .theme-toggle { display: inline-flex; }
 }
 
 /* -- the top bar's search field (layout.tsx TopbarSearch) ------------------
-   A hairline field between the lockup and the right-hand controls, as wide as
-   the bar allows up to 480 px. From 1000 px it starts where the content
-   column's text starts (the lockup's link spans the rail less the gutter).
-   Below 700 px it takes a row of its own under the lockup. */
+   A field between the lockup and the right-hand controls, as wide as the
+   bar allows up to 480 px, white text on a translucent white fill (white
+   at 7% over the navy) inside the bar's control edge. From 1000 px it
+   starts where the content column's text starts (the lockup's link spans
+   the rail less the gutter). Below 700 px it takes a row of its own under
+   the lockup. */
 .topbar-search { flex: 1 1 240px; min-width: 160px; max-width: 480px; margin: 0; }
-.topbar-search input[type="search"] { display: block; width: 100%; }
+.topbar-search input[type="search"] { display: block; width: 100%; background: var(--bar-field); }
 .topbar-search input[type="search"]::placeholder { color: var(--muted); opacity: 1; }
 @media (min-width: 1000px) {
   .topbar-search { margin-left: 8px; }
@@ -340,8 +425,11 @@ a.rail-item:hover { background: var(--hover); color: var(--ink); }
 .breadcrumb a { color: var(--ink-2); }
 .page-head-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px var(--gutter); }
 .page-head-text { flex: 1 1 420px; min-width: 0; max-width: 88ch; }
-h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02em; overflow-wrap: anywhere; }
-.eyebrow { margin: 0 0 4px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+/* The page title in the display face, the landing page's headings' cut;
+   the eyebrow over it in Inter's spaced capitals, spaced a little wider
+   beside the heavier title. */
+h1 { font-family: var(--display); font-size: 28px; line-height: 34px; font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.eyebrow { margin: 0 0 4px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .lead { margin: 8px 0 0; font-size: 14px; line-height: 24px; color: var(--ink-2); }
 .lead .badge, .lead .flag { vertical-align: 1px; }
 /* A note line stays near the measure a reader's eye can hold. */
@@ -349,24 +437,28 @@ h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02
 .page-actions { display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; }
 .page-foot-note { margin: 0 0 var(--gutter); font-size: 12px; line-height: 16px; color: var(--muted); }
 
-/* -- buttons and controls ------------------------------------------------- */
+/* -- buttons and controls -------------------------------------------------
+   A control has 6 px corners (a button, a field, a select); the regions
+   around it stay square. Every button is flat, an outline on the panel
+   ground, but the one filled button a page, .btn-primary: the emerald with
+   white type in the light theme and navy type in the dark, at 600. */
 .btn {
   display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
   min-height: var(--field-h); padding: 5px 12px;
-  border: 1px solid var(--field-border); border-radius: 0; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink);
   font: inherit; font-size: 13px; line-height: 20px; font-weight: 500; text-align: left; text-decoration: none; cursor: pointer;
 }
 .btn:hover { border-color: var(--ink-2); background: var(--hover); text-decoration: none; }
 .btn:disabled { border-color: var(--border); color: var(--muted); background: var(--panel); cursor: default; }
-.btn-primary { background: var(--ink); border-color: var(--ink); color: var(--panel); }
-.btn-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+.btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
 .btn-active, .btn[aria-pressed="true"] { border-color: var(--ink); font-weight: 600; }
 .btn-active::before, .btn[aria-pressed="true"]::before { content: ""; flex: none; width: 8px; height: 8px; background: var(--ink); }
 .btn-link { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 2px; cursor: pointer; }
 .btn-link:hover { text-decoration-color: currentColor; }
 input[type="search"], input[type="text"], input[type="number"], input[type="email"], select, textarea {
   max-width: 100%; min-height: var(--field-h); padding: 5px 8px;
-  border: 1px solid var(--field-border); border-radius: 0; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink);
   font: inherit; font-size: 13px; line-height: 20px;
 }
 /* A select draws its own chevron, so its text sits as far from the right
@@ -426,7 +518,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
 .tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 16px; background: var(--panel); border: 1px solid var(--border); color: var(--ink); text-decoration: none; }
 a.tile:hover { border-color: var(--border-2); background: var(--hover); }
 .tile-label { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted); }
-.tile-value { font-size: 32px; line-height: 40px; font-weight: 600; letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+/* The figure in the display face at 800, its tabular digits (the face's
+   own are proportional) so a figure keeps its width as it changes. */
+.tile-value { font-family: var(--display); font-size: 32px; line-height: 40px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .tile-note { font-size: 12px; line-height: 16px; color: var(--ink-2); }
 /* A tile that opens a list carries a chevron at the right of its label,
    drawn from two borders, so it reads as a link without the pointer. */
@@ -776,6 +870,9 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
    it push the button down. */
 .interest-form input[type="email"], .interest-form .btn { height: var(--field-h); min-height: 0; border: 1px solid var(--field-border); }
 .interest-form .btn { flex: none; align-self: flex-start; margin-top: 20px; justify-content: center; white-space: nowrap; }
+/* The Email lists page's Save is that page's filled button: its 1 px edge
+   shows the fill under it rather than the field's border. */
+.interest-form .btn-primary { border-color: transparent; }
 .interest-body > .interest-done { margin: 0 0 8px; color: var(--ink); font-weight: 500; }
 .interest-body > .interest-error { margin: 0 0 8px; padding-left: 8px; border-left: 2px solid var(--ink-2); color: var(--ink); font-size: 12px; line-height: 16px; }
 .interest-body > .interest-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; }
@@ -946,7 +1043,8 @@ tr[data-phone-cut] { display: none !important; }
   .toolbar-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .field-text, .toolbar-actions { grid-column: 1 / -1; }
   .toolbar-actions { margin-left: 0; }
-  h1 { font-size: 20px; line-height: 28px; }
+  /* The display title a step down on a phone: 24/30 under the desktop's 28/34. */
+  h1 { font-size: 24px; line-height: 30px; }
   .tiles { gap: 16px; }
   .tile { padding: 12px; }
   .tile-value { font-size: 24px; line-height: 32px; }
@@ -1006,16 +1104,19 @@ tr[data-phone-cut] { display: none !important; }
    a 1 px accent border on the panel ground, and the type of the plan
    subscript after the wordmark (11/16, 600, 0.04em). The accent on the
    panel is 5.3:1 light and 9.3:1 dark, and at least 4.7:1 on every ground
-   the chip sits on (page, head band, selected row). The chip has no hover or
-   focus of its own: the link it sits in carries the focus ring. The tokens
-   swap with the theme, so there is no dark rule.
+   the chip sits on (page, head band, selected row). On the top bar the same
+   rule draws it in the bright emerald on the navy (8.1:1 light, 8.9:1
+   dark), from the tokens the bar sets. Corners of 4 px, a step under a
+   control's 6. The chip has no hover or focus of its own: the link it sits
+   in carries the focus ring. The tokens swap with the theme, so there is no
+   dark rule.
    Spacing, one rule for every page: 6 px between the chip and whatever is
    beside it (a label, a count, a sentence), from the chip's own margins. The
    markup puts no word space beside a chip, so the gap does not change with
    the type size around it, and no page sets a margin of its own. */
 .pro-tag {
   display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; margin: 0 6px; padding: 0 6px;
-  border: 1px solid var(--accent); border-radius: 0; background: var(--panel); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 4px; background: var(--panel); color: var(--accent);
   font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; font-variant-numeric: normal;
   text-transform: none; text-decoration: none; white-space: nowrap; vertical-align: middle;
 }
@@ -1158,6 +1259,9 @@ ul.documents li:last-child { margin-bottom: 0; }
 a.refresh { color: inherit; text-decoration: none; }
 a.refresh:hover .refresh-label { color: var(--ink); }
 a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offset: 2px; }
+/* The reload link in the accent, which the bar makes its bright emerald
+   (8.1:1 light, 8.9:1 dark), set apart from the white figures before it. */
+.refresh-reload { color: var(--accent); }
 .refresh-reload .refresh-short { display: inline; }
 .refresh-reload .refresh-full { display: none; }
 @media (min-width: 1600px) {

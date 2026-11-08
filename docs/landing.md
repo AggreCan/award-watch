@@ -144,9 +144,10 @@ file in the google/fonts repository (`ofl/bricolagegrotesque`), its width
 axis pinned at 100 and its weights cut to 400 to 800 with fontTools, optical
 size kept, subset to the same ranges as Inter. It is under the SIL Open Font
 License 1.1; the licence travels as `site/public/fonts/BricolageGrotesque-OFL.txt`.
-It is declared with `font-display: swap` and preloaded by the landing page
-alone. The static assets layer serves `public/` as it is; no file there has
-a caching rule of its own.
+It is declared with `font-display: swap`, in `landing.css` and identically in
+`styles.css`, where the app pages set their titles and tile figures in it;
+every page preloads it. The static assets layer serves `public/` as it is;
+no file there has a caching rule of its own.
 
 ## Tests
 

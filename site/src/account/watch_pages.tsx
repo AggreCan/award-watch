@@ -59,12 +59,17 @@ export async function watchControl(c: Context<AppEnv>, kind: WatchKind, target: 
 // "Following" and leads to the watches page; a Free account at its cap sees
 // the cap with the Pro chip. A buyer's button comes with a choice: the whole
 // buyer, or one UNSPSC segment of it.
-export const WatchControl: FC<{ lang: Lang; state: ControlState | null; kind: WatchKind; target: string }> = ({ lang, state, kind, target }) => {
+// primary: Follow is the page's one filled button (public/styles.css
+// .btn-primary), on a page with no other: an organization's profile. The
+// buyer, notice and contract pages keep theirs on their own first action, so
+// their Follow stays flat. "Following" is a state, never filled.
+export const WatchControl: FC<{ lang: Lang; state: ControlState | null; kind: WatchKind; target: string; primary?: boolean }> = ({ lang, state, kind, target, primary }) => {
   if (!state) return null;
+  const follow = primary ? "btn btn-primary" : "btn";
   if (state.at === "out") {
     return (
       <div class="watch-control">
-        <a href={`/account/sign-in?next=${encodeURIComponent(state.next)}`} class="btn">{t(lang, "watches.button")}</a>
+        <a href={`/account/sign-in?next=${encodeURIComponent(state.next)}`} class={follow}>{t(lang, "watches.button")}</a>
         <span class="muted small">{t(lang, "watches.control_out")}</span>
       </div>
     );
@@ -106,7 +111,7 @@ export const WatchControl: FC<{ lang: Lang; state: ControlState | null; kind: Wa
           {SEGMENT_CODES.map((code) => <option value={code}>{`${code} ${segmentShort(lang, code)}`}</option>)}
         </select>
       ) : null}
-      <button type="submit" class="btn">{t(lang, "watches.button")}</button>
+      <button type="submit" class={follow}>{t(lang, "watches.button")}</button>
       <span class="muted small">{note}{kind === "buyer" ? ` ${t(lang, "watches.segment_note")}` : ""}</span>
     </form>
   );
