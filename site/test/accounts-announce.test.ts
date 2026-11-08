@@ -21,6 +21,8 @@ useAccountsDb();
 const SITE = "https://awardwatch.ca";
 const LOCAL = "http://localhost";
 const EM_DASH = String.fromCharCode(0x2014);
+// The mail shell's button (src/account/mail_html.ts): its link and its label.
+const BUTTON = /<td class="btn"[^>]*><a href="([^"]*)"[^>]*>([^<]*)<\/a><\/td>/;
 
 // -- the people and their lists ------------------------------------------------------------------
 
@@ -202,8 +204,10 @@ describe("a run from the console", () => {
       "You receive this because the address was entered on the site's email lists form.\nAward Watch · ",
     ].join("\n\n"))).toBe(true);
     expect(m.text).toMatch(/\ncontact@awardwatch\.ca\n$/);
-    expect(m.html).toContain(`<a href="${LOCAL}/interest/stop?t=${enFirst}">Take this address off the lists</a>`);
-    expect(m.html).toContain("<li>Every new tender notice</li>");
+    // In the mail shell: the sign-in page as the button, the stop link in the muted line under it.
+    expect(BUTTON.exec(m.html)?.slice(1)).toEqual([`${LOCAL}/account/sign-in`, "Sign in"]);
+    expect(m.html).toContain(`<a href="${LOCAL}/interest/stop?t=${enFirst}" style="color:#5b6b80;">Take this address off the lists</a>`);
+    expect(m.html).toMatch(/<li\b[^>]*>Every new tender notice<\/li>/);
     for (const part of [m.subject, m.text, m.html]) expect(part).not.toContain(EM_DASH);
 
     const f = (await lastMail(fr))!;
@@ -295,7 +299,7 @@ describe("the message", () => {
     const m = accountsOpenMessage("en", "reader@example.com", labels, announceLinks(LOCAL, "en", "a".repeat(32)));
     expect(m.text.match(/^- /gm)).toHaveLength(10);
     expect(m.text).toContain("\nAnd 2 more.");
-    expect(m.html).toContain("<li>List &lt;0&gt; &amp; more</li>");
+    expect(m.html).toMatch(/<li\b[^>]*>List &lt;0&gt; &amp; more<\/li>/);
     expect(m.html).not.toContain("<0>");
     expect(m.headers).toEqual({});
     const fr = accountsOpenMessage("fr", "lecteur@example.com", labels.slice(0, 11), announceLinks(SITE, "fr", "b".repeat(32)));
@@ -390,8 +394,9 @@ describe("the Ultra message", () => {
       "You receive this because the address was entered on the Ultra card of the site's home page.\n" +
       "Award Watch · Federal tenders, awards, contracts and grants, by organization.\ncontact@awardwatch.ca\n",
     ].join("\n\n"));
-    expect(m.html).toContain(`<a href="${LOCAL}/pro">Plans and prices</a>`);
-    expect(m.html).toContain(`<a href="${LOCAL}/interest/stop?t=${enToken}">Take this address off the lists</a>`);
+    // In the mail shell: the plans page as the button, the stop link in the muted line under it.
+    expect(BUTTON.exec(m.html)?.slice(1)).toEqual([`${LOCAL}/pro`, "Plans and prices"]);
+    expect(m.html).toContain(`<a href="${LOCAL}/interest/stop?t=${enToken}" style="color:#5b6b80;">Take this address off the lists</a>`);
     for (const part of [m.subject, m.text, m.html]) expect(part).not.toContain(EM_DASH);
 
     const f = (await lastMail(fr))!;

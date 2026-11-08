@@ -9,12 +9,19 @@
 // the HTML part's visible text; the HTML part's visible text, split the same
 // way and at every element, must each be found in the text part. A few lines
 // are worded for one part by design (the sign-in message's lead beside its
-// button, the text part's "Saved searches and delivery" line); a shape names
-// them by their dictionary keys, so the exception holds in both languages and
-// nothing else slips through it. The web links must be the same set in both
-// parts, the header's link to the home page aside (the text part has no
-// header), and an address the HTML part links with mailto: is written out in
-// the text part.
+// button, the text part's "Saved searches and delivery" line, the shell's
+// tagline in the address-change notice, whose text part ends on its contact
+// line); a shape names them by their dictionary keys, so the exception holds
+// in both languages and nothing else slips through it. The web links must be
+// the same set in both parts, the header's link to the home page aside (the
+// text part has no header), and an address the HTML part links with mailto:
+// is written out in the text part.
+//
+// Every message is laid out in the one shell (src/account/mail_html.ts): its
+// HTML part must carry the shell's header (the wordmark linking the site) and
+// its footer (the tagline and the contact address), a preheader, at most one
+// button, and no image but the two wordmarks, which are the same two files
+// for every reader.
 import { expect } from "vitest";
 import { sendWithHeaders } from "../src/account/deliveries";
 import { deliveryHeaders, siteLink } from "../src/account/digests";
@@ -74,6 +81,21 @@ function visible(html: string, fine: boolean): string {
 
 const LINK_RE = /(?:https?:\/\/|mailto:)\S+/g;
 
+// -- the shell ---------------------------------------------------------------------------------------
+
+// The header's wordmark: a link to the site around the light wordmark.
+export const shellHeader = (site: string) =>
+  `<a href="${site}" style="text-decoration:none;"><img class="logo-light" src="${site}/brand/wordmark.png"`;
+
+// The footer's last line, the tagline then the contact address, as the HTML
+// part reads once its entities are decoded.
+export const shellFooter = (lang: Lang) =>
+  `${t(lang, "site.name")} · ${t(lang, "site.tagline")} · <a href="mailto:${CONTACT_EMAIL}" style="color:#5b6b80;">${CONTACT_EMAIL}</a></p>`;
+
+const PREHEADER_RE = /<div style="display:none;[^"]*">([^<]*)<\/div>/;
+const imagesIn = (html: string) => [...html.matchAll(/<img\b[^>]*?\ssrc="([^"]*)"/g)].map((m) => decode(m[1]));
+const buttonsIn = (html: string) => (html.match(/<td class="btn"/g) ?? []).length;
+
 // A part's lines cut into the pieces compared: at line ends, " · " and ", ",
 // links out, list dashes and a closing colon off, spaces collapsed; pieces
 // with no letter or digit dropped.
@@ -116,6 +138,15 @@ export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: re
   expect([...m.subject].length, `${what}: subject length`).toBeLessThan(SUBJECT_MAX);
   expect(m.lang, what).toBe(lang);
   expect(m.html, what).toMatch(new RegExp(`<html lang="${lang}"`, "i"));
+
+  // The shell: its header and its footer, a preheader, one button at most, no
+  // image but the two wordmarks (Gmail's Promotions tab weighs images and
+  // buttons, and an image that differs per reader would tell who opened it).
+  expect(m.html.includes(shellHeader(shape.site)), `${what}: the shell's header`).toBe(true);
+  expect(decode(m.html).includes(shellFooter(lang)), `${what}: the shell's footer`).toBe(true);
+  expect(PREHEADER_RE.exec(m.html)?.[1].trim(), `${what}: the preheader`).toBeTruthy();
+  expect(buttonsIn(m.html), `${what}: one button at most`).toBeLessThanOrEqual(1);
+  expect(imagesIn(m.html), `${what}: no image but the wordmarks`).toEqual([`${shape.site}/brand/wordmark.png`, `${shape.site}/brand/wordmark-dark.png`]);
 
   // No em-dash anywhere.
   for (const [part, s] of [["subject", m.subject], ["text", m.text], ["html", m.html]] as const) {
@@ -202,7 +233,9 @@ export const SHAPES = {
   briefing: { list: true, why: "briefing.why", manage: "/account/searches" },
   accounts_open: { list: true, why: "announce.why", manage: null },
   ultra_open: { list: true, why: "announce.ultra_why", manage: null },
-  address_notice: { list: false, why: null, onePart: [["account.sign_in"], ["admin.mail_sign_in", { link: "" }]] },
+  // The shell's footer prints the tagline; the notice's text part, which
+  // ends on the contact line, does not.
+  address_notice: { list: false, why: null, onePart: [["account.sign_in"], ["admin.mail_sign_in", { link: "" }], ["site.tagline"]] },
 } as const satisfies Record<string, Omit<Shape, "name" | "site">>;
 
 export const shapeOf = (kind: keyof typeof SHAPES, name: string, site: string): Shape => ({ ...SHAPES[kind], name, site });

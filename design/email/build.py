@@ -31,6 +31,8 @@ C = {
     "ink": "#0f172a", "ink2": "#334155", "muted": "#5b6b80", "accent": "#0f7b4f", "amber": "#b45309",
 }
 FONT = "'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+# The sign-in code's face: large and monospace, so no digit is taken for another.
+MONO = "ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace"
 SITE = "https://awardwatch.ca"
 NBSP = " "
 
@@ -139,9 +141,9 @@ def button(href: str, label: str) -> str:
 def code_box(code: str, aria: str) -> str:
     return T("""<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px 0;"><tr>
   <td class="band" align="center" style="background:{{head}};border:1px solid {{border2}};padding:18px;">
-    <span class="ink" role="text" aria-label="{{aria}}" style="font:700 30px/1 {{font}};letter-spacing:0.22em;color:{{ink}};font-variant-numeric:tabular-nums;">{{code}}</span>
+    <span class="ink" role="text" aria-label="{{aria}}" style="font:700 32px/1 {{mono}};letter-spacing:0.2em;color:{{ink}};font-variant-numeric:tabular-nums;">{{code}}</span>
   </td>
-</tr></table>""", head=C["head"], border2=C["border2"], aria=aria, font=FONT, ink=C["ink"], code=code)
+</tr></table>""", head=C["head"], border2=C["border2"], aria=aria, mono=MONO, ink=C["ink"], code=code)
 
 
 def chip(text: str) -> str:

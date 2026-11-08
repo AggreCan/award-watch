@@ -16,11 +16,11 @@
 // back, and the address waits for the next run. A daily or rate limit of the
 // mail service ends the run there.
 //
-// The message is plain (paragraphs and links, no design shell), in the
+// The message is in the site's one mail shell (mail_html.ts), in the
 // language of the address's first sign-up: accounts are open, the lists it
 // signed up for, that signing in with the address offers them as saved
-// searches, the sign-in page, and the link that takes the address off the
-// lists. That link is /interest/stop?t=<token of the address's first row>,
+// searches, the sign-in page as the button, and the link that takes the
+// address off the lists. That link is /interest/stop?t=<token of the address's first row>,
 // also in List-Unsubscribe with its one-click partner (RFC 8058). It works
 // whatever the accounts switch says, since leaving the lists must never
 // depend on it: the GET shows the lists and a button and changes nothing, so
@@ -49,6 +49,7 @@ import { CONTACT_EMAIL } from "../pages/docs";
 import { ULTRA_KIND } from "../pages/interest";
 import { STOP_CODES, sendWithHeaders } from "./deliveries";
 import { deliveryHeaders } from "./digests";
+import { button, escapeHtml, list, mutedLink, para, shell } from "./mail_html";
 import { randomHex, sha256Hex } from "./secrets";
 import type { MailMessage } from "./sender";
 
@@ -125,8 +126,10 @@ async function listsOf(env: Env, emails: string[]): Promise<Map<string, string[]
 
 // -- the message -------------------------------------------------------------------------------
 
-const escapeHtml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+// The site the links point at, where the shell's wordmarks load from and its
+// header links: the origin of the message's first link, which announceLinks
+// and ultraLinks build on the run's base.
+const siteOf = (url: string): string => new URL(url).origin;
 
 export type AnnounceLinks = { signIn: string; stop: string };
 
@@ -139,7 +142,10 @@ export function announceLinks(base: string, lang: Lang, token: string): Announce
 
 // The labels are the site's own (interestFilter wrote them), in the language
 // of the form each list was saved from. List-Unsubscribe goes with an https
-// stop link only, as Email Sending takes no other.
+// stop link only, as Email Sending takes no other. The HTML part: the lead,
+// the lists, the saved-search line, the sign-in page as the button, the
+// only-message line with the link off the lists, and the shell's footer with
+// why it came; the preheader is the saved-search line.
 export function accountsOpenMessage(lang: Lang, to: string, labels: readonly string[], links: AnnounceLinks): MailMessage & { headers: Record<string, string> } {
   const shown = labels.slice(0, LISTS_SHOWN);
   const rest = labels.length - shown.length;
@@ -156,21 +162,20 @@ export function accountsOpenMessage(lang: Lang, to: string, labels: readonly str
     `${t(lang, "announce.only")}\n${link(stop, links.stop)}`,
     `${t(lang, "announce.why")}\n${tagline}\n${CONTACT_EMAIL}\n`,
   ].join("\n\n");
-  const p = (html: string) => `<p>${html}</p>`;
-  const a = (url: string, label: string) => `<a href="${escapeHtml(url)}">${escapeHtml(label)}</a>`;
-  const html =
-    `<!doctype html><html lang="${lang}"><body style="font-family: sans-serif; line-height: 1.5;">` +
-    p(escapeHtml(t(lang, "announce.lead"))) +
-    p(escapeHtml(t(lang, "announce.lists"))) +
-    `<ul>${shown.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>` +
-    (more ? p(escapeHtml(more)) : "") +
-    p(escapeHtml(t(lang, "announce.saved"))) +
-    p(a(links.signIn, signIn)) +
-    p(`${escapeHtml(t(lang, "announce.only"))} ${a(links.stop, stop)}`) +
-    `<p style="color: #5b6b80; font-size: 13px;">${escapeHtml(t(lang, "announce.why"))}<br>${escapeHtml(tagline)} · ${a(`mailto:${CONTACT_EMAIL}`, CONTACT_EMAIL)}</p>` +
-    "</body></html>";
+  const subject = t(lang, "announce.subject");
+  const body =
+    para(escapeHtml(t(lang, "announce.lead"))) +
+    para(escapeHtml(t(lang, "announce.lists"))) +
+    list(shown) +
+    (more ? para(escapeHtml(more)) : "") +
+    para(escapeHtml(t(lang, "announce.saved"))) +
+    button(links.signIn, signIn) +
+    para(`${escapeHtml(t(lang, "announce.only"))} ${mutedLink(links.stop, stop)}`, true);
+  const html = shell({
+    lang, site: siteOf(links.signIn), subject, preheader: t(lang, "announce.saved"), body, why: escapeHtml(t(lang, "announce.why")),
+  });
   const headers = links.stop.startsWith("https://") ? deliveryHeaders(links.stop) : {};
-  return { to, subject: t(lang, "announce.subject"), text, html, lang, headers };
+  return { to, subject, text, html, lang, headers };
 }
 
 export type UltraLinks = { plans: string; stop: string };
@@ -182,8 +187,9 @@ export function ultraLinks(base: string, lang: Lang, token: string): UltraLinks 
 }
 
 // The Ultra message: Ultra is open, the address asked to be told, the plans
-// page, the only-message line with the link off the lists, and why it came.
-// Every line is the site's own; nothing in it was typed by a visitor.
+// page as the button, the only-message line with the link off the lists, and
+// the shell's footer with why it came; the preheader is the asked-to-be-told
+// line. Every line is the site's own; nothing in it was typed by a visitor.
 export function ultraOpenMessage(lang: Lang, to: string, links: UltraLinks): MailMessage & { headers: Record<string, string> } {
   const plans = t(lang, "announce.ultra_plans");
   const stop = t(lang, "announce.stop_link");
@@ -196,18 +202,17 @@ export function ultraOpenMessage(lang: Lang, to: string, links: UltraLinks): Mai
     `${t(lang, "announce.ultra_only")}\n${link(stop, links.stop)}`,
     `${t(lang, "announce.ultra_why")}\n${tagline}\n${CONTACT_EMAIL}\n`,
   ].join("\n\n");
-  const p = (html: string) => `<p>${html}</p>`;
-  const a = (url: string, label: string) => `<a href="${escapeHtml(url)}">${escapeHtml(label)}</a>`;
-  const html =
-    `<!doctype html><html lang="${lang}"><body style="font-family: sans-serif; line-height: 1.5;">` +
-    p(escapeHtml(t(lang, "announce.ultra_lead"))) +
-    p(escapeHtml(t(lang, "announce.ultra_asked"))) +
-    p(a(links.plans, plans)) +
-    p(`${escapeHtml(t(lang, "announce.ultra_only"))} ${a(links.stop, stop)}`) +
-    `<p style="color: #5b6b80; font-size: 13px;">${escapeHtml(t(lang, "announce.ultra_why"))}<br>${escapeHtml(tagline)} · ${a(`mailto:${CONTACT_EMAIL}`, CONTACT_EMAIL)}</p>` +
-    "</body></html>";
+  const subject = t(lang, "announce.ultra_subject");
+  const body =
+    para(escapeHtml(t(lang, "announce.ultra_lead"))) +
+    para(escapeHtml(t(lang, "announce.ultra_asked"))) +
+    button(links.plans, plans) +
+    para(`${escapeHtml(t(lang, "announce.ultra_only"))} ${mutedLink(links.stop, stop)}`, true);
+  const html = shell({
+    lang, site: siteOf(links.plans), subject, preheader: t(lang, "announce.ultra_asked"), body, why: escapeHtml(t(lang, "announce.ultra_why")),
+  });
   const headers = links.stop.startsWith("https://") ? deliveryHeaders(links.stop) : {};
-  return { to, subject: t(lang, "announce.ultra_subject"), text, html, lang, headers };
+  return { to, subject, text, html, lang, headers };
 }
 
 // -- the run -------------------------------------------------------------------------------------

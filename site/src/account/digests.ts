@@ -3,10 +3,10 @@
 // search's new tender notices, the contracts that entered a radar window,
 // and, in the same shell, the records counts that rose for an organization,
 // a buyer or a segment (with a segment's new tender notices). Each message
-// has an HTML part laid out the way that design lays it out (a 600 px column
-// of tables, every style inline, the two hosted wordmarks, dark rules under a
-// media query) and a plain-text part shaped like its .txt files. Every string
-// is in the dictionary, in the saved search's language.
+// has an HTML part in the site's one mail shell (mail_html.ts: a 600 px
+// column of tables, every style inline, the two hosted wordmarks, dark rules
+// under a media query) and a plain-text part shaped like design/email's .txt
+// files. Every string is in the dictionary, in the saved search's language.
 //
 // Nothing here reads a file or a database: deliveries.ts hands over the rows
 // it chose and the links it made, so the messages can be tested on their own.
@@ -24,8 +24,13 @@ import { CODE_RE } from "../pages/tenders";
 import { fiscalLabel } from "../records_db";
 import type { BriefingData, BriefingSubject, Quarter } from "./briefings";
 import type { RecordsKind, Rise } from "./records_deliveries";
+import { C, FONT, button, escapeHtml, h1, h2, inkLink, para, shell, siteLink, textFooter, whyLine } from "./mail_html";
 import { type EventKind, type EventRow, INSTRUMENT_REF, type Listed, type WatchKind, isInstrumentKind } from "./watch_events";
 import type { MailMessage } from "./sender";
+
+// siteLink moved to mail_html.ts with the shell; the delivery modules still
+// import it from here.
+export { siteLink };
 
 // A message and the headers it goes out with (List-Unsubscribe and its
 // one-click partner, RFC 8058).
@@ -66,16 +71,6 @@ export interface ExpiringDigest extends DigestBase {
 }
 
 // -- helpers ----------------------------------------------------------------------
-
-const escapeHtml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-
-// A link on the site in the message's language: the language middleware
-// reads ?lang=, so a French reader lands on the French page.
-export function siteLink(site: string, path: string, lang: Lang): string {
-  if (lang !== "fr") return `${site}${path}`;
-  return `${site}${path}${path.includes("?") ? "&" : "?"}lang=fr`;
-}
 
 const dayDiff = (a: string, b: string) => Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000);
 
@@ -124,110 +119,7 @@ function preheader(lang: Lang, titles: string[], total: number): string {
   return tn(lang, "digest.pre_more_one", "digest.pre_more_many", rest, { first, n: fmtInt(rest, lang) });
 }
 
-// -- the shell (design/email/build.py) -----------------------------------------------------
-
-const C = {
-  page: "#f8fafc", panel: "#ffffff", head: "#eef2f7", border: "#e2e8f0", border2: "#cbd5e1",
-  ink: "#0f172a", ink2: "#334155", muted: "#5b6b80", accent: "#0f7b4f", amber: "#b45309",
-};
-const FONT = "'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
-
-// Overrides for a dark client, under the media query Apple Mail and iOS
-// honour; Gmail inverts on its own and the palette survives it.
-const DARK_CSS = [
-  ".bg{background:#0b1220!important}",
-  ".card{background:#111a2b!important;border-color:#243044!important}",
-  ".ink, .ink a{color:#e5edf7!important}",
-  ".ink2{color:#c7d2e0!important}",
-  ".muted, .muted a{color:#8da0b8!important}",
-  ".band{background:#17233a!important;border-color:#2b3a52!important}",
-  ".rule{border-color:#243044!important}",
-  ".btn{background:#e5edf7!important}",
-  ".btn a{color:#0f172a!important}",
-  ".chip{border-color:#3b4a63!important;color:#c7d2e0!important}",
-  ".logo-light{display:none!important}",
-  ".logo-dark{display:block!important}",
-].join("");
-
-const HEAD_CSS = `
-  body{margin:0;padding:0;background:${C.page};}
-  table{border-collapse:collapse;}
-  img{border:0;outline:none;text-decoration:none;}
-  @media (prefers-color-scheme: dark){ ${DARK_CSS} }
-  @media only screen and (max-width:620px){ .wrap{width:100%!important;} .pad{padding-left:18px!important;padding-right:18px!important;} }
-`;
-
-// The two hosted wordmarks at 2x, 142 by 20 CSS pixels: ink on a baked white
-// ground for light clients and for the Gmail apps (which darken the page and
-// leave images alone), light ink on a transparent ground for the clients that
-// honour the dark query. The site's name is the fallback text.
-function wordmark(site: string): string {
-  return `<a href="${escapeHtml(site)}" style="text-decoration:none;">` +
-    `<img class="logo-light" src="${escapeHtml(site)}/brand/wordmark.png" width="142" height="20" alt="Award Watch" ` +
-    `style="display:block;border:0;width:142px;height:20px;font:700 18px ${FONT};color:${C.ink};">` +
-    `<img class="logo-dark" src="${escapeHtml(site)}/brand/wordmark-dark.png" width="142" height="20" alt="Award Watch" ` +
-    `style="display:none;border:0;width:142px;height:20px;font:700 18px ${FONT};color:#e5edf7;"></a>`;
-}
-
-function shell(o: { lang: Lang; site: string; subject: string; preheader: string; body: string; why: string }): string {
-  const host = new URL(o.site).host;
-  const home = siteLink(o.site, "/", o.lang);
-  const tagline = `${escapeHtml(t(o.lang, "site.name"))} · ${escapeHtml(t(o.lang, "site.tagline"))}`;
-  return `<!DOCTYPE html>
-<html lang="${o.lang}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<meta name="supported-color-schemes" content="light dark">
-<title>${escapeHtml(o.subject)}</title>
-<style>${HEAD_CSS}</style>
-</head>
-<body class="bg" style="margin:0;padding:0;background:${C.page};">
-<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(o.preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg" style="background:${C.page};">
-<tr><td align="center" style="padding:24px 12px;">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" class="wrap card" style="width:600px;max-width:600px;background:${C.panel};border:1px solid ${C.border};">
-  <tr><td class="pad" style="padding:18px 28px 14px 28px;border-bottom:2px solid ${C.accent};">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-      <td class="logo" style="vertical-align:middle;color:${C.ink};">${wordmark(o.site)}</td>
-      <td align="right" class="muted" style="vertical-align:middle;font:13px/1 ${FONT};color:${C.muted};"><a href="${escapeHtml(home)}" style="color:${C.muted};text-decoration:none;">${escapeHtml(host)}</a></td>
-    </tr></table>
-  </td></tr>
-  <tr><td class="pad" style="padding:24px 28px 8px 28px;">${o.body}</td></tr>
-  <tr><td class="pad rule" style="padding:14px 28px 20px 28px;border-top:1px solid ${C.border};">
-    <p class="muted" style="margin:0 0 6px 0;font:12px/1.5 ${FONT};color:${C.muted};">${o.why}</p>
-    <p class="muted" style="margin:0;font:12px/1.5 ${FONT};color:${C.muted};">${tagline} · <a href="mailto:${CONTACT_EMAIL}" style="color:${C.muted};">${CONTACT_EMAIL}</a></p>
-  </td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>
-`;
-}
-
-function h1(text: string): string {
-  return `<h1 class="ink" style="margin:0 0 12px 0;font:700 20px/1.3 ${FONT};color:${C.ink};">${escapeHtml(text)}</h1>`;
-}
-
-// A part's heading inside one message (the records digest's two parts).
-function h2(text: string): string {
-  return `<h2 class="ink" style="margin:18px 0 6px 0;font:700 16px/1.3 ${FONT};color:${C.ink};">${escapeHtml(text)}</h2>`;
-}
-
-// html is markup already escaped.
-function para(html: string, muted = false): string {
-  const cls = muted ? "muted" : "ink2";
-  const size = muted ? 13 : 15;
-  return `<p class="${cls}" style="margin:0 0 14px 0;font:${size}px/1.5 ${FONT};color:${muted ? C.muted : C.ink2};">${html}</p>`;
-}
-
-function button(href: string, label: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 18px 0;"><tr>
-  <td class="btn" style="background:${C.ink};"><a href="${escapeHtml(href)}" style="display:inline-block;padding:11px 18px;font:600 14px/1 ${FONT};color:#ffffff;text-decoration:none;">${escapeHtml(label)}</a></td>
-</tr></table>`;
-}
+// -- the deliveries' own pieces, inside the shell (mail_html.ts) -------------------------------
 
 function chip(text: string): string {
   return `<span class="chip" style="display:inline-block;border:1px solid ${C.border2};padding:1px 6px;` +
@@ -256,7 +148,7 @@ function moreLine(lang: Lang, shown: number, total: number, href: string): { htm
   if (rest <= 0) return null;
   const label = tn(lang, "digest.more_one", "digest.more_many", rest, { n: fmtInt(rest, lang) });
   return {
-    html: para(`<a href="${escapeHtml(href)}" style="color:${C.ink2};">${escapeHtml(label)}</a>`),
+    html: para(inkLink(href, label)),
     text: t(lang, "digest.text_link", { label, url: href }),
   };
 }
@@ -266,19 +158,16 @@ function moreLine(lang: Lang, shown: number, total: number, href: string): { htm
 function why(o: DigestBase): { html: string; text: string } {
   const searches = siteLink(o.site, "/account/searches", o.lang);
   const reason = t(o.lang, o.cadence === "daily" ? "digest.why_daily" : "digest.why_weekly");
-  const link = (href: string, key: Key) => `<a href="${escapeHtml(href)}" style="color:${C.muted};">${escapeHtml(t(o.lang, key))}</a>`;
   return {
-    html: `${escapeHtml(reason)} ${link(searches, "digest.searches_link")} · ${link(o.stopUrl, "digest.stop_link")}`,
+    html: whyLine(reason, [
+      { href: searches, label: t(o.lang, "digest.searches_link") }, { href: o.stopUrl, label: t(o.lang, "digest.stop_link") },
+    ]),
     text: [
       reason,
       t(o.lang, "digest.text_link", { label: t(o.lang, "digest.text_searches"), url: searches }),
       t(o.lang, "digest.text_link", { label: t(o.lang, "digest.stop_link"), url: o.stopUrl }),
     ].join("\n"),
   };
-}
-
-function textFooter(lang: Lang): string {
-  return `${t(lang, "site.name")} · ${t(lang, "site.tagline")}\n${CONTACT_EMAIL}\n`;
 }
 
 // List-Unsubscribe names the contact address and the stop link; the second
@@ -635,7 +524,7 @@ export interface DigestOpening {
 }
 
 function openingHtml(o: DigestOpening): string[] {
-  return [h2(o.heading), ...o.lines.map((l) => para(`<a href="${escapeHtml(l.url)}" style="color:${C.ink2};">${escapeHtml(l.text)}</a>`))];
+  return [h2(o.heading), ...o.lines.map((l) => para(inkLink(l.url, l.text)))];
 }
 
 function openingText(o: DigestOpening): string {
@@ -761,7 +650,7 @@ export function watchDigest(o: WatchDigest): DigestMessage {
     const n = g.events.reduce((sum, e) => sum + e.n, 0);
     const head = `${g.label} · ${t(lang, WATCH_KIND_KEY[g.kind])}`;
     const count = tn(lang, "watches.count_one", "watches.count_many", n, { n: fmtInt(n, lang) });
-    html.push(h2(head), para(`<a href="${escapeHtml(href)}" style="color:${C.ink2};">${escapeHtml(count)}</a>`));
+    html.push(h2(head), para(inkLink(href, count)));
     const lines: string[] = [`${head}\n${t(lang, "digest.text_link", { label: count, url: href })}`];
     for (const e of g.events) {
       if (e.rows.length) {
@@ -777,7 +666,7 @@ export function watchDigest(o: WatchDigest): DigestMessage {
       const rest = e.n - e.rows.length;
       if (rest > 0) {
         const more = watchMoreText(lang, e.kind, rest);
-        html.push(para(`<a href="${escapeHtml(href)}" style="color:${C.ink2};">${escapeHtml(more)}</a>`));
+        html.push(para(inkLink(href, more)));
         lines.push(t(lang, "digest.text_link", { label: more, url: href }));
       }
     }
@@ -785,7 +674,6 @@ export function watchDigest(o: WatchDigest): DigestMessage {
   }
   html.push(button(page, t(lang, "watches.digest_button")), para(escapeHtml(t(lang, "watches.digest_note")), true));
   const why = t(lang, "watches.digest_why");
-  const link = (href: string, key: Key) => `<a href="${escapeHtml(href)}" style="color:${C.muted};">${escapeHtml(t(lang, key))}</a>`;
   const whyText = [
     why,
     t(lang, "digest.text_link", { label: t(lang, "watches.digest_link"), url: page }),
@@ -801,7 +689,7 @@ export function watchDigest(o: WatchDigest): DigestMessage {
     to: o.to, subject, lang, headers: deliveryHeaders(o.stopUrl), text: text.join("\n\n"),
     html: shell({
       lang, site: o.site, subject, preheader: pre, body: html.join(""),
-      why: `${escapeHtml(why)} ${link(page, "watches.digest_link")} · ${link(o.stopUrl, "watches.digest_stop")}`,
+      why: whyLine(why, [{ href: page, label: t(lang, "watches.digest_link") }, { href: o.stopUrl, label: t(lang, "watches.digest_stop") }]),
     }),
   };
 }
@@ -913,7 +801,7 @@ export function briefingParts(o: Pick<BriefingDigest, "lang" | "site" | "briefin
     }
     if (rest > 0 && restPath) {
       const label = tn(lang, "briefing.more_one", "briefing.more_many", rest, { n: n(rest) });
-      html.push(para(`<a href="${escapeHtml(link(restPath))}" style="color:${C.ink2};">${escapeHtml(label)}</a>`));
+      html.push(para(inkLink(link(restPath), label)));
       block.push(t(lang, "digest.text_link", { label, url: link(restPath) }));
     }
     text.push(block.join("\n"));
@@ -924,7 +812,7 @@ export function briefingParts(o: Pick<BriefingDigest, "lang" | "site" | "briefin
     text[text.length - 1] += `\n${lineText}`;
   };
   const linkLine = (label: string, path: string) =>
-    tail(t(lang, "digest.text_link", { label, url: link(path) }), para(`<a href="${escapeHtml(link(path))}" style="color:${C.ink2};">${escapeHtml(label)}</a>`));
+    tail(t(lang, "digest.text_link", { label, url: link(path) }), para(inkLink(link(path), label)));
 
   const heading = t(lang, "briefing.title", { name: o.name, date: d.dataDate });
   const span = t(lang, "briefing.span", { first: addDays(d.start, 1), last: d.dataDate });
@@ -1085,7 +973,6 @@ export function briefingDigest(o: BriefingDigest): DigestMessage {
   const parts = briefingParts(o);
   const searches = siteLink(o.site, "/account/searches", lang);
   const why = t(lang, "briefing.why");
-  const link = (href: string, key: Key) => `<a href="${escapeHtml(href)}" style="color:${C.muted};">${escapeHtml(t(lang, key))}</a>`;
   const whyText = [
     why,
     t(lang, "digest.text_link", { label: t(lang, "briefing.searches_link"), url: searches }),
@@ -1095,7 +982,7 @@ export function briefingDigest(o: BriefingDigest): DigestMessage {
     to: o.to, subject: parts.subject, lang, headers: deliveryHeaders(o.stopUrl), text: `${parts.text}\n\n${whyText}\n${textFooter(lang)}`,
     html: shell({
       lang, site: o.site, subject: parts.subject, preheader: parts.preheader, body: parts.body,
-      why: `${escapeHtml(why)} ${link(searches, "briefing.searches_link")} · ${link(o.stopUrl, "briefing.stop_link")}`,
+      why: whyLine(why, [{ href: searches, label: t(lang, "briefing.searches_link") }, { href: o.stopUrl, label: t(lang, "briefing.stop_link") }]),
     }),
   };
 }

@@ -256,7 +256,7 @@ describe("the accounts-open run", () => {
     }
     const listed = await lastTo(many);
     expect(itemsIn(listed.text)).toBe(LISTS_SHOWN);
-    expect((listed.html.match(/<li>/g) ?? []).length).toBe(LISTS_SHOWN);
+    expect((listed.html.match(/<li\b/g) ?? []).length).toBe(LISTS_SHOWN);
     expect(listed.text).toContain(t("en", "announce.lists_more_many", { n: 12 - LISTS_SHOWN }));
   });
 });
@@ -332,6 +332,12 @@ describe("the checks", () => {
     ["List-Unsubscribe naming another link", (m) => ({ ...m, headers: { ...m.headers, "List-Unsubscribe": stop.replace("t=b", "t=c") } })],
     ["a subject of SUBJECT_MAX characters", (m) => ({ ...m, subject: "x".repeat(SUBJECT_MAX) })],
     ["an empty subject", (m) => ({ ...m, subject: " " })],
+    // The shell: each plant leaves the lines and the links as they were.
+    ["the shell's header left out", (m) => ({ ...m, html: m.html.replace(`<a href="${SITE}" style="text-decoration:none;">`, `<a href="${SITE}">`) })],
+    ["the shell's footer left out", (m) => ({ ...m, html: m.html.replace(/ · (<a href="mailto:[^"]*")/, " $1") })],
+    ["no preheader", (m) => ({ ...m, html: m.html.replace(/(<div style="display:none;[^"]*">)[^<]*/, "$1") })],
+    ["a second button", (m) => ({ ...m, html: m.html.replace(/<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 18px 0;">[\s\S]*?<\/table>/, (b) => b + b) })],
+    ["an image of its own", (m) => ({ ...m, html: m.html.replace("</h1>", `</h1><img src="${SITE}/pixel.png?r=1" width="1" height="1" alt="">`) })],
   ];
 
   it.each(PLANTED)("fail a message planted with %s", (_label, plant) => {

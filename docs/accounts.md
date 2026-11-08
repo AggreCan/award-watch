@@ -233,12 +233,14 @@ lists after the subject).
 
 The template is `signInMessage()` in `site/src/account/sender.ts`, with its
 English and French strings under `account.mail_*` in
-`site/src/account/strings.ts`. It mirrors the sign-in prototype in
-`design/email/`: the same tables, inline styles and dark-mode rules, the
-code in a ruled band, a button carrying the link, and a footer with the
-reason for the message, the site's tagline and the contact address. The
-prototype's plain-text file is the shape of the plain-text part. A change to
-the message belongs in `design/email/build.py` as well; running
+`site/src/account/strings.ts`, laid out in the shell every message shares
+(`site/src/account/mail_html.ts`; docs/mail.md, *The shell*). It mirrors the
+sign-in prototype in `design/email/`: the same tables, inline styles and
+dark-mode rules, the code in a ruled band (32 px, monospace), a button
+carrying the link, and a footer with the reason for the message, the site's
+tagline and the contact address. The prototype's plain-text file is the
+shape of the plain-text part. A change to the message belongs in
+`design/email/build.py` as well; running
 `python design/email/build.py` regenerates the prototypes and the review
 sheet (`design/email/prototypes.html`, not tracked), so the sheet keeps
 showing what is sent.
@@ -862,15 +864,17 @@ holders. An address is sent the message once:
 
 ### The message
 
-Plain text and plain HTML (no design shell), in the language of the
-address's first sign-up, through the accounts sender (the `MAIL` binding;
-the log sender on a local run): accounts are open; the lists the address
+A plain-text part and an HTML part in the mail shell (docs/mail.md, *The
+shell*), in the language of the address's first sign-up, through the
+accounts sender (the `MAIL` binding; the log sender on a local run):
+accounts are open; the lists the address
 signed up for (their labels as the site wrote them, ten at most and a line
 for the rest); that signing in with the address offers each list to the
 account as a saved search, and that email delivery of a saved search is
-part of Pro (no price); the sign-in page's address; that this is the only
-message about the lists, with the link to leave them; why it came, the
-tagline and the contact address. The links are the site's (`SITE_URL`, or
+part of Pro (no price); the sign-in page's address (the button in the
+HTML part); that this is the only message about the lists, with the link to
+leave them; why it came, the tagline and the contact address. The preheader
+is the line about saved searches. The links are the site's (`SITE_URL`, or
 the request's own origin locally). With an https link the message carries
 the same `List-Unsubscribe` pair as a delivery, naming the leaving link.
 
@@ -944,9 +948,10 @@ be bought: the message says Ultra is open.
   rate limit work as for the accounts-open message, on the address's
   `ultra` rows alone: one message never marks the other's rows, so an
   address on the lists and on the card gets each message once.
-- The message, plain text and plain HTML in the language the address was
-  entered in: Ultra, the plan above Pro, is open; the address asked to be
-  told; "Plans and prices" with the link to `/pro`; that this is the only
+- The message, a plain-text part and an HTML part in the mail shell, in the
+  language the address was entered in: Ultra, the plan above Pro, is open;
+  the address asked to be told (also the preheader); "Plans and prices" with
+  the link to `/pro` (the button in the HTML part); that this is the only
   message about Ultra, with the link off the lists
   (`/interest/stop?t=<token of the address's first ultra row>`, also in
   `List-Unsubscribe` with its one-click partner); why it came, the tagline
@@ -1371,7 +1376,7 @@ delete the operator's own account.
 | Cancel the subscription (confirm) | At the period end (`POST /v1/subscriptions/<id>` with `cancel_at_period_end=true`): Pro runs to the end of the period paid, then Stripe's `customer.subscription.deleted` notice ends it. At once (`DELETE /v1/subscriptions/<id>`): Stripe ends it now and the stored row reads `canceled`; the same notice ends Pro, usually within a minute. Neither refunds anything. |
 | Refund the latest payment (confirm) | The page reads the latest paid invoices of the subscription (`GET /v1/invoices?subscription=<id>&status=paid&expand[]=data.payments`) and takes the newest that took money; its charge comes from the invoice's payments, or, for a payment through a PaymentIntent, from `GET /v1/charges?payment_intent=<id>`. It shows the invoice, the charge, the amount and what is refunded already. The post finds the charge again, refunds only if it is still the one shown, and calls `POST /v1/refunds` with `charge=<id>` and the header `Idempotency-Key: operator-refund-<charge id>`, so a second press or a retry within Stripe's 24 hours returns the first refund. Stripe's `charge.refunded` notice then ends the account's Stripe Pro (*What each notice does*). The subscription is not cancelled. |
 | Block (confirm) / Lift the block | A row in `account_blocks` with the reason (required, at most 200 characters, no `@`). In one batch: every session revoked, and email delivery turned off on every saved search that had it, the list kept in the row. While it stands, a code or a link for the address gets the "expired" answer any stale code gets, the sign-in page itself answering as for any address; the account's API keys answer 401; the delivery job, which reads only searches whose delivery is on, sends nothing. Lifting the block deletes the row and turns delivery back on for the searches it turned off that are still off. Entitlements and the subscription are left alone. |
-| Change the address (confirm) | The new address is normalized as sign-in does, at most 254 characters, and refused when any account holds it. The old address's open sign-in requests and wrong tries are deleted and every session is revoked. When mail can be sent (the `MAIL` binding and `MAIL_FROM`, or the log sender locally), the new address gets a plain message in the account's language saying the site's operator changed the account's address, with the sign-in page and the contact address. The old address is not written to, and can sign up again as a new account. |
+| Change the address (confirm) | The new address is normalized as sign-in does, at most 254 characters, and refused when any account holds it. The old address's open sign-in requests and wrong tries are deleted and every session is revoked. When mail can be sent (the `MAIL` binding and `MAIL_FROM`, or the log sender locally), the new address gets a message in the mail shell, in the account's language, saying the site's operator changed the account's address, with the sign-in page as its button and the contact address. The old address is not written to, and can sign up again as a new account. |
 | Sign out everywhere | Every session of the account revoked. |
 | Delete (confirm) | Exactly the reader's own deletion (*Deletion*): the subscription cancelled first or nothing deleted, then the rows deleted and the address hashed, then every session revoked. A block ends with it. |
 

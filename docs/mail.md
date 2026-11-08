@@ -17,6 +17,42 @@ The live check never sends to a reader: its one recipient is the address in
 No workflow runs either test suite. The default suite (`npm test`) is local
 too; the deploys run neither.
 
+## The shell
+
+Every message the site sends to a reader is laid out in one shell,
+`site/src/account/mail_html.ts`: the sign-in code, the saved-search
+deliveries, the records counts, the watch mail, the weekly briefing, the
+accounts-open and Ultra messages and the address-change notice. A new message
+is built with it as well; no message writes its own `<html>`.
+
+| Part | What it holds |
+|---|---|
+| Preheader | one hidden line, the one an inbox lists after the subject |
+| Header | the wordmark linking the site, the host name linking the home page, an emerald rule under both |
+| Body | the message's own pieces: `h1`, `h2`, `para` (muted for a note and for the line with a stop link), `list`, `button`, `inkLink`, `mutedLink` |
+| Footer | why the message came, with its links (`whyLine`; the address-change notice has no such line), then the tagline and `contact@awardwatch.ca` |
+
+The layout is design/email's (`design/email/build.py`): a 600 px column of
+tables, every style inline, the site's palette, Inter with the system faces
+behind it, and dark-mode overrides under `prefers-color-scheme`. The sign-in
+code sits in a ruled band at 32 px in a monospace face. A change to the shell
+belongs in `design/email/build.py` too, so the review sheet keeps showing
+what is sent.
+
+What the shell keeps out, for Gmail's Promotions tab and for the reader:
+
+- No image but the two wordmark PNGs from the site's `/brand/`, the same two
+  files for every reader, so loading them says nothing about who opened a
+  message. No tracking of any kind: no pixel, and no link that records a
+  click. The only values that differ from one reader to the next are the
+  tokens a sign-in link or a stop link needs to work.
+- One button at most, dark ink on the white panel; no coloured background but
+  the pale page around the panel.
+- The plain-text part goes with every message, and the list messages keep
+  `List-Unsubscribe` with its one-click partner.
+
+The mail suite holds every message to the shell (below).
+
 ## The mail suite
 
 ```
@@ -69,10 +105,14 @@ and keep their own tests.
 - The text and HTML parts carry the same lines and the same links, checked
   both ways: each line of one part is found in the other. The few lines
   worded for one part by design (the sign-in message's lead beside its
-  button, the text part's "Saved searches and delivery") are named by their
-  dictionary keys in `site/test-mail/checks.ts`, so the exception holds in
-  both languages and covers nothing else. The header's link to the home page
-  is the HTML part's alone.
+  button, the text part's "Saved searches and delivery", the shell's tagline
+  in the address-change notice, whose text part ends on its contact line)
+  are named by their dictionary keys in `site/test-mail/checks.ts`, so the
+  exception holds in both languages and covers nothing else. The header's
+  link to the home page is the HTML part's alone.
+- The HTML part is in the shell: the header's wordmark linking the site, the
+  footer's line with the tagline and the contact address, a preheader, at
+  most one button, and no image but the two wordmarks.
 - A list or watch delivery (the saved searches, the records, the watch mail,
   the briefing, the accounts-open and Ultra messages) carries its stop link
   in both parts, the page that manages it (the saved searches page or the
@@ -103,10 +143,13 @@ and keep their own tests.
 The last part plants each fault the checks look for (an em-dash, another
 reader's address, a link or a line in one part only, the reason line or the
 stop link removed, `List-Unsubscribe` missing or naming another link, a
-subject of 100 characters, an empty subject) and checks that each one fails.
+subject of 100 characters, an empty subject, the shell's header or footer
+left out, an empty preheader, a second button, an image of the message's
+own) and checks that each one fails.
 
-Run the suite before shipping a change to a message, to a string a message
-uses (`site/src/account/strings.ts`), to the sender, or to a cap.
+Run the suite before shipping a change to a message, to the shell, to a
+string a message uses (`site/src/account/strings.ts`), to the sender, or to a
+cap.
 
 ## The live mail check
 

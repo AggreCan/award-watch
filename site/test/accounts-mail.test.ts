@@ -158,6 +158,10 @@ describe("the message's template", () => {
     const band = BAND.exec(html);
     expect(band?.[2]).toBe(code);
     expect(band?.[1]).toBe(code.split("").join(" "));
+    // Large and in a monospace face, so no digit is taken for another.
+    const bandFont = /font:700 (\d+)px\/1 ([^;]*);/.exec(/<span class="ink" role="text"[^>]*\sstyle="([^"]*)"/.exec(html)?.[1] ?? "");
+    expect(Number(bandFont?.[1])).toBeGreaterThanOrEqual(30);
+    expect(bandFont?.[2]).toMatch(/\bmonospace$/);
     // The button carries the link.
     const button = BUTTON.exec(html);
     expect(button?.[1]).toBe(link);
