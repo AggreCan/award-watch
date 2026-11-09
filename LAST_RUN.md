@@ -1,10 +1,10 @@
-Last successful refresh: 2026-11-08 14:12 UTC
+Last successful refresh: 2026-11-09 14:26 UTC
 
 Audience roll-up: rolled up
 
 Search Console: no credentials
 
-IndexNow: submitted 11 URLs
+IndexNow: submitted 18 URLs
 
 Search database: synced
 
