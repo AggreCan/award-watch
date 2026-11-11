@@ -214,8 +214,19 @@ describe("the map panel", () => {
     expect(panel.match(/<use href="#cm-ON"/g)).toHaveLength(8);
     // The fills of the open layer: Ontario the largest count, the top step; Prince Edward Island's 8 the first.
     const open = panel.match(/<g class="cmap-layer" data-for="open">[\s\S]*?<\/g>/)?.[0] ?? "";
-    expect(open).toContain('<use href="#cm-ON" class="cmap-s4">');
-    expect(open).toContain('<use href="#cm-PE" class="cmap-s1">');
+    expect(open).toContain('<use href="#cm-ON" class="cmap-s4" style="fill:url(#cm-fade-4) var(--map-4)">');
+    expect(open).toContain('<use href="#cm-PE" class="cmap-s1" style="fill:url(#cm-fade-1) var(--map-1)">');
+    // Each step with a notice fades: its gradient once in the defs, named by the fill with the plain colour after
+    // it. A fill names no gradient the page lacks, and a province with no notice names none.
+    for (let s = 1; s <= MAP_STEPS; s++) {
+      expect(panel.match(new RegExp(`<linearGradient id="cm-fade-${s}" class="cmap-f${s}" x1="0" y1="0" x2="0" y2="1">` +
+        '<stop offset="0"></stop><stop offset="1" class="cmap-foot"></stop></linearGradient>', "g")), `step ${s}`).toHaveLength(1);
+    }
+    const fills = [...panel.matchAll(/<use href="#cmi?-\w\w" class="cmap-s(\d)"([^>]*)>/g)];
+    expect(fills).toHaveLength(4 * (PROVINCES.length + 3));
+    for (const [, step, rest] of fills) {
+      expect(rest, `step ${step}`).toBe(step === "0" ? "" : ` style="fill:url(#cm-fade-${step}) var(--map-${step})"`);
+    }
     // A layer's three passes, then its labels: the fills, the land borders as a gap, each province's clear outline.
     const gap = open.indexOf('<use href="#cm-borders" class="cmap-borders"></use>');
     expect(gap).toBeGreaterThan(open.lastIndexOf('class="cmap-s'));
@@ -224,7 +235,7 @@ describe("the map panel", () => {
     expect(open.match(/class="cmap-hit"/g)).toHaveLength(PROVINCES.length);
     // The inset the same, with its own border.
     const inset = panel.match(/<g class="cmap-layer" data-for="open">[\s\S]*?<\/g>/g)?.[1] ?? "";
-    expect(inset).toMatch(/class="cmap-s\d"><\/use><use href="#cmi-borders" class="cmap-borders"><\/use><(?:a|use) /);
+    expect(inset).toMatch(/class="cmap-s\d"[^>]*><\/use><use href="#cmi-borders" class="cmap-borders"><\/use><(?:a|use) /);
     expect(inset.match(/class="cmap-hit"/g)).toHaveLength(3);
     expect(page).toContain('<script src="/canada-map.js" defer=""></script>');
   });
@@ -460,6 +471,36 @@ describe("the stylesheet", () => {
         const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
         expect(g, `--map-${s} ${hex}`).toBeGreaterThan(r);
         expect(g, `--map-${s} ${hex}`).toBeGreaterThan(b);
+      }
+    }
+    // The fade: each step's gradient is its own colour throughout, and its foot lets the ground through. Drawn over
+    // the panel, the foot is lighter or darker than the step by enough to see, and nearer the step than the one
+    // below it (OKLab lightness), in every palette: a fade is never read as the next step down.
+    const okl = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => {
+        const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2104542553 * Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+        + 0.793617785 * Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+        - 0.0040720468 * Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    };
+    const over = (hex: string, ground: string, a: number) => "#" + [1, 3, 5]
+      .map((i) => Math.round(a * parseInt(hex.slice(i, i + 2), 16) + (1 - a) * parseInt(ground.slice(i, i + 2), 16)).toString(16).padStart(2, "0")).join("");
+    const foot = [1, 2, 3, 4].map((s) => {
+      expect(STYLES).toContain(`\n.cmap-f${s} stop { stop-color: var(--map-${s}); }`);
+      return Number(new RegExp(`\\n\\.cmap-f${s} \\.cmap-foot \\{ stop-opacity: (0\\.\\d+); \\}`).exec(STYLES)![1]);
+    });
+    for (const block of blocks) {
+      const body = block.exec(STYLES)![0];
+      const token = (name: string) => new RegExp(`--${name}: (#[0-9a-f]{6});`).exec(body)![1];
+      const ground = token("panel");
+      for (const s of [1, 2, 3, 4]) {
+        const step = token(`map-${s}`);
+        const below = s > 1 ? token(`map-${s - 1}`) : ground;
+        const share = (okl(over(step, ground, foot[s - 1])) - okl(step)) / (okl(below) - okl(step));
+        expect(share, `--map-${s} on ${ground}`).toBeGreaterThan(0.15);
+        expect(share, `--map-${s} on ${ground}`).toBeLessThan(0.5);
       }
     }
     const phone = STYLES.slice(STYLES.indexOf("-- the home page's Canada map"));

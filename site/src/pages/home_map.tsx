@@ -13,7 +13,12 @@
 // layer places them with <use>, so the paths are not repeated per layer.
 //
 // A layer is drawn in three passes. First the fills, each on its step of the
-// ramp. Then the land borders, a gap in the panel's ground between two
+// ramp and fading a little from its top to its foot, as a chart's bar does
+// (operator, 2026-11-11: flat fills looked off beside the charts). The fade
+// is the step's gradient in the defs, over the province's own box, and the
+// stylesheet sets its strength (.cmap-foot): the foot stays nearer its own
+// step than the one below it, so a fade is never read as the next step down.
+// A province with no notice stays flat. Then the land borders, a gap in the panel's ground between two
 // neighbours, so two provinces on one step are still two shapes (operator,
 // 2026-11-11); a coast gets no gap, so no island is thinned by one. Then each
 // province's outline again, clear: it is what the pointer meets, so it holds
@@ -152,10 +157,17 @@ const MARITIMES: readonly MaritimeProvince[] = ["NB", "NS", "PE"];
 const LABEL_UP = 2;
 const LABEL_LINE = 22;
 
-// A province's fill on one layer, on its step of the ramp.
-const Fill: FC<{ layer: MapLayer; code: Province; def: string; top: number }> = ({ layer, code, def, top }) => (
-  <use href={`#${def}`} class={`cmap-s${mapStep(countOf(layer.counts, code), top)}`}></use>
-);
+// The steps that fade: every one but the province with no notice.
+const FADED = Array.from({ length: MAP_STEPS }, (_, i) => i + 1);
+const fadeId = (step: number) => `cm-fade-${step}`;
+
+// A province's fill on one layer, on its step of the ramp. A step with a
+// notice names its gradient, with the plain colour after it for a browser
+// that cannot resolve it (the class alone gives the same colour).
+const Fill: FC<{ layer: MapLayer; code: Province; def: string; top: number }> = ({ layer, code, def, top }) => {
+  const step = mapStep(countOf(layer.counts, code), top);
+  return <use href={`#${def}`} class={`cmap-s${step}`} style={step > 0 ? `fill:url(#${fadeId(step)}) var(--map-${step})` : undefined}></use>;
+};
 
 // A province's outline over the fills and the gap: a link to its list when it
 // has a notice, and its tip, the province's name over the layer's count.
@@ -209,6 +221,12 @@ export const CanadaMapPanel: FC<{ lang: Lang; layers: readonly MapLayer[] }> = (
               {MARITIMES.map((p) => <path id={`cmi-${p}`} d={INSET_PATHS[p]} />)}
               <path id="cm-borders" d={MAP_BORDERS} />
               <path id="cmi-borders" d={INSET_BORDERS} />
+              {FADED.map((s) => (
+                <linearGradient id={fadeId(s)} class={`cmap-f${s}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0"></stop>
+                  <stop offset="1" class="cmap-foot"></stop>
+                </linearGradient>
+              ))}
             </defs>
             {layers.map((l) => (
               <g class="cmap-layer" data-for={l.id}>

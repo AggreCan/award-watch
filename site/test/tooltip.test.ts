@@ -207,7 +207,7 @@ describe("the pages", () => {
     const page = await html("/", e);
     expect(page).toContain('<div class="cmap-figure" data-tip="">');
     // The tip is on the province's clear outline, which lies over its fill and is what the pointer meets.
-    expect(page).toContain('<use href="#cm-ON" class="cmap-s4"></use>');
+    expect(page).toContain('<use href="#cm-ON" class="cmap-s4" style="fill:url(#cm-fade-4) var(--map-4)"></use>');
     expect(page).toContain('<use href="#cm-ON" class="cmap-hit"><title>Ontario\n14 new notices today</title></use>');
     expect(page).toContain("<title>Ontario\n260 open notices</title>");
     expect(page).toContain("<title>Ontario\n38 notices closing within 7 days</title>");

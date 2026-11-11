@@ -1565,6 +1565,19 @@ html.js .cmap-toggles { display: flex; }
 .cmap-s2 { fill: var(--map-2); }
 .cmap-s3 { fill: var(--map-3); }
 .cmap-s4 { fill: var(--map-4); }
+/* A fill fades a little from its top to its foot, as a chart's bar does
+   (home_map.tsx names each step's gradient on the fill). The foot lets the
+   panel's ground through, less of it the further the step stands from the
+   ground, so every step fades by about as much to the eye and its foot stays
+   nearer its own step than the one below it in both themes. */
+.cmap-f1 stop { stop-color: var(--map-1); }
+.cmap-f2 stop { stop-color: var(--map-2); }
+.cmap-f3 stop { stop-color: var(--map-3); }
+.cmap-f4 stop { stop-color: var(--map-4); }
+.cmap-f1 .cmap-foot { stop-opacity: 0.78; }
+.cmap-f2 .cmap-foot { stop-opacity: 0.86; }
+.cmap-f3 .cmap-foot { stop-opacity: 0.88; }
+.cmap-f4 .cmap-foot { stop-opacity: 0.9; }
 /* The code over its count, in ink on a halo of the panel's ground, so it reads on every step. */
 .cmap-label {
   font-size: 22px; font-weight: 600; fill: var(--ink); text-anchor: middle; pointer-events: none;
