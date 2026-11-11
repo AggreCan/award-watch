@@ -485,8 +485,8 @@ export const ACCOUNT_STRINGS = {
     fr: "Il n'y a pas de mot de passe. Les codes et liens de connexion, la session et les clés d'API ne sont conservés que sous forme de hachages à sens unique. Un navigateur connecté détient un second témoin, __Host-aw_session, qui conserve la session pendant 30 jours après sa dernière utilisation.",
   },
   "account.privacy_not_kept": {
-    en: "An account keeps no name, postal address, IP address or browser identification. A sign-in request keeps, for one day, a hash of the IP address under a key that changes every day.",
-    fr: "Un compte ne conserve aucun nom, adresse postale, adresse IP ni identification de navigateur. Une demande de connexion conserve, pendant un jour, un hachage de l'adresse IP sous une clé qui change chaque jour.",
+    en: "An account keeps no name, postal address, IP address or browser identification. A sign-in request, made on the sign-in page or with the Follow field of a page, keeps for one day the email address it was made for and a hash of the IP address under a key that changes every day, whether or not the sign-in is completed.",
+    fr: "Un compte ne conserve aucun nom, adresse postale, adresse IP ni identification de navigateur. Une demande de connexion, faite à la page de connexion ou dans le champ Suivre d'une page, conserve pendant un jour l'adresse courriel pour laquelle elle a été faite et un hachage de l'adresse IP sous une clé qui change chaque jour, que la connexion soit menée à terme ou non.",
   },
   "account.privacy_delete": {
     en: "Deleting the account from its own page removes its saved searches, keys and sessions and replaces the email address with a hash that cannot be matched to it.",
@@ -521,8 +521,13 @@ export const ACCOUNT_STRINGS = {
   },
   "account.stopped_one_click": { en: "The delivery is off.", fr: "L'envoi est désactivé." },
   "account.privacy_mail": {
-    en: "The email address is handed to Cloudflare's email service to deliver the site's messages: the sign-in code, and the saved searches whose delivery is on. Apart from the checkout described under Payments, it is used for nothing else.",
-    fr: "L'adresse courriel est transmise au service de courriel de Cloudflare pour livrer les messages du site : le code de connexion et les recherches enregistrées dont l'envoi est activé. Hormis le paiement décrit à la section Paiements, elle ne sert à rien d'autre.",
+    en: "The email address is handed to Cloudflare's email service to deliver the site's messages: the sign-in code, the saved searches whose delivery is on, and the events of the pages followed while their mail is on. Apart from the checkout described under Payments, it is used for nothing else.",
+    fr: "L'adresse courriel est transmise au service de courriel de Cloudflare pour livrer les messages du site : le code de connexion, les recherches enregistrées dont l'envoi est activé et les événements des pages suivies lorsque leur envoi est activé. Hormis le paiement décrit à la section Paiements, elle ne sert à rien d'autre.",
+  },
+  // The privacy page's accounts section (privacy.tsx): what following keeps.
+  "watches.privacy": {
+    en: "The pages an account follows are kept with it: the organization, buyer, contract or tender notice, the events to show for it and, for its mail, the daily or weekly setting and, for {days} days, when each message went and how many events it held. A message names public records only.",
+    fr: "Les pages qu'un compte suit sont conservées avec lui : l'organisation, l'acheteur, le contrat ou l'avis d'appel d'offres, les événements à afficher et, pour l'envoi, le réglage quotidien ou hebdomadaire ainsi que, pendant {days} jours, le moment de chaque message et le nombre d'événements qu'il contenait. Un message ne nomme que des documents publics.",
   },
   "digest.tenders_title": { en: "New tender notices", fr: "Nouveaux avis d'appel d'offres" },
   "digest.tenders_subject_one": { en: "1 new tender notice: {scope}", fr: "1 nouvel avis d'appel d'offres : {scope}" },

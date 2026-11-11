@@ -425,6 +425,29 @@ describe("the sign-in page with follow", () => {
   });
 });
 
+// -- the privacy page ---------------------------------------------------------------------------------------
+
+describe("the privacy page", () => {
+  it("says what following keeps and what a sign-in request keeps, in both languages", async () => {
+    const en = await text(await get("/privacy"));
+    expect(en).toContain("The pages an account follows are kept with it: the organization, buyer, contract or tender notice, the events to show for it and, " +
+      "for its mail, the daily or weekly setting and, for 90 days, when each message went and how many events it held. A message names public records only.");
+    expect(en).toContain("A sign-in request, made on the sign-in page or with the Follow field of a page, keeps for one day the email address it was made for " +
+      "and a hash of the IP address under a key that changes every day, whether or not the sign-in is completed.");
+    expect(en).toContain("the saved searches whose delivery is on, and the events of the pages followed while their mail is on.");
+    const fr = await text(await get("/privacy?lang=fr"));
+    expect(fr).toContain("Les pages qu'un compte suit sont conservées avec lui");
+    expect(fr).toContain("pendant 90 jours, le moment de chaque message");
+    expect(fr).toContain("dans le champ Suivre d'une page");
+    for (const page of [en, fr]) {
+      expect(page).not.toContain(EM_DASH);
+      expect(page).not.toContain(EN_DASH);
+    }
+    // With accounts off the page says there are none, as before.
+    expect(await (await get("/privacy", { env: offEnv() })).text()).not.toContain("The pages an account follows");
+  });
+});
+
 // -- asking for a new code ---------------------------------------------------------------------------------
 
 describe("Ask for a new code", () => {
