@@ -394,6 +394,16 @@ describe("the stylesheet", () => {
       expect(light[i]).toBeLessThan(light[i - 1]);
       expect(dark[i]).toBeGreaterThan(dark[i - 1]);
     }
+    // The steps are the charts' emerald (operator, 2026-11-11: one data hue across the site): green leads in every step.
+    for (const block of blocks) {
+      const body = block.exec(STYLES)![0];
+      for (const s of [1, 2, 3, 4]) {
+        const hex = new RegExp(`--map-${s}: (#[0-9a-f]{6});`).exec(body)![1];
+        const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+        expect(g, `--map-${s} ${hex}`).toBeGreaterThan(r);
+        expect(g, `--map-${s} ${hex}`).toBeGreaterThan(b);
+      }
+    }
     const phone = STYLES.slice(STYLES.indexOf("-- the home page's Canada map"));
     expect(phone).toMatch(/@media \(max-width: 699px\) \{\s*\.cmap-figure \{ display: none; \}/);
     for (const layer of ["new_today", "open", "closing_7d", "same_day"]) {

@@ -129,13 +129,14 @@
   --chart-on: #0f6b45;
   --chart-wash: #1f8a621f;
   /* The home page's Canada map: a province with no notice on a step of the
-     paper, then four steps of the charts' slate, lighter to darker as the
-     count grows; the steps differ in lightness alone. */
+     paper, then four steps of the charts' emerald, lighter to darker as the
+     count grows; the steps differ in lightness alone, and the lightest is
+     2.1:1 on the panel. */
   --map-0: #e7e3d9;
-  --map-1: #cbd5e1;
-  --map-2: #94a3b8;
-  --map-3: #64748b;
-  --map-4: #334155;
+  --map-1: #79bd9c;
+  --map-2: #45a078;
+  --map-3: #1f7d57;
+  --map-4: #0a5234;
   /* The line between provinces: visible on the lightest step and on the darkest (operator, 2026-11-07). */
   --map-line: #9c9486;
   --topbar: 56px;
@@ -190,10 +191,10 @@
   --chart-wash: #22a87326;
   /* The map's steps run the other way on the dark ground: the most notices the lightest. */
   --map-0: #1e2738;
-  --map-1: #3a4a62;
-  --map-2: #566883;
-  --map-3: #7a8ca6;
-  --map-4: #aebbcd;
+  --map-1: #1f5a45;
+  --map-2: #278563;
+  --map-3: #3db888;
+  --map-4: #7fe0b6;
   --map-line: #0f172a;
   color-scheme: dark;
 }
@@ -226,10 +227,10 @@
     --chart-on: #5ad6a0;
     --chart-wash: #22a87326;
     --map-0: #1e2738;
-    --map-1: #3a4a62;
-    --map-2: #566883;
-    --map-3: #7a8ca6;
-    --map-4: #aebbcd;
+    --map-1: #1f5a45;
+    --map-2: #278563;
+    --map-3: #3db888;
+    --map-4: #7fe0b6;
   --map-line: #0f172a;
     color-scheme: dark;
   }
