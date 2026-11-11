@@ -171,7 +171,7 @@ describe("the page", () => {
       if (i % 5 === 0) rows.push([mirror.id, day, 40 + i]);
     }
     await seed(rows);
-    const res = await get("/account/api", { cookie: made.cookie });
+    const res = await get("/account/api?chart=lines", { cookie: made.cookie });
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
@@ -227,11 +227,51 @@ describe("the page", () => {
     expect(main).not.toContain(EN_DASH);
   });
 
+  it("draws a bar a day unless asked for the lines, today's in the pale step, with both forms one press apart", async () => {
+    const made = await proWithKeys("usage-forms", ["Solo"]);
+    const [solo] = made.keys;
+    await seed([[solo.id, TODAY, 120], [solo.id, dayPlus(TODAY, -1), 900], [solo.id, dayPlus(TODAY, -3), 19_500]]);
+    const bars = mainOf(await page("/account/api", { cookie: made.cookie }));
+    // A bar for each day with a request, faded as the site's other amounts are; today's, a part day, pale and flat.
+    expect(count(bars, /<path class="bar" style="fill:url\(#cf-\d+-\d+\) var\(--chart-bar\)"/g)).toBe(2);
+    expect(count(bars, /<path class="bar bar-light"/g)).toBe(1);
+    expect(bars).not.toContain("<polyline");
+    expect(bars).toContain("Solo, 2026-10-30\n900 requests");
+    // The cap's line is drawn in either form.
+    expect([...bars.matchAll(RULE)]).toHaveLength(1);
+    expect(bars).toContain('<nav aria-label="Chart form" class="tabs tabs-small"><a href="/account/api" aria-current="page">Bars</a>' +
+      '<a href="/account/api?chart=lines">Lines</a></nav>');
+    expect(bars).toContain("<p>The pale bar is today, a day still under way.</p>");
+    const lines = mainOf(await page("/account/api?chart=lines", { cookie: made.cookie }));
+    expect(count(lines, /<polyline class="line"/g)).toBe(1);
+    expect(lines).not.toContain('<path class="bar');
+    expect([...lines.matchAll(RULE)]).toHaveLength(1);
+    expect(lines).toContain('<a href="/account/api">Bars</a><a href="/account/api?chart=lines" aria-current="page">Lines</a>');
+    expect(lines).not.toContain("The pale bar");
+    // Any other value is the bars, and the figures under the chart are the same in both forms.
+    expect(mainOf(await page("/account/api?chart=pie", { cookie: made.cookie }))).toContain('<a href="/account/api" aria-current="page">Bars</a>');
+    const table = (html: string) => /<table[\s\S]*<\/table>/.exec(html)?.[0];
+    expect(table(bars)).toBe(table(lines));
+    const fr = mainOf(await page("/account/api?lang=fr", { cookie: made.cookie }));
+    expect(fr).toContain('<nav aria-label="Forme du graphique" class="tabs tabs-small"><a href="/account/api" aria-current="page">Barres</a>' +
+      '<a href="/account/api?chart=lines">Lignes</a></nav>');
+    expect(fr).toContain("La barre pâle est aujourd’hui, une journée en cours.");
+  });
+
+  it("says nothing of a pale bar on a day with no request yet", async () => {
+    const made = await proWithKeys("usage-quiet", ["Solo"]);
+    await seed([[made.keys[0].id, dayPlus(TODAY, -2), 50]]);
+    const main = mainOf(await page("/account/api", { cookie: made.cookie }));
+    expect(count(main, /<path class="bar"/g)).toBe(1);
+    expect(main).not.toContain("bar-light");
+    expect(main).not.toContain("The pale bar");
+  });
+
   it("draws the cap's dashed line on a key's panel when its axis reaches it, never on the total's", async () => {
     const made = await proWithKeys("usage-near", ["Heavy", "Light"]);
     const [heavy, light] = made.keys;
     await seed([[heavy.id, TODAY, 19_000], [light.id, TODAY, 300], [heavy.id, dayPlus(TODAY, -1), 9_000]]);
-    const main = mainOf(await page("/account/api", { cookie: made.cookie }));
+    const main = mainOf(await page("/account/api?chart=lines", { cookie: made.cookie }));
     // The panels in order: the total (19,300 a day, its axis to 20,000), Light (to 300), Heavy (to 20,000).
     const tops = [...main.matchAll(/<span style="bottom:100%">([0-9,]+)<\/span>/g)].map((m) => m[1]);
     expect(tops).toEqual(["20,000", "300", "20,000"]);
@@ -268,7 +308,7 @@ describe("the page", () => {
 
   it("draws the empty chart for keys with no rows: zero lines on the floor's scale, zeros in the tiles and the table", async () => {
     const made = await proWithKeys("usage-empty", ["Fresh"]);
-    const main = mainOf(await page("/account/api", { cookie: made.cookie }));
+    const main = mainOf(await page("/account/api?chart=lines", { cookie: made.cookie }));
     expect(main).toContain(`<span style="bottom:100%">${AXIS_FLOOR}</span>`);
     expect(main).toContain('<span class="tile-label">Requests today</span><span class="tile-value">0</span>');
     expect(main).toContain('<span class="tile-label">Requests in 60 days</span><span class="tile-value">0</span>');
@@ -404,8 +444,9 @@ describe("the languages", () => {
   it("render the page in English and in French, with no em-dash and no placeholder left", async () => {
     const made = await proWithKeys("usage-lang", ["Synchro", "Miroir"]);
     await seed([[made.keys[0].id, TODAY, 1234], [made.keys[1].id, dayPlus(TODAY, -2), 56]]);
-    const en = await page("/account/api", { cookie: made.cookie });
-    const fr = await page("/account/api?lang=fr", { cookie: made.cookie });
+    // The lines, whose marks include the days at 0 (a bar is drawn only for a day with a request).
+    const en = await page("/account/api?chart=lines", { cookie: made.cookie });
+    const fr = await page("/account/api?lang=fr&chart=lines", { cookie: made.cookie });
     expect(en).toContain('<html lang="en">');
     expect(fr).toContain('<html lang="fr">');
     const main = mainOf(fr);

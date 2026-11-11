@@ -409,6 +409,10 @@ export const ACCOUNT_STRINGS = {
     en: "No key is in use. Keys are made on the {keys} page.",
     fr: "Aucune clé n'est en service. Les clés se créent sur la page {keys}.",
   },
+  "apiusage.form_nav": { en: "Chart form", fr: "Forme du graphique" },
+  "apiusage.form_bars": { en: "Bars", fr: "Barres" },
+  "apiusage.form_lines": { en: "Lines", fr: "Lignes" },
+  "apiusage.today_pale": { en: "The pale bar is today, a day still under way.", fr: "La barre pâle est aujourd'hui, une journée en cours." },
   "apiusage.panel_chart": { en: "Requests a Day", fr: "Requêtes par jour" },
   "apiusage.period": { en: "{first} to {last}", fr: "du {first} au {last}" },
   "apiusage.chart_aria": {

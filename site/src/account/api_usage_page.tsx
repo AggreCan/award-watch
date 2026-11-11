@@ -101,10 +101,23 @@ const Tile: FC<{ label: string; value: string; note: unknown }> = ({ label, valu
 // A date never breaks at its hyphens (the stylesheet's .nw).
 const Day: FC<{ day: string }> = ({ day }) => <span class="nw">{day}</span>;
 
-export type UsageView = { quota: KeyQuota; keys: KeyRow[]; rows: DayCount[] | null; today: string };
+// The daily chart's two forms (operator, 2026-11-11: keep both as the reader's
+// choice). A day's requests are an amount, so the page draws a bar a day
+// unless asked for the lines: the bars wear the fade the site's other amounts
+// wear, and a key that runs every fifth day reads as a run and then nothing,
+// where a line would draw teeth. ?chart=lines asks for the lines; any other
+// value, or none, is the bars. Nothing is stored: the choice is the address.
+export type ChartForm = "bars" | "lines";
+export const chartForm = (raw: string | undefined | null): ChartForm => (raw === "lines" ? "lines" : "bars");
+const FORMS: [ChartForm, string, "apiusage.form_bars" | "apiusage.form_lines"][] = [
+  ["bars", "/account/api", "apiusage.form_bars"], ["lines", "/account/api?chart=lines", "apiusage.form_lines"],
+];
+
+export type UsageView = { quota: KeyQuota; keys: KeyRow[]; rows: DayCount[] | null; today: string; form?: ChartForm };
 
 export function usageView(lang: Lang, view: UsageView) {
   const { quota, keys, rows, today } = view;
+  const form = view.form ?? "bars";
   const days = usageDays(today);
   const first = days[0];
   const series = rows ? usageSeries(lang, keys, rows, days) : [];
@@ -118,9 +131,13 @@ export function usageView(lang: Lang, view: UsageView) {
   // The cap is a key's: the total of several keys has none.
   const ruled = (s: UsageSeries) => s.id !== null && quota.perDay <= axisTop(s.values);
   const capShown = series.some(ruled);
+  const tip = (s: UsageSeries, i: number) => tipText(tipHead(lang, s.label, days[i]), [requestsText(lang, s.values[i])]);
   const panels: ChartPanel[] = series.length ? series.map((s) => ({
     title: s.label,
-    line: s.values.map((v, i) => ({ x: dayPos(days[i]) + 0.5, value: v, title: tipText(tipHead(lang, s.label, days[i]), [requestsText(lang, v)]) })),
+    // Today is a day still under way, so its bar takes the pale step a part period takes elsewhere.
+    ...(form === "bars"
+      ? { bars: s.values.map((v, i) => ({ x0: dayPos(days[i]), x1: dayPos(days[i]) + 1, value: v, light: i === last, title: tip(s, i) })) }
+      : { line: s.values.map((v, i) => ({ x: dayPos(days[i]) + 0.5, value: v, title: tip(s, i) })) }),
     rule: ruled(s) ? quota.perDay : undefined,
   })) : [{ title: t(lang, "apiusage.series_all"), line: [] }];
   // Keys revoked inside the window that the read may have left out, past KEYS_MAX keys with rows (DAILY_SQL).
@@ -158,7 +175,13 @@ export function usageView(lang: Lang, view: UsageView) {
         )}
       </Panel>
       <Panel title={t(lang, "apiusage.panel_chart")} count={period}
+        tools={
+          <nav aria-label={t(lang, "apiusage.form_nav")} class="tabs tabs-small">
+            {FORMS.map(([f, href, key]) => <a href={href} aria-current={f === form ? "page" : undefined}>{t(lang, key)}</a>)}
+          </nav>
+        }
         foot={<>
+          {form === "bars" && all[last] > 0 ? <p>{t(lang, "apiusage.today_pale")}</p> : null}
           {leftOut ? <p>{t(lang, "apiusage.left_out", { n: n(KEYS_MAX) })}</p> : null}
           <p>{t(lang, "apiusage.counted", { days: USAGE_KEEP_DAYS })}</p>
         </>}>
@@ -201,5 +224,5 @@ export async function usagePage(c: Context<AppEnv>, who: Account): Promise<Respo
   const now = nowOf(c.env);
   const keys = await listKeys(c.env, who.userId);
   const rows = keys.length ? await dailyUsage(c.env, who.userId, now) : [];
-  return accountPage(c, t(lang, "apiusage.title"), usageView(lang, { quota, keys, rows, today: utcDay(now) }));
+  return accountPage(c, t(lang, "apiusage.title"), usageView(lang, { quota, keys, rows, today: utcDay(now), form: chartForm(c.req.query("chart")) }));
 }
