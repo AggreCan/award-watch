@@ -28,6 +28,16 @@ A count that cannot be read is blank in the row and "n/a" in the line,
 never 0. A night run again (a retry the same day) replaces that day's row,
 and a count it could not read keeps the one the row had, as the roll-up does
 with its readings.
+
+The month on the line (with_month): on the night the monthly audience
+report is written (views_report.py), the report step joins the month's
+private line to the day's line and puts the result in R2 again, so the
+morning's email carries the month once. The joined line keeps the shape the
+daily check accepts (FIGURES_PATTERN): the day's figures stay whole, and the
+month's parts are dropped from its end until the line fits. A night whose
+funnel step left no line still gets one, dated as that step dates it. A
+retry the same day writes the day's line alone again and finds the report
+already written, so the month is then in the report only.
 """
 
 from __future__ import annotations
@@ -36,6 +46,7 @@ import csv
 import io
 import json
 import logging
+import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -53,6 +64,17 @@ HEADER = ["date", "accounts", "accounts_new", "codes_requested", "sign_ins", "pr
 COUNTS = HEADER[1:]
 # The day's audience figures the line carries, from the roll-up's summary row.
 AUDIENCE = ["human_pages", "engaged_visitors", "search_visitors", "phone_visitors"]
+
+# The line the Worker's daily check accepts (site/src/watchdog.ts, FIGURES_RE,
+# the same text; a test holds the two together): the date, " (UTC): ", then
+# at most 600 printable ASCII characters on one line. Matched with ASCII
+# digits and fullmatch, as JavaScript reads it.
+FIGURES_PATTERN = r"^(\d{4}-\d{2}-\d{2}) \(UTC\): [ -~]{1,600}$"
+# Between the day's figures and the month's, and between the month's parts
+# (views_report.PART_SEP, most wanted first).
+MONTH_SEP = " | "
+MONTH_PART_SEP = "; "
+NO_DAY = "the day's figures were not written tonight"
 
 # The operator console's count of accounts on Pro (site/src/account/admin_ops.ts,
 # overview, without its split by source): of each active account's live
@@ -194,6 +216,34 @@ def line(row: dict[str, Any], audience: dict[str, int | None]) -> str:
             f"engaged visitors {_n(audience.get('engaged_visitors'))}, "
             f"from search {_n(audience.get('search_visitors'))}, "
             f"on a phone or tablet {_n(audience.get('phone_visitors'))}")
+
+
+def is_figures_line(text: str) -> bool:
+    """Whether the daily check would accept text as the figures line (its date aside)."""
+    return re.fullmatch(FIGURES_PATTERN, text, re.ASCII) is not None
+
+
+def with_month(day_line: str | None, month_line: str, day: date) -> str | None:
+    """The figures line with the month's line joined on, for views/funnel_line.txt.
+
+    day_line is the line the funnel step left tonight; one the daily check
+    would not accept counts as none. Without one, the line is dated day (the
+    day the funnel step counted) and says the day's figures are missing, so
+    the email still carries the month. The day's figures are never cut: the
+    month's parts go from its end (its key in R2 first, the page views by
+    people last) until the line passes the check, so a part that is too long
+    or not printable ASCII goes as well. None when not even the first part
+    passes: the line R2 holds is then left as it is."""
+    head = (day_line or "").strip()
+    if not is_figures_line(head):
+        head = f"{day.isoformat()} (UTC): {NO_DAY}"
+    parts = [p for p in month_line.strip().split(MONTH_PART_SEP) if p]
+    while parts:
+        joined = head + MONTH_SEP + MONTH_PART_SEP.join(parts)
+        if is_figures_line(joined):
+            return joined
+        parts.pop()
+    return None
 
 
 def previous_day(now: datetime | None = None) -> date:

@@ -30,10 +30,13 @@ import { faultSummary } from "./search_db";
 // keeps one line for the last finished UTC day, the account funnel's counts
 // and that day's audience figures, in R2 under the private views/ prefix
 // (FIGURES_KEY), apart from status.json, whose text the run prints in its
-// public log. The check adds the line to the email, and a morning with the
-// line and nothing else still sends one, so the operator reads the figures
-// each day without asking for them. A line too old to be the last night's,
-// or of another shape, is left out; it is never an alert.
+// public log. On the night the monthly audience report is written, the line
+// also carries the month's figures (funnel.with_month), so they reach the
+// operator once, the morning after. The check adds the line to the email,
+// and a morning with the line and nothing else still sends one, so the
+// operator reads the figures each day without asking for them. A line too
+// old to be the last night's, or of another shape, is left out; it is never
+// an alert.
 
 export const DATA_STALE_HOURS = 36;
 // The backup is uploaded in parts of at most 250 MiB (the nightly pack); the
@@ -60,7 +63,9 @@ export const LOOKUP_MAX_BYTES = 2_000_000;
 // older line means the nightly did not write one since.
 export const FIGURES_KEY = "views/funnel_line.txt";
 export const FIGURES_MAX_DAYS = 2;
-// funnel.line: the date, " (UTC): ", then printable ASCII on one line.
+// funnel.line (funnel.with_month on a report night): the date, " (UTC): ",
+// then printable ASCII on one line. funnel.FIGURES_PATTERN is the same text,
+// and a pipeline test (test_funnel.py) holds the two together.
 const FIGURES_RE = /^(\d{4}-\d{2}-\d{2}) \(UTC\): [ -~]{1,600}$/;
 
 // The same-day refresh's runs in one statement over intraday_runs

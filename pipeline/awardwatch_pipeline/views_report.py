@@ -5,8 +5,14 @@ for the month just ended in R2 and runs this. It reads `views/summary.csv`
 (views_rollup.py) and, when present, `views/search_console.csv`
 (search_console.py), and writes the report: the month and the three before
 it, side by side, in plain markdown tables, with the definitions of the
-numbers and nothing else. It also writes the one line the workflow adds to
-LAST_RUN.md.
+numbers and nothing else. It also writes two lines. summary_line.txt is the
+one the workflow adds to LAST_RUN.md, which the nightly commits to the public
+repository: it says the month's report was written and its R2 key, and holds
+no figure. month_line.txt holds the month's figures for the operator: the
+workflow joins it to the night's private figures line (funnel.with_month) and
+puts the result in R2 as views/funnel_line.txt, so the Worker's daily check
+mails the month once, the morning after the report is written. Neither line
+is printed or logged.
 
 Waiting: the report is meant to cover the whole month, so it waits while the
 summary lacks the month's last day, for up to WAIT_DAYS days into the next
@@ -24,15 +30,15 @@ subscribers, organizations, records) are not summed: each month shows the
 last reading in it (the largest daily figure for feed subscribers).
 
 Unique visitors count automated browsers that copy a browser's headers, so
-the report says beside the table which figures to read as people. The one
-line for LAST_RUN.md is public and carries none of the three.
+the report says beside the table which figures to read as people. In the
+private line those three come right after the page views by people.
 
 Alert sign-ups: the count the nightly run read from the forms database just
 before the report (rows of the interest table, one per address and saved
 filter, and how many have not unsubscribed; the landing page's Ultra card
 rows, which hold no filter, are left out by the workflow's query), as it stood
-when the report was written. It stays out of the one-line summary, which goes
-to the public LAST_RUN.md.
+when the report was written. The report is the only place it is kept; the
+run status records only whether it was counted.
 """
 
 from __future__ import annotations
@@ -53,6 +59,10 @@ WAIT_DAYS = 7
 MONTHS = 4
 TOP_PAGES = 10
 NA = "n/a"
+
+# The public line for LAST_RUN.md (no figure) and the private one for the operator's email.
+SUMMARY_LINE = "summary_line.txt"
+MONTH_LINE = "month_line.txt"
 
 
 def month_bounds(month: str) -> tuple[date, date]:
@@ -295,14 +305,38 @@ def render(month: str, months: list[Month], written: date, interest: dict[str, i
     )
 
 
-def summary_line(month: str, m: Month) -> str:
-    parts = [f"{_n(m.human_pages)} page views by people" if m.people_days else "page views by people n/a",
-             f"{_n(m.visitor_days)} visitor-days" if m.visitor_days_n else "visitor-days n/a",
-             f"{_n(m.visits)} visits" if m.visitor_days_n else "visits n/a",
-             f"Canada {_share(m.canada, m.countries_total)}"]
-    if m.search_days:
-        parts.append(f"search clicks {_n(m.clicks)}, impressions {_n(m.impressions)}")
-    return f"{month}: " + "; ".join(parts) + f" (views/report-{month}.md)"
+def report_key(month: str) -> str:
+    return f"views/report-{month}.md"
+
+
+def summary_line(month: str) -> str:
+    """The public line for LAST_RUN.md: that the report was written, and where. It takes no figures, so it can
+    carry none."""
+    return f"{month} written to R2 as {report_key(month)}"
+
+
+# Between the private line's parts. funnel.with_month drops parts from the end
+# to fit the line the daily check accepts, so the most wanted come first.
+PART_SEP = "; "
+
+
+def month_line(month: str, m: Month) -> str:
+    """The month's figures in one private line for the operator's email (funnel.with_month joins it to the day's
+    line). Page views by people first, then the three counts to read as people, then the visitor-days and visits
+    (which count automated browsers too), the search figures, Canada's share and the report's key."""
+    readers = m.readers_n > 0
+    parts = [
+        f"month {month}: page views by people {_n(m.human_pages) if m.people_days else NA}",
+        f"engaged visitor-days {_n(m.engaged) if readers else NA}, from search {_n(m.from_search) if readers else NA}, "
+        f"on a phone or tablet {_n(m.phone) if readers else NA}",
+        f"visitor-days {_n(m.visitor_days) if m.visitor_days_n else NA}, "
+        f"visits {_n(m.visits) if m.visitor_days_n else NA}",
+        f"search clicks {_n(m.clicks) if m.search_days else NA}, "
+        f"impressions {_n(m.impressions) if m.search_days else NA}",
+        f"Canada {_share(m.canada, m.countries_total)}",
+        f"report {report_key(month)}",
+    ]
+    return PART_SEP.join(parts)
 
 
 def _read_search(path: Path | None) -> list[dict[str, str]]:
@@ -314,9 +348,10 @@ def _read_search(path: Path | None) -> list[dict[str, str]]:
 
 def run(out_dir: Path, month: str, today: date, summary_path: Path, search_path: Path | None = None,
         interest: dict[str, int] | None = None) -> str:
-    """Write report-<month>.md and summary_line.txt in out_dir. Returns "written",
-    "waiting" (the month's last day is not rolled up yet), "no data" or "failed"; never raises.
-    interest is the count of alert sign-ups (nightly.interest_counts), None when it was not read."""
+    """Write report-<month>.md, summary_line.txt (public, no figure) and month_line.txt (private) in out_dir.
+    Returns "written", "waiting" (the month's last day is not rolled up yet), "no data" or "failed"; never
+    raises, and never prints or logs a figure. interest is the count of alert sign-ups
+    (nightly.interest_counts), None when it was not read."""
     try:
         first, last = month_bounds(month)
         if today <= last:
@@ -339,7 +374,8 @@ def run(out_dir: Path, month: str, today: date, summary_path: Path, search_path:
         out_dir.mkdir(parents=True, exist_ok=True)
         report = render(month, months, today, interest)
         (out_dir / f"report-{month}.md").write_text(report, encoding="utf-8", newline="\n")
-        (out_dir / "summary_line.txt").write_text(summary_line(month, months[-1]) + "\n", encoding="utf-8")
+        (out_dir / SUMMARY_LINE).write_text(summary_line(month) + "\n", encoding="utf-8", newline="\n")
+        (out_dir / MONTH_LINE).write_text(month_line(month, months[-1]) + "\n", encoding="utf-8", newline="\n")
         return "written"
     except Exception as exc:
         log.error("views report failed (%s): %s", type(exc).__name__, str(exc)[:200])

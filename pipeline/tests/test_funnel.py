@@ -10,11 +10,12 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
-from awardwatch_pipeline import funnel, nightly, resilience, views_rollup as vr
+from awardwatch_pipeline import funnel, nightly, resilience, views_report as vrep, views_rollup as vr
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = ROOT / "site" / "accounts_schema.sql"
 WORKFLOW = ROOT / ".github" / "workflows" / "nightly.yml"
+WATCHDOG = ROOT / "site" / "src" / "watchdog.ts"
 DAY = date(2026, 11, 10)
 
 
@@ -200,6 +201,112 @@ def test_a_record_that_cannot_be_read_safely_is_never_replaced(tmp_path):
         assert not (out / funnel.LINE).exists()
 
 
+# -- the month on the line ---------------------------------------------------------------
+
+
+DAY_LINE = ("2026-11-30 (UTC): accounts 12 (new 2), sign-in codes asked for 3, sign-ins 2, Pro 1, saved searches 4, "
+            "watches 7; page views by people 120, engaged visitors 7, from search 9, on a phone or tablet 6")
+MONTH = ("month 2026-11: page views by people 3,400; engaged visitor-days 210, from search 160, on a phone or tablet 95; "
+         "visitor-days 5,100, visits 4,800; search clicks 140, impressions 9,800; Canada 81.2%; "
+         "report views/report-2026-11.md")
+REPORT_DAY = date(2026, 11, 30)
+
+
+def test_the_line_has_the_shape_the_daily_check_accepts():
+    # The Worker's pattern, as written in site/src/watchdog.ts.
+    m = re.search(r"^const FIGURES_RE = /(.+)/;$", WATCHDOG.read_text(encoding="utf-8"), re.M)
+    assert m and m.group(1) == funnel.FIGURES_PATTERN
+    assert funnel.MONTH_PART_SEP == vrep.PART_SEP
+    assert funnel.is_figures_line(DAY_LINE)
+    assert funnel.is_figures_line("2026-11-30 (UTC): " + "x" * 600)
+    for bad in ("2026-11-30 (UTC): " + "x" * 601, "2026-11-30 (UTC): a\nb", "2026-11-30 (UTC): a\n",
+                "2026-11-30 (UTC): café", "2026-11-30: a", "٢026-11-30 (UTC): a", "2026-11-30 (UTC): "):
+        assert not funnel.is_figures_line(bad), bad
+
+
+def test_the_month_is_joined_after_the_days_figures():
+    joined = funnel.with_month(DAY_LINE + "\n", MONTH + "\n", REPORT_DAY)
+    assert joined == f"{DAY_LINE} | {MONTH}"
+    assert funnel.is_figures_line(joined)
+
+
+def test_without_a_days_line_the_month_goes_on_a_line_dated_as_the_funnel_step_dates_it():
+    expected = f"2026-11-30 (UTC): {funnel.NO_DAY} | {MONTH}"
+    assert funnel.is_figures_line(expected)
+    # No line, or one the daily check would refuse anyway.
+    for missing in (None, "", "garbled", "2026-11-30 (UTC): café", DAY_LINE + "\n" + DAY_LINE,
+                    "2026-11-30 (UTC): " + "x" * 601):
+        assert funnel.with_month(missing, MONTH, REPORT_DAY) == expected, missing
+
+
+def test_a_line_that_would_not_fit_drops_the_months_parts_from_its_end():
+    parts = MONTH.split("; ")
+    head = "2026-11-30 (UTC): "
+    for keep in range(1, len(parts) + 1):
+        # A day's line that leaves room for exactly `keep` parts of the month.
+        room = len(" | " + "; ".join(parts[:keep]))
+        day_line = head + "a" * (600 - room)
+        joined = funnel.with_month(day_line, MONTH, REPORT_DAY)
+        assert joined == day_line + " | " + "; ".join(parts[:keep]), keep
+        assert len(joined) == len(head) + 600 and funnel.is_figures_line(joined)
+    # The day's figures are never cut: with no room for the month's first part, nothing is joined.
+    assert funnel.with_month(head + "a" * (600 - len(" | " + parts[0]) + 1), MONTH, REPORT_DAY) is None
+    # A part the check would refuse goes, with the parts after it.
+    odd = MONTH.replace("Canada 81.2%", "Canada 81.2% ")
+    assert funnel.with_month(DAY_LINE, odd, REPORT_DAY) == DAY_LINE + " | " + "; ".join(parts[:4])
+    assert funnel.with_month(DAY_LINE, "", REPORT_DAY) is None
+    assert funnel.with_month(None, "month 2026-11: café", REPORT_DAY) is None
+
+
+def test_the_command_joins_the_lines_the_two_steps_left_and_prints_neither(tmp_path, capsys, caplog, monkeypatch):
+    caplog.set_level("INFO")
+    # Tonight's funnel line and the month's line, from one summary, with figures that must never be printed.
+    counts = write_answer(tmp_path / "count.json", answer(
+        day="2026-11-30", accounts=7301, accounts_new=7302, codes_requested=7303, sign_ins=7304, pro=7305,
+        saved_searches=7306, watches=7307))
+    summary = write_summary(tmp_path / "summary.csv", day="2026-11-30", human_pages=7308, unique_visitors=7312,
+                            human_visits=7313, engaged_visitors=7309, search_visitors=7310, phone_visitors=7311)
+    funnel_dir, report_dir = tmp_path / "funnel", tmp_path / "report"
+    funnel_dir.mkdir()
+    assert funnel.run(funnel_dir, REPORT_DAY, counts, summary) == "written"
+    (funnel_dir / "day.txt").write_text("2026-11-30\n", encoding="utf-8")
+    assert vrep.run(report_dir, "2026-11", date(2026, 12, 1), summary) == "written"
+    out = report_dir / "figures_line.txt"
+    args = ["figures-line", "--month-line", str(report_dir / vrep.MONTH_LINE),
+            "--day-line", str(funnel_dir / funnel.LINE), "--day-file", str(funnel_dir / "day.txt"), "--out", str(out)]
+    capsys.readouterr()
+    assert nightly.main(args) == 0
+    printed = capsys.readouterr()
+    assert printed.out == "figures-line: the month joined to tonight's line\n"
+    for n in range(7301, 7314):
+        for shown in (str(n), f"{n:,}"):
+            assert shown not in printed.out + printed.err + caplog.text, n
+    day_line = (funnel_dir / funnel.LINE).read_text(encoding="utf-8").strip()
+    month = (report_dir / vrep.MONTH_LINE).read_text(encoding="utf-8").strip()
+    assert out.read_text(encoding="utf-8") == f"{day_line} | {month}\n"
+    assert funnel.is_figures_line(out.read_text(encoding="utf-8").strip())
+    assert "accounts 7,301" in day_line and "month 2026-11: page views by people 7,308" in month
+    # No funnel line tonight: the month still goes, on a line dated by the funnel step's day.
+    (funnel_dir / funnel.LINE).unlink()
+    assert nightly.main(args) == 0
+    assert capsys.readouterr().out == "figures-line: the month joined to a line without the day's figures\n"
+    assert out.read_text(encoding="utf-8") == f"2026-11-30 (UTC): {funnel.NO_DAY} | {month}\n"
+    # Without the day file, or with one that does not read, the date is yesterday's (UTC), as the funnel step's.
+    monkeypatch.setattr(funnel, "previous_day", lambda now=None: date(2026, 12, 4))
+    (funnel_dir / "day.txt").write_text("not a date\n", encoding="utf-8")
+    for day_file in (funnel_dir / "day.txt", tmp_path / "missing.txt"):
+        assert nightly.main(args[:5] + ["--day-file", str(day_file), "--out", str(out)]) == 0
+        assert out.read_text(encoding="utf-8").startswith(f"2026-12-04 (UTC): {funnel.NO_DAY} | month 2026-11: ")
+    # Nothing to join: exit 1, and no file left for the upload, not even an earlier one.
+    for month_line in (tmp_path / "missing.txt", tmp_path / "odd.txt"):
+        (tmp_path / "odd.txt").write_text("month 2026-11: café\n", encoding="utf-8")
+        out.write_text("an earlier line\n", encoding="utf-8")
+        assert nightly.main(["figures-line", "--month-line", str(month_line), "--out", str(out)]) == 1
+        assert not out.exists()
+    printed = capsys.readouterr()
+    assert "caf" not in printed.out + printed.err
+
+
 # -- the commands -----------------------------------------------------------------------
 
 
@@ -286,7 +393,39 @@ def test_the_workflow_counts_the_funnel_in_d1_and_keeps_it_in_the_private_prefix
     # The record of the run, committed to the public repository, never names the funnel.
     record = step(text, "Record the run so the schedule stays enabled")
     assert "funnel" not in record
-    # The funnel's files are read and written in these two steps and no other.
-    others = code(text.replace(count, "").replace(save, ""))
+    # The funnel's files are read and written in these two steps and, for the
+    # month's figures, the report step (the next test), and in no other.
+    report = step(text, "Write the monthly audience report (the first run of a month)")
+    others = code(text.replace(count, "").replace(save, "").replace(report, ""))
     assert "data/out/funnel/" not in others.replace("--funnel-outcome data/out/funnel/last_outcome.txt", "")
     assert "funnel_line" not in others and "funnel.csv" not in others and "awardwatch-accounts" not in others
+
+
+def test_the_report_step_puts_the_month_on_the_line_and_prints_neither():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    report = code(step(text, "Write the monthly audience report (the first run of a month)"))
+    assert 'if python -m awardwatch_pipeline.nightly figures-line --month-line "$out/month_line.txt" \\' in report
+    assert ('--day-line data/out/funnel/funnel_line.txt --day-file data/out/funnel/day.txt '
+            '--out "$out/figures_line.txt" \\') in report
+    # The report, then the joined line over the funnel step's, and no answer from Wrangler in the log.
+    puts = re.findall(r'r2 object put --remote "\$BUCKET/([^"]+)" --file "([^"]+)"(.*)$', report, re.M)
+    assert puts == [("views/report-$month.md", "$out/report-$month.md", " > /dev/null"),
+                    ("views/funnel_line.txt", "$out/figures_line.txt", " > /dev/null; then")]
+    # Only on the night the report is written, after it is in R2; a join or an
+    # upload that fails sits inside the if, so the outcome stays "written".
+    assert (report.index('if [ "$outcome" = "written" ]; then') < report.index('"$BUCKET/views/report-$month.md"')
+            < report.index("figures-line") < report.index('echo "$outcome" > "$out/last_outcome.txt"'))
+    assert "funnel.csv" not in report and "data/out/funnel/" not in report.replace(
+        "data/out/funnel/funnel_line.txt", "").replace("data/out/funnel/day.txt", "")
+    for shown in ("month_line", "figures_line", "funnel_line", "data/out/funnel"):
+        assert f"cat {shown}" not in report and f'cat "$out/{shown}' not in report, shown
+    assert "$GITHUB_STEP_SUMMARY" not in report
+    # After the funnel step left tonight's line, before the run status.
+    names = [ln.strip()[len("- name: "):] for ln in text.splitlines() if ln.strip().startswith("- name: ")]
+    assert (names.index("Save the account funnel to R2 (private)")
+            < names.index("Write the monthly audience report (the first run of a month)")
+            < names.index("Write the run status"))
+    # LAST_RUN.md gets the public line alone.
+    record = code(step(text, "Record the run so the schedule stays enabled"))
+    assert 'echo "Audience report: $(cat data/out/report/summary_line.txt)" >> LAST_RUN.md' in record
+    assert "month_line" not in record and "figures_line" not in record

@@ -36,9 +36,17 @@
 # in R2 when the analytics token exists, count the alert sign-ups in the forms database,
 # count the account funnel's day and keep it in R2's private views/ prefix for the
 # operator's email, append Search Console's daily figures when its key exists, write the
-# monthly audience report on the first run of a month, run the monthly expiry
+# monthly audience report on the first run of a month (its figures join the
+# operator's line, never LAST_RUN.md), run the monthly expiry
 # checks on the first of a month, write the run status, and report the items
 # needing attention (failed run, one GitHub issue).
+#
+# Audience and account figures (visitors, page views, search clicks, sign-ups
+# and the like) stay in R2's private views/ prefix and the operator's
+# email. This run log is public, LAST_RUN.md is committed to the public
+# repository, and status.json is printed in this log, so no step prints such
+# a figure and neither file holds one; for those steps they carry an outcome
+# word.
 #
 # What a failure does (awardwatch_pipeline/nightly.py and resilience.py hold the
 # checks):
@@ -66,8 +74,8 @@
 #   could not be downloaded is never replaced. The same holds for the Search
 #   Console import (search_console: failed) and its file, and for the monthly
 #   report (views_report: failed), which the next run writes instead.
-# - A count of the alert sign-ups that cannot be read leaves the status's
-#   interest counts empty and adds a notice: information, never an item
+# - A count of the alert sign-ups that cannot be read sets the status's
+#   interest to "failed" and adds a notice: information, never an item
 #   needing attention and never a failed run. The next run counts again.
 # - An account funnel count that cannot be read writes n/a in the operator's
 #   line; a funnel record that cannot be saved to R2 is a notice
@@ -913,8 +921,10 @@ jobs:
       # address waiting for one message, not an alert) left out. The query
       # returns those two numbers and nothing else, so no address leaves D1. The deploy token reads D1 already (the
       # weekly snapshot exports it). Wrangler's JSON answer goes to
-      # data/out/interest/count.json, which the run status (interest) and the
-      # monthly audience report read; a query that fails three times leaves
+      # data/out/interest/count.json and never to this log, which is public.
+      # The monthly audience report, kept in R2's private views/ prefix, is
+      # the one place the two numbers go; the run status (interest) records
+      # only whether they were read. A query that fails three times leaves
       # no file, and the status then carries a notice. It never stops the run
       # and is never an item needing attention.
       - name: Count the alert sign-ups
@@ -981,7 +991,9 @@ jobs:
       # up nothing. The Worker's daily check adds the line to the operator's
       # email. Both stay in the private views/ prefix, which no route on the
       # site reads: the run status gets the outcome word alone, LAST_RUN.md
-      # nothing, and no figure is printed here. The record is downloaded first
+      # nothing, and no figure is printed here. On the night the monthly
+      # report is written, the report step below puts the line again with
+      # the month's figures joined on. The record is downloaded first
       # and a download that fails for any reason but "does not exist" stops
       # the step, so a shorter record never replaces it. The outcome reads
       # "failed" until both files are in R2; a failed save is a notice. It
@@ -1082,8 +1094,18 @@ jobs:
       # beside it. Every night this asks R2 whether last month's report
       # exists ("not due" when it does), so a night that fails is made up by
       # the next. The report waits up to a week for the month's last day to
-      # be rolled up ("waiting"). Its one-line summary goes to LAST_RUN.md.
-      # It never stops the run.
+      # be rolled up ("waiting"). LAST_RUN.md, which is public, gets only
+      # summary_line.txt: that the report was written and its R2 key. The
+      # month's figures go to the operator: figures-line joins month_line.txt
+      # to the line the funnel step left tonight (or, when it left none, to a
+      # line dated as that step dates it), and the result replaces
+      # views/funnel_line.txt, so the next morning's email carries the month
+      # once. A line that cannot be joined or saved leaves the email without
+      # the month; the report is in R2 and the outcome stays "written". A
+      # retry the same day finds the report written ("not due"), so its
+      # funnel step's line goes out without the month. Wrangler's answers to
+      # the uploads go to /dev/null, and neither line is printed. It never
+      # stops the run.
       - name: Write the monthly audience report (the first run of a month)
         id: report
         if: ${{ !cancelled() }}
@@ -1116,7 +1138,14 @@ jobs:
             --search "$out/search_console.csv" --interest data/out/interest/count.json --out "$out"
           outcome=$(cat "$out/outcome.txt")
           if [ "$outcome" = "written" ]; then
-            "$WRANGLER" r2 object put --remote "$BUCKET/views/report-$month.md" --file "$out/report-$month.md"
+            "$WRANGLER" r2 object put --remote "$BUCKET/views/report-$month.md" --file "$out/report-$month.md" > /dev/null
+            if python -m awardwatch_pipeline.nightly figures-line --month-line "$out/month_line.txt" \
+                --day-line data/out/funnel/funnel_line.txt --day-file data/out/funnel/day.txt --out "$out/figures_line.txt" \
+              && "$WRANGLER" r2 object put --remote "$BUCKET/views/funnel_line.txt" --file "$out/figures_line.txt" > /dev/null; then
+              echo "the month's figures are on the operator's line for the next email"
+            else
+              echo "the month's figures could not be put on the operator's line; the report in R2 holds them"
+            fi
           fi
           echo "$outcome" > "$out/last_outcome.txt"
 
@@ -1152,7 +1181,8 @@ jobs:
       # outcome under steps), the notices (information, never failures or
       # items needing attention), what the checks found, the outcomes of the
       # audience roll-up, the Search Console import, the monthly report and
-      # the IndexNow submission, the count of alert sign-ups (interest), where
+      # the IndexNow submission, whether the alert sign-ups were counted
+      # (interest: "counted", "failed" or "not run", never the counts), where
       # the database came from (restore), the smoke test and any rollback, and
       # the expiry checks. search_sync is the search database sync's outcome
       # ("synced", "nothing to send", "failed", or "not run" when the checks
@@ -1226,7 +1256,8 @@ jobs:
             echo "" >> LAST_RUN.md
             echo "Search Console: $(cat data/out/search_console/last_outcome.txt)" >> LAST_RUN.md
           fi
-          # The monthly report's one line, only on the run that wrote it (or tried and failed).
+          # The monthly report's public line, only on the run that wrote it (or
+          # tried and failed): the month and the R2 key, no figure.
           report_outcome=$(cat data/out/report/last_outcome.txt 2>/dev/null || true)
           if [ "$report_outcome" = "written" ] && [ -f data/out/report/summary_line.txt ]; then
             echo "" >> LAST_RUN.md

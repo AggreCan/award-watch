@@ -66,6 +66,10 @@ Why "failed" never stops the run: the counts are a record of the audience,
 not part of the data refresh. The step reports the outcome in the run status
 and the next night catches up.
 
+What the log says: the days rolled up, whether each had the bot flag, and
+the file written for it; never an audience figure. The repository is public,
+so its run log is too, and the figures stay in R2's private views/ prefix.
+
 Readings taken on the night, on the row for yesterday only: the site's
 organization and record counts from tonight's stats.json (records: award
 notices, contract history records, published contracts, grant agreements and
@@ -297,7 +301,10 @@ def query(http: Any, account: str, token: str, sql: str, timeout: float = 60) ->
     """The rows of one SQL API answer. Raises QueryError for anything else.
 
     The token travels only in the Authorization header, never in a URL, so
-    no error message or log line can carry it."""
+    no error message or log line can carry it. An error answer's body is
+    kept in the message, since it names the problem; a successful answer's
+    is not, since it may hold the day's counts and the message reaches the
+    public run log."""
     headers = {"Authorization": f"Bearer {token}", "User-Agent": config.USER_AGENT, "Content-Type": "text/plain"}
     try:
         resp = http.post(SQL_URL.format(account=account), data=sql.encode("utf-8"), headers=headers, timeout=timeout)
@@ -309,7 +316,7 @@ def query(http: Any, account: str, token: str, sql: str, timeout: float = 60) ->
     try:
         rows = resp.json()["data"]
     except Exception:
-        raise QueryError(f"HTTP {status} without rows: {_body(resp)}") from None
+        raise QueryError(f"HTTP {status} without rows") from None
     if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
         raise QueryError(f"HTTP {status}: data is not a list of rows")
     return rows
@@ -859,8 +866,10 @@ def _run(out_dir: Path | None, *, day: date | None, env: Mapping[str, str] | Non
     counts = site_counts(stats_path or (config.OUT_DIR / "static" / "stats.json"))
     for d in rolled:
         path = write_day(folder, d)
-        log.info("views: %s: %d responses, %d grouped rows, %d feeds%s -> %s", d.day, d.total, len(d.counts),
-                 len(d.feeds), "" if d.flagged else " (no bot flag, people columns blank)", path.name)
+        # The day, the flag note and the file only: the run log is public, and
+        # the day's totals belong in R2's private views/ prefix.
+        log.info("views: %s rolled up%s -> %s", d.day, "" if d.flagged else " (no bot flag, people columns blank)",
+                 path.name)
     if caught:
         log.info("views: reader columns filled on %d earlier day(s): %s", len(caught),
                  ", ".join(r["date"] for r in caught))

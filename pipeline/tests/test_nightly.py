@@ -422,14 +422,25 @@ def test_status_carries_the_notices_and_they_never_fail_the_run(tmp_path):
 INTEREST_ANSWER = Path(__file__).parent / "fixtures" / "d1_interest_count.json"
 
 
-def test_status_carries_the_alert_sign_ups_from_the_d1_answer(tmp_path):
+def test_status_says_the_alert_sign_ups_were_counted_and_never_holds_the_counts(tmp_path, capsys):
     db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     out = tmp_path / "status.json"
     assert nightly.main(["status", "--db", str(db), "--interest", str(INTEREST_ANSWER), "--out", str(out)]) == 0
     status = json.loads(out.read_text(encoding="utf-8"))
-    assert status["interest"] == {"n": 12, "live": 11}
+    assert status["interest"] == "counted"
     assert status["notices"] == []
+    # The status is printed in the public run log and saved to R2: the counts
+    # reach neither, only the word.
+    figures = tmp_path / "figures.json"
+    figures.write_text(json.dumps([{"results": [{"n": 7301, "live": 7299}], "success": True}]), encoding="utf-8")
+    capsys.readouterr()
+    assert nightly.main(["status", "--db", str(db), "--interest", str(figures), "--out", str(out)]) == 0
+    printed = capsys.readouterr()
+    written = out.read_text(encoding="utf-8")
+    assert json.loads(written)["interest"] == "counted"
+    for shown in ("7301", "7,301", "7299", "7,299"):
+        assert shown not in printed.out + printed.err + written, shown
     # Text Wrangler prints before its JSON is skipped.
     noisy = tmp_path / "noisy.json"
     noisy.write_text("Executing on remote database award-watch:\n" + INTEREST_ANSWER.read_text(encoding="utf-8"),
@@ -447,13 +458,13 @@ def test_an_unread_count_is_a_notice_never_an_item_needing_attention(tmp_path):
         assert nightly.main(["status", "--db", str(db), "--started-file", str(tmp_path / "none"),
                              "--interest", str(path), "--step", "deploy=success", "--out", str(out)]) == 0
         status = json.loads(out.read_text(encoding="utf-8"))
-        assert status["interest"] == {"n": None, "live": None}
+        assert status["interest"] == "failed"
         assert {"source": "interest", "detail": nightly.INTEREST_NOTICE} in status["notices"]
         assert resilience.attention_items({**status, "stages": []}) == []
         assert any(item.startswith("interest: the alert sign-ups were not counted") for item in resilience.notice_items(status))
     # A status written without the count step (a run before it existed) says nothing about it.
     quiet = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
-    assert quiet["interest"] == {"n": None, "live": None} and quiet["notices"] == [] and quiet["ok"] is True
+    assert quiet["interest"] == "not run" and quiet["notices"] == [] and quiet["ok"] is True
 
 
 @pytest.mark.parametrize("answer, counts", [

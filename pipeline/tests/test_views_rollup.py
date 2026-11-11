@@ -335,6 +335,37 @@ def test_an_api_failure_is_failed_and_leaves_every_file_as_it_was(tmp_path, fail
     assert TOKEN not in caplog.text
 
 
+def test_the_log_names_the_day_and_its_file_and_never_a_figure(tmp_path, caplog, capsys):
+    # The run log is public: the counts go to the files, never to the log.
+    caplog.set_level("INFO")
+    kinds = [{"kind": "page", "responses": "73011"}, {"kind": "api", "responses": "73012"}]
+    counts = [{"route": "/", "kind": "page", "lang": "en", "country": "CA", "referrer": "", "status": 200,
+               "responses": "73013"}]
+    feeds = [{"feed": "feeds/canada/tenders.xml", "responses": "73014", "subscribers": 73015}]
+    people = {**FLAGGED, "audience": [{"agent": "human", "country": "CA", "device": "desktop", "lang": "en",
+                                       "pages": "73016"}],
+              "routes": [{"route": "/", "pages": "73016"}], "visitors": [{"visitors": "73017", "uncoded": "0"}],
+              "visits": [{"visits": "73018"}], "engaged": [{"engaged": "73019"}], "search": [{"search": "73020"}],
+              "phone": [{"phone": "73021"}]}
+    before = date(2026, 10, 20)
+    http = FakeHttp({before: (kinds, counts, feeds), YESTERDAY: (kinds, counts, feeds, people)})
+    (tmp_path / vr.SUMMARY).write_text(",".join(vr.SUMMARY_HEADER) + "\n2026-10-19,1,1,0,0,0,0,0,0,,/ 1\n",
+                                       encoding="utf-8")
+    assert roll(tmp_path, http) == "rolled up"
+    assert "73013" in (tmp_path / "2026-10-21.csv").read_text(encoding="utf-8")
+    days = [r.getMessage() for r in caplog.records if r.getMessage().startswith("views: 2026-10-2")]
+    assert days == ["views: 2026-10-20 rolled up (no bot flag, people columns blank) -> 2026-10-20.csv",
+                    "views: 2026-10-21 rolled up -> 2026-10-21.csv"]
+    shown = caplog.text + capsys.readouterr().err
+    for n in [*range(73011, 73022), 73011 + 73012]:
+        assert str(n) not in shown and f"{n:,}" not in shown, n
+    # A successful answer that does not read is reported without its body, which may hold the counts.
+    caplog.clear()
+    bad = FakeResponse(200, None, '{"meta": [], "data": [{"kind": "page", "responses": "73022"')
+    assert roll(tmp_path, FakeHttp(fail=bad)) == "failed"
+    assert "HTTP 200 without rows" in caplog.text and "73022" not in caplog.text
+
+
 def test_a_failure_part_way_through_a_catch_up_writes_nothing(tmp_path):
     summary = tmp_path / vr.SUMMARY
     summary.write_text(",".join(vr.SUMMARY_HEADER) + "\n2026-10-19,1,1,0,0,0,0,0,0,,/ 1\n", encoding="utf-8")

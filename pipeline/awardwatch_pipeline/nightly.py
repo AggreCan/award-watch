@@ -13,8 +13,10 @@ one, and always leaves a status file the site's daily check can read.
   verify    check tonight's database and export; writes db_ok and export_ok
             for the save and deploy steps (to $GITHUB_OUTPUT when set).
   status    write status.json from the run's log rows, the workflow steps'
-            outcomes and the checks, whatever state the run ended in, with
-            the count of alert sign-ups the workflow read from D1.
+            outcomes and the checks, whatever state the run ended in, and
+            print it. It holds no audience figure and no count of sign-ups
+            (the audience steps and the sign-up count give a word each),
+            since the run log is public.
   pack      write the backup the save step uploads: a copy of the database
             without its secondary indexes, checked, gzipped and split into
             parts of at most PART_MIB with a manifest of their SHA-256.
@@ -59,6 +61,11 @@ one, and always leaves a status file the site's daily check can read.
             the audience roll-up (views_rollup.py), the Search Console import
             (search_console.py) and the monthly report (views_report.py);
             each exits 1 only when it failed.
+  funnel-sql, funnel, figures-line
+            the account funnel (funnel.py): the count statement, the row
+            and line kept in R2's private views/ prefix, and on the night
+            the monthly report is written that line with the month's
+            figures joined on (funnel.with_month). None prints a figure.
 
 Backups travel in parts. Wrangler refuses a single R2 upload above 300 MiB,
 and the database holds every published contract and grant agreement, so its
@@ -640,9 +647,12 @@ def run_status(
     the data refresh failed.
 
     interest is the count of alert sign-ups the workflow read from the forms
-    database (interest_counts): n rows, live of them not unsubscribed; both
-    null when it was not read. A count that was tried and not read
-    (interest_tried) adds a notice, never an item needing attention.
+    database (interest_counts), None when it was not read; interest_tried
+    says the workflow asked. The status keeps only the outcome: "counted",
+    "failed" (asked and not read, which adds a notice, never an item needing
+    attention) or "not run". The counts themselves go to the monthly report
+    in R2 (views_report.py), because this file is printed in the public run
+    log and saved where the site's daily check reads it.
 
     intraday_lookup and intraday_prune are the outcomes of the same-day
     refresh's two nightly steps (intraday.py: the buyer lookup saved to R2,
@@ -765,7 +775,9 @@ def run_status(
         "views_report": views_report or "not run",
         "indexnow": indexnow_outcome or "not run",
         "funnel": funnel or "not run",
-        "interest": dict(interest) if interest else {"n": None, "live": None},
+        # Whether the alert sign-ups were counted, never the counts: the
+        # monthly report in R2 carries them.
+        "interest": "counted" if interest else "failed" if interest_tried else "not run",
         "restore": restored,
         "smoke": verdict,
         "smoke_detail": str(smoke.get("detail") or "")[:300] if isinstance(smoke, dict) else "",
@@ -1144,7 +1156,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--indexnow-outcome", default=None, help="the IndexNow submission's outcome file")
     s.add_argument("--search-console-outcome", default=None, help="the Search Console import's outcome file")
     s.add_argument("--views-report-outcome", default=None, help="the monthly audience report's outcome file")
-    s.add_argument("--interest", default=None, help="Wrangler's JSON answer to the count of alert sign-ups")
+    s.add_argument("--interest", default=None,
+                   help="Wrangler's JSON answer to the count of alert sign-ups (the status keeps whether it read)")
     s.add_argument("--funnel-outcome", default=None, help="the account funnel save's outcome file (a word, no figure)")
     s.add_argument("--restore", default=None, help="the restore record")
     s.add_argument("--smoke", default=None, help="the smoke test's result file")
@@ -1242,9 +1255,20 @@ def build_parser() -> argparse.ArgumentParser:
     vp.add_argument("--month", default=None, help="YYYY-MM (default: the month before today, UTC)")
     vp.add_argument("--summary", required=True, help="views/summary.csv as downloaded from R2")
     vp.add_argument("--search", default=None, help="views/search_console.csv as downloaded from R2, when it exists")
-    vp.add_argument("--out", required=True, help="folder for report-<month>.md, summary_line.txt and outcome.txt")
+    vp.add_argument("--out", required=True,
+                    help="folder for report-<month>.md, summary_line.txt, month_line.txt and outcome.txt")
     vp.add_argument("--today", default=None, help="YYYY-MM-DD (default: today, UTC)")
     vp.add_argument("--interest", default=None, help="Wrangler's JSON answer to the count of alert sign-ups, when read")
+    # The month's private line joined to the night's figures line
+    # (funnel.with_month), for the report step to put in R2 as
+    # views/funnel_line.txt. Prints neither line.
+    fl = sub.add_parser("figures-line", help="join the month's private line to tonight's figures line")
+    fl.add_argument("--month-line", required=True, help="the month_line.txt views-report wrote")
+    fl.add_argument("--day-line", default=None, help="the funnel_line.txt the funnel step left tonight, if any")
+    fl.add_argument("--day-file", default=None,
+                    help="the funnel step's day.txt, the date of a line written without a day line "
+                         "(default: yesterday, UTC)")
+    fl.add_argument("--out", required=True, help="the joined line, written only when there is one")
     # The account funnel (funnel.py, docs/search-engines.md section 6): the
     # statement the count step sends to the accounts database, then the row
     # and line kept in the private views/ prefix. Neither prints a figure.
@@ -1268,6 +1292,7 @@ def main(argv: list[str] | None = None) -> int:
         "attention": _attention, "notices": _notice_section, "site-bundle-check": _site_bundle_check,
         "indexnow": _indexnow, "rollup-views": _rollup_views, "import-search-console": _import_search_console,
         "views-report": _views_report, "org-review": _org_review, "funnel-sql": _funnel_sql, "funnel": _funnel,
+        "figures-line": _figures_line,
     }
     return handlers[args.command](args)
 
@@ -1562,6 +1587,40 @@ def _funnel(args: argparse.Namespace) -> int:
     (out / funnel.OUTCOME).write_text(outcome + "\n", encoding="utf-8")
     print(f"funnel: {outcome}")
     return 1 if outcome == "failed" else 0
+
+
+def _figures_line(args: argparse.Namespace) -> int:
+    """Exit 1, with nothing at --out, when there is no line to put in R2 (no month line, or none that fits).
+    Prints a word about what was joined and never either line: the run log is public."""
+    from . import funnel
+
+    def text(path: str | None) -> str | None:
+        try:
+            return _read(path)
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    out = Path(args.out)
+    # A line left by an earlier call must never go up in place of tonight's.
+    out.unlink(missing_ok=True)
+    month = text(args.month_line)
+    if not month:
+        print("figures-line: no month line, nothing to join")
+        return 1
+    try:
+        day = date.fromisoformat(text(args.day_file) or "")
+    except ValueError:
+        day = funnel.previous_day()
+    day_line = text(args.day_line)
+    joined = funnel.with_month(day_line, month, day)
+    if joined is None:
+        print("figures-line: the month's line does not fit, nothing to join")
+        return 1
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(joined + "\n", encoding="utf-8", newline="\n")
+    had_day = day_line is not None and funnel.is_figures_line(day_line)
+    print("figures-line: the month joined to " + ("tonight's line" if had_day else "a line without the day's figures"))
+    return 0
 
 
 def _summary(lines: list[str]) -> None:

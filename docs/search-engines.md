@@ -593,9 +593,21 @@ reads `n/a`. Unique visitors are summed over the month's days
 ("visitor-days"), since the code changes daily: a person who came on three
 days counts three times.
 
-Its one line goes to LAST_RUN.md as "Audience report: ..." on the run that
-wrote it. LAST_RUN.md is public, and the line carries none of the three
-people counts. Outcomes, as `views_report`: `written`, `not due` (the report
+LAST_RUN.md, which the nightly commits to the public repository, gets one
+line on the run that wrote the report, with no figure:
+`Audience report: 2026-10 written to R2 as views/report-2026-10.md`. The
+month's figures go to the operator instead. The step writes them as one
+private line (`month_line.txt`): page views by people; engaged visitor-days,
+from search and on a phone or tablet; visitor-days and visits; search clicks
+and impressions; Canada's share; the report's key. `nightly figures-line`
+joins it to the line the funnel step left that night (see the account
+funnel below), and the step puts the result in R2 as `views/funnel_line.txt`
+again, so the next morning's email carries the month once. Neither line is
+printed, and Wrangler's answers to the uploads go to `/dev/null`. A line
+that cannot be joined or saved leaves the email without the month; the
+report is in R2 either way, and the outcome stays `written`.
+
+Outcomes, as `views_report`: `written`, `not due` (the report
 exists), `waiting`, `no data` (the summary holds no day of the month), or
 `failed` (an attention item and a watchdog email; the next run tries again).
 To write one by hand from downloaded files:
@@ -642,6 +654,18 @@ and `phone_visitors` from the summary the roll-up step left on the runner,
 `2026-11-10 (UTC): accounts 12 (new 2), sign-in codes asked for 3, sign-ins 2, Pro 1, saved searches 4, watches 7; page views by people 120, engaged visitors 7, from search 9, on a phone or tablet 6`
 (the figures here are made up).
 
+On the night the monthly report is written, the report step puts the line
+again with the month's figures after ` | `, for example
+`... on a phone or tablet 6 | month 2026-11: page views by people 3,400; engaged visitor-days 210, from search 160, on a phone or tablet 95; visitor-days 5,100, visits 4,800; search clicks 140, impressions 9,800; Canada 81.2%; report views/report-2026-11.md`
+(made up as well). The daily check accepts at most 600 characters after the
+date, so when the whole would not fit, the month's parts are dropped from
+the end (the report's key first, the page views by people last); the day's
+figures are never cut (`funnel.with_month`). When the funnel step left no
+line that night, the joined line is dated as that step dates it and reads
+"the day's figures were not written tonight" before the month. A retry the
+same day finds the report written and puts the day's line alone, so the
+month is then in the report only.
+
 The Worker's daily check (`site/src/watchdog.ts`, 06:00 UTC) reads the line
 from R2 and adds it to the operator's email under "The last finished day
 (private figures from the nightly run)". A morning with the line and no
@@ -653,8 +677,9 @@ alert.
 Where the figures never go: no route on the site reads `views/`; the run
 status gets only the outcome word (`funnel`: `saved`, `failed` or `not run`),
 because the run prints the status in its public log and its notices go to
-LAST_RUN.md; LAST_RUN.md gets nothing; and neither step prints a figure.
-A failed save is a notice, never an item needing attention. To look at the
+LAST_RUN.md; LAST_RUN.md gets nothing; and neither step prints a figure,
+nor does the report step when it joins the month. A failed save is a
+notice, never an item needing attention. To look at the
 record:
 `npx wrangler r2 object get --remote awardwatch-data/views/funnel.csv --file funnel.csv`
 from `site/`.

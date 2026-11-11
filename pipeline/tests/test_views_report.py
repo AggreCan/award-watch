@@ -97,9 +97,11 @@ def test_the_report_puts_the_month_beside_the_three_before_it(tmp_path):
     assert "## Definitions" in text
     for dash in (chr(0x2014), chr(0x2013)):  # no em or en dash in the report's prose
         assert dash not in text
-    line = (out / "summary_line.txt").read_text(encoding="utf-8")
-    assert line == ("2026-10: 600 page views by people; 300 visitor-days; 280 visits; Canada 78.3%; "
-                    "search clicks 30, impressions 400 (views/report-2026-10.md)\n")
+    # The public line says where the report is and nothing more; the figures go in the private one.
+    assert (out / "summary_line.txt").read_text(encoding="utf-8") == "2026-10 written to R2 as views/report-2026-10.md\n"
+    assert (out / "month_line.txt").read_text(encoding="utf-8") == (
+        "month 2026-10: page views by people 600; engaged visitor-days n/a, from search n/a, on a phone or tablet n/a; "
+        "visitor-days 300, visits 280; search clicks 30, impressions 400; Canada 78.3%; report views/report-2026-10.md\n")
 
 
 def test_the_report_waits_a_week_for_the_months_last_day(tmp_path):
@@ -130,7 +132,7 @@ def test_without_search_console_the_search_rows_read_not_counted(tmp_path):
     assert vrep.run(out, "2026-10", date(2026, 11, 1), summary, tmp_path / "absent.csv") == "written"
     text = (out / "report-2026-10.md").read_text(encoding="utf-8")
     assert table_row(text, "Search clicks") == ["n/a"] * 4
-    assert "search clicks" not in (out / "summary_line.txt").read_text(encoding="utf-8")
+    assert "; search clicks n/a, impressions n/a; " in (out / "month_line.txt").read_text(encoding="utf-8")
 
 
 def test_the_command_writes_its_outcome_and_exits_1_only_when_failed(tmp_path):
@@ -163,7 +165,7 @@ def test_the_run_status_carries_the_report_and_only_failed_needs_attention(tmp_p
     assert json.loads(out.read_text(encoding="utf-8"))["views_report"] == "not due"
 
 
-def test_the_report_carries_the_alert_sign_ups_and_the_public_line_does_not(tmp_path):
+def test_the_report_carries_the_alert_sign_ups_and_neither_line_does(tmp_path):
     summary, search = write_files(tmp_path)
     out = tmp_path / "out"
     assert vrep.run(out, "2026-10", date(2026, 11, 1), summary, search, interest={"n": 1234, "live": 1200}) == "written"
@@ -172,7 +174,9 @@ def test_the_report_carries_the_alert_sign_ups_and_the_public_line_does_not(tmp_
     assert section.startswith("1,234 sign-ups when this report was written, 1,200 of them not unsubscribed.")
     assert text.index("## Top pages by people") < text.index("## Alert sign-ups") < text.index("## Definitions")
     assert "- Alert sign-ups: rows of the interest table" in text
-    assert "sign-up" not in (out / "summary_line.txt").read_text(encoding="utf-8")
+    for name in ("summary_line.txt", "month_line.txt"):
+        line = (out / name).read_text(encoding="utf-8")
+        assert "sign-up" not in line and "1,234" not in line and "1,200" not in line, name
     assert vrep.run(out, "2026-10", date(2026, 11, 1), summary, search) == "written"
     assert "## Alert sign-ups\n\nNot counted. The forms database could not be read" in (
         out / "report-2026-10.md").read_text(encoding="utf-8")
@@ -213,10 +217,38 @@ def test_the_report_carries_the_three_reader_counts_and_says_what_each_can_tell(
         assert f"\n- {word}" in text, word
     for dash in (chr(0x2014), chr(0x2013)):
         assert dash not in text
-    # The public line for LAST_RUN.md carries none of them.
-    assert (out / "summary_line.txt").read_text(encoding="utf-8") == (
-        "2026-10: 600 page views by people; 390 visitor-days; 360 visits; Canada 78.3%; "
-        "search clicks 30, impressions 400 (views/report-2026-10.md)\n")
+    # The public line for LAST_RUN.md carries none of them; the private line
+    # puts them right after the page views by people.
+    assert (out / "summary_line.txt").read_text(encoding="utf-8") == "2026-10 written to R2 as views/report-2026-10.md\n"
+    assert (out / "month_line.txt").read_text(encoding="utf-8") == (
+        "month 2026-10: page views by people 600; engaged visitor-days 15, from search 21, on a phone or tablet 6; "
+        "visitor-days 390, visits 360; search clicks 30, impressions 400; Canada 78.3%; report views/report-2026-10.md\n")
+
+
+def test_the_public_line_holds_no_figure_and_the_command_prints_none(tmp_path, capsys, caplog):
+    caplog.set_level("INFO")
+    rows = [summary_row("2026-10-31", **people(7301, 7302, 7, 7303, 7, {"/": 7301}, 7304, 7305),
+                        engaged_visitors=7306, search_visitors=7307, phone_visitors=7308, feed_subscribers=7309,
+                        organizations=7310, records=7311)]
+    search = [{"date": "2026-10-30", "clicks": "7312", "impressions": "7313", "ctr": "0.5", "position": "7.0",
+               "top_queries": "[]"}]
+    summary, search_path = write_files(tmp_path, rows=rows, search=search)
+    out = tmp_path / "out"
+    assert nightly.main(["views-report", "--summary", str(summary), "--search", str(search_path), "--out", str(out),
+                         "--today", "2026-11-01"]) == 0
+    printed = capsys.readouterr()
+    assert printed.out == "views-report 2026-10: written\n"
+    public = (out / vrep.SUMMARY_LINE).read_text(encoding="utf-8")
+    private = (out / vrep.MONTH_LINE).read_text(encoding="utf-8")
+    # The public line: no digit but the month's own (and R2's).
+    assert not any(ch.isdigit() for ch in public.replace("2026-10", "").replace("R2", "")), public
+    for n in range(7301, 7314):
+        for shown in (str(n), f"{n:,}"):
+            assert shown not in printed.out + printed.err + caplog.text + public, n
+    # The private line has them (those it carries), on one line.
+    for shown in ("7,301", "7,304", "7,305", "7,306", "7,307", "7,308", "7,312", "7,313"):
+        assert shown in private, shown
+    assert private.count("\n") == 1 and private.endswith("\n")
 
 
 def test_the_report_command_reads_the_count_wrangler_wrote(tmp_path):
