@@ -388,6 +388,8 @@ export function overviewView(
               </span>
             </li>
           )}
+          {/* The open notices matching that organization (fit_pages.tsx); no count, so the overview never reads the open list. */}
+          {counts.org ? <li><a href="/account/matches">{t(lang, "fit.overview")}</a></li> : null}
         </ul>
       </Panel>
       <Panel title={t(lang, "account.panel_sign_out")}>

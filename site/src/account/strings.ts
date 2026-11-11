@@ -2300,4 +2300,109 @@ export const ACCOUNT_STRINGS = {
   "weekly.account_link": { en: "Your account", fr: "Votre compte" },
   "weekly.stop_link": { en: "Unsubscribe", fr: "Se désabonner" },
   "weekly.sender": { en: "Sent by {name}, {address}.", fr: "Envoyé par {name}, {address}." },
+
+  // -- matching notices (src/fit.tsx, src/account/fit_pages.tsx, public/fit.js; docs/accounts.md, Matching notices) --
+  // The band names the match between a notice and records, never the business; a reason states record
+  // counts. test/fit-pages.test.ts holds a list of words out of every string here.
+  "fit.disclaimer": {
+    en: "Award Watch calculates matches from public records. A match is not advice and may be wrong. See the {terms}.",
+    fr: "Award Watch calcule les correspondances à partir de dossiers publics. Une correspondance ne constitue pas un conseil et peut être erronée. Voir les {terms}.",
+  },
+  "fit.not_odds": {
+    en: "A match is not a chance of winning: the federal files name the supplier a contract went to and no other bidder.",
+    fr: "Une correspondance n'est pas une chance de l'emporter : les fichiers fédéraux nomment le fournisseur retenu et aucun autre soumissionnaire.",
+  },
+  "fit.not_all": {
+    en: "A notice with no match may still suit {name}: a match reads only UNSPSC codes, buyers, provinces and notice types.",
+    fr: "Un avis sans correspondance peut tout de même convenir à {name} : une correspondance ne lit que les codes UNSPSC, les acheteurs, les provinces et les types d'avis.",
+  },
+  "fit.how": { en: "How matches are counted", fr: "Comment les correspondances sont établies" },
+  "fit.band_close": { en: "Close match", fr: "Correspondance étroite" },
+  "fit.band_partial": { en: "Partial match", fr: "Correspondance partielle" },
+  "fit.band_weak": { en: "Weak match", fr: "Correspondance faible" },
+  "fit.band_none": { en: "No match", fr: "Aucune correspondance" },
+  "fit.points": { en: "{n} of {max} points", fr: "{n} points sur {max}" },
+  "fit.pts": { en: "+{n}", fr: "+{n}" },
+  "fit.pts_aria": { en: "{n} points", fr: "{n} points" },
+  // A reason: what is in common and each source's count. {code} is the level's code with its name when
+  // the open notices give one ("811015 Civil engineering").
+  "fit.r_class": { en: "UNSPSC class {code}: {counts}", fr: "Classe UNSPSC {code} : {counts}" },
+  "fit.r_family": { en: "UNSPSC family {code}: {counts}", fr: "Famille UNSPSC {code} : {counts}" },
+  "fit.r_segment": { en: "UNSPSC segment {code}: {counts}", fr: "Segment UNSPSC {code} : {counts}" },
+  "fit.r_buyer": { en: "Buyer {buyer}: {counts}", fr: "Acheteur {buyer} : {counts}" },
+  "fit.r_delivered": { en: "Province of delivery {province}: {counts}", fr: "Province de livraison {province} : {counts}" },
+  "fit.r_home": { en: "{province}, the province on the profile of {name}", fr: "{province}, la province du profil de {name}" },
+  "fit.r_national": { en: "No province named: Canada-wide or not stated", fr: "Aucune province nommée : tout le Canada ou non précisé" },
+  "fit.r_type": { en: "Notice type {type}: {counts}", fr: "Type d'avis {type} : {counts}" },
+  "fit.r_held": {
+    en: "Supply arrangements held in segment {code}: {n}",
+    fr: "Arrangements en matière d'approvisionnement détenus dans le segment {code} : {n}",
+  },
+  "fit.basis": { en: "From {counts}, fiscal years {first} to {last}.", fr: "D'après {counts}, exercices {first} à {last}." },
+  "fit.newest": { en: "The newest of these records is dated {date}.", fr: "Le plus récent de ces dossiers est daté du {date}." },
+  "fit.thin": {
+    en: "{name} has too few records with UNSPSC codes to rank notices: {counts}, fiscal years {first} to {last}. A ranking needs at least {min} in one source.",
+    fr: "{name} a trop peu de dossiers portant des codes UNSPSC pour classer les avis : {counts}, exercices {first} à {last}. Un classement en demande au moins {min} dans une même source.",
+  },
+  "fit.uncoded": {
+    en: "The records of {name} in fiscal years {first} to {last} are published contracts, which carry no UNSPSC codes, so notices cannot be ranked by kind of work yet.",
+    fr: "Les dossiers de {name} des exercices {first} à {last} sont des contrats publiés, qui ne portent aucun code UNSPSC; les avis ne peuvent donc pas encore être classés selon le genre de travail.",
+  },
+  "fit.none_records": {
+    en: "{name} has no award notice, PSPC contract history record or published contract in fiscal years {first} to {last}.",
+    fr: "{name} n'a aucun avis d'attribution, dossier de l'historique des contrats de SPAC ni contrat publié pour les exercices {first} à {last}.",
+  },
+  // Before the first nightly run that writes the profiles' matching counts.
+  "fit.pending": {
+    en: "Matching notices appear here after the next nightly data refresh.",
+    fr: "Les avis correspondants s'afficheront ici après la prochaine actualisation nocturne des données.",
+  },
+  "fit.title": { en: "Matching Notices", fr: "Avis correspondants" },
+  "fit.lead": {
+    en: "Open tender notices ranked by what each has in common with the records of {name}, the organization you told the site is yours.",
+    fr: "Les avis d'appel d'offres ouverts, classés selon ce que chacun a en commun avec les dossiers de {name}, l'organisation que vous avez indiquée comme la vôtre.",
+  },
+  "fit.unclaimed_lead": {
+    en: "Tell the site which organization is yours, and this page ranks the open notices by what each has in common with its records.",
+    fr: "Indiquez au site quelle organisation est la vôtre, et cette page classera les avis ouverts selon ce que chacun a en commun avec ses dossiers.",
+  },
+  "fit.choose": { en: "Choose Your Organization", fr: "Choisir votre organisation" },
+  "fit.panel_basis": { en: "What the Matches Read", fr: "Ce que lisent les correspondances" },
+  "fit.basis_classes": { en: "Its UNSPSC classes", fr: "Ses classes UNSPSC" },
+  "fit.basis_buyers": { en: "Its buyers", fr: "Ses acheteurs" },
+  "fit.basis_provinces": { en: "Its provinces of delivery", fr: "Ses provinces de livraison" },
+  "fit.basis_types": { en: "Notice types it was awarded under", fr: "Types d'avis sous lesquels elle a obtenu des contrats" },
+  // One class, buyer, province or notice type of the records, and each source's count.
+  "fit.basis_row": { en: "{label}: {counts}", fr: "{label} : {counts}" },
+  // One standing offer or supply arrangement type held in a segment, and how many.
+  "fit.held_row": { en: "{type}, segment {code}: {n}", fr: "{type}, segment {code} : {n}" },
+  "fit.panel_list": { en: "Open Notices That Match", fr: "Avis ouverts correspondants" },
+  "fit.count_one": { en: "{n} match", fr: "{n} correspondance" },
+  "fit.count_many": { en: "{n} matches", fr: "{n} correspondances" },
+  "fit.col_match": { en: "Match", fr: "Correspondance" },
+  "fit.col_notice": { en: "Notice", fr: "Avis" },
+  "fit.col_common": { en: "In common", fr: "Points communs" },
+  "fit.free_cap": {
+    en: "The Free plan lists the first {free} matching notices. Pro lists up to {pro}, {page} a page.",
+    fr: "Le forfait Gratuit présente les {free} premiers avis correspondants. Pro en présente jusqu'à {pro}, {page} par page.",
+  },
+  "fit.pro_cap": {
+    en: "The first {pro} of {n} matching notices are listed, the closest first.",
+    fr: "Les {pro} premiers des {n} avis correspondants sont présentés, les plus proches d'abord.",
+  },
+  "fit.uncoded_count_one": {
+    en: "{n} open notice carries no UNSPSC code and cannot be matched.",
+    fr: "{n} avis ouvert ne porte aucun code UNSPSC et ne peut faire l'objet d'une correspondance.",
+  },
+  "fit.uncoded_count_many": {
+    en: "{n} open notices carry no UNSPSC code and cannot be matched.",
+    fr: "{n} avis ouverts ne portent aucun code UNSPSC et ne peuvent faire l'objet d'une correspondance.",
+  },
+  "fit.none_open": {
+    en: "No open notice matches the records of {name} today. {all}",
+    fr: "Aucun avis ouvert ne correspond aux dossiers de {name} aujourd'hui. {all}",
+  },
+  "fit.all_open": { en: "All open notices", fr: "Tous les avis ouverts" },
+  "fit.unavailable": { en: "The open notices cannot be read right now.", fr: "Les avis ouverts ne peuvent pas être lus pour le moment." },
+  "fit.overview": { en: "Matching notices", fr: "Avis correspondants" },
 } as const satisfies Record<string, { en: string; fr: string }>;

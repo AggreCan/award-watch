@@ -2166,6 +2166,89 @@ show); the user page shows the account's claim, its competitor ids and its
 segment.
 
 ### Operator step
+
+Create the claims table (idempotent; the schema's other tables already
+exist):
+
+```
+cd site
+npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+```
+
+## Matching notices
+
+`/account/matches` lists the open tender notices ranked by what each has in
+common with the records of the organization the account claims (*Your
+organization*). It is the site's first advisory feature: a calculation by
+fixed rules, never a statement about the business and never a chance of
+winning. The code is `site/public/fit.js` (the rules and the points, one copy
+for the Worker and the browser), `site/src/fit.tsx` (the block's check, the
+words of a band and a reason, the disclaimer) and
+`site/src/account/fit_pages.tsx` (the page); the pipeline writes the block in
+`pipeline/awardwatch_pipeline/profile_matching.py`. The tests are
+`site/test/fit.test.ts`, `site/test/fit-pages.test.ts` and
+`pipeline/tests/test_profile_matching.py`.
+
+### The block
+
+Each profile in `profiles/<abc>.json` with a record or a held instrument in
+the 5 fiscal years ending with the data date's carries `matching`: the
+records counted per source (award notices, PSPC contract history, published
+contracts), the award notices and history records with a UNSPSC code, the
+newest record's date, and per source the UNSPSC classes (40 at most),
+families (20), segments, buyers (25, listed buyers only), provinces of
+delivery and notice types, and the standing offers and supply arrangements
+held by type and segment. A history record counts under its client and under
+PSPC. Published contracts add counts and buyers only; their amendments are
+not counted. Grants and lobbying reports are never read, and a withheld
+supplier's record counts for no organization. `stats.json` carries
+`matching_fy`, the window the night's blocks count, so the page can tell a
+profile with nothing in the window from a file written before the block
+existed.
+
+### The rules
+
+Four parts out of 100, the highest line of each counting, a count always the
+largest of one source and never a sum: the kind of work (a shared UNSPSC
+class 45 or 35, family 25 or 20, segment 10 or 5), the buyer (25 or 15), the
+province (a province of delivery 15 or 10, the profile's province 8, a
+notice naming none 5) and the notice type (an RFP against a supply
+arrangement while one is held in a notice segment 15, else a type the
+organization was awarded under 10 or 5). The first figure of each pair is
+for 3 records or more of one source. A notice is matched only when it shares
+at least a segment. Close from 60, partial from 30, weak below; the list
+shows close and partial. An organization needs 3 records with codes in one
+source for a ranking. The Methodology page (`/methodology#matching`) prints
+the table from `fit.js`'s constants.
+
+### The page
+
+- No claim: a line and the page's one filled button, to `/account/organization`.
+- A profile written before the block: "Matching notices appear here after the
+  next nightly data refresh." The page never errors; a block that does not
+  read is treated the same way.
+- Nothing in the window, published contracts only, or too few records with
+  codes: one line saying which, with the counts and the fiscal years.
+- The ranking: what the matches read (the first 5 classes, buyers, provinces
+  and notice types, the instruments held, the counts and the newest date),
+  then the matching notices, each with its band, its total ("95 of 100
+  points") and every reason with its points. Free lists the first 5 and says
+  what each plan lists (`RULES.free.matches`, `RULES.pro.matches`,
+  `MATCH_PAGE`); Pro lists up to 200, 50 a page. A notice whose closing time
+  has passed is left out, and the notices with no UNSPSC code are counted.
+- Every state carries the disclaimer, linked to the Terms' No Warranty
+  section, which holds the paragraph on these calculations, and the way to
+  the rules; the ranking adds that a match is not a chance of winning, that a
+  notice with no match may still suit the organization, and the licence line.
+- The page reads the claim (one accounts row), the profile entry, `stats.json`
+  and, for a ranking, `tenders/open.json` and `tenders/open-levels.json`
+  (both kept parsed while their ETags hold); the buyers index only for a
+  buyer the profile and the open notices do not name. It never reads the
+  records database and never writes: a claim on a retired id is followed to
+  the surviving profile for display and repointed by the organization page.
+  It is `private, no-store` and `noindex`.
+- The overview links it beside the claimed organization.
+
 ## Weekly briefings
 
 A weekly briefing is one message a week about one UNSPSC segment or one buyer

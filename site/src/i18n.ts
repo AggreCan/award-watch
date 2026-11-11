@@ -1759,6 +1759,7 @@ const STRINGS = {
   "methodology.toc_statuses": { en: "Statuses and Regions", fr: "Statuts et régions" },
   "methodology.toc_expiring": { en: "Contracts Ending Soon", fr: "Contrats prenant fin bientôt" },
   "methodology.toc_analytics": { en: "Analytics", fr: "Analyses" },
+  "methodology.toc_matching": { en: "Matching Notices", fr: "Avis correspondants" },
   "methodology.toc_people": { en: "People", fr: "Personnes" },
   "methodology.toc_claims": { en: "What the Site Does Not Claim", fr: "Ce que le site n'affirme pas" },
   "methodology.toc_corrections": { en: "Corrections and Responses", fr: "Corrections et réponses" },
@@ -1984,6 +1985,50 @@ const STRINGS = {
   "methodology.analytics_date": {
     en: "The views read a database of the records refreshed each night after the data; each view gives the date its records describe.",
     fr: "Les vues lisent une base des dossiers actualisée chaque nuit après les données; chaque vue indique la date que décrivent ses dossiers.",
+  },
+  // Matching notices: the rules public/fit.js scores by, its figures rendered from its constants. The Terms'
+  // advisory paragraph links here.
+  "methodology.matching_what": {
+    en: "A signed-in reader who tells the site which organization is theirs sees the open tender notices ranked by what each has in common with that organization's records. The ranking is Award Watch's own calculation, by the fixed rules below, from the same records as the profile. It is not advice, it says nothing about the merit of any organization, and it is not a chance of winning: the federal files name the supplier a contract went to and no other bidder.",
+    fr: "Un lecteur connecté qui indique au site quelle organisation est la sienne voit les avis d'appel d'offres ouverts classés selon ce que chacun a en commun avec les dossiers de cette organisation. Le classement est un calcul propre à Award Watch, selon les règles fixes ci-dessous, à partir des mêmes dossiers que le profil. Ce n'est pas un conseil, il ne dit rien du mérite d'une organisation et ce n'est pas une chance de l'emporter : les fichiers fédéraux nomment le fournisseur retenu et aucun autre soumissionnaire.",
+  },
+  "methodology.matching_read": {
+    en: "The records read are the organization's award notices and PSPC contract history, which carry UNSPSC codes, provinces of delivery and the notice type they were awarded under, and its published contracts, which add buyers, dated in the {years} fiscal years ending with the data date's. A PSPC contract history record counts under its client department and under PSPC, which contracted for it. Grants and lobbying reports are not read. Each source is counted apart: where a rule needs a count, it takes the largest count of any one source, never a sum of two.",
+    fr: "Les dossiers lus sont les avis d'attribution et l'historique des contrats de SPAC de l'organisation, qui portent des codes UNSPSC, des provinces de livraison et le type d'avis sous lequel le contrat a été attribué, ainsi que ses contrats publiés, qui ajoutent des acheteurs, datés des {years} exercices se terminant par celui de la date des données. Un dossier de l'historique des contrats de SPAC compte pour son ministère client et pour SPAC, qui a passé le contrat. Les subventions et les rapports de lobbying ne sont pas lus. Chaque source est comptée à part : quand une règle demande un nombre, elle prend le plus grand nombre d'une seule source, jamais la somme de deux.",
+  },
+  "methodology.matching_col_rule": { en: "Rule", fr: "Règle" },
+  "methodology.matching_col_points": { en: "Points", fr: "Points" },
+  "methodology.matching_rule_class": {
+    en: "The notice shares a UNSPSC class with {many} or more records of one source; with 1 to {few}",
+    fr: "L'avis partage une classe UNSPSC avec au moins {many} dossiers d'une même source; avec 1 à {few}",
+  },
+  "methodology.matching_rule_family": {
+    en: "It shares a family instead; {many} or more, or 1 to {few}",
+    fr: "Il partage plutôt une famille; au moins {many}, ou 1 à {few}",
+  },
+  "methodology.matching_rule_segment": {
+    en: "It shares a segment only; {many} or more, or 1 to {few}",
+    fr: "Il ne partage qu'un segment; au moins {many}, ou 1 à {few}",
+  },
+  "methodology.matching_rule_buyer": {
+    en: "Its buyer is in {many} or more records of one source; in 1 to {few}",
+    fr: "Son acheteur figure dans au moins {many} dossiers d'une même source; dans 1 à {few}",
+  },
+  "methodology.matching_rule_province": {
+    en: "A province it names, stated or derived, is a province of delivery in {many} or more records; in 1 to {few}; it is the province on the profile; it names no province",
+    fr: "Une province qu'il nomme, précisée ou déduite, est une province de livraison dans au moins {many} dossiers; dans 1 à {few}; c'est la province du profil; il ne nomme aucune province",
+  },
+  "methodology.matching_rule_type": {
+    en: "It is an RFP against a supply arrangement and the organization holds a supply arrangement in one of its segments; its notice type is one the organization was awarded under in {many} or more records, or 1 to {few}",
+    fr: "C'est une demande de propositions dans le cadre d'un arrangement en matière d'approvisionnement et l'organisation détient un tel arrangement dans l'un de ses segments; son type d'avis est un type sous lequel l'organisation a obtenu au moins {many} contrats, ou 1 à {few}",
+  },
+  "methodology.matching_bands": {
+    en: "Only the highest line of each part counts. A notice is matched only when it shares at least a UNSPSC segment with the records. Its points, out of {max}, name the match: close from {close}, partial from {partial}, weak below. The list of matching notices shows close and partial matches.",
+    fr: "Seule la ligne la plus élevée de chaque partie compte. Un avis n'est rapproché que s'il partage au moins un segment UNSPSC avec les dossiers. Ses points, sur {max}, nomment la correspondance : étroite à partir de {close}, partielle à partir de {partial}, faible en dessous. La liste des avis correspondants présente les correspondances étroites et partielles.",
+  },
+  "methodology.matching_limits": {
+    en: "A ranking needs at least {min} records with UNSPSC codes in one source over the period. Tender notices publish no value, so value plays no part. The site shows a match only to the account that named the organization, and no page, file or feed lists matches. The counts a match reads are counts of public records, and the organization's profile file carries them.",
+    fr: "Un classement demande au moins {min} dossiers portant des codes UNSPSC dans une même source sur la période. Les avis d'appel d'offres ne publient aucune valeur, la valeur n'entre donc pas en compte. Le site ne montre une correspondance qu'au compte qui a indiqué l'organisation, et aucune page, aucun fichier ni aucun fil ne présente de correspondances. Les nombres que lit une correspondance sont des nombres de dossiers publics, et le fichier du profil de l'organisation les porte.",
   },
   "methodology.people_individuals": {
     en: "Private individuals are never stored: grants to individuals and any supplier, recipient or client whose name reads as a person's are dropped before anything is written, and only their number is logged.",
@@ -2354,6 +2399,11 @@ const STRINGS = {
   "terms.warranty": {
     en: "The figures are drawn from the sources as published and may carry the sources' errors. The site and its files are provided as is, with no warranty of accuracy, completeness or fitness for a purpose.",
     fr: "Les chiffres sont tirés des sources telles que publiées et peuvent en reprendre les erreurs. Le site et ses fichiers sont fournis tels quels, sans garantie d'exactitude, d'exhaustivité ou d'adéquation à un usage.",
+  },
+  // Between the warranty and the liability paragraphs, so the Pro section's reference to No Warranty covers it.
+  "terms.advisory": {
+    en: "Some features calculate, from public records, what may interest a reader, such as the notices that match the records of the organization a reader names. These calculations follow the fixed rules on the {methodology} page. They do not constitute advice, they say nothing about the merit of any organization, and they may be wrong or incomplete. They are Award Watch's own and are neither produced nor endorsed by the Government of Canada. Award Watch is not responsible for their accuracy or for any decision made on them, including a decision to bid or not to bid.",
+    fr: "Certaines fonctions calculent, à partir de dossiers publics, ce qui peut intéresser un lecteur, comme les avis qui correspondent aux dossiers de l'organisation qu'il indique. Ces calculs suivent les règles fixes décrites à la page {methodology}. Ils ne constituent pas un conseil, ne disent rien du mérite d'une organisation et peuvent être erronés ou incomplets. Ils sont propres à Award Watch et ne sont ni produits ni approuvés par le gouvernement du Canada. Award Watch n'est pas responsable de leur exactitude ni d'aucune décision prise sur leur base, y compris celle de soumissionner ou non.",
   },
   "terms.liability": {
     en: "Award Watch is not liable for any loss arising from the use of the site, its pages or its files.",
@@ -3360,6 +3410,8 @@ const STRINGS = {
   "plans.pro_feeds": { en: "Calendar feeds of searches and watches", fr: "Flux de calendrier : recherches et suivis" },
   "plans.free_analytics": { en: "Analytics: first chart, {n} fiscal years", fr: "Analyses : premier graphique, {n} exercices" },
   "plans.pro_analytics": { en: "Analytics: every view, {n} fiscal years", fr: "Analyses : toutes les vues, {n} exercices" },
+  // Matching notices (src/account/fit_pages.tsx): each plan's own figure, the one wording for both.
+  "plans.matches": { en: "{n} matching notices for your organization", fr: "{n} avis correspondant à votre organisation" },
   "plans.free_api": { en: "Open JSON API", fr: "API JSON ouverte" },
   "plans.pro_api": { en: "Keyed API: {day} requests a day", fr: "API avec clé : {day} requêtes par jour" },
   "plans.free_instruments": { en: "Standing offer pages", fr: "Pages des offres à commandes" },
@@ -3915,6 +3967,10 @@ export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "citepage.style.bibtex",
   "citepage.style.ris",
   "col.type",
+  // A match's points (src/fit.tsx): a figure, and the word that is the same in both.
+  "fit.pts",
+  "fit.pts_aria",
+  "methodology.matching_col_points",
   // A tender notice's documents: the same word in both languages.
   "tender.documents",
   "tender.documents_one",

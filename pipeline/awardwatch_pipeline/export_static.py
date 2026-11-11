@@ -32,7 +32,8 @@ change there. Output tree (under data/out/static):
                                 zeros kept, a notice placed in several provinces counted in each, and
                                 not_stated the notices placed in none, Canada-wide or not stated. The fourth
                                 layer, the same-day notices, is the site's own: it counts the rows the
-                                intraday job writes, which this file never sees)
+                                intraday job writes, which this file never sees), and matching_fy, the first
+                                and last fiscal year the profiles' "matching" blocks count (below)
   tenders/open.json             every notice open on the data date as a list row (read by the browser only)
   tenders/open-first.json       the open notices closing by the day after the data date and the 50 after
                                 them, the number open, and the facet counts over all of them (what
@@ -81,8 +82,12 @@ change there. Output tree (under data/out/static):
                                 profile with a history record that gives the supplier's employees carries
                                 employees {value, awarded, reference}: the figure on its newest such record
                                 (the history list's order), that record's award date and URL reference
-                                (profile_employees); one with none has no such key
-  aliases/<ab>.json             retired organization id -> the live id that took its records, sharded on the
+                                (profile_employees); one with none has no such key. A profile with a
+                                record or a held instrument in the MATCH_YEARS fiscal years to the data
+                                date's carries matching, the counts the site ranks open notices by for an
+                                account that names the organization (profile_matching.py has the block and
+                                its rules); one with none has no such key
+  aliases/<ab>.json            retired organization id -> the live id that took its records, sharded on the
                                 id's characters 5 and 6 (256 files at most: 27,000 merged ids on 4,096
                                 shards pushed the export past the file cap on 2026-11-02): retired by a
                                 normalization change (migrate.py) or merged into another organization
@@ -207,7 +212,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from xml.sax.saxutils import escape
 
-from . import config, directory, expiring, indicators, organizations, sosa_export, value_checks
+from . import config, directory, expiring, indicators, organizations, profile_matching, sosa_export, value_checks
 from .db import get_meta, log_run, set_meta
 from .export import SUMS, listed_buyer_ids, register_functions, scrub, scrub_doc
 from .feeds import write_feeds
@@ -505,7 +510,8 @@ def _materialize(conn: sqlite3.Connection, as_of: str) -> None:
     totals (organizations._newest_by_reference) except that a contract whose
     newest version withholds its supplier links to no organization (x_history
     adds employees, the supplier employees its newest stating version gives,
-    normalize.employee_count); value is
+    normalize.employee_count; both carry notice_type_en, which the profile's
+    "matching" block counts, profile_matching.py); value is
     the rules' value as shown (cancelled counts zero, any currency, NULL when
     the source published none), v the value a total adds (CAD only, never a
     value flagged for checking: organizations.award_value), nv 1 when the
@@ -541,7 +547,7 @@ def _materialize(conn: sqlite3.Connection, as_of: str) -> None:
             "CASE WHEN n.supplier_withheld = 1 THEN NULL ELSE n.org END AS org, n.supplier_withheld, "
             "n.title_en, n.title_fr, n.buyer_id, n.buyer_raw_en, n.buyer_raw_fr, " + extra +
             "n.published, n.awarded, n.start, n.\"end\", n.currency, n.status, n.competitive, n.instrument_type_en, "
-            "n.instrument_type_fr, n.provinces, n.provinces_derived, n.provinces_from, "
+            "n.instrument_type_fr, n.provinces, n.provinces_derived, n.provinces_from, n.notice_type_en, "
             f"{shown} AS value, {organizations.award_value(kind)} AS v, {organizations.AWARD_NO_VALUE} AS nv, "
             f"{organizations.award_flagged(kind)} AS flag, "
             f"(SELECT MIN(z.first_seen) FROM {table} z WHERE z.reference = n.reference) AS first_sight, "
@@ -1109,6 +1115,9 @@ def write_stats(m: Model, out: Path, *, counts: dict[str, int], open_rows: list[
                    "awards_30d": _money(recent_v)},
         "downloads": downloads or [],
         "map": province_map(m, open_rows, new_today),
+        # The fiscal years the profiles' "matching" blocks count: its presence tells the site that a profile
+        # without a block has nothing in them, rather than predating the block.
+        "matching_fy": list(profile_matching.window(m.as_of)),
     }
     _dump(out / "stats.json", stats)
     return stats
@@ -1726,6 +1735,7 @@ def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, i
     """profiles/<abc>.json: every organization's profile, one shard per three hex digits of its id."""
     keys = sorted({shard_key(oid) for oid in m.orgs})
     held = sosa_export.organization_parts(conn)
+    held_segments = profile_matching.held_instruments(conn)
     family = profile_families(conn, m)
     also = profile_aliases(conn, m)
     written = largest_bytes = 0
@@ -1747,6 +1757,12 @@ def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, i
         for oid, p in shard.items():
             if oid in held:
                 p["instruments"] = held[oid]
+            # The same rows the lists above read, every one of them, not only the PROFILE_ROWS listed.
+            block = profile_matching.matching_block(
+                tables["awards"].get(oid, []), tables["history"].get(oid, []), tables["contracts"].get(oid, []),
+                held_segments.get(oid), as_of=m.as_of, segments=m.segments, link=m.link)
+            if block:
+                p["matching"] = block
             if oid in family:
                 p["family"] = family[oid]
             if oid in also:

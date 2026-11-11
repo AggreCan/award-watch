@@ -384,7 +384,7 @@ describe("the radar's tabs and tiles", () => {
 
   it("lists what Pro includes, watches, calendar feeds, your organization, the weekly briefing, the keyed API, instrument files and bug reports among it, each line a Pro feature", () => {
     expect(PRO_INCLUDES.map(([f]) => f)).toEqual([
-      "intraday", "radar_depth", "radar_depth", "delivery", "watch_mail", "delivery", "analytics", "api", "export_filtered",
+      "intraday", "radar_depth", "radar_depth", "delivery", "watch_mail", "delivery", "analytics", "matches", "api", "export_filtered",
       "delivery", "analytics", "bug_reports",
     ]);
     expect(PRO_INCLUDES.map(([, key]) => key)).toContain("plans.pro_briefing");
@@ -482,7 +482,8 @@ describe("the plan cards", () => {
     // Your organization's page beside the competitors it compares, as many as org_claim allows.
     expect(pro).toContain(`<span>Your organization beside ${COMPETITORS_MAX} others</span>`);
     // Every figure on a card is one of the plans' or the constants', or a window's months.
-    const figures = new Set([RULES.free.saved_searches, RULES.pro.saved_searches, RULES.free.watchlists, RULES.pro.watchlists, FREE_YEARS, MAX_YEARS,
+    const figures = new Set([RULES.free.saved_searches, RULES.pro.saved_searches, RULES.free.watchlists, RULES.pro.watchlists,
+      RULES.free.matches, RULES.pro.matches, FREE_YEARS, MAX_YEARS,
       KEY_PER_DAY, hours, COMPETITORS_MAX, 3, 6, 12].map(String));
     for (const card of [free, pro, freeFr, proFr]) {
       for (const { text } of rowsOf(card)) {
@@ -493,10 +494,16 @@ describe("the plan cards", () => {
     const COMPARATIVE = /\b(more|higher|above|unlimited|limits above|plus|davantage|supérieure?s?|au-dessus|illimitée?s?)\b/i;
     for (const card of [free, pro, freeFr, proFr]) expect(card.replace(/<[^>]+>/g, " "), card.slice(0, 60)).not.toMatch(COMPARATIVE);
     for (const key of allKeys().filter((k) => k.startsWith("plans."))) expect(rawEntry(key).en + " " + rawEntry(key).fr, key).not.toMatch(COMPARATIVE);
-    // Every row is one the plans give Pro and not Free.
+    // Every row is one the plans give Pro and not Free, or for a counted feature a larger figure on Pro.
     for (const row of PLAN_ROWS) {
-      expect(RULES.pro[row.feature], row.pro.key).toBe(true);
-      expect(RULES.free[row.feature], row.pro.key).toBe(false);
+      const pro = RULES.pro[row.feature];
+      const free = RULES.free[row.feature];
+      if (typeof pro === "number") {
+        expect(pro, row.pro.key).toBeGreaterThan(free as number);
+      } else {
+        expect(pro, row.pro.key).toBe(true);
+        expect(free, row.pro.key).toBe(false);
+      }
     }
   });
 

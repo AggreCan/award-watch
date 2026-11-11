@@ -82,9 +82,10 @@ export const ProNote: FC<{ lang: Lang; children?: unknown }> = ({ lang, children
 export type Wording = { key: Key; vars?: (lang: Lang) => Record<string, string> };
 
 // One line of the plan cards: the feature the plans grant for it (one Pro
-// has and Free has not, so test/seo-intent.test.ts and test/radar-gate.test.ts
-// can hold every row to RULES), and each plan's wording, null where the plan
-// has none of it. Every card draws every row in this order, so the lists
+// has and Free has not, or for a counted feature one Pro gives a larger
+// figure, so test/seo-intent.test.ts and test/radar-gate.test.ts can hold
+// every row to RULES), and each plan's wording, null where the plan has none
+// of it. Every card draws every row in this order, so the lists
 // line up across the cards.
 export type PlanRow = { feature: Feature; free: Wording | null; pro: Wording };
 
@@ -137,6 +138,8 @@ export const PLAN_ROWS: readonly PlanRow[] = [
     free: { key: "plans.free_analytics", vars: count(() => FREE_YEARS) },
     pro: { key: "plans.pro_analytics", vars: count(() => MAX_YEARS) },
   },
+  // The matching notices /account/matches lists (src/account/fit_pages.tsx): a count, as the watches are.
+  { feature: "matches", free: { key: "plans.matches", vars: count(() => RULES.free.matches) }, pro: { key: "plans.matches", vars: count(() => RULES.pro.matches) } },
   { feature: "api", free: { key: "plans.free_api" }, pro: { key: "plans.pro_api", vars: (lang) => ({ day: fmtInt(KEY_PER_DAY, lang) }) } },
   { feature: "export_filtered", free: { key: "plans.free_instruments" }, pro: { key: "plans.pro_instruments" } },
   // A weekly briefing is a delivery, as a saved search's mail is (src/account/briefings.ts).

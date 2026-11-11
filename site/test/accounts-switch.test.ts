@@ -17,6 +17,8 @@ const PUBLIC_PAGES = [
   "/", "/overview", "/overview?lang=fr", "/tenders", "/tenders?segment=82", "/awards", "/expiring", "/organizations", "/organizations/org-a000000001",
   "/buyers/pwgsc-tpsgc", "/segments/82", "/alerts", "/watchlist", "/about", "/terms", "/privacy", "/data", "/corrections",
   "/nothing-here", "/?lang=fr", "/privacy?lang=fr",
+  // The pages that state the matching notices' rules and the Terms that cover them, whatever the switch.
+  "/methodology", "/methodology?lang=fr", "/terms?lang=fr",
   // A notice's and a contract's pages carry their calendar file's link whatever the switch (pages/ics.ts).
   "/tenders/cb-200-20005019", "/awards/cb-400-40000004",
   // The pages a search is saved from (account/search_control.tsx), filtered and not.
@@ -38,6 +40,8 @@ const ACCOUNT_ROUTES: [string, string][] = [
   ["GET", "/account/organization"], ["GET", "/account/organization?q=exemplar"], ["POST", "/account/organization"],
   ["POST", "/account/organization/compare"], ["POST", "/account/organization/compare/remove"], ["POST", "/account/organization/segment"],
   ["POST", "/account/organization/delete"], ["GET", "/account/organization/years.csv"],
+  // Matching notices (account/fit_pages.tsx).
+  ["GET", "/account/matches"], ["GET", "/account/matches?page=2"],
 ];
 
 // A binding that notes every use and throws: the accounts database, or the

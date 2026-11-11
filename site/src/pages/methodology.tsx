@@ -1,9 +1,11 @@
 import type { Context } from "hono";
+import { BAND_CLOSE, BAND_PARTIAL, MATCH_MANY, MATCH_MAX, MATCH_MIN, MATCH_POINTS, MATCH_YEARS } from "../../public/fit.js";
 import { HowToCite } from "../cite";
+import { Table } from "../columns";
 import { CLOSING_SOON_DAYS } from "../constants";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { t, tj, type Key } from "../i18n";
+import { fmtInt, t, tj, type Key } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { pageSeo } from "../seo";
 import { ENTRANT_LOOKBACK, FREE_YEARS } from "../records_db";
@@ -16,6 +18,9 @@ import { EXPIRING_TEASER_ROWS } from "./expiring";
 // "Contracts ending soon" section states the radar's rules the same way
 // (CLAUDE.md "Expiring-contracts radar"). The "Analytics" section states the
 // rules the analytics views count by (src/records_db.ts, docs/analytics.md).
+// The "Matching notices" section states the rules public/fit.js scores by,
+// its table and figures drawn from that module's constants; the Terms' No
+// Warranty section links it.
 // The "Derived provinces" part of "Statuses and Regions" states the place
 // rule of the pipeline's places.py; its figures were counted on the files of
 // 2026-11-06.
@@ -37,9 +42,22 @@ const TOC: [string, Key][] = [
   ["statuses", "methodology.toc_statuses"],
   ["expiring", "methodology.toc_expiring"],
   ["analytics", "methodology.toc_analytics"],
+  ["matching", "methodology.toc_matching"],
   ["people", "methodology.toc_people"],
   ["claims", "methodology.toc_claims"],
   ["corrections", "methodology.toc_corrections"],
+];
+
+// Matching notices: each part's rule beside its points, every figure from
+// public/fit.js, the module that scores by them.
+const P = MATCH_POINTS;
+const MATCH_RULES: [Key, readonly number[]][] = [
+  ["methodology.matching_rule_class", P.class],
+  ["methodology.matching_rule_family", P.family],
+  ["methodology.matching_rule_segment", P.segment],
+  ["methodology.matching_rule_buyer", P.buyer],
+  ["methodology.matching_rule_province", [...P.delivered, P.home, P.national]],
+  ["methodology.matching_rule_type", [P.held, ...P.type]],
 ];
 
 // vars fills a key's placeholders, for a figure the page takes from the code.
@@ -137,6 +155,33 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
             "methodology.analytics_records", "methodology.analytics_due", "methodology.analytics_entrants", "methodology.analytics_people",
             "methodology.analytics_pro", "methodology.analytics_date",
           ]} />
+
+          <h2 id="matching">{t(lang, "methodology.toc_matching")}</h2>
+          <p>{t(lang, "methodology.matching_what")}</p>
+          <p>{t(lang, "methodology.matching_read", { years: fmtInt(MATCH_YEARS, lang) })}</p>
+          <div class="table-wrap">
+            <Table sorting="none" cols={[
+              { kind: "main", label: t(lang, "methodology.matching_col_rule") },
+              { kind: "label", label: t(lang, "methodology.matching_col_points") },
+            ]}>
+              <tbody>
+                {MATCH_RULES.map(([key, points]) => (
+                  <tr>
+                    <td data-label={t(lang, "methodology.matching_col_rule")}>
+                      {t(lang, key, { many: fmtInt(MATCH_MANY, lang), few: fmtInt(MATCH_MANY - 1, lang) })}
+                    </td>
+                    <td data-label={t(lang, "methodology.matching_col_points")} class="mono">{points.map((n) => fmtInt(n, lang)).join(" / ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+          <p>
+            {t(lang, "methodology.matching_bands", {
+              max: fmtInt(MATCH_MAX, lang), close: fmtInt(BAND_CLOSE, lang), partial: fmtInt(BAND_PARTIAL, lang),
+            })}
+          </p>
+          <p>{t(lang, "methodology.matching_limits", { min: fmtInt(MATCH_MIN, lang) })}</p>
 
           <h2 id="people">{t(lang, "methodology.toc_people")}</h2>
           <List lang={lang} keys={["methodology.people_individuals", "methodology.people_contacts", "methodology.people_officials"]} />

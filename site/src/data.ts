@@ -308,6 +308,11 @@ export interface Stats {
   // Absent from older exports, and dropped when it does not read: the home
   // page then has no map.
   map?: Record<StatsMapLayer, ProvinceCounts>;
+  // The first and last fiscal year the profiles' "matching" blocks count
+  // (pipeline profile_matching.py). Absent from exports written before the
+  // block: a profile without one then says nothing yet. Read through
+  // src/fit.tsx matchingWindow.
+  matching_fy?: unknown;
 }
 
 export interface CodeRow { code: string; desc_en: string | null; desc_fr: string | null }
@@ -595,6 +600,10 @@ export interface Profile {
   // The supplier employees on its newest history record that gives them;
   // absent from older exports. Read through profileEmployees.
   employees?: unknown;
+  // What its records hold for matching notices (pipeline profile_matching.py);
+  // absent from older exports and from a profile with nothing in the window.
+  // Read through src/fit.tsx profileMatching.
+  matching?: unknown;
 }
 
 // -- corporate families ------------------------------------------------------------

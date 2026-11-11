@@ -19,7 +19,7 @@
 // reads a deep window's file or shows one of its rows past the free ones.
 import { describe, expect, it } from "vitest";
 import wrangler from "../wrangler.jsonc?raw";
-import { allowed } from "../src/account/entitlements";
+import { RULES, allowed, isCounted } from "../src/account/entitlements";
 import type { ExpiringRow } from "../src/data";
 import { t } from "../src/i18n";
 import { app } from "../src/index";
@@ -192,8 +192,10 @@ describe("the plans", () => {
   it("list in the Pro panel only what Pro has and Free does not", () => {
     expect(PRO_INCLUDES.map(([feature]) => feature)).toContain("radar_depth");
     for (const [feature] of PRO_INCLUDES) {
-      expect(allowed({ plan: "pro" }, feature), feature).toBe(true);
-      expect(allowed({ plan: "free" }, feature), feature).toBe(false);
+      // A counted feature (the matching notices) has a larger figure on Pro: the count that fills Free's still fits Pro.
+      const used = isCounted(feature) ? RULES.free[feature] : 0;
+      expect(allowed({ plan: "pro" }, feature, used), feature).toBe(true);
+      expect(allowed({ plan: "free" }, feature, used), feature).toBe(false);
     }
   });
 });

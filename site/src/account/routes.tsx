@@ -51,6 +51,7 @@
 //   POST /account/organization/segment the share block's segment                       (session, CSRF)
 //   POST /account/organization/delete  remove the claim                                (session, CSRF)
 //   GET  /account/organization/:block.csv  a block as a file                           (session, plan)
+//   GET  /account/matches              the open notices matching the claimed organization (session; plan's count)
 //   GET  /account/billing              the plan, the prices or the subscription; with ?refund=confirm
 //                                      the refund's confirmation step                 (session)
 //   POST /account/billing/checkout     to the payment service's checkout              (session, CSRF)
@@ -125,6 +126,7 @@ import {
   isShareSource, orgIdIn, readClaim, setClaimSegment,
 } from "./org_claim";
 import { ORG_PATH, orgCsv, orgPage, segmentChoice } from "./org_pages";
+import { MATCH_PATH, matchesPage } from "./fit_pages";
 import {
   DAY_SLOTS, type Follow, type WatchKind, followOf, followValue, isWatchKind, readEvents, segmentOf, targetOf, watchPath,
 } from "./watch_events";
@@ -140,8 +142,9 @@ account.use("*", async (c, next) => {
   if (!accountsEnabled(c.env)) return c.notFound();
   await next();
   // A calendar feed is read by a calendar app, never a page: private as
-  // well; so is the organization an account claims, its page and its files.
-  const own = FEED_ICS.test(c.req.path) || c.req.path === ORG_PATH || c.req.path.startsWith(`${ORG_PATH}/`);
+  // well; so is the organization an account claims, its page and its files,
+  // and the notices matching it.
+  const own = FEED_ICS.test(c.req.path) || c.req.path === ORG_PATH || c.req.path.startsWith(`${ORG_PATH}/`) || c.req.path === MATCH_PATH;
   c.header("Cache-Control", own ? "private, no-store" : "no-store");
   c.header("X-Robots-Tag", "noindex, nofollow");
 });
@@ -1269,6 +1272,14 @@ account.get("/organization/:file{[a-z]+\\.csv}", async (c) => {
   const who = await signedIn(c);
   if (who instanceof Response) return who;
   return guarded(c, () => orgCsv(c, who, block));
+});
+
+// -- matching notices (fit_pages.tsx) --------------------------------------------------------------
+
+account.get("/matches", async (c) => {
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => matchesPage(c, who));
 });
 
 // -- API keys ----------------------------------------------------------------------------------------

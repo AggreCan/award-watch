@@ -124,9 +124,12 @@ export function termsPage(c: Context<AppEnv>): Promise<Response> {
     },
     { id: "authority", title: "terms.toc_authority", body: <p>{t(lang, "terms.authority")}</p> },
     {
+      // The advisory paragraph covers what the site calculates for a reader (matching notices), between
+      // the warranty and the liability, so the Pro section's reference to this section covers it too.
       id: "warranty", title: "terms.toc_warranty", body: (
         <>
           <p>{t(lang, "terms.warranty")}</p>
+          <p>{tj(lang, "terms.advisory", { methodology: link("/methodology#matching", t(lang, "nav.methodology")) })}</p>
           <p>{t(lang, "terms.liability")}</p>
         </>
       ),
