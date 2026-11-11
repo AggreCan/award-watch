@@ -96,6 +96,20 @@ export function queryString(s, page) {
   return q ? "?" + q : "";
 }
 
+// The part of a view a saved search keeps (interestFilter in
+// src/pages/interest.tsx): the filters, with the title words' runs of space
+// as one, and without the closing window, the order and the page. Two views
+// with the same key save the same search, so tenders.js shows the saved
+// state for the view the page was served with and for no other.
+export function searchKey(s) {
+  var kept = {};
+  Object.keys(s).forEach(function (k) { kept[k] = s[k]; });
+  kept.q = String(s.q || "").replace(/\s+/g, " ").trim();
+  kept.closing = "";
+  kept.sort = "closing";
+  return queryString(kept, 1);
+}
+
 // Lower case with accents removed, so "evaluation" finds "Évaluation".
 export function fold(s) {
   return String(s || "").normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();

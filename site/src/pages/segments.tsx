@@ -19,6 +19,7 @@ import { Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from
 import { pageSeo, segmentSeo } from "../seo";
 import { accountsEnabled } from "../account/switch";
 import { BriefingPanel, briefingControl } from "../account/briefing_pages";
+import { SaveSearchLine, saveControl } from "../account/search_control";
 import { IncumbentsPanel, loadIncumbents } from "./backbone";
 import { InterestPanel, interestFilter } from "./interest";
 import { holdersPart } from "../instruments";
@@ -188,6 +189,8 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
     loadIncumbents(c, "segment", code, todayOf(stats.data_as_of)),
     briefingControl(c, "segment", code),
   ]);
+  // Save this search, under the head (account/search_control.tsx): nothing while the switch is off or signed out.
+  const save = await saveControl(c, interest, `/segments/${code}`);
   // An export without the levels file shows no levels panel.
   const levels = openLevels ? segmentLevels(openLevels, code) : null;
   const ending = expiring?.by_segment.find((g) => g.code === code)?.n ?? 0;
@@ -207,7 +210,9 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
           {ending > 0 ? <a href={`/expiring/12m?segment=${code}`} class="btn">{t(lang, "segment.expiring", { n: n(ending) })}</a> : null}
           <a href={`/data/feeds/segment/${code}/tenders.xml`} class="btn">{t(lang, "feeds.button_tenders")}</a>
           <AnalyticsLink lang={lang} href={`/segments/${code}/analytics`} on={accountsEnabled(c.env)} />
-        </>} />
+        </>}>
+        <SaveSearchLine lang={lang} state={save} />
+      </PageHead>
 
       <Panel title={t(lang, "segment.open")} count={n(seg.open_tenders.length)}
         foot={open.length ? <a href={`/tenders?segment=${code}`} class="btn btn-primary">{t(lang, "segment.all_open", { n: n(seg.open_tenders.length) })}</a> : undefined}>

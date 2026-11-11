@@ -54,10 +54,17 @@
    page shown: Closing and Published are links to the same view in their
    next order (ascending, descending, then the list's own), which this
    script answers in memory as it does a page link; the other heads are
-   plain, as the server draws them (src/columns.tsx, sorting "server"). */
+   plain, as the server draws them (src/columns.tsx, sorting "server").
+
+   For a signed-in reader the toolbar's last row holds Save this search
+   (src/account/search_control.tsx), whose own form posts the address to
+   save and the page to return to. This script keeps both on the view shown.
+   Whether a view is saved is known only for the view the page was served
+   with: that view shows the saved state, any other the button (or the
+   plan's cap), and the post answers a view saved already as saved. */
 import { closingInstant, closingParts, closingPassed, closingState, countdownText } from "./closing.js";
 import { headOrder } from "./sort.js";
-import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryString, readSearch } from "./tender-query.js";
+import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryString, readSearch, searchKey } from "./tender-query.js";
 
 (function () {
   var form = document.getElementById("tender-filters");
@@ -226,6 +233,30 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
     if (derivedBox) derivedBox.checked = state.derived;
   }
   function query(s, page) { return queryString(s, page); }
+
+  // -- Save this search -------------------------------------------------------
+
+  var saveForm = document.getElementById("save-search");
+  var saveRow = document.querySelector("[data-save-search]");
+  // The view the page was served with, as a saved search keeps it.
+  var savedView = null;
+  if (saveForm) {
+    var servedUrl = saveForm.elements.namedItem("url");
+    var servedAt = servedUrl ? servedUrl.value.indexOf("?") : -1;
+    savedView = searchKey(readSearch(servedAt >= 0 ? servedUrl.value.slice(servedAt) : ""));
+  }
+  function followSave(url) {
+    if (!saveForm) return;
+    ["url", "next"].forEach(function (name) {
+      var field = saveForm.elements.namedItem(name);
+      if (field) field.value = url;
+    });
+    var saved = saveRow ? saveRow.querySelectorAll('[data-save="saved"]') : [];
+    if (!saved.length) return;
+    var same = searchKey(state) === savedView;
+    Array.prototype.forEach.call(saved, function (n) { n.hidden = !same; });
+    Array.prototype.forEach.call(saveRow.querySelectorAll('[data-save="new"]'), function (n) { n.hidden = same; });
+  }
 
   // -- filtering --------------------------------------------------------------
 
@@ -546,6 +577,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
       if (push) history.pushState(null, "", url);
       else history.replaceState(null, "", url);
     } catch (e) { /* a sandboxed page may refuse; the view still updates */ }
+    followSave(url);
     // The alerts block (interest.js) saves the address shown.
     try { document.dispatchEvent(new CustomEvent("aw:view")); } catch (e) { /* the form still reads the address when it is sent */ }
   }

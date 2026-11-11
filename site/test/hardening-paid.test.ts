@@ -25,7 +25,7 @@ import { INTRADAY_SQL } from "../src/intraday";
 import { bucketFor, throttle } from "../src/limits";
 import { WINDOW_DAYS } from "../src/pages/expiring";
 import wranglerConfig from "../wrangler.jsonc?raw";
-import { ACCOUNTS, csrf, get, nbsp, newEmail, nextIp, onEnv, post, signIn, useAccountsDb, userId } from "./accounts-helpers";
+import { ACCOUNTS, csrf, get, nbsp, newEmail, nextIp, noSaveSearch, onEnv, post, signIn, useAccountsDb, userId } from "./accounts-helpers";
 import { makeFakeAssets } from "./assets";
 import stats from "./fixtures/stats.json";
 import { applySql } from "./setup";
@@ -804,7 +804,8 @@ async function render(path: string, cookie?: string, extra: Record<string, unkno
   };
 }
 
-const normal = (body: string) => body.replace(RAIL_ACCOUNT, "<li>[account]</li>").replace(PLAN_MARK, "");
+// A signed-in reader's page also carries Save this search where a search is saved from (the tender list).
+const normal = (body: string) => noSaveSearch(body.replace(RAIL_ACCOUNT, "<li>[account]</li>").replace(PLAN_MARK, ""));
 
 const keyProbe = new Hono<AppEnv>();
 keyProbe.get("/probe", requireApiKey(), (c) => c.json({ holder: apiKeyOf(c) ?? null }));

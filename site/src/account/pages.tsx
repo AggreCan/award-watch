@@ -249,12 +249,9 @@ const StartPanel: FC<{ lang: Lang; account: Account; counts: OverviewCounts }> =
         {save ? (
           <li>
             <h3>{t(lang, "account.start_search")}</h3>
-            {/* No list page saves to an account in one step yet: the searches page's Add a Search takes the page's address. */}
+            {/* The tender list saves its filters to the account with its own Save this search (search_control.tsx). */}
             <a href="/tenders" class={follow ? "btn" : "btn btn-primary"}>{t(lang, "account.start_search_button")}</a>
-            <p class="muted small">
-              {tj(lang, "account.start_search_text", { searches: <a href="/account/searches">{t(lang, "account.start_searches_link")}</a> })}{" "}
-              {searchFigures}
-            </p>
+            <p class="muted small">{t(lang, "account.start_search_text")} {searchFigures}</p>
           </li>
         ) : null}
         {counts.org === false ? (

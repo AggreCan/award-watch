@@ -17,6 +17,7 @@
 // the newest day by default and any of the last 30 on request.
 
 import type { Context } from "hono";
+import { SaveSearchForm, SaveSearchRow, saveControl } from "../account/search_control";
 import { type SortOrders, SortsHere, clientTable, headSort } from "../columns";
 import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENT_CODES } from "../constants";
 import {
@@ -359,6 +360,8 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   };
   const chips = activeChips(q, opts, lang, named);
   const interest = await interestFilter(c.env, lang, "tenders", `/tenders${url.search}`);
+  // Save this search, for a signed-in reader (account/search_control.tsx): nothing otherwise.
+  const save = await saveControl(c, interest, `/tenders${url.search}`);
   const empty = !waiting && shown.length === 0;
   // The same-day notices for a paid request; null (nothing read) on the free plan.
   const intraday = await intradayBand(c, stats.data_as_of, clock);
@@ -456,7 +459,9 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
             </a>
           ))}
         </div>
+        <SaveSearchRow lang={lang} state={save} />
       </form>
+      <SaveSearchForm lang={lang} state={save} />
 
       {intraday}
       <div class={empty ? "split is-empty" : "split"} id="tender-split">

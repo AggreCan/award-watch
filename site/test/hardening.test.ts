@@ -25,7 +25,7 @@ import {
 } from "../src/search_db";
 import wranglerConfig from "../wrangler.jsonc?raw";
 import {
-  ACCOUNTS, DB, csrf, get, grantPro, newEmail, nextIp, onEnv, post, requestCode, sessionCookie, signIn, useAccountsDb, userId,
+  ACCOUNTS, DB, csrf, get, grantPro, newEmail, nextIp, noSaveSearch, onEnv, post, requestCode, sessionCookie, signIn, useAccountsDb, userId,
 } from "./accounts-helpers";
 import { FILES, makeFakeAssets } from "./assets";
 import STATS_MAP from "./fixtures/stats-map.json";
@@ -241,10 +241,11 @@ describe("the same-day band, for a request that is not a live Pro session", () =
     const cached = { email: newEmail("band-cache"), cookie: "" };
     cached.cookie = await signIn(cached.email);
     await ACCOUNTS.prepare("UPDATE users SET plan = 'pro', plan_until = NULL WHERE email = ?").bind(cached.email).run();
-    // The rail's account item and the plan subscript after the wordmark are the
-    // only marks of a session on a free page.
-    const normal = (body: string) => body.replace(RAIL_ACCOUNT, "<li>[account]</li>")
-      .replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "");
+    // The rail's account item, the plan subscript after the wordmark and, on the
+    // tender list, Save this search (account/search_control.tsx) are the only
+    // marks of a session on a free page.
+    const normal = (body: string) => noSaveSearch(body.replace(RAIL_ACCOUNT, "<li>[account]</li>")
+      .replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, ""));
     for (const path of BAND_PAGES) {
       const anonymous = await render(path);
       for (const [what, s] of Object.entries({ free, revoked, ended, later, replaced, cached })) {
@@ -548,8 +549,15 @@ describe("sessions, codes and links", () => {
     }
     expect((await post(target, {}, { cookie: a })).status).toBe(403);
     expect((await post(target, { csrf: good }, { cookie: a })).status).toBe(303);
-    // The value is on the account's own pages only, never on a public one.
-    expect(await (await get("/tenders", { cookie: a })).text()).not.toContain(good);
+    // The value is on the account's own pages and, on a public page, in the
+    // session's own forms only (Follow, Save this search), on a response sent
+    // to that session alone and never kept by a cache; never on the page as
+    // another session or a reader without one gets it.
+    const own = await get("/tenders", { cookie: a });
+    expect(own.headers.get("cache-control")).toBe("private, no-store");
+    expect((await own.text()).split(good)).toHaveLength(2);
+    expect(await (await get("/tenders")).text()).not.toContain(good);
+    expect(await (await get("/tenders", { cookie: b })).text()).not.toContain(good);
     expect((await post("/account/sign-out", { csrf: good }, { cookie: a })).status).toBe(303);
   });
 

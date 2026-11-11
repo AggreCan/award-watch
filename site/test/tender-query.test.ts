@@ -1,12 +1,14 @@
 // The browser's view rules (public/tender-query.js, which tenders.js draws
 // with) held to the server's: the same address reads as the same view,
 // keeps the same notices in the same order and is written back the same,
-// several values of a key included.
+// several values of a key included; and two views are one saved search in
+// the browser exactly when the server saves them as one.
 import { describe, expect, it } from "vitest";
-import { filterRows, queryString, readSearch } from "../public/tender-query.js";
+import { filterRows, queryString, readSearch, searchKey } from "../public/tender-query.js";
 import type { TenderRow } from "../src/data";
+import { interestFilter } from "../src/pages/interest";
 import { filterTenders, readTenderQuery, tenderQueryString } from "../src/pages/tenders";
-import { testClock } from "./assets";
+import { testClock, testEnv } from "./assets";
 import openTenders from "./fixtures/tenders-open.json";
 
 const rows = openTenders as unknown as TenderRow[];
@@ -48,5 +50,27 @@ describe("the browser's view rules", () => {
     }
     expect(queryString(readSearch("?segment=82&segment=43&province=QC&province=BC&category=SRV&category=GD"), 1))
       .toBe("?category=GD&category=SRV&segment=43&segment=82&province=BC&province=QC");
+  });
+
+  // tenders.js shows Save this search's saved state for the view the page was
+  // served with and for any view with the same key (src/account/search_control.tsx).
+  it("give two views one saved-search key exactly when the server saves them as one filter", async () => {
+    const views = [
+      ...VIEWS,
+      // What a saved search leaves out: the closing window, the order, the page; and runs of space in the words.
+      "?segment=82&closing=30&sort=published&page=2", "?closing=7", "?q=propeller%20%20blade", "?q=propeller+blade", "?q=+propeller",
+      "?province=QC&derived=0", "?province=QC&national=0&derived=0", "?national=0", "?code=7210&segment=43",
+    ];
+    const env = testEnv() as never;
+    const saved = await Promise.all(views.map(async (v) => (await interestFilter(env, "en", "tenders", `/tenders${v}`))?.params));
+    expect(saved.every((p) => typeof p === "string")).toBe(true);
+    for (let i = 0; i < views.length; i++) {
+      for (let j = i + 1; j < views.length; j++) {
+        const browser = searchKey(readSearch(views[i])) === searchKey(readSearch(views[j]));
+        expect(browser, `${views[i]} and ${views[j]}`).toBe(saved[i] === saved[j]);
+      }
+    }
+    expect(searchKey(readSearch("?segment=82&closing=30&sort=published&page=2"))).toBe("?segment=82");
+    expect(searchKey(readSearch("?q=propeller%20%20blade"))).toBe("?q=propeller+blade");
   });
 });

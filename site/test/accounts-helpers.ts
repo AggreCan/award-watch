@@ -121,6 +121,17 @@ export async function grantPro(email: string, endsAt: string | null = null): Pro
   await ACCOUNTS.prepare(MANUAL_GRANT_SQL).bind(endsAt, email).run();
 }
 
+// A page as it reads without Save this search (src/account/search_control.tsx),
+// which a signed-in reader's page carries where a search is saved from: the
+// line under a head, the toolbar's row, and the row's own form after the toolbar.
+export const SAVE_SEARCH_PARTS = [
+  /<form method="post" action="\/account\/searches" class="save-search">[\s\S]*?<\/form>/,
+  /<div class="save-search">[\s\S]*?<\/div>/,
+  /<div class="toolbar-row save-search" data-save-search="">[\s\S]*?<\/div>(?:<\/div>)?(?=<\/form>)/,
+  /<form method="post" action="\/account\/searches" id="save-search" class="save-search-form">[\s\S]*?<\/form>/,
+];
+export const noSaveSearch = (body: string) => SAVE_SEARCH_PARTS.reduce((b, re) => b.replace(re, ""), body);
+
 export const decode = (s: string) =>
   s.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 export const nbsp = (s: string) => s.replace(/[  ]/g, " ");

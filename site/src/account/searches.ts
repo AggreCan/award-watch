@@ -75,6 +75,28 @@ export async function addSearch(
   return same ? "exists" : "cap";
 }
 
+// What a page's Save this search control shows (search_control.tsx): whether
+// the page's filter is saved on the account, and how many the account holds
+// against the cap, the briefings counted as addSearch counts them. One
+// statement, on the table's unique key and the account's rows.
+const SEARCH_STATE = (count: string) =>
+  `SELECT EXISTS (SELECT 1 FROM saved_searches WHERE user_id = ?1 AND kind = ?2 AND params = ?3) AS saved, ${count} AS n`;
+const STATE_COUNT = "(SELECT COUNT(*) FROM saved_searches WHERE user_id = ?1)";
+
+export async function searchState(
+  env: Env, userId: string, filter: Pick<InterestFilter, "kind" | "params">,
+): Promise<{ saved: boolean; n: number }> {
+  const db = env.ACCOUNTS!;
+  const binds = [userId, filter.kind, filter.params];
+  const row = await db.prepare(SEARCH_STATE(`${STATE_COUNT} + (SELECT COUNT(*) FROM briefings WHERE user_id = ?1)`)).bind(...binds)
+    .first<{ saved: number; n: number }>()
+    .catch((e) => {
+      if (!missingTable(e)) throw e;
+      return db.prepare(SEARCH_STATE(STATE_COUNT)).bind(...binds).first<{ saved: number; n: number }>();
+    });
+  return { saved: row?.saved === 1, n: row?.n ?? 0 };
+}
+
 // Daily or weekly only for a kind the job can deliver; off for any.
 export async function setDelivery(env: Env, userId: string, id: string, deliver: Delivery): Promise<boolean> {
   const kinds = DELIVERABLE_KINDS.map(() => "?").join(", ");

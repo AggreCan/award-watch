@@ -9,7 +9,7 @@
 //   GET  /account                      the overview                                   (session)
 //   POST /account/sign-out             this browser, or every browser (scope=all)     (session, CSRF)
 //   GET  /account/searches             saved searches, the alerts form's rows to add  (session)
-//   POST /account/searches             add from a page address                        (session, CSRF)
+//   POST /account/searches             add from a page address, or Save this search   (session, CSRF)
 //   POST /account/searches/import      add the alerts form's rows                     (session, CSRF)
 //   POST /account/searches/:id         email delivery                                 (session, CSRF)
 //   POST /account/searches/:id/delete  remove one                                     (session, CSRF)
@@ -497,19 +497,41 @@ function sitePath(raw: string, requestUrl: string): string | null {
   }
 }
 
+// The page a press of Save this search returns to, in the page's language: a
+// French page's address says so, as the watch post's return does, in case the
+// browser keeps no language cookie.
+function inLang(path: string, lang: Lang): string {
+  const cut = path.includes("#") ? path.indexOf("#") : path.length;
+  const before = path.slice(0, cut);
+  if (lang !== "fr" || /[?&]lang=/.test(before)) return path;
+  return `${before}${before.includes("?") ? "&" : "?"}lang=fr${path.slice(cut)}`;
+}
+
+// Add a Search posts the address typed or pasted; a page's Save this search
+// (search_control.tsx) posts the page's own address and next, the page to
+// return to. One path for both: the filter is rebuilt from the address
+// (interestFilter), the insert is held to the plan's cap and stores a filter
+// saved already once (searches.ts addSearch), and an address that is not a
+// page with a filter is refused with the searches page's own line. A press
+// then goes back to next, which safeNext holds to a path on this site (an
+// unsafe one is dropped for the filter's own page), where the control reads
+// saved, or shows the cap when nothing was added; the audit's detail says
+// which form added the search.
 account.post("/searches", async (c) => {
   const post = await signedInPost(c);
   if (post instanceof Response) return post;
   const { account: who, fields } = post;
   const lang = c.get("lang");
   const raw = clean(fields, "url", 2100);
+  const pressed = typeof fields.next === "string";
   return guarded(c, async () => {
     const path = sitePath(raw, c.req.url);
     const kind = path ? kindOfPath(path.split("?")[0]) : null;
     const filter = path && kind ? await interestFilter(c.env, lang, kind, path) : null;
     if (!filter) return searchesPage(c, who, { errors: ["account.err_url"], url: raw, status: 400 });
     const result = await addSearch(c.env, who, filter, lang);
-    if (result === "added") await audit(c.env, who.userId, "search_added", filter.kind);
+    if (result === "added") await audit(c.env, who.userId, "search_added", pressed ? `${filter.kind} on its page` : filter.kind);
+    if (pressed) return c.redirect(inLang(safeNext(fields.next) ?? filter.params, lang), 303);
     return c.redirect(`/account/searches?m=${result === "added" ? "added" : result}`, 303);
   });
 });

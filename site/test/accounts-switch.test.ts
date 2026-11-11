@@ -19,6 +19,8 @@ const PUBLIC_PAGES = [
   "/nothing-here", "/?lang=fr", "/privacy?lang=fr",
   // A notice's and a contract's pages carry their calendar file's link whatever the switch (pages/ics.ts).
   "/tenders/cb-200-20005019", "/awards/cb-400-40000004",
+  // The pages a search is saved from (account/search_control.tsx), filtered and not.
+  "/tenders?segment=82&province=BC&sort=published", "/expiring/3m", "/expiring/3m?segment=82", "/tenders?lang=fr",
 ];
 
 const ACCOUNT_ROUTES: [string, string][] = [
@@ -230,6 +232,23 @@ describe("with the switch on", () => {
       expect(off.body, path).not.toContain("pro-tag");
       expect(off.body, path).not.toContain("/account");
       expect(landingCore(on.body), path).toBe(landingCore(off.body));
+    }
+  });
+
+  // Save this search (account/search_control.tsx) renders for a signed-in
+  // reader only: the pages that carry it gain nothing from it without a
+  // session, or with a cookie that names none (the loop above holds /tenders
+  // to the byte).
+  it("adds no Save this search to a page that carries it, for a reader without a session", async () => {
+    const stale = "__Host-aw_session=" + "a".repeat(32) + "." + "b".repeat(64);
+    for (const path of ["/tenders?segment=82", "/expiring", "/expiring/3m?segment=82", "/segments/82"]) {
+      for (const cookie of [undefined, stale]) {
+        const on = await render(path, onEnv(), cookie);
+        expect(on.status, path).toBe(200);
+        expect(on.body, path).not.toContain("save-search");
+        expect(on.body, path).not.toContain('action="/account/searches"');
+        expect(on.body, path).not.toContain('name="csrf"');
+      }
     }
   });
 

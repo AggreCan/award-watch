@@ -121,8 +121,8 @@ export const ACCOUNT_STRINGS = {
   },
   // The panel over the overview while the account follows no page or keeps no
   // saved search (pages.tsx StartPanel). Each step's line says what the step
-  // leads to in the words the Follow control, the searches page and the
-  // organization page use; the figures come from the plans, and a Free
+  // leads to in the words the Follow control, the Save this search control and
+  // the organization page use; the figures come from the plans, and a Free
   // account's lines are the watches and searches pages' own (watches.cap_free,
   // account.cap_note).
   "account.start_panel": { en: "Start Here", fr: "Pour commencer" },
@@ -139,10 +139,9 @@ export const ACCOUNT_STRINGS = {
   "account.start_search": { en: "Save a search of tender notices", fr: "Enregistrer une recherche d'avis d'appel d'offres" },
   "account.start_search_button": { en: "Filter the tender notices", fr: "Filtrer les avis d'appel d'offres" },
   "account.start_search_text": {
-    en: "Set the filters there, then copy the page's address into Add a Search on your {searches}.",
-    fr: "Choisissez-y les filtres, puis copiez l'adresse de la page dans Ajouter une recherche, sur votre {searches}.",
+    en: "Set the filters there, then press Save this search.",
+    fr: "Choisissez-y les filtres, puis appuyez sur Enregistrer cette recherche.",
   },
-  "account.start_searches_link": { en: "saved searches page", fr: "page des recherches enregistrées" },
   "account.start_search_cap": {
     en: "This account holds {n} of {cap} saved searches. Each can be sent by email, daily or weekly.",
     fr: "Recherches enregistrées de ce compte : {n} sur {cap}. Chacune peut être envoyée par courriel, chaque jour ou chaque semaine.",
@@ -183,8 +182,8 @@ export const ACCOUNT_STRINGS = {
   "account.add_url": { en: "Page address", fr: "Adresse de la page" },
   "account.add_button": { en: "Save the search", fr: "Enregistrer la recherche" },
   "account.add_note": {
-    en: "Paste the address of a tender list, a list of contracts ending, an organization, a buyer or a segment page. The filter is saved as the page shows it.",
-    fr: "Collez l'adresse d'une liste d'appels d'offres, d'une liste de contrats prenant fin, d'une organisation, d'un acheteur ou d'une page de segment. Le filtre est enregistré tel que la page l'affiche.",
+    en: "Paste the address of a tender list, a list of contracts ending, an organization, a buyer or a segment page. The filter is saved as the page shows it. On a tender list, a list of contracts ending or a segment page, Save this search does the same without the address.",
+    fr: "Collez l'adresse d'une liste d'appels d'offres, d'une liste de contrats prenant fin, d'une organisation, d'un acheteur ou d'une page de segment. Le filtre est enregistré tel que la page l'affiche. Sur une liste d'appels d'offres, une liste de contrats prenant fin ou une page de segment, Enregistrer cette recherche fait de même sans l'adresse.",
   },
   "account.cap_free": {
     en: "The Free plan keeps up to {cap} saved searches.",
@@ -209,6 +208,16 @@ export const ACCOUNT_STRINGS = {
   "account.err_url": {
     en: "That address is not a page with a filter to save.",
     fr: "Cette adresse ne mène pas à une page dont le filtre peut être enregistré.",
+  },
+  // The Save this search control on a page whose filter can be saved (search_control.tsx): the
+  // button, the state once the page's filter is saved, and Pro's line at the cap. A Free account's
+  // line at the cap is the searches page's own (account.cap_note).
+  "account.save_button": { en: "Save this search", fr: "Enregistrer cette recherche" },
+  "account.save_saved": { en: "Search saved", fr: "Recherche enregistrée" },
+  "account.save_manage": { en: "Manage your saved searches", fr: "Gérer vos recherches enregistrées" },
+  "account.save_cap_pro": {
+    en: "This account holds {cap} saved searches, the most an account keeps.",
+    fr: "Ce compte a {cap} recherches enregistrées, le maximum qu'un compte conserve.",
   },
 
   // -- calendar feeds (src/account/feeds.ts, the searches and watches pages) -----------

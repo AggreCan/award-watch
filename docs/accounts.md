@@ -14,9 +14,11 @@ the schema is `site/accounts_schema.sql`; the tests are
   one signs the browser in, once, within 15 minutes.
 - **Saved searches.** The filters of the alerts form (tender lists, contracts
   ending, organizations, buyers, segments), kept on the account. A search is
-  added by pasting a page's address; the site rebuilds the filter and writes
-  its label, as the alerts form does. Requests made earlier through the
-  alerts form are offered for import after sign-in.
+  added with `Save this search` on a tender list, a list of contracts ending
+  or a segment page (*Save this search*), or by pasting a page's address on
+  the searches page; either way the site rebuilds the filter and writes its
+  label, as the alerts form does. Requests made earlier through the alerts
+  form are offered for import after sign-in.
 - **Delivery by email.** On the Pro plan, any saved search can be sent
   daily or weekly: a tender list, a list of contracts ending, or the new
   records of an organization, a buyer or a segment (*Phase 2: delivery*).
@@ -539,6 +541,60 @@ The `bug_reports` table must be on the remote database before the switch
 is turned on with this code: deleting an account clears it in the same
 batch as the rest, so without it the deletion answers 503. Re-applying
 `accounts_schema.sql` adds it (*Operator steps*, step 1).
+
+## Save this search
+
+`site/src/account/search_control.tsx`. A signed-in reader sees `Save this
+search` (`Enregistrer cette recherche`) on the tender list and on a window of
+contracts ending, as the last row of the filter toolbar, outside the phone's
+fold; and under the head of a segment page and the contracts ending
+overview, as one line, the button beside the filter's label (the label the
+email list's block shows). An organization's and a buyer's addresses are
+saved searches too (`kindOfPath` in `site/src/pages/interest.tsx`), but their
+pages keep `Follow` as their one control, since the two would ask a reader
+the same thing there; their saved search is made with Add a Search on the
+searches page. The button is always a flat one: each page keeps its
+filled button on its own action (`Apply` on the lists). With the switch off,
+for a reader not signed in and when the accounts database cannot be read,
+nothing renders and the page keeps every byte; the Email Lists block is
+unchanged. The form carries the session's CSRF value, so it renders only on
+a page the layout sends `private, no-store`.
+
+The states: the button; `Search saved` (`Recherche enregistrée`) and the line
+`Manage your saved searches`, both links to `/account/searches`, as a saved
+briefing reads, once the page's filter is saved; at the plan's cap, for
+Free the searches page's own gate note (`account.cap_note`, with the Pro chip
+and the link to the plans), for Pro "This account holds 25 saved searches,
+the most an account keeps." with the searches page's link. One statement
+reads both, the filter's row by the table's unique key and the account's
+count with its briefings, which share the cap (`searches.ts`
+`searchState`).
+
+A press is `POST /account/searches`, the searches page's own Add a Search
+post, with one more field: `next`, the page to return to. The address in
+`url` is rebuilt by `interestFilter` (an address that is not such a page, or
+names nothing the data holds, is refused with the searches page's own line
+and a 400), the insert is held to the cap and stores a filter once
+(`addSearch`), and `search_added` carries the detail `<kind> on its page`
+(a pasted address keeps the kind alone). The answer is a 303 to `next`, held
+by `safeNext` to a path on this site (an unsafe one is dropped for the
+filter's own page), with `lang=fr` added for a French page whose address
+lacks it. There the control reads saved, or shows the cap when nothing was
+added; a filter saved already answers the same and stores nothing.
+
+On the tender list the filters change in the browser. The toolbar is itself
+the filters' form, so the row's button submits a form of its own placed
+after the toolbar (`id="save-search"`, by the button's `form` attribute).
+`public/tenders.js` writes the view's address into that form's `url` and
+`next` after each draw, so a press saves the view shown; without the script
+the toolbar is a plain GET form and the server writes the fields for the
+address loaded. Whether a view is saved is known only for the view the page
+was served with: `searchKey` in `public/tender-query.js` reduces a view to
+what a saved search keeps (the filters, without the closing window, the
+order and the page), and the saved state shows while the view's key is the
+served one, the button (or the cap) otherwise. `site/test/tender-query.test.ts`
+holds the key to the server's saved filter; the rest is
+`site/test/accounts-save-search.test.ts`.
 
 ## Phase 2: delivery
 

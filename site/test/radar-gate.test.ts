@@ -28,7 +28,7 @@ import { EXPIRING_TEASER_ROWS } from "../src/pages/expiring";
 import { DEEP_WINDOWS, allowsRadarDepth } from "../src/plan";
 import { PRO_INCLUDES } from "../src/pro";
 import { routeTemplate } from "../src/views";
-import { get, grantPro, nbsp, newEmail, nextIp, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
+import { get, grantPro, nbsp, newEmail, nextIp, noSaveSearch, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { contentEtag, makeFakeAssets, testEnv } from "./assets";
 import { landingCore } from "./home";
 import page1 from "./fixtures/expiring-3m-1.json";
@@ -140,12 +140,13 @@ async function sessions(): Promise<void> {
 const html = async (path: string, env: object, cookie?: string) => (await get(path, { env, cookie })).text();
 // Once the switch is on, the rail carries the signed-in address (or "Sign
 // in"), the wordmark a signed-in reader's plan, the footer a Pro reader's
-// bug report link and the analytics index's link, and the tabs and tiles
-// of the deep windows the Pro chip (for every reader); the rest of the
-// page is what is compared.
+// bug report link and the analytics index's link, a signed-in reader's
+// window and overview Save this search, and the tabs and tiles of the deep
+// windows the Pro chip (for every reader); the rest of the page is what is
+// compared.
 const CHIP = /<span class="pro-tag"><svg[^>]*><path[^>]*><\/path><\/svg>Pro<span class="visually-hidden"> \((?:paid plan|forfait payant)\)<\/span><\/span>/g;
 const noRail = (page: string) =>
-  page.replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "")
+  noSaveSearch(page).replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "")
     .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(/<a href="\/pro">[^<]*<\/a>/, "").replace(/<a href="\/analytics">[^<]*<\/a>/, "")
     .replace(CHIP, "")
     .replace(/<p class="interest-pro">[\s\S]*?<\/p>/g, "")

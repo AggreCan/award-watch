@@ -3,7 +3,7 @@
 // no saved search, each step not done yet with its one action and its line,
 // gone once the account holds both. The Follow step's search is the top
 // bar's GET to /search; the searches step leads to the tender notices and
-// says how the address reaches the searches page; the organization step
+// says to press Save this search there; the organization step
 // rides along only while the panel shows. One filled button on the page, on
 // the first step shown; no Pro chip in the panel; a Pro account's lines name
 // its own plan only. Every expected line is written out here, never read
@@ -63,12 +63,13 @@ describe("the first steps on the account overview", () => {
     expect(/<form method="get" action="\/search"[\s\S]*?<\/form>/.exec(panel)?.[0]).not.toContain("csrf");
 
     expect(panel).toContain('<a href="/tenders" class="btn">Filter the tender notices</a>');
-    expect(panel).toContain('<a href="/account/searches">saved searches page</a>');
+    // The list saves its own filters now: the line names the button, not the searches page.
+    expect(panel).not.toContain('href="/account/searches"');
     expect(panel).toContain('<a href="/account/organization" class="btn">Find your organization</a>');
     expect(linesOf(panel)).toEqual([
       "On a result's profile, use the Follow button. Its events then show on your watches page: a new award, an amendment, an end date near, " +
         "a new or closed notice. This account follows 0 of 3 pages. Pro follows up to 25 and sends their events by email.",
-      "Set the filters there, then copy the page's address into Add a Search on your saved searches page. " +
+      "Set the filters there, then press Save this search. " +
         "This account holds 0 of 3 saved searches. Pro holds up to 25 and sends them by email, daily or weekly.",
       "Tell the site which organization is yours to see its records by fiscal year on one page. The choice is private to your account.",
     ]);
@@ -161,7 +162,7 @@ describe("the first steps on the account overview", () => {
     expect(linesOf(panel)).toEqual([
       "On a result's profile, use the Follow button. Its events then show on your watches page and come by email: a new award, an amendment, " +
         "an end date near, a new or closed notice. This account follows 0 of 25 pages.",
-      "Set the filters there, then copy the page's address into Add a Search on your saved searches page. " +
+      "Set the filters there, then press Save this search. " +
         "This account holds 0 of 25 saved searches. Each can be sent by email, daily or weekly.",
       "Tell the site which organization is yours to see, on one page, its records by fiscal year and segment, its contracts ending within " +
         "12 months and the buyers it has won from. The choice is private to your account.",
@@ -190,7 +191,7 @@ describe("the first steps on the account overview", () => {
       "Sur le profil d'un résultat, utilisez le bouton Suivre. Ses événements s'affichent ensuite sur votre page des suivis : une nouvelle " +
         "attribution, une modification, une fin proche, un avis nouveau ou fermé. Pages suivies par ce compte : 0 sur 3. Pro en suit " +
         "jusqu'à 25 et envoie leurs événements par courriel.",
-      "Choisissez-y les filtres, puis copiez l'adresse de la page dans Ajouter une recherche, sur votre page des recherches enregistrées. " +
+      "Choisissez-y les filtres, puis appuyez sur Enregistrer cette recherche. " +
         "Recherches enregistrées de ce compte : 0 sur 3. Pro en conserve jusqu'à 25 et les envoie par courriel, chaque jour ou chaque semaine.",
       "Indiquez au site quelle organisation est la vôtre pour voir ses dossiers par exercice sur une même page. Ce choix reste privé à votre compte.",
     ]);
@@ -208,7 +209,7 @@ describe("the first steps on the account overview", () => {
     expect(linesOf(panel)).toEqual([
       "Sur le profil d'un résultat, utilisez le bouton Suivre. Ses événements s'affichent ensuite sur votre page des suivis et arrivent par " +
         "courriel : une nouvelle attribution, une modification, une fin proche, un avis nouveau ou fermé. Pages suivies par ce compte : 0 sur 25.",
-      "Choisissez-y les filtres, puis copiez l'adresse de la page dans Ajouter une recherche, sur votre page des recherches enregistrées. " +
+      "Choisissez-y les filtres, puis appuyez sur Enregistrer cette recherche. " +
         "Recherches enregistrées de ce compte : 0 sur 25. Chacune peut être envoyée par courriel, chaque jour ou chaque semaine.",
       "Indiquez au site quelle organisation est la vôtre pour voir au même endroit ses dossiers par exercice et par segment, ses contrats " +
         "prenant fin d'ici 12 mois et les acheteurs auprès desquels elle a obtenu des contrats. Ce choix reste privé à votre compte.",

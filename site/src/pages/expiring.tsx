@@ -32,6 +32,7 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { allowed } from "../account/entitlements";
+import { SaveSearchForm, SaveSearchLine, SaveSearchRow, saveControl } from "../account/search_control";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
 import { ShortMoney } from "../chart";
@@ -573,6 +574,8 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
     expiringFeeds(c),
     interestFilter(c.env, lang, "expiring", "/expiring"),
   ]);
+  // Save this search, for a signed-in reader (account/search_control.tsx): the 3-month list the overview opens on.
+  const save = await saveControl(c, interest, "/expiring");
   const shown = first ? soonestFirst(first).slice(0, EXPIRING_FIRST) : [];
   const n = (v: number) => fmtInt(v, lang);
   const byBuyerName = (b: (typeof idx.by_buyer)[number]) => pick(lang, b.buyer_en, b.buyer_fr) ?? b.buyer_id ?? t(lang, "common.not_stated");
@@ -593,7 +596,9 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
         actions={<>
           <a href={`/downloads/${EXPIRING_CSV_3M}`} class="btn">{t(lang, "expiring.download_3m")}</a>
           {feeds.national ? <a href={`/data/${EXPIRING_FEED}`} class="btn">{t(lang, "expiring.feed")}</a> : null}
-        </>} />
+        </>}>
+        <SaveSearchLine lang={lang} state={save} />
+      </PageHead>
 
       {windows.length ? (
         <section class="tiles" aria-label={t(lang, "expiring.tiles_label")}>
@@ -1006,6 +1011,8 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   const rows = !viewOnly || whole || n === 1 ? first : await loadExpiringPage(c.env, window, n);
   if (!rows) return noDataPage(c, "expiring.title");
   const interest = await interestFilter(c.env, lang, "expiring", `${path}${url.search}`);
+  // Save this search, for a signed-in reader (account/search_control.tsx): the window's filter as the address sets it.
+  const save = await saveControl(c, interest, `${path}${url.search}`);
   const sorted = soonestFirst(rows);
   const local = filtered ? filterExpiring(sorted, q) : sorted;
   const shown = whole ? whole.rows : orderExpiring(local, q.sort);
@@ -1128,7 +1135,9 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
             ))}
           </div>
         ) : null}
+        <SaveSearchRow lang={lang} state={save} />
       </form>
+      <SaveSearchForm lang={lang} state={save} />
       <Panel title={t(lang, WINDOW_LABEL[window])}
         count={whole ? tn(lang, "expiring.whole_match_one", "expiring.whole_match_many", whole.n, { n: fmtInt(whole.n, lang) })
           : filtered ? tn(lang, "expiring.match_one", "expiring.match_many", shown.length, { n: fmtInt(shown.length, lang) }) : fmtInt(idx.rows, lang)}
