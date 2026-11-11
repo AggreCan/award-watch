@@ -187,9 +187,15 @@ export function checkoutPrice(env: Env): ProPrice | null {
 }
 
 // "Pro is CA$18.99 a month or CA$189.99 a year, taxes added at checkout."
-// The taxes are named with the price, so no amount appears only at checkout.
+// The taxes are named with the price, so no amount appears only at checkout,
+// and the refund of the first payment is stated with it (the Terms, Refund of
+// the First Payment), so a reader weighing the price sees the way back.
 export const PriceLine: FC<{ lang: Lang; price: ProPrice | null }> = ({ lang, price }) =>
-  price ? <p class="pro-price">{t(lang, "pro.price", { monthly: decimal(lang, price.monthly), yearly: decimal(lang, price.yearly) })}</p> : null;
+  price ? (
+    <p class="pro-price">
+      {t(lang, "pro.price", { monthly: decimal(lang, price.monthly), yearly: decimal(lang, price.yearly) })} {t(lang, "pro.refund")}
+    </p>
+  ) : null;
 
 // -- the plan cards ---------------------------------------------------------------
 

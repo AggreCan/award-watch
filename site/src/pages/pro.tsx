@@ -24,6 +24,7 @@ import type { AppEnv } from "../env";
 import { decimal, fmtInt, t, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { PLAN_ROWS, PlanCards, PriceLine, ProTag, SUBSCRIBE_PATH, type PlanReader, type ProPrice, checkoutPrice, planCards, planLine } from "../pro";
+import { CONTACT_EMAIL } from "./docs";
 import { MAX_YEARS } from "../records_db";
 import { type Faq, pageSeo, proJsonLd } from "../seo";
 
@@ -48,6 +49,7 @@ export function proFaq(lang: Lang, price: ProPrice | null): Faq[] {
     qa("propage.q_recompete", t(lang, "propage.a_recompete")),
     qa("propage.q_source", t(lang, "propage.a_source")),
     qa("propage.q_cancel", t(lang, "propage.a_cancel")),
+    qa("propage.q_refund", t(lang, "propage.a_refund", { email: CONTACT_EMAIL })),
     qa("propage.q_seller", t(lang, "propage.a_seller")),
   ];
 }

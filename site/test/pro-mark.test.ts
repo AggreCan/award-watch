@@ -828,7 +828,7 @@ describe("a Free account", () => {
     expect(keys).toContain('<p>API keys come with the Pro plan. <a href="/account/billing">Plans and prices</a></p>');
     const bug = decode(await html("/account/bug", { cookie: freeCookie }));
     expect(bug).toContain(`<section class="panel pro-panel"><div class="panel-head"><h2>Part of Pro</h2><div class="panel-tools">${CHIP_EN}</div></div>`);
-    expect(bug).toContain(`<p class="pro-price">Pro is CA$${PRICE[1]} a month or CA$${PRICE[2]} a year, taxes added at checkout.</p>`);
+    expect(bug).toContain(`<p class="pro-price">Pro is CA$${PRICE[1]} a month or CA$${PRICE[2]} a year, taxes added at checkout. The first payment is refunded in full if you ask within 14 days.</p>`);
     const bugFr = decode(nbsp(await html("/account/bug?lang=fr", { cookie: freeCookie })));
     expect(bugFr).toContain(`<h2>Offert avec le forfait Pro</h2><div class="panel-tools">${CHIP_FR}</div>`);
     expect(chips(mainOf(decode(await html("/account/keys", { cookie: proCookie }))))).toBe(0);

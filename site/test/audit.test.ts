@@ -325,12 +325,15 @@ describe("the about, terms and privacy pages", () => {
     expect(pro).toContain('The <a href="#warranty">No Warranty</a> terms above, liability included, apply to Pro');
     expect(pro).toContain("The prices are shown on the site, on the account's billing page, in Canadian dollars.");
     expect(pro).toContain("at least 30 days after notice by email to the account's address");
-    expect(pro).toContain("The current period is not refunded, in whole or in part, except where the law requires a refund.");
+    expect(pro).toContain("The current period is not refunded, in whole or in part, except under Refund of the First Payment and where the law requires a refund.");
+    // The refund the operator promised (2026-11-11): the first payment, within 14 days, once per account, by writing to the contact address.
+    expect(pro).toContain("<h3>Refund of the First Payment</h3><p>If you ask within 14 days of your first payment for Pro, monthly or yearly, Allwater refunds that payment in full");
+    expect(pro).toContain("This applies once per account and to the first payment only");
     expect(pro).toContain("If Allwater ends Pro for any other reason, it refunds the unused part of the current period.");
     expect(pro).toContain("Deleting the account cancels the subscription at once, without refund.");
-    // The prices live on the billing page: the only figure in the section is the notice period.
+    // The prices live on the billing page: the only figures in the section are the notice period and the refund's 14 days.
     expect(pro).not.toContain("$");
-    expect([...pro.replace(/<[^>]+>/g, "").matchAll(/\d+/g)].map((m) => m[0])).toEqual(["30", "30"]);
+    expect([...pro.replace(/<[^>]+>/g, "").matchAll(/\d+/g)].map((m) => m[0])).toEqual(["30", "14", "30"]);
     // The billing page is named, never linked: no public page links to /account while the switch is off.
     expect(pro).not.toContain("/account");
     // The sections that were there stay, the paid plan last.

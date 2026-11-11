@@ -96,12 +96,13 @@ export function aboutPage(c: Context<AppEnv>): Promise<Response> {
 }
 
 // The paid plan's parts after "Who Sells It", each a heading and a paragraph
-// with no link in it.
+// with no link in it. The refund's paragraph names the address to write to, as text.
 const PRO_TERMS: [Key, Key][] = [
   ["terms.pro_includes_title", "terms.pro_includes"],
   ["terms.pro_prices_title", "terms.pro_prices"],
   ["terms.pro_renewal_title", "terms.pro_renewal"],
   ["terms.pro_cancel_title", "terms.pro_cancel"],
+  ["terms.pro_refund_title", "terms.pro_refund"],
   ["terms.pro_failed_title", "terms.pro_failed"],
   ["terms.pro_abuse_title", "terms.pro_abuse"],
   ["terms.pro_law_title", "terms.pro_law"],
@@ -151,7 +152,7 @@ export function termsPage(c: Context<AppEnv>): Promise<Response> {
           {PRO_TERMS.map(([title, body]) => (
             <>
               <h3>{t(lang, title)}</h3>
-              <p>{t(lang, body)}</p>
+              <p>{t(lang, body, { email: CONTACT_EMAIL })}</p>
             </>
           ))}
         </>

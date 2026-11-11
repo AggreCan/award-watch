@@ -194,7 +194,18 @@ describe("the Pro page", () => {
     const page = decode(await res.text());
     expect(page).toContain("<h1>Pro: Email Alerts on Tenders, Awards and Contracts Ending</h1>");
     expect(page).toContain("Pro emails you new notices that match your saved searches, and each award, amendment or end date within 6 or 12 months");
-    expect(page).toContain('<p class="pro-price">Pro is CA$21.50 a month or CA$215.00 a year, taxes added at checkout.</p>');
+    expect(page).toContain('<p class="pro-price">Pro is CA$21.50 a month or CA$215.00 a year, taxes added at checkout. ' +
+      "The first payment is refunded in full if you ask within 14 days.</p>");
+    // The refund is one of the page's questions, with the address to write to, and the Terms say the same.
+    expect(page).toContain("Can I get a refund?");
+    expect(page).toContain("Yes, of your first payment: write to contact@awardwatch.ca from your account's address within 14 days of it.");
+    const terms = decode(await (await get("/terms", payEnv())).text());
+    expect(terms).toContain("<h3>Refund of the First Payment</h3><p>If you ask within 14 days of your first payment for Pro, monthly or yearly, " +
+      "Allwater refunds that payment in full, taxes included, to the payment method used, and ends the subscription. " +
+      "Write to contact@awardwatch.ca from the account's address.");
+    expect(terms).toContain("This applies once per account and to the first payment only");
+    expect(terms).toContain("except under Refund of the First Payment and where the law requires a refund");
+    expect(terms.indexOf("<h3>Cancellation</h3>")).toBeLessThan(terms.indexOf("<h3>Refund of the First Payment</h3>"));
     // The way in for a reader not signed in: Subscribe, through the sign-in page back to billing, the steps under it.
     expect(page).toContain('<a href="/account/sign-in?next=/account/billing" class="btn btn-primary">Subscribe to Pro</a>');
     expect(page).toContain("Enter your email, type the 6-digit code the site sends, then pay monthly or yearly on Stripe's page. There is no password.");
@@ -235,7 +246,8 @@ describe("the Pro page", () => {
     // The questions, word for word as the page shows them.
     expect(faq["@type"]).toBe("FAQPage");
     expect(faq.mainEntity.length).toBeGreaterThanOrEqual(4);
-    expect(faq.mainEntity.length).toBeLessThanOrEqual(7);
+    // The price, when Pro is on sale, and seven standing questions, the refund of the first payment among them.
+    expect(faq.mainEntity.length).toBeLessThanOrEqual(8);
     // The one page allowed the capture manager's word (the radar never says it).
     expect(page).toContain("the recompetes in their field");
     expect(page).toContain("<h3>Does Pro show recompetes?</h3>");

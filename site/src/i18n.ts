@@ -881,6 +881,10 @@ const STRINGS = {
   // are the operator's figures from wrangler.jsonc, never written here.
   "pro.tag": { en: "Pro", fr: "Pro" },
   "pro.tag_hidden": { en: "(paid plan)", fr: "(forfait payant)" },
+  "pro.refund": {
+    en: "The first payment is refunded in full if you ask within 14 days.",
+    fr: "Le premier paiement est remboursé en entier si vous le demandez dans les 14 jours.",
+  },
   "pro.price": {
     en: "Pro is CA${monthly} a month or CA${yearly} a year, taxes added at checkout.",
     fr: "Pro coûte {monthly} $ CA par mois ou {yearly} $ CA par année, taxes ajoutées au paiement.",
@@ -2399,8 +2403,15 @@ const STRINGS = {
   },
   "terms.pro_cancel_title": { en: "Cancellation", fr: "Annulation" },
   "terms.pro_cancel": {
-    en: "A subscription can be cancelled at any time from the account's billing page. The cancellation takes effect at the end of the period already paid, and Pro continues until then. The current period is not refunded, in whole or in part, except where the law requires a refund. Deleting the account cancels the subscription at once, without refund.",
-    fr: "Un abonnement peut être annulé en tout temps depuis la page de facturation du compte. L'annulation prend effet à la fin de la période déjà payée, et Pro continue jusque-là. La période en cours n'est pas remboursée, en tout ou en partie, sauf si la loi exige un remboursement. La suppression du compte annule l'abonnement immédiatement, sans remboursement.",
+    en: "A subscription can be cancelled at any time from the account's billing page. The cancellation takes effect at the end of the period already paid, and Pro continues until then. The current period is not refunded, in whole or in part, except under Refund of the First Payment and where the law requires a refund. Deleting the account cancels the subscription at once, without refund.",
+    fr: "Un abonnement peut être annulé en tout temps depuis la page de facturation du compte. L'annulation prend effet à la fin de la période déjà payée, et Pro continue jusque-là. La période en cours n'est pas remboursée, en tout ou en partie, sauf selon Remboursement du premier paiement et si la loi exige un remboursement. La suppression du compte annule l'abonnement immédiatement, sans remboursement.",
+  },
+  // The operator's own wording (approved 2026-11-11), from what Stripe's terms allow: a seller's policy may be
+  // more generous than Link's, and a change-of-mind request comes to the seller, since Link does not review one.
+  "terms.pro_refund_title": { en: "Refund of the First Payment", fr: "Remboursement du premier paiement" },
+  "terms.pro_refund": {
+    en: "If you ask within 14 days of your first payment for Pro, monthly or yearly, Allwater refunds that payment in full, taxes included, to the payment method used, and ends the subscription. Write to {email} from the account's address. This applies once per account and to the first payment only; later payments are covered by the Cancellation terms above. It is in addition to any refund that Link or the law provides.",
+    fr: "Si vous le demandez dans les 14 jours suivant votre premier paiement pour Pro, mensuel ou annuel, Allwater rembourse ce paiement en entier, taxes comprises, au mode de paiement utilisé, et met fin à l'abonnement. Écrivez à {email} depuis l'adresse du compte. Cela s'applique une fois par compte et au premier paiement seulement; les paiements suivants relèvent des conditions d'annulation ci-dessus. Cela s'ajoute à tout remboursement prévu par Link ou par la loi.",
   },
   "terms.pro_failed_title": { en: "Failed Payments", fr: "Paiements refusés" },
   "terms.pro_failed": {
@@ -3022,6 +3033,11 @@ const STRINGS = {
     fr: "Oui. Les listes de 6 et 12 mois des contrats prenant fin énumèrent chaque contrat qui prend fin, avec son détenteur, son acheteur et sa méthode d'attribution, et les analyses montrent les contrats d'un acheteur ou d'un segment qui prennent fin par trimestre. Suivez une organisation ou un acheteur et Pro vous écrit quand ses contrats approchent de leur fin.",
   },
   "propage.q_cancel": { en: "Can I cancel?", fr: "Puis-je annuler?" },
+  "propage.q_refund": { en: "Can I get a refund?", fr: "Puis-je être remboursé?" },
+  "propage.a_refund": {
+    en: "Yes, of your first payment: write to {email} from your account's address within 14 days of it. It is refunded in full, taxes included, and the subscription ends. This applies once per account; later payments are not refunded.",
+    fr: "Oui, pour votre premier paiement : écrivez à {email} depuis l'adresse de votre compte dans les 14 jours qui le suivent. Il est remboursé en entier, taxes comprises, et l'abonnement prend fin. Cela s'applique une fois par compte; les paiements suivants ne sont pas remboursés.",
+  },
   "propage.q_seller": { en: "Who sells Pro?", fr: "Qui vend Pro?" },
   "propage.a_seller": {
     en: "Pro is sold through Link, the merchant of record run by Stripe, on behalf of Allwater Software Inc., the British Columbia corporation that publishes Award Watch. Card details go to Stripe and never reach this site; Link sends the receipts.",
@@ -3580,8 +3596,8 @@ const STRINGS = {
     fr: "Un message par recherche enregistrée, chaque jour ou chaque semaine, envoyé en fin de matinée (heure de l'Est) après la mise à jour du jour, avec seulement ce qui est nouveau; un jour sans nouveauté n'envoie rien. Les suivis arrivent ensemble dans un message; un bulletin arrive le lundi.",
   },
   "propage.a_cancel": {
-    en: "Yes, at any time: Plan and Billing in your account opens Stripe's page, where you cancel. Pro stays on to the end of the period paid, which is not refunded, and nothing more is charged.",
-    fr: "Oui, en tout temps : Forfait et facturation, dans votre compte, ouvre la page de Stripe, où vous annulez. Pro reste actif jusqu'à la fin de la période payée, qui n'est pas remboursée, et rien d'autre n'est facturé.",
+    en: "Yes, at any time: Plan and Billing in your account opens Stripe's page, where you cancel. Pro stays on to the end of the period paid, which is not refunded except as the next answer says, and nothing more is charged.",
+    fr: "Oui, en tout temps : Forfait et facturation, dans votre compte, ouvre la page de Stripe, où vous annulez. Pro reste actif jusqu'à la fin de la période payée, qui n'est pas remboursée sauf selon la réponse suivante, et rien d'autre n'est facturé.",
   },
   // The 3-month panel on /expiring, where expiring.first_note's comparison
   // with the 3-month list would name the list itself.
