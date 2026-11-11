@@ -26,6 +26,8 @@ const ACCOUNT_ROUTES: [string, string][] = [
   ["GET", "/account/searches"], ["GET", "/account/keys"], ["GET", "/account/delete"], ["GET", "/account/billing"],
   ["POST", "/account/sign-in"], ["POST", "/account/check"], ["POST", "/account/sign-out"], ["POST", "/account/searches"],
   ["POST", "/account/searches/import"], ["POST", "/account/keys"], ["POST", "/account/delete"],
+  // The keys' usage page (account/api_usage_page.tsx).
+  ["GET", "/account/api"],
   ["GET", `/account/stop?s=${"a".repeat(32)}&t=${"b".repeat(32)}`], ["POST", "/account/stop"],
   // Calendar feeds (account/feeds.ts): every address under /account/calendar.
   ["GET", `/account/calendar/${"a".repeat(32)}.ics?t=${"b".repeat(32)}`], ["POST", "/account/calendar"],

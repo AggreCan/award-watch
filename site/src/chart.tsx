@@ -139,6 +139,9 @@ export interface Panel {
   bars?: Bar[];
   line?: LinePoint[];
   tone?: "approved" | "refused" | "pending";
+  // A level drawn across the plot as a dashed rule (a key's daily cap on the
+  // usage page, account/api_usage_page.tsx), only while the axis reaches it.
+  rule?: number;
 }
 
 export interface Marker {
@@ -241,6 +244,9 @@ function marks(p: Panel, ticks: number[], top: number, grid: number[], markers: 
     out += `<rect class="${b.light ? "bar bar-light" : "bar"}" x="${f(x0)}" y="${f(sy(b.value))}" width="${f(Math.max(0.5, x1 - x0))}" height="${f(H - sy(b.value))}"><title>${esc(b.title)}</title></rect>`;
   }
   for (const m of markers) out += `<line class="mark" x1="${f(sx(m.x))}" x2="${f(sx(m.x))}" y1="0" y2="${H}"${ns}/>`;
+  if (p.rule !== undefined && p.rule >= 0 && p.rule <= top) {
+    out += `<line class="mark mark-rule" x1="0" x2="${W}" y1="${f(sy(p.rule))}" y2="${f(sy(p.rule))}"${ns}/>`;
+  }
   const line = p.line ?? [];
   if (line.length > 1) out += `<polyline class="line" points="${line.map((pt) => `${f(sx(pt.x))},${f(sy(pt.value))}`).join(" ")}"${ns}/>`;
   // A zero-length line with round caps draws a round dot at any stretch.
@@ -267,13 +273,16 @@ export const ChartStack: FC<{
   // gap between bars that fill their slot. A chart of few slots passes more,
   // so a bar stays a thin mark rather than a block (barGap).
   gap?: number;
-}> = ({ domain, panels, height, xLabels, grid = [], markers = [], fmt, aria, shared, gap: barGapUnits }) => {
+  // The least value the axis reaches, so a panel of small figures (or of none)
+  // still draws a scale rather than a few units.
+  floor?: number;
+}> = ({ domain, panels, height, xLabels, grid = [], markers = [], fmt, aria, shared, gap: barGapUnits, floor = 0 }) => {
   useTips();
   const span = domain[1] - domain[0];
   const sx = (x: number) => ((x - domain[0]) / span) * W;
   const pct = (x: number) => ((x - domain[0]) / span) * 100;
-  const peak = (p: Panel) => Math.max(0, ...(p.bars ?? []).map((b) => b.value), ...(p.line ?? []).map((pt) => pt.value));
-  const sharedTicks = shared ? niceTicks(Math.max(...panels.map(peak))) : null;
+  const peak = (p: Panel) => Math.max(floor, ...(p.bars ?? []).map((b) => b.value), ...(p.line ?? []).map((pt) => pt.value));
+  const sharedTicks = shared ? niceTicks(Math.max(floor, ...panels.map(peak))) : null;
   const placed = markerRows(markers, domain);
   const wide = markerRows(markers, domain, MARK_GAP_WIDE);
   const rows = placed.reduce((n, p) => Math.max(n, p.row + 1), 0);
@@ -410,17 +419,19 @@ export interface RankedBar {
 // wraps and the type keeps its size at any width. A value at or below zero
 // draws no bar and keeps its figure. The table under the chart carries every
 // value, so the tip is never the only way to read one. A row's tip shows on
-// hover and when the link in its label takes the keyboard focus.
-export const RankedBars: FC<{ rows: readonly RankedBar[]; aria: string }> = ({ rows, aria }) => {
+// hover and when the link in its label takes the keyboard focus. max scales
+// the bars to a fixed whole instead of the largest row (a key's daily cap on
+// the usage page, with class "of-cap", whose track shows that whole).
+export const RankedBars: FC<{ rows: readonly RankedBar[]; aria: string; max?: number; class?: string }> = ({ rows, aria, max, class: cls }) => {
   useTips();
-  const top = Math.max(0, ...rows.map((r) => r.value));
+  const top = max ?? Math.max(0, ...rows.map((r) => r.value));
   return (
-    <ol class="rank-bars" aria-label={aria} data-tip="">
+    <ol class={cls ? `rank-bars ${cls}` : "rank-bars"} aria-label={aria} data-tip="">
       {rows.map((r) => (
         <li title={r.title}>
           <span class="rank-label">{r.label as any}</span>
           <span class="rank-track" aria-hidden="true">
-            {r.value > 0 && top > 0 ? <span class="rank-bar" style={`width:${f(Math.max(0.5, (r.value / top) * 100))}%`}></span> : null}
+            {r.value > 0 && top > 0 ? <span class="rank-bar" style={`width:${f(Math.min(100, Math.max(0.5, (r.value / top) * 100)))}%`}></span> : null}
           </span>
           <span class="rank-value">{r.text}{r.note ? <span class="muted"> {r.note}</span> : null}</span>
         </li>

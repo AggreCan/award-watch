@@ -4,6 +4,7 @@
 // (account/pages.tsx) read them from here, so neither imports the routes
 // and a test holds this list to the routes the sub-app registers.
 
+import { allowed, type Plan } from "./account/entitlements";
 import type { Key } from "./i18n";
 
 // One key's limits. An ordinary script (a nightly mirror of the open notices,
@@ -17,6 +18,16 @@ import type { Key } from "./i18n";
 // applies to every request as well.
 export const KEY_PER_MINUTE = 600;
 export const KEY_PER_DAY = 20_000;
+
+export type KeyQuota = { perDay: number; perMinute: number };
+
+// One key's limits on a plan, as the usage page (account/api_usage_page.tsx)
+// states them; null for a plan without the keyed API. Every plan that has it
+// gets the limits above today; a plan with figures of its own returns them
+// here.
+export function keyQuota(plan: Plan): KeyQuota | null {
+  return allowed({ plan }, "api") ? { perDay: KEY_PER_DAY, perMinute: KEY_PER_MINUTE } : null;
+}
 
 // A list answers PAGE_ROWS rows a page; the hosted search keeps its own 50
 // (src/search_db.ts, PAGE_SIZE). The static lists end where their files do,

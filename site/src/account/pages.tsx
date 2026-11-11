@@ -205,6 +205,10 @@ export function overviewView(
             <a href="/account/keys">{t(lang, "account.keys")}{allowed(account, "api") ? null : <ProTag lang={lang} />}</a>
             <span class="num">{fmtInt(counts.keys, lang)}</span>
           </li>
+          {/* The keys' usage (api_usage_page.tsx), marked as the keys are; without the api feature it leads to the keys page. */}
+          <li>
+            <a href="/account/api">{t(lang, "apiusage.link")}{allowed(account, "api") ? null : <ProTag lang={lang} />}</a>
+          </li>
           {counts.watches === undefined || counts.watches === null ? null : (
             <li>
               <a href="/account/watches">{t(lang, "watches.title")}</a>
@@ -514,8 +518,12 @@ export function keysView(
   const count = (k: KeyRow, which: keyof KeyUsage) => (state.usage ? fmtInt(state.usage.get(k.id)?.[which] ?? 0, lang) : "");
   return (
     <>
+      {/* The usage page's button for a plan with the keyed API; any other plan is sent back here from it. */}
       <PageHead lang={lang} title={t(lang, "account.keys_title")} lead={t(lang, "account.keys_lead")}
-        actions={<a href="/account" class="btn">{t(lang, "account.title")}</a>} />
+        actions={<>
+          {canCreate ? <a href="/account/api" class="btn">{t(lang, "apiusage.link")}</a> : null}
+          <a href="/account" class="btn">{t(lang, "account.title")}</a>
+        </>} />
       <Notice message={state.notice} />
       {state.created ? (
         <Panel title={t(lang, "account.panel_new_key")}>

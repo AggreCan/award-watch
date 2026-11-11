@@ -122,7 +122,8 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
 -- The keyed API's count (src/account/api_usage.ts, src/api_keyed.ts): one
 -- row per API key per UTC day it was used, holding how many requests the
 -- day's quota counted for it (a refused request is not counted). The keys
--- page shows today's count and the last 30 days'. Rows go after 60 days
+-- page shows today's count and the last 30 days', the usage page
+-- (/account/api) each of the 60 days. Rows go after 60 days
 -- (signin.ts, sweep) and with their key (the cascade, when deletion removes
 -- the account's keys). A count alone: no path, parameter, address or time
 -- of day. Until this table exists on the database every request is let

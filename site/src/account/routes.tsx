@@ -15,6 +15,7 @@
 //   GET  /account/keys                 API keys, each with its counts, the endpoints  (session)
 //   POST /account/keys                 create one, shown once                         (session, CSRF, plan)
 //   POST /account/keys/:id/revoke      revoke one                                     (session, CSRF)
+//   GET  /account/api                  each key's requests a day, the plan's limits   (session; plan, else to /account/keys)
 //   GET  /account/bug                  the bug report form, or Pro's notice           (session)
 //   POST /account/bug                  store a report, send it to the operator        (session, CSRF, plan, FORM_LIMIT)
 //   GET  /account/delete               what deleting removes                          (session)
@@ -75,6 +76,7 @@ import { EMAIL_MAX, interestFilter, kindOfPath, normalizeEmail } from "../pages/
 import { deviceClass } from "../views";
 import { KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
 import { keyUsage, nowOf } from "./api_usage";
+import { usagePage } from "./api_usage_page";
 import { audit } from "./audit";
 import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, startCheckout } from "./billing";
 import { BriefingsPanel, briefingLabel, briefingStopView, briefingStoppedView } from "./briefing_pages";
@@ -1067,6 +1069,13 @@ account.post("/keys/:id/revoke", async (c) => {
     if (await revokeKey(c.env, who.userId, c.req.param("id") ?? "")) await audit(c.env, who.userId, "key_revoked");
     return c.redirect("/account/keys?m=revoked", 303);
   });
+});
+
+// The keys' usage (api_usage_page.tsx); a plan without the keyed API goes to the keys page.
+account.get("/api", async (c) => {
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => usagePage(c, who));
 });
 
 // -- bug reports (bugs.tsx) ------------------------------------------------------------------

@@ -326,6 +326,74 @@ export const ACCOUNT_STRINGS = {
     fr: "Les comptes ne peuvent pas être lus pour le moment.",
   },
 
+  // -- API usage (src/account/api_usage_page.tsx) ---------------------------------------
+  "apiusage.title": { en: "API Usage", fr: "Utilisation de l'API" },
+  // The link to the page, on the keys page and the account's overview.
+  "apiusage.link": { en: "API usage", fr: "Utilisation de l'API" },
+  "apiusage.lead": {
+    en: "Requests made with this account's API keys, counted by UTC day, over the {days} days ending today.",
+    fr: "Les requêtes faites avec les clés d'API de ce compte, comptées par jour UTC, au cours des {days} jours qui se terminent aujourd'hui.",
+  },
+  "apiusage.tiles_label": { en: "Limits and requests", fr: "Limites et requêtes" },
+  "apiusage.tile_day": { en: "Requests a day, per key", fr: "Requêtes par jour, par clé" },
+  "apiusage.tile_day_note": { en: "The plan's daily cap, by UTC day", fr: "Le plafond quotidien du forfait, par jour UTC" },
+  "apiusage.tile_minute": { en: "Requests a minute, per key", fr: "Requêtes par minute, par clé" },
+  "apiusage.tile_minute_note": { en: "Every address: at most {n} a minute", fr: "Chaque adresse : au plus {n} par minute" },
+  "apiusage.tile_today": { en: "Requests today", fr: "Requêtes aujourd'hui" },
+  "apiusage.tile_today_note": { en: "All keys, {date} UTC", fr: "Toutes les clés, {date} UTC" },
+  "apiusage.tile_window": { en: "Requests in {days} days", fr: "Requêtes en {days} jours" },
+  "apiusage.tile_window_note": { en: "All keys, {first} to {last}", fr: "Toutes les clés, du {first} au {last}" },
+  "apiusage.panel_today": { en: "Today Against the Cap", fr: "Aujourd'hui par rapport au plafond" },
+  "apiusage.today_aria": {
+    en: "Requests today by key, against the daily cap",
+    fr: "Requêtes d'aujourd'hui par clé, par rapport au plafond quotidien",
+  },
+  "apiusage.none_live": {
+    en: "No key is in use. Keys are made on the {keys} page.",
+    fr: "Aucune clé n'est en service. Les clés se créent sur la page {keys}.",
+  },
+  "apiusage.panel_chart": { en: "Requests a Day", fr: "Requêtes par jour" },
+  "apiusage.period": { en: "{first} to {last}", fr: "du {first} au {last}" },
+  "apiusage.chart_aria": {
+    en: "Requests a day from {first} to {last}; the figures are in the table under the chart.",
+    fr: "Requêtes par jour du {first} au {last}; les chiffres sont dans le tableau sous le graphique.",
+  },
+  // A series of the chart and a column of its table: every key together, or one revoked key.
+  "apiusage.series_all": { en: "All keys", fr: "Toutes les clés" },
+  "apiusage.series_revoked": { en: "{name} (revoked)", fr: "{name} (révoquée)" },
+  "apiusage.requests_one": { en: "{n} request", fr: "{n} requête" },
+  "apiusage.requests_many": { en: "{n} requests", fr: "{n} requêtes" },
+  "apiusage.cap_rule": {
+    en: "The dashed line marks the cap of {cap} requests a key a day.",
+    fr: "La ligne pointillée marque le plafond de {cap} requêtes par clé par jour.",
+  },
+  // With several keys each panel has its own scale; the total's has no cap.
+  "apiusage.cap_rule_keys": {
+    en: "The dashed line marks the cap of {cap} requests a key a day, on each key's chart whose scale reaches it.",
+    fr: "La ligne pointillée marque le plafond de {cap} requêtes par clé par jour, sur le graphique de chaque clé dont l'échelle l'atteint.",
+  },
+  "apiusage.cap_off": {
+    en: "The cap, {cap} requests a key a day, is above the top of this scale.",
+    fr: "Le plafond, {cap} requêtes par clé par jour, dépasse le haut de cette échelle.",
+  },
+  "apiusage.cap_off_keys": {
+    en: "The cap, {cap} requests a key a day, is above the top of each key's scale.",
+    fr: "Le plafond, {cap} requêtes par clé par jour, dépasse le haut de l'échelle de chaque clé.",
+  },
+  "apiusage.left_out": {
+    en: "The chart and the totals count at most {n} keys with requests in these days, the keys in use first, then the ones revoked most recently.",
+    fr: "Le graphique et les totaux comptent au plus {n} clés ayant des requêtes au cours de ces jours, d'abord les clés en service, puis les plus récemment révoquées.",
+  },
+  "apiusage.counted": {
+    en: "Requests are counted by UTC day, and one refused at the cap is not counted. Each day's count is kept for {days} days.",
+    fr: "Les requêtes sont comptées par jour UTC, et une requête refusée au plafond n'est pas comptée. Le compte de chaque jour est conservé {days} jours.",
+  },
+  "apiusage.col_day": { en: "Day (UTC)", fr: "Jour (UTC)" },
+  "apiusage.keys_page": {
+    en: "The keys, their names and the endpoints are on the {keys} page.",
+    fr: "Les clés, leurs noms et les points d'accès sont sur la page {keys}.",
+  },
+
   // -- deletion ------------------------------------------------------------------------
   "account.delete_title": { en: "Delete the Account", fr: "Supprimer le compte" },
   "account.delete_lead": { en: "Deleting the account cannot be undone.", fr: "La suppression du compte est définitive." },

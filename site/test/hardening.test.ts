@@ -826,6 +826,8 @@ describe("the account pages' headers", () => {
         ["GET account without a session", await get("/account")],
         ["GET account", await get("/account", { cookie })],
         ["GET keys", await get("/account/keys", { cookie })],
+        // A Free account's request for the usage page goes to the keys page.
+        ["GET api usage", await get("/account/api", { cookie })],
         ["POST keys without CSRF", await post("/account/keys", { name: "x" }, { cookie })],
         ["GET billing", await get("/account/billing", { cookie })],
         ["GET account through an outage, unseen", await (async () => {
@@ -846,7 +848,7 @@ describe("the account pages' headers", () => {
         expect(await res.clone().text(), what).toContain('<meta name="robots" content="noindex"/>');
       }
     }
-    expect(answers.map(([, r]) => r.status)).toEqual([200, 200, 400, 400, 403, 400, 303, 303, 200, 200, 403, 200, 503]);
+    expect(answers.map(([, r]) => r.status)).toEqual([200, 200, 400, 400, 403, 400, 303, 303, 200, 200, 303, 403, 200, 503]);
   });
 });
 

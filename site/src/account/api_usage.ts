@@ -9,9 +9,11 @@
 
 import { KEY_PER_DAY } from "../api_keyed_spec";
 import type { Env } from "../env";
+import { KEYS_MAX } from "./api_keys";
 
 // How long a day's row is kept (signin.ts, sweep), and how many days the keys
-// page adds up.
+// page adds up. The usage page (api_usage_page.tsx) draws the USAGE_KEEP_DAYS
+// days ending today.
 export const USAGE_KEEP_DAYS = 60;
 export const USAGE_DAYS_SHOWN = 30;
 
@@ -29,6 +31,17 @@ export const COUNT_SQL =
 export const USAGE_SQL =
   "SELECT key_id, SUM(CASE WHEN day = ?2 THEN n ELSE 0 END) AS today, SUM(n) AS last30 FROM api_usage " +
   "WHERE key_id IN (SELECT id FROM api_keys WHERE user_id = ?1) AND day BETWEEN ?3 AND ?2 GROUP BY key_id";
+
+// The usage page: each day's row from ?3 to ?2 (the USAGE_KEEP_DAYS days
+// ending today) for at most ?4 (KEYS_MAX) keys of one user (?1): of the keys
+// with a row in those days, the live ones first, then the ones revoked most
+// recently, so a revoked key's days stay on the chart while there is room.
+// At most ?4 * USAGE_KEEP_DAYS rows, each key's read through the primary key.
+export const DAILY_SQL =
+  "SELECT key_id, day, n FROM api_usage WHERE day BETWEEN ?3 AND ?2 AND key_id IN (" +
+  "SELECT k.id FROM api_keys k WHERE k.user_id = ?1 " +
+  "AND EXISTS (SELECT 1 FROM api_usage u WHERE u.key_id = k.id AND u.day BETWEEN ?3 AND ?2) " +
+  "ORDER BY k.revoked_at IS NOT NULL, k.revoked_at DESC, k.created_at DESC, k.id LIMIT ?4)";
 
 // The sweep: days before ?1, through idx_api_usage_day.
 export const USAGE_SWEEP_SQL = "DELETE FROM api_usage WHERE day < ?1";
@@ -84,6 +97,25 @@ export async function keyUsage(env: Env, userId: string, now: Date): Promise<Map
     return new Map((res.results ?? []).map((r) => [r.key_id, { today: r.today ?? 0, last30: r.last30 ?? 0 }]));
   } catch {
     console.error("api usage: not readable for the keys page");
+    return null;
+  }
+}
+
+export type DayCount = { key_id: string; day: string; n: number };
+
+// The first day of the usage page's window, which ends on `day`.
+const windowStart = (day: string): string => dayPlus(day, -(USAGE_KEEP_DAYS - 1));
+
+// The usage page's rows (DAILY_SQL): a key and a day with no request have
+// none. Null when the table cannot be read; the page then says so. Never
+// throws.
+export async function dailyUsage(env: Env, userId: string, now: Date): Promise<DayCount[] | null> {
+  const day = utcDay(now);
+  try {
+    const res = await env.ACCOUNTS!.prepare(DAILY_SQL).bind(userId, day, windowStart(day), KEYS_MAX).all<DayCount>();
+    return (res.results ?? []).map((r) => ({ key_id: r.key_id, day: r.day, n: Number(r.n) || 0 }));
+  } catch {
+    console.error("api usage: not readable for the usage page");
     return null;
   }
 }

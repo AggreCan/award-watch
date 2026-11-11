@@ -981,9 +981,16 @@ tr[data-phone-cut] { display: none !important; }
 .rank-track { position: relative; height: 12px; border-left: 1px solid var(--ink-2); }
 .rank-bar { position: absolute; top: 0; bottom: 0; left: 0; background: var(--chart-bar); border-radius: 0 4px 4px 0; }
 .rank-value { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Bars against a cap (account/api_usage_page.tsx): the rows on the list's
+   own columns, so every track is as long as the others, and the track filled
+   to the cap in the charts' lighter step, so each bar reads as its share. */
+.rank-bars.of-cap { grid-template-columns: minmax(0, 16rem) minmax(0, 1fr) auto; }
+.rank-bars.of-cap li { grid-column: 1 / -1; grid-template-columns: subgrid; }
+.rank-bars.of-cap .rank-track { background: var(--chart-bar-light); }
 @media (max-width: 699px) {
   .rank-bars li { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
   .rank-label { grid-column: 1 / -1; }
+  .rank-bars.of-cap { grid-template-columns: minmax(0, 1fr) auto; }
 }
 /* The analytics views' figures beside a chart: shares held by the largest. */
 .figures { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 13px; line-height: 20px; color: var(--ink-2); }

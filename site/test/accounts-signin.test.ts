@@ -261,7 +261,7 @@ describe("the link", () => {
 
 describe("sessions", () => {
   it("send a page without a session to the sign-in form", async () => {
-    for (const path of ["/account", "/account/searches", "/account/keys", "/account/delete"]) {
+    for (const path of ["/account", "/account/searches", "/account/keys", "/account/api", "/account/delete"]) {
       const res = await get(path);
       expect(res.status, path).toBe(303);
       expect(res.headers.get("location"), path).toBe("/account/sign-in");

@@ -782,15 +782,18 @@ describe("the Email lists page", () => {
 // -- the account --------------------------------------------------------------------------------
 
 describe("a Free account", () => {
-  it("sees API keys and Report a bug on its overview with the chip; a Pro account sees them without", async () => {
+  it("sees API keys, API usage and Report a bug on its overview with the chip; a Pro account sees them without", async () => {
     await sessions();
     const free = decode(await html("/account", { cookie: freeCookie }));
     expect(free).toContain(`<a href="/account/keys">API keys${CHIP_EN}</a>`);
+    expect(free).toContain(`<li><a href="/account/api">API usage${CHIP_EN}</a></li>`);
     expect(free).toContain(`<dd><a href="/account/bug">Report a bug${CHIP_EN}</a></dd>`);
     const fr = decode(await html("/account?lang=fr", { cookie: freeCookie }));
     expect(fr).toContain(`<a href="/account/keys">Clés d’API${CHIP_FR}</a>`);
+    expect(fr).toContain(`<a href="/account/api">Utilisation de l’API${CHIP_FR}</a>`);
     const pro = decode(await html("/account", { cookie: proCookie }));
     expect(pro).toContain('<a href="/account/keys">API keys</a>');
+    expect(pro).toContain('<li><a href="/account/api">API usage</a></li>');
     expect(chips(mainOf(pro))).toBe(0);
   });
 

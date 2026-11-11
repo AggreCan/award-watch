@@ -43,7 +43,12 @@ the schema is `site/accounts_schema.sql`; the tests are
   closing or end date as a one-event file, to any reader.
 - **API keys.** Issued and revoked on the account; shown once. A key of a
   Pro account opens the keyed API under `/api/v1` (*The keyed API*); the
-  keys page shows each key's requests today and over 30 days.
+  keys page shows each key's requests today and over 30 days. The usage
+  page, `/account/api` (linked from the keys page's head and the account's
+  overview), shows a key's limits on the plan, today's requests of each key
+  in use against the daily cap, and each key's requests a day over the 60
+  days the counts are kept, as a chart and a table (*The usage page*). A
+  plan without the keyed API is sent from it to the keys page.
 - **Plans.** Each account is on a plan, Free or Pro, computed from the
   entitlements table. The plan sets how many saved searches the account
   keeps and whether delivery, API keys, filtered exports, same-day tender
@@ -205,8 +210,8 @@ taxes added at checkout, and leaves the line out when the checkout would
 offer no price. On the Data page the 12-month file's row carries the chip
 and, for a request without the feature, leads to the 12-month list's free
 view; the file's own address still answers 404. A Free account's overview
-lists API keys and bug reports with the chip, and its saved searches carry
-one-line notes at the cap and in the delivery column.
+lists API keys, API usage and bug reports with the chip, and its saved
+searches carry one-line notes at the cap and in the delivery column.
 `site/test/pro-mark.test.ts` holds the placements and the chip's styles.
 
 ## Sending mail
@@ -985,6 +990,37 @@ sizes and limits are `site/src/api_keyed_spec.ts`, which the Data page's API
 section (`site/src/pages/keyed_api.tsx`, shown only while the switch is on)
 and the keys page both read; the count is `site/src/account/api_usage.ts`;
 the tests are `site/test/api-keyed.test.ts`.
+
+### The usage page
+
+`GET /account/api` (`site/src/account/api_usage_page.tsx`), behind the
+session like every account page; a reader signed out goes to the sign-in
+page, and a plan without `api` is sent to `/account/keys` (303), whose gate
+note says what the plan lacks. From the top:
+
+- Four tiles: a key's requests a day and a minute on the plan
+  (`keyQuota(plan)` in `site/src/api_keyed_spec.ts`, the one place a plan's
+  figures come from), the requests of every key today, and over the 60 days.
+- Today against the cap: one bar a key in use, filled to its share of the
+  daily cap, with the count, the cap and the share as text.
+- Requests a day over the 60 UTC days ending today, one panel a key, with
+  every key's total first when there is more than one key. A revoked key
+  with requests in those days keeps its panel, named as revoked; a day
+  without a row is 0. Each panel's axis runs to a round number at or above
+  its largest day (at least 10), so a key making a few hundred requests a
+  day keeps a readable line beside one making thousands. A key's daily cap
+  is a dashed line on its panel only when that axis reaches it (the total
+  has none), and a line under the chart states the cap otherwise. Each
+  point's exact count is its tip, and the table under the chart lists every
+  day, newest first.
+
+It reads the account's keys and one statement, `DAILY_SQL` in
+`site/src/account/api_usage.ts`: the day's rows of at most 5 keys with
+requests in the window (the live ones first, then the ones revoked most
+recently), at most 300 rows through the primary key. When that statement
+cannot be read the page still answers 200 with the limits, an empty chart
+and the line saying the counts cannot be read. The tests are
+`site/test/api-usage-page.test.ts`.
 
 ### Endpoints
 
