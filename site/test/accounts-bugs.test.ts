@@ -135,7 +135,7 @@ describe("the bug report page", () => {
     expect(await page.text()).toContain('<meta name="robots" content="noindex"/>');
     const out = await get("/account/bug");
     expect(out.status).toBe(303);
-    expect(out.headers.get("location")).toBe("/account/sign-in");
+    expect(out.headers.get("location")).toBe("/account/sign-in?next=%2Faccount%2Fbug");
     const posted = await post("/account/bug", { text: "x" });
     expect(posted.status).toBe(303);
     expect(posted.headers.get("location")).toBe("/account/sign-in");

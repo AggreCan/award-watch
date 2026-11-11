@@ -529,7 +529,7 @@ describe("the billing page", () => {
   it("sends a signed-out visitor to sign in", async () => {
     const res = await get("/account/billing", { env: payEnv() });
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toBe("/account/sign-in");
+    expect(res.headers.get("location")).toBe("/account/sign-in?next=%2Faccount%2Fbilling");
   });
 
   it("says Pro is not available yet without the keys or the prices, in both languages, and reads no payment table", async () => {

@@ -232,7 +232,7 @@ describe("the claim", () => {
     expect((await get("/account/organization", { env: offEnv() })).status).toBe(404);
     const out = await get("/account/organization", { env: E() });
     expect(out.status).toBe(303);
-    expect(out.headers.get("location")).toBe("/account/sign-in");
+    expect(out.headers.get("location")).toBe("/account/sign-in?next=%2Faccount%2Forganization");
   });
 
   it("stores only a checked id: a pasted profile address, an alias followed; anything else refused and nothing stored", async () => {

@@ -647,7 +647,7 @@ describe("the feeds' states", () => {
   it("does not exist signed out: the searches page sends to the sign-in", async () => {
     const res = await get("/account/searches");
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toBe("/account/sign-in");
+    expect(res.headers.get("location")).toBe("/account/sign-in?next=%2Faccount%2Fsearches");
   });
 
   it("lists the feeds on the console by kind and on the user page, never the secret", async () => {

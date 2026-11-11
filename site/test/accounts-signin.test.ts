@@ -260,12 +260,29 @@ describe("the link", () => {
 });
 
 describe("sessions", () => {
-  it("send a page without a session to the sign-in form", async () => {
-    for (const path of ["/account", "/account/searches", "/account/keys", "/account/api", "/account/delete"]) {
+  it("send a page without a session to the sign-in form, which ends on the page asked for", async () => {
+    // The overview is where signing in ends anyway, so it carries no page.
+    const overview = await get("/account");
+    expect(overview.status).toBe(303);
+    expect(overview.headers.get("location")).toBe("/account/sign-in");
+    // Any other page (a bookmark, a link in a message, a session that ran out) is carried as next, query and all.
+    for (const path of ["/account/searches", "/account/keys", "/account/api", "/account/delete", "/account/searches?lang=fr&m=added"]) {
       const res = await get(path);
       expect(res.status, path).toBe(303);
-      expect(res.headers.get("location"), path).toBe("/account/sign-in");
+      expect(res.headers.get("location"), path).toBe(`/account/sign-in?next=${encodeURIComponent(path)}`);
     }
+    // A form's press has no page of its own to return to.
+    const pressed = await post("/account/searches", { url: "/tenders" });
+    expect(pressed.status).toBe(303);
+    expect(pressed.headers.get("location")).toBe("/account/sign-in");
+    // The sign-in form holds the page, and the code's check ends on it.
+    const form = await (await get("/account/sign-in?next=%2Faccount%2Fapi")).text();
+    expect(form).toContain('<input type="hidden" name="next" value="/account/api"/>');
+    const email = newEmail();
+    const { code } = await requestCode(email);
+    const done = await post("/account/check", { email, code, sent: "1", next: "/account/api" });
+    expect(done.status).toBe(303);
+    expect(done.headers.get("location")).toBe("/account/api");
     const forged = await get("/account", { cookie: `__Host-aw_session=${"a".repeat(32)}.${"b".repeat(64)}` });
     expect(forged.status).toBe(303);
     expect(forged.headers.getSetCookie().join("\n")).toMatch(/__Host-aw_session=;.*Max-Age=0/);

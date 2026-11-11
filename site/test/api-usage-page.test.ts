@@ -370,7 +370,7 @@ describe("the readers", () => {
   it("sends a reader who is not signed in to the sign-in page", async () => {
     const res = await get("/account/api");
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toBe("/account/sign-in");
+    expect(res.headers.get("location")).toBe("/account/sign-in?next=%2Faccount%2Fapi");
   });
 
   it("answers 200 when the counts cannot be read: the limits, the empty chart and the line saying so", async () => {

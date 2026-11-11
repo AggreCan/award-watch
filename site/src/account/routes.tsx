@@ -169,7 +169,20 @@ async function signedIn(c: Context<AppEnv>): Promise<Account | Response> {
   if (read.state === "ok") return read.account;
   if (read.state === "unavailable") return unavailable(c);
   if (getCookie(c, SESSION_COOKIE)) clearSessionCookie(c);
-  return c.redirect("/account/sign-in", 303);
+  return c.redirect(signInFor(c), 303);
+}
+
+// Where a request without a session is sent. A page asked for by its address
+// (a bookmark, a link in a message, a session that ran out) is carried as
+// next, so signing in ends on that page and not on the overview; safeNext
+// holds it to a path on this site. The overview is where sign-in ends anyway,
+// and a form's press has no page of its own to return to: both go to the
+// plain sign-in page.
+function signInFor(c: Context<AppEnv>): string {
+  if (c.req.method !== "GET") return "/account/sign-in";
+  const url = new URL(c.req.url);
+  const next = safeNext(url.pathname + url.search);
+  return next && url.pathname !== "/account" ? `/account/sign-in?next=${encodeURIComponent(next)}` : "/account/sign-in";
 }
 
 // A POST that needs the session: the Origin, then the session, then the CSRF
