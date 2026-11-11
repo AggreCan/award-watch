@@ -1,6 +1,7 @@
 // Phase 3: paying for Pro. The billing page, the posts that send a user to
 // the payment service's checkout and portal, and the webhook that turns the
-// service's notices into entitlement rows. routes.tsx mounts them behind the
+// service's notices into entitlement rows. The page also offers the refund of
+// the first payment, which refund.ts makes. routes.tsx mounts them behind the
 // same guards as every account route (the switch, the session, Origin and
 // CSRF on the user's posts); the webhook has no session and no Origin, and
 // its signature is its only credential (stripe.ts).
@@ -21,6 +22,7 @@ import type { Context } from "hono";
 import type { AppEnv, Env } from "../env";
 import { decimal, t, tj, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
+import { CONTACT_EMAIL } from "../contact";
 import { PlanCards, planCards } from "../pro";
 import { audit } from "./audit";
 import { planFor } from "./entitlements";
@@ -35,6 +37,11 @@ export const GRACE_DAYS = 3;
 // Notices are kept this long against a second delivery; Stripe's own
 // retries stop after three days and a manual resend after thirty.
 export const EVENT_DAYS = 90;
+// The refund of the first payment (the Terms, Refund of the First Payment):
+// offered on this page for this many days after it, once per account.
+// refund.ts makes it.
+export const REFUND_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Statuses after which a subscription never bills again.
 const ENDED = new Set(["canceled", "incomplete_expired"]);
@@ -62,7 +69,7 @@ export const liveSubscription = (row: PaymentRow | null): boolean => !!row?.subs
 
 const day = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : "");
 const graceAfter = (periodEnd: string) => plusDays(new Date(periodEnd), GRACE_DAYS);
-const langQuery = (lang: Lang, first: "?" | "&") => (lang === "fr" ? `${first}lang=fr` : "");
+export const langQuery = (lang: Lang, first: "?" | "&") => (lang === "fr" ? `${first}lang=fr` : "");
 
 // -- the overview's line ---------------------------------------------------------------
 
@@ -83,6 +90,57 @@ export async function billingLine(env: Env, userId: string, now = new Date()): P
   } catch {
     return null;
   }
+}
+
+// -- the refund of the first payment: who is offered it ----------------------------------
+
+// What the site's own rows say of the refund, in one statement: when the
+// account's first Stripe row was written (the first payment's notice wrote
+// it), its Stripe rows that name another subscription, renewals recorded
+// since (grant's "stripe renewed, extended": a second payment on the same
+// subscription), refunds made from this page (refund.ts), and the customer's
+// charges refunded in full or disputed (payment_reversals).
+export const REFUND_FACTS_SQL =
+  "SELECT (SELECT MIN(created_at) FROM entitlements WHERE user_id = ?1 AND source = 'stripe') AS first, " +
+  "(SELECT COUNT(*) FROM entitlements WHERE user_id = ?1 AND source = 'stripe' AND (reference IS NULL OR reference <> ?2)) AS others, " +
+  "(SELECT COUNT(*) FROM audit WHERE user_id = ?1 AND event = 'plan_changed' AND detail = 'stripe renewed, extended') AS renewals, " +
+  "(SELECT COUNT(*) FROM audit WHERE user_id = ?1 AND event = 'refund_made') AS made, " +
+  "(SELECT COUNT(*) FROM payment_reversals WHERE customer_id = ?3 AND why = 'refunded') AS refunded, " +
+  "(SELECT COUNT(*) FROM payment_reversals WHERE customer_id = ?3) AS reversals";
+
+type RefundFacts = { first: string | null; others: number; renewals: number; made: number; refunded: number; reversals: number };
+
+// "offer": the page shows Refund now. Every one of these holds: Pro comes
+// from a live Stripe row now; the bound subscription is active; every Stripe
+// row the account has ever had names that subscription, so no earlier
+// subscription was paid for (entitlement rows are never deleted, which makes
+// this the lasting half of "once per account"); no renewal was recorded; the
+// first of those rows was written within REFUND_DAYS; and no refund or
+// dispute is on record (the audit and payment_reversals keep 90 days, which
+// covers the 14). "refunded": a refund is on record. "window": everything
+// holds but the days. "none": anything else. The page asks Stripe nothing;
+// the press reads Stripe and decides again (refund.ts). A fault reading the
+// rows offers nothing, and the Terms' address stays the way to ask.
+export type RefundState = "offer" | "refunded" | "window" | "none";
+
+export async function refundState(
+  env: Env, userId: string, row: PaymentRow | null, line: BillingLine | null, now = new Date(),
+): Promise<RefundState> {
+  if (!row) return "none";
+  let facts: RefundFacts | null;
+  try {
+    facts = await env.ACCOUNTS!.prepare(REFUND_FACTS_SQL).bind(userId, row.subscription_id, row.customer_id).first<RefundFacts>();
+  } catch {
+    console.error("billing: refund state not read");
+    return "none";
+  }
+  if (!facts) return "none";
+  if (facts.made || facts.refunded) return "refunded";
+  if (!row.subscription_id || row.status !== "active" || !line?.stripe) return "none";
+  if (!facts.first || facts.others || facts.renewals || facts.reversals) return "none";
+  const first = Date.parse(facts.first);
+  if (!Number.isFinite(first)) return "none";
+  return now.getTime() - first <= REFUND_DAYS * DAY_MS ? "offer" : "window";
 }
 
 // -- the page ---------------------------------------------------------------------------
@@ -107,20 +165,55 @@ const Hidden = ({ account, lang }: { account: Account; lang: Lang }) => (
   </>
 );
 
+// The refund's panel: the offer, one line and the Refund now link, which
+// leads to the confirmation on this same page (?refund=confirm); or that
+// confirmation, which says what cannot be undone and posts only with its box
+// ticked. Neither button is filled: the page's one filled button stays
+// Manage the subscription, and a refund is not what the page invites.
+const RefundPanel = ({ lang, account, step }: { lang: Lang; account: Account; step: "offer" | "confirm" }) => (
+  <Panel title={t(lang, "terms.pro_refund_title")} id="refund" class="panel-form">
+    {step === "offer" ? (
+      <>
+        <p>{t(lang, "billing.refund_text")}</p>
+        <p><a href={`/account/billing?refund=confirm${langQuery(lang, "&")}#refund`} class="btn">{t(lang, "billing.refund_now")}</a></p>
+      </>
+    ) : (
+      <form method="post" action="/account/billing/refund" class="stack">
+        <Hidden account={account} lang={lang} />
+        <p>{t(lang, "billing.refund_confirm_text")}</p>
+        <label class="account-check">
+          <input type="checkbox" name="confirm" value="yes" required />
+          <span>{t(lang, "billing.refund_confirm")}</span>
+        </label>
+        <div class="account-actions">
+          <button type="submit" class="btn">{t(lang, "billing.refund_button")}</button>
+          <a href={`/account/billing${langQuery(lang, "?")}`} class="btn">{t(lang, "billing.refund_keep")}</a>
+        </div>
+      </form>
+    )}
+  </Panel>
+);
+
 export function billingView(
   lang: Lang, account: Account,
   state: {
     offer: Readonly<Record<Interval, string>> | null; canManage: boolean; row: PaymentRow | null; line: BillingLine | null; errors?: Key[];
+    // The refund's panel, when the account is offered it (refundState); and
+    // the line saying what the last press did, already in the page's language.
+    refund?: "offer" | "confirm" | null; notice?: string | null;
   },
 ) {
   const { offer, row, canManage } = state;
   const live = canManage && liveSubscription(row);
   const overdue = row?.status === "past_due" || row?.status === "unpaid";
+  // The refund's messages name the contact address and the days; the other errors have neither to fill.
+  const vars = { email: CONTACT_EMAIL, days: REFUND_DAYS };
   return (
     <>
       <PageHead lang={lang} title={t(lang, "billing.title")} lead={t(lang, "billing.lead", { plan: planLine(lang, account, state.line) })}
         actions={<a href="/account" class="btn">{t(lang, "account.title")}</a>} />
-      {state.errors?.length ? <ul class="errors" role="alert">{state.errors.map((e) => <li>{t(lang, e)}</li>)}</ul> : null}
+      {state.errors?.length ? <ul class="errors" role="alert">{state.errors.map((e) => <li>{t(lang, e, vars)}</li>)}</ul> : null}
+      {state.notice ? <p class="account-notice" role="status">{state.notice}</p> : null}
       {live && row ? (
         <Panel title={t(lang, "billing.panel_subscription")} class="panel-form">
           {overdue ? <p role="status"><strong>{t(lang, "billing.past_due_note")}</strong></p> : null}
@@ -141,6 +234,7 @@ export function billingView(
           </form>
         </Panel>
       ) : null}
+      {live && state.refund ? <RefundPanel lang={lang} account={account} step={state.refund} /> : null}
       {/* Free beside Pro, the account's own plan marked; Pro's link leads to the Subscribe panel below. */}
       <Panel title={t(lang, "billing.panel_pro")}>
         <PlanCards lang={lang} plans={planCards(lang, { price: offer, reader: account.plan === "pro" ? "pro" : "free", place: "billing" })} />
@@ -185,14 +279,30 @@ export function billingView(
   );
 }
 
+// What ?refund= asks of the page: the confirmation step, or the line after a
+// press that took the refund (done: the subscription cancelled too; sent:
+// its cancellation still to be made by hand, refund.ts).
+const refundNotice = (asked: string): Key | null =>
+  asked === "done" ? "billing.refund_done" : asked === "sent" ? "billing.refund_sent" : null;
+
 // The page for a signed-in user. With the stub source the payment tables are
 // not read at all, so the page answers before the operator has applied them.
-export async function billingPage(c: Context<AppEnv>, who: Account, extra: { errors?: Key[]; status?: number } = {}): Promise<Response> {
+// confirm: the refund's confirmation step, for a press that came without its box ticked.
+export async function billingPage(
+  c: Context<AppEnv>, who: Account, extra: { errors?: Key[]; status?: number; confirm?: boolean } = {},
+): Promise<Response> {
   const lang = c.get("lang");
   const source = paymentSource(c.env);
   const row = source.kind === "stub" ? null : await paymentRow(c.env, who.userId);
   const line = source.kind === "stub" ? null : await billingLine(c.env, who.userId);
-  const view = billingView(lang, who, { offer: source.offer(), canManage: source.kind !== "stub", row, line, errors: extra.errors });
+  const asked = c.req.query("refund") ?? "";
+  const offered = source.kind !== "stub" && (await refundState(c.env, who.userId, row, line)) === "offer";
+  const refund = offered ? (extra.confirm || asked === "confirm" ? "confirm" : "offer") : null;
+  const noticeKey = refundNotice(asked);
+  const notice = noticeKey ? t(lang, noticeKey) : null;
+  const view = billingView(lang, who, {
+    offer: source.offer(), canManage: source.kind !== "stub", row, line, errors: extra.errors, refund, notice,
+  });
   return accountPage(c, t(lang, "billing.title"), view, extra.status ?? 200);
 }
 

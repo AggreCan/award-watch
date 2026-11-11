@@ -326,7 +326,8 @@ describe("the about, terms and privacy pages", () => {
     expect(pro).toContain("The prices are shown on the site, on the account's billing page, in Canadian dollars.");
     expect(pro).toContain("at least 30 days after notice by email to the account's address");
     expect(pro).toContain("The current period is not refunded, in whole or in part, except under Refund of the First Payment and where the law requires a refund.");
-    // The refund the operator promised (2026-11-11): the first payment, within 14 days, once per account, by writing to the contact address.
+    // The refund the operator promised (2026-11-11): the first payment, within 14 days, once per account,
+    // with the billing page's Refund now button, or by writing to the contact address.
     expect(pro).toContain("<h3>Refund of the First Payment</h3><p>If you ask within 14 days of your first payment for Pro, monthly or yearly, Allwater refunds that payment in full");
     expect(pro).toContain("This applies once per account and to the first payment only");
     expect(pro).toContain("If Allwater ends Pro for any other reason, it refunds the unused part of the current period.");

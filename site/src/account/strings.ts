@@ -815,6 +815,48 @@ export const ACCOUNT_STRINGS = {
   "billing.field": { en: "Billing", fr: "Facturation" },
   "billing.link_plans": { en: "Plans and prices", fr: "Forfaits et prix" },
   "billing.plan_stripe": { en: "Pro, paid until {date}", fr: "Pro, payé jusqu'au {date}" },
+  // The refund of the first payment (billing.tsx RefundPanel, refund.ts). The
+  // panel's title is the Terms' own heading (terms.pro_refund_title). {email}
+  // is the contact address, {days} the window (REFUND_DAYS).
+  "billing.refund_text": {
+    en: "Refund now returns your first payment in full, taxes included, and ends Pro at once.",
+    fr: "Rembourser maintenant vous rend votre premier paiement en entier, taxes comprises, et met fin à Pro immédiatement.",
+  },
+  "billing.refund_now": { en: "Refund now", fr: "Rembourser maintenant" },
+  "billing.refund_confirm_text": {
+    en: "This cannot be undone. Your first payment is refunded in full, taxes included, to the payment method used, and the subscription is cancelled at once. Pro ends when Stripe confirms the refund, usually within a minute.",
+    fr: "Cette action est irréversible. Votre premier paiement est remboursé en entier, taxes comprises, au mode de paiement utilisé, et l'abonnement est annulé immédiatement. Pro prend fin dès que Stripe confirme le remboursement, en général en moins d'une minute.",
+  },
+  "billing.refund_confirm": {
+    en: "I want my first payment refunded and Pro ended now.",
+    fr: "Je veux que mon premier paiement soit remboursé et que Pro prenne fin maintenant.",
+  },
+  "billing.refund_button": { en: "Refund my first payment", fr: "Rembourser mon premier paiement" },
+  "billing.refund_keep": { en: "Keep Pro", fr: "Garder Pro" },
+  "billing.refund_done": {
+    en: "Your first payment is being refunded in full, taxes included, and the subscription is cancelled. Pro ends when Stripe confirms the refund, usually within a minute. Reload this page to see it.",
+    fr: "Votre premier paiement est en voie d'être remboursé en entier, taxes comprises, et l'abonnement est annulé. Pro prend fin dès que Stripe confirme le remboursement, en général en moins d'une minute. Rechargez cette page pour le voir.",
+  },
+  "billing.refund_sent": {
+    en: "Your first payment is being refunded in full, taxes included. The subscription could not be cancelled at Stripe just now; the site's operator is told and cancels it by hand. Pro ends when Stripe confirms the refund, usually within a minute.",
+    fr: "Votre premier paiement est en voie d'être remboursé en entier, taxes comprises. L'abonnement n'a pas pu être annulé chez Stripe pour l'instant; l'exploitant du site en est informé et l'annule lui-même. Pro prend fin dès que Stripe confirme le remboursement, en général en moins d'une minute.",
+  },
+  "billing.refund_err_failed": {
+    en: "The refund did not go through, so nothing was changed: Pro and the subscription continue. Write to {email} from your account's address to ask for the refund.",
+    fr: "Le remboursement n'a pas abouti, donc rien n'a changé : Pro et l'abonnement continuent. Écrivez à {email} depuis l'adresse de votre compte pour demander le remboursement.",
+  },
+  "billing.refund_err_window": {
+    en: "The {days} days after your first payment have passed, so nothing was refunded. Write to {email} from your account's address with any question.",
+    fr: "Les {days} jours suivant votre premier paiement sont écoulés, donc rien n'a été remboursé. Écrivez à {email} depuis l'adresse de votre compte pour toute question.",
+  },
+  "billing.refund_err_refunded": {
+    en: "A payment of this account has been refunded already, so nothing more was refunded.",
+    fr: "Un paiement de ce compte a déjà été remboursé, donc rien de plus n'a été remboursé.",
+  },
+  "billing.refund_err_unavailable": {
+    en: "This account's first payment cannot be refunded from this page, so nothing was refunded. Write to {email} from your account's address to ask about it.",
+    fr: "Le premier paiement de ce compte ne peut pas être remboursé depuis cette page, donc rien n'a été remboursé. Écrivez à {email} depuis l'adresse de votre compte pour en faire la demande.",
+  },
   // -- bug reports (src/account/bugs.tsx) ---------------------------------------------
   // A Pro feature. The site offers self-service and no support line, so the
   // page promises no reply; the corrections page stays the place for data.

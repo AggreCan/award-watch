@@ -2408,10 +2408,12 @@ const STRINGS = {
   },
   // The operator's own wording (approved 2026-11-11), from what Stripe's terms allow: a seller's policy may be
   // more generous than Link's, and a change-of-mind request comes to the seller, since Link does not review one.
+  // The way to ask names the billing page's button first (account/refund.ts), the address as the fallback; the
+  // billing page is named in words, since no public page links to /account while the switch is off.
   "terms.pro_refund_title": { en: "Refund of the First Payment", fr: "Remboursement du premier paiement" },
   "terms.pro_refund": {
-    en: "If you ask within 14 days of your first payment for Pro, monthly or yearly, Allwater refunds that payment in full, taxes included, to the payment method used, and ends the subscription. Write to {email} from the account's address. This applies once per account and to the first payment only; later payments are covered by the Cancellation terms above. It is in addition to any refund that Link or the law provides.",
-    fr: "Si vous le demandez dans les 14 jours suivant votre premier paiement pour Pro, mensuel ou annuel, Allwater rembourse ce paiement en entier, taxes comprises, au mode de paiement utilisé, et met fin à l'abonnement. Écrivez à {email} depuis l'adresse du compte. Cela s'applique une fois par compte et au premier paiement seulement; les paiements suivants relèvent des conditions d'annulation ci-dessus. Cela s'ajoute à tout remboursement prévu par Link ou par la loi.",
+    en: "If you ask within 14 days of your first payment for Pro, monthly or yearly, Allwater refunds that payment in full, taxes included, to the payment method used, and ends the subscription. To ask, press Refund now on the account's billing page; if the button is not there or the refund does not go through, write to {email} from the account's address. This applies once per account and to the first payment only; later payments are covered by the Cancellation terms above. It is in addition to any refund that Link or the law provides.",
+    fr: "Si vous le demandez dans les 14 jours suivant votre premier paiement pour Pro, mensuel ou annuel, Allwater rembourse ce paiement en entier, taxes comprises, au mode de paiement utilisé, et met fin à l'abonnement. Pour le demander, appuyez sur Rembourser maintenant à la page de facturation du compte; si le bouton n'y figure pas ou si le remboursement n'aboutit pas, écrivez à {email} depuis l'adresse du compte. Cela s'applique une fois par compte et au premier paiement seulement; les paiements suivants relèvent des conditions d'annulation ci-dessus. Cela s'ajoute à tout remboursement prévu par Link ou par la loi.",
   },
   "terms.pro_failed_title": { en: "Failed Payments", fr: "Paiements refusés" },
   "terms.pro_failed": {
@@ -3035,8 +3037,8 @@ const STRINGS = {
   "propage.q_cancel": { en: "Can I cancel?", fr: "Puis-je annuler?" },
   "propage.q_refund": { en: "Can I get a refund?", fr: "Puis-je être remboursé?" },
   "propage.a_refund": {
-    en: "Yes, of your first payment: write to {email} from your account's address within 14 days of it. It is refunded in full, taxes included, and the subscription ends. This applies once per account; later payments are not refunded.",
-    fr: "Oui, pour votre premier paiement : écrivez à {email} depuis l'adresse de votre compte dans les 14 jours qui le suivent. Il est remboursé en entier, taxes comprises, et l'abonnement prend fin. Cela s'applique une fois par compte; les paiements suivants ne sont pas remboursés.",
+    en: "Yes, of your first payment: press Refund now under Plan and Billing in your account within 14 days of it. If the button is not there or the refund does not go through, write to {email} from your account's address. It is refunded in full, taxes included, and the subscription ends. This applies once per account; later payments are not refunded.",
+    fr: "Oui, pour votre premier paiement : appuyez sur Rembourser maintenant sous Forfait et facturation, dans votre compte, dans les 14 jours qui le suivent. Si le bouton n'y figure pas ou si le remboursement n'aboutit pas, écrivez à {email} depuis l'adresse de votre compte. Il est remboursé en entier, taxes comprises, et l'abonnement prend fin. Cela s'applique une fois par compte; les paiements suivants ne sont pas remboursés.",
   },
   "propage.q_seller": { en: "Who sells Pro?", fr: "Qui vend Pro?" },
   "propage.a_seller": {

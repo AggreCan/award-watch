@@ -17,6 +17,11 @@ import { faultSummary } from "./search_db";
 // binding to a destination verified in the zone's Email Routing; with no
 // binding or no address the check still runs and only logs.
 //
+// A refund pressed on the billing page (src/account/refund.ts) whose
+// subscription can still bill is an alert, one line per account, naming the
+// account's id and the subscription's Stripe id and nothing else, until the
+// subscription is cancelled (REFUNDS_TO_CANCEL_SQL below).
+//
 // The same-day refresh (docs/intraday.md) sends no email of its own: a
 // failed cut is a row in intraday_runs, not a red workflow run, so this
 // check is where it shows. It reads that table in the search database (one
@@ -87,6 +92,29 @@ export type IntradayRuns = {
   rowsNew: number; // new versions written by the ones that went through
 };
 
+// Refunds pressed on the billing page whose subscription can still bill, in
+// one statement over the accounts database: a press that took the refund and
+// could not cancel (refund_cancel_failed), or a press followed by a full
+// refund of the customer's charge in payment_reversals, which is how a
+// refund whose answer never reached the site reads once Stripe's notice
+// arrives. Both audit rows name the subscription in their detail; an item
+// stands while payment_customers still binds that subscription to the
+// account with a status that bills, so cancelling it (the console, Stripe's
+// dashboard and its notice) clears it. Over the audit's 90 days from ?1, at
+// most REFUND_ITEMS_MAX, as "<user id> <subscription id>" joined by commas.
+export const REFUND_ITEMS_MAX = 20;
+export const REFUNDS_TO_CANCEL_SQL =
+  "SELECT group_concat(item, ',') AS items FROM (SELECT DISTINCT a.user_id || ' ' || p.subscription_id AS item " +
+  "FROM audit a JOIN payment_customers p ON p.user_id = a.user_id AND p.subscription_id = a.detail " +
+  "WHERE a.event IN ('refund_cancel_failed', 'refund_requested') AND a.at >= ?1 " +
+  "AND (p.status IS NULL OR p.status NOT IN ('canceled', 'incomplete_expired')) " +
+  "AND (a.event = 'refund_cancel_failed' OR EXISTS (SELECT 1 FROM payment_reversals r " +
+  "WHERE r.customer_id = p.customer_id AND r.why = 'refunded' AND r.at >= a.at)) " +
+  `ORDER BY item LIMIT ${REFUND_ITEMS_MAX})`;
+export const REFUND_LOOKBACK_DAYS = 90;
+
+export type RefundToCancel = { userId: string; subscriptionId: string };
+
 export type RunStatus = {
   run_at?: string;
   ok?: boolean;
@@ -121,6 +149,9 @@ export type Inputs = {
   // Live pro entitlements (LIVE_PRO_SQL), or null when not counted (no
   // ACCOUNTS binding, or a fault). The 4-hour line needs a count above zero.
   livePro?: number | null;
+  // Refunds whose subscription can still bill (REFUNDS_TO_CANCEL_SQL), or
+  // null when not read (no ACCOUNTS binding, or a fault).
+  refundsToCancel?: RefundToCancel[] | null;
   // The last finished day's figures (readFigures), or null when there is no current line.
   figures?: string | null;
 };
@@ -265,7 +296,24 @@ export function collectAlerts(i: Inputs): string[] {
     }
   }
   out.push(...intradayAlerts(i));
+  for (const r of i.refundsToCancel ?? []) {
+    out.push(`A refund of a first payment pressed on the billing page went through, but its subscription can still bill: account ${r.userId}, subscription ${r.subscriptionId}. Cancel it at once in the operator console (the account's page, Cancel the subscription, At once) or in Stripe's dashboard.`);
+  }
   return out;
+}
+
+const USER_RE = /^[0-9a-f]{32}$/;
+const SUBSCRIPTION_RE = /^sub_[A-Za-z0-9]{1,100}$/;
+
+// The row REFUNDS_TO_CANCEL_SQL answers: its items, each an account id and a
+// subscription id in their own shapes; anything else in the text is dropped.
+export function readRefundsToCancel(row: unknown): RefundToCancel[] {
+  const items = row && typeof row === "object" ? (row as Record<string, unknown>).items : null;
+  if (typeof items !== "string") return [];
+  return items.split(",").flatMap((item) => {
+    const [userId, subscriptionId, rest] = item.split(" ");
+    return rest === undefined && USER_RE.test(userId ?? "") && SUBSCRIPTION_RE.test(subscriptionId ?? "") ? [{ userId, subscriptionId }] : [];
+  });
 }
 
 // The same-day refresh's lines. Runs that cannot be read are one line and
@@ -407,6 +455,20 @@ async function countLivePro(env: Env, now: Date): Promise<number | null> {
   }
 }
 
+// The refunds to cancel, or null: as with the paid plans, no binding or a
+// fault is logged and never a line of its own (the accounts may be switched
+// off, or the payment tables never applied).
+async function readRefunds(env: Env, now: Date): Promise<RefundToCancel[] | null> {
+  if (!env.ACCOUNTS) return null;
+  try {
+    const since = new Date(now.getTime() - REFUND_LOOKBACK_DAYS * 24 * HOUR).toISOString();
+    return readRefundsToCancel(await env.ACCOUNTS.prepare(REFUNDS_TO_CANCEL_SQL).bind(since).first());
+  } catch (e) {
+    console.log(`watchdog: refunds to cancel not read (${faultSummary(e)})`);
+    return null;
+  }
+}
+
 export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const stats = await loadStats(env).catch(() => null);
   let backupUploaded: Date | null = null;
@@ -444,9 +506,10 @@ export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const dataAsOf = typeof raw === "string" ? raw : raw == null ? null : String(raw);
   const { intraday, intradayProblem } = await readIntraday(env, now);
   const livePro = await countLivePro(env, now);
+  const refundsToCancel = await readRefunds(env, now);
   return {
     now, dataAsOf, backupUploaded, status, statusProblem: problems.join(" ") || null, intraday, intradayProblem, livePro,
-    figures,
+    figures, refundsToCancel,
   };
 }
 

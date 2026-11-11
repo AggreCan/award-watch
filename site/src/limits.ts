@@ -25,9 +25,9 @@ import { accountsEnabled } from "./account/switch";
 // same terms: its posts come from the service's few addresses, which retry
 // after a 429, and anything else posting there is refused at the signature.
 // The bug report post of a Pro account (/account/bug) writes a row and sends
-// a message, so it counts with the forms, on the same terms; so do the two
-// billing posts (checkout and portal), each of which opens a session with
-// the payment service, which no reader does five times a minute. The CSV
+// a message, so it counts with the forms, on the same terms; so do the three
+// billing posts (checkout, portal and refund), each of which calls the
+// payment service, which no reader does five times a minute. The CSV
 // files of the analytics views are downloads: each reads the records
 // database, so a script asking for every table of every buyer meets the
 // download cap rather than the pages'. A notice's or a contract's calendar
@@ -57,6 +57,9 @@ export const FEED_ICS = /^\/account\/calendar\/[^/]+\.ics$/;
 // a download, on the accounts terms (a page while the switch is off).
 export const ORG_CLAIM_CSV = /^\/account\/organization\/[a-z]+\.csv$/;
 
+// The billing page's own posts (account/routes.tsx); the webhook has its bucket.
+const BILLING_POSTS = new Set(["/account/billing/checkout", "/account/billing/portal", "/account/billing/refund"]);
+
 // A HEAD request for a download (a link checker, a client asking a file's
 // size before fetching it) moves no file, so it is not counted against the
 // download cap; it is counted with the pages.
@@ -71,7 +74,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
   if (path === "/account/stop" || path === "/interest/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";
-  if (method === "POST" && (path === "/account/bug" || path === "/account/billing/checkout" || path === "/account/billing/portal")) return "form";
+  if (method === "POST" && (path === "/account/bug" || BILLING_POSTS.has(path))) return "form";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
     return "form";
   }

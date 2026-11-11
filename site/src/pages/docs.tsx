@@ -14,8 +14,9 @@ import { Layout, PageHead, page } from "../layout";
 import { OGL_URL, pageSeo, type PageKey } from "../seo";
 import { AccountsPrivacy, PaymentsPrivacy } from "../account/privacy";
 import { accountsEnabled } from "../account/switch";
+import { CONTACT_EMAIL } from "../contact";
 
-export const CONTACT_EMAIL = "contact@awardwatch.ca";
+export { CONTACT_EMAIL };
 
 // Requests a minute per address, as the rate-limit bindings in wrangler.jsonc set them.
 export const REQUEST_LIMITS = { page: 120, api: 60, download: 10 } as const;
@@ -96,7 +97,8 @@ export function aboutPage(c: Context<AppEnv>): Promise<Response> {
 }
 
 // The paid plan's parts after "Who Sells It", each a heading and a paragraph
-// with no link in it. The refund's paragraph names the address to write to, as text.
+// with no link in it. The refund's paragraph names the billing page's button
+// and the address to write to, as text.
 const PRO_TERMS: [Key, Key][] = [
   ["terms.pro_includes_title", "terms.pro_includes"],
   ["terms.pro_prices_title", "terms.pro_prices"],

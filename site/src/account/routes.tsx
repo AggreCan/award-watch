@@ -51,9 +51,11 @@
 //   POST /account/organization/segment the share block's segment                       (session, CSRF)
 //   POST /account/organization/delete  remove the claim                                (session, CSRF)
 //   GET  /account/organization/:block.csv  a block as a file                           (session, plan)
-//   GET  /account/billing              the plan, the prices or the subscription       (session)
+//   GET  /account/billing              the plan, the prices or the subscription; with ?refund=confirm
+//                                      the refund's confirmation step                 (session)
 //   POST /account/billing/checkout     to the payment service's checkout              (session, CSRF)
 //   POST /account/billing/portal       to the payment service's portal                (session, CSRF)
+//   POST /account/billing/refund       refund the first payment, then cancel at once  (session read from the database, CSRF)
 //   POST /account/billing/webhook      the payment service's notices                  (signature only)
 //
 // Every POST but the stop link's and the webhook's (which Stripe sends,
@@ -88,6 +90,7 @@ import { keyUsage, nowOf } from "./api_usage";
 import { usagePage } from "./api_usage_page";
 import { audit } from "./audit";
 import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, startCheckout } from "./billing";
+import { pressRefund } from "./refund";
 import { BriefingsPanel, briefingLabel, briefingStopView, briefingStoppedView } from "./briefing_pages";
 import {
   type Brief, type BriefingSubject, addBriefing, briefOf, briefValue, briefingName, briefingPath, deleteBriefing, deleteBriefingsOf,
@@ -1425,6 +1428,15 @@ account.post("/billing/portal", async (c) => {
   const post = await signedInPost(c);
   if (post instanceof Response) return post;
   return guarded(c, () => openPortal(c, post.account, siteBase(c)));
+});
+
+// Money moves on this post, so a session remembered through a database
+// outage does not count: the 503 page, and nothing asked of Stripe.
+account.post("/billing/refund", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  if (post.account.stale) return unavailable(c);
+  return guarded(c, () => pressRefund(c, post.account, post.fields));
 });
 
 // Stripe posts here: no session, no Origin, no form; the signature decides.

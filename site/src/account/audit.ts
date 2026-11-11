@@ -18,7 +18,12 @@ export type AuditEvent =
   | "briefing_added" | "briefing_changed" | "briefing_removed" | "briefing_stopped"
   // The weekly email (weekly.ts): where it was turned on or off ("at sign-in",
   // "account"), or how the unsubscribe link was used ("link", "one_click").
-  | "weekly_on" | "weekly_off" | "weekly_stopped";
+  | "weekly_on" | "weekly_off" | "weekly_stopped"
+  // The refund of the first payment from the billing page (refund.ts):
+  // refund_requested and refund_cancel_failed carry the subscription's Stripe
+  // id (the daily check reads it, watchdog.ts), refund_refused a fixed reason,
+  // refund_made the refund's status. Never an amount.
+  | "refund_requested" | "refund_refused" | "refund_made" | "refund_cancel_failed";
 
 export const AUDIT_DAYS = 90;
 

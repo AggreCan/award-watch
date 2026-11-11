@@ -196,13 +196,16 @@ describe("the Pro page", () => {
     expect(page).toContain("Pro emails you new notices that match your saved searches, and each award, amendment or end date within 6 or 12 months");
     expect(page).toContain('<p class="pro-price">Pro is CA$21.50 a month or CA$215.00 a year, taxes added at checkout. ' +
       "The first payment is refunded in full if you ask within 14 days.</p>");
-    // The refund is one of the page's questions, with the address to write to, and the Terms say the same.
+    // The refund is one of the page's questions: the billing page's button first, the address to write to
+    // as the fallback, and the Terms say the same.
     expect(page).toContain("Can I get a refund?");
-    expect(page).toContain("Yes, of your first payment: write to contact@awardwatch.ca from your account's address within 14 days of it.");
+    expect(page).toContain("Yes, of your first payment: press Refund now under Plan and Billing in your account within 14 days of it. " +
+      "If the button is not there or the refund does not go through, write to contact@awardwatch.ca from your account's address.");
     const terms = decode(await (await get("/terms", payEnv())).text());
     expect(terms).toContain("<h3>Refund of the First Payment</h3><p>If you ask within 14 days of your first payment for Pro, monthly or yearly, " +
       "Allwater refunds that payment in full, taxes included, to the payment method used, and ends the subscription. " +
-      "Write to contact@awardwatch.ca from the account's address.");
+      "To ask, press Refund now on the account's billing page; if the button is not there or the refund does not go through, " +
+      "write to contact@awardwatch.ca from the account's address.");
     expect(terms).toContain("This applies once per account and to the first payment only");
     expect(terms).toContain("except under Refund of the First Payment and where the law requires a refund");
     expect(terms.indexOf("<h3>Cancellation</h3>")).toBeLessThan(terms.indexOf("<h3>Refund of the First Payment</h3>"));

@@ -1226,12 +1226,13 @@ API version (`STRIPE_VERSION`, `2026-10-28.endive`).
 
 | Route | Guards | What it does |
 |---|---|---|
-| `GET /account/billing` | session | The plan today. Without a subscription: what Pro includes, a monthly and a yearly button with the configured prices and "Taxes added at checkout". With one: its status, the end of the period paid and a button to Stripe's portal. Without the keys or the prices: "Paying for Pro is not available yet." |
+| `GET /account/billing` | session | The plan today. Without a subscription: what Pro includes, a monthly and a yearly button with the configured prices and "Taxes added at checkout". With one: its status, the end of the period paid and a button to Stripe's portal, and, while the account is offered it, the Refund of the First Payment panel (*Refund of the first payment*, below); `?refund=confirm` shows that panel's confirmation step. Without the keys or the prices: "Paying for Pro is not available yet." |
 | `POST /account/billing/checkout` | session, CSRF, Origin | Creates a Checkout Session and redirects (303) to it, under an `Idempotency-Key` naming the user and the ten minutes the request falls in: two checkouts started together get the one session, and one with other choices (the other interval, the other language) in the same minutes gets "A checkout with other choices was started from this account a moment ago" (409). A user whose subscription can still bill is sent to Stripe's portal instead (a billing page left open from before the subscription would otherwise start a second one). |
 | `POST /account/billing/portal` | session, CSRF, Origin | Creates a portal session for the stored customer and redirects (303) to it. |
+| `POST /account/billing/refund` | session read from the database (not one remembered through an outage), CSRF, Origin; `FORM_LIMIT` | Refunds the first payment in full and cancels the subscription at once, from the confirmation step with its box ticked (*Refund of the first payment*). |
 | `POST /account/billing/webhook` | Stripe's signature; `WEBHOOK_LIMIT`, 120 a minute per address, while the switch is on (Stripe retries a 429) | Takes Stripe's notices. |
 
-All four are the site's 404 while the accounts switch is off. The overview
+All five are the site's 404 while the accounts switch is off. The overview
 (`/account`) shows "Pro, paid until <date>" when a live Stripe row decides
 the plan, the date being the end of the period paid, and links the billing
 page in either case.
@@ -1313,6 +1314,169 @@ until it gets a 2xx) answers 200 the second time and changes nothing.
   no refund) before anything is deleted; if Stripe cannot confirm it, the
   account is kept and the page says to try again, so a deleted account is
   never charged again.
+- **A refund from the billing page fails closed.** Anything Stripe refuses,
+  or any read it does not answer, refunds nothing and cancels nothing, and
+  the reader is sent to the contact address (*Refund of the first payment*).
+
+### Refund of the first payment
+
+The Terms promise a full refund of the first payment, taxes included, if
+the reader asks within 14 days of it, once per account. The billing page
+makes it without the operator: a panel titled Refund of the First Payment
+with one line ("Refund now returns your first payment in full, taxes
+included, and ends Pro at once.") and a Refund now link, which is not the
+page's filled button. The code is `site/src/account/refund.ts` (the press)
+and `site/src/account/billing.tsx` (`refundState` and the panel); the Stripe
+calls are the console's, in `site/src/account/admin_stripe.ts`; the tests are
+`site/test/accounts-refund.test.ts`.
+
+**Who is offered it.** The page reads the site's own rows only and asks
+Stripe nothing (`REFUND_FACTS_SQL`, one statement). The panel shows when all
+of these hold:
+
+- Pro comes from a live Stripe row now (a manual grant written after it
+  decides the plan instead, and hides the panel);
+- `payment_customers` binds a subscription whose status is `active`;
+- every `entitlements` row of source `stripe` the account has ever had names
+  that subscription, so no earlier subscription was paid for;
+- no `plan_changed` audit row reads "stripe renewed, extended" (a second
+  payment on the same subscription);
+- the first of those Stripe rows was written at most 14 days ago (it is
+  written when the first payment's notice arrives);
+- no `refund_made` audit row for the account, and no `payment_reversals` row
+  for its customer (a refund or a dispute from anywhere: the console, Link,
+  Stripe's dashboard).
+
+"Once per account" needs no new table. Entitlement rows are never deleted,
+not even with the account, so an account that was refunded and subscribes
+again has a Stripe row naming the old subscription, and is never offered the
+refund again. The audit and `payment_reversals` keep 90 days, which covers
+the 14. Stripe's own lists (below) decide again at the press, and Stripe
+keeps every charge.
+
+**The confirmation.** Refund now leads to `/account/billing?refund=confirm`,
+the same page with the panel in its second step: "This cannot be undone.
+Your first payment is refunded in full, taxes included, to the payment
+method used, and the subscription is cancelled at once. Pro ends when Stripe
+confirms the refund, usually within a minute.", a box to tick ("I want my
+first payment refunded and Pro ended now."), Refund my first payment, and
+Keep Pro. The box makes it two deliberate acts: a double click on Refund now
+cannot land on the confirmation. A post without the box ticked shows the
+step again ("Tick the box to confirm.", 400) and asks Stripe nothing.
+
+**The press** (`POST /account/billing/refund`). Nothing the form sends is
+read but the box and the language; the subscription, the customer and the
+charge are the ones bound to the signed-in account. In order:
+
+1. The site's rows again, as the page read them. Past the window: "The 14
+   days after your first payment have passed, so nothing was refunded" (409).
+   Refunded before: "A payment of this account has been refunded already, so
+   nothing more was refunded." (409). Not offered for any other reason: "This
+   account's first payment cannot be refunded from this page, so nothing was
+   refunded. Write to (the contact address)..." (409). None of these asks
+   Stripe anything.
+2. An audit row `refund_requested` with the subscription's id.
+3. The subscription (`GET /v1/subscriptions/<id>`): it must be `active`, its
+   customer the bound one, and the `user_id` in its metadata, when there is
+   one, this account.
+4. The customer's paid invoices (`GET /v1/invoices?customer=<id>&status=paid&expand[]=data.payments`)
+   and charges (`GET /v1/charges?customer=<id>`), 10 of each, and the charge
+   behind the oldest invoice that took money, found as the console finds it
+   (the invoice's payments, then `GET /v1/charges?payment_intent=<id>`).
+   Stripe's figures must say (`refundVerdict`): exactly one paid invoice
+   took money and exactly one charge succeeded, both lists read to their end,
+   and that charge is the invoice's; the invoice was for the bound
+   subscription; no charge of the customer was refunded in any part or
+   disputed; the charge names the bound customer; its amount and currency are
+   the invoice's (so a full refund of the charge is the first payment and no
+   more); and its `created` time is at most 14 days (14 times 24 hours)
+   before the press. Otherwise the press stops with the matching line above
+   (409).
+5. The refund: `POST /v1/refunds` with `charge=<id>` and no amount, under
+   the header `Idempotency-Key: operator-refund-<charge id>`, the
+   console's own key and parameters. A double submit, a retry or a press
+   beside the operator's on the same charge gets the first refund back from
+   Stripe (within its 24 hours), never a second; after those 24 hours the
+   charge reads refunded and step 4 stops the press. Stripe never refunds
+   more than a charge. A 409 (the same key still in flight) is asked again
+   up to three times, a call with no answer once. A refund Stripe gives as
+   `succeeded` or `pending` is taken; anything else, or no answer, reads the
+   charge again (`GET /v1/charges/<id>`), and a charge refunded in full there
+   counts as taken ("refund confirmed").
+6. `refund_made` with the refund's status ("refund succeeded").
+7. The cancellation at once (`DELETE /v1/subscriptions/<id>`, the payment
+   source's `cancel`, as account deletion does), then the stored row reads
+   `canceled` and `plan_changed` "stripe cancelled with the refund".
+
+The entitlement is not written by the press. Stripe's `charge.refunded`
+notice ends the account's Stripe Pro (*What each notice does*), and
+`customer.subscription.deleted` would too.
+
+What the reader sees:
+
+| Path | Status | The page |
+|---|---|---|
+| Refund and cancellation went through | 303 to `/account/billing?refund=done` | "Your first payment is being refunded in full, taxes included, and the subscription is cancelled. Pro ends when Stripe confirms the refund, usually within a minute. Reload this page to see it." Until the notice arrives, the lead still reads "Pro, paid until (date)"; the subscription and refund panels are gone (the stored row reads `canceled`), and the Subscribe and Earlier Receipts panels show, as after any cancellation. Once the notice arrives the plan reads Free. |
+| Refund went through, cancellation did not | 303 to `/account/billing?refund=sent` | "Your first payment is being refunded in full, taxes included. The subscription could not be cancelled at Stripe just now; the site's operator is told and cancels it by hand. Pro ends when Stripe confirms the refund, usually within a minute." The audit row `refund_cancel_failed` carries the subscription's id, and the daily check names it (below). |
+| Stripe refused the refund, or could not be reached at any step | 503 | "The refund did not go through, so nothing was changed: Pro and the subscription continue. Write to (the contact address) from your account's address to ask for the refund." `refund_refused` "stripe refused" or "stripe unreachable". Nothing is cancelled and nothing is recorded as refunded; the panel stays, so the reader may press again. |
+| Refused by the rules (window, refunded, not the first payment, another account, figures) | 409 | The matching line of step 1; `refund_refused` with the reason. |
+
+Every line is in English and French. The audit rows hold no amount and no
+address: `refund_requested` (the subscription id), `refund_refused` (a fixed
+reason: "window", "refunded already", "not offered", "stripe unreachable",
+"subscription", "another account", "no payment", "refunded", "not first",
+"disputed", "figures", "stripe refused"), `refund_made` ("refund
+succeeded", "refund pending", "refund confirmed"), `refund_cancel_failed`
+(the subscription id), then the webhook's own `plan_changed` rows.
+
+**The daily check.** Its message (`site/src/watchdog.ts`,
+`REFUNDS_TO_CANCEL_SQL`) carries one item needing attention per account
+whose refund went through while its subscription can still bill:
+
+```
+A refund of a first payment pressed on the billing page went through, but its subscription can still bill: account <user id>, subscription <sub id>. Cancel it at once in the operator console (the account's page, Cancel the subscription, At once) or in Stripe's dashboard.
+```
+
+An account is named when a `refund_cancel_failed` row names its bound
+subscription, or when a `refund_requested` row does and a full refund of the
+customer's charge was recorded in `payment_reversals` after it (a refund
+whose answer never reached the site, or one the operator made after a press
+that failed), in both cases while `payment_customers` still binds that
+subscription with a status other than `canceled` or `incomplete_expired`.
+The item repeats each morning until the subscription is cancelled: from the
+console at once (the stored row then reads `canceled`), or in Stripe's
+dashboard, whose `customer.subscription.deleted` notice does the same. It
+names the account id and the subscription id and nothing else, at most 20
+accounts, over the audit's 90 days. A fault reading it is logged, as the
+count of paid plans is, and never a line of its own.
+
+**Keys.** The press uses the restricted key's Subscriptions write, Refunds
+write, and Invoices and Charges read (*Stripe key permissions*).
+
+#### After the first real refund
+
+Stripe's documentation does not say how a refund behaves when Link is the
+merchant of record. After the first refund made from the billing page,
+check in Stripe's dashboard and on the site:
+
+1. The payment shows refunded in full, the amount being the whole first
+   payment with its taxes, and its Payment breakdown says whether Stripe kept
+   the sales tax and the Managed Payments fee (the refund itself returns the
+   tax to the customer).
+2. The subscription reads canceled, with no further invoice.
+3. The webhook took `charge.refunded` and `customer.subscription.deleted`
+   (Workbench, the endpoint's deliveries), and the console's user page shows
+   the plan Free, the stored row `canceled`, and the audit rows
+   `refund_requested`, `refund_made`, `plan_changed` "stripe cancelled with
+   the refund" and "stripe ended, refunded".
+4. Link sent the reader a refund notice (ask the reader, or preview it from
+   Receipt history).
+5. In the invoice the press read, the subscription sat under
+   `parent.subscription_details`, the charge came through `payments`, and the
+   charge's amount and currency equalled the invoice's `amount_paid` and
+   currency. If any of these differs under Managed Payments, every press stops
+   at "figures" or "not first" and readers are sent to the contact address:
+   refund those by hand in the console and adjust `refundVerdict`.
 
 ### What is kept
 
@@ -1365,7 +1529,9 @@ is deleted, tied to the id alone like the entitlement rows.
    A restricted key (`rk_live_...`) with write access to Checkout Sessions,
    the customer portal and Subscriptions, and read access to Charges (a
    dispute names its charge, which is read for the customer), is enough,
-   and holds less than the account's full secret key.
+   and holds less than the account's full secret key. The operator console
+   and the billing page's refund need Refunds write and Invoices read as
+   well (*Stripe key permissions*).
 7. **The four variables** in `site/wrangler.jsonc`: `STRIPE_PRICE_MONTHLY`
    and `STRIPE_PRICE_YEARLY` (the price ids), `PRICE_MONTHLY_CAD` `"18.99"` and
    `PRICE_YEARLY_CAD` `"189.99"` (shown on the billing page as CA$18.99 and
@@ -1556,6 +1722,22 @@ for ids, statuses, dates, an amount and its currency, shown once and not
 kept; nothing from a charge's card or billing details is read into the
 page.
 
+A reader's own refund from the billing page (*Refund of the first
+payment*) needs nothing from the operator when it goes through. It shows
+on the account's page as audit rows: `refund_requested` with the
+subscription's id, `refund_made` ("refund succeeded"), `plan_changed`
+"stripe cancelled with the refund", then the webhook's "stripe ended,
+refunded"; the stored row reads `canceled` and the plan Free. A press that
+was refused shows `refund_refused` with its reason; a reader sent to the
+contact address after one ("stripe refused", "stripe unreachable",
+"figures", "not first") is refunded here with Refund the latest payment,
+then cancelled with Cancel the subscription, At once. The one case that
+needs a hand is a refund that went through while the subscription can
+still bill: the daily check names the account and the subscription each
+morning until Cancel the subscription, At once (or a cancellation in
+Stripe's dashboard) clears it. The overview's last 20 audit events show the
+same rows.
+
 ### The accounts table
 
 `/admin/accounts`, linked from the overview, lists every account, 50 to a
@@ -1629,9 +1811,10 @@ each page.
 
 With the console, the restricted key of *Payments*, step 6, needs:
 Subscriptions write (cancelling, already needed for deletion), Refunds
-write, and Invoices and Charges read. Without the Stripe secrets the
-user page shows the stored row alone and offers no cancellation or
-refund.
+write, and Invoices and Charges read. The billing page's own refund
+(*Refund of the first payment*) uses the same four. Without the Stripe
+secrets the user page shows the stored row alone and offers no
+cancellation or refund, and the billing page offers no refund either.
 
 ### The `account_blocks` table
 
