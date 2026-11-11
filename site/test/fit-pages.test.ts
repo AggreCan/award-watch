@@ -312,6 +312,10 @@ describe("around the page", () => {
     expect(keys.length).toBeGreaterThan(40);
     for (const key of ["fit.mail_heading", "fit.mail_row", "fit.mail_detail", "fit.mail_more_one", "fit.mail_more_many", "fit.mail_subject_one",
       "fit.mail_subject_many", "fit.mail_free_note", "plans.match_mail"]) expect(keys, key).toContain(key);
+    // So are the notice page's panel and line, and the short list over /tenders and on the organization page
+    // (account/fit_panels.tsx, test/fit-panels.test.ts).
+    for (const key of ["fit.panel_notice", "fit.notice_lead", "fit.nudge", "fit.none_reason", "fit.no_codes", "fit.also_common",
+      "fit.tenders_panel", "fit.tenders_all_one", "fit.tenders_all_many", "fit.tenders_none"]) expect(keys, key).toContain(key);
     for (const key of keys) {
       const { en, fr } = rawEntry(key);
       expect(en, key).not.toMatch(EN);

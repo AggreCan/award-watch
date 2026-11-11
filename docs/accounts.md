@@ -2187,11 +2187,13 @@ organization*). It is the site's first advisory feature: a calculation by
 fixed rules, never a statement about the business and never a chance of
 winning. The code is `site/public/fit.js` (the rules and the points, one copy
 for the Worker and the browser), `site/src/fit.tsx` (the block's check, the
-words of a band and a reason, the disclaimer) and
-`site/src/account/fit_pages.tsx` (the page); the pipeline writes the block in
-`pipeline/awardwatch_pipeline/profile_matching.py`. The tests are
-`site/test/fit.test.ts`, `site/test/fit-pages.test.ts` and
-`pipeline/tests/test_profile_matching.py`.
+words of a band and a reason, the disclaimer),
+`site/src/account/fit_pages.tsx` (the page) and
+`site/src/account/fit_panels.tsx` with `site/public/fit-panel.js` (the
+panels on other pages, *On the site's pages*); the pipeline writes the block
+in `pipeline/awardwatch_pipeline/profile_matching.py`. The tests are
+`site/test/fit.test.ts`, `site/test/fit-pages.test.ts`,
+`site/test/fit-panels.test.ts` and `pipeline/tests/test_profile_matching.py`.
 
 ### The block
 
@@ -2252,6 +2254,68 @@ the table from `fit.js`'s constants.
   the surviving profile for display and repointed by the organization page.
   It is `private, no-store` and `noindex`.
 - The overview links it beside the claimed organization.
+
+### On the site's pages
+
+The same matches appear where a signed-in reader already is. Free and Pro see
+the same three surfaces; only `/account/matches` and the email list more on
+Pro.
+
+- **An open notice's page.** After Key Dates and Buyer, before Documents:
+  "Match With Your Organization", what the notice has in common with the
+  claimed organization's records, the band and its total ("95 of 100
+  points"), every reason with its points, the records counted ("From 7
+  award notices, ..., fiscal years 2022-23 to 2026-27.") and the disclaimer
+  with the way to the rules. A notice that shares no UNSPSC segment reads
+  "No match" and says why (or that it carries no code), then states the
+  buyer, province of delivery or notice type it still shares, as facts
+  without points. A signed-in account without a claim gets one line under
+  the Follow control instead, linking `/account/organization`. A closed
+  notice shows neither: a match is about what can still be answered.
+- **`/tenders`.** Over the toolbar: "Notices Matching <name>", the first 5
+  matches, closest first, each its band and title, then its buyer, closing
+  day and first reason (the work in common) without points; "All 12 matching
+  notices" linking `/account/matches`, which lists what the plan allows; the
+  disclaimer. The server writes the panel's frame and, in a JSON block
+  (`#fit-data`), the organization's id, name and province, its matching
+  block, the words and the titles of its segments. `public/tenders.js` loads
+  `public/fit-panel.js` only for such a page and hands it the full list it
+  already fetches; `fit.js` scores it in the browser, and the families' and
+  classes' names come from `tenders/open-levels.json`. Without JavaScript the
+  panel holds a link to `/account/matches`. Apply stays the page's one filled
+  button.
+- **`/account/organization`.** After the claim and compare panels: the same
+  5 rows with the link to all, drawn on the server by `fit-panel.js` from the
+  same data, and the disclaimer; or the one line that says why there are
+  none (no open match, the open notices unreadable, or a block that cannot
+  rank, in `/account/matches`' words).
+- **Nothing** for a reader not signed in, and on the notice page and
+  `/tenders` nothing while the claimed organization's block cannot rank
+  notices (no block yet, nothing in the window, published contracts only, too
+  few records with codes, or the organization gone from the data): the
+  account pages say which.
+- **Caching.** The notice page and `/tenders` are public pages: signed out,
+  they are the same bytes with the same headers as before the panels
+  (`public, max-age=300`, with `Vary: Cookie` while accounts are on). A panel
+  or the line is drawn only for a session the request reads, and the shell
+  then names the signed-in address, so `layout.page` sends the response
+  `private, no-store`, as for the Follow control and Save this search. Only
+  the account's own claim is read, so one reader's organization never
+  reaches another's page.
+- **Reads per page view** of a signed-in account, besides what each page
+  already read: on the notice page, the claim (one accounts row,
+  `CLAIM_READ_SQL`), the claimed profile's shard entry (two more files for a
+  retired id) and `tenders/open-levels.json` when a reason names a class or
+  family; the notice is scored alone. On `/tenders`, the claim and the
+  profile entry; the server never parses `tenders/open.json` for the page.
+  On `/account/organization`, `tenders/open.json` and
+  `tenders/open-levels.json` (kept parsed while their ETags hold) and about
+  a thousand notices scored; the claim and profile are the page's own. No
+  records-database read and no write anywhere. `site/test/cpu-budget.test.ts`
+  times each page for a signed-in account, its accounts database answered
+  from memory, with 900 open notices. On the notice page the claim, the
+  profile shard's read and the panel add about 70 percent to the page's time
+  for that account (measured 2026-11-11).
 
 ### By email
 

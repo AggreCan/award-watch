@@ -2,15 +2,16 @@
 // public/fit.js holds the rules and the points, one copy for the Worker and
 // the browser; the pipeline's profile_matching.py writes the block they read
 // on each profile. Here: the block read off a profile and checked, the
-// window stats.json says the night's export counted, the words of a band and
+// window stats.json says the night's export counted, a notice's page read as
+// the rules read a list row, the words of a band and
 // of each reason, and FitDisclaimer, the line every surface that shows a
 // match carries. A band names the match between a notice and records, never
 // the business, and a reason states record counts, each source apart.
 
 import type { FC } from "hono/jsx";
-import { type MatchBlock, type Reason, type Score, MATCH_MAX } from "../public/fit.js";
+import { type FitNotice, type MatchBlock, type Reason, type Score, MATCH_MAX } from "../public/fit.js";
 import { PROVINCES, SEGMENT_CODES } from "./constants";
-import { BUYER_ID_RE, type CodeLevel, DAY_RE } from "./data";
+import { BUYER_ID_RE, type CodeLevel, DAY_RE, type TenderDetail } from "./data";
 import { fmtInt, pick, provinceName, segmentLabel, t, tj, tn, type Key, type Lang } from "./i18n";
 import { isObj, isStr } from "./valid";
 
@@ -56,6 +57,17 @@ export function profileMatching(profile: unknown): MatchBlock | null {
 export function matchingWindow(stats: { matching_fy?: unknown } | null | undefined): [number, number] | null {
   const v = stats?.matching_fy;
   return Array.isArray(v) && v.length === 2 && isYear(v[0]) && isYear(v[1]) && v[0] <= v[1] ? [v[0], v[1]] : null;
+}
+
+// A notice's page as the rules read a list row: its codes, and its segments
+// as the export derives a row's (the first two digits of each code, within
+// the 57), so the page scores the notice as /account/matches does.
+export function detailNotice(d: TenderDetail): FitNotice {
+  const codes = d.codes.map((c) => c.code);
+  return {
+    codes, segments: [...new Set(codes.map((c) => c.slice(0, 2)).filter((s) => SEGMENT_CODES.includes(s)))].sort(),
+    provinces: d.provinces, provinces_derived: d.provinces_derived ?? null, buyer_id: d.buyer_id, notice_type_en: d.notice_type_en,
+  };
 }
 
 // -- the words ----------------------------------------------------------------------

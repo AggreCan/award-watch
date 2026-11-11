@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import fitPanelJs from "../public/fit-panel.js?raw";
 import tendersJs from "../public/tenders.js?raw";
 import watchlistJs from "../public/watchlist.js?raw";
+import { FIT_CLIENT_KEYS } from "../src/account/fit_panels";
 import { SEGMENTS } from "../src/constants";
 import { app } from "../src/index";
 import { homeRequest } from "./home";
@@ -241,12 +243,16 @@ describe("client scripts", () => {
     const watch = new Set<string>(WATCHLIST_CLIENT_KEYS);
     for (const key of literalKeys(watchlistJs)) expect(watch.has(key), `watchlist.js uses ${key}`).toBe(true);
     for (const s of ["awards", "history", "contracts", "grants", "lobbying"]) expect(watch.has(`source.${s}`), s).toBe(true);
-    for (const key of [...TENDERS_CLIENT_KEYS, ...WATCHLIST_CLIENT_KEYS]) expect(allKeys()).toContain(key);
+    // The matching panel over /tenders (fit-panel.js) reads its own block (#fit-data).
+    const fit = new Set<string>(FIT_CLIENT_KEYS);
+    for (const key of literalKeys(fitPanelJs)) expect(fit.has(key), `fit-panel.js uses ${key}`).toBe(true);
+    for (const key of [...TENDERS_CLIENT_KEYS, ...WATCHLIST_CLIENT_KEYS, ...FIT_CLIENT_KEYS]) expect(allKeys()).toContain(key);
   });
 
   it("hold no English sentences of their own", () => {
     expect(sentenceLiterals(tendersJs)).toEqual([]);
     expect(sentenceLiterals(watchlistJs)).toEqual([]);
+    expect(sentenceLiterals(fitPanelJs)).toEqual([]);
   });
 
   it("get their strings from a JSON block, with no inline executable script", async () => {

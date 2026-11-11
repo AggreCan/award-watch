@@ -61,7 +61,11 @@
    save and the page to return to. This script keeps both on the view shown.
    Whether a view is saved is known only for the view the page was served
    with: that view shows the saved state, any other the button (or the
-   plan's cap), and the post answers a view saved already as saved. */
+   plan's cap), and the post answers a view saved already as saved.
+
+   For a signed-in reader whose account names its organization, the page
+   carries a matching panel over the toolbar: this script loads
+   public/fit-panel.js for it and hands it the full list once fetched. */
 import { closingInstant, closingParts, closingPassed, closingState, countdownText } from "./closing.js";
 import { headOrder } from "./sort.js";
 import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryString, readSearch, searchKey } from "./tender-query.js";
@@ -823,6 +827,17 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
   // selectable if it never does.
   wireSelection();
 
+  // Matching notices (public/fit-panel.js): the panel over the toolbar, for a
+  // signed-in reader whose account names its organization. The module loads
+  // only when the page carries the panel's data, and scores the list fetched
+  // here; fitDraw(null) tells it the list could not be read.
+  var fitPanel = document.getElementById("fit-data")
+    ? import("./fit-panel.js").then(function (m) { return m.startPanel(); }, function () { return null; })
+    : null;
+  function fitDraw(list) {
+    if (fitPanel) fitPanel.then(function (p) { if (p) p.draw(list); });
+  }
+
   var note = el("p", "muted small loading-note", tx("tenders.loading"));
   note.setAttribute("aria-live", "polite");
   results.insertBefore(note, tableBox);
@@ -835,7 +850,9 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
       if (!Array.isArray(data)) throw new Error("not a list");
       note.parentNode.removeChild(note);
       start(data.filter(function (r) { return r && typeof r.reference === "string" && Array.isArray(r.segments) && Array.isArray(r.provinces) && Array.isArray(r.category); }));
+      fitDraw(rows);
     }, function () {
       note.textContent = tx("tenders.load_failed");
+      fitDraw(null);
     });
 })();

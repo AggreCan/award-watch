@@ -4,9 +4,11 @@
    ranked by what each has in common with that organization's records. The
    pipeline counts the records once a night, as the profile's "matching"
    block (pipeline/awardwatch_pipeline/profile_matching.py has its shape);
-   this module scores a notice against that block. src/fit.tsx imports it for
-   /account/matches, and the browser can import it to score the list
-   public/tenders.js already holds. The Methodology page prints its points
+   this module scores a notice against that block. The Worker imports it for
+   /account/matches and a notice's page (src/fit.tsx and
+   src/account/fit_panels.tsx), and public/fit-panel.js imports it in the
+   browser to score the list public/tenders.js already holds. The
+   Methodology page prints its points
    table from MATCH_POINTS. Nothing here touches the page, so the tests
    import it as it is.
 

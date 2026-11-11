@@ -7,7 +7,9 @@
 // ratio holds. This is a guard, NOT a production figure: the bounds sit well
 // above the ratios measured when it was written (cpu-report, 2026-11-07), so
 // only a real regression trips them, such as a per-notice Intl call back in
-// the rail on every page or a whole-shard parse back on a profile.
+// the rail on every page or a whole-shard parse back on a profile. The
+// matching notices' pages are timed for a signed-in account too, its
+// accounts database answered from memory (below).
 import { describe, expect, it } from "vitest";
 import { clearClosingCache } from "../src/closing";
 import { clearParsedCache } from "../src/data";
@@ -156,6 +158,113 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   ["/sitemap-1.xml", 100, 2], // [32]
 ];
 
+// -- a signed-in account that names its organization ---------------------------------------
+//
+// The matching surfaces (src/account/fit_panels.tsx, fit_pages.tsx) read a
+// session and the account's claim, so these renders carry a session cookie
+// and an accounts database that answers from memory: the session's row, no
+// entitlement (Free), the claim on org-a000000001, and nothing for any other
+// statement (no watch, no saved search, no write). As above, the time is the
+// Worker's own work, not a local database's round trips. The claimed profile
+// carries a matching block (the scale-up shard otherwise as above), and the
+// open list its 900 rows, a third of them close matches.
+
+const MATCH_BLOCK = {
+  fy: [2022, 2026], n: [7, 3, 12], coded: [7, 3], newest: "2026-09-30",
+  classes: [["821118", 5, 2], ["811015", 2, 0]], families: [["8211", 5, 2], ["8110", 2, 0]], segments: [["82", 5, 2], ["81", 2, 0]],
+  buyers: [["pwgsc-tpsgc", 4, 3, 0], ["dfo-mpo", 1, 0, 4]], provinces: [["ON", 6, 2], ["QC", 1, 1]],
+  types: [["Request for Proposal", 5, 1]], held: [["SA", "82", 1]],
+};
+const FIT_BODIES: Record<string, string> = {
+  ...BODIES,
+  "profiles/a00.json": JSON.stringify(Object.fromEntries(Object.entries(bigProfileShard()).map(([id, p]) =>
+    [id, id === "org-a000000001" ? { ...(p as object), matching: MATCH_BLOCK } : p]))),
+  "stats.json": JSON.stringify({ ...JSON.parse(BODIES["stats.json"]), matching_fy: [2022, 2026] }),
+};
+
+const SESSION_ID = "5e55".repeat(8);
+const SECRET = "c0ffee".repeat(10) + "c0ff";
+const COOKIE = `__Host-aw_session=${SESSION_ID}.${SECRET}`;
+
+// The accounts database's answers, by statement: what a statement not named here reads is nothing.
+function memoryAccounts(tokenHash: string, claim: boolean): D1Database {
+  const at = new Date().toISOString();
+  const answer = (sql: string): { first: unknown; all: unknown[] } => {
+    if (sql.includes("FROM sessions s JOIN users u")) {
+      return {
+        first: {
+          id: SESSION_ID, token_hash: tokenHash, expires_at: "2999-01-01T00:00:00.000Z", revoked_at: null, last_seen_at: at, user_id: "budget-user",
+          email: "budget@example.com", lang: "en", status: "active", plan: "free", plan_until: null, created_at: at,
+        },
+        all: [],
+      };
+    }
+    if (claim && sql.startsWith("SELECT organization_id, segment, competitors")) {
+      return { first: { organization_id: "org-a000000001", segment: null, competitors: "[]", created_at: at, updated_at: at }, all: [] };
+    }
+    return { first: null, all: [] };
+  };
+  const statement = (sql: string) => {
+    const s = {
+      bind: () => s,
+      first: async () => answer(sql).first,
+      all: async () => ({ results: answer(sql).all, success: true, meta: {} }),
+      raw: async () => [],
+      run: async () => ({ results: [], success: true, meta: { changes: 0 } }),
+    };
+    return s;
+  };
+  return {
+    prepare: statement,
+    batch: async (list: unknown[]) => list.map(() => ({ results: [], success: true, meta: { changes: 0 } })),
+  } as unknown as D1Database;
+}
+
+async function sha256Hex(s: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
+  return [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// The same pages through the real app with the session cookie, the switch on and the accounts in memory.
+// mark is what the page shows only for this account, so the render is the signed-in one.
+async function signedInRatio(path: string, per: number, accounts: D1Database, mark: string): Promise<number> {
+  const fitEnv = { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true" };
+  const request = () => app.request(path, {
+    headers: { "sec-fetch-mode": "navigate", cookie: COOKIE, "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}` },
+  }, fitEnv);
+  const go = async () => {
+    const res = await request();
+    await res.arrayBuffer();
+    return res.status;
+  };
+  const first = await request();
+  expect(first.status, path).toBe(200);
+  expect(first.headers.get("cache-control"), path).toBe("private, no-store");
+  expect(await first.text(), path).toContain(mark);
+  for (let i = 0; i < 3; i++) await go();
+  const route: number[] = [];
+  const yard: number[] = [];
+  for (let b = 0; b < 5; b++) {
+    yard.push(await batch(yardstick, 16));
+    route.push(await batch(go, per));
+  }
+  return median(route) / median(yard);
+}
+
+// Each bound about three times the larger of two ratios measured when the
+// panels were added (2026-11-11, in brackets, on a busy machine), rounded up.
+// "no claim" is the same page for a signed-in account that names no
+// organization: the signed-in path as it was before the panels, beside which
+// the claim's read and the panel show.
+const SIGNED_IN_BUDGET: [name: string, path: string, claim: boolean, mark: string, bound: number, per: number][] = [
+  ["/tenders/cb-100-10000001, no claim", "/tenders/cb-100-10000001", false, "Tell the site which organization", 6, 16], // [2.0]
+  ["/tenders/cb-100-10000001, claim", "/tenders/cb-100-10000001", true, "Match With Your Organization", 11, 16], // [3.4]
+  ["/tenders, no claim", "/tenders", false, "data-save-search", 8, 16], // [2.4]
+  ["/tenders, claim", "/tenders", true, 'id="fit-data"', 13, 16], // [4.3]
+  ["/account/organization, claim", "/account/organization", true, "<h2>Notices Matching ", 21, 8], // [6.7]
+  ["/account/matches, claim", "/account/matches", true, "<h2>Open Notices That Match</h2>", 21, 8], // [6.9]
+];
+
 describe("CPU budget per route (a synthetic guard, not a production number)", () => {
   it("keeps each route's render within its bound over the yardstick", async () => {
     clearParsedCache();
@@ -168,6 +277,20 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
       // The search page answers 503 without its database, after rendering in full.
       expect([200, 503], name).toContain(await render(path, home));
       const r = await ratio(path, per, home);
+      seen.push(`${name} ${r.toFixed(2)}`);
+      if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
+    }
+    expect(over, seen.join(", ")).toEqual([]);
+  }, 120_000);
+
+  it("keeps the matching surfaces of a signed-in account within their bounds (accounts answered from memory)", async () => {
+    clearParsedCache();
+    clearClosingCache();
+    const hash = await sha256Hex(SECRET);
+    const over: string[] = [];
+    const seen: string[] = [];
+    for (const [name, path, claim, mark, bound, per] of SIGNED_IN_BUDGET) {
+      const r = await signedInRatio(path, per, memoryAccounts(hash, claim), mark);
       seen.push(`${name} ${r.toFixed(2)}`);
       if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
     }

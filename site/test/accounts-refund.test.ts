@@ -320,7 +320,9 @@ describe("who is offered Refund now", () => {
     const s = await subscriber("past-due");
     await ACCOUNTS.prepare("UPDATE payment_customers SET status = 'past_due' WHERE user_id = ?").bind(s.user).run();
     expect(await billing(s)).not.toContain(PANEL_HEAD);
-    const t = await subscriber("topped");
+    // Paid a minute before the grant: while another test file keeps the runtime busy its clock can stand still
+    // across both writes, and two rows written in the same instant leave the newer one to chance.
+    const t = await subscriber("topped", 60 / DAY_S);
     await grantPro(t.email);
     expect(await billing(t)).not.toContain(PANEL_HEAD);
   });

@@ -7,6 +7,7 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { WatchControl, watchControl } from "../account/watch_pages";
+import { FitNudge, NoticeMatchPanel, noticeFit } from "../account/fit_panels";
 import { Table } from "../columns";
 import {
   REFERENCE_RE, loadOpenFirst, loadStats, loadTender, publishedReference, tenderAttachments, type Attachment, type TenderDetail,
@@ -133,6 +134,8 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   // An open notice can be followed; its watch ends when it closes (account/watch_mail.ts).
   const open = state === "open" || state === "closing";
   const watch = open ? await watchControl(c, "tender", `tender:${d.reference.toLowerCase()}`) : null;
+  // An open notice's match with the organization a signed-in account names (account/fit_panels.tsx); without a session nothing is read.
+  const fit = open ? await noticeFit(c, d) : null;
   const description_ = description ? (
     <Panel title={descriptionMark ? `${t(lang, "tender.description_heading")} ${descriptionMark}` : t(lang, "tender.description_heading")}>
       <div class="prose">{description.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
@@ -158,6 +161,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
         </p>
         <p class="page-note">{t(lang, "tender.contact_note")}</p>
         <WatchControl lang={lang} state={watch} kind="tender" target={`tender:${d.reference.toLowerCase()}`} />
+        <FitNudge lang={lang} fit={fit} />
       </PageHead>
 
       <div class="panel-grid">
@@ -195,6 +199,8 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
           </dl>
         </Panel>
       </div>
+
+      <NoticeMatchPanel lang={lang} fit={fit} notice={d} />
 
       <DocumentsPanel lang={lang} d={d} documents={tenderAttachments(d)} clock={clock} closes={closes} notice={notice} noticeUrl={noticeUrl} />
 

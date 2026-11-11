@@ -13,11 +13,18 @@
 // server answers any view itself, with the same rules as the script
 // (filterTenders below; the tests hold both to the same answers).
 //
+// For a signed-in account that names its organization, a panel over the
+// toolbar lists the closest matching notices: the page carries the
+// organization's matching block, and public/fit-panel.js scores the full list
+// tenders.js fetches (account/fit_panels.tsx). The server still parses only
+// the first file.
+//
 // /tenders/new: the notices first seen on one day, from tenders/new/<day>.json,
 // the newest day by default and any of the last 30 on request.
 
 import type { Context } from "hono";
 import { SaveSearchForm, SaveSearchRow, saveControl } from "../account/search_control";
+import { TendersFitPanel, readFit } from "../account/fit_panels";
 import { type SortOrders, SortsHere, clientTable, headSort } from "../columns";
 import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENT_CODES } from "../constants";
 import {
@@ -362,6 +369,9 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
   const interest = await interestFilter(c.env, lang, "tenders", `/tenders${url.search}`);
   // Save this search, for a signed-in reader (account/search_control.tsx): nothing otherwise.
   const save = await saveControl(c, interest, `/tenders${url.search}`);
+  // Matching notices over the list, for a signed-in account that names its organization
+  // (account/fit_panels.tsx): the block goes to the browser, which scores the full list.
+  const fit = await readFit(c);
   const empty = !waiting && shown.length === 0;
   // The same-day notices for a paid request; null (nothing read) on the free plan.
   const intraday = await intradayBand(c, stats.data_as_of, clock);
@@ -387,6 +397,8 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
         <p class="page-note">{t(lang, "tenders.contact_note")}</p>
         {sameDay ? <SameDayNote lang={lang} /> : null}
       </PageHead>
+
+      <TendersFitPanel lang={lang} fit={fit} />
 
       <form method="get" action="/tenders" class="toolbar" id="tender-filters">
         <FiltersFold lang={lang} active={chips.length} id="tender-fold">

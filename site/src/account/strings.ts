@@ -2405,6 +2405,35 @@ export const ACCOUNT_STRINGS = {
   "fit.all_open": { en: "All open notices", fr: "Tous les avis ouverts" },
   "fit.unavailable": { en: "The open notices cannot be read right now.", fr: "Les avis ouverts ne peuvent pas être lus pour le moment." },
   "fit.overview": { en: "Matching notices", fr: "Avis correspondants" },
+  // An open notice's page (src/account/fit_panels.tsx): the match with the claimed organization, or the
+  // line that asks a signed-in account without a claim to name one.
+  "fit.panel_notice": { en: "Match With Your Organization", fr: "Correspondance avec votre organisation" },
+  "fit.notice_lead": {
+    en: "What this notice has in common with the records of {name}.",
+    fr: "Ce que cet avis a en commun avec les dossiers de {name}.",
+  },
+  "fit.nudge": {
+    en: "Tell the site which organization is yours to see what this notice has in common with its records: {link}.",
+    fr: "Indiquez au site quelle organisation est la vôtre pour voir ce que cet avis a en commun avec ses dossiers : {link}.",
+  },
+  "fit.none_reason": {
+    en: "None of this notice's UNSPSC codes shares a segment with the award notices or PSPC contract history of {name}.",
+    fr: "Aucun code UNSPSC de cet avis ne partage de segment avec les avis d'attribution ou l'historique des contrats de SPAC de {name}.",
+  },
+  "fit.no_codes": {
+    en: "This notice carries no UNSPSC code, so it cannot be matched.",
+    fr: "Cet avis ne porte aucun code UNSPSC, il ne peut donc pas faire l'objet d'une correspondance.",
+  },
+  // Before the buyer, province or notice type a notice with no match still shares, stated without points.
+  "fit.also_common": { en: "Also in common:", fr: "Aussi en commun :" },
+  // The panel over /tenders and on /account/organization: the closest matches, and the way to all of them.
+  "fit.tenders_panel": { en: "Notices Matching {name}", fr: "Avis correspondant à {name}" },
+  "fit.tenders_all_one": { en: "{n} matching notice", fr: "{n} avis correspondant" },
+  "fit.tenders_all_many": { en: "All {n} matching notices", fr: "Les {n} avis correspondants" },
+  "fit.tenders_none": {
+    en: "No open notice matches the records of {name} today.",
+    fr: "Aucun avis ouvert ne correspond aux dossiers de {name} aujourd'hui.",
+  },
   // The block of the week's mail (src/account/fit_mail.ts, digests.ts): the open notices first seen in the
   // week that match, each as its band and title, then its buyer, closing date and first reason without points.
   "fit.mail_heading": { en: "New open notices this week that match {name}", fr: "Nouveaux avis ouverts cette semaine qui correspondent à {name}" },

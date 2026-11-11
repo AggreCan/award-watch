@@ -2,6 +2,7 @@
 // the claim and the statements; routes.tsx mounts the page and its posts).
 // Unclaimed: a search for the organization, each result with its "This is
 // us" button. Claimed: the organization, the up to five it is compared with,
+// the open notices that match it closest (fit_panels.tsx, Free and Pro),
 // then the blocks: records by fiscal year for any account (the latest three
 // fiscal years on Free, as the free analytics view shows), and for Pro the
 // records by segment, the share of a segment, the contracts ending within 12
@@ -29,6 +30,7 @@ import { money } from "../pages/shared";
 import { ProNote, ProTag } from "../pro";
 import { FREE_YEARS, MAX_YEARS, SOURCE_NUMBER, type Row, dollars, fiscalLabel, num, orgNumber, segmentCode } from "../records_db";
 import { allowed } from "./entitlements";
+import { type OrgMatches, OrgMatchesPanel, readOrgMatches } from "./fit_panels";
 import {
   BUYERS_MAX, BUYERS_SHOWN, COMPETITORS_MAX, ENDING_SHOWN, INSTRUMENTS_SHOWN, type BlockRows, type BlocksRead, type ClaimBlock, type ClaimFrame, type Found,
   SHARE_SOURCES, claimFrame, findOrganizations, followClaim, isShareSource, readBlockCsv, readBlocks, readClaim, shareSegment,
@@ -571,6 +573,8 @@ export interface ClaimedState {
   read: BlocksRead | null;
   open: Map<string, number> | null;
   errors?: Key[];
+  // The matching notices' summary (fit_panels.tsx); absent when the profile is gone.
+  matches?: OrgMatches | null;
 }
 
 export function claimedView(lang: Lang, account: Account, s: ClaimedState) {
@@ -625,6 +629,7 @@ export function claimedView(lang: Lang, account: Account, s: ClaimedState) {
           : <SearchForm lang={lang} q={s.q} label="orgclaim.compare_label" />}
         <Results lang={lang} account={account} found={s.found} q={s.q} action="compare" skip={[s.id, ...s.competitors.map((c) => c.id)]} full={full} />
       </Panel>
+      {s.matches ? <OrgMatchesPanel lang={lang} m={s.matches} name={name} /> : null}
       {s.read === null ? (
         <Panel title={t(lang, "orgclaim.gone_title")}><p>{t(lang, "orgclaim.gone_text")}</p></Panel>
       ) : s.read.state !== "ready" ? (
@@ -711,15 +716,18 @@ export async function orgPage(c: Context<AppEnv>, who: Account, extra: { errors?
   const source = sourceOf(c);
   const segment = f.claim.segment;
   const competitors = f.competitors.map((x) => ({ id: x.id, name: x.profile.organization.display_name }));
-  const [read, found, open] = await Promise.all([
+  const [read, found, open, matches] = await Promise.all([
     f.own && oid !== null
       ? readBlocks(c.env, oid, competitors.map((x) => orgNumber(x.id) ?? -1), { pro, source, segment: segment === null ? null : Number(segment), frame })
       : Promise.resolve(null),
     q.trim() ? findOrganizations(c.env, q) : Promise.resolve(undefined),
     pro && f.own ? openNotices(c) : Promise.resolve(null),
+    // Free and Pro alike: the static files only, never the records database.
+    f.own ? readOrgMatches(c, id, f.own).catch(() => null) : Promise.resolve(null),
   ]);
   return accountPage(c, t(lang, "orgclaim.title"), claimedView(lang, who, {
     id, profile: f.own, createdAt: f.claim.createdAt, competitors, notices, q, found, pro, frame, source, segment, read, open, errors: extra.errors,
+    matches,
   }), extra.status ?? 200);
 }
 
