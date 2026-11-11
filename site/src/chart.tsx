@@ -1,4 +1,5 @@
-// Charts drawn on the server, for the trends pages. The marks (bars, lines,
+// Charts drawn on the server, for the trends pages. The marks (thin bars
+// with a rounded data end, lines over a wash with ringed dots, hairline
 // gridlines) sit in an inline SVG that stretches to the plot's width
 // (preserveAspectRatio="none", strokes held at a fixed width by
 // vector-effect), and the words (axis labels, marker numbers) are HTML placed
@@ -26,6 +27,23 @@ import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, t, tn, type Lang } from "./i18
 const W = 1000;
 const H = 100;
 const DAY = 86_400_000;
+
+// A bar is a thin mark with air around it, never a slab that fills its slot:
+// at most BAR_SHARE of the slot and about BAR_MAX_PX wide, centred. Its data
+// end is rounded by about BAR_RADIUS_PX and its foot stays square on the
+// baseline. The plot stretches with the page, so pixels are worked out for a
+// plot PLOT_PX wide (a column's on a desktop): a narrower plot draws the bars
+// thinner in step, and the corner's two radii are given apart, the vertical
+// one from the plot's own height, so the corner is round at that width and
+// near enough to it at any other.
+const PLOT_PX = 900;
+const BAR_MAX_PX = 22;
+const BAR_SHARE = 0.6;
+const BAR_RADIUS_PX = 4;
+// A line of more points than this keeps a dot on its last point only; the
+// others stay as marks for the pointer and the keys, unseen until one is on
+// them, so a long line reads as a line.
+const DOTS_SHOWN_MAX = 24;
 
 // Position on a time axis measured in quarters: 2024-01-01 is 2024 * 4,
 // 2024-04-01 one more, and a day inside a quarter falls in proportion. With
@@ -231,7 +249,9 @@ export function esc(s: string): string {
 // The inside of one panel's SVG, written as a string: a panel of the
 // province view holds about 40 bars and a page 14 panels, and string
 // building costs a fraction of rendering each element through JSX.
-function marks(p: Panel, ticks: number[], top: number, grid: number[], markers: Marker[], sx: (x: number) => number, gap: number): string {
+function marks(
+  p: Panel, ticks: number[], top: number, grid: number[], markers: Marker[], sx: (x: number) => number, gap: number, height: number,
+): string {
   const sy = (v: number) => H - (v / top) * H;
   const ns = ' vector-effect="non-scaling-stroke"';
   let out = "";
@@ -239,21 +259,42 @@ function marks(p: Panel, ticks: number[], top: number, grid: number[], markers: 
   for (const x of grid) out += `<line class="grid grid-x" x1="${f(sx(x))}" x2="${f(sx(x))}" y1="0" y2="${H}"${ns}/>`;
   for (const b of p.bars ?? []) {
     if (!(b.value > 0)) continue;
-    const x0 = sx(b.x0 + gap);
-    const x1 = sx(b.x1 - gap);
-    out += `<rect class="${b.light ? "bar bar-light" : "bar"}" x="${f(x0)}" y="${f(sy(b.value))}" width="${f(Math.max(0.5, x1 - x0))}" height="${f(H - sy(b.value))}"><title>${esc(b.title)}</title></rect>`;
+    // The widest the bar may be: its slot less the gap each side, then the
+    // share and the cap; what is left of the slot is air, split either side.
+    const slot = sx(b.x1) - sx(b.x0);
+    const width = Math.max(0.5, Math.min(sx(b.x1 - gap) - sx(b.x0 + gap), slot * BAR_SHARE, (BAR_MAX_PX * W) / PLOT_PX));
+    const x0 = sx(b.x0) + (slot - width) / 2;
+    const x1 = x0 + width;
+    const y = sy(b.value);
+    const rx = Math.min((BAR_RADIUS_PX * W) / PLOT_PX, width / 2);
+    const ry = Math.min((BAR_RADIUS_PX * H) / height, H - y);
+    const d = `M${f(x0)} ${H} L${f(x0)} ${f(y + ry)} A${f(rx)} ${f(ry)} 0 0 1 ${f(x0 + rx)} ${f(y)} ` +
+      `L${f(x1 - rx)} ${f(y)} A${f(rx)} ${f(ry)} 0 0 1 ${f(x1)} ${f(y + ry)} L${f(x1)} ${H} Z`;
+    out += `<path class="${b.light ? "bar bar-light" : "bar"}" d="${d}"><title>${esc(b.title)}</title></path>`;
   }
   for (const m of markers) out += `<line class="mark" x1="${f(sx(m.x))}" x2="${f(sx(m.x))}" y1="0" y2="${H}"${ns}/>`;
   if (p.rule !== undefined && p.rule >= 0 && p.rule <= top) {
     out += `<line class="mark mark-rule" x1="0" x2="${W}" y1="${f(sy(p.rule))}" y2="${f(sy(p.rule))}"${ns}/>`;
   }
   const line = p.line ?? [];
-  if (line.length > 1) out += `<polyline class="line" points="${line.map((pt) => `${f(sx(pt.x))},${f(sy(pt.value))}`).join(" ")}"${ns}/>`;
-  // A zero-length line with round caps draws a round dot at any stretch.
+  if (line.length > 1) {
+    const points = line.map((pt) => `${f(sx(pt.x))},${f(sy(pt.value))}`);
+    // A wash of the line's own colour down to the baseline, under the line.
+    out += `<path class="area" d="M${f(sx(line[0].x))} ${H} L${points.map((pt) => pt.replace(",", " ")).join(" L")} ` +
+      `L${f(sx(line[line.length - 1].x))} ${H} Z"/>`;
+    out += `<polyline class="line" points="${points.join(" ")}"${ns}/>`;
+  }
+  // A zero-length line with round caps draws a round dot at any stretch; one
+  // in the panel's colour under it rings the dot, so it stays apart from the
+  // line it sits on. Past DOTS_SHOWN_MAX points only the last one shows.
   if (line.length <= 60) {
-    for (const pt of line) {
-      out += `<line class="dot" x1="${f(sx(pt.x))}" x2="${f(sx(pt.x))}" y1="${f(sy(pt.value))}" y2="${f(sy(pt.value))}"${ns}><title>${esc(pt.title)}</title></line>`;
-    }
+    const quiet = line.length > DOTS_SHOWN_MAX;
+    line.forEach((pt, i) => {
+      const at = `x1="${f(sx(pt.x))}" x2="${f(sx(pt.x))}" y1="${f(sy(pt.value))}" y2="${f(sy(pt.value))}"${ns}`;
+      const last = i === line.length - 1;
+      if (!quiet || last) out += `<line class="dot-ring" ${at}/>`;
+      out += `<line class="${quiet && !last ? "dot dot-quiet" : "dot"}" ${at}><title>${esc(pt.title)}</title></line>`;
+    });
   }
   return out;
 }
@@ -333,7 +374,7 @@ export const ChartStack: FC<{
               </div>
               <div class="chart-plot" style={`height:${height}px`}>
                 <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${p.title}. ${aria}`} focusable="false"
-                  data-tip="keys">{raw(marks(p, ticks, top, grid, markers, sx, gap))}</svg>
+                  data-tip="keys">{raw(marks(p, ticks, top, grid, markers, sx, gap, height))}</svg>
               </div>
             </div>
           </>

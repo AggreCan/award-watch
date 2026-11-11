@@ -236,7 +236,51 @@ describe("corners", () => {
       [".btn", "6px"],
       ['input[type="search"], input[type="text"], input[type="number"], input[type="email"], select, textarea', "6px"],
       [".rank-bar", "0 4px 4px 0"],
+      // A meter against a cap is one whole: its track and its fill are rounded both ends.
+      [".rank-bars.of-cap .rank-track", "4px"],
+      [".rank-bars.of-cap .rank-bar", "4px"],
       [".pro-tag", "4px"],
     ]);
+  });
+});
+
+// The charts' marks (operator, 2026-11-11: thick, inky bars do not invite a reader in): one emerald, a bar
+// a thin mark with air around it and a rounded data end, scaffolding that steps back, a wash under a line.
+describe("the charts' marks", () => {
+  it("are one emerald in each theme, with its pale step, its darker step under the pointer and its wash", () => {
+    expect(token(LIGHT, "--chart-bar")).toBe("#1f8a62");
+    expect(token(LIGHT, "--chart-bar-light")).toBe("#bfe3d1");
+    expect(token(LIGHT, "--chart-on")).toBe("#0f6b45");
+    expect(token(LIGHT, "--chart-wash")).toBe("#1f8a621f");
+    for (const block of [DARK, MEDIA]) {
+      expect(token(block, "--chart-bar")).toBe("#22a873");
+      expect(token(block, "--chart-bar-light")).toBe("#1b4a39");
+      expect(token(block, "--chart-on")).toBe("#5ad6a0");
+      expect(token(block, "--chart-wash")).toBe("#22a87326");
+    }
+    // A mark reads against the panel at 3:1 or better, and the mark under the pointer too.
+    for (const theme of ["light", "dark"] as const) {
+      for (const name of ["--chart-bar", "--chart-on"]) {
+        expect(contrast(themeToken(theme, name)!, themeToken(theme, "--panel")!), `${theme} ${name}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("draw through those tokens alone: bars, lines, dots on a ring of the panel, ranked bars, and a quiet baseline", () => {
+    expect(decl(rule(".chart-plot .bar")?.body, "fill")).toBe("var(--chart-bar)");
+    expect(decl(rule(".chart-plot .bar-light")?.body, "fill")).toBe("var(--chart-bar-light)");
+    expect(decl(rule(".chart-plot .area")?.body, "fill")).toBe("var(--chart-wash)");
+    const line = rule(".chart-plot .line")?.body;
+    expect([decl(line, "stroke"), decl(line, "stroke-width")]).toEqual(["var(--chart-bar)", "2"]);
+    const dot = rule(".chart-plot .dot")?.body;
+    expect([decl(dot, "stroke"), decl(dot, "stroke-width")]).toEqual(["var(--chart-bar)", "8"]);
+    const ring = rule(".chart-plot .dot-ring")?.body;
+    expect([decl(ring, "stroke"), decl(ring, "stroke-width")]).toEqual(["var(--panel)", "12"]);
+    expect(decl(rule(".chart-plot .dot-quiet")?.body, "stroke")).toBe("transparent");
+    expect(decl(rule(".rank-bar")?.body, "background")).toBe("var(--chart-bar)");
+    expect(decl(rule(".rank-track")?.body, "height")).toBe("8px");
+    // The scaffolding: a baseline in the second border, solid hairline gridlines.
+    expect(decl(rule(".chart-plot")?.body, "border-bottom")).toBe("1px solid var(--border-2)");
+    expect(rules().some((r) => r.selector.includes(".grid") && /stroke-dasharray/.test(r.body))).toBe(false);
   });
 });

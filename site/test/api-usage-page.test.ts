@@ -194,7 +194,11 @@ describe("the page", () => {
     // The keys in the keys page's order, the newest first.
     expect(main).toMatch(/<div class="chart-title">All keys<\/div>[\s\S]*<div class="chart-title">Mirror<\/div>[\s\S]*<div class="chart-title">Nightly sync<\/div>/);
     expect(count(main, /<polyline class="line"/g)).toBe(3);
-    expect(count(main, /<line class="dot"/g)).toBe(3 * USAGE_KEEP_DAYS);
+    // Sixty points a line: every one a mark for the pointer, the last one alone a dot that shows, on its ring.
+    expect(count(main, /<line class="dot(?: dot-quiet)?"/g)).toBe(3 * USAGE_KEEP_DAYS);
+    expect(count(main, /<line class="dot"/g)).toBe(3);
+    expect(count(main, /<line class="dot-ring"/g)).toBe(3);
+    expect(count(main, /<path class="area"/g)).toBe(3);
     expect(main).toContain(`<title>Nightly sync, ${TODAY}\n2,000 requests</title>`);
     expect(main).toContain(`<title>Nightly sync, ${dayPlus(TODAY, -3)}\n0 requests</title>`);
     expect(main).toContain(`<title>All keys, ${TODAY}\n2,040 requests</title>`);
@@ -439,6 +443,6 @@ describe("the links to the page", () => {
 
   it("leave the bar's track to a token of the stylesheet, so it reads in both themes", () => {
     const rule = /\.rank-bars\.of-cap \.rank-track \{([^}]*)\}/.exec(STYLES)?.[1] ?? "";
-    expect(rule.trim()).toBe("background: var(--chart-bar-light);");
+    expect(rule.trim()).toBe("background: var(--chart-bar-light); border-left: 0; border-radius: 4px;");
   });
 });

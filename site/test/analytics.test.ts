@@ -543,7 +543,7 @@ describe("the Pro view", () => {
   // exact figures, every one worked out here from the rows.
   it("gives every chart's marks their exact figures as their tip: quarters, years, shares, ranked bars and the quarters ahead", async () => {
     await sessions();
-    const marks = (html: string) => [...html.matchAll(/<(?:rect|line)\b[^>]*><title>([^<]*)<\/title>/g)].map((m) => decode(m[1]));
+    const marks = (html: string) => [...html.matchAll(/<(?:path|line)\b[^>]*><title>([^<]*)<\/title>/g)].map((m) => decode(m[1]));
     const rows = (html: string) => [...html.matchAll(/<li title="([^"]*)">/g)].map((m) => decode(m[1]));
     const recs = (n: number) => `${n} record${n === 1 ? "" : "s"}`;
     const buyer = (await page(`${VIEWS[0]}?source=history`, { cookie: proCookie })).html;

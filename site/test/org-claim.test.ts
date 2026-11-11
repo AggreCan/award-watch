@@ -488,7 +488,7 @@ describe("the page", () => {
   // The tips (src/chart.tsx, public/tooltip.js): each bar's SVG <title> is the
   // series and the fiscal year over the exact figures.
   it("gives the charts' bars their exact figures as their tip: the value and its records, the share and its parts", async () => {
-    const marks = (html: string) => [...html.matchAll(/<rect\b[^>]*><title>([^<]*)<\/title>/g)].map((m) => decode(m[1]));
+    const marks = (html: string) => [...html.matchAll(/<path\b[^>]*><title>([^<]*)<\/title>/g)].map((m) => decode(m[1]));
     const tips = marks(await text(await page(pro)));
     expect(tips).toContain("Award notices: value by fiscal year, 2024-25\n$1,000,000\n1 record");
     expect(tips).toContain("Published contracts: value by fiscal year, 2026-27 (to date)\n$12,345\n1 record");
