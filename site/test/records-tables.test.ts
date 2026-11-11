@@ -215,6 +215,16 @@ describe("a published contract's page", () => {
     expect(html).toContain(`href="${contractPath("dnd-mdn", SECOND)}">${SECOND}</a> <span class="tag">Newest</span>`);
   });
 
+  it("stacks the parties, the value and the dates on the left of the procurement details, as an award notice's page does", async () => {
+    const { html } = await page(contractPath("dnd-mdn", SECOND));
+    const grid = html.slice(html.indexOf('<div class="panel-grid">'));
+    expect(grid.startsWith('<div class="panel-grid"><div class="panel-stack"><section class="panel"><div class="panel-head"><h2>Supplier and Buyer</h2>')).toBe(true);
+    const at = ["<h2>Supplier and Buyer</h2>", "<h2>Contract Value</h2>", "<h2>Key Dates</h2>", "</div><section class=\"panel\"><div class=\"panel-head\"><h2>Procurement</h2>"]
+      .map((h) => grid.indexOf(h));
+    expect(at.every((x, i) => x >= 0 && (i === 0 || x > at[i - 1])), at.join(",")).toBe(true);
+    expect(html.match(/<div class="panel-grid/g)).toHaveLength(1);
+  });
+
   it("reads in French", async () => {
     const { html } = await page(`${contractPath("dnd-mdn", SECOND)}?lang=fr`);
     expect(html).toContain("Contrat publié");

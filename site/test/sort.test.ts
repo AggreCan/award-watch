@@ -72,8 +72,8 @@ describe("a cell's key", () => {
     expect(sortKey("3 sur 60 (5 %)", "share", "fr")).toBe(5);
     expect(sortKey("12, 3 withheld", "num", "en")).toBe(12);
     expect(sortKey("12, dont 3 retirés", "num", "fr")).toBe(12);
-    // A zero printed as a muted dash carries the figure for a screen reader: the dash is no minus.
-    expect(sortKey("–0", "num", "en")).toBe(0);
+    // A zero among counts is printed as a muted 0 (pages/shared.tsx Count).
+    expect(sortKey("0", "num", "en")).toBe(0);
   });
 
   it("reads a date, a date and time in either language, a year and a fiscal year", () => {

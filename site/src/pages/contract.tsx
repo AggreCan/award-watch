@@ -122,7 +122,11 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
         <WatchControl lang={lang} state={watch} kind="contract" target={`${kind}:${raw.toLowerCase()}`} primary />
       </PageHead>
 
+      {/* The three short panels one under another on the left and the procurement details, the longest, on the
+          right: in two pairs, each short panel sat beside empty ground. One column below about 1336 px, in the
+          same order. */}
       <div class="panel-grid">
+        <div class="panel-stack">
         <Panel title={t(lang, "contract.parties")}>
           <dl>
             <Row lang={lang} k="contract.supplier" v={supplier} />
@@ -155,22 +159,20 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
           )}
           {nonCad ? <p class="muted small">{t(lang, "contract.non_cad", { currency: d.currency ?? "" })}</p> : null}
         </Panel>
-      </div>
-
-      <div class="panel-grid">
-      <Panel title={t(lang, "tender.dates")}>
-      <dl>
-        <Row lang={lang} k="col.awarded" v={d.awarded} />
-        <Row lang={lang} k="col.published" v={d.published} />
-        <Row lang={lang} k="tender.amended" v={d.amended} />
-        <Row lang={lang} k="contract.start" v={d.start} />
-        <Row lang={lang} k="contract.end" v={d.end ? <>
-          {d.end}
-          {window ? <> · <a href={`/expiring/${window}`} class="small">{daysText}</a></> : null}
-          {calendar ? <> · <a href={contractIcsPath(kind, d.reference, lang)} class="small" rel="nofollow">{t(lang, "cal.add")}</a></> : null}
-        </> : null} />
-      </dl>
-      </Panel>
+        <Panel title={t(lang, "tender.dates")}>
+          <dl>
+            <Row lang={lang} k="col.awarded" v={d.awarded} />
+            <Row lang={lang} k="col.published" v={d.published} />
+            <Row lang={lang} k="tender.amended" v={d.amended} />
+            <Row lang={lang} k="contract.start" v={d.start} />
+            <Row lang={lang} k="contract.end" v={d.end ? <>
+              {d.end}
+              {window ? <> · <a href={`/expiring/${window}`} class="small">{daysText}</a></> : null}
+              {calendar ? <> · <a href={contractIcsPath(kind, d.reference, lang)} class="small" rel="nofollow">{t(lang, "cal.add")}</a></> : null}
+            </> : null} />
+          </dl>
+        </Panel>
+        </div>
 
       <Panel title={t(lang, "tender.procurement")}>
       <dl>

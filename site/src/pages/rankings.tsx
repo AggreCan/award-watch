@@ -107,7 +107,7 @@ export async function rankingsPage(c: Context<AppEnv>): Promise<Response> {
         <Panel title={t(lang, "rankings.buyers", { source: sourceLabel(lang, buyerSource) })}>
           <div class="table-wrap bordered">
             <Table restack={false} class="compact" cols={[
-              { kind: "count", label: t(lang, "col.rank"), class: "c-rank" },
+              { kind: "rank", label: t(lang, "col.rank") },
               { kind: "main", label: t(lang, "col.buyer") },
               { kind: "count", label: t(lang, "col.records"), class: "ph" },
               { kind: "total", label: t(lang, "col.value") },

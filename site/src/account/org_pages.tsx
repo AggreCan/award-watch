@@ -23,7 +23,7 @@ import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, provinceName, segmentLab
 import { PageHead, Panel, todayOf } from "../layout";
 import { csvCell } from "../pages/analytics";
 import { ExpiringNote, ExpiringTable, RADAR_CSV_COLUMNS, contractReference, radarRow } from "../pages/expiring";
-import { expiryText, regionName, typeCodeOf, typeLabel } from "../pages/instruments";
+import { ExpiryLines, regionName, typeCodeOf, typeLabel } from "../pages/instruments";
 import { daysLeft, instrumentPath } from "../instruments";
 import { money } from "../pages/shared";
 import { ProNote, ProTag } from "../pro";
@@ -517,7 +517,7 @@ const InstrumentsBlock: FC<{ lang: Lang; id: string; rows: Row[]; today: string 
                     <td data-label={t(lang, "instruments.col_user")}>
                       {user && h.buyer ? <a href={`/buyers/${h.buyer}`}>{user}</a> : user ?? t(lang, "common.not_stated")}
                     </td>
-                    <td data-label={t(lang, "instruments.col_expiry")} class="mono">{expiryText(lang, h.expiry, today)}</td>
+                    <td data-label={t(lang, "instruments.col_expiry")} class="mono"><ExpiryLines lang={lang} expiry={h.expiry} today={today} /></td>
                   </tr>
                 );
               })}

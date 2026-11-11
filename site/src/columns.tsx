@@ -19,7 +19,11 @@ export const COLUMN_WIDTHS = {
   // SPAC" (186 px of type), on one line; also the watchlist's new records by
   // source.
   tally: 204,
-  count: 96, // a count, a rank, an amendment number
+  count: 96, // a count, an amendment number
+  // A rank: up to three digits under "Rank" or "Rang", beside the 16 px a
+  // first column keeps on its left. At the count's 96 px a ranked list in
+  // half a row gave its names 40 px less and wrapped them.
+  rank: 56,
   comp: 168, // the competition flag, its longest label ("Méthode non précisée") on one line
   amend: 144, // amendments and value growth; with value, the widest table fits 1600 px
   record: 168, // links to the government's own record, "Avis sur AchatsCanada" on one line
@@ -66,7 +70,7 @@ export type Column = { kind: ColumnKind; label: unknown; rest?: Rest; class?: st
 
 // A tally column is a figure's when its table says so (class "num"): the
 // watchlist's new records by source are words.
-const NUMERIC: ReadonlySet<ColumnKind> = new Set<ColumnKind>(["value", "total", "count", "share"]);
+const NUMERIC: ReadonlySet<ColumnKind> = new Set<ColumnKind>(["value", "total", "count", "rank", "share"]);
 
 export function headClass(c: Column): string {
   return [`k-${c.kind}`, NUMERIC.has(c.kind) ? "num" : "", c.rest ? REST_CLASS[c.rest] : "", c.class ?? ""]

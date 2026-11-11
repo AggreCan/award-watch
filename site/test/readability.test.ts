@@ -149,7 +149,9 @@ describe("the lists", () => {
     expect(named).toContain('<meta name="robots" content="noindex"/>');
     const segments = await text("/segments");
     expect(segments).toContain('<a href="/segments?sort=code">By code</a>');
-    expect(segments).toContain('<span class="zero"><span aria-hidden="true">–</span><span class="visually-hidden">0</span></span>');
+    // A zero among the counts is a muted 0, no dash.
+    expect(segments).toContain('<span class="zero">0</span>');
+    expect(segments).not.toContain(String.fromCharCode(0x2013));
   });
 
   it("give the rankings one buyer table, the tab's own, and a year select on a phone", async () => {

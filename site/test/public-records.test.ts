@@ -24,7 +24,7 @@ describe("organization profile", () => {
     expect(page).toContain("Records from 2024-03-04 to 2026-09-15. Business number 000000001.");
     expect(page).toContain("Gatineau, Quebec");
     expect(page).toContain("Records under this name at 2 addresses.");
-    expect(page).toContain("EXEMPLAR TRANSLATION SERVICES INC. <span class=\"mono\">0000001</span>, Active, registered 2009-05-01");
+    expect(page).toContain("EXEMPLAR TRANSLATION SERVICES INC. <span class=\"mono\">0000001</span>, Active, registered <span class=\"nw\">2009-05-01</span>");
     expect(page).toContain("Exact name match");
     // One address: no note about shared names.
     expect(await html("/organizations/org-a000000002")).not.toContain("Records under this name at");

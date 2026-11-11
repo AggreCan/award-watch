@@ -115,6 +115,25 @@ export function expiryText(lang: Lang, expiry: string | null, today: string): st
   return tn(lang, "instruments.days_left_one", "instruments.days_left_many", left, { date: expiry, n: fmtInt(left, lang) });
 }
 
+// The same in a table's 112 px date column: the date, then the days left (or
+// that it has expired) on a muted line under it, as the contracts-ending
+// tables write it. On one line the text ran past the column, cut off at the
+// panel's edge or over the next column. The column sort reads the date
+// alone (public/sort.js stops at the line break).
+export const ExpiryLines: FC<{ lang: Lang; expiry: string | null; today: string }> = ({ lang, expiry, today }) => {
+  const left = expiry ? daysLeft(expiry, today) : null;
+  if (!expiry || left === null) return <>{expiry ?? t(lang, "common.not_stated")}</>;
+  return (
+    <>
+      {expiry}
+      <br />
+      <span class="muted small">
+        {left < 0 ? t(lang, "status.expired") : tn(lang, "expiring.days_left_one", "expiring.days_left_many", left, { n: fmtInt(left, lang) })}
+      </span>
+    </>
+  );
+};
+
 // Pro's file of a view or of an instrument's holders: never while the switch is off.
 export async function instrumentsCsvAllowed(c: Context<AppEnv>): Promise<boolean> {
   if (!accountsEnabled(c.env)) return false;
@@ -217,7 +236,7 @@ const InstrumentsTable: FC<{
               <td data-label={t(lang, "instruments.col_regions")} class="mdh">
                 {r.regions.map((x) => regionName(lang, x, idx.region_names?.[x])).join(", ")}
               </td>
-              <td data-label={t(lang, "instruments.col_expiry")} class="mono">{expiryText(lang, r.expiry, today)}</td>
+              <td data-label={t(lang, "instruments.col_expiry")} class="mono"><ExpiryLines lang={lang} expiry={r.expiry} today={today} /></td>
               <td data-label={t(lang, "instruments.col_holders")} class="mono num">
                 {r.n_holders_withheld
                   ? t(lang, "instruments.holders_withheld", { n: fmtInt(r.n_holders, lang), w: fmtInt(r.n_holders_withheld, lang) })
@@ -665,9 +684,12 @@ export const InstrumentsLine: FC<{ lang: Lang; part: ProfileInstruments | null }
     </p>
   ) : null;
 
+// On a phone the rows restack into labelled blocks, as a record list's do:
+// held as a table, its type, regions and date columns alone were wider than
+// the screen.
 const HeldTable: FC<{ lang: Lang; rows: readonly HeldInstrument[]; lapsed?: boolean; today: string }> = ({ lang, rows, lapsed, today }) => (
   <div class="table-wrap bordered">
-    <Table restack={false} class="compact" cols={[
+    <Table cols={[
       { kind: "main", label: t(lang, "instruments.col_instrument") },
       { kind: "label", label: t(lang, "instruments.col_type"), rest: "md" },
       { kind: "region", label: t(lang, "instruments.col_regions") },
@@ -683,7 +705,7 @@ const HeldTable: FC<{ lang: Lang; rows: readonly HeldInstrument[]; lapsed?: bool
             <td data-label={t(lang, "instruments.col_type")} class="mdh">{typeLabel(lang, r.type, r.type_en, r.type_fr)}</td>
             <td data-label={t(lang, "instruments.col_regions")}>{r.regions.map((x) => regionName(lang, x)).join(", ")}</td>
             <td data-label={t(lang, lapsed ? "org.instruments_lost_on" : "instruments.col_expiry")} class="mono">
-              {lapsed ? r.lost_on ?? "" : expiryText(lang, r.expiry, today)}
+              {lapsed ? r.lost_on ?? "" : <ExpiryLines lang={lang} expiry={r.expiry} today={today} />}
             </td>
           </tr>
         ))}

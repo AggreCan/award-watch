@@ -234,7 +234,8 @@ export async function segmentPage(c: Context<AppEnv>): Promise<Response> {
       {/* Who holds the most active standing offers and supply arrangements carrying the segment (pages/instruments.tsx). */}
       <HoldersPanel lang={lang} part={holdersPart(seg)} kind="segment" filter={`segment=${code}`} />
 
-      <div class="panel-grid">
+      {/* The ranked organizations run longer than the years beside them; both panels end on one line. */}
+      <div class="panel-grid stretch">
       <Panel title={t(lang, "segment.top")}>
       <p class="muted small">
         {t(lang, "segment.top_note")}

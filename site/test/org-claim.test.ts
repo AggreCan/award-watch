@@ -569,8 +569,8 @@ describe("the standing offers and supply arrangements block", () => {
     expect(html).toContain("Alberta, British Columbia");
     expect(html).toContain('<a href="/buyers/pwgsc-tpsgc">Public Services and Procurement Canada</a>');
     expect(html).toContain(">All government departments</td>");
-    expect(html).toContain("2027-06-30 (242 days left)");
-    expect(html).toContain("2028-03-31 (517 days left)");
+    expect(html).toContain('2027-06-30<br/><span class="muted small">242 days left</span>');
+    expect(html).toContain('2028-03-31<br/><span class="muted small">517 days left</span>');
     expect(html).toContain("National Capital Region");
     expect(html).toContain("National (all regions)");
     expect(html).toContain(`the first 3 here, all of them in the CSV file and in <a href="/organizations/${A1}#instruments">its profile's section</a>`);
@@ -613,7 +613,7 @@ describe("the standing offers and supply arrangements block", () => {
     const html = await text(await page(pro, "/account/organization?lang=fr"));
     expect(html).toContain("<h2>Offres à commandes et arrangements en matière d'approvisionnement</h2>");
     expect(html).toContain("Offre à commandes principale régionale");
-    expect(html).toContain("2027-06-30 (242 jours restants)");
+    expect(html).toContain('2027-06-30<br/><span class="muted small">242 jours restants</span>');
     expect(html).toContain(">Tous les ministères</td>");
     expect(html).toContain("Alberta, Colombie-Britannique");
     expect(html).not.toContain("Standing Offers and Supply Arrangements");

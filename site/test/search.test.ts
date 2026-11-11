@@ -234,10 +234,10 @@ describe("/search", () => {
     expect(html.indexOf("Searched: organization names")).toBeGreaterThan(html.indexOf("1 to 6 of 6"));
   });
 
-  it("drops the Lobbying column until the registry is read, and dashes the zeros", async () => {
+  it("drops the Lobbying column until the registry is read, and mutes the zeros", async () => {
     const html = await (await get("/search?q=exemplar")).text();
     expect(html).not.toContain(">Lobbying</th>");
-    expect(html).toContain('<span class="zero"><span aria-hidden="true">–</span><span class="visually-hidden">0</span></span>');
+    expect(html).toContain('<span class="zero">0</span>');
   });
 
   it("counts the open notices the tender list finds for the same words, and links that list", async () => {

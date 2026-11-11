@@ -151,10 +151,10 @@ export function orList(lang: Lang, items: readonly string[]): string {
   return t(lang, "common.list_or", { list: items.slice(0, -1).join(", "), last: items[items.length - 1] });
 }
 
-// A count in a table of many figures: zero is a muted dash, so the figures
-// that are not zero stand out; a screen reader still hears the zero.
+// A count in a table of many figures: zero is a muted 0, so the figures that
+// are not zero stand out. No dash: the site writes no en dash.
 export const Count: FC<{ lang: Lang; n: number | null | undefined }> = ({ lang, n }) =>
-  n ? <>{fmtInt(n, lang)}</> : <span class="zero"><span aria-hidden="true">–</span><span class="visually-hidden">0</span></span>;
+  n ? <>{fmtInt(n, lang)}</> : <span class="zero">{fmtInt(0, lang)}</span>;
 
 // The provinces a record's regions of delivery state, then the ones derived
 // from another field (pipeline places.py), each marked; "Canada-wide or not
@@ -569,7 +569,7 @@ export const AwardTable: FC<{
 export const OrgTotalTable: FC<{ lang: Lang; rows: readonly OrgTotal[]; rank?: boolean }> = ({ lang, rows, rank }) => (
   <div class="table-wrap bordered">
     <Table restack={false} class="compact" cols={[
-      rank && { kind: "count", label: t(lang, "col.rank"), class: "c-rank" },
+      rank && { kind: "rank", label: t(lang, "col.rank") },
       { kind: "main", label: t(lang, "col.organization") },
       { kind: "count", label: t(lang, "col.records"), class: "ph" },
       { kind: "total", label: t(lang, "col.value") },

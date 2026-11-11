@@ -276,7 +276,7 @@ td.num, span.num { font-variant-numeric: tabular-nums; }
 /* A date or a reference never breaks inside itself ("2026-08-" over "29");
    a long address (a feed's, marked .wrap) still wraps. */
 .nw, td a.mono:not(.wrap), td.mono:not(.num):not(.c-date):not(.wrap):not(:has(br, .nw)) { white-space: nowrap; }
-/* Zero among figures: a muted dash, so the figures that are not zero stand out. */
+/* Zero among figures: a muted 0, so the figures that are not zero stand out. */
 .zero { color: var(--muted); }
 .top-gap { margin-top: 16px; }
 .narrow { max-width: 640px; }
@@ -516,11 +516,37 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
 .panel > .table-wrap:not(:last-child):not(:has(+ .panel-foot)) { border-bottom: 1px solid var(--border); }
 .panel-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gutter); align-items: start; margin: 0 0 var(--gutter); }
 .panel-grid:empty { display: none; }
-.panel-grid > .panel { margin: 0; }
+.panel-grid > .panel, .panel-stack > .panel { margin: 0; }
+/* A pair whose panels differ in height by many rows (a segment's ranked
+   organizations beside its years): both as tall as the taller, so the pair
+   ends on one line rather than leave a hole under the shorter. */
+.panel-grid.stretch { align-items: stretch; }
+/* A record page's short panels one under another, as one cell of its grid
+   beside the long one. */
+.panel-stack { display: grid; gap: var(--gutter); align-content: start; min-width: 0; }
 /* Two panels to a row once each can hold a ranked list (rank, name, records
-   and value: 492 px at the least); a lone panel takes the row. */
+   and value: 446 px at the least). A lone panel takes the row, and so does
+   an odd last one, which otherwise sat beside a half row of empty ground. */
 @media (min-width: 1200px) {
   .panel-grid { grid-template-columns: repeat(auto-fit, minmax(max(500px, calc((100% - var(--gutter)) / 2)), 1fr)); }
+  .panel-grid:not(.thirds) > :last-child:nth-child(odd):not(:first-child) { grid-column: 1 / -1; }
+  /* A profile's three short panels (registry, responses, corrections): one
+     row of three, each as tall as the tallest, so they end on one line and
+     their foot links share one. */
+  .panel-grid.thirds { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+  .panel-grid.thirds > .panel { display: flex; flex-direction: column; }
+  .panel-grid.thirds > .panel > .panel-foot { margin-top: auto; }
+  /* In a third of a row a label beside its value had about 80 px at
+     1280 px and broke inside a word ("Corporation" over "s Canada"): the
+     label goes over its value. */
+  .panel-grid.thirds dl { grid-template-columns: minmax(0, 1fr); }
+  .panel-grid.thirds dd { padding-top: 0; border-top: 0; }
+}
+/* Three panels side by side once each ranked list in them keeps a name
+   column of about 190 px (a buyer page with three sources ranked). */
+@media (min-width: 1840px) {
+  .panel-grid:has(> :nth-child(3):last-child) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .panel-grid:has(> :nth-child(3):last-child) > :last-child:nth-child(odd):not(:first-child) { grid-column: auto; }
 }
 .panel-form { max-width: 720px; }
 
@@ -581,6 +607,7 @@ th.num { text-align: right; }
 .k-total { width: 148px; }
 .k-tally { width: 204px; }
 .k-count { width: 96px; }
+.k-rank { width: 56px; }
 .k-comp { width: 168px; }
 .k-amend { width: 144px; }
 .k-record { width: 168px; }
@@ -806,6 +833,20 @@ ul.kv { margin: 0; padding: 0; list-style: none; }
 .kv li:last-child { border-bottom: 0; }
 .kv .num { flex: none; font-weight: 600; white-space: nowrap; }
 .kv-note { display: block; font-size: 12px; line-height: 16px; color: var(--muted); }
+/* A profile's addresses (organization.tsx) in columns across the full
+   width, each about as wide as the half panel the list had: the order runs
+   down the first column and on into the next, a hairline parts the columns,
+   and every row keeps its rule, the last ones over the panel's edge or above
+   the note, so a shorter column does not end without one. */
+@media (min-width: 1200px) {
+  ul.kv-cols { columns: 2; column-gap: 0; column-rule: 1px solid var(--border); }
+  .kv-cols li { break-inside: avoid; }
+  .kv-cols li:last-child { border-bottom: 1px solid var(--border); }
+  ul.kv-cols:last-child { margin-bottom: -1px; }
+}
+@media (min-width: 1600px) {
+  ul.kv-cols { columns: 3; }
+}
 ul.plain { padding: 0; list-style: none; }
 .notes li { margin-bottom: 8px; }
 .prose { max-width: 75ch; }
@@ -1148,7 +1189,7 @@ tr[data-phone-cut] { display: none !important; }
   .compact .k-total { width: 136px; }
   .compact .k-value { width: 128px; }
   .compact .k-tally { width: 120px; }
-  .compact .c-rank { width: 48px; }
+  .compact .k-rank { width: 48px; }
   /* A figure stays on one line: "$13,044,299,191" fits the value column. */
   .compact td.num { white-space: nowrap; }
   .restack tbody tr:hover > td:first-child, .restack tbody tr.is-sel > td:first-child { box-shadow: none; }

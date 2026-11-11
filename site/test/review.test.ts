@@ -11,7 +11,7 @@ import { app } from "../src/index";
 import { homeRequest } from "./home";
 import { bucketFor } from "../src/limits";
 import { filterExpiring, fiscalYearEnd, readExpiringQuery, expiringQueryString, standingOffer } from "../src/pages/expiring";
-import { addressCount, mergedPlaces, placeKey, valueShare } from "../src/pages/organization";
+import { addressCount, mergedPlaces, placeCity, placeKey, valueShare } from "../src/pages/organization";
 import { FILES, makeFakeAssets, testEnv } from "./assets";
 import expiringPage1 from "./fixtures/expiring-3m-1.json";
 import profiles from "./fixtures/profiles-a00.json";
@@ -180,6 +180,39 @@ describe("the addresses on a profile", () => {
     expect(one).not.toContain("Records under this name at");
     const two = await text("/organizations/org-a000000001");
     expect(two).toContain("Records under this name at 2 addresses. Two organizations with the same legal name may share this page");
+  });
+
+  it("are one row when they read the same: a place in Canada with no city, one with no country, and a placeholder city", async () => {
+    // As the export gave them for one profile (2026-11-11): two rows read "Not stated" and one "N/a".
+    const export_ = [
+      { country: "CA", province: null, city: null, n: 3655 },
+      place("Ottawa", "ON", 1682),
+      { country: null, province: null, city: null, n: 10 },
+      { country: "US", province: null, city: null, n: 5 },
+      { country: "CA", province: null, city: "N/a", n: 1 },
+      place("Kingston", "ON", 1),
+    ];
+    expect(placeKey(export_[0])).toBe(placeKey(export_[2]));
+    expect(placeKey(export_[0])).toBe(placeKey(export_[4]));
+    expect(placeKey(export_[3])).not.toBe(placeKey(export_[0]));
+    for (const city of ["N/A", "n/a", "NA", "N.A.", "None", "unknown", "NULL", "Not applicable", "--"]) expect(placeCity(city), city).toBeNull();
+    for (const city of ["Nanaimo", "Ottawa", "Na Ottawa"]) expect(placeCity(city), city).toBe(city);
+    const merged = mergedPlaces(export_);
+    expect(merged.map((p) => [p.country, p.city, p.n])).toEqual([["CA", null, 3666], ["CA", "Ottawa", 1682], ["US", null, 5], ["CA", "Kingston", 1]]);
+    // A placeholder city is no address.
+    expect(addressCount(export_)).toBe(2);
+    const base = (profiles as Record<string, any>)["org-a000000001"] as Profile;
+    const shown = { ...profiles, "org-a000000001": { ...base, places: export_, organization: { ...base.organization, city: "N/A", province: "ON" } } };
+    for (const lang of ["en", "fr"] as const) {
+      const html = nbsp(await text(`/organizations/org-a000000001?lang=${lang}`, withFiles({ "profiles/a00.json": shown })));
+      const list = /<ul class="kv[^"]*">([\s\S]*?)<\/ul>/.exec(html)?.[1] ?? "";
+      const rows = [...list.matchAll(/<li><span>([^<]*)<\/span>/g)].map((m) => m[1]);
+      expect(rows).toEqual(lang === "en"
+        ? ["Not stated", "Ottawa, Ontario", "US", "Kingston, Ontario"]
+        : ["Non indiqué", "Ottawa, Ontario", "US", "Kingston, Ontario"]);
+      // The head's line under the name drops the placeholder too.
+      expect(html).toContain('<p class="lead">Ontario</p>');
+    }
   });
 });
 

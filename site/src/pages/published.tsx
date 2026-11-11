@@ -198,7 +198,10 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
         <WatchControl lang={lang} state={watch} kind="contract" target={`contract:${dept}:${ref}`} primary />
       </PageHead>
 
+      {/* As on an award notice's page (contract.tsx): the three short panels one under another on the left, the
+          procurement details on the right, one column below about 1336 px in the same order. */}
       <div class="panel-grid">
+        <div class="panel-stack">
         <Panel title={t(lang, "contract.parties")}>
           <dl>
             <Item lang={lang} k="contract.supplier" v={supplier} />
@@ -215,9 +218,6 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
           </dl>
           <p class="muted small">{tj(lang, "published.value_note", { rules: <a href="/methodology#counting">{t(lang, "expiring.rules_link")}</a> })}</p>
         </Panel>
-      </div>
-
-      <div class="panel-grid">
         <Panel title={t(lang, "tender.dates")}>
           <dl>
             <Item lang={lang} k="published.contract_date" v={str(d.cdate)} />
@@ -233,6 +233,7 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
           </dl>
           {end && !window && versions.length > 1 ? <p class="muted small">{t(lang, "published.window_newest")}</p> : null}
         </Panel>
+        </div>
         <Panel title={t(lang, "tender.procurement")}>
           <dl>
             <Item lang={lang} k="published.procedure" v={coded(lang, str(d.proc), PROCEDURE)} />

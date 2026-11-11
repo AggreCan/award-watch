@@ -385,7 +385,7 @@ const ShareLines: FC<{ lang: Lang; frame: Frame; panels: { title: string; values
 const RankTable: FC<{ lang: Lang; head: string; rows: { label: unknown; n: number; cents: unknown; share: string }[] }> = ({ lang, head, rows }) => (
   <div class="table-wrap">
     <Table cols={[
-      { kind: "count", label: t(lang, "analytics.col_rank") },
+      { kind: "rank", label: t(lang, "analytics.col_rank") },
       { kind: "main", label: head },
       { kind: "count", label: t(lang, "col.records") },
       { kind: "total", label: t(lang, "col.value") },
@@ -551,7 +551,7 @@ const RecordsPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: "organiza
       {rows.length ? (
         <div class="table-wrap">
           <Table cols={[
-            { kind: "count", label: t(lang, "analytics.col_rank") },
+            { kind: "rank", label: t(lang, "analytics.col_rank") },
             { kind: "main", label: t(lang, "col.record") },
             org && { kind: "org", label: t(lang, "col.organization") },
             buyer && { kind: "buyer", label: t(lang, "col.buyer"), rest: org ? "md" : undefined },

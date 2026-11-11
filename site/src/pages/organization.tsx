@@ -200,23 +200,41 @@ export function valueShare(lang: Lang, y: YearFigure): string {
 
 type Place = Profile["places"][number];
 
-// A place as the records spell it, reduced so trivial variants match: case,
+const foldPlace = (s: string | null) => (s ?? "").normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
+
+// What a source writes in the city field for no city ("N/A", "None",
+// "Unknown"; the pipeline's placeholder names, matching.py), folded as
+// placeKey folds a city. Such a city is shown and counted as none: the
+// export keeps it as a place of its own, and it read as an address.
+const PLACEHOLDER_CITIES: ReadonlySet<string> = new Set(["n a", "na", "none", "null", "unknown", "nil", "not applicable"]);
+
+export function placeCity(city: string | null): string | null {
+  if (!city) return null;
+  const folded = foldPlace(city).replace(/[^a-z]+/g, " ").trim();
+  return folded && !PLACEHOLDER_CITIES.has(folded) ? city : null;
+}
+
+// A place as the list shows it, reduced so trivial variants match: case,
 // accents and punctuation folded ("Pointe-Claire" and "pointe claire"), a
 // postal code run into the city dropped ("Toronto2C4"), and a province
 // written after the city left out ("Markham Ontario", "Markham, Ontario",
-// "Markham ON" with Ontario as the province).
+// "Markham ON" with Ontario as the province). The key holds only what
+// placeText shows, so two places that read the same are one row: Canada is
+// not shown, so a place in Canada with no city or province and a place with
+// nothing but a postal code both read "Not stated" and share a key.
 export function placeKey(p: Pick<Place, "country" | "province" | "city">): string {
-  const fold = (s: string | null) => (s ?? "").normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
-  let city = fold(p.city).replace(/[0-9].*$/, "").replace(/[^a-z]+/g, " ").trim();
-  const province = (p.province ?? "").toUpperCase();
+  let city = foldPlace(placeCity(p.city)).replace(/[0-9].*$/, "").replace(/[^a-z]+/g, " ").trim();
+  const code = (p.province ?? "").toUpperCase();
+  const province = (PROVINCES as readonly string[]).includes(code) ? code : "";
+  const country = (p.country ?? "").toUpperCase();
   if (province) {
-    const names = [province.toLowerCase(), fold(provinceName("en", province)), fold(provinceName("fr", province))]
+    const names = [province.toLowerCase(), foldPlace(provinceName("en", province)), foldPlace(provinceName("fr", province))]
       .map((s) => s.replace(/[^a-z]+/g, " ").trim()).filter(Boolean);
     for (const name of names) {
       if (city !== name && city.endsWith(` ${name}`)) city = city.slice(0, -name.length - 1).trim();
     }
   }
-  return `${(p.country ?? "").toUpperCase()}|${province}|${city}`;
+  return `${country === "CA" ? "" : country}|${province}|${city}`;
 }
 
 // The places with their variants merged: one row per key, counted together,
@@ -231,6 +249,11 @@ export function mergedPlaces(places: readonly Place[]): Place[] {
   }
   return [...byKey.values()].sort((a, b) => b.n - a.n);
 }
+
+// From this many places the list runs in columns on a wide screen. Fewer
+// stay one under another: a single row in half the panel read as a column
+// left empty.
+export const PLACES_IN_COLUMNS = 3;
 
 // How many addresses the note counts: the distinct places that name a city
 // (a country or province alone could be any of them), plus the places past
@@ -249,7 +272,7 @@ export function directoryName(lang: Lang, code: string): string {
 function placeText(lang: Lang, p: { country: string | null; province: string | null; city: string | null }): string {
   const prov = p.province && (PROVINCES as readonly string[]).includes(p.province) ? provinceName(lang, p.province) : null;
   const country = p.country && p.country !== "CA" ? p.country : null;
-  return [p.city, prov, country].filter(Boolean).join(", ") || t(lang, "common.not_stated");
+  return [placeCity(p.city), prov, country].filter(Boolean).join(", ") || t(lang, "common.not_stated");
 }
 
 // The seed's words for a member's tie to its family; another word, or none,
@@ -650,15 +673,23 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
 
       <InterestPanel lang={lang} filter={interest} />
 
-      <div class="panel-grid">
-        <Panel title={t(lang, "org.places")}>
-          {places.length ? (
-            <ul class="kv">
-              {places.map((p) => <li><span>{placeText(lang, p)}</span> <span class="num muted">{tn(lang, "org.rows_one", "org.rows_many", p.n, { n: n(p.n) })}</span></li>)}
-            </ul>
-          ) : <p class="muted">{t(lang, "common.not_stated")}</p>}
-          {placeCount > 1 ? <p class="muted small">{t(lang, "org.places_note", { n: n(placeCount) })}</p> : null}
-        </Panel>
+      {/* The whole width: the list grows with the profile (one to ten places) where the panels after it
+          hardly do, so beside one of them it left a hole on the largest profiles. From 1200 px its rows run
+          down two columns (three from 1600 px), each as wide as half the old pair (styles.css .kv-cols). */}
+      <Panel title={t(lang, "org.places")}>
+        {places.length ? (
+          <ul class={places.length >= PLACES_IN_COLUMNS ? "kv kv-cols" : "kv"}>
+            {places.map((p) => <li><span>{placeText(lang, p)}</span> <span class="num muted">{tn(lang, "org.rows_one", "org.rows_many", p.n, { n: n(p.n) })}</span></li>)}
+          </ul>
+        ) : <p class="muted">{t(lang, "common.not_stated")}</p>}
+        {placeCount > 1 ? <p class="muted small">{t(lang, "org.places_note", { n: n(placeCount) })}</p> : null}
+      </Panel>
+
+      {/* Only when the export places the profile in a family; an older export has no such field. */}
+      <FamilyPanel lang={lang} family={profileFamily(profile)} self={o.id} />
+
+      {/* Three short panels in one row from 1200 px, as tall as the tallest, so they end on one line. */}
+      <div class="panel-grid thirds">
         <Panel title={t(lang, "org.registry")}>
           {profile.registry.length ? (
             <dl>
@@ -668,7 +699,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
                   <dd>
                     {r.legal_name ?? ""} <span class="mono">{r.registry_id}</span>
                     {r.status ? `, ${r.status}` : ""}
-                    {r.registered_on ? `, ${t(lang, "registry.registered", { date: r.registered_on })}` : ""}
+                    {/* The date never breaks inside itself ("2026-10-" over "01") in the third of a row. */}
+                    {r.registered_on ? <>{", "}{tj(lang, "registry.registered", { date: <span class="nw">{r.registered_on}</span> })}</> : ""}
                     <br />
                     <span class="muted small">{GRADE[r.grade] ? t(lang, GRADE[r.grade]) : r.grade}</span>
                     {REGISTRY_URL[r.registry] ? <> <a class="small" href={REGISTRY_URL[r.registry]}>{t(lang, "registry.search")}</a></> : null}
@@ -678,12 +710,6 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
             </dl>
           ) : <p class="muted">{t(lang, registryRead ? "registry.none" : "common.not_loaded")}</p>}
         </Panel>
-      </div>
-
-      {/* Only when the export places the profile in a family; an older export has no such field. */}
-      <FamilyPanel lang={lang} family={profileFamily(profile)} self={o.id} />
-
-      <div class="panel-grid">
         <Panel id="responses" title={t(lang, "org.responses")} foot={<a href={`/organizations/${o.id}/respond`}>{t(lang, "org.respond")}</a>}>
           {responses.length ? (
             <ul class="statement-list">

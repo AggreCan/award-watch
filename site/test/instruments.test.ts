@@ -160,7 +160,8 @@ describe("the list of standing offers and supply arrangements", () => {
     // The type in the site's words, the regions by name, the days left, the persons withheld counted.
     expect(html).toContain("Regional master standing offer");
     expect(html).toContain("Alberta, British Columbia");
-    expect(html).toContain("2026-12-31 (61 days left)");
+    // The days left on a line of their own under the date, inside the 112 px column.
+    expect(html).toContain('<td data-label="Expires" class="mono">2026-12-31<br/><span class="muted small">61 days left</span></td>');
     expect(html).toContain("3, 1 withheld");
     expect(html).toContain('<a href="/buyers/pwgsc-tpsgc">Public Services and Procurement Canada</a>');
     expect(html).toContain("the radar of contracts ending leaves them out");
@@ -297,8 +298,14 @@ describe("the other pages", () => {
     const section = html.slice(html.indexOf('<h2 id="instruments">'));
     expect(order(section, [NMSO, RMSO, "<h3>No Longer Held</h3>", SA]).every((x, i, a) => x >= 0 && (i === 0 || x > a[i - 1]))).toBe(true);
     expect(section).toContain("2026-10-23");
+    // The days left on a muted line under the date, so the cell keeps to its 112 px column; on a phone the rows restack.
+    const held = section.slice(0, section.indexOf("<h3>No Longer Held</h3>"));
+    expect(held).toMatch(/<td data-label="Expires" class="mono">\d{4}-\d{2}-\d{2}<br\/><span class="muted small">[\d,]+ days? left<\/span><\/td>/);
+    expect(held).not.toContain("days left)");
+    expect(held).toContain('<table class="restack cols"');
     const fr = (await page(`/organizations/${A1}?lang=fr`)).html;
     expect(fr).toContain("Détient 2 offres à commandes ou arrangements en matière d’approvisionnement actifs");
+    expect(fr).toMatch(/<td data-label="Expiration" class="mono">\d{4}-\d{2}-\d{2}<br\/><span class="muted small">[\d\u00a0\u202f]+ jours? restants?<\/span><\/td>/);
     // A profile with none, and a file written before them, have neither.
     const none = (await page(`/organizations/${A2}`)).html;
     expect(none).not.toContain('href="#instruments"');
