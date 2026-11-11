@@ -231,12 +231,22 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
           <a href={`/tenders?buyer=${b.buyer.id}`} class="btn btn-primary">
             {tn(lang, "buyer.open_one", "buyer.open_many", b.open_tenders, { n: n(b.open_tenders) })}
           </a>
-          {FEED_BUTTON.map(([event, key]) => {
-            const f = feed(event);
-            return f ? <a href={`/data/${f.path}`} class="btn">{t(lang, key)}</a> : null;
-          })}
           <AnalyticsLink lang={lang} href={`/buyers/${b.buyer.id}/analytics`} on={accountsEnabled(c.env)} />
           <a href={`/buyers/${b.buyer.id}/records`} class="btn" rel="nofollow">{t(lang, "records.link")}</a>
+          {/* The buyer's feeds, after the reader's own actions. Their three long buttons stood between the name and
+              the first figure on a phone, so they fold behind one button there, as a profile's upkeep does
+              (public/pager.js closes the fold below 700 px; wider screens never see its button). */}
+          {FEED_BUTTON.some(([event]) => feed(event)) ? (
+            <details class="phone-fold actions-fold" open data-phone-closed="">
+              <summary class="btn">{t(lang, "nav.feeds")}</summary>
+              <div class="actions-more">
+                {FEED_BUTTON.map(([event, key]) => {
+                  const f = feed(event);
+                  return f ? <a href={`/data/${f.path}`} class="btn">{t(lang, key)}</a> : null;
+                })}
+              </div>
+            </details>
+          ) : null}
         </>}>
         {span ? <p class="page-note">{t(lang, "buyer.seen", { first: String(span.first), last: String(span.last) })}</p> : null}
         <WatchControl lang={lang} state={watch} kind="buyer" target={b.buyer.id} />

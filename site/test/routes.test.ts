@@ -482,6 +482,14 @@ describe("buyers, segments and rankings", () => {
     expect(index).toContain('<a href="/tenders?buyer=pwgsc-tpsgc">1</a>');
     const one = await text("/buyers/pwgsc-tpsgc");
     expect(one).toContain('<a href="/tenders?buyer=pwgsc-tpsgc" class="btn btn-primary">1 open notice</a>');
+    // The buyer's feeds come after the reader's own actions, in a fold a phone starts closed (public/pager.js).
+    const row = one.slice(one.indexOf('<div class="page-actions">'));
+    const fold = '<details class="phone-fold actions-fold" open="" data-phone-closed=""><summary class="btn">Feeds</summary><div class="actions-more">';
+    expect(row.indexOf(fold)).toBeGreaterThan(row.indexOf(">Record table</a>"));
+    const folded = row.slice(row.indexOf(fold), row.indexOf("</details>"));
+    expect([...folded.matchAll(/<a href="\/data\/feeds\/[^"]+\.xml" class="btn">/g)].length).toBeGreaterThan(0);
+    expect(row.slice(0, row.indexOf(fold))).not.toContain("/data/feeds/");
+    expect(one.match(/<script src="\/pager\.js" defer=""><\/script>/g)).toHaveLength(1);
     expect(one).toContain("Largest Values: Award notices");
     expect(one).toContain('<a href="/organizations/org-a000000002">Sample Harbour Marine Ltd.</a>');
     expect(one).toContain('href="https://open.canada.ca/data/en/organization/pwgsc-tpsgc"');
