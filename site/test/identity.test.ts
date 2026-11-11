@@ -215,6 +215,23 @@ describe("a contract's page", () => {
   });
 });
 
+describe("a chart's gradients", () => {
+  it("are the panel's own, numbered on the page so its markup is the same on every render, with the plain colour to fall back on", async () => {
+    const path = "/buyers/pwgsc-tpsgc";
+    const first = await (await get(path)).text();
+    expect(await (await get(path)).text()).toBe(first);
+    const ids = [...first.matchAll(/<linearGradient id="([^"]+)"/g)].map((m) => m[1]);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) expect(id).toMatch(/^c[fw]-\d+-\d+$/);
+    // Every gradient a mark names is defined in the page, and every bar that fades names the flat colour after it.
+    const used = [...first.matchAll(/style="fill:url\(#([^)]+)\) var\(--chart-(?:bar|wash)\)"/g)].map((m) => m[1]);
+    expect(used.length).toBeGreaterThan(0);
+    for (const id of used) expect(ids).toContain(id);
+    expect(first).not.toMatch(/<path class="bar bar-light" style=/);
+  });
+});
+
 describe("on a phone", () => {
   it("the page comes before the rail and the footer after both, by order alone", () => {
     const at = STYLES.indexOf("/* -- phones: one column");
@@ -270,6 +287,13 @@ describe("the charts' marks", () => {
     expect(decl(rule(".chart-plot .bar")?.body, "fill")).toBe("var(--chart-bar)");
     expect(decl(rule(".chart-plot .bar-light")?.body, "fill")).toBe("var(--chart-bar-light)");
     expect(decl(rule(".chart-plot .area")?.body, "fill")).toBe("var(--chart-wash)");
+    // The fade: a bar full at its data end and lighter at its foot, a wash that ends at nothing; one hue throughout.
+    for (const stop of [".chart-plot .fade-top", ".chart-plot .fade-foot", ".chart-plot .wash-top", ".chart-plot .wash-foot"]) {
+      expect(decl(rule(stop)?.body, "stop-color"), stop).toBe("var(--chart-bar)");
+    }
+    expect(decl(rule(".chart-plot .fade-top")?.body, "stop-opacity")).toBeUndefined();
+    expect(Number(decl(rule(".chart-plot .fade-foot")?.body, "stop-opacity"))).toBeGreaterThanOrEqual(0.6);
+    expect(decl(rule(".chart-plot .wash-foot")?.body, "stop-opacity")).toBe("0");
     const line = rule(".chart-plot .line")?.body;
     expect([decl(line, "stroke"), decl(line, "stroke-width")]).toEqual(["var(--chart-bar)", "2"]);
     const dot = rule(".chart-plot .dot")?.body;

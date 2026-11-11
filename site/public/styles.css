@@ -962,6 +962,13 @@ tr[data-phone-cut] { display: none !important; }
 .chart-plot .bar-light { fill: var(--chart-bar-light); }
 .chart-plot .mark { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 4 3; }
 .chart-plot .area { fill: var(--chart-wash); }
+/* The marks' fade (chart.tsx): a bar full at its data end and lighter toward
+   its foot, a line's wash from the line down to nothing at the baseline. The
+   stops alone set the colour and the strength, so both themes follow. */
+.chart-plot .fade-top { stop-color: var(--chart-bar); }
+.chart-plot .fade-foot { stop-color: var(--chart-bar); stop-opacity: 0.68; }
+.chart-plot .wash-top { stop-color: var(--chart-bar); stop-opacity: 0.26; }
+.chart-plot .wash-foot { stop-color: var(--chart-bar); stop-opacity: 0; }
 .chart-plot .line { fill: none; stroke: var(--chart-bar); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 /* A dot is 8 px across on a 12 px ring of the panel's colour; past a
    line's first points the dots wait unseen for the pointer (chart.tsx). */
@@ -1032,7 +1039,7 @@ tr[data-phone-cut] { display: none !important; }
 /* The mark the tip is about, in the ink step past the chart's hue (darker in
    light, lighter in dark): a bar or a ranked bar filled, a point larger, a
    province edged as on hover. */
-.chart-plot .bar.tip-on, .chart-plot .bar:hover { fill: var(--chart-on); }
+.chart-plot .bar.tip-on, .chart-plot .bar:hover { fill: var(--chart-on) !important; }
 .chart-plot .bar-light.tip-on, .chart-plot .bar-light:hover { fill: var(--chart-bar); }
 .chart-plot .dot.tip-on, .chart-plot .dot:hover { stroke: var(--chart-on); stroke-width: 10; }
 .rank-bars li.tip-on .rank-bar, .rank-bars li:hover .rank-bar { background: var(--chart-on); }

@@ -40,6 +40,19 @@ const PLOT_PX = 900;
 const BAR_MAX_PX = 22;
 const BAR_SHARE = 0.6;
 const BAR_RADIUS_PX = 4;
+// The marks fade a little (operator, 2026-11-11: the subtle of two versions):
+// a bar is full at its data end, where its value is read, and lighter toward
+// its foot; a line's wash fades from the line to nothing at the baseline.
+// Each is a gradient over the mark's own box, so a short bar is a tall one in
+// miniature and the fade never says a value twice. The stops take their
+// colour and strength from the stylesheet (.fade-*, .wash-*), so both themes
+// follow; a mark names its gradient with the plain colour after it, which a
+// browser that cannot resolve the gradient draws instead.
+const fadeId = (chart: number, panel: number) => `cf-${chart}-${panel}`;
+const washId = (chart: number, panel: number) => `cw-${chart}-${panel}`;
+const gradient = (id: string, top: string, foot: string) =>
+  `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="${top}"/><stop offset="1" class="${foot}"/></linearGradient>`;
+
 // A line of more points than this keeps a dot on its last point only; the
 // others stay as marks for the pointer and the keys, unseen until one is on
 // them, so a long line reads as a line.
@@ -251,10 +264,17 @@ export function esc(s: string): string {
 // building costs a fraction of rendering each element through JSX.
 function marks(
   p: Panel, ticks: number[], top: number, grid: number[], markers: Marker[], sx: (x: number) => number, gap: number, height: number,
+  ids: { fade: string; wash: string },
 ): string {
   const sy = (v: number) => H - (v / top) * H;
   const ns = ' vector-effect="non-scaling-stroke"';
   let out = "";
+  // The gradients this panel's marks use, and no others.
+  const fades = (p.bars ?? []).some((b) => b.value > 0 && !b.light);
+  const washes = (p.line ?? []).length > 1;
+  if (fades || washes) {
+    out += `<defs>${fades ? gradient(ids.fade, "fade-top", "fade-foot") : ""}${washes ? gradient(ids.wash, "wash-top", "wash-foot") : ""}</defs>`;
+  }
   for (const v of ticks.slice(1)) out += `<line class="grid" x1="0" x2="${W}" y1="${f(sy(v))}" y2="${f(sy(v))}"${ns}/>`;
   for (const x of grid) out += `<line class="grid grid-x" x1="${f(sx(x))}" x2="${f(sx(x))}" y1="0" y2="${H}"${ns}/>`;
   for (const b of p.bars ?? []) {
@@ -270,7 +290,10 @@ function marks(
     const ry = Math.min((BAR_RADIUS_PX * H) / height, H - y);
     const d = `M${f(x0)} ${H} L${f(x0)} ${f(y + ry)} A${f(rx)} ${f(ry)} 0 0 1 ${f(x0 + rx)} ${f(y)} ` +
       `L${f(x1 - rx)} ${f(y)} A${f(rx)} ${f(ry)} 0 0 1 ${f(x1)} ${f(y + ry)} L${f(x1)} ${H} Z`;
-    out += `<path class="${b.light ? "bar bar-light" : "bar"}" d="${d}"><title>${esc(b.title)}</title></path>`;
+    // A partial period's bar stays the flat pale step: it is a different kind of mark, and a fade on it would read as a third.
+    out += b.light
+      ? `<path class="bar bar-light" d="${d}"><title>${esc(b.title)}</title></path>`
+      : `<path class="bar" style="fill:url(#${ids.fade}) var(--chart-bar)" d="${d}"><title>${esc(b.title)}</title></path>`;
   }
   for (const m of markers) out += `<line class="mark" x1="${f(sx(m.x))}" x2="${f(sx(m.x))}" y1="0" y2="${H}"${ns}/>`;
   if (p.rule !== undefined && p.rule >= 0 && p.rule <= top) {
@@ -280,7 +303,7 @@ function marks(
   if (line.length > 1) {
     const points = line.map((pt) => `${f(sx(pt.x))},${f(sy(pt.value))}`);
     // A wash of the line's own colour down to the baseline, under the line.
-    out += `<path class="area" d="M${f(sx(line[0].x))} ${H} L${points.map((pt) => pt.replace(",", " ")).join(" L")} ` +
+    out += `<path class="area" style="fill:url(#${ids.wash}) var(--chart-wash)" d="M${f(sx(line[0].x))} ${H} L${points.map((pt) => pt.replace(",", " ")).join(" L")} ` +
       `L${f(sx(line[line.length - 1].x))} ${H} Z"/>`;
     out += `<polyline class="line" points="${points.join(" ")}"${ns}/>`;
   }
@@ -319,6 +342,9 @@ export const ChartStack: FC<{
   floor?: number;
 }> = ({ domain, panels, height, xLabels, grid = [], markers = [], fmt, aria, shared, gap: barGapUnits, floor = 0 }) => {
   useTips();
+  // This stack's number on the page, for its gradients' ids (0 where no page keeps count).
+  const use = useContext(TableUseContext);
+  const chart = use ? (use.charts = (use.charts ?? 0) + 1) : 0;
   const span = domain[1] - domain[0];
   const sx = (x: number) => ((x - domain[0]) / span) * W;
   const pct = (x: number) => ((x - domain[0]) / span) * 100;
@@ -374,7 +400,7 @@ export const ChartStack: FC<{
               </div>
               <div class="chart-plot" style={`height:${height}px`}>
                 <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${p.title}. ${aria}`} focusable="false"
-                  data-tip="keys">{raw(marks(p, ticks, top, grid, markers, sx, gap, height))}</svg>
+                  data-tip="keys">{raw(marks(p, ticks, top, grid, markers, sx, gap, height, { fade: fadeId(chart, i), wash: washId(chart, i) }))}</svg>
               </div>
             </div>
           </>

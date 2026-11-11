@@ -172,7 +172,7 @@ describe("the pages", () => {
     expect(titles).toContain("Published contracts, 2026\n$1,100,000\n60 records");
     expect(titles).toContain("Award notices, 2026\n$250,000\n1 record");
     // A bar is a path from the baseline up, its data end rounded by two arcs, its foot square on the baseline.
-    expect(page).toMatch(/<path class="bar" d="M[\d.]+ 100 L[\d.]+ [\d.]+ A[\d.]+ [\d.]+ 0 0 1 [\d.]+ [\d.]+ L[\d.]+ [\d.]+ A[\d.]+ [\d.]+ 0 0 1 [\d.]+ [\d.]+ L[\d.]+ 100 Z"><title>PSPC contract history, 2024\n\$4,512,346\n15 records<\/title><\/path>/);
+    expect(page).toMatch(/<path class="bar" style="fill:url\(#cf-1-\d+\) var\(--chart-bar\)" d="M[\d.]+ 100 L[\d.]+ [\d.]+ A[\d.]+ [\d.]+ 0 0 1 [\d.]+ [\d.]+ L[\d.]+ [\d.]+ A[\d.]+ [\d.]+ 0 0 1 [\d.]+ [\d.]+ L[\d.]+ 100 Z"><title>PSPC contract history, 2024\n\$4,512,346\n15 records<\/title><\/path>/);
     for (const t of titles) expect(t, t).not.toMatch(/\d[MB]\b|M\$|G\$/);
     expect(page).toContain('<span class="tile-label">PSPC contract history</span><span class="tile-value" title="$4,513,158" data-tip="">$4.5M</span>');
     expect(page).toContain('<span class="tile-value" title="$1,875,000" data-tip="">$1.9M</span>');
@@ -245,7 +245,7 @@ describe("the pages", () => {
     expect(rule).not.toMatch(/display:|box-shadow|#[0-9a-f]{3,6}/);
     expect(STYLES).toContain("\n.tip-head { display: block; color: var(--muted); }");
     expect(STYLES).toContain("\n.tip-main { font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ink); }");
-    expect(STYLES).toContain("\n.chart-plot .bar.tip-on, .chart-plot .bar:hover { fill: var(--chart-on); }");
+    expect(STYLES).toContain("\n.chart-plot .bar.tip-on, .chart-plot .bar:hover { fill: var(--chart-on) !important; }");
     expect(STYLES).toContain("\n.cmap-svg use.tip-on { stroke: var(--ink); stroke-width: 2.5; }");
   });
 });

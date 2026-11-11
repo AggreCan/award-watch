@@ -138,7 +138,9 @@ export function headSort(orders: SortOrders, current: string, column: string, hr
 // then loads public/sort.js and its words after the content (src/layout.tsx);
 // and whether the page draws a tip (a chart, the home map or a short-form
 // figure, src/chart.tsx useTips), for which it loads public/tooltip.js.
-export type TableUse = { sortable: boolean; tips?: boolean };
+// charts counts the page's chart stacks (src/chart.tsx), so each one's gradients
+// get ids of their own that are the same on every render of the page.
+export type TableUse = { sortable: boolean; tips?: boolean; charts?: number };
 export const TableUseContext = createContext<TableUse | null>(null);
 
 // For a page whose sortable table a client script draws after load (the
