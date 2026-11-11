@@ -60,8 +60,8 @@ CAP = 20_000
 TIMEOUT = 30
 RETRY_S = 10.0
 # The pages whose content follows the nightly data. "/" is the home page.
-FIXED_PAGES: tuple[str, ...] = ("/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers",
-                                "/segments", "/rankings")
+FIXED_PAGES: tuple[str, ...] = ("/", "/overview", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations",
+                                "/buyers", "/segments", "/rankings")
 
 ACCEPTED = (200, 202)
 # 400 bad request, 403 key not valid, 422 URLs not on the host or a key that

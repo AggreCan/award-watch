@@ -184,11 +184,14 @@ def live_version(text: str) -> str | None:
 
 # -- smoke test ---------------------------------------------------------------
 
-SMOKE_PAGES = ("/", "/tenders", "/data")
+# "/overview" is the day's overview every reader gets (the home page before
+# the landing page took "/" for a reader without a session): the one page
+# that reads the counts, the map and the day's lists together.
+SMOKE_PAGES = ("/", "/overview", "/tenders", "/data")
 # Pages that print the data date (the layout's "Data as of"; on "/", which a
 # check without a session gets as the landing page, its figures' "Counted on"
 # line); the deploy carried tonight's export only if they show it.
-DATED_PAGES = {"/", "/data"}
+DATED_PAGES = {"/", "/overview", "/data"}
 SMOKE_RETRY_S = 30.0
 # A new version reaches every edge location within seconds of the deploy.
 SMOKE_SETTLE_S = 20.0

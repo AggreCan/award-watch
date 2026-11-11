@@ -176,7 +176,7 @@ def test_live_version_command(tmp_path, monkeypatch):
 
 BASE = "https://awardwatch.example"
 DATA_DATE = "2026-10-22"
-PATHS = ["/", "/tenders", "/data", "/organizations/org-a000000005"]
+PATHS = ["/", "/overview", "/tenders", "/data", "/organizations/org-a000000005"]
 
 
 def page(date_text=DATA_DATE, status=200, headers=None):
@@ -210,7 +210,7 @@ def test_a_page_answering_5xx_twice_is_broken():
     assert result["detail"] == "/tenders answered 500 and 502"
     # The second try waits 30 seconds and asks again only for the page that failed.
     assert waits == [20, 30]
-    assert [u for u, _ in http.calls].count(BASE + "/tenders") == 2 and len(http.calls) == 5
+    assert [u for u, _ in http.calls].count(BASE + "/tenders") == 2 and len(http.calls) == len(PATHS) + 1
 
 
 def test_a_5xx_that_recovers_is_ok():
@@ -251,10 +251,10 @@ def test_a_missing_data_date_or_a_strange_answer_is_unverifiable():
 def test_smoke_paths_take_one_well_formed_organization_from_stats():
     stats = {"top_organizations_year": [{"id": "../../admin"}, {"id": "org-A000000005"}, {"id": "org-a000000005"},
                                         {"id": "org-b"}]}
-    assert resilience.smoke_paths(stats) == ["/", "/tenders", "/data", "/organizations/org-a000000005"]
-    assert resilience.smoke_paths(None) == ["/", "/tenders", "/data"]
-    assert resilience.smoke_paths({"top_organizations_year": "x"}) == ["/", "/tenders", "/data"]
-    assert resilience.smoke_paths({"top_organizations_year": []}) == ["/", "/tenders", "/data"]
+    assert resilience.smoke_paths(stats) == ["/", "/overview", "/tenders", "/data", "/organizations/org-a000000005"]
+    assert resilience.smoke_paths(None) == ["/", "/overview", "/tenders", "/data"]
+    assert resilience.smoke_paths({"top_organizations_year": "x"}) == ["/", "/overview", "/tenders", "/data"]
+    assert resilience.smoke_paths({"top_organizations_year": []}) == ["/", "/overview", "/tenders", "/data"]
 
 
 def test_smoke_command_writes_the_verdict(tmp_path, monkeypatch):
@@ -269,7 +269,7 @@ def test_smoke_command_writes_the_verdict(tmp_path, monkeypatch):
     assert nightly.main(["smoke", "--base-url", BASE, "--stats", str(stats), "--out", str(out), "--settle", "0"]) == 1
     assert gh.read_text() == "verdict=broken\n"
     written = json.loads(out.read_text())
-    assert written["verdict"] == "broken" and written["data_date"] == DATA_DATE and len(written["pages"]) == 4
+    assert written["verdict"] == "broken" and written["data_date"] == DATA_DATE and len(written["pages"]) == len(PATHS)
     http2 = site()
     monkeypatch.setattr(nightly, "_session", lambda: http2)
     assert nightly.main(["smoke", "--base-url", BASE, "--data-date", DATA_DATE, "--stats", str(stats),

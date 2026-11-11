@@ -29,6 +29,7 @@ Downloads are limited to ten per minute per address.
 
 ## Pages worth reading
 
+- https://awardwatch.ca/overview: the day at a glance: open tender notices by province, the notices new today and closing soon, the newest awards, and the contracts ending within 3 months
 - https://awardwatch.ca/methodology: how organizations and buyers are merged and how money is counted, source by source
 - https://awardwatch.ca/tenders: the open tender notices
 - https://awardwatch.ca/organizations: every organization A to Z by province
