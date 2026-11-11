@@ -20,7 +20,8 @@ CLAUDE.md "Expiring-contracts radar" is the rule; this module follows it:
   same contract would otherwise pass twice. Rows of one source are never
   dropped against each other. A published contract's contract numbers are its
   procurement_id and its reference number. Each pair collapsed is listed in
-  data/out/review/expiring-duplicates.txt for the operator.
+  data/out/review/expiring-duplicates.txt for the operator, and kept in
+  expiring_twins for the holder's record (lines.py).
 * client_buyer_id and client_buyer_name(_fr) name the client department: the
   department of a published contract dropped against the row, else the
   client of a history record dropped against it, else the row's own (a
@@ -479,10 +480,15 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
                    client_buyer_id=cid, client_buyer_name=cen, client_buyer_name_fr=cfr,
                    indigenous=marks[c.source_key], computed_at=stamp)
         rows.append(tuple(row[k] for k in COLUMNS))
+    # The pairs the duplicate rule collapsed, kept row first: the holder's
+    # record (lines.py) counts a kept row in each source that holds it.
+    twins = sorted({(p.kept.source_key, p.dropped.source_key, p.trigger) for p in pairs})
     try:
         conn.execute("DELETE FROM expiring_contracts")
         conn.executemany(f"INSERT INTO expiring_contracts ({', '.join(COLUMNS)}) VALUES ({', '.join('?' * len(COLUMNS))})",
                          rows)
+        conn.execute("DELETE FROM expiring_twins")
+        conn.executemany("INSERT OR IGNORE INTO expiring_twins (source_key, twin_key, trigger) VALUES (?, ?, ?)", twins)
         conn.commit()
     except BaseException:
         conn.rollback()

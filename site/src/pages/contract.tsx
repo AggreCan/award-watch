@@ -14,7 +14,9 @@ import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, provinceName, segmentLabel, statusLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { contractSeo } from "../seo";
+import { lineKey } from "../lines";
 import { windowOf } from "./expiring";
+import { HolderPanel, holderOfNotice } from "./holders";
 import { contractIcsPath } from "./ics";
 import {
   BuyerLink, awardNoticeUrl, datasetUrl, derivedPlacesText, employeesText, instrumentText, money, otherLanguageMark, provincesText,
@@ -96,6 +98,8 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
 
   // The account's Follow control (account/watch_pages.tsx): nothing while the accounts switch is off.
   const watch = await watchControl(c, "contract", `${kind}:${raw.toLowerCase()}`);
+  // The holder's record (pages/holders.tsx): read only for a signed-in reader and a contract the radar can hold.
+  const holder = await holderOfNotice(c, lineKey(kind, raw), daysLeft, !!d.organization_id, d.status !== "cancelled");
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} active={kind === "award" ? "/awards" : undefined} seo={contractSeo(d, lang, crumbs)}>
@@ -172,6 +176,8 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
             </> : null} />
           </dl>
         </Panel>
+        {/* After the dates and before the procurement details in one column, as the record's own figures read. */}
+        <HolderPanel lang={lang} state={holder} published={false} supplier={d.supplier} uncoded={d.codes.length ? "segment" : "none"} />
         </div>
 
       <Panel title={t(lang, "tender.procurement")}>

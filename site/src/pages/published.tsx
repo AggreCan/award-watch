@@ -4,7 +4,8 @@
 // the other rows of the same contract (its amendments: the rows sharing the
 // department and procurement_id) and, in the same batch, its Indigenous
 // business fields when the department reported a set-aside or an Indigenous
-// business (PUBLISHED_INDIGENOUS_SQL). A reference is unique within one
+// business (PUBLISHED_INDIGENOUS_SQL), and for a signed-in reader the
+// holder's record (pages/holders.tsx). A reference is unique within one
 // department only, so the address names both. The government's contracts
 // search stays linked as the source, a secondary link: it often lists
 // nothing yet for a new quarter.
@@ -23,7 +24,9 @@ import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, page, todayOf } f
 import { dollars, num } from "../records_db";
 import { CONTRACT_VERSIONS_MAX, readPublishedContract, type Row } from "../records_tables";
 import { breadcrumbJsonLd, clip, pageTitle, type Seo } from "../seo";
+import { lineKey } from "../lines";
 import { windowOf } from "./expiring";
+import { HolderPanel, holderAccess, holderFromRead, inRadar } from "./holders";
 import { publishedIcsPath } from "./ics";
 import { BuyerLink, contractPath, contractSearchUrl, datasetUrl, money, otherLanguageMark } from "./shared";
 
@@ -94,7 +97,9 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
   const stats = await loadStats(c.env);
   if (!stats) return noDataPage(c, "published.title");
   const search = contractSearchUrl(ref);
-  const read = await readPublishedContract(c.env, dept, ref);
+  // A signed-in reader's batch also asks for the holder's record (pages/holders.tsx); anyone else's is as it was.
+  const access = await holderAccess(c);
+  const read = await readPublishedContract(c.env, dept, ref, access ? lineKey("contract", `${dept}:${ref}`) : undefined);
   if (read.state !== "ready") {
     c.header("Retry-After", "3600");
     return page(
@@ -178,6 +183,8 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
     jsonLd: [breadcrumbJsonLd(crumbs)],
   };
   const watch = await watchControl(c, "contract", `contract:${dept}:${ref}`);
+  const holder = access && inRadar(daysLeft, num(d.wh) !== 1 && num(d.oid) !== null, true)
+    ? await holderFromRead(c, read, 2, daysLeft, access.plan) : { state: "none" as const };
 
   return page(
     c,
@@ -233,6 +240,8 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
           </dl>
           {end && !window && versions.length > 1 ? <p class="muted small">{t(lang, "published.window_newest")}</p> : null}
         </Panel>
+        {/* After the dates and before the procurement details in one column, as on an award notice's page. */}
+        <HolderPanel lang={lang} state={holder} published supplier={str(d.org_name)} uncoded="none" />
         </div>
         <Panel title={t(lang, "tender.procurement")}>
           <dl>

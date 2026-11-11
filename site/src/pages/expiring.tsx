@@ -28,6 +28,12 @@
 // the 3-month window never change. Until the switch, nothing does. While it
 // is on, the tabs and tiles that lead to a deep window, and the links to the
 // 12-month list, carry the Pro chip (src/pro.tsx) for every reader.
+//
+// On a window's page (the full list and the free view), a signed-in reader
+// sees under each holder's name its record with the buyer (src/lines.ts,
+// radarLines below) for the rows ending within the plan's days, Free the
+// 3-month list's and Pro the 12-month list's; a reader not signed in sees
+// one line saying so. The page is then private, as every signed-in page is.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -46,10 +52,12 @@ import {
 import type { AppEnv } from "../env";
 import { fmtInt, numberLocale, pick, provinceName, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, addDays, noDataPage, notFoundPage, page, PageHead, Panel, todayOf, varyOnCookie } from "../layout";
-import { DEEP_WINDOWS, radarWindowLocked, requestPlan } from "../plan";
+import { lineKey, parseLine } from "../lines";
+import { RadarLineNotes, RadarMark, type RadarLines, markText } from "../lines_view";
+import { DEEP_WINDOWS, type Plan, allowsRadarDepth, radarWindowLocked, requestPlan } from "../plan";
 import { dollars, num, orgIdOf, orgNumber } from "../records_db";
 import {
-  RADAR_CSV_MAX, RADAR_PAGE_ROWS, type RadarParams, type RadarSort, type Read, type Row, type SortDir, readRadar, readRadarCsv,
+  RADAR_CSV_MAX, RADAR_PAGE_ROWS, type RadarParams, type RadarSort, type Read, type Row, type SortDir, readLines, readRadar, readRadarCsv,
 } from "../records_tables";
 import { csvCell } from "./analytics";
 import { ProNote, ProPanel, ProTag, checkoutPrice } from "../pro";
@@ -70,6 +78,13 @@ export const EXPIRING_PAGE_ROWS = 500;
 export const EXPIRING_TEASER_ROWS = 10;
 // Each window in days from the data date, as the pipeline cuts them (expiring.py WINDOWS).
 export const WINDOW_DAYS: Record<ExpiringWindow, number> = { "3m": 91, "6m": 182, "12m": 365 };
+
+// The days within which a plan sees the holder's record (src/lines.ts): the
+// radar's own windows, the 3-month list's on Free and the 12-month list's on
+// Pro, as radar_depth opens them.
+export function lineDays(plan: Plan): number {
+  return WINDOW_DAYS[allowsRadarDepth(plan) ? "12m" : "3m"];
+}
 
 // The narrowest window a contract ending in this many days falls in, or null past the last.
 export function windowOf(daysLeft: number): ExpiringWindow | null {
@@ -410,7 +425,10 @@ export const ExpiringTable: FC<{
   // once accounts open, and the list shows a free reader the teaser instead.
   csv?: CsvWindow | "list";
   sorts?: { end: HeadSort; value: HeadSort };
-}> = ({ lang, rows, organization = true, buyer = true, phonePages = false, pages, phoneRows, csv = "12m", sorts }) => {
+  // The holder's record of the rows a signed-in reader's plan covers, as the
+  // mark under each holder's name, by row key (radarLines).
+  marks?: ReadonlyMap<string, string>;
+}> = ({ lang, rows, organization = true, buyer = true, phonePages = false, pages, phoneRows, csv = "12m", sorts, marks }) => {
   const buyerRest: Rest = organization ? "lg" : "md";
   const compRest: Rest | undefined = organization ? "md" : undefined;
   return (
@@ -433,6 +451,7 @@ export const ExpiringTable: FC<{
           const path = sitePath(r);
           const instrument = instrumentText(lang, r.instrument_en, r.instrument_fr);
           const indigenous = indigenousMark(r);
+          const mark = marks?.get(lineKey(r.kind, r.reference));
           return (
             <tr>
               <td data-label={t(lang, "expiring.col_ends")} class="mono">
@@ -463,6 +482,7 @@ export const ExpiringTable: FC<{
               {organization ? (
                 <td data-label={t(lang, "col.supplier")}>
                   <Organization lang={lang} r={r} />
+                  {mark ? <RadarMark text={mark} /> : null}
                   {buyer ? <RestParty lang={lang} label="col.buyer"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></RestParty> : null}
                 </td>
               ) : null}
@@ -554,6 +574,35 @@ export const MoreInWindow: FC<{ lang: Lang; part: ExpiringPart; pro?: boolean }>
     </>
   );
 };
+
+// -- the holder's record on a window's page ---------------------------------------------
+
+// What a window's list shows of its rows' holders' records (src/lines.ts):
+// nothing while the accounts switch is off; one line for a reader not signed
+// in; for a signed-in reader, the records of the rows ending within the
+// plan's days (lineDays) whose holder is named, read from rec_lines in one
+// statement, as a mark each. A records database without rec_lines yet leaves
+// the list as it was; one that cannot answer says so in a line.
+export async function radarLines(c: Context<AppEnv>, lang: Lang, rows: readonly ExpiringRow[]): Promise<RadarLines> {
+  if (!accountsEnabled(c.env)) return { state: "off" };
+  const account = await railAccount(c).catch(() => undefined);
+  if (!account?.email) return { state: "signed_out" };
+  const days = lineDays(account.plan ?? "free");
+  const keys = rows.filter((r) => r.days_left >= 0 && r.days_left <= days && r.organization_id && !r.supplier_withheld)
+    .map((r) => lineKey(r.kind, r.reference));
+  if (!keys.length) return { state: "ready", marks: new Map(), pending: false };
+  const read = await readLines(c.env, keys);
+  if (read.state === "failed" && read.noTable) return { state: "absent" };
+  if (read.state !== "ready") return { state: "unavailable" };
+  const found = read.rows[0] ?? [];
+  const marks = new Map<string, string>();
+  for (const row of found) {
+    const j = parseLine(row.j);
+    const text = j ? markText(lang, j) : null;
+    if (text && typeof row.sk === "string") marks.set(row.sk, text);
+  }
+  return { state: "ready", marks, pending: found.length === 0 };
+}
 
 // -- pages ----------------------------------------------------------------------------
 
@@ -971,6 +1020,7 @@ async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats:
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "expiring.title"), path: "/expiring" }, { name: title }];
   const account = await railAccount(c).catch(() => undefined);
   varyOnCookie(c); // once per request; page() adds the same for every page while the switch is on
+  const lines: RadarLines = shown.length ? await radarLines(c, lang, shown) : { state: "off" };
 
   return page(
     c,
@@ -985,7 +1035,8 @@ async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats:
         {shown.length ? (
           <>
             <p class="muted small">{t(lang, "expiring.first_note", { n: fmtInt(shown.length, lang) })}</p>
-            <ExpiringTable lang={lang} rows={shown} csv="3m" />
+            <ExpiringTable lang={lang} rows={shown} csv="3m" marks={lines.state === "ready" ? lines.marks : undefined} />
+            <RadarLineNotes lang={lang} lines={lines} />
           </>
         ) : (
           <p class="muted">{t(lang, "expiring.none_window")}</p>
@@ -1039,6 +1090,8 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   const shown = whole ? whole.rows : orderExpiring(local, q.sort);
   const pages = whole ? wholePages : Math.max(1, idx.pages);
   const csvAllowed = whole ? await filteredCsvAllowed(c, window) : false;
+  // The holder's record of the rows shown (radarLines): a mark under each holder's name for a signed-in reader.
+  const lines: RadarLines = shown.length ? await radarLines(c, lang, shown) : { state: "off" };
   const account = whole && accountsEnabled(c.env) && !csvAllowed ? await railAccount(c).catch(() => undefined) : undefined;
   const months = t(lang, WINDOW_MONTHS[window]);
   const title = t(lang, WINDOW_TITLE[window]);
@@ -1202,7 +1255,11 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
           ) : null
         ) : null}
         {shown.length ? (
-          <ExpiringTable lang={lang} rows={shown} phonePages pages={serverPages} csv={csv} sorts={sorts} />
+          <>
+            <ExpiringTable lang={lang} rows={shown} phonePages pages={serverPages} csv={csv} sorts={sorts}
+              marks={lines.state === "ready" ? lines.marks : undefined} />
+            <RadarLineNotes lang={lang} lines={lines} />
+          </>
         ) : (
           <p class="muted">{t(lang, whole ? "expiring.whole_none" : filtered ? "expiring.none_match" : "expiring.none_window")}</p>
         )}

@@ -47,6 +47,7 @@ reads it, with prepared statements.
 | `rec_contracts` | published contract row: every field its page shows (`/contracts/<department>/<reference>`) | about 1.34 million |
 | `rec_gsin` | GSIN code a published contract carries: its names | about 10,000 at most |
 | `rec_contract_indigenous` | published contract row (its `rec_contracts` `k`) whose `indigenous_business` names a set-aside under the Procurement Strategy for Indigenous Business (`psib` MS or VS) or whose `indigenous_business_excluding_psib` says yes (`ib` 1); none for a vendor withheld as a person | tens of thousands (143 of the first 5,290 rows of `contracts.csv`) |
+| `rec_lines` | row of `rec_expiring` (its `k`) whose holder is named: the holder's record with the buyer as JSON (`j`, the pipeline's `lines.py`), asked for by `sk`, the row's kind and reference in lower case (*Holder's record* in `docs/accounts.md`) | about the window's rows (1,894 of the development copy's 1,906, about 355 bytes each) |
 | `rec_events` | thing that happened on a data date of the last 90 to an organization, a buyer, a single record or a tender notice, plus a count row past 100 a subject a day (*Events*) | thousands a night, a few hundred thousand |
 | `rec_instruments` | standing offer or supply arrangement the pipeline keeps (`docs/sosa.md`): its fields and its call-ups as JSON | a few thousand |
 | `rec_holders` | active holder of one, by region, whose name is shown | about 10,000 |
@@ -548,6 +549,15 @@ so a province filter seeks the province's rows and joins `rec_expiring` by
 column added there reaches D1 only through a full reload. When the records
 database is missing, loading or failing, a filtered view filters the window
 file's page as before and says so.
+
+`rec_lines` is written beside them from the lines stage's `expiring_lines`
+(`records_db.lines_rows`), one row per window row whose holder the stage
+counted, keyed as the row is in `rec_expiring` and found by
+`rec_lines_sk (sk)`. The window pages and the record pages read it for a
+signed-in reader only (`readLines`, `readLine`); a database without it shows
+the pages as they were. Like `rec_expiring_prov`, it is a table of its own
+that the nightly schema creates, so it needs no full reload, and `LAYOUT`
+stays 2.
 
 ## Earlier awards, incumbents and organization feeds
 

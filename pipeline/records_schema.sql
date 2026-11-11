@@ -218,6 +218,23 @@ CREATE TABLE IF NOT EXISTS rec_expiring_prov (
 );
 CREATE INDEX IF NOT EXISTS rec_expiring_prov_prov ON rec_expiring_prov (prov, k);
 
+-- The holder's record of each row of rec_expiring whose holder is named
+-- (pipeline lines.py, records_db.lines_rows; docs/accounts.md "Holder's
+-- record"): the holder's contracts of the same kind with the same buyer, each
+-- source counted apart, as JSON. k is the row's rec_expiring.k; sk is
+-- '<kind>:<reference in lower case>' ('award:cb-188-1434012',
+-- 'contract:<department>:<reference>'), what a radar page and a record's page
+-- ask by. Read only for a signed-in reader. A table beside rec_expiring rather
+-- than a column of it: the nightly schema creates it, its rows are all new to
+-- the ledger, and a page reading a database without it shows what it did
+-- before.
+CREATE TABLE IF NOT EXISTS rec_lines (
+  k INTEGER PRIMARY KEY,
+  sk TEXT NOT NULL,
+  j TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS rec_lines_sk ON rec_lines (sk);
+
 -- The page of each published contract (/contracts/<department>/<reference>,
 -- site/src/pages/published.tsx): one row per row of the contracts table,
 -- keyed as its row of records is, with every field the page shows. A

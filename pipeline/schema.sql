@@ -840,6 +840,28 @@ CREATE TABLE IF NOT EXISTS expiring_contracts (
 );
 CREATE INDEX IF NOT EXISTS idx_expiring_end ON expiring_contracts(end);
 
+-- The rows the radar's duplicate rule dropped, each beside the kept row it
+-- duplicates (expiring.py), rebuilt whole with expiring_contracts in the same
+-- transaction. The holder's record (lines.py) counts a kept row in each source
+-- that holds it, so an award notice whose published contract was dropped is
+-- also counted among the published contracts.
+CREATE TABLE IF NOT EXISTS expiring_twins (
+  source_key TEXT NOT NULL,                      -- the kept row (expiring_contracts.source_key)
+  twin_key TEXT NOT NULL,                        -- the dropped row: 'history:<reference>', 'contract:<owner_org>:<reference>'
+  trigger TEXT NOT NULL,                         -- number | match (expiring.Pair)
+  PRIMARY KEY (source_key, twin_key)
+);
+
+-- The holder's record of each kept radar row whose holder is named (lines.py,
+-- docs/accounts.md "Holder's record"): j is the figures each source gives,
+-- counted apart, as JSON. Rebuilt whole after the expiring stage; the records
+-- sync sends it to D1 as rec_lines. Never exported to a static file.
+CREATE TABLE IF NOT EXISTS expiring_lines (
+  source_key TEXT PRIMARY KEY,                   -- expiring_contracts.source_key
+  j TEXT NOT NULL,
+  computed_at TEXT NOT NULL
+);
+
 -- Nightly link sampling (link_sample.py, docs/link-sampling.md): one row per
 -- government link checked, from the sample drawn each night. Rows older than
 -- link_sample.RETENTION_DAYS (60) are deleted by the night that writes the

@@ -147,6 +147,13 @@ export const PLAN_ROWS: readonly PlanRow[] = [
     free: { key: "plans.match_mail", vars: count(() => RULES.free.match_mail) },
     pro: { key: "plans.match_mail", vars: count(() => RULES.pro.match_mail) },
   },
+  // The holder's record on the radar's lists and a contract's page (src/pages/holders.tsx): the radar's own
+  // windows, as radar_depth opens them, so the months come from EXPIRING_WINDOWS as the radar rows' do.
+  {
+    feature: "radar_depth",
+    free: { key: "plans.lines", vars: (lang) => ({ m: windowMonths(0, lang) }) },
+    pro: { key: "plans.lines", vars: (lang) => ({ m: windowMonths(2, lang) }) },
+  },
   { feature: "api", free: { key: "plans.free_api" }, pro: { key: "plans.pro_api", vars: (lang) => ({ day: fmtInt(KEY_PER_DAY, lang) }) } },
   { feature: "export_filtered", free: { key: "plans.free_instruments" }, pro: { key: "plans.pro_instruments" } },
   // A weekly briefing is a delivery, as a saved search's mail is (src/account/briefings.ts).

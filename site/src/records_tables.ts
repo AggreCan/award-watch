@@ -54,10 +54,18 @@ export const PUBLISHED_INDIGENOUS_SQL =
 // One batch: the state row, the contract's rows and its Indigenous business
 // fields (rows[1]). A records database the nightly has not given
 // rec_contract_indigenous yet is read again without it, and the page shows
-// the contract without the two fields.
-export async function readPublishedContract(env: Env, dept: string, ref: string): Promise<Read> {
+// the contract without the two fields. lineKey, for a signed-in reader only:
+// the holder's record in the same batch (rows[2], LINE_BY_KEY_SQL); a
+// database without rec_lines is read again without it, and noLines says so.
+export async function readPublishedContract(env: Env, dept: string, ref: string, lineKey?: string): Promise<Read & { noLines?: true }> {
   const contract: Query = { sql: PUBLISHED_CONTRACT_SQL, params: [dept, ref] };
-  const read = await readRecords(env, [contract, { sql: PUBLISHED_INDIGENOUS_SQL, params: [dept, ref] }]);
+  const indigenous: Query = { sql: PUBLISHED_INDIGENOUS_SQL, params: [dept, ref] };
+  if (lineKey !== undefined) {
+    const read = await readRecords(env, [contract, indigenous, { sql: LINE_BY_KEY_SQL, params: [lineKey] }]);
+    if (read.state !== "failed" || !read.noTable) return read;
+    return { ...(await readPublishedContract(env, dept, ref)), noLines: true };
+  }
+  const read = await readRecords(env, [contract, indigenous]);
   if (read.state !== "failed" || !read.noTable) return read;
   return readRecords(env, [contract]);
 }
@@ -213,6 +221,31 @@ export function readRadar(env: Env, p: RadarParams, sort: RadarSort, offset: num
 
 export function readRadarCsv(env: Env, p: RadarParams, sort: RadarSort, dir?: SortDir): Promise<RadarRead> {
   return withoutMissingProvinces(env, p, (prov) => [{ sql: radarOrder(sort, dir, prov).csv, params: prov ? radarProvBinds(p) : radarBinds(p) }]);
+}
+
+// -- the holder's record (src/lines.ts, pages/expiring.tsx, pages/holders.tsx) -----------
+
+// rec_lines through rec_lines_sk, read only for a signed-in reader. A
+// window's page asks for its rows' records by their keys (a JSON list bound
+// as ?1, at most LINES_MAX, the rows of one page file), the rows a
+// reader's plan covers; a record's page asks for its own with the names of
+// the buyer and the holder beside it.
+export const LINES_MAX = 500;
+export const LINES_BY_KEY_SQL = `SELECT sk, j FROM rec_lines WHERE sk IN (SELECT value FROM json_each(?1)) LIMIT ${LINES_MAX}`;
+export const LINE_BY_KEY_SQL =
+  "SELECT l.j AS j, b.name_en AS buyer_en, b.name_fr AS buyer_fr, o.name AS holder FROM rec_lines l " +
+  "LEFT JOIN rec_buyers b ON b.id = json_extract(l.j, '$.buyer') LEFT JOIN rec_orgs o ON o.oid = json_extract(l.j, '$.oid') " +
+  "WHERE l.sk = ?1 LIMIT 1";
+
+// One statement beside the state row. A records database the nightly has not
+// given rec_lines yet answers failed with noTable, and the page shows what
+// it did before.
+export function readLines(env: Env, keys: readonly string[]): Promise<Read> {
+  return readRecords(env, [{ sql: LINES_BY_KEY_SQL, params: [JSON.stringify(keys.slice(0, LINES_MAX))] }]);
+}
+
+export function readLine(env: Env, key: string): Promise<Read> {
+  return readRecords(env, [{ sql: LINE_BY_KEY_SQL, params: [key] }]);
 }
 
 // -- the record tables of a profile and a buyer (pages/records.tsx) --------------------
@@ -391,7 +424,7 @@ export function readContractSitemap(env: Env, first: string, last: string): Prom
 // Every statement here, for the tests that read their plans and their bounds.
 export const TABLE_SQL: readonly string[] = [
   CONTRACT_SITEMAP_SQL, EARLIER_AWARDS_SQL, BUYER_INCUMBENTS_SQL, SEGMENT_INCUMBENTS_SQL, ORG_FEED_SQL,
-  PUBLISHED_CONTRACT_SQL, PUBLISHED_INDIGENOUS_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
+  PUBLISHED_CONTRACT_SQL, PUBLISHED_INDIGENOUS_SQL, LINES_BY_KEY_SQL, LINE_BY_KEY_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
   RADAR_ROWS_END_DESC_SQL, RADAR_ROWS_VALUE_ASC_SQL, RADAR_CSV_END_DESC_SQL, RADAR_CSV_VALUE_ASC_SQL,
   RADAR_FACETS_SQL, RADAR_BUYERS_SQL, RADAR_CLIENTS_SQL, RADAR_SUPPLIERS_SQL,
   ...Object.values(RECORDS_SQL.organization), ...Object.values(RECORDS_SQL.buyer), ...RADAR_PROV_SQL,

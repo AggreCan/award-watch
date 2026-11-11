@@ -171,11 +171,26 @@ export function termsWarrantyHref(lang: Lang, site = ""): string {
 
 export const METHOD_HREF = "/methodology#matching";
 
-// The line beside every match the site shows, with the way to the rules
-// after it unless how is false.
-export const FitDisclaimer: FC<{ lang: Lang; site?: string; how?: boolean }> = ({ lang, site = "", how = true }) => (
-  <p class="muted small fit-disclaimer">
-    {tj(lang, "fit.disclaimer", { terms: <a href={termsWarrantyHref(lang, site)}>{t(lang, "terms.title")}</a> })}
-    {how ? <> · <a href={`${site}${METHOD_HREF}`}>{t(lang, "fit.how")}</a></> : null}
-  </p>
-);
+// The advisory features (the Terms' paragraph on calculations covers each):
+// the line every surface showing one carries, the link to its rules, and
+// the Methodology section the link opens. A later feature adds its kind here.
+export type AdvisoryKind = "fit" | "line";
+const ADVISORY: Readonly<Record<AdvisoryKind, { text: Key; how: Key; href: string; cls: string }>> = {
+  fit: { text: "fit.disclaimer", how: "fit.how", href: METHOD_HREF, cls: "fit-disclaimer" },
+  line: { text: "line.disclaimer", how: "line.how", href: "/methodology#holders", cls: "line-disclaimer" },
+};
+
+// The line beside every calculation the site shows, with the way to its
+// rules after it unless how is false.
+export const AdvisoryDisclaimer: FC<{ lang: Lang; kind: AdvisoryKind; site?: string; how?: boolean }> = ({ lang, kind, site = "", how = true }) => {
+  const a = ADVISORY[kind];
+  return (
+    <p class={`muted small ${a.cls}`}>
+      {tj(lang, a.text, { terms: <a href={termsWarrantyHref(lang, site)}>{t(lang, "terms.title")}</a> })}
+      {how ? <> · <a href={`${site}${a.href}`}>{t(lang, a.how)}</a></> : null}
+    </p>
+  );
+};
+
+// The matching notices' line, as every match carries it.
+export const FitDisclaimer: FC<{ lang: Lang; site?: string; how?: boolean }> = (p) => <AdvisoryDisclaimer {...p} kind="fit" />;

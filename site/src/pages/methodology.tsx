@@ -8,6 +8,8 @@ import type { AppEnv } from "../env";
 import { fmtInt, t, tj, type Key } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { pageSeo } from "../seo";
+import { CODE_CHARS, LINE_YEARS, LONG_RUN, RUN_GAP_DAYS, RUN_OVERLAP_DAYS, SIMILAR_PREFIX } from "../lines";
+import { BAND_KEY } from "../lines_view";
 import { ENTRANT_LOOKBACK, FREE_YEARS } from "../records_db";
 import { EXPIRING_TEASER_ROWS } from "./expiring";
 
@@ -20,7 +22,8 @@ import { EXPIRING_TEASER_ROWS } from "./expiring";
 // rules the analytics views count by (src/records_db.ts, docs/analytics.md).
 // The "Matching notices" section states the rules public/fit.js scores by,
 // its table and figures drawn from that module's constants; the Terms' No
-// Warranty section links it.
+// Warranty section links the page. The "Holder's record" section states the
+// rules the pipeline's lines.py counts by, every figure from src/lines.ts.
 // The "Derived provinces" part of "Statuses and Regions" states the place
 // rule of the pipeline's places.py; its figures were counted on the files of
 // 2026-11-06.
@@ -43,6 +46,7 @@ const TOC: [string, Key][] = [
   ["expiring", "methodology.toc_expiring"],
   ["analytics", "methodology.toc_analytics"],
   ["matching", "methodology.toc_matching"],
+  ["holders", "methodology.toc_holders"],
   ["people", "methodology.toc_people"],
   ["claims", "methodology.toc_claims"],
   ["corrections", "methodology.toc_corrections"],
@@ -58,6 +62,13 @@ const MATCH_RULES: [Key, readonly number[]][] = [
   ["methodology.matching_rule_buyer", P.buyer],
   ["methodology.matching_rule_province", [...P.delivered, P.home, P.national]],
   ["methodology.matching_rule_type", [P.held, ...P.type]],
+];
+
+// The holder's record: each label beside its rule, the long run's figure from src/lines.ts.
+const HOLDER_RULES: [keyof typeof BAND_KEY, Key][] = [
+  ["run", "methodology.holders_rule_run"],
+  ["earlier", "methodology.holders_rule_earlier"],
+  ["none", "methodology.holders_rule_none"],
 ];
 
 // vars fills a key's placeholders, for a figure the page takes from the code.
@@ -182,6 +193,28 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
             })}
           </p>
           <p>{t(lang, "methodology.matching_limits", { min: fmtInt(MATCH_MIN, lang) })}</p>
+
+          <h2 id="holders">{t(lang, "methodology.toc_holders")}</h2>
+          <p>{t(lang, "methodology.holders_what")}</p>
+          <p>{t(lang, "methodology.holders_cell", { chars: fmtInt(CODE_CHARS, lang), years: fmtInt(LINE_YEARS, lang) })}</p>
+          <p>{t(lang, "methodology.holders_run", { gap: fmtInt(RUN_GAP_DAYS, lang), overlap: fmtInt(RUN_OVERLAP_DAYS, lang) })}</p>
+          <div class="table-wrap">
+            <Table sorting="none" cols={[
+              { kind: "label", label: t(lang, "methodology.holders_col_label") },
+              { kind: "main", label: t(lang, "methodology.holders_col_rule") },
+            ]}>
+              <tbody>
+                {HOLDER_RULES.map(([band, key]) => (
+                  <tr>
+                    <td data-label={t(lang, "methodology.holders_col_label")}>{t(lang, BAND_KEY[band])}</td>
+                    <td data-label={t(lang, "methodology.holders_col_rule")}>{t(lang, key, { long: fmtInt(LONG_RUN, lang) })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+          <p>{t(lang, "methodology.holders_similar", { prefix: fmtInt(SIMILAR_PREFIX, lang) })}</p>
+          <p>{t(lang, "methodology.holders_limits")}</p>
 
           <h2 id="people">{t(lang, "methodology.toc_people")}</h2>
           <List lang={lang} keys={["methodology.people_individuals", "methodology.people_contacts", "methodology.people_officials"]} />

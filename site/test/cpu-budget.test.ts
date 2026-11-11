@@ -11,6 +11,7 @@
 // matching notices' pages are timed for a signed-in account too, its
 // accounts database answered from memory (below).
 import { describe, expect, it } from "vitest";
+import { sha256Hex } from "../src/account/secrets";
 import { clearClosingCache } from "../src/closing";
 import { clearParsedCache } from "../src/data";
 import { app } from "../src/index";
@@ -99,15 +100,73 @@ const landingAssets = assetsOf({ ...BODIES, "expiring/3m/1.json": JSON.stringify
 const env = { ...testEnv(assets), DB: undefined, SEARCH: undefined, RECORDS: undefined, ACCOUNTS: undefined };
 const landingEnv = { ...env, ASSETS: landingAssets };
 
+// -- a signed-in reader's window page, with the holders' records ----------------------------
+
+// A database that answers in memory: each statement's rows from answer(sql,
+// params), for first(), all() and a batch alike. No local database runs, so
+// the time is the Worker's own.
+type Answer = (sql: string, params: unknown[]) => Record<string, unknown>[];
+function stubDb(answer: Answer): D1Database {
+  const statement = (sql: string, params: unknown[] = []): Record<string, unknown> => ({
+    sql, params,
+    bind: (...p: unknown[]) => statement(sql, p),
+    first: async () => answer(sql, params)[0] ?? null,
+    all: async () => ({ results: answer(sql, params), success: true, meta: {} }),
+    run: async () => ({ results: [], success: true, meta: { changes: 0 } }),
+    raw: async () => [],
+  });
+  return {
+    prepare: (sql: string) => statement(sql),
+    batch: async (list: { sql: string; params: unknown[] }[]) => list.map((s) => ({ results: answer(s.sql, s.params), success: true, meta: {} })),
+  } as unknown as D1Database;
+}
+
+// A Pro session the stub accounts database knows (the cookie's secret hashed
+// as the sessions table holds it), last seen now so no request writes.
+const SESSION_ID = "a".repeat(32);
+const SESSION_SECRET = "b".repeat(64);
+const SIGNED_IN = `__Host-aw_session=${SESSION_ID}.${SESSION_SECRET}`;
+async function accountsStub(): Promise<D1Database> {
+  const now = new Date().toISOString();
+  const session = {
+    id: SESSION_ID, token_hash: await sha256Hex(SESSION_SECRET), expires_at: "2999-01-01T00:00:00.000Z", revoked_at: null, last_seen_at: now,
+    user_id: "u-cpu", email: "reader@example.com", lang: "en", status: "active", plan: "pro", plan_until: null, created_at: now,
+  };
+  const pro = { id: "e-cpu", plan: "pro", starts_at: "2026-01-01T00:00:00.000Z", ends_at: null, created_at: "2026-01-01T00:00:00.000Z", revoked_at: null };
+  return stubDb((sql) => (sql.includes("FROM sessions s JOIN users u") ? [session] : sql.includes("FROM entitlements") ? [pro] : []));
+}
+// A record for every row a page asks for: two sources and a similar name,
+// about as long as the longest the pipeline writes.
+const LINE_J = JSON.stringify({
+  v: 1, fy: [2017, 2026], buyer: "pwgsc-tpsgc", oid: 1,
+  s: [{ src: 1, lvl: "class", key: ["821118", "811015"], held: 9, run: 3, first: "2019-04-01", total: 43, others: 17, c: 6, nc: 2, u: 1 },
+    { src: 3, lvl: "code", key: ["R019"], held: 4, run: 1, first: "2021-04-01", total: 12, others: 3, c: 1, nc: 3, u: 0 }],
+  own: { comp: 1, meth: "OB", bids: 3, amd: 2, growth: 0.25, end0: "2026-09-30", end: "2026-11-20" },
+  sim: [["org-b000000001", "Exemplar Translation Services Limited", 1, 2, "2024-04-01"]],
+});
+const recordsStub = stubDb((sql, params) => {
+  if (sql.includes("FROM rec_meta")) return [{ key: "state", value: "ready" }, { key: "as_of", value: "2026-10-31" }];
+  if (sql.includes("FROM rec_lines")) return (JSON.parse(String(params[0])) as string[]).map((sk) => ({ sk, j: LINE_J }));
+  return [];
+});
+// The 3-month window's first page at its production size, under its own ETags.
+const signedInBody = JSON.stringify(bigExpiringPage(500));
+const signedInAssets = assetsOf({ ...BODIES, "expiring/3m/1.json": signedInBody }, "v1-signed-in");
+
 // -- timing ---------------------------------------------------------------------------
 
 let address = 0;
 // home: "/" answered by the app home, as a signed-in reader gets it (test/home.ts);
 // without it "/" is the landing page, there being no session here.
-async function render(path: string, home = false): Promise<number> {
+// signedIn: the request carries the stub's Pro session, under the signed-in environment (signedInEnv).
+let signedInEnv: object | null = null;
+async function render(path: string, home = false, signedIn = false): Promise<number> {
   const res = await (home ? homeApp : app).request(path, {
-    headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}` },
-  }, path === "/" && !home ? landingEnv : env);
+    headers: {
+      "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}`,
+      ...(signedIn ? { cookie: SIGNED_IN } : {}),
+    },
+  }, signedIn ? signedInEnv! : path === "/" && !home ? landingEnv : env);
   await res.arrayBuffer();
   return res.status;
 }
@@ -126,13 +185,13 @@ const yardstick = () => JSON.parse(JSON.stringify(ROWS));
 
 // A route's time over the yardstick's, batches of each taken in turn so a
 // change in the machine's load falls on both.
-async function ratio(path: string, per: number, home = false): Promise<number> {
-  for (let i = 0; i < 3; i++) await render(path, home);
+async function ratio(path: string, per: number, home = false, signedIn = false): Promise<number> {
+  for (let i = 0; i < 3; i++) await render(path, home, signedIn);
   const route: number[] = [];
   const yard: number[] = [];
   for (let b = 0; b < 5; b++) {
     yard.push(await batch(yardstick, 16));
-    route.push(await batch(() => render(path, home), per));
+    route.push(await batch(() => render(path, home, signedIn), per));
   }
   return median(route) / median(yard);
 }
@@ -156,6 +215,12 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   ["/expiring/3m", 7, 16], // [2.2]
   ["/search?q=services", 16, 16], // [5.1]
   ["/sitemap-1.xml", 100, 2], // [32]
+  // A Pro reader's 3-month list of 500 contracts, each named holder's record
+  // read from a records database that answers at once and drawn as a mark
+  // (src/pages/expiring.tsx radarLines; measured 2026-11-11). The same 500
+  // rows measured 27.2 signed out and 27.4 signed in with no record: the
+  // table is most of it, the records about 4.
+  ["/expiring/3m (signed in, 500 rows with records)", 95, 8], // [31.6]
 ];
 
 // -- a signed-in account that names its organization ---------------------------------------
@@ -182,9 +247,9 @@ const FIT_BODIES: Record<string, string> = {
   "stats.json": JSON.stringify({ ...JSON.parse(BODIES["stats.json"]), matching_fy: [2022, 2026] }),
 };
 
-const SESSION_ID = "5e55".repeat(8);
+const FIT_SESSION_ID = "5e55".repeat(8);
 const SECRET = "c0ffee".repeat(10) + "c0ff";
-const COOKIE = `__Host-aw_session=${SESSION_ID}.${SECRET}`;
+const COOKIE = `__Host-aw_session=${FIT_SESSION_ID}.${SECRET}`;
 
 // The accounts database's answers, by statement: what a statement not named here reads is nothing.
 function memoryAccounts(tokenHash: string, claim: boolean): D1Database {
@@ -193,7 +258,7 @@ function memoryAccounts(tokenHash: string, claim: boolean): D1Database {
     if (sql.includes("FROM sessions s JOIN users u")) {
       return {
         first: {
-          id: SESSION_ID, token_hash: tokenHash, expires_at: "2999-01-01T00:00:00.000Z", revoked_at: null, last_seen_at: at, user_id: "budget-user",
+          id: FIT_SESSION_ID, token_hash: tokenHash, expires_at: "2999-01-01T00:00:00.000Z", revoked_at: null, last_seen_at: at, user_id: "budget-user",
           email: "budget@example.com", lang: "en", status: "active", plan: "free", plan_until: null, created_at: at,
         },
         all: [],
@@ -218,11 +283,6 @@ function memoryAccounts(tokenHash: string, claim: boolean): D1Database {
     prepare: statement,
     batch: async (list: unknown[]) => list.map(() => ({ results: [], success: true, meta: { changes: 0 } })),
   } as unknown as D1Database;
-}
-
-async function sha256Hex(s: string): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
-  return [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // The same pages through the real app with the session cookie, the switch on and the accounts in memory.
@@ -271,12 +331,20 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     clearClosingCache();
     const over: string[] = [];
     const seen: string[] = [];
+    signedInEnv = { ...env, ASSETS: signedInAssets, ACCOUNTS_ENABLED: "true", ACCOUNTS: await accountsStub(), RECORDS: recordsStub };
+    // What the signed-in entry times: a private page with a mark under every named holder of its 500 rows.
+    const signed = await app.request("/expiring/3m", { headers: { "sec-fetch-mode": "navigate", cookie: SIGNED_IN } }, signedInEnv);
+    expect(signed.headers.get("cache-control")).toBe("private, no-store");
+    const marked = (await signed.text()).match(/class="muted small line-mark"/g)?.length ?? 0;
+    expect(marked).toBe((JSON.parse(signedInBody) as { organization_id: unknown }[]).filter((r) => r.organization_id).length);
+    expect(marked).toBeGreaterThan(300);
     for (const [name, bound, per] of BUDGET) {
       const home = name === "/ (app home)";
-      const path = home ? "/" : name;
+      const signedIn = name.includes("(signed in");
+      const path = home ? "/" : name.split(" ")[0];
       // The search page answers 503 without its database, after rendering in full.
-      expect([200, 503], name).toContain(await render(path, home));
-      const r = await ratio(path, per, home);
+      expect([200, 503], name).toContain(await render(path, home, signedIn));
+      const r = await ratio(path, per, home, signedIn);
       seen.push(`${name} ${r.toFixed(2)}`);
       if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
     }

@@ -165,8 +165,10 @@ HOLDERS = Table(15, "rec_holders", "k", ("ik", "oid", "name", "op", "region", "r
 EXPIRING_PROV = Table(16, "rec_expiring_prov", "pk", ("k", "prov", "derived"))
 # A published contract row's Indigenous business fields, keyed as its rec_contracts row (published_indigenous_rows).
 CONTRACT_INDIGENOUS = Table(17, "rec_contract_indigenous", "k", ("psib", "ib"))
+# The holder's record of a radar row (lines.py, lines_rows), keyed as its rec_expiring row.
+LINES = Table(18, "rec_lines", "k", ("sk", "j"))
 TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE, DETAILS, CLASSES, EXPIRING, CONTRACTS, GSIN,
-          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV, CONTRACT_INDIGENOUS)
+          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV, CONTRACT_INDIGENOUS, LINES)
 BY_CODE = {t.code: t for t in TABLES}
 
 # The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
@@ -174,9 +176,9 @@ BY_CODE = {t.code: t for t in TABLES}
 # rec_buyer_years, rec_due. Recorded in meta (META_LAYOUT) by the full load
 # that wrote it; a sync that finds another reloads in full by itself. The
 # tables added beside them (rec_details to rec_gsin, then rec_events, rec_instruments, rec_holders,
-# rec_expiring_prov and rec_contract_indigenous) leave it at 2: no table D1 holds changed form, the nightly
-# schema creates a missing table, and its rows are all new to the ledger, so the ordinary changes fill
-# it. A column added to any of the seventeen raises it.
+# rec_expiring_prov, rec_contract_indigenous and rec_lines) leave it at 2: no table D1 holds changed form, the
+# nightly schema creates a missing table, and its rows are all new to the ledger, so the ordinary changes fill
+# it. A column added to any of the eighteen raises it.
 LAYOUT = 2
 
 # The source numbers the site's records_db.ts SOURCE_NUMBER repeats.
@@ -634,6 +636,36 @@ def expiring_province_rows(window: Iterable[tuple]) -> Iterator[tuple]:
             yield key_of(f"expiring-prov:{k}:{prov}"), k, prov, 1 if prov in derived else 0
 
 
+def lines_rows(conn: sqlite3.Connection, window: Iterable[tuple], tally: dict | None = None) -> Iterator[tuple]:
+    """rec_lines's rows for rec_expiring's (expiring_row's tuples), in LINES.written order.
+
+    Each window row whose holder's record the lines stage wrote (expiring_lines, by the row's own key: its kind and
+    its reference as published) gives one row: the window row's key, so a page joins it on rec_expiring's key, and
+    sk, its kind and reference in the site's URL form, in lower case, which the record pages ask by. Two rows whose
+    sk would be the same (two published references differing only in case) keep the first by key and count the
+    other in tally["lines_same_key"], since rec_lines_sk is unique. A night whose lines stage wrote nothing gives
+    no rows, and the table empties with it.
+    """
+    left = tally if tally is not None else {}
+    left.setdefault("lines_same_key", 0)
+    held = dict(conn.execute("SELECT source_key, j FROM expiring_lines"))
+    if not held:
+        return
+    seen: set[str] = set()
+    for row in sorted(window, key=lambda r: r[0]):
+        data = json.loads(row[-1])
+        kind, ref = data.get("kind"), data.get("reference")
+        j = held.get(f"{kind}:{data.get('reference_published') or ref}")
+        if j is None or not isinstance(ref, str):
+            continue
+        sk = f"{kind}:{ref.lower()}"
+        if sk in seen:
+            left["lines_same_key"] += 1
+            continue
+        seen.add(sk)
+        yield row[0], sk, j
+
+
 # -- the published contracts' pages (rec_contracts, rec_gsin, rec_contract_indigenous) --
 
 # One row per row of the contracts table, keyed as its records row is
@@ -849,7 +881,8 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
     today is the data date the contracts ending are counted from (the radar's day),
     and the one an award date after it is read against (NOTICE_DAY).
     static_dir is the static export (default data/out/static), whose 12-month
-    radar window becomes rec_expiring and rec_expiring_prov.
+    radar window becomes rec_expiring and rec_expiring_prov, and with the lines
+    stage's expiring_lines, rec_lines.
     """
     day = today or date.fromisoformat(today_iso()[:10])
     as_of = day.isoformat()
@@ -944,6 +977,8 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
 
     # The published contracts' pages, and the names of the GSIN codes they carry.
     left_out = {"grants_withheld": counts.grants_withheld, "bad_buyers": counts.bad_buyers}
+    # The holder's record of each window row the lines stage counted (lines.py).
+    fill(LINES, lines_rows(conn, window, left_out))
     try:
         fill(CONTRACTS, published_rows(conn, left_out))
     except sqlite3.IntegrityError:

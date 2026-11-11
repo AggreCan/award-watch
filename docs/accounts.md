@@ -2372,6 +2372,140 @@ are `site/test/fit-mail.test.ts` and the mail suite (`docs/mail.md`).
   message on a week with nothing else, at most once a week) counts against
   the same 300 messages a run.
 
+## Holder's record
+
+Under the holder of each contract on the radar, a signed-in reader sees the
+holder's record with the buyer: its contracts of the same kind of work with
+the same buyer, each source counted apart, and a label that names the
+records ("Long run", "Earlier records", "No earlier record"; "Longue série",
+"Dossiers antérieurs", "Aucun dossier antérieur") with its figure. It is the
+site's second advisory feature, covered by the same Terms paragraph as
+matching notices. The code is `pipeline/awardwatch_pipeline/lines.py` (the
+rules and the nightly stage), `records_db.py` (`rec_lines`),
+`site/src/lines.ts` (the constants, the row's check, the label),
+`site/src/lines_view.tsx` (the radar's mark and its lines),
+`site/src/pages/holders.tsx` (the panel on a contract's page) and
+`radarLines` in `site/src/pages/expiring.tsx`. The tests are
+`pipeline/tests/test_lines.py`, `pipeline/tests/test_records_db.py`,
+`site/test/lines.test.ts` and `site/test/lines-pages.test.ts`.
+
+### The rules
+
+A line is one source's records of one buyer and one kind of work, dated in
+the 10 fiscal years ending with the data date's (`LINE_YEARS`). The buyer is
+the radar row's client department, else its buyer; the kind of work is the
+UNSPSC class of an award notice or history record (its family when it has
+no class), or the first 4 characters of a published contract's commodity
+code (`CODE_CHARS`). A row is counted in its own source and in the source of
+each row the radar's duplicate rule dropped against it (`expiring_twins`)
+when the same organization holds that row. In each source: the holder's
+records that start on or before this one (held, this one included), the
+first start, how many ran back to back (each later one starting no more
+than 120 days after the earlier one ends and no more than 60 before,
+`RUN_GAP_DAYS`, `RUN_OVERLAP_DAYS`; never two call-ups against one standing
+offer), the records in the line whoever held them and the other
+organizations among them, and how the held ones were awarded. A long run is
+3 or more back to back in one source (`LONG_RUN`); earlier records, one
+earlier record or more in one source; no earlier record, none in a source
+with a kind of work. Organizations of a similar name (the same match key,
+the same first 20 characters of the normalized name, `SIMILAR_PREFIX`, or a
+corporate family in common) are listed under their own names and never
+added to the holder's. The pipeline's constants and `lines.ts`'s are held
+equal by `test_lines.py`; the Methodology page (`/methodology#holders`)
+prints every figure from `lines.ts`.
+
+### The nightly
+
+- The stage `lines` runs after `expiring` and before `export`, with its own
+  `sources_log` row (the counts by label, the rows written and the
+  seconds; no notice, and no account or reader figure). It reads the radar
+  rows with a named holder and their twins, then one pass over each source,
+  keeping only the records a row's line reads, and rebuilds
+  `expiring_lines` (source key, `j`) whole in one transaction. A fault rolls
+  the transaction back, so the table keeps the night before's rows; the
+  stages after it still run, and the run is marked failed like any stage.
+- `expiring.py` keeps the pairs its duplicate rule collapsed in
+  `expiring_twins`, rebuilt with `expiring_contracts`.
+- The records sync writes `rec_lines` (code 18) from `expiring_lines` and
+  the static export's 12-month window: one row per window row whose holder
+  was counted, keyed as the row is in `rec_expiring`, `sk` its kind and URL
+  reference in lower case. Both pipeline tables are in `schema.sql`, which
+  every connection applies, and `rec_lines` is in `records_schema.sql`,
+  which the nightly applies before each sync: no operator SQL, no full
+  reload, `LAYOUT` stays 2.
+- The review file `data/out/review/holder-lines.txt`: the labels by source
+  and window, 50 rows of each label sampled by a hash of their key, and
+  every similar-name pair. The workflow saves it to the bucket's private
+  `review/` prefix with the other review files. It names organizations and
+  records, never an account or a reader.
+- On the development copy (1,906 radar rows, data date 2026-11-01): 1,894
+  rows written (12 withheld or unnamed), 22 long runs, 328 earlier records,
+  1,485 no earlier record, 59 without a kind of work, 11 similar-name pairs;
+  `j` averages 355 bytes (672 KB in all), and the stage took under a second.
+
+### Where it shows
+
+- A radar window's page (`/expiring/3m`, `/6m`, `/12m`, the full list and
+  the free view): under each named holder of a row ending within the plan's
+  days, Free 91 (the 3-month list's) and Pro 365 (the 12-month list's), one
+  muted line: "Long run · 7 back to back", "Earlier records · 8 earlier",
+  "No earlier record", with "· similar name" when the line lists one. Under
+  the table: what the line means, the disclaimer with its link to the
+  Terms' No Warranty section and to `/methodology#holders`, and the
+  licence line. Rows the plan covers with no record yet: "Holders' records
+  appear here after the next nightly update." A database that cannot
+  answer: one line saying so. A reader not signed in: "Signed-in readers see
+  each holder's record with the buyer under its name. Sign in", the same for
+  everyone, so the page stays public (`public, max-age=300`, `Vary:
+  Cookie`).
+- A contract's page (`/awards/<ref>`, `/history/<ref>`,
+  `/contracts/<department>/<ref>`), after the dates: the panel "The Holder's
+  Record With This Buyer" with the lead, the label and its figure, each
+  source's lines, this contract's method, bids and amendments, the similar
+  names (each linking its own profile), the basis, that the counts say
+  nothing about the chances of any bid, the disclaimer and the licence
+  line. A contract without a kind of work says why it has no label. Free,
+  past its 91 days: one line saying what each plan shows, with a link to
+  the plans. Nothing for a reader not signed in, a contract the radar does
+  not hold (ended, cancelled, beyond 365 days, a twin, an older version of
+  a published contract), a supplier withheld as a person, or a row that
+  does not read in full.
+- The plan cards: "Holder's record: the 3-month list" on Free, "the
+  12-month list" on Pro (`plans.lines`, feature `radar_depth`).
+- Every page showing a record is signed in, so `page()` sends it
+  `private, no-store`. Nothing is added to a static file, a feed, the open
+  API or a CSV.
+
+### Reads and bounds
+
+- A window's page, signed in: one records statement (`LINES_BY_KEY_SQL`),
+  the keys of the rows the plan covers bound as one JSON list, at most 500
+  (a page file's rows), each found through `rec_lines_sk`: up to 500 index
+  reads and about 180 KB of `j`, then each row checked and its mark drawn.
+  The CPU guard times a Pro reader's 500-row 3-month page at 31.6 times the
+  yardstick against 27.2 for the same page signed out (bound 95).
+- An award notice's or history record's page, signed in: one statement
+  (`LINE_BY_KEY_SQL`, one row with the buyer's and the holder's names, under
+  1 KB), only when the contract can be on the radar; plus the open notices'
+  class and family names (`tenders/open-levels.json`, kept parsed while its
+  ETag holds) when the record names a class or family.
+- A published contract's page, signed in: the same statement in the page's
+  own batch (four statements where it had three).
+- A reader not signed in: no read at all; the contract pages are byte for
+  byte as before, which `lines-pages.test.ts` holds.
+
+### Later
+
+May follow (the earlier contracts an open notice may follow), the matching
+notices' line, the mail and the CSV columns are later slices. The Terms
+paragraph already names may follow.
+
+### Operator steps
+
+None for the tables. After the first nightly with the stage, read
+`review/holder-lines.txt` in the bucket: the split by label and source, the
+sampled rows and the similar-name pairs. The constants are confirmed there.
+
 ## Weekly briefings
 
 A weekly briefing is one message a week about one UNSPSC segment or one buyer

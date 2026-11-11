@@ -2034,6 +2034,43 @@ const STRINGS = {
     en: "A ranking needs at least {min} records with UNSPSC codes in one source over the period. Tender notices publish no value, so value plays no part. The site shows a match only to the account that named the organization, and no page, file or feed lists matches. The counts a match reads are counts of public records, and the organization's profile file carries them.",
     fr: "Un classement demande au moins {min} dossiers portant des codes UNSPSC dans une même source sur la période. Les avis d'appel d'offres ne publient aucune valeur, la valeur n'entre donc pas en compte. Le site ne montre une correspondance qu'au compte qui a indiqué l'organisation, et aucune page, aucun fichier ni aucun fil ne présente de correspondances. Les nombres que lit une correspondance sont des nombres de dossiers publics, et le fichier du profil de l'organisation les porte.",
   },
+  // The holder's record: the rules lines.py counts by, every figure rendered from src/lines.ts. The Terms'
+  // advisory paragraph links the page; the radar and a contract's page link here.
+  "methodology.toc_holders": { en: "Holder's Record", fr: "Dossiers du titulaire" },
+  "methodology.holders_what": {
+    en: "A signed-in reader sees, under the holder of each contract ending, its record with the same buyer for the same kind of work. The count is Award Watch's own, by the fixed rules below, from the award notices, the PSPC contract history and the published contracts. It is not advice, it says nothing about the merit of any organization or about how any buyer procures, and it says nothing about the chances of any bid: the federal files name the supplier a contract went to and no other bidder.",
+    fr: "Un lecteur connecté voit, sous le titulaire de chaque contrat qui prend fin, ses dossiers auprès du même acheteur pour le même genre de travail. Ce compte est propre à Award Watch, selon les règles fixes ci-dessous, à partir des avis d'attribution, de l'historique des contrats de SPAC et des contrats publiés. Il ne constitue pas un conseil, ne dit rien du mérite d'une organisation ni de la façon dont un acheteur passe ses marchés, et ne dit rien des chances d'une soumission : les fichiers fédéraux nomment le fournisseur retenu et aucun autre soumissionnaire.",
+  },
+  "methodology.holders_cell": {
+    en: "The same kind of work with the same buyer is, for an award notice or a PSPC contract history record, the same UNSPSC class (the first six digits of a code), or the same family (four digits) when the contract carries no class; for a published contract, a commodity code with the same first {chars} characters. The buyer is the client department where the source names one, else the contracting entity. Records count from the {years} fiscal years ending with the data date's. Each source is counted in its own terms and never added to another; a label takes the largest figure of any one source.",
+    fr: "Le même genre de travail auprès du même acheteur est, pour un avis d'attribution ou un dossier de l'historique des contrats de SPAC, la même classe UNSPSC (les six premiers chiffres d'un code), ou la même famille (quatre chiffres) lorsque le contrat ne porte aucune classe; pour un contrat publié, un code de marchandise dont les {chars} premiers caractères sont les mêmes. L'acheteur est le ministère client lorsque la source en nomme un, sinon l'entité contractante. Les dossiers comptent à partir des {years} exercices se terminant par celui de la date des données. Chaque source est comptée selon ses propres termes et n'est jamais ajoutée à une autre; un libellé retient le plus grand nombre d'une seule source.",
+  },
+  "methodology.holders_run": {
+    en: "Two of the holder's contracts are back to back when the later one starts no more than {gap} days after the earlier one ends and no more than {overlap} days before. The count runs back from the contract ending, one contract at a time, and stops at the first gap. Two call-ups against the same standing offer are never back to back. Purchases made at the same time count as earlier records but not as back to back.",
+    fr: "Deux contrats du titulaire se suivent lorsque le plus récent commence au plus {gap} jours après la fin du précédent et au plus {overlap} jours avant. Le compte remonte à partir du contrat qui prend fin, un contrat à la fois, et s'arrête à la première interruption. Deux commandes subséquentes à une même offre à commandes ne se suivent jamais. Des achats faits en même temps comptent comme dossiers antérieurs, mais pas comme contrats qui se suivent.",
+  },
+  "methodology.holders_col_label": { en: "Label", fr: "Libellé" },
+  "methodology.holders_col_rule": { en: "Rule", fr: "Règle" },
+  "methodology.holders_rule_run": {
+    en: "{long} or more of the holder's contracts back to back, this one included, in one source",
+    fr: "Au moins {long} contrats du titulaire à la suite, celui-ci compris, dans une même source",
+  },
+  "methodology.holders_rule_earlier": {
+    en: "At least one earlier contract of this kind with this buyer under the holder's name, in one source",
+    fr: "Au moins un contrat antérieur de ce genre auprès de cet acheteur sous le nom du titulaire, dans une même source",
+  },
+  "methodology.holders_rule_none": {
+    en: "None under the holder's name in the period, in any source",
+    fr: "Aucun sous le nom du titulaire pendant la période, dans aucune source",
+  },
+  "methodology.holders_similar": {
+    en: "One organization can appear under several names, and its records are then split between profiles. Where another holder in the same line of work has a name that begins with the same {prefix} characters, shares the merge rules' match key, or belongs to the same corporate family, its records are listed beside the holder's, under its own name and counted apart. A holder can therefore have more records than shown, and a label never adds the two.",
+    fr: "Une même organisation peut figurer sous plusieurs noms, et ses dossiers sont alors répartis entre plusieurs profils. Lorsqu'un autre titulaire du même genre de travail porte un nom qui commence par les mêmes {prefix} caractères, partage la clé de rapprochement des règles de fusion ou appartient à la même famille d'entreprises, ses dossiers sont présentés à côté de ceux du titulaire, sous son propre nom et comptés à part. Un titulaire peut donc avoir plus de dossiers que ce qui est montré, et un libellé n'additionne jamais les deux.",
+  },
+  "methodology.holders_limits": {
+    en: "Departments code the same work in different ways, so one kind of work can be split across codes, and a broad class can gather unrelated work. A contract that carries only a UNSPSC segment gets no label. A supplier withheld as a private individual is never named; its contracts count only in a total. One organization under several names is shown under each name (above), and two businesses with the same name share one profile, which says so. Nothing here is public: a reader must be signed in, and no file, feed or API carries these labels.",
+    fr: "Les ministères codent un même travail de façons différentes : un même genre de travail peut donc se répartir entre plusieurs codes, et une classe large peut réunir des travaux sans rapport. Un contrat qui ne porte qu'un segment UNSPSC ne reçoit aucun libellé. Un fournisseur non divulgué parce qu'il s'agit d'un particulier n'est jamais nommé; ses contrats ne comptent que dans un total. Une organisation qui figure sous plusieurs noms est présentée sous chacun d'eux (ci-dessus), et deux entreprises qui portent le même nom partagent un profil, qui l'indique. Rien de ceci n'est public : il faut être connecté, et aucun fichier, aucun fil ni aucune API ne porte ces libellés.",
+  },
   "methodology.people_individuals": {
     en: "Private individuals are never stored: grants to individuals and any supplier, recipient or client whose name reads as a person's are dropped before anything is written, and only their number is logged.",
     fr: "Les particuliers ne sont jamais conservés : les subventions versées à des particuliers et tout fournisseur, bénéficiaire ou client dont le nom se lit comme celui d'une personne sont écartés avant toute écriture, et seul leur nombre est consigné.",
@@ -2406,8 +2443,8 @@ const STRINGS = {
   },
   // Between the warranty and the liability paragraphs, so the Pro section's reference to No Warranty covers it.
   "terms.advisory": {
-    en: "Some features calculate, from public records, what may interest a reader, such as the notices that match the records of the organization a reader names. These calculations follow the fixed rules on the {methodology} page. They do not constitute advice, they say nothing about the merit of any organization, and they may be wrong or incomplete. They are Award Watch's own and are neither produced nor endorsed by the Government of Canada. Award Watch is not responsible for their accuracy or for any decision made on them, including a decision to bid or not to bid.",
-    fr: "Certaines fonctions calculent, à partir de dossiers publics, ce qui peut intéresser un lecteur, comme les avis qui correspondent aux dossiers de l'organisation qu'il indique. Ces calculs suivent les règles fixes décrites à la page {methodology}. Ils ne constituent pas un conseil, ne disent rien du mérite d'une organisation et peuvent être erronés ou incomplets. Ils sont propres à Award Watch et ne sont ni produits ni approuvés par le gouvernement du Canada. Award Watch n'est pas responsable de leur exactitude ni d'aucune décision prise sur leur base, y compris celle de soumissionner ou non.",
+    en: "Some features calculate, from public records, what may interest a reader, such as the notices that match the records of the organization a reader names, a contract holder's earlier records with the same buyer and the earlier contracts an open notice may follow. These calculations follow the fixed rules on the {methodology} page. They do not constitute advice, they say nothing about the merit of any organization or about how any buyer procures, and they may be wrong or incomplete. They are Award Watch's own and are neither produced nor endorsed by the Government of Canada. Award Watch is not responsible for their accuracy or for any decision made on them, including a decision to bid or not to bid.",
+    fr: "Certaines fonctions calculent, à partir de dossiers publics, ce qui peut intéresser un lecteur, comme les avis qui correspondent aux dossiers de l'organisation qu'il indique, les dossiers antérieurs du titulaire d'un contrat auprès du même acheteur et les contrats antérieurs auxquels un avis ouvert pourrait faire suite. Ces calculs suivent les règles fixes décrites à la page {methodology}. Ils ne constituent pas un conseil, ne disent rien du mérite d'une organisation ni de la façon dont un acheteur passe ses marchés, et peuvent être erronés ou incomplets. Ils sont propres à Award Watch et ne sont ni produits ni approuvés par le gouvernement du Canada. Award Watch n'est pas responsable de leur exactitude ni d'aucune décision prise sur leur base, y compris celle de soumissionner ou non.",
   },
   "terms.liability": {
     en: "Award Watch is not liable for any loss arising from the use of the site, its pages or its files.",
@@ -3421,6 +3458,9 @@ const STRINGS = {
   // The week's new matching notices by email (src/account/fit_mail.ts): Free's in the weekly email, Pro's
   // in the weekly email or the watch mail. The French runs 44 characters at Pro's figure.
   "plans.match_mail": { en: "{n} matching notices a week, by email", fr: "{n} correspondances par semaine, par courriel" },
+  // The holder's record (src/pages/holders.tsx): the radar's windows, the 3-month list's on Free and the
+  // 12-month list's on Pro, each plan's own figure on the one wording.
+  "plans.lines": { en: "Holder's record: the {m}-month list", fr: "Dossiers du titulaire : liste de {m} mois" },
   "plans.free_api": { en: "Open JSON API", fr: "API JSON ouverte" },
   "plans.pro_api": { en: "Keyed API: {day} requests a day", fr: "API avec clé : {day} requêtes par jour" },
   "plans.free_instruments": { en: "Standing offer pages", fr: "Pages des offres à commandes" },
@@ -3706,6 +3746,118 @@ const STRINGS = {
   "expiring.province_unavailable": {
     en: "The province filter is not available yet; the list shows every province.",
     fr: "Le filtre par province n'est pas encore offert; la liste présente toutes les provinces.",
+  },
+  // -- the holder's record (src/lines.ts, src/lines_view.tsx, src/pages/holders.tsx; docs/accounts.md, Holder's record) --
+  // A label names the records (a run of contracts, earlier records, none), never the business or the buyer, and
+  // always stands with its figure. test/lines.test.ts holds a list of words out of every string here.
+  "line.panel": { en: "The Holder's Record With This Buyer", fr: "Dossiers du titulaire auprès de cet acheteur" },
+  "line.lead": {
+    en: "Contracts of this kind with {buyer} held by {holder}, fiscal years {first} to {last}.",
+    fr: "Contrats de ce genre auprès de {buyer} détenus par {holder}, exercices {first} à {last}.",
+  },
+  "line.band_run": { en: "Long run", fr: "Longue série" },
+  "line.band_earlier": { en: "Earlier records", fr: "Dossiers antérieurs" },
+  "line.band_none": { en: "No earlier record", fr: "Aucun dossier antérieur" },
+  "line.short_run": { en: "{n} back to back", fr: "{n} à la suite" },
+  "line.short_earlier_one": { en: "{n} earlier", fr: "{n} antérieur" },
+  "line.short_earlier_many": { en: "{n} earlier", fr: "{n} antérieurs" },
+  "line.short_similar": { en: "similar name", fr: "nom semblable" },
+  "line.since": { en: "since {date}", fr: "depuis le {date}" },
+  "line.kind_class": { en: "UNSPSC class {code}", fr: "classe UNSPSC {code}" },
+  "line.kind_family": { en: "UNSPSC family {code}", fr: "famille UNSPSC {code}" },
+  // A notice coded in several classes (or families): its line is the records sharing any one of them.
+  "line.kind_classes": { en: "UNSPSC classes {code}", fr: "classes UNSPSC {code}" },
+  "line.kind_families": { en: "UNSPSC families {code}", fr: "familles UNSPSC {code}" },
+  "line.kind_code": { en: "commodity codes starting {code}", fr: "codes de marchandise commençant par {code}" },
+  "line.r_held_one": {
+    en: "{source}, {kind}: this is the only contract of this kind with this buyer held by {holder} in the period.",
+    fr: "{source}, {kind} : c'est le seul contrat de ce genre auprès de cet acheteur détenu par {holder} pendant la période.",
+  },
+  "line.r_held_many": {
+    en: "{source}, {kind}: {holder} held {n} contracts of this kind with this buyer, this one included, the first starting {date}.",
+    fr: "{source}, {kind} : {holder} a détenu {n} contrats de ce genre auprès de cet acheteur, celui-ci compris, le premier commençant le {date}.",
+  },
+  "line.r_run": {
+    en: "{n} of them back to back, each starting within {gap} days of the previous one's end.",
+    fr: "{n} d'entre eux à la suite, chacun commençant à moins de {gap} jours de la fin du précédent.",
+  },
+  "line.r_run_none": { en: "None of them runs back to back into this one.", fr: "Aucun d'eux ne précède celui-ci sans interruption." },
+  "line.r_cell_one": {
+    en: "In all, {total} contracts of this kind with this buyer in the period; 1 other supplier held some of them.",
+    fr: "Au total, {total} contrats de ce genre auprès de cet acheteur pendant la période; 1 autre fournisseur en a détenu.",
+  },
+  "line.r_cell_many": {
+    en: "In all, {total} contracts of this kind with this buyer in the period; {others} other suppliers held some of them.",
+    fr: "Au total, {total} contrats de ce genre auprès de cet acheteur pendant la période; {others} autres fournisseurs en ont détenu.",
+  },
+  "line.r_cell_none": {
+    en: "No other supplier held a contract of this kind with this buyer in the period.",
+    fr: "Aucun autre fournisseur n'a détenu de contrat de ce genre auprès de cet acheteur pendant la période.",
+  },
+  "line.r_method": { en: "How the {n} were awarded: {parts}.", fr: "Mode d'attribution des {n} : {parts}." },
+  "line.method_nc": { en: "non-competitive: {n}", fr: "non concurrentiels : {n}" },
+  "line.method_c": { en: "competitive: {n}", fr: "concurrentiels : {n}" },
+  "line.method_u": { en: "method not stated: {n}", fr: "méthode non précisée : {n}" },
+  "line.r_last": { en: "This contract: {method}{bids}.", fr: "Ce contrat : {method}{bids}." },
+  "line.bids_one": { en: ", {n} bid received", fr: ", {n} soumission reçue" },
+  "line.bids_many": { en: ", {n} bids received", fr: ", {n} soumissions reçues" },
+  "line.r_amend": {
+    en: "Amendments published: {n}; value {pct} on the original amount.",
+    fr: "Modifications publiées : {n}; valeur {pct} par rapport au montant initial.",
+  },
+  // The same where the source gives no value to set against the original amount.
+  "line.r_amend_count": { en: "Amendments published: {n}.", fr: "Modifications publiées : {n}." },
+  "line.r_end_moved": { en: "End date moved from {from} to {to}.", fr: "Date de fin passée du {from} au {to}." },
+  "line.r_amend_none": {
+    en: "No amendment published; the end date is as first published.",
+    fr: "Aucune modification publiée; la date de fin est celle publiée au départ.",
+  },
+  "line.r_similar": {
+    en: "Under a similar name, counted apart: {name}, {n} contracts of this kind with this buyer, the last starting {date}.",
+    fr: "Sous un nom semblable, compté à part : {name}, {n} contrats de ce genre auprès de cet acheteur, le dernier commençant le {date}.",
+  },
+  "line.r_similar_one": {
+    en: "Under a similar name, counted apart: {name}, {n} contract of this kind with this buyer, starting {date}.",
+    fr: "Sous un nom semblable, compté à part : {name}, {n} contrat de ce genre auprès de cet acheteur, commençant le {date}.",
+  },
+  "line.uncoded": {
+    en: "This contract carries only a UNSPSC segment, so its kind of work is not compared and no label is given.",
+    fr: "Ce contrat ne porte qu'un segment UNSPSC; son genre de travail n'est donc pas comparé et aucun libellé n'est donné.",
+  },
+  // A record with no code at all, or a published contract whose commodity code is too short to compare.
+  "line.uncoded_none": {
+    en: "This contract carries no code that names its kind of work, so it is not compared and no label is given.",
+    fr: "Ce contrat ne porte aucun code qui nomme son genre de travail; il n'est donc pas comparé et aucun libellé n'est donné.",
+  },
+  "line.basis": {
+    en: "Counted from the award notices, PSPC contract history and published contracts of the last {years} fiscal years. Each source is counted apart and never added to another.",
+    fr: "Compté à partir des avis d'attribution, de l'historique des contrats de SPAC et des contrats publiés des {years} derniers exercices. Chaque source est comptée à part et n'est jamais ajoutée à une autre.",
+  },
+  "line.disclaimer": {
+    en: "Award Watch counts these records from public files. The counts and their labels are not advice and may be wrong or incomplete. See the {terms}.",
+    fr: "Award Watch compte ces dossiers à partir de fichiers publics. Les nombres et leurs libellés ne constituent pas un conseil et peuvent être erronés ou incomplets. Voir les {terms}.",
+  },
+  "line.how": { en: "How the holder's record is counted", fr: "Comment les dossiers du titulaire sont comptés" },
+  "line.not_odds": {
+    en: "These counts say nothing about the chances of any bid: the federal files name the supplier each contract went to and no other bidder.",
+    fr: "Ces nombres ne disent rien des chances d'une soumission : les fichiers fédéraux nomment le fournisseur retenu pour chaque contrat et aucun autre soumissionnaire.",
+  },
+  "line.legend": {
+    en: "Under each holder's name: its record with the buyer for the same kind of work over the last {years} fiscal years.",
+    fr: "Sous le nom de chaque titulaire : ses dossiers auprès de l'acheteur pour le même genre de travail au cours des {years} derniers exercices.",
+  },
+  "line.unavailable": { en: "The holders' records are not available right now.", fr: "Les dossiers des titulaires ne sont pas disponibles pour le moment." },
+  "line.pending": {
+    en: "Holders' records appear here after the next nightly update.",
+    fr: "Les dossiers des titulaires s'affichent ici après la prochaine mise à jour de nuit.",
+  },
+  "line.free_window": {
+    en: "The Free plan shows the holder's record for contracts ending within {free} days; Pro shows it for those ending within {pro} days. {plans}",
+    fr: "Le forfait Gratuit présente les dossiers du titulaire pour les contrats qui prennent fin d'ici {free} jours; Pro, pour ceux qui prennent fin d'ici {pro} jours. {plans}",
+  },
+  "line.signed_out": {
+    en: "Signed-in readers see each holder's record with the buyer under its name. {signin}",
+    fr: "Les lecteurs connectés voient, sous le nom de chaque titulaire, ses dossiers auprès de l'acheteur. {signin}",
   },
   // The rail's Analytics item and the index of the analytics views it opens
   // (pages/analytics_index.tsx): the lead, the gate note for a reader whose

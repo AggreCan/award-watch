@@ -384,7 +384,7 @@ describe("the radar's tabs and tiles", () => {
 
   it("lists what Pro includes, watches, calendar feeds, your organization, the weekly briefing, the keyed API, instrument files and bug reports among it, each line a Pro feature", () => {
     expect(PRO_INCLUDES.map(([f]) => f)).toEqual([
-      "intraday", "radar_depth", "radar_depth", "delivery", "watch_mail", "delivery", "analytics", "matches", "match_mail", "api",
+      "intraday", "radar_depth", "radar_depth", "delivery", "watch_mail", "delivery", "analytics", "matches", "match_mail", "radar_depth", "api",
       "export_filtered", "delivery", "analytics", "bug_reports",
     ]);
     expect(PRO_INCLUDES.map(([, key]) => key)).toContain("plans.pro_briefing");
@@ -471,6 +471,9 @@ describe("the plan cards", () => {
     expect(pro).toContain("<span>Contracts ending: 6- and 12-month lists</span>");
     expect(free).toContain("<span>Contracts ending: the 3-month CSV</span>");
     expect(pro).toContain("<span>Contracts ending: the 12-month CSV</span>");
+    // The holder's record: the radar's windows, the 3-month list's on Free and the 12-month list's on Pro.
+    expect(free).toContain("<span>Holder's record: the 3-month list</span>");
+    expect(pro).toContain("<span>Holder's record: the 12-month list</span>");
     expect(EXPIRING_WINDOWS).toEqual(["3m", "6m", "12m"]);
     const hours = Number(SAME_DAY_RUNS_UTC[1].slice(0, 2)) - Number(SAME_DAY_RUNS_UTC[0].slice(0, 2));
     expect(pro).toContain(`<span>Tender notices, same day, every ${hours} hours</span>`);

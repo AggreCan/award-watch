@@ -275,10 +275,11 @@ describe("around the page", () => {
       expect(warranty).toBeGreaterThan(0);
       expect(advisory).toBeGreaterThan(warranty);
       expect(liability).toBeGreaterThan(advisory);
-      expect(en).toContain('These calculations follow the fixed rules on the <a href="/methodology#matching">Methodology</a> page.');
+      // The page as a whole: its contents name each calculation's section (matching notices, the holder's record).
+      expect(en).toContain('These calculations follow the fixed rules on the <a href="/methodology">Methodology</a> page.');
       expect(en).toContain("Award Watch is not responsible for their accuracy or for any decision made on them, including a decision to bid or not to bid.");
       const fr = nbsp(decode(await (await get("/terms?lang=fr", { env })).text())).replace(/’/g, "'");
-      expect(fr).toContain("Ces calculs suivent les règles fixes décrites à la page <a href=\"/methodology#matching\">Méthodologie</a>.");
+      expect(fr).toContain("Ces calculs suivent les règles fixes décrites à la page <a href=\"/methodology\">Méthodologie</a>.");
       expect(fr).toContain("Award Watch n'est pas responsable de leur exactitude ni d'aucune décision prise sur leur base, y compris celle de soumissionner ou non.");
     }
   });

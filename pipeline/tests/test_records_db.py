@@ -735,6 +735,54 @@ def test_a_reference_whose_url_form_another_takes_loses_its_link_in_both_tables_
     assert ref("rec_details", rd.key_of("award:$$")) == (":$$",)
 
 
+def test_the_holders_record_is_one_row_per_window_row_keyed_as_it_and_asked_for_by_its_lower_case_reference(seeded, tmp_path):
+    """rec_lines (lines.py through lines_rows): one row for each row of the radar's window whose holder the lines
+    stage counted, keyed as the window row is in rec_expiring, sk its kind and URL reference in lower case, j as the
+    stage wrote it (no day count). A table added beside the others: code 18, the layout as it was, so no reload."""
+    from awardwatch_pipeline import lines
+
+    conn, _ = seeded
+    from export_seed import TODAY
+    lines.compute(conn, today=TODAY, now=STAMP, review_dir=tmp_path / "review")
+    static = tmp_path / "static"
+    export_static.export_static(conn, static, today=TODAY, base_url="https://awardwatch.example")
+    held = dict(conn.execute("SELECT source_key, j FROM expiring_lines"))
+    assert held and all("days_left" not in j for j in held.values())
+    db = d1()
+    out = tmp_path / "records"
+    manifest = night(conn, out, db, static_dir=static)
+    rows = db.execute("SELECT l.k, l.sk, l.j, e.j FROM rec_lines l JOIN rec_expiring e ON e.k = l.k").fetchall()
+    assert len(rows) == manifest["expected"]["rec_lines"] == db.execute("SELECT COUNT(*) FROM rec_lines").fetchone()[0] > 0
+    for k, sk, j, row in rows:
+        row = json.loads(row)
+        assert sk == f"{row['kind']}:{row['reference']}".lower(), sk
+        assert j == held[f"{row['kind']}:{row.get('reference_published') or row['reference']}"]
+        assert k == rd.key_of(f"expiring:{row['kind']}:{row['reference']}")
+    # The withheld supplier's row (AW-5) has none; a published contract is asked for by its department and reference.
+    assert "award:aw-5" not in {sk for _, sk, _, _ in rows}
+    assert any(sk.startswith("contract:dnd-mdn:") for _, sk, _, _ in rows)
+    # The page's statement reads it by sk through the unique index.
+    plan = " ".join(str(r[-1]) for r in db.execute("EXPLAIN QUERY PLAN SELECT j FROM rec_lines WHERE sk = ? LIMIT 1", ("x",)))
+    assert "rec_lines_sk" in plan and "SCAN" not in plan, plan
+    assert rd.LINES.code == 18 and rd.BY_CODE[18] is rd.LINES and rd.LAYOUT == 2
+    assert len({t.code for t in rd.TABLES}) == len(rd.TABLES)
+    # Nothing changed, nothing sent; a night whose lines stage wrote nothing empties the table.
+    assert night(conn, out, db, static_dir=static)["batches"] == []
+    conn.execute("DELETE FROM expiring_lines")
+    conn.commit()
+    manifest = night(conn, out, db, static_dir=static)
+    assert manifest["deletes"]["rec_lines"] == len(rows) and db.execute("SELECT COUNT(*) FROM rec_lines").fetchone() == (0,)
+
+
+def test_two_window_rows_whose_lower_case_reference_is_one_keep_the_first():
+    window = [(2, None, '{"kind":"contract","reference":"d:ab-1"}'), (1, None, '{"kind":"contract","reference":"d:AB-1"}')]
+    conn = connect(memory=True)
+    conn.executemany("INSERT INTO expiring_lines (source_key, j, computed_at) VALUES (?, ?, 'x')",
+                     [("contract:d:ab-1", '{"v":1}'), ("contract:d:AB-1", '{"v":2}')])
+    tally: dict = {}
+    assert list(rd.lines_rows(conn, window, tally)) == [(1, "contract:d:ab-1", '{"v":2}')] and tally == {"lines_same_key": 1}
+
+
 def _window(static: Path, rows: object, pages: object = 1) -> None:
     folder = static / "expiring" / "12m"
     folder.mkdir(parents=True, exist_ok=True)
