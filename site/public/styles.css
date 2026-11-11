@@ -1195,6 +1195,16 @@ a > .pro-tag:last-child { margin-right: 0; }
 .feed-cell { display: grid; gap: 4px; justify-items: start; }
 .feed-cell p { margin: 0; }
 .calendar-address { width: 100%; min-width: 24ch; font-size: 12px; }
+/* The overview's first steps (account/pages.tsx StartPanel): a step a row, ruled as the
+   overview's lists are, each its title, its one action and a line. The search field keeps
+   room for its placeholder; where that and the button do not fit on one line (a phone in
+   French) the button goes under it. */
+.panel > .start-steps { margin: 0; padding: 0; list-style: none; }
+.start-steps > li { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 16px; border-bottom: 1px solid var(--border); }
+.start-steps > li:last-child { border-bottom: 0; }
+.start-steps p { margin: 0; max-width: 72ch; }
+.start-search { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; max-width: 480px; margin: 0; }
+.start-search input { flex: 1 1 15em; min-width: 0; }
 /* On a phone the tables restack, and a select with its button wraps rather than overflow the cell. */
 @media (max-width: 699px) {
   .account-inline { flex-wrap: wrap; white-space: normal; }

@@ -13,10 +13,11 @@ import { Layout, PageHead, Panel, page } from "../layout";
 import { EMAIL_MAX } from "../pages/interest";
 import { ProNote, ProTag } from "../pro";
 import { KEYED_ENDPOINTS, KEY_PER_DAY, KEY_PER_MINUTE } from "../api_keyed_spec";
+import { MAX_Q } from "../search_db";
 import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
-import { SAVED_SEARCH_MAX, allowed, watchCap } from "./entitlements";
+import { SAVED_SEARCH_MAX, WATCH_MAX, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX, type FeedKind } from "./feeds";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch } from "./searches";
 import type { Account } from "./session";
@@ -195,15 +196,82 @@ export function planLine(lang: Lang, account: Pick<Account, "plan" | "planUntil"
   return planLabel(lang, account);
 }
 
+type OverviewCounts = {
+  sessions: number; searches: number; cap: number; keys: number;
+  // The watches that count toward the cap, and whether the claimed organization's is held beside them (watches.ts watchCount).
+  watches?: number | null; watchesOwn?: boolean;
+  // The organization the account claims (org_claim.ts claimSummary): false for none, undefined before its table exists.
+  org?: { id: string; name: string | null } | false;
+};
+
+// The first steps, over the overview's own panels while the account follows
+// no page or keeps no saved search: a reader who signed in to track tenders
+// otherwise lands on settings with nothing to do next. Each step not done
+// yet, with its one action and a line on what it leads to; the panel goes by
+// itself once the account holds both. The claimed organization's watch counts
+// as a watch, since its events show on the watches page like any other.
+// Choosing the organization rides along only while the panel shows. Watches
+// that cannot be counted (the table not there yet) offer no Follow step. The
+// first step shown holds the page's one filled button; the steps are not
+// numbered, as nothing orders them. No Pro chip: a Free account's figures are
+// the watches and searches pages' own sentences, and a Pro account's lines
+// name its own plan only.
+const StartPanel: FC<{ lang: Lang; account: Account; counts: OverviewCounts }> = ({ lang, account, counts }) => {
+  const follow = counts.watches === 0 && !counts.watchesOwn;
+  const save = counts.searches === 0;
+  if (!follow && !save) return null;
+  const n = (v: number) => fmtInt(v, lang);
+  const mail = allowed(account, "watch_mail");
+  const deliver = allowed(account, "delivery");
+  const watching = { n: n(counts.watches ?? 0), cap: n(watchCap(account.plan)) };
+  const held = { n: n(counts.searches), cap: n(counts.cap) };
+  const watchFigures = mail
+    ? t(lang, "account.start_follow_cap", watching)
+    : t(lang, "watches.cap_free", { ...watching, max: n(WATCH_MAX) });
+  const searchFigures = deliver
+    ? t(lang, "account.start_search_cap", held)
+    : t(lang, "account.cap_note", { ...held, max: n(SAVED_SEARCH_MAX) });
+  return (
+    <Panel title={t(lang, "account.start_panel")}>
+      <ul class="start-steps">
+        {follow ? (
+          <li>
+            <h3>{t(lang, "account.start_follow")}</h3>
+            {/* The top bar's search (layout.tsx TopbarSearch), with its button: a name leads to the results, a result to its profile and its Follow. */}
+            <form method="get" action="/search" class="start-search" role="search">
+              <input type="search" name="q" maxlength={MAX_Q} autocomplete="off"
+                placeholder={t(lang, "search.placeholder")} aria-label={t(lang, "search.label")} />
+              <button type="submit" class="btn btn-primary">{t(lang, "search.submit")}</button>
+            </form>
+            <p class="muted small">{t(lang, mail ? "account.start_follow_text_pro" : "account.start_follow_text")} {watchFigures}</p>
+          </li>
+        ) : null}
+        {save ? (
+          <li>
+            <h3>{t(lang, "account.start_search")}</h3>
+            {/* No list page saves to an account in one step yet: the searches page's Add a Search takes the page's address. */}
+            <a href="/tenders" class={follow ? "btn" : "btn btn-primary"}>{t(lang, "account.start_search_button")}</a>
+            <p class="muted small">
+              {tj(lang, "account.start_search_text", { searches: <a href="/account/searches">{t(lang, "account.start_searches_link")}</a> })}{" "}
+              {searchFigures}
+            </p>
+          </li>
+        ) : null}
+        {counts.org === false ? (
+          <li>
+            <h3>{t(lang, "account.start_org")}</h3>
+            <a href="/account/organization" class="btn">{t(lang, "account.start_org_button")}</a>
+            <p class="muted small">{t(lang, allowed(account, "analytics") ? "account.start_org_text_pro" : "account.start_org_text")}</p>
+          </li>
+        ) : null}
+      </ul>
+    </Panel>
+  );
+};
+
 export function overviewView(
   lang: Lang, account: Account,
-  counts: {
-    sessions: number; searches: number; cap: number; keys: number;
-    // The watches that count toward the cap, and whether the claimed organization's is held beside them (watches.ts watchCount).
-    watches?: number | null; watchesOwn?: boolean;
-    // The organization the account claims (org_claim.ts claimSummary): false for none, undefined before its table exists.
-    org?: { id: string; name: string | null } | false;
-  },
+  counts: OverviewCounts,
   extra: { billing?: BillingLine | null; notice?: string | null } = {},
 ) {
   const stripe = extra.billing?.stripe && account.plan === "pro";
@@ -211,6 +279,7 @@ export function overviewView(
     <>
       <PageHead lang={lang} title={t(lang, "account.title")} lead={t(lang, "account.lead", { email: account.email })} />
       <Notice message={extra.notice} />
+      <StartPanel lang={lang} account={account} counts={counts} />
       <Panel title={t(lang, "account.panel_account")}>
         <dl class="wide">
           <dt>{t(lang, "account.field_email")}</dt><dd>{account.email}</dd>

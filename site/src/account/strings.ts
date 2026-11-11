@@ -119,6 +119,44 @@ export const ACCOUNT_STRINGS = {
     en: "Deleting the account removes its saved searches and API keys and signs out every browser.",
     fr: "La suppression du compte retire ses recherches enregistrées et ses clés d'API, et déconnecte chaque navigateur.",
   },
+  // The panel over the overview while the account follows no page or keeps no
+  // saved search (pages.tsx StartPanel). Each step's line says what the step
+  // leads to in the words the Follow control, the searches page and the
+  // organization page use; the figures come from the plans, and a Free
+  // account's lines are the watches and searches pages' own (watches.cap_free,
+  // account.cap_note).
+  "account.start_panel": { en: "Start Here", fr: "Pour commencer" },
+  "account.start_follow": { en: "Follow an organization or a buyer", fr: "Suivre une organisation ou un acheteur" },
+  "account.start_follow_text": {
+    en: "On a result's profile, use the Follow button. Its events then show on your watches page: a new award, an amendment, an end date near, a new or closed notice.",
+    fr: "Sur le profil d'un résultat, utilisez le bouton Suivre. Ses événements s'affichent ensuite sur votre page des suivis : une nouvelle attribution, une modification, une fin proche, un avis nouveau ou fermé.",
+  },
+  "account.start_follow_text_pro": {
+    en: "On a result's profile, use the Follow button. Its events then show on your watches page and come by email: a new award, an amendment, an end date near, a new or closed notice.",
+    fr: "Sur le profil d'un résultat, utilisez le bouton Suivre. Ses événements s'affichent ensuite sur votre page des suivis et arrivent par courriel : une nouvelle attribution, une modification, une fin proche, un avis nouveau ou fermé.",
+  },
+  "account.start_follow_cap": { en: "This account follows {n} of {cap} pages.", fr: "Pages suivies par ce compte : {n} sur {cap}." },
+  "account.start_search": { en: "Save a search of tender notices", fr: "Enregistrer une recherche d'avis d'appel d'offres" },
+  "account.start_search_button": { en: "Filter the tender notices", fr: "Filtrer les avis d'appel d'offres" },
+  "account.start_search_text": {
+    en: "Set the filters there, then copy the page's address into Add a Search on your {searches}.",
+    fr: "Choisissez-y les filtres, puis copiez l'adresse de la page dans Ajouter une recherche, sur votre {searches}.",
+  },
+  "account.start_searches_link": { en: "saved searches page", fr: "page des recherches enregistrées" },
+  "account.start_search_cap": {
+    en: "This account holds {n} of {cap} saved searches. Each can be sent by email, daily or weekly.",
+    fr: "Recherches enregistrées de ce compte : {n} sur {cap}. Chacune peut être envoyée par courriel, chaque jour ou chaque semaine.",
+  },
+  "account.start_org": { en: "Choose your organization", fr: "Choisir votre organisation" },
+  "account.start_org_button": { en: "Find your organization", fr: "Trouver votre organisation" },
+  "account.start_org_text": {
+    en: "Tell the site which organization is yours to see its records by fiscal year on one page. The choice is private to your account.",
+    fr: "Indiquez au site quelle organisation est la vôtre pour voir ses dossiers par exercice sur une même page. Ce choix reste privé à votre compte.",
+  },
+  "account.start_org_text_pro": {
+    en: "Tell the site which organization is yours to see, on one page, its records by fiscal year and segment, its contracts ending within 12 months and the buyers it has won from. The choice is private to your account.",
+    fr: "Indiquez au site quelle organisation est la vôtre pour voir au même endroit ses dossiers par exercice et par segment, ses contrats prenant fin d'ici 12 mois et les acheteurs auprès desquels elle a obtenu des contrats. Ce choix reste privé à votre compte.",
+  },
 
   // -- saved searches -------------------------------------------------------------------
   "account.searches_title": { en: "Saved Searches", fr: "Recherches enregistrées" },
