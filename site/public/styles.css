@@ -1159,7 +1159,7 @@ tr[data-phone-cut] { display: none !important; }
 /* -- the Pro mark (src/pro.tsx) -------------------------------------------------
    One chip for whatever comes with Pro: the word in the accent, a filled
    gem glyph before it (an inline SVG in currentColor, 4 px before the word),
-   a 1 px accent border on the panel ground, and the type of the plan
+   a 2 px accent border on the panel ground, and the type of the plan
    subscript after the wordmark (11/16, 600, 0.04em). The accent on the
    panel is 5.3:1 light and 9.3:1 dark, and at least 4.7:1 on every ground
    the chip sits on (page, head band, selected row). On the top bar the same
@@ -1181,7 +1181,10 @@ tr[data-phone-cut] { display: none !important; }
   font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; font-variant-numeric: normal;
   text-transform: none; text-decoration: none; white-space: nowrap; vertical-align: middle;
 }
-.pro-tag svg { display: block; flex: none; width: 11px; height: 11px; fill: currentColor; }
+/* 12 px, an even 2 px above and below in the chip's 16 px of room. At 11 px
+   the glyph was centred on a half pixel and sat a device pixel or two low
+   in some places, most on a scaled display (operator, 2026-11-11). */
+.pro-tag svg { display: block; flex: none; width: 12px; height: 12px; fill: currentColor; }
 /* The exceptions, where something else already makes the space, so the
    margin on that side would double it. A chip that ends a link: what follows
    is the link's neighbour (a tab's gap, the head's padding, a sentence's

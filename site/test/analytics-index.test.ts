@@ -32,7 +32,7 @@ const SEARCH = (env as unknown as { SEARCH: D1Database }).SEARCH;
 const SEARCH_SCHEMA = (env as unknown as { SEARCH_SCHEMA_SQL: string }).SEARCH_SCHEMA_SQL;
 const EM_DASH = String.fromCharCode(0x2014);
 
-const CHIP_EN = `<span class="pro-tag"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="${PRO_GLYPH_PATH}"></path></svg>Pro<span class="visually-hidden"> (paid plan)</span></span>`;
+const CHIP_EN = `<span class="pro-tag"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="${PRO_GLYPH_PATH}"></path></svg>Pro<span class="visually-hidden"> (paid plan)</span></span>`;
 const CHIP_FR = CHIP_EN.replace("(paid plan)", "(forfait payant)");
 const chips = (html: string) => (html.match(/<span class="pro-tag">/g) ?? []).length;
 const railOf = (html: string) => /<nav class="rail"[\s\S]*?<\/nav>/.exec(html)?.[0] ?? "";

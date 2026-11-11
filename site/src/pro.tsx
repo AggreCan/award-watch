@@ -28,7 +28,7 @@ import { Panel } from "./layout";
 import { FREE_YEARS, MAX_RIVALS, MAX_YEARS } from "./records_db";
 import { SAME_DAY_RUNS_UTC } from "./refresh";
 
-// The glyph before the word, one path on a 16-unit box drawn at 11 px in
+// The glyph before the word, one path on a 16-unit box drawn at 12 px in
 // the chip's colour: a filled brilliant-cut gem. A different shape is a
 // change to this path alone.
 export const PRO_GLYPH_PATH = "M3 6.2 6 2h4l3 4.2L8 14.5z";
@@ -39,7 +39,7 @@ export const PRO_GLYPH_PATH = "M3 6.2 6 2h4l3 4.2L8 14.5z";
 // on either side (public/styles.css), and a space would add to them.
 export const ProTag: FC<{ lang: Lang }> = ({ lang }) => (
   <span class="pro-tag">
-    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d={PRO_GLYPH_PATH} /></svg>
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d={PRO_GLYPH_PATH} /></svg>
     {t(lang, "pro.tag")}
     <span class="visually-hidden">{` ${t(lang, "pro.tag_hidden")}`}</span>
   </span>

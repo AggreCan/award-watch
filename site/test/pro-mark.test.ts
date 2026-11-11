@@ -57,7 +57,7 @@ const teaseOf = (html: string) => /<section class="panel pro-panel">[\s\S]*?<\/s
 const cardsOf = (panel: string) => panel.split(/(?=<div class="plan-card[ "])/).slice(1);
 
 // The chip as ProTag writes it, in either language.
-const CHIP_EN = `<span class="pro-tag"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="${PRO_GLYPH_PATH}"></path></svg>Pro<span class="visually-hidden"> (paid plan)</span></span>`;
+const CHIP_EN = `<span class="pro-tag"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="${PRO_GLYPH_PATH}"></path></svg>Pro<span class="visually-hidden"> (paid plan)</span></span>`;
 const CHIP_FR = CHIP_EN.replace("(paid plan)", "(forfait payant)");
 const chips = (html: string) => (html.match(/<span class="pro-tag">/g) ?? []).length;
 const railOf = (html: string) => /<nav class="rail"[\s\S]*?<\/nav>/.exec(html)?.[0] ?? "";
@@ -114,7 +114,9 @@ describe("the chip's stylesheet", () => {
     // The glyph is the SVG in currentColor, so it follows the chip's colour in both themes.
     const [glyph] = rulesFor("pro-tag").filter((r) => r.selector === ".pro-tag svg");
     expect(decl(glyph.body, "fill")).toBe("currentColor");
-    expect(decl(glyph.body, "width")).toBe("11px");
+    // 12 px in the chip's 16 px of room: 2 px above and below, so it centres on whole pixels.
+    expect(decl(glyph.body, "width")).toBe("12px");
+    expect(decl(glyph.body, "height")).toBe("12px");
   });
 
   it("names no colour of its own in any Pro rule, and gives the chip no hover, focus or pseudo-element", () => {
