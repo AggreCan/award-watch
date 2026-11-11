@@ -10,7 +10,7 @@
 import { env } from "cloudflare:test";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import mapJs from "../public/canada-map.js?raw";
-import { INSET_PATHS, MAP_HEIGHT, MAP_LABELS, MAP_PATHS, MAP_WIDTH } from "../src/canada_map";
+import { INSET_BORDERS, INSET_PATHS, MAP_BORDERS, MAP_HEIGHT, MAP_LABELS, MAP_PATHS, MAP_WIDTH } from "../src/canada_map";
 import { PROVINCES } from "../src/constants";
 import { provinceCounts, type TenderRow } from "../src/data";
 import { STYLES_VERSION } from "../src/layout";
@@ -131,6 +131,51 @@ describe("the fills", () => {
       expect(x > 0 && x < MAP_WIDTH && y > 0 && y < MAP_HEIGHT, p).toBe(true);
     }
   });
+
+  it("carry the land borders as open lines that lie on the outlines, every pair of neighbours and no strait", () => {
+    type P = [number, number];
+    const nums = (s: string) => [...s.matchAll(/-?\d+/g)].map((m) => Number(m[0]));
+    // Path data as the script writes it: each part one absolute move and relative steps.
+    const lines = (d: string): P[][] => d.split("M").filter(Boolean).map((part) => {
+      const [head, steps] = part.replace(/z$/, "").split("l");
+      let [x, y] = nums(head);
+      const line: P[] = [[x, y]];
+      const v = nums(steps);
+      for (let i = 0; i < v.length; i += 2) line.push([(x += v[i]), (y += v[i + 1])]);
+      if (part.endsWith("z")) line.push(line[0]);
+      return line;
+    });
+    const segments = (ls: P[][]) => ls.flatMap((l) => l.slice(1).map((b, i): [P, P] => [l[i], b]));
+    const reach = (p: P, segs: [P, P][]) => {
+      let best = Infinity;
+      for (const [[ax, ay], [bx, by]] of segs) {
+        const dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+        const t = len === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / len));
+        best = Math.min(best, Math.hypot(p[0] - (ax + t * dx), p[1] - (ay + t * dy)));
+      }
+      return best;
+    };
+    const check = (borders: string, paths: Readonly<Record<string, string>>, pairs: [string, string][]) => {
+      expect(borders).toMatch(/^(?:M\d+ \d+l[-\d ]+)+$/); // open lines: no ring closes
+      const outline = Object.fromEntries(Object.entries(paths).map(([code, d]) => [code, segments(lines(d))]));
+      const every = Object.values(outline).flat();
+      const drawn = lines(borders);
+      // Every point of a border is a point of an outline (the script rounds a line's two ends to whole units).
+      for (const p of drawn.flat()) expect(reach(p, every), String(p)).toBeLessThanOrEqual(1);
+      // Each pair of neighbours has a stretch of border that lies on both of them.
+      const middles = segments(drawn).map(([a, b]): P => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+      for (const [a, b] of pairs) {
+        expect(middles.some((m) => reach(m, outline[a]) <= 1.5 && reach(m, outline[b]) <= 1.5), `${a} and ${b}`).toBe(true);
+      }
+      // A strait is not a border: nothing is drawn along Prince Edward Island.
+      for (const p of drawn.flat()) expect(reach(p, outline.PE), String(p)).toBeGreaterThan(2);
+    };
+    check(MAP_BORDERS, MAP_PATHS, [
+      ["AB", "BC"], ["AB", "NT"], ["AB", "SK"], ["BC", "NT"], ["BC", "YT"], ["MB", "NU"], ["MB", "ON"], ["MB", "SK"],
+      ["NB", "NS"], ["NB", "QC"], ["NL", "QC"], ["NT", "NU"], ["NT", "SK"], ["NT", "YT"], ["ON", "QC"],
+    ]);
+    check(INSET_BORDERS, INSET_PATHS, [["NB", "NS"]]);
+  });
 });
 
 // -- the panel ----------------------------------------------------------------------------
@@ -163,11 +208,24 @@ describe("the map panel", () => {
     expect(panel).toMatch(/<text class="cmap-label" x="\d+" y="\d+">PE<tspan class="cmap-count" x="\d+" dy="22">8<\/tspan><\/text>/);
     // The outlines once, in the defs, placed by each layer.
     expect(panel.match(/<path id="cm-ON"/g)).toHaveLength(1);
-    expect(panel.match(/<use href="#cm-ON"/g)).toHaveLength(4);
+    expect(panel.match(/<path id="cm-borders"/g)).toHaveLength(1);
+    expect(panel.match(/<path id="cmi-borders"/g)).toHaveLength(1);
+    // Twice a layer: its fill, and its clear outline for the pointer.
+    expect(panel.match(/<use href="#cm-ON"/g)).toHaveLength(8);
     // The fills of the open layer: Ontario the largest count, the top step; Prince Edward Island's 8 the first.
     const open = panel.match(/<g class="cmap-layer" data-for="open">[\s\S]*?<\/g>/)?.[0] ?? "";
     expect(open).toContain('<use href="#cm-ON" class="cmap-s4">');
     expect(open).toContain('<use href="#cm-PE" class="cmap-s1">');
+    // A layer's three passes, then its labels: the fills, the land borders as a gap, each province's clear outline.
+    const gap = open.indexOf('<use href="#cm-borders" class="cmap-borders"></use>');
+    expect(gap).toBeGreaterThan(open.lastIndexOf('class="cmap-s'));
+    expect(open.indexOf('class="cmap-hit"')).toBeGreaterThan(gap);
+    expect(open.lastIndexOf('class="cmap-hit"')).toBeLessThan(open.indexOf('<text class="cmap-label"'));
+    expect(open.match(/class="cmap-hit"/g)).toHaveLength(PROVINCES.length);
+    // The inset the same, with its own border.
+    const inset = panel.match(/<g class="cmap-layer" data-for="open">[\s\S]*?<\/g>/g)?.[1] ?? "";
+    expect(inset).toMatch(/class="cmap-s\d"><\/use><use href="#cmi-borders" class="cmap-borders"><\/use><(?:a|use) /);
+    expect(inset.match(/class="cmap-hit"/g)).toHaveLength(3);
     expect(page).toContain('<script src="/canada-map.js" defer=""></script>');
   });
 
@@ -410,6 +468,12 @@ describe("the stylesheet", () => {
       expect(STYLES).toContain(`.cmap:not([data-layer="${layer}"]) [data-for="${layer}"]`);
     }
     expect(STYLES).toContain("html.js .cmap-toggles { display: flex; }");
+    // Neighbours part on a gap in the panel's ground along the land borders; the pointer's outline lies over it,
+    // clear until it is the one under the pointer or the keys.
+    expect(STYLES).toContain("\n.cmap-svg .cmap-borders { fill: none; stroke: var(--panel); stroke-width: 4; stroke-linecap: round; pointer-events: none; }");
+    expect(STYLES).toContain("\n.cmap-svg .cmap-hit { fill: transparent; stroke: none; }");
+    expect(STYLES).toContain("\n.cmap-svg a:hover .cmap-hit { stroke: var(--ink); stroke-width: 2.5; }");
+    expect(STYLES).toContain("\n.cmap-svg a:focus-visible .cmap-hit { stroke: var(--ink); stroke-width: 2.5; }");
   });
 });
 

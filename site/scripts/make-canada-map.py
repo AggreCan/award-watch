@@ -33,8 +33,18 @@ code and its count fit inside it: the prairie labels staggered, Prince
 Edward Island's above it in the Gulf and Nova Scotia's below it, both on the
 water of the inset.
 
+Between two neighbours the page leaves a gap, so two provinces on one step of
+the ramp still read as two shapes. The script writes the land borders
+(LAND_BORDERS) for that, as open lines worked from the outlines as drawn:
+each is the later-drawn neighbour's own edge where it runs within
+BORDER_REACH units of the earlier one's. A coast gets no line, so no island
+is thinned by it.
+
 Run from the repository root or from site/:
   python site/scripts/make-canada-map.py --from <boundaries.json>
+  python site/scripts/make-canada-map.py --borders
+The second works the borders again from the outlines already in the output
+file, without the boundary file.
 Output: site/src/canada_map.ts.
 """
 
@@ -43,6 +53,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -63,6 +74,21 @@ DENSIFY_DEG = 0.25
 # The inset's frame on the map: top right, over the Arctic islands.
 INSET = (WIDTH - 272, PAD, 266, 196)
 INSET_PAD = 14
+# The land borders: each pair of neighbours that meet on land, first the one
+# the page draws first (it draws them in the order of their codes). A strait
+# is not a border, so Prince Edward Island has none.
+LAND_BORDERS = (("AB", "BC"), ("AB", "NT"), ("AB", "SK"), ("BC", "NT"), ("BC", "YT"), ("MB", "NU"), ("MB", "ON"),
+                ("MB", "SK"), ("NB", "NS"), ("NB", "QC"), ("NL", "QC"), ("NT", "NU"), ("NT", "SK"), ("NT", "YT"),
+                ("ON", "QC"))
+# Two neighbours' drawings of one border lie within BORDER_REACH units of each
+# other (the narrowest strait drawn is twice that wide). A break shorter than
+# BORDER_BRIDGE inside a border is drawn through, and a run shorter than
+# BORDER_MIN is two corners touching, which is no border.
+BORDER_REACH = 1.5
+BORDER_BRIDGE = 3.0
+BORDER_MIN = 3.0
+# The side of a square of the grid that finds the edges near a point.
+BORDER_CELL = 16
 
 # Label anchors (longitude, latitude). Codes and counts are drawn in two lines
 # centred on the point.
@@ -148,8 +174,8 @@ def numbers(values: list[int]) -> str:
     return s
 
 
-def path_data(rings: list[list[tuple[int, int]]]) -> str:
-    """Each ring as one absolute move and relative lines, closed."""
+def path_data(rings: list[list[tuple[int, int]]], end: str = "z") -> str:
+    """Each ring as one absolute move and relative lines, closed; with end="" each is an open line."""
     parts = []
     for ring in rings:
         (x, y), rest = ring[0], ring[1:]
@@ -158,8 +184,136 @@ def path_data(rings: list[list[tuple[int, int]]]) -> str:
         for qx, qy in rest:
             steps += [qx - px, qy - py]
             px, py = qx, qy
-        parts.append(f"M{numbers([x, y])}l{numbers(steps)}z")
+        parts.append(f"M{numbers([x, y])}l{numbers(steps)}{end}")
     return "".join(parts)
+
+
+def rings_of(data: str) -> list[list[tuple[int, int]]]:
+    """The rings of path data as path_data writes it."""
+    out = []
+    for part in data.split("z"):
+        if not part:
+            continue
+        head, _, steps = part.partition("l")
+        x, y = (int(v) for v in re.findall(r"-?\d+", head))
+        ring = [(x, y)]
+        values = [int(v) for v in re.findall(r"-?\d+", steps)]
+        for dx, dy in zip(values[::2], values[1::2]):
+            x, y = x + dx, y + dy
+            ring.append((x, y))
+        out.append(ring)
+    return out
+
+
+def _distance(p: Point, a: Point, b: Point) -> float:
+    """From a point to a segment."""
+    (px, py), (ax, ay), (bx, by) = p, a, b
+    dx, dy = bx - ax, by - ay
+    length = dx * dx + dy * dy
+    t = 0.0 if length == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+
+def _runs(ring: list[tuple[int, int]], near) -> list[list[tuple[int, int]]]:
+    """The stretches of a ring that lie along a neighbour (near says so of a point), as open lines."""
+    # Points a unit apart at most around the ring: where each is, the length of the step
+    # to the next, and whether it is one of the ring's own points.
+    points: list[tuple[Point, float, bool]] = []
+    for (ax, ay), (bx, by) in zip(ring, ring[1:] + ring[:1]):
+        length = math.hypot(bx - ax, by - ay)
+        n = max(1, math.ceil(length))
+        points += [((ax + (bx - ax) * i / n, ay + (by - ay) * i / n), length / n, i == 0) for i in range(n)]
+    flags = [near(p) for p, _, _ in points]
+    if not any(flags):
+        return []
+    # Begin on a point off the border, so no run wraps past the end of the list.
+    start = flags.index(False) if not all(flags) else 0
+    points, flags = points[start:] + points[:start], flags[start:] + flags[:start]
+    runs: list[list[int]] = []
+    gap = math.inf
+    for i, flag in enumerate(flags):
+        if flag:
+            if runs and gap < BORDER_BRIDGE:
+                runs[-1][1] = i
+            else:
+                runs.append([i, i])
+            gap = 0.0
+        gap += points[i][1]
+    lines = []
+    for first, last in runs:
+        if sum(points[k][1] for k in range(first, last)) < BORDER_MIN:
+            continue
+        line: list[tuple[int, int]] = []
+        for k in range(first, last + 1):
+            (x, y), _, own = points[k]
+            if own or k in (first, last):
+                p = (round(x), round(y))
+                if not line or line[-1] != p:
+                    line.append(p)
+        if len(line) > 1:
+            lines.append(line)
+    return lines
+
+
+def border_lines(paths: dict[str, str]) -> str:
+    """The land borders among the drawn outlines, as open lines. Each is the later-drawn neighbour's own edge
+    where it runs along the earlier one's, so the line lies on the edge the page shows. Worked from the path
+    data as written, so the same outlines always give the same borders."""
+    shapes = {code: rings_of(data) for code, data in paths.items()}
+    lines: list[list[tuple[int, int]]] = []
+    for code in sorted(shapes):
+        grid: dict[tuple[int, int], list[tuple[Point, Point]]] = {}
+        for first, second in LAND_BORDERS:
+            if second != code or first not in shapes:
+                continue
+            for ring in shapes[first]:
+                for a, b in zip(ring, ring[1:] + ring[:1]):
+                    for cx in range(int((min(a[0], b[0]) - BORDER_REACH) // BORDER_CELL), int((max(a[0], b[0]) + BORDER_REACH) // BORDER_CELL) + 1):
+                        for cy in range(int((min(a[1], b[1]) - BORDER_REACH) // BORDER_CELL), int((max(a[1], b[1]) + BORDER_REACH) // BORDER_CELL) + 1):
+                            grid.setdefault((cx, cy), []).append((a, b))
+        if not grid:
+            continue
+
+        def near(p: Point) -> bool:
+            cell = (int(p[0] // BORDER_CELL), int(p[1] // BORDER_CELL))
+            return any(_distance(p, a, b) <= BORDER_REACH for a, b in grid.get(cell, ()))
+
+        for ring in shapes[code]:
+            lines += _runs(ring, near)
+    return path_data(lines, end="")
+
+
+def borders_block(paths: dict[str, str], inset_paths: dict[str, str]) -> str:
+    """The borders as the output file carries them."""
+    return (
+        "// The land borders between neighbours, as open lines: on the main map and in\n"
+        "// the inset. The map draws them as a gap in the colour of its ground.\n"
+        f"export const MAP_BORDERS = {json.dumps(border_lines(paths))};\n"
+        f"export const INSET_BORDERS = {json.dumps(border_lines(inset_paths))};\n\n"
+    )
+
+
+# The line of the output file the borders are written above.
+BORDERS_BEFORE = "// Where the inset's provinces lie on the main map.\n"
+
+
+def reborder(out: Path) -> str:
+    """The written file with its borders worked again from its own outlines."""
+    text = out.read_text(encoding="utf-8")
+
+    def paths(name: str) -> dict[str, str]:
+        body = re.search(name + r": [^=]*= \{\n(.*?)\n\};", text, re.S)
+        if not body:
+            raise SystemExit(f"no {name} in {out}")
+        return dict(re.findall(r'^  ([A-Z]{2}): "([^"]*)",$', body.group(1), re.M))
+
+    block = borders_block(paths("MAP_PATHS"), paths("INSET_PATHS"))
+    old = re.search(r"// The land borders between neighbours.*?\n\n", text, re.S)
+    if old:
+        return text[: old.start()] + block + text[old.end():]
+    if text.count(BORDERS_BEFORE) != 1:
+        raise SystemExit(f"{out} is not this script's output")
+    return text.replace(BORDERS_BEFORE, block + BORDERS_BEFORE)
 
 
 def densify(ring: list[Point], step: float = DENSIFY_DEG) -> list[Point]:
@@ -240,8 +394,9 @@ def build(source: Path) -> str:
         "// The inset: the three Maritime provinces enlarged, in its frame (x, y, w, h).\n"
         f"export const INSET_FRAME = {{ x: {x}, y: {y}, w: {w}, h: {h} }} as const;\n"
         f"export const INSET_PATHS: Readonly<Record<MaritimeProvince, string>> = {obj(inset_paths)};\n\n"
-        "// Where the inset's provinces lie on the main map.\n"
-        f"export const INSET_EXTENT = {{ x: {extent[0]}, y: {extent[1]}, w: {extent[2]}, h: {extent[3]} }} as const;\n\n"
+        + borders_block(paths, inset_paths)
+        + BORDERS_BEFORE
+        + f"export const INSET_EXTENT = {{ x: {extent[0]}, y: {extent[1]}, w: {extent[2]}, h: {extent[3]} }} as const;\n\n"
         "// Each province's label point: on the main map, or in the inset for the Maritimes.\n"
         f"export const MAP_LABELS: Readonly<Record<Province, {{ x: number; y: number; inset: boolean }}>> = {{\n{label_lines}}};\n"
     )
@@ -249,11 +404,14 @@ def build(source: Path) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--from", dest="source", required=True, help="the boundary file, JSON rings in longitude and latitude")
+    parser.add_argument("--from", dest="source", help="the boundary file, JSON rings in longitude and latitude")
+    parser.add_argument("--borders", action="store_true", help="work the borders again from the outlines already in the output file")
     parser.add_argument("--out", default=str(OUT))
     args = parser.parse_args(argv)
+    if args.borders == bool(args.source):
+        parser.error("give --from <boundaries.json> or --borders, one of them")
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 20000))  # Douglas-Peucker recurses per split
-    text = build(Path(args.source))
+    text = reborder(Path(args.out)) if args.borders else build(Path(args.source))
     Path(args.out).write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {len(text) // 1024} KB to {args.out}")
     return 0

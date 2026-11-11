@@ -1044,7 +1044,7 @@ tr[data-phone-cut] { display: none !important; }
 .chart-plot .bar-light.tip-on, .chart-plot .bar-light:hover { fill: var(--chart-bar); }
 .chart-plot .dot.tip-on, .chart-plot .dot:hover { stroke: var(--chart-on); stroke-width: 10; }
 .rank-bars li.tip-on .rank-bar, .rank-bars li:hover .rank-bar { background: var(--chart-on); }
-.cmap-svg use.tip-on { stroke: var(--ink); stroke-width: 2.5; }
+.cmap-svg .cmap-hit.tip-on { stroke: var(--ink); stroke-width: 2.5; }
 /* A chart's marks take the keyboard focus (the script makes each panel one
    stop): the filled mark and the tip are its sign, so the browser's box
    around the mark is not drawn. */
@@ -1546,13 +1546,20 @@ th[aria-sort="descending"] .th-sort::after {
 html.js .cmap-toggles { display: flex; }
 .cmap-caption { margin: 0 0 8px; font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ink); }
 .cmap-svg { display: block; width: 100%; height: auto; }
-/* Provinces part on a hairline of the panel's ground; the one under the pointer takes an ink edge. */
+/* A province has a hairline on its coast. Between two neighbours the land
+   borders (src/canada_map.ts) lie over the fills as a gap in the panel's
+   ground, so two provinces on one step of the ramp are still two shapes
+   (operator, 2026-11-11); a coast gets no gap, so no island is thinned by
+   one. Over the gap each province's outline lies again, clear: it takes the
+   pointer and draws the ink edge of the one under it, whole. */
 .cmap-svg use { stroke: var(--map-line); stroke-width: 1.5; stroke-linejoin: round; }
-.cmap-svg a:hover use { stroke: var(--ink); stroke-width: 2.5; }
+.cmap-svg .cmap-borders { fill: none; stroke: var(--panel); stroke-width: 4; stroke-linecap: round; pointer-events: none; }
+.cmap-svg .cmap-hit { fill: transparent; stroke: none; }
+.cmap-svg a:hover .cmap-hit { stroke: var(--ink); stroke-width: 2.5; }
 /* A clicked province took the browser's focus rectangle around its bounding box; the
    outline goes and the keyboard focus draws the same stroke as hover (operator, 2026-11-07). */
 .cmap-svg a:focus { outline: none; }
-.cmap-svg a:focus-visible use { stroke: var(--ink); stroke-width: 2.5; }
+.cmap-svg a:focus-visible .cmap-hit { stroke: var(--ink); stroke-width: 2.5; }
 .cmap-s0 { fill: var(--map-0); }
 .cmap-s1 { fill: var(--map-1); }
 .cmap-s2 { fill: var(--map-2); }

@@ -12,6 +12,14 @@
 // outlines (src/canada_map.ts) are drawn once in the SVG's defs and each
 // layer places them with <use>, so the paths are not repeated per layer.
 //
+// A layer is drawn in three passes. First the fills, each on its step of the
+// ramp. Then the land borders, a gap in the panel's ground between two
+// neighbours, so two provinces on one step are still two shapes (operator,
+// 2026-11-11); a coast gets no gap, so no island is thinned by one. Then each
+// province's outline again, clear: it is what the pointer meets, so it holds
+// the link and the tip, and its ink edge under the pointer is whole, since
+// neither a neighbour's fill nor the gap lies over it.
+//
 // Each province links to its list with the layer's filter and national=0, so
 // the list holds the notices its count counts: /tenders/new for the new
 // ones, /tenders and /tenders?closing=7 for the open and the closing ones,
@@ -26,7 +34,9 @@
 
 import type { FC } from "hono/jsx";
 import { tipText, useTips } from "../chart";
-import { INSET_EXTENT, INSET_FRAME, INSET_PATHS, MAP_HEIGHT, MAP_LABELS, MAP_PATHS, MAP_WIDTH, type MaritimeProvince } from "../canada_map";
+import {
+  INSET_BORDERS, INSET_EXTENT, INSET_FRAME, INSET_PATHS, MAP_BORDERS, MAP_HEIGHT, MAP_LABELS, MAP_PATHS, MAP_WIDTH, type MaritimeProvince,
+} from "../canada_map";
 import { type Column, Table, minWidths } from "../columns";
 import { CLOSING_SOON_DAYS, PROVINCES } from "../constants";
 import type { ProvinceCounts, StatsMapLayer } from "../data";
@@ -142,12 +152,17 @@ const MARITIMES: readonly MaritimeProvince[] = ["NB", "NS", "PE"];
 const LABEL_UP = 2;
 const LABEL_LINE = 22;
 
-// A province on one layer: its fill, as a link to its list when it has a
-// notice, and its tip, the province's name over the layer's count.
-const Shape: FC<{ lang: Lang; layer: MapLayer; code: Province; def: string; top: number }> = ({ lang, layer, code, def, top }) => {
+// A province's fill on one layer, on its step of the ramp.
+const Fill: FC<{ layer: MapLayer; code: Province; def: string; top: number }> = ({ layer, code, def, top }) => (
+  <use href={`#${def}`} class={`cmap-s${mapStep(countOf(layer.counts, code), top)}`}></use>
+);
+
+// A province's outline over the fills and the gap: a link to its list when it
+// has a notice, and its tip, the province's name over the layer's count.
+const Hit: FC<{ lang: Lang; layer: MapLayer; code: Province; def: string }> = ({ lang, layer, code, def }) => {
   const n = countOf(layer.counts, code);
   const shape = (
-    <use href={`#${def}`} class={`cmap-s${mapStep(n, top)}`}>
+    <use href={`#${def}`} class="cmap-hit">
       <title>{tipText(provinceName(lang, code), [layer.count(n)])}</title>
     </use>
   );
@@ -192,10 +207,14 @@ export const CanadaMapPanel: FC<{ lang: Lang; layers: readonly MapLayer[] }> = (
             <defs>
               {PROVINCES.map((p) => <path id={`cm-${p}`} d={MAP_PATHS[p]} />)}
               {MARITIMES.map((p) => <path id={`cmi-${p}`} d={INSET_PATHS[p]} />)}
+              <path id="cm-borders" d={MAP_BORDERS} />
+              <path id="cmi-borders" d={INSET_BORDERS} />
             </defs>
             {layers.map((l) => (
               <g class="cmap-layer" data-for={l.id}>
-                {PROVINCES.map((p) => <Shape lang={lang} layer={l} code={p} def={`cm-${p}`} top={tops.get(l.id)!} />)}
+                {PROVINCES.map((p) => <Fill layer={l} code={p} def={`cm-${p}`} top={tops.get(l.id)!} />)}
+                <use href="#cm-borders" class="cmap-borders"></use>
+                {PROVINCES.map((p) => <Hit lang={lang} layer={l} code={p} def={`cm-${p}`} />)}
                 {main.map((p) => <Label lang={lang} layer={l} code={p} />)}
               </g>
             ))}
@@ -204,7 +223,9 @@ export const CanadaMapPanel: FC<{ lang: Lang; layers: readonly MapLayer[] }> = (
             <rect class="cmap-inset" x={INSET_FRAME.x} y={INSET_FRAME.y} width={INSET_FRAME.w} height={INSET_FRAME.h} />
             {layers.map((l) => (
               <g class="cmap-layer" data-for={l.id}>
-                {MARITIMES.map((p) => <Shape lang={lang} layer={l} code={p} def={`cmi-${p}`} top={tops.get(l.id)!} />)}
+                {MARITIMES.map((p) => <Fill layer={l} code={p} def={`cmi-${p}`} top={tops.get(l.id)!} />)}
+                <use href="#cmi-borders" class="cmap-borders"></use>
+                {MARITIMES.map((p) => <Hit lang={lang} layer={l} code={p} def={`cmi-${p}`} />)}
                 {inset.map((p) => <Label lang={lang} layer={l} code={p} />)}
               </g>
             ))}

@@ -206,11 +206,13 @@ describe("the pages", () => {
     const e = testEnv(makeFakeAssets({}, { "stats.json": { ...stats, map } }));
     const page = await html("/", e);
     expect(page).toContain('<div class="cmap-figure" data-tip="">');
-    expect(page).toContain('<use href="#cm-ON" class="cmap-s4"><title>Ontario\n14 new notices today</title></use>');
+    // The tip is on the province's clear outline, which lies over its fill and is what the pointer meets.
+    expect(page).toContain('<use href="#cm-ON" class="cmap-s4"></use>');
+    expect(page).toContain('<use href="#cm-ON" class="cmap-hit"><title>Ontario\n14 new notices today</title></use>');
     expect(page).toContain("<title>Ontario\n260 open notices</title>");
     expect(page).toContain("<title>Ontario\n38 notices closing within 7 days</title>");
     // A province with no notice has its tip too, with no link.
-    expect(page).toMatch(/<use href="#cm-YT" class="cmap-s0"><title>Yukon\n0 new notices today<\/title><\/use>/);
+    expect(page).toMatch(/<\/a><use href="#cm-YT" class="cmap-hit"><title>Yukon\n0 new notices today<\/title><\/use>/);
     expect(page).toContain('Worth <span title="$4,910,500" data-tip="">$4.9M</span>');
     expect(page).toContain(BOX);
     const fr = await html("/?lang=fr", e);
@@ -246,6 +248,6 @@ describe("the pages", () => {
     expect(STYLES).toContain("\n.tip-head { display: block; color: var(--muted); }");
     expect(STYLES).toContain("\n.tip-main { font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ink); }");
     expect(STYLES).toContain("\n.chart-plot .bar.tip-on, .chart-plot .bar:hover { fill: var(--chart-on) !important; }");
-    expect(STYLES).toContain("\n.cmap-svg use.tip-on { stroke: var(--ink); stroke-width: 2.5; }");
+    expect(STYLES).toContain("\n.cmap-svg .cmap-hit.tip-on { stroke: var(--ink); stroke-width: 2.5; }");
   });
 });
