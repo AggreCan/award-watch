@@ -78,6 +78,11 @@ export const ACCOUNT_STRINGS = {
     en: "This code or link has expired or was already used. Ask for a new one.",
     fr: "Ce code ou ce lien a expiré ou a déjà servi. Demandez-en un nouveau.",
   },
+  // The sign-in pages, when a public page's Follow form started the sign-in (routes.tsx, follow).
+  "account.follow_pending": {
+    en: "Signing in also follows the page where you pressed Follow.",
+    fr: "En vous connectant, vous suivrez aussi la page où vous avez appuyé sur Suivre.",
+  },
   "account.msg_signed_out": { en: "You are signed out.", fr: "Vous êtes déconnecté." },
   "account.msg_signed_out_all": { en: "Every browser is signed out.", fr: "Tous les navigateurs sont déconnectés." },
 
@@ -1390,10 +1395,12 @@ export const ACCOUNT_STRINGS = {
     en: "Its events show on your watches page and come by email.",
     fr: "Ses événements s'affichent sur votre page des suivis et arrivent par courriel.",
   },
+  // A reader not signed in: the address field and Follow on the page itself (watch_pages.tsx).
   "watches.control_out": {
-    en: "Sign in to follow this page's events: a new award, an amendment, an end date near, a new or closed notice.",
-    fr: "Connectez-vous pour suivre les événements de cette page : une nouvelle attribution, une modification, une fin proche, un avis nouveau ou fermé.",
+    en: "Free, with no password. The site sends a sign-in link to that address; once you sign in, this page's events show on your watches page: a new award, an amendment, an end date near, a new or closed notice.",
+    fr: "Gratuit, sans mot de passe. Le site envoie un lien de connexion à cette adresse; après la connexion, les événements de cette page s'affichent sur votre page des suivis : une nouvelle attribution, une modification, une fin proche, un avis nouveau ou fermé.",
   },
+  "watches.signin_placeholder": { en: "Your email address", fr: "Votre adresse courriel" },
   "watches.control_cap_pro": {
     en: "This account follows {cap} pages, the most an account keeps.",
     fr: "Ce compte suit {cap} pages, le maximum qu'un compte conserve.",

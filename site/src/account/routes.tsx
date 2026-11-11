@@ -4,7 +4,8 @@
 //   GET  /account/sign-in              the address form (a session goes to /account)
 //   POST /account/sign-in              makes a code and a link, sends them; the same page for any address
 //   GET  /account/check                the code form; with ?token= the link's confirm button
-//   POST /account/check                a code (with the address) or the link's token; starts the session
+//   POST /account/check                a code (with the address) or the link's token; starts the session,
+//                                      then follows the page a Follow form named (follow), within the plan's cap
 //   GET  /account                      the overview                                   (session)
 //   POST /account/sign-out             this browser, or every browser (scope=all)     (session, CSRF)
 //   GET  /account/searches             saved searches, the alerts form's rows to add  (session)
@@ -53,7 +54,9 @@
 // Every POST but the stop link's and the webhook's (which Stripe sends,
 // signed; billing.tsx) is refused with a 403 when its Origin names another
 // site (or "null"); a client that sends no Origin is let through, as
-// interest.tsx does, since a browser always sends one with a form post. The
+// interest.tsx does, since a browser always sends one with a form post; a
+// sign-in post that carries follow (a public page's Follow form) must say it
+// comes from the site's page, or it sends nothing (POST /sign-in below). The
 // two sign-in posts are capped per address by AUTH_LIMIT (limits.ts); the
 // codes per address are capped in the database (signin.ts). Every response is
 // no-store and noindex. The site's referrer policy already keeps a link's
@@ -62,7 +65,7 @@
 import { Hono, type Context } from "hono";
 import { getCookie } from "hono/cookie";
 import { addDays } from "../../public/closing.js";
-import { isOwnAddress } from "../api";
+import { fromOwnPage, isOwnAddress } from "../api";
 import { readForm } from "../body";
 import { FEED_EVENTS_MAX, ICS_TYPE, closingStart } from "../calendar";
 import { type Clock, clockOf, tenderState } from "../closing";
@@ -85,7 +88,7 @@ import {
   listBriefings, narrowOf, setBriefingDelivery, subjectOf,
 } from "./briefings";
 import { bugPage, fileBug } from "./bugs";
-import { WATCH_MAX, allowed, watchCap } from "./entitlements";
+import { WATCH_MAX, allowed, planFor, watchCap } from "./entitlements";
 import {
   FEEDS_MAX, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
   feedSize, feedWatches, isFeedKind, listFeeds, readFeed, removeFeed, rotateFeed, searchMatches,
@@ -110,7 +113,9 @@ import {
   isShareSource, orgIdIn, readClaim, setClaimSegment,
 } from "./org_claim";
 import { ORG_PATH, orgCsv, orgPage, segmentChoice } from "./org_pages";
-import { DAY_SLOTS, type WatchKind, isWatchKind, readEvents, segmentOf, targetOf, watchPath } from "./watch_events";
+import {
+  DAY_SLOTS, type Follow, type WatchKind, followOf, followValue, isWatchKind, readEvents, segmentOf, targetOf, watchPath,
+} from "./watch_events";
 import { type WatchCalendar, watchStopView, watchStoppedView, watchesView } from "./watch_pages";
 import {
   addWatch, countedWatches, deleteWatch, deleteWatchesOf, followAliases, isCadence, listWatches, mailOf, setMail, setWatch, watchCount,
@@ -207,13 +212,20 @@ export function safeNext(raw: string | undefined | null): string | null {
   return raw;
 }
 
+// ?follow= (or the follow field) is carried the same way, beside next: what a
+// public page's Follow form asked to follow (watch_events.ts followOf), added
+// once the address has proved itself (followAtSignIn). An invalid one is
+// dropped without a word, as an unsafe next is. A GET only carries it: a
+// reader already signed in goes back to the page, which offers its own
+// Follow form, and nothing is added on a GET.
 account.get("/sign-in", async (c) => {
   const lang = c.get("lang");
   const next = safeNext(c.req.query("next"));
   if ((await readSession(c)).state === "ok") return c.redirect(next ?? "/account", 303);
+  const follow = followOf(c.req.query("follow"));
   const m = c.req.query("m");
   const notice = m === "out" ? t(lang, "account.msg_signed_out") : m === "out_all" ? t(lang, "account.msg_signed_out_all") : null;
-  return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { notice, next }));
+  return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { notice, next, follow }));
 });
 
 account.post("/sign-in", async (c) => {
@@ -222,11 +234,25 @@ account.post("/sign-in", async (c) => {
   const lang = c.get("lang");
   const typed = clean(fields, "email", EMAIL_MAX + 50);
   const next = safeNext(fields.next);
+  const follow = followOf(fields.follow);
   const again = (errors: Key[], status: number, limitN?: number) =>
-    accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { errors, email: typed.slice(0, EMAIL_MAX), limitN, next }), status);
+    accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { errors, email: typed.slice(0, EMAIL_MAX), limitN, next, follow }), status);
   if (clean(fields, "website", 10)) return again(["interest.err_rejected"], 400);
   const email = normalizeEmail(typed);
   if (!email) return again(["interest.err_email"], 400);
+  // The Follow form sits on every public page, where crawlers read it. A post
+  // that carries follow from a browser on the site's page says so in
+  // Sec-Fetch-Site, Origin or Referer (api.ts fromOwnPage); one that says
+  // none of them was most likely sent by a script that read the form, so no
+  // message goes out: the sign-in page answers with the address kept and the
+  // follow dropped. A reader on a browser that sends none of the three signs
+  // in from there as before (its post carries no follow), and follows after.
+  // Any client can send those headers; the caps per address and per email
+  // stay the brake (docs/accounts.md, Security posture).
+  if (follow && !fromOwnPage(c.req.raw.headers, c.req.url)) {
+    console.log("account sign-in: a Follow post without a page's headers, answered with the sign-in page");
+    return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { email: typed.slice(0, EMAIL_MAX), next }));
+  }
   return guarded(c, async () => {
     const now = new Date();
     await sweep(c.env, now);
@@ -237,7 +263,8 @@ account.post("/sign-in", async (c) => {
     }
     await audit(c.env, issued.userId, "code_requested", null, now);
     const base = siteBase(c);
-    const link = `${base}/account/check?token=${issued.token}${lang === "fr" ? "&lang=fr" : ""}${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+    const link = `${base}/account/check?token=${issued.token}${lang === "fr" ? "&lang=fr" : ""}${next ? `&next=${encodeURIComponent(next)}` : ""}` +
+      `${follow ? `&follow=${encodeURIComponent(followValue(follow.kind, follow.target))}` : ""}`;
     const sent = await senderFor(c.env, c.req.url)
       .send(signInMessage(lang, email, issued.code, link, CODE_MINUTES, base))
       .catch(() => ({ sent: false, reason: "failed" }) as const);
@@ -245,7 +272,7 @@ account.post("/sign-in", async (c) => {
       if (sent.reason === "failed") await audit(c.env, issued.userId, "mail_failed", null, now);
       return again([sent.reason === "not_configured" ? "account.err_not_sent" : "account.err_send_failed"], 503);
     }
-    return accountPage(c, t(lang, "account.check_title"), codeView(lang, { email, sent: true, next }));
+    return accountPage(c, t(lang, "account.check_title"), codeView(lang, { email, sent: true, next, follow }));
   });
 });
 
@@ -258,7 +285,8 @@ account.get("/check", async (c) => {
   if (token !== undefined) {
     const ok = TOKEN_RE.test(token);
     return accountPage(c, t(lang, "account.link_title"),
-      linkView(lang, ok ? token : "", ok ? undefined : ["account.err_stale"], safeNext(c.req.query("next"))), ok ? 200 : 400);
+      linkView(lang, ok ? token : "", ok ? undefined : ["account.err_stale"], safeNext(c.req.query("next")), followOf(c.req.query("follow"))),
+      ok ? 200 : 400);
   }
   return accountPage(c, t(lang, "account.enter_title"), codeView(lang));
 });
@@ -274,6 +302,8 @@ account.post("/check", async (c) => {
   const token = clean(fields, "token", 200);
   const typed = clean(fields, "email", EMAIL_MAX + 50);
   const sentForm = clean(fields, "sent", 1) === "1";
+  const next = safeNext(fields.next);
+  const follow = followOf(fields.follow);
   return guarded(c, async () => {
     const now = new Date();
     let checked: Checked;
@@ -290,7 +320,8 @@ account.post("/check", async (c) => {
       const errors: Key[] = [left === 2 ? "account.err_code_two" : left === 1 ? "account.err_code_one" : CHECK_ERROR[checked.reason]];
       if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors), 400);
       const title = t(lang, sentForm ? "account.check_title" : "account.enter_title");
-      return accountPage(c, title, codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors }), 400);
+      // A mistyped code keeps the page to return to and what to follow, for the next try.
+      return accountPage(c, title, codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors, next, follow }), 400);
     }
     const user = await findOrCreateUser(c.env, checked.email, lang, now);
     if (user.created) await audit(c.env, user.id, "user_created", null, now);
@@ -304,7 +335,7 @@ account.post("/check", async (c) => {
     }
     await startSession(c, user.id, uaClass(c), now);
     await audit(c.env, user.id, "signed_in", token ? "link" : "code", now);
-    const next = safeNext(fields.next);
+    if (follow) await followAtSignIn(c, user.id, follow, lang, now);
     if (next) return c.redirect(next, 303);
     const pending = await pendingInterest(c.env, checked.email, user.id).catch(() => []);
     return c.redirect(pending.length ? "/account/searches" : "/account", 303);
@@ -875,6 +906,32 @@ account.post("/watches", async (c) => {
     return c.redirect(`${watchPath(kind, target)}${lang === "fr" ? "?lang=fr" : ""}`, 303);
   });
 });
+
+// The page a public page's Follow form named (follow), followed for the
+// account whose address has just proved itself (POST /account/check, after
+// the session starts): the watch post's own steps, for that account only.
+// The label is read from the data (a page that no longer reads, or a notice
+// no longer open, adds nothing), the watches are aligned on the merges, and
+// the insert is held to the account's plan's cap (watches.ts addWatch): at
+// the cap nothing is added and the page shows the cap; a page followed
+// already stays as it is. A buyer is followed whole. The audit says the
+// watch came with the sign-in. Nothing here may fail the sign-in: a fault is
+// logged without detail and the reader goes on to the page.
+async function followAtSignIn(c: Context<AppEnv>, userId: string, follow: Follow, lang: Lang, now: Date): Promise<void> {
+  try {
+    const label = await watchLabel(c, follow.kind, follow.target, lang);
+    if (!label) return;
+    const user = await c.env.ACCOUNTS!.prepare("SELECT plan, plan_until FROM users WHERE id = ?").bind(userId)
+      .first<{ plan: string; plan_until: string | null }>();
+    if (!user) return;
+    const { plan } = await planFor(c.env, { id: userId, ...user }, now);
+    const [stats] = await Promise.all([loadStats(c.env).catch(() => null), alignWatches(c, userId)]);
+    const result = await addWatch(c.env, { userId, plan }, { ...follow, segment: "", label }, stats?.data_as_of?.slice(0, 10) ?? null, now);
+    if (result === "added") await audit(c.env, userId, "watch_added", `${follow.kind} at sign-in`, now);
+  } catch {
+    console.error("account sign-in: the page named by Follow was not followed");
+  }
+}
 
 account.post("/watches/mail", async (c) => {
   const post = await signedInPost(c);

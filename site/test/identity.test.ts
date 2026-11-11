@@ -164,7 +164,7 @@ describe("one filled button", () => {
   it("is a profile's Follow, signed in or not, and the profile's only one", async () => {
     const out = await (await get(`/organizations/${ORG}`)).text();
     expect(out.match(/class="btn btn-primary"/g)).toHaveLength(1);
-    expect(out).toMatch(/<div class="watch-control"><a href="\/account\/sign-in\?next=[^"]*" class="btn btn-primary">Follow<\/a>/);
+    expect(out).toMatch(/<form method="post" action="\/account\/sign-in" class="watch-control watch-signin">[\s\S]*?<button type="submit" class="btn btn-primary">Follow<\/button>/);
     const cookie = await signIn(newEmail("identity-follow"));
     const signedIn = await (await get(`/organizations/${ORG}`, { cookie })).text();
     expect(signedIn.match(/class="btn btn-primary"/g)).toHaveLength(1);

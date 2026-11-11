@@ -167,9 +167,16 @@ describe("with the switch on", () => {
   // The home head's first button: the email alerts while Pro exists, the Atom feeds while it does not.
   const HOME_BUTTON = '<a href="/pro" class="btn">Email alerts with Pro</a>';
   const HOME_FEEDS = '<a href="/feeds" class="btn">Atom feeds</a>';
-  // The Follow control under a profile's head (account/watch_pages.tsx): for a reader not signed in, a link to sign in,
-  // the profile's one filled button.
-  const FOLLOW = /<div class="watch-control"><a href="\/account\/sign-in\?next=[^"]*" class="btn btn-primary">Follow<\/a>[\s\S]*?<\/div>/;
+  // The Follow control under a profile's head (account/watch_pages.tsx): for a reader not signed in, a form that
+  // posts an address to the sign-in with the page and what to follow, Follow the profile's one filled button.
+  const FOLLOW = new RegExp(
+    '<form method="post" action="/account/sign-in" class="watch-control watch-signin">' +
+    '<input type="hidden" name="lang" value="en"/><input type="hidden" name="next" value="/organizations/org-a000000001"/>' +
+    '<input type="hidden" name="follow" value="organization:org-a000000001"/>' +
+    '<label class="watch-email"><span class="visually-hidden">Email address</span><input name="email" type="email" [^>]*/></label>' +
+    '<div class="hp"><label>Leave this field empty<input name="website" type="text" tabindex="-1" autocomplete="off"/></label></div>' +
+    '<button type="submit" class="btn btn-primary">Follow</button><span class="muted small">[^<]*</span></form>',
+  );
 
   it("opens the routes and adds the account item, the Pro marks and a profile's analytics link, and nothing else on a public page", async () => {
     expect((await get("/account/sign-in")).status).toBe(200);

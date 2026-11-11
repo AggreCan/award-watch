@@ -1323,6 +1323,14 @@ a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offse
    reads in order: a button, then its line. */
 .watch-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; }
 .watch-control .muted { max-width: 60ch; }
+/* A reader not signed in: the address and Follow on one line, the field
+   giving way to the button on a phone, then the line under both, as wide as
+   a page note. A grid rather than the flex row, so the line goes under at
+   every width (the third column is the room it spans). */
+.watch-signin { display: grid; grid-template-columns: minmax(0, 320px) auto minmax(0, 1fr); align-items: center; }
+.watch-signin .watch-email { display: flex; min-width: 0; }
+.watch-signin .watch-email input { width: 100%; min-width: 0; }
+.watch-signin > .muted { grid-column: 1 / -1; max-width: 72ch; }
 .watch-events { margin: 0; padding: 0; list-style: none; }
 .watch-events li + li { margin-top: 6px; }
 .watch-settings { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0; }

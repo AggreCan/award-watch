@@ -153,6 +153,28 @@ export function targetOf(kind: WatchKind, raw: string): string | null {
 // A buyer watch's segment: '' for the whole buyer, else one of the 57 codes.
 export const segmentOf = (raw: string | undefined): string | null => (!raw ? "" : SEGMENT_CODES.includes(raw) ? raw : null);
 
+// What a page's Follow form asks to follow before its reader has signed in
+// (watch_pages.tsx WatchControl, routes.tsx): the kind and the target in one
+// field, "<kind>:<target>" (a kind holds no colon; the target may). It rides
+// along with the sign-in as ?next does, and is read back here by the rules
+// the watch post applies (isWatchKind, targetOf), so anything but one watch
+// on a page the site writes reads as null and is dropped. A buyer's form
+// follows the whole buyer: the segment choice stays with the signed-in form.
+export type Follow = { kind: WatchKind; target: string };
+// A kind, the colon and the 300 characters the watch post reads of a target.
+export const FOLLOW_MAX = 320;
+
+export const followValue = (kind: WatchKind, target: string): string => `${kind}:${target}`;
+
+export function followOf(raw: string | undefined | null): Follow | null {
+  if (typeof raw !== "string" || raw.length > FOLLOW_MAX || CONTROL_RE.test(raw)) return null;
+  const at = raw.indexOf(":");
+  const kind = raw.slice(0, at);
+  if (at <= 0 || !isWatchKind(kind)) return null;
+  const target = targetOf(kind, raw.slice(at + 1));
+  return target ? { kind, target } : null;
+}
+
 // The page a watch follows, as the site's links write it.
 export function watchPath(kind: WatchKind, target: string): string {
   if (kind === "organization") return `/organizations/${target}`;

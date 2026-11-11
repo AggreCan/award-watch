@@ -194,9 +194,11 @@ describe("the events statements", () => {
 // -- the routes ----------------------------------------------------------------------------------
 
 describe("the Follow control and the watch routes", () => {
-  it("send a reader not signed in to sign in and back, and give a signed-in reader the form", async () => {
+  it("ask a reader not signed in for an address on the page, and give a signed-in reader the form", async () => {
+    // The whole path of the signed-out form is test/accounts-follow.test.ts.
     const out = await (await get(`/organizations/${ORG}`)).text();
-    expect(out).toContain(`<div class="watch-control"><a href="/account/sign-in?next=%2Forganizations%2F${ORG}" class="btn btn-primary">Follow</a>`);
+    expect(out).toContain('<form method="post" action="/account/sign-in" class="watch-control watch-signin">');
+    expect(out).toContain(`<input type="hidden" name="next" value="/organizations/${ORG}"/><input type="hidden" name="follow" value="organization:${ORG}"/>`);
     const cookie = await signIn(newEmail("w-form"));
     const page = await (await get(`/organizations/${ORG}`, { cookie })).text();
     expect(page).toContain('<form method="post" action="/account/watches" class="watch-control">');

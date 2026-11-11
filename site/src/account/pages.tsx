@@ -21,6 +21,7 @@ import { FEEDS_MAX, type FeedKind } from "./feeds";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch } from "./searches";
 import type { Account } from "./session";
 import { CODE_MINUTES } from "./signin";
+import { type Follow, followValue } from "./watch_events";
 
 export async function accountPage(c: Context<AppEnv>, title: string, body: unknown, status = 200): Promise<Response> {
   const lang = c.get("lang");
@@ -44,7 +45,8 @@ const Notice: FC<{ message?: string | null }> = ({ message }) =>
 
 const Csrf: FC<{ account: Account }> = ({ account }) => <input type="hidden" name="csrf" value={account.csrf} />;
 
-const Honeypot: FC<{ lang: Lang }> = ({ lang }) => (
+// Also on the Follow form a public page shows a reader not signed in (watch_pages.tsx).
+export const Honeypot: FC<{ lang: Lang }> = ({ lang }) => (
   <div class="hp"><label>{t(lang, "form.honeypot")}<input name="website" type="text" tabindex={-1} autocomplete="off" /></label></div>
 );
 
@@ -55,8 +57,17 @@ const day = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : "");
 // next: the page to return to after signing in (routes.tsx safeNext), carried as a hidden field.
 const Next: FC<{ next?: string | null }> = ({ next }) => (next ? <input type="hidden" name="next" value={next} /> : null);
 
+// follow: the page a public page's Follow form named (watch_events.ts
+// followOf), carried beside next and followed once the address has proved
+// itself; the line says so, so the reader knows the Follow was not lost.
+const FollowField: FC<{ follow?: Follow | null }> = ({ follow }) =>
+  follow ? <input type="hidden" name="follow" value={followValue(follow.kind, follow.target)} /> : null;
+const FollowNote: FC<{ lang: Lang; follow?: Follow | null }> = ({ lang, follow }) =>
+  follow ? <p class="muted small">{t(lang, "account.follow_pending")}</p> : null;
+
 export function signInView(
-  lang: Lang, state: { errors?: Key[]; email?: string; notice?: string | null; limitN?: number; next?: string | null } = {},
+  lang: Lang,
+  state: { errors?: Key[]; email?: string; notice?: string | null; limitN?: number; next?: string | null; follow?: Follow | null } = {},
 ) {
   const errors = state.errors ?? [];
   return (
@@ -69,9 +80,11 @@ export function signInView(
             {errors.map((e) => <li>{e === "account.err_limited" ? t(lang, e, { n: state.limitN ?? 0 }) : t(lang, e)}</li>)}
           </ul>
         ) : null}
+        <FollowNote lang={lang} follow={state.follow} />
         <form method="post" action="/account/sign-in" class="stack">
           <input type="hidden" name="lang" value={lang} />
           <Next next={state.next} />
+          <FollowField follow={state.follow} />
           <label>
             {t(lang, "interest.email")}
             <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={state.email ?? ""} />
@@ -87,7 +100,9 @@ export function signInView(
 
 // The code form: after a request (email hidden, the lead names it), or typed
 // from scratch (the email as a field).
-export function codeView(lang: Lang, state: { email?: string; sent?: boolean; errors?: Key[]; next?: string | null } = {}) {
+export function codeView(
+  lang: Lang, state: { email?: string; sent?: boolean; errors?: Key[]; next?: string | null; follow?: Follow | null } = {},
+) {
   const sent = !!state.sent && !!state.email;
   return (
     <>
@@ -96,9 +111,11 @@ export function codeView(lang: Lang, state: { email?: string; sent?: boolean; er
         lead={sent ? tj(lang, "account.check_lead", { email: <strong>{state.email}</strong>, minutes: CODE_MINUTES }) : t(lang, "account.enter_lead")} />
       <Panel title={t(lang, "account.code_panel")} class="panel-form">
         <Errors lang={lang} errors={state.errors} />
+        <FollowNote lang={lang} follow={state.follow} />
         <form method="post" action="/account/check" class="stack">
           <input type="hidden" name="lang" value={lang} />
           <Next next={state.next} />
+          <FollowField follow={state.follow} />
           {sent ? (
             <>
               <input type="hidden" name="email" value={state.email} />
@@ -125,7 +142,7 @@ export function codeView(lang: Lang, state: { email?: string; sent?: boolean; er
 
 // The link from the message opens this page; the button posts the token, so a
 // mail scanner that fetches the link signs no one in and uses nothing up.
-export function linkView(lang: Lang, token: string, errors?: Key[], next?: string | null) {
+export function linkView(lang: Lang, token: string, errors?: Key[], next?: string | null, follow?: Follow | null) {
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.link_title")} lead={t(lang, "account.link_lead")} />
@@ -134,12 +151,16 @@ export function linkView(lang: Lang, token: string, errors?: Key[], next?: strin
         {errors?.length ? (
           <p><a href="/account/sign-in" class="btn">{t(lang, "account.code_again_link")}</a></p>
         ) : (
-          <form method="post" action="/account/check" class="stack">
-            <input type="hidden" name="lang" value={lang} />
-            <input type="hidden" name="token" value={token} />
-            <Next next={next} />
-            <button type="submit" class="btn btn-primary">{t(lang, "account.sign_in")}</button>
-          </form>
+          <>
+            <FollowNote lang={lang} follow={follow} />
+            <form method="post" action="/account/check" class="stack">
+              <input type="hidden" name="lang" value={lang} />
+              <input type="hidden" name="token" value={token} />
+              <Next next={next} />
+              <FollowField follow={follow} />
+              <button type="submit" class="btn btn-primary">{t(lang, "account.sign_in")}</button>
+            </form>
+          </>
         )}
       </Panel>
     </>

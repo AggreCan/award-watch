@@ -418,7 +418,23 @@ The test suite runs this same insert (`MANUAL_GRANT_SQL` in
   the key's id) on top of `API_LIMIT` (60 a minute per address), and a
   daily quota per key in the database (*The keyed API*).
 - **Cross-site posts refused.** Every POST checks `Origin`; the session
-  cookie is `SameSite=Lax`; every signed-in form carries a CSRF value.
+  cookie is `SameSite=Lax`; every signed-in form carries a CSRF value. A
+  post without `Origin` (not a browser) is let through.
+- **The Follow form on public pages.** A reader not signed in can ask for a
+  sign-in message from any organization, buyer, notice or contract page
+  (*Watches*), so the request form sits on every one of those pages, where
+  crawlers read it. A post that carries `follow` must say it comes from the
+  site's own page (`Sec-Fetch-Site` same-origin or same-site, else an
+  `Origin` or `Referer` of the site; `api.ts` `fromOwnPage`), which every
+  current browser does for a form post; one that does not sends nothing and
+  answers the sign-in page with the address kept and `follow` dropped, and
+  the console line `account sign-in: a Follow post without a page's
+  headers` counts them. This stops a script that reads the form and posts
+  it bare; any client can send those headers, so the caps above stay the
+  brake. The form never adds anything by itself: the watch is added only
+  after the address's own code or link is verified, for the account that
+  address signs in to, and only one watch on a page the data holds, within
+  the plan's cap.
 - **No account enumeration.** The sign-in page answers the same whether or
   not the address has an account, and the per-email limit applies to every
   address alike.
@@ -1560,9 +1576,33 @@ from `rec_events` in the records database (`docs/analytics.md`, *Events*).
 - A `Follow` button (`Suivre`) under the head of every organization, buyer,
   award notice, history record, published contract and open tender notice
   page. With the switch off it is not rendered and the page keeps every byte.
-  Not signed in: a link to `/account/sign-in?next=<this page>`; the sign-in
-  form, the code form and the emailed link carry `next`, and a sign-in returns
-  there (a path on this site only, never the sign-in pages). Signed in: a form
+  Not signed in: a form on the page itself, an address field and `Follow`
+  with one line under them (free, a sign-in link to that address, no
+  password, what following shows). It posts to `/account/sign-in` with the
+  honeypot, `lang`, `next` (this page) and `follow`, the kind and the target
+  in one field (`<kind>:<target>`, for example `organization:org-a000000001`
+  or `contract:award:cb-400-40000004`; `watch_events.ts` `followOf`). The
+  form is the same for every reader not signed in (no token, no nonce), so
+  the page's public cache is unchanged. A buyer's form follows the whole
+  buyer; the segment choice is the signed-in form's. The code form, the
+  emailed link and its confirm page carry `next` and `follow`, so either way
+  of finishing keeps them; a sign-in returns to `next` (a path on this site
+  only, never the sign-in pages). `follow` is read by the watch post's own
+  rules (`isWatchKind`, `targetOf`); anything else is dropped without a
+  word, as an unsafe `next` is. After the code or the link is verified and
+  the session starts, `POST /account/check` adds that one watch for the
+  account the address signs in to, by the watch post's steps (the label from
+  the data, the merges, the insert held to the plan's cap), and audits
+  `watch_added` with the detail `<kind> at sign-in`; at the cap nothing is
+  added, a page followed already stays as it is, and any fault in this step
+  is logged without detail and never fails the sign-in. No GET adds a watch:
+  `/account/sign-in?next=&follow=` (an old link) and the link's page only
+  carry `follow`. A post that carries `follow` without `Sec-Fetch-Site`,
+  `Origin` or `Referer` of the site's own page sends nothing and answers the
+  sign-in page with the address kept and `follow` dropped (*Security
+  posture*). Errors on the form (an incomplete address, the honeypot, the
+  hour's limit, a message not sent) answer on the sign-in page with its own
+  lines, the address, `next` and `follow` kept. Signed in: a form
   that posts the kind and the target with the session's CSRF value; a buyer's
   form adds a choice of the whole buyer or one of the 57 segments. The label
   is read from the data, never typed. A followed page reads `Following` and

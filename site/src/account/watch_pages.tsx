@@ -17,15 +17,16 @@ import { SEGMENT_CODES } from "../constants";
 import type { AppEnv } from "../env";
 import { fmtInt, segmentShort, t, tn, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
+import { EMAIL_MAX } from "../pages/interest";
 import { ProNote, ProTag } from "../pro";
 import { EVENT_KEY, WATCH_KIND_KEY, watchEventLines, watchMoreText } from "./digests";
 import { WATCH_MAX, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX } from "./feeds";
-import { type CalendarRow, FeedCell } from "./pages";
+import { type CalendarRow, FeedCell, Honeypot } from "./pages";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
 import {
-  type EventsRead, type WatchKind, KINDS_FOR, closedOn, foundKey, listed, watchPath,
+  type EventsRead, type WatchKind, KINDS_FOR, closedOn, foundKey, followValue, listed, watchPath,
 } from "./watch_events";
 import { watchLabel } from "./watch_mail";
 import { type MailRow, type Watch, countedWatches, ownWatch, watchState } from "./watches";
@@ -55,10 +56,16 @@ export async function watchControl(c: Context<AppEnv>, kind: WatchKind, target: 
 }
 
 // The Follow button and one line under the page's head. A reader not signed
-// in gets the sign-in page, which returns here (?next); a followed page reads
-// "Following" and leads to the watches page; a Free account at its cap sees
-// the cap with the Pro chip. A buyer's button comes with a choice: the whole
-// buyer, or one UNSPSC segment of it.
+// in gets the sign-in request on the page itself: the address and Follow,
+// posted to /account/sign-in with the page to return to (next) and what to
+// follow (follow, watch_events.ts followOf), which the code form and the
+// mailed link carry on, so the page is followed when the address proves
+// itself and reads "Following" on the way back. The form is the same for
+// every reader not signed in (no token, no nonce), so the page stays
+// cacheable as it was. A followed page reads "Following" and leads to the
+// watches page; a Free account at its cap sees the cap with the Pro chip. A
+// signed-in buyer's button comes with a choice: the whole buyer, or one
+// UNSPSC segment of it.
 // primary: Follow is the page's one filled button (public/styles.css
 // .btn-primary), on a page with no other: an organization's profile. The
 // buyer, notice and contract pages keep theirs on their own first action, so
@@ -68,10 +75,19 @@ export const WatchControl: FC<{ lang: Lang; state: ControlState | null; kind: Wa
   const follow = primary ? "btn btn-primary" : "btn";
   if (state.at === "out") {
     return (
-      <div class="watch-control">
-        <a href={`/account/sign-in?next=${encodeURIComponent(state.next)}`} class={follow}>{t(lang, "watches.button")}</a>
+      <form method="post" action="/account/sign-in" class="watch-control watch-signin">
+        <input type="hidden" name="lang" value={lang} />
+        <input type="hidden" name="next" value={state.next} />
+        <input type="hidden" name="follow" value={followValue(kind, target)} />
+        <label class="watch-email">
+          <span class="visually-hidden">{t(lang, "interest.email")}</span>
+          <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false}
+            placeholder={t(lang, "watches.signin_placeholder")} />
+        </label>
+        <Honeypot lang={lang} />
+        <button type="submit" class={follow}>{t(lang, "watches.button")}</button>
         <span class="muted small">{t(lang, "watches.control_out")}</span>
-      </div>
+      </form>
     );
   }
   const note = t(lang, state.mail ? "watches.control_pro" : "watches.control_free");
