@@ -24,6 +24,32 @@ export const BUG_REPORT_DAYS = 180;
 export const CODE_TRIES = 5;
 export const CODES_PER_HOUR = 5;
 const HOUR_MS = 3_600_000;
+
+// The hour's ceiling, over the whole site, on sign-in messages asked for
+// through a public page's Follow form (watch_pages.tsx). The form sits on
+// every page with the control, where a script that sends a browser's headers
+// could post it for address after address, and each post is a message from
+// the site's own sender; the caps per address and per client do not bound
+// that. Counted from the audit trail (code_requested with the detail
+// "follow", read through idx_audit_at). Past the ceiling a Follow post is
+// answered with the sign-in page, whose own post carries no follow and is
+// not counted here, so no reader is kept from signing in. A count that
+// cannot be read lets the post through, as a limiter fault does
+// (src/limits.ts). Real demand is a few requests a week.
+export const FOLLOW_CODES_PER_HOUR = 200;
+export const FOLLOW_CODE_DETAIL = "follow";
+export const FOLLOW_CODES_SQL = "SELECT COUNT(*) AS n FROM audit WHERE at >= ?1 AND event = 'code_requested' AND detail = ?2";
+
+export async function followCodesInHour(env: Env, now: Date): Promise<number> {
+  try {
+    const row = await env.ACCOUNTS!.prepare(FOLLOW_CODES_SQL).bind(new Date(now.getTime() - HOUR_MS).toISOString(), FOLLOW_CODE_DETAIL)
+      .first<{ n: number }>();
+    return row?.n ?? 0;
+  } catch {
+    console.error("account sign-in: the hour's Follow requests not counted, let through");
+    return 0;
+  }
+}
 const CODE_RE = /^[0-9]{6}$/;
 const TOKEN_RE = /^([0-9a-f]{32})\.([0-9a-f]{64})$/;
 

@@ -83,6 +83,11 @@ export const ACCOUNT_STRINGS = {
     en: "Signing in also follows the page where you pressed Follow.",
     fr: "En vous connectant, vous suivrez aussi la page où vous avez appuyé sur Suivre.",
   },
+  // On the sign-in page that answers a Follow post which sent nothing (routes.tsx).
+  "account.follow_after": {
+    en: "To follow that page, sign in here, then press Follow on it.",
+    fr: "Pour suivre cette page, connectez-vous ici, puis appuyez sur Suivre sur la page.",
+  },
   "account.msg_signed_out": { en: "You are signed out.", fr: "Vous êtes déconnecté." },
   "account.msg_signed_out_all": { en: "Every browser is signed out.", fr: "Tous les navigateurs sont déconnectés." },
 

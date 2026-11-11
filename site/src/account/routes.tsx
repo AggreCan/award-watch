@@ -106,7 +106,10 @@ import {
   type Account, type UaClass, SESSION_COOKIE, clearSessionCookie, csrfValid, markSignedOut, readSession, revokeAllSessions,
   revokeSession, startSession,
 } from "./session";
-import { CODE_MINUTES, CODES_PER_HOUR, CODE_TRIES, type Checked, checkCode, checkLink, findOrCreateUser, issueCode, sweep } from "./signin";
+import {
+  CODE_MINUTES, CODES_PER_HOUR, CODE_TRIES, type Checked, FOLLOW_CODES_PER_HOUR, FOLLOW_CODE_DETAIL, checkCode, checkLink, findOrCreateUser,
+  followCodesInHour, issueCode, sweep,
+} from "./signin";
 import { accountsEnabled } from "./switch";
 import {
   changeCompetitors, checkOrganization, claimOrganization, claimSummary, deleteClaim, deleteClaimOf, followClaimedId, isClaimBlock,
@@ -247,21 +250,31 @@ account.post("/sign-in", async (c) => {
   // message goes out: the sign-in page answers with the address kept and the
   // follow dropped. A reader on a browser that sends none of the three signs
   // in from there as before (its post carries no follow), and follows after.
-  // Any client can send those headers; the caps per address and per email
-  // stay the brake (docs/accounts.md, Security posture).
+  // Any client can send those headers, so the Follow posts of the whole site
+  // also have a ceiling an hour (signin.ts FOLLOW_CODES_PER_HOUR), past which
+  // one is answered the same way; the caps per address and per email stand
+  // beside it (docs/accounts.md, Security posture). The sign-in page says how
+  // to follow after signing in, and its own post is held to neither.
+  const signInOnly = () => accountPage(c, t(lang, "account.sign_in_title"),
+    signInView(lang, { email: typed.slice(0, EMAIL_MAX), next, notice: t(lang, "account.follow_after") }));
   if (follow && !fromOwnPage(c.req.raw.headers, c.req.url)) {
     console.log("account sign-in: a Follow post without a page's headers, answered with the sign-in page");
-    return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { email: typed.slice(0, EMAIL_MAX), next }));
+    return signInOnly();
   }
   return guarded(c, async () => {
     const now = new Date();
     await sweep(c.env, now);
+    if (follow && (await followCodesInHour(c.env, now)) >= FOLLOW_CODES_PER_HOUR) {
+      console.log("account sign-in: the hour's Follow requests are spent, answered with the sign-in page");
+      return signInOnly();
+    }
     const issued = await issueCode(c.env, email, await ipHash(c.env.VIEWS_SALT_KEY, c.req.header("cf-connecting-ip"), now), now);
     if (issued === "limited") {
       await audit(c.env, null, "code_limited", null, now);
       return again(["account.err_limited"], 429, CODES_PER_HOUR);
     }
-    await audit(c.env, issued.userId, "code_requested", null, now);
+    // A Follow form's request is marked, which is what the hour's ceiling counts.
+    await audit(c.env, issued.userId, "code_requested", follow ? FOLLOW_CODE_DETAIL : null, now);
     const base = siteBase(c);
     const link = `${base}/account/check?token=${issued.token}${lang === "fr" ? "&lang=fr" : ""}${next ? `&next=${encodeURIComponent(next)}` : ""}` +
       `${follow ? `&follow=${encodeURIComponent(followValue(follow.kind, follow.target))}` : ""}`;

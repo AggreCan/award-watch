@@ -430,8 +430,16 @@ The test suite runs this same insert (`MANUAL_GRANT_SQL` in
   answers the sign-in page with the address kept and `follow` dropped, and
   the console line `account sign-in: a Follow post without a page's
   headers` counts them. This stops a script that reads the form and posts
-  it bare; any client can send those headers, so the caps above stay the
-  brake. The form never adds anything by itself: the watch is added only
+  it bare. Any client can send those headers, so the Follow posts of the
+  whole site also have a ceiling: `FOLLOW_CODES_PER_HOUR`, 200 sign-in
+  messages an hour (`signin.ts`), counted from the audit trail, where a
+  Follow form's request is `code_requested` with the detail `follow`. Past
+  it a Follow post sends nothing and gets the same sign-in page (console
+  line `account sign-in: the hour's Follow requests are spent`). That page
+  says to sign in there and press Follow after, and its own post is held to
+  neither rule, so no reader is kept from signing in; a count that cannot be
+  read lets the post through. The caps above stand beside it. The form never
+  adds anything by itself: the watch is added only
   after the address's own code or link is verified, for the account that
   address signs in to, and only one watch on a page the data holds, within
   the plan's cap.

@@ -13,7 +13,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ADD_WATCH_SQL } from "../src/account/watches";
 import { FOLLOW_MAX, followOf } from "../src/account/watch_events";
-import { CODES_PER_HOUR } from "../src/account/signin";
+import { CODES_PER_HOUR, FOLLOW_CODES_PER_HOUR, FOLLOW_CODES_SQL } from "../src/account/signin";
 import {
   ACCOUNTS, decode, get, lastMail, nbsp, newEmail, offEnv, onEnv, post, sessionCookie, signIn, useAccountsDb, userId,
 } from "./accounts-helpers";
@@ -425,6 +425,91 @@ describe("the sign-in page with follow", () => {
   });
 });
 
+// -- the hour's ceiling on Follow posts --------------------------------------------------------------------
+
+describe("the hour's ceiling on sign-in messages asked for through a Follow form", () => {
+  const FOLLOW_ROWS = "event = 'code_requested' AND detail = 'follow'";
+  const clear = () => ACCOUNTS.prepare(`DELETE FROM audit WHERE ${FOLLOW_ROWS}`).run();
+  const seed = async (n: number, at: Date) => {
+    const row = ACCOUNTS.prepare("INSERT INTO audit (user_id, event, at, detail) VALUES (NULL, 'code_requested', ?, 'follow')");
+    for (let i = 0; i < n; i += 50) await ACCOUNTS.batch(Array.from({ length: Math.min(50, n - i) }, () => row.bind(at.toISOString())));
+  };
+  const marked = async () => ACCOUNTS.prepare(`SELECT COUNT(*) AS n FROM audit WHERE ${FOLLOW_ROWS}`).first<number>("n");
+
+  it("marks a Follow form's request in the audit, and the sign-in page's own request not", async () => {
+    await clear();
+    await post("/account/sign-in", await pageForm(`/organizations/${ORG}`, newEmail("f-mark")));
+    expect(await marked()).toBe(1);
+    await post("/account/sign-in", { lang: "en", email: newEmail("f-plain") });
+    expect(await marked()).toBe(1);
+    await clear();
+  });
+
+  it("past it, sends nothing and answers the sign-in page, in French too; that page's own post still sends", async () => {
+    await clear();
+    await seed(FOLLOW_CODES_PER_HOUR, new Date(Date.now() - 60_000));
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const email = newEmail("f-ceiling");
+      const res = await post("/account/sign-in", await pageForm(`/organizations/${ORG}`, email));
+      expect(res.status).toBe(200);
+      const html = await text(res);
+      expect(html).toContain("<h1>Sign In</h1>");
+      expect(html).toContain(`value="${email}"`);
+      expect(html).toContain(`<input type="hidden" name="next" value="/organizations/${ORG}"/>`);
+      expect(html).not.toContain('name="follow"');
+      expect(html).toContain('<p class="account-notice" role="status">To follow that page, sign in here, then press Follow on it.</p>');
+      expect(await lastMail(email)).toBeNull();
+      expect(await ACCOUNTS.prepare("SELECT COUNT(*) AS n FROM magic_codes WHERE email = ?").bind(email).first("n")).toBe(0);
+      expect(await marked()).toBe(FOLLOW_CODES_PER_HOUR);
+      expect(log.mock.calls.map((c) => c.join(" "))).toContain("account sign-in: the hour's Follow requests are spent, answered with the sign-in page");
+      const fr = await text(await post("/account/sign-in", { ...(await pageForm(`/organizations/${ORG}`, newEmail("f-plafond"))), lang: "fr" }));
+      expect(fr).toContain("Pour suivre cette page, connectez-vous ici, puis appuyez sur Suivre sur la page.");
+      // The sign-in page's own post carries no follow and is held to no ceiling.
+      const again = await post("/account/sign-in", { lang: "en", email, next: `/organizations/${ORG}` });
+      expect(again.status).toBe(200);
+      expect(await lastMail(email)).not.toBeNull();
+    } finally {
+      await clear();
+    }
+  });
+
+  it("counts the last hour only, and one request under the ceiling goes through", async () => {
+    await clear();
+    await seed(FOLLOW_CODES_PER_HOUR, new Date(Date.now() - 61 * 60_000));
+    await seed(FOLLOW_CODES_PER_HOUR - 1, new Date(Date.now() - 60_000));
+    try {
+      const email = newEmail("f-under");
+      await post("/account/sign-in", await pageForm(`/organizations/${ORG}`, email));
+      expect(await lastMail(email)).not.toBeNull();
+      // That request was the hour's last.
+      const next = newEmail("f-over");
+      await post("/account/sign-in", await pageForm(`/organizations/${ORG}`, next));
+      expect(await lastMail(next)).toBeNull();
+    } finally {
+      await clear();
+    }
+  });
+
+  it("lets the post through when the count cannot be read", async () => {
+    await clear();
+    const failing = {
+      prepare(sql: string) {
+        if (sql === FOLLOW_CODES_SQL) throw new Error("D1_ERROR: no such table: audit: SQLITE_ERROR");
+        return ACCOUNTS.prepare(sql);
+      },
+      batch: (s: D1PreparedStatement[]) => ACCOUNTS.batch(s),
+    } as unknown as D1Database;
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const email = newEmail("f-uncounted");
+    const res = await post("/account/sign-in", await pageForm(`/organizations/${ORG}`, email), { env: onEnv({ ACCOUNTS: failing }) });
+    expect(res.status).toBe(200);
+    expect(await lastMail(email)).not.toBeNull();
+    expect(errors.mock.calls.map((c) => c.join(" "))).toContain("account sign-in: the hour's Follow requests not counted, let through");
+    await clear();
+  });
+});
+
 // -- the guard against scripts ---------------------------------------------------------------------------
 
 describe("a post that carries follow without a page's headers", () => {
@@ -439,6 +524,7 @@ describe("a post that carries follow without a page's headers", () => {
     expect(html).toContain(`<input type="hidden" name="next" value="/organizations/${ORG}"/>`);
     expect(html).not.toContain('name="follow"');
     expect(html).not.toContain('role="alert"');
+    expect(html).toContain('<p class="account-notice" role="status">To follow that page, sign in here, then press Follow on it.</p>');
     expect(await lastMail(email)).toBeNull();
     expect(await ACCOUNTS.prepare("SELECT COUNT(*) AS n FROM magic_codes WHERE email = ?").bind(email).first("n")).toBe(0);
     expect(log.mock.calls.map((c) => c.join(" "))).toContain("account sign-in: a Follow post without a page's headers, answered with the sign-in page");
