@@ -53,6 +53,23 @@ describe("the button on a profile", () => {
     expect(en).not.toContain(EM_DASH);
     expect(fr).not.toContain(EM_DASH);
   });
+
+  it("sits with the page's upkeep, after the reader's own actions, in a fold a phone starts closed", async () => {
+    const on = nbsp(decode(await (await app.request(`/organizations/${ID}`, {}, onEnv())).text()));
+    const head = /<header class="page-head">[\s\S]*?<\/header>/.exec(on)?.[0] ?? "";
+    // The reader's own actions first, then one fold with the four upkeep links in it.
+    const row = head.slice(head.indexOf('<div class="page-actions">'));
+    const at = (text: string) => row.indexOf(text);
+    const order = ['id="watch-toggle"', ">Analytics<", ">Record table</a>",
+      '<details class="phone-fold actions-fold" open="" data-phone-closed=""><summary class="btn">More actions</summary><div class="actions-more">',
+      ">Respond as this organization</a>", ">Report a correction</a>", ">Report a wrong merge</a>", ">Records feed</a></div></details>"];
+    for (const text of order) expect(at(text), text).toBeGreaterThan(-1);
+    expect(order.map(at)).toEqual([...order.map(at)].sort((a, b) => a - b));
+    // The script that closes the fold below 700 px is on the page, once.
+    expect(on.match(/<script src="\/pager\.js" defer=""><\/script>/g)).toHaveLength(1);
+    const fr = await page(`/organizations/${ID}?lang=fr`);
+    expect(fr).toContain('<summary class="btn">Autres actions</summary>');
+  });
 });
 
 describe("the merge report's form", () => {

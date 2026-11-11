@@ -1059,6 +1059,7 @@ const STRINGS = {
   "org.business_number": { en: "Business number {bn}.", fr: "Numéro d'entreprise {bn}." },
   "org.respond": { en: "Respond as this organization", fr: "Répondre au nom de cette organisation" },
   "org.correct": { en: "Report a correction", fr: "Signaler une correction" },
+  "org.more_actions": { en: "More actions", fr: "Autres actions" },
   "org.tiles_label": { en: "Totals by source", fr: "Totaux par source" },
   "org.tile_records_one": { en: "{n} record", fr: "{n} dossier" },
   "org.tile_records_many": { en: "{n} records", fr: "{n} dossiers" },

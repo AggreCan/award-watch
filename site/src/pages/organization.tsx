@@ -514,13 +514,21 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
             data-label-on={t(lang, "watch.on")} data-label-off={t(lang, "watch.off")} data-label-full={t(lang, "watch.full", { max: WATCH_MAX })}>
             {t(lang, "watch.off")}
           </button>
-          <a href={`/organizations/${o.id}/respond`} class="btn">{t(lang, "org.respond")}</a>
-          <a href={`/corrections?organization=${o.id}`} class="btn">{t(lang, "org.correct")}</a>
-          {/* Every reader, signed in or not: a merge joins records on evidence, and a reader who knows a name is another business's says so here. */}
-          <a href={`/corrections?merge=${o.id}`} class="btn" rel="nofollow">{t(lang, "org.wrong_merge")}</a>
           <AnalyticsLink lang={lang} href={`/organizations/${o.id}/analytics`} on={accountsEnabled(c.env)} />
           <a href={`/organizations/${o.id}/records`} class="btn" rel="nofollow">{t(lang, "records.link")}</a>
-          <a href={`/data/feeds/organizations/${o.id}.xml`} class="btn" rel="nofollow">{t(lang, "orgfeed.button")}</a>
+          {/* The page's upkeep, after the reader's own actions. On a phone the seven buttons stood between the name and
+              the first figure, so these four fold behind one button there (public/pager.js closes the fold below
+              700 px; wider screens never see its button, and without the script it stays open). */}
+          <details class="phone-fold actions-fold" open data-phone-closed="">
+            <summary class="btn">{t(lang, "org.more_actions")}</summary>
+            <div class="actions-more">
+              <a href={`/organizations/${o.id}/respond`} class="btn">{t(lang, "org.respond")}</a>
+              <a href={`/corrections?organization=${o.id}`} class="btn">{t(lang, "org.correct")}</a>
+              {/* Every reader, signed in or not: a merge joins records on evidence, and a reader who knows a name is another business's says so here. */}
+              <a href={`/corrections?merge=${o.id}`} class="btn" rel="nofollow">{t(lang, "org.wrong_merge")}</a>
+              <a href={`/data/feeds/organizations/${o.id}.xml`} class="btn" rel="nofollow">{t(lang, "orgfeed.button")}</a>
+            </div>
+          </details>
         </>}>
         {otherNames.length ? <p class="page-note">{t(lang, "org.also_recorded")} {otherNames.join(" · ")}</p> : null}
         <AlsoAppearsAs lang={lang} aliases={aliases} />

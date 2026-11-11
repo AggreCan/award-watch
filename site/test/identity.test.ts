@@ -241,6 +241,16 @@ describe("on a phone", () => {
     expect(body(".content")).toContain("display: contents");
     expect([body("main"), body(".rail"), body(".site-footer")].map((b) => /order: (\d)/.exec(b)?.[1])).toEqual(["1", "2", "3"]);
   });
+
+  it("a profile's upkeep folds behind one button, which wider screens never see", () => {
+    // The fold's button is the phone fold's own: hidden from 700 px, where the links sit in the head's row.
+    expect(STYLES).toContain("@media (min-width: 700px) { .phone-fold > summary { display: none; } }");
+    expect(decl(rule(".actions-more")?.body, "display")).toBe("flex");
+    expect(decl(rule(".actions-more")?.body, "flex-wrap")).toBe("wrap");
+    expect(decl(rule(".actions-fold > summary")?.body, "margin")).toBe("0");
+    // Open on a phone, the fold takes a row of its own under its button.
+    expect(STYLES).toMatch(/@media \(max-width: 699px\) \{\n {2}\.actions-fold\[open\] \{ flex-basis: 100%; \}\n {2}\.actions-fold\[open\] > summary \{ margin-bottom: 8px; \}\n\}/);
+  });
 });
 
 describe("corners", () => {

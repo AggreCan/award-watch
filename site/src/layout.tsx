@@ -459,7 +459,7 @@ const TipScript: FC<{ tables: TableUse }> = ({ tables }) =>
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 49;
+export const STYLES_VERSION = 50;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
