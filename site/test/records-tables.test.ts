@@ -177,7 +177,8 @@ describe("a published contract's page", () => {
     const { res, html } = await page(contractPath("dnd-mdn", SECOND), { env: { ...offEnv(), RECORDS: binding } });
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=300");
-    expect(batches).toEqual([2]);
+    // The state row, the contract's rows and its Indigenous business fields.
+    expect(batches).toEqual([3]);
     expect(html).toContain("<h1>Translation services</h1>");
     expect(html).toContain(`href="/organizations/${A1}">Exemplar Translation Services Inc.</a>`);
     expect(html).toContain('href="/buyers/dnd-mdn">National Defence</a>');

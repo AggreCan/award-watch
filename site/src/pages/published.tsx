@@ -2,7 +2,9 @@
 // disclosure of contracts over $10,000), from the records database
 // (src/records_tables.ts PUBLISHED_CONTRACT_SQL, one bounded statement), with
 // the other rows of the same contract (its amendments: the rows sharing the
-// department and procurement_id). A reference is unique within one
+// department and procurement_id) and, in the same batch, its Indigenous
+// business fields when the department reported a set-aside or an Indigenous
+// business (PUBLISHED_INDIGENOUS_SQL). A reference is unique within one
 // department only, so the address names both. The government's contracts
 // search stays linked as the source, a secondary link: it often lists
 // nothing yet for a new quarter.
@@ -37,6 +39,9 @@ const COMMODITY: Record<string, Key> = { G: "cat.GD", S: "cat.SRV", C: "cat.CNST
 const INSTRUMENT: Record<string, Key> = {
   C: "published.inst_C", A: "published.inst_A", SO: "published.inst_SO", SA: "published.inst_SA",
 };
+// The set-asides under the Procurement Strategy for Indigenous Business, in
+// the TBS schema's own terms (indigenous_business).
+const PSIB: Record<string, Key> = { MS: "published.psib_MS", VS: "published.psib_VS" };
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 
@@ -156,6 +161,12 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
   const source = stats.sources.find((s) => s.source === "contracts");
   const lastRead = source?.last_read ? source.last_read.slice(0, 10) : null;
   const supplier = supplierOf(lang, d);
+  // The two Indigenous business fields, when the department reported a
+  // set-aside or an Indigenous business; none for a person's contract.
+  const marks = num(d.wh) === 1 ? undefined : read.rows[1]?.[0];
+  const psib = str(marks?.psib)?.toUpperCase() ?? null;
+  const psibCode = psib && PSIB[psib] ? psib : null;
+  const outsidePsib = num(marks?.ib) === 1;
   const seo: Seo = {
     path,
     title: pageTitle(clip(title, 90)),
@@ -235,7 +246,11 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
             <Item lang={lang} k="published.bids" v={num(d.bids) === null ? null : fmtInt(num(d.bids), lang)} />
             <Item lang={lang} k="published.standing_offer" v={str(d.so_no) ? <span class="mono">{str(d.so_no)}</span> : null} />
             <Item lang={lang} k="contract.procurement_number" v={str(d.pid) ? <span class="mono">{str(d.pid)}</span> : null} />
+            <Item lang={lang} k="published.psib" v={coded(lang, psibCode, PSIB)} />
+            <Item lang={lang} k="published.ib_outside" v={outsidePsib ? t(lang, "published.ib_yes") : null} />
           </dl>
+          {psibCode ? <p class="muted small">{t(lang, "published.psib_note")}</p> : null}
+          {outsidePsib ? <p class="muted small">{t(lang, "published.ib_note")}</p> : null}
           <p class="muted small">{t(lang, "published.codes_note")}</p>
         </Panel>
       </div>

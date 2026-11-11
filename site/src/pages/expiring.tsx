@@ -39,9 +39,9 @@ import { ShortMoney } from "../chart";
 import { type HeadSort, type Rest, type SortOrders, Table, headSort, restClass } from "../columns";
 import { PROVINCES, SEGMENTS } from "../constants";
 import {
-  BUYER_ID_RE, EXPIRING_KINDS, EXPIRING_WINDOWS, ORG_ID_RE, SEGMENT_RE, isExpiringRow, isExpiringWindow, loadExpiringIndex, loadExpiringPage,
-  loadExpiringWindow, loadStats, type ExpiringKind, type ExpiringPart, type ExpiringRow, type ExpiringWindow, type ExpiringWindowIndex,
-  type Stats,
+  BUYER_ID_RE, EXPIRING_KINDS, EXPIRING_WINDOWS, ORG_ID_RE, SEGMENT_RE, indigenousMark, isExpiringRow, isExpiringWindow, loadExpiringIndex,
+  loadExpiringPage, loadExpiringWindow, loadStats, type ExpiringKind, type ExpiringPart, type ExpiringRow, type ExpiringWindow,
+  type ExpiringWindowIndex, type IndigenousMark, type Stats,
 } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, numberLocale, pick, provinceName, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
@@ -94,6 +94,10 @@ const WINDOW_TITLE: Record<ExpiringWindow, Key> = {
 };
 export const WINDOW_MONTHS: Record<ExpiringWindow, Key> = { "3m": "expiring.months_3m", "6m": "expiring.months_6m", "12m": "expiring.months_12m" };
 const KIND_LABEL: Record<ExpiringKind, Key> = { award: "expiring.kind_award", history: "expiring.kind_history", contract: "expiring.kind_contract" };
+// The tag of a row whose published contract reports a set-aside under the
+// Procurement Strategy for Indigenous Business or an Indigenous business
+// outside one, in the TBS schema's own terms.
+const INDIGENOUS_TAG: Record<IndigenousMark, Key> = { MS: "expiring.tag_psib_MS", VS: "expiring.tag_psib_VS", IB: "expiring.tag_ib" };
 // The source each kind is read from, for the source filter's labels.
 export const KIND_SOURCE: Record<ExpiringKind, string> = { award: "awards", history: "history", contract: "contracts" };
 
@@ -423,6 +427,7 @@ export const ExpiringTable: FC<{
           const title = pick(lang, r.title_en, r.title_fr) ?? contractReference(r);
           const path = sitePath(r);
           const instrument = instrumentText(lang, r.instrument_en, r.instrument_fr);
+          const indigenous = indigenousMark(r);
           return (
             <tr>
               <td data-label={t(lang, "expiring.col_ends")} class="mono">
@@ -442,11 +447,13 @@ export const ExpiringTable: FC<{
                 <span class="mono id muted">{contractReference(r)}</span> <SegmentChips lang={lang} codes={r.segments} />
                 {/* The source the row was kept from, then the instrument; a
                     standing offer or supply arrangement is tagged (a framework,
-                    not one purchase), and so is an end on March 31. */}
+                    not one purchase), and so is an end on March 31, and an
+                    Indigenous business set-aside or award its published contract reports. */}
                 <br />
                 <span class="muted small">{t(lang, KIND_LABEL[r.kind])}{instrument && !standingOffer(r) ? ` · ${instrument}` : ""}</span>
                 {instrument && standingOffer(r) ? <> <span class="tag">{instrument}</span></> : null}
                 {fiscalYearEnd(r) ? <> <span class="tag">{t(lang, "expiring.tag_fye")}</span></> : null}
+                {indigenous ? <> <span class="tag" title={t(lang, "expiring.tag_indigenous_def")}>{t(lang, INDIGENOUS_TAG[indigenous])}</span></> : null}
               </td>
               {organization ? <td data-label={t(lang, "col.supplier")}><Organization lang={lang} r={r} /></td> : null}
               {buyer ? <td data-label={t(lang, "col.buyer")} class={restClass(BUYER_REST)}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td> : null}

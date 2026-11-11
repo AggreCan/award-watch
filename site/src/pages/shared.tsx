@@ -118,6 +118,18 @@ export function instrumentText(lang: Lang, en: string | null | undefined, fr: st
   return text;
 }
 
+// A supplier's employees as PSPC's contract history gives them (data.ts
+// isEmployees): a count ("180"), or a size band of the CanadaBuys data
+// dictionary ("50 to 99", "5,000 and over", "Self-employed").
+export function employeesText(lang: Lang, code: string): string {
+  if (code === "self") return t(lang, "employees.self");
+  const over = /^(\d+)\+$/.exec(code);
+  if (over) return t(lang, "employees.over", { low: fmtInt(Number(over[1]), lang) });
+  const band = /^(\d+)-(\d+)$/.exec(code);
+  if (band) return t(lang, "employees.band", { low: fmtInt(Number(band[1]), lang), high: fmtInt(Number(band[2]), lang) });
+  return fmtInt(Number(code), lang);
+}
+
 // The CanadaBuys file a record was read from, as a reader knows it ("the
 // CanadaBuys open tender notices file"), by the start of its name as the
 // loaders match it (sources/canadabuys.py FILES); any other name as given.

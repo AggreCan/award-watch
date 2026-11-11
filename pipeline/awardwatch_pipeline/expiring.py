@@ -44,6 +44,12 @@ CLAUDE.md "Expiring-contracts radar" is the rule; this module follows it:
   solicitation number matches the row's (resolved through tenders), never the
   solicitation number itself.
 * A withheld supplier stays withheld: no organization, supplier_withheld 1.
+* indigenous is the published contracts' Indigenous business mark
+  (normalize.indigenous_mark): MS or VS for a set-aside under the
+  Procurement Strategy for Indigenous Business, IB for an Indigenous business
+  outside one, read from the newest row of the group that fills each field; a
+  row kept from another source takes the mark of a published contract
+  dropped against it. A withheld supplier's row has none.
 * entered_3m is the data date on which a row first came within FEED_DAYS of
   its end, carried over from the previous build while the row stays in that
   window, so the feed lists each contract once, on the night it entered.
@@ -66,6 +72,7 @@ from pathlib import Path
 
 from . import config, organizations, places
 from .db import log_run, now_iso
+from .normalize import indigenous_mark
 from .sources.buyers import public_spelling
 
 log = logging.getLogger(__name__)
@@ -92,7 +99,8 @@ COLUMNS = ("source_key", "kind", "reference", "title_en", "title_fr", "organizat
            "supplier_withheld", "buyer_id", "buyer_en", "buyer_fr", "start", "end", "days_left", "value", "currency",
            "competitive", "method_en", "method_fr", "instrument_en", "instrument_fr", "n_amendments", "value_growth",
            "contract_number", "tender_reference", "segments", "provinces", "provinces_derived", "provinces_from",
-           "entered_3m", "client_buyer_id", "client_buyer_name", "client_buyer_name_fr", "value_flag", "computed_at")
+           "entered_3m", "client_buyer_id", "client_buyer_name", "client_buyer_name_fr", "value_flag", "indigenous",
+           "computed_at")
 REVIEW_FILE = "expiring-duplicates.txt"
 
 
@@ -243,6 +251,7 @@ def notice_candidates(conn: sqlite3.Connection, kind: str, names: _Names, first:
             "provinces": json.dumps(json.loads(r["provinces"]) if r["provinces"] else []),
             "provinces_derived": r["provinces_derived"] or None, "provinces_from": r["provinces_from"] or None,
             "value_flag": "check" if (kind, r["reference"]) in names.flags else None,
+            "indigenous": None,
         }
         buyers = frozenset(b for b in (r["buyer_id"], r["client_id"]) if b)
         if kind == "history":
@@ -262,8 +271,18 @@ def _first_raw(text: object) -> str | None:
     return names[0] if names else None
 
 
+def _newest_stated(column: str) -> str:
+    """The column's value on the newest row of a published contract's group that fills it."""
+    return (f"FIRST_VALUE({column}) OVER (PARTITION BY owner_org, gk ORDER BY COALESCE(TRIM({column}), '') = '', "
+            "contract_date DESC, reference DESC)")
+
+
 def contract_candidates(conn: sqlite3.Connection, names: _Names, first: str, last: str, today: date) -> list[Candidate]:
-    """Published contracts ending between first and last, one per department and procurement_id."""
+    """Published contracts ending between first and last, one per department and procurement_id.
+
+    indigenous is the group's mark (normalize.indigenous_mark) from the newest row that fills each of the two
+    Indigenous business fields; a withheld vendor carries none, as nothing about a private individual is shown.
+    """
     from .indicators import CONTRACT_VALUE
 
     sql = (
@@ -276,12 +295,14 @@ def contract_candidates(conn: sqlite3.Connection, names: _Names, first: str, las
         "SUM(own) OVER (PARTITION BY owner_org, gk) AS group_value, "
         "FIRST_VALUE(COALESCE(original_value, value)) OVER (PARTITION BY owner_org, gk "
         "ORDER BY contract_date, reference) AS original, "
-        "MIN(CASE WHEN instrument_type != 'A' THEN instrument_type END) OVER (PARTITION BY owner_org, gk) AS instrument "
+        "MIN(CASE WHEN instrument_type != 'A' THEN instrument_type END) OVER (PARTITION BY owner_org, gk) AS instrument, "
+        f"{_newest_stated('indigenous_business')} AS set_aside, "
+        f"{_newest_stated('indigenous_business_excluding_psib')} AS outside_psib "
         "FROM g) "
         "SELECT owner_org, reference, procurement_id, vendor_withheld, organization_id, buyer_id, period_start, "
         "substr(delivery_date, 1, 10) AS end_day, competitive, description_en, description_fr, versions, group_value, "
-        "original, instrument, land_claims FROM r WHERE rn = 1 AND substr(delivery_date, 1, 10) BETWEEN ? AND ? "
-        "ORDER BY end_day, owner_org, reference"
+        "original, instrument, land_claims, set_aside, outside_psib FROM r WHERE rn = 1 "
+        "AND substr(delivery_date, 1, 10) BETWEEN ? AND ? ORDER BY end_day, owner_org, reference"
     )
     out: list[Candidate] = []
     for r in conn.execute(sql, (first, last)):
@@ -311,6 +332,7 @@ def contract_candidates(conn: sqlite3.Connection, names: _Names, first: str, las
             "provinces_derived": json.dumps(claimed) if claimed else None,
             "provinces_from": places.FROM_LAND_CLAIMS if claimed else None,
             "value_flag": "check" if ("contract", f"{r['owner_org']}:{r['procurement_id']}") in names.flags else None,
+            "indigenous": None if withheld else indigenous_mark(r["set_aside"], r["outside_psib"]),
         }
         buyers = frozenset([r["buyer_id"]]) if r["buyer_id"] else frozenset()
         out.append(Candidate("contract", f"contract:{reference}", reference, end, row, org, buyers, numbers, value,
@@ -378,6 +400,24 @@ def clients(kept: list[Candidate], pairs: list[Pair]) -> dict[str, tuple[str | N
     return out
 
 
+def indigenous_marks(kept: list[Candidate], pairs: list[Pair]) -> dict[str, str | None]:
+    """Each kept row's Indigenous business mark: its own (a published contract's), else that of a published
+    contract the duplicate rule dropped against it, the first by key. A row whose supplier is withheld has none."""
+    twins: dict[str, list[Candidate]] = defaultdict(list)
+    for p in pairs:
+        if p.dropped.kind == "contract" and p.dropped.row.get("indigenous"):
+            twins[p.kept.source_key].append(p.dropped)
+    out: dict[str, str | None] = {}
+    for c in kept:
+        own = c.row.get("indigenous")
+        if own or c.row.get("supplier_withheld"):
+            out[c.source_key] = own
+            continue
+        side = sorted(twins.get(c.source_key, []), key=lambda d: d.source_key)
+        out[c.source_key] = side[0].row["indigenous"] if side else None
+    return out
+
+
 def write_review(pairs: list[Pair], path: Path, *, stamp: str) -> str | None:
     """Write (or, with no pair, remove) the operator's list of the pairs the duplicate rule collapsed."""
     if not pairs:
@@ -425,6 +465,7 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
     }
     kept, dropped, pairs = dedupe(by_kind)
     client = clients(kept, pairs)
+    marks = indigenous_marks(kept, pairs)
     entered = dict(conn.execute("SELECT source_key, entered_3m FROM expiring_contracts WHERE entered_3m IS NOT NULL"))
     rows = []
     new_in_window = 0
@@ -435,7 +476,8 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
             new_in_window += 1
         cid, cen, cfr = client[c.source_key]
         row.update(source_key=c.source_key, entered_3m=(entered.get(c.source_key) or first) if in_window else None,
-                   client_buyer_id=cid, client_buyer_name=cen, client_buyer_name_fr=cfr, computed_at=stamp)
+                   client_buyer_id=cid, client_buyer_name=cen, client_buyer_name_fr=cfr,
+                   indigenous=marks[c.source_key], computed_at=stamp)
         rows.append(tuple(row[k] for k in COLUMNS))
     try:
         conn.execute("DELETE FROM expiring_contracts")

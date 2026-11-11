@@ -639,6 +639,16 @@ const STRINGS = {
   "contract.supplier": { en: "Supplier", fr: "Fournisseur" },
   "contract.operating_name": { en: "Operating name", fr: "Nom commercial" },
   "contract.supplier_place": { en: "Supplier location", fr: "Lieu du fournisseur" },
+  // A PSPC history record's supplierEmployeeCount (pages/contract.tsx), and its note.
+  "contract.employees": { en: "Supplier's employees", fr: "Employés du fournisseur" },
+  "contract.employees_note": {
+    en: "Supplier's employees: the number of individuals employed by the supplier, as PSPC's contract history gives it for this contract (a count, or a size band in older records).",
+    fr: "Employés du fournisseur : le nombre de personnes employées par le fournisseur, tel que l'historique des contrats de SPAC l'indique pour ce contrat (un nombre, ou une tranche dans les dossiers plus anciens).",
+  },
+  // The size bands of the CanadaBuys data dictionary, which older history records give instead of a count.
+  "employees.self": { en: "Self-employed", fr: "Travailleur autonome" },
+  "employees.band": { en: "{low} to {high}", fr: "{low} à {high}" },
+  "employees.over": { en: "{low} and over", fr: "{low} et plus" },
   "contract.contracting": { en: "Contracting entity", fr: "Entité contractante" },
   "contract.value": { en: "Contract Value", fr: "Valeur du contrat" },
   "contract.value_counted": { en: "Value counted", fr: "Valeur retenue" },
@@ -760,6 +770,17 @@ const STRINGS = {
   "expiring.chip_sosa": { en: "Standing offers and supply arrangements", fr: "Offres à commandes et arrangements" },
   "expiring.chip_left_out": { en: "left out", fr: "exclues" },
   "expiring.tag_fye": { en: "Fiscal year end", fr: "Fin d'exercice" },
+  // A row whose published contract reports a set-aside under the Procurement Strategy for Indigenous
+  // Business, or an Indigenous business outside one, in the TBS schema's terms.
+  "expiring.tag_psib_MS": { en: "PSIB: Mandatory Set-Aside", fr: "SAEA : Contrat réservé obligatoire" },
+  "expiring.tag_psib_VS": { en: "PSIB: Voluntary Set-Aside", fr: "SAEA : Contrat réservé facultatif" },
+  // A tag is short: the source's full field name (published.ib_outside) ran to 70 characters in French and
+  // was cut off in a phone's cell. The contract's own page gives the field by its name.
+  "expiring.tag_ib": { en: "Indigenous business, outside PSIB", fr: "Entreprise autochtone, hors SAEA" },
+  "expiring.tag_indigenous_def": {
+    en: "As the department reported it in its published contracts",
+    fr: "Tel que le ministère l'a déclaré dans ses contrats publiés",
+  },
   "expiring.band_under_100k": { en: "Under $100,000", fr: "Moins de 100 000 $" },
   "expiring.band_100k_1m": { en: "$100,000 to under $1 million", fr: "De 100 000 $ à moins de 1 million de dollars" },
   "expiring.band_1m_10m": { en: "$1 million to under $10 million", fr: "De 1 à moins de 10 millions de dollars" },
@@ -1057,6 +1078,12 @@ const STRINGS = {
   "org.also_recorded": { en: "Also recorded as:", fr: "Également au dossier sous :" },
   "org.seen": { en: "Records from {first} to {last}.", fr: "Dossiers du {first} au {last}." },
   "org.business_number": { en: "Business number {bn}.", fr: "Numéro d'entreprise {bn}." },
+  // The supplier employees on the profile's newest PSPC history record that gives them, dated by that contract.
+  "org.employees": {
+    en: "Employees: {value}, as PSPC's contract history gives it for the {record}.",
+    fr: "Employés : {value}, selon l'historique des contrats de SPAC pour le {record}.",
+  },
+  "org.employees_record": { en: "contract awarded {date}", fr: "contrat attribué le {date}" },
   "org.respond": { en: "Respond as this organization", fr: "Répondre au nom de cette organisation" },
   "org.correct": { en: "Report a correction", fr: "Signaler une correction" },
   "org.more_actions": { en: "More actions", fr: "Autres actions" },
@@ -2778,6 +2805,21 @@ const STRINGS = {
   "published.limited_reason": { en: "Limited tendering reason", fr: "Raison de l'appel d'offres limité" },
   "published.bids": { en: "Number of bids", fr: "Nombre de soumissions" },
   "published.standing_offer": { en: "Standing offer number", fr: "Numéro de l'offre à commandes" },
+  // The two Indigenous business fields, in the TBS schema's own terms (indigenous_business and
+  // indigenous_business_excluding_psib), and a note for each.
+  "published.psib": { en: "Procurement Strategy for Indigenous Business", fr: "Stratégie d'approvisionnement auprès des entreprises autochtones" },
+  "published.psib_MS": { en: "Mandatory Set-Aside", fr: "Contrat réservé obligatoire" },
+  "published.psib_VS": { en: "Voluntary Set-Aside", fr: "Contrat réservé facultatif" },
+  "published.ib_outside": { en: "Indigenous Business excluding PSIB", fr: "Entreprises autochtones excluant le marché réservé en vertu de la SAEA" },
+  "published.ib_yes": { en: "Yes", fr: "Oui" },
+  "published.psib_note": {
+    en: "The department reported a set-aside for Indigenous businesses under the Procurement Strategy for Indigenous Business (PSIB) on this contract.",
+    fr: "Le ministère a déclaré pour ce contrat un marché réservé aux entreprises autochtones en vertu de la Stratégie d'approvisionnement auprès des entreprises autochtones (SAEA).",
+  },
+  "published.ib_note": {
+    en: "The department reported this contract as awarded to an Indigenous business outside a PSIB set-aside.",
+    fr: "Le ministère a déclaré ce contrat comme attribué à une entreprise autochtone hors d'un marché réservé en vertu de la SAEA.",
+  },
   "published.codes_note": {
     en: "Codes as the department published them, from the Treasury Board's reporting guide.",
     fr: "Codes tels que le ministère les a publiés, selon le guide de déclaration du Conseil du Trésor.",

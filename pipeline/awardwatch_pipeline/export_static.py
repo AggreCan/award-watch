@@ -48,7 +48,10 @@ change there. Output tree (under data/out/static):
                                 newest version's links, https on a Government of Canada host, 50 at most; name is
                                 the last segment of the URL's path, percent-decoded); one with none has no such key
   contracts/<abc>.json          award notices and contract history records, detail form, same sharding,
-                                keyed "award:<reference>" and "history:<reference>"
+                                keyed "award:<reference>" and "history:<reference>"; a history record whose
+                                supplier PSPC gives a number of employees for carries supplier_employees
+                                (normalize.employee_count: a count's digits or a size band's code, from the
+                                newest version that states one); a withheld supplier's record never does
   awards/recent.json            the 500 most recently published award notices whose award date is not after
                                 the data date
   awards/erroneous.json         the award notices whose award date falls after the data date, newest award
@@ -74,7 +77,11 @@ change there. Output tree (under data/out/static):
                                 former, short, branch; null for a rule's merge), reason the merge's rule
                                 (business_number, truncation, spelling, seed); names with a note first, then
                                 by records, PROFILE_ALIASES at most, aliases_total_rows beside them when more
-                                (profile_aliases); a profile nothing was merged into has neither key
+                                (profile_aliases); a profile nothing was merged into has neither key. A
+                                profile with a history record that gives the supplier's employees carries
+                                employees {value, awarded, reference}: the figure on its newest such record
+                                (the history list's order), that record's award date and URL reference
+                                (profile_employees); one with none has no such key
   aliases/<ab>.json             retired organization id -> the live id that took its records, sharded on the
                                 id's characters 5 and 6 (256 files at most: 27,000 merged ids on 4,096
                                 shards pushed the export past the file cap on 2026-11-02): retired by a
@@ -150,7 +157,10 @@ lobbying registry has refused every request so far), so a count of 0 there
 reads as not loaded rather than none; a source that was read carries no key.
 Radar rows carry client_buyer_id, client_buyer_name and client_buyer_name_fr,
 the client department expiring.py names, beside buyer_id (for an award notice
-that is PSPC).
+that is PSPC). A radar row whose published contract reports a set-aside under
+the Procurement Strategy for Indigenous Business, or an Indigenous business
+outside one, carries indigenous (MS, VS or IB, expiring.py); any other row has
+no such key.
 
 References in URLs and file names. The site takes a reference from its URL
 only when it reads as [A-Za-z0-9._-]{1,80}, and a few CanadaBuys references do
@@ -201,7 +211,7 @@ from . import config, directory, expiring, indicators, organizations, sosa_expor
 from .db import get_meta, log_run, set_meta
 from .export import SUMS, listed_buyer_ids, register_functions, scrub, scrub_doc
 from .feeds import write_feeds
-from .normalize import PROVINCE_CODES, closing_day, norm_name, org_id, tender_status_on
+from .normalize import INDIGENOUS_MARKS, PROVINCE_CODES, closing_day, employee_count, norm_name, org_id, tender_status_on
 from .sources import buyers as buyer_rules
 from .sources.buyers import public_spelling
 from .sources.canadabuys_rows import ATTACHMENTS_MAX, government_url
@@ -493,7 +503,9 @@ def _materialize(conn: sqlite3.Connection, as_of: str) -> None:
     closing day has passed is closed). x_awards and
     x_history: each contract at its newest amendment, attributed like the
     totals (organizations._newest_by_reference) except that a contract whose
-    newest version withholds its supplier links to no organization; value is
+    newest version withholds its supplier links to no organization (x_history
+    adds employees, the supplier employees its newest stating version gives,
+    normalize.employee_count); value is
     the rules' value as shown (cancelled counts zero, any currency, NULL when
     the source published none), v the value a total adds (CAD only, never a
     value flagged for checking: organizations.award_value), nv 1 when the
@@ -514,9 +526,14 @@ def _materialize(conn: sqlite3.Connection, as_of: str) -> None:
         "FROM tenders t WHERE t.amendment = (SELECT MAX(y.amendment) FROM tenders y WHERE y.reference = t.reference)",
         (as_of,),
     )
+    # A history record's supplier employees: the newest version's that states them (employee_count), for the
+    # profile's figure (profile_employees).
+    employees = ("(SELECT employee_count(z.supplier_employee_count) FROM contract_history z WHERE z.reference = n.reference "
+                 "AND employee_count(z.supplier_employee_count) IS NOT NULL ORDER BY z.amendment DESC LIMIT 1) AS employees, ")
     for table, temp, codes, extra, kind in (
         ("awards", "x_awards", "award_codes", "", "award"),
-        ("contract_history", "x_history", "history_codes", "n.client_id, n.client_raw_en, n.client_raw_fr, ", "history"),
+        ("contract_history", "x_history", "history_codes", "n.client_id, n.client_raw_en, n.client_raw_fr, " + employees,
+         "history"),
     ):
         conn.execute(
             f"CREATE TEMP TABLE {temp} AS WITH newest AS ({organizations._newest_by_reference(table, ('reference',))}) "
@@ -861,6 +878,9 @@ def expiring_row(m: Model, r: sqlite3.Row) -> tuple[dict, float | None] | None:
     _places(row, r)
     if withheld:
         row["supplier_withheld"] = True
+    elif r["indigenous"] in INDIGENOUS_MARKS:
+        # The published contracts' Indigenous business mark (expiring.py), only when set.
+        row["indigenous"] = r["indigenous"]
     if kind != "contract" and ref != r["reference"]:
         row["reference_published"] = r["reference"]
     _expiring_extra(row, r)
@@ -1344,8 +1364,8 @@ def contract_detail(m: Model, kind: str, ref: str, versions: list[sqlite3.Row], 
     """An award notice or a contract history record at its newest amendment, with its versions.
 
     A supplier withheld on the newest version is exported as supplier null and
-    supplier_withheld true, with no organization, city or operating name
-    whatever the row holds; the contacts and the street are never read.
+    supplier_withheld true, with no organization, city, operating name or
+    employees whatever the row holds; the contacts and the street are never read.
     """
     v = versions[-1]
     withheld = bool(v["supplier_withheld"])
@@ -1393,6 +1413,12 @@ def contract_detail(m: Model, kind: str, ref: str, versions: list[sqlite3.Row], 
         client = m.link(client)
         d.update({"procurement_number": v["procurement_number"], "client_id": client, "client_en": c_en,
                   "client_fr": c_fr, "supplier_operating": None if withheld else v["supplier_operating"]})
+        # The supplier's employees as PSPC states them, from the newest version that does; only when stated,
+        # and never for a supplier withheld as a person.
+        employees = None if withheld else next(
+            (e for x in reversed(versions) if (e := employee_count(x["supplier_employee_count"]))), None)
+        if employees:
+            d["supplier_employees"] = employees
     if ref != v["reference"]:
         d["reference_published"] = v["reference"]
     return d
@@ -1584,7 +1610,24 @@ def profile(m: Model, o: sqlite3.Row, t: dict[str, dict[str, list[sqlite3.Row]]]
     p["expiring"] = m.expiring_part("organization_id", oid)
     if non_cad:
         p["non_cad"] = dict(sorted(non_cad.items()))
+    employees = profile_employees(m, t["history"].get(oid, []))
+    if employees:
+        p["employees"] = employees
     return p
+
+
+def profile_employees(m: Model, history: Iterable[sqlite3.Row]) -> dict | None:
+    """The supplier employees PSPC's contract history gives on the organization's newest record that gives
+    them, with an award date and a reference the site can link: {value, awarded, reference}, or None.
+
+    history is the profile's x_history rows, newest first as its list shows them; a record whose supplier is
+    withheld names no organization, so its figure never reaches a profile.
+    """
+    for r in history:
+        ref = m.refs["history"].get(r["reference"])
+        if r["employees"] and r["awarded"] and ref is not None:
+            return {"value": r["employees"], "awarded": str(r["awarded"])[:10], "reference": ref}
+    return None
 
 
 def _value_checks(conn: sqlite3.Connection, rng: tuple[str, str]) -> dict[str, dict[str, int]]:

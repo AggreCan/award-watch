@@ -645,6 +645,70 @@ def competitive_code(solicitation_procedure: object) -> int | None:
     return None
 
 
+# PSPC's contract history gives the supplier's employees
+# (supplierEmployeeCount) as a count ("180") in its newer rows and as one of
+# the CanadaBuys data dictionary's size bands ("50 to 99 employees") in older
+# ones. Each band as the English column writes it, folded, and the code the
+# export writes for it. The French column is not read: the files write its
+# accented letters as replacement characters.
+EMPLOYEE_BANDS = {
+    "self-employed": "self",
+    "1 to 4 employees": "1-4",
+    "5 to 9 employees": "5-9",
+    "10 to 19 employees": "10-19",
+    "20 to 49 employees": "20-49",
+    "50 to 99 employees": "50-99",
+    "100 to 199 employees": "100-199",
+    "200 to 499 employees": "200-499",
+    "500 to 999 employees": "500-999",
+    "1000 to 1499 employees": "1000-1499",
+    "1500 to 2499 employees": "1500-2499",
+    "2500 to 4999 employees": "2500-4999",
+    "5000 employees and over": "5000+",
+}
+# A count longer than this is not one.
+EMPLOYEE_DIGITS_MAX = 7
+_EMPLOYEE_COUNT_RE = re.compile(rf"\d{{1,{EMPLOYEE_DIGITS_MAX}}}", re.ASCII)
+
+
+def employee_count(raw: object) -> str | None:
+    """A history record's supplierEmployeeCount as the export writes it: a count's digits ("180"), a band's
+    code (EMPLOYEE_BANDS: "50-99", "self", "5000+"), or None for a blank, UNKNOWN or anything else."""
+    text = squash(raw)
+    digits = re.sub(r"[ ,]", "", text)
+    if _EMPLOYEE_COUNT_RE.fullmatch(digits):
+        return str(int(digits))
+    return EMPLOYEE_BANDS.get(text.casefold())
+
+
+# The published contracts' two Indigenous business fields (the TBS schema's
+# indigenous_business and indigenous_business_excluding_psib): a set-aside
+# under the Procurement Strategy for Indigenous Business (MS mandatory, VS
+# voluntary, NA none), and whether a contract outside such a set-aside was
+# awarded to an Indigenous business (Y or N).
+PSIB_SET_ASIDES = ("MS", "VS")
+# The mark a radar row carries: the set-aside's code, or IB for an Indigenous
+# business outside a set-aside.
+INDIGENOUS_MARKS = (*PSIB_SET_ASIDES, "IB")
+
+
+def psib_set_aside(raw: object) -> str | None:
+    """MS or VS as published, in any case; None for NA, a blank or anything else."""
+    code = squash(raw).upper()
+    return code if code in PSIB_SET_ASIDES else None
+
+
+def indigenous_outside_psib(raw: object) -> bool:
+    """Whether indigenous_business_excluding_psib says yes (Y, Yes or Oui, in any case)."""
+    return squash(raw).upper() in ("Y", "YES", "OUI")
+
+
+def indigenous_mark(set_aside: object, outside_psib: object) -> str | None:
+    """A published contract's mark: its set-aside's code, else IB when it went to an Indigenous business
+    outside a set-aside, else None."""
+    return psib_set_aside(set_aside) or ("IB" if indigenous_outside_psib(outside_psib) else None)
+
+
 _TENDER_STATUS = {
     "open": "open", "ouvert": "open", "ouverte": "open",
     "expired": "expired", "expire": "expired", "expiree": "expired", "closed": "expired", "ferme": "expired",

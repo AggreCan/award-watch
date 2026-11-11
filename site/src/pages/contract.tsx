@@ -9,7 +9,7 @@ import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { WatchControl, watchControl } from "../account/watch_pages";
 import { Table } from "../columns";
-import { REFERENCE_RE, loadContract, loadStats, publishedReference, type ContractDetail } from "../data";
+import { REFERENCE_RE, loadContract, loadStats, publishedReference, supplierEmployees, type ContractDetail } from "../data";
 import type { AppEnv } from "../env";
 import { categoryLabel, fmtInt, pick, provinceName, segmentLabel, statusLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
@@ -17,7 +17,8 @@ import { contractSeo } from "../seo";
 import { windowOf } from "./expiring";
 import { contractIcsPath } from "./ics";
 import {
-  BuyerLink, awardNoticeUrl, datasetUrl, derivedPlacesText, instrumentText, money, otherLanguageMark, provincesText, sourceFileText,
+  BuyerLink, awardNoticeUrl, datasetUrl, derivedPlacesText, employeesText, instrumentText, money, otherLanguageMark, provincesText,
+  sourceFileText,
 } from "./shared";
 
 // Days from one ISO date to another.
@@ -90,6 +91,8 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
   const daysText = daysLeft === null ? "" : daysLeft === 0 ? t(lang, "contract.ends_today")
     : tn(lang, "contract.days_left_one", "contract.days_left_many", daysLeft, { n: fmtInt(daysLeft, lang) });
   const supplier = d.organization_id ? <a href={`/organizations/${d.organization_id}`}>{d.supplier ?? d.organization_id}</a> : d.supplier;
+  // A history record's supplier employees as PSPC gives them (absent before the export carried them).
+  const employees = kind === "history" ? supplierEmployees(d) : null;
 
   // The account's Follow control (account/watch_pages.tsx): nothing while the accounts switch is off.
   const watch = await watchControl(c, "contract", `${kind}:${raw.toLowerCase()}`);
@@ -125,6 +128,7 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
             <Row lang={lang} k="contract.supplier" v={supplier} />
             <Row lang={lang} k="contract.operating_name" v={d.supplier_operating} />
             <Row lang={lang} k="contract.supplier_place" v={supplierPlace} />
+            <Row lang={lang} k="contract.employees" v={employees ? employeesText(lang, employees) : null} />
             <Row lang={lang} k={kind === "history" ? "contract.contracting" : "col.buyer"} v={<BuyerLink lang={lang} id={d.buyer_id} en={d.buyer_en} fr={d.buyer_fr} />} />
             {kind === "history" ? (
               <Row lang={lang} k="col.client" v={d.client_en || d.client_fr ? <BuyerLink lang={lang} id={d.client_id ?? null} en={d.client_en ?? null} fr={d.client_fr ?? null} /> : null} />
@@ -132,6 +136,7 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
               <Row lang={lang} k="tender.end_users" v={listOf(lang, d.end_users_en, d.end_users_fr)} />
             )}
           </dl>
+          {employees ? <p class="muted small">{t(lang, "contract.employees_note")}</p> : null}
         </Panel>
         <Panel title={t(lang, "contract.value")}>
           {oneValue && d.status !== "cancelled" ? (

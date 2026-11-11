@@ -266,6 +266,20 @@ CREATE TABLE IF NOT EXISTS rec_gsin (
   desc_fr TEXT
 );
 
+-- The two Indigenous business fields of a published contract row
+-- (records_db.published_indigenous_rows), keyed as its rec_contracts row, for
+-- its page: a row only where indigenous_business names a set-aside under the
+-- Procurement Strategy for Indigenous Business or
+-- indigenous_business_excluding_psib says yes, and never for a vendor
+-- withheld as a person. A table beside rec_contracts rather than columns of
+-- it: rec_contracts keeps its form, and a new table reaches D1 through the
+-- nightly sync's ordinary changes, with no full reload.
+CREATE TABLE IF NOT EXISTS rec_contract_indigenous (
+  k INTEGER PRIMARY KEY,                         -- rec_contracts.k of the row
+  psib TEXT,                                     -- indigenous_business: MS mandatory or VS voluntary set-aside; NULL otherwise
+  ib INTEGER NOT NULL DEFAULT 0                  -- 1 when indigenous_business_excluding_psib is Y
+);
+
 -- The events the watches follow (site/src/account/watch_events.ts; the rules
 -- in docs/analytics.md, "Events"): one row per thing that happened on a data
 -- date of the last 90 days to an organization, a buyer, a published contract

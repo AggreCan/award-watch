@@ -43,6 +43,11 @@ Two serve the page of each published contract (/contracts/<department>/
 page shows of a published contract row) and rec_gsin (the names of the GSIN
 codes those rows carry). The asset count is why these live here rather than
 in static shards: a page per published contract would be 1.3 million files.
+Beside them, rec_contract_indigenous holds the two Indigenous business fields
+of the rows that report a set-aside under the Procurement Strategy for
+Indigenous Business or an Indigenous business outside one: a table of its
+own, because a column added to rec_contracts reaches D1 only through a full
+reload, and a row only where a field says so, so the table stays small.
 
 One more, rec_events, holds what the watches follow (site/src/account/
 watch_events.ts): what happened tonight to an organization, a buyer, a
@@ -104,7 +109,7 @@ from .db import connect, get_meta, now_iso, set_meta, today_iso
 from .export import scrub
 from .export_static import BUYER_ID_RE, NEW_LAG_DAYS, ORG_ID_RE, RefMap, read_segments
 from .indicators import RULES_VERSION
-from .normalize import PROVINCE_CODES, closing_day, tender_status_on
+from .normalize import PROVINCE_CODES, closing_day, indigenous_outside_psib, psib_set_aside, tender_status_on
 from .search_db import (
     MAX_BATCH_BYTES, MAX_BATCH_STATEMENTS, MAX_KEYS_PER_DELETE, MAX_STATEMENT_BYTES, _BatchWriter, _grouped, sql_literal,
 )
@@ -158,18 +163,20 @@ HOLDERS = Table(15, "rec_holders", "k", ("ik", "oid", "name", "op", "region", "r
 # One row per radar row and province: k is the row's rec_expiring.k, so the
 # table needs a key of its own for the ledger (pk), which the site never reads.
 EXPIRING_PROV = Table(16, "rec_expiring_prov", "pk", ("k", "prov", "derived"))
+# A published contract row's Indigenous business fields, keyed as its rec_contracts row (published_indigenous_rows).
+CONTRACT_INDIGENOUS = Table(17, "rec_contract_indigenous", "k", ("psib", "ib"))
 TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE, DETAILS, CLASSES, EXPIRING, CONTRACTS, GSIN,
-          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV)
+          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV, CONTRACT_INDIGENOUS)
 BY_CODE = {t.code: t for t in TABLES}
 
 # The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
 # so); 2: the amendment, reference and title columns, the median columns and
 # rec_buyer_years, rec_due. Recorded in meta (META_LAYOUT) by the full load
 # that wrote it; a sync that finds another reloads in full by itself. The
-# tables added beside them (rec_details to rec_gsin, then rec_events, rec_instruments, rec_holders and
-# rec_expiring_prov) leave it at 2: no table D1 holds changed form, the nightly schema creates a missing
-# table, and its rows are all new to the ledger, so the ordinary changes fill
-# it. A column added to any of the sixteen raises it.
+# tables added beside them (rec_details to rec_gsin, then rec_events, rec_instruments, rec_holders,
+# rec_expiring_prov and rec_contract_indigenous) leave it at 2: no table D1 holds changed form, the nightly
+# schema creates a missing table, and its rows are all new to the ledger, so the ordinary changes fill
+# it. A column added to any of the seventeen raises it.
 LAYOUT = 2
 
 # The source numbers the site's records_db.ts SOURCE_NUMBER repeats.
@@ -627,7 +634,7 @@ def expiring_province_rows(window: Iterable[tuple]) -> Iterator[tuple]:
             yield key_of(f"expiring-prov:{k}:{prov}"), k, prov, 1 if prov in derived else 0
 
 
-# -- the published contracts' pages (rec_contracts, rec_gsin) -----------------------
+# -- the published contracts' pages (rec_contracts, rec_gsin, rec_contract_indigenous) --
 
 # One row per row of the contracts table, keyed as its records row is
 # ('contract:<owner_org>:<reference>'), so the page reads the counted value
@@ -675,6 +682,12 @@ def _long(value: object, lang: str) -> str | None:
     return text[:LONG_MAX].rstrip() or None
 
 
+def _addressable(dept: str, ref: str) -> bool:
+    """Whether the site can address a published contract: a department that is a buyer id, and a reference of
+    at most REF_MAX characters with no control character."""
+    return bool(BUYER_ID_RE.match(dept)) and len(dept) <= 80 and bool(ref) and len(ref) <= REF_MAX and not _CONTROL.search(ref)
+
+
 def published_rows(conn: sqlite3.Connection, tally: dict | None = None) -> Iterator[tuple]:
     """Every published contract row in CONTRACTS.written order.
 
@@ -686,7 +699,7 @@ def published_rows(conn: sqlite3.Connection, tally: dict | None = None) -> Itera
     left.setdefault("contracts_unaddressable", 0)
     for r in conn.execute(PUBLISHED_SQL):
         dept, ref = str(r["owner_org"] or ""), str(r["reference"] or "")
-        if not (BUYER_ID_RE.match(dept) and len(dept) <= 80) or not ref or len(ref) > REF_MAX or _CONTROL.search(ref):
+        if not _addressable(dept, ref):
             left["contracts_unaddressable"] += 1
             continue
         buyer = r["buyer_id"]
@@ -706,6 +719,31 @@ def published_rows(conn: sqlite3.Connection, tally: dict | None = None) -> Itera
             _long(r["description_en"], "en"), _long(r["description_fr"], "fr"), _long(r["comments_en"], "en"),
             _long(r["comments_fr"], "fr"),
         )
+
+
+# The rows whose Indigenous business fields could say something; published_indigenous_rows reads each field.
+INDIGENOUS_SQL = (
+    "SELECT owner_org, reference, indigenous_business, indigenous_business_excluding_psib FROM contracts "
+    "WHERE vendor_withheld = 0 AND (COALESCE(TRIM(indigenous_business), '') != '' "
+    "OR COALESCE(TRIM(indigenous_business_excluding_psib), '') != '')"
+)
+
+
+def published_indigenous_rows(conn: sqlite3.Connection) -> Iterator[tuple]:
+    """rec_contract_indigenous's rows, in CONTRACT_INDIGENOUS.written order: one per published contract row the
+    site can address whose indigenous_business is a set-aside under the Procurement Strategy for Indigenous
+    Business (psib MS or VS, normalize.psib_set_aside) or whose indigenous_business_excluding_psib says yes (ib
+    1), keyed as its rec_contracts row. NA, N and a blank write no row. A vendor withheld as a person has none:
+    the marks say something about the person.
+    """
+    for r in conn.execute(INDIGENOUS_SQL):
+        dept, ref = str(r["owner_org"] or ""), str(r["reference"] or "")
+        if not _addressable(dept, ref):
+            continue
+        psib = psib_set_aside(r["indigenous_business"])
+        ib = 1 if indigenous_outside_psib(r["indigenous_business_excluding_psib"]) else 0
+        if psib or ib:
+            yield key_of(f"contract:{dept}:{ref}"), psib, ib
 
 
 def gsin_rows(conn: sqlite3.Connection, codes: set[str]) -> Iterator[tuple]:
@@ -912,6 +950,7 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
         raise ValueError("two published contracts have the same key; key_of needs more bits") from None
     codes = {r[0] for r in conn.execute(f"SELECT DISTINCT gsin FROM temp.{_now(CONTRACTS)} WHERE gsin IS NOT NULL")}
     fill(GSIN, gsin_rows(conn, codes))
+    fill(CONTRACT_INDIGENOUS, published_indigenous_rows(conn))
 
     # The standing offers and supply arrangements' pages.
     tenders = RefMap(conn, "tenders")

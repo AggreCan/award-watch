@@ -46,6 +46,7 @@ reads it, with prepared statements.
 | `rec_expiring_prov` | row of `rec_expiring` (its `k`) and province or territory the row names: stated by its source (`derived` 0) or derived from its other fields (`derived` 1, `places.py`); `pk` is the sync's key | a few thousand (about 1,150 of the window's 7,178 rows were placed on 2026-11-06, most in one or two provinces) |
 | `rec_contracts` | published contract row: every field its page shows (`/contracts/<department>/<reference>`) | about 1.34 million |
 | `rec_gsin` | GSIN code a published contract carries: its names | about 10,000 at most |
+| `rec_contract_indigenous` | published contract row (its `rec_contracts` `k`) whose `indigenous_business` names a set-aside under the Procurement Strategy for Indigenous Business (`psib` MS or VS) or whose `indigenous_business_excluding_psib` says yes (`ib` 1); none for a vendor withheld as a person | tens of thousands (143 of the first 5,290 rows of `contracts.csv`) |
 | `rec_events` | thing that happened on a data date of the last 90 to an organization, a buyer, a single record or a tender notice, plus a count row past 100 a subject a day (*Events*) | thousands a night, a few hundred thousand |
 | `rec_instruments` | standing offer or supply arrangement the pipeline keeps (`docs/sosa.md`): its fields and its call-ups as JSON | a few thousand |
 | `rec_holders` | active holder of one, by region, whose name is shown | about 10,000 |
@@ -444,7 +445,13 @@ window of the contract's newest version, the solicitation procedure and the
 competitive flag, the instrument, the commodity type and GSIN, the agreement
 and trade agreement codes, the limited tendering reason, the number of bids,
 the comments, and the provenance: the dataset, its file and last read
-(`stats.json` `sources`), and the records' data date.
+(`stats.json` `sources`), and the records' data date. When the row reports a
+set-aside under the Procurement Strategy for Indigenous Business (MS
+"Mandatory Set-Aside", VS "Voluntary Set-Aside") or an Indigenous business
+outside one ("Indigenous Business excluding PSIB": Y), the page shows it in
+the source's terms from `rec_contract_indigenous`, read in the same batch; a
+records database without that table (a site deployed before the nightly that
+creates it) is read again without it, and the page shows neither.
 
 `rec_contracts` leaves out `loaded_at`, which changes for every row each
 time the file is read, so a night sends only the rows that changed. Rows the

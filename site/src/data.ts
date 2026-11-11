@@ -506,7 +506,10 @@ export interface ContractDetail extends DerivedPlaces {
   provinces: string[];
   organization_id: string | null;
   supplier: string | null;
+  supplier_withheld?: boolean;
   supplier_operating?: string | null;
+  // Contract history: the supplier's employees as PSPC gives them; read through supplierEmployees.
+  supplier_employees?: unknown;
   supplier_city: string | null;
   supplier_province: string | null;
   supplier_country: string | null;
@@ -589,6 +592,9 @@ export interface Profile {
   // exports. Read through profileAliases.
   aliases?: unknown;
   aliases_total_rows?: unknown;
+  // The supplier employees on its newest history record that gives them;
+  // absent from older exports. Read through profileEmployees.
+  employees?: unknown;
 }
 
 // -- corporate families ------------------------------------------------------------
@@ -800,6 +806,51 @@ export interface ExpiringRow extends DerivedPlaces {
   tender_reference?: string | null;
   segments: string[];
   provinces: string[];
+  // The published contracts' Indigenous business mark; read through indigenousMark.
+  indigenous?: unknown;
+}
+
+// The mark a radar row carries when its published contract reports a
+// set-aside under the Procurement Strategy for Indigenous Business (MS
+// mandatory, VS voluntary) or an Indigenous business outside one (IB), as
+// export_static.expiring_row writes it. Absent from older files and from
+// every other row; anything else reads as none, and a row whose supplier is
+// withheld as a person shows none whatever it holds.
+export const INDIGENOUS_MARKS = ["MS", "VS", "IB"] as const;
+export type IndigenousMark = (typeof INDIGENOUS_MARKS)[number];
+export function indigenousMark(r: { indigenous?: unknown; supplier_withheld?: boolean }): IndigenousMark | null {
+  if (r.supplier_withheld) return null;
+  return (INDIGENOUS_MARKS as readonly unknown[]).includes(r.indigenous) ? (r.indigenous as IndigenousMark) : null;
+}
+
+// -- the supplier's employees on PSPC's contract history ---------------------------
+
+// How the export writes them (normalize.employee_count in the pipeline): a
+// count's digits ("180"), or the code of one of the CanadaBuys data
+// dictionary's size bands, which older records give instead of a count.
+export const EMPLOYEE_BANDS = [
+  "self", "1-4", "5-9", "10-19", "20-49", "50-99", "100-199", "200-499", "500-999", "1000-1499", "1500-2499", "2500-4999", "5000+",
+] as const;
+export const isEmployees = (v: unknown): v is string =>
+  isStr(v) && (/^\d{1,7}$/.test(v) || (EMPLOYEE_BANDS as readonly string[]).includes(v));
+
+// A history record's supplier employees, or null: absent from files written
+// before the field, from a record that states none, and from one whose
+// supplier is withheld; a value of another shape reads as none rather than
+// taking the page down.
+export function supplierEmployees(d: { supplier_employees?: unknown; supplier_withheld?: boolean }): string | null {
+  return !d.supplier_withheld && isEmployees(d.supplier_employees) ? d.supplier_employees : null;
+}
+
+// The figure a profile carries: the supplier employees on the organization's
+// newest history record that gives them, that record's award date and
+// reference (export_static.profile_employees). Null when the profile has
+// none, an older export, or a field of the wrong shape.
+export interface ProfileEmployees { value: string; awarded: string; reference: string }
+export function profileEmployees(profile: unknown): ProfileEmployees | null {
+  const v = isObj(profile) ? profile.employees : undefined;
+  if (!isObj(v) || !isEmployees(v.value) || !isStr(v.awarded) || !/^\d{4}-\d{2}-\d{2}$/.test(v.awarded) || !isRef(v.reference)) return null;
+  return { value: v.value, awarded: v.awarded, reference: v.reference };
 }
 
 export interface ExpiringIndex {

@@ -88,7 +88,7 @@ from typing import Any, TextIO
 
 from . import config, expiring
 from .db import log_run
-from .normalize import tender_status_on
+from .normalize import employee_count, tender_status_on
 from .sources.buyers import public_spelling
 
 log = logging.getLogger(__name__)
@@ -174,8 +174,11 @@ def scrub_doc(obj: object) -> object:
 
 def register_functions(conn: sqlite3.Connection) -> None:
     """The SQL functions the export queries call: tender_status_on(status, closing, as_of), a notice's
-    status on the data date (normalize.tender_status_on), so the open list is one rule in every file."""
+    status on the data date (normalize.tender_status_on), so the open list is one rule in every file; and
+    employee_count(raw), a history record's supplier employees as the export writes them
+    (normalize.employee_count)."""
     conn.create_function("tender_status_on", 3, tender_status_on, deterministic=True)
+    conn.create_function("employee_count", 1, employee_count, deterministic=True)
 
 
 YEAR_RE = re.compile(r"^(awards|history|contracts|grants)-(?:\d{4}|before-\d{4}|after-\d{4}|undated)(?:-[2-9])?\.csv$")

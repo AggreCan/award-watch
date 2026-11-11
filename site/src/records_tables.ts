@@ -2,7 +2,7 @@
 // and (below) the radar over its whole window, the record tables, the earlier
 // awards on a tender, the incumbents and the per-organization feeds. The
 // tables are pipeline/records_schema.sql's rec_contracts, rec_gsin,
-// rec_details, rec_classes and rec_expiring, which the nightly sync fills
+// rec_contract_indigenous, rec_details, rec_classes and rec_expiring, which the nightly sync fills
 // (pipeline/awardwatch_pipeline/records_db.py; docs/analytics.md).
 //
 // The rules of records_db.ts hold here too: every statement is a constant
@@ -43,8 +43,23 @@ export const PUBLISHED_CONTRACT_SQL =
   "WHERE c.dept = ?1 AND c.pid IS NOT NULL AND c.pid = (SELECT pid FROM rec_contracts WHERE dept = ?1 AND ref = ?2) AND c.ref <> ?2 " +
   `ORDER BY c.cdate, c.ref LIMIT ${CONTRACT_VERSIONS_MAX + 1}) ORDER BY self DESC, cdate, ref LIMIT ${CONTRACT_VERSIONS_MAX + 2}`;
 
-export function readPublishedContract(env: Env, dept: string, ref: string): Promise<Read> {
-  return readRecords(env, [{ sql: PUBLISHED_CONTRACT_SQL, params: [dept, ref] }]);
+// The row's two Indigenous business fields (rec_contract_indigenous, keyed as
+// its rec_contracts row): ?1 the department, ?2 the reference, through the
+// unique index on both and the table's key. A row only where the department
+// reported a set-aside under the Procurement Strategy for Indigenous
+// Business (psib MS or VS) or an Indigenous business outside one (ib 1).
+export const PUBLISHED_INDIGENOUS_SQL =
+  "SELECT i.psib AS psib, i.ib AS ib FROM rec_contracts c JOIN rec_contract_indigenous i ON i.k = c.k WHERE c.dept = ?1 AND c.ref = ?2 LIMIT 1";
+
+// One batch: the state row, the contract's rows and its Indigenous business
+// fields (rows[1]). A records database the nightly has not given
+// rec_contract_indigenous yet is read again without it, and the page shows
+// the contract without the two fields.
+export async function readPublishedContract(env: Env, dept: string, ref: string): Promise<Read> {
+  const contract: Query = { sql: PUBLISHED_CONTRACT_SQL, params: [dept, ref] };
+  const read = await readRecords(env, [contract, { sql: PUBLISHED_INDIGENOUS_SQL, params: [dept, ref] }]);
+  if (read.state !== "failed" || !read.noTable) return read;
+  return readRecords(env, [contract]);
 }
 
 // -- the radar over its whole window (pages/expiring.tsx) -------------------------------
@@ -376,7 +391,7 @@ export function readContractSitemap(env: Env, first: string, last: string): Prom
 // Every statement here, for the tests that read their plans and their bounds.
 export const TABLE_SQL: readonly string[] = [
   CONTRACT_SITEMAP_SQL, EARLIER_AWARDS_SQL, BUYER_INCUMBENTS_SQL, SEGMENT_INCUMBENTS_SQL, ORG_FEED_SQL,
-  PUBLISHED_CONTRACT_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
+  PUBLISHED_CONTRACT_SQL, PUBLISHED_INDIGENOUS_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
   RADAR_ROWS_END_DESC_SQL, RADAR_ROWS_VALUE_ASC_SQL, RADAR_CSV_END_DESC_SQL, RADAR_CSV_VALUE_ASC_SQL,
   RADAR_FACETS_SQL, RADAR_BUYERS_SQL, RADAR_CLIENTS_SQL, RADAR_SUPPLIERS_SQL,
   ...Object.values(RECORDS_SQL.organization), ...Object.values(RECORDS_SQL.buyer), ...RADAR_PROV_SQL,

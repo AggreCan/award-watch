@@ -14,8 +14,8 @@ import { Table, restClass } from "../columns";
 import { MONEY_SOURCES, PROVINCES, type MoneySource, type SourceKey } from "../constants";
 import { buyerPath, directoryCode, directoryPath, loadDirectories } from "../crosslinks";
 import {
-  type AliasNote, type Family, type OrgAliases, loadAlias, loadProfile, loadStats, profileAliases, profileFamily, sourceLoaded, type Profile,
-  type YearFigure,
+  type AliasNote, type Family, type OrgAliases, loadAlias, loadProfile, loadStats, profileAliases, profileEmployees, profileFamily, sourceLoaded,
+  type Profile, type YearFigure,
 } from "../data";
 import type { AppEnv } from "../env";
 import {
@@ -30,7 +30,7 @@ import {
 import { InterestPanel, interestFilter } from "./interest";
 import {
   AnalyticsLink, AwardTable, BuyerLink, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, contractPath, contractSearchUrl, datasetUrl,
-  grantUrl, lobbyUrl, money, orList, shareText,
+  employeesText, grantUrl, lobbyUrl, money, orList, shareText,
 } from "./shared";
 import { WATCH_MAX } from "./watchlist";
 import { profileInstruments } from "../instruments";
@@ -318,6 +318,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
   const o = profile.organization;
   // The standing offers and supply arrangements it holds (sosa_export.py); none on a file written before them.
   const instruments = profileInstruments(profile);
+  // The supplier employees on its newest PSPC history record that gives them; none on a file written before them.
+  const employees = profileEmployees(profile);
   const [{ responses, corrections }, directories, interest] = await Promise.all([
     siteRows(c, id), loadDirectories(c.env), interestFilter(c.env, lang, "organization", `/organizations/${o.id}`, { name: o.display_name }),
   ]);
@@ -536,6 +538,15 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           {t(lang, "org.seen", { first: o.first_seen ?? t(lang, "common.na"), last: o.last_seen ?? t(lang, "common.na") })}
           {o.business_number ? ` ${t(lang, "org.business_number", { bn: o.business_number })}` : ""}
         </p>
+        {/* The figure as its record states it, dated by that record's contract. */}
+        {employees ? (
+          <p class="page-note">
+            {tj(lang, "org.employees", {
+              value: employeesText(lang, employees.value),
+              record: <a href={`/history/${employees.reference.toLowerCase()}`}>{t(lang, "org.employees_record", { date: employees.awarded })}</a>,
+            })}
+          </p>
+        ) : null}
         <WatchControl lang={lang} state={watch} kind="organization" target={o.id} primary />
         <InstrumentsLine lang={lang} part={instruments} />
       </PageHead>

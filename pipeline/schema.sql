@@ -421,7 +421,8 @@ CREATE TABLE IF NOT EXISTS contract_history (
   supplier_raw TEXT,                             -- supplierLegalName
   supplier_standardized TEXT,                    -- supplierStandardizedName, blank on most rows
   supplier_operating TEXT,
-  supplier_employee_count TEXT,
+  supplier_employee_count TEXT,                  -- supplierEmployeeCount as published: a count, or a size band in older
+                                                 -- rows; exported as normalize.employee_count reads it
   supplier_street TEXT,
   supplier_city TEXT,
   supplier_province TEXT,
@@ -832,7 +833,10 @@ CREATE TABLE IF NOT EXISTS expiring_contracts (
   client_buyer_name TEXT,                        -- the client's English name (the end user as published when unmatched)
   client_buyer_name_fr TEXT,
   value_flag TEXT,                               -- 'check' when value_flags lists the contract (value_checks.py)
-  computed_at TEXT NOT NULL
+  computed_at TEXT NOT NULL,
+  indigenous TEXT                                -- the published contracts' Indigenous business mark: MS | VS (a set-aside
+                                                 -- under the Procurement Strategy for Indigenous Business) | IB (an
+                                                 -- Indigenous business outside one) | NULL (expiring.py)
 );
 CREATE INDEX IF NOT EXISTS idx_expiring_end ON expiring_contracts(end);
 
