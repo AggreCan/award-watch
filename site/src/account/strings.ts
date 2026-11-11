@@ -88,6 +88,16 @@ export const ACCOUNT_STRINGS = {
     en: "To follow that page, sign in here, then press Follow on it.",
     fr: "Pour suivre cette page, connectez-vous ici, puis appuyez sur Suivre sur la page.",
   },
+  // The sign-in pages, when a page's Save this briefing link started the sign-in (routes.tsx, brief).
+  "account.brief_pending": {
+    en: "Signing in also saves the weekly briefing of the page where you pressed Save this briefing.",
+    fr: "En vous connectant, vous enregistrerez aussi le bulletin hebdomadaire de la page où vous avez appuyé sur Enregistrer ce bulletin.",
+  },
+  // On the sign-in page that answers a post carrying a briefing which sent nothing (routes.tsx).
+  "account.brief_after": {
+    en: "To save that briefing, sign in here, then press Save this briefing on its page.",
+    fr: "Pour enregistrer ce bulletin, connectez-vous ici, puis appuyez sur Enregistrer ce bulletin sur sa page.",
+  },
   "account.msg_signed_out": { en: "You are signed out.", fr: "Vous êtes déconnecté." },
   "account.msg_signed_out_all": { en: "Every browser is signed out.", fr: "Tous les navigateurs sont déconnectés." },
 

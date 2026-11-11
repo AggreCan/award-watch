@@ -17,6 +17,7 @@ import { MAX_Q } from "../search_db";
 import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
+import { type Brief, briefValue } from "./briefings";
 import { SAVED_SEARCH_MAX, WATCH_MAX, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX, type FeedKind } from "./feeds";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch } from "./searches";
@@ -65,21 +66,31 @@ const FollowField: FC<{ follow?: Follow | null }> = ({ follow }) =>
   follow ? <input type="hidden" name="follow" value={followValue(follow.kind, follow.target)} /> : null;
 const FollowNote: FC<{ lang: Lang; follow?: Follow | null }> = ({ lang, follow }) =>
   follow ? <p class="muted small">{t(lang, "account.follow_pending")}</p> : null;
-// The sign-in page for "Ask for a new code", with the page to return to and
-// what to follow carried on (routes.tsx reads both from the address), so a
-// reader whose message did not come, or whose link went stale, still ends on
-// the page they started from, following it.
-const againHref = (next?: string | null, follow?: Follow | null): string => {
+// brief: the briefing a segment or buyer page's Save this briefing link named
+// (briefings.ts briefOf), carried and announced the same way, and saved once
+// the address has proved itself.
+const BriefField: FC<{ brief?: Brief | null }> = ({ brief }) =>
+  brief ? <input type="hidden" name="brief" value={briefValue(brief.kind, brief.subject)} /> : null;
+const BriefNote: FC<{ lang: Lang; brief?: Brief | null }> = ({ lang, brief }) =>
+  brief ? <p class="muted small">{t(lang, "account.brief_pending")}</p> : null;
+// The sign-in page for "Ask for a new code", with the page to return to, what
+// to follow and the briefing to save carried on (routes.tsx reads them from the
+// address), so a reader whose message did not come, or whose link went stale,
+// still ends on the page they started from, following it or with its briefing.
+const againHref = (next?: string | null, follow?: Follow | null, brief?: Brief | null): string => {
   const query = [
     next ? `next=${encodeURIComponent(next)}` : "",
     follow ? `follow=${encodeURIComponent(followValue(follow.kind, follow.target))}` : "",
+    brief ? `brief=${encodeURIComponent(briefValue(brief.kind, brief.subject))}` : "",
   ].filter(Boolean).join("&");
   return query ? `/account/sign-in?${query}` : "/account/sign-in";
 };
 
 export function signInView(
   lang: Lang,
-  state: { errors?: Key[]; email?: string; notice?: string | null; limitN?: number; next?: string | null; follow?: Follow | null } = {},
+  state: {
+    errors?: Key[]; email?: string; notice?: string | null; limitN?: number; next?: string | null; follow?: Follow | null; brief?: Brief | null;
+  } = {},
 ) {
   const errors = state.errors ?? [];
   return (
@@ -93,10 +104,12 @@ export function signInView(
           </ul>
         ) : null}
         <FollowNote lang={lang} follow={state.follow} />
+        <BriefNote lang={lang} brief={state.brief} />
         <form method="post" action="/account/sign-in" class="stack">
           <input type="hidden" name="lang" value={lang} />
           <Next next={state.next} />
           <FollowField follow={state.follow} />
+          <BriefField brief={state.brief} />
           <label>
             {t(lang, "interest.email")}
             <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={state.email ?? ""} />
@@ -113,7 +126,8 @@ export function signInView(
 // The code form: after a request (email hidden, the lead names it), or typed
 // from scratch (the email as a field).
 export function codeView(
-  lang: Lang, state: { email?: string; sent?: boolean; errors?: Key[]; next?: string | null; follow?: Follow | null } = {},
+  lang: Lang,
+  state: { email?: string; sent?: boolean; errors?: Key[]; next?: string | null; follow?: Follow | null; brief?: Brief | null } = {},
 ) {
   const sent = !!state.sent && !!state.email;
   return (
@@ -124,10 +138,12 @@ export function codeView(
       <Panel title={t(lang, "account.code_panel")} class="panel-form">
         <Errors lang={lang} errors={state.errors} />
         <FollowNote lang={lang} follow={state.follow} />
+        <BriefNote lang={lang} brief={state.brief} />
         <form method="post" action="/account/check" class="stack">
           <input type="hidden" name="lang" value={lang} />
           <Next next={state.next} />
           <FollowField follow={state.follow} />
+          <BriefField brief={state.brief} />
           {sent ? (
             <>
               <input type="hidden" name="email" value={state.email} />
@@ -147,7 +163,7 @@ export function codeView(
           <button type="submit" class="btn btn-primary">{t(lang, "account.sign_in")}</button>
         </form>
         <p class="muted small">
-          {tj(lang, "account.code_again", { again: <a href={againHref(state.next, state.follow)}>{t(lang, "account.code_again_link")}</a> })}
+          {tj(lang, "account.code_again", { again: <a href={againHref(state.next, state.follow, state.brief)}>{t(lang, "account.code_again_link")}</a> })}
         </p>
       </Panel>
     </>
@@ -156,22 +172,24 @@ export function codeView(
 
 // The link from the message opens this page; the button posts the token, so a
 // mail scanner that fetches the link signs no one in and uses nothing up.
-export function linkView(lang: Lang, token: string, errors?: Key[], next?: string | null, follow?: Follow | null) {
+export function linkView(lang: Lang, token: string, errors?: Key[], next?: string | null, follow?: Follow | null, brief?: Brief | null) {
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.link_title")} lead={t(lang, "account.link_lead")} />
       <Panel title={t(lang, "account.link_panel")} class="panel-form">
         <Errors lang={lang} errors={errors} />
         {errors?.length ? (
-          <p><a href={againHref(next, follow)} class="btn">{t(lang, "account.code_again_link")}</a></p>
+          <p><a href={againHref(next, follow, brief)} class="btn">{t(lang, "account.code_again_link")}</a></p>
         ) : (
           <>
             <FollowNote lang={lang} follow={follow} />
+            <BriefNote lang={lang} brief={brief} />
             <form method="post" action="/account/check" class="stack">
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="token" value={token} />
               <Next next={next} />
               <FollowField follow={follow} />
+              <BriefField brief={brief} />
               <button type="submit" class="btn btn-primary">{t(lang, "account.sign_in")}</button>
             </form>
           </>

@@ -5,7 +5,8 @@
 //   POST /account/sign-in              makes a code and a link, sends them; the same page for any address
 //   GET  /account/check                the code form; with ?token= the link's confirm button
 //   POST /account/check                a code (with the address) or the link's token; starts the session,
-//                                      then follows the page a Follow form named (follow), within the plan's cap
+//                                      then follows the page a Follow form named (follow), within the plan's cap,
+//                                      and saves the briefing a Save this briefing link named (brief), within the shared cap
 //   GET  /account                      the overview                                   (session)
 //   POST /account/sign-out             this browser, or every browser (scope=all)     (session, CSRF)
 //   GET  /account/searches             saved searches, the alerts form's rows to add  (session)
@@ -55,8 +56,9 @@
 // signed; billing.tsx) is refused with a 403 when its Origin names another
 // site (or "null"); a client that sends no Origin is let through, as
 // interest.tsx does, since a browser always sends one with a form post; a
-// sign-in post that carries follow (a public page's Follow form) must say it
-// comes from the site's page, or it sends nothing (POST /sign-in below). The
+// sign-in post that carries follow (a public page's Follow form) or brief (a
+// page's Save this briefing link) must say it comes from the site's page, or
+// it sends nothing (POST /sign-in below). The
 // two sign-in posts are capped per address by AUTH_LIMIT (limits.ts); the
 // codes per address are capped in the database (signin.ts). Every response is
 // no-store and noindex. The site's referrer policy already keeps a link's
@@ -84,11 +86,11 @@ import { audit } from "./audit";
 import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, startCheckout } from "./billing";
 import { BriefingsPanel, briefingLabel, briefingStopView, briefingStoppedView } from "./briefing_pages";
 import {
-  addBriefing, briefingName, briefingPath, deleteBriefing, deleteBriefingsOf, isBriefingDelivery, isBriefingKind, lastBriefingRuns,
-  listBriefings, narrowOf, setBriefingDelivery, subjectOf,
+  type Brief, type BriefingSubject, addBriefing, briefOf, briefValue, briefingName, briefingPath, deleteBriefing, deleteBriefingsOf,
+  isBriefingDelivery, isBriefingKind, lastBriefingRuns, listBriefings, narrowOf, setBriefingDelivery, subjectOf,
 } from "./briefings";
 import { bugPage, fileBug } from "./bugs";
-import { WATCH_MAX, allowed, planFor, watchCap } from "./entitlements";
+import { type Plan, WATCH_MAX, allowed, planFor, watchCap } from "./entitlements";
 import {
   FEEDS_MAX, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
   feedSize, feedWatches, isFeedKind, listFeeds, readFeed, removeFeed, rotateFeed, searchMatches,
@@ -107,8 +109,8 @@ import {
   revokeSession, startSession,
 } from "./session";
 import {
-  CODE_MINUTES, CODES_PER_HOUR, CODE_TRIES, type Checked, FOLLOW_CODES_PER_HOUR, FOLLOW_CODE_DETAIL, checkCode, checkLink, findOrCreateUser,
-  followCodesInHour, issueCode, sweep,
+  BRIEF_CODE_DETAIL, CODE_MINUTES, CODES_PER_HOUR, CODE_TRIES, type Checked, FOLLOW_CODES_PER_HOUR, FOLLOW_CODE_DETAIL, checkCode, checkLink,
+  findOrCreateUser, followCodesInHour, issueCode, sweep,
 } from "./signin";
 import { accountsEnabled } from "./switch";
 import {
@@ -234,14 +236,21 @@ export function safeNext(raw: string | undefined | null): string | null {
 // dropped without a word, as an unsafe next is. A GET only carries it: a
 // reader already signed in goes back to the page, which offers its own
 // Follow form, and nothing is added on a GET.
+//
+// ?brief= (or the brief field) goes the same way beside them: the briefing a
+// segment or buyer page's Save this briefing link named (briefings.ts
+// briefOf), saved once the address has proved itself (briefAtSignIn), held to
+// the same guards as follow. No page carries both; a sign-in that does
+// carries both on and adds each by its own steps.
 account.get("/sign-in", async (c) => {
   const lang = c.get("lang");
   const next = safeNext(c.req.query("next"));
   if ((await readSession(c)).state === "ok") return c.redirect(next ?? "/account", 303);
   const follow = followOf(c.req.query("follow"));
+  const brief = briefOf(c.req.query("brief"));
   const m = c.req.query("m");
   const notice = m === "out" ? t(lang, "account.msg_signed_out") : m === "out_all" ? t(lang, "account.msg_signed_out_all") : null;
-  return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { notice, next, follow }));
+  return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { notice, next, follow, brief }));
 });
 
 account.post("/sign-in", async (c) => {
@@ -251,8 +260,9 @@ account.post("/sign-in", async (c) => {
   const typed = clean(fields, "email", EMAIL_MAX + 50);
   const next = safeNext(fields.next);
   const follow = followOf(fields.follow);
-  const again = (errors: Key[], status: number, limitN?: number) =>
-    accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { errors, email: typed.slice(0, EMAIL_MAX), limitN, next, follow }), status);
+  const brief = briefOf(fields.brief);
+  const again = (errors: Key[], status: number, limitN?: number) => accountPage(c, t(lang, "account.sign_in_title"),
+    signInView(lang, { errors, email: typed.slice(0, EMAIL_MAX), limitN, next, follow, brief }), status);
   if (clean(fields, "website", 10)) return again(["interest.err_rejected"], 400);
   const email = normalizeEmail(typed);
   if (!email) return again(["interest.err_email"], 400);
@@ -268,17 +278,24 @@ account.post("/sign-in", async (c) => {
   // one is answered the same way; the caps per address and per email stand
   // beside it (docs/accounts.md, Security posture). The sign-in page says how
   // to follow after signing in, and its own post is held to neither.
-  const signInOnly = () => accountPage(c, t(lang, "account.sign_in_title"),
-    signInView(lang, { email: typed.slice(0, EMAIL_MAX), next, notice: t(lang, "account.follow_after") }));
-  if (follow && !fromOwnPage(c.req.raw.headers, c.req.url)) {
-    console.log("account sign-in: a Follow post without a page's headers, answered with the sign-in page");
+  // A post that carries brief is held to both rules alike, and the same
+  // ceiling counts it (signin.ts); the page then says how to save the
+  // briefing after signing in, and drops it too.
+  const signInOnly = () => accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, {
+    email: typed.slice(0, EMAIL_MAX), next,
+    notice: [follow ? t(lang, "account.follow_after") : "", brief ? t(lang, "account.brief_after") : ""].filter(Boolean).join(" "),
+  }));
+  // The console lines name Follow whenever the post carries follow, as before.
+  const what = follow ? "Follow" : "briefing";
+  if ((follow || brief) && !fromOwnPage(c.req.raw.headers, c.req.url)) {
+    console.log(`account sign-in: a ${what} post without a page's headers, answered with the sign-in page`);
     return signInOnly();
   }
   return guarded(c, async () => {
     const now = new Date();
     await sweep(c.env, now);
-    if (follow && (await followCodesInHour(c.env, now)) >= FOLLOW_CODES_PER_HOUR) {
-      console.log("account sign-in: the hour's Follow requests are spent, answered with the sign-in page");
+    if ((follow || brief) && (await followCodesInHour(c.env, now)) >= FOLLOW_CODES_PER_HOUR) {
+      console.log(`account sign-in: the hour's ${follow ? "Follow" : "Follow and briefing"} requests are spent, answered with the sign-in page`);
       return signInOnly();
     }
     const issued = await issueCode(c.env, email, await ipHash(c.env.VIEWS_SALT_KEY, c.req.header("cf-connecting-ip"), now), now);
@@ -286,11 +303,13 @@ account.post("/sign-in", async (c) => {
       await audit(c.env, null, "code_limited", null, now);
       return again(["account.err_limited"], 429, CODES_PER_HOUR);
     }
-    // A Follow form's request is marked, which is what the hour's ceiling counts.
-    await audit(c.env, issued.userId, "code_requested", follow ? FOLLOW_CODE_DETAIL : null, now);
+    // A Follow form's request, or one carrying a briefing, is marked, which is
+    // what the hour's ceiling counts; one carrying both is marked once.
+    await audit(c.env, issued.userId, "code_requested", follow ? FOLLOW_CODE_DETAIL : brief ? BRIEF_CODE_DETAIL : null, now);
     const base = siteBase(c);
     const link = `${base}/account/check?token=${issued.token}${lang === "fr" ? "&lang=fr" : ""}${next ? `&next=${encodeURIComponent(next)}` : ""}` +
-      `${follow ? `&follow=${encodeURIComponent(followValue(follow.kind, follow.target))}` : ""}`;
+      `${follow ? `&follow=${encodeURIComponent(followValue(follow.kind, follow.target))}` : ""}` +
+      `${brief ? `&brief=${encodeURIComponent(briefValue(brief.kind, brief.subject))}` : ""}`;
     const sent = await senderFor(c.env, c.req.url)
       .send(signInMessage(lang, email, issued.code, link, CODE_MINUTES, base))
       .catch(() => ({ sent: false, reason: "failed" }) as const);
@@ -298,7 +317,7 @@ account.post("/sign-in", async (c) => {
       if (sent.reason === "failed") await audit(c.env, issued.userId, "mail_failed", null, now);
       return again([sent.reason === "not_configured" ? "account.err_not_sent" : "account.err_send_failed"], 503);
     }
-    return accountPage(c, t(lang, "account.check_title"), codeView(lang, { email, sent: true, next, follow }));
+    return accountPage(c, t(lang, "account.check_title"), codeView(lang, { email, sent: true, next, follow, brief }));
   });
 });
 
@@ -310,9 +329,8 @@ account.get("/check", async (c) => {
   const token = c.req.query("token");
   if (token !== undefined) {
     const ok = TOKEN_RE.test(token);
-    return accountPage(c, t(lang, "account.link_title"),
-      linkView(lang, ok ? token : "", ok ? undefined : ["account.err_stale"], safeNext(c.req.query("next")), followOf(c.req.query("follow"))),
-      ok ? 200 : 400);
+    return accountPage(c, t(lang, "account.link_title"), linkView(lang, ok ? token : "", ok ? undefined : ["account.err_stale"],
+      safeNext(c.req.query("next")), followOf(c.req.query("follow")), briefOf(c.req.query("brief"))), ok ? 200 : 400);
   }
   return accountPage(c, t(lang, "account.enter_title"), codeView(lang));
 });
@@ -330,6 +348,7 @@ account.post("/check", async (c) => {
   const sentForm = clean(fields, "sent", 1) === "1";
   const next = safeNext(fields.next);
   const follow = followOf(fields.follow);
+  const brief = briefOf(fields.brief);
   return guarded(c, async () => {
     const now = new Date();
     let checked: Checked;
@@ -344,10 +363,11 @@ account.post("/check", async (c) => {
       // The third and fourth wrong codes of the hour say how many tries are left.
       const left = checked.reason === "wrong" ? checked.left : null;
       const errors: Key[] = [left === 2 ? "account.err_code_two" : left === 1 ? "account.err_code_one" : CHECK_ERROR[checked.reason]];
-      if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors, next, follow), 400);
+      if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors, next, follow, brief), 400);
       const title = t(lang, sentForm ? "account.check_title" : "account.enter_title");
-      // A mistyped code keeps the page to return to and what to follow, for the next try.
-      return accountPage(c, title, codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors, next, follow }), 400);
+      // A mistyped code keeps the page to return to, what to follow and the briefing to save, for the next try.
+      return accountPage(c, title,
+        codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors, next, follow, brief }), 400);
     }
     const user = await findOrCreateUser(c.env, checked.email, lang, now);
     if (user.created) await audit(c.env, user.id, "user_created", null, now);
@@ -362,6 +382,7 @@ account.post("/check", async (c) => {
     await startSession(c, user.id, uaClass(c), now);
     await audit(c.env, user.id, "signed_in", token ? "link" : "code", now);
     if (follow) await followAtSignIn(c, user.id, follow, lang, now);
+    if (brief) await briefAtSignIn(c, user.id, brief, lang, now);
     if (next) return c.redirect(next, 303);
     const pending = await pendingInterest(c.env, checked.email, user.id).catch(() => []);
     return c.redirect(pending.length ? "/account/searches" : "/account", 303);
@@ -587,6 +608,15 @@ account.post("/searches/:id", async (c) => {
 
 // -- weekly briefings (briefings.ts, briefing_pages.tsx) ------------------------------------------
 
+// A briefing's label, the site's and never typed: a segment's code and name,
+// a buyer's name as the data holds it (and a narrowed one's segment); null
+// for a buyer the data no longer holds, for which nothing is added.
+async function briefingLabelOf(c: Context<AppEnv>, s: BriefingSubject, lang: Lang): Promise<string | null> {
+  if (s.kind !== "buyer") return briefingName(lang, s, "");
+  const b = await loadBuyer(c.env, s.subject).catch(() => null);
+  return b ? briefingName(lang, s, pick(lang, b.buyer.name_en, b.buyer.name_fr) ?? b.buyer.id) : null;
+}
+
 // The page's own form posts the kind, the subject and, on a buyer page, a
 // segment; the label is the site's, read from the data. A Free account's
 // briefing is kept with its email off. The answer goes back to the page,
@@ -602,13 +632,9 @@ account.post("/briefings", async (c) => {
   if (!isBriefingKind(kind) || !subject || segment === null) return c.text(t(lang, "form.rejected"), 400);
   return guarded(c, async () => {
     const s = { kind, subject, segment };
-    let name = "";
-    if (kind === "buyer") {
-      const b = await loadBuyer(c.env, subject).catch(() => null);
-      if (!b) return c.redirect("/account/searches?m=b_gone#briefings", 303);
-      name = pick(lang, b.buyer.name_en, b.buyer.name_fr) ?? b.buyer.id;
-    }
-    const result = await addBriefing(c.env, who, { ...s, label: briefingName(lang, s, name) }, lang);
+    const label = await briefingLabelOf(c, s, lang);
+    if (label === null) return c.redirect("/account/searches?m=b_gone#briefings", 303);
+    const result = await addBriefing(c.env, who, { ...s, label }, lang);
     if (result === "added") await audit(c.env, who.userId, "briefing_added", kind);
     if (result === "cap") return c.redirect("/account/searches?m=b_cap#briefings", 303);
     return c.redirect(`${briefingPath(s)}${lang === "fr" ? "?lang=fr" : ""}`, 303);
@@ -969,15 +995,47 @@ async function followAtSignIn(c: Context<AppEnv>, userId: string, follow: Follow
   try {
     const label = await watchLabel(c, follow.kind, follow.target, lang);
     if (!label) return;
-    const user = await c.env.ACCOUNTS!.prepare("SELECT plan, plan_until FROM users WHERE id = ?").bind(userId)
-      .first<{ plan: string; plan_until: string | null }>();
-    if (!user) return;
-    const { plan } = await planFor(c.env, { id: userId, ...user }, now);
+    const plan = await planAtSignIn(c, userId, now);
+    if (!plan) return;
     const [stats] = await Promise.all([loadStats(c.env).catch(() => null), alignWatches(c, userId)]);
     const result = await addWatch(c.env, { userId, plan }, { ...follow, segment: "", label }, stats?.data_as_of?.slice(0, 10) ?? null, now);
     if (result === "added") await audit(c.env, userId, "watch_added", `${follow.kind} at sign-in`, now);
   } catch {
     console.error("account sign-in: the page named by Follow was not followed");
+  }
+}
+
+// The plan of the account the address has just signed in to, as the session
+// would read it; null when the row is not there.
+async function planAtSignIn(c: Context<AppEnv>, userId: string, now: Date): Promise<Plan | null> {
+  const user = await c.env.ACCOUNTS!.prepare("SELECT plan, plan_until FROM users WHERE id = ?").bind(userId)
+    .first<{ plan: string; plan_until: string | null }>();
+  return user ? (await planFor(c.env, { id: userId, ...user }, now)).plan : null;
+}
+
+// The briefing a segment or buyer page's Save this briefing link named
+// (brief), saved for the account whose address has just proved itself (POST
+// /account/check, after the session starts): the briefing post's own steps,
+// for that account only. The label is read from the data (a buyer no longer
+// in it adds nothing), and the insert is held to the cap the saved searches
+// and the briefings share, keeps one briefing of a subject (one already there
+// stays as it is) and is weekly on a plan with delivery, off otherwise
+// (briefings.ts addBriefing); at the cap nothing is added and the page shows
+// the cap. A buyer's is the whole buyer. The audit says the briefing came
+// with the sign-in. Nothing here may fail the sign-in: a fault is logged
+// without detail and the reader goes on to the page, which offers its own
+// Subscribe form.
+async function briefAtSignIn(c: Context<AppEnv>, userId: string, brief: Brief, lang: Lang, now: Date): Promise<void> {
+  try {
+    const s: BriefingSubject = { ...brief, segment: "" };
+    const label = await briefingLabelOf(c, s, lang);
+    if (!label) return;
+    const plan = await planAtSignIn(c, userId, now);
+    if (!plan) return;
+    const result = await addBriefing(c.env, { userId, plan }, { ...s, label }, lang, now);
+    if (result === "added") await audit(c.env, userId, "briefing_added", `${brief.kind} at sign-in`, now);
+  } catch {
+    console.error("account sign-in: the briefing named by Save this briefing was not saved");
   }
 }
 

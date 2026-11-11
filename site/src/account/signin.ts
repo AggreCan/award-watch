@@ -31,18 +31,28 @@ const HOUR_MS = 3_600_000;
 // could post it for address after address, and each post is a message from
 // the site's own sender; the caps per address and per client do not bound
 // that. Counted from the audit trail (code_requested with the detail
-// "follow", read through idx_audit_at). Past the ceiling a Follow post is
-// answered with the sign-in page, whose own post carries no follow and is
-// not counted here, so no reader is kept from signing in. A count that
-// cannot be read lets the post through, as a limiter fault does
+// "follow" or "brief", read through idx_audit_at). Past the ceiling a Follow
+// post is answered with the sign-in page, whose own post carries no follow
+// and is not counted here, so no reader is kept from signing in. A count
+// that cannot be read lets the post through, as a limiter fault does
 // (src/limits.ts). Real demand is a few requests a week.
+//
+// A request that carries a briefing from a segment or buyer page's Save this
+// briefing link (briefing_pages.tsx, routes.tsx brief) is held to the same
+// ceiling, marked with the detail "brief" (a request carrying both is marked
+// "follow" and counted once). The link leads a crawler from the same public
+// pages to a sign-in form with the briefing in it, so the threat is the same
+// one, and one ceiling keeps one bound on the messages those pages can have
+// the sender send in an hour.
 export const FOLLOW_CODES_PER_HOUR = 200;
 export const FOLLOW_CODE_DETAIL = "follow";
-export const FOLLOW_CODES_SQL = "SELECT COUNT(*) AS n FROM audit WHERE at >= ?1 AND event = 'code_requested' AND detail = ?2";
+export const BRIEF_CODE_DETAIL = "brief";
+export const FOLLOW_CODES_SQL = "SELECT COUNT(*) AS n FROM audit WHERE at >= ?1 AND event = 'code_requested' AND detail IN (?2, ?3)";
 
 export async function followCodesInHour(env: Env, now: Date): Promise<number> {
   try {
-    const row = await env.ACCOUNTS!.prepare(FOLLOW_CODES_SQL).bind(new Date(now.getTime() - HOUR_MS).toISOString(), FOLLOW_CODE_DETAIL)
+    const row = await env.ACCOUNTS!.prepare(FOLLOW_CODES_SQL)
+      .bind(new Date(now.getTime() - HOUR_MS).toISOString(), FOLLOW_CODE_DETAIL, BRIEF_CODE_DETAIL)
       .first<{ n: number }>();
     return row?.n ?? 0;
   } catch {

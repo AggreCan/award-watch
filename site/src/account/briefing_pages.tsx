@@ -20,8 +20,8 @@ import { fmtInt, segmentShort, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, publicPage, todayOf } from "../layout";
 import { ProNote } from "../pro";
 import {
-  type Briefing, type BriefingKind, type BriefingOverview, type BriefingRun, type BriefingSubject, WEEK_DAYS, briefingName, briefingPath,
-  briefingState, readBriefing, sharedCap,
+  type Briefing, type BriefingKind, type BriefingOverview, type BriefingRun, type BriefingSubject, WEEK_DAYS, briefValue, briefingName,
+  briefingPath, briefingState, readBriefing, sharedCap,
 } from "./briefings";
 import { briefingParts } from "./digests";
 import { allowed } from "./entitlements";
@@ -62,7 +62,10 @@ export async function briefingControl(c: Context<AppEnv>, kind: BriefingKind, su
 }
 
 // The panel beside "Email Lists": what the briefing holds, the sample, and the
-// way to subscribe. Signed out: the sign-in page, which returns here (?next).
+// way to subscribe. Signed out: the sign-in page, which returns here (?next)
+// and saves this briefing once the address has proved itself (?brief, the
+// whole buyer on a buyer page; routes.tsx). The link is the same for every
+// reader not signed in, so the page keeps its public cache.
 // Free: the button saves the briefing with its email off, and the Pro chip
 // says the weekly email is Pro's. Pro: saved with the email on, weekly. A
 // buyer's button comes with a choice of the whole buyer or one segment.
@@ -72,11 +75,12 @@ export const BriefingPanel: FC<{ lang: Lang; state: BriefingControlState | null;
   if (!state) return null;
   let body: unknown;
   if (state.at === "out") {
+    const signInHref = `/account/sign-in?next=${encodeURIComponent(state.next)}&brief=${encodeURIComponent(briefValue(kind, subject))}`;
     // The weekly email is Pro's: the line under the button says so and offers the plan (operator, 2026-11-07).
     body = (
       <>
         <div class="briefing-control">
-          <a href={`/account/sign-in?next=${encodeURIComponent(state.next)}`} class="btn">{t(lang, "briefing.subscribe")}</a>
+          <a href={signInHref} class="btn">{t(lang, "briefing.subscribe")}</a>
           <span class="muted small">{t(lang, "briefing.control_out")}</span>
         </div>
         <ProNote lang={lang}>{t(lang, "interest.pro_line")} <a href="/account/sign-in?next=/account/billing">{t(lang, "expiring.pro_sign_in")}</a></ProNote>

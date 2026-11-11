@@ -445,6 +445,21 @@ The test suite runs this same insert (`MANUAL_GRANT_SQL` in
   after the address's own code or link is verified, for the account that
   address signs in to, and only one watch on a page the data holds, within
   the plan's cap.
+- **The Save this briefing link on public pages.** A segment or buyer page
+  links a reader not signed in to `/account/sign-in?next=<page>&brief=<kind>:<subject>`
+  (*Weekly briefings*), so a crawler that follows the link finds a sign-in
+  form carrying `brief`. A sign-in post that carries `brief` is held to the
+  same two rules as one that carries `follow`: it must come from the site's
+  own page (console line `account sign-in: a briefing post without a page's
+  headers`), and it counts against the same ceiling, `FOLLOW_CODES_PER_HOUR`,
+  marked `code_requested` with the detail `brief` (console line `account
+  sign-in: the hour's Follow and briefing requests are spent`). One ceiling
+  for both keeps one bound on the messages the public pages can have the
+  sender send in an hour. A post carrying both is marked `follow` and counted
+  once. Past either rule the post sends nothing and gets the sign-in page
+  with `brief` dropped and a line saying to sign in there and press Save
+  this briefing after. The briefing is saved only after the address's own
+  code or link is verified.
 - **No account enumeration.** The sign-in page answers the same whether or
   not the address has an account, and the per-email limit applies to every
   address alike.
@@ -1979,7 +1994,23 @@ are `site/test/briefings.test.ts`.
 - Each segment page and buyer page has a Weekly Briefing panel (`Bulletin
   hebdomadaire`) under Email Lists, with a link to this week's sample. With
   the switch off it is not rendered and the page keeps every byte. Not signed
-  in: Subscribe links to `/account/sign-in?next=<this page>`. Free: Subscribe
+  in: Subscribe links to `/account/sign-in?next=<this page>&brief=<kind>:<subject>`
+  (`segment:81`, or `buyer:<id>` for the whole buyer; `briefings.ts`
+  `briefOf` reads it by the post's own rules and drops anything else without
+  a word). The link is the same for every reader not signed in, so the page's
+  public cache is unchanged. The sign-in page, the code form, the emailed
+  link and its confirm page carry `brief` beside `next` (and beside `follow`,
+  when a sign-in carries both: each is added by its own steps), with a line
+  saying that signing in also saves the briefing. After the code or the link
+  is verified and the session starts, `POST /account/check` saves that
+  briefing for the account the address signs in to, by the post's own steps
+  (the label from the data, the shared cap, one briefing of a subject, the
+  email off on Free), and audits `briefing_added` with the detail `<kind> at
+  sign-in`. At the cap nothing is added and the page shows the cap; a
+  briefing saved already stays as it is; a buyer no longer in the data adds
+  nothing; any fault in this step is logged without detail and never fails
+  the sign-in. The reader lands on `next`, which reads "Briefing saved". No
+  GET adds a briefing (*Security posture* has the guards). Free: Subscribe
   saves the briefing with delivery `off`, beside a gate note with the Pro chip
   saying the weekly email is Pro's. Pro: saved with delivery `weekly`, "Sent
   each Monday by email". A buyer's form adds a choice of the whole buyer or

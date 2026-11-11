@@ -764,9 +764,9 @@ describe("subscribing", () => {
     expect((await post("/account/briefings", { csrf: proToken, kind: "segment", subject: "99" }, { cookie: proCookie })).status).toBe(400);
   });
 
-  it("sends a reader not signed in to sign in and back", async () => {
+  it("sends a reader not signed in to sign in and back, the briefing carried (test/accounts-brief.test.ts)", async () => {
     const html = await (await get("/segments/82")).text();
-    expect(html).toContain('<a href="/account/sign-in?next=%2Fsegments%2F82" class="btn">Save this briefing</a>');
+    expect(html).toContain('<a href="/account/sign-in?next=%2Fsegments%2F82&amp;brief=segment%3A82" class="btn">Save this briefing</a>');
   });
 
   it("stops a briefing from its link, on a POST or a one-click post, and keeps it on the searches page", async () => {

@@ -153,6 +153,29 @@ export function subjectOf(kind: BriefingKind, raw: string): string | null {
 // A buyer briefing's segment: '' for the whole buyer, else one of the 57 codes.
 export const narrowOf = (raw: string | undefined): string | null => (!raw ? "" : SEGMENT_CODES.includes(raw) ? raw : null);
 
+// What a page's Save this briefing link asks for before its reader has signed
+// in (briefing_pages.tsx BriefingPanel, routes.tsx): the kind and the subject
+// in one field, "<kind>:<subject>" (neither holds a colon). It rides along
+// with the sign-in as ?next does, as a Follow form's follow does
+// (watch_events.ts followOf), and is read back here by the rules the briefing
+// post applies (isBriefingKind, subjectOf), so anything but one briefing of a
+// page the site writes reads as null and is dropped. A buyer's link asks for
+// the whole buyer: the segment choice stays with the signed-in form.
+export type Brief = { kind: BriefingKind; subject: string };
+// A kind, the colon and the 100 characters the briefing post reads of a subject.
+export const BRIEF_MAX = 110;
+
+export const briefValue = (kind: BriefingKind, subject: string): string => `${kind}:${subject}`;
+
+export function briefOf(raw: string | undefined | null): Brief | null {
+  if (typeof raw !== "string" || raw.length > BRIEF_MAX) return null;
+  const at = raw.indexOf(":");
+  const kind = raw.slice(0, at);
+  if (at <= 0 || !isBriefingKind(kind)) return null;
+  const subject = subjectOf(kind, raw.slice(at + 1));
+  return subject ? { kind, subject } : null;
+}
+
 // The subject's page on the site, and its analytics view.
 export const briefingPath = (s: Pick<BriefingSubject, "kind" | "subject">): string =>
   s.kind === "segment" ? `/segments/${s.subject}` : `/buyers/${s.subject}`;
