@@ -6,12 +6,13 @@
 //   2. the landing page's navy top bar in both themes, everything on it in the
 //      bar's own tones, every text on it at 4.5:1 or better and a control's
 //      edge at 3:1 or better;
-//   3. one filled button, .btn-primary in the emerald, which a profile's Follow
-//      takes; the pages with their own filled button keep their Follow flat;
+//   3. one filled button, .btn-primary in the emerald, which Follow takes on a
+//      profile and on a contract's page; a buyer and a tender notice keep it on
+//      their own first action and their Follow flat;
 //   4. 6 px corners on controls, 4 px on the Pro chip, and none on the regions.
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { get, newEmail, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
+import { get, newEmail, offEnv, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 
 useAccountsDb();
 
@@ -173,15 +174,55 @@ describe("one filled button", () => {
 
   it("leaves Follow flat where the page's first action is already the filled one", async () => {
     const cookie = await signIn(newEmail("identity-flat"));
-    for (const path of ["/buyers/pwgsc-tpsgc", "/tenders/cb-100-10000001", "/awards/cb-400-40000004"]) {
+    for (const path of ["/buyers/pwgsc-tpsgc", "/tenders/cb-100-10000001"]) {
       const page = await (await get(path, { cookie })).text();
       expect(page, path).toContain('<button type="submit" class="btn">Follow</button>');
       expect(page.match(/class="btn btn-primary"/g), path).toHaveLength(1);
     }
+    // On a tender notice the filled button is the notice at the source, where a bid starts.
+    expect(await (await get("/tenders/cb-100-10000001", { cookie })).text()).toMatch(/<a href="[^"]*" class="btn btn-primary" rel="noopener">[^<]*CanadaBuys/);
     // The filters' Apply is the tender list's.
     const list = await (await get("/tenders", { env: onEnv() })).text();
     expect(list.match(/class="btn btn-primary"/g)).toHaveLength(1);
     expect(list).toContain('class="btn btn-primary" id="tender-apply"');
+  });
+});
+
+// An award notice and a contract history record; a published contract reads
+// the records database, so its case is in records-tables.test.ts.
+describe("a contract's page", () => {
+  const PAGES = ["/awards/cb-400-40000004", "/history/w8472-000633"];
+  const SOURCE = /<a href="https:\/\/[^"]*" class="(btn(?: btn-primary)?)" rel="noopener">/;
+
+  it("fills Follow and leaves the link to the source flat, signed in or not", async () => {
+    const cookie = await signIn(newEmail("identity-contract"));
+    for (const path of PAGES) {
+      for (const html of [await (await get(path)).text(), await (await get(path, { cookie })).text()]) {
+        expect(html.match(/class="btn btn-primary"/g), path).toHaveLength(1);
+        expect(html, path).toContain('<button type="submit" class="btn btn-primary">Follow</button>');
+        expect(SOURCE.exec(html)?.[1], path).toBe("btn");
+      }
+    }
+  });
+
+  it("keeps the filled button on the link to the source while there is no Follow, as the page was", async () => {
+    for (const path of PAGES) {
+      const html = await (await get(path, { env: offEnv() })).text();
+      expect(html, path).not.toContain("watch-control");
+      expect(html.match(/class="btn btn-primary"/g), path).toHaveLength(1);
+      expect(SOURCE.exec(html)?.[1], path).toBe("btn btn-primary");
+    }
+  });
+});
+
+describe("on a phone", () => {
+  it("the page comes before the rail and the footer after both, by order alone", () => {
+    const at = STYLES.indexOf("/* -- phones: one column");
+    const phone = STYLES.slice(at, STYLES.indexOf("\n}\n", at));
+    const body = (selector: string) => phone.split(`\n  ${selector} {`)[1]?.split("}")[0] ?? "";
+    expect(body(".frame")).toContain("flex-direction: column");
+    expect(body(".content")).toContain("display: contents");
+    expect([body("main"), body(".rail"), body(".site-footer")].map((b) => /order: (\d)/.exec(b)?.[1])).toEqual(["1", "2", "3"]);
   });
 });
 

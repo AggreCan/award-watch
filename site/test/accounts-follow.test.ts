@@ -34,7 +34,7 @@ const PAGES = [
   { path: `/organizations/${ORG}`, follow: `organization:${ORG}`, primary: true },
   { path: `/buyers/${BUYER}`, follow: `buyer:${BUYER}`, primary: false },
   { path: `/tenders/${TENDER}`, follow: `tender:tender:${TENDER}`, primary: false },
-  { path: `/awards/${AWARD}`, follow: `contract:award:${AWARD}`, primary: false },
+  { path: `/awards/${AWARD}`, follow: `contract:award:${AWARD}`, primary: true },
 ];
 
 const text = async (res: Response) => nbsp(decode(await res.text())).replace(/’/g, "'");

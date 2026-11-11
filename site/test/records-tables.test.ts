@@ -238,6 +238,17 @@ describe("a published contract's page", () => {
     expect((await page(`/contracts/dnd-mdn/${SLASHED}`)).res.status).toBe(200);
   });
 
+  it("fills Follow while accounts are on and has no filled button while they are off, its two links to the source flat", async () => {
+    const path = contractPath("dnd-mdn", SECOND);
+    const on = await (await get(path, { env: onEnv() })).text();
+    expect(on.match(/class="btn btn-primary"/g)).toHaveLength(1);
+    expect(on).toContain('<button type="submit" class="btn btn-primary">Follow</button>');
+    const off = (await page(path)).html;
+    expect(off).not.toContain("watch-control");
+    expect(off).not.toContain("btn-primary");
+    for (const html of [on, off]) expect(html).toMatch(/<a href="https:\/\/[^"]*" class="btn" rel="noopener">/);
+  });
+
   it("answers a reference it does not hold with a 404 that links the search, and a malformed address with the site's 404", async () => {
     const missing = await page("/contracts/dnd-mdn/C-2026-2027-Q3-99999");
     expect(missing.res.status).toBe(404);

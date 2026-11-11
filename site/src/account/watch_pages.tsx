@@ -67,9 +67,13 @@ export async function watchControl(c: Context<AppEnv>, kind: WatchKind, target: 
 // signed-in buyer's button comes with a choice: the whole buyer, or one
 // UNSPSC segment of it.
 // primary: Follow is the page's one filled button (public/styles.css
-// .btn-primary), on a page with no other: an organization's profile. The
-// buyer, notice and contract pages keep theirs on their own first action, so
-// their Follow stays flat. "Following" is a state, never filled.
+// .btn-primary) on an organization's profile and on a contract's page (an
+// award notice, a contract history record, a published contract), whose
+// link to the source stays flat beside it: that link leads away from the
+// site, and Follow is what the page asks of a reader (operator, 2026-11-10).
+// A buyer and a tender notice keep the filled button on their own first
+// action (the buyer's open notices, the notice on CanadaBuys, where a bid
+// starts), so their Follow stays flat. "Following" is a state, never filled.
 export const WatchControl: FC<{ lang: Lang; state: ControlState | null; kind: WatchKind; target: string; primary?: boolean }> = ({ lang, state, kind, target, primary }) => {
   if (!state) return null;
   const follow = primary ? "btn btn-primary" : "btn";

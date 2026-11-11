@@ -184,7 +184,7 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
           <a href={datasetUrl("contracts", lang)} class="btn" rel="noopener">{t(lang, "contract.history_dataset")}</a>
         </>}>
         <p class="page-note"><span class="mono">{ref}</span> <CompetitiveFlag lang={lang} value={num(d.comp) as 0 | 1 | null} /></p>
-        <WatchControl lang={lang} state={watch} kind="contract" target={`contract:${dept}:${ref}`} />
+        <WatchControl lang={lang} state={watch} kind="contract" target={`contract:${dept}:${ref}`} primary />
       </PageHead>
 
       <div class="panel-grid">

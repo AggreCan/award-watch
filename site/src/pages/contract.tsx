@@ -106,15 +106,17 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
           ].filter((x) => x !== null).map((x, i) => <>{i > 0 ? " · " : null}{x}</>)}
         </>}
         actions={<>
+          {/* The link to the source is the page's filled button only while there is no Follow to be it
+              (accounts off, or the accounts database not answering): it leads away from the site. */}
           {kind === "award" ? (
-            <a href={awardNoticeUrl(shownRef, lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.on_canadabuys")}</a>
+            <a href={awardNoticeUrl(shownRef, lang)} class={watch ? "btn" : "btn btn-primary"} rel="noopener">{t(lang, "contract.on_canadabuys")}</a>
           ) : (
-            <a href={datasetUrl("history", lang)} class="btn btn-primary" rel="noopener">{t(lang, "contract.history_dataset")}</a>
+            <a href={datasetUrl("history", lang)} class={watch ? "btn" : "btn btn-primary"} rel="noopener">{t(lang, "contract.history_dataset")}</a>
           )}
           {d.tender_reference ? <a href={`/tenders/${d.tender_reference.toLowerCase()}`} class="btn">{t(lang, "contract.tender_link")}</a> : null}
         </>}>
         <p class="page-note"><span class="mono">{shownRef}</span> <CompetitiveFlag lang={lang} value={d.competitive} /></p>
-        <WatchControl lang={lang} state={watch} kind="contract" target={`${kind}:${raw.toLowerCase()}`} />
+        <WatchControl lang={lang} state={watch} kind="contract" target={`${kind}:${raw.toLowerCase()}`} primary />
       </PageHead>
 
       <div class="panel-grid">

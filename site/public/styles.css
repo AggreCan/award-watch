@@ -1046,6 +1046,15 @@ tr[data-phone-cut] { display: none !important; }
   .toolbar-row.phone-only .field { flex: 1 1 auto; }
   /* The browse links are in the footer as well; on a phone the rail keeps the counts and the lists. */
   .rail-browse { display: none; }
+  /* The page comes first on a phone, then the rail's counts and lists, then the footer: a reader
+     arriving from a search sees what was searched for on the first screen, where the counts
+     used to fill it (operator, 2026-11-10). The markup keeps its order, so the keyboard and a
+     screen reader still meet the rail first; the top bar keeps the search and the language. */
+  .frame { display: flex; flex-direction: column; }
+  .content { display: contents; }
+  main { order: 1; }
+  .rail { order: 2; border-top: 1px solid var(--border); border-bottom: 0; }
+  .site-footer { order: 3; }
   .interest-form .interest-field, .interest-form .btn { flex: 1 1 100%; width: 100%; }
   .interest-form .btn { margin-top: 0; }
   .list-filters { grid-template-columns: minmax(0, 1fr); }
