@@ -38,6 +38,7 @@ import type { FC } from "hono/jsx";
 import { RULES } from "../account/entitlements";
 import { SESSION_COOKIE, readSession } from "../account/session";
 import { accountsEnabled } from "../account/switch";
+import { followValue } from "../account/watch_events";
 import { INSET_EXTENT, INSET_FRAME, INSET_PATHS, MAP_HEIGHT, MAP_LABELS, MAP_PATHS, MAP_WIDTH, type MaritimeProvince } from "../canada_map";
 import { recordsText } from "../chart";
 import { type Clock, clockOf, tenderState } from "../closing";
@@ -289,12 +290,14 @@ const ProfileShot: FC<{ lang: Lang; profile: Profile; on: boolean; lobbying: boo
     tiles.push({ label: sourceLabel(lang, "lobbying"), value: fmtInt(org.n_lobbying, lang), note: t(lang, "landing.tile_reports") });
   }
   // The shot's controls lead where the profile's own would: Follow to the
-  // sign-in with the profile as the way back (the profile's control for a
-  // reader without a session, account/watch_pages.tsx), Analytics to the
+  // sign-in with the profile as the way back and as what to follow (what the
+  // profile's own form posts for a reader without a session,
+  // account/watch_pages.tsx, so signing in follows it), Analytics to the
   // organization's view, and with the switch off the watchlist's button to
   // the profile, where the watchlist script runs. Links, so the shot is not
   // hidden from assistive technology.
   const profilePath = `/organizations/${org.id}`;
+  const followPath = `/account/sign-in?next=${encodeURIComponent(profilePath)}&follow=${encodeURIComponent(followValue("organization", org.id))}`;
   return (
     <div class="lp-shot">
       <div class="lp-profile">
@@ -303,7 +306,7 @@ const ProfileShot: FC<{ lang: Lang; profile: Profile; on: boolean; lobbying: boo
         <div class="lp-acts">
           {on
             ? <>
-              <a class="lp-btn lp-btn-sm lp-btn-fill" href={`/account/sign-in?next=${encodeURIComponent(profilePath)}`}>{t(lang, "watches.button")}</a>
+              <a class="lp-btn lp-btn-sm lp-btn-fill" href={followPath}>{t(lang, "watches.button")}</a>
               <a class="lp-btn lp-btn-sm" href={`${profilePath}/analytics`} rel="nofollow">{t(lang, "rail.analytics")}</a>
             </>
             : <a class="lp-btn lp-btn-sm lp-btn-fill" href={profilePath}>{t(lang, "watch.off")}</a>}

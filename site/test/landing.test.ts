@@ -489,7 +489,9 @@ describe("the writing and the files", () => {
     const id = stats.top_organizations_year[0].id as string;
     const onPage = await html("/", on());
     expect(onPage).toContain(`<div class="lp-nm"><a href="/organizations/${id}">`);
-    expect(onPage).toContain(`<a class="lp-btn lp-btn-sm lp-btn-fill" href="/account/sign-in?next=${encodeURIComponent(`/organizations/${id}`)}">Follow</a>`);
+    // Follow leads to the sign-in with the profile as the way back and as what to follow, so signing in follows it.
+    expect(onPage).toContain(`<a class="lp-btn lp-btn-sm lp-btn-fill" href="/account/sign-in?next=${encodeURIComponent(`/organizations/${id}`)}` +
+      `&amp;follow=${encodeURIComponent(`organization:${id}`)}">Follow</a>`);
     expect(onPage).toContain(`<a class="lp-btn lp-btn-sm" href="/organizations/${id}/analytics" rel="nofollow">Analytics</a>`);
     expect(onPage).not.toContain('<div class="lp-shot" aria-hidden="true"><div class="lp-profile">');
     const offPage = await html("/", off());
