@@ -3412,6 +3412,9 @@ const STRINGS = {
   "plans.pro_analytics": { en: "Analytics: every view, {n} fiscal years", fr: "Analyses : toutes les vues, {n} exercices" },
   // Matching notices (src/account/fit_pages.tsx): each plan's own figure, the one wording for both.
   "plans.matches": { en: "{n} matching notices for your organization", fr: "{n} avis correspondant à votre organisation" },
+  // The week's new matching notices by email (src/account/fit_mail.ts): Free's in the weekly email, Pro's
+  // in the weekly email or the watch mail. The French runs 44 characters at Pro's figure.
+  "plans.match_mail": { en: "{n} matching notices a week, by email", fr: "{n} correspondances par semaine, par courriel" },
   "plans.free_api": { en: "Open JSON API", fr: "API JSON ouverte" },
   "plans.pro_api": { en: "Keyed API: {day} requests a day", fr: "API avec clé : {day} requêtes par jour" },
   "plans.free_instruments": { en: "Standing offer pages", fr: "Pages des offres à commandes" },

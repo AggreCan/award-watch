@@ -120,6 +120,9 @@ const BAND_KEY: Readonly<Record<Score["band"], Key>> = {
   close: "fit.band_close", partial: "fit.band_partial", weak: "fit.band_weak", none: "fit.band_none",
 };
 
+// The band's word alone, for a line of text (the week's mail, account/fit_mail.ts).
+export const bandText = (lang: Lang, band: Score["band"]): string => t(lang, BAND_KEY[band]);
+
 // The band's word, then the total out of MATCH_MAX in small type: the total
 // is the sum of the reasons' points printed beside it, so the order of a list
 // can be checked by hand. No total for a notice that is not matched.

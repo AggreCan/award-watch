@@ -2,7 +2,8 @@
 // sender where a run sends (docs/mail.md): the delivery job's one cap shared
 // by the saved searches, the watch mail, the briefings and the weekly email,
 // and the weekly email's own ceiling; the rows a message
-// lists and the line that counts the rest; the subject's length; the
+// lists and the line that counts the rest, the week's matching notices at
+// each plan's figure among them; the subject's length; the
 // accounts-open and Ultra runs' cap a run, run again until no address waits;
 // the sign-in codes an address may ask for in an hour; and the live check's
 // one message per template. Then the checks themselves, each made to fail on
@@ -17,6 +18,7 @@ import {
 import {
   MAIL_CHECK_MARK, MAIL_CHECK_TEMPLATES, NO_MAIL_ADDRESS, mailCheckBriefingData, mailCheckMessages, runMailCheck,
 } from "../src/account/mail_check";
+import { RULES } from "../src/account/entitlements";
 import { CODES_PER_HOUR } from "../src/account/signin";
 import { ROWS_PER_KIND, type EventRow, type Found, foundKey } from "../src/account/watch_events";
 import { WATCH_ACCOUNTS_MAX, groupsFor } from "../src/account/watch_mail";
@@ -25,7 +27,7 @@ import { WEEKLY_ACCOUNTS_MAX, WEEKLY_RUN_MAX } from "../src/account/weekly";
 import { t, type Lang } from "../src/i18n";
 import { INSERT_INTEREST, newToken } from "../src/pages/interest";
 import { ACCOUNTS, DB, decode, nbsp, newEmail, onEnv, post, useAccountsDb } from "../test/accounts-helpers";
-import { DAY, SAMPLE_ADDRESS, SITE, tender, tenderInput, weeklyInput } from "../test/mail-fixtures";
+import { DAY, SAMPLE_ADDRESS, SITE, matchesInput, tender, tenderInput, weeklyInput } from "../test/mail-fixtures";
 import { LOCAL, type Sent, checkMessage, shapeOf, viaLogSender } from "./checks";
 
 useAccountsDb();
@@ -54,6 +56,7 @@ describe("the caps", () => {
     expect(WEEKLY_LINES).toBe(5);
     expect(SUBJECT_MAX).toBe(100);
     expect(MAIL_CHECK_TEMPLATES).toHaveLength(10);
+    expect([RULES.free.match_mail, RULES.pro.match_mail]).toEqual([3, 10]);
   });
 });
 
@@ -169,6 +172,25 @@ describe("the rows a message lists", () => {
   });
 });
 
+describe("the week's matching notices", () => {
+  it.each(LANGS)("list RULES.free.match_mail on Free and RULES.pro.match_mail on Pro, the rest counted in both parts (%s)", async (lang) => {
+    for (const [plan, total] of [["free", 2], ["free", 3], ["free", 25], ["pro", 9], ["pro", 10], ["pro", 25]] as const) {
+      const matches = matchesInput(lang, plan, total);
+      const m = weeklyDigest({ ...weeklyInput(lang, { news: false, pro: plan === "pro" }), to: newEmail(`matches-cap-${lang}`), matches });
+      const listed = Math.min(total, RULES[plan].match_mail);
+      expect(rowsIn(m.html), `${plan} ${total}`).toBe(listed);
+      expect(itemsIn(m.text), `${plan} ${total}`).toBe(listed);
+      const more = nbsp(t(lang, "fit.mail_more_many", { n: total - listed }));
+      expect(nbsp(m.text).includes(`${more}${lang === "fr" ? " : " : ": "}${SITE}/account/matches`), `${plan} ${total}`).toBe(total > listed);
+      expect(nbsp(decode(m.html)).includes(`>${more}</a>`), `${plan} ${total}`).toBe(total > listed);
+      // The subject counts every match, listed or not.
+      expect(nbsp(m.subject).endsWith(`, ${nbsp(t(lang, "fit.mail_subject_many", { n: total }))}`)).toBe(true);
+      expect([...m.subject].length).toBeLessThan(SUBJECT_MAX);
+      checkMessage(await viaLogSender(m), shapeOf("weekly", `weekly email with ${total} matches, ${plan}`, SITE), lang);
+    }
+  });
+});
+
 describe("the weekly email's lines", () => {
   it.each(LANGS)("name WEEKLY_LINES watches, one line each, and count the rest on a line to the watches page (%s)", async (lang) => {
     const groups: WatchGroup[] = Array.from({ length: WEEKLY_LINES + 3 }, (_, i) => ({
@@ -218,6 +240,11 @@ describe("the subject", () => {
     const fr = mailCheckMessages("fr", "", SITE).find((m) => m.template === "briefing")!.message.subject;
     expect([...fr].length).toBeLessThan(SUBJECT_MAX);
     expect(fr.endsWith("…")).toBe(false);
+    // Its weekly email names the site's count and the matches' count, whole, in both languages.
+    for (const lang of LANGS) {
+      const weekly = mailCheckMessages(lang, "", SITE, new Date(), SAMPLE_ADDRESS).find((m) => m.template === "weekly")!.message.subject;
+      expect(nbsp(weekly).endsWith(`, ${nbsp(t(lang, "fit.mail_subject_many", { n: 4 }))}`), weekly).toBe(true);
+    }
   });
 });
 

@@ -7,7 +7,10 @@
 // The message: what happened in the week on the pages the account follows
 // (its watches, grouped as the watch mail groups them, watch_mail.ts
 // groupsFor), or, when it follows nothing or nothing happened, the week on
-// the site in figures; one line on what Pro adds for an account without
+// the site in figures; for an account that names its organization, the
+// week's matching notices (fit_mail.ts, at its plan's match_mail figure, Pro
+// included: a Pro account whose weekly email is on gets them here and not in
+// its watch mail); one line on what Pro adds for an account without
 // Pro's mail; and a footer with the sender's name and mailing address
 // (MAIL_ADDRESS), why it came, and the unsubscribe link.
 //
@@ -40,6 +43,7 @@ import { WEEK_DAYS, weekAnchor } from "./briefings";
 import { type Files, STOP_CODES, sendWithHeaders } from "./deliveries";
 import { WEEKLY_ENDING_MONTHS, type WatchGroup, type WeekFigures, siteLink, weeklyDigest } from "./digests";
 import { allowed, planFor, type Plan } from "./entitlements";
+import { fitDigestBlock, weekNotices } from "./fit_mail";
 import { type RecordsWait, missingTable } from "./records_deliveries";
 import { randomHex } from "./secrets";
 import { readEvents } from "./watch_events";
@@ -289,6 +293,8 @@ export async function runWeekly(
   const figures = read.figures;
   const room = Math.min(o.room, WEEKLY_RUN_MAX);
   const days = weekDays(dataDate);
+  // The open notices of the week, read once for every account that names its organization (fit_mail.ts).
+  const notices = weekNotices(env, dataDate, now);
   let stop: string | null = null;
   let capped = false;
   let held: DueRow | null = null;
@@ -313,8 +319,11 @@ export async function runWeekly(
         const span = new Set(days);
         ({ groups, total } = groupsFor(lang, watches, events, new Map(watches.map((w) => [w.id, span]))));
       }
-      // Nothing from the watches and no figure to show: nothing to send, so the account waits.
-      if (!total && Object.values(figures).every((v) => v === null)) {
+      // The week's matching notices for an account that names its organization, on any plan at its own
+      // figure; null leaves them out, and never fails the message.
+      const matches = await fitDigestBlock(env, { userId: a.user_id, lang, site, dataDate, plan, now, notices });
+      // Nothing from the watches, no figure and no match to show: nothing to send, so the account waits.
+      if (!total && !matches && Object.values(figures).every((v) => v === null)) {
         wait("no_figures", 1);
         continue;
       }
@@ -333,7 +342,7 @@ export async function runWeekly(
       }
       const message = weeklyDigest({
         lang, to: a.email, site, dataDate, address, stopUrl: siteLink(site, `/account/stop?e=${a.user_id}&t=${secret}`, lang),
-        watches: { groups, total, watched: watches.length }, figures, pro: allowed({ plan }, "watch_mail"),
+        watches: { groups, total, watched: watches.length }, figures, pro: allowed({ plan }, "watch_mail"), matches,
       });
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {

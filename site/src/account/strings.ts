@@ -2405,4 +2405,19 @@ export const ACCOUNT_STRINGS = {
   "fit.all_open": { en: "All open notices", fr: "Tous les avis ouverts" },
   "fit.unavailable": { en: "The open notices cannot be read right now.", fr: "Les avis ouverts ne peuvent pas être lus pour le moment." },
   "fit.overview": { en: "Matching notices", fr: "Avis correspondants" },
+  // The block of the week's mail (src/account/fit_mail.ts, digests.ts): the open notices first seen in the
+  // week that match, each as its band and title, then its buyer, closing date and first reason without points.
+  "fit.mail_heading": { en: "New open notices this week that match {name}", fr: "Nouveaux avis ouverts cette semaine qui correspondent à {name}" },
+  "fit.mail_row": { en: "{band}: {title}", fr: "{band} : {title}" },
+  "fit.mail_detail": { en: "{buyer} · closes {date} · {reason}", fr: "{buyer} · clôture le {date} · {reason}" },
+  "fit.mail_more_one": { en: "{n} more on the site", fr: "{n} de plus sur le site" },
+  "fit.mail_more_many": { en: "{n} more on the site", fr: "{n} de plus sur le site" },
+  // The part the weekly email's subject gains: how many matched this week, listed or not.
+  "fit.mail_subject_one": { en: "1 matching notice", fr: "1 avis correspondant" },
+  "fit.mail_subject_many": { en: "{n} matching notices", fr: "{n} avis correspondants" },
+  // Free only: Pro's own two figures, read from RULES; no plan compared with another.
+  "fit.mail_free_note": {
+    en: "Pro lists up to {pro} matching notices on the site and {mail} a week here.",
+    fr: "Pro présente jusqu'à {pro} avis correspondants sur le site et {mail} par semaine ici.",
+  },
 } as const satisfies Record<string, { en: string; fr: string }>;

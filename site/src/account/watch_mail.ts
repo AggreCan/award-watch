@@ -12,11 +12,14 @@
 // lists their events, grouped by watch in the order single records,
 // organizations, buyers, notices; an event reached through two watches is
 // listed once, under the first, which names the others; the kinds each
-// follows only; ROWS_MAX rows in all. Nothing new writes "empty" and sends
-// nothing. The account is claimed for the data date before its message goes
-// and given back when the send does not go, as a saved search is. A refusal
-// that is not a sending limit marks the data date failed, and the account
-// waits for the next one. Each run of an account is a watch_deliveries row.
+// follows only; ROWS_MAX rows in all. The account's first message of the
+// week also carries the week's matching notices for the organization it
+// claims (fit_mail.ts), unless its weekly email takes them. Nothing new
+// writes "empty" and sends nothing. The account is claimed for the data date
+// before its message goes and given back when the send does not go, as a
+// saved search is. A refusal that is not a sending limit marks the data date
+// failed, and the account waits for the next one. Each run of an account is
+// a watch_deliveries row.
 //
 // Until the records database is ready at today's data date (no binding, a
 // load under way, a statement that failed, tonight's sync not finished), the
@@ -31,8 +34,10 @@ import { addDays } from "../../public/closing.js";
 import { clockAt } from "../closing";
 import type { Env } from "../env";
 import { segmentShort, type Lang } from "../i18n";
+import { weekAnchor } from "./briefings";
 import { ROWS_MAX, STOP_CODES, isDue, sendWithHeaders, spanStart } from "./deliveries";
-import { type WatchGroup, siteLink, watchDigest } from "./digests";
+import { type DigestMatches, type WatchGroup, siteLink, watchDigest } from "./digests";
+import { fitDigestBlock, weekNotices, weeklyTakesMatches } from "./fit_mail";
 import { orgWeekOpening } from "./org_claim";
 import { allowed, planFor, type Plan } from "./entitlements";
 import { type RecordsWait, missingTable } from "./records_deliveries";
@@ -220,6 +225,9 @@ export async function runWatchMail(
   let capped = false;
   let ready = true;
   let held: DueRow | null = null;
+  // The open notices of the week, read once for the accounts whose message carries the matching notices.
+  const notices = weekNotices(env, dataDate, now);
+  const week = weekAnchor(dataDate);
   try {
     for (const a of accounts) {
       let plan = o.plans.get(a.user_id);
@@ -250,13 +258,23 @@ export async function runWatchMail(
       // in reading it leaves the message without the block.
       const weekly = due.some((w) => w.cadence === "weekly") || new Date(`${dataDate}T00:00:00Z`).getUTCDay() === WEEK_OPENING_DAY;
       const opening = weekly ? await orgWeekOpening(env, { userId: a.user_id, lang, site, dataDate }).catch(() => null) : null;
+      // The week's matching notices (fit_mail.ts) go in the account's first message of the week (no data date
+      // of this week covered yet), and only while its weekly email does not take them, so a Pro account is
+      // never sent the same matches twice in a week. A fault in reading them leaves the message without them.
+      let matches: DigestMatches | null = null;
+      if (a.last_day === null || a.last_day < week) {
+        matches = await weeklyTakesMatches(env, a.user_id, week)
+          .then((taken) => (taken ? null : fitDigestBlock(env, { userId: a.user_id, lang, site, dataDate, plan, now, notices })))
+          .catch(() => null);
+      }
       const closed = due.filter((w) => {
         const shut = w.kind === "tender" ? closedOn(read.found.get(foundKey(w))) : null;
         return !!shut && spans.get(w.id)!.has(shut);
       }).map((w) => w.id);
       const { groups, total } = groupsFor(lang, due, read, spans);
-      // A message with nothing from the watches still goes when the block has a line (the block alone, under its own subject).
-      if (!total && !opening?.lines.length) {
+      // A message with nothing from the watches still goes when a block has something to say (the blocks
+      // alone, under the opening's subject).
+      if (!total && !opening?.lines.length && !matches) {
         if (!(await claim(env, a.user_id, dataDate, now))) continue;
         held = a;
         await covered(env, a.user_id, "empty", 0, now, dataDate, due, closed);
@@ -280,7 +298,7 @@ export async function runWatchMail(
       const stopUrl = siteLink(site, `/account/stop?w=${a.user_id}&t=${secret}`, lang);
       // The send time is the clock each notice's time left is read at.
       const message = watchDigest({
-        lang, to: a.email, site, dataDate, stopUrl, groups, total, watched: all.length, opening, clock: clockAt(now.getTime()),
+        lang, to: a.email, site, dataDate, stopUrl, groups, total, watched: all.length, opening, matches, clock: clockAt(now.getTime()),
       });
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {

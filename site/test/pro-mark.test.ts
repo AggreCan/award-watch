@@ -384,8 +384,8 @@ describe("the radar's tabs and tiles", () => {
 
   it("lists what Pro includes, watches, calendar feeds, your organization, the weekly briefing, the keyed API, instrument files and bug reports among it, each line a Pro feature", () => {
     expect(PRO_INCLUDES.map(([f]) => f)).toEqual([
-      "intraday", "radar_depth", "radar_depth", "delivery", "watch_mail", "delivery", "analytics", "matches", "api", "export_filtered",
-      "delivery", "analytics", "bug_reports",
+      "intraday", "radar_depth", "radar_depth", "delivery", "watch_mail", "delivery", "analytics", "matches", "match_mail", "api",
+      "export_filtered", "delivery", "analytics", "bug_reports",
     ]);
     expect(PRO_INCLUDES.map(([, key]) => key)).toContain("plans.pro_briefing");
     expect(PRO_INCLUDES).toEqual(PLAN_ROWS.map((r) => [r.feature, r.pro.key]));
@@ -481,9 +481,14 @@ describe("the plan cards", () => {
     expect(proFr).toContain(`<span>API avec clé : ${KEY_PER_DAY.toLocaleString("fr-CA").replace(/\s/g, " ")} requêtes par jour</span>`);
     // Your organization's page beside the competitors it compares, as many as org_claim allows.
     expect(pro).toContain(`<span>Your organization beside ${COMPETITORS_MAX} others</span>`);
+    // The week's matching notices by email: each plan's own count, from RULES, on the same wording.
+    expect(free).toContain(`<span>${RULES.free.match_mail} matching notices a week, by email</span>`);
+    expect(pro).toContain(`<span>${RULES.pro.match_mail} matching notices a week, by email</span>`);
+    expect(freeFr).toContain(`<span>${RULES.free.match_mail} correspondances par semaine, par courriel</span>`);
+    expect(proFr).toContain(`<span>${RULES.pro.match_mail} correspondances par semaine, par courriel</span>`);
     // Every figure on a card is one of the plans' or the constants', or a window's months.
     const figures = new Set([RULES.free.saved_searches, RULES.pro.saved_searches, RULES.free.watchlists, RULES.pro.watchlists,
-      RULES.free.matches, RULES.pro.matches, FREE_YEARS, MAX_YEARS,
+      RULES.free.matches, RULES.pro.matches, RULES.free.match_mail, RULES.pro.match_mail, FREE_YEARS, MAX_YEARS,
       KEY_PER_DAY, hours, COMPETITORS_MAX, 3, 6, 12].map(String));
     for (const card of [free, pro, freeFr, proFr]) {
       for (const { text } of rowsOf(card)) {

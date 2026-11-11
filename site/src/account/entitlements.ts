@@ -32,9 +32,11 @@ export type Plan = (typeof PLANS)[number];
 // email, daily or weekly per watch (src/account/watch_mail.ts).
 // matches: how many matching notices /account/matches lists for the claimed
 // organization, closest first (src/account/fit_pages.tsx), MATCH_PAGE a page.
+// match_mail: how many of the week's new matching notices one message a week
+// lists (src/account/fit_mail.ts): the weekly email, or Pro's watch mail.
 export const FEATURES = [
   "saved_searches", "delivery", "api", "export_filtered", "intraday", "radar_depth", "bug_reports", "analytics", "watchlists",
-  "watch_mail", "matches",
+  "watch_mail", "matches", "match_mail",
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -49,22 +51,22 @@ export const MATCH_PAGE = 50;
 
 type Rules = {
   saved_searches: number; delivery: boolean; api: boolean; export_filtered: boolean; intraday: boolean; radar_depth: boolean;
-  bug_reports: boolean; analytics: boolean; watchlists: number; watch_mail: boolean; matches: number;
+  bug_reports: boolean; analytics: boolean; watchlists: number; watch_mail: boolean; matches: number; match_mail: number;
 };
 
 export const RULES: Readonly<Record<Plan, Rules>> = {
   free: {
     saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false, radar_depth: false, bug_reports: false,
-    analytics: false, watchlists: 3, watch_mail: false, matches: 5,
+    analytics: false, watchlists: 3, watch_mail: false, matches: 5, match_mail: 3,
   },
   pro: {
     saved_searches: SAVED_SEARCH_MAX, delivery: true, api: true, export_filtered: true, intraday: true, radar_depth: true, bug_reports: true,
-    analytics: true, watchlists: WATCH_MAX, watch_mail: true, matches: 200,
+    analytics: true, watchlists: WATCH_MAX, watch_mail: true, matches: 200, match_mail: 10,
   },
 };
 
 // The figures a plan gives as counts rather than as yes or no.
-export const COUNTED_FEATURES = ["saved_searches", "watchlists", "matches"] as const satisfies readonly Feature[];
+export const COUNTED_FEATURES = ["saved_searches", "watchlists", "matches", "match_mail"] as const satisfies readonly Feature[];
 export type CountedFeature = (typeof COUNTED_FEATURES)[number];
 export const isCounted = (f: Feature): f is CountedFeature => (COUNTED_FEATURES as readonly Feature[]).includes(f);
 
@@ -141,7 +143,7 @@ export async function planFor(env: Env, user: PlanHolder, now: Date = new Date()
 }
 
 // allowed(user, feature): whether the user's plan allows a feature. For a
-// counted feature (saved_searches, watchlists, matches), `used` is how many
+// counted feature (saved_searches, watchlists, matches, match_mail), `used` is how many
 // the user holds or is shown, and the answer is whether one more fits.
 export function allowed(who: { plan: Plan } | null | undefined, feature: Feature, used = 0): boolean {
   const rules = RULES[who?.plan ?? "free"];
@@ -160,4 +162,9 @@ export function watchCap(plan: Plan): number {
 // How many matching notices a plan lists.
 export function matchCap(plan: Plan): number {
   return RULES[plan].matches;
+}
+
+// How many of the week's new matching notices a plan's weekly message lists.
+export function matchMailCap(plan: Plan): number {
+  return RULES[plan].match_mail;
 }

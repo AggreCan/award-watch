@@ -3,8 +3,12 @@
 // delivery and console tests hand messages to: tender notices and contracts
 // as the published files hold them, the radar's contracts R1 to R5, and the
 // inputs of a tender digest and a radar digest in each language, on the
-// fixtures' data date. Nothing here touches a database.
-import type { WatchGroup } from "../src/account/digests";
+// fixtures' data date, and the week's matching notices block. Nothing here
+// touches a database.
+import { rankNotices } from "../public/fit.js";
+import type { DigestMatches, WatchGroup } from "../src/account/digests";
+import type { Plan } from "../src/account/entitlements";
+import { matchDigestBlock } from "../src/account/fit_mail";
 import type { ExpiringRow, TenderRow } from "../src/data";
 import { readExpiringQuery } from "../src/pages/expiring";
 
@@ -96,6 +100,30 @@ export function weeklyInput(lang: "en" | "fr", o: { news?: boolean; watched?: nu
     watches: { groups, total: groups.reduce((n, g) => n + g.events.reduce((m, e) => m + e.n, 0), 0), watched: o.watched ?? (groups.length ? 4 : 0) },
     figures: WEEK_FIGURES, pro: o.pro ?? false,
   };
+}
+
+// The week's matching notices (src/account/fit_mail.ts), as fitDigestBlock
+// builds them for a plan: an organization whose records share the class
+// 821118 with n of the week's notices, each a close match, ranked by
+// public/fit.js and drawn in lang. The class is named by its code alone, as
+// it is when the levels file does not read.
+export const MATCH_NAME = "Exemplar Translation Services Inc.";
+export const MATCH_BLOCK = {
+  fy: [2022, 2026] as [number, number], n: [7, 3, 12] as [number, number, number], coded: [7, 3] as [number, number], newest: "2026-09-30",
+  classes: [["821118", 5, 2]] as [string, number, number][], families: [["8211", 5, 2]] as [string, number, number][],
+  segments: [["82", 5, 2]] as [string, number, number][], buyers: [["pwgsc-tpsgc", 4, 3, 0]] as [string, number, number, number][],
+  provinces: [["ON", 6, 2]] as [string, number, number][], types: [["Request for Proposal", 5, 1]] as [string, number, number][],
+  held: [] as [string, string, number][],
+};
+
+export function matchesInput(lang: "en" | "fr", plan: Plan, n: number): DigestMatches {
+  const rows = Array.from({ length: n }, (_, i) => tender(`cb-910-${String(i).padStart(8, "0")}`, {
+    title_en: `Translation services ${i + 1} (sample)`, title_fr: `Services de traduction ${i + 1} (exemple)`, buyer_id: "pwgsc-tpsgc",
+    buyer_en: "Public Services and Procurement Canada", buyer_fr: "Services publics et Approvisionnement Canada", codes: ["82111800"],
+    segments: ["82"], provinces: ["ON"], closing: "2026-11-20T14:00:00", first_seen: "2026-10-30",
+  }));
+  const { matches } = rankNotices(MATCH_BLOCK, rows, "ON");
+  return matchDigestBlock(lang, SITE, { plan, name: MATCH_NAME, matches, levels: null })!;
 }
 
 export type Handed = {

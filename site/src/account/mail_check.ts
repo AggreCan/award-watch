@@ -35,6 +35,7 @@ import { accountsOpenMessage, announceLinks, ultraLinks, ultraOpenMessage } from
 import { type BriefingData, type BriefingSubject, INSTRUMENT_WITHIN, briefingName, nextQuarter, quarterTurn } from "./briefings";
 import { sendWithHeaders } from "./deliveries";
 import { briefingDigest, expiringDigest, fitSubject, recordsDigest, siteLink, tenderDigest, watchDigest, weeklyDigest } from "./digests";
+import { matchDigestBlock } from "./fit_mail";
 import { sameHash, sha256Hex } from "./secrets";
 import { type MailMessage, type Sender, addressNotice, senderFor, signInMessage } from "./sender";
 import { CODE_MINUTES } from "./signin";
@@ -145,6 +146,19 @@ export function mailCheckBriefingData(day: string): BriefingData {
   };
 }
 
+// The matching notices block for a Free account (fit_mail.ts), from four
+// sample matches, so it lists RULES.free.match_mail and counts the rest.
+export function mailCheckMatches(lang: Lang, site: string, day: string) {
+  const work = { part: "work" as const, kind: "class" as const, key: "721015", counts: [5, 2], points: 45 };
+  const matches = [95, 80, 60, 45].map((points, i) => ({
+    row: sampleTender(`cb-000-0000003${i}`, day, 10 + i, {
+      title_en: `Building maintenance services (sample ${i + 1})`, title_fr: `Services d'entretien de bâtiments (exemple ${i + 1})`,
+    }),
+    score: { points, band: points >= 60 ? "close" as const : "partial" as const, coded: true, reasons: [work] },
+  }));
+  return matchDigestBlock(lang, site, { plan: "free", name: "Sample Engineering Ltd.", matches, levels: null });
+}
+
 // -- the messages ------------------------------------------------------------------------------
 
 // One message of each template, in lang, to `to`, its links on `site` (no
@@ -223,10 +237,13 @@ export function mailCheckMessages(lang: Lang, to: string, site: string, now: Dat
         data: mailCheckBriefingData(day),
       });
     },
-    // The form most accounts get: one that follows nothing, on Free, the site's week in figures.
+    // The form most accounts get: one that follows nothing, on Free, the site's week in figures, with the
+    // week's matching notices of an account that names its organization, so the inbox shows the block.
+    // The notices' figure has two digits so the French subject keeps its matches' count whole beside the mark.
     weekly: () => address === null ? null : weeklyDigest({
       lang, to, site, dataDate: day, address, stopUrl: link(`/account/stop?e=${ZERO}&t=${ZERO}`),
-      watches: { groups: [], total: 0, watched: 0 }, figures: { notices: 412, closing: 263, awards: 187, ending: 1250 }, pro: false,
+      watches: { groups: [], total: 0, watched: 0 }, figures: { notices: 41, closing: 263, awards: 187, ending: 1250 }, pro: false,
+      matches: mailCheckMatches(lang, site, day),
     }),
     accounts_open: () => accountsOpenMessage(lang, to, [t(lang, "interest.label_tenders_all")], announceLinks(site, lang, ZERO)),
     ultra_open: () => ultraOpenMessage(lang, to, ultraLinks(site, lang, ZERO)),

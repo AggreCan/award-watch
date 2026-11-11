@@ -140,6 +140,13 @@ export const PLAN_ROWS: readonly PlanRow[] = [
   },
   // The matching notices /account/matches lists (src/account/fit_pages.tsx): a count, as the watches are.
   { feature: "matches", free: { key: "plans.matches", vars: count(() => RULES.free.matches) }, pro: { key: "plans.matches", vars: count(() => RULES.pro.matches) } },
+  // The week's new matching notices by email (src/account/fit_mail.ts): the weekly email for Free, the
+  // weekly email or the watch mail for Pro; the weekly email has no row of its own, being free to all.
+  {
+    feature: "match_mail",
+    free: { key: "plans.match_mail", vars: count(() => RULES.free.match_mail) },
+    pro: { key: "plans.match_mail", vars: count(() => RULES.pro.match_mail) },
+  },
   { feature: "api", free: { key: "plans.free_api" }, pro: { key: "plans.pro_api", vars: (lang) => ({ day: fmtInt(KEY_PER_DAY, lang) }) } },
   { feature: "export_filtered", free: { key: "plans.free_instruments" }, pro: { key: "plans.pro_instruments" } },
   // A weekly briefing is a delivery, as a saved search's mail is (src/account/briefings.ts).

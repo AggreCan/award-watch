@@ -1958,8 +1958,11 @@ message per account, grouped by watch in the order single records,
 organizations, buyers, notices; an event two watches reach is listed once,
 under the first, with "Also on your watch of ..."; the kinds each follows
 only; 50 rows in all, then a line per kind with how many more (a count row
-counts what it stands for). Nothing new writes `empty` and sends nothing: no
-empty message is ever sent. The account is claimed for the data date before
+counts what it stands for). The account's first message of the week also
+carries the week's matching notices for the organization it claims, unless
+its weekly email takes them (*Matching notices*, By email). Nothing new
+writes `empty` and sends nothing: no empty message is ever sent. The
+account is claimed for the data date before
 its message goes (`watch_mail.last_day`), given back when the send does not
 go; a refusal that is not a sending limit sets `failed_day` and the account
 waits for the next data date. Each run of an account is a `watch_deliveries`
@@ -2151,7 +2154,8 @@ mail's run (`watch_mail.ts` `runWatchMail`) reads it on the account's weekly
 day (a day one of its weekly watches is due, or Monday for an account whose
 watches are all daily, `WEEK_OPENING_DAY`) and sends a message that would
 otherwise be empty when the block has a line; a fault in reading it leaves
-the message without the block.
+the message without the block. The week's matching notices, when the
+message carries them, follow this block (*Matching notices*, By email).
 
 ### Privacy and the console
 
@@ -2248,6 +2252,61 @@ the table from `fit.js`'s constants.
   the surviving profile for display and repointed by the organization page.
   It is `private, no-store` and `noindex`.
 - The overview links it beside the claimed organization.
+
+### By email
+
+`site/src/account/fit_mail.ts` builds the block a week's message carries
+(`fitDigestBlock`), and `digests.ts` draws it (`DigestMatches`). The tests
+are `site/test/fit-mail.test.ts` and the mail suite (`docs/mail.md`).
+
+- What it lists: the open notices first seen (`first_seen`) in the 7 data
+  dates ending with the run's, whose closing time has not passed at the
+  run's time, that are close or partial matches, closest first, as the page
+  ranks them. Free lists `RULES.free.match_mail` (3), Pro
+  `RULES.pro.match_mail` (10). The plan cards state each plan's figure on a
+  row of their own after the matching notices' (`plans.match_mail`, feature
+  `match_mail`): "3 matching notices a week, by email" and "10 matching
+  notices a week, by email" ("3 correspondances par semaine, par
+  courriel").
+- Each row: the band and the title ("Close match: Snow removal ..."),
+  linking the notice; then the buyer, the closing date and the first reason
+  (the work in common) without its points. Then, when more matched than are
+  listed, "9 more on the site" linking `/account/matches`; for Free, "Pro
+  lists up to 200 matching notices on the site and 10 a week here." (both
+  figures from `RULES`); the disclaimer, its Terms of Use a full https
+  address (`/terms#warranty`, `/terms?lang=fr#warranty` in French); the
+  licence line.
+- Which message: a Free account's weekly email (*Weekly email*). A Pro
+  account's weekly email when that is on; otherwise its watch mail
+  (*Watches*), in the account's first message of the week (the account
+  covered no data date since the week's Monday, `briefings.ts`
+  `weekAnchor`), after the "Your organization" block and before the
+  watches. The watch mail leaves the block out when the account's weekly
+  email is on from before that Monday or went that week
+  (`weeklyTakesMatches`), so a Pro account with both is sent the same
+  matches once. A watch message with no event and nothing in the
+  organization's block still goes for the matches, under the organization
+  block's subject (or the matches' heading when that block did not read).
+- No block, and the message goes as it would without it: no claim (or no
+  claims table), the organization gone from the data, a profile without a
+  block or one that does not read, a record too thin, published contracts
+  only or nothing in the window, no new match in the week, and any read
+  that fails (the claim, the profile shard, `tenders/open.json`). A
+  `tenders/open-levels.json` that does not read leaves a class or family
+  named by its code alone, as on the page. Nothing here throws, and nothing
+  new is logged.
+- Reads: per account, the claim (one accounts row, `CLAIM_READ_SQL`) and
+  the profile's shard entry (two more files for a retired id); in the watch
+  mail, the weekly email's row too (`WEEKLY_MATCHES_SQL`, by its key), and
+  only on the account's first message of the week. `tenders/open.json` and
+  `tenders/open-levels.json` are read once a run (`weekNotices`), and the
+  week's rows are ranked per account. No records-database read: the block
+  needs only the static files, and the weekly email and the watch mail
+  already wait for the records database for their own parts. No write and
+  no new table. The run's caps are unchanged: a message with the block is
+  one message, and the one the block alone sends (a Pro account's watch
+  message on a week with nothing else, at most once a week) counts against
+  the same 300 messages a run.
 
 ## Weekly briefings
 
@@ -2434,7 +2493,8 @@ against the cap alone.
 
 One message a week to any account, Free or Pro, that turned it on: what
 changed in the week on the pages it follows, or, when it follows nothing or
-nothing changed, the site's week in figures. It is the only list mail a Free
+nothing changed, the site's week in figures; and, for an account that names
+its organization, the week's matching notices. It is the only list mail a Free
 account can receive. No account is ever enrolled except by its own
 choice: existing accounts are not, and nothing turns it on for them. The code
 is `site/src/account/weekly.ts` (the choice, the site's figures, the run),
@@ -2482,6 +2542,7 @@ In the account's language (`users.lang`), in the site's one mail shell.
 | Heading and span | "Your Week on Award Watch" when a page it follows had news, else "The Week on Award Watch"; "Data dates 2026-10-27 to 2026-11-02." (the seven data dates ending with the data date) |
 | The watches' news | "8 updates on 3 of the 4 pages you follow." ("on the page you follow" when it follows one); then one line per watch with news, in the watch mail's order and grouping (`watch_mail.ts` `groupsFor`: single records, organizations, buyers, notices, an event reached twice listed once), at most `WEEKLY_LINES` (5): the watch's name and kind linking its page, and each kind of event with its count ("New award or contract: 2, Contract amended: 1"); a line for the rest ("3 more pages with news are on your watches page"); the button "Open your watches" |
 | The site's week | when there is no news: "Nothing changed this week on the 4 pages you follow" linking the watches page, or, for an account that follows nothing, how to follow a page; then four figures, each linking its list: new tender notices (`/tenders/new`), notices closing within 7 days (`/tenders?closing=7`), new award notices (`/awards`), contracts ending within 3 months (`/expiring/3m`) |
+| Matching notices | for an account that names its organization (*Your organization*), when some of the week's new notices match: "New open notices this week that match <name>", up to `RULES.free.match_mail` (3) or `RULES.pro.match_mail` (10) rows, how many more are on `/account/matches`, for Free the line on what Pro lists, the disclaimer with the Terms as a full https address, and the licence line (*Matching notices*, By email) |
 | What Pro adds | for an account whose plan does not mail its watches (Free) only: "Free: 3 watches and 3 saved searches, on the site. Pro: 25 watches and 25 saved searches, each change by email." and "Plans and prices" (`/pro`); the figures are read from the plans (`RULES`), each plan's own, never compared |
 | Footer | "You receive this because you turned on the weekly email for your account.", the account page, "Unsubscribe" (the stop link), then "Sent by Award Watch, <MAIL_ADDRESS>." on the next line; then the shell's tagline and contact address |
 
@@ -2498,8 +2559,14 @@ no count.
 Subject: "Your week: {n} updates on what you follow", or "The week on Award
 Watch: {n} new tender notices" ("The week on Award Watch, to {date}" without
 that figure); in French "Votre semaine : ..." and "La semaine sur Award
-Watch : ...". The message carries `List-Unsubscribe` and
-`List-Unsubscribe-Post` as the other list mail does.
+Watch : ...". With matching notices, their count follows after a comma:
+"Your week: 8 updates on what you follow, 12 matching notices", "The week
+on Award Watch: 412 new tender notices, 12 matching notices", "The week on
+Award Watch, to 2026-11-02, 1 matching notice" ("..., 12 avis
+correspondants"); it counts every match of the week, listed or not, and is
+left out first when the two would reach 100 characters (`fitCounts`). The
+message carries `List-Unsubscribe` and `List-Unsubscribe-Post` as the other
+list mail does.
 
 ### The run
 
@@ -2514,7 +2581,9 @@ first run, or, when Monday's nightly came late or the ceiling left it
 waiting, on the next data date of the same week; never twice in a week. The
 records database must be at today's data date (the watches and the award
 figure read it); until then every account waits unclaimed, as the briefings
-do.
+do. The matching notices read only the claim, the profile and the open
+notices (*Matching notices*, By email); an account with nothing from its
+watches and no figure still gets its message when they have a row.
 
 Each account is claimed for the week before its message goes (one statement
 that holds only while the email is on, the account active and the week not
@@ -2557,8 +2626,8 @@ The row keeps whether the email is on, where and when it was last turned on,
 when it was turned off, the week of the last message and whether it was
 sent, the week a message was refused, and the link's secret; the message
 names public records and figures only, and no copy is kept. The privacy page
-says so. 5 lines of watches a message, 4 figures, 100 messages a run, 1,000
-accounts read a run.
+says so. 5 lines of watches a message, 4 figures, 3 matching notices on
+Free and 10 on Pro, 100 messages a run, 1,000 accounts read a run.
 
 ### Operator steps
 

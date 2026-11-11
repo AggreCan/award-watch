@@ -5,20 +5,25 @@
 // a segment and of an organization, the watch mail (with and without the
 // "Your organization" block it can open with), the weekly briefing, the
 // weekly email (with the watches' news and with the site's week, on Free and
-// on Pro), the accounts-open and Ultra
+// on Pro), the week's matching notices in the weekly email and in the watch
+// mail (Free and Pro, with the disclaimer and the Terms' https address in
+// both parts), the accounts-open and Ultra
 // messages (through their console run), the address-change notice, and the
 // live check's own messages (src/account/mail_check.ts), which the route
 // sends to the test inbox only once they pass here.
 import { describe, expect, it } from "vitest";
 import { accountsOpenMessage, announceLinks, runAnnouncement, ultraLinks, ultraOpenMessage } from "../src/account/announce";
 import { expiringDigest, recordsDigest, tenderDigest, watchDigest, weeklyDigest } from "../src/account/digests";
+import { RULES } from "../src/account/entitlements";
 import { MAIL_CHECK_LISTS, MAIL_CHECK_MARK, MAIL_CHECK_TEMPLATES, type MailCheckTemplate, mailCheckMessages } from "../src/account/mail_check";
 import { weekOpening } from "../src/account/org_claim";
 import { addressNotice } from "../src/account/sender";
-import { t, type Lang } from "../src/i18n";
+import { t, tn, type Lang } from "../src/i18n";
 import { INSERT_INTEREST, newToken } from "../src/pages/interest";
-import { DB, lastMail, newEmail, onEnv, post, useAccountsDb } from "../test/accounts-helpers";
-import { DAY, SAMPLE_ADDRESS, SITE, STOP, expiringInput, tenderInput, weeklyInput } from "../test/mail-fixtures";
+import { DB, decode, lastMail, nbsp, newEmail, onEnv, post, useAccountsDb } from "../test/accounts-helpers";
+import {
+  DAY, MATCH_NAME, SAMPLE_ADDRESS, SITE, STOP, expiringInput, matchesInput, tenderInput, weeklyInput,
+} from "../test/mail-fixtures";
 import { LOCAL, type Sent, SHAPES, checkMessage, shapeOf, viaLogSender } from "./checks";
 
 useAccountsDb();
@@ -30,6 +35,37 @@ const CHECK_SHAPE: Record<MailCheckTemplate, keyof typeof SHAPES> = {
   sign_in: "sign_in", tenders_daily: "digest_daily", expiring_weekly: "digest_weekly", records: "digest_daily", watch: "watch",
   briefing: "briefing", weekly: "weekly", accounts_open: "accounts_open", ultra_open: "ultra_open", address_notice: "address_notice",
 };
+
+// What every message carrying the week's matching notices holds in both
+// parts: the plan's rows (RULES.free.match_mail or RULES.pro.match_mail) of
+// `total`, the rest counted with its link to /account/matches, for Free the
+// line with Pro's own figures from RULES, the disclaimer with the Terms' No
+// Warranty section as a full https address, and the data credit.
+function holdsMatches(m: Sent, lang: Lang, plan: "free" | "pro", total: number): void {
+  const what = `${plan} (${lang})`;
+  const text = nbsp(m.text);
+  const html = nbsp(decode(m.html));
+  const visible = html.replace(/<[^>]+>/g, "");
+  const listed = Math.min(total, RULES[plan].match_mail);
+  expect((text.match(new RegExp(`${SITE}/tenders/cb-910-`, "g")) ?? []).length, `${what}: rows in the text part`).toBe(listed);
+  expect((html.match(new RegExp(`href="${SITE}/tenders/cb-910-`, "g")) ?? []).length, `${what}: rows in the HTML part`).toBe(listed);
+  const more = nbsp(tn(lang, "fit.mail_more_one", "fit.mail_more_many", total - listed, { n: total - listed }));
+  const matchesPage = `${SITE}/account/matches${lang === "fr" ? "?lang=fr" : ""}`;
+  expect(text, what).toContain(nbsp(t(lang, "digest.text_link", { label: more, url: matchesPage })));
+  expect(html, what).toContain(`href="${matchesPage}"`);
+  expect(visible, what).toContain(more);
+  const note = nbsp(t(lang, "fit.mail_free_note", { pro: RULES.pro.matches, mail: RULES.pro.match_mail }));
+  expect(text.includes(note), `${what}: the line on Pro in the text part`).toBe(plan === "free");
+  expect(visible.includes(note), `${what}: the line on Pro in the HTML part`).toBe(plan === "free");
+  const terms = `${SITE}/terms${lang === "fr" ? "?lang=fr" : ""}#warranty`;
+  expect(terms.startsWith("https://")).toBe(true);
+  const disclaimer = nbsp(t(lang, "fit.disclaimer", { terms: t(lang, "terms.title") }));
+  expect(text, `${what}: the disclaimer in the text part`).toContain(disclaimer);
+  expect(visible, `${what}: the disclaimer in the HTML part`).toContain(disclaimer);
+  expect(text, `${what}: the Terms' address in the text part`).toContain(nbsp(t(lang, "digest.text_link", { label: t(lang, "terms.title"), url: terms })));
+  expect(html, `${what}: the Terms' link in the HTML part`).toContain(`<a href="${terms}" style="color:#5b6b80;">${nbsp(t(lang, "terms.title"))}</a>`);
+  for (const part of [text, visible]) expect(part, `${what}: the data credit`).toContain(nbsp(t(lang, "data.credit")));
+}
 
 // A sign-up on the email lists, as the interest form keeps it; the Ultra card's row with "ultra".
 let clock = 0;
@@ -112,6 +148,34 @@ describe.each(LANGS)("every message, in %s", (lang) => {
       ...weeklyInput(lang, { news: false }), to: newEmail(`weekly-partial-${lang}`), figures: { notices: null, closing: 5, awards: null, ending: null },
     });
     checkMessage(await viaLogSender(partial), shapeOf("weekly", "weekly email, one figure", SITE), lang);
+  });
+
+  it("the weekly email with the week's matching notices: the figures or the watches' news, Free and Pro", async () => {
+    for (const plan of ["free", "pro"] as const) {
+      const matches = matchesInput(lang, plan, 12);
+      for (const news of [false, true]) {
+        const m = weeklyDigest({ ...weeklyInput(lang, { news, pro: plan === "pro" }), to: newEmail(`weekly-matches-${lang}`), matches });
+        checkMessage(await viaLogSender(m), shapeOf("weekly", `weekly email with matches, ${plan}, ${news ? "news" : "figures"}`, SITE), lang);
+        holdsMatches(m, lang, plan, 12);
+      }
+    }
+  });
+
+  it("the watch mail with the week's matching notices: after the organization's block, alone, and beside a watch", async () => {
+    const matches = matchesInput(lang, "pro", 12);
+    const opening = weekOpening(lang, SITE, "org-a000000001", MATCH_NAME, { records: [], ending: { n: 0, cents: null, soonest: null }, buyers: [] });
+    const base = { lang, site: SITE, dataDate: DAY, stopUrl: `${SITE}/account/stop?w=${"a".repeat(32)}&t=${"b".repeat(32)}`, watched: 1, matches };
+    const groups = [{ kind: "organization" as const, label: "Sample Harbour Marine Ltd.", path: "/organizations/org-a000000002", events: [] }];
+    const cases: [string, Parameters<typeof watchDigest>[0]][] = [
+      ["after the organization's block", { ...base, to: newEmail(`watch-matches-open-${lang}`), groups: [], total: 0, opening }],
+      ["alone", { ...base, to: newEmail(`watch-matches-alone-${lang}`), groups: [], total: 0 }],
+      ["beside a watch", { ...base, to: newEmail(`watch-matches-both-${lang}`), groups, total: 1, opening }],
+    ];
+    for (const [name, input] of cases) {
+      const m = watchDigest(input);
+      checkMessage(await viaLogSender(m), shapeOf("watch", `watch mail with matches, ${name}`, SITE), lang);
+      holdsMatches(m, lang, "pro", 12);
+    }
   });
 
   it("the accounts-open message, as its run sends it, and with an https stop link", async () => {

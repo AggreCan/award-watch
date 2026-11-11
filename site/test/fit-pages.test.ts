@@ -306,8 +306,12 @@ describe("around the page", () => {
   it("keeps out of every matching string a word that reads as a judgement of the business or a chance of winning", () => {
     const EN = /\b(fit|qualified|eligible|capable|should|recommend\w*|likely|odds|probabl\w*)\b/i;
     const FR = /\b(qualifiée?s?|admissibles?|capables?|devrai\w*|recommand\w*|probab\w*)\b/i;
-    const keys = allKeys().filter((k) => k.startsWith("fit.") || k.startsWith("methodology.matching") || k === "plans.matches") as Key[];
+    // The week's mail (fit.mail_*) and its plan row are held to the same list.
+    const keys = allKeys().filter((k) => k.startsWith("fit.") || k.startsWith("methodology.matching") || k === "plans.matches" ||
+      k === "plans.match_mail") as Key[];
     expect(keys.length).toBeGreaterThan(40);
+    for (const key of ["fit.mail_heading", "fit.mail_row", "fit.mail_detail", "fit.mail_more_one", "fit.mail_more_many", "fit.mail_subject_one",
+      "fit.mail_subject_many", "fit.mail_free_note", "plans.match_mail"]) expect(keys, key).toContain(key);
     for (const key of keys) {
       const { en, fr } = rawEntry(key);
       expect(en, key).not.toMatch(EN);

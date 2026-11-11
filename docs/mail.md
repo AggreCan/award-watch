@@ -92,6 +92,7 @@ Each in English and in French.
 | The watch mail, with and without the "Your organization" block | the watch digest |
 | The weekly briefing | the briefing digest |
 | The weekly email: the watches' news (Free and Pro) and the site's week (nothing new on several pages, on one, following nothing, Pro), and with one figure left out | the weekly digest, `weeklyDigest`, from the fixtures in `site/test/mail-fixtures.ts` (a made-up mailing address) |
+| The week's matching notices: in the weekly email (the figures and the watches' news, Free and Pro) and in the watch mail (after the "Your organization" block, alone, beside a watch) | `matchesInput` in the fixtures: 12 sample notices ranked by `public/fit.js` against a sample organization's block, drawn by `fit_mail.ts` `matchDigestBlock` |
 | The accounts-open message | its console run, `runAnnouncement`, and with an https stop link |
 | The Ultra message | its console run (kind `ultra`), and with an https stop link |
 | The address-change notice | the console's notice |
@@ -134,6 +135,12 @@ and keep their own tests.
   List-Unsubscribe=One-Click`. With an http link (a local run) it carries
   neither, since Email Sending takes https links only.
 - No em-dash in the subject, the text or the HTML.
+- A message that carries matching notices (the weekly email, the watch
+  mail) lists its plan's figure of them (`RULES.free.match_mail`, 3, or
+  `RULES.pro.match_mail`, 10), counts the rest with its link to
+  `/account/matches`, gives a Free account the line with Pro's own figures,
+  and carries, in both parts, the disclaimer with the Terms' No Warranty
+  section as a full https address and the licence line.
 - No address but the site's two role addresses, `contact@awardwatch.ca` and
   `alerts@awardwatch.ca`: never the reader's own and never another reader's.
   The accounts-open and Ultra runs send to several addresses at once, and
@@ -146,6 +153,7 @@ and keep their own tests.
 | Messages in one delivery run (saved searches, then watch mail, then briefings, then the weekly email) | `RUN_MESSAGES_MAX`, 300 | `roomAfter`: each part gets the cap less what the parts before it sent or tried, never below zero, and the four never pass 300 together |
 | Weekly emails in one delivery run | `WEEKLY_RUN_MAX`, 100 | the weekly email's room is the shared room held to 100; the run stops there and the next hour (or the next data date of the week) goes on |
 | Watches one weekly email names | `WEEKLY_LINES`, 5 | eight watches with news name five, one line each, and count three more on a line to the watches page |
+| Matching notices one message lists | `RULES.free.match_mail`, 3; `RULES.pro.match_mail`, 10 | 2, 3 and 25 matches on Free list 2, 3 and 3; 9, 10 and 25 on Pro list 9, 10 and 10; the rest is counted in both parts only when there is one, and the subject counts every match |
 | Rows in one delivery message | `ROWS_MAX`, 50 | a search with 120 notices lists 50 and counts 70 more in both parts; a segment's counts come first; the watch mail's 50 run across every watch, each kind's rest on its own line |
 | Rows in one briefing section | `SECTION_ROWS`, 10 | 25 new notices list 10 and count 15 more |
 | Lists named in the accounts-open message | `LISTS_SHOWN`, 10 | twelve lists name ten and count two more |
@@ -178,7 +186,8 @@ sender a reader's message goes through (`sendWithHeaders` in
 5. the watch mail
 6. the weekly briefing
 7. the weekly email (the site's week, as an account that follows nothing on
-   Free gets it)
+   Free gets it, with four sample matching notices for the organization it
+   names, so the block, its line on Pro and its disclaimer can be read)
 8. the accounts-open message
 9. the Ultra message
 10. the address-change notice

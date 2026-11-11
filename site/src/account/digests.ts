@@ -25,7 +25,7 @@ import { fiscalLabel } from "../records_db";
 import type { BriefingData, BriefingSubject, Quarter } from "./briefings";
 import { RULES } from "./entitlements";
 import type { RecordsKind, Rise } from "./records_deliveries";
-import { C, FONT, button, escapeHtml, h1, h2, inkLink, para, shell, siteLink, textFooter, whyLine } from "./mail_html";
+import { C, FONT, button, escapeHtml, h1, h2, inkLink, mutedLink, para, shell, siteLink, textFooter, whyLine } from "./mail_html";
 import { type EventKind, type EventRow, INSTRUMENT_REF, type Listed, type WatchKind, isInstrumentKind } from "./watch_events";
 import type { MailMessage } from "./sender";
 
@@ -510,6 +510,8 @@ export interface WatchDigest {
   watched: number;
   // A block the message opens with, before the watches (opening below).
   opening?: DigestOpening | null;
+  // The week's matching notices (fit_mail.ts), after the opening block and before the watches.
+  matches?: DigestMatches | null;
   // The send time, for the time left on each notice's closing (watchEventLines).
   clock?: Clock;
 }
@@ -530,6 +532,59 @@ function openingHtml(o: DigestOpening): string[] {
 
 function openingText(o: DigestOpening): string {
   return [o.heading, ...o.lines.map((l) => `  ${l.text} · ${l.url}`)].join("\n");
+}
+
+// The matching notices block (fit_mail.ts fitDigestBlock builds it in the
+// reader's language; docs/accounts.md, Matching notices): a heading, the
+// week's new matches closest first, each its band and title linking the
+// notice and a muted line with its buyer, closing date and first reason; how
+// many more are on the site; for Free, what Pro lists; then the disclaimer,
+// its Terms a full address, and the data credit. Every message that carries a
+// match carries the disclaimer.
+export interface DigestMatches {
+  heading: string;
+  // The subject's part, how many matched in the week: "3 matching notices".
+  subject: string;
+  rows: readonly { title: string; url: string; detail: string }[];
+  more: { text: string; url: string } | null;
+  note: string | null;
+  // The disclaimer's words before and after its link to the Terms.
+  disclaimer: { before: string; label: string; url: string; after: string };
+  credit: string;
+}
+
+// A matching notice's row: the title as a link, then one muted line.
+function matchRow(title: string, href: string, line: string, first: boolean): string {
+  const border = first ? "" : `border-top:1px solid ${C.border};`;
+  return `<tr><td class="rule" style="padding:10px 0;${border}">` +
+    `<a class="ink" href="${escapeHtml(href)}" style="font:600 15px/1.4 ${FONT};color:${C.ink};text-decoration:none;">${escapeHtml(title)}</a>` +
+    `<div class="muted" style="margin-top:3px;font:13px/1.5 ${FONT};color:${C.muted};">${line}</div></td></tr>`;
+}
+
+function matchesHtml(m: DigestMatches): string[] {
+  const d = m.disclaimer;
+  return [
+    h2(m.heading),
+    rows(m.rows.map((r, i) => matchRow(r.title, r.url, escapeHtml(r.detail), i === 0))),
+    ...(m.more ? [para(inkLink(m.more.url, m.more.text))] : []),
+    ...(m.note ? [para(escapeHtml(m.note), true)] : []),
+    para(`${escapeHtml(d.before)}${mutedLink(d.url, d.label)}${escapeHtml(d.after)}`, true),
+    para(escapeHtml(m.credit), true),
+  ];
+}
+
+// The text part: a link stands on a line of its own after its words, as the
+// other blocks write them, so no address runs into a sentence's last period.
+function matchesText(lang: Lang, m: DigestMatches): string {
+  const link = (label: string, url: string) => t(lang, "digest.text_link", { label, url });
+  const d = m.disclaimer;
+  const tail = [...(m.more ? [link(m.more.text, m.more.url)] : []), ...(m.note ? [m.note] : [])];
+  return [
+    m.heading,
+    m.rows.map((r) => `- ${r.title}\n  ${r.detail}\n  ${r.url}`).join("\n\n"),
+    ...(tail.length ? [tail.join("\n")] : []),
+    [`${d.before}${d.label}${d.after}`, link(d.label, d.url), m.credit].join("\n"),
+  ].join("\n\n");
 }
 
 export const WATCH_KIND_KEY: Readonly<Record<WatchKind, Key>> = {
@@ -635,17 +690,22 @@ export function watchMoreText(lang: Lang, kind: EventKind, rest: number): string
 export function watchDigest(o: WatchDigest): DigestMessage {
   const { lang } = o;
   const open = o.opening ?? null;
-  const alone = open !== null && o.groups.length === 0;
+  const fit = o.matches ?? null;
+  // With no watch event the message is its blocks alone, under the opening's
+  // subject, or the matches' heading when the opening did not read.
+  const alone = (open !== null || fit !== null) && o.groups.length === 0;
   const labels = o.groups.slice(0, 2).map((g) => g.label).join(", ");
-  const subject = fitSubject(alone ? open.subject
+  const subject = fitSubject(alone ? (open ? open.subject : fit!.heading)
     : tn(lang, "watches.digest_subject_one", "watches.digest_subject_many", o.total, { n: fmtInt(o.total, lang), labels }));
   const title = t(lang, "watches.digest_title");
   const lead = tn(lang, "watches.digest_lead_one", "watches.digest_lead_many", o.total, {
     n: fmtInt(o.total, lang), w: fmtInt(o.groups.length, lang), all: fmtInt(o.watched, lang), date: o.dataDate,
   });
   const page = siteLink(o.site, "/account/watches", lang);
-  const html: string[] = [...(open ? openingHtml(open) : []), ...(alone ? [] : [h1(title), para(escapeHtml(lead))])];
-  const text: string[] = [...(open ? [openingText(open)] : []), ...(alone ? [] : [title, lead])];
+  const html: string[] = [
+    ...(open ? openingHtml(open) : []), ...(fit ? matchesHtml(fit) : []), ...(alone ? [] : [h1(title), para(escapeHtml(lead))]),
+  ];
+  const text: string[] = [...(open ? [openingText(open)] : []), ...(fit ? [matchesText(lang, fit)] : []), ...(alone ? [] : [title, lead])];
   for (const g of o.groups) {
     const href = siteLink(o.site, g.path, lang);
     const n = g.events.reduce((sum, e) => sum + e.n, 0);
@@ -682,8 +742,10 @@ export function watchDigest(o: WatchDigest): DigestMessage {
   ].join("\n");
   text.push(t(lang, "digest.text_link", { label: t(lang, "watches.digest_button"), url: page }), t(lang, "watches.digest_note"),
     `${whyText}\n${textFooter(lang)}`);
-  // The first facts in words ("Kerr Wood Leidal · Contract amended"), then how many more.
-  const facts = alone ? (open.lines.length ? open.lines.map((l) => l.text) : [open.heading])
+  // The first facts in words ("Kerr Wood Leidal · Contract amended"), then how many more; alone, the
+  // opening's lines then the matches' titles, or the opening's heading when neither has one.
+  const blockFacts = [...(open?.lines.map((l) => l.text) ?? []), ...(fit?.rows.map((r) => r.title) ?? [])];
+  const facts = alone ? (blockFacts.length ? blockFacts : [open!.heading])
     : o.groups.flatMap((g) => g.events.map((e) => `${g.label} · ${t(lang, EVENT_KEY[e.kind])}`));
   const pre = preheader(lang, facts, facts.length);
   return {
@@ -996,11 +1058,12 @@ export function briefingDigest(o: BriefingDigest): DigestMessage {
 // kind of event and how many, at most WEEKLY_LINES watches, then a line for
 // the rest and the button to the watches page. Otherwise the site's week in
 // figures, each a link to its list, after a line saying nothing changed on
-// what it follows, or how to follow a page. Then, for an account whose plan
-// does not mail its watches (Free), one line naming each plan's figures for
-// watches and saved searches. The footer adds the sender's name and mailing
-// address to the reason line, beside the account page and the unsubscribe
-// link.
+// what it follows, or how to follow a page. Then, for an account that names
+// its organization, the week's matching notices (DigestMatches above). Then,
+// for an account whose plan does not mail its watches (Free), one line naming
+// each plan's figures for watches and saved searches. The footer adds the
+// sender's name and mailing address to the reason line, beside the account
+// page and the unsubscribe link.
 export const WEEKLY_LINES = 5;
 // The radar window the site's figures count, in months (expiring/index.json's "3m").
 export const WEEKLY_ENDING_MONTHS = 3;
@@ -1022,6 +1085,8 @@ export interface WeeklyDigest {
   figures: WeekFigures;
   // Whether the account's plan already mails its watches and searches: no line on Pro then.
   pro: boolean;
+  // The week's matching notices (fit_mail.ts), after the watches or the figures.
+  matches?: DigestMatches | null;
 }
 
 // The figures in the order the message lists them, each with its list on the site.
@@ -1102,6 +1167,13 @@ export function weeklyDigest(o: WeeklyDigest): DigestMessage {
     pre = shown.length ? `${shown.map((f) => f.label).join(", ")}.` : span;
   }
 
+  // The week's matching notices, when the account names its organization and some matched.
+  const fit = o.matches ?? null;
+  if (fit) {
+    html.push(...matchesHtml(fit));
+    text.push(matchesText(lang, fit));
+  }
+
   // What Pro adds, as each plan's own figures (the plan cards' rule: no plan compared with another).
   if (!o.pro) {
     const line = t(lang, "weekly.pro_line", {
@@ -1120,7 +1192,9 @@ export function weeklyDigest(o: WeeklyDigest): DigestMessage {
     why, linkText(t(lang, "weekly.account_link"), account), linkText(t(lang, "weekly.stop_link"), o.stopUrl), sender,
   ].join("\n");
   text.push(`${whyText}\n${textFooter(lang)}`);
-  const fitted = fitSubject(subject);
+  // The matches' count after the subject's own, as a second count ("..., 3 matching notices"), left out
+  // first when the two would not fit (fitCounts).
+  const fitted = fit ? fitCounts([subject, fit.subject], (shown) => shown.join(", ")) : fitSubject(subject);
   return {
     to: o.to, subject: fitted, lang, headers: deliveryHeaders(o.stopUrl), text: text.join("\n\n"),
     html: shell({
