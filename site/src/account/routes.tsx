@@ -331,7 +331,7 @@ account.post("/check", async (c) => {
       // The third and fourth wrong codes of the hour say how many tries are left.
       const left = checked.reason === "wrong" ? checked.left : null;
       const errors: Key[] = [left === 2 ? "account.err_code_two" : left === 1 ? "account.err_code_one" : CHECK_ERROR[checked.reason]];
-      if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors), 400);
+      if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors, next, follow), 400);
       const title = t(lang, sentForm ? "account.check_title" : "account.enter_title");
       // A mistyped code keeps the page to return to and what to follow, for the next try.
       return accountPage(c, title, codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors, next, follow }), 400);

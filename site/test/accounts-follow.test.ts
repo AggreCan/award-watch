@@ -425,6 +425,37 @@ describe("the sign-in page with follow", () => {
   });
 });
 
+// -- asking for a new code ---------------------------------------------------------------------------------
+
+describe("Ask for a new code", () => {
+  const AGAIN = `/account/sign-in?next=${encodeURIComponent(`/organizations/${ORG}`)}&amp;follow=${encodeURIComponent(`organization:${ORG}`)}`;
+
+  it("keeps the page and what to follow, on the code page, after a mistyped code and on a link gone stale", async () => {
+    const email = newEmail("f-again");
+    const sent = await (await post("/account/sign-in", await pageForm(`/organizations/${ORG}`, email))).text();
+    expect(sent).toContain(`<a href="${AGAIN}">`);
+    const wrong = await (await post("/account/check", { email, code: "000000", sent: "1", next: `/organizations/${ORG}`, follow: `organization:${ORG}` })).text();
+    expect(wrong).toContain(`<a href="${AGAIN}">`);
+    // A link that no longer works, by its page and by its post.
+    const stale = `${"0".repeat(32)}.${"0".repeat(64)}`;
+    const posted = await post("/account/check", { token: stale, next: `/organizations/${ORG}`, follow: `organization:${ORG}` });
+    expect(posted.status).toBe(400);
+    expect(await posted.text()).toContain(`<a href="${AGAIN}" class="btn">`);
+    const opened = await (await get(`/account/check?token=nonsense&next=${encodeURIComponent(`/organizations/${ORG}`)}&follow=${encodeURIComponent(`organization:${ORG}`)}`)).text();
+    expect(opened).toContain(`<a href="${AGAIN}" class="btn">`);
+    // The page it leads to carries both on, and nothing is added by opening it.
+    const page = await (await get(AGAIN.replace("&amp;", "&"))).text();
+    expect(page).toContain(`<input type="hidden" name="next" value="/organizations/${ORG}"/>`);
+    expect(page).toContain(`<input type="hidden" name="follow" value="organization:${ORG}"/>`);
+  });
+
+  it("is the plain sign-in page when there is nothing to carry", async () => {
+    const email = newEmail("f-again-plain");
+    const sent = await (await post("/account/sign-in", { lang: "en", email })).text();
+    expect(sent).toContain('<a href="/account/sign-in">');
+  });
+});
+
 // -- the hour's ceiling on Follow posts --------------------------------------------------------------------
 
 describe("the hour's ceiling on sign-in messages asked for through a Follow form", () => {

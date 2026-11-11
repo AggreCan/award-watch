@@ -64,6 +64,17 @@ const FollowField: FC<{ follow?: Follow | null }> = ({ follow }) =>
   follow ? <input type="hidden" name="follow" value={followValue(follow.kind, follow.target)} /> : null;
 const FollowNote: FC<{ lang: Lang; follow?: Follow | null }> = ({ lang, follow }) =>
   follow ? <p class="muted small">{t(lang, "account.follow_pending")}</p> : null;
+// The sign-in page for "Ask for a new code", with the page to return to and
+// what to follow carried on (routes.tsx reads both from the address), so a
+// reader whose message did not come, or whose link went stale, still ends on
+// the page they started from, following it.
+const againHref = (next?: string | null, follow?: Follow | null): string => {
+  const query = [
+    next ? `next=${encodeURIComponent(next)}` : "",
+    follow ? `follow=${encodeURIComponent(followValue(follow.kind, follow.target))}` : "",
+  ].filter(Boolean).join("&");
+  return query ? `/account/sign-in?${query}` : "/account/sign-in";
+};
 
 export function signInView(
   lang: Lang,
@@ -134,7 +145,9 @@ export function codeView(
           </label>
           <button type="submit" class="btn btn-primary">{t(lang, "account.sign_in")}</button>
         </form>
-        <p class="muted small">{tj(lang, "account.code_again", { again: <a href="/account/sign-in">{t(lang, "account.code_again_link")}</a> })}</p>
+        <p class="muted small">
+          {tj(lang, "account.code_again", { again: <a href={againHref(state.next, state.follow)}>{t(lang, "account.code_again_link")}</a> })}
+        </p>
       </Panel>
     </>
   );
@@ -149,7 +162,7 @@ export function linkView(lang: Lang, token: string, errors?: Key[], next?: strin
       <Panel title={t(lang, "account.link_panel")} class="panel-form">
         <Errors lang={lang} errors={errors} />
         {errors?.length ? (
-          <p><a href="/account/sign-in" class="btn">{t(lang, "account.code_again_link")}</a></p>
+          <p><a href={againHref(next, follow)} class="btn">{t(lang, "account.code_again_link")}</a></p>
         ) : (
           <>
             <FollowNote lang={lang} follow={follow} />
