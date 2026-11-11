@@ -1171,10 +1171,13 @@ tr[data-phone-cut] { display: none !important; }
    Spacing, one rule for every page: 6 px between the chip and whatever is
    beside it (a label, a count, a sentence), from the chip's own margins. The
    markup puts no word space beside a chip, so the gap does not change with
-   the type size around it, and no page sets a margin of its own. */
+   the type size around it, and no page sets a margin of its own.
+   Its edge is 2 px, as a control's is (operator, 2026-11-11), so the curve
+   of its corners holds; the padding gives up the pixel and the chip keeps
+   its width and its 20 px. */
 .pro-tag {
-  display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; margin: 0 6px; padding: 0 6px;
-  border: 1px solid var(--accent); border-radius: 4px; background: var(--panel); color: var(--accent);
+  display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; margin: 0 6px; padding: 0 5px;
+  border: 2px solid var(--accent); border-radius: 4px; background: var(--panel); color: var(--accent);
   font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; font-variant-numeric: normal;
   text-transform: none; text-decoration: none; white-space: nowrap; vertical-align: middle;
 }

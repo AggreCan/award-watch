@@ -99,7 +99,9 @@ describe("the chip's stylesheet", () => {
     expect(chip).toBeDefined();
     expect(decl(chip.body, "color")).toBe("var(--accent)");
     expect(decl(chip.body, "background")).toBe("var(--panel)");
-    expect(decl(chip.body, "border")).toBe("1px solid var(--accent)");
+    // 2 px, as a control's edge is, so the curve of its corners holds; the padding gives up the pixel.
+    expect(decl(chip.body, "border")).toBe("2px solid var(--accent)");
+    expect(decl(chip.body, "padding")).toBe("0 5px");
     expect(decl(chip.body, "height")).toBe("20px");
     expect(decl(chip.body, "font-size")).toBe("11px");
     expect(decl(chip.body, "font-weight")).toBe("600");
