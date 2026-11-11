@@ -2,7 +2,10 @@
 
 Source: "Monthly Communication Reports", Office of the Commissioner of
 Lobbying of Canada, open.canada.ca dataset
-a34eb330-7136-4f5e-9f5f-3ba41df58b06, Open Government Licence - Canada. One
+a34eb330-7136-4f5e-9f5f-3ba41df58b06, published under the Commissioner's own
+Open Data Licence Agreement (the catalogue's licence id ca-odla-aldg), not
+under the Open Government Licence - Canada that the site's other sources
+carry. The site's Data page says so. One
 zip (config.LOBBYING_URL) holding a primary CSV, one row per communication
 report, and secondary CSVs for the one-to-many parts (the designated public
 office holders communicated with, the subject matters), all keyed by the
