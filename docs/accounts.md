@@ -1088,11 +1088,19 @@ note says what the plan lacks. From the top:
   with requests in those days keeps its panel, named as revoked; a day
   without a row is 0. Each panel's axis runs to a round number at or above
   its largest day (at least 10), so a key making a few hundred requests a
-  day keeps a readable line beside one making thousands. A key's daily cap
+  day stays readable beside one making thousands. A key's daily cap
   is a dashed line on its panel only when that axis reaches it (the total
   has none), and a line under the chart states the cap otherwise. Each
-  point's exact count is its tip, and the table under the chart lists every
+  mark's exact count is its tip, and the table under the chart lists every
   day, newest first.
+- The chart has two forms, chosen by two tabs in its panel's head. Bars,
+  the page's own form: a bar for each day with a request, with the fade the
+  site's other amounts wear, and today's bar in the pale step, since the
+  day is still under way (a line under the chart says so on a day that has
+  one). Lines (`/account/api?chart=lines`): a line a panel over its wash,
+  with a mark on every day, the days at 0 included. The choice is the
+  address, so nothing is stored, and any other value of `chart` is the
+  bars. The scale, the cap's line and the table are the same in both.
 
 It reads the account's keys and one statement, `DAILY_SQL` in
 `site/src/account/api_usage.ts`: the day's rows of at most 5 keys with
