@@ -15,7 +15,10 @@ export type AuditEvent =
   // Your organization (org_claim.ts): org_claimed carries the organization id
   // (not personal data), never the address; the others a fixed word.
   | "org_claimed" | "org_unclaimed" | "org_compare"
-  | "briefing_added" | "briefing_changed" | "briefing_removed" | "briefing_stopped";
+  | "briefing_added" | "briefing_changed" | "briefing_removed" | "briefing_stopped"
+  // The weekly email (weekly.ts): where it was turned on or off ("at sign-in",
+  // "account"), or how the unsubscribe link was used ("link", "one_click").
+  | "weekly_on" | "weekly_off" | "weekly_stopped";
 
 export const AUDIT_DAYS = 90;
 

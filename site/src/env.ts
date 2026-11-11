@@ -60,6 +60,13 @@ export interface Env {
   // The sign-in messages' sender, an address on the domain onboarded for
   // Email Sending (a variable in wrangler.jsonc).
   MAIL_FROM?: string;
+  // The sender's postal mailing address, on one line, which every weekly
+  // email prints in its footer as Canada's anti-spam law asks of a
+  // commercial message (src/account/weekly.ts; docs/accounts.md, Weekly
+  // email). Set with `wrangler secret put MAIL_ADDRESS`, never written into
+  // the repository or a workflow's log. Unset, no weekly email is sent and
+  // the delivery run's line says so.
+  MAIL_ADDRESS?: string;
   // Sign-in and code posts per address (wrangler.jsonc "ratelimits").
   AUTH_LIMIT?: RateLimit;
   // A delivery's stop link, both methods, per address (wrangler.jsonc "ratelimits").

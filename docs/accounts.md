@@ -39,6 +39,11 @@ the schema is `site/accounts_schema.sql`; the tests are
   awards and notable amendments, and the contracts ending next fiscal quarter.
   A public sample is built live at `/pro/briefing-sample` (*Weekly
   briefings*).
+- **Weekly email.** Any account, Free or Pro, can turn on one message a
+  week, with a box on the sign-in form or a control on the account page:
+  what changed on the pages it follows, or the site's week in figures, and
+  one line on what Pro adds for an account without it. No account is
+  enrolled any other way (*Weekly email*).
 - **Calendar feeds.** On the Pro plan, a saved tender search becomes an
   address a calendar app subscribes to, its open notices' closings as
   events (*Calendar feeds*). Every notice and contract page also offers its
@@ -68,7 +73,9 @@ saved-search deliveries a Pro account turns on, and, once, the message
 telling the email lists' sign-ups that accounts are open (*The accounts-open
 message*). All go out through Cloudflare Email Sending from the Worker's
 own binding once the domain is onboarded (see *Sending mail* and *Operator
-steps*).
+steps*). The watch mail, the weekly briefings and the weekly email any
+account can turn on go the same way (*Watches*, *Weekly briefings*, *Weekly
+email*).
 
 ## Data model
 
@@ -93,6 +100,7 @@ Every datetime is ISO in UTC.
 | `api_usage` | one row per API key per UTC day it was used: how many requests the keyed API counted for it that day | a path, a parameter, an address, the time of a request |
 | `watches`, `watch_mail` | the pages an account follows and its watch mail (*Watches*) | anything typed, a copy of a message |
 | `briefings`, `briefing_deliveries` | the segments and buyers an account receives a weekly briefing about, and each briefing's runs (*Weekly briefings*) | anything typed, a copy of a message |
+| `weekly_mail` | one row per account that turned the weekly email on: on or off, where (`sign_in` or `account`) and when it was last turned on, when it was turned off, the week its last message covered and whether it was sent, the week a message was refused, the unsubscribe link's secret (*Weekly email*) | anything typed, a copy of a message, the sender's postal address |
 | `feeds` | one row per calendar feed: kind (`search`, `watchlist`, `all`), the saved search it follows, the address's secret, created and revocation times, the UTC day a calendar last read it | a time of reading, an address, a user agent |
 | `org_claims` | one row per account that named its organization: the organization id, up to five organization ids to compare it with, the share block's segment, when it was chosen and last changed (*Your organization*) | anything typed, a name, any sign of which other accounts chose the same organization |
 
@@ -505,9 +513,9 @@ logs name no key.
 ## Deletion
 
 `/account/delete` asks for a ticked box, deletes the account's watches, its
-claim of an organization and its calendar feeds (statements of their own,
-so a database without those tables still deletes the rest), then in one
-batch: revokes every
+claim of an organization, its briefings, its weekly email row and its
+calendar feeds (statements of their own, so a database without those tables
+still deletes the rest), then in one batch: revokes every
 session; deletes the saved searches (with their delivery rows, stop links
 and records marks), the API keys (their daily counts go with them, by the
 cascade on `api_usage`), the bug reports, the watches and the watch mail row, and the address's sign-in requests; and marks the user row deleted with its
@@ -2155,3 +2163,163 @@ Idempotent; it adds `briefings` and `briefing_deliveries`. Apply it before
 deploying: until then a signed-in reader sees no briefing panel, the run logs
 that the accounts database has no briefings table, and saved searches count
 against the cap alone.
+
+## Weekly email
+
+One message a week to any account, Free or Pro, that turned it on: what
+changed in the week on the pages it follows, or, when it follows nothing or
+nothing changed, the site's week in figures. It is the only list mail a Free
+account can receive. No account is ever enrolled except by its own
+choice: existing accounts are not, and nothing turns it on for them. The code
+is `site/src/account/weekly.ts` (the choice, the site's figures, the run),
+`digests.ts` `weeklyDigest` (the message), `pages.tsx` (the box, the account
+page's row, the unsubscribe pages) and `routes.tsx`; the tests are
+`site/test/accounts-weekly.test.ts` and the mail suite (`docs/mail.md`).
+
+### Turning it on and off
+
+- The sign-in page's own form (`/account/sign-in`) has a box, never ticked
+  by the site, also not after an error: "Send me the weekly email: each
+  Monday, what changed on the pages I follow, or the week on the site in
+  figures. Each message has a link to unsubscribe." (French: "Envoyez-moi le
+  courriel hebdomadaire : ..."). No address ticks it (the page reads no
+  `weekly=`). The Follow form on public pages and the Save this briefing link
+  have no box.
+- A tick rides with the sign-in the way `next`, `follow` and `brief` do: the
+  code form carries `weekly=1`, the emailed link carries `&weekly=1` and its
+  confirm page carries it to its button, and both pages say "Signing in also
+  turns on the weekly email." Nothing is kept until the code or the link is
+  verified and the session starts: `POST /account/check` then writes the
+  `weekly_mail` row (`via` `sign_in`, `on_at` the time) for the account the
+  address signs in to, and audits `weekly_on` with the detail `at sign-in`.
+  An email that was off is turned back on; one already on stays as it is,
+  with no second audit row. Any fault in this step is logged without detail
+  and never fails the sign-in; it is one statement after the session starts.
+  "Ask for a new code" does not carry the tick: the box is ticked again.
+- The account page (`/account`) has a row "Weekly email" with the state (On
+  or Off) and one link-styled button that turns it the other way (`POST
+  /account/weekly`, `mail=on|off`, with the CSRF value), and a note on what
+  the message holds. The page's one filled button stays its own. Turning it
+  on writes `via` `account`; the page says "The weekly email is on. The first
+  one goes out on the first Monday after today." The audit rows are
+  `weekly_on` and `weekly_off` with the detail `account`.
+- Turning it off keeps the row, off, with `off_at`; the record of the choice
+  (`via`, `on_at`) is kept while the row is. Deleting the account deletes the
+  row.
+
+### The message
+
+In the account's language (`users.lang`), in the site's one mail shell.
+
+| Part | What it holds |
+|---|---|
+| Heading and span | "Your Week on Award Watch" when a page it follows had news, else "The Week on Award Watch"; "Data dates 2026-10-27 to 2026-11-02." (the seven data dates ending with the data date) |
+| The watches' news | "8 updates on 3 of the 4 pages you follow." ("on the page you follow" when it follows one); then one line per watch with news, in the watch mail's order and grouping (`watch_mail.ts` `groupsFor`: single records, organizations, buyers, notices, an event reached twice listed once), at most `WEEKLY_LINES` (5): the watch's name and kind linking its page, and each kind of event with its count ("New award or contract: 2, Contract amended: 1"); a line for the rest ("3 more pages with news are on your watches page"); the button "Open your watches" |
+| The site's week | when there is no news: "Nothing changed this week on the 4 pages you follow" linking the watches page, or, for an account that follows nothing, how to follow a page; then four figures, each linking its list: new tender notices (`/tenders/new`), notices closing within 7 days (`/tenders?closing=7`), new award notices (`/awards`), contracts ending within 3 months (`/expiring/3m`) |
+| What Pro adds | for an account whose plan does not mail its watches (Free) only: "Free: 3 watches and 3 saved searches, on the site. Pro: 25 watches and 25 saved searches, each change by email." and "Plans and prices" (`/pro`); the figures are read from the plans (`RULES`), each plan's own, never compared |
+| Footer | "You receive this because you turned on the weekly email for your account.", the account page, "Unsubscribe" (the stop link), then "Sent by Award Watch, <MAIL_ADDRESS>." on the next line; then the shell's tagline and contact address |
+
+The site's figures, read once a run (`readWeek`): the new notices of the
+span's days from `tenders/new/<day>.json`, each notice once, as `/tenders/new`
+lists them; the open notices closing within 7 days at the run's time, as
+the rail counts them (`stats.json`); the award notices new to the records in
+the span, `rec_events` kind `award` with `src = 1` and no count row (one row
+per notice whatever subjects it names), through `rec_events_day`; the
+contracts in the radar's 3-month window (`expiring/index.json`). A figure
+whose file does not read is left out of the list, and the subject then names
+no count.
+
+Subject: "Your week: {n} updates on what you follow", or "The week on Award
+Watch: {n} new tender notices" ("The week on Award Watch, to {date}" without
+that figure); in French "Votre semaine : ..." and "La semaine sur Award
+Watch : ...". The message carries `List-Unsubscribe` and
+`List-Unsubscribe-Post` as the other list mail does.
+
+### The run
+
+The delivery job's last part (`runWeekly`, after the briefings, inside the
+same cap of 300 messages a run, and held to `WEEKLY_RUN_MAX`, 100, of them;
+`WEEKLY_ACCOUNTS_MAX`, 1,000 accounts read). An account is due when its email
+is on, the account is active and not blocked, the week (its opening day,
+Monday, `briefings.ts` `weekAnchor`) is not covered yet, no message to it was
+refused that week, and the email was turned on before that Monday: the first
+message goes on the first Monday after the choice. So it goes on Monday's
+first run, or, when Monday's nightly came late or the ceiling left it
+waiting, on the next data date of the same week; never twice in a week. The
+records database must be at today's data date (the watches and the award
+figure read it); until then every account waits unclaimed, as the briefings
+do.
+
+Each account is claimed for the week before its message goes (one statement
+that holds only while the email is on, the account active and the week not
+covered), so two runs at once send it once; a send that does not go gives
+the claim back. A refusal that is not a sending limit marks the week
+(`failed_week`), so the account waits for next week; `E_DAILY_LIMIT_EXCEEDED`
+or `E_RATE_LIMIT_EXCEEDED` stops the run and the next hour goes on. A deleted
+account is never due: its row goes with it, and the list reads active
+accounts only.
+
+The run's log line adds `weekly email: n sent, n failed`, and, when accounts
+waited, how many and why (the records database, `MAIL_ADDRESS` not set, or
+nothing to send). Until `weekly_mail` exists the run reads nothing of it and
+its line is the line without the feature.
+
+### Unsubscribing
+
+The link is `/account/stop?e=<user id>&t=<secret>`, in the footer and in
+`List-Unsubscribe`. The secret is 16 random bytes made with the first
+message, kept in clear as the other stop links' are; it turns this
+account's weekly email off and nothing else. `GET` shows one button and
+changes nothing; `POST` and the one-click body (RFC 8058) turn the email off,
+audit `weekly_stopped` with `link` or `one_click`, and answer the page or a
+line of text. A wrong secret, a deleted account or a database without the
+table is the site's 404. `STOP_LIMIT` counts both methods.
+
+### The mailing address
+
+Canada's anti-spam law asks a commercial message to name its sender and a
+postal mailing address. The address is the Worker secret `MAIL_ADDRESS`
+(`env.ts`), read by `weekly.ts` `mailAddress` for each run: one line as the
+footer prints it, spaces collapsed and a closing period dropped, at most 200
+characters. It is never written into the repository, a workflow or a log.
+While it is unset no weekly email is sent: the accounts due wait, and the
+run's line says `MAIL_ADDRESS is not set`.
+
+### Privacy and bounds
+
+The row keeps whether the email is on, where and when it was last turned on,
+when it was turned off, the week of the last message and whether it was
+sent, the week a message was refused, and the link's secret; the message
+names public records and figures only, and no copy is kept. The privacy page
+says so. 5 lines of watches a message, 4 figures, 100 messages a run, 1,000
+accounts read a run.
+
+### Operator steps
+
+1. Create the table (idempotent; the schema's other tables already exist):
+
+   ```
+   cd site
+   npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+   ```
+
+   Until it runs, the feature is left out whole: no box on the sign-in form,
+   no row on the account page, the unsubscribe link answers 404, and the
+   delivery run reads and logs nothing of it.
+2. Set the mailing address, one line, as it should print:
+
+   ```
+   cd site
+   npx wrangler secret put MAIL_ADDRESS
+   ```
+
+   A secret rather than a variable, so the address never shows in a public
+   workflow's log; a deploy keeps it. Until it is set nothing is sent, and the
+   Monday mail check reports the weekly email `stubbed` with
+   `no_mail_address` (`docs/mail.md`).
+
+Checking a week:
+
+```
+npx wrangler d1 execute awardwatch-accounts --remote --command "SELECT mail, last_week, last_status, COUNT(*) AS n FROM weekly_mail GROUP BY mail, last_week, last_status ORDER BY last_week DESC LIMIT 20"
+```

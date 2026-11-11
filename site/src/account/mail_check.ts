@@ -34,11 +34,12 @@ import { operatorEmails } from "./admin_ops";
 import { accountsOpenMessage, announceLinks, ultraLinks, ultraOpenMessage } from "./announce";
 import { type BriefingData, type BriefingSubject, INSTRUMENT_WITHIN, briefingName, nextQuarter, quarterTurn } from "./briefings";
 import { sendWithHeaders } from "./deliveries";
-import { briefingDigest, expiringDigest, fitSubject, recordsDigest, siteLink, tenderDigest, watchDigest } from "./digests";
+import { briefingDigest, expiringDigest, fitSubject, recordsDigest, siteLink, tenderDigest, watchDigest, weeklyDigest } from "./digests";
 import { sameHash, sha256Hex } from "./secrets";
 import { type MailMessage, type Sender, addressNotice, senderFor, signInMessage } from "./sender";
 import { CODE_MINUTES } from "./signin";
 import { accountsEnabled } from "./switch";
+import { mailAddress } from "./weekly";
 
 // The tag every subject starts with. Not translated: it is a fixed marker for
 // the operator's inbox, the same in both languages.
@@ -49,15 +50,19 @@ export const MAIL_CHECK_MARK = "[mail check]";
 // daily, the contracts ending weekly), since the footer's reason is the only
 // part the cadence changes.
 export const MAIL_CHECK_TEMPLATES = [
-  "sign_in", "tenders_daily", "expiring_weekly", "records", "watch", "briefing", "accounts_open", "ultra_open", "address_notice",
+  "sign_in", "tenders_daily", "expiring_weekly", "records", "watch", "briefing", "weekly", "accounts_open", "ultra_open", "address_notice",
 ] as const;
 export type MailCheckTemplate = (typeof MAIL_CHECK_TEMPLATES)[number];
 
 // The messages a list or watch delivery sends: each carries a stop link, the
 // reason it came, and List-Unsubscribe with an https stop link.
 export const MAIL_CHECK_LISTS: ReadonlySet<MailCheckTemplate> = new Set([
-  "tenders_daily", "expiring_weekly", "records", "watch", "briefing", "accounts_open", "ultra_open",
+  "tenders_daily", "expiring_weekly", "records", "watch", "briefing", "weekly", "accounts_open", "ultra_open",
 ]);
+
+// The reason the weekly email's template reports when MAIL_ADDRESS is unset:
+// the message must carry the mailing address, so it is not built or sent.
+export const NO_MAIL_ADDRESS = "no_mail_address";
 
 // The token the workflow sends is a random value of at least this many
 // characters; a shorter MAIL_CHECK_TOKEN on the Worker admits nothing.
@@ -145,13 +150,15 @@ export function mailCheckBriefingData(day: string): BriefingData {
 // One message of each template, in lang, to `to`, its links on `site` (no
 // trailing slash), the rows dated from now's UTC date. The subjects carry the
 // mark and stay under SUBJECT_MAX with it (digests.ts fitSubject). Exported for the mail suite (site/test-mail/), which checks these
-// before the route ever sends them.
-export function mailCheckMessages(lang: Lang, to: string, site: string, now: Date = new Date()): MailCheckMessage[] {
+// before the route ever sends them. address is the sender's mailing address
+// (weekly.ts mailAddress); without one the weekly email is left out, as the
+// delivery run leaves it unsent.
+export function mailCheckMessages(lang: Lang, to: string, site: string, now: Date = new Date(), address: string | null = null): MailCheckMessage[] {
   const day = now.toISOString().slice(0, 10);
   const yesterday = addDays(day, -1);
   const link = (path: string) => siteLink(site, path, lang);
   const segment43 = `43 ${segmentShort(lang, "43")}`;
-  const build: Record<MailCheckTemplate, () => MailMessage & { headers?: Record<string, string> }> = {
+  const build: Record<MailCheckTemplate, () => (MailMessage & { headers?: Record<string, string> }) | null> = {
     sign_in: () => signInMessage(lang, to, "000000", `${site}/account/check?token=${ZERO}.${ZERO}${ZERO}${lang === "fr" ? "&lang=fr" : ""}`,
       CODE_MINUTES, site),
     tenders_daily: () => tenderDigest({
@@ -216,13 +223,18 @@ export function mailCheckMessages(lang: Lang, to: string, site: string, now: Dat
         data: mailCheckBriefingData(day),
       });
     },
+    // The form most accounts get: one that follows nothing, on Free, the site's week in figures.
+    weekly: () => address === null ? null : weeklyDigest({
+      lang, to, site, dataDate: day, address, stopUrl: link(`/account/stop?e=${ZERO}&t=${ZERO}`),
+      watches: { groups: [], total: 0, watched: 0 }, figures: { notices: 412, closing: 263, awards: 187, ending: 1250 }, pro: false,
+    }),
     accounts_open: () => accountsOpenMessage(lang, to, [t(lang, "interest.label_tenders_all")], announceLinks(site, lang, ZERO)),
     ultra_open: () => ultraOpenMessage(lang, to, ultraLinks(site, lang, ZERO)),
     address_notice: () => addressNotice(lang, to, site),
   };
-  return MAIL_CHECK_TEMPLATES.map((template) => {
+  return MAIL_CHECK_TEMPLATES.flatMap((template) => {
     const m = build[template]();
-    return { template, message: { ...m, to, subject: fitSubject(`${MAIL_CHECK_MARK} ${m.subject}`), headers: m.headers ?? {} } };
+    return m ? [{ template, message: { ...m, to, subject: fitSubject(`${MAIL_CHECK_MARK} ${m.subject}`), headers: m.headers ?? {} } }] : [];
   });
 }
 
@@ -232,13 +244,21 @@ export function mailCheckMessages(lang: Lang, to: string, site: string, now: Dat
 // binding on the site, the log outbox on a local run with MAIL_SENDER=log,
 // the stub when the binding or MAIL_FROM is missing), one after another, and
 // reports each. A refusal does not stop the run: the next template is tried,
-// so the report shows which templates the mail service takes.
+// so the report shows which templates the mail service takes. Without
+// MAIL_ADDRESS the weekly email is reported stubbed, with NO_MAIL_ADDRESS,
+// and nothing is sent for it.
 export async function runMailCheck(
   env: Env, requestUrl: string, o: { to: string; site: string; lang: Lang; now?: Date },
 ): Promise<MailCheckRun> {
   const sender = senderFor(env, requestUrl).kind;
   const results: MailCheckResult[] = [];
-  for (const { template, message } of mailCheckMessages(o.lang, o.to, o.site, o.now ?? new Date())) {
+  const messages = mailCheckMessages(o.lang, o.to, o.site, o.now ?? new Date(), mailAddress(env));
+  for (const template of MAIL_CHECK_TEMPLATES) {
+    const message = messages.find((m) => m.template === template)?.message;
+    if (!message) {
+      results.push({ template, result: "stubbed", reason: NO_MAIL_ADDRESS });
+      continue;
+    }
     const sent = await sendWithHeaders(env, requestUrl, { ...message, to: o.to });
     if (sent.sent) results.push({ template, result: "sent", reason: null });
     else if (sender === "stub") results.push({ template, result: "stubbed", reason: "not_configured" });

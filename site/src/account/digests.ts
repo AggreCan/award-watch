@@ -13,7 +13,7 @@
 
 import { addDays, closingParts } from "../../public/closing.js";
 import { type Clock, closesLine, closingText, closingTime } from "../closing";
-import { CATEGORIES, PROVINCES, SEGMENTS } from "../constants";
+import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENTS } from "../constants";
 import { type ExpiringRow, type TenderRow, publishedReference } from "../data";
 import { categoryLabel, fmtInt, fmtMoney, fmtMoneyShort, pick, provinceName, segmentShort, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { instrumentPath, instrumentQueryString } from "../instruments";
@@ -23,6 +23,7 @@ import { provincesText } from "../pages/shared";
 import { CODE_RE } from "../pages/tenders";
 import { fiscalLabel } from "../records_db";
 import type { BriefingData, BriefingSubject, Quarter } from "./briefings";
+import { RULES } from "./entitlements";
 import type { RecordsKind, Rise } from "./records_deliveries";
 import { C, FONT, button, escapeHtml, h1, h2, inkLink, para, shell, siteLink, textFooter, whyLine } from "./mail_html";
 import { type EventKind, type EventRow, INSTRUMENT_REF, type Listed, type WatchKind, isInstrumentKind } from "./watch_events";
@@ -983,6 +984,150 @@ export function briefingDigest(o: BriefingDigest): DigestMessage {
     html: shell({
       lang, site: o.site, subject: parts.subject, preheader: parts.preheader, body: parts.body,
       why: whyLine(why, [{ href: searches, label: t(lang, "briefing.searches_link") }, { href: o.stopUrl, label: t(lang, "briefing.stop_link") }]),
+    }),
+  };
+}
+
+// -- the weekly email (weekly.ts) -----------------------------------------------------------------
+
+// One message a week to an account that turned the email on, in the
+// account's language. When a page it follows had news in the week: one line
+// per watch, in the watch mail's order (watch_mail.ts groupsFor), naming each
+// kind of event and how many, at most WEEKLY_LINES watches, then a line for
+// the rest and the button to the watches page. Otherwise the site's week in
+// figures, each a link to its list, after a line saying nothing changed on
+// what it follows, or how to follow a page. Then, for an account whose plan
+// does not mail its watches (Free), one line naming each plan's figures for
+// watches and saved searches. The footer adds the sender's name and mailing
+// address to the reason line, beside the account page and the unsubscribe
+// link.
+export const WEEKLY_LINES = 5;
+// The radar window the site's figures count, in months (expiring/index.json's "3m").
+export const WEEKLY_ENDING_MONTHS = 3;
+
+// The site's week (weekly.ts readWeek); a figure whose file did not read is null and left out.
+export type WeekFigures = { notices: number | null; closing: number | null; awards: number | null; ending: number | null };
+
+export interface WeeklyDigest {
+  lang: Lang;
+  to: string;
+  site: string;
+  dataDate: string;
+  // The sender's mailing address on one line (weekly.ts mailAddress).
+  address: string;
+  // The unsubscribe link (/account/stop?e=...&t=...).
+  stopUrl: string;
+  // The watches with news in the week, the events in all, and how many pages the account follows.
+  watches: { groups: readonly WatchGroup[]; total: number; watched: number };
+  figures: WeekFigures;
+  // Whether the account's plan already mails its watches and searches: no line on Pro then.
+  pro: boolean;
+}
+
+// The figures in the order the message lists them, each with its list on the site.
+const WEEK_FIGURES: readonly { key: keyof WeekFigures; one: Key; many: Key; path: string; vars: Record<string, number> }[] = [
+  { key: "notices", one: "weekly.fig_notices_one", many: "weekly.fig_notices_many", path: "/tenders/new", vars: {} },
+  {
+    key: "closing", one: "weekly.fig_closing_one", many: "weekly.fig_closing_many", path: `/tenders?closing=${CLOSING_SOON_DAYS}`,
+    vars: { days: CLOSING_SOON_DAYS },
+  },
+  { key: "awards", one: "weekly.fig_awards_one", many: "weekly.fig_awards_many", path: "/awards", vars: {} },
+  {
+    key: "ending", one: "weekly.fig_ending_one", many: "weekly.fig_ending_many", path: `/expiring/${WEEKLY_ENDING_MONTHS}m`,
+    vars: { months: WEEKLY_ENDING_MONTHS },
+  },
+];
+
+export function weeklyDigest(o: WeeklyDigest): DigestMessage {
+  const { lang } = o;
+  const n = (v: number) => fmtInt(v, lang);
+  const link = (path: string) => siteLink(o.site, path, lang);
+  const linkText = (label: string, url: string) => t(lang, "digest.text_link", { label, url });
+  const watchesPage = link("/account/watches");
+  const span = t(lang, "briefing.span", { first: addDays(o.dataDate, -6), last: o.dataDate });
+  const { groups, total, watched } = o.watches;
+  const html: string[] = [];
+  const text: string[] = [];
+  let subject: string;
+  let pre: string;
+
+  if (total > 0 && groups.length) {
+    const title = t(lang, "weekly.title_watch");
+    const lead = watched === 1
+      ? tn(lang, "weekly.lead_page_one", "weekly.lead_page_many", total, { n: n(total) })
+      : tn(lang, "weekly.lead_one", "weekly.lead_many", total, { n: n(total), w: n(groups.length), all: n(watched) });
+    html.push(h1(title), para(escapeHtml(span), true), para(escapeHtml(lead)));
+    text.push(`${title}\n${span}`, lead);
+    const lines = groups.slice(0, WEEKLY_LINES).map((g) => ({
+      head: `${g.label} · ${t(lang, WATCH_KIND_KEY[g.kind])}`, href: link(g.path),
+      kinds: g.events.filter((e) => e.n > 0).map((e) => t(lang, "weekly.kind_n", { kind: t(lang, EVENT_KEY[e.kind]), n: n(e.n) })).join(", "),
+    }));
+    html.push(rows(lines.map((l, i) => briefingRow(l.head, l.href, escapeHtml(l.kinds), i === 0))));
+    text.push(lines.map((l) => `- ${l.head}\n  ${l.kinds}\n  ${l.href}`).join("\n\n"));
+    const rest = groups.length - lines.length;
+    if (rest > 0) {
+      const label = tn(lang, "weekly.more_pages_one", "weekly.more_pages_many", rest, { n: n(rest) });
+      html.push(para(inkLink(watchesPage, label)));
+      text.push(linkText(label, watchesPage));
+    }
+    const label = t(lang, "watches.digest_button");
+    html.push(button(watchesPage, label));
+    text.push(linkText(label, watchesPage));
+    subject = tn(lang, "weekly.subject_watch_one", "weekly.subject_watch_many", total, { n: n(total) });
+    const facts = groups.flatMap((g) => g.events.map((e) => `${g.label} · ${t(lang, EVENT_KEY[e.kind])}`));
+    pre = preheader(lang, facts, facts.length);
+  } else {
+    const title = t(lang, "weekly.title_site");
+    html.push(h1(title), para(escapeHtml(span), true));
+    text.push(`${title}\n${span}`);
+    if (watched) {
+      const quiet = tn(lang, "weekly.quiet_one", "weekly.quiet_many", watched, { all: n(watched) });
+      html.push(para(inkLink(watchesPage, quiet)));
+      text.push(linkText(quiet, watchesPage));
+    } else {
+      const follow = t(lang, "weekly.follow_none");
+      html.push(para(escapeHtml(follow)));
+      text.push(follow);
+    }
+    const shown = WEEK_FIGURES.flatMap((f) => {
+      const v = o.figures[f.key];
+      return v === null ? [] : [{ label: tn(lang, f.one, f.many, v, { n: n(v), ...f.vars }), href: link(f.path) }];
+    });
+    html.push(...shown.map((f) => para(inkLink(f.href, f.label))));
+    if (shown.length) text.push(shown.map((f) => linkText(f.label, f.href)).join("\n"));
+    const notices = o.figures.notices;
+    subject = notices === null
+      ? t(lang, "weekly.subject_site", { date: o.dataDate })
+      : tn(lang, "weekly.subject_site_one", "weekly.subject_site_many", notices, { n: n(notices) });
+    pre = shown.length ? `${shown.map((f) => f.label).join(", ")}.` : span;
+  }
+
+  // What Pro adds, as each plan's own figures (the plan cards' rule: no plan compared with another).
+  if (!o.pro) {
+    const line = t(lang, "weekly.pro_line", {
+      free: t(lang, "plans.free"), fw: n(RULES.free.watchlists), fs: n(RULES.free.saved_searches),
+      pro: t(lang, "pro.tag"), pw: n(RULES.pro.watchlists), ps: n(RULES.pro.saved_searches),
+    });
+    const label = t(lang, "weekly.pro_link");
+    html.push(para(`${escapeHtml(line)} ${inkLink(link("/pro"), label)}`));
+    text.push(`${line}\n${linkText(label, link("/pro"))}`);
+  }
+
+  const account = link("/account");
+  const why = t(lang, "weekly.why");
+  const sender = t(lang, "weekly.sender", { name: t(lang, "site.name"), address: o.address });
+  const whyText = [
+    why, linkText(t(lang, "weekly.account_link"), account), linkText(t(lang, "weekly.stop_link"), o.stopUrl), sender,
+  ].join("\n");
+  text.push(`${whyText}\n${textFooter(lang)}`);
+  const fitted = fitSubject(subject);
+  return {
+    to: o.to, subject: fitted, lang, headers: deliveryHeaders(o.stopUrl), text: text.join("\n\n"),
+    html: shell({
+      lang, site: o.site, subject: fitted, preheader: pre, body: html.join(""),
+      // The sender's line under the reason, in the same muted footer paragraph.
+      why: `${whyLine(why, [{ href: account, label: t(lang, "weekly.account_link") }, { href: o.stopUrl, label: t(lang, "weekly.stop_link") }])}` +
+        `<br>${escapeHtml(sender)}`,
     }),
   };
 }

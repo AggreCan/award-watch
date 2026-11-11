@@ -278,6 +278,7 @@ export const SHAPES = {
   digest_weekly: { list: true, why: "digest.why_weekly", manage: "/account/searches", onePart: [["digest.text_searches"]] },
   watch: { list: true, why: "watches.digest_why", manage: "/account/watches" },
   briefing: { list: true, why: "briefing.why", manage: "/account/searches" },
+  weekly: { list: true, why: "weekly.why", manage: "/account" },
   accounts_open: { list: true, why: "announce.why", manage: null },
   ultra_open: { list: true, why: "announce.ultra_why", manage: null },
   // The shell's footer prints the tagline; the notice's text part, which

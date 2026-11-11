@@ -434,7 +434,7 @@ describe("the privacy page", () => {
       "for its mail, the daily or weekly setting and, for 90 days, when each message went and how many events it held. A message names public records only.");
     expect(en).toContain("A sign-in request, made on the sign-in page or with the Follow field of a page, keeps for one day the email address it was made for " +
       "and a hash of the IP address under a key that changes every day, whether or not the sign-in is completed.");
-    expect(en).toContain("the saved searches whose delivery is on, and the events of the pages followed while their mail is on.");
+    expect(en).toContain("the saved searches whose delivery is on, the events of the pages followed while their mail is on, and the weekly email while it is on.");
     const fr = await text(await get("/privacy?lang=fr"));
     expect(fr).toContain("Les pages qu'un compte suit sont conservées avec lui");
     expect(fr).toContain("pendant 90 jours, le moment de chaque message");

@@ -4,6 +4,7 @@
 // as the published files hold them, the radar's contracts R1 to R5, and the
 // inputs of a tender digest and a radar digest in each language, on the
 // fixtures' data date. Nothing here touches a database.
+import type { WatchGroup } from "../src/account/digests";
 import type { ExpiringRow, TenderRow } from "../src/data";
 import { readExpiringQuery } from "../src/pages/expiring";
 
@@ -58,6 +59,42 @@ export function expiringInput(lang: "en" | "fr") {
     lang, to: "reader@example.com", site: SITE, label: "Contracts entering the 3-month window for National Defence",
     params: "/expiring/3m?buyer=dnd-mdn", cadence: "weekly" as const, dataDate: DAY, stopUrl: STOP, total: 3,
     rows: [R1, R2, R3], months: 3, query: readExpiringQuery(new URL(`${SITE}/expiring/3m?buyer=dnd-mdn`)),
+  };
+}
+
+// The weekly email (src/account/weekly.ts, digests.ts weeklyDigest): a
+// made-up mailing address for its footer (the real one is the Worker secret
+// MAIL_ADDRESS and is never in the repository), its stop link, the site's
+// week in figures, and the watches with news, as watch_mail.ts groupsFor
+// hands them over (the message names counts, not rows).
+export const SAMPLE_ADDRESS = "100 Sample Street, Exampletown ON A0A 0A0";
+export const WEEKLY_STOP = `${SITE}/account/stop?e=${"c".repeat(32)}&t=${"d".repeat(32)}`;
+export const WEEK_FIGURES = { notices: 412, closing: 263, awards: 187, ending: 1250 };
+
+export function weeklyGroups(lang: "en" | "fr"): WatchGroup[] {
+  return [
+    {
+      kind: "organization", label: "Sample Engineering Ltd.", path: "/organizations/org-a000000001",
+      events: [{ kind: "award", n: 2, rows: [] }, { kind: "amended", n: 1, rows: [] }],
+    },
+    {
+      kind: "buyer", label: lang === "fr" ? "Pêches et Océans Canada" : "Fisheries and Oceans Canada", path: "/buyers/dfo-mpo",
+      events: [{ kind: "notice", n: 4, rows: [] }],
+    },
+    {
+      kind: "tender", label: lang === "fr" ? "Levé hydrographique (exemple)" : "Hydrographic survey (sample)", path: "/tenders/cb-100-10000001",
+      events: [{ kind: "notice_amended", n: 1, rows: [] }],
+    },
+  ];
+}
+
+// A weekly email's input: with the watches' news, or (none) the site's week for an account that follows `watched` pages.
+export function weeklyInput(lang: "en" | "fr", o: { news?: boolean; watched?: number; pro?: boolean } = {}) {
+  const groups = o.news === false ? [] : weeklyGroups(lang);
+  return {
+    lang, to: "reader@example.com", site: SITE, dataDate: DAY, address: SAMPLE_ADDRESS, stopUrl: lang === "fr" ? `${WEEKLY_STOP}&lang=fr` : WEEKLY_STOP,
+    watches: { groups, total: groups.reduce((n, g) => n + g.events.reduce((m, e) => m + e.n, 0), 0), watched: o.watched ?? (groups.length ? 4 : 0) },
+    figures: WEEK_FIGURES, pro: o.pro ?? false,
   };
 }
 

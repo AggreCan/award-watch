@@ -73,10 +73,18 @@ const BriefField: FC<{ brief?: Brief | null }> = ({ brief }) =>
   brief ? <input type="hidden" name="brief" value={briefValue(brief.kind, brief.subject)} /> : null;
 const BriefNote: FC<{ lang: Lang; brief?: Brief | null }> = ({ lang, brief }) =>
   brief ? <p class="muted small">{t(lang, "account.brief_pending")}</p> : null;
+// weekly: the reader ticked the sign-in form's box for the weekly email
+// (weekly.ts), carried as a field to the code form and the link's page and
+// turned on once the address has proved itself; the line says so.
+const WeeklyField: FC<{ weekly?: boolean }> = ({ weekly }) => (weekly ? <input type="hidden" name="weekly" value="1" /> : null);
+const WeeklyNote: FC<{ lang: Lang; weekly?: boolean }> = ({ lang, weekly }) =>
+  weekly ? <p class="muted small">{t(lang, "weekly.pending")}</p> : null;
 // The sign-in page for "Ask for a new code", with the page to return to, what
 // to follow and the briefing to save carried on (routes.tsx reads them from the
 // address), so a reader whose message did not come, or whose link went stale,
 // still ends on the page they started from, following it or with its briefing.
+// The weekly email's choice is not carried: the sign-in form's box is never
+// ticked for the reader, so it is ticked again there.
 const againHref = (next?: string | null, follow?: Follow | null, brief?: Brief | null): string => {
   const query = [
     next ? `next=${encodeURIComponent(next)}` : "",
@@ -86,10 +94,14 @@ const againHref = (next?: string | null, follow?: Follow | null, brief?: Brief |
   return query ? `/account/sign-in?${query}` : "/account/sign-in";
 };
 
+// offerWeekly: the box for the weekly email, while its table is on the
+// database (weekly.ts weeklyReady). Never ticked by the site, on a first view
+// or after an error.
 export function signInView(
   lang: Lang,
   state: {
     errors?: Key[]; email?: string; notice?: string | null; limitN?: number; next?: string | null; follow?: Follow | null; brief?: Brief | null;
+    offerWeekly?: boolean;
   } = {},
 ) {
   const errors = state.errors ?? [];
@@ -115,6 +127,12 @@ export function signInView(
             <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={state.email ?? ""} />
           </label>
           <Honeypot lang={lang} />
+          {state.offerWeekly ? (
+            <label class="account-check">
+              <input type="checkbox" name="weekly" value="1" />
+              <span>{t(lang, "weekly.opt_in")}</span>
+            </label>
+          ) : null}
           <button type="submit" class="btn btn-primary">{t(lang, "account.send_code")}</button>
         </form>
         <p class="muted small">{tj(lang, "account.sign_in_privacy", { privacy: <a href="/privacy#accounts">{t(lang, "footer.privacy")}</a> })}</p>
@@ -127,7 +145,9 @@ export function signInView(
 // from scratch (the email as a field).
 export function codeView(
   lang: Lang,
-  state: { email?: string; sent?: boolean; errors?: Key[]; next?: string | null; follow?: Follow | null; brief?: Brief | null } = {},
+  state: {
+    email?: string; sent?: boolean; errors?: Key[]; next?: string | null; follow?: Follow | null; brief?: Brief | null; weekly?: boolean;
+  } = {},
 ) {
   const sent = !!state.sent && !!state.email;
   return (
@@ -139,11 +159,13 @@ export function codeView(
         <Errors lang={lang} errors={state.errors} />
         <FollowNote lang={lang} follow={state.follow} />
         <BriefNote lang={lang} brief={state.brief} />
+        <WeeklyNote lang={lang} weekly={state.weekly} />
         <form method="post" action="/account/check" class="stack">
           <input type="hidden" name="lang" value={lang} />
           <Next next={state.next} />
           <FollowField follow={state.follow} />
           <BriefField brief={state.brief} />
+          <WeeklyField weekly={state.weekly} />
           {sent ? (
             <>
               <input type="hidden" name="email" value={state.email} />
@@ -172,7 +194,9 @@ export function codeView(
 
 // The link from the message opens this page; the button posts the token, so a
 // mail scanner that fetches the link signs no one in and uses nothing up.
-export function linkView(lang: Lang, token: string, errors?: Key[], next?: string | null, follow?: Follow | null, brief?: Brief | null) {
+export function linkView(
+  lang: Lang, token: string, errors?: Key[], next?: string | null, follow?: Follow | null, brief?: Brief | null, weekly?: boolean,
+) {
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.link_title")} lead={t(lang, "account.link_lead")} />
@@ -184,12 +208,14 @@ export function linkView(lang: Lang, token: string, errors?: Key[], next?: strin
           <>
             <FollowNote lang={lang} follow={follow} />
             <BriefNote lang={lang} brief={brief} />
+            <WeeklyNote lang={lang} weekly={weekly} />
             <form method="post" action="/account/check" class="stack">
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="token" value={token} />
               <Next next={next} />
               <FollowField follow={follow} />
               <BriefField brief={brief} />
+              <WeeklyField weekly={weekly} />
               <button type="submit" class="btn btn-primary">{t(lang, "account.sign_in")}</button>
             </form>
           </>
@@ -284,10 +310,28 @@ const StartPanel: FC<{ lang: Lang; account: Account; counts: OverviewCounts }> =
   );
 };
 
+// The weekly email's row (weekly.ts): its state and the one control that
+// turns it the other way, a plain link-styled button, so the page keeps its
+// one filled button. Left out while the table is not on the database.
+const WeeklyRow: FC<{ lang: Lang; account: Account; on: boolean }> = ({ lang, account, on }) => (
+  <>
+    <dt>{t(lang, "weekly.field")}</dt>
+    <dd>
+      <form method="post" action="/account/weekly" class="account-inline">
+        <Csrf account={account} />
+        <input type="hidden" name="mail" value={on ? "off" : "on"} />
+        <span>{t(lang, on ? "weekly.state_on" : "weekly.state_off")}</span>
+        <button type="submit" class="btn-link">{t(lang, on ? "weekly.turn_off" : "weekly.turn_on")}</button>
+      </form>
+      <span class="kv-note">{t(lang, "weekly.field_note")}</span>
+    </dd>
+  </>
+);
+
 export function overviewView(
   lang: Lang, account: Account,
   counts: OverviewCounts,
-  extra: { billing?: BillingLine | null; notice?: string | null } = {},
+  extra: { billing?: BillingLine | null; notice?: string | null; weekly?: { on: boolean } | null } = {},
 ) {
   const stripe = extra.billing?.stripe && account.plan === "pro";
   return (
@@ -304,6 +348,7 @@ export function overviewView(
           <dd><a href="/account/billing">{t(lang, stripe ? "billing.manage" : "billing.link_plans")}</a></dd>
           <dt>{t(lang, "account.field_since")}</dt><dd class="mono">{day(account.createdAt)}</dd>
           <dt>{t(lang, "account.field_sessions")}</dt><dd>{fmtInt(counts.sessions, lang)}</dd>
+          {extra.weekly ? <WeeklyRow lang={lang} account={account} on={extra.weekly.on} /> : null}
           {/* A Free account sees the row too, with the Pro chip, leading to the page's notice (bugs.tsx). */}
           <dt>{t(lang, "bugs.field")}</dt>
           <dd>
@@ -623,6 +668,35 @@ export function stoppedView(lang: Lang, label: string) {
   );
 }
 
+// The weekly email's unsubscribe page (/account/stop?e=&t=), the same way:
+// one button that posts the link's values back, no session needed.
+export function weeklyStopView(lang: Lang, state: { userId: string; secret: string; off: boolean }) {
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "weekly.stop_title")} lead={t(lang, "weekly.stop_lead")} />
+      <Panel title={t(lang, "weekly.panel")} class="panel-form">
+        {state.off ? (
+          <p>{t(lang, "weekly.stop_already")}</p>
+        ) : (
+          <form method="post" action="/account/stop" class="stack">
+            <input type="hidden" name="e" value={state.userId} />
+            <input type="hidden" name="t" value={state.secret} />
+            <input type="hidden" name="lang" value={lang} />
+            <button type="submit" class="btn btn-primary">{t(lang, "weekly.stop_button")}</button>
+          </form>
+        )}
+      </Panel>
+    </>
+  );
+}
+
+export function weeklyStoppedView(lang: Lang) {
+  return (
+    <PageHead lang={lang} title={t(lang, "weekly.stopped_title")} lead={t(lang, "weekly.stopped_lead")}
+      actions={<a href="/account" class="btn">{t(lang, "account.title")}</a>} />
+  );
+}
+
 // -- API keys ----------------------------------------------------------------------------------
 
 // usage: each key's count today and over the last 30 days (api_usage.ts); null
@@ -738,6 +812,7 @@ export function deleteView(lang: Lang, account: Account, errors?: Key[]) {
           <li>{t(lang, "watches.delete")}</li>
           <li>{t(lang, "orgclaim.delete")}</li>
           <li>{t(lang, "briefing.delete")}</li>
+          <li>{t(lang, "weekly.delete")}</li>
           <li>{t(lang, "calfeed.delete")}</li>
           <li>{t(lang, "bugs.delete")}</li>
           <li>{t(lang, "account.delete_sessions")}</li>

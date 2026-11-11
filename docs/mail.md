@@ -22,7 +22,8 @@ too; the deploys run neither.
 Every message the site sends to a reader is laid out in one shell,
 `site/src/account/mail_html.ts`: the sign-in code, the saved-search
 deliveries, the records counts, the watch mail, the weekly briefing, the
-accounts-open and Ultra messages and the address-change notice. A new message
+weekly email, the accounts-open and Ultra messages and the address-change
+notice. A new message
 is built with it as well; no message writes its own `<html>`.
 
 | Part | What it holds |
@@ -30,7 +31,7 @@ is built with it as well; no message writes its own `<html>`.
 | Preheader | one hidden line, the one an inbox lists after the subject |
 | Header | the wordmark linking the site, the host name linking the home page, an emerald rule under both |
 | Body | the message's own pieces: `h1`, `h2`, `para` (muted for a note and for the line with a stop link), `list`, `button`, `inkLink`, `mutedLink` |
-| Footer | why the message came, with its links (`whyLine`; the address-change notice has no such line), then the tagline and `contact@awardwatch.ca` |
+| Footer | why the message came, with its links (`whyLine`; the address-change notice has no such line; the weekly email adds the sender's name and mailing address on the next line), then the tagline and `contact@awardwatch.ca` |
 
 The layout is design/email's (`design/email/build.py`): a 600 px column of
 tables, every style inline, the site's palette, Inter with the system faces
@@ -90,10 +91,11 @@ Each in English and in French.
 | An organization's new records, a segment's new records and notices | the records digest |
 | The watch mail, with and without the "Your organization" block | the watch digest |
 | The weekly briefing | the briefing digest |
+| The weekly email: the watches' news (Free and Pro) and the site's week (nothing new on several pages, on one, following nothing, Pro), and with one figure left out | the weekly digest, `weeklyDigest`, from the fixtures in `site/test/mail-fixtures.ts` (a made-up mailing address) |
 | The accounts-open message | its console run, `runAnnouncement`, and with an https stop link |
 | The Ultra message | its console run (kind `ultra`), and with an https stop link |
 | The address-change notice | the console's notice |
-| The live check's nine messages | `site/src/account/mail_check.ts` |
+| The live check's ten messages | `site/src/account/mail_check.ts` |
 
 The operator's own alerts (the daily check's email and the bug reports, both
 through the `ALERTS` binding to the operator's address) are not reader mail
@@ -123,10 +125,10 @@ and keep their own tests.
   footer's line with the tagline and the contact address, a preheader, at
   most one button, and no image but the two wordmarks.
 - A list or watch delivery (the saved searches, the records, the watch mail,
-  the briefing, the accounts-open and Ultra messages) carries its stop link
-  in both parts, the page that manages it (the saved searches page or the
-  watches page) where it has one, and the line saying why the reader received
-  it.
+  the briefing, the weekly email, the accounts-open and Ultra messages)
+  carries its stop link in both parts, the page that manages it (the saved
+  searches page, the watches page, or the account page for the weekly email)
+  where it has one, and the line saying why the reader received it.
 - With an https stop link, the message carries `List-Unsubscribe` naming the
   contact address and that same link, and `List-Unsubscribe-Post:
   List-Unsubscribe=One-Click`. With an http link (a local run) it carries
@@ -141,13 +143,15 @@ and keep their own tests.
 
 | Cap | Figure | Held |
 |---|---|---|
-| Messages in one delivery run (saved searches, then watch mail, then briefings) | `RUN_MESSAGES_MAX`, 300 | `roomAfter`: each part gets the cap less what the parts before it sent or tried, never below zero, and the three never pass 300 together |
+| Messages in one delivery run (saved searches, then watch mail, then briefings, then the weekly email) | `RUN_MESSAGES_MAX`, 300 | `roomAfter`: each part gets the cap less what the parts before it sent or tried, never below zero, and the four never pass 300 together |
+| Weekly emails in one delivery run | `WEEKLY_RUN_MAX`, 100 | the weekly email's room is the shared room held to 100; the run stops there and the next hour (or the next data date of the week) goes on |
+| Watches one weekly email names | `WEEKLY_LINES`, 5 | eight watches with news name five, one line each, and count three more on a line to the watches page |
 | Rows in one delivery message | `ROWS_MAX`, 50 | a search with 120 notices lists 50 and counts 70 more in both parts; a segment's counts come first; the watch mail's 50 run across every watch, each kind's rest on its own line |
 | Rows in one briefing section | `SECTION_ROWS`, 10 | 25 new notices list 10 and count 15 more |
 | Lists named in the accounts-open message | `LISTS_SHOWN`, 10 | twelve lists name ten and count two more |
 | Messages in one accounts-open or Ultra run | `ANNOUNCE_MAX`, 300 | runs capped at 2 send at most 2 each, each address once; what waited less what a run sent is what waits after it; account holders are passed over (accounts-open only) |
 | Sign-in codes an address may ask for in an hour | `CODES_PER_HOUR`, 5 | the sixth request answers 429 and sends nothing |
-| Messages in one live check | one per template, 9 | all to the one address, nothing to any other |
+| Messages in one live check | one per template, 10 | all to the one address, nothing to any other; without `MAIL_ADDRESS` the weekly email is reported `stubbed` and not sent |
 
 The last part plants each fault the checks look for (an em-dash, another
 reader's address, a link or a line in one part only, the reason line or the
@@ -173,9 +177,11 @@ sender a reader's message goes through (`sendWithHeaders` in
 4. a segment's new records
 5. the watch mail
 6. the weekly briefing
-7. the accounts-open message
-8. the Ultra message
-9. the address-change notice
+7. the weekly email (the site's week, as an account that follows nothing on
+   Free gets it)
+8. the accounts-open message
+9. the Ultra message
+10. the address-change notice
 
 Each subject starts with `[mail check]`, the same tag in both languages, so
 the message is never taken for a reader's and an inbox rule can file it. The
@@ -203,7 +209,7 @@ The answer is JSON and names no address:
 |---|---|
 | `sent` | the sender took the message (Email Sending on the site; the local outbox on a local run) |
 | `refused` | Email Sending refused it; `reason` is its error code (`E_SENDER_NOT_VERIFIED`, `E_RECIPIENT_NOT_ALLOWED`, `E_DAILY_LIMIT_EXCEEDED`, ...) or `failed` without one |
-| `stubbed` | the `MAIL` binding or `MAIL_FROM` is missing, so nothing could leave (`reason` is `not_configured`) |
+| `stubbed` | the `MAIL` binding or `MAIL_FROM` is missing, so nothing could leave (`reason` is `not_configured`); or, for the weekly email alone, the Worker secret `MAIL_ADDRESS` is not set, so the message, which must carry the mailing address, is not built (`reason` is `no_mail_address`) |
 
 A refusal does not stop the run: every template is tried, so the answer shows
 which ones the mail service takes. Each run writes an audit row,
@@ -255,7 +261,7 @@ address.
 | Cloudflare Access stopped the request | check the service token secrets and the Service Auth policy (step 3) |
 | The site answered 404 | the switch is off, `OPERATOR_EMAILS` is unset, Access's token did not check out, or the repository's token is not the Worker's |
 | The Worker has no test address | add the secret `MAIL_TEST_TO` and deploy (step 1) |
-| n of 9 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing |
+| n of 10 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing, or for the weekly email that `MAIL_ADDRESS` is not set (`docs/accounts.md`, Weekly email) |
 
 ### Setting up
 
@@ -286,7 +292,7 @@ address.
 
 After each run, in the test inbox:
 
-- Nine messages arrived, each subject starting with `[mail check]`, none in
+- Ten messages arrived, each subject starting with `[mail check]`, none in
   spam. A template the run reported `sent` that did not arrive is a delivery
   problem past Email Sending: look in spam, then at the address's
   suppression list in the dashboard.

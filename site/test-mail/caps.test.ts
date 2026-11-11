@@ -1,6 +1,7 @@
 // The caps on what the site sends, and their arithmetic, through the log
 // sender where a run sends (docs/mail.md): the delivery job's one cap shared
-// by the saved searches, the watch mail and the briefings; the rows a message
+// by the saved searches, the watch mail, the briefings and the weekly email,
+// and the weekly email's own ceiling; the rows a message
 // lists and the line that counts the rest; the subject's length; the
 // accounts-open and Ultra runs' cap a run, run again until no address waits;
 // the sign-in codes an address may ask for in an hour; and the live check's
@@ -10,16 +11,21 @@ import { describe, expect, it } from "vitest";
 import { ANNOUNCE_MAX, LISTS_SHOWN, announceCounts, runAnnouncement } from "../src/account/announce";
 import { BRIEFINGS_RUN_MAX, SECTION_ROWS } from "../src/account/briefings";
 import { ROWS_MAX, RUN_MESSAGES_MAX, roomAfter } from "../src/account/deliveries";
-import { SUBJECT_MAX, briefingDigest, fitCounts, fitSubject, recordsDigest, tenderDigest, watchDigest } from "../src/account/digests";
-import { MAIL_CHECK_MARK, MAIL_CHECK_TEMPLATES, mailCheckBriefingData, mailCheckMessages, runMailCheck } from "../src/account/mail_check";
+import {
+  SUBJECT_MAX, WEEKLY_LINES, type WatchGroup, briefingDigest, fitCounts, fitSubject, recordsDigest, tenderDigest, watchDigest, weeklyDigest,
+} from "../src/account/digests";
+import {
+  MAIL_CHECK_MARK, MAIL_CHECK_TEMPLATES, NO_MAIL_ADDRESS, mailCheckBriefingData, mailCheckMessages, runMailCheck,
+} from "../src/account/mail_check";
 import { CODES_PER_HOUR } from "../src/account/signin";
 import { ROWS_PER_KIND, type EventRow, type Found, foundKey } from "../src/account/watch_events";
 import { WATCH_ACCOUNTS_MAX, groupsFor } from "../src/account/watch_mail";
 import type { Watch } from "../src/account/watches";
+import { WEEKLY_ACCOUNTS_MAX, WEEKLY_RUN_MAX } from "../src/account/weekly";
 import { t, type Lang } from "../src/i18n";
 import { INSERT_INTEREST, newToken } from "../src/pages/interest";
 import { ACCOUNTS, DB, decode, nbsp, newEmail, onEnv, post, useAccountsDb } from "../test/accounts-helpers";
-import { DAY, SITE, tender, tenderInput } from "../test/mail-fixtures";
+import { DAY, SAMPLE_ADDRESS, SITE, tender, tenderInput, weeklyInput } from "../test/mail-fixtures";
 import { LOCAL, type Sent, checkMessage, shapeOf, viaLogSender } from "./checks";
 
 useAccountsDb();
@@ -43,8 +49,11 @@ describe("the caps", () => {
     expect(CODES_PER_HOUR).toBe(5);
     expect(WATCH_ACCOUNTS_MAX).toBe(1000);
     expect(BRIEFINGS_RUN_MAX).toBe(1000);
+    expect(WEEKLY_ACCOUNTS_MAX).toBe(1000);
+    expect(WEEKLY_RUN_MAX).toBe(100);
+    expect(WEEKLY_LINES).toBe(5);
     expect(SUBJECT_MAX).toBe(100);
-    expect(MAIL_CHECK_TEMPLATES).toHaveLength(9);
+    expect(MAIL_CHECK_TEMPLATES).toHaveLength(10);
   });
 });
 
@@ -56,18 +65,23 @@ describe("the delivery job's one cap", () => {
     expect(roomAfter({ sent: 120, failed: 3 }, { sent: 77, failed: 0 })).toBe(100);
     expect(roomAfter({ sent: 300, failed: 0 })).toBe(0);
     expect(roomAfter({ sent: 250, failed: 0 }, { sent: 80, failed: 0 })).toBe(0);
+    // The weekly email gets what the three before it left.
+    expect(roomAfter({ sent: 120, failed: 3 }, { sent: 77, failed: 0 }, { sent: 40, failed: 1 })).toBe(59);
   });
 
-  it("holds the three parts together to RUN_MESSAGES_MAX, each stopping at the room it is given", () => {
+  it("holds the four parts together to RUN_MESSAGES_MAX, each stopping at the room it is given, the weekly email at its own ceiling too", () => {
     // Each part sends until it has as many as it wants or reaches its room
-    // (the `>= room` rule of deliveries.ts, watch_mail.ts and briefings.ts).
+    // (the `>= room` rule of deliveries.ts, watch_mail.ts, briefings.ts and
+    // weekly.ts, whose room is also held to WEEKLY_RUN_MAX).
     const part = (want: number, room: number) => ({ sent: Math.min(want, room), failed: 0 });
-    for (const [a, b, c] of [[10, 20, 30], [290, 20, 30], [100, 250, 5], [0, 0, 400], [301, 1, 1], [150, 150, 150]]) {
+    for (const [a, b, c, d] of [[10, 20, 30, 40], [290, 20, 30, 5], [100, 50, 5, 400], [0, 0, 0, 400], [301, 1, 1, 1], [100, 50, 50, 150]]) {
       const searches = part(a, RUN_MESSAGES_MAX);
       const watch = part(b, roomAfter(searches));
       const briefings = part(c, roomAfter(searches, watch));
-      const total = searches.sent + watch.sent + briefings.sent;
-      expect(total, `${a}, ${b}, ${c}`).toBe(Math.min(a + b + c, RUN_MESSAGES_MAX));
+      const weekly = part(d, Math.min(roomAfter(searches, watch, briefings), WEEKLY_RUN_MAX));
+      const total = searches.sent + watch.sent + briefings.sent + weekly.sent;
+      expect(weekly.sent, `${a}, ${b}, ${c}, ${d}`).toBeLessThanOrEqual(WEEKLY_RUN_MAX);
+      expect(total, `${a}, ${b}, ${c}, ${d}`).toBe(Math.min(a + b + c + Math.min(d, WEEKLY_RUN_MAX), RUN_MESSAGES_MAX));
       expect(total).toBeLessThanOrEqual(RUN_MESSAGES_MAX);
     }
   });
@@ -152,6 +166,26 @@ describe("the rows a message lists", () => {
     expect(nbsp(m.text)).toContain(more);
     expect(nbsp(decode(m.html))).toContain(more);
     checkMessage(await viaLogSender(m), shapeOf("briefing", "briefing at the cap", SITE), lang);
+  });
+});
+
+describe("the weekly email's lines", () => {
+  it.each(LANGS)("name WEEKLY_LINES watches, one line each, and count the rest on a line to the watches page (%s)", async (lang) => {
+    const groups: WatchGroup[] = Array.from({ length: WEEKLY_LINES + 3 }, (_, i) => ({
+      kind: "organization" as const, label: `Sample Works ${i + 1}`, path: `/organizations/org-a00000000${i}`,
+      events: [{ kind: "award" as const, n: 2, rows: [] }],
+    }));
+    const m = weeklyDigest({
+      ...weeklyInput(lang), to: newEmail(`weekly-lines-${lang}`), watches: { groups, total: 2 * groups.length, watched: groups.length + 2 },
+    });
+    expect(rowsIn(m.html)).toBe(WEEKLY_LINES);
+    expect(itemsIn(m.text)).toBe(WEEKLY_LINES);
+    for (let i = 1; i <= WEEKLY_LINES; i++) expect(m.text).toContain(`- Sample Works ${i} · `);
+    expect(m.text).not.toContain(`Sample Works ${WEEKLY_LINES + 1}`);
+    const more = nbsp(t(lang, "weekly.more_pages_many", { n: 3 }));
+    expect(nbsp(m.text)).toContain(`${more}${lang === "fr" ? " : " : ": "}${SITE}/account/watches`);
+    expect(nbsp(decode(m.html))).toContain(more);
+    checkMessage(await viaLogSender(m), shapeOf("weekly", "weekly email past its lines", SITE), lang);
   });
 });
 
@@ -290,10 +324,17 @@ describe("the sign-in code", () => {
 });
 
 describe("the live check's run", () => {
+  it("leaves the weekly email unsent, reported stubbed, while MAIL_ADDRESS is unset, and sends every other template", async () => {
+    const to = newEmail("mail-check-run-unset");
+    const run = await runMailCheck(onEnv() as never, `${LOCAL}/admin/mail-check`, { to, site: SITE, lang: "en" });
+    expect(run.results.filter((r) => r.result !== "sent")).toEqual([{ template: "weekly", result: "stubbed", reason: NO_MAIL_ADDRESS }]);
+    expect(await outbox(to)).toBe(MAIL_CHECK_TEMPLATES.length - 1);
+  });
+
   it.each(LANGS)("sends one message of each template to the one address and to no other (%s)", async (lang) => {
     const to = newEmail(`mail-check-run-${lang}`);
     const all = await outbox();
-    const run = await runMailCheck(onEnv() as never, `${LOCAL}/admin/mail-check`, { to, site: SITE, lang });
+    const run = await runMailCheck(onEnv({ MAIL_ADDRESS: SAMPLE_ADDRESS }) as never, `${LOCAL}/admin/mail-check`, { to, site: SITE, lang });
     expect(run.sender).toBe("log");
     expect(run.results.map((r) => r.template)).toEqual([...MAIL_CHECK_TEMPLATES]);
     expect(run.results.every((r) => r.result === "sent" && r.reason === null)).toBe(true);

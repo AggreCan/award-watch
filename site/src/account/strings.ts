@@ -582,8 +582,8 @@ export const ACCOUNT_STRINGS = {
   },
   "account.stopped_one_click": { en: "The delivery is off.", fr: "L'envoi est désactivé." },
   "account.privacy_mail": {
-    en: "The email address is handed to Cloudflare's email service to deliver the site's messages: the sign-in code, the saved searches whose delivery is on, and the events of the pages followed while their mail is on. Apart from the checkout described under Payments, it is used for nothing else.",
-    fr: "L'adresse courriel est transmise au service de courriel de Cloudflare pour livrer les messages du site : le code de connexion, les recherches enregistrées dont l'envoi est activé et les événements des pages suivies lorsque leur envoi est activé. Hormis le paiement décrit à la section Paiements, elle ne sert à rien d'autre.",
+    en: "The email address is handed to Cloudflare's email service to deliver the site's messages: the sign-in code, the saved searches whose delivery is on, the events of the pages followed while their mail is on, and the weekly email while it is on. Apart from the checkout described under Payments, it is used for nothing else.",
+    fr: "L'adresse courriel est transmise au service de courriel de Cloudflare pour livrer les messages du site : le code de connexion, les recherches enregistrées dont l'envoi est activé, les événements des pages suivies lorsque leur envoi est activé et le courriel hebdomadaire lorsqu'il est activé. Hormis le paiement décrit à la section Paiements, elle ne sert à rien d'autre.",
   },
   // The privacy page's accounts section (privacy.tsx): what following keeps.
   "watches.privacy": {
@@ -2161,4 +2161,101 @@ export const ACCOUNT_STRINGS = {
   "admin.mail_check_t_accounts_open": { en: "The accounts-open message", fr: "Le message d'ouverture des comptes" },
   "admin.mail_check_t_ultra_open": { en: "The Ultra message", fr: "Le message Ultra" },
   "admin.mail_check_t_address": { en: "The address-change notice", fr: "L'avis de changement d'adresse" },
+  "admin.mail_check_t_weekly": { en: "The weekly email", fr: "Le courriel hebdomadaire" },
+
+  // -- the weekly email (src/account/weekly.ts, digests.ts weeklyDigest; docs/accounts.md, Weekly email) --
+  // The sign-in form's box, never ticked by the site, and the line the code and link pages show when it was ticked.
+  "weekly.opt_in": {
+    en: "Send me the weekly email: each Monday, what changed on the pages I follow, or the week on the site in figures. Each message has a link to unsubscribe.",
+    fr: "Envoyez-moi le courriel hebdomadaire : chaque lundi, ce qui a changé sur les pages que je suis, ou la semaine du site en chiffres. Chaque message contient un lien de désabonnement.",
+  },
+  "weekly.pending": {
+    en: "Signing in also turns on the weekly email.",
+    fr: "En vous connectant, vous activerez aussi le courriel hebdomadaire.",
+  },
+  // The account page's control.
+  "weekly.field": { en: "Weekly email", fr: "Courriel hebdomadaire" },
+  "weekly.state_on": { en: "On", fr: "Activé" },
+  "weekly.state_off": { en: "Off", fr: "Désactivé" },
+  "weekly.turn_on": { en: "Turn on", fr: "Activer" },
+  "weekly.turn_off": { en: "Turn off", fr: "Désactiver" },
+  "weekly.field_note": {
+    en: "Each Monday: what changed on the pages you follow, or the week on the site in figures.",
+    fr: "Chaque lundi : ce qui a changé sur les pages que vous suivez, ou la semaine du site en chiffres.",
+  },
+  "weekly.msg_on": {
+    en: "The weekly email is on. The first one goes out on the first Monday after today.",
+    fr: "Le courriel hebdomadaire est activé. Le premier sera envoyé le premier lundi après aujourd'hui.",
+  },
+  "weekly.msg_off": { en: "The weekly email is off.", fr: "Le courriel hebdomadaire est désactivé." },
+  "weekly.delete": { en: "The weekly email setting.", fr: "Le réglage du courriel hebdomadaire." },
+  "weekly.privacy": {
+    en: "The weekly email goes only to an account that turned it on, on the sign-in form or the account page; no account is enrolled otherwise. For it the account keeps whether it is on, when and where it was last turned on, when it was turned off, the week of its last message and whether that message was sent, and the secret of its unsubscribe link. The message names public records and figures only.",
+    fr: "Le courriel hebdomadaire n'est envoyé qu'à un compte qui l'a activé, dans le formulaire de connexion ou sur la page du compte; aucun compte n'y est inscrit autrement. Pour ce courriel, le compte conserve s'il est activé, le moment et l'endroit de sa dernière activation, le moment de sa désactivation, la semaine de son dernier message et si ce message a été envoyé, ainsi que le secret de son lien de désabonnement. Le message ne nomme que des dossiers et des chiffres publics.",
+  },
+  // The unsubscribe link of a message (/account/stop?e=...&t=...).
+  "weekly.stop_title": { en: "Unsubscribe from the Weekly Email", fr: "Se désabonner du courriel hebdomadaire" },
+  "weekly.stop_lead": {
+    en: "This turns the weekly email off. Your account, and what it follows, stay as they are.",
+    fr: "Ceci désactive le courriel hebdomadaire. Votre compte, et ce qu'il suit, restent tels quels.",
+  },
+  "weekly.panel": { en: "Weekly Email", fr: "Courriel hebdomadaire" },
+  "weekly.stop_button": { en: "Turn the weekly email off", fr: "Désactiver le courriel hebdomadaire" },
+  "weekly.stop_already": { en: "The weekly email is already off.", fr: "Le courriel hebdomadaire est déjà désactivé." },
+  "weekly.stopped_title": { en: "Weekly Email Off", fr: "Courriel hebdomadaire désactivé" },
+  "weekly.stopped_lead": {
+    en: "The weekly email is off. Turn it back on from your account page.",
+    fr: "Le courriel hebdomadaire est désactivé. Réactivez-le à partir de la page de votre compte.",
+  },
+  "weekly.stopped_one_click": { en: "The weekly email is off.", fr: "Le courriel hebdomadaire est désactivé." },
+  // The message.
+  "weekly.subject_watch_one": { en: "Your week: 1 update on what you follow", fr: "Votre semaine : 1 nouveauté sur ce que vous suivez" },
+  "weekly.subject_watch_many": { en: "Your week: {n} updates on what you follow", fr: "Votre semaine : {n} nouveautés sur ce que vous suivez" },
+  "weekly.subject_site_one": { en: "The week on Award Watch: 1 new tender notice", fr: "La semaine sur Award Watch : 1 nouvel avis d'appel d'offres" },
+  "weekly.subject_site_many": {
+    en: "The week on Award Watch: {n} new tender notices",
+    fr: "La semaine sur Award Watch : {n} nouveaux avis d'appel d'offres",
+  },
+  "weekly.subject_site": { en: "The week on Award Watch, to {date}", fr: "La semaine sur Award Watch, jusqu'au {date}" },
+  "weekly.title_watch": { en: "Your Week on Award Watch", fr: "Votre semaine sur Award Watch" },
+  "weekly.title_site": { en: "The Week on Award Watch", fr: "La semaine sur Award Watch" },
+  "weekly.lead_one": { en: "1 update on 1 of the {all} pages you follow.", fr: "1 nouveauté sur 1 des {all} pages que vous suivez." },
+  "weekly.lead_many": { en: "{n} updates on {w} of the {all} pages you follow.", fr: "{n} nouveautés sur {w} des {all} pages que vous suivez." },
+  "weekly.lead_page_one": { en: "1 update on the page you follow.", fr: "1 nouveauté sur la page que vous suivez." },
+  "weekly.lead_page_many": { en: "{n} updates on the page you follow.", fr: "{n} nouveautés sur la page que vous suivez." },
+  "weekly.kind_n": { en: "{kind}: {n}", fr: "{kind} : {n}" },
+  "weekly.more_pages_one": { en: "1 more page with news is on your watches page", fr: "1 autre page avec des nouveautés figure sur votre page des suivis" },
+  "weekly.more_pages_many": {
+    en: "{n} more pages with news are on your watches page",
+    fr: "{n} autres pages avec des nouveautés figurent sur votre page des suivis",
+  },
+  "weekly.quiet_one": { en: "Nothing changed this week on the page you follow", fr: "Rien n'a changé cette semaine sur la page que vous suivez" },
+  "weekly.quiet_many": {
+    en: "Nothing changed this week on the {all} pages you follow",
+    fr: "Rien n'a changé cette semaine sur les {all} pages que vous suivez",
+  },
+  "weekly.follow_none": {
+    en: "Follow an organization, a buyer, a contract or a tender notice from its page, and this email lists what changes on it.",
+    fr: "Suivez une organisation, un acheteur, un contrat ou un appel d'offres à partir de sa page, et ce courriel indiquera ce qui y change.",
+  },
+  "weekly.fig_notices_one": { en: "1 new tender notice", fr: "1 nouvel avis d'appel d'offres" },
+  "weekly.fig_notices_many": { en: "{n} new tender notices", fr: "{n} nouveaux avis d'appel d'offres" },
+  "weekly.fig_closing_one": { en: "1 notice closing within {days} days", fr: "1 appel d'offres qui se clôture d'ici {days} jours" },
+  "weekly.fig_closing_many": { en: "{n} notices closing within {days} days", fr: "{n} appels d'offres qui se clôturent d'ici {days} jours" },
+  "weekly.fig_awards_one": { en: "1 new award notice", fr: "1 nouvel avis d'attribution" },
+  "weekly.fig_awards_many": { en: "{n} new award notices", fr: "{n} nouveaux avis d'attribution" },
+  "weekly.fig_ending_one": { en: "1 contract ending within {months} months", fr: "1 contrat prenant fin d'ici {months} mois" },
+  "weekly.fig_ending_many": { en: "{n} contracts ending within {months} months", fr: "{n} contrats prenant fin d'ici {months} mois" },
+  "weekly.pro_line": {
+    en: "{free}: {fw} watches and {fs} saved searches, on the site. {pro}: {pw} watches and {ps} saved searches, each change by email.",
+    fr: "{free} : {fw} suivis et {fs} recherches enregistrées, sur le site. {pro} : {pw} suivis et {ps} recherches enregistrées, chaque changement par courriel.",
+  },
+  "weekly.pro_link": { en: "Plans and prices", fr: "Forfaits et prix" },
+  "weekly.why": {
+    en: "You receive this because you turned on the weekly email for your account.",
+    fr: "Vous recevez ce message parce que vous avez activé le courriel hebdomadaire de votre compte.",
+  },
+  "weekly.account_link": { en: "Your account", fr: "Votre compte" },
+  "weekly.stop_link": { en: "Unsubscribe", fr: "Se désabonner" },
+  "weekly.sender": { en: "Sent by {name}, {address}.", fr: "Envoyé par {name}, {address}." },
 } as const satisfies Record<string, { en: string; fr: string }>;

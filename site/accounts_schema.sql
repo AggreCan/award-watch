@@ -453,3 +453,35 @@ CREATE TABLE IF NOT EXISTS briefing_deliveries (
 );
 CREATE INDEX IF NOT EXISTS idx_briefing_deliveries_briefing ON briefing_deliveries(briefing_id, id);
 CREATE INDEX IF NOT EXISTS idx_briefing_deliveries_sent ON briefing_deliveries(sent_at);
+
+-- The weekly email (src/account/weekly.ts; docs/accounts.md, Weekly email):
+-- one row per account that turned it on, made by that choice alone (the box
+-- on the sign-in form, once the address has proved itself, or the account
+-- page's control); no account is ever enrolled otherwise. A table of its own,
+-- since the other tables' CHECK constraints cannot change on D1 without
+-- rebuilding them; until it exists the feature is left out whole. mail is on
+-- until the reader turns it off (the account page or the unsubscribe link);
+-- the row then stays, off. via and on_at are where and when it was last
+-- turned on, the record of the choice; off_at when it was last turned off.
+-- secret is the unsubscribe link's 16 random bytes, made with the first
+-- message and kept in clear as delivery_tokens keeps its own (every message
+-- carries it; it can turn this account's weekly email off and nothing else).
+-- last_week is the week's opening day (a Monday) the last run covered,
+-- claimed before the message goes; last_at and last_status (sent, failed)
+-- describe that run; failed_week is the week a message was refused for, so
+-- the account waits for the next one. Goes with the account.
+CREATE TABLE IF NOT EXISTS weekly_mail (
+  user_id TEXT PRIMARY KEY REFERENCES users(id),
+  mail TEXT NOT NULL DEFAULT 'on' CHECK (mail IN ('on', 'off')),
+  via TEXT NOT NULL CHECK (via IN ('sign_in', 'account')),
+  on_at TEXT NOT NULL,
+  off_at TEXT,
+  secret TEXT,
+  last_week TEXT,                                -- YYYY-MM-DD, a Monday
+  last_at TEXT,
+  last_status TEXT,                              -- sent | failed
+  failed_week TEXT,                              -- YYYY-MM-DD, a Monday
+  created_at TEXT NOT NULL
+);
+-- The delivery job's list of the accounts due, oldest choice first.
+CREATE INDEX IF NOT EXISTS idx_weekly_mail_due ON weekly_mail(mail, on_at);

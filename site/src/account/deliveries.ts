@@ -42,7 +42,8 @@
 // one message per account with watches, inside the same cap, and a sending
 // limit met there stops the run the same way. A file that did not read stops
 // the saved searches only, since the watches read the records database alone.
-// Then the weekly briefings (briefings.ts runBriefings), the same way.
+// Then the weekly briefings (briefings.ts runBriefings), the same way, and
+// last the weekly email any account can turn on (weekly.ts runWeekly).
 //
 // Log lines name counts and dates only, never an address or a label.
 
@@ -67,6 +68,7 @@ import { randomHex } from "./secrets";
 import { type MailMessage, senderFor } from "./sender";
 import { accountsEnabled } from "./switch";
 import { WATCH_WAIT_WHY, type WatchReport, runWatchMail } from "./watch_mail";
+import { type WeeklyReport, runWeekly, weeklyActive, weeklyCounts } from "./weekly";
 
 // The hourly trigger in wrangler.jsonc; any other trigger is the daily check.
 export const DELIVERY_CRON = "0 15-20 * * *";
@@ -80,9 +82,10 @@ export const SPAN_DAYS_MAX = 7;
 export const WEEK_DAYS = 7;
 // The messages a run may still send once the parts named have run: the cap
 // less every message they sent or tried, never below zero. The watch mail
-// gets roomAfter(the saved searches) and the briefings roomAfter(the saved
-// searches, the watch mail), so the three parts share the one cap
-// (test-mail/caps.test.ts holds the arithmetic).
+// gets roomAfter(the saved searches), the briefings roomAfter(the saved
+// searches, the watch mail) and the weekly email roomAfter(all three), so
+// the four parts share the one cap (test-mail/caps.test.ts holds the
+// arithmetic).
 export const roomAfter = (...parts: ({ sent: number; failed: number } | null | undefined)[]): number =>
   Math.max(0, RUN_MESSAGES_MAX - parts.reduce((n, p) => n + (p ? p.sent + p.failed : 0), 0));
 // Refusals that mean the account's sending is spent for now: the run stops
@@ -111,6 +114,9 @@ export interface RunReport {
   watch: WatchReport | null;
   // The weekly briefings' part (briefings.ts); absent or null when the run did not reach it.
   briefing?: BriefingReport | null;
+  // The weekly email's part (weekly.ts); absent or null when the run did not
+  // reach it or the accounts database has no weekly_mail table yet.
+  weekly?: WeeklyReport | null;
 }
 
 // A file or the database could not be read: the message is the run's one log line.
@@ -416,7 +422,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   if (!env.MAIL || !env.MAIL_FROM?.trim() || !site) return { ...report, outcome: "no_mail" };
   const stats = await loadStats(env).catch(() => null);
   const dataDate = stats?.data_as_of ? stats.data_as_of.slice(0, 10) : null;
-  if (!dataDate) {
+  if (!stats || !dataDate) {
     log("stats.json could not be read; the next hour tries again");
     return { ...report, outcome: "no_data" };
   }
@@ -568,9 +574,26 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
       return { ...report, outcome: "fault" };
     }
   }
+  if (!stop) {
+    try {
+      const weekly = await runWeekly(env, {
+        site, dataDate, now, plans, room: roomAfter(report, report.watch, report.briefing), capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
+        files, stats,
+      });
+      report.weekly = weekly.report;
+      if (weekly.stop) {
+        stop = weekly.stop;
+        if (report.outcome === "done") report.outcome = weekly.capped ? "capped" : "limited";
+      }
+    } catch {
+      log(`${dataDate}: the weekly email could not read or write the accounts database; the next hour tries again`);
+      return { ...report, outcome: "fault" };
+    }
+  }
   if (report.outcome === "fault") {
     if (report.watch && watchActive(report.watch)) log(`${dataDate}: ${watchCounts(report.watch)}`);
     if (report.briefing && briefingActive(report.briefing)) log(`${dataDate}: ${briefingCounts(report.briefing)}`);
+    if (report.weekly && weeklyActive(report.weekly)) log(`${dataDate}: ${weeklyCounts(report.weekly)}`);
     return report;
   }
   log(`${dataDate}: ${counts(report)}${stop ? `; stopped at ${stop}, the next hour goes on` : ""}`);
@@ -595,4 +618,5 @@ const counts = (r: RunReport) =>
   `${r.sent} sent, ${r.failed} failed, ${r.empty} with nothing new, ${r.skipped} not on a plan with delivery` +
   (r.records ? `, ${r.waiting} organization, buyer or segment searches waiting: ${WAIT_WHY[r.records]}` : "") +
   (r.watch && watchActive(r.watch) ? `; ${watchCounts(r.watch)}` : "") +
-  (r.briefing && briefingActive(r.briefing) ? `; ${briefingCounts(r.briefing)}` : "");
+  (r.briefing && briefingActive(r.briefing) ? `; ${briefingCounts(r.briefing)}` : "") +
+  (r.weekly && weeklyActive(r.weekly) ? `; ${weeklyCounts(r.weekly)}` : "");

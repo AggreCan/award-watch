@@ -24,7 +24,7 @@ import {
   useAccountsDb, userId,
 } from "./accounts-helpers";
 import { makeFakeAssets } from "./assets";
-import { fakeMail } from "./mail-fixtures";
+import { SAMPLE_ADDRESS, fakeMail } from "./mail-fixtures";
 
 useAccountsDb();
 
@@ -1526,7 +1526,7 @@ describe("the live mail check", () => {
     const inbox = newEmail("test-inbox");
     const env = {
       ...base, MAIL: mail.binding, MAIL_FROM: "alerts@awardwatch.ca", MAIL_SENDER: undefined, MAIL_TEST_TO: inbox, SITE_URL,
-      MAIL_CHECK_TOKEN: CHECK_TOKEN, ...extra,
+      MAIL_CHECK_TOKEN: CHECK_TOKEN, MAIL_ADDRESS: SAMPLE_ADDRESS, ...extra,
     };
     return { env, mail, inbox };
   }
@@ -1559,7 +1559,7 @@ describe("the live mail check", () => {
     expect(html).toContain("The test address is set.");
     expect(html).toContain("Sender: provider.");
     expect(html).toContain('action="/admin/mail-check"');
-    expect(html).toContain("Send the 9 messages");
+    expect(html).toContain("Send the 10 messages");
     expect(html).not.toContain(inbox);
     const fr = await text(await get("/admin/mail-check?lang=fr", { cookie: op.cookie, env }));
     expect(fr).toContain("Vérification du courriel");
@@ -1588,7 +1588,7 @@ describe("the live mail check", () => {
       expect(m.from).toEqual({ email: "alerts@awardwatch.ca", name: "Award Watch" });
       expect(m.subject.startsWith(`${MAIL_CHECK_MARK} `)).toBe(true);
     }
-    expect(await lastCheckAudit()).toEqual({ user_id: null, detail: `by ${op.id}, 9 sent, 0 refused, 0 stubbed` });
+    expect(await lastCheckAudit()).toEqual({ user_id: null, detail: `by ${op.id}, 10 sent, 0 refused, 0 stubbed` });
   });
 
   it("refuses a console post without the CSRF value or the site's Origin, and sends nothing", async () => {
@@ -1628,7 +1628,7 @@ describe("the live mail check", () => {
       ok: false, sender: "stub", language: "en",
       results: MAIL_CHECK_TEMPLATES.map((template) => ({ template, result: "stubbed", reason: "not_configured" })),
     });
-    expect((await lastCheckAudit())?.detail).toBe(`by ${op.id}, 0 sent, 0 refused, 9 stubbed`);
+    expect((await lastCheckAudit())?.detail).toBe(`by ${op.id}, 0 sent, 0 refused, 10 stubbed`);
     expect(log.mock.calls.map((c) => c.join(" ")).join("\n")).not.toContain(inbox);
   });
 
@@ -1650,7 +1650,7 @@ describe("the live mail check", () => {
       expect(m.headers?.["Auto-Submitted"], template).toBe("auto-generated");
     });
     expect(mail.handed[0].subject).toBe(`${MAIL_CHECK_MARK} Votre code de connexion à Award Watch`);
-    expect(await lastCheckAudit()).toEqual({ user_id: null, detail: "by token, 9 sent, 0 refused, 0 stubbed" });
+    expect(await lastCheckAudit()).toEqual({ user_id: null, detail: "by token, 10 sent, 0 refused, 0 stubbed" });
     // No body at all is a check in English.
     expect((await (await tokenPost(env)).json() as { language: string }).language).toBe("en");
     // The token never reaches a log line.

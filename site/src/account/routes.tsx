@@ -6,8 +6,10 @@
 //   GET  /account/check                the code form; with ?token= the link's confirm button
 //   POST /account/check                a code (with the address) or the link's token; starts the session,
 //                                      then follows the page a Follow form named (follow), within the plan's cap,
-//                                      and saves the briefing a Save this briefing link named (brief), within the shared cap
+//                                      saves the briefing a Save this briefing link named (brief), within the shared cap,
+//                                      and turns on the weekly email when the sign-in form's box was ticked (weekly)
 //   GET  /account                      the overview                                   (session)
+//   POST /account/weekly               the weekly email on or off                     (session, CSRF)
 //   POST /account/sign-out             this browser, or every browser (scope=all)     (session, CSRF)
 //   GET  /account/searches             saved searches, the alerts form's rows to add  (session)
 //   POST /account/searches             add from a page address, or Save this search   (session, CSRF)
@@ -35,6 +37,8 @@
 //   POST /account/briefings/:id/delete remove a briefing                               (session, CSRF)
 //   GET  /account/stop?b=&t=           a briefing's stop page, from its message        (the link's secret)
 //   POST /account/stop?b=&t=           turn that briefing's email off; one-click too   (the link's secret)
+//   GET  /account/stop?e=&t=           the weekly email's unsubscribe page              (the link's secret)
+//   POST /account/stop?e=&t=           turn the weekly email off; one-click too        (the link's secret)
 //   GET  /account/watches              watches with their last 14 days of events, the calendar feed (session)
 //   POST /account/watches              watch a page (kind, target)                     (session, CSRF, plan's cap)
 //   POST /account/watches/mail         the watch mail on or off                        (session, CSRF, plan to turn on)
@@ -97,7 +101,7 @@ import {
 } from "./feeds";
 import {
   type CalendarRow, type CalendarView, accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView,
-  signInView, stopView, stoppedView, unavailableView,
+  signInView, stopView, stoppedView, unavailableView, weeklyStopView, weeklyStoppedView,
 } from "./pages";
 import {
   type SavedSearch, addSearch, capFor, deleteSearch, importInterest, isDelivery, lastDeliveries, listSearches, pendingInterest, setDelivery,
@@ -125,6 +129,7 @@ import { type WatchCalendar, watchStopView, watchStoppedView, watchesView } from
 import {
   addWatch, countedWatches, deleteWatch, deleteWatchesOf, followAliases, isCadence, listWatches, mailOf, setMail, setWatch, watchCount,
 } from "./watches";
+import { deleteWeeklyOf, turnWeeklyOff, turnWeeklyOn, weeklyReady, weeklyState, weeklyStopRow } from "./weekly";
 
 export const account = new Hono<AppEnv>();
 
@@ -242,6 +247,14 @@ export function safeNext(raw: string | undefined | null): string | null {
 // briefOf), saved once the address has proved itself (briefAtSignIn), held to
 // the same guards as follow. No page carries both; a sign-in that does
 // carries both on and adds each by its own steps.
+//
+// The weekly email's box (weekly.ts) is on the sign-in page's own form only,
+// never ticked by the site, and only while its table is on the database
+// (weeklyReady, one statement whatever the address). A tick rides on as
+// weekly=1 the way the fields above do (the code form, the emailed link and
+// its page) and is recorded only once the address has proved itself
+// (weeklyAtSignIn). No GET reads it: an address cannot tick the box for
+// anyone.
 account.get("/sign-in", async (c) => {
   const lang = c.get("lang");
   const next = safeNext(c.req.query("next"));
@@ -250,7 +263,8 @@ account.get("/sign-in", async (c) => {
   const brief = briefOf(c.req.query("brief"));
   const m = c.req.query("m");
   const notice = m === "out" ? t(lang, "account.msg_signed_out") : m === "out_all" ? t(lang, "account.msg_signed_out_all") : null;
-  return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { notice, next, follow, brief }));
+  const offerWeekly = await weeklyReady(c.env);
+  return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { notice, next, follow, brief, offerWeekly }));
 });
 
 account.post("/sign-in", async (c) => {
@@ -261,8 +275,10 @@ account.post("/sign-in", async (c) => {
   const next = safeNext(fields.next);
   const follow = followOf(fields.follow);
   const brief = briefOf(fields.brief);
+  const offerWeekly = await weeklyReady(c.env);
+  const weekly = offerWeekly && fields.weekly === "1";
   const again = (errors: Key[], status: number, limitN?: number) => accountPage(c, t(lang, "account.sign_in_title"),
-    signInView(lang, { errors, email: typed.slice(0, EMAIL_MAX), limitN, next, follow, brief }), status);
+    signInView(lang, { errors, email: typed.slice(0, EMAIL_MAX), limitN, next, follow, brief, offerWeekly }), status);
   if (clean(fields, "website", 10)) return again(["interest.err_rejected"], 400);
   const email = normalizeEmail(typed);
   if (!email) return again(["interest.err_email"], 400);
@@ -282,7 +298,7 @@ account.post("/sign-in", async (c) => {
   // ceiling counts it (signin.ts); the page then says how to save the
   // briefing after signing in, and drops it too.
   const signInOnly = () => accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, {
-    email: typed.slice(0, EMAIL_MAX), next,
+    email: typed.slice(0, EMAIL_MAX), next, offerWeekly,
     notice: [follow ? t(lang, "account.follow_after") : "", brief ? t(lang, "account.brief_after") : ""].filter(Boolean).join(" "),
   }));
   // The console lines name Follow whenever the post carries follow, as before.
@@ -309,7 +325,7 @@ account.post("/sign-in", async (c) => {
     const base = siteBase(c);
     const link = `${base}/account/check?token=${issued.token}${lang === "fr" ? "&lang=fr" : ""}${next ? `&next=${encodeURIComponent(next)}` : ""}` +
       `${follow ? `&follow=${encodeURIComponent(followValue(follow.kind, follow.target))}` : ""}` +
-      `${brief ? `&brief=${encodeURIComponent(briefValue(brief.kind, brief.subject))}` : ""}`;
+      `${brief ? `&brief=${encodeURIComponent(briefValue(brief.kind, brief.subject))}` : ""}${weekly ? "&weekly=1" : ""}`;
     const sent = await senderFor(c.env, c.req.url)
       .send(signInMessage(lang, email, issued.code, link, CODE_MINUTES, base))
       .catch(() => ({ sent: false, reason: "failed" }) as const);
@@ -317,7 +333,7 @@ account.post("/sign-in", async (c) => {
       if (sent.reason === "failed") await audit(c.env, issued.userId, "mail_failed", null, now);
       return again([sent.reason === "not_configured" ? "account.err_not_sent" : "account.err_send_failed"], 503);
     }
-    return accountPage(c, t(lang, "account.check_title"), codeView(lang, { email, sent: true, next, follow, brief }));
+    return accountPage(c, t(lang, "account.check_title"), codeView(lang, { email, sent: true, next, follow, brief, weekly }));
   });
 });
 
@@ -330,7 +346,7 @@ account.get("/check", async (c) => {
   if (token !== undefined) {
     const ok = TOKEN_RE.test(token);
     return accountPage(c, t(lang, "account.link_title"), linkView(lang, ok ? token : "", ok ? undefined : ["account.err_stale"],
-      safeNext(c.req.query("next")), followOf(c.req.query("follow")), briefOf(c.req.query("brief"))), ok ? 200 : 400);
+      safeNext(c.req.query("next")), followOf(c.req.query("follow")), briefOf(c.req.query("brief")), c.req.query("weekly") === "1"), ok ? 200 : 400);
   }
   return accountPage(c, t(lang, "account.enter_title"), codeView(lang));
 });
@@ -349,6 +365,7 @@ account.post("/check", async (c) => {
   const next = safeNext(fields.next);
   const follow = followOf(fields.follow);
   const brief = briefOf(fields.brief);
+  const weekly = fields.weekly === "1";
   return guarded(c, async () => {
     const now = new Date();
     let checked: Checked;
@@ -363,11 +380,11 @@ account.post("/check", async (c) => {
       // The third and fourth wrong codes of the hour say how many tries are left.
       const left = checked.reason === "wrong" ? checked.left : null;
       const errors: Key[] = [left === 2 ? "account.err_code_two" : left === 1 ? "account.err_code_one" : CHECK_ERROR[checked.reason]];
-      if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors, next, follow, brief), 400);
+      if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors, next, follow, brief, weekly), 400);
       const title = t(lang, sentForm ? "account.check_title" : "account.enter_title");
-      // A mistyped code keeps the page to return to, what to follow and the briefing to save, for the next try.
+      // A mistyped code keeps the page to return to, what to follow, the briefing to save and the weekly email's tick, for the next try.
       return accountPage(c, title,
-        codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors, next, follow, brief }), 400);
+        codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors, next, follow, brief, weekly }), 400);
     }
     const user = await findOrCreateUser(c.env, checked.email, lang, now);
     if (user.created) await audit(c.env, user.id, "user_created", null, now);
@@ -383,6 +400,7 @@ account.post("/check", async (c) => {
     await audit(c.env, user.id, "signed_in", token ? "link" : "code", now);
     if (follow) await followAtSignIn(c, user.id, follow, lang, now);
     if (brief) await briefAtSignIn(c, user.id, brief, lang, now);
+    if (weekly) await weeklyAtSignIn(c, user.id, now);
     if (next) return c.redirect(next, 303);
     const pending = await pendingInterest(c.env, checked.email, user.id).catch(() => []);
     return c.redirect(pending.length ? "/account/searches" : "/account", 303);
@@ -418,14 +436,36 @@ account.get("/", async (c) => {
     ).bind(who.userId, new Date().toISOString()).first<{ sessions: number; searches: number; keys: number }>();
     const watching = await watchCount(c.env, who.userId);
     const org = await claimSummary(c.env, who.userId);
+    const m = c.req.query("m");
     return accountPage(c, t(lang, "account.title"), overviewView(lang, who, {
       sessions: counts?.sessions ?? 0, searches: counts?.searches ?? 0, cap: capFor(who), keys: counts?.keys ?? 0,
       watches: watching?.n ?? null, watchesOwn: watching?.own ?? false, org,
     }, {
       billing: await billingLine(c.env, who.userId),
       // Stripe's checkout returns here; the plan changes when its notice lands, often a moment later.
-      notice: c.req.query("billing") === "done" ? t(lang, "billing.msg_done") : null,
+      notice: c.req.query("billing") === "done" ? t(lang, "billing.msg_done")
+        : m === "weekly_on" ? t(lang, "weekly.msg_on") : m === "weekly_off" ? t(lang, "weekly.msg_off") : null,
+      // The weekly email's control; null leaves it out while its table is not on the database.
+      weekly: await weeklyState(c.env, who.userId),
     }));
+  });
+});
+
+// The overview's weekly email control: on or off, by the account's own
+// choice. An email turned on is due from the first Monday after today
+// (weekly.ts).
+account.post("/weekly", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  if (fields.mail !== "on" && fields.mail !== "off") return c.text(t(c.get("lang"), "form.rejected"), 400);
+  const on = fields.mail === "on";
+  return guarded(c, async () => {
+    const changed = on ? await turnWeeklyOn(c.env, who.userId, "account") : await turnWeeklyOff(c.env, who.userId);
+    // No table on the database yet: the page has no control to answer.
+    if (changed === null) return c.redirect("/account", 303);
+    if (changed) await audit(c.env, who.userId, on ? "weekly_on" : "weekly_off", "account");
+    return c.redirect(`/account?m=${on ? "weekly_on" : "weekly_off"}`, 303);
   });
 });
 
@@ -806,13 +846,29 @@ async function briefingStopTarget(c: Context<AppEnv>, id: string, secret: string
 const stopLabel = (lang: Lang, row: BriefingStopRow) =>
   isBriefingKind(row.kind) ? briefingLabel(lang, { ...row, kind: row.kind, lang: row.lang === "fr" ? "fr" : "en" }) : row.label;
 
+// The weekly email's unsubscribe link, /account/stop?e=<user id>&t=<secret>:
+// the same rules, for the account's weekly email (weekly.ts). It turns the
+// email off; the row stays, off, and the account page turns it back on. A
+// database without the table matches nothing, as a wrong link does.
+async function weeklyStopTarget(c: Context<AppEnv>, userId: string, secret: string) {
+  if (!STOP_VALUE_RE.test(userId) || !STOP_VALUE_RE.test(secret)) return null;
+  const row = await weeklyStopRow(c.env, userId);
+  return row?.secret && sameHash(row.secret, secret) ? row : null;
+}
+
 account.get("/stop", async (c) => {
   const lang = c.get("lang");
   const searchId = c.req.query("s") ?? "";
   const secret = c.req.query("t") ?? "";
   const watcher = c.req.query("w");
   const briefing = c.req.query("b");
+  const weekly = c.req.query("e");
   return guarded(c, async () => {
+    if (weekly !== undefined && !searchId && watcher === undefined && briefing === undefined) {
+      const mine = await weeklyStopTarget(c, weekly, secret);
+      if (!mine) return c.notFound();
+      return accountPage(c, t(lang, "weekly.stop_title"), weeklyStopView(lang, { userId: mine.user_id, secret, off: mine.mail === "off" }));
+    }
     if (briefing !== undefined && !searchId) {
       const mine = await briefingStopTarget(c, briefing, secret);
       if (!mine) return c.notFound();
@@ -841,8 +897,19 @@ account.post("/stop", async (c) => {
   const secret = clean(fields, "t", 64) || (c.req.query("t") ?? "");
   const watcher = clean(fields, "w", 64) || (c.req.query("w") ?? "");
   const briefing = clean(fields, "b", 64) || (c.req.query("b") ?? "");
+  const weekly = clean(fields, "e", 64) || (c.req.query("e") ?? "");
   const oneClick = fields["List-Unsubscribe"] === "One-Click";
   return guarded(c, async () => {
+    if (weekly && !searchId && !watcher && !briefing) {
+      const mine = await weeklyStopTarget(c, weekly, secret);
+      if (!mine) return c.notFound();
+      if (mine.mail !== "off") {
+        await turnWeeklyOff(c.env, mine.user_id);
+        await audit(c.env, mine.user_id, "weekly_stopped", oneClick ? "one_click" : "link");
+      }
+      if (oneClick) return c.text(t(lang, "weekly.stopped_one_click"), 200);
+      return accountPage(c, t(lang, "weekly.stopped_title"), weeklyStoppedView(lang));
+    }
     if (briefing && !searchId && !watcher) {
       const mine = await briefingStopTarget(c, briefing, secret);
       if (!mine) return c.notFound();
@@ -1036,6 +1103,21 @@ async function briefAtSignIn(c: Context<AppEnv>, userId: string, brief: Brief, l
     if (result === "added") await audit(c.env, userId, "briefing_added", `${brief.kind} at sign-in`, now);
   } catch {
     console.error("account sign-in: the briefing named by Save this briefing was not saved");
+  }
+}
+
+// The weekly email, turned on for the account whose address has just proved
+// itself (POST /account/check, after the session starts), when the sign-in
+// form's box was ticked: the choice and its time are recorded with "sign_in"
+// (weekly.ts turnWeeklyOn), and the audit says it came with the sign-in. An
+// email already on stays as it is. Nothing here may fail the sign-in: a
+// table not there yet adds nothing, and any other fault is logged without
+// detail.
+async function weeklyAtSignIn(c: Context<AppEnv>, userId: string, now: Date): Promise<void> {
+  try {
+    if (await turnWeeklyOn(c.env, userId, "sign_in", now)) await audit(c.env, userId, "weekly_on", "at sign-in", now);
+  } catch {
+    console.error("account sign-in: the weekly email was not turned on");
   }
 }
 
@@ -1269,11 +1351,12 @@ account.get("/delete", async (c) => {
 // cannot be matched to the address, and the address can sign up afresh.
 // Sessions are revoked; calendar feeds, saved searches (with their stop
 // links, delivery rows and records marks), keys, bug reports, the claim of
-// an organization and sign-in requests are deleted; so are the address's
-// rows in the alerts form's table. The entitlement rows stay, tied to the
-// id alone, as the record of what was granted. The watches, the claim and
-// the feeds go first, each on its own, so a database without their tables
-// yet still deletes the rest.
+// an organization, the weekly email's row and sign-in requests are deleted;
+// so are the address's rows in the alerts form's table. The entitlement rows
+// stay, tied to the id alone, as the record of what was granted. The
+// watches, the claim, the briefings, the weekly email and the feeds go
+// first, each on its own, so a database without their tables yet still
+// deletes the rest.
 export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new Date()): Promise<void> {
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
@@ -1281,6 +1364,7 @@ export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new 
   await deleteWatchesOf(c.env, who.userId);
   await deleteClaimOf(c.env, who.userId);
   await deleteBriefingsOf(c.env, who.userId);
+  await deleteWeeklyOf(c.env, who.userId);
   await deleteFeeds(c.env, { userId: who.userId });
   await db.batch([
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, who.userId),
