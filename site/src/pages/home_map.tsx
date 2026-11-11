@@ -22,8 +22,10 @@
 // neighbours, so two provinces on one step are still two shapes (operator,
 // 2026-11-11); a coast gets no gap, so no island is thinned by one. Then each
 // province's outline again, clear: it is what the pointer meets, so it holds
-// the link and the tip, and its ink edge under the pointer is whole, since
-// neither a neighbour's fill nor the gap lies over it.
+// the link and the tip, and under the pointer it takes a veil of ink, the
+// province a shade deeper, as a chart's mark does. No outline is drawn
+// anywhere: a province's shape is its fill (operator, 2026-11-11: the lines
+// on the coasts and the ink edge under the pointer read as borders on borders).
 //
 // Each province links to its list with the layer's filter and national=0, so
 // the list holds the notices its count counts: /tenders/new for the new
@@ -181,10 +183,18 @@ const Hit: FC<{ lang: Lang; layer: MapLayer; code: Province; def: string }> = ({
   return n > 0 ? <a href={layer.href(code)} tabindex={-1}>{shape}</a> : shape;
 };
 
-const Label: FC<{ lang: Lang; layer: MapLayer; code: Province }> = ({ lang, layer, code }) => {
+// The labels that sit on the inset's water, beside their province: they stay in ink.
+const ON_WATER: ReadonlySet<Province> = new Set(["NS", "PE"]);
+
+// A province's code over its count, with no outline of its own (operator,
+// 2026-11-11: a halo round every label read as a border on the text). A label
+// on its province takes the colour that reads on that step (the stylesheet's
+// .cmap-onN: the ink on the paler steps, the panel's ground on the deeper).
+const Label: FC<{ lang: Lang; layer: MapLayer; code: Province; top: number }> = ({ lang, layer, code, top }) => {
   const { x, y } = MAP_LABELS[code];
+  const on = ON_WATER.has(code) ? "" : ` cmap-on${mapStep(countOf(layer.counts, code), top)}`;
   return (
-    <text class="cmap-label" x={x} y={y - LABEL_UP}>
+    <text class={`cmap-label${on}`} x={x} y={y - LABEL_UP}>
       {code}
       <tspan class="cmap-count" x={x} dy={LABEL_LINE}>{fmtInt(countOf(layer.counts, code), lang)}</tspan>
     </text>
@@ -233,7 +243,7 @@ export const CanadaMapPanel: FC<{ lang: Lang; layers: readonly MapLayer[] }> = (
                 {PROVINCES.map((p) => <Fill layer={l} code={p} def={`cm-${p}`} top={tops.get(l.id)!} />)}
                 <use href="#cm-borders" class="cmap-borders"></use>
                 {PROVINCES.map((p) => <Hit lang={lang} layer={l} code={p} def={`cm-${p}`} />)}
-                {main.map((p) => <Label lang={lang} layer={l} code={p} />)}
+                {main.map((p) => <Label lang={lang} layer={l} code={p} top={tops.get(l.id)!} />)}
               </g>
             ))}
             {/* Where the inset's provinces lie, then the inset over the Arctic islands. */}
@@ -244,7 +254,7 @@ export const CanadaMapPanel: FC<{ lang: Lang; layers: readonly MapLayer[] }> = (
                 {MARITIMES.map((p) => <Fill layer={l} code={p} def={`cmi-${p}`} top={tops.get(l.id)!} />)}
                 <use href="#cmi-borders" class="cmap-borders"></use>
                 {MARITIMES.map((p) => <Hit lang={lang} layer={l} code={p} def={`cmi-${p}`} />)}
-                {inset.map((p) => <Label lang={lang} layer={l} code={p} />)}
+                {inset.map((p) => <Label lang={lang} layer={l} code={p} top={tops.get(l.id)!} />)}
               </g>
             ))}
           </svg>

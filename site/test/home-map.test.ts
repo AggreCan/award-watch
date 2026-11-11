@@ -204,7 +204,7 @@ describe("the map panel", () => {
     // one read before the data date left out.
     expect(panel).toContain('<p class="cmap-caption" data-for="same_day">4 notices posted since this morning&#39;s refresh</p>');
     // Each province's figure on the map, a label a layer: the code over its count.
-    expect(panel).toMatch(/<text class="cmap-label" x="\d+" y="\d+">ON<tspan class="cmap-count" x="\d+" dy="22">260<\/tspan><\/text>/);
+    expect(panel).toMatch(/<text class="cmap-label cmap-on4" x="\d+" y="\d+">ON<tspan class="cmap-count" x="\d+" dy="22">260<\/tspan><\/text>/);
     expect(panel).toMatch(/<text class="cmap-label" x="\d+" y="\d+">PE<tspan class="cmap-count" x="\d+" dy="22">8<\/tspan><\/text>/);
     // The outlines once, in the defs, placed by each layer.
     expect(panel.match(/<path id="cm-ON"/g)).toHaveLength(1);
@@ -231,7 +231,15 @@ describe("the map panel", () => {
     const gap = open.indexOf('<use href="#cm-borders" class="cmap-borders"></use>');
     expect(gap).toBeGreaterThan(open.lastIndexOf('class="cmap-s'));
     expect(open.indexOf('class="cmap-hit"')).toBeGreaterThan(gap);
-    expect(open.lastIndexOf('class="cmap-hit"')).toBeLessThan(open.indexOf('<text class="cmap-label"'));
+    expect(open.lastIndexOf('class="cmap-hit"')).toBeLessThan(open.indexOf('<text class="cmap-label'));
+    // A label on its province names the province's step, so it takes the colour that reads on it; the two that
+    // sit on the inset's water name none and stay in ink.
+    for (const group of panel.match(/<g class="cmap-layer" data-for="\w+">[\s\S]*?<\/g>/g) ?? []) {
+      const step = new Map([...group.matchAll(/<use href="#cmi?-(\w\w)" class="cmap-s(\d)"/g)].map((m) => [m[1], m[2]]));
+      const labels = [...group.matchAll(/<text class="cmap-label( cmap-on(\d))?" x="\d+" y="\d+">(\w\w)</g)];
+      expect(labels.length).toBeGreaterThan(0);
+      for (const [, , on, code] of labels) expect(on, code).toBe(code === "NS" || code === "PE" ? undefined : step.get(code));
+    }
     expect(open.match(/class="cmap-hit"/g)).toHaveLength(PROVINCES.length);
     // The inset the same, with its own border.
     const inset = panel.match(/<g class="cmap-layer" data-for="open">[\s\S]*?<\/g>/g)?.[1] ?? "";
@@ -511,10 +519,36 @@ describe("the stylesheet", () => {
     expect(STYLES).toContain("html.js .cmap-toggles { display: flex; }");
     // Neighbours part on a gap in the panel's ground along the land borders; the pointer's outline lies over it,
     // clear until it is the one under the pointer or the keys.
-    expect(STYLES).toContain("\n.cmap-svg .cmap-borders { fill: none; stroke: var(--panel); stroke-width: 4; stroke-linecap: round; pointer-events: none; }");
-    expect(STYLES).toContain("\n.cmap-svg .cmap-hit { fill: transparent; stroke: none; }");
-    expect(STYLES).toContain("\n.cmap-svg a:hover .cmap-hit { stroke: var(--ink); stroke-width: 2.5; }");
-    expect(STYLES).toContain("\n.cmap-svg a:focus-visible .cmap-hit { stroke: var(--ink); stroke-width: 2.5; }");
+    expect(STYLES).toContain("\n.cmap-svg .cmap-borders { fill: none; stroke: var(--panel); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }");
+    // No outline anywhere: a province's shape is its fill, and the one under the pointer or the keys takes a veil of ink.
+    expect(STYLES).not.toMatch(/\.cmap-svg use \{/);
+    expect(STYLES).not.toContain("--map-line");
+    expect(STYLES).toContain("\n.cmap-svg .cmap-hit { fill: var(--ink); fill-opacity: 0; }");
+    expect(STYLES).toContain("\n.cmap-svg a:hover .cmap-hit { fill-opacity: 0.14; }");
+    expect(STYLES).toContain("\n.cmap-svg a:focus-visible .cmap-hit { fill-opacity: 0.14; }");
+    expect(STYLES).not.toMatch(/\.cmap-hit[^{]*\{[^}]*stroke: var\(--ink\)/);
+    // The labels have no halo. Ink on the water and on steps 0 to 2, the panel's ground on steps 3 and 4: each
+    // reads on its step, top and foot of the fade, in every palette (WCAG contrast).
+    expect(STYLES).toContain("\n.cmap-label { font-size: 22px; font-weight: 600; fill: var(--ink); text-anchor: middle; pointer-events: none; }");
+    expect(STYLES).toContain("\n.cmap-on3, .cmap-on4 { fill: var(--panel); }");
+    const lum = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => {
+        const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a: string, b: string) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+    for (const block of blocks) {
+      const body = block.exec(STYLES)![0];
+      const token = (name: string) => new RegExp(`--${name}: (#[0-9a-f]{6});`).exec(body)![1];
+      for (const s of [0, 1, 2, 3, 4]) {
+        const label = token(s >= 3 ? "panel" : "ink");
+        const step = token(`map-${s}`);
+        const low = s === 0 ? step : over(step, token("panel"), foot[s - 1]);
+        expect(Math.min(contrast(label, step), contrast(label, low)), `label on --map-${s} ${step}`).toBeGreaterThan(3.5);
+      }
+    }
   });
 });
 

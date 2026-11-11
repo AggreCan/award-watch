@@ -27,19 +27,19 @@ const nbsp = (s: string) => s.replace(/[  ]/g, " ");
 
 describe("controls", () => {
   it("give a select the same room on both sides of its text, with the chevron in the right-hand padding", () => {
-    // 8 px left; on the right 8 px, a 10 px chevron and an 8 px gap.
+    // Inside the 2 px edge: 7 px left; on the right 7 px, a 10 px chevron and an 8 px gap.
     const select = styles.match(/\nselect \{[^}]*\}/)?.[0] ?? "";
     expect(select).toContain("appearance: none;");
-    expect(select).toContain("padding-right: 26px;");
-    expect(select).toContain("background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%;");
+    expect(select).toContain("padding-right: 25px;");
+    expect(select).toContain("background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;");
     expect(select).toContain("var(--ink-2)");
     // Fields and selects keep the field border token and one height.
-    expect(styles).toMatch(/select, textarea \{\n  max-width: 100%; min-height: var\(--field-h\); padding: 5px 8px;\n  border: 1px solid var\(--field-border\);/);
+    expect(styles).toMatch(/select, textarea \{\n  max-width: 100%; min-height: var\(--field-h\); padding: 4px 7px;\n  border: 2px solid var\(--field-border\);/);
     expect(styles).toContain("--field-h: 32px;");
   });
 
   it("set the alerts form's field and button to one height and one border token, side by side, stacked on a phone", async () => {
-    expect(styles).toContain('.interest-form input[type="email"], .interest-form .btn { height: var(--field-h); min-height: 0; border: 1px solid var(--field-border); }');
+    expect(styles).toContain('.interest-form input[type="email"], .interest-form .btn { height: var(--field-h); min-height: 0; border: 2px solid var(--field-border); }');
     // The button is pinned to the input's top (the label line plus its 4 px), not to the column's
     // bottom: a password manager's zero-height element after the input would otherwise push it down.
     expect(styles).toContain('.interest-form .interest-field { flex: 0 1 320px; gap: 0; }');

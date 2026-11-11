@@ -134,7 +134,7 @@ describe("the navy top bar", () => {
     expect(bar).toContain('class="theme-toggle"');
     expect(bar).not.toContain("style=");
     const toggles = rule(".lang-toggle, .theme-toggle")?.body;
-    expect(decl(toggles, "border")).toBe("1px solid var(--field-border)");
+    expect(decl(toggles, "border")).toBe("2px solid var(--field-border)");
     expect(decl(toggles, "background")).toBe("var(--panel)");
     expect(decl(toggles, "border-radius")).toBe("6px");
   });
@@ -159,7 +159,9 @@ describe("one filled button", () => {
     // Every other button stays an outline on the panel ground.
     const btn = rule(".btn")?.body;
     expect(decl(btn, "background")).toBe("var(--panel)");
-    expect(decl(btn, "border")).toBe("1px solid var(--field-border)");
+    // 2 px, so the curve of a rounded corner holds beside the straight sides; the padding gives up the pixel.
+    expect(decl(btn, "border")).toBe("2px solid var(--field-border)");
+    expect(decl(btn, "padding")).toBe("4px 11px");
   });
 
   it("is a profile's Follow, signed in or not, and the profile's only one", async () => {

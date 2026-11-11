@@ -248,6 +248,6 @@ describe("the pages", () => {
     expect(STYLES).toContain("\n.tip-head { display: block; color: var(--muted); }");
     expect(STYLES).toContain("\n.tip-main { font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ink); }");
     expect(STYLES).toContain("\n.chart-plot .bar.tip-on, .chart-plot .bar:hover { fill: var(--chart-on) !important; }");
-    expect(STYLES).toContain("\n.cmap-svg .cmap-hit.tip-on { stroke: var(--ink); stroke-width: 2.5; }");
+    expect(STYLES).toContain("\n.cmap-svg .cmap-hit.tip-on { fill-opacity: 0.14; }");
   });
 });

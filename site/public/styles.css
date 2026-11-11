@@ -132,13 +132,12 @@
      paper, then four steps of the charts' emerald, lighter to darker as the
      count grows; the steps differ in lightness alone, and the lightest is
      2.1:1 on the panel. */
-  --map-0: #e7e3d9;
+  --map-0: #dfdbce;
   --map-1: #79bd9c;
   --map-2: #45a078;
   --map-3: #1f7d57;
   --map-4: #0a5234;
   /* The line between provinces: visible on the lightest step and on the darkest (operator, 2026-11-07). */
-  --map-line: #9c9486;
   --topbar: 56px;
   /* Wide enough for the longest label and its count on one line in both
      languages (measured: 256 px is the floor at 1440; 264 leaves margin). */
@@ -195,7 +194,6 @@
   --map-2: #278563;
   --map-3: #3db888;
   --map-4: #7fe0b6;
-  --map-line: #0f172a;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -231,7 +229,6 @@
     --map-2: #278563;
     --map-3: #3db888;
     --map-4: #7fe0b6;
-  --map-line: #0f172a;
     color-scheme: dark;
   }
 }
@@ -322,8 +319,8 @@ kbd { display: inline-block; min-width: 20px; padding: 0 4px; border: 1px solid 
 /* The language and theme buttons: outlined on the bar, the corners of every
    control, the bar's lighter step and a whiter edge under the pointer. */
 .lang-toggle, .theme-toggle {
-  display: inline-flex; align-items: center; height: 32px; padding: 0 12px;
-  border: 1px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink-2);
+  display: inline-flex; align-items: center; height: 32px; padding: 0 11px;
+  border: 2px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink-2);
   font: inherit; font-size: 12px; line-height: 16px; font-weight: 500; text-decoration: none; cursor: pointer;
 }
 .lang-toggle:hover, .theme-toggle:hover { border-color: var(--ink-2); background: var(--hover); color: var(--ink); }
@@ -456,10 +453,14 @@ h1 { font-family: var(--display); font-size: 28px; line-height: 34px; font-weigh
    around it stay square. Every button is flat, an outline on the panel
    ground, but the one filled button a page, .btn-primary: the emerald with
    white type in the light theme and navy type in the dark, at 600. */
+/* A control's edge is 2 px (operator, 2026-11-11): at 1 px the curve of a
+   rounded corner drew fainter than the straight sides and the corner seemed
+   to go, most of all on a display scaled to 125%, where 1 px is one device
+   pixel. The padding gives up the pixel, so no control changes size. */
 .btn {
   display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
-  min-height: var(--field-h); padding: 5px 12px;
-  border: 1px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink);
+  min-height: var(--field-h); padding: 4px 11px;
+  border: 2px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink);
   font: inherit; font-size: 13px; line-height: 20px; font-weight: 500; text-align: left; text-decoration: none; cursor: pointer;
 }
 .btn:hover { border-color: var(--ink-2); background: var(--hover); text-decoration: none; }
@@ -471,19 +472,20 @@ h1 { font-family: var(--display); font-size: 28px; line-height: 34px; font-weigh
 .btn-link { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 2px; cursor: pointer; }
 .btn-link:hover { text-decoration-color: currentColor; }
 input[type="search"], input[type="text"], input[type="number"], input[type="email"], select, textarea {
-  max-width: 100%; min-height: var(--field-h); padding: 5px 8px;
-  border: 1px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink);
+  max-width: 100%; min-height: var(--field-h); padding: 4px 7px;
+  border: 2px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink);
   font: inherit; font-size: 13px; line-height: 20px;
 }
 /* A select draws its own chevron, so its text sits as far from the right
-   edge as from the left: the 8 px padding, the 10 px chevron, then an 8 px
-   gap before the text. The chevron is two halves of a square in the
-   secondary ink, so it follows the theme. */
+   edge as from the left: the 7 px padding (9 px from the outer edge, with
+   the 2 px edge), the 10 px chevron, then an 8 px gap before the text. The
+   chevron is two halves of a square in the secondary ink, so it follows the
+   theme. */
 select {
   -webkit-appearance: none; appearance: none;
-  padding-right: 26px;
+  padding-right: 25px;
   background-image: linear-gradient(45deg, transparent 50%, var(--ink-2) 50%), linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
-  background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%;
+  background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
 }
@@ -882,7 +884,7 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
    rather than to the column's bottom: a password manager drops a zero-height
    element after the input, and a column gap or a bottom alignment would let
    it push the button down. */
-.interest-form input[type="email"], .interest-form .btn { height: var(--field-h); min-height: 0; border: 1px solid var(--field-border); }
+.interest-form input[type="email"], .interest-form .btn { height: var(--field-h); min-height: 0; border: 2px solid var(--field-border); }
 .interest-form .btn { flex: none; align-self: flex-start; margin-top: 20px; justify-content: center; white-space: nowrap; }
 /* The Email lists page's Save is that page's filled button: its 1 px edge
    shows the fill under it rather than the field's border. */
@@ -1050,12 +1052,12 @@ tr[data-phone-cut] { display: none !important; }
 .tip-main { font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ink); }
 /* The mark the tip is about, in the ink step past the chart's hue (darker in
    light, lighter in dark): a bar or a ranked bar filled, a point larger, a
-   province edged as on hover. */
+   province under its veil as on hover. */
 .chart-plot .bar.tip-on, .chart-plot .bar:hover { fill: var(--chart-on) !important; }
 .chart-plot .bar-light.tip-on, .chart-plot .bar-light:hover { fill: var(--chart-bar); }
 .chart-plot .dot.tip-on, .chart-plot .dot:hover { stroke: var(--chart-on); stroke-width: 10; }
 .rank-bars li.tip-on .rank-bar, .rank-bars li:hover .rank-bar { background: var(--chart-on); }
-.cmap-svg .cmap-hit.tip-on { stroke: var(--ink); stroke-width: 2.5; }
+.cmap-svg .cmap-hit.tip-on { fill-opacity: 0.14; }
 /* A chart's marks take the keyboard focus (the script makes each panel one
    stop): the filled mark and the tip are its sign, so the browser's box
    around the mark is not drawn. */
@@ -1557,20 +1559,21 @@ th[aria-sort="descending"] .th-sort::after {
 html.js .cmap-toggles { display: flex; }
 .cmap-caption { margin: 0 0 8px; font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ink); }
 .cmap-svg { display: block; width: 100%; height: auto; }
-/* A province has a hairline on its coast. Between two neighbours the land
-   borders (src/canada_map.ts) lie over the fills as a gap in the panel's
-   ground, so two provinces on one step of the ramp are still two shapes
-   (operator, 2026-11-11); a coast gets no gap, so no island is thinned by
-   one. Over the gap each province's outline lies again, clear: it takes the
-   pointer and draws the ink edge of the one under it, whole. */
-.cmap-svg use { stroke: var(--map-line); stroke-width: 1.5; stroke-linejoin: round; }
-.cmap-svg .cmap-borders { fill: none; stroke: var(--panel); stroke-width: 4; stroke-linecap: round; pointer-events: none; }
-.cmap-svg .cmap-hit { fill: transparent; stroke: none; }
-.cmap-svg a:hover .cmap-hit { stroke: var(--ink); stroke-width: 2.5; }
+/* A province's shape is its fill: no line is drawn on a coast. Between two
+   neighbours the land borders (src/canada_map.ts) lie over the fills as a
+   fine gap in the panel's ground, so two provinces on one step of the ramp
+   are still two shapes; a coast gets no gap, so no island is thinned by one.
+   Over the gap each province's outline lies again, clear: it takes the
+   pointer, and for the one under the pointer or the keys it is a veil of
+   ink, the province a shade deeper, as a chart's mark is. No edge is drawn
+   (operator, 2026-11-11: the outlines read as borders on borders). */
+.cmap-svg .cmap-borders { fill: none; stroke: var(--panel); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.cmap-svg .cmap-hit { fill: var(--ink); fill-opacity: 0; }
+.cmap-svg a:hover .cmap-hit { fill-opacity: 0.14; }
 /* A clicked province took the browser's focus rectangle around its bounding box; the
-   outline goes and the keyboard focus draws the same stroke as hover (operator, 2026-11-07). */
+   outline goes and the keyboard focus draws the same veil as hover (operator, 2026-11-07). */
 .cmap-svg a:focus { outline: none; }
-.cmap-svg a:focus-visible .cmap-hit { stroke: var(--ink); stroke-width: 2.5; }
+.cmap-svg a:focus-visible .cmap-hit { fill-opacity: 0.14; }
 .cmap-s0 { fill: var(--map-0); }
 .cmap-s1 { fill: var(--map-1); }
 .cmap-s2 { fill: var(--map-2); }
@@ -1589,11 +1592,12 @@ html.js .cmap-toggles { display: flex; }
 .cmap-f2 .cmap-foot { stop-opacity: 0.86; }
 .cmap-f3 .cmap-foot { stop-opacity: 0.88; }
 .cmap-f4 .cmap-foot { stop-opacity: 0.9; }
-/* The code over its count, in ink on a halo of the panel's ground, so it reads on every step. */
-.cmap-label {
-  font-size: 22px; font-weight: 600; fill: var(--ink); text-anchor: middle; pointer-events: none;
-  stroke: var(--panel); stroke-width: 5px; stroke-linejoin: round; paint-order: stroke;
-}
+/* The code over its count, with no outline of its own. On the water (the
+   inset) and on the paler steps it is ink; on the two deepest steps it takes
+   the panel's ground, which reads on them in both themes (the ramp runs the
+   other way in the dark, and so do the ink and the ground). */
+.cmap-label { font-size: 22px; font-weight: 600; fill: var(--ink); text-anchor: middle; pointer-events: none; }
+.cmap-on3, .cmap-on4 { fill: var(--panel); }
 .cmap-count { font-weight: 500; font-variant-numeric: tabular-nums; }
 .cmap-inset { fill: var(--panel); stroke: var(--border-2); stroke-width: 1.5; }
 .cmap-extent { fill: none; stroke: var(--muted); stroke-width: 1.2; }
