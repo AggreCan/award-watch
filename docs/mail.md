@@ -39,6 +39,11 @@ code sits in a ruled band at 32 px in a monospace face. A change to the shell
 belongs in `design/email/build.py` too, so the review sheet keeps showing
 what is sent.
 
+The dark overrides recolour the text classes (`ink`, `ink2`, `muted`) and,
+by name, the links inside each: a link carries its own inline colour, which
+a rule on the paragraph around it does not reach. Apple Mail and iOS Mail
+apply them; Gmail inverts colours on its own.
+
 What the shell keeps out, for Gmail's Promotions tab and for the reader:
 
 - No image but the two wordmark PNGs from the site's `/brand/`, the same two
@@ -110,6 +115,10 @@ and keep their own tests.
   are named by their dictionary keys in `site/test-mail/checks.ts`, so the
   exception holds in both languages and covers nothing else. The header's
   link to the home page is the HTML part's alone.
+- Every link that carries a colour is reached by a rule of the dark query:
+  its own class recoloured, or a rule for the links inside a class around
+  it (`linksLeftLight` in `site/test-mail/checks.ts`), so no link keeps the
+  light ink on the dark card.
 - The HTML part is in the shell: the header's wordmark linking the site, the
   footer's line with the tagline and the contact address, a preheader, at
   most one button, and no image but the two wordmarks.

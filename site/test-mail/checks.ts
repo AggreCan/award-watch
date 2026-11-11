@@ -22,6 +22,13 @@
 // its footer (the tagline and the contact address), a preheader, at most one
 // button, and no image but the two wordmarks, which are the same two files
 // for every reader.
+//
+// A client that honours the dark query (Apple Mail, iOS Mail) recolours the
+// classes the shell names, and a link keeps its own inline colour unless a
+// rule names the link itself. So every link that carries a colour must be
+// reached by a dark rule: its own class recoloured, or a rule for the links
+// inside a class around it. A paragraph link once kept the light ink on the
+// dark card and could not be read.
 import { expect } from "vitest";
 import { sendWithHeaders } from "../src/account/deliveries";
 import { deliveryHeaders, siteLink } from "../src/account/digests";
@@ -57,6 +64,43 @@ export interface Shape {
   manage?: string | null;
   // Lines worded for one part by design, as dictionary keys and their values.
   onePart?: readonly (readonly [Key, Record<string, string | number>?])[];
+}
+
+// -- the dark rules and the links -----------------------------------------------------------------
+
+// The selectors the dark query recolours, read from the message itself.
+export function darkColoured(html: string): Set<string> {
+  const at = html.indexOf("@media (prefers-color-scheme: dark){");
+  const block = at < 0 ? "" : html.slice(at, html.indexOf("@media only screen", at));
+  const out = new Set<string>();
+  for (const [, selectors, rule] of block.matchAll(/([.a-z0-9 ,-]+)\{([^}]*)\}/g)) {
+    if (!/(?:^|;)color:/.test(rule)) continue;
+    for (const s of selectors.split(",")) out.add(s.trim());
+  }
+  return out;
+}
+
+// The coloured links no dark rule reaches, each as its opening tag. A link
+// with no colour of its own (the wordmark's) takes the colour around it.
+export function linksLeftLight(html: string): string[] {
+  const dark = darkColoured(html);
+  const body = html.slice(html.indexOf("<body"));
+  const VOID = new Set(["img", "br", "meta", "link", "hr", "input"]);
+  const open: string[][] = [];
+  const left: string[] = [];
+  for (const [tag, close, name, attrs] of body.matchAll(/<(\/?)([a-z0-9]+)([^>]*)>/gi)) {
+    const el = name.toLowerCase();
+    if (VOID.has(el)) continue;
+    if (close) { open.pop(); continue; }
+    const classes = (/\sclass="([^"]*)"/.exec(attrs)?.[1] ?? "").split(/\s+/).filter(Boolean);
+    if (el === "a" && /\sstyle="(?:[^"]*;)?\s*color:/.test(attrs)) {
+      const own = classes.some((c) => dark.has(`.${c}`));
+      const around = open.flat().some((c) => dark.has(`.${c} a`));
+      if (!own && !around) left.push(tag);
+    }
+    open.push(classes);
+  }
+  return left;
 }
 
 // -- reading the two parts ----------------------------------------------------------------------
@@ -147,6 +191,9 @@ export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: re
   expect(PREHEADER_RE.exec(m.html)?.[1].trim(), `${what}: the preheader`).toBeTruthy();
   expect(buttonsIn(m.html), `${what}: one button at most`).toBeLessThanOrEqual(1);
   expect(imagesIn(m.html), `${what}: no image but the wordmarks`).toEqual([`${shape.site}/brand/wordmark.png`, `${shape.site}/brand/wordmark-dark.png`]);
+
+  // Every coloured link is reached by a rule of the dark query.
+  expect(linksLeftLight(m.html), `${what}: links a dark client leaves in the light ink`).toEqual([]);
 
   // No em-dash anywhere.
   for (const [part, s] of [["subject", m.subject], ["text", m.text], ["html", m.html]] as const) {

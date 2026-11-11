@@ -47,12 +47,16 @@ export const FONT = "'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue
 export const MONO = "ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace";
 
 // Overrides for a dark client, under the media query Apple Mail and iOS
-// honour; Gmail inverts on its own and the palette survives it.
+// honour; Gmail inverts on its own and the palette survives it. A link
+// carries its own inline colour, which a rule on the paragraph around it
+// does not reach, so each text class names its links too (a paragraph
+// link kept the light ink on the dark card until 2026-11-10); the mail
+// suite holds every coloured link in every message to one of these rules.
 const DARK_CSS = [
   ".bg{background:#0b1220!important}",
   ".card{background:#111a2b!important;border-color:#243044!important}",
   ".ink, .ink a{color:#e5edf7!important}",
-  ".ink2{color:#c7d2e0!important}",
+  ".ink2, .ink2 a{color:#c7d2e0!important}",
   ".muted, .muted a{color:#8da0b8!important}",
   ".band{background:#17233a!important;border-color:#2b3a52!important}",
   ".rule{border-color:#243044!important}",

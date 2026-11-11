@@ -51,7 +51,7 @@ DARK_RULES = [
     (".bg", "background:#0b1220!important"),
     (".card", "background:#111a2b!important;border-color:#243044!important"),
     (".ink, .ink a", "color:#e5edf7!important"),
-    (".ink2", "color:#c7d2e0!important"),
+    (".ink2, .ink2 a", "color:#c7d2e0!important"),
     (".muted, .muted a", "color:#8da0b8!important"),
     (".band", "background:#17233a!important;border-color:#2b3a52!important"),
     (".rule", "border-color:#243044!important"),
@@ -64,7 +64,11 @@ DARK_RULES = [
 
 
 def dark_css(prefix: str) -> str:
-    return "".join(f"{prefix}{sel}{{{rule}}}" for sel, rule in DARK_RULES)
+    # The prefix goes on every selector of a list: ".dark .ink, .ink a" would
+    # colour the links for the dark sheet on the light one as well.
+    def scoped(sel: str) -> str:
+        return ", ".join(f"{prefix}{part.strip()}" for part in sel.split(","))
+    return "".join(f"{scoped(sel)}{{{rule}}}" for sel, rule in DARK_RULES)
 
 
 HEAD_CSS = T("""
