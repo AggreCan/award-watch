@@ -29,8 +29,8 @@ import {
 } from "./forms";
 import { InterestPanel, interestFilter } from "./interest";
 import {
-  AnalyticsLink, AwardTable, BuyerLink, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, contractPath, contractSearchUrl, datasetUrl,
-  employeesText, grantUrl, lobbyUrl, money, orList, shareText,
+  AnalyticsLink, AwardTable, BuyerLink, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, contractPath, datasetUrl,
+  employeesText, grantUrl, grantsOnly, lobbyUrl, money, orList, shareText,
 } from "./shared";
 import { WATCH_MAX } from "./watchlist";
 import { profileInstruments } from "../instruments";
@@ -201,6 +201,10 @@ export function valueShare(lang: Lang, y: YearFigure): string {
 type Place = Profile["places"][number];
 
 const foldPlace = (s: string | null) => (s ?? "").normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
+
+// An institution's name as two lobbying fields compare it: case, accents and
+// spacing folded.
+export const foldName = (s: string) => foldPlace(s).replace(/\s+/g, " ").trim();
 
 // What a source writes in the city field for no city ("N/A", "None",
 // "Unknown"; the pipeline's placeholder names, matching.py), folded as
@@ -393,6 +397,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
   const notRead = SOURCE_ORDER.filter((s) => !read(s));
   const listed = (s: SourceKey) => withRecords.includes(s);
   const dataYear = Number(todayOf(stats.data_as_of).slice(0, 4));
+  const grantsOnlyYears = grantsOnly(profile.years);
   const buyerSources = MONEY_SOURCES.filter((s) => profile.buyers.some((b) => b.source === s));
 
   const sections: Record<SourceKey, unknown> = {
@@ -416,34 +421,38 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         <p class="muted small">{t(lang, "org.contracts_note")}</p>
         {profile.contracts.length ? (
           <PhonePages lang={lang} rows={PHONE_ROWS}>
+            {/* The reference sits under the description, as on the award lists: the description opens the
+                contract's page here, which links the government's contracts search. The largest value under
+                the same procurement ID shows where it differs from the row's own, on the description's lines,
+                where the row has room. */}
             <Table cols={[
               { kind: "date", label: t(lang, "col.date") },
               { kind: "main", label: t(lang, "col.description") },
               { kind: "buyer", label: t(lang, "col.buyer"), rest: "md" },
               { kind: "value", label: t(lang, "col.value") },
               { kind: "comp", label: t(lang, "col.method") },
-              { kind: "record", label: t(lang, "col.record") },
             ]}>
               <tbody>
-                {profile.contracts.map((r) => (
-                  <tr>
-                    <td data-label={t(lang, "col.date")} class="mono">{r.contract_date ?? ""}</td>
-                    <td data-label={t(lang, "col.description")} class="lead-cell">
-                      <a href={contractPath(r.owner_org, r.reference)}>{pick(lang, r.description_en, r.description_fr) ?? r.reference}</a>
-                      {r.reporting_period ? <><br /><span class="muted small">{t(lang, "org.reporting_period", { period: r.reporting_period })}</span></> : null}
-                    </td>
-                    <td data-label={t(lang, "col.buyer")} class="mdh"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
-                    <td data-label={t(lang, "col.value")} class="mono num">
-                      {money(lang, r.value)}
-                      {r.value_last_reported !== undefined && r.value_last_reported !== null ? (
-                        <><br /><span class="muted small" title={t(lang, "org.last_reported_def")}>{t(lang, "org.last_reported", { value: money(lang, r.value_last_reported) })}</span></>
-                      ) : null}
-                    </td>
-                    <td data-label={t(lang, "col.method")}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
-                    {/* A published contract's or a grant's reference runs to 30 characters ("199-2019-2020-Q4- CSGC16725277"), past the record column; it wraps at its hyphens rather than widening the table into a scroll. */}
-                    <td data-label={t(lang, "col.record")}><a href={contractSearchUrl(r.reference)} class="mono wrap" rel="nofollow noopener">{r.reference}</a></td>
-                  </tr>
-                ))}
+                {profile.contracts.map((r) => {
+                  const largest = r.value_last_reported ?? null;
+                  return (
+                    <tr>
+                      <td data-label={t(lang, "col.date")} class="mono">{r.contract_date ?? ""}</td>
+                      <td data-label={t(lang, "col.description")} class="lead-cell">
+                        <a href={contractPath(r.owner_org, r.reference)}>{pick(lang, r.description_en, r.description_fr) ?? r.reference}</a>
+                        <br />
+                        <span class="mono id muted">{r.reference}</span>
+                        {r.reporting_period ? <span class="muted small">{` · ${t(lang, "org.reporting_period", { period: r.reporting_period })}`}</span> : null}
+                        {largest !== null && largest !== r.value ? (
+                          <span class="nw-block muted small" title={t(lang, "org.last_reported_def")}>{t(lang, "org.largest_value", { value: money(lang, largest) })}</span>
+                        ) : null}
+                      </td>
+                      <td data-label={t(lang, "col.buyer")} class="mdh"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
+                      <td data-label={t(lang, "col.value")} class="mono num">{money(lang, r.value)}</td>
+                      <td data-label={t(lang, "col.method")}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </Table>
           </PhonePages>
@@ -456,34 +465,39 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
       <Panel id="grants" title={t(lang, SECTION_KEY.grants)} count={n(profile.grants_total_rows)} foot={<SourceLine lang={lang} source="grants" />}>
         {profile.grants.length ? (
           <PhonePages lang={lang} rows={PHONE_ROWS}>
+            {/* Four columns, so the department shows from 700 px: the end date on a line of its own under the
+                start, the reference (a link to the government's record) under the program, and the agreement
+                type under the value, which it qualifies ("Grant", "Contribution"). */}
             <Table cols={[
               { kind: "date", label: t(lang, "grant.start") },
               { kind: "main", label: t(lang, "grant.program") },
-              { kind: "buyer", label: t(lang, "grant.department"), rest: "md" },
-              { kind: "label", label: t(lang, "grant.type") },
+              { kind: "buyer", label: t(lang, "grant.department") },
               { kind: "value", label: t(lang, "col.value") },
-              { kind: "record", label: t(lang, "col.record") },
             ]}>
               <tbody>
-                {profile.grants.map((g) => (
-                  <tr>
-                    <td data-label={t(lang, "grant.start")} class="mono">
-                      <span class="nw">{g.start ?? ""}</span>
-                      {g.end ? <span class="muted"> {tj(lang, "grant.to", { end: <span class="nw">{g.end}</span> })}</span> : null}
-                    </td>
-                    <td data-label={t(lang, "grant.program")} class="lead-cell">
-                      {pick(lang, g.program_en, g.program_fr) ?? ""}
-                      {pick(lang, g.title_en, g.title_fr) ? <><br /><span class="muted small">{pick(lang, g.title_en, g.title_fr)}</span></> : null}
-                    </td>
-                    <td data-label={t(lang, "grant.department")} class="mdh"><BuyerLink lang={lang} id={g.buyer_id} en={g.buyer_en} fr={g.buyer_fr} /></td>
-                    <td data-label={t(lang, "grant.type")}>{g.agreement_type && AGREEMENT_TYPE[g.agreement_type] ? t(lang, AGREEMENT_TYPE[g.agreement_type]) : g.agreement_type ?? ""}</td>
-                    <td data-label={t(lang, "col.value")} class="mono num">{money(lang, g.value)}</td>
-                    <td data-label={t(lang, "col.record")}>
-                      <a href={grantUrl(g.owner_org, g.reference)} class="mono wrap" rel="nofollow noopener">{g.reference}</a>
-                      {g.amendment > 0 ? <span class="muted small"> {t(lang, "grant.amendment", { n: g.amendment })}</span> : null}
-                    </td>
-                  </tr>
-                ))}
+                {profile.grants.map((g) => {
+                  const type = g.agreement_type && AGREEMENT_TYPE[g.agreement_type] ? t(lang, AGREEMENT_TYPE[g.agreement_type]) : g.agreement_type;
+                  return (
+                    <tr>
+                      <td data-label={t(lang, "grant.start")} class="mono">
+                        <span class="nw">{g.start ?? ""}</span>
+                        {g.end ? <><br /><span class="muted small">{tj(lang, "grant.to", { end: <span class="nw">{g.end}</span> })}</span></> : null}
+                      </td>
+                      <td data-label={t(lang, "grant.program")} class="lead-cell">
+                        {pick(lang, g.program_en, g.program_fr) ?? ""}
+                        {pick(lang, g.title_en, g.title_fr) ? <><br /><span class="muted small">{pick(lang, g.title_en, g.title_fr)}</span></> : null}
+                        <br />
+                        <a href={grantUrl(g.owner_org, g.reference)} class="mono id wrap" rel="nofollow noopener">{g.reference}</a>
+                        {g.amendment > 0 ? <span class="muted small"> {t(lang, "grant.amendment", { n: g.amendment })}</span> : null}
+                      </td>
+                      <td data-label={t(lang, "grant.department")}><BuyerLink lang={lang} id={g.buyer_id} en={g.buyer_en} fr={g.buyer_fr} /></td>
+                      <td data-label={t(lang, "col.value")} class="mono num">
+                        {money(lang, g.value)}
+                        {type ? <span class="nw-block muted small" title={t(lang, "grant.type")}>{type}</span> : null}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </Table>
           </PhonePages>
@@ -497,27 +511,41 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         <p class="muted small">{t(lang, "org.lobbying_note")}</p>
         {profile.lobbying.length ? (
           <PhonePages lang={lang} rows={PHONE_ROWS}>
+            {/* The officials are the longest text a row holds, so they take the main column; the subject
+                matters are codes ("SMT-11") and fit a label's width. An official's institution is left out
+                where the row's institutions name it already. While the institutions column rests (700 to
+                1279 px) they show under the officials. */}
             <Table cols={[
               { kind: "date", label: t(lang, "col.date") },
-              { kind: "main", label: t(lang, "lobby.subjects") },
+              { kind: "label", label: t(lang, "lobby.subjects") },
               { kind: "buyer", label: t(lang, "lobby.institutions"), rest: "md" },
-              { kind: "org", label: t(lang, "lobby.officials") },
+              { kind: "main", label: t(lang, "lobby.officials") },
               { kind: "org", label: t(lang, "lobby.registrant"), rest: "lg" },
               { kind: "record", label: t(lang, "col.record") },
             ]}>
               <tbody>
-                {profile.lobbying.map((r) => (
-                  <tr>
-                    <td data-label={t(lang, "col.date")} class="mono">{r.comm_date ?? ""}</td>
-                    <td data-label={t(lang, "lobby.subjects")} class="lead-cell">{r.subject_matters.join("; ")}</td>
-                    <td data-label={t(lang, "lobby.institutions")} class={restClass("md")}>{r.institutions.join("; ")}</td>
-                    <td data-label={t(lang, "lobby.officials")}>
-                      {r.dpoh.map((d) => <span class="nw-block">{[d.name, d.title, d.institution].filter(Boolean).join(", ")}</span>)}
-                    </td>
-                    <td data-label={t(lang, "lobby.registrant")} class={restClass("lg")}>{r.registrant ?? ""}</td>
-                    <td data-label={t(lang, "col.record")}><a href={lobbyUrl(r.comm_number)} class="mono" rel="nofollow noopener">{r.comm_number}</a></td>
-                  </tr>
-                ))}
+                {profile.lobbying.map((r) => {
+                  const named = new Set(r.institutions.map(foldName));
+                  return (
+                    <tr>
+                      <td data-label={t(lang, "col.date")} class="mono">{r.comm_date ?? ""}</td>
+                      <td data-label={t(lang, "lobby.subjects")}>{r.subject_matters.join("; ")}</td>
+                      <td data-label={t(lang, "lobby.institutions")} class={restClass("md")}>{r.institutions.join("; ")}</td>
+                      <td data-label={t(lang, "lobby.officials")} class="lead-cell">
+                        {r.dpoh.map((d) => (
+                          <span class="nw-block">
+                            {[d.name, d.title, d.institution && !named.has(foldName(d.institution)) ? d.institution : null].filter(Boolean).join(", ")}
+                          </span>
+                        ))}
+                        {r.institutions.length ? (
+                          <span class="md-only muted small">{t(lang, "common.labelled", { label: t(lang, "lobby.institutions"), value: r.institutions.join("; ") })}</span>
+                        ) : null}
+                      </td>
+                      <td data-label={t(lang, "lobby.registrant")} class={restClass("lg")}>{r.registrant ?? ""}</td>
+                      <td data-label={t(lang, "col.record")}><a href={lobbyUrl(r.comm_number)} class="mono" rel="nofollow noopener">{r.comm_number}</a></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </Table>
           </PhonePages>
@@ -631,7 +659,9 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
         ) : <p class="muted">{t(lang, "org.buyers_none")}</p>}
       </Panel>
 
-      <Panel id="years" title={t(lang, "org.years")} foot={<span>
+      {/* Grants carry no competitive flag: on a profile whose every year is grants, the two share columns
+          would read "Not applicable" on every row, so they and their footnote are left out. */}
+      <Panel id="years" title={t(lang, "org.years")} foot={grantsOnlyYears ? undefined : <span>
         {t(lang, "org.nc_footnote")}
         {profile.years.some((y) => (y.n_negative ?? 0) > 0 && y.source !== "grants") ? <><br />{t(lang, "org.nc_negative_note")}</> : null}
       </span>}>
@@ -646,16 +676,18 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
             { kind: "main", label: t(lang, "col.source") },
             { kind: "count", label: t(lang, "col.records") },
             { kind: "total", label: t(lang, "col.value") },
-            { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span> },
-            { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_value")}</span>, rest: "md" },
+            !grantsOnlyYears && { kind: "part", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span> },
+            !grantsOnlyYears && { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_value")}</span>, rest: "md" },
           ]} cells={(y) => (
             <>
               <td data-label={t(lang, "col.year")} class="mono">{y.year}</td>
               <td data-label={t(lang, "col.source")}>{sourceLabel(lang, y.source)}</td>
               <td data-label={t(lang, "col.records")} class="mono num">{n(y.n)}</td>
               <td data-label={t(lang, "col.value")} class="mono num">{money(lang, y.total)}</td>
-              <td data-label={t(lang, "org.col_nc_count")} class="mono num">{shareText(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}</td>
-              <td data-label={t(lang, "org.col_nc_value")} class="mono num mdh">{valueShare(lang, y)}</td>
+              {grantsOnlyYears ? null : <>
+                <td data-label={t(lang, "org.col_nc_count")} class="mono num">{shareText(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}</td>
+                <td data-label={t(lang, "org.col_nc_value")} class="mono num mdh">{valueShare(lang, y)}</td>
+              </>}
             </>
           )} />
         ) : <p class="muted">{t(lang, "org.years_none")}</p>}

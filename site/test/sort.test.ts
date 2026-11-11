@@ -198,7 +198,7 @@ describe("the markup", () => {
     // The other heads: no button, no link, no glyph.
     expect(heads.match(/class="th-sort"/g)).toHaveLength(2);
     expect(heads).toContain('<th class="k-main">Contract</th>');
-    expect(heads).toContain('<th class="k-buyer mdh">Buyer</th>');
+    expect(heads).toContain('<th class="k-buyer lgh">Buyer</th>');
     expect(heads).not.toContain("<button");
     expect(heads).not.toContain("aria-sort");
     // Round trip: ascending, descending, then the window's own order, the filters kept and the first page.

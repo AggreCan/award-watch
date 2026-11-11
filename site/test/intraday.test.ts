@@ -234,7 +234,7 @@ describe("a paid request", () => {
     expect(band).toContain('<span class="mono id muted">SSC-26-00099999:T</span>');
     // A listed buyer links its page; an unresolved one shows the name as published, no link.
     expect(band).toContain('<a href="/buyers/pwgsc-tpsgc">Public Services and Procurement Canada</a>');
-    expect(band).toContain('<td data-label="Buyer" class="c-buyer">Some Base Supply Office</td>');
+    expect(band).toContain('<td data-label="Buyer" class="c-buyer">Some Base Supply Office<span class="split-only md-only muted small">');
     // Left out: the version already listed, the older amendment, the row read before the data date.
     for (const gone of ["Listed already, same version", "An older version", "Read before the data date"]) expect(page).not.toContain(gone);
     // The rest of the page is the free page.

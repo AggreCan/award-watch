@@ -27,6 +27,7 @@ import { routeTemplate } from "../src/views";
 import { get, grantPro, newEmail, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { testEnv } from "./assets";
 import { applySql } from "./setup";
+import { misfits, tablesIn } from "./table-fit";
 
 useAccountsDb();
 
@@ -425,7 +426,9 @@ describe("the Pro view", () => {
     expect(amended).toHaveLength(1);
     const pct = `+${Math.round((after / before - 1) * 100)}%`;
     expect(panel).toMatch(new RegExp(`2025-26</td><td[^>]*>${year.length}</td><td[^>]*>1 \\(${Math.round(100 / year.length)}%\\)</td><td[^>]*>1</td>` +
-      `<td[^>]*>${reEsc(money(before))}</td><td[^>]*>${reEsc(money(after))}</td><td[^>]*>${reEsc(pct)}</td>`));
+      `<td[^>]*>${reEsc(money(before))}</td><td[^>]*>${reEsc(money(after))}</td><td[^>]*>${reEsc(pct)}<span class="md-only muted small">`));
+    // While the two values rest (700 to 1279 px) they show under the change, each named.
+    expect(panel).toContain(`<span class="nw-block">First version: ${money(before)}</span><span class="nw-block">Newest version: ${money(after)}</span></span></td>`);
     expect(panel).toContain("Amended records: value of the first version");
     const contracts = (await page(`${VIEWS[0]}?source=contracts`, { cookie: proCookie })).html;
     expect(contracts.split("Change in Value Through Amendments")[1]).toContain("Amendments are read from award notices and PSPC contract history");
@@ -608,6 +611,24 @@ describe("the Pro view", () => {
     const free = (await page(`${VIEWS[0]}?lang=fr`)).html;
     expect(free).toContain("S’abonner à Pro");
     expect(free).not.toContain("Sign in to subscribe");
+  });
+});
+
+describe("the Pro view's tables", () => {
+  it("fit their column from 700 px, for every source of every view, in both languages", async () => {
+    await sessions();
+    let tables = 0;
+    for (const view of [...VIEWS, `/organizations/${A2}/analytics`]) {
+      for (const source of ["awards", "history", "contracts", "grants"]) {
+        for (const lang of ["en", "fr"]) {
+          const path = `${view}?source=${source}&years=10${lang === "fr" ? "&lang=fr" : ""}`;
+          const { html } = await page(path, { cookie: proCookie });
+          tables += tablesIn(html).length;
+          expect(misfits(html), path).toEqual([]);
+        }
+      }
+    }
+    expect(tables).toBeGreaterThan(40);
   });
 });
 

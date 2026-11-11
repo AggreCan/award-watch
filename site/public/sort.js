@@ -131,7 +131,8 @@ export function headOrder(orders, current, column, none = "") {
 function kindOf(th, table) {
   const c = th.classList;
   if (c.contains("k-date") || c.contains("k-datetime") || th.getAttribute("data-kind") === "date") return "date";
-  if (c.contains("k-share")) return "share";
+  // A part of a count ("3 (25%)") sorts by its percentage, as a share does.
+  if (c.contains("k-share") || c.contains("k-part")) return "share";
   if (c.contains("num")) return "num";
   // A figure under a head of another kind (an average in the main column): its cells say so.
   const col = /** @type {HTMLTableCellElement} */ (th).cellIndex;

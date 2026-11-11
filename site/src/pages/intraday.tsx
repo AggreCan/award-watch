@@ -56,14 +56,18 @@ export const IntradayBand: FC<{ lang: Lang; rows: readonly IntradayView[]; clock
                   <span class="mono id muted">{shown}</span> <span class="tag">{t(lang, CHIP[r.intraday])}</span>{" "}
                   <SegmentChips lang={lang} codes={r.segments} />
                 </td>
-                <td data-label={t(lang, "col.buyer")} class="c-buyer"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td>
+                <td data-label={t(lang, "col.buyer")} class="c-buyer">
+                  <BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} />
+                  {/* While the provinces column rests (beside the detail panel, and from 700 to 1279 px), as on the list. */}
+                  <span class="split-only md-only muted small">{provincesText(lang, r.provinces)}</span>
+                </td>
                 <td data-label={t(lang, "col.closing")} class="mono c-date" data-closes={closes ?? undefined}
                   data-time={closes ? closingTime(r.closing, lang) ?? undefined : undefined} data-notice={closes ? r.reference.toLowerCase() : undefined}>
                   {closingText(r.closing, lang)}{" "}
                   <StatusBadge lang={lang} status={state} notice={closes ? r.reference.toLowerCase() : undefined} />
                 </td>
                 <td data-label={t(lang, "col.published")} class="mono c-pub mdh">{r.published ?? ""}</td>
-                <td data-label={t(lang, "col.region")} class="c-region">{provincesText(lang, r.provinces)}</td>
+                <td data-label={t(lang, "col.region")} class="c-region mdh">{provincesText(lang, r.provinces)}</td>
               </tr>
             );
           })}

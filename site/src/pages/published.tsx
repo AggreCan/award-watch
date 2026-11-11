@@ -272,11 +272,12 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
         <Panel title={t(lang, "published.versions")} count={more ? t(lang, "published.versions_more", { n: fmtInt(CONTRACT_VERSIONS_MAX + 1, lang) }) : fmtInt(versions.length, lang)}
           foot={more ? t(lang, "published.versions_cut", { n: fmtInt(CONTRACT_VERSIONS_MAX, lang) }) : undefined}>
           <div class="table-wrap bordered">
+            {/* From 700 to 1279 px the instrument type and the amendment value rest and show under the reference. */}
             <Table cols={[
               { kind: "date", label: t(lang, "published.contract_date") },
               { kind: "main", label: t(lang, "col.record") },
-              { kind: "label", label: t(lang, "contract.instrument") },
-              { kind: "value", label: t(lang, "published.amendment") },
+              { kind: "label", label: t(lang, "contract.instrument"), rest: "md" },
+              { kind: "value", label: t(lang, "published.amendment"), rest: "md" },
               { kind: "value", label: t(lang, "published.value") },
               { kind: "value", label: t(lang, "contract.value_counted") },
             ]}>
@@ -284,15 +285,25 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
                 {versions.map((v) => {
                   const vref = String(v.ref);
                   const self = num(v.self) === 1;
+                  const instrument = str(v.inst) ? (INSTRUMENT[String(v.inst).toUpperCase()] ? t(lang, INSTRUMENT[String(v.inst).toUpperCase()]) : String(v.inst)) : null;
+                  const amendment = cad(lang, v.amend);
                   return (
                     <tr>
                       <td data-label={t(lang, "published.contract_date")} class="mono">{str(v.cdate) ?? ""}</td>
                       <td data-label={t(lang, "col.record")} class="mono">
                         {self ? <strong>{vref}</strong> : <a href={contractPath(dept, vref)}>{vref}</a>}
                         {v === newest ? <> <span class="tag">{t(lang, "published.newest")}</span></> : null}
+                        {instrument || amendment ? (
+                          <span class="md-only muted small">
+                            {[
+                              instrument ? t(lang, "common.labelled", { label: t(lang, "contract.instrument"), value: instrument }) : null,
+                              amendment ? t(lang, "common.labelled", { label: t(lang, "published.amendment"), value: amendment }) : null,
+                            ].filter(Boolean).join(" · ")}
+                          </span>
+                        ) : null}
                       </td>
-                      <td data-label={t(lang, "contract.instrument")}>{str(v.inst) ? (INSTRUMENT[String(v.inst).toUpperCase()] ? t(lang, INSTRUMENT[String(v.inst).toUpperCase()]) : String(v.inst)) : ""}</td>
-                      <td data-label={t(lang, "published.amendment")} class="mono num">{cad(lang, v.amend) ?? ""}</td>
+                      <td data-label={t(lang, "contract.instrument")} class="mdh">{instrument ?? ""}</td>
+                      <td data-label={t(lang, "published.amendment")} class="mono num mdh">{amendment ?? ""}</td>
                       <td data-label={t(lang, "published.value")} class="mono num">{cad(lang, v.value) ?? ""}</td>
                       <td data-label={t(lang, "contract.value_counted")} class="mono num">{cad(lang, v.counted) ?? ""}</td>
                     </tr>

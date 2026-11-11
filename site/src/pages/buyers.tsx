@@ -29,7 +29,7 @@ import { holdersPart } from "../instruments";
 import { HoldersPanel } from "./instruments";
 import {
   AnalyticsLink, AwardTable, BUYER_SOURCE_RESTS, Count, OrgTotalTable, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, money,
-  shareText, sourceCellClass, sourceColumns,
+  grantsOnly, shareText, sourceCellClass, sourceColumns,
 } from "./shared";
 
 const KIND: Record<string, Key> = {
@@ -180,6 +180,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "buyers.title"), path: "/buyers" }, { name }];
   const n = (v: number) => fmtInt(v, lang);
   const dataYear = Number(todayOf(stats.data_as_of).slice(0, 4));
+  const grantsOnlyYears = grantsOnly(b.years);
   const withValue = b.years.filter((y) => (y.total ?? 0) > 0);
   let chart = null;
   if (withValue.length) {
@@ -299,7 +300,8 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
       {/* The weekly briefing beside the email lists, while the accounts switch is on (account/briefing_pages.tsx). */}
       <BriefingPanel lang={lang} state={briefing} kind="buyer" subject={b.buyer.id} />
 
-      <Panel id="years" title={t(lang, "org.years")} foot={<span>{t(lang, "org.nc_footnote")}</span>}>
+      {/* As on a profile: a buyer whose every year is grants has no non-competitive share to show. */}
+      <Panel id="years" title={t(lang, "org.years")} foot={grantsOnlyYears ? undefined : <span>{t(lang, "org.nc_footnote")}</span>}>
       {lateYears ? <p class="muted small">{t(lang, "common.dates_as_published")}</p> : null}
       {chart}
       {b.years.length ? (
@@ -308,7 +310,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
           { kind: "main", label: t(lang, "col.source") },
           { kind: "count", label: t(lang, "col.records") },
           { kind: "total", label: t(lang, "col.value") },
-          { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span> },
+          !grantsOnlyYears && { kind: "part", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span> },
           { kind: "count", label: t(lang, "buyer.col_organizations"), rest: "md" },
         ]} cells={(y) => (
           <>
@@ -316,9 +318,11 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
             <td data-label={t(lang, "col.source")}>{sourceLabel(lang, y.source)}</td>
             <td data-label={t(lang, "col.records")} class="mono num">{n(y.n)}</td>
             <td data-label={t(lang, "col.value")} class="mono num">{money(lang, y.total)}</td>
-            <td data-label={t(lang, "org.col_nc_count")} class="mono num">
-              {shareText(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}
-            </td>
+            {grantsOnlyYears ? null : (
+              <td data-label={t(lang, "org.col_nc_count")} class="mono num">
+                {shareText(lang, y.n_non_competitive, y.source === "grants" ? null : y.n, n)}
+              </td>
+            )}
             <td data-label={t(lang, "buyer.col_organizations")} class="mono num mdh">{y.n_organizations === null ? "" : n(y.n_organizations)}</td>
           </>
         )} />

@@ -6,7 +6,7 @@ import type { FC, PropsWithChildren } from "hono/jsx";
 import { ProTag, SameDayMark } from "../pro";
 import { type Column, type HeadSort, type MaybeColumn, type Rest, type Sorting, Table, restClass } from "../columns";
 import { METHOD_SHORT, MONEY_SOURCES, NOTICE_TYPE_SHORT, type MoneySource } from "../constants";
-import { type AwardRow, type DerivedPlaces, type OrgTotal, type PlaceSource, type TenderRow, type YearFigure, publishedReference } from "../data";
+import { type AwardRow, type Competitive, type DerivedPlaces, type OrgTotal, type PlaceSource, type TenderRow, type YearFigure, publishedReference } from "../data";
 import { buyerPath } from "../crosslinks";
 import { fmtInt, fmtMoney, fmtPct, pick, provinceName, segmentLabel, segmentShort, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { type Clock, closesAtUtc, closesLineWords, closingText, closingTime, countdownLine, tenderState } from "../closing";
@@ -317,6 +317,11 @@ export function yearOrder<Y extends YearFigure>(years: readonly Y[], dataYear: n
 // How many years the table shows before the fold: the data year and the nine before it.
 export const YEARS_SHOWN = 10;
 
+// Whether every row of a year table is grants, which carry no competitive
+// flag: its non-competitive shares would read "Not applicable" on every row,
+// and the table leaves them out.
+export const grantsOnly = (years: readonly YearFigure[]): boolean => years.length > 0 && years.every((y) => y.source === "grants");
+
 // The year table: a switch above it shows one source at a time (or all of
 // them), so a reader follows one source down the years; the rows older than
 // the last ten years wait under "Show all years". Both work from the
@@ -363,7 +368,9 @@ export function YearsBox<Y extends YearFigure>({ lang, years, dataYear, cols, ce
 
 // The tender list's columns. The c- classes name each column for the split
 // view, which hides the published date and the region beside its detail
-// panel; the kinds set the widths (src/columns.tsx).
+// panel; the kinds set the widths (src/columns.tsx). From 700 to 1279 px
+// the region rests too, and a row's provinces show under its buyer, as
+// beside the detail panel and on the home lists.
 // sorts: on /tenders, the list's orders the Closing and Published heads set (pages/tenders.tsx).
 export function tenderColumns(lang: Lang, sorts?: TenderSorts): Column[] {
   return [
@@ -371,7 +378,7 @@ export function tenderColumns(lang: Lang, sorts?: TenderSorts): Column[] {
     { kind: "buyer", label: t(lang, "col.buyer"), class: "c-buyer" },
     { kind: "datetime", label: t(lang, "col.closing"), class: "c-date", sort: sorts?.closing },
     { kind: "date", label: t(lang, "col.published"), rest: "md", class: "c-pub", sort: sorts?.published },
-    { kind: "region", label: t(lang, "col.region"), class: "c-region" },
+    { kind: "region", label: t(lang, "col.region"), rest: "md", class: "c-region" },
   ];
 }
 
@@ -471,9 +478,9 @@ export const TenderTable: FC<{
               ) : null}
               <td data-label={t(lang, "col.buyer")} class="c-buyer">
                 <BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} />
-                {/* Beside the detail panel the provinces column rests; they show here instead. On the home
-                    lists they show here too while the column rests on a medium screen (md-only). */}
-                <span class={home ? "split-only md-only muted small" : "split-only muted small"}>{provincesText(lang, r.provinces, r.provinces_derived)}</span>
+                {/* Beside the detail panel the provinces column rests; they show here instead. They show here too
+                    while the column rests on a medium screen (md-only). */}
+                <span class="split-only md-only muted small">{provincesText(lang, r.provinces, r.provinces_derived)}</span>
               </td>
               <td data-label={t(lang, "col.closing")} class="mono c-date" data-closes={closes ?? undefined}
                 data-time={closes ? closingTime(r.closing, lang) ?? undefined : undefined} data-notice={closes ? r.reference.toLowerCase() : undefined}>
@@ -484,7 +491,7 @@ export const TenderTable: FC<{
                 {far !== null ? <span class="countdown countdown-far">{far}</span> : null}
               </td>
               {home ? null : <td data-label={t(lang, "col.published")} class="mono c-pub mdh">{r.published ?? ""}</td>}
-              <td data-label={t(lang, "col.region")} class={home ? "c-region mdh" : "c-region"}>{provincesText(lang, r.provinces, r.provinces_derived)}</td>
+              <td data-label={t(lang, "col.region")} class="c-region mdh">{provincesText(lang, r.provinces, r.provinces_derived)}</td>
             </tr>
           );
         })}
@@ -514,54 +521,87 @@ export const CountdownScript: FC<{ lang: Lang; line?: boolean }> = ({ lang, line
   </>
 );
 
+// The competition flag under a record's value while the competition column
+// rests (700 to 1279 px), and whatever else that column holds (a record
+// table's method line) after it.
+export const RestFlag: FC<PropsWithChildren<{ lang: Lang; value: Competitive }>> = ({ lang, value, children }) => (
+  <span class="md-only rest-flag">
+    <CompetitiveFlag lang={lang} value={value} />
+    {children}
+  </span>
+);
+
+// A party under another while the party's own column rests (700 to 1439
+// px): "Buyer: Health Canada", on a line of its own. The line break ends
+// what public/sort.js reads, so the cell sorts by its own party.
+export const RestParty: FC<{ lang: Lang; label: Key; children?: unknown }> = ({ lang, label, children }) => (
+  <>
+    <br />
+    <span class="lg-down muted small">{tj(lang, "common.labelled", { label: t(lang, label), value: children })}</span>
+  </>
+);
+
 // Award notices and contract history rows. href is the record page's
 // prefix (/awards or /history); on history rows the buyer is the client
 // department. sorting "server": a page of a longer list (/awards and a
 // year's awards), whose heads sort only where sorts links the server's
 // orders; a list shown whole sorts in the page.
+// With the supplier and the buyer both shown, the table is too wide for the
+// content column below 1440 px: there the buyer goes under the supplier, and
+// below 1280 px the competition flag goes under the value. With one party it
+// fits from 700 px with the buyer resting below 1280 px (a profile's lists).
 export const AwardTable: FC<{
   lang: Lang; rows: readonly AwardRow[]; href?: string; organization?: boolean; buyer?: boolean; phoneRows?: number;
   sorting?: Sorting; sorts?: { awarded: HeadSort; value: HeadSort };
 }> = ({
   lang, rows, href = "/awards", organization = true, buyer = true, phoneRows, sorting = "client", sorts,
-}) => (
-  <div class="table-wrap bordered" data-phone-rows={phoneRows ? String(phoneRows) : undefined}>
-    <Table sorting={sorting} cols={[
-      { kind: "date", label: t(lang, "col.awarded"), sort: sorts?.awarded },
-      { kind: "main", label: t(lang, "col.contract") },
-      organization && { kind: "org", label: t(lang, "col.supplier") },
-      buyer && { kind: "buyer", label: t(lang, href === "/history" ? "col.client" : "col.buyer"), rest: "md" },
-      { kind: "value", label: t(lang, "col.value"), sort: sorts?.value },
-      { kind: "comp", label: t(lang, "col.method") },
-    ]}>
-      <tbody>
-        {rows.map((r) => (
-          <tr>
-            <td data-label={t(lang, "col.awarded")} class="mono">{r.awarded ?? ""}</td>
-            <td data-label={t(lang, "col.contract")} class="lead-cell">
-              <a href={`${href}/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? publishedReference(r)}</a>
-              <br />
-              <span class="mono id muted">{publishedReference(r)}</span>
-              {r.status === "cancelled" ? <> <StatusBadge lang={lang} status="cancelled" /></> : null}
-            </td>
-            {organization ? (
-              <td data-label={t(lang, "col.supplier")}>
-                {r.organization_id ? <a href={`/organizations/${r.organization_id}`}>{r.organization ?? r.organization_id}</a> : r.organization ?? ""}
+}) => {
+  const buyerKey: Key = href === "/history" ? "col.client" : "col.buyer";
+  const buyerRest: Rest = organization ? "lg" : "md";
+  const compRest: Rest | undefined = organization ? "md" : undefined;
+  return (
+    <div class="table-wrap bordered" data-phone-rows={phoneRows ? String(phoneRows) : undefined}>
+      <Table sorting={sorting} cols={[
+        { kind: "date", label: t(lang, "col.awarded"), sort: sorts?.awarded },
+        { kind: "main", label: t(lang, "col.contract") },
+        organization && { kind: "org", label: t(lang, "col.supplier") },
+        buyer && { kind: "buyer", label: t(lang, buyerKey), rest: buyerRest },
+        { kind: "value", label: t(lang, "col.value"), sort: sorts?.value },
+        { kind: "comp", label: t(lang, "col.method"), rest: compRest },
+      ]}>
+        <tbody>
+          {rows.map((r) => (
+            <tr>
+              <td data-label={t(lang, "col.awarded")} class="mono">{r.awarded ?? ""}</td>
+              <td data-label={t(lang, "col.contract")} class="lead-cell">
+                <a href={`${href}/${r.reference.toLowerCase()}`}>{pick(lang, r.title_en, r.title_fr) ?? publishedReference(r)}</a>
+                <br />
+                <span class="mono id muted">{publishedReference(r)}</span>
+                {r.status === "cancelled" ? <> <StatusBadge lang={lang} status="cancelled" /></> : null}
               </td>
-            ) : null}
-            {buyer ? (
-              <td data-label={t(lang, href === "/history" ? "col.client" : "col.buyer")} class="mdh">
-                <BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} />
+              {organization ? (
+                <td data-label={t(lang, "col.supplier")}>
+                  {r.organization_id ? <a href={`/organizations/${r.organization_id}`}>{r.organization ?? r.organization_id}</a> : r.organization ?? ""}
+                  {buyer ? <RestParty lang={lang} label={buyerKey}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></RestParty> : null}
+                </td>
+              ) : null}
+              {buyer ? (
+                <td data-label={t(lang, buyerKey)} class={restClass(buyerRest)}>
+                  <BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} />
+                </td>
+              ) : null}
+              <td data-label={t(lang, "col.value")} class="mono num">
+                {money(lang, r.value, r.currency)}
+                {compRest ? <RestFlag lang={lang} value={r.competitive} /> : null}
               </td>
-            ) : null}
-            <td data-label={t(lang, "col.value")} class="mono num">{money(lang, r.value, r.currency)}</td>
-            <td data-label={t(lang, "col.method")}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
-  </div>
-);
+              <td data-label={t(lang, "col.method")} class={restClass(compRest)}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </div>
+  );
+};
 
 // Organizations with their total in one source, ranked as the file ranks them.
 // A narrow table: on a phone it stays a table (rank, name, value, the

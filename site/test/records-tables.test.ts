@@ -21,6 +21,7 @@ import { contractPath } from "../src/pages/shared";
 import { get, grantPro, newEmail, offEnv, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { FILES, makeFakeAssets } from "./assets";
 import { applySql } from "./setup";
+import { expectTablesFit } from "./table-fit";
 
 useAccountsDb();
 
@@ -660,6 +661,29 @@ describe("the record tables", () => {
     const lines = (await res.text()).trim().split("\r\n");
     expect(lines[0]).toBe("date,source,reference,title_en,title_fr,buyer_id,buyer,organization_id,organization,value_cad,value_note,competitive,method");
     expect(lines.slice(1).map((l) => l.split(",").slice(0, 3).join(","))).toEqual([`2026-04-10,contracts,${FIRST}`, "2025-05-01,grants,G-1"]);
+  });
+
+  it("write the method on its own line under the flag, and the source after the reference as the contracts-ending tables do", async () => {
+    const { html } = await page(ORG);
+    expect(html).toContain('<span class="mono id muted">G-1</span><span class="muted small"> · Grant or contribution</span>');
+    expect(html).toContain(`<span class="mono id muted">${FIRST}</span><span class="muted small"> · Published contract</span>`);
+    expect(html).not.toMatch(/<span class="mono id muted">[^<]*<\/span> <span class="muted small">/);
+    // A published contract's procedure code: its name on a line of its own, the code as its title.
+    expect(html).toMatch(/<span class="flag flag-[a-z]+" title="[^>]+">[^<]+<\/span><span class="nw-block muted small" title="TN">Non-competitive<\/span><\/td>/);
+    // While the competition column rests (700 to 1279 px), the flag and the method show under the value.
+    expect(html).toContain('<th class="k-comp mdh">Competition</th>');
+    expect(html).toMatch(/<span class="md-only rest-flag"><span class="flag flag-[a-z]+" title="[^>]+">[^<]+<\/span><span class="nw-block muted small" title="TN">Non-competitive<\/span><\/span><\/td>/);
+    const fr = (await page(`${ORG}?lang=fr`)).html;
+    expect(fr).toContain('<span class="mono id muted">G-1</span><span class="muted small"> · Subvention ou contribution</span>');
+  });
+
+  it("fit every table into its column from 700 px, in both languages", async () => {
+    for (const path of [ORG, "/buyers/pwgsc-tpsgc/records", contractPath("dnd-mdn", SECOND), "/expiring/3m", `/expiring/3m?supplier=${A1}`,
+      "/tenders/cb-100-10000001", "/buyers/pwgsc-tpsgc", `/organizations/${A1}`]) {
+      for (const shown of [path, `${path}${path.includes("?") ? "&" : "?"}lang=fr`]) {
+        expectTablesFit(await (await get(shown, { env: offEnv() })).text(), shown);
+      }
+    }
   });
 
   it("read rec_details through its indexes", async () => {

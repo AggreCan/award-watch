@@ -24,6 +24,7 @@ import { routeTemplate } from "../src/views";
 import { decode, get, grantPro, nbsp, newEmail, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { FILES, makeFakeAssets, testEnv } from "./assets";
 import { applySql } from "./setup";
+import { expectTablesFit } from "./table-fit";
 
 useAccountsDb();
 
@@ -291,6 +292,14 @@ describe("an instrument's page", () => {
 });
 
 describe("the other pages", () => {
+  it("fit every table into its column from 700 px, the list, an instrument's page and the pages that hold the blocks", async () => {
+    for (const path of ["/instruments", instrumentPath(RMSO), `/organizations/${A1}`, "/segments/82", "/buyers/pwgsc-tpsgc", "/tenders/cb-100-10000001"]) {
+      for (const shown of [path, `${path}${path.includes("?") ? "&" : "?"}lang=fr`]) {
+        expectTablesFit(await (await get(shown, { env: off() })).text(), shown);
+      }
+    }
+  });
+
   it("give a profile the line in its head and the section, soonest expiry first, with what it no longer holds", async () => {
     const { html } = await page(`/organizations/${A1}`);
     expect(html).toContain('<a href="#instruments">Holds 2 active standing offers or supply arrangements</a>');

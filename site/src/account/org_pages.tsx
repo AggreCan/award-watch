@@ -495,9 +495,10 @@ const InstrumentsBlock: FC<{ lang: Lang; id: string; rows: Row[]; today: string 
       })}</span> : undefined}>
       {shown.length ? <>
         <div class="table-wrap">
+          {/* From 700 to 1279 px the type rests and shows under the instrument. */}
           <Table cols={[
             { kind: "main", label: t(lang, "instruments.col_instrument") },
-            { kind: "label", label: t(lang, "instruments.col_type") },
+            { kind: "label", label: t(lang, "instruments.col_type"), rest: "md" },
             { kind: "region", label: t(lang, "instruments.col_regions") },
             { kind: "label", label: t(lang, "instruments.col_user") },
             { kind: "date", label: t(lang, "instruments.col_expiry") },
@@ -506,13 +507,15 @@ const InstrumentsBlock: FC<{ lang: Lang; id: string; rows: Row[]; today: string 
               {shown.map((h) => {
                 const description = pick(lang, h.descEn, h.descFr);
                 const user = pick(lang, h.userEn, h.userFr);
+                const type = typeLabel(lang, typeCodeOf(h.typeEn), h.typeEn, h.typeFr);
                 return (
                   <tr>
                     <td data-label={t(lang, "instruments.col_instrument")}>
                       <a href={instrumentPath(h.agreement)} class="mono">{h.agreement}</a>
                       {description ? <><br /><span class="small">{description}</span></> : null}
+                      {type ? <span class="md-only muted small">{t(lang, "common.labelled", { label: t(lang, "instruments.col_type"), value: type })}</span> : null}
                     </td>
-                    <td data-label={t(lang, "instruments.col_type")}>{typeLabel(lang, typeCodeOf(h.typeEn), h.typeEn, h.typeFr)}</td>
+                    <td data-label={t(lang, "instruments.col_type")} class="mdh">{type}</td>
                     <td data-label={t(lang, "instruments.col_regions")}>{h.regions.map((x) => regionName(lang, x)).join(", ")}</td>
                     <td data-label={t(lang, "instruments.col_user")}>
                       {user && h.buyer ? <a href={`/buyers/${h.buyer}`}>{user}</a> : user ?? t(lang, "common.not_stated")}

@@ -33,23 +33,34 @@ export const COLUMN_WIDTHS = {
   source: 180, // a source's name
   label: 128, // a short label: a status, a type, a code, a stage, a feed file
   share: 160, // "3 of 60 (5%)"
+  // A part of the row's own count and its percentage: "12,345 (100%)" (97 px
+  // of type) on one line. At the share's 160 px a year table did not fit a
+  // 700 px window.
+  part: 120,
   file: 220, // a file name or an API endpoint
   text: 192, // a second column of running text
 } as const;
 
 export type ColumnKind = "main" | keyof typeof COLUMN_WIDTHS;
 
-// The main column never gets narrower than this: below it the table keeps
-// its width and its wrapper scrolls sideways. At this floor the awards list,
-// buyer included, fits a 1280 px window with its 15 px scrollbar.
-export const MAIN_MIN = 144;
+// The main column never gets narrower than this. A table's least width in a
+// range (its shown columns, the main one at this floor) is never more than
+// the content column the stylesheet gives it there (test/columns.test.ts),
+// so where a table would not fit, a column rests rather than the table
+// scrolling sideways.
+export const MAIN_MIN = 128;
 
 // A secondary column rests (is hidden) while the content column is too
 // narrow for the whole table, from 700 px of viewport up to 1279 px ("md"),
-// 1439 px ("lg"), 1599 px ("xl") or 1919 px ("xxl"). With the 240 px rail
-// and the scrollbar, the narrowest window of each range above it leaves a
-// content column of about 975, 1135, 1295 and 1615 px. Below 700 px a table
-// restacks into labelled blocks and shows every column again.
+// 1439 px ("lg"), 1599 px ("xl") or 1919 px ("xxl"). The content column is
+// the window less a 15 px scrollbar, the 264 px rail from 1000 px, the
+// page's 24 px padding on each side and the panel's two 1 px borders: 635 px
+// at 700, 671 at 1000 (where the rail appears), 951 at 1280, 1111 at 1440,
+// 1271 at 1600 and 1591 at 1920; half of it, less the gutter, in a panel
+// grid's track, and at most 878 px in a document. Below 700 px a table
+// restacks into labelled blocks and shows every column again. What a
+// resting column holds still shows in the range it rests, under another
+// column's figure (.md-only from 700 to 1279 px, .lg-down from 700 to 1439).
 export type Rest = "md" | "lg" | "xl" | "xxl";
 
 export const REST_CLASS: Record<Rest, string> = { md: "mdh", lg: "lgh", xl: "xlh", xxl: "xxh" };
@@ -70,7 +81,7 @@ export type Column = { kind: ColumnKind; label: unknown; rest?: Rest; class?: st
 
 // A tally column is a figure's when its table says so (class "num"): the
 // watchlist's new records by source are words.
-const NUMERIC: ReadonlySet<ColumnKind> = new Set<ColumnKind>(["value", "total", "count", "rank", "share"]);
+const NUMERIC: ReadonlySet<ColumnKind> = new Set<ColumnKind>(["value", "total", "count", "rank", "share", "part"]);
 
 export function headClass(c: Column): string {
   return [`k-${c.kind}`, NUMERIC.has(c.kind) ? "num" : "", c.rest ? REST_CLASS[c.rest] : "", c.class ?? ""]

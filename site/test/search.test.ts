@@ -15,6 +15,7 @@ import {
 import { routeTemplate } from "../src/views";
 import { applySql } from "./setup";
 import { testEnv } from "./assets";
+import { expectTablesFit } from "./table-fit";
 
 const SEARCH = (env as unknown as { SEARCH: D1Database }).SEARCH;
 const SCHEMA = (env as unknown as { SEARCH_SCHEMA_SQL: string }).SEARCH_SCHEMA_SQL;
@@ -247,6 +248,12 @@ describe("/search", () => {
     expect(none).toContain('<a href="/tenders?q=zzqqxx">Open notices with these words in the title: 0</a>');
     const fr = nbsp(await (await get("/search?q=translation&lang=fr")).text());
     expect(fr).toMatch(/Avis ouverts dont le titre contient ces mots : \d+/);
+  });
+
+  it("fits its tables into their column from 700 px, in both languages", async () => {
+    for (const path of ["/search?q=exemplar", "/search?q=canada", "/search?q=filler", "/search?q=exemplar&lang=fr", "/search?q=canada&lang=fr"]) {
+      expectTablesFit(await (await get(path)).text(), path);
+    }
   });
 
   it("lists the buyers with their figures and links", async () => {

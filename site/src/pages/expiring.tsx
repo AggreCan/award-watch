@@ -57,8 +57,8 @@ import { canonicalUrl, expiringWindowSeo, pageSeo } from "../seo";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
 import {
-  BuyerLink, FiltersFold, PhonePagerScript, PhonePages, SegmentChips, SegmentNote, type ServerPages, awardNoticeUrl, contractPath,
-  contractSearchUrl, datasetUrl, instrumentText, money,
+  BuyerLink, FiltersFold, PhonePagerScript, PhonePages, RestFlag, RestParty, SegmentChips, SegmentNote, type ServerPages, awardNoticeUrl,
+  contractPath, contractSearchUrl, datasetUrl, instrumentText, money,
 } from "./shared";
 
 // How many rows of the 3-month list the overview shows.
@@ -385,13 +385,15 @@ const Organization: FC<{ lang: Lang; r: ExpiringRow }> = ({ lang, r }) => {
   return <>{r.organization ?? t(lang, "common.not_stated")}</>;
 };
 
-// The widest table on the site. The buyer is the column a reader filters on,
-// so it shows from 1280 px of viewport; the record links (the title opens
-// the site's own page, the Record column the government's record)
-// and amendments and growth rest below 1600 px. The same order holds on a profile and a buyer page, which
-// drop one of the two parties. No range scrolls from 1280 px up
-// (src/columns.tsx).
-const BUYER_REST: Rest = "md";
+// The widest table on the site. The record links (the title opens the
+// site's own page, the Record column the government's record) and
+// amendments and growth rest below 1600 px, and the line under the table
+// says where they are. With the supplier shown, the competition flag shows
+// under the value below 1280 px, and the buyer, the column a reader filters
+// on, rests below 1440 px and shows under the supplier there. A profile
+// drops the supplier: there the buyer rests below 1280 px and the flag
+// keeps its column. A buyer page drops the buyer. No range is wider than its
+// content column (src/columns.tsx).
 const LATE_REST: Rest = "xl";
 
 // phonePages: a long list, 50 rows at a time on a phone (pages: the window's
@@ -408,7 +410,10 @@ export const ExpiringTable: FC<{
   // once accounts open, and the list shows a free reader the teaser instead.
   csv?: CsvWindow | "list";
   sorts?: { end: HeadSort; value: HeadSort };
-}> = ({ lang, rows, organization = true, buyer = true, phonePages = false, pages, phoneRows, csv = "12m", sorts }) => (
+}> = ({ lang, rows, organization = true, buyer = true, phonePages = false, pages, phoneRows, csv = "12m", sorts }) => {
+  const buyerRest: Rest = organization ? "lg" : "md";
+  const compRest: Rest | undefined = organization ? "md" : undefined;
+  return (
   <>
   <SegmentNote lang={lang} rows={rows} />
   <PhonePages lang={lang} on={phonePages} pages={pages} rows={phoneRows}>
@@ -416,9 +421,9 @@ export const ExpiringTable: FC<{
       { kind: "date", label: t(lang, "expiring.col_ends"), sort: sorts?.end },
       { kind: "main", label: t(lang, "col.contract") },
       organization && { kind: "org", label: t(lang, "col.supplier") },
-      buyer && { kind: "buyer", label: t(lang, "col.buyer"), rest: BUYER_REST },
+      buyer && { kind: "buyer", label: t(lang, "col.buyer"), rest: buyerRest },
       { kind: "value", label: t(lang, "col.value"), sort: sorts?.value },
-      { kind: "comp", label: t(lang, "col.method") },
+      { kind: "comp", label: t(lang, "col.method"), rest: compRest },
       { kind: "amend", label: <span title={t(lang, "expiring.growth_def")}>{t(lang, "expiring.col_amendments")}</span>, rest: LATE_REST },
       { kind: "record", label: t(lang, "col.record"), rest: LATE_REST },
     ]}>
@@ -455,10 +460,18 @@ export const ExpiringTable: FC<{
                 {fiscalYearEnd(r) ? <> <span class="tag">{t(lang, "expiring.tag_fye")}</span></> : null}
                 {indigenous ? <> <span class="tag" title={t(lang, "expiring.tag_indigenous_def")}>{t(lang, INDIGENOUS_TAG[indigenous])}</span></> : null}
               </td>
-              {organization ? <td data-label={t(lang, "col.supplier")}><Organization lang={lang} r={r} /></td> : null}
-              {buyer ? <td data-label={t(lang, "col.buyer")} class={restClass(BUYER_REST)}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td> : null}
-              <td data-label={t(lang, "col.value")} class="mono num">{money(lang, r.value, r.currency)}</td>
-              <td data-label={t(lang, "col.method")}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
+              {organization ? (
+                <td data-label={t(lang, "col.supplier")}>
+                  <Organization lang={lang} r={r} />
+                  {buyer ? <RestParty lang={lang} label="col.buyer"><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></RestParty> : null}
+                </td>
+              ) : null}
+              {buyer ? <td data-label={t(lang, "col.buyer")} class={restClass(buyerRest)}><BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} /></td> : null}
+              <td data-label={t(lang, "col.value")} class="mono num">
+                {money(lang, r.value, r.currency)}
+                {compRest ? <RestFlag lang={lang} value={r.competitive} /> : null}
+              </td>
+              <td data-label={t(lang, "col.method")} class={restClass(compRest)}><CompetitiveFlag lang={lang} value={r.competitive} /></td>
               {/* Sorted in the page by the number of amendments, which the words around it hide. */}
               <td data-label={t(lang, "expiring.col_amendments")} class={restClass(LATE_REST)} data-sort={String(r.n_amendments)}>
                 {r.n_amendments === 0
@@ -493,7 +506,8 @@ export const ExpiringTable: FC<{
     </p>
   ) : null}
   </>
-);
+  );
+};
 
 // The rule the radar lists by, for the foot of a list that shows rows.
 export const ExpiringNote: FC<{ lang: Lang }> = ({ lang }) => (

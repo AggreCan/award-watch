@@ -387,15 +387,17 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
           <h3 id="files">{t(lang, "data.files_read")}</h3>
           {stats.sources.length ? (
             <div class="table-wrap bordered">
+              {/* From 700 to 1279 px the publisher's date rests and shows under the last read, as in the sources table. */}
               <Table cols={[
                 { kind: "file", label: t(lang, "data.col_file") },
                 { kind: "main", label: t(lang, "data.col_source") },
                 { kind: "datetime", label: t(lang, "data.col_last_read") },
-                { kind: "date", label: t(lang, "data.col_publisher_date") },
+                { kind: "date", label: t(lang, "data.col_publisher_date"), rest: "md" },
               ]}>
                 <tbody>
                   {stats.sources.map((r) => {
                     const row = SOURCE_ROWS.find((s) => s.key === r.source);
+                    const published = r.loaded !== false ? publisherDay(r.last_modified) : null;
                     return (
                       <tr>
                         {/* A file name can run past its column ("openTenderNotice-ouvertAvisAppelOffres.csv"): it wraps. */}
@@ -403,8 +405,9 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                         <td data-label={t(lang, "data.col_source")}>{row ? t(lang, row.name) : r.source}</td>
                         <td data-label={t(lang, "data.col_last_read")} class="mono">
                           {r.last_read && r.loaded !== false ? runTime(r.last_read, lang) : <span class="muted">{t(lang, "data.not_read")}</span>}
+                          {published ? <span class="md-only muted small">{t(lang, "data.modified", { date: published })}</span> : null}
                         </td>
-                        <td data-label={t(lang, "data.col_publisher_date")} class="mono">{r.loaded !== false ? publisherDay(r.last_modified) ?? "" : ""}</td>
+                        <td data-label={t(lang, "data.col_publisher_date")} class="mono mdh">{published ?? ""}</td>
                       </tr>
                     );
                   })}

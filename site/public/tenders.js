@@ -41,8 +41,8 @@
    level and the code's name where the notices give one, as the server does.
 
    An empty list says what to do next and hides the detail panel. Beside the
-   panel the provinces column rests, and each row's provinces show under its
-   buyer. On a phone the filters fold behind a button that counts the active
+   panel, and from 700 to 1279 px, the provinces column rests, and each row's
+   provinces show under its buyer. On a phone the filters fold behind a button that counts the active
    ones (pager.js folds them); this script keeps the count.
 
    Everything rendered from data uses textContent. Every word the script
@@ -334,7 +334,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
     });
     var buyer = cell(tr, "col.buyer", "c-buyer");
     buyer.appendChild(buyerNode(r.buyer_id, r.buyer_en, r.buyer_fr));
-    buyer.appendChild(el("span", "split-only muted small", provincesText(r.provinces, r.provinces_derived)));
+    buyer.appendChild(el("span", "split-only md-only muted small", provincesText(r.provinces, r.provinces_derived)));
     var closing = cell(tr, "col.closing", "mono c-date");
     var state = stateOf(r.closing);
     var ref = r.reference.toLowerCase();
@@ -351,7 +351,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
       }
     }
     cell(tr, "col.published", "mono c-pub mdh").textContent = r.published || "";
-    cell(tr, "col.region", "c-region").textContent = provincesText(r.provinces, r.provinces_derived);
+    cell(tr, "col.region", "c-region mdh").textContent = provincesText(r.provinces, r.provinces_derived);
     return tr;
   }
   function table(list) {
@@ -362,7 +362,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
     var hr = el("tr");
     var heads = TABLE ? TABLE.heads : [
       ["c-notice", tx("col.notice")], ["c-buyer", tx("col.buyer")], ["c-date", tx("col.closing")],
-      ["c-pub mdh", tx("col.published")], ["c-region", tx("col.region")],
+      ["c-pub mdh", tx("col.published")], ["c-region mdh", tx("col.region")],
     ];
     t.setAttribute("data-sorting", "server");
     heads.forEach(function (h) { hr.appendChild(h[2] ? sortHead(h) : el("th", h[0], h[1])); });

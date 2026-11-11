@@ -125,9 +125,11 @@ describe("the home lists' rows", () => {
       expect(list, heading).toContain('<th class="k-region mdh c-region"><button type="button" class="th-sort">Provinces of delivery</button></th>');
       expect(list, heading).toContain('<span class="split-only md-only muted small">');
     }
+    // The tender lists keep their Published column; their provinces rest on a medium screen too and show under the buyer.
     const day = await text("/tenders/new");
     expect(day).toContain('<th class="k-date mdh c-pub"><button type="button" class="th-sort">Published</button></th>');
-    expect(day).not.toContain("md-only");
+    expect(day).toContain('<th class="k-region mdh c-region"><button type="button" class="th-sort">Provinces of delivery</button></th>');
+    expect(day).toContain('<span class="split-only md-only muted small">');
     expect(day).not.toContain('class="c-type');
   });
 

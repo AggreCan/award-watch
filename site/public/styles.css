@@ -584,10 +584,12 @@ a.tile:hover .tile-label { color: var(--ink); }
 /* One column system (src/columns.tsx). Every table lays out at a fixed width:
    each kind of column has one width across the site, set below on its head
    cell, and the main column (the title, description or name a row is about)
-   takes the rest. A table never gets narrower than its columns with a 144 px
+   takes the rest. A table never gets narrower than its columns with a 128 px
    main column (--tmin, written on the table for the columns it shows in each
-   range); below that its wrapper scrolls sideways. Content never widens a
-   column: a long word breaks inside its cell. Below 700 px the rows restack. */
+   range), and that width never exceeds the content column in its range
+   (test/columns.test.ts), so a table rests columns rather than scroll. Content
+   never widens a column: a long word breaks inside its cell. Below 700 px the
+   rows restack. */
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 20px; }
 table.cols { table-layout: fixed; min-width: var(--tmin, 0px); }
@@ -617,6 +619,7 @@ th.num { text-align: right; }
 .k-source { width: 180px; }
 .k-label { width: 128px; }
 .k-share { width: 160px; }
+.k-part { width: 120px; }
 .k-file { width: 220px; }
 .k-text { width: 192px; }
 tbody tr:last-child td { border-bottom: 0; }
@@ -645,10 +648,11 @@ td.c-notice a:first-child { font-weight: 500; }
 .scroll-y thead th { position: sticky; top: 0; z-index: 1; }
 /* Secondary columns rest while the content column is too narrow for the
    whole table: xxh below 1920 px of viewport, xlh below 1600, lgh below 1440,
-   mdh below 1280 (with the 240 px rail and the scrollbar, content columns
-   from about 1615, 1295, 1135 and 975 px at the next range's edge). Each
-   range takes the table's least width without the columns resting in it. A
-   phone shows every column again in its restacked rows. */
+   mdh below 1280. The content column (the window less a 15 px scrollbar, the
+   264 px rail from 1000 px, the gutters and the panel's border) is 635 px at
+   700, 671 at 1000, 951 at 1280, 1111 at 1440, 1271 at 1600 and 1591 at
+   1920. Each range takes the table's least width without the columns resting
+   in it. A phone shows every column again in its restacked rows. */
 @media (min-width: 700px) and (max-width: 1919px) {
   .xxh { display: none; }
   table.cols { min-width: var(--tmin-xxl, var(--tmin, 0px)); }
@@ -665,6 +669,22 @@ td.c-notice a:first-child { font-weight: 500; }
   .mdh { display: none; }
   table.cols { min-width: var(--tmin-md, var(--tmin, 0px)); }
 }
+/* What a resting column holds, shown under a figure of a column that stays,
+   on a line of its own: .md-only while the md columns rest (700 to 1279 px),
+   .lg-down while the lg ones do (700 to 1439 px). Nowhere else: wider
+   screens show the column, and a phone's restacked rows show every column.
+   The line wraps even in a cell kept on one line (a reference's). */
+.md-only, .lg-down { display: none; white-space: normal; }
+@media (min-width: 700px) and (max-width: 1279px) {
+  .md-only { display: block; }
+}
+@media (min-width: 700px) and (max-width: 1439px) {
+  .lg-down { display: block; }
+}
+/* The competition flag under a value while its column rests: the chip wraps
+   inside the value column ("Méthode non précisée" is wider than it). */
+.rest-flag { margin-top: 4px; }
+td .rest-flag .flag { height: auto; min-height: 24px; max-width: 100%; padding: 4px 8px; white-space: normal; text-align: left; }
 
 /* -- status chips, the competitive flag, codes, filter chips -------------- */
 .badge, .flag, .chip, .fchip {
@@ -1327,9 +1347,6 @@ td.c-type .type-method { display: block; font-size: 12px; line-height: 16px; col
    name broken anywhere so the panel never scrolls sideways on a phone. */
 ul.documents li { margin: 0 0 4px; overflow-wrap: anywhere; }
 ul.documents li:last-child { margin-bottom: 0; }
-@media (min-width: 700px) and (max-width: 1279px) {
-  .md-only { display: block; }
-}
 @media (max-width: 699px) {
   td.c-type .type-name, td.c-type .type-method { display: inline; }
   td.c-type .type-name + .type-method::before { content: ", "; }

@@ -128,6 +128,8 @@ const STRINGS = {
   "common.not_loaded_short": { en: "Not loaded", fr: "Non chargé" },
   // A list of two or more, the last joined by "or" ("a, b or c").
   "common.list_or": { en: "{list} or {last}", fr: "{list} ou {last}" },
+  // A resting column's figure under another column's, named by its head ("Buyer: Health Canada").
+  "common.labelled": { en: "{label}: {value}", fr: "{label} : {value}" },
   // Below 700 px a long table shows its first rows; this opens the rest (public/pager.js).
   "common.show_rows": { en: "Show all {n} rows", fr: "Afficher les {n} lignes" },
   "common.show_years": { en: "Show all years", fr: "Afficher toutes les années" },
@@ -1171,7 +1173,10 @@ const STRINGS = {
     fr: "Contrats de plus de 10 000 $ tels que les ministères les déclarent chaque trimestre. La valeur de chaque dossier lui est propre. Un dossier de modification porte la valeur de la modification.",
   },
   "org.reporting_period": { en: "Reported for {period}", fr: "Déclaré pour {period}" },
-  "org.last_reported": { en: "Value as last reported: {value}", fr: "Valeur à la dernière déclaration : {value}" },
+  "org.largest_value": {
+    en: "Largest value under this procurement ID: {value}",
+    fr: "Plus grande valeur sous ce numéro d'approvisionnement : {value}",
+  },
   "org.last_reported_def": {
     en: "The largest contract value among the records that share this procurement ID. It is shown for reference and never added to a total.",
     fr: "La plus grande valeur de contrat parmi les dossiers qui partagent ce numéro d'approvisionnement. Elle est affichée à titre indicatif et jamais additionnée à un total.",
@@ -1252,7 +1257,6 @@ const STRINGS = {
   "watch.noscript": { en: "The watchlist needs JavaScript.", fr: "La liste de suivi nécessite JavaScript." },
   "watch.col_latest": { en: "Latest record", fr: "Dernier dossier" },
   "watch.col_new": { en: "New since last visit", fr: "Depuis la dernière visite" },
-  "watch.col_manage": { en: "Manage", fr: "Gérer" },
   "watch.remove": { en: "Remove", fr: "Retirer" },
   "watch.remove_aria": { en: "Remove {name} from the watchlist", fr: "Retirer {name} de la liste de suivi" },
   "watch.loading": { en: "Loading {n} profiles…", fr: "Chargement de {n} profils…" },
@@ -2973,6 +2977,8 @@ const STRINGS = {
   "records.csv": { en: "Download these records (CSV)", fr: "Télécharger ces dossiers (CSV)" },
   "records.csv_pro": { en: "These records as a CSV file are part of Pro.", fr: "Ces dossiers en fichier CSV font partie de Pro." },
   "records.none": { en: "No record matches.", fr: "Aucun dossier ne correspond." },
+  // A grant's source after its reference, in the singular as the contracts-ending tables name theirs (expiring.kind_*).
+  "records.kind_grant": { en: "Grant or contribution", fr: "Subvention ou contribution" },
   "records.note": {
     en: "Records as of {as_of}, each counted once by the rules on the Methodology page. A value in another currency, not published or flagged for checking reads as not stated and stays out of the total.",
     fr: "Dossiers au {as_of}, chacun compté une fois selon les règles de la page Méthodologie. Une valeur en une autre devise, non publiée ou signalée pour vérification se lit comme non indiquée et reste hors du total.",

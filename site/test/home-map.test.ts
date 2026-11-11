@@ -191,7 +191,7 @@ describe("the map panel", () => {
     expect(page.indexOf(panel)).toBeLessThan(page.indexOf('<section class="tiles"'));
     expect(page.indexOf(panel)).toBeLessThan(page.indexOf("<h2>New Tender Notices Today</h2>"));
     // The first layer shown, the others in the markup for the stylesheet to show.
-    expect(panel).toContain('<div class="cmap" id="canada-map" data-layer="new_today" style="--cmap-list-min:528px">');
+    expect(panel).toContain('<div class="cmap" id="canada-map" data-layer="new_today" style="--cmap-list-min:512px">');
     for (const layer of ["new_today", "open", "closing_7d", "same_day"]) {
       expect(panel.match(new RegExp(`<g class="cmap-layer" data-for="${layer}">`, "g")), layer).toHaveLength(2);
       expect(panel).toContain(`<p class="cmap-caption" data-for="${layer}">`);
@@ -384,7 +384,7 @@ describe("the same-day layer", () => {
     const panel = panelOf(switchedOff);
     expect(panel).not.toContain("same_day");
     expect(panel).not.toContain("pro-tag");
-    expect(panel).toContain('style="--cmap-list-min:432px"');
+    expect(panel).toContain('style="--cmap-list-min:416px"');
     expect(panel).not.toContain("Same-day notices count");
   });
 

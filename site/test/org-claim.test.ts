@@ -24,6 +24,7 @@ import { foldText } from "../src/search_db";
 import { ACCOUNTS, csrf, decode, get, grantPro, nbsp, newEmail, offEnv, onEnv, post, signIn, userId, useAccountsDb } from "./accounts-helpers";
 import { FILES, makeFakeAssets } from "./assets";
 import { applySql } from "./setup";
+import { misfits, panelTitle, tablesIn } from "./table-fit";
 
 useAccountsDb();
 
@@ -416,6 +417,25 @@ describe("the page", () => {
     pro = await reader("page-pro", true);
     for (const r of [free, pro]) await send(r, "/account/organization", { org: A1 });
     await send(pro, "/account/organization/compare", { org: A2 });
+  });
+
+  // Three blocks take a column per source or per organization compared, so
+  // their width grows with the account's data (up to four sources, up to six
+  // organizations): resting some of those columns needs a design of its own,
+  // not yet made. Every other table on the page is held to its column.
+  const VARIABLE = ["Records by Fiscal Year", "Records by Segment", "Share of a Segment", "Dossiers par exercice", "Dossiers par segment", "Part d'un segment"];
+  const variable = (tb: Parameters<typeof panelTitle>[0]) => VARIABLE.some((h) => panelTitle(tb).replace(/\u2019/g, "'").startsWith(h));
+
+  it("fits its other tables into their column from 700 px, in both languages", async () => {
+    let tables = 0;
+    for (const r of [free, pro]) {
+      for (const path of ["/account/organization", "/account/organization?lang=fr"]) {
+        const html = await text(await page(r, path));
+        tables += tablesIn(html).filter((tb) => !variable(tb)).length;
+        expect(misfits(html, variable), path).toEqual([]);
+      }
+    }
+    expect(tables).toBeGreaterThan(0);
   });
 
   it("gives a Free account the first block for the latest three fiscal years, and every other block's title with the chip", async () => {

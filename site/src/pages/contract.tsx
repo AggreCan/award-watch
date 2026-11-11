@@ -221,23 +221,27 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
       {amended ? (
       <Panel title={t(lang, "contract.amendments")} count={fmtInt(versions.length, lang)}>
       <div class="table-wrap bordered">
+        {/* From 700 to 1279 px the status rests and shows under the amendment type. */}
         <Table cols={[
           { kind: "count", label: t(lang, "col.amendment") },
           { kind: "date", label: t(lang, "tender.amended") },
           { kind: "main", label: t(lang, "contract.amendment_type") },
           { kind: "value", label: t(lang, "contract.amount") },
           { kind: "value", label: t(lang, "contract.total_value") },
-          { kind: "label", label: t(lang, "col.status") },
+          { kind: "label", label: t(lang, "col.status"), rest: "md" },
         ]}>
           <tbody>
             {versions.map((v) => (
               <tr>
                 <td data-label={t(lang, "col.amendment")} class="mono num">{fmtInt(v.amendment, lang)}</td>
                 <td data-label={t(lang, "tender.amended")} class="mono">{v.amended ?? ""}</td>
-                <td data-label={t(lang, "contract.amendment_type")}>{pick(lang, v.amendment_type_en, v.amendment_type_fr) ?? ""}</td>
+                <td data-label={t(lang, "contract.amendment_type")}>
+                  {pick(lang, v.amendment_type_en, v.amendment_type_fr) ?? ""}
+                  {v.status ? <span class="md-only muted small">{t(lang, "common.labelled", { label: t(lang, "col.status"), value: statusLabel(lang, v.status) })}</span> : null}
+                </td>
                 <td data-label={t(lang, "contract.amount")} class="mono num">{v.amount === null ? "" : money(lang, v.amount, d.currency)}</td>
                 <td data-label={t(lang, "contract.total_value")} class="mono num">{v.total_value === null ? "" : money(lang, v.total_value, d.currency)}</td>
-                <td data-label={t(lang, "col.status")}>{v.status ? statusLabel(lang, v.status) : ""}</td>
+                <td data-label={t(lang, "col.status")} class="mdh">{v.status ? statusLabel(lang, v.status) : ""}</td>
               </tr>
             ))}
           </tbody>

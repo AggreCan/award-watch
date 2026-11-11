@@ -289,8 +289,10 @@
     return td;
   }
 
-  function removeButton(tr, id, name) {
-    var td = cell(tr, "watch.col_manage");
+  // The Remove button, on a line of its own under the organization's name
+  // (src/pages/watchlist.tsx keeps no column for it).
+  function removeButton(box, tr, id, name) {
+    box.appendChild(document.createElement("br"));
     var b = el("button", "btn-link", tx("watch.remove"));
     b.type = "button";
     b.setAttribute("aria-label", tx("watch.remove_aria", { name: name }));
@@ -301,8 +303,8 @@
       if (!list.length) { showEmpty(); statusEl.textContent = ""; }
       else statusEl.textContent = setCount(list) + " " + (statusEl.getAttribute("data-visit") || "");
     });
-    td.appendChild(b);
-    return td;
+    box.appendChild(b);
+    return b;
   }
 
   // A cell whose content is one element: on a phone each row restacks as a
@@ -328,11 +330,11 @@
     });
     // Resting columns rest in the rows as their head cells do.
     cell(tr, "watch.col_latest", rest("watch.col_latest", "mono")).textContent = o.last_seen || "";
+    removeButton(who, tr, id, name);
     if (found.first) {
       // No earlier visit to compare with: nothing to mark yet. The cell stays
       // empty, so a phone's restacked row leaves it out.
       cell(tr, "watch.col_new");
-      removeButton(tr, id, name);
       return tr;
     }
     var news = boxed(tr, "watch.col_new");
@@ -343,7 +345,6 @@
     } else {
       news.appendChild(el("span", "muted", tx("watch.nothing_new")));
     }
-    removeButton(tr, id, name);
     return tr;
   }
 
@@ -351,13 +352,14 @@
   // for each other column, each resting with its head, so nothing shifts.
   function problemRow(id, message) {
     var tr = el("tr");
-    cell(tr, "col.organization").appendChild(el("span", "mono id", id));
+    var who = boxed(tr, "col.organization");
+    who.appendChild(el("span", "mono id", id));
+    removeButton(who, tr, id, id);
     ["awards", "history", "contracts", "grants", "lobbying"].forEach(function (s) {
       cell(tr, "source." + s, rest("source." + s, "mono num"));
     });
     cell(tr, "watch.col_latest", rest("watch.col_latest"));
     cell(tr, "watch.col_new", "muted").textContent = message;
-    removeButton(tr, id, id);
     return tr;
   }
 

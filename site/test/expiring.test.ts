@@ -128,16 +128,20 @@ describe("/expiring/:window", () => {
     expect(html).toContain('<p class="rest-note muted small">Amendments, value changes and the source record of each contract are in <a href="/downloads/expiring-3m.csv">the 3-month CSV file</a>.</p>');
     expect(html).toContain('<a href="/downloads/expiring-3m.csv" class="btn">Download contracts ending within 3 months (CSV)</a>');
     expect(html).not.toContain("/downloads/expiring-12m.csv");
-    // Organization, withheld wording, buyer, value, competition.
-    expect(html).toContain('<td data-label="Supplier"><a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a></td>');
-    expect(html).toContain('<td data-label="Supplier"><span class="muted">Individual, name withheld</span></td>');
-    // The buyer shows from 1280 px; the record links and amendments and growth from 1600 px.
-    expect(html).toContain('<td data-label="Buyer" class="mdh"><a href="/buyers/dfo-mpo">Fisheries and Oceans Canada</a></td>');
-    expect(html).toContain('<th class="k-buyer mdh">Buyer</th>');
+    // Organization, withheld wording, buyer, value, competition. Below 1440 px the buyer rests and shows
+    // under the supplier, on a line of its own after a break (so the cell sorts by its supplier).
+    expect(html).toContain('<td data-label="Supplier"><a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a><br/><span class="lg-down muted small">Buyer: <a href="/buyers/pwgsc-tpsgc">Public Services and Procurement Canada</a></span></td>');
+    expect(html).toContain('<td data-label="Supplier"><span class="muted">Individual, name withheld</span><br/><span class="lg-down muted small">Buyer: ');
+    // The buyer column shows from 1440 px, the competition column from 1280; the record links and amendments and growth from 1600 px.
+    expect(html).toContain('<td data-label="Buyer" class="lgh"><a href="/buyers/dfo-mpo">Fisheries and Oceans Canada</a></td>');
+    expect(html).toContain('<th class="k-buyer lgh">Buyer</th>');
+    expect(html).toContain('<th class="k-comp mdh">Competition</th>');
     expect(html).toContain('<th class="k-record xlh">Record</th>');
     // The Record cell holds the links; the source is under the title.
     expect(html).toMatch(/<td data-label="Record" class="xlh"><a href="https:\/\/canadabuys/);
-    expect(html).toContain('<td data-label="Value" class="mono num">$4,500,000</td>');
+    // Below 1280 px the competition flag shows under the value.
+    expect(html).toMatch(/<td data-label="Value" class="mono num">\$4,500,000<span class="md-only rest-flag"><span class="flag flag-[a-z]+" title="[^>]+">[^<]+<\/span><\/span><\/td>/);
+    expect(html).toMatch(/<td data-label="Competition" class="mdh"><span class="flag flag-/);
     expect(html).toContain('<span class="flag flag-yes"');
     expect(html).toContain('<span class="flag flag-no"');
     expect(html).toContain('<span class="flag flag-unstated"');

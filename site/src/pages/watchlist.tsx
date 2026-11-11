@@ -17,7 +17,7 @@ export const WATCH_MAX = 100;
 // Every string watchlist.js draws, handed over in the page's JSON block.
 export const WATCHLIST_CLIENT_KEYS: readonly Key[] = [
   "col.organization", "source.awards", "source.history", "source.contracts", "source.grants", "source.lobbying",
-  "watch.col_latest", "watch.col_new", "watch.col_manage", "watch.remove", "watch.remove_aria",
+  "watch.col_latest", "watch.col_new", "watch.remove", "watch.remove_aria",
   "watch.loading", "watch.count_one", "watch.count_many", "watch.last_visit", "watch.first_visit",
   "watch.nothing_new", "watch.added_since",
   "watch.new_awards_one", "watch.new_awards_many", "watch.new_history_one", "watch.new_history_many",
@@ -34,13 +34,16 @@ export const WATCHLIST_CLIENT_KEYS: readonly Key[] = [
 // table is wider than a window below 1920 px can hold, so the
 // columns the rows use least rest first (src/columns.tsx), lobbying (not
 // loaded yet) and the latest record below 1920 px, grants below 1600,
-// contract history below 1440, published contracts below 1280. A row whose
-// cell spans columns keeps one cell for each resting column, here and in
-// public/watchlist.js, so a hidden column never shifts the cells after it.
+// contract history below 1440, published contracts below 1280. A row's
+// Remove button sits under the organization's name: as a column of its own
+// it made the table wider than the content column at 700, 1600 and 1920 px.
+// A row whose cell spans columns keeps one cell for each resting column,
+// here and in public/watchlist.js, so a hidden column never shifts the cells
+// after it.
 const COLUMNS: [Key, ColumnKind, Rest?, string?][] = [
   ["col.organization", "main"], ["source.awards", "tally", undefined, "num"], ["source.history", "tally", "lg", "num"],
   ["source.contracts", "tally", "md", "num"], ["source.grants", "tally", "xl", "num"], ["source.lobbying", "tally", "xxl", "num"],
-  ["watch.col_latest", "date", "xxl"], ["watch.col_new", "tally"], ["watch.col_manage", "label"],
+  ["watch.col_latest", "date", "xxl"], ["watch.col_new", "tally"],
 ];
 
 // The rest class of each column the script draws, by its label key.
@@ -73,7 +76,7 @@ export async function watchlistPage(c: Context<AppEnv>): Promise<Response> {
                 <noscript> {t(lang, "watch.noscript")}</noscript>
               </td>
               {COLUMNS.slice(2, 7).map(([, , rest]) => <td class={restClass(rest)}></td>)}
-              <td colspan={2}></td>
+              <td></td>
             </tr>
           </tbody>
         </Table>

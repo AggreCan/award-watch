@@ -244,23 +244,30 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       <Panel title={t(lang, "tender.history")} count={fmtInt(versions.length, lang)}>
       <p class="muted small">{t(lang, "tender.history_note")}</p>
       <div class="table-wrap bordered">
+        {/* From 700 to 1279 px the published and first-seen dates rest and show under the title. */}
         <Table cols={[
           { kind: "count", label: t(lang, "col.amendment") },
-          { kind: "date", label: t(lang, "col.published") },
+          { kind: "date", label: t(lang, "col.published"), rest: "md" },
           { kind: "date", label: t(lang, "tender.amended") },
           { kind: "datetime", label: t(lang, "col.closing") },
           { kind: "main", label: t(lang, "col.title") },
-          { kind: "date", label: t(lang, "tender.first_seen") },
+          { kind: "date", label: t(lang, "tender.first_seen"), rest: "md" },
         ]}>
           <tbody>
             {versions.map((v) => (
               <tr>
                 <td data-label={t(lang, "col.amendment")} class="mono num">{fmtInt(v.amendment, lang)}</td>
-                <td data-label={t(lang, "col.published")} class="mono">{v.published ?? ""}</td>
+                <td data-label={t(lang, "col.published")} class="mono mdh">{v.published ?? ""}</td>
                 <td data-label={t(lang, "tender.amended")} class="mono">{v.amended ?? ""}</td>
                 <td data-label={t(lang, "col.closing")} class="mono">{closingText(v.closing, lang)}</td>
-                <td data-label={t(lang, "col.title")} class="lead-cell">{pick(lang, v.title_en, v.title_fr) ?? ""}</td>
-                <td data-label={t(lang, "tender.first_seen")} class="mono">{v.first_seen}</td>
+                <td data-label={t(lang, "col.title")} class="lead-cell">
+                  {pick(lang, v.title_en, v.title_fr) ?? ""}
+                  <span class="md-only muted small">
+                    {v.published ? <>{tj(lang, "common.labelled", { label: t(lang, "col.published"), value: <span class="nw">{v.published}</span> })} · </> : null}
+                    {tj(lang, "common.labelled", { label: t(lang, "tender.first_seen"), value: <span class="nw">{v.first_seen}</span> })}
+                  </span>
+                </td>
+                <td data-label={t(lang, "tender.first_seen")} class="mono mdh">{v.first_seen}</td>
               </tr>
             ))}
           </tbody>

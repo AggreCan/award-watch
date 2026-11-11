@@ -4,11 +4,13 @@
 // non-competitive share and what it is a share of; the published responses
 // and corrections from the forms database.
 import { describe, expect, it } from "vitest";
+import type { Profile } from "../src/data";
 import { app } from "../src/index";
 import { awardNoticeUrl, contractSearchUrl, grantUrl, lobbyUrl, tenderNoticeUrl } from "../src/pages/shared";
-import { testEnv } from "./assets";
+import { makeFakeAssets, testEnv } from "./assets";
+import profiles from "./fixtures/profiles-a00.json";
 
-const html = async (path: string) => (await app.request(path, {}, testEnv())).text();
+const html = async (path: string, e = testEnv()) => (await app.request(path, {}, e)).text();
 const nbsp = (s: string) => s.replace(/[\u00a0\u202f]/g, " ");
 const section = (page: string, id: string) => {
   const start = page.indexOf(`<h2 id="${id}">`);
@@ -61,13 +63,25 @@ describe("organization profile", () => {
     expect(awards).toContain('<span class="flag flag-yes" title="The source records the contract as awarded through a competition');
     const contracts = section(page, "contracts");
     expect(contracts.match(/<tr>/g)?.length).toBe(101);
-    expect(contracts).toContain(`<a href="${contractSearchUrl("C-2026-000")}" class="mono wrap" rel="nofollow noopener">C-2026-000</a>`);
-    expect(contracts).toContain("Value as last reported: $36,001");
+    // The reference under the description, as on the award lists, the period after it; no Record column.
+    expect(contracts).toContain('<span class="mono id muted">C-2026-000</span><span class="muted small"> · Reported for 2026-2027-Q1</span>');
+    expect(contracts).not.toContain('class="k-record"');
+    expect(contracts).not.toContain(contractSearchUrl("C-2026-000"));
+    // The largest value under the procurement ID, on the description's lines, only where it differs from the row's own.
+    expect(contracts).toContain('<span class="nw-block muted small" title="The largest contract value among the records that share this procurement ID. It is shown for reference and never added to a total.">Largest value under this procurement ID: $36,001</span>');
+    expect(contracts.match(/Largest value under this procurement ID/g)).toHaveLength(2);
+    expect(contracts).not.toContain("Value as last reported");
+    expect(contracts).toContain('<td data-label="Value" class="mono num">$18,000</td>');
     expect(contracts).toContain('<span class="flag flag-unstated" title="The source leaves the procurement method blank for this record.">Method not stated</span>');
     expect(contracts).toContain('Showing the newest 100 of 101 records. The other one is in <a href="https://open.canada.ca/data/en/dataset/d8f85d91-7dec-4fd1-8055-483b77225d8b">the publisher&#39;s file</a>.');
     expect(contracts).toContain("1 record in another currency is shown with its currency and left out of the totals.");
     const lobbying = section(page, "lobbying");
-    expect(lobbying).toContain("Example Officeholder, Assistant Deputy Minister, Public Services and Procurement Canada (PSPC)");
+    // The officials take the main column, without the institution the row names already; the subject matters a label's.
+    expect(lobbying).toContain('<th class="k-main"><button type="button" class="th-sort">Public office holders</button></th>');
+    expect(lobbying).toContain('<th class="k-label"><button type="button" class="th-sort">Subject matters</button></th>');
+    expect(lobbying).toContain('<span class="nw-block">Example Officeholder, Assistant Deputy Minister</span>');
+    // While the institutions column rests (700 to 1279 px) they show under the officials.
+    expect(lobbying).toContain('<span class="md-only muted small">Federal institutions: Public Services and Procurement Canada (PSPC)</span>');
     expect(lobbying).toContain(`<a href="${lobbyUrl("500001")}" class="mono" rel="nofollow noopener">500001</a>`);
     // The sources with no record of the organization: one line after the lists, no empty panels, no link from their tiles.
     expect(page).not.toContain('<h2 id="history">');
@@ -83,11 +97,32 @@ describe("organization profile", () => {
     expect(history).toContain('<th class="k-buyer mdh"><button type="button" class="th-sort">Client department</button></th>');
     expect(history).toContain('<span class="flag flag-no" title="The source&#39;s own term for a contract awarded without a competition');
     const grants = section(two, "grants");
-    expect(grants).toContain(`<a href="${grantUrl("dfo-mpo", "GC-2025-0099")}" class="mono wrap" rel="nofollow noopener">GC-2025-0099</a>`);
-    expect(grants).toContain("Small Craft Harbours");
-    expect(grants).toContain(">Contribution</td>");
+    // Four columns: the end date on its own line, the reference and its amendment under the program, the type under the value.
+    expect(grants.match(/<th class="k-/g)).toHaveLength(4);
+    expect(grants).toContain('<span class="nw">2025-04-01</span><br/><span class="muted small">to <span class="nw">2026-03-31</span></span></td>');
+    expect(grants).toContain(`Small Craft Harbours<br/><span class="muted small">Wharf safety upgrades</span><br/><a href="${grantUrl("dfo-mpo", "GC-2025-0099")}" class="mono id wrap" rel="nofollow noopener">GC-2025-0099</a><span class="muted small"> amendment 1</span></td>`);
+    expect(grants).toContain('<td data-label="Value" class="mono num">$75,000<span class="nw-block muted small" title="Agreement type">Contribution</span></td>');
+    // The department shows from 700 px.
+    expect(grants).toContain('<td data-label="Department"><a href="/buyers/dfo-mpo">Fisheries and Oceans Canada</a></td>');
     // A cancelled notice is marked as such where it is listed.
     expect(section(two, "awards")).toContain('<span class="badge badge-cancelled">Cancelled</span>');
+  });
+
+  it("leaves the non-competitive shares out of the year table when every year is grants", async () => {
+    const base = (profiles as Record<string, any>)["org-a000000002"] as Profile;
+    const years = base.years.filter((y) => y.source === "grants");
+    const e = testEnv(makeFakeAssets({}, { "profiles/a00.json": { ...profiles, "org-a000000002": { ...base, years } } }));
+    for (const lang of ["en", "fr"]) {
+      const table = section(await html(`/organizations/org-a000000002?lang=${lang}`, e), "years");
+      expect(table, lang).not.toContain("k-part");
+      expect(table, lang).not.toContain("k-share");
+      expect(table, lang).not.toContain(lang === "en" ? "Not applicable" : "Sans objet");
+      expect(table, lang).not.toContain('<div class="panel-foot">');
+    }
+    // With any other source, both stay, the count share in its own narrower kind.
+    const mixed = section(await html("/organizations/org-a000000002"), "years");
+    expect(mixed).toContain('<th class="k-part num"><button type="button" class="th-sort"><span title=');
+    expect(mixed).toContain('<th class="k-share num mdh"><button type="button" class="th-sort"><span title=');
   });
 
   it("lists the main buyers per source", async () => {

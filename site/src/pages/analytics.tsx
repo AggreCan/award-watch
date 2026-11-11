@@ -485,13 +485,14 @@ const GrowthPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = 
           ]} />
         ) : <p class="muted">{t(lang, "analytics.growth_none")}</p>}
         <div class="table-wrap">
+          {/* From 700 to 1279 px the first and newest values rest and show under the change. */}
           <Table cols={[
             { kind: "date", label: t(lang, "analytics.col_fy") },
             { kind: "count", label: t(lang, "col.records") },
             { kind: "share", label: t(lang, "analytics.col_amended") },
             { kind: "count", label: t(lang, "analytics.col_compared"), rest: "md" },
-            { kind: "total", label: t(lang, "analytics.col_first_value") },
-            { kind: "total", label: t(lang, "analytics.col_last_value") },
+            { kind: "total", label: t(lang, "analytics.col_first_value"), rest: "md" },
+            { kind: "total", label: t(lang, "analytics.col_last_value"), rest: "md" },
             { kind: "main", label: t(lang, "analytics.col_change") },
           ]}>
             <tbody>
@@ -503,9 +504,17 @@ const GrowthPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = 
                     <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
                     <td data-label={t(lang, "analytics.col_amended")} class="mono num">{shareText(lang, int(r.n_amended), int(r.n), n)}</td>
                     <td data-label={t(lang, "analytics.col_compared")} class="mono num mdh">{n(int(r.n_compared))}</td>
-                    <td data-label={t(lang, "analytics.col_first_value")} class="mono num">{before > 0 ? money(lang, before / 100) : ""}</td>
-                    <td data-label={t(lang, "analytics.col_last_value")} class="mono num">{before > 0 ? money(lang, dollars(r.last_cents)) : ""}</td>
-                    <td data-label={t(lang, "analytics.col_change")} class="mono num">{before > 0 ? growthPct(lang, int(r.last_cents) / before - 1) : ""}</td>
+                    <td data-label={t(lang, "analytics.col_first_value")} class="mono num mdh">{before > 0 ? money(lang, before / 100) : ""}</td>
+                    <td data-label={t(lang, "analytics.col_last_value")} class="mono num mdh">{before > 0 ? money(lang, dollars(r.last_cents)) : ""}</td>
+                    <td data-label={t(lang, "analytics.col_change")} class="mono num">
+                      {before > 0 ? growthPct(lang, int(r.last_cents) / before - 1) : ""}
+                      {before > 0 ? (
+                        <span class="md-only muted small">
+                          <span class="nw-block">{t(lang, "common.labelled", { label: t(lang, "analytics.col_first_value"), value: money(lang, before / 100) })}</span>
+                          <span class="nw-block">{t(lang, "common.labelled", { label: t(lang, "analytics.col_last_value"), value: money(lang, dollars(r.last_cents)) })}</span>
+                        </span>
+                      ) : null}
+                    </td>
                   </tr>
                 );
               })}
@@ -550,12 +559,13 @@ const RecordsPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: "organiza
       foot={<span>{t(lang, "analytics.foot_records")}</span>}>
       {rows.length ? (
         <div class="table-wrap">
+          {/* With the organization shown, the fiscal year rests from 700 to 1279 px and shows under the reference. */}
           <Table cols={[
             { kind: "rank", label: t(lang, "analytics.col_rank") },
             { kind: "main", label: t(lang, "col.record") },
             org && { kind: "org", label: t(lang, "col.organization") },
             buyer && { kind: "buyer", label: t(lang, "col.buyer"), rest: org ? "md" : undefined },
-            { kind: "date", label: t(lang, "analytics.col_fy") },
+            { kind: "date", label: t(lang, "analytics.col_fy"), rest: org ? "md" : undefined },
             { kind: "value", label: t(lang, "col.value") },
           ]}>
             <tbody>
@@ -569,6 +579,7 @@ const RecordsPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: "organiza
                     <td data-label={t(lang, "col.record")} class="lead-cell">
                       {link ? <a href={link.href} rel={link.here ? undefined : "nofollow noopener"}>{title}</a> : title}
                       {link ? <><br /><span class="mono id muted">{link.text}</span></> : null}
+                      {org ? <span class="md-only muted small">{t(lang, "common.labelled", { label: t(lang, "analytics.col_fy"), value: fy(lang, int(r.fy), frame.current) })}</span> : null}
                     </td>
                     {org ? (
                       <td data-label={t(lang, "col.organization")}>
@@ -580,7 +591,7 @@ const RecordsPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: "organiza
                         {typeof r.buyer_id === "string" ? <a href={`/buyers/${r.buyer_id}`}>{buyerName ?? r.buyer_id}</a> : <span class="muted">{t(lang, "common.not_stated")}</span>}
                       </td>
                     ) : null}
-                    <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
+                    <td data-label={t(lang, "analytics.col_fy")} class={org ? "mono mdh" : "mono"}>{fy(lang, int(r.fy), frame.current)}</td>
                     <td data-label={t(lang, "col.value")} class="mono num">{money(lang, dollars(r.cents))}</td>
                   </tr>
                 );
@@ -828,17 +839,20 @@ const QuarterTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
   const quarter = (q: number) => t(lang, "analytics.quarter", { n: q });
   return (
     <div class="table-wrap">
+      {/* With the four quarters shown (from 1280 px) the count without a published value rests below
+          1440 px; from 700 to 1439 px it shows under the year's value. */}
       <Table cols={[
         { kind: "date", label: t(lang, "analytics.col_fy") },
         ...[1, 2, 3, 4].map((q) => ({ kind: "value" as const, label: quarter(q), rest: "md" as const })),
         { kind: "main", label: t(lang, "analytics.col_year_value") },
         { kind: "count", label: t(lang, "col.records") },
-        { kind: "count", label: t(lang, "analytics.col_no_value"), rest: "md" },
+        { kind: "count", label: t(lang, "analytics.col_no_value"), rest: "lg" },
       ]}>
         <tbody>
           {years.map((y) => {
             const mine = rows.filter((r) => int(r.fy) === y);
             const value = mine.some((r) => num(r.cents) !== null) ? mine.reduce((s, r) => s + int(r.cents), 0) / 100 : null;
+            const noValue = mine.reduce((s, r) => s + int(r.n_no_value), 0);
             return (
               <tr>
                 <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, y, frame.current)}</td>
@@ -846,9 +860,12 @@ const QuarterTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
                   const r = cell(y, q);
                   return <td data-label={quarter(q)} class="mono num mdh">{r ? money(lang, dollars(r.cents)) : ""}</td>;
                 })}
-                <td data-label={t(lang, "analytics.col_year_value")} class="mono num">{mine.length ? money(lang, value) : ""}</td>
+                <td data-label={t(lang, "analytics.col_year_value")} class="mono num">
+                  {mine.length ? money(lang, value) : ""}
+                  {mine.length ? <span class="lg-down muted small">{t(lang, "common.labelled", { label: t(lang, "analytics.col_no_value"), value: fmtInt(noValue, lang) })}</span> : null}
+                </td>
                 <td data-label={t(lang, "col.records")} class="mono num">{fmtInt(mine.reduce((s, r) => s + int(r.n), 0), lang)}</td>
-                <td data-label={t(lang, "analytics.col_no_value")} class="mono num mdh">{fmtInt(mine.reduce((s, r) => s + int(r.n_no_value), 0), lang)}</td>
+                <td data-label={t(lang, "analytics.col_no_value")} class="mono num lgh">{fmtInt(noValue, lang)}</td>
               </tr>
             );
           })}

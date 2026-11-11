@@ -30,7 +30,7 @@ import {
   RECORDS_CSV_MAX, RECORDS_PAGE_ROWS, type RecordsParams, type RecordsSort, type RecordsView, type Row, readRecordCsv, readRecordTable,
 } from "../records_tables";
 import { csvCell } from "./analytics";
-import { BuyerLink, contractPath, grantUrl, money } from "./shared";
+import { BuyerLink, RestFlag, contractPath, grantUrl, money } from "./shared";
 
 const METHODS = ["OB", "TC", "ST", "TN", "AC"] as const;
 type Method = (typeof METHODS)[number];
@@ -38,6 +38,8 @@ const METHOD_NAME: Record<(typeof METHODS)[number], Key> = {
   OB: "method.open", TC: "method.traditional", ST: "method.selective", TN: "method.non_competitive", AC: "method.acan",
 };
 const SOURCE_OF: Record<number, MoneySource> = { 1: "awards", 2: "history", 3: "contracts", 4: "grants" };
+// A row's source in the singular, as the contracts-ending tables write it after a reference.
+const KIND_OF: Record<number, Key> = { 1: "expiring.kind_award", 2: "expiring.kind_history", 3: "expiring.kind_contract", 4: "records.kind_grant" };
 
 // The orders a record table offers, the table's Date and Value heads set
 // them too; "" (no order asked) is the newest first, the table's own.
@@ -149,9 +151,18 @@ function params(e: Entity, q: RecordsQuery, lastFy: number): RecordsParams {
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 
+// A record's method: a published contract's procedure is a code (TN, OB,
+// ...), shown by its name with the code as the title; other sources' methods
+// are words already.
+const MethodText: FC<{ lang: Lang; meth: string }> = ({ lang, meth }) => {
+  const key = METHOD_NAME[meth as Method];
+  return <span class={key ? "nw-block muted small" : "nw-block mono muted small"} title={key ? meth : undefined}>{key ? t(lang, key) : meth}</span>;
+};
+
 // The table is one page of a longer list, so the server orders it: the date
 // and value heads link their orders (sorts), and a free reader, whose view
-// keeps the newest first, gets plain heads.
+// keeps the newest first, gets plain heads. From 700 to 1279 px the
+// competition column rests and its flag and method show under the value.
 const RecordRows: FC<{ lang: Lang; view: RecordsView; rows: Row[]; sorts?: { date: HeadSort; value: HeadSort } }> = ({ lang, view, rows, sorts }) => (
   <div class="table-wrap bordered">
     <Table sorting="server" cols={[
@@ -159,7 +170,7 @@ const RecordRows: FC<{ lang: Lang; view: RecordsView; rows: Row[]; sorts?: { dat
       { kind: "main", label: t(lang, "col.record") },
       { kind: view === "organization" ? "buyer" : "org", label: t(lang, view === "organization" ? "col.buyer" : "col.supplier") },
       { kind: "value", label: t(lang, "col.value"), sort: sorts?.value },
-      { kind: "comp", label: t(lang, "col.method") },
+      { kind: "comp", label: t(lang, "col.method"), rest: "md" },
     ]}>
       <tbody>
         {rows.map((r) => {
@@ -169,13 +180,15 @@ const RecordRows: FC<{ lang: Lang; view: RecordsView; rows: Row[]; sorts?: { dat
           const title = recordTitle(lang, r, ref);
           const oid = num(r.oid);
           const cents = dollars(r.cents);
+          const meth = str(r.meth);
           return (
             <tr>
               <td data-label={t(lang, "col.date")} class="mono">{str(r.day) ?? ""}</td>
               <td data-label={t(lang, "col.record")} class="lead-cell">
                 {href ? <a href={href} rel={src === 4 ? "nofollow noopener" : "nofollow"}>{title}</a> : title}
                 <br />
-                <span class="mono id muted">{shownReference(ref)}</span> <span class="muted small">{SOURCE_OF[src] ? sourceLabel(lang, SOURCE_OF[src]) : ""}</span>
+                <span class="mono id muted">{shownReference(ref)}</span>
+                {KIND_OF[src] ? <span class="muted small">{` · ${t(lang, KIND_OF[src])}`}</span> : null}
               </td>
               {view === "organization" ? (
                 <td data-label={t(lang, "col.buyer")}><BuyerLink lang={lang} id={str(r.buyer_id)} en={str(r.buyer_en)} fr={str(r.buyer_fr)} /></td>
@@ -184,11 +197,15 @@ const RecordRows: FC<{ lang: Lang; view: RecordsView; rows: Row[]; sorts?: { dat
                   {oid === null ? <span class="muted">{t(lang, "common.not_stated")}</span> : <a href={`/organizations/${orgIdOf(oid)}`}>{str(r.org_name) ?? orgIdOf(oid)}</a>}
                 </td>
               )}
-              <td data-label={t(lang, "col.value")} class="mono num">{cents === null ? t(lang, "common.not_stated") : money(lang, cents)}</td>
-              <td data-label={t(lang, "col.method")}>
+              <td data-label={t(lang, "col.value")} class="mono num">
+                {cents === null ? t(lang, "common.not_stated") : money(lang, cents)}
+                {src === 4 ? (meth ? <span class="md-only rest-flag"><MethodText lang={lang} meth={meth} /></span> : null)
+                  : <RestFlag lang={lang} value={num(r.comp) as 0 | 1 | null}>{meth ? <MethodText lang={lang} meth={meth} /> : null}</RestFlag>}
+              </td>
+              {/* The flag, then the method on a line of its own. */}
+              <td data-label={t(lang, "col.method")} class="mdh">
                 {src === 4 ? "" : <CompetitiveFlag lang={lang} value={num(r.comp) as 0 | 1 | null} />}
-                {/* A published contract's procedure is a code (TN, OB, ...): its name, with the code as the title; other sources' methods are words already. */}
-                {str(r.meth) ? <> <span class={METHOD_NAME[str(r.meth) as Method] ? "muted small" : "mono muted small"} title={METHOD_NAME[str(r.meth) as Method] ? str(r.meth) ?? undefined : undefined}>{METHOD_NAME[str(r.meth) as Method] ? t(lang, METHOD_NAME[str(r.meth) as Method]) : str(r.meth)}</span></> : null}
+                {meth ? <MethodText lang={lang} meth={meth} /> : null}
               </td>
             </tr>
           );

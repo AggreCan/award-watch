@@ -179,8 +179,12 @@ describe("page metadata", () => {
 
   it("outbound record links are nofollow where they go to a search", async () => {
     const html = await (await get("/organizations/org-a000000001")).text();
-    expect(html).toContain('<a href="https://search.open.canada.ca/contracts/?search_text=C-2026-000" class="mono wrap" rel="nofollow noopener">C-2026-000</a>');
     expect(html).toContain('href="https://lobbycanada.gc.ca/app/secure/ocl/lrs/do/cmmLgPblcVw?comlogId=500001" class="mono" rel="nofollow noopener"');
+    // A published contract's reference sits under its description as text; its page here links the contracts search.
+    expect(html).not.toContain('href="https://search.open.canada.ca/contracts/?search_text=C-2026-000"');
+    // A grant's reference links its record in the grants search.
+    const grants = await (await get("/organizations/org-a000000002")).text();
+    expect(grants).toContain('<a href="https://search.open.canada.ca/grants/record/dfo-mpo%2CGC-2025-0099%2Ccurrent" class="mono id wrap" rel="nofollow noopener">GC-2025-0099</a>');
   });
 
   it("the response form, filtered views and later pages stay out of the index; error pages carry only the site description", async () => {

@@ -3,11 +3,14 @@
 // width, and every table on the site drawn on it.
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import tendersJs from "../public/tenders.js?raw";
+import watchlistJs from "../public/watchlist.js?raw";
 import { app } from "../src/index";
 import { homeRequest } from "./home";
 import { COLUMN_WIDTHS, MAIN_MIN, type Column, headClass, minWidths, tableStyle } from "../src/columns";
 import { homeTenderColumns, tenderColumns } from "../src/pages/shared";
 import { testEnv } from "./assets";
+import { SHEET, edges, leastWidths, mainWidth, misfits, rangeOf, tableColumn, tablesIn } from "./table-fit";
 
 // The stylesheet's text, handed over by vitest.config.ts.
 const styles = env.STYLES_CSS;
@@ -16,12 +19,14 @@ let address = 0;
 const text = async (path: string) =>
   (await homeRequest(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.1.${(address++ % 250) + 1}` } }, testEnv())).text();
 
-// Every page that draws a table, in both languages.
+// Every page that draws a table, in both languages. The pages that read the
+// records database, the search database or an account hold the same check
+// in their own tests (expectTablesFit), which set those up.
 const PAGES = [
-  "/", "/tenders", "/tenders/new", "/tenders/cb-100-10000001", "/awards", "/awards/2026", "/awards/erroneous", "/awards/cb-400-40000004",
-  "/expiring", "/expiring/3m", "/organizations", "/organizations/directory/on", "/organizations/org-a000000001",
-  "/organizations/org-a000000002", "/buyers", "/buyers/pwgsc-tpsgc", "/segments", "/segments/82", "/rankings",
-  "/data", "/feeds", "/watchlist",
+  "/", "/overview", "/tenders", "/tenders/new", "/tenders/cb-100-10000001", "/awards", "/awards/2026", "/awards/erroneous",
+  "/awards/cb-400-40000004", "/history/w8472-000633", "/expiring", "/expiring/3m", "/organizations", "/organizations/directory/on",
+  "/organizations/org-a000000001", "/organizations/org-a000000002", "/buyers", "/buyers/pwgsc-tpsgc", "/segments", "/segments/82",
+  "/rankings", "/rankings/2026?source=contracts&by=count", "/data", "/feeds", "/watchlist", "/methodology",
 ];
 
 describe("column widths", () => {
@@ -86,9 +91,15 @@ describe("column widths", () => {
     const data = JSON.parse(html.match(/<script type="application\/json" id="i18n">([\s\S]*?)<\/script>/)?.[1] ?? "{}");
     expect(data.table.cls).toBe("restack cols t-tenders");
     expect(data.table.heads.map((h: string[]) => h[0])).toEqual([
-      "k-main c-notice", "k-buyer c-buyer", "k-datetime c-date", "k-date mdh c-pub", "k-region c-region",
+      "k-main c-notice", "k-buyer c-buyer", "k-datetime c-date", "k-date mdh c-pub", "k-region mdh c-region",
     ]);
     expect(data.table.heads.map((h: string[]) => h[1])).toEqual(["Notice", "Buyer", "Closing", "Published", "Provinces of delivery"]);
+    // The script draws a row as the server does: the provinces under the buyer while their column rests.
+    expect(tendersJs).toContain('buyer.appendChild(el("span", "split-only md-only muted small", provincesText(r.provinces, r.provinces_derived)));');
+    expect(tendersJs).toContain('cell(tr, "col.region", "c-region mdh")');
+    // The watchlist's script puts each row's Remove button under its name, as the head row has no column for it.
+    expect(watchlistJs).toContain("removeButton(who, tr, id, name);");
+    expect(watchlistJs).not.toContain("watch.col_manage");
     expect(data.table.style).toMatch(/^--tmin:\d+px;--tmin-xl:\d+px;--tmin-lg:\d+px;--tmin-md:\d+px$/);
   });
 
@@ -96,27 +107,58 @@ describe("column widths", () => {
     const cols = homeTenderColumns("en");
     expect(cols.map(headClass)).toEqual(["k-main c-notice", "k-label mdh c-type", "k-buyer c-buyer", "k-datetime c-date", "k-region mdh c-region"]);
     expect(cols.map((c) => c.label)).toEqual(["Notice", "Type", "Buyer", "Closing", "Provinces of delivery"]);
-    // From 1000 to 1279 px the content column is 671 px at the least: the three columns left fit it.
-    expect(minWidths(cols)).toEqual({ all: 836, xxl: 836, xl: 836, lg: 836, md: 528 });
-    expect(minWidths(cols).md).toBeLessThanOrEqual(1000 - 15 - 264 - 48 - 2);
+    // From 700 to 1279 px the content column is 635 px at the least: the three columns left fit it.
+    expect(minWidths(cols)).toEqual({ all: 820, xxl: 820, xl: 820, lg: 820, md: 512 });
+    expect(minWidths(cols).md).toBeLessThanOrEqual(mainWidth(700) - 2 * SHEET.panelBorder);
     const html = await text("/");
     expect(html).toContain(`<table class="restack cols t-tenders" style="${tableStyle(cols)}" data-sorting="client"><thead><tr>` +
       '<th class="k-main c-notice"><button type="button" class="th-sort">Notice</button></th><th class="k-label mdh c-type"><button type="button" class="th-sort">Type</button></th>');
-    // The tender list keeps its own columns.
-    expect(tenderColumns("en").map(headClass)).toEqual(["k-main c-notice", "k-buyer c-buyer", "k-datetime c-date", "k-date mdh c-pub", "k-region c-region"]);
+    // The tender list keeps its own columns; its provinces rest below 1280 px too, and show under the buyer.
+    expect(tenderColumns("en").map(headClass)).toEqual(["k-main c-notice", "k-buyer c-buyer", "k-datetime c-date", "k-date mdh c-pub", "k-region mdh c-region"]);
   });
 });
 
-// The content column at the narrowest window of each range: the window less
-// a 15 px scrollbar, the 240 px rail, the two 24 px gutters and the panel's
-// two borders. A table fits its range when its least width there is no wider.
-const CONTENT = { lg: 1280 - 15 - 240 - 48 - 2, xl: 1440 - 15 - 240 - 48 - 2, xxl: 1600 - 15 - 240 - 48 - 2, all: 1920 - 15 - 240 - 48 - 2 };
-const styleOf = (html: string, marker: string) => {
-  const at = html.indexOf(marker);
-  const m = html.slice(at).match(/<table class="[^"]*" style="([^"]+)"/);
-  const v = (name: string) => Number(m?.[1].match(new RegExp(`--tmin${name}:([0-9]+)px`))?.[1]);
-  return { all: v(""), xxl: v("-xxl") || v(""), xl: v("-xl"), lg: v("-lg") };
-};
+describe("a table's least width", () => {
+  it("works the content column out from the stylesheet: window, scrollbar, rail, padding and border", () => {
+    // The rail is the stylesheet's own figure, and the window it appears at.
+    expect(SHEET.rail).toBe(264);
+    expect(SHEET.railFrom).toBe(1000);
+    const panel = (w: number) => mainWidth(w) - 2 * SHEET.panelBorder;
+    expect([700, 1000, 1280, 1440, 1600, 1920].map(panel)).toEqual([635, 671, 951, 1111, 1271, 1591]);
+    // Each range's low edge, the rail's window, and the windows inside a range where a panel grid
+    // splits into tracks, three panels share a row, a document's contents move beside it, or the
+    // home map's list moves beside the map.
+    expect(edges()).toEqual([700, 1000, 1200, 1280, 1351, 1400, 1440, 1600, 1840, 1920]);
+    expect([699, 700, 1279, 1280, 1439, 1440, 1599, 1600, 1919, 1920].map(rangeOf)).toEqual(
+      ["md", "md", "md", "lg", "lg", "xl", "xl", "xxl", "xxl", "all"]);
+  });
+
+  it("is never wider than the column the table gets, for every table the pages draw, at every edge from 700 px", async () => {
+    let tables = 0;
+    for (const page of PAGES) {
+      for (const path of [page, `${page}${page.includes("?") ? "&" : "?"}lang=fr`]) {
+        const html = await text(path);
+        tables += tablesIn(html).length;
+        expect(misfits(html), path).toEqual([]);
+      }
+    }
+    expect(tables).toBeGreaterThan(80);
+  });
+
+  it("narrows with the column a table sits in: a panel grid's track, a document's measure", async () => {
+    // A buyer's ranked lists, two to a track from 1351 px: 500 px tracks less the panel's border.
+    const [first] = tablesIn(await text("/buyers/pwgsc-tpsgc")).filter((tb) => tb.parent?.parent?.parent?.cls.includes("panel-grid"));
+    expect(first?.parent?.parent?.parent?.children.length).toBeGreaterThanOrEqual(2);
+    expect(tableColumn(first, 1350)).toBe(mainWidth(1350) - 2);
+    expect(tableColumn(first, 1351)).toBe(498);
+    expect(leastWidths(first).lg).toBeLessThanOrEqual(498);
+    // A document's tables run its 880 px measure, less its border.
+    for (const tb of tablesIn(await text("/data"))) {
+      expect(tableColumn(tb, 1920)).toBe(SHEET.measure - 2);
+      expect(tableColumn(tb, 700)).toBe(635);
+    }
+  });
+});
 
 describe("a source's name over its figure", () => {
   it("heads its column on one line, in the tally kind, on every table that has one", async () => {
@@ -138,13 +180,13 @@ describe("a source's name over its figure", () => {
     }
   });
 
-  it("keeps the buyers list and the watchlist inside the window at 1280, 1440, 1600 and 1920 px, resting columns rather than scrolling", async () => {
-    for (const [path, marker] of [["/buyers", 'id="main"'], ["/watchlist", 'id="watchlist"']] as const) {
-      const w = styleOf(await text(path), marker);
-      expect(w.lg, path).toBeLessThanOrEqual(CONTENT.lg);
-      expect(w.xl, path).toBeLessThanOrEqual(CONTENT.xl);
-      expect(w.xxl, path).toBeLessThanOrEqual(CONTENT.xxl);
-      expect(w.all, path).toBeLessThanOrEqual(CONTENT.all);
+  it("keeps the buyers list and the watchlist inside the window from 700 px, resting columns rather than scrolling", async () => {
+    for (const path of ["/buyers", "/watchlist"]) {
+      const html = await text(path);
+      expect(html, path).toContain('<th class="k-tally');
+      expect(misfits(html), path).toEqual([]);
     }
+    // The watchlist's Remove button sits under the name: eight columns, none of them for it.
+    expect((await text("/watchlist")).match(/<th class="k-/g)).toHaveLength(8);
   });
 });
