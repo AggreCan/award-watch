@@ -18,9 +18,14 @@ and say so.
 Sums of daily figures: unique visitors come from a code that changes every
 UTC day, so a month's figure is the sum of daily uniques ("visitor-days"):
 a person who came on three days counts three times. The same holds for
-visits. Levels (feed subscribers, organizations, records) are not summed:
-each month shows the last reading in it (the largest daily figure for feed
-subscribers).
+visits and for the three reader counts (engaged, from search, phone or
+tablet), which are summed over the days that have all three. Levels (feed
+subscribers, organizations, records) are not summed: each month shows the
+last reading in it (the largest daily figure for feed subscribers).
+
+Unique visitors count automated browsers that copy a browser's headers, so
+the report says beside the table which figures to read as people. The one
+line for LAST_RUN.md is public and carries none of the three.
 
 Alert sign-ups: the count the nightly run read from the forms database just
 before the report (rows of the interest table, one per address and saved
@@ -40,7 +45,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
-from .views_rollup import SummaryError, read_summary
+from .views_rollup import READER_COLUMNS, SummaryError, read_summary
 
 log = logging.getLogger(__name__)
 
@@ -107,6 +112,10 @@ class Month:
     visitor_days: int = 0
     visitor_days_n: int = 0           # days with a unique-visitor figure
     visits: int = 0
+    readers_n: int = 0                # days with all three reader counts
+    engaged: int = 0                  # codes with two or more page views, summed by day
+    from_search: int = 0              # codes referred by a search engine, summed by day
+    phone: int = 0                    # codes on a phone or tablet, summed by day
     canada: int = 0                   # people's page views from CA, on days with countries
     countries_total: int = 0
     devices: dict[str, int] = field(default_factory=dict)
@@ -143,6 +152,14 @@ def gather(month: str, summary: list[dict[str, str]], search: list[dict[str, str
             m.visitor_days_n += 1
             m.visitor_days += uniques
             m.visits += _int(row.get("human_visits")) or 0
+        # Together or not at all, so the three cover the same days and can be
+        # read beside each other.
+        engaged, from_search, phone = (_int(row.get(c)) for c in READER_COLUMNS)
+        if engaged is not None and from_search is not None and phone is not None:
+            m.readers_n += 1
+            m.engaged += engaged
+            m.from_search += from_search
+            m.phone += phone
         subs = _int(row.get("feed_subscribers"))
         if subs is not None:
             m.feed_subscribers = subs if m.feed_subscribers is None else max(m.feed_subscribers, subs)
@@ -176,6 +193,16 @@ def _days(n: int, month: str) -> str:
     return f"{n} of {(last - first).days + 1}"
 
 
+# What each visitor figure can tell, printed under the table.
+READING = (
+    "Unique visitors counts every client that sends a browser's headers, and that includes automated browsers that "
+    "copy those headers. Engaged visitors, visitors from search and visitors on a phone or tablet are the figures to "
+    "read as people. Each undercounts the real audience in its own way: engaged leaves out everyone who read one "
+    "page, from search leaves out everyone who came by a link, a bookmark or a typed address, and phone or tablet "
+    "leaves out everyone on a desktop.\n"
+)
+
+
 def interest_text(interest: dict[str, int] | None) -> str:
     if not interest:
         return "Not counted. The forms database could not be read when this report was written.\n"
@@ -199,6 +226,10 @@ def render(month: str, months: list[Month], written: date, interest: dict[str, i
         line("Days with visitor counts", [_days(m.visitor_days_n, m.month) for m in months]),
         line("Unique visitors (visitor-days)", [_n(m.visitor_days) if m.visitor_days_n else NA for m in months]),
         line("Visits", [_n(m.visits) if m.visitor_days_n else NA for m in months]),
+        line("Days with engaged, search and phone counts", [_days(m.readers_n, m.month) for m in months]),
+        line("Engaged visitors (visitor-days)", [_n(m.engaged) if m.readers_n else NA for m in months]),
+        line("Visitors from search (visitor-days)", [_n(m.from_search) if m.readers_n else NA for m in months]),
+        line("Visitors on a phone or tablet (visitor-days)", [_n(m.phone) if m.readers_n else NA for m in months]),
         line("Canada share of people's page views", [_share(m.canada, m.countries_total) for m in months]),
         line("Desktop share", [_share(m.devices.get("desktop", 0), sum(m.devices.values())) for m in months]),
         line("Mobile share", [_share(m.devices.get("mobile", 0), sum(m.devices.values())) for m in months]),
@@ -225,6 +256,7 @@ def render(month: str, months: list[Month], written: date, interest: dict[str, i
         f"Written {written.isoformat()} from views/summary.csv and views/search_console.csv in R2. "
         "Months are UTC calendar months. n/a means not counted.\n\n"
         f"## The month and the three before it\n\n{table}\n"
+        f"{READING}\n"
         f"## Top pages by people, {month}\n\n{pages}\n"
         f"## Alert sign-ups\n\n{interest_text(interest)}\n"
         "## Definitions\n\n"
@@ -236,6 +268,16 @@ def render(month: str, months: list[Month], written: date, interest: dict[str, i
         "is a hash of the address and user agent under a key that changes every UTC day, so a person who came on "
         "three days counts three times. Counted only on days when every person's request carried a code.\n"
         "- Visits: each day's count of distinct visitor codes with at least one page view, summed over the month.\n"
+        "- Engaged visitors: each day's count of distinct visitor codes with two or more page views below status "
+        "400, summed over the days with engaged, search and phone counts.\n"
+        "- Visitors from search: each day's count of distinct visitor codes with a page view below status 400 whose "
+        "referring site is a search engine (Google, Bing, DuckDuckGo, Yahoo search, Ecosia, Brave Search, Startpage, "
+        "Qwant, Yandex, Baidu), summed the same way. A browser that sends no referrer is not counted here.\n"
+        "- Visitors on a phone or tablet: each day's count of distinct visitor codes with a page view below status "
+        "400 from a device read as mobile or tablet, summed the same way.\n"
+        "- Days with engaged, search and phone counts: days on which every person's request carried a code and all "
+        "three counts were read. Days rolled up before the three counts existed (2026-11-11) were filled afterwards, "
+        "while Analytics Engine still held them.\n"
         "- Canada share, device shares: of people's page views on the days with people counted; the device is read "
         "from the user agent (iPads that ask for desktop pages count as desktop).\n"
         "- Search figures: Google Search Console, web search, final data only, summed over the days imported "

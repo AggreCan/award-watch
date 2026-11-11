@@ -151,6 +151,11 @@ NOTICE_PART_MAX = 1200
 # The notice for a night the alert sign-ups were not counted.
 INTEREST_NOTICE = "the alert sign-ups were not counted tonight (the D1 query failed or did not run); the next run counts again"
 
+# The notice for a night the account funnel's record (funnel.py) was not saved
+# to R2. It names no figure: the notices go to the public LAST_RUN.md.
+FUNNEL_NOTICE = ("the account funnel's record and line were not saved to R2 tonight (views/funnel.csv); "
+                 "the next run counts its own day")
+
 # The notice for a night the records database was not synced because it does
 # not exist yet: wrangler.jsonc still holds the placeholder id (docs/analytics.md).
 RECORDS_NOTICE = "the records database is not created yet, so the analytics views answer unavailable; docs/analytics.md has the steps"
@@ -617,6 +622,7 @@ def run_status(
     intraday_lookup_bytes: int | None = None,
     link_sample: str | None = None, link_sample_broken: list[dict[str, Any]] | None = None,
     org_review: str | None = None, org_review_record: dict[str, Any] | None = None,
+    funnel: str | None = None,
 ) -> dict[str, Any]:
     """status.json for the site's daily check. Every input may be missing: the
     status then says what is missing rather than failing to be written.
@@ -677,7 +683,13 @@ def run_status(
     adds one notice, the daily check's email line (org_review_notice): the
     headline counts and the R2 object, or why there is none. Never an item
     needing attention: the review is for the operator, and the site is
-    untouched by it."""
+    untouched by it.
+
+    funnel is the outcome of saving the account funnel's record (funnel.py:
+    "saved", "failed", or "not run"). Only the word: the figures stay in the
+    private views/ prefix, because this file is printed in the public run
+    log and its notices go to LAST_RUN.md. A failed save is a notice
+    (FUNNEL_NOTICE), never an item needing attention."""
     stages: list[dict[str, Any]] = []
     notices: list[dict[str, str]] = []
     for name, result in steps.items():
@@ -752,6 +764,7 @@ def run_status(
         "search_console": search_console or "not run",
         "views_report": views_report or "not run",
         "indexnow": indexnow_outcome or "not run",
+        "funnel": funnel or "not run",
         "interest": dict(interest) if interest else {"n": None, "live": None},
         "restore": restored,
         "smoke": verdict,
@@ -768,7 +781,8 @@ def run_status(
         + [{"source": name, "detail": text} for name, text in INTRADAY_NOTICES.items() if intraday[name] == "failed"]
         + ([{"source": "records_sync", "detail": RECORDS_NOTICE}] if records == "no database" else [])
         + link_notices
-        + ([review_notice] if review_notice else []),
+        + ([review_notice] if review_notice else [])
+        + ([{"source": "funnel", "detail": FUNNEL_NOTICE}] if funnel == "failed" else []),
         "ok": all(s["ok"] for s in stages) and verdict != "broken",
     }
 
@@ -1131,6 +1145,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--search-console-outcome", default=None, help="the Search Console import's outcome file")
     s.add_argument("--views-report-outcome", default=None, help="the monthly audience report's outcome file")
     s.add_argument("--interest", default=None, help="Wrangler's JSON answer to the count of alert sign-ups")
+    s.add_argument("--funnel-outcome", default=None, help="the account funnel save's outcome file (a word, no figure)")
     s.add_argument("--restore", default=None, help="the restore record")
     s.add_argument("--smoke", default=None, help="the smoke test's result file")
     s.add_argument("--rollback-outcome", default=None, help="the rollback step's outcome file")
@@ -1230,6 +1245,17 @@ def build_parser() -> argparse.ArgumentParser:
     vp.add_argument("--out", required=True, help="folder for report-<month>.md, summary_line.txt and outcome.txt")
     vp.add_argument("--today", default=None, help="YYYY-MM-DD (default: today, UTC)")
     vp.add_argument("--interest", default=None, help="Wrangler's JSON answer to the count of alert sign-ups, when read")
+    # The account funnel (funnel.py, docs/search-engines.md section 6): the
+    # statement the count step sends to the accounts database, then the row
+    # and line kept in the private views/ prefix. Neither prints a figure.
+    fq = sub.add_parser("funnel-sql", help="print the account funnel's count statement for a finished UTC day")
+    fq.add_argument("--day", default=None, help="YYYY-MM-DD (default: yesterday, UTC)")
+    fn = sub.add_parser("funnel", help="keep the account funnel's row and line for a finished UTC day")
+    fn.add_argument("--day", default=None, help="YYYY-MM-DD, the day the count step asked for (default: yesterday, UTC)")
+    fn.add_argument("--accounts", default=None, help="Wrangler's JSON answer to funnel-sql's statement, when read")
+    fn.add_argument("--summary", default=None, help="the roll-up's views/summary.csv, for the day's audience figures")
+    fn.add_argument("--out", required=True, help="folder holding funnel.csv as downloaded; funnel_line.txt and "
+                                                 "outcome.txt go beside it")
     return parser
 
 
@@ -1241,7 +1267,7 @@ def main(argv: list[str] | None = None) -> int:
         "status": _status, "gate": _gate, "live-version": _live_version, "smoke": _smoke, "checks": _checks,
         "attention": _attention, "notices": _notice_section, "site-bundle-check": _site_bundle_check,
         "indexnow": _indexnow, "rollup-views": _rollup_views, "import-search-console": _import_search_console,
-        "views-report": _views_report, "org-review": _org_review,
+        "views-report": _views_report, "org-review": _org_review, "funnel-sql": _funnel_sql, "funnel": _funnel,
     }
     return handlers[args.command](args)
 
@@ -1353,7 +1379,8 @@ def _status(args: argparse.Namespace) -> int:
                         intraday_lookup_bytes=read_byte_count(args.intraday_lookup_bytes),
                         link_sample=_read(args.link_sample_outcome),
                         link_sample_broken=read_broken_links(args.link_sample_broken),
-                        org_review=_read(args.org_review_outcome), org_review_record=_read_json(args.org_review_summary))
+                        org_review=_read(args.org_review_outcome), org_review_record=_read_json(args.org_review_summary),
+                        funnel=_read(args.funnel_outcome))
     _write_json(Path(args.out), status)
     print(json.dumps(status, indent=1))
     return 0
@@ -1505,6 +1532,35 @@ def _views_report(args: argparse.Namespace) -> int:
     (out / "outcome.txt").write_text(outcome + "\n", encoding="utf-8")
     log.info("views-report %s: %s", month, outcome)
     print(f"views-report {month}: {outcome}")
+    return 1 if outcome == "failed" else 0
+
+
+def _funnel_day(value: str | None) -> date:
+    from . import funnel
+
+    return date.fromisoformat(value) if value else funnel.previous_day()
+
+
+def _funnel_sql(args: argparse.Namespace) -> int:
+    """Prints the statement alone on stdout, for the workflow's --command."""
+    from . import funnel
+
+    print(funnel.accounts_sql(_funnel_day(args.day)))
+    return 0
+
+
+def _funnel(args: argparse.Namespace) -> int:
+    """Exit 1 only when the record could not be written. The workflow writes the
+    outcome for the run status itself, once both files are in R2. Prints the
+    outcome word and nothing else: the run log is public."""
+    from . import funnel
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    outcome = funnel.run(out, _funnel_day(args.day), Path(args.accounts) if args.accounts else None,
+                         Path(args.summary) if args.summary else None)
+    (out / funnel.OUTCOME).write_text(outcome + "\n", encoding="utf-8")
+    print(f"funnel: {outcome}")
     return 1 if outcome == "failed" else 0
 
 

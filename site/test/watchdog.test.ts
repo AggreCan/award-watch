@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import accountsSchema from "../accounts_schema.sql?raw";
 import { LIVE_PRO_SQL, planFromRows, type EntitlementRow } from "../src/account/entitlements";
 import {
-  BACKUP_KEY, INTRADAY_RUNS_SQL, INTRADAY_STEP_NOTICES, LOOKUP_MAX_BYTES, buildEmail, collectAlerts, collectNotices,
-  gatherInputs, readIntradayRuns, readStatus, runWatchdog,
+  BACKUP_KEY, FIGURES_KEY, INTRADAY_RUNS_SQL, INTRADAY_STEP_NOTICES, LOOKUP_MAX_BYTES, buildEmail, collectAlerts,
+  collectNotices, gatherInputs, readFigures, readIntradayRuns, readStatus, runWatchdog,
 } from "../src/watchdog";
 import { testEnv } from "./assets";
 import { applySql } from "./setup";
@@ -469,6 +469,107 @@ describe("daily check: the same-day refresh's nightly steps", () => {
     ]);
     for (const bytes of [58_773, 2_000_000]) {
       expect(collectAlerts(withStatus({ intraday_lookup: "saved", intraday_lookup_bytes: bytes })), String(bytes)).toEqual([]);
+    }
+  });
+});
+
+describe("daily check: the day's figures", () => {
+  // The line pipeline/awardwatch_pipeline/funnel.py writes for 2026-10-18, read the morning of the 20th.
+  const line =
+    "2026-10-18 (UTC): accounts 12 (new 2), sign-in codes asked for 3, sign-ins 2, Pro 1, saved searches 4, watches 7; " +
+    "page views by people 120, engaged visitors 7, from search 9, on a phone or tablet 6";
+
+  // A bucket holding the backup, a status and the figures line under their own keys.
+  function bucketWith(figures: string | null | Error, status: object = healthy.status) {
+    const asked: string[] = [];
+    const bucket = {
+      head: async () => ({ uploaded: new Date("2026-10-20T00:50:00Z") }),
+      get: async (key: string) => {
+        asked.push(key);
+        if (key === "status.json") return { text: async () => JSON.stringify(status) };
+        if (key !== FIGURES_KEY || figures === null) return null;
+        if (figures instanceof Error) throw figures;
+        return { text: async () => `${figures}\n` };
+      },
+    } as unknown as R2Bucket;
+    return { bucket, asked };
+  }
+
+  // A stand-in for the ALERTS binding that keeps each message (the local runtime keeps its text under "EmailMessage::raw").
+  function fakeAlerts() {
+    const handed: string[] = [];
+    const binding = {
+      async send(message: unknown) {
+        handed.push((message as Record<string, string>)["EmailMessage::raw"]);
+      },
+    } as unknown as SendEmail;
+    return { handed, binding };
+  }
+
+  it("reads one line from the last night or the one before, and nothing else", () => {
+    expect(FIGURES_KEY.startsWith("views/")).toBe(true);
+    expect(readFigures(`${line}\n`, now)).toBe(line);
+    expect(readFigures(line.replace("2026-10-18", "2026-10-19"), now)).not.toBeNull();
+    // Older than the night before, from today, or from the future: left out.
+    for (const day of ["2026-10-17", "2026-10-20", "2026-10-21"]) {
+      expect(readFigures(line.replace("2026-10-18", day), now), day).toBeNull();
+    }
+    // Another shape: two lines, a character outside printable ASCII, no date, empty, not text.
+    for (const odd of [`${line}\nsecond line`, line.replace("; ", `${String.fromCharCode(0x2014)} `), line.slice(18), "", null, 42]) {
+      expect(readFigures(odd, now)).toBeNull();
+    }
+  });
+
+  it("puts the line in its own section and sends it alone with a subject that names the day", () => {
+    const raw = buildEmail("a@b.ca", "c@d.ca", [], now, [], {}, line);
+    expect(raw).toContain("Subject: Award Watch: figures for 2026-10-18\r\n");
+    expect(raw).toContain("Daily check at 2026-10-20T06:00 UTC: nothing needs attention.");
+    expect(raw).toContain(`The last finished day (private figures from the nightly run):\r\n\r\n- ${line}`);
+    expect(raw).toContain("each morning the nightly run has left the day's figures.");
+    // With alerts and notices, after both and with their subject.
+    const both = buildEmail("a@b.ca", "c@d.ca", ["one thing"], now, ["buyers: one"], {}, line);
+    expect(both).toContain("Subject: Award Watch: 1 item need attention, 1 notice\r\n");
+    expect(both.indexOf("1. one thing")).toBeLessThan(both.indexOf("- buyers: one"));
+    expect(both.indexOf("- buyers: one")).toBeLessThan(both.indexOf(`- ${line}`));
+    expect(buildEmail("a@b.ca", "c@d.ca", [], now, ["buyers: one"], {}, line)).toContain(
+      "Subject: Award Watch: 1 notice from the last run\r\n");
+    // Without a line nothing changes.
+    expect(buildEmail("a@b.ca", "c@d.ca", [], now, ["buyers: one"])).not.toContain("private figures");
+  });
+
+  it("sends a morning that has the figures and nothing else, and logs no figure", async () => {
+    const { bucket, asked } = bucketWith(line);
+    const alerts = fakeAlerts();
+    const env = {
+      ...testEnv(), DATA: bucket, SEARCH: fakeD1(cleanRuns).db, ACCOUNTS: fakeD1({ n: 1 }).db,
+      ALERTS: alerts.binding, ALERT_EMAIL: "owner@example.com", ALERT_FROM: "alerts@example.invalid",
+    };
+    const logs = vi.spyOn(console, "log").mockImplementation(() => {});
+    const result = await runWatchdog(env as never, now);
+    expect(result).toEqual({ alerts: [], notices: [], sent: true });
+    expect(asked).toEqual(["status.json", FIGURES_KEY]);
+    expect(alerts.handed).toHaveLength(1);
+    expect(alerts.handed[0]).toContain(`- ${line}`);
+    expect(logs.mock.calls.flat().join(" ")).toContain("the day's figures, email sent");
+    expect(logs.mock.calls.flat().join(" ")).not.toContain("engaged");
+    logs.mockRestore();
+  });
+
+  it("leaves out a line that is missing, stale or unreadable, and stays quiet with nothing else to say", async () => {
+    for (const figures of [null, line.replace("2026-10-18", "2026-10-10"), "not the line", new Error("R2 down")]) {
+      const { bucket } = bucketWith(figures);
+      const alerts = fakeAlerts();
+      const env = {
+        ...testEnv(), DATA: bucket, SEARCH: fakeD1(cleanRuns).db, ACCOUNTS: fakeD1({ n: 1 }).db,
+        ALERTS: alerts.binding, ALERT_EMAIL: "owner@example.com", ALERT_FROM: "alerts@example.invalid",
+      };
+      const inputs = await gatherInputs(env as never, now);
+      expect(inputs.figures, String(figures)).toBeNull();
+      // Not an alert of its own.
+      expect(collectAlerts(inputs), String(figures)).toEqual([]);
+      const result = await runWatchdog(env as never, now);
+      expect(result, String(figures)).toEqual({ alerts: [], notices: [], sent: false });
+      expect(alerts.handed).toEqual([]);
     }
   });
 });

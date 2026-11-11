@@ -28,6 +28,19 @@ would undercount; a day on which any person's request carries no code (no
 VIEWS_SALT_KEY, or the secret set part way through the day) gets blank
 visitor columns. A blank means "not counted", a 0 means none.
 
+Why three more visitor columns (since 2026-11-11): the Worker marks a
+request "human" by its browser-shaped headers, and automated browsers that
+copy those headers pass. In the week to 2026-11-10 such a pool made up most
+of unique_visitors, nearly every code a single page view, from many
+countries a day. Three distinct counts tracked the real audience through it
+and are harder to inflate: engaged_visitors (codes with two or more page
+views below 400), search_visitors (codes with a page view below 400 whose
+referring host is a search engine's, SEARCH_ENGINES) and phone_visitors
+(codes with a page view below 400 from a phone or tablet). Like the others
+they are asked as counts, so no code leaves Analytics Engine, and they
+follow the visitor columns' blank rule; a day whose referring hosts fill a
+whole answer leaves search_visitors blank.
+
 Why a day is caught up rather than only yesterday: a night whose query fails
 leaves a gap, and nothing should need a manual step to fill it. Each night
 rolls up every day after the newest one in the summary, back to the three
@@ -35,7 +48,19 @@ months Analytics Engine still holds (all of them on the first night, which
 keeps the counts written before the roll-up existed). A day with no data
 points at all is not written: an empty day means the counting failed, not
 that nobody came, and the next night asks again. Queries are per day: one
-for the totals by kind, and six more only for a day that has data points.
+for the totals by kind, six more only for a day that has data points, and
+three or four more only for a day whose every person's request carries a
+code (the search count is asked only when a search engine sent a reader).
+
+The reader columns' catch-up: days rolled up before those three columns
+existed hold blanks in them. On a night that rolls up a day, the run also
+fills them on up to CATCH_UP_DAYS such days, newest first: days still inside
+the retention, with all three blank and the visitor columns filled. It asks
+first for the day's distinct codes with a page view again and goes on only
+when the answer equals the row's human_visits, so a day Analytics Engine has
+begun to drop is never filled with figures that undercount. A filled day is
+never asked again; a query that fails ends the catch-up for the night,
+leaves that day as it was and fails nothing.
 
 Why "failed" never stops the run: the counts are a record of the audience,
 not part of the data refresh. The step reports the outcome in the run status
@@ -90,10 +115,14 @@ SUMMARY_HEADER = ["date", "responses", "pages", "api", "downloads", "forms", "fe
                   "feed_subscribers", "top_routes",
                   "human_pages", "bot_pages", "unique_visitors", "human_visits",
                   "human_by_country", "human_by_device", "human_by_lang", "human_by_route",
-                  "organizations", "records"]
+                  "organizations", "records",
+                  "engaged_visitors", "search_visitors", "phone_visitors"]
+# The distinct counts of codes that behave like readers (since 2026-11-11),
+# which the catch-up fills on days held from before them.
+READER_COLUMNS = ["engaged_visitors", "search_visitors", "phone_visitors"]
 # The columns that are blank on a day counted before the bot flag.
 AUDIENCE_COLUMNS = ["human_pages", "bot_pages", "unique_visitors", "human_visits",
-                    "human_by_country", "human_by_device", "human_by_lang", "human_by_route"]
+                    "human_by_country", "human_by_device", "human_by_lang", "human_by_route", *READER_COLUMNS]
 # Readings taken on the night (not counts of the day), kept when a re-run cannot take them again.
 READINGS = ["organizations", "records"]
 # The stats.json counts added into the records reading.
@@ -107,6 +136,25 @@ TOP_ROUTES = 5
 TOP_COUNTRIES = 10
 UNKNOWN = "unknown"
 
+# The search engines whose referring host makes a page view one that came
+# from a search. "name.*" is an engine with a domain per country: the name,
+# with or without "www.", then a country or generic ending (google.ca,
+# www.google.co.uk, www.google.com.hk), so Google's other services
+# (news.google.com, mail.google.com) and a host that merely holds the name
+# (notgoogle.example) do not match. Any other entry matches that host and the
+# hosts under it (www.bing.com, ca.search.yahoo.com), never a longer label
+# that ends the same way (notbing.com).
+SEARCH_ENGINES = ("google.*", "bing.com", "duckduckgo.com", "search.yahoo.com", "ecosia.org", "search.brave.com",
+                  "startpage.com", "qwant.com", "yandex.*", "baidu.com")
+# The endings a "name.*" entry takes: a two- or three-letter one, or co. or com. before a country code.
+COUNTRY_ENDING = r"(?:[a-z]{2,3}|co\.[a-z]{2}|com\.[a-z]{2})"
+# Search hosts listed in one query. A day of this site's traffic has a few;
+# more than this means forged referrers, and the column is left blank.
+MAX_SEARCH_HOSTS = 200
+# Days the reader columns' catch-up fills a night: at most five queries
+# each, so 150 a night against the SQL API's 10,000 a day.
+CATCH_UP_DAYS = 30
+
 # The shapes site/src/views.ts writes. Anything else is blanked (or "other"
 # for a route), never stored as read.
 ROUTE_RE = re.compile(r"^(?:other|/[A-Za-z0-9._:/-]{0,99})$")
@@ -115,6 +163,11 @@ HOST_RE = re.compile(r"^[a-z0-9.-]{1,100}$")
 FEED_RE = re.compile(r"^feeds/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*\.xml$")
 ACCOUNT_RE = re.compile(r"^[0-9A-Fa-f]{16,64}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+SEARCH_RE = re.compile(
+    "^(?:"
+    + "|".join(rf"(?:www\.)?{re.escape(e[:-2])}\.{COUNTRY_ENDING}" if e.endswith(".*")
+               else rf"(?:[a-z0-9-]+\.)*{re.escape(e)}" for e in SEARCH_ENGINES)
+    + ")$")
 
 
 class QueryError(Exception):
@@ -189,6 +242,41 @@ def visits_sql(day: date) -> str:
     # Distinct codes with at least one page view (any status).
     return (f"SELECT count(DISTINCT blob10) AS visits FROM {DATASET} "
             f"WHERE blob8 = 'human' AND blob2 = 'page' AND blob10 != '' AND {_where(day)} FORMAT JSON")
+
+
+def _coded_pages(day: date) -> str:
+    # People's page views below 400 that carry a code: what the three reader columns count codes over.
+    return f"blob8 = 'human' AND blob2 = 'page' AND double1 < 400 AND blob10 != '' AND {_where(day)}"
+
+
+def engaged_sql(day: date) -> str:
+    # Codes with two or more page views. The inner query groups by code inside
+    # Analytics Engine and the answer is the number of groups, so no code
+    # leaves it. (The API refuses countIf(DISTINCT ...) and uniqIf.)
+    return ("SELECT count() AS engaged FROM (SELECT blob10 AS code, SUM(_sample_interval) AS n "
+            f"FROM {DATASET} WHERE {_coded_pages(day)} GROUP BY code HAVING n >= 2) FORMAT JSON")
+
+
+def search_hosts_sql(day: date) -> str:
+    # The hosts that referred people's page views. The API takes no backslash
+    # in a string, so no pattern can pick the engines in SQL; the roll-up picks
+    # them here (search_hosts) and names them in search_sql.
+    return (f"SELECT blob5 AS referrer, SUM(_sample_interval) AS pages FROM {DATASET} "
+            f"WHERE blob8 = 'human' AND blob2 = 'page' AND double1 < 400 AND blob5 != '' AND {_where(day)} "
+            f"GROUP BY referrer ORDER BY pages DESC LIMIT {MAX_ROWS} FORMAT JSON")
+
+
+def search_sql(day: date, hosts: list[str]) -> str:
+    # hosts come from search_hosts: each passed HOST_RE ([a-z0-9.-] only), so
+    # none can close the quotes around it.
+    listed = ", ".join(f"'{h}'" for h in hosts)
+    return (f"SELECT count(DISTINCT blob10) AS search FROM {DATASET} "
+            f"WHERE {_coded_pages(day)} AND blob5 IN ({listed}) FORMAT JSON")
+
+
+def phone_sql(day: date) -> str:
+    return (f"SELECT count(DISTINCT blob10) AS phone FROM {DATASET} "
+            f"WHERE {_coded_pages(day)} AND blob9 IN ('mobile', 'tablet') FORMAT JSON")
 
 
 # -- the API ------------------------------------------------------------------
@@ -278,6 +366,9 @@ class Day:
     visitors: int | None = None   # distinct codes over people's requests
     uncoded: int = 0              # people's requests without a code
     visits: int | None = None     # distinct codes with a page view
+    engaged: int | None = None    # codes with two or more page views below 400
+    search: int | None = None     # codes with a page view below 400 referred by a search engine
+    phone: int | None = None      # codes with a page view below 400 from a phone or tablet
 
     @property
     def total(self) -> int:
@@ -327,6 +418,43 @@ def clean_count_key(row: dict[str, Any]) -> tuple[str, str, str, str, str, int]:
         referrer if HOST_RE.match(referrer) else "",
         status if 100 <= status <= 599 else 0,
     )
+
+
+def is_search_host(host: str) -> bool:
+    """Whether a referring host is a search engine's (SEARCH_ENGINES), for a host in the shape the Worker writes."""
+    # fullmatch: a trailing newline, which $ lets through, never reaches the query.
+    return isinstance(host, str) and bool(HOST_RE.fullmatch(host)) and bool(SEARCH_RE.fullmatch(host))
+
+
+def search_hosts(rows: list[dict[str, Any]]) -> list[str] | None:
+    """The search engines' hosts among a day's referring hosts (search_hosts_sql), sorted; None when the
+    answer may lack some (it filled MAX_ROWS) or names more than MAX_SEARCH_HOSTS, so the count would undercount."""
+    if len(rows) >= MAX_ROWS:
+        return None
+    hosts = sorted({h for h in (_text(r.get("referrer")) for r in rows) if is_search_host(h)})
+    return None if len(hosts) > MAX_SEARCH_HOSTS else hosts
+
+
+def _single(rows: list[dict[str, Any]], key: str) -> int | None:
+    # One row from an aggregate without GROUP BY; anything else reads as not counted.
+    return _count_or_none(rows[0].get(key)) if len(rows) == 1 else None
+
+
+def reader_counts(http: Any, account: str, token: str, day: date) -> tuple[int | None, int | None, int | None]:
+    """(engaged, search, phone) for one day; None for a count that cannot be read. Raises QueryError.
+
+    The search count is asked only when a search engine referred someone
+    that day; with none it is 0, from a complete list of the day's hosts."""
+    engaged = _single(query(http, account, token, engaged_sql(day)), "engaged")
+    hosts = search_hosts(query(http, account, token, search_hosts_sql(day)))
+    if hosts is None:
+        search = None
+    elif hosts:
+        search = _single(query(http, account, token, search_sql(day, hosts)), "search")
+    else:
+        search = 0
+    phone = _single(query(http, account, token, phone_sql(day)), "phone")
+    return engaged, search, phone
 
 
 def clean_audience_key(row: dict[str, Any]) -> AudienceKey:
@@ -441,7 +569,13 @@ def audience_columns(d: Day) -> dict[str, Any]:
     if d.coded:
         out["unique_visitors"] = d.visitors
         out["human_visits"] = "" if d.visits is None else d.visits
+        out.update(reader_columns(d.engaged, d.search, d.phone))
     return out
+
+
+def reader_columns(engaged: int | None, search: int | None, phone: int | None) -> dict[str, Any]:
+    """The three reader columns, blank for a count not read."""
+    return {column: "" if n is None else n for column, n in zip(READER_COLUMNS, (engaged, search, phone))}
 
 
 def summary_row(d: Day, *, site_counts: dict[str, int] | None = None) -> dict[str, Any]:
@@ -600,10 +734,58 @@ def roll_day(http: Any, account: str, token: str, day: date) -> Day | None:
         visitors=query(http, account, token, visitors_sql(day)),
         visits=query(http, account, token, visits_sql(day)),
     )
+    # Only a day whose every person's request carries a code can fill them,
+    # so the other days cost no further query.
+    if d.coded:
+        d.engaged, d.search, d.phone = reader_counts(http, account, token, day)
     if d.truncated:
         log.warning("views: %s has more than %d grouped rows; the smallest are left out of the day file "
                     "(the totals are exact)", day, MAX_ROWS)
     return d
+
+
+def catch_up_due(rows: list[dict[str, Any]], yesterday: date, skip: set[str]) -> list[dict[str, Any]]:
+    """The held rows the reader columns' catch-up fills tonight, newest first, at most CATCH_UP_DAYS: inside
+    the retention, all three reader columns blank, and both visitor columns filled (the day was counted with
+    every person's request coded). skip holds the days rolled up tonight, which have the columns already."""
+    oldest = (yesterday - timedelta(days=RETENTION_DAYS - 1)).isoformat()
+    due = [r for r in rows
+           if oldest <= r["date"] <= yesterday.isoformat() and r["date"] not in skip
+           and all(r.get(c, "") == "" for c in READER_COLUMNS)
+           and r.get("unique_visitors", "") != "" and r.get("human_visits", "") != ""]
+    return sorted(due, key=lambda r: r["date"], reverse=True)[:CATCH_UP_DAYS]
+
+
+def catch_up_row(http: Any, account: str, token: str, row: dict[str, Any]) -> dict[str, Any] | None:
+    """row with its reader columns filled, or None when the dataset no longer answers for the day as it did
+    when it was counted (its distinct codes with a page view differ from the row's human_visits).
+    Raises QueryError."""
+    day = date.fromisoformat(row["date"])
+    visits = _single(query(http, account, token, visits_sql(day)), "visits")
+    if visits is None or str(visits) != str(row.get("human_visits", "")).strip():
+        return None
+    return {**row, **reader_columns(*reader_counts(http, account, token, day))}
+
+
+def catch_up(http: Any, account: str, token: str, rows: list[dict[str, Any]], yesterday: date,
+             skip: set[str]) -> list[dict[str, Any]]:
+    """The rows filled tonight. A query that fails ends the catch-up: the rows filled before it are kept, the
+    rest wait for the next night, and nothing fails. Any other fault does the same, so the catch-up can never
+    cost the night its roll-up."""
+    filled: list[dict[str, Any]] = []
+    for row in catch_up_due(rows, yesterday, skip):
+        try:
+            new = catch_up_row(http, account, token, row)
+        except Exception as exc:
+            log.warning("views: the reader columns' catch-up stopped at %s, which is left as it was (%s): %s",
+                        row["date"], type(exc).__name__, str(exc)[:200])
+            break
+        if new is None:
+            log.info("views: %s no longer answers as it did when it was counted; its reader columns stay blank",
+                     row["date"])
+            continue
+        filled.append(new)
+    return filled
 
 
 def run(out_dir: Path | None = None, *, day: date | None = None, env: Mapping[str, str] | None = None,
@@ -663,6 +845,10 @@ def _run(out_dir: Path | None, *, day: date | None, env: Mapping[str, str] | Non
                 log.info("views: no data points for %s; nothing written for it", d)
                 continue
             rolled.append(result)
+        # Only on a night whose summary is written and uploaded anyway, and not
+        # for a day asked for by hand, which rolls up that day and no other.
+        caught = (catch_up(http, account, token, held, yesterday, {d.day.isoformat() for d in rolled})
+                  if rolled and day is None else [])
     finally:
         if session is None:
             http.close()
@@ -675,8 +861,11 @@ def _run(out_dir: Path | None, *, day: date | None, env: Mapping[str, str] | Non
         path = write_day(folder, d)
         log.info("views: %s: %d responses, %d grouped rows, %d feeds%s -> %s", d.day, d.total, len(d.counts),
                  len(d.feeds), "" if d.flagged else " (no bot flag, people columns blank)", path.name)
+    if caught:
+        log.info("views: reader columns filled on %d earlier day(s): %s", len(caught),
+                 ", ".join(r["date"] for r in caught))
     update_summary(folder / SUMMARY, [
         summary_row(d, site_counts=counts) if d.day == yesterday else summary_row(d)
-        for d in rolled])
+        for d in rolled] + caught)
     (folder / ROLLED_UP).write_text("".join(f"{d.day.isoformat()}\n" for d in rolled), encoding="utf-8")
     return "rolled up"

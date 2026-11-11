@@ -25,6 +25,15 @@ import { faultSummary } from "./search_db";
 // never stops the check. From status.json it reads the refresh's two nightly
 // steps (a failed one is a notice, as the nightly calls it) and the size of
 // the buyer lookup the nightly saved.
+//
+// The day's figures (pipeline/awardwatch_pipeline/funnel.py): the nightly
+// keeps one line for the last finished UTC day, the account funnel's counts
+// and that day's audience figures, in R2 under the private views/ prefix
+// (FIGURES_KEY), apart from status.json, whose text the run prints in its
+// public log. The check adds the line to the email, and a morning with the
+// line and nothing else still sends one, so the operator reads the figures
+// each day without asking for them. A line too old to be the last night's,
+// or of another shape, is left out; it is never an alert.
 
 export const DATA_STALE_HOURS = 36;
 // The backup is uploaded in parts of at most 250 MiB (the nightly pack); the
@@ -44,6 +53,15 @@ export const INTRADAY_WINDOW_HOURS = 24;
 // it, so past this bound the lookup should keep only recent spellings
 // (docs/intraday.md).
 export const LOOKUP_MAX_BYTES = 2_000_000;
+
+// The day's figures. The nightly at 12:30 UTC writes the line for the day
+// before, and this check at 06:00 reads it the morning after, two calendar
+// days after the line's date; a manual run after midnight makes it one. An
+// older line means the nightly did not write one since.
+export const FIGURES_KEY = "views/funnel_line.txt";
+export const FIGURES_MAX_DAYS = 2;
+// funnel.line: the date, " (UTC): ", then printable ASCII on one line.
+const FIGURES_RE = /^(\d{4}-\d{2}-\d{2}) \(UTC\): [ -~]{1,600}$/;
 
 // The same-day refresh's runs in one statement over intraday_runs
 // (pipeline/intraday_schema.sql): the time of the newest run that went
@@ -98,6 +116,8 @@ export type Inputs = {
   // Live pro entitlements (LIVE_PRO_SQL), or null when not counted (no
   // ACCOUNTS binding, or a fault). The 4-hour line needs a count above zero.
   livePro?: number | null;
+  // The last finished day's figures (readFigures), or null when there is no current line.
+  figures?: string | null;
 };
 
 const count = (v: unknown): number | null => (typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : null);
@@ -174,6 +194,18 @@ export function readIntradayRuns(row: unknown): IntradayRuns | null {
 }
 
 const grouped = (n: number) => n.toLocaleString("en-US");
+
+// The figures line as the nightly wrote it, or null when it is not one line
+// of that shape or not from the last night or the one before (by its date
+// against the check's UTC day).
+export function readFigures(text: unknown, now: Date): string | null {
+  if (typeof text !== "string") return null;
+  const line = text.trim();
+  const m = FIGURES_RE.exec(line);
+  if (!m) return null;
+  const days = (Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00Z`) - Date.parse(`${m[1]}T00:00:00Z`)) / (24 * HOUR);
+  return days >= 1 && days <= FIGURES_MAX_DAYS ? line : null;
+}
 
 export function collectAlerts(i: Inputs): string[] {
   const out: string[] = [];
@@ -295,11 +327,13 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 // is left out.
 export function buildEmail(
   from: string, to: string, alerts: string[], now: Date, notices: string[] = [],
-  links: { runLog?: string; site?: string } = {},
+  links: { runLog?: string; site?: string } = {}, figures: string | null = null,
 ): string {
   const subject = alerts.length
     ? `Award Watch: ${plural(alerts.length, "item")} need attention${notices.length ? `, ${plural(notices.length, "notice")}` : ""}`
-    : `Award Watch: ${plural(notices.length, "notice")} from the last run`;
+    : notices.length || !figures
+      ? `Award Watch: ${plural(notices.length, "notice")} from the last run`
+      : `Award Watch: figures for ${figures.slice(0, 10)}`;
   const linkLines = [
     ...(links.runLog ? [`Run log: ${links.runLog}`] : []),
     ...(links.site ? [`Site: ${links.site}`] : []),
@@ -310,11 +344,15 @@ export function buildEmail(
     ...(notices.length
       ? ["", "Notices from the last run (information; nothing failed):", "", ...notices.map((n) => `- ${n}`)]
       : []),
+    // Kept in R2 under views/ and published nowhere.
+    ...(figures ? ["", "The last finished day (private figures from the nightly run):", "", `- ${figures}`] : []),
     ...(linkLines.length ? ["", ...linkLines] : []),
     "",
     alerts.length
       ? "This message is sent by the site's own daily check; it repeats each day while an item remains."
-      : "This message is sent by the site's own daily check when the last run recorded notices.",
+      : figures
+        ? "This message is sent by the site's own daily check each morning the nightly run has left the day's figures."
+        : "This message is sent by the site's own daily check when the last run recorded notices.",
   ];
   return [
     `From: Award Watch <${from}>`,
@@ -368,6 +406,7 @@ export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const stats = await loadStats(env).catch(() => null);
   let backupUploaded: Date | null = null;
   let status: RunStatus | null = null;
+  let figures: string | null = null;
   const problems: string[] = [];
   if (env.DATA) {
     try {
@@ -388,12 +427,22 @@ export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
       status = null;
       problems.push(`The run status (status.json) in R2 could not be read: ${String(e).slice(0, 120)}`);
     }
+    // Information only: a line that cannot be read is left out, never an alert.
+    try {
+      const obj = await env.DATA.get(FIGURES_KEY);
+      figures = obj ? readFigures(await obj.text(), now) : null;
+    } catch (e) {
+      console.log(`watchdog: the day's figures not read (${String(e).slice(0, 120)})`);
+    }
   }
   const raw = stats?.data_as_of;
   const dataAsOf = typeof raw === "string" ? raw : raw == null ? null : String(raw);
   const { intraday, intradayProblem } = await readIntraday(env, now);
   const livePro = await countLivePro(env, now);
-  return { now, dataAsOf, backupUploaded, status, statusProblem: problems.join(" ") || null, intraday, intradayProblem, livePro };
+  return {
+    now, dataAsOf, backupUploaded, status, statusProblem: problems.join(" ") || null, intraday, intradayProblem, livePro,
+    figures,
+  };
 }
 
 export async function runWatchdog(
@@ -402,8 +451,10 @@ export async function runWatchdog(
   const inputs = await gatherInputs(env, now);
   const alerts = collectAlerts(inputs);
   const notices = collectNotices(inputs);
-  if (alerts.length === 0 && notices.length === 0) return { alerts, notices, sent: false };
-  const counts = `${alerts.length} alert(s), ${notices.length} notice(s)`;
+  const figures = inputs.figures ?? null;
+  if (alerts.length === 0 && notices.length === 0 && !figures) return { alerts, notices, sent: false };
+  // The log says whether figures went, never what they are.
+  const counts = `${alerts.length} alert(s), ${notices.length} notice(s)${figures ? ", the day's figures" : ""}`;
   const to = (env.ALERT_EMAIL ?? "").trim();
   const from = (env.ALERT_FROM ?? "").trim();
   if (!env.ALERTS || !to || !from) {
@@ -413,7 +464,7 @@ export async function runWatchdog(
   try {
     const { EmailMessage } = await import("cloudflare:email");
     const links = { runLog: (env.RUN_LOG_URL ?? "").trim() || undefined, site: (env.SITE_URL ?? "").trim() || undefined };
-    await env.ALERTS.send(new EmailMessage(from, to, buildEmail(from, to, alerts, now, notices, links)));
+    await env.ALERTS.send(new EmailMessage(from, to, buildEmail(from, to, alerts, now, notices, links, figures)));
     console.log(`watchdog: ${counts}, email sent`);
     return { alerts, notices, sent: true };
   } catch (e) {

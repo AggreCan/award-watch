@@ -73,12 +73,18 @@ UNFLAGGED = {
 }
 
 
+# The three people counts when a day's answers do not name them: none of each.
+NO_PEOPLE = {"engaged": [{"engaged": "0"}], "hosts": [], "search": [{"search": "0"}], "phone": [{"phone": "0"}]}
+
+
 class FakeHttp:
     """Stands in for requests.Session. Answers the SQL API per day from `days`
     (day -> (kinds, counts, feeds) or (kinds, counts, feeds, audience answers);
     a day not listed has no data points; three answers stand for a day before
-    the bot flag). `fail` replaces every SQL answer. A GET is recorded and
-    answered 404: the roll-up reads nothing but the SQL API."""
+    the bot flag). The audience answers may name the people counts' answers
+    (engaged, hosts, search, phone; NO_PEOPLE otherwise). `fail` replaces
+    every SQL answer. A GET is recorded and answered 404: the roll-up reads
+    nothing but the SQL API."""
 
     def __init__(self, days: dict | None = None, *, fail: FakeResponse | Exception | None = None) -> None:
         self.days = {YESTERDAY: (KINDS, COUNTS, FEEDS)} if days is None else days
@@ -105,12 +111,21 @@ class FakeHttp:
         else:
             kinds, counts, feeds = held[:3]
             extra = held[3] if len(held) > 3 else UNFLAGGED
+        extra = {**NO_PEOPLE, **extra}
         if "blob7 AS feed" in sql:
             return answer(feeds)
         if "GROUP BY kind " in sql:
             return answer(kinds)
         if "blob8 AS agent" in sql:
             return answer(extra["audience"])
+        if sql.startswith("SELECT count() AS engaged"):
+            return answer(extra["engaged"])
+        if sql.startswith("SELECT blob5 AS referrer"):
+            return answer(extra["hosts"])
+        if "AS search " in sql:
+            return answer(extra["search"])
+        if "AS phone " in sql:
+            return answer(extra["phone"])
         if "SUM(_sample_interval) AS pages" in sql:
             return answer(extra["routes"])
         if "AS uncoded" in sql:
@@ -244,7 +259,8 @@ def test_the_summary_gets_one_row_per_day_and_a_re_run_replaces_it_in_place(tmp_
                                            "feed_subscribers", "top_routes",
                                            "human_pages", "bot_pages", "unique_visitors", "human_visits",
                                            "human_by_country", "human_by_device", "human_by_lang", "human_by_route",
-                                           "organizations", "records"]
+                                           "organizations", "records",
+                                           "engaged_visitors", "search_visitors", "phone_visitors"]
     assert [r["date"] for r in rows] == ["2026-10-19", "2026-10-20", "2026-10-21"]
     assert rows[0]["top_routes"] == "/ 60"  # earlier rows are kept as they were
     new = rows[-1]
@@ -444,8 +460,13 @@ AUDIENCE = [
     {"agent": "bot", "country": "US", "device": "", "lang": "en", "pages": "300"},
 ]
 ROUTES = [{"route": "/organizations/:id", "pages": "70"}, {"route": "/", "pages": "22"}]
+# People's referring hosts: two search engines, the site itself, and hosts that only look like one.
+HOSTS = [{"referrer": "awardwatch.ca", "pages": "40"}, {"referrer": "www.google.com", "pages": "9"},
+         {"referrer": "www.bing.com", "pages": "2"}, {"referrer": "notgoogle.example", "pages": "4"},
+         {"referrer": "news.google.com", "pages": "2"}]
 FLAGGED = {"audience": AUDIENCE, "routes": ROUTES, "visitors": [{"visitors": "41", "uncoded": "0"}],
-           "visits": [{"visits": "37"}]}
+           "visits": [{"visits": "37"}], "engaged": [{"engaged": "7"}], "hosts": HOSTS,
+           "search": [{"search": "9"}], "phone": [{"phone": "6"}]}
 
 
 def flagged_day(**changes) -> dict:
@@ -474,11 +495,21 @@ def test_the_people_and_bot_queries_read_page_views_below_400_and_only_count_cod
         "SELECT count(DISTINCT blob10) AS visits FROM awardwatch_views "
         f"WHERE blob8 = 'human' AND blob2 = 'page' AND blob10 != '' AND {where} FORMAT JSON")
     # No query ever reads a visitor code back: blob10 appears only inside a
-    # distinct count or a comparison with the empty string.
-    for sql in (vr.kinds_sql(YESTERDAY), vr.counts_sql(YESTERDAY), vr.feeds_sql(YESTERDAY), vr.audience_sql(YESTERDAY),
-                vr.human_routes_sql(YESTERDAY), vr.visitors_sql(YESTERDAY), vr.visits_sql(YESTERDAY)):
+    # distinct count or a comparison with the empty string, or inside the
+    # engaged count's inner query, whose outer query answers one number.
+    for sql in every_query(YESTERDAY):
+        if sql.startswith("SELECT count() AS engaged FROM (SELECT blob10 AS code,"):
+            assert sql.endswith(" HAVING n >= 2) FORMAT JSON"), sql
+            sql = sql.replace("SELECT blob10 AS code,", "SELECT").replace("GROUP BY code", "")
         rest = sql.replace("count(DISTINCT blob10)", "").replace("blob10 = ''", "").replace("blob10 != ''", "")
         assert "blob10" not in rest, sql
+
+
+def every_query(day: date) -> list[str]:
+    """Every query the roll-up can send for a day."""
+    return [vr.kinds_sql(day), vr.counts_sql(day), vr.feeds_sql(day), vr.audience_sql(day), vr.human_routes_sql(day),
+            vr.visitors_sql(day), vr.visits_sql(day), vr.engaged_sql(day), vr.search_hosts_sql(day),
+            vr.search_sql(day, ["www.google.ca", "www.bing.com"]), vr.phone_sql(day)]
 
 
 def test_a_flagged_day_fills_the_people_and_bot_columns(tmp_path):
@@ -490,6 +521,7 @@ def test_a_flagged_day_fills_the_people_and_bot_columns(tmp_path):
         "human_by_device": '{"desktop":60,"mobile":30,"tablet":2}',
         "human_by_lang": '{"en":72,"fr":20}',
         "human_by_route": '{"/organizations/:id":70,"/":22}',
+        "engaged_visitors": "7", "search_visitors": "9", "phone_visitors": "6",
     }
     # The existing columns are unchanged by the flag.
     assert (row["responses"], row["pages"]) == ("206", "120")
@@ -578,3 +610,248 @@ def test_the_site_counts_come_from_tonights_stats_and_go_on_yesterdays_row_only(
                 "[]", "not json", '{"counts": {"organizations": 1}}'):
         stats.write_text(bad, encoding="utf-8")
         assert vr.site_counts(stats) == {}, bad
+
+
+# -- the reader columns: engaged, from search, phone (since 2026-11-11) ---------
+
+
+def test_the_three_people_queries_count_codes_over_coded_page_views_below_400():
+    where = f"timestamp >= toDateTime({START}) AND timestamp < toDateTime({START + 86_400})"
+    coded = f"blob8 = 'human' AND blob2 = 'page' AND double1 < 400 AND blob10 != '' AND {where}"
+    # The form run against the live dataset: the inner query groups by code, the answer is how many groups.
+    assert vr.engaged_sql(YESTERDAY) == (
+        "SELECT count() AS engaged FROM (SELECT blob10 AS code, SUM(_sample_interval) AS n "
+        f"FROM awardwatch_views WHERE {coded} GROUP BY code HAVING n >= 2) FORMAT JSON")
+    assert vr.search_hosts_sql(YESTERDAY) == (
+        "SELECT blob5 AS referrer, SUM(_sample_interval) AS pages FROM awardwatch_views "
+        f"WHERE blob8 = 'human' AND blob2 = 'page' AND double1 < 400 AND blob5 != '' AND {where} "
+        "GROUP BY referrer ORDER BY pages DESC LIMIT 10000 FORMAT JSON")
+    assert vr.search_sql(YESTERDAY, ["www.google.ca", "www.google.com"]) == (
+        "SELECT count(DISTINCT blob10) AS search FROM awardwatch_views "
+        f"WHERE {coded} AND blob5 IN ('www.google.ca', 'www.google.com') FORMAT JSON")
+    assert vr.phone_sql(YESTERDAY) == (
+        "SELECT count(DISTINCT blob10) AS phone FROM awardwatch_views "
+        f"WHERE {coded} AND blob9 IN ('mobile', 'tablet') FORMAT JSON")
+    # Forms the SQL API refused in testing, and a backslash, which it takes in no string.
+    for sql in every_query(YESTERDAY):
+        for refused in ("countIf(DISTINCT", "uniqIf", "toDate(", "IF(", "\\"):
+            assert refused not in sql, (refused, sql)
+
+
+def test_the_search_host_matcher_matches_engines_and_not_names_that_contain_them():
+    for host in ("google.ca", "www.google.com", "www.google.co.uk", "www.google.com.hk", "www.bing.com", "bing.com",
+                 "cn.bing.com", "duckduckgo.com", "html.duckduckgo.com", "search.yahoo.com", "ca.search.yahoo.com",
+                 "www.ecosia.org", "search.brave.com", "www.startpage.com", "www.qwant.com", "yandex.ru",
+                 "www.yandex.com.tr", "www.baidu.com", "m.baidu.com"):
+        assert vr.is_search_host(host), host
+    for host in ("notgoogle.example", "google.example", "news.google.com", "mail.google.com", "google.ca.evil.org",
+                 "notbing.com", "bing.com.evil.org", "yahoo.com", "ca.yahoo.com", "brave.com", "awardwatch.ca",
+                 "GOOGLE.CA", "google.ca\n", "www.google.ca'", "", None, 7):
+        assert not vr.is_search_host(host), host
+    # One named list, read by the matcher: an engine added there is matched.
+    assert "google.*" in vr.SEARCH_ENGINES and "bing.com" in vr.SEARCH_ENGINES
+
+
+def test_the_search_hosts_of_a_day_are_the_engines_alone_and_none_when_the_list_may_be_short():
+    assert vr.search_hosts(HOSTS) == ["www.bing.com", "www.google.com"]
+    assert vr.search_hosts([{"referrer": "awardwatch.ca", "pages": "5"}]) == []
+    assert vr.search_hosts([]) == []
+    # An answer that filled MAX_ROWS may lack some hosts: not counted rather than an undercount.
+    full = [{"referrer": f"site{i}.example", "pages": "1"} for i in range(vr.MAX_ROWS)]
+    assert vr.search_hosts(full) is None
+    # Forged referrers naming hundreds of engine hosts: not counted.
+    forged = [{"referrer": f"www.google.{a}{b}", "pages": "1"} for a in "abcdefghijklmnop" for b in "abcdefghijklmnop"]
+    assert vr.search_hosts(forged) is None
+
+
+def test_a_coded_day_asks_the_three_counts_and_fills_the_columns(tmp_path):
+    http = FakeHttp(flagged_day())
+    assert roll(tmp_path, http) == "rolled up"
+    asked = [p["sql"] for p in http.posts]
+    assert asked[-4:] == [vr.engaged_sql(YESTERDAY), vr.search_hosts_sql(YESTERDAY),
+                          vr.search_sql(YESTERDAY, ["www.bing.com", "www.google.com"]), vr.phone_sql(YESTERDAY)]
+    row = summary_last(tmp_path)
+    assert (row["engaged_visitors"], row["search_visitors"], row["phone_visitors"]) == ("7", "9", "6")
+    assert (row["unique_visitors"], row["human_visits"]) == ("41", "37")
+
+
+def test_with_no_search_engine_among_the_hosts_from_search_is_0_without_a_query(tmp_path):
+    http = FakeHttp(flagged_day(hosts=[{"referrer": "awardwatch.ca", "pages": "40"}]))
+    assert roll(tmp_path, http) == "rolled up"
+    assert not any(" AS search " in p["sql"] for p in http.posts)
+    assert summary_last(tmp_path)["search_visitors"] == "0"
+
+
+def test_the_reader_columns_follow_the_visitor_columns_blank_rule(tmp_path):
+    # A day before the bot flag, or one with any person's request uncoded: blank, and not asked.
+    for days in ({YESTERDAY: (KINDS, COUNTS, FEEDS)}, flagged_day(visitors=[{"visitors": "30", "uncoded": "4"}])):
+        http = FakeHttp(days)
+        assert roll(tmp_path, http) == "rolled up"
+        assert [summary_last(tmp_path)[c] for c in vr.READER_COLUMNS] == ["", "", ""]
+        assert not any(p["sql"].startswith("SELECT count() AS engaged") or " AS phone " in p["sql"] for p in http.posts)
+    # A count whose answer cannot be read is blank on its own; the others stand.
+    assert roll(tmp_path, FakeHttp(flagged_day(engaged=[], phone=[{"phone": "x"}]))) == "rolled up"
+    row = summary_last(tmp_path)
+    assert (row["engaged_visitors"], row["search_visitors"], row["phone_visitors"]) == ("", "9", "")
+    # Hosts that filled a whole answer: from search blank, never an undercount.
+    full = [{"referrer": f"site{i}.example", "pages": "1"} for i in range(vr.MAX_ROWS)]
+    assert roll(tmp_path, FakeHttp(flagged_day(hosts=full))) == "rolled up"
+    row = summary_last(tmp_path)
+    assert (row["engaged_visitors"], row["search_visitors"], row["phone_visitors"]) == ("7", "", "6")
+    # A 0 stays a 0.
+    assert roll(tmp_path, FakeHttp(flagged_day(engaged=[{"engaged": "0"}], phone=[{"phone": 0}]))) == "rolled up"
+    row = summary_last(tmp_path)
+    assert (row["engaged_visitors"], row["phone_visitors"]) == ("0", "0")
+
+
+def test_a_failed_people_query_fails_the_night_like_any_other(tmp_path):
+    class FailsOnPhone(FakeHttp):
+        def post(self, url, data=None, headers=None, timeout=None):
+            if " AS phone " in data.decode("utf-8"):
+                self.posts.append({"url": url, "sql": data.decode(), "headers": headers})
+                return FakeResponse(502, None, "bad gateway")
+            return super().post(url, data=data, headers=headers, timeout=timeout)
+
+    assert roll(tmp_path, FailsOnPhone(flagged_day())) == "failed"
+    assert not (tmp_path / vr.SUMMARY).exists() and not (tmp_path / "2026-10-21.csv").exists()
+
+
+# -- the reader columns' catch-up ------------------------------------------------
+
+
+def held_row(day: str, visits: str = "37", **values) -> dict:
+    """A summary row from a coded day rolled up before the reader columns."""
+    row = dict.fromkeys(vr.SUMMARY_HEADER, "")
+    row.update(date=day, responses="206", pages="120", api="30", downloads="4", forms="1", feeds="40", other="11",
+               feed_subscribers="15", top_routes="/ 50", human_pages="92", bot_pages="300", unique_visitors="41",
+               human_visits=visits, human_by_country='{"CA":92}', human_by_device='{"desktop":92}',
+               human_by_lang='{"en":92}', human_by_route='{"/":92}', organizations="91234", records="2010000")
+    row.update(values)
+    return row
+
+
+def write_summary(folder, rows: list[dict]) -> None:
+    vr._write_csv(folder / vr.SUMMARY, vr.SUMMARY_HEADER, rows)
+
+
+def catch_up_world(*days: date, **changes) -> dict:
+    """Yesterday flagged, and the earlier days held in the dataset as they were counted."""
+    return {YESTERDAY: (KINDS, COUNTS, FEEDS, FLAGGED),
+            **{d: (KINDS, COUNTS, FEEDS, {**FLAGGED, **changes}) for d in days}}
+
+
+def asked_for(http: FakeHttp, day: date) -> list[str]:
+    return [p["sql"] for p in http.posts if f">= toDateTime({vr.day_bounds(day)[0]})" in p["sql"]]
+
+
+def test_the_catch_up_fills_a_held_day_once_and_leaves_the_rest_of_its_row_alone(tmp_path):
+    earlier = date(2026, 10, 19)
+    write_summary(tmp_path, [held_row("2026-10-19"), held_row("2026-10-20", engaged_visitors="3",
+                                                              search_visitors="2", phone_visitors="1")])
+    http = FakeHttp(catch_up_world(earlier, date(2026, 10, 20)))
+    assert roll(tmp_path, http) == "rolled up"
+    # The visits again first, then the three counts.
+    assert asked_for(http, earlier) == [vr.visits_sql(earlier), vr.engaged_sql(earlier), vr.search_hosts_sql(earlier),
+                                        vr.search_sql(earlier, ["www.bing.com", "www.google.com"]),
+                                        vr.phone_sql(earlier)]
+    # A day already filled is never asked.
+    assert asked_for(http, date(2026, 10, 20)) == []
+    _, rows = read_csv(tmp_path / vr.SUMMARY)
+    assert [r["date"] for r in rows] == ["2026-10-19", "2026-10-20", "2026-10-21"]
+    assert rows[0] == {**held_row("2026-10-19"), "engaged_visitors": "7", "search_visitors": "9",
+                       "phone_visitors": "6"}
+    assert (rows[1]["engaged_visitors"], rows[1]["search_visitors"], rows[1]["phone_visitors"]) == ("3", "2", "1")
+    # Only the night's own day goes to the upload loop; the held day's file is not rewritten.
+    assert (tmp_path / vr.ROLLED_UP).read_text(encoding="utf-8") == "2026-10-21\n"
+    assert not (tmp_path / "2026-10-19.csv").exists()
+
+    # The next night: the held day is filled, so it is not asked again.
+    http = FakeHttp(catch_up_world(earlier))
+    assert roll(tmp_path, http) == "rolled up"
+    assert asked_for(http, earlier) == []
+    assert read_csv(tmp_path / vr.SUMMARY)[1][0]["engaged_visitors"] == "7"
+
+
+def test_the_catch_up_leaves_a_day_alone_when_the_dataset_answers_for_it_differently(tmp_path):
+    earlier = date(2026, 10, 19)
+    # Analytics Engine has begun to drop the day: fewer codes with a page view than were counted.
+    write_summary(tmp_path, [held_row("2026-10-19", visits="40")])
+    http = FakeHttp(catch_up_world(earlier))
+    assert roll(tmp_path, http) == "rolled up"
+    assert asked_for(http, earlier) == [vr.visits_sql(earlier)]
+    held = read_csv(tmp_path / vr.SUMMARY)[1][0]
+    assert [held[c] for c in vr.READER_COLUMNS] == ["", "", ""]
+
+
+def test_the_catch_up_asks_only_days_counted_with_codes_and_still_held(tmp_path):
+    rows = [
+        held_row("2026-07-20"),                                     # older than the retention
+        held_row("2026-10-12", unique_visitors="", human_visits=""),  # before the visitor code
+        held_row("2026-10-13", human_visits=""),                    # visits not read when rolled up
+        held_row("2026-10-14", unique_visitors="0", human_visits="0"),  # counted, nobody came
+    ]
+    write_summary(tmp_path, rows)
+    http = FakeHttp(catch_up_world(date(2026, 10, 14), visits=[{"visits": "0"}]))
+    assert roll(tmp_path, http) == "rolled up"
+    for day in (date(2026, 7, 20), date(2026, 10, 12), date(2026, 10, 13)):
+        assert asked_for(http, day) == [], day
+    assert asked_for(http, date(2026, 10, 14))[0] == vr.visits_sql(date(2026, 10, 14))
+    _, rows = read_csv(tmp_path / vr.SUMMARY)
+    assert [r["date"] for r in rows if r["engaged_visitors"] != ""] == ["2026-10-14", "2026-10-21"]
+
+
+def test_the_catch_up_is_bounded_to_the_newest_days_a_night(tmp_path):
+    held = [YESTERDAY - timedelta(days=n) for n in range(1, vr.CATCH_UP_DAYS + 11)]
+    write_summary(tmp_path, [held_row(d.isoformat()) for d in sorted(held)])
+    http = FakeHttp(catch_up_world(*held))
+    assert roll(tmp_path, http) == "rolled up"
+    asked = [d for d in held if asked_for(http, d)]
+    assert asked == held[:vr.CATCH_UP_DAYS]  # newest first
+    # Yesterday's seven and four, then at most five for each day caught up.
+    assert len(http.posts) <= 11 + 5 * vr.CATCH_UP_DAYS
+    # The rest follow on the next nights.
+    http = FakeHttp(catch_up_world(*held))
+    assert roll(tmp_path, http) == "rolled up"
+    assert [d for d in held if asked_for(http, d)] == held[vr.CATCH_UP_DAYS:]
+    _, rows = read_csv(tmp_path / vr.SUMMARY)
+    assert all(r["engaged_visitors"] == "7" for r in rows)
+
+
+def test_a_failed_catch_up_query_leaves_that_day_as_it_was_and_the_night_goes_on(tmp_path, caplog):
+    days = [date(2026, 10, 18), date(2026, 10, 19), date(2026, 10, 20)]
+    write_summary(tmp_path, [held_row(d.isoformat()) for d in days])
+
+    class FailsOn19th(FakeHttp):
+        def post(self, url, data=None, headers=None, timeout=None):
+            sql = data.decode("utf-8")
+            if f">= toDateTime({vr.day_bounds(date(2026, 10, 19))[0]})" in sql and "AS phone " in sql:
+                self.posts.append({"url": url, "sql": sql, "headers": headers})
+                return FakeResponse(503, None, "unavailable")
+            return super().post(url, data=data, headers=headers, timeout=timeout)
+
+    http = FailsOn19th(catch_up_world(*days))
+    assert roll(tmp_path, http) == "rolled up"
+    _, rows = read_csv(tmp_path / vr.SUMMARY)
+    by_date = {r["date"]: r["engaged_visitors"] for r in rows}
+    # The 20th (newest first) was filled, the 19th failed part way and is left blank, the 18th waits.
+    assert by_date == {"2026-10-18": "", "2026-10-19": "", "2026-10-20": "7", "2026-10-21": "7"}
+    assert asked_for(http, date(2026, 10, 18)) == []
+    assert "catch-up stopped at 2026-10-19" in caplog.text and TOKEN not in caplog.text
+    # The next night picks up the two left.
+    http = FakeHttp(catch_up_world(*days))
+    assert roll(tmp_path, http) == "rolled up"
+    assert all(r["engaged_visitors"] == "7" for r in read_csv(tmp_path / vr.SUMMARY)[1])
+
+
+def test_the_catch_up_runs_only_on_a_night_that_writes_the_summary(tmp_path):
+    earlier = date(2026, 10, 19)
+    write_summary(tmp_path, [held_row("2026-10-19")])
+    before = (tmp_path / vr.SUMMARY).read_text(encoding="utf-8")
+    # Yesterday has no data point: nothing is uploaded tonight, so nothing is caught up.
+    http = FakeHttp({earlier: (KINDS, COUNTS, FEEDS, FLAGGED)})
+    assert roll(tmp_path, http) == "no data"
+    assert asked_for(http, earlier) == [] and (tmp_path / vr.SUMMARY).read_text(encoding="utf-8") == before
+    # A day asked for by hand rolls up that day and no other.
+    http = FakeHttp(catch_up_world(earlier))
+    assert roll(tmp_path, http, day=YESTERDAY) == "rolled up"
+    assert asked_for(http, earlier) == []

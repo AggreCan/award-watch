@@ -178,6 +178,47 @@ def test_the_report_carries_the_alert_sign_ups_and_the_public_line_does_not(tmp_
         out / "report-2026-10.md").read_text(encoding="utf-8")
 
 
+def test_the_report_carries_the_three_reader_counts_and_says_what_each_can_tell(tmp_path):
+    rows = [
+        # Before the three counts: blank, so the month reads n/a for them.
+        summary_row("2026-09-30", **people(50, 40, 5, 30, 15, {"/": 50}, 40, 35)),
+        # Two days with all three, one with search not counted (left out of all three).
+        summary_row("2026-10-30", **people(200, 150, 30, 120, 70, {"/": 200}, 120, 110),
+                    engaged_visitors=7, search_visitors=9, phone_visitors=6),
+        summary_row("2026-10-31", **people(300, 240, 40, 150, 130, {"/": 300}, 180, 170),
+                    engaged_visitors=8, search_visitors=12, phone_visitors=0),
+        summary_row("2026-10-29", **people(100, 80, 10, 60, 30, {"/": 100}, 90, 80),
+                    engaged_visitors=6, search_visitors="", phone_visitors=3),
+    ]
+    summary, search = write_files(tmp_path, rows=rows)
+    out = tmp_path / "out"
+    assert vrep.run(out, "2026-10", date(2026, 11, 1), summary, search) == "written"
+    text = (out / "report-2026-10.md").read_text(encoding="utf-8")
+    assert table_row(text, "Days with engaged, search and phone counts") == ["0 of 31", "0 of 31", "0 of 30", "2 of 31"]
+    assert table_row(text, "Engaged visitors (visitor-days)") == ["n/a", "n/a", "n/a", "15"]
+    assert table_row(text, "Visitors from search (visitor-days)") == ["n/a", "n/a", "n/a", "21"]
+    assert table_row(text, "Visitors on a phone or tablet (visitor-days)") == ["n/a", "n/a", "n/a", "6"]
+    # Beside the unique visitors, in the table's order.
+    labels = [ln.split("|")[1].strip() for ln in text.splitlines() if ln.startswith("| ")]
+    at = labels.index("Visits")
+    assert labels[at + 1:at + 5] == ["Days with engaged, search and phone counts", "Engaged visitors (visitor-days)",
+                                     "Visitors from search (visitor-days)", "Visitors on a phone or tablet (visitor-days)"]
+    # The paragraph under the table says what each figure can tell.
+    reading = text.split("| Records (last reading) |", 1)[1].split("\n## ", 1)[0]
+    assert "includes automated browsers that copy those headers" in reading
+    assert "the figures to read as people" in reading
+    for left_out in ("everyone who read one page", "came by a link, a bookmark or a typed address", "on a desktop"):
+        assert left_out in reading, left_out
+    for word in ("Engaged visitors: ", "Visitors from search: ", "Visitors on a phone or tablet: "):
+        assert f"\n- {word}" in text, word
+    for dash in (chr(0x2014), chr(0x2013)):
+        assert dash not in text
+    # The public line for LAST_RUN.md carries none of them.
+    assert (out / "summary_line.txt").read_text(encoding="utf-8") == (
+        "2026-10: 600 page views by people; 390 visitor-days; 360 visits; Canada 78.3%; "
+        "search clicks 30, impressions 400 (views/report-2026-10.md)\n")
+
+
 def test_the_report_command_reads_the_count_wrangler_wrote(tmp_path):
     summary, search = write_files(tmp_path)
     out = tmp_path / "out"

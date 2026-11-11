@@ -235,7 +235,8 @@ The counts are read day to day and kept as a lasting record of the site's
 audience. Cloudflare's dashboards show a window and keep nothing, so the
 nightly run keeps three files in R2: the daily roll-up of the Worker's own
 counts, Search Console's daily figures, and a report per month. Since
-2026-10-30 every count separates people from crawlers.
+2026-10-30 every count separates people from crawlers. Beside them, for the
+operator only, it keeps the account funnel's daily figures (below).
 
 ### What one data point holds
 
@@ -294,8 +295,10 @@ the secret no one can compute a code from an address. Whoever holds the
 secret could recompute a past day's salt and test a known address against
 the codes still in Analytics Engine (three months), so the secret lives only
 in the Worker. The roll-up only ever asks for how many distinct codes there
-are (`count(DISTINCT blob10)`), so no code reaches R2. The Data page says
-all this in both languages.
+are (`count(DISTINCT blob10)`, or for engaged visitors an inner query that
+groups by code inside Analytics Engine and answers with the number of
+groups), so no code reaches R2. The Data page says all this in both
+languages.
 
 The Atom feeds are the one static file counted. `site/wrangler.jsonc` runs
 the Worker first for `/data/feeds/*` (`run_worker_first`), and the Worker
@@ -362,9 +365,12 @@ It asks the SQL API for every finished UTC day after the newest one in the
 summary (normally only yesterday; on the first night, the last 90 days), so
 a night that fails is caught up by the next. A day with no data points at all
 is not written and is asked again the next night. Each day costs one query,
-and six more when it has data points (counts, feeds, page views by bot flag,
+six more when it has data points (counts, feeds, page views by bot flag,
 people's page views by route, distinct visitor codes, distinct codes with a
-page view). Files in the `awardwatch-data` bucket:
+page view), and three or four more when every person's request that day
+carried a code (engaged visitors, people's referring hosts, visitors from
+search when a search engine referred anyone, visitors on a phone or tablet).
+Files in the `awardwatch-data` bucket:
 
 | Key | What it is |
 |---|---|
@@ -372,6 +378,11 @@ page view). Files in the `awardwatch-data` bucket:
 | `views/summary.csv` | one row per day, every day kept so far |
 | `views/search_console.csv` | one row per day of Search Console figures (below) |
 | `views/report-YYYY-MM.md` | the monthly report (below) |
+| `views/funnel.csv` | the account funnel, one row per day (below); private |
+| `views/funnel_line.txt` | the last finished day's line for the operator's email (below); private |
+
+No route on the site reads the `views/` prefix: the download route reads only
+`downloads/` and `mirror/`.
 
 The summary is downloaded, extended and uploaded again each night. A download
 that fails for any reason other than "does not exist" stops the step, and a
@@ -400,7 +411,7 @@ distinct counts of visitor codes would undercount if it ever sampled (this
 site's volume is far below where it starts).
 
 The summary, header
-`date,responses,pages,api,downloads,forms,feeds,other,feed_subscribers,top_routes,human_pages,bot_pages,unique_visitors,human_visits,human_by_country,human_by_device,human_by_lang,human_by_route,organizations,records`:
+`date,responses,pages,api,downloads,forms,feeds,other,feed_subscribers,top_routes,human_pages,bot_pages,unique_visitors,human_visits,human_by_country,human_by_device,human_by_lang,human_by_route,organizations,records,engaged_visitors,search_visitors,phone_visitors`:
 
 | Column | Meaning |
 |---|---|
@@ -419,15 +430,58 @@ The summary, header
 | `human_by_lang` | people's page views by `en`, `fr` |
 | `human_by_route` | people's page views by route template, every route |
 | `organizations`, `records` | the site's counts from tonight's `stats.json` (organizations; records: award notices, contract history records, published contracts, grant agreements and lobbying communications, the five counts added), on the row for the day before |
+| `engaged_visitors` | distinct visitor codes with two or more page views below status 400 (from 2026-11-11, and earlier days by the catch-up below) |
+| `search_visitors` | distinct visitor codes with a page view below status 400 whose referring host is a search engine's |
+| `phone_visitors` | distinct visitor codes with a page view below status 400 from a device read as `mobile` or `tablet` |
 
-Blanks are deliberate and never mean zero. The eight people and bot columns
+Blanks are deliberate and never mean zero. The eleven people and bot columns
 are blank on any day on which a page view carries no bot flag (every day
 before 2026-10-30, and the day itself, which mixes points from before and
-after the deploy). `unique_visitors` and `human_visits` are also blank on any
-day on which a person's request carried no visitor code (no `VIEWS_SALT_KEY`,
-or the secret set part way through the day). The organization and record
-readings are taken on the night, so a day rolled up again keeps the reading
-it had.
+after the deploy). `unique_visitors`, `human_visits` and the last three
+columns are also blank on any day on which a person's request carried no
+visitor code (no `VIEWS_SALT_KEY`, or the secret set part way through the
+day), and any one of the last three is blank when its answer could not be
+read. `search_visitors` is blank on a day whose referring hosts filled a
+whole answer (10,000 rows) or named more than 200 search hosts, since a short
+list would undercount. The organization and record readings are taken on the
+night, so a day rolled up again keeps the reading it had.
+
+**Reading the visitor columns.** `human` means a request with a browser's
+headers, and automated browsers that copy those headers pass. In the week to
+2026-11-10 such a pool made up most of `unique_visitors`: nearly every code a
+single page view, from many countries a day, in bursts at 02:00 UTC. So
+`unique_visitors` and `human_visits` count every browser-shaped client, and
+the last three columns are the ones to read as people. Each undercounts in
+its own way: `engaged_visitors` leaves out everyone who read one page,
+`search_visitors` everyone who came by a link, a bookmark or a typed address
+(and every browser that sends no referrer), `phone_visitors` everyone on a
+desktop. A pool that loads two pages per code, or forges a search engine as
+its referrer, or a phone's user agent, would inflate one of them; no header
+check can rule that out.
+
+**Search engines** (`SEARCH_ENGINES` in `views_rollup.py`): Google and Yandex
+by name with a country or generic ending (`google.ca`, `www.google.co.uk`,
+`www.google.com.hk`; not `news.google.com`, not `notgoogle.example`), and
+`bing.com`, `duckduckgo.com`, `search.yahoo.com`, `ecosia.org`,
+`search.brave.com`, `startpage.com`, `qwant.com` and `baidu.com` with the
+hosts under them (`www.bing.com`; not `notbing.com`). The SQL API takes no
+backslash in a string, so the pattern cannot run in SQL: the roll-up asks for
+the day's referring hosts of people's page views, picks the engines in
+Python, and names them in the count's `blob5 IN (...)`. With none, the column
+is 0 without a further query.
+
+**The catch-up.** Days rolled up before 2026-11-11 hold blanks in the last
+three columns. On a night that rolls up a day (not with `--day`), the roll-up
+also fills them on up to 30 such days, newest first: days still inside the
+90 days, with all three blank and both `unique_visitors` and `human_visits`
+filled. For each it first asks again for the distinct codes with a page view
+and goes on only when the answer equals the row's `human_visits`, so a day
+Analytics Engine has begun to drop is left blank rather than filled with an
+undercount; then the three counts. That is at most five queries a day, 150 a
+night. A filled day is never asked again. A query that fails ends the
+catch-up for the night and leaves that day as it was; the roll-up's outcome
+is unchanged, and the next night goes on. Only the summary row changes; the
+day file is not written again.
 
 Nothing in either file identifies a visitor: the queries can read only what
 the Worker writes, never ask for a visitor code itself, and the roll-up
@@ -529,19 +583,81 @@ writes with the days there are.
 
 The report is plain markdown: a table of the month and the three before it
 (days counted, page views by people, unique visitors summed by day, visits,
-Canada's share, the device split, search clicks, impressions and position,
-feed subscribers, organizations and records), the
-month's top ten pages by people, and the definitions of each figure. A
-figure that was not counted reads `n/a`. Unique visitors are summed over the
-month's days ("visitor-days"), since the code changes daily: a person who
-came on three days counts three times.
+engaged visitors, visitors from search and visitors on a phone or tablet
+summed over the days that have all three, Canada's share, the device split,
+search clicks, impressions and position, feed subscribers, organizations and
+records), a paragraph under the table on what each visitor figure can tell
+(as in "Reading the visitor columns" above), the month's top ten pages by
+people, and the definitions of each figure. A figure that was not counted
+reads `n/a`. Unique visitors are summed over the month's days
+("visitor-days"), since the code changes daily: a person who came on three
+days counts three times.
 
 Its one line goes to LAST_RUN.md as "Audience report: ..." on the run that
-wrote it. Outcomes, as `views_report`: `written`, `not due` (the report
+wrote it. LAST_RUN.md is public, and the line carries none of the three
+people counts. Outcomes, as `views_report`: `written`, `not due` (the report
 exists), `waiting`, `no data` (the summary holds no day of the month), or
 `failed` (an attention item and a watchdog email; the next run tries again).
 To write one by hand from downloaded files:
 `python -m awardwatch_pipeline.nightly views-report --month 2026-11 --summary summary.csv --search search_console.csv --out .`
+
+### The account funnel (operator only)
+
+The accounts database (`awardwatch-accounts`) is read by the site alone, so
+the nightly counts its funnel for the operator
+(`pipeline/awardwatch_pipeline/funnel.py`). Two workflow steps after "Count
+the alert sign-ups":
+
+1. "Count the account funnel" writes the last finished UTC day to `day.txt`,
+   prints one statement with `nightly funnel-sql --day`, and sends it with
+   `wrangler d1 execute awardwatch-accounts --remote --json --command`, the
+   deploy token, three tries, the answer to a file. The statement selects
+   counts and nothing else, so no address, id or row leaves D1.
+2. "Save the account funnel to R2 (private)" downloads `views/funnel.csv`
+   (a download that fails for any reason but "does not exist" stops the
+   step, so a shorter record never replaces it), runs `nightly funnel`, and
+   uploads `views/funnel.csv` and `views/funnel_line.txt`.
+
+`views/funnel.csv`, header
+`date,accounts,accounts_new,codes_requested,sign_ins,pro,saved_searches,watches`:
+
+| Column | Meaning |
+|---|---|
+| `date` | the UTC day |
+| `accounts_new` | accounts made that day (`users.created_at`, any status, so one deleted since still counts) |
+| `codes_requested` | sign-in codes asked for that day (`audit` event `code_requested`) |
+| `sign_ins` | sign-ins that day (`audit` event `signed_in`) |
+| `accounts` | active accounts, read when the nightly ran (the day after `date`) |
+| `pro` | accounts on Pro, read then, counted as the operator console counts them (`admin_ops.ts`, overview: of each active account's live entitlements, the latest by `created_at` then `id`, when its plan is `pro`) |
+| `saved_searches`, `watches` | rows of each table, read then |
+
+The audit trail keeps 90 days, so a day's codes and sign-ins can be counted
+again only within them. A count that cannot be read is blank; a retry the
+same day replaces the day's row, keeping any count it could not read.
+
+`views/funnel_line.txt` is one line for the last finished day: the seven
+counts, then that day's `human_pages`, `engaged_visitors`, `search_visitors`
+and `phone_visitors` from the summary the roll-up step left on the runner,
+`n/a` for anything not read. For example
+`2026-11-10 (UTC): accounts 12 (new 2), sign-in codes asked for 3, sign-ins 2, Pro 1, saved searches 4, watches 7; page views by people 120, engaged visitors 7, from search 9, on a phone or tablet 6`
+(the figures here are made up).
+
+The Worker's daily check (`site/src/watchdog.ts`, 06:00 UTC) reads the line
+from R2 and adds it to the operator's email under "The last finished day
+(private figures from the nightly run)". A morning with the line and no
+alert or notice still sends one, subject `Award Watch: figures for
+<date>`, so the email now comes every morning the nightly has run. A line
+whose date is more than two days before the check's is left out, never an
+alert.
+
+Where the figures never go: no route on the site reads `views/`; the run
+status gets only the outcome word (`funnel`: `saved`, `failed` or `not run`),
+because the run prints the status in its public log and its notices go to
+LAST_RUN.md; LAST_RUN.md gets nothing; and neither step prints a figure.
+A failed save is a notice, never an item needing attention. To look at the
+record:
+`npx wrangler r2 object get --remote awardwatch-data/views/funnel.csv --file funnel.csv`
+from `site/`.
 
 ### The dashboard
 

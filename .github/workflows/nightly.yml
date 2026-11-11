@@ -34,7 +34,8 @@
 # files back to R2 (the organization merges list on the 1st and the 16th
 # only, under its data date), keep the audience counts of the finished days
 # in R2 when the analytics token exists, count the alert sign-ups in the forms database,
-# append Search Console's daily figures when its key exists, write the
+# count the account funnel's day and keep it in R2's private views/ prefix for the
+# operator's email, append Search Console's daily figures when its key exists, write the
 # monthly audience report on the first run of a month, run the monthly expiry
 # checks on the first of a month, write the run status, and report the items
 # needing attention (failed run, one GitHub issue).
@@ -68,6 +69,10 @@
 # - A count of the alert sign-ups that cannot be read leaves the status's
 #   interest counts empty and adds a notice: information, never an item
 #   needing attention and never a failed run. The next run counts again.
+# - An account funnel count that cannot be read writes n/a in the operator's
+#   line; a funnel record that cannot be saved to R2 is a notice
+#   (funnel: failed), never an item needing attention. The next run counts
+#   its own day, and a record R2 holds is never replaced by a shorter one.
 # - A search database sync that fails is reported (search_sync: failed, an
 #   item needing attention) and stops nothing: the deploy goes ahead, the
 #   search page answers from what D1 already holds, and the next night sends
@@ -934,6 +939,87 @@ jobs:
           cat "$out/count.log"
           exit 1
 
+      # The account funnel (pipeline/awardwatch_pipeline/funnel.py,
+      # docs/search-engines.md section 6), for the operator only: for the last
+      # finished UTC day the accounts made, the sign-in codes asked for and
+      # the sign-ins, beside levels read tonight (accounts, Pro plans as the
+      # operator console counts them, saved searches, watches). funnel-sql
+      # prints the one statement; it returns those counts and nothing else,
+      # so no address or id leaves D1, and the deploy token reads D1 already.
+      # Wrangler's answer goes to a file and never to this log, which is
+      # public. day.txt fixes the day once for both steps. A query that fails
+      # three times leaves no file, and the next step writes n/a for the
+      # counts. It never stops the run and is never an item needing attention.
+      - name: Count the account funnel
+        id: funnel_count
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        working-directory: site
+        run: |
+          out=../data/out/funnel
+          mkdir -p "$out"
+          rm -f "$out/count.json" "$out/answer.json"
+          date -u -d yesterday +%Y-%m-%d > "$out/day.txt"
+          sql=$(python -m awardwatch_pipeline.nightly funnel-sql --day "$(cat "$out/day.txt")")
+          for attempt in 1 2 3; do
+            if "$WRANGLER" d1 execute awardwatch-accounts --remote --json --command "$sql" > "$out/answer.json" 2> "$out/count.log"; then
+              mv "$out/answer.json" "$out/count.json"
+              exit 0
+            fi
+            sleep 20
+          done
+          rm -f "$out/answer.json"
+          echo "The account funnel could not be counted:"
+          cat "$out/count.log"
+          exit 1
+
+      # The funnel's record: views/funnel.csv, one row per finished UTC day,
+      # and views/funnel_line.txt, that day's line with its audience figures
+      # (people's page views, engaged, from search, phone or tablet) from the
+      # summary the roll-up above left in data/out/views, n/a where it rolled
+      # up nothing. The Worker's daily check adds the line to the operator's
+      # email. Both stay in the private views/ prefix, which no route on the
+      # site reads: the run status gets the outcome word alone, LAST_RUN.md
+      # nothing, and no figure is printed here. The record is downloaded first
+      # and a download that fails for any reason but "does not exist" stops
+      # the step, so a shorter record never replaces it. The outcome reads
+      # "failed" until both files are in R2; a failed save is a notice. It
+      # never stops the run.
+      - name: Save the account funnel to R2 (private)
+        id: funnel
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          out=data/out/funnel
+          mkdir -p "$out"
+          echo "failed" > "$out/last_outcome.txt"
+          [ -s "$out/day.txt" ] || date -u -d yesterday +%Y-%m-%d > "$out/day.txt"
+          rm -f "$out/funnel.csv"
+          got=""
+          for attempt in 1 2 3; do
+            if "$WRANGLER" r2 object get --remote "$BUCKET/views/funnel.csv" --file "$out/funnel.csv" > "$out/get.log" 2>&1; then
+              got=yes
+              break
+            fi
+            if grep -qi "specified key does not exist" "$out/get.log"; then
+              got=missing
+              rm -f "$out/funnel.csv"
+              break
+            fi
+            sleep 20
+          done
+          if [ -z "$got" ]; then
+            echo "views/funnel.csv could not be downloaded; nothing saved"
+            cat "$out/get.log"
+            exit 1
+          fi
+          python -m awardwatch_pipeline.nightly funnel --day "$(cat "$out/day.txt")" --accounts "$out/count.json" --summary data/out/views/summary.csv --out "$out"
+          "$WRANGLER" r2 object put --remote "$BUCKET/views/funnel.csv" --file "$out/funnel.csv" > /dev/null
+          "$WRANGLER" r2 object put --remote "$BUCKET/views/funnel_line.txt" --file "$out/funnel_line.txt" > /dev/null
+          echo "saved" > "$out/last_outcome.txt"
+
       # Search Console's figures (docs/search-engines.md, section 6): clicks,
       # impressions, position and the top 50 queries of every final day after
       # the newest in views/search_console.csv, appended to it. Google keeps
@@ -1082,10 +1168,13 @@ jobs:
       # sample is a notice). organization_review is the semi-monthly
       # organization review's outcome ("saved", "failed", "no file", "not
       # due" or "not run"); on a due night its headline counts and R2 object
-      # are a notice. Written whatever happened above. The roll-up,
-      # Search Console, report, IndexNow, rollback, the two same-day steps and
-      # the link sample write "failed" before they start, so a step stopped by
-      # its time limit still reads as failed.
+      # are a notice. funnel is the account funnel save's outcome word
+      # ("saved", "failed" or "not run"; a failed one is a notice) and never
+      # a figure, since this step prints the status in its public log.
+      # Written whatever happened above. The roll-up,
+      # Search Console, report, IndexNow, rollback, the two same-day steps,
+      # the link sample and the funnel save write "failed" before they start,
+      # so a step stopped by its time limit still reads as failed.
       - name: Write the run status
         if: ${{ always() }}
         run: |
@@ -1102,6 +1191,7 @@ jobs:
             --search-console-outcome data/out/search_console/last_outcome.txt \
             --views-report-outcome data/out/report/last_outcome.txt \
             --interest data/out/interest/count.json \
+            --funnel-outcome data/out/funnel/last_outcome.txt \
             --restore data/out/restore.json --smoke data/out/deploy/smoke.json \
             --rollback-outcome data/out/deploy/rollback.txt --version-before data/out/deploy/version_before.txt \
             --checks data/out/checks.json \
