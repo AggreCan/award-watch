@@ -19,7 +19,8 @@ import { windowOf } from "./expiring";
 import { HolderPanel, holderOfNotice } from "./holders";
 import { contractIcsPath } from "./ics";
 import {
-  BuyerLink, awardNoticeUrl, datasetUrl, derivedPlacesText, employeesText, instrumentText, money, otherLanguageMark, provincesText,
+  BuyerLink, PublishedDescription, awardNoticeUrl, datasetUrl, derivedPlacesText, employeesText, instrumentText, money, otherLanguageMark,
+  provincesText,
   sourceFileText,
 } from "./shared";
 
@@ -220,7 +221,8 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
 
       {description ? (
         <Panel title={descriptionMark ? `${t(lang, "tender.description_heading")} ${descriptionMark}` : t(lang, "tender.description_heading")}>
-          <div class="prose">{description.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
+          {/* An award notice's whole text is on its CanadaBuys page; a history record has no page of its own there. */}
+          <PublishedDescription lang={lang} text={description} full={kind === "award" ? awardNoticeUrl(shownRef, lang) : null} />
         </Panel>
       ) : null}
 

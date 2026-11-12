@@ -30,7 +30,8 @@ export const KeyedApiDocs: FC<{ lang: Lang; ultra?: boolean }> = ({ lang, ultra 
           <tbody>
             {KEYED_ENDPOINTS.map((e) => (
               <tr>
-                <td data-label={t(lang, "data.col_endpoint")} class="mono">GET {e.path}</td>
+                {/* A long path wraps in its own cell (.wrap) rather than run into the next column. */}
+                <td data-label={t(lang, "data.col_endpoint")} class="mono wrap">GET {e.path}</td>
                 <td data-label={t(lang, "data.col_contents")}>{t(lang, e.text)}</td>
                 <td data-label={t(lang, "keyed.col_params")}>{e.params.length ? mono(e.params.join(", ")) : t(lang, "keyed.no_params")}</td>
               </tr>

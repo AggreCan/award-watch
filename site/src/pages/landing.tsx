@@ -41,6 +41,7 @@ import { MATCH_MAX, type FitNotice, type MatchBlock, type Score, scoreNotice } f
 import { RULES } from "../account/entitlements";
 import { signInTo } from "../account/fit_panels";
 import { SESSION_COOKIE, readSession } from "../account/session";
+import { ultraFigures } from "../account/stripe";
 import { accountsEnabled } from "../account/switch";
 import { followValue } from "../account/watch_events";
 import { INSET_EXTENT, INSET_FRAME, INSET_PATHS, MAP_HEIGHT, MAP_LABELS, MAP_PATHS, MAP_WIDTH, type MaritimeProvince } from "../canada_map";
@@ -57,7 +58,7 @@ import {
   type Key, type Lang,
 } from "../i18n";
 import { FitDisclaimer, type ReasonContext, bandText, reasonText } from "../fit";
-import { BrandMark, BrandWordmark, FooterRow, MetaTags, noDataPage, todayOf, varyOnCookie } from "../layout";
+import { BrandMark, BrandWordmark, FooterRow, ICONS_VERSION, MetaTags, noDataPage, todayOf, varyOnCookie } from "../layout";
 import { LANDING_ORGS_A, LANDING_ORGS_B, type LandingOrg, brandfetchLogoUrl } from "../landing_orgs";
 import {
   type ProPrice, ProTag, SUBSCRIBE_PATH, ULTRA_SUBSCRIBE_PATH, UltraTag, checkoutPrice, planLine, planRows, rowFor, sameDayHours, ultraCheckoutPrice,
@@ -392,13 +393,15 @@ const PlanList: FC<{ lang: Lang; plan: "free" | "pro" }> = ({ lang, plan }) => (
   </ul>
 );
 
-// Ultra's rows while it is not on sale: the planned scope, its unset figures
-// saying so (operator's ruling on tier lines, 2026-11-06). Every row is one
-// Ultra will have. Once it is on sale (ultraOnSale), the card lists what
-// Ultra holds that day, with Ultra's own figures (src/pro.tsx ultraLines).
-export const ULTRA_ROWS = [
-  "landing.everything_pro", "landing.ultra_builder", "landing.ultra_schedule", "landing.ultra_dashboard", "landing.ultra_caps",
-] as const;
+// Ultra's rows while it is not on sale: "Everything in Pro", then what is
+// built, in Ultra's own lines with its figures (src/pro.tsx ultraLines, the
+// lines the card lists once it is on sale), then the two parts still
+// planned, each saying so. Every row is one Ultra will have (operator's
+// ruling on tier lines, 2026-11-06). Once it is on sale (ultraOnSale), the
+// card lists what Ultra holds that day, and the planned lines leave it.
+export const ULTRA_PLANNED = ["landing.ultra_schedule", "landing.ultra_builder"] as const;
+export const ultraRows = (lang: Lang): string[] =>
+  [t(lang, "landing.everything_pro"), ...ultraLines(lang), ...ULTRA_PLANNED.map((k) => t(lang, k))];
 
 // The Ultra card's form and what stands in its place after a post: the line
 // that says the address is kept, or the form again with the address as typed
@@ -439,13 +442,14 @@ export const UltraBox: FC<{ lang: Lang } & UltraState> = ({ lang, done, error, e
   </div>
 );
 
-// The Ultra card. While Ultra is not on sale: no price, the "Coming soon"
-// tag, the planned rows and the one-field form. While it is (sale holds its
+// The Ultra card. While Ultra is not on sale: the "Coming soon" tag, with
+// the price once its two figures are set (planned; "Price to be set" until
+// then), its rows and the one-field form. While it is (sale holds its
 // figures): the monthly figure large and the yearly beside it, the "for"
 // line, "Everything in Pro" and Ultra's own figures, and Subscribe to Ultra
 // through the sign-in page, outlined in sapphire as the form's button is;
 // the form leaves the card, and the addresses it kept stay for the message.
-const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null }> = ({ lang, ultra, sale }) => {
+const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null; planned: ProPrice | null }> = ({ lang, ultra, sale, planned }) => {
   const figure = (n: string) => t(lang, "plans.figure", { n: decimal(lang, n) });
   return sale ? (
     <div class="lp-plan lp-plan-ultra" id={ULTRA_ANCHOR}>
@@ -460,17 +464,24 @@ const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null }> = 
   ) : (
     <div class="lp-plan lp-plan-ultra" id={ULTRA_ANCHOR}>
       <h3 class="lp-plan-nm">{t(lang, "ultra.tag")}<UltraTag lang={lang} size={11} /></h3>
-      <p class="lp-pr lp-pr-unset">{t(lang, "landing.ultra_price")} <span class="lp-soon-tag">{t(lang, "landing.ultra_soon")}</span></p>
-      <p class="lp-for">{t(lang, "landing.ultra_for")}</p>
+      {planned ? (
+        <p class="lp-pr">
+          {figure(planned.monthly)} <span class="lp-soon-tag">{t(lang, "landing.ultra_soon")}</span>
+          <small>{t(lang, "landing.price_rest", { yearly: figure(planned.yearly) })}</small>
+        </p>
+      ) : (
+        <p class="lp-pr lp-pr-unset">{t(lang, "landing.ultra_price")} <span class="lp-soon-tag">{t(lang, "landing.ultra_soon")}</span></p>
+      )}
+      <p class="lp-for">{t(lang, "plans.ultra_for")}</p>
       <ul class="lp-plan-list lp-plan-list-wrap">
-        {ULTRA_ROWS.map((k) => <li><Check /><span>{t(lang, k)}</span></li>)}
+        {ultraRows(lang).map((line) => <li><Check /><span>{line}</span></li>)}
       </ul>
       <UltraBox lang={lang} {...ultra} />
     </div>
   );
 };
 
-const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: ProPrice | null }> = ({ lang, price, ultra, sale }) => {
+const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: ProPrice | null; planned: ProPrice | null }> = ({ lang, price, ultra, sale, planned }) => {
   const figure = (n: string) => t(lang, "plans.figure", { n: decimal(lang, n) });
   return (
     <section class="lp-pricing" aria-labelledby="lp-plans-h">
@@ -498,7 +509,7 @@ const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: P
               <a class="lp-btn" href="/pro">{t(lang, "landing.everything_pro")}</a>
             </p>
           </div>
-          <UltraCard lang={lang} ultra={ultra} sale={sale} />
+          <UltraCard lang={lang} ultra={ultra} sale={sale} planned={planned} />
         </div>
         {price ? <p class="lp-plans-note">{t(lang, "plans.seller")}</p> : null}
       </div>
@@ -531,7 +542,7 @@ export async function landingPage(c: Context<AppEnv>, ultra: UltraState | null, 
   varyOnCookie(c);
   return c.html(html`<!doctype html>${(
     <LandingDoc lang={lang} on={accountsEnabled(c.env)} stats={stats} clock={clock} endingN={three?.n} ending={firstEnding ?? []}
-      profile={profile} price={checkoutPrice(c.env)} logo={c.env.BRANDFETCH_CLIENT_ID?.trim() || null} ultra={ultra} ultraPrice={ultraPrice} />
+      profile={profile} price={checkoutPrice(c.env)} logo={c.env.BRANDFETCH_CLIENT_ID?.trim() || null} ultra={ultra} ultraPrice={ultraPrice} ultraPlanned={ultraFigures(c.env)} />
   ) as any}`, status);
 }
 
@@ -576,12 +587,15 @@ export async function ultraSubmit(c: Context<AppEnv>, post: InterestPost): Promi
 
 // ultraPrice: Ultra's figures while it is on sale (src/pro.tsx
 // ultraCheckoutPrice), which turn its card from the waitlist to the price.
+// ultraPlanned: the same two figures before it is on sale (account/stripe.ts
+// ultraFigures), which the waitlist card shows beside "Coming soon".
 type DocProps = {
   lang: Lang; on: boolean; stats: Stats; clock: Clock; endingN: number | undefined; ending: readonly ExpiringRow[];
   profile: Profile | null; price: ProPrice | null; logo: string | null; ultra?: UltraState | null; ultraPrice?: ProPrice | null;
+  ultraPlanned?: ProPrice | null;
 };
 
-export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null, ultraPrice = null }) => {
+export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null, ultraPrice = null, ultraPlanned = null }) => {
   const counts = stats.counts;
   const seo = pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] });
   const lobbying = sourceLoaded("lobbying", null, stats) === true;
@@ -627,9 +641,9 @@ export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, endi
         <script src="/theme.js"></script>
         <link rel="preload" href={DISPLAY_FONT} as="font" type="font/woff2" crossorigin="anonymous" />
         <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
-        <link rel="icon" href="/favicon.ico" sizes="48x48" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="icon" href={`/favicon.ico?v=${ICONS_VERSION}`} sizes="48x48" />
+        <link rel="icon" href={`/favicon.svg?v=${ICONS_VERSION}`} type="image/svg+xml" />
+        <link rel="apple-touch-icon" href={`/apple-touch-icon.png?v=${ICONS_VERSION}`} />
         <MetaTags seo={seo} lang={lang} title={t(lang, "site.name")} />
         <FeedLinks lang={lang} />
       </head>
@@ -816,7 +830,7 @@ export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, endi
             </div>
           </section>
 
-          {on ? <Plans lang={lang} price={price} ultra={ultra ?? {}} sale={ultraPrice} /> : null}
+          {on ? <Plans lang={lang} price={price} ultra={ultra ?? {}} sale={ultraPrice} planned={ultraPlanned} /> : null}
 
           <section class="lp-close" aria-labelledby="lp-close-h">
             <div class="lp-wrap">

@@ -6,7 +6,7 @@ import { app } from "../src/index";
 import { homeRequest } from "./home";
 import type { TenderRow } from "../src/data";
 import {
-  LOCKUP_WORD_PATH, MARK_CHECK_COLOUR, MARK_CHECK_PATH, MARK_INK_PATH, WORDMARK_CHECK_INDEX, WORDMARK_CHECK_PATH, WORDMARK_INK_PATHS,
+  ICONS_VERSION, LOCKUP_WORD_PATH, MARK_CHECK_COLOUR, MARK_CHECK_PATH, MARK_INK_PATH, WORDMARK_CHECK_INDEX, WORDMARK_CHECK_PATH, WORDMARK_INK_PATHS,
 } from "../src/layout";
 import lockupSvg from "../../brand/lockup.svg?raw";
 import wordmarkSvg from "../../brand/wordmark.svg?raw";
@@ -164,7 +164,10 @@ describe("every page", () => {
     expect(html).toContain('<path class="mark-check" fill="#0f7b4f" fill-rule="evenodd"');
     expect(html).toContain('<button type="button" class="theme-toggle"><span class="when-light">Dark</span><span class="when-dark">Light</span></button>');
     expect(html).toContain('<a href="?lang=fr" class="lang-toggle" rel="nofollow">Français</a>');
-    expect(html).toContain('<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>');
+    // The icons' addresses carry their version, so a redrawn icon replaces the one a browser kept (layout.tsx ICONS_VERSION).
+    expect(html).toContain(`<link rel="icon" href="/favicon.svg?v=${ICONS_VERSION}" type="image/svg+xml"/>`);
+    expect(html).toContain(`<link rel="icon" href="/favicon.ico?v=${ICONS_VERSION}" sizes="48x48"/>`);
+    expect(html).toContain(`<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=${ICONS_VERSION}"/>`);
     expect(html).toMatch(/<link rel="stylesheet" href="\/styles\.css\?v=\d+"\/>/);
     // No social accounts, no notice bar, nothing loaded from another host.
     expect(html).not.toMatch(/x\.com|bsky|notice-ee|ko-fi/i);

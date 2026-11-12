@@ -247,7 +247,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                       </td>
                       <td data-label={t(lang, "data.col_publisher")}>{t(lang, s.publisher)}</td>
                       <td data-label={t(lang, "data.col_files")} class="small mdh">{s.files}</td>
-                      <td data-label={t(lang, "data.col_last_read")} class="mono">
+                      <td data-label={t(lang, "data.col_last_read")} class="mono wrap">
                         {last ? (
                           <>
                             {runTime(last.read, lang)}
@@ -331,7 +331,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
               <tbody>
                 {API_ROWS.map(([endpoint, key]) => (
                   <tr>
-                    <td data-label={t(lang, "data.col_endpoint")} class="mono">{endpoint}</td>
+                    <td data-label={t(lang, "data.col_endpoint")} class="mono wrap">{endpoint}</td>
                     <td data-label={t(lang, "data.col_contents")}>{t(lang, key)}</td>
                   </tr>
                 ))}
@@ -406,7 +406,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
                         {/* A file name can run past its column ("openTenderNotice-ouvertAvisAppelOffres.csv"): it wraps. */}
                         <td data-label={t(lang, "data.col_file")} class="mono wrap">{r.file}</td>
                         <td data-label={t(lang, "data.col_source")}>{row ? t(lang, row.name) : r.source}</td>
-                        <td data-label={t(lang, "data.col_last_read")} class="mono">
+                        <td data-label={t(lang, "data.col_last_read")} class="mono wrap">
                           {r.last_read && r.loaded !== false ? runTime(r.last_read, lang) : <span class="muted">{t(lang, "data.not_read")}</span>}
                           {published ? <span class="md-only muted small">{t(lang, "data.modified", { date: published })}</span> : null}
                         </td>

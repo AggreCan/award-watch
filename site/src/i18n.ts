@@ -572,6 +572,15 @@ const STRINGS = {
   "tender.gsin": { en: "GSIN", fr: "NIBS" },
   "tender.codes": { en: "UNSPSC Codes", fr: "Codes UNSPSC" },
   "tender.description_heading": { en: "Description as Published", fr: "Description publiée" },
+  // Under a description the site keeps only the start of (pages/shared.tsx PublishedDescription).
+  "tender.description_cut": {
+    en: "The site keeps the first {n} characters of a description. The whole text is on {notice}.",
+    fr: "Le site conserve les {n} premiers caractères d'une description. Le texte complet se trouve dans {notice}.",
+  },
+  "tender.description_cut_plain": {
+    en: "The site keeps the first {n} characters of a description.",
+    fr: "Le site conserve les {n} premiers caractères d'une description.",
+  },
   "tender.history": { en: "Amendment History", fr: "Historique des modifications" },
   "tender.history_note": {
     en: "Each version of the notice as CanadaBuys published it, newest first.",
@@ -4160,22 +4169,14 @@ const STRINGS = {
   "ultra.tag_hidden": { en: "(custom plan)", fr: "(forfait sur mesure)" },
   "landing.ultra_price": { en: "Price to be set", fr: "Prix à fixer" },
   "landing.ultra_soon": { en: "Coming soon", fr: "Bientôt offert" },
-  "landing.ultra_for": {
-    en: "For teams that want their own views of the data, built and delivered.",
-    fr: "Pour les équipes qui veulent leurs propres vues des données, construites et livrées.",
+  // The two parts of Ultra still planned, on its card before it is on sale (pages/landing.tsx ULTRA_PLANNED).
+  "landing.ultra_schedule": {
+    en: "Planned: saved analytics views by email, weekly or monthly",
+    fr: "Prévu : vues d'analyse enregistrées par courriel, chaque semaine ou mois",
   },
   "landing.ultra_builder": {
-    en: "A custom analytics builder: your measure, grouping, period and filters, saved as views",
-    fr: "Un générateur d'analyses sur mesure : votre mesure, regroupement, période et filtres, enregistrés comme vues",
-  },
-  "landing.ultra_schedule": { en: "Your saved views delivered by email on a schedule", fr: "Vos vues enregistrées envoyées par courriel selon un horaire" },
-  "landing.ultra_dashboard": {
-    en: "A custom dashboard in your account, built from the site's lists, views and panels",
-    fr: "Un tableau de bord sur mesure dans votre compte, fait des listes, vues et panneaux du site",
-  },
-  "landing.ultra_caps": {
-    en: "Saved searches, watches and API: figures set with the price",
-    fr: "Recherches enregistrées, suivis et API : chiffres fixés avec le prix",
+    en: "Planned: an analytics builder for your own measure, grouping, period and filters",
+    fr: "Prévu : un générateur d'analyses pour vos propres mesure, regroupement, période et filtres",
   },
   "landing.ultra_button": { en: "Tell me when Ultra opens", fr: "M'avertir à l'ouverture d'Ultra" },
   "landing.close_heading": { en: "Your next federal tender is already in here.", fr: "Votre prochain appel d'offres fédéral est déjà ici." },

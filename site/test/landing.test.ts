@@ -12,7 +12,7 @@ import { MAP_LABELS } from "../src/canada_map";
 import { t } from "../src/i18n";
 import { app } from "../src/index";
 import { LANDING_ORGS, LANDING_ORGS_A, LANDING_ORGS_B, brandfetchLogoUrl } from "../src/landing_orgs";
-import { DISPLAY_FONT, LANDING_VERSION, ULTRA_GLYPH_PATH, ULTRA_ROWS } from "../src/pages/landing";
+import { DISPLAY_FONT, LANDING_VERSION, ULTRA_GLYPH_PATH, ultraRows } from "../src/pages/landing";
 import { PLAN_ROWS, planLine, rowFor } from "../src/pro";
 import { nbsp, newEmail, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { FILES, assetsWithout, emptyAssets, makeFakeAssets, testEnv } from "./assets";
@@ -357,7 +357,8 @@ describe("the two switch states", () => {
         // A row the plan lacks is marked so in words and by the ring.
         expect(cards[i].match(/class="lp-lacks"/g)?.length ?? 0).toBe(ROWS.filter((r) => !rowFor(r, plan).has).length);
       }
-      expect(rows(cards[2])).toEqual(ULTRA_ROWS.map((k) => nbsp(t(lang, k))));
+      // Ultra's card before it is on sale: Everything in Pro, Ultra's own lines with its figures, then the two parts still planned.
+      expect(rows(cards[2])).toEqual(ultraRows(lang).map((line) => nbsp(line)));
       const monthly = lang === "fr" ? `${PRICE[1].replace(".", ",")} $ CA` : `CA$${PRICE[1]}`;
       const yearly = lang === "fr" ? `${PRICE[2].replace(".", ",")} $ CA` : `CA$${PRICE[2]}`;
       expect(cards[1]).toContain(`<p class="lp-pr">${monthly}<small>${nbsp(t(lang, "landing.price_rest", { yearly }))}</small></p>`);
@@ -366,7 +367,8 @@ describe("the two switch states", () => {
     const pricing = decode(section(await html("/", paid()), "lp-pricing"));
     expect(pricing).toContain(`<h3 class="lp-plan-nm">Ultra<span class="ultra-tag"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="${ULTRA_GLYPH_PATH}"></path></svg>Ultra<span class="visually-hidden"> (custom plan)</span></span></h3>`);
     expect(ULTRA_GLYPH_PATH).toBe("M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z");
-    expect(pricing).toContain('<p class="lp-pr lp-pr-unset">Price to be set <span class="lp-soon-tag">Coming soon</span></p>');
+    // Not on sale yet: the two figures wrangler.jsonc holds show its price beside the tag (test/ultra.test.ts has the card without them).
+    expect(pricing).toMatch(/<p class="lp-pr">\s*CA\$[0-9]+(\.[0-9]{2})? <span class="lp-soon-tag">Coming soon<\/span>\s*<small>a month, or CA\$[0-9]+(\.[0-9]{2})? a year<\/small>\s*<\/p>/);
     // The button is the Ultra card's form now (operator, 2026-11-08), not a link to the email lists.
     expect(pricing).toContain('<button type="submit" class="lp-btn lp-ultra-btn">Tell me when Ultra opens</button>');
     expect(pricing).not.toContain('href="/alerts"');

@@ -42,7 +42,7 @@ describe("data page", () => {
     expect(sources).toContain("Treasury Board of Canada Secretariat");
     expect(sources).toContain("Office of the Commissioner of Lobbying");
     // One last read per source, with the publisher's newest date under it; no column of terms (the licence section has them).
-    expect(sources).toContain('<td data-label="Last read" class="mono">2026-10-31 00:40 UTC<span class="nw-block muted small">(publisher&#39;s date 2026-10-30)</span></td>');
+    expect(sources).toContain('<td data-label="Last read" class="mono wrap">2026-10-31 00:40 UTC<span class="nw-block muted small">(publisher&#39;s date 2026-10-30)</span></td>');
     expect(sources).not.toContain('data-label="Terms"');
     // A source the last run did not read says so.
     expect(sources).toContain("Not read yet");

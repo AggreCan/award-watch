@@ -97,6 +97,15 @@ export function stripeOffers(env: Env): Offers {
   return { pro, ultra: ultra && product ? { ...ultra, product } : null };
 }
 
+// Ultra's two figures alone, set and in form, whatever its product and price ids are: what Ultra will cost,
+// for the landing page's card before Ultra is on sale. Nothing is offered for sale by them: an offer needs
+// all five variables (stripeOffers above).
+export function ultraFigures(env: Pick<Env, "PRICE_ULTRA_MONTHLY_CAD" | "PRICE_ULTRA_YEARLY_CAD">): Record<Interval, string> | null {
+  const monthly = set(env.PRICE_ULTRA_MONTHLY_CAD);
+  const yearly = set(env.PRICE_ULTRA_YEARLY_CAD);
+  return monthly && yearly && FIGURE_RE.test(monthly) && FIGURE_RE.test(yearly) ? { monthly, yearly } : null;
+}
+
 // Pro's two prices, as before Ultra.
 export function stripeOffer(env: Env): Offer | null {
   return stripeOffers(env).pro;

@@ -184,9 +184,12 @@ describe("while Ultra is off sale", () => {
     const proCookie = await signIn(pro, { env: payEnv() });
     await grantPro(pro);
     const malformed = saleEnv({ STRIPE_PRODUCT_ULTRA: "nope" });
+    // The landing page's Ultra card shows the price beside "Coming soon" once the two figures are set, on sale or
+    // not, so its page is held against the one with the figures alone.
+    const FIGURES = { PRICE_ULTRA_MONTHLY_CAD: ULTRA_VARS.PRICE_ULTRA_MONTHLY_CAD, PRICE_ULTRA_YEARLY_CAD: ULTRA_VARS.PRICE_ULTRA_YEARLY_CAD };
     for (const cookie of [undefined, freeCookie, proCookie]) {
       for (const path of PUBLIC) {
-        const plain = await page(path, payEnv(), cookie);
+        const plain = await page(path, path === "/" || path.startsWith("/?") ? payEnv(FIGURES) : payEnv(), cookie);
         expect(await page(path, malformed, cookie), path).toEqual(plain);
         await withoutTiers(async () => expect(await page(path, saleEnv(), cookie), path).toEqual(plain));
         expect(plain.body, path).not.toContain("ultra-tag\"><svg viewBox=\"0 0 16 16\" width=\"12\"");
@@ -334,9 +337,26 @@ describe("the landing page's Ultra card", () => {
   const section = (html: string) => /<section class="lp-pricing"[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
 
   it("is the waitlist while Ultra is off sale, and the price, Ultra's own figures and Subscribe while it is on sale, without the form", async () => {
-    const off = section(await (await request("/", payEnv())).text());
-    expect(off).toContain('<span class="lp-soon-tag">Coming soon</span>');
+    // Without the two figures (wrangler.jsonc holds them, so they are emptied here) the card names no price.
+    const off = text(section(await (await request("/", payEnv({ PRICE_ULTRA_MONTHLY_CAD: "", PRICE_ULTRA_YEARLY_CAD: "" }))).text()));
+    expect(off).toContain('<p class="lp-pr lp-pr-unset">Price to be set <span class="lp-soon-tag">Coming soon</span></p>');
     expect(off).toContain('name="kind" value="ultra"');
+    // Before it is on sale the card says who Ultra is for and lists Ultra's own lines, then the two parts still planned.
+    expect(off).toContain(`<p class="lp-for">${text(t("en", "plans.ultra_for"))}</p>`);
+    const offCard = /<div class="lp-plan lp-plan-ultra" id="ultra">[\s\S]*?<\/ul>/.exec(off)?.[0] ?? "";
+    const offRows = [...offCard.matchAll(/<li><svg[^>]*><path[^>]*><\/path><\/svg><span>([^<]*)<\/span><\/li>/g)].map((m) => m[1]);
+    expect(offRows).toEqual([text(t("en", "landing.everything_pro")), ...ultraLines("en").map(text),
+      "Planned: saved analytics views by email, weekly or monthly",
+      "Planned: an analytics builder for your own measure, grouping, period and filters"]);
+    // With the two figures set and nothing else of Ultra's, the card shows the price beside the tag and stays the waitlist.
+    const planned = text(section(await (await request("/", payEnv({ PRICE_ULTRA_MONTHLY_CAD: "38.99", PRICE_ULTRA_YEARLY_CAD: "389.99" }))).text()));
+    expect(planned).toMatch(/<p class="lp-pr">\s*CA\$38\.99 <span class="lp-soon-tag">Coming soon<\/span>\s*<small>a month, or CA\$389\.99 a year<\/small>\s*<\/p>/);
+    expect(planned).toContain('name="kind" value="ultra"');
+    expect(planned).not.toContain("Subscribe to Ultra");
+    expect(planned).not.toContain("Price to be set");
+    // A figure out of form shows no price.
+    const bad = text(section(await (await request("/", payEnv({ PRICE_ULTRA_MONTHLY_CAD: "38,99", PRICE_ULTRA_YEARLY_CAD: "389.99" }))).text()));
+    expect(bad).toContain("Price to be set");
     for (const lang of ["en", "fr"] as const) {
       const on = text(section(await (await request(lang === "fr" ? "/?lang=fr" : "/", saleEnv())).text()));
       const card = /<div class="lp-plan lp-plan-ultra" id="ultra">[\s\S]*?<\/p><\/div>/.exec(on)?.[0] ?? "";

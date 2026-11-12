@@ -110,6 +110,43 @@ export function otherLanguageMark(lang: Lang, en: string | null | undefined, fr:
   return !(mine && mine.trim()) && other && other.trim() ? t(lang, "common.other_lang_only") : null;
 }
 
+// A description as published. The pipeline keeps the first DESCRIPTION_KEPT
+// characters of one (sources/canadabuys_rows.py DESCRIPTION_MAX; a test holds
+// the two equal) and drops the spaces a cut leaves at its end, so a text
+// within DESCRIPTION_SLACK of that length is the start of a longer one. Such
+// a text is shown to its last whole word with an ellipsis, and a line says
+// the site keeps the start only and where the whole is: the notice on
+// CanadaBuys when the page has one (full), else nothing more. On the
+// development copy 13 of 24 notices and a third of the award notices are
+// cut; about one text in 300 is that long and whole, and reads as cut.
+export const DESCRIPTION_KEPT = 600;
+export const DESCRIPTION_SLACK = 10;
+
+export function publishedText(text: string): { text: string; cut: boolean } {
+  if (text.length < DESCRIPTION_KEPT - DESCRIPTION_SLACK) return { text, cut: false };
+  const at = text.search(/\s+\S*$/);
+  const head = (at > DESCRIPTION_KEPT / 2 ? text.slice(0, at) : text).replace(/[\s,;:.]+$/, "");
+  return { text: `${head}\u2026`, cut: true };
+}
+
+export const PublishedDescription: FC<{ lang: Lang; text: string; full?: string | null }> = ({ lang, text, full }) => {
+  const shown = publishedText(text);
+  return (
+    <>
+      <div class="prose">{shown.text.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
+      {shown.cut ? (
+        <p class="muted small">
+          {full
+            ? tj(lang, "tender.description_cut", {
+              n: fmtInt(DESCRIPTION_KEPT, lang), notice: <a href={full} rel="noopener">{t(lang, "tender.documents_none_link")}</a>,
+            })
+            : t(lang, "tender.description_cut_plain", { n: fmtInt(DESCRIPTION_KEPT, lang) })}
+        </p>
+      ) : null}
+    </>
+  );
+};
+
 // A contract's instrument as the source names it, with CanadaBuys' English
 // abbreviation spelled out ("Contract against SA"); the French is already whole.
 export function instrumentText(lang: Lang, en: string | null | undefined, fr: string | null | undefined): string | null {

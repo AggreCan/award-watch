@@ -224,7 +224,7 @@ describe("a source never read", () => {
     expect(html).toContain("(publisher&#39;s date 2026-11-01)");
     expect(html).not.toContain("Sun, 01 No");
     // The file's own row under Files Read; the source's row has no read to give.
-    expect(html).toMatch(/communications_ocl_cal\.zip<\/td><td data-label="Dataset">Registry of Lobbyists, communication reports<\/td><td data-label="Last read" class="mono"><span class="muted">Not read yet<\/span>/);
+    expect(html).toMatch(/communications_ocl_cal\.zip<\/td><td data-label="Dataset">Registry of Lobbyists, communication reports<\/td><td data-label="Last read" class="mono wrap"><span class="muted">Not read yet<\/span>/);
   });
 });
 

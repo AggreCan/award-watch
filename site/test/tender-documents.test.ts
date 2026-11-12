@@ -9,6 +9,8 @@ import { describe, expect, it } from "vitest";
 import { clockAt, closesLine, countdownLine } from "../src/closing";
 import { documentUrl, tenderAttachments, type TenderDetail } from "../src/data";
 import { app } from "../src/index";
+import rowsPy from "../../pipeline/awardwatch_pipeline/sources/canadabuys_rows.py?raw";
+import { DESCRIPTION_KEPT, DESCRIPTION_SLACK, publishedText } from "../src/pages/shared";
 import { FILES, TEST_NOW, makeFakeAssets, testEnv } from "./assets";
 
 const EM_DASH = String.fromCharCode(0x2014);
@@ -56,6 +58,49 @@ const panel = (html: string) => {
   expect(start, "the Documents panel").toBeGreaterThan(-1);
   return html.slice(start, html.indexOf("</section>", start) + "</section>".length);
 };
+
+describe("a description the site keeps only the start of", () => {
+  const WORDS = "The work includes mechanical systems for the ablutions building and related site services. ";
+  // As the pipeline stores a long one: its first DESCRIPTION_KEPT characters, ending inside a word.
+  const cutText = `First paragraph.\n\n${WORDS.repeat(9)}`.slice(0, DESCRIPTION_KEPT);
+  const whole = "A short description, whole as published.";
+  const described = (text: string | null) => shard("cb-200-20005019", (e) => { e.description_en = text; e.description_fr = null; });
+
+  it("keeps as many characters as the pipeline stores", () => {
+    expect(Number(/^DESCRIPTION_MAX = (\d+)$/m.exec(rowsPy)?.[1])).toBe(DESCRIPTION_KEPT);
+  });
+
+  it("ends at its last whole word with an ellipsis, and says where the whole text is", async () => {
+    expect(cutText).toHaveLength(DESCRIPTION_KEPT);
+    const shown = publishedText(cutText);
+    expect(shown.cut).toBe(true);
+    expect(shown.text.endsWith("\u2026")).toBe(true);
+    // Nothing of the half word the cut left, and no punctuation before the ellipsis.
+    expect(cutText.startsWith(shown.text.slice(0, -1))).toBe(true);
+    expect(shown.text).toMatch(/\w\u2026$/);
+    expect(cutText[shown.text.length - 1]).toMatch(/[\s,;:.]/);
+    // A cut that ended on spaces is stored shorter; it still reads as cut.
+    expect(publishedText(cutText.slice(0, DESCRIPTION_KEPT - DESCRIPTION_SLACK)).cut).toBe(true);
+    expect(publishedText(cutText.slice(0, DESCRIPTION_KEPT - DESCRIPTION_SLACK - 1)).cut).toBe(false);
+    const html = await page("/tenders/cb-200-20005019", TEST_NOW, described(cutText));
+    const at = html.indexOf("<h2>Description as Published</h2>");
+    const panelHtml = html.slice(at, html.indexOf("</section>", at));
+    expect(panelHtml).toContain("<p>First paragraph.</p>");
+    expect(panelHtml).toContain("\u2026</p></div>");
+    expect(panelHtml).toMatch(/<p class="muted small">The site keeps the first 600 characters of a description\. The whole text is on <a href="https:\/\/canadabuys\.canada\.ca\/[^"]+" rel="noopener">the CanadaBuys notice<\/a>\.<\/p>/);
+    const fr = nbsp(await page("/tenders/cb-200-20005019?lang=fr", TEST_NOW, shard("cb-200-20005019", (e) => { e.description_fr = cutText; })));
+    // The apostrophe is typeset on a French page, so it is matched as any one character.
+    expect(fr).toMatch(/Le site conserve les 600 premiers caractères d(.|&#39;)une description\. Le texte complet se trouve dans <a href=/);
+    expect(fr).not.toContain(EM_DASH);
+  });
+
+  it("leaves a shorter description as it is, with no line under it", async () => {
+    expect(publishedText(whole)).toEqual({ text: whole, cut: false });
+    const html = await page("/tenders/cb-200-20005019", TEST_NOW, described(whole));
+    expect(html).toContain(`<div class="prose"><p>${whole}</p></div></section>`);
+    expect(html).not.toContain("The site keeps the first");
+  });
+});
 
 describe("the Documents panel", () => {
   it("lists each document the notice names, under the key facts and above the description", async () => {

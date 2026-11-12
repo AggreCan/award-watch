@@ -24,7 +24,8 @@ import { tenderInstruments } from "../instruments";
 import { TenderInstrumentsPanel } from "./instruments";
 import { tenderSeo } from "../seo";
 import {
-  BuyerLink, CountdownScript, closingHasZone, closingText, derivedPlacesText, money, otherLanguageMark, provincesText, sourceFileText,
+  BuyerLink, CountdownScript, PublishedDescription, closingHasZone, closingText, derivedPlacesText, money, otherLanguageMark, provincesText,
+  sourceFileText,
   tenderNoticeUrl,
 } from "./shared";
 
@@ -138,7 +139,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   const fit = open ? await noticeFit(c, d) : null;
   const description_ = description ? (
     <Panel title={descriptionMark ? `${t(lang, "tender.description_heading")} ${descriptionMark}` : t(lang, "tender.description_heading")}>
-      <div class="prose">{description.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
+      <PublishedDescription lang={lang} text={description} full={noticeUrl} />
     </Panel>
   ) : null;
 

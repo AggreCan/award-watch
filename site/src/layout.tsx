@@ -473,6 +473,14 @@ const TipScript: FC<{ tables: TableUse }> = ({ tables }) =>
     </>
   ) : null;
 
+// The icons' version: bump it whenever public/favicon.ico, favicon.svg or
+// apple-touch-icon.png is redrawn. A browser keeps a site's icon under its
+// address long after the file changes, whatever the file's cache headers say,
+// so the address carries the version and a new drawing is fetched at once.
+// 2: the tick in the w (the files were redrawn on 2026-11-08 under the old
+// addresses, and browsers that had the earlier icon kept showing it).
+export const ICONS_VERSION = 2;
+
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
 export const STYLES_VERSION = 62;
@@ -547,9 +555,9 @@ export const Layout: FC<
         <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
         {/* The display face of every page's title (public/styles.css), fetched with Inter rather than once the title is laid out. */}
         <link rel="preload" href="/fonts/BricolageGrotesque-Variable.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
-        <link rel="icon" href="/favicon.ico" sizes="48x48" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="icon" href={`/favicon.ico?v=${ICONS_VERSION}`} sizes="48x48" />
+        <link rel="icon" href={`/favicon.svg?v=${ICONS_VERSION}`} type="image/svg+xml" />
+        <link rel="apple-touch-icon" href={`/apple-touch-icon.png?v=${ICONS_VERSION}`} />
         <MetaTags seo={props.seo} lang={lang} title={props.title} />
         {props.head as any}
       </head>
