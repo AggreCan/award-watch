@@ -14,7 +14,7 @@ import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { type KeyQuota, keyQuota } from "../api_keyed_spec";
 import { type AxisLabel, ChartStack, type Panel as ChartPanel, type RankedBar, RankedBars, dayPos, niceTicks, partOf, tipHead, tipText } from "../chart";
-import { Table } from "../columns";
+import { type Rest, Table, restClass } from "../columns";
 import type { AppEnv } from "../env";
 import { fmtInt, t, tj, tn, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
@@ -63,6 +63,33 @@ export function usageSeries(lang: Lang, keys: readonly KeyRow[], rows: readonly 
   if (series.length < 2) return series;
   const total = days.map((_, i) => series.reduce((n, s) => n + s.values[i], 0));
   return [{ id: null, label: t(lang, "apiusage.series_all"), revoked: false, values: total }, ...series];
+}
+
+// The table: the day's column (the main one, at least MAIN_MIN, 128 px) and a
+// column a series, of the requests kind (80 px). From 700 to 1279 px of
+// window the content column is 635 px at the least: six series fit (128 +
+// 480 = 608), the total and five keys, KEYS_MAX. Up to 1439 px it is 951
+// px: ten fit (928). The most the page shows is eleven: five keys in use
+// with no request in the window, five revoked ones that have some (DAILY_SQL
+// reads at most KEYS_MAX keys with rows) and the total, 1,008 px, which the
+// 1,111 px from 1440 px holds.
+export const SERIES_FIT = { md: 6, lg: 10 } as const;
+
+// Where a range holds fewer series than the page shows, the keys with the
+// fewest requests over the window rest there first, the later one first on
+// a tie (the total never rests); each one's count then shows under the day,
+// on a line of its own. The rest of a key that rests below 1440 px is "lg".
+export function seriesRests(series: readonly UsageSeries[]): (Rest | undefined)[] {
+  const rests: (Rest | undefined)[] = series.map(() => undefined);
+  const md = Math.max(0, series.length - SERIES_FIT.md);
+  const lg = Math.max(0, series.length - SERIES_FIT.lg);
+  series
+    .map((s, i) => ({ i, id: s.id, sum: s.values.reduce((a, b) => a + b, 0) }))
+    .filter((x) => x.id !== null)
+    .sort((a, b) => a.sum - b.sum || b.i - a.i)
+    .slice(0, md)
+    .forEach((x, k) => (rests[x.i] = k < lg ? "lg" : "md"));
+  return rests;
 }
 
 // The top of a panel's axis (niceTicks over its largest day, at least
@@ -150,6 +177,8 @@ export function usageView(lang: Lang, view: UsageView) {
   const period = tj(lang, "apiusage.period", { first: <Day day={first} />, last: <Day day={today} /> });
   const capLine = t(lang, capShown ? (total ? "apiusage.cap_rule_keys" : "apiusage.cap_rule") : total ? "apiusage.cap_off_keys" : "apiusage.cap_off",
     { cap: n(quota.perDay) });
+  const rests = seriesRests(series);
+  const resting = series.map((_, k) => k).filter((k) => rests[k]);
   return (
     <>
       <PageHead lang={lang} title={t(lang, "apiusage.title")} lead={t(lang, "apiusage.lead", { days: USAGE_KEEP_DAYS })}
@@ -194,14 +223,30 @@ export function usageView(lang: Lang, view: UsageView) {
         <p class="muted small">{capLine}</p>
         {series.length ? (
           <div class="table-wrap">
-            <Table cols={[{ kind: "main", label: t(lang, "apiusage.col_day") }, ...series.map((s) => ({ kind: "count" as const, label: s.label }))]}>
+            <Table cols={[
+              { kind: "main", label: t(lang, "apiusage.col_day") },
+              ...series.map((s, k) => ({ kind: "requests" as const, label: s.label, rest: rests[k] })),
+            ]}>
               <tbody>
                 {days.map((_, j) => {
                   const i = last - j;
+                  // A resting key's count shows under the day only on a day it made requests: with five keys
+                  // resting, a line of zeros a key a day made each row six lines tall and said nothing.
+                  const shown = resting.filter((k) => series[k].values[i] > 0);
                   return (
                     <tr>
-                      <td data-label={t(lang, "apiusage.col_day")} class="mono">{days[i]}</td>
-                      {series.map((s) => <td data-label={s.label} class="mono num">{n(s.values[i])}</td>)}
+                      {shown.length ? (
+                        // The line break ends what public/sort.js reads, so the cell sorts by its day.
+                        <td data-label={t(lang, "apiusage.col_day")} class="mono">
+                          <Day day={days[i]} /><br />
+                          {shown.map((k) => (
+                            <span class={`${rests[k] === "md" ? "md-only" : "lg-down"} muted small`}>
+                              {t(lang, "common.labelled", { label: series[k].label, value: n(series[k].values[i]) })}
+                            </span>
+                          ))}
+                        </td>
+                      ) : <td data-label={t(lang, "apiusage.col_day")} class="mono">{days[i]}</td>}
+                      {series.map((s, k) => <td data-label={s.label} class={rests[k] ? `mono num ${restClass(rests[k])}` : "mono num"}>{n(s.values[i])}</td>)}
                     </tr>
                   );
                 })}

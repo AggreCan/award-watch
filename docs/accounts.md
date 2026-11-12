@@ -1115,7 +1115,13 @@ note says what the plan lacks. From the top:
   is a dashed line on its panel only when that axis reaches it (the total
   has none), and a line under the chart states the cap otherwise. Each
   mark's exact count is its tip, and the table under the chart lists every
-  day, newest first.
+  day, newest first, a column a series. The total and five keys fit a
+  700 px window; the page can show up to five keys in use and five revoked
+  ones beside the total, and where a window holds fewer columns (six below
+  1280 px, ten below 1440 px) the keys with the fewest requests over the
+  window rest. A resting key's count shows on a line under a day only on a
+  day it made requests; while the read holds five keys with requests, the
+  keys that rest are the ones that made none, so no line appears.
 - The chart has two forms, chosen by two tabs in its panel's head. Bars,
   the page's own form: a bar for each day with a request, with the fade the
   site's other amounts wear, and today's bar in the pale step, since the
@@ -2068,7 +2074,9 @@ weekly block) and `org_pages.tsx` (the page and the files); the tests are
   search, each with a remove button, kept in the order added), then the
   blocks.
 - The blocks, all over the 10 fiscal years ending with the data date's:
-  records by fiscal year, each source apart (`ORG_COUNTS_SQL`); records by
+  records by fiscal year, each source apart (`ORG_COUNTS_SQL`), listed a
+  row a fiscal year and source with the profile's switch that shows one
+  source or all of them, a year without records at 0; records by
   segment, award notices and PSPC contract history apart, each record once
   in its first segment, with the published contracts and grants (no segment)
   counted beside; the share of one segment's counted value by fiscal year

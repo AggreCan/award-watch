@@ -26,7 +26,7 @@ import { csvCell } from "../pages/analytics";
 import { ExpiringNote, ExpiringTable, RADAR_CSV_COLUMNS, contractReference, radarRow } from "../pages/expiring";
 import { ExpiryLines, regionName, typeCodeOf, typeLabel } from "../pages/instruments";
 import { daysLeft, instrumentPath } from "../instruments";
-import { money } from "../pages/shared";
+import { Count, PhonePagerScript, type YearRow, YearsBox, money } from "../pages/shared";
 import { ProNote, ProTag } from "../pro";
 import { FREE_YEARS, MAX_YEARS, SOURCE_NUMBER, type Row, dollars, fiscalLabel, num, orgNumber, segmentCode } from "../records_db";
 import { allowed } from "./entitlements";
@@ -201,12 +201,25 @@ const YearBars: FC<{ lang: Lang; first: number; last: number; panels: { title: s
 
 const none = (lang: Lang, years: number) => <p class="muted">{t(lang, "orgclaim.none_years", { n: fmtInt(years, lang) })}</p>;
 
-// Records by fiscal year, each source apart (ORG_COUNTS_SQL).
+// A fiscal year's records in one source, a row of the years block.
+type YearCount = YearRow & { cents: unknown };
+
+// Records by fiscal year, each source apart (ORG_COUNTS_SQL). A row a fiscal
+// year and source, as the profile's year table lists its years (YearsBox,
+// with its switch showing one source or all of them): a column a source made
+// the table 944 px wide with four, more than a 700 px window gives it. Each
+// source has a row for every year of the span, a year without records at a
+// muted 0, as each source's column had them.
 const YearsBlock: FC<{ lang: Lang; rows: Row[]; first: number; current: number; pro: boolean }> = ({ lang, rows, first, current, pro }) => {
   const sources = MONEY_SOURCES.filter((s) => rows.some((r) => int(r.src) === SOURCE_NUMBER[s] && int(r.n) > 0));
   const cell = (s: MoneySource, fy: number) => rows.find((r) => int(r.src) === SOURCE_NUMBER[s] && int(r.fy) === fy);
-  const years: number[] = [];
-  for (let fy = current; fy >= first; fy--) years.push(fy);
+  const years: YearCount[] = [];
+  for (let fy = current; fy >= first; fy--) {
+    for (const s of sources) {
+      const r = cell(s, fy);
+      years.push({ year: fy, source: s, n: r ? int(r.n) : 0, cents: r?.cents ?? null });
+    }
+  }
   return (
     <Panel title={t(lang, "orgclaim.panel_years")} tools={pro && sources.length ? <CsvLink lang={lang} block="years" /> : undefined}
       foot={pro ? <span>{t(lang, "orgclaim.foot_years")}</span> : (
@@ -223,24 +236,21 @@ const YearsBlock: FC<{ lang: Lang; rows: Row[]; first: number; current: number; 
             values: rows.filter((r) => int(r.src) === SOURCE_NUMBER[s])
               .map((r): YearPoint => [int(r.fy), int(r.cents) / 100, [fmtMoney(int(r.cents) / 100, lang), recordsText(lang, int(r.n))]]),
           }))} />
-        <div class="table-wrap">
-          <Table cols={[
-            { kind: "main", label: t(lang, "analytics.col_fy") },
-            ...sources.map((s) => ({ kind: "tally" as const, label: sourceLabel(lang, s) })),
-          ]}>
-            <tbody>
-              {years.map((fy) => (
-                <tr>
-                  <td data-label={t(lang, "analytics.col_fy")} class="mono">{fyLabel(lang, fy, current)}</td>
-                  {sources.map((s) => {
-                    const r = cell(s, fy);
-                    return <td data-label={sourceLabel(lang, s)}><Figure lang={lang} n={r ? int(r.n) : 0} cents={r?.cents ?? null} /></td>;
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
+        {/* The fiscal year is the main column, wide enough for "2026-2027 (à ce jour)" on one line; a date column's 112 px is not. */}
+        <YearsBox lang={lang} years={years} dataYear={current} cols={[
+          { kind: "main", label: t(lang, "analytics.col_fy") },
+          { kind: "source", label: t(lang, "col.source") },
+          { kind: "count", label: t(lang, "col.records") },
+          { kind: "total", label: t(lang, "col.value") },
+        ]} cells={(y) => (
+          <>
+            <td data-label={t(lang, "analytics.col_fy")} class="mono">{fyLabel(lang, y.year, current)}</td>
+            <td data-label={t(lang, "col.source")}>{sourceLabel(lang, y.source)}</td>
+            <td data-label={t(lang, "col.records")} class="mono num"><Count lang={lang} n={y.n} /></td>
+            {/* No records, no value: the cell stays empty, and a phone's block leaves it out. */}
+            <td data-label={t(lang, "col.value")} class="mono num">{y.n ? money(lang, dollars(y.cents)) : null}</td>
+          </>
+        )} />
       </> : none(lang, current - first + 1)}
     </Panel>
   );
@@ -658,6 +668,8 @@ export function claimedView(lang: Lang, account: Account, s: ClaimedState) {
           {s.read.asOf ? t(lang, "analytics.as_of", { date: s.read.asOf }) : null}{" "}
           {tj(lang, "analytics.rules", { methodology: <a href="/methodology#analytics">{t(lang, "analytics.rules_link")}</a> })}
         </p>
+        {/* The years block's rows past the first ten wait under a button on a phone, as on a profile. */}
+        {rows.years?.length ? <PhonePagerScript lang={lang} /> : null}
       </>}
     </>
   );

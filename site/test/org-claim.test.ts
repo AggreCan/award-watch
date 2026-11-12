@@ -24,7 +24,7 @@ import { foldText } from "../src/search_db";
 import { ACCOUNTS, csrf, decode, get, grantPro, nbsp, newEmail, offEnv, onEnv, post, signIn, userId, useAccountsDb } from "./accounts-helpers";
 import { FILES, makeFakeAssets } from "./assets";
 import { applySql } from "./setup";
-import { misfits, panelTitle, tablesIn } from "./table-fit";
+import { find, misfits, panelTitle, tablesIn } from "./table-fit";
 
 useAccountsDb();
 
@@ -419,23 +419,72 @@ describe("the page", () => {
     await send(pro, "/account/organization/compare", { org: A2 });
   });
 
-  // Three blocks take a column per source or per organization compared, so
-  // their width grows with the account's data (up to four sources, up to six
-  // organizations): resting some of those columns needs a design of its own,
-  // not yet made. Every other table on the page is held to its column.
-  const VARIABLE = ["Records by Fiscal Year", "Records by Segment", "Share of a Segment", "Dossiers par exercice", "Dossiers par segment", "Part d'un segment"];
-  const variable = (tb: Parameters<typeof panelTitle>[0]) => VARIABLE.some((h) => panelTitle(tb).replace(/\u2019/g, "'").startsWith(h));
+  // The share of a segment takes a column per organization compared, so its
+  // width grows with the comparison (1,236 px with six organizations): it has
+  // no design yet that fits a 700 px window. Every other table on the page is
+  // held to its column.
+  const SHARE = ["Share of a Segment", "Part d'un segment"];
+  const share = (tb: Parameters<typeof panelTitle>[0]) => SHARE.some((h) => panelTitle(tb).replace(/\u2019/g, "'").startsWith(h));
+  const titled = (html: string, title: string) => tablesIn(html).filter((tb) => panelTitle(tb).replace(/\u2019/g, "'") === title);
 
-  it("fits its other tables into their column from 700 px, in both languages", async () => {
+  it("fits its tables into their column from 700 px, in both languages, the years and segments blocks at their largest", async () => {
     let tables = 0;
     for (const r of [free, pro]) {
       for (const path of ["/account/organization", "/account/organization?lang=fr"]) {
         const html = await text(await page(r, path));
-        tables += tablesIn(html).filter((tb) => !variable(tb)).length;
-        expect(misfits(html, variable), path).toEqual([]);
+        tables += tablesIn(html).filter((tb) => !share(tb)).length;
+        expect(misfits(html, share), path).toEqual([]);
       }
     }
     expect(tables).toBeGreaterThan(0);
+    // At their largest: the years block with all four sources (its width is the same with one), the segments
+    // block with both sources that carry a segment, a column each.
+    for (const [path, years, segments] of [
+      ["/account/organization", "Records by Fiscal Year", "Records by Segment"],
+      ["/account/organization?lang=fr", "Dossiers par exercice", "Dossiers par segment"],
+    ]) {
+      const html = await text(await page(pro, path));
+      expect(titled(html, years), path).toHaveLength(1);
+      expect([...html.matchAll(/<input type="radio" name="years-source" value="([a-z]+)"/g)].map((m) => m[1]), path)
+        .toEqual(["awards", "history", "contracts", "grants", "all"]);
+      const [seg] = titled(html, segments);
+      expect(find(seg, (e) => e.tag === "th").map((th) => th.cls.find((c) => c.startsWith("k-"))), path).toEqual(["k-main", "k-tally", "k-tally"]);
+    }
+  });
+
+  it("lists records by fiscal year a row a year and source, with the profile's switch, every year of each source", async () => {
+    const html = await text(await page(pro));
+    const at = html.indexOf('<div class="years-box">');
+    const box = html.slice(at, html.indexOf("</table>", at));
+    // The switch opens on award notices, the source with the most records (two).
+    expect(box).toContain('<div class="ysw" role="radiogroup" aria-label="Source shown">');
+    expect(box).toMatch(/<input type="radio" name="years-source" value="awards" checked=""\/>/);
+    expect(box).toContain("<th class=\"k-main\"><button type=\"button\" class=\"th-sort\">Fiscal year</button></th>" +
+      "<th class=\"k-source\"><button type=\"button\" class=\"th-sort\">Source</button></th>" +
+      "<th class=\"k-count num\"><button type=\"button\" class=\"th-sort\">Records</button></th>" +
+      "<th class=\"k-total num\"><button type=\"button\" class=\"th-sort\">Value</button></th>");
+    // Ten fiscal years for each of the four sources, newest first, the sources in their order within a year.
+    const rows = [...box.matchAll(/<tr data-source="([a-z]+)"><td[^>]*>([^<]*)<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([\s\S]*?)<\/td><td[^>]*>([^<]*)<\/td><\/tr>/g)]
+      .map((m) => [m[1], m[2], m[3], m[4], m[5]]);
+    expect(rows).toHaveLength(10 * 4);
+    expect(rows.slice(0, 5).map((r) => `${r[0]} ${r[1]}`)).toEqual([
+      "awards 2026-27 (to date)", "history 2026-27 (to date)", "contracts 2026-27 (to date)", "grants 2026-27 (to date)", "awards 2025-26",
+    ]);
+    expect(rows[rows.length - 1].slice(0, 2)).toEqual(["grants", "2017-18"]);
+    // The same figures as each source's column had: a year's records and their value, a year without any a muted 0 and no value.
+    const row = (source: string, fy: string) => rows.find((r) => r[0] === source && r[1] === fy);
+    expect(row("awards", "2024-25")).toEqual(["awards", "2024-25", "Award notices", "1", "$1,000,000"]);
+    expect(row("awards", "2025-26")).toEqual(["awards", "2025-26", "Award notices", "1", "$500,000"]);
+    expect(row("history", "2020-21")).toEqual(["history", "2020-21", "PSPC contract history", "1", "$200,000"]);
+    expect(row("contracts", "2026-27 (to date)")).toEqual(["contracts", "2026-27 (to date)", "Published contracts", "1", "$12,345"]);
+    expect(row("grants", "2018-19")).toEqual(["grants", "2018-19", "Grants and contributions", "1", "$40,000"]);
+    expect(row("awards", "2023-24")).toEqual(["awards", "2023-24", "Award notices", '<span class="zero">0</span>', ""]);
+    // On a phone each row restacks with its labels, and rows past the first ten wait under a button.
+    expect(box).toContain('<div class="table-wrap bordered" data-phone-rows="10">');
+    expect(html).toContain('<script src="/pager.js" defer=""></script>');
+    const fr = await text(await page(pro, "/account/organization?lang=fr"));
+    expect(fr).toMatch(/<tr data-source="history"><td data-label="Exercice" class="mono">2020-2021<\/td><td data-label="Source">Historique des contrats de SPAC<\/td>/);
+    expect(fr).toContain('<td data-label="Valeur" class="mono num">200 000 $</td>');
   });
 
   it("gives a Free account the first block for the latest three fiscal years, and every other block's title with the chip", async () => {
@@ -448,7 +497,10 @@ describe("the page", () => {
     expect(html).toContain("$1,000,000");
     expect(html).toContain("$500,000");
     expect(html).toContain("$12,345");
-    expect(html).not.toContain(">PSPC contract history</button></th>");
+    // No history row, and no history in the source switch: its one record is in 2020-21.
+    expect(html).not.toContain('<tr data-source="history">');
+    expect(html).not.toContain('value="history"');
+    expect(html).not.toContain("2023-24");
     expect(html).toContain("The Free plan shows the latest 3 fiscal years; Pro shows 10 and the blocks below.");
     for (const title of ["Records by Segment", "Share of a Segment", "Contracts Ending Within 12 Months", "Buyers It Has Won From", "Registry Match"]) {
       expect(html, title).toMatch(new RegExp(`<h2>${title}<span class="pro-tag">`));
@@ -471,7 +523,7 @@ describe("the page", () => {
     expect(html).toContain("2017-18");
     expect(html).toContain("2020-21");
     expect(html).not.toContain("2015-16");
-    expect(html).toContain(">PSPC contract history</button></th>");
+    expect(html).toMatch(/<tr data-source="history"><td[^>]*>2020-21<\/td><td[^>]*>PSPC contract history<\/td><td[^>]*>1<\/td><td[^>]*>\$200,000<\/td><\/tr>/);
     // By segment: each record once, in its first segment (77 is a further one), the two sources apart.
     expect(html).toContain('href="/segments/81"');
     expect(html).toContain('href="/segments/43"');

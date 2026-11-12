@@ -20,6 +20,11 @@ export const COLUMN_WIDTHS = {
   // source.
   tally: 204,
   count: 96, // a count, an amendment number
+  // A day's requests on the API usage page: one key's, up to its daily cap
+  // ("20,000", 46 px of type, in a last column's 56 px), or the day's total
+  // over the keys ("200,000", 54 px, in 64). At the count's 96 px the total
+  // and five keys did not fit a 700 px window.
+  requests: 80,
   // A rank: up to three digits under "Rank" or "Rang", beside the 16 px a
   // first column keeps on its left. At the count's 96 px a ranked list in
   // half a row gave its names 40 px less and wrapped them.
@@ -81,7 +86,7 @@ export type Column = { kind: ColumnKind; label: unknown; rest?: Rest; class?: st
 
 // A tally column is a figure's when its table says so (class "num"): the
 // watchlist's new records by source are words.
-const NUMERIC: ReadonlySet<ColumnKind> = new Set<ColumnKind>(["value", "total", "count", "rank", "share", "part"]);
+const NUMERIC: ReadonlySet<ColumnKind> = new Set<ColumnKind>(["value", "total", "count", "requests", "rank", "share", "part"]);
 
 export function headClass(c: Column): string {
   return [`k-${c.kind}`, NUMERIC.has(c.kind) ? "num" : "", c.rest ? REST_CLASS[c.rest] : "", c.class ?? ""]

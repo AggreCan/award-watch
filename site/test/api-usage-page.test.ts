@@ -13,10 +13,12 @@ import { env } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 import { KEYS_MAX, type KeyRow } from "../src/account/api_keys";
 import { DAILY_SQL, USAGE_KEEP_DAYS, dayPlus } from "../src/account/api_usage";
-import { AXIS_FLOOR, axisTop, usageDays, usageSeries, weekLabels } from "../src/account/api_usage_page";
+import { AXIS_FLOOR, SERIES_FIT, axisTop, seriesRests, usageDays, usageSeries, weekLabels } from "../src/account/api_usage_page";
 import { PLANS, allowed } from "../src/account/entitlements";
 import { KEY_PER_DAY, KEY_PER_MINUTE, keyQuota } from "../src/api_keyed_spec";
+import { COLUMN_WIDTHS, MAIN_MIN } from "../src/columns";
 import { ACCOUNTS, csrf, decode, get, grantPro, nbsp, newEmail, onEnv, post, signIn, useAccountsDb } from "./accounts-helpers";
+import { SHEET, edges, expectTablesFit, mainWidth, rangeOf } from "./table-fit";
 
 useAccountsDb();
 
@@ -214,7 +216,7 @@ describe("the page", () => {
     // The table: a row a day, newest first, a column a series, sorted in the page.
     const table = /<table class="restack cols"[\s\S]*?<\/table>/.exec(main)?.[0] ?? "";
     expect(table).toContain('data-sorting="client"');
-    expect(table).toMatch(/<th class="k-main"><button type="button" class="th-sort">Day \(UTC\)<\/button><\/th><th class="k-count num"><button type="button" class="th-sort">All keys<\/button><\/th>/);
+    expect(table).toMatch(/<th class="k-main"><button type="button" class="th-sort">Day \(UTC\)<\/button><\/th><th class="k-requests num"><button type="button" class="th-sort">All keys<\/button><\/th>/);
     const days = [...table.matchAll(/<td data-label="Day \(UTC\)" class="mono">([0-9-]+)<\/td>/g)].map((m) => m[1]);
     expect(days).toEqual(usageDays(TODAY).reverse());
     expect(table).toContain(`<td data-label="Day (UTC)" class="mono">${TODAY}</td><td data-label="All keys" class="mono num">2,040</td><td data-label="Mirror" class="mono num">40</td><td data-label="Nightly sync" class="mono num">2,000</td>`);
@@ -342,6 +344,81 @@ describe("the page", () => {
     expect(main).toContain('<span class="rank-label">New sync</span>');
     expect(main).toContain('<td data-label="Old sync (revoked)" class="mono num">300</td>');
     expect(main).toContain('<span class="tile-label">Requests in 60 days</span><span class="tile-value">312</span>');
+  });
+});
+
+// -- the table's width -------------------------------------------------------------------------
+
+describe("the table's width", () => {
+  const heads = (main: string) => [...main.matchAll(/<th class="(k-[a-z]+)( [a-z ]+)?"><button type="button" class="th-sort">([^<]*)<\/button><\/th>/g)]
+    .map((m) => `${m[1]}${m[2] ?? ""}|${m[3]}`);
+
+  it("holds the total and the plan's five keys in the content column from 700 px, none resting", async () => {
+    const made = await proWithKeys("usage-fit-five", ["Nightly sync", "Mirror", "Backfill", "Reports", "Staging"]);
+    expect(made.keys).toHaveLength(KEYS_MAX);
+    // Each key at its cap, so the total and the keys carry their widest figures.
+    await seed(made.keys.map((k): [string, string, number] => [k.id, TODAY, KEY_PER_DAY]));
+    for (const path of ["/account/api", "/account/api?lang=fr"]) {
+      const html = await page(path, { cookie: made.cookie });
+      expectTablesFit(html, path);
+      const main = mainOf(html);
+      expect(heads(main).filter((h) => h.startsWith("k-requests num|")), path).toHaveLength(KEYS_MAX + 1);
+      const table = /<table class="restack cols"[\s\S]*?<\/table>/.exec(main)?.[0] ?? "";
+      expect(table, path).toContain("</tbody>");
+      expect(table, path).not.toMatch(/class="[^"]*\b(md-only|lg-down|mdh|lgh)\b/);
+    }
+    const main = mainOf(await page("/account/api", { cookie: made.cookie }));
+    expect(main).toContain(`<td data-label="Day (UTC)" class="mono">${TODAY}</td><td data-label="All keys" class="mono num">100,000</td>`);
+  });
+
+  it("rests the keys with the fewest requests where the page shows more series than fit, their counts under the day", async () => {
+    // Five keys with requests, revoked, then five new ones not yet used: the page's most, eleven series.
+    const made = await proWithKeys("usage-fit-eleven", ["Old a", "Old b", "Old c", "Old d", "Old e"]);
+    const token = await csrf(made.cookie, "/account/keys");
+    await seed(made.keys.map((k, j): [string, string, number] => [k.id, dayPlus(TODAY, -1), 100 * (j + 1)]));
+    for (const k of made.keys) await post(`/account/keys/${k.id}/revoke`, { csrf: token }, { cookie: made.cookie });
+    for (const name of ["New a", "New b", "New c", "New d", "New e"]) expect((await post("/account/keys", { csrf: token, name }, { cookie: made.cookie })).status).toBe(200);
+    for (const path of ["/account/api", "/account/api?lang=fr"]) expectTablesFit(await page(path, { cookie: made.cookie }), path);
+    const main = mainOf(await page("/account/api", { cookie: made.cookie }));
+    // The total, the five keys in use, then the five revoked ones. The keys in use made no request: they rest below
+    // 1280 px, the last of them below 1440 px too, and the five with requests keep their columns.
+    const all = heads(main);
+    expect(all.slice(0, 2)).toEqual(["k-main|Day (UTC)", "k-requests num|All keys"]);
+    const live = all.slice(2, 7);
+    expect(live.map((h) => h.replace(/\|New [a-e]$/, ""))).toEqual([...Array(4).fill("k-requests num mdh"), "k-requests num lgh"]);
+    expect(all.slice(7).map((h) => h.replace(/\|Old [a-e] \(revoked\)$/, ""))).toEqual(Array(5).fill("k-requests num"));
+    // A resting key's count shows under the day only on a day it made requests: these made none, so no day
+    // carries a line and each row stays one line tall.
+    const names = live.map((h) => h.split("|")[1]);
+    const day = dayPlus(TODAY, -1);
+    expect(main).toContain(`<td data-label="Day (UTC)" class="mono">${day}</td>` +
+      `<td data-label="All keys" class="mono num">1,500</td><td data-label="${names[0]}" class="mono num mdh">0</td>`);
+    expect(main).toContain(`<td data-label="${names[4]}" class="mono num lgh">0</td>`);
+    // While the read holds KEYS_MAX keys with requests, the keys that rest are the ones that made none in the
+    // window (the fewest rest first), so no line appears; a day would carry one for a resting key that made some.
+    expect(count(main, /<span class="(md-only|lg-down) muted small">/g)).toBe(0);
+  });
+
+  it("rests the least used key first and never the total", () => {
+    const days = usageDays(TODAY);
+    const s = (id: string | null, sum: number) => ({ id, label: id ?? "All keys", revoked: false, values: days.map((_, i) => (i === 0 ? sum : 0)) });
+    expect(seriesRests([s(null, 21), s("a", 1), s("b", 2), s("c", 3), s("d", 4), s("e", 5)])).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
+    // Seven series: one rests below 1280 px, the key with the fewest requests; on a tie the later one.
+    expect(seriesRests([s(null, 20), s("a", 1), s("b", 2), s("c", 0), s("d", 4), s("e", 5), s("f", 8)])).toEqual(
+      [undefined, undefined, undefined, "md", undefined, undefined, undefined]);
+    expect(seriesRests([s(null, 0), s("a", 0), s("b", 0), s("c", 0), s("d", 0), s("e", 0), s("f", 0)])).toEqual(
+      [undefined, undefined, undefined, undefined, undefined, undefined, "md"]);
+    // The arithmetic: the day's column at its floor and the series at their kind's width, against each range's least
+    // panel (635, 951 and 1,111 px, from the stylesheet), the most a range holds and no fewer.
+    const panel = (range: string) => Math.min(...edges().filter((w) => rangeOf(w) === range).map((w) => mainWidth(w) - 2 * SHEET.panelBorder));
+    const width = (n: number) => MAIN_MIN + n * COLUMN_WIDTHS.requests;
+    expect([panel("md"), panel("lg"), panel("xl")]).toEqual([635, 951, 1111]);
+    expect(width(SERIES_FIT.md)).toBeLessThanOrEqual(panel("md"));
+    expect(width(SERIES_FIT.md + 1)).toBeGreaterThan(panel("md"));
+    expect(width(SERIES_FIT.lg)).toBeLessThanOrEqual(panel("lg"));
+    expect(width(SERIES_FIT.lg + 1)).toBeGreaterThan(panel("lg"));
+    // Five keys in use, five revoked with requests, and the total.
+    expect(width(2 * KEYS_MAX + 1)).toBeLessThanOrEqual(panel("xl"));
   });
 });
 

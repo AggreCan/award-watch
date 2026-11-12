@@ -302,10 +302,15 @@ export const FiltersFold: FC<PropsWithChildren<{ lang: Lang; active: number; id?
 
 // -- the yearly figures of a profile and a buyer page ----------------------------------
 
+// A row of a year table: what the order, the switch and the fold read of it.
+// A profile's and a buyer's years carry more (YearFigure); an account's own
+// organization page passes its fiscal years' counts (account/org_pages.tsx).
+export type YearRow = Pick<YearFigure, "year" | "source" | "n">;
+
 // Newest first, with the years after the data date's (dates as the source
 // typed them) after the data year rather than above it; within a year the
 // sources keep their order.
-export function yearOrder<Y extends YearFigure>(years: readonly Y[], dataYear: number): Y[] {
+export function yearOrder<Y extends YearRow>(years: readonly Y[], dataYear: number): Y[] {
   const rank = (y: number) => (y === dataYear ? [0, 0] : y > dataYear ? [1, y] : [2, -y]);
   return [...years].sort((a, b) => {
     const [ga, ka] = rank(a.year);
@@ -326,7 +331,7 @@ export const grantsOnly = (years: readonly YearFigure[]): boolean => years.lengt
 // them), so a reader follows one source down the years; the rows older than
 // the last ten years wait under "Show all years". Both work from the
 // stylesheet alone (:has); a browser without it shows every row.
-export function YearsBox<Y extends YearFigure>({ lang, years, dataYear, cols, cells }: {
+export function YearsBox<Y extends YearRow>({ lang, years, dataYear, cols, cells }: {
   lang: Lang; years: readonly Y[]; dataYear: number; cols: readonly MaybeColumn[]; cells: (y: Y) => unknown;
 }) {
   const rows = yearOrder(years, dataYear);
