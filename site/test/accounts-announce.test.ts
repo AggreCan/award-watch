@@ -14,7 +14,12 @@ import {
 } from "../src/account/announce";
 import { bucketFor } from "../src/limits";
 import { INSERT_INTEREST, newToken } from "../src/pages/interest";
-import { ACCOUNTS, DB, csrf, decode, get, lastMail, nbsp, newEmail, offEnv, onEnv, post, signIn, useAccountsDb, userId } from "./accounts-helpers";
+import {
+  ACCOUNTS, DB, csrf, decode, get, lastMail, nbsp, newEmail, offEnv, onEnv, post, signIn, ultraEnv, useAccountsDb, userId, withoutTiers,
+} from "./accounts-helpers";
+import { RULES } from "../src/account/entitlements";
+import { KEY_PER_DAY } from "../src/api_keyed_spec";
+import { MAX_YEARS } from "../src/records_db";
 
 useAccountsDb();
 
@@ -28,9 +33,11 @@ const BUTTON = /<td class="btn"[^>]*><a href="([^"]*)"[^>]*>([^<]*)<\/a><\/td>/;
 
 type Operator = { email: string; id: string; cookie: string; csrf: string; env: Record<string, unknown> };
 
-async function operator(): Promise<Operator> {
+// sale: the operator's site with Ultra on sale (Stripe's keys, Pro's and Ultra's variables, the tier table),
+// which the Ultra message needs before it may be sent.
+async function operator(sale = false): Promise<Operator> {
   const email = newEmail("op");
-  const env = onEnv({ OPERATOR_EMAILS: email });
+  const env = sale ? ultraEnv({ OPERATOR_EMAILS: email }) : onEnv({ OPERATOR_EMAILS: email });
   const cookie = await signIn(email, { env });
   return { email, id: await userId(email), cookie, csrf: await csrf(cookie, "/account", { env }), env };
 }
@@ -311,8 +318,44 @@ describe("the message", () => {
 // -- the Ultra message --------------------------------------------------------------------------------
 
 describe("the Ultra message", () => {
+  // What Ultra holds the day the message goes, with Ultra's own figures: the plan cards' lines (src/pro.tsx ultraLines).
+  const HOLDS_EN = [
+    "Ultra includes everything in Pro, with these figures:",
+    `- ${RULES.ultra.saved_searches} saved searches, by email`,
+    `- ${RULES.ultra.watchlists} watches, each change by email`,
+    `- Analytics: every view, ${MAX_YEARS} fiscal years`,
+    `- Keyed API: ${KEY_PER_DAY.toLocaleString("en-CA")} requests a day`,
+  ].join("\n");
+
+  it("refuses to be sent while Ultra cannot be bought: the page says so and offers no form, and a post sends nothing", async () => {
+    const email = newEmail("ultra-off-sale");
+    await signUp(email, ["ultra"]);
+    const REFUSAL = "Ultra cannot be bought yet, so the message was not sent.";
+    // The switch on and payments set up, but none of Ultra's variables; then the variables but no tier table.
+    const plain = await operator();
+    const sale = await operator(true);
+    for (const op of [plain, sale]) {
+      const check = async () => {
+        const html = await text(await get("/admin/announce?kind=ultra", { cookie: op.cookie, env: op.env }));
+        expect(html).toContain(REFUSAL);
+        expect(html).not.toContain('<input type="hidden" name="kind" value="ultra"/>');
+        const res = await post("/admin/announce", { csrf: op.csrf, confirm: "yes", kind: "ultra" }, { cookie: op.cookie, env: op.env });
+        expect(res.status).toBe(400);
+        expect(await text(res)).toContain(REFUSAL);
+      };
+      if (op === plain) await check();
+      else await withoutTiers(check);
+    }
+    const fr = nbsp(await text(await get("/admin/announce?kind=ultra&lang=fr", { cookie: plain.cookie, env: plain.env })));
+    expect(fr).toContain("Ultra ne peut pas encore être acheté; le message n’a donc pas été envoyé.");
+    expect(await outbox(email)).toBe(0);
+    expect((await rowsOf(email))[0].notice_at).toBeNull();
+    // The accounts-open message is not held by it.
+    expect(await text(await get("/admin/announce", { cookie: plain.cookie, env: plain.env }))).not.toContain(REFUSAL);
+  });
+
   it("has its own console page: the counts, a form naming the kind, the message in both languages, linked from the overview", async () => {
-    const op = await operator();
+    const op = await operator(true);
     await signUp(newEmail("ultra-page"), ["ultra"]);
     const res = await get("/admin/announce?kind=ultra", { cookie: op.cookie, env: op.env });
     expect(res.status).toBe(200);
@@ -359,7 +402,7 @@ describe("the Ultra message", () => {
   });
 
   it("goes from the console to each Ultra address, account holders included, in its language, marks its Ultra rows alone and writes the audit row", async () => {
-    const op = await operator();
+    const op = await operator(true);
     const en = newEmail("ultra-en");
     const fr = newEmail("ultra-fr");
     const holder = newEmail("ultra-holder");
@@ -389,6 +432,7 @@ describe("the Ultra message", () => {
     expect(m.text).toBe([
       "Ultra, the plan above Pro, is open on Award Watch.",
       "This address asked to be told when it opened.",
+      HOLDS_EN,
       `Plans and prices: ${LOCAL}/pro`,
       `This is the only message about Ultra.\nTake this address off the lists: ${LOCAL}/interest/stop?t=${enToken}`,
       "You receive this because the address was entered on the Ultra card of the site's home page.\n" +
@@ -396,6 +440,10 @@ describe("the Ultra message", () => {
     ].join("\n\n"));
     // In the mail shell: the plans page as the button, the stop link in the muted line under it.
     expect(BUTTON.exec(m.html)?.slice(1)).toEqual([`${LOCAL}/pro`, "Plans and prices"]);
+    // The lines of what Ultra holds, as a list before the button; no price in the message.
+    expect(m.html).toContain(`${RULES.ultra.saved_searches} saved searches, by email</li>`);
+    expect(m.html.indexOf("Ultra includes everything in Pro, with these figures:")).toBeLessThan(m.html.indexOf("Plans and prices</a>"));
+    expect(m.text).not.toMatch(/CA\$|\$ CA/);
     expect(m.html).toContain(`<a href="${LOCAL}/interest/stop?t=${enToken}" style="color:#5b6b80;">Take this address off the lists</a>`);
     for (const part of [m.subject, m.text, m.html]) expect(part).not.toContain(EM_DASH);
 
@@ -403,6 +451,7 @@ describe("the Ultra message", () => {
     expect(nbsp(f.subject)).toBe("Ultra est ouvert sur Award Watch");
     expect(f.lang).toBe("fr");
     expect(nbsp(f.text)).toContain("Ultra, le forfait au-dessus de Pro, est ouvert sur Award Watch.\n\nCette adresse a demandé à être avertie de son ouverture.");
+    expect(nbsp(f.text)).toContain(`Ultra comprend tout ce que comprend Pro, avec ces chiffres :\n- ${RULES.ultra.saved_searches} recherches enregistrées, par courriel`);
     expect(nbsp(f.text)).toContain(`Forfaits et prix : ${LOCAL}/pro?lang=fr`);
     expect(nbsp(f.text)).toContain(`C’est le seul message au sujet d’Ultra.\nRetirer cette adresse des listes : ${LOCAL}/interest/stop?t=${frToken}&lang=fr`);
     for (const part of [f.subject, f.text, f.html]) expect(part).not.toContain(EM_DASH);

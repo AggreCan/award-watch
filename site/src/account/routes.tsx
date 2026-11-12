@@ -56,6 +56,7 @@
 //                                      the refund's confirmation step                 (session)
 //   POST /account/billing/checkout     to the payment service's checkout              (session, CSRF)
 //   POST /account/billing/portal       to the payment service's portal                (session, CSRF)
+//   POST /account/billing/change       a move between Pro and Ultra, on the portal    (session, CSRF)
 //   POST /account/billing/refund       refund the first payment, then cancel at once  (session read from the database, CSRF)
 //   POST /account/billing/webhook      the payment service's notices                  (signature only)
 //
@@ -90,7 +91,7 @@ import { KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
 import { keyUsage, nowOf } from "./api_usage";
 import { usagePage } from "./api_usage_page";
 import { audit } from "./audit";
-import { billingLine, billingPage, billingWebhook, endForDeletion, openPortal, startCheckout } from "./billing";
+import { billingLine, billingPage, billingWebhook, endForDeletion, moveBetweenPlans, openPortal, startCheckout } from "./billing";
 import { pressRefund } from "./refund";
 import { BriefingsPanel, briefingLabel, briefingStopView, briefingStoppedView } from "./briefing_pages";
 import {
@@ -98,7 +99,7 @@ import {
   isBriefingDelivery, isBriefingKind, lastBriefingRuns, listBriefings, narrowOf, setBriefingDelivery, subjectOf,
 } from "./briefings";
 import { bugPage, fileBug } from "./bugs";
-import { type Plan, WATCH_MAX, allowed, planFor, watchCap } from "./entitlements";
+import { type Plan, RULES, allowed, planFor, watchCap } from "./entitlements";
 import {
   FEEDS_MAX, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
   feedSize, feedWatches, isFeedKind, listFeeds, readFeed, removeFeed, rotateFeed, searchMatches,
@@ -449,7 +450,8 @@ account.get("/", async (c) => {
     }, {
       billing: await billingLine(c.env, who.userId),
       // Stripe's checkout returns here; the plan changes when its notice lands, often a moment later.
-      notice: c.req.query("billing") === "done" ? t(lang, "billing.msg_done")
+      notice: c.req.query("billing") === "done" ? t(lang, "billing.msg_done", { plan: t(lang, "pro.tag") })
+        : c.req.query("billing") === "done_ultra" ? t(lang, "billing.msg_done", { plan: t(lang, "ultra.tag") })
         : m === "weekly_on" ? t(lang, "weekly.msg_on") : m === "weekly_off" ? t(lang, "weekly.msg_off") : null,
       // The weekly email's control; null leaves it out while its table is not on the database.
       weekly: await weeklyState(c.env, who.userId),
@@ -1009,7 +1011,7 @@ async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, stat
   const cap = watchCap(who.plan);
   const notice = m === "cap"
     ? allowed(who, "watch_mail") ? t(lang, "watches.control_cap_pro", { cap: fmtInt(cap, lang) })
-      : t(lang, "watches.cap_free", { n: fmtInt(countedWatches(watches, claimed), lang), cap: fmtInt(cap, lang), max: fmtInt(WATCH_MAX, lang) })
+      : t(lang, "watches.cap_free", { n: fmtInt(countedWatches(watches, claimed), lang), cap: fmtInt(cap, lang), max: fmtInt(RULES.pro.watchlists, lang) })
     : WATCH_NOTICE[m] ? t(lang, WATCH_NOTICE[m]) : null;
   // The watches' calendar feed, with how many events it holds now; no feeds
   // table on the database yet leaves it out.
@@ -1442,6 +1444,13 @@ account.post("/billing/portal", async (c) => {
   const post = await signedInPost(c);
   if (post instanceof Response) return post;
   return guarded(c, () => openPortal(c, post.account, siteBase(c)));
+});
+
+// A move between Pro and Ultra, on Stripe's portal (billing.tsx moveBetweenPlans).
+account.post("/billing/change", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => moveBetweenPlans(c, post.account, post.fields, siteBase(c)));
 });
 
 // Money moves on this post, so a session remembered through a database

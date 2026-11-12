@@ -156,6 +156,19 @@ CREATE TABLE IF NOT EXISTS entitlements (
 );
 CREATE INDEX IF NOT EXISTS idx_entitlements_user ON entitlements(user_id);
 
+-- Ultra (src/account/entitlements.ts; docs/accounts.md, Ultra): an entitlements row that grants
+-- Ultra. Its row in entitlements says pro, which Ultra includes, so every reader that asks whether
+-- a paid plan is live (LIVE_PRO_SQL: the same-day gate and the daily check) counts it unchanged;
+-- planFor reads this table beside it and answers ultra. A table of its own because the CHECK on
+-- entitlements.plan cannot change on D1 without rebuilding that table. Written in the same batch
+-- as its entitlements row, never alone; never deleted, like the entitlements rows. Until it is
+-- on the database an Ultra row cannot be written, an existing one reads as Pro, and nothing
+-- offers Ultra.
+CREATE TABLE IF NOT EXISTS entitlement_tiers (
+  entitlement_id TEXT PRIMARY KEY REFERENCES entitlements(id),
+  tier TEXT NOT NULL CHECK (tier IN ('ultra'))
+);
+
 -- One row per delivery run of a saved search (src/account/deliveries.ts):
 -- sent (the message left), failed (the mail service refused it) or empty
 -- (nothing new, no message). sent_at is the run's time; items is how many

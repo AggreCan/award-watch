@@ -14,13 +14,14 @@
 //
 // The plan cards (PlanCards) put Free beside Pro as two checklists of the
 // same rows, PLAN_ROWS, on the tease panels, the Pro page and the billing
-// page; a third plan is one more card and one more wording a row.
+// page; while Ultra is on sale (account/payments.ts ultraOnSale) its card is
+// the third, with its own wording of every row.
 
 import type { FC } from "hono/jsx";
 import { PLANS, RULES, type Feature, type Plan } from "./account/entitlements";
-import { paymentSource } from "./account/payments";
-import { stripeOffer } from "./account/stripe";
-import { KEY_PER_DAY } from "./api_keyed_spec";
+import { paymentSource, ultraOnSale } from "./account/payments";
+import { stripeOffer, stripeOffers } from "./account/stripe";
+import { KEY_PER_DAY, keyQuota } from "./api_keyed_spec";
 import { EXPIRING_WINDOWS } from "./data";
 import type { Env } from "./env";
 import { decimal, fmtInt, numberLocale, t, tj, type Key, type Lang } from "./i18n";
@@ -42,6 +43,20 @@ export const ProTag: FC<{ lang: Lang }> = ({ lang }) => (
     <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d={PRO_GLYPH_PATH} /></svg>
     {t(lang, "pro.tag")}
     <span class="visually-hidden">{` ${t(lang, "pro.tag_hidden")}`}</span>
+  </span>
+);
+
+// Ultra's chip: the word and the 2 x 2 tiles in sapphire (operator's ruling of
+// 2026-11-06), with the long form for assistive technology. It goes where the
+// Pro chip goes and nowhere else: the rail, the tabs and the plan cards. The
+// landing page passes size 11, the markup its card had before the chip moved
+// here (its stylesheet draws both chips' glyphs at 11 px).
+export const ULTRA_GLYPH_PATH = "M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z";
+export const UltraTag: FC<{ lang: Lang; size?: number }> = ({ lang, size = 12 }) => (
+  <span class="ultra-tag">
+    <svg viewBox="0 0 16 16" width={String(size)} height={String(size)} aria-hidden="true"><path d={ULTRA_GLYPH_PATH} /></svg>
+    {t(lang, "ultra.tag")}
+    <span class="visually-hidden">{` ${t(lang, "ultra.tag_hidden")}`}</span>
   </span>
 );
 
@@ -85,9 +100,10 @@ export type Wording = { key: Key; vars?: (lang: Lang) => Record<string, string> 
 // has and Free has not, or for a counted feature one Pro gives a larger
 // figure, so test/seo-intent.test.ts and test/radar-gate.test.ts can hold
 // every row to RULES), and each plan's wording, null where the plan has none
-// of it. Every card draws every row in this order, so the lists
-// line up across the cards.
-export type PlanRow = { feature: Feature; free: Wording | null; pro: Wording };
+// of it. Ultra has every row, each with Ultra's own figure (at or above
+// Pro's); every row so far is one Pro has too. Every card draws every row in
+// this order, so the lists line up across the cards.
+export type PlanRow = { feature: Feature; free: Wording | null; pro: Wording; ultra: Wording };
 
 // The longest a row's line may run, in characters, in either language: one
 // line at a card's narrowest (300 px, 13 px type, the mark beside it). The
@@ -103,70 +119,104 @@ export const sameDayHours = (lang: Lang) => {
   return fmtInt(b - a, lang);
 };
 const count = (n: () => number) => (lang: Lang) => ({ n: fmtInt(n(), lang) });
+// A key's requests a day on a plan with the keyed API (api_keyed_spec.ts keyQuota, the one place a plan's figures come from).
+const perDay = (plan: Plan) => (lang: Lang) => ({ day: fmtInt(keyQuota(plan)?.perDay ?? KEY_PER_DAY, lang) });
 
 // The rows Free has come first, then those Pro adds, so the hollow marks
 // gather at the foot of the Free card and what each plan adds reads down the
-// page (operator, 2026-11-06); a third plan's rows would follow Pro's. Each
-// line names the figure its own plan gets and never compares the plans.
+// page (operator, 2026-11-06); a row only Ultra has would follow Pro's. Each
+// line names the figure its own plan gets and never compares the plans. A
+// row whose wording is the same on Pro and Ultra (no figure, or the same
+// one) shares Pro's wording.
+const same = (w: Wording) => ({ pro: w, ultra: w });
+
 export const PLAN_ROWS: readonly PlanRow[] = [
-  { feature: "intraday", free: { key: "plans.free_tenders" }, pro: { key: "plans.pro_tenders", vars: (lang) => ({ h: sameDayHours(lang) }) } },
+  { feature: "intraday", free: { key: "plans.free_tenders" }, ...same({ key: "plans.pro_tenders", vars: (lang) => ({ h: sameDayHours(lang) }) }) },
   {
     feature: "radar_depth",
     free: { key: "plans.free_radar", vars: (lang) => ({ m: windowMonths(0, lang) }) },
-    pro: { key: "plans.pro_radar", vars: (lang) => ({ a: windowMonths(1, lang), b: windowMonths(2, lang) }) },
+    ...same({ key: "plans.pro_radar", vars: (lang) => ({ a: windowMonths(1, lang), b: windowMonths(2, lang) }) }),
   },
   {
     feature: "radar_depth",
     free: { key: "plans.radar_csv", vars: (lang) => ({ m: windowMonths(0, lang) }) },
-    pro: { key: "plans.radar_csv", vars: (lang) => ({ m: windowMonths(2, lang) }) },
+    ...same({ key: "plans.radar_csv", vars: (lang) => ({ m: windowMonths(2, lang) }) }),
   },
   // Each plan's own count of searches and of watches; the mail is what Free lacks.
   {
     feature: "delivery",
     free: { key: "plans.free_searches", vars: count(() => RULES.free.saved_searches) },
     pro: { key: "plans.pro_searches", vars: count(() => RULES.pro.saved_searches) },
+    ultra: { key: "plans.pro_searches", vars: count(() => RULES.ultra.saved_searches) },
   },
   {
     feature: "watch_mail",
     free: { key: "plans.free_watches", vars: count(() => RULES.free.watchlists) },
     pro: { key: "plans.pro_watches", vars: count(() => RULES.pro.watchlists) },
+    ultra: { key: "plans.pro_watches", vars: count(() => RULES.ultra.watchlists) },
   },
   // A calendar feed is a delivery, as mail is (src/account/feeds.ts); a record's own file stays free.
-  { feature: "delivery", free: { key: "plans.free_feeds" }, pro: { key: "plans.pro_feeds" } },
+  { feature: "delivery", free: { key: "plans.free_feeds" }, ...same({ key: "plans.pro_feeds" }) },
   {
     feature: "analytics",
     free: { key: "plans.free_analytics", vars: count(() => FREE_YEARS) },
-    pro: { key: "plans.pro_analytics", vars: count(() => MAX_YEARS) },
+    ...same({ key: "plans.pro_analytics", vars: count(() => MAX_YEARS) }),
   },
   // The matching notices /account/matches lists (src/account/fit_pages.tsx): a count, as the watches are.
-  { feature: "matches", free: { key: "plans.matches", vars: count(() => RULES.free.matches) }, pro: { key: "plans.matches", vars: count(() => RULES.pro.matches) } },
+  {
+    feature: "matches",
+    free: { key: "plans.matches", vars: count(() => RULES.free.matches) },
+    pro: { key: "plans.matches", vars: count(() => RULES.pro.matches) },
+    ultra: { key: "plans.matches", vars: count(() => RULES.ultra.matches) },
+  },
   // The week's new matching notices by email (src/account/fit_mail.ts): the weekly email for Free, the
   // weekly email or the watch mail for Pro; the weekly email has no row of its own, being free to all.
   {
     feature: "match_mail",
     free: { key: "plans.match_mail", vars: count(() => RULES.free.match_mail) },
     pro: { key: "plans.match_mail", vars: count(() => RULES.pro.match_mail) },
+    ultra: { key: "plans.match_mail", vars: count(() => RULES.ultra.match_mail) },
   },
   // The holder's record on the radar's lists and a contract's page (src/pages/holders.tsx): the radar's own
   // windows, as radar_depth opens them, so the months come from EXPIRING_WINDOWS as the radar rows' do.
   {
     feature: "radar_depth",
     free: { key: "plans.lines", vars: (lang) => ({ m: windowMonths(0, lang) }) },
-    pro: { key: "plans.lines", vars: (lang) => ({ m: windowMonths(2, lang) }) },
+    ...same({ key: "plans.lines", vars: (lang) => ({ m: windowMonths(2, lang) }) }),
   },
-  { feature: "api", free: { key: "plans.free_api" }, pro: { key: "plans.pro_api", vars: (lang) => ({ day: fmtInt(KEY_PER_DAY, lang) }) } },
-  { feature: "export_filtered", free: { key: "plans.free_instruments" }, pro: { key: "plans.pro_instruments" } },
+  {
+    feature: "api", free: { key: "plans.free_api" },
+    pro: { key: "plans.pro_api", vars: perDay("pro") }, ultra: { key: "plans.pro_api", vars: perDay("ultra") },
+  },
+  { feature: "export_filtered", free: { key: "plans.free_instruments" }, ...same({ key: "plans.pro_instruments" }) },
   // A weekly briefing is a delivery, as a saved search's mail is (src/account/briefings.ts).
-  { feature: "delivery", free: null, pro: { key: "plans.pro_briefing" } },
+  { feature: "delivery", free: null, ...same({ key: "plans.pro_briefing" }) },
   // The blocks of "Your organization" past its first (src/account/org_pages.tsx),
   // with the organizations it sits beside (COMPETITORS_MAX in account/org_claim.ts is MAX_RIVALS).
-  { feature: "analytics", free: null, pro: { key: "plans.pro_org", vars: count(() => MAX_RIVALS) } },
-  { feature: "bug_reports", free: null, pro: { key: "plans.pro_bugs" } },
+  { feature: "analytics", free: null, ...same({ key: "plans.pro_org", vars: count(() => MAX_RIVALS) }) },
+  { feature: "bug_reports", free: null, ...same({ key: "plans.pro_bugs" }) },
 ];
 
 // What Pro adds, each line under the feature that carries it, so a test can
 // hold the list to the plans (test/radar-gate.test.ts): the rows' Pro column.
 export const PRO_INCLUDES: readonly (readonly [Feature, Key])[] = PLAN_ROWS.map((r) => [r.feature, r.pro.key] as const);
+// The same for Ultra: the rows' Ultra column.
+export const ULTRA_INCLUDES: readonly (readonly [Feature, Key])[] = PLAN_ROWS.map((r) => [r.feature, r.ultra.key] as const);
+
+// The lines that say what Ultra holds beyond the plan cards (the landing
+// page's Ultra card while Ultra is on sale, and the Ultra message), each the
+// Ultra wording of a PLAN_ROWS row, so the figures are read from RULES and the
+// constants and never typed: searches, watches, analytics, the keyed API and
+// the matching notices. The landing card leads with "Everything in Pro"; the
+// message leaves out the matching notices.
+export const ULTRA_LINES: readonly Key[] = ["plans.pro_searches", "plans.pro_watches", "plans.pro_analytics", "plans.pro_api", "plans.matches"];
+
+export function ultraLines(lang: Lang, keys: readonly Key[] = ULTRA_LINES): string[] {
+  return keys.map((key) => {
+    const row = PLAN_ROWS.find((r) => r.ultra.key === key);
+    return row ? planLine(lang, row.ultra) : t(lang, key);
+  });
+}
 
 // A row's text on a card: the wording with its figures, a capital first and
 // no closing period, whatever key a row is given.
@@ -201,6 +251,15 @@ export function proPrice(env: Env): ProPrice | null {
 // billing page does.
 export function checkoutPrice(env: Env): ProPrice | null {
   return paymentSource(env).available() ? proPrice(env) : null;
+}
+
+// Ultra's two figures while Ultra is on sale (ultraOnSale: the switch, the
+// payment source, all five Ultra variables and the tier table), else null:
+// every caller then draws exactly what it drew before Ultra.
+export async function ultraCheckoutPrice(env: Env): Promise<ProPrice | null> {
+  if (!(await ultraOnSale(env))) return null;
+  const offer = stripeOffers(env).ultra;
+  return offer ? { monthly: offer.monthly.figure, yearly: offer.yearly.figure } : null;
 }
 
 // "Pro is CA$18.99 a month or CA$189.99 a year, taxes added at checkout."
@@ -244,11 +303,16 @@ const Mark: FC<{ has: boolean }> = ({ has }) => has
   ? <svg class="plan-mark" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d={CHECK_PATH} /></svg>
   : <svg class="plan-mark plan-mark-none" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="8" r="5.5" /></svg>;
 
+// Ultra's card is framed in its sapphire (plan-card-ultra), Pro's in the
+// accent while it is the plan on offer.
+const cardClass = (card: PlanCard) =>
+  card.plan === "ultra" ? "plan-card plan-card-ultra" : card.offered ? "plan-card plan-card-offer" : "plan-card";
+
 const PlanCardView: FC<{ lang: Lang; card: PlanCard }> = ({ lang, card }) => (
-  <div class={card.offered ? "plan-card plan-card-offer" : "plan-card"}>
+  <div class={cardClass(card)}>
     <div class="plan-card-head">
       <h3>{card.name}</h3>
-      {card.tag ? <ProTag lang={lang} /> : null}
+      {card.tag ? (card.plan === "ultra" ? <UltraTag lang={lang} /> : <ProTag lang={lang} />) : null}
       {card.current ? <span class="plan-current">{t(lang, "plans.current")}</span> : null}
     </div>
     <p class="plan-price"><span class="plan-name">{card.name}</span> <span class="plan-figure">{card.price as any}</span></p>
@@ -272,8 +336,8 @@ const PlanCardView: FC<{ lang: Lang; card: PlanCard }> = ({ lang, card }) => (
 );
 
 // The cards side by side, in the order given, the same height and every
-// row at one height across them (public/styles.css .plan-cards). A third
-// plan is one more card.
+// row at one height across them (public/styles.css .plan-cards). Three fit
+// side by side where the column allows it; two and one below.
 export const PlanCards: FC<{ lang: Lang; plans: readonly PlanCard[] }> = ({ lang, plans }) => (
   <div class="plan-cards" style={`--plan-rows:${PLAN_ROWS.length};--plan-card-rows:${PLAN_CARD_ROWS}`}>
     {plans.map((card) => <PlanCardView lang={lang} card={card} />)}
@@ -282,7 +346,7 @@ export const PlanCards: FC<{ lang: Lang; plans: readonly PlanCard[] }> = ({ lang
 
 // Who reads the cards, and where: a tease panel (a reader without the
 // page's feature, so signed out or Free), the Pro page, the billing page.
-export type PlanReader = "out" | "free" | "pro";
+export type PlanReader = "out" | "free" | "pro" | "ultra";
 export type PlanPlace = "tease" | "pro_page" | "billing";
 
 // Free and Pro as every page draws them. The links: an account is made at
@@ -292,18 +356,42 @@ export type PlanPlace = "tease" | "pro_page" | "billing";
 // page to its Subscribe panel while Pro is on sale; a reader's own plan has
 // no way to buy it; the Pro page is offered everywhere but on itself. The
 // billing page's head already links the account, so its cards do not.
+//
+// While Ultra is on sale (ultra holds its figures) its card is the third:
+// Subscribe to Ultra through the sign-in page (ULTRA_SUBSCRIBE_PATH) or the
+// billing page's Ultra panel; for a Pro reader, Move to Ultra, which on the
+// Pro page is the page's filled button and on the billing page a plain one
+// (the subscription's Manage stays filled); for an Ultra reader on the
+// billing page, Pro's card offers Move to Pro. An Ultra reader while Ultra is
+// not on sale (a grant by hand) sees the two cards as a Pro reader does,
+// without the mark of its own plan. On the billing page, chosen is the plan
+// its Subscribe panel offers (that plan's link is the filled one), and move
+// the move its subscription can make, if any.
 export const SUBSCRIBE_PATH = "/account/sign-in?next=/account/billing";
+export const ULTRA_SUBSCRIBE_PATH = `/account/sign-in?next=${encodeURIComponent("/account/billing?plan=ultra")}`;
 
-export function planCards(lang: Lang, o: { price: ProPrice | null; reader: PlanReader; place: PlanPlace }): PlanCard[] {
+export function planCards(
+  lang: Lang,
+  o: { price: ProPrice | null; reader: PlanReader; place: PlanPlace; ultra?: ProPrice | null; chosen?: "pro" | "ultra"; move?: "up" | "down" | null },
+): PlanCard[] {
   const { price, reader, place } = o;
+  const ultra = o.ultra ?? null;
+  const paid = reader === "pro" || reader === "ultra";
   const go = (href: string, key: Key, primary = false): PlanAction => ({ href, label: t(lang, key), primary });
   const account = place === "billing" ? [] : [go("/account", "expiring.pro_account")];
-  const about = reader !== "pro" && place !== "pro_page" ? [go("/pro", "pro.about_button")] : [];
+  const about = !paid && place !== "pro_page" ? [go("/pro", "pro.about_button")] : [];
+  // On the billing page with Ultra's panel chosen, Pro's link leads back to Pro's panel and is no longer the filled one.
+  const ultraChosen = place === "billing" && !!ultra && o.chosen === "ultra";
   const buy = reader === "out" ? [go(SUBSCRIBE_PATH, "expiring.pro_sign_in", true)]
     : place !== "billing" ? [go("/account/billing", "propage.billing", true)]
-    : price ? [go("#subscribe", "billing.panel_subscribe", true)] : [];
+    : !price ? []
+    : ultraChosen ? [go(`/account/billing${lang === "fr" ? "?lang=fr" : ""}#subscribe`, "billing.panel_subscribe")]
+    : [go("#subscribe", "billing.panel_subscribe", true)];
+  const proActions = reader === "pro" ? account
+    : reader === "ultra" ? (place === "billing" && ultra && o.move === "down" ? [go("#move", "plans.move_pro")] : account)
+    : [...buy, ...about];
   const figure = (n: string) => t(lang, "plans.figure", { n: decimal(lang, n) });
-  return [
+  const cards: PlanCard[] = [
     {
       plan: "free",
       name: t(lang, "plans.free"),
@@ -323,14 +411,36 @@ export function planCards(lang: Lang, o: { price: ProPrice | null; reader: PlanR
         : <span class="muted">{t(lang, "plans.unavailable")}</span>,
       forLine: t(lang, "plans.pro_for"),
       current: reader === "pro",
-      actions: reader === "pro" ? account : [...buy, ...about],
+      actions: proActions,
       // The taxes named with the price, so no amount appears only at checkout, and who sells it;
       // for a reader not signed in, the steps from the button to Stripe's page first.
-      note: price && reader !== "pro"
+      note: price && !paid
         ? (reader === "out" ? `${t(lang, "propage.subscribe_steps")} ${t(lang, "plans.seller")}` : t(lang, "plans.seller"))
         : null,
     },
   ];
+  if (!ultra) return cards;
+  // Ultra's way in: through the sign-in page, to the billing page's Ultra panel, or a move for a Pro reader.
+  const ultraActions: PlanAction[] = reader === "out" ? [go(ULTRA_SUBSCRIBE_PATH, "plans.ultra_subscribe")]
+    : reader === "free" ? [place === "billing"
+      ? go(ultraChosen ? "#subscribe" : `/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#subscribe`, "plans.ultra_subscribe", ultraChosen)
+      : go(`/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#subscribe`, "plans.ultra_subscribe")]
+    : reader === "pro" ? [place === "billing"
+      ? (o.move === "up" ? go("#move", "plans.move_ultra")
+        : go(ultraChosen ? "#subscribe" : `/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#subscribe`, "plans.ultra_subscribe", ultraChosen))
+      : go(`/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#move`, "plans.move_ultra", place === "pro_page")]
+    : account;
+  cards.push({
+    plan: "ultra",
+    name: t(lang, "ultra.tag"),
+    tag: true,
+    price: tj(lang, "plans.price", { monthly: <strong class="plan-amount">{figure(ultra.monthly)}</strong>, yearly: figure(ultra.yearly) }),
+    forLine: t(lang, "plans.ultra_for"),
+    current: reader === "ultra",
+    actions: ultraActions,
+    note: reader === "ultra" ? null : t(lang, "plans.seller"),
+  });
+  return cards;
 }
 
 // The tease panel at the foot of a Pro page's free view: "Part of Pro" with
@@ -338,13 +448,14 @@ export function planCards(lang: Lang, o: { price: ProPrice | null; reader: PlanR
 // cards with the price and the way in. Nothing to dismiss and nothing timed:
 // the page was the reader's choice. foot is a note under the cards (the
 // same-day page's legend). A reader here lacks the page's feature, so a
-// session is a Free one.
-export const ProPanel: FC<{ lang: Lang; text: unknown; free?: unknown; price: ProPrice | null; signedIn: boolean; foot?: unknown }> = (
-  { lang, text, free, price, signedIn, foot },
-) => (
+// session is a Free one. ultra: Ultra's figures while it is on sale
+// (ultraCheckoutPrice), which add its card.
+export const ProPanel: FC<{
+  lang: Lang; text: unknown; free?: unknown; price: ProPrice | null; signedIn: boolean; foot?: unknown; ultra?: ProPrice | null;
+}> = ({ lang, text, free, price, signedIn, foot, ultra }) => (
   <Panel title={t(lang, "expiring.pro_title")} class="pro-panel" tools={<ProTag lang={lang} />} foot={foot}>
     <p>{text as any}</p>
     {free ? <p>{free as any}</p> : null}
-    <PlanCards lang={lang} plans={planCards(lang, { price, reader: signedIn ? "free" : "out", place: "tease" })} />
+    <PlanCards lang={lang} plans={planCards(lang, { price, ultra, reader: signedIn ? "free" : "out", place: "tease" })} />
   </Panel>
 );

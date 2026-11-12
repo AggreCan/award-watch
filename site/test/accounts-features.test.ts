@@ -395,7 +395,7 @@ describe("entitlements", () => {
     expect(source.kind).toBe("stub");
     expect(source.available()).toBe(false);
     expect(await source.checkoutUrl({
-      userId: "u", email: "u@example.com", interval: "monthly", lang: "en", customerId: null, successUrl: "/", cancelUrl: "/",
+      userId: "u", email: "u@example.com", plan: "pro", interval: "monthly", lang: "en", customerId: null, successUrl: "/", cancelUrl: "/",
     })).toBeNull();
     expect(await source.readNotice(new Request("https://x.invalid/", { method: "POST", body: "{}" }))).toEqual({ ok: false });
     const cookie = await signIn(newEmail());

@@ -164,7 +164,11 @@
   // yearly, and the figures the billing page prints beside them in Canadian
   // dollars (digits, cents optional). Empty, the billing page says Pro is not
   // available yet. The two Stripe secrets are set with `wrangler secret put`,
-  // never here (docs/accounts.md, Payments).
+  // never here (docs/accounts.md, Payments). The five Ultra variables are the
+  // same for the plan above Pro: its Stripe product id, its monthly and
+  // yearly price ids and their two figures. Empty, nothing offers Ultra; the
+  // operator fills all five once the entitlement_tiers table is applied
+  // (docs/accounts.md, Ultra).
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
@@ -174,7 +178,12 @@
     "STRIPE_PRICE_MONTHLY": "price_1UXstXIP2lpoGRa5hXTTSm4A",
     "STRIPE_PRICE_YEARLY": "price_1UXstXIP2lpoGRa5H1NF6Od3",
     "PRICE_MONTHLY_CAD": "18.99",
-    "PRICE_YEARLY_CAD": "189.99"
+    "PRICE_YEARLY_CAD": "189.99",
+    "STRIPE_PRODUCT_ULTRA": "",
+    "STRIPE_PRICE_ULTRA_MONTHLY": "",
+    "STRIPE_PRICE_ULTRA_YEARLY": "",
+    "PRICE_ULTRA_MONTHLY_CAD": "",
+    "PRICE_ULTRA_YEARLY_CAD": ""
   },
   // Workers Logs keeps the console lines (which name events and counts, never
   // an address, a code or a token) and not the per-request invocation log,

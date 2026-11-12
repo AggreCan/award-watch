@@ -146,7 +146,7 @@ const html = async (path: string, env: object, cookie?: string) => (await get(pa
 // compared.
 const CHIP = /<span class="pro-tag"><svg[^>]*><path[^>]*><\/path><\/svg>Pro<span class="visually-hidden"> \((?:paid plan|forfait payant)\)<\/span><\/span>/g;
 const noRail = (page: string) =>
-  noSaveSearch(page).replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, "")
+  noSaveSearch(page).replace(/<nav class="rail"[\s\S]*?<\/nav>/, "").replace(/<span class="brand-plan brand-plan-(?:free|pro|ultra)">[^<]*<\/span>/, "")
     .replace(/<a href="\/account\/bug">[^<]*<\/a>/, "").replace(/<a href="\/pro">[^<]*<\/a>/, "").replace(/<a href="\/analytics">[^<]*<\/a>/, "")
     .replace(CHIP, "")
     .replace(/<p class="interest-pro">[\s\S]*?<\/p>/g, "")

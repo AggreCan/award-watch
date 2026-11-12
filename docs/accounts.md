@@ -423,6 +423,13 @@ npx wrangler d1 execute awardwatch-accounts --remote --command "UPDATE entitleme
 The test suite runs this same insert (`MANUAL_GRANT_SQL` in
 `site/test/accounts-helpers.ts`).
 
+Ultra is granted from the operator console (the grant's Plan select,
+*Operator console*), which writes the `entitlements` row and its
+`entitlement_tiers` row in one batch (*Ultra*). By hand it is the insert
+above with a chosen id, followed in the same command by
+`INSERT INTO entitlement_tiers (entitlement_id, tier) VALUES ('<that id>', 'ultra')`;
+the console is the safer way, since its batch is one transaction.
+
 ## Security posture
 
 - **No passwords.** The only credential is control of the inbox. Losing the
@@ -1057,7 +1064,10 @@ is the same job as the accounts-open message, of its own kind: the operator
 starts it from `/admin/announce?kind=ultra` (the overview links it as
 "Ultra message"), at most 300 messages a run, and runs it again until no
 address is left; nothing sends it on a schedule. Send it only once Ultra can
-be bought: the message says Ultra is open.
+be bought: the message says Ultra is open. The console refuses it until then
+(`ultraMessageAllowed`, which is `ultraOnSale`, *Ultra*): the page says "Ultra
+cannot be bought yet, so the message was not sent." and offers no form, and
+a post sends nothing.
 
 - Who gets it: each address with an `ultra` row not unsubscribed and no
   `ultra` row marked `notice_at`, in address order. An address holding an
@@ -1068,7 +1078,10 @@ be bought: the message says Ultra is open.
   address on the lists and on the card gets each message once.
 - The message, a plain-text part and an HTML part in the mail shell, in the
   language the address was entered in: Ultra, the plan above Pro, is open;
-  the address asked to be told (also the preheader); "Plans and prices" with
+  the address asked to be told (also the preheader); "Ultra includes
+  everything in Pro, with these figures:" and the Ultra card's own lines
+  with Ultra's figures on the day it is sent (saved searches, watches,
+  analytics, the keyed API); "Plans and prices" with
   the link to `/pro` (the button in the HTML part); that this is the only
   message about Ultra, with the link off the lists
   (`/interest/stop?t=<token of the address's first ultra row>`, also in
@@ -1237,7 +1250,8 @@ page says the counts cannot be read. The `KEY_LIMIT` binding deploys with
 
 ## Payments
 
-Pro is sold as a subscription through Stripe, monthly or yearly, under
+Pro is sold as a subscription through Stripe, monthly or yearly, and so is
+Ultra once it is on sale (*Ultra*, below, has what differs for it), under
 Stripe's Managed Payments: Link, operated by Stripe, is the merchant of
 record, selling on behalf of Allwater Software Inc., which provides the
 service. The site never sees a card: the
@@ -1257,10 +1271,11 @@ API version (`STRIPE_VERSION`, `2026-10-28.endive`).
 | `GET /account/billing` | session | The plan today. Without a subscription: what Pro includes, a monthly and a yearly button with the configured prices and "Taxes added at checkout". With one: its status, the end of the period paid and a button to Stripe's portal, and, while the account is offered it, the Refund of the First Payment panel (*Refund of the first payment*, below); `?refund=confirm` shows that panel's confirmation step. Without the keys or the prices: "Paying for Pro is not available yet." |
 | `POST /account/billing/checkout` | session, CSRF, Origin | Creates a Checkout Session and redirects (303) to it, under an `Idempotency-Key` naming the user and the ten minutes the request falls in: two checkouts started together get the one session, and one with other choices (the other interval, the other language) in the same minutes gets "A checkout with other choices was started from this account a moment ago" (409). A user whose subscription can still bill is sent to Stripe's portal instead (a billing page left open from before the subscription would otherwise start a second one). |
 | `POST /account/billing/portal` | session, CSRF, Origin | Creates a portal session for the stored customer and redirects (303) to it. |
+| `POST /account/billing/change` | session, CSRF, Origin | A move between Pro and Ultra, opened on Stripe's portal at the move itself (*Ultra*, *Moving between the plans*). |
 | `POST /account/billing/refund` | session read from the database (not one remembered through an outage), CSRF, Origin; `FORM_LIMIT` | Refunds the first payment in full and cancels the subscription at once, from the confirmation step with its box ticked (*Refund of the first payment*). |
 | `POST /account/billing/webhook` | Stripe's signature; `WEBHOOK_LIMIT`, 120 a minute per address, while the switch is on (Stripe retries a 429) | Takes Stripe's notices. |
 
-All five are the site's 404 while the accounts switch is off. The overview
+All six are the site's 404 while the accounts switch is off. The overview
 (`/account`) shows "Pro, paid until <date>" when a live Stripe row decides
 the plan, the date being the end of the period paid, and links the billing
 page in either case.
@@ -1623,6 +1638,204 @@ their end.
 - Prices change in Stripe (a new price, then the variables); existing
   subscriptions keep their price until moved in the dashboard.
 
+## Ultra
+
+Ultra is the plan above Pro: every Pro feature, with figures of its own.
+It is built to deploy inert. Nothing offers it, and no public page or
+account page changes in any byte, until the operator sets its five Stripe
+variables and applies the schema; an account the operator grants Ultra by
+hand uses its features and sees its labels before then. For now `RULES.ultra`
+holds Pro's figures for every counted feature: Ultra's own figures come
+with the code that serves them (the watch statements in groups under D1's
+100 bound values, the keyed API's count by plan, the longer analytics
+period), raised together, so no card promises a figure before it works.
+The code is `site/src/account/entitlements.ts` (the plan and the tier
+table), `payments.ts` (`ultraOnSale`), `stripe.ts` and `billing.tsx` (the
+payments), `site/src/pro.tsx` (the cards and the chip); the tests are
+`site/test/ultra.test.ts` and `site/test/accounts-ultra-billing.test.ts`.
+
+### The tier table
+
+Both CHECKs that name the plans (`users.plan`, `entitlements.plan`) hold
+`free` and `pro`, and neither can change on D1 without rebuilding its
+table. An Ultra entitlement is therefore a `pro` row of `entitlements`,
+which Ultra includes, with a row of its own in `entitlement_tiers`:
+
+| Table | Columns | Rule |
+|---|---|---|
+| `entitlement_tiers` | `entitlement_id` (the `entitlements` row), `tier` (`ultra`) | Written in the same batch as its row, never alone (`entitlementWrites`); never deleted, as the entitlement rows are not |
+
+- `planFor` reads each row's plan through its tier
+  (`COALESCE(t.tier, e.plan)`), and the newest live row decides as before.
+- The cache on `users` holds Ultra as `pro` (`cachedPlanOf`), and is
+  compared the same way, so an Ultra account's cache is not rewritten on
+  every request. Through an accounts-database outage an Ultra account is
+  served as Pro (`lastKnownPlan`); nothing is granted that was not paid for.
+- `LIVE_PRO_SQL` (the same-day gate and the daily check) counts `pro` rows,
+  so it counts Ultra unchanged.
+- Every gate asks `allowed()` for a feature, never for a plan, so every Pro
+  gate opens for Ultra. The pages that named a plan now read it by plan:
+  the overview's and billing page's plan line ("Ultra, no end date",
+  "Ultra, until (date)", "Ultra, paid until (date)"), the subscript after
+  the wordmark (`ultra`, in sapphire), the matching notices' cap
+  (`matchCap(plan)`), and the email lists' line offering a plan with
+  delivery, which an Ultra reader is not shown.
+- Until the table is on the database: `planFor` reads without it (an Ultra
+  row then reads as Pro) and logs one line per isolate, "entitlement_tiers
+  missing"; nothing offers Ultra; an Ultra grant's batch fails whole, so a
+  webhook answers 500 (Stripe sends it again) and the console says which
+  file to apply; the console's pages read Ultra as Pro and leave out the
+  Ultra counts.
+
+### On sale
+
+`ultraOnSale(env)` is true when the accounts switch is on, the payment
+source offers Pro, all five Ultra variables are set and in form, and
+`entitlement_tiers` answers (`SELECT 1 FROM entitlement_tiers LIMIT 1`; a
+true answer is kept for the isolate's life). The cheap checks come first,
+so a site without the variables never reads the database for it. While it
+is true:
+
+- the plan cards are three, wherever they are drawn (the tease panels, the
+  Pro page, the billing page): Ultra's card framed in sapphire, its chip in
+  the card's head, every row with Ultra's own wording and figure;
+- the Pro page gains the section on Ultra after Who It Is For, the answer on
+  moving between the plans, the refund's answer naming both plans, and a
+  Product "Award Watch Ultra" with its two offers in the page's markup;
+- the landing page's Ultra card shows the price, Ultra's lines and Subscribe
+  to Ultra through the sign-in page, in place of the waitlist form;
+- the Terms' paid-plan section covers Pro and Ultra, with Moving Between
+  Plans after the renewal (the Pro terms stay word for word until then);
+- the billing page offers Ultra's checkout and the moves; and the Ultra
+  message may be sent from the console (*The Ultra message*).
+
+### Buying
+
+`POST /account/billing/checkout` takes `plan` (`ultra`, or `pro`, which a
+form naming none means) beside `interval`; anything else is a 400. Ultra is
+sold only while it is on sale; otherwise the post returns to the billing
+page and asks Stripe nothing. The session is Pro's with Ultra's price; it
+returns to `/account?billing=done_ultra` ("Thank you. Ultra starts once
+Stripe confirms the payment") and, cancelled, to
+`/account/billing?plan=ultra`. The idempotency key names the user and the
+ten minutes, not the plan, so a checkout of the other plan in the same
+minutes answers busy. The billing page's Subscribe panel shows one plan's
+two buttons, Pro by default and Ultra at `/account/billing?plan=ultra`
+(where Ultra's card leads), with a line to the other plan.
+
+### Moving between the plans
+
+`POST /account/billing/change` with `plan` reads the bound subscription for
+its one item (`GET /v1/subscriptions/<id>`: the item's id, its price, the
+price's product and its interval) and creates a portal session at the move
+itself:
+
+| Parameter | Value |
+|---|---|
+| `flow_data[type]` | `subscription_update_confirm` |
+| `flow_data[subscription_update_confirm][subscription]` | the subscription |
+| `flow_data[subscription_update_confirm][items][0][id]` | its item |
+| `flow_data[subscription_update_confirm][items][0][price]` | the other plan's price of the same interval |
+| `flow_data[subscription_update_confirm][items][0][quantity]` | `1` |
+| `flow_data[after_completion][type]` | `redirect` |
+| `flow_data[after_completion][redirect][return_url]` | `/account/billing?move=sent` (up) or `?move=down` |
+
+Stripe's page shows the amount due before the reader confirms and handles
+the card's authentication. When Stripe refuses the flow (any 4xx: a price
+the portal's configuration does not list, a subscription it cannot
+update), the plain portal opens instead, as Manage does, so the reader is
+never left on an error; so it does when the subscription has no single
+item or its price is one the site does not know. A move up is offered only
+while Ultra is on sale; the billing page shows it to a subscriber whose
+plan comes from a live Stripe row (Move to Ultra, plain, the Manage button
+staying the filled one), and the move down to an Ultra subscriber. Nothing
+is written by the route: the webhook changes the plan.
+
+The plan a subscription pays for is its product's (`planOfSubscription`):
+Ultra when its one item is on `STRIPE_PRODUCT_ULTRA` or one of the two
+Ultra prices, Pro otherwise. Mapping by product keeps a subscriber on an
+older Ultra price on Ultra after a price change; a product the site does
+not know grants Pro, never Ultra.
+
+| Notice | With two plans |
+|---|---|
+| `checkout.session.completed`, paid | The subscription is read already; the plan granted is its product's |
+| `invoice.paid` | The subscription is read for its plan (unreachable: 500, nothing written). Active or trialing with no pending update: the plan is granted, the live row switched when the plan differs. A pending update naming Ultra: 500, so the notice comes again once it is settled. Any other status never raises the plan. A subscription Stripe no longer knows keeps the live row's plan |
+| `customer.subscription.updated` | As before, and when the subscription's plan ranks below its live row's (a move down), the row is switched down at once, keeping its end, once a read of the subscription confirms it (a notice delivered late, from before a move up, changes nothing). Never raises a plan |
+| `.deleted`, `charge.refunded`, `charge.dispute.created` | Unchanged: every live Stripe row of the account ends, whichever plan |
+
+A switch is one batch: the live row's end set to now, and a row of the new
+plan (with its tier row for Ultra) from now to the later of the old row's
+end and the paid period's end plus the grace; the audit reads "stripe moved
+to ultra" or "stripe moved to pro". A move up: Pro continues until a paid
+notice shows the Ultra product on an active subscription; if the payment
+fails, the account keeps Pro. A move down: Ultra continues to the end of
+the period paid; at the renewal Stripe applies Pro, the update switches the
+row keeping its end, and the renewal's `invoice.paid` extends it.
+
+### Refunds
+
+The refund of the first payment covers the account's first payment, Pro or
+Ultra (*Refund of the first payment*). A move from Pro to Ultra is a second
+paid invoice, so the press already refuses it; the page stops offering the
+refund after any move (`REFUND_FACTS_SQL` counts the `plan_changed` rows
+reading "stripe moved ...", and any one reads "none"), so it never offers
+a refund the press would refuse. The audit keeps 90 days, longer than the 14.
+
+### Operator steps
+
+1. **Apply the schema** (any time before the variables; it adds
+   `entitlement_tiers` and changes nothing else):
+
+   ```
+   cd site
+   npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+   ```
+
+2. **The product and its prices.** A product "Award Watch Ultra", the same
+   software-as-a-service tax code as Pro, and two recurring CAD prices with
+   tax behaviour exclusive. Note the product id (`prod_...`) and both price
+   ids.
+3. **The customer portal** (Settings, Billing, Customer portal): add the
+   Ultra product and its two prices to plan switching beside Pro's; upgrades
+   prorated and invoiced at once; downgrades at the end of the billing
+   period; cancellation at the period's end as today.
+4. **The webhook and the key:** no new event type, no new permission (portal
+   sessions and subscription reads are granted already).
+5. **A test in the sandbox, locally**, with test clocks: buy Ultra; buy Pro
+   and move to Ultra; move with a card that attaches but fails its charges
+   (4000 0000 0000 0341) and check the subscription stays Pro and active;
+   move down and advance the clock past the period's end; refund an Ultra
+   first payment; check the proration invoice carries tax under Managed
+   Payments.
+6. **The five variables** in `site/wrangler.jsonc`:
+   `STRIPE_PRODUCT_ULTRA`, `STRIPE_PRICE_ULTRA_MONTHLY`,
+   `STRIPE_PRICE_ULTRA_YEARLY`, `PRICE_ULTRA_MONTHLY_CAD` and
+   `PRICE_ULTRA_YEARLY_CAD` (digits, cents optional; they must match the
+   Stripe prices, which nothing checks), then a deploy. Any one empty or out
+   of form keeps Ultra off sale.
+7. **One live purchase of Ultra** by the operator, then Refund now from the
+   billing page, as for Pro.
+8. **The Ultra message**, last (*The Ultra message*): the console refuses it
+   until Ultra is on sale.
+
+### Known limits
+
+- **The console's refund after a move.** Refund the latest payment refunds
+  the newest paid invoice's charge, which after a move up is the proration
+  invoice, and Stripe's `charge.refunded` notice then ends every live Stripe
+  row of the account, Pro included. Refund a move only together with a move
+  back to Pro and a manual Pro grant to the period's end.
+- **Removing Ultra's variables** while Ultra subscribers exist makes their
+  next paid notice grant Pro, and an update notice lower them to Pro: the
+  product is then unknown to the site. Keep the product id set while any
+  Ultra subscription bills.
+- **Not confirmed in Stripe's sandbox yet:** whether the portal holds a move
+  up until it is paid, whether it switches plans, prorates and taxes the
+  proration invoice under Managed Payments, and how an Ultra refund shows in
+  the payment's breakdown (operator step 5). If the portal applies a move up
+  before its payment, the webhook still grants nothing until a paid notice.
+
 ## Operator console
 
 `/admin` is where the operator looks an account up and acts on it. The
@@ -1712,7 +1925,7 @@ delete the operator's own account.
 
 | Action | Effect |
 |---|---|
-| Grant Pro by hand | A `manual` entitlement row from now to the start of the end date given (UTC), or with no end. The reference is required: at most 120 characters, and any value holding `@` is refused, since a reference never holds an address. The same row as the insert under *Granting a plan by hand*. |
+| Grant Pro by hand (or Ultra) | A `manual` entitlement row from now to the start of the end date given (UTC), or with no end. The reference is required: at most 120 characters, and any value holding `@` is refused, since a reference never holds an address. The same row as the insert under *Granting a plan by hand*. The Plan select offers Pro (the default) and Ultra; an Ultra grant writes the row and its `entitlement_tiers` row in one batch, whether or not Ultra is on sale, and on a database without that table writes nothing and says to apply `accounts_schema.sql` (*Ultra*). |
 | Revoke | Sets `revoked_at` on one row not yet revoked or ended. Revoking a Stripe row leaves the subscription billing, and its next paid invoice grants Pro again: cancel the subscription as well. |
 | Cancel the subscription (confirm) | At the period end (`POST /v1/subscriptions/<id>` with `cancel_at_period_end=true`): Pro runs to the end of the period paid, then Stripe's `customer.subscription.deleted` notice ends it. At once (`DELETE /v1/subscriptions/<id>`): Stripe ends it now and the stored row reads `canceled`; the same notice ends Pro, usually within a minute. Neither refunds anything. |
 | Refund the latest payment (confirm) | The page reads the latest paid invoices of the subscription (`GET /v1/invoices?subscription=<id>&status=paid&expand[]=data.payments`) and takes the newest that took money; its charge comes from the invoice's payments, or, for a payment through a PaymentIntent, from `GET /v1/charges?payment_intent=<id>`. It shows the invoice, the charge, the amount and what is refunded already. The post finds the charge again, refunds only if it is still the one shown, and calls `POST /v1/refunds` with `charge=<id>` and the header `Idempotency-Key: operator-refund-<charge id>`, so a second press or a retry within Stripe's 24 hours returns the first refund. Stripe's `charge.refunded` notice then ends the account's Stripe Pro (*What each notice does*). The subscription is not cancelled. |
@@ -1724,8 +1937,9 @@ delete the operator's own account.
 ### What the console shows
 
 - `/admin`: active, deleted and blocked accounts; signed-in browsers; the
-  accounts on Pro now by the source of the row that decides their plan
-  (by hand or through Stripe); subscriptions by their last notified
+  accounts on Pro now and on Ultra now (once `entitlement_tiers` exists),
+  each by the source of the row that decides their plan (by hand or
+  through Stripe); subscriptions by their last notified
   status; deliveries sent and not sent in the last 7 days; bug reports in
   the last 7 days and in all, with the latest 10, once the `bug_reports`
   table exists; calendar feeds by kind and read in the last 7 days, once
@@ -1734,8 +1948,10 @@ delete the operator's own account.
 - `/admin/accounts`: every account in one table, filtered, sorted and
   paged, with a CSV of the same view (*The accounts table*, below).
 - `/admin/users/<id>`: the user row (address, created, last seen,
-  language, status, cached plan), the plan `planFor` computes, every
-  entitlement row with a revoke button on those not revoked or ended, the
+  language, status, cached plan, which holds Ultra as pro), the plan
+  `planFor` computes, every entitlement row (its plan read through its
+  tier, so an Ultra row reads `ultra`) with a revoke button on those not
+  revoked or ended, the grant form with its Plan select, the
   `payment_customers` row and, with the Stripe keys set, the
   subscription's status, period end and pending cancellation as Stripe
   holds them now; sessions (signed in now, the newest use, device

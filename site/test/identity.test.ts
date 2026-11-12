@@ -256,7 +256,7 @@ describe("on a phone", () => {
 });
 
 describe("corners", () => {
-  it("round a control by 6 px and the Pro chip by 4, and nothing else but the charts' bars", () => {
+  it("round a control by 6 px and the Pro and Ultra chips by 4, and nothing else but the charts' bars", () => {
     const rounded = rules()
       .map((r) => [r.selector, decl(r.body, "border-radius")] as const)
       .filter(([, radius]) => radius !== undefined && radius !== "0");
@@ -269,6 +269,8 @@ describe("corners", () => {
       [".rank-bars.of-cap .rank-track", "4px"],
       [".rank-bars.of-cap .rank-bar", "4px"],
       [".pro-tag", "4px"],
+      // Ultra's chip (src/pro.tsx UltraTag), the Pro chip's box in sapphire.
+      [".ultra-tag", "4px"],
     ]);
   });
 });

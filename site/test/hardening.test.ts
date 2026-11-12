@@ -245,7 +245,7 @@ describe("the same-day band, for a request that is not a live Pro session", () =
     // tender list, Save this search (account/search_control.tsx) are the only
     // marks of a session on a free page.
     const normal = (body: string) => noSaveSearch(body.replace(RAIL_ACCOUNT, "<li>[account]</li>")
-      .replace(/<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/, ""));
+      .replace(/<span class="brand-plan brand-plan-(?:free|pro|ultra)">[^<]*<\/span>/, ""));
     for (const path of BAND_PAGES) {
       const anonymous = await render(path);
       for (const [what, s] of Object.entries({ free, revoked, ended, later, replaced, cached })) {

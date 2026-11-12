@@ -2528,6 +2528,47 @@ const STRINGS = {
     en: "A change to these paid-plan terms applies to a subscription from its first renewal at least 30 days after notice by email to the account's address.",
     fr: "Une modification des conditions du forfait payant s'applique à un abonnement à compter de son premier renouvellement survenant au moins 30 jours après un avis envoyé par courriel à l'adresse du compte.",
   },
+  // The paid plans' terms once Ultra can be bought (pages/docs.tsx PAID_TERMS, account/payments.ts ultraOnSale):
+  // the same sections for both plans, and Moving Between Plans. Until then the page shows the Pro terms above.
+  "terms.toc_pro_ultra": { en: "Paid Plans (Pro and Ultra)", fr: "Forfaits payants (Pro et Ultra)" },
+  "terms.pro_intro_ultra": {
+    en: "These terms apply to the paid plans, Pro and Ultra, in addition to the terms above. The {warranty} terms above, liability included, apply to both plans as they do to the rest of the site.",
+    fr: "Ces conditions s'appliquent aux forfaits payants, Pro et Ultra, en plus des conditions ci-dessus. Les conditions de la section {warranty} ci-dessus, responsabilité comprise, s'appliquent aux deux forfaits comme au reste du site.",
+  },
+  "terms.pro_seller_ultra": {
+    en: "Award Watch is published by Allwater Software Inc., a British Columbia corporation. Pro and Ultra subscriptions are sold through Link, the merchant of record operated by Stripe, on Allwater's behalf: the charge on the card statement reads LINK.COM followed by Allwater's name, Link sends the receipts, and refunds and disputes are handled through Link's support, with Allwater able to refund as well. The site never receives card details. Questions about a charge go to {email} or to Link's support.",
+    fr: "Award Watch est publié par Allwater Software Inc., une société de la Colombie-Britannique. Les abonnements Pro et Ultra sont vendus par l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le compte d'Allwater : le débit sur le relevé de carte indique LINK.COM suivi du nom d'Allwater, Link envoie les reçus, et les remboursements et les litiges passent par le soutien de Link, Allwater pouvant aussi rembourser. Le site ne reçoit jamais les données de carte. Les questions sur un débit s'adressent à {email} ou au soutien de Link.",
+  },
+  "terms.pro_includes_title_ultra": { en: "What the Paid Plans Include", fr: "Ce que comprennent les forfaits payants" },
+  "terms.pro_includes_ultra": {
+    en: "Pro and Ultra are plans on an Award Watch account. Ultra includes everything in Pro. What each plan includes, with its figures (saved searches, watches, API requests and the others), is listed on the site's plans page and on the account's billing page. Every public page of the site stays free to read without an account. Allwater may add to a plan at any time; a change that takes something away from a plan applies from the first renewal after notice.",
+    fr: "Pro et Ultra sont des forfaits d'un compte Award Watch. Ultra comprend tout ce que comprend Pro. Ce que comprend chaque forfait, avec ses chiffres (recherches enregistrées, suivis, requêtes à l'API et les autres), figure sur la page des forfaits du site et sur la page de facturation du compte. Toutes les pages publiques du site restent gratuites, sans compte. Allwater peut ajouter à un forfait en tout temps; un changement qui retire quelque chose à un forfait s'applique à compter du premier renouvellement suivant un avis.",
+  },
+  "terms.pro_prices_ultra": {
+    en: "The prices of each plan are shown on the site and on the account's billing page, in Canadian dollars. Taxes are added at checkout according to the buyer's location. Allwater may change the prices; a new price applies from the first renewal at least 30 days after notice by email to the account's address, and a subscription can be cancelled before then.",
+    fr: "Les prix de chaque forfait sont affichés sur le site et à la page de facturation du compte, en dollars canadiens. Les taxes sont ajoutées au paiement selon le lieu de l'acheteur. Allwater peut modifier les prix; un nouveau prix s'applique à compter du premier renouvellement survenant au moins 30 jours après un avis envoyé par courriel à l'adresse du compte, et l'abonnement peut être annulé avant cette date.",
+  },
+  "terms.pro_change_title": { en: "Moving Between Plans", fr: "Passer d'un forfait à l'autre" },
+  "terms.pro_change": {
+    en: "A subscriber can move from Pro to Ultra at any time from the account's billing page. The move charges at once, taxes added, the price of Ultra for the rest of the current period less the unused part of Pro, as Stripe's page shows before it is confirmed. Ultra starts once that payment is confirmed; until then, and if the payment does not go through, the account keeps Pro. A move from Ultra to Pro takes effect at the end of the period already paid: Ultra continues until then, and nothing is refunded for the rest of that period. After a move to Pro, what the account holds past Pro's figures is kept, and only as many as Pro's figures are delivered.",
+    fr: "Un abonné peut passer de Pro à Ultra en tout temps depuis la page de facturation du compte. Le passage facture aussitôt, taxes ajoutées, le prix d'Ultra pour le reste de la période en cours moins la partie inutilisée de Pro, comme la page de Stripe l'indique avant la confirmation. Ultra commence une fois ce paiement confirmé; d'ici là, et si le paiement n'aboutit pas, le compte garde Pro. Un passage d'Ultra à Pro prend effet à la fin de la période déjà payée : Ultra continue jusque-là, et rien n'est remboursé pour le reste de cette période. Après un passage à Pro, ce que le compte conserve au-delà des chiffres de Pro est gardé, et seul le nombre prévu par Pro est envoyé.",
+  },
+  "terms.pro_cancel_ultra": {
+    en: "A subscription can be cancelled at any time from the account's billing page. The cancellation takes effect at the end of the period already paid, and the plan continues until then. The current period is not refunded, in whole or in part, except under Refund of the First Payment and where the law requires a refund. Deleting the account cancels the subscription at once, without refund.",
+    fr: "Un abonnement peut être annulé en tout temps depuis la page de facturation du compte. L'annulation prend effet à la fin de la période déjà payée, et le forfait continue jusque-là. La période en cours n'est pas remboursée, en tout ou en partie, sauf selon Remboursement du premier paiement et si la loi exige un remboursement. La suppression du compte annule l'abonnement immédiatement, sans remboursement.",
+  },
+  "terms.pro_refund_ultra": {
+    en: "If you ask within 14 days of your account's first payment for a paid plan, Pro or Ultra, monthly or yearly, Allwater refunds that payment in full, taxes included, to the payment method used, and ends the subscription. To ask, press Refund now on the account's billing page; if the button is not there or the refund does not go through, write to {email} from the account's address. This applies once per account and to the first payment only. A payment for moving from Pro to Ultra is not a first payment; it and every later payment are covered by the Cancellation terms above. This refund is in addition to any refund that Link or the law provides.",
+    fr: "Si vous le demandez dans les 14 jours suivant le premier paiement de votre compte pour un forfait payant, Pro ou Ultra, mensuel ou annuel, Allwater rembourse ce paiement en entier, taxes comprises, au mode de paiement utilisé, et met fin à l'abonnement. Pour le demander, appuyez sur Rembourser maintenant à la page de facturation du compte; si le bouton n'y figure pas ou si le remboursement n'aboutit pas, écrivez à {email} depuis l'adresse du compte. Cela s'applique une fois par compte et au premier paiement seulement. Un paiement pour passer de Pro à Ultra n'est pas un premier paiement; lui et chaque paiement suivant relèvent des conditions d'annulation ci-dessus. Ce remboursement s'ajoute à tout remboursement prévu par Link ou par la loi.",
+  },
+  "terms.pro_failed_ultra": {
+    en: "If a renewal payment fails, the payment is retried and the plan continues for a short grace period. If it does not go through, the account returns to the Free plan: email delivery and same-day notices stop, and saved searches are kept.",
+    fr: "Si un paiement de renouvellement échoue, il est tenté de nouveau et le forfait continue pendant une courte période de grâce. S'il ne passe pas, le compte revient au forfait Gratuit : l'envoi par courriel et les avis du jour cessent, et les recherches enregistrées sont conservées.",
+  },
+  "terms.pro_abuse_ultra": {
+    en: "Allwater may suspend or end an account and its subscription for abuse, including breaking these Terms, automated access beyond the published limits, sharing or reselling an account, getting around a limit or a payment, or use that harms the site or other people. When service ends for abuse, the current period is not refunded. If Allwater ends a paid plan for any other reason, it refunds the unused part of the current period.",
+    fr: "Allwater peut suspendre ou fermer un compte et son abonnement en cas d'abus, notamment le non-respect des présentes conditions, un accès automatisé au-delà des limites publiées, le partage ou la revente d'un compte, le contournement d'une limite ou d'un paiement, ou un usage qui nuit au site ou à autrui. Lorsque le service prend fin pour abus, la période en cours n'est pas remboursée. Si Allwater met fin à un forfait payant pour toute autre raison, elle rembourse la partie inutilisée de la période en cours.",
+  },
   "privacy.title": { en: "Privacy", fr: "Confidentialité" },
   "privacy.lead": {
     en: "What the site keeps about a visit, and what it never keeps.",
@@ -3135,6 +3176,31 @@ const STRINGS = {
     en: "Yes, of your first payment: press Refund now under Plan and Billing in your account within 14 days of it. If the button is not there or the refund does not go through, write to {email} from your account's address. It is refunded in full, taxes included, and the subscription ends. This applies once per account; later payments are not refunded.",
     fr: "Oui, pour votre premier paiement : appuyez sur Rembourser maintenant sous Forfait et facturation, dans votre compte, dans les 14 jours qui le suivent. Si le bouton n'y figure pas ou si le remboursement n'aboutit pas, écrivez à {email} depuis l'adresse de votre compte. Il est remboursé en entier, taxes comprises, et l'abonnement prend fin. Cela s'applique une fois par compte; les paiements suivants ne sont pas remboursés.",
   },
+  // The Pro page while Ultra is on sale (pages/pro.tsx): the refund's answer naming both plans, the move
+  // between them, and the section on Ultra after "Who It Is For". The figures are read from the plans and
+  // the constants; {monthly} and {yearly} are the operator's (PRICE_ULTRA_MONTHLY_CAD, PRICE_ULTRA_YEARLY_CAD).
+  "propage.a_refund_ultra": {
+    en: "Yes, of your account's first payment, for Pro or Ultra: press Refund now under Plan and Billing in your account within 14 days of it. If the button is not there or the refund does not go through, write to {email} from your account's address. It is refunded in full, taxes included, and the subscription ends. This applies once per account; a payment for moving to Ultra and later payments are not refunded.",
+    fr: "Oui, pour le premier paiement de votre compte, pour Pro ou Ultra : appuyez sur Rembourser maintenant sous Forfait et facturation, dans votre compte, dans les 14 jours qui le suivent. Si le bouton n'y figure pas ou si le remboursement n'aboutit pas, écrivez à {email} depuis l'adresse de votre compte. Il est remboursé en entier, taxes comprises, et l'abonnement prend fin. Cela s'applique une fois par compte; un paiement pour passer à Ultra et les paiements suivants ne sont pas remboursés.",
+  },
+  "propage.q_move": { en: "Can I move from Pro to Ultra, or back?", fr: "Puis-je passer de Pro à Ultra, ou revenir à Pro?" },
+  "propage.a_move": {
+    en: "Yes, from Plan and Billing in your account. Moving to Ultra charges the difference for the rest of the current period at once, taxes added, and Ultra starts once the payment is confirmed. Moving back to Pro takes effect at the end of the period already paid.",
+    fr: "Oui, sous Forfait et facturation, dans votre compte. Passer à Ultra facture aussitôt la différence pour le reste de la période en cours, taxes ajoutées, et Ultra commence une fois le paiement confirmé. Revenir à Pro prend effet à la fin de la période déjà payée.",
+  },
+  "propage.ultra_title": { en: "Ultra", fr: "Ultra" },
+  "propage.ultra_text": {
+    en: "Ultra includes everything in Pro, with these figures: {searches} saved searches by email, {watches} watches, {years} fiscal years of analytics and API keys of {day} requests a day each.",
+    fr: "Ultra comprend tout ce que comprend Pro, avec ces chiffres : {searches} recherches enregistrées par courriel, {watches} suivis, {years} exercices d'analyses et des clés d'API de {day} requêtes par jour chacune.",
+  },
+  "propage.ultra_who": {
+    en: "For people who follow a whole market: many buyers, segments and competitors at once.",
+    fr: "Pour qui suit tout un marché : beaucoup d'acheteurs, de segments et de concurrents à la fois.",
+  },
+  "propage.ultra_price": {
+    en: "Ultra is CA${monthly} a month or CA${yearly} a year, taxes added at checkout.",
+    fr: "Ultra coûte {monthly} $ CA par mois ou {yearly} $ CA par année, taxes ajoutées au paiement.",
+  },
   "propage.q_seller": { en: "Who sells Pro?", fr: "Qui vend Pro?" },
   "propage.a_seller": {
     en: "Pro is sold through Link, the merchant of record run by Stripe, on behalf of Allwater Software Inc., the British Columbia corporation that publishes Award Watch. Card details go to Stripe and never reach this site; Link sends the receipts.",
@@ -3433,6 +3499,11 @@ const STRINGS = {
   "plans.unavailable": { en: "Not on sale yet", fr: "Pas encore en vente" },
   "plans.free_for": { en: "Every page, with or without an account.", fr: "Toutes les pages, avec ou sans compte." },
   "plans.pro_for": { en: "For people who bid, or follow who wins.", fr: "Pour qui soumissionne, ou suit qui gagne." },
+  // Ultra's card, while Ultra is on sale (src/pro.tsx planCards), and the moves between the plans.
+  "plans.ultra_for": { en: "For people who follow a whole market.", fr: "Pour qui suit tout un marché." },
+  "plans.ultra_subscribe": { en: "Subscribe to Ultra", fr: "S'abonner à Ultra" },
+  "plans.move_ultra": { en: "Move to Ultra", fr: "Passer à Ultra" },
+  "plans.move_pro": { en: "Move to Pro", fr: "Passer à Pro" },
   // Under the Pro card's buttons while it is on sale: the taxes named with the price.
   "plans.seller": {
     en: "Taxes added at checkout. Monthly or yearly, cancel any time. Sold through Link on behalf of Allwater Software Inc.",
@@ -4069,8 +4140,9 @@ const STRINGS = {
   // After the monthly figure: "CA$18.99 a month, or CA$189.99 a year".
   "landing.price_rest": { en: "a month, or {yearly} a year", fr: "par mois, ou {yearly} par année" },
   "landing.everything_pro": { en: "Everything in Pro", fr: "Tout ce que comprend Pro" },
-  "landing.ultra": { en: "Ultra", fr: "Ultra" },
-  "landing.ultra_hidden": { en: "(custom plan)", fr: "(forfait sur mesure)" },
+  // Ultra's name, on its chip (src/pro.tsx UltraTag), its cards and the lines that name it, and the chip's long form.
+  "ultra.tag": { en: "Ultra", fr: "Ultra" },
+  "ultra.tag_hidden": { en: "(custom plan)", fr: "(forfait sur mesure)" },
   "landing.ultra_price": { en: "Price to be set", fr: "Prix à fixer" },
   "landing.ultra_soon": { en: "Coming soon", fr: "Bientôt offert" },
   "landing.ultra_for": {
@@ -4144,7 +4216,9 @@ type Vars = Record<string, string | number>;
 export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "account.plan_tag_pro", // the plan subscript after the wordmark reads the same in both
   "pro.tag", // the plan's name on the Pro chip
-  "landing.ultra", // the third plan's name, on its chip and card (src/pages/landing.tsx)
+  "ultra.tag", // the third plan's name, on its chip and card (src/pro.tsx UltraTag)
+  "account.plan_tag_ultra", // the Ultra subscript after the wordmark reads the same in both
+  "propage.ultra_title", // the Pro page's section on Ultra, headed by the plan's name
   "tip.head", // a chart tip's series and period, joined by a comma in both
   "site.name",
   "nav.segments",

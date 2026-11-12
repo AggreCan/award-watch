@@ -86,7 +86,13 @@ every row of `PLAN_ROWS` in order, as the Pro page does, Pro with its price
 from the checkout's figures (or "Not on sale yet"); Ultra, in sapphire with
 the 2 x 2 tiles chip, reads "Price to be set" and "Coming soon", lists its
 planned scope and ends on a one-field form in place of a button (below).
-The chips sit on the plan cards only. Every piece the switch changes is
+Once Ultra is on sale (docs/accounts.md, *Ultra*) the card shows its monthly
+figure large with the yearly beside it, "For people who follow a whole
+market.", "Everything in Pro" and Ultra's own lines with its figures from
+`RULES`, and Subscribe to Ultra, outlined in sapphire, through the sign-in
+page to the billing page's Ultra panel; the form leaves the card, and the
+addresses it kept stay for the Ultra message. The chips sit on the plan
+cards only. Every piece the switch changes is
 listed in `LANDING_SWITCH_PIECES` (`site/test/home.ts`); the switch guards
 strip them and hold the rest of the page equal in both states.
 

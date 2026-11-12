@@ -56,10 +56,12 @@ const CHECKOUT_LOCALE: Record<Lang, string> = { en: "en", fr: "fr-CA" };
 const PORTAL_LOCALE: Record<Lang, string> = { en: "en-CA", fr: "fr-CA" };
 
 const PRICE_RE = /^price_[A-Za-z0-9]{1,100}$/;
+const PRODUCT_RE = /^prod_[A-Za-z0-9]{1,100}$/;
 // Whole dollars, or dollars and two digits of cents: the figure in Canadian
 // dollars as the page prints it.
 const FIGURE_RE = /^[0-9]{1,6}(\.[0-9]{2})?$/;
 const USER_RE = /^[0-9a-f]{32}$/;
+const ITEM_RE = /^si_[A-Za-z0-9_]{1,100}$/;
 
 const set = (v: string | undefined): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
@@ -70,17 +72,67 @@ export function stripeKeys(env: Pick<Env, "STRIPE_SECRET_KEY" | "STRIPE_WEBHOOK_
 }
 
 export type Offer = Record<Interval, { price: string; figure: string }>;
+export type Offers = { pro: Offer | null; ultra: (Offer & { product: string }) | null };
 
-// The two prices, or null when any of the four values is missing or not in
-// its expected form (the page then says Pro is not available yet rather than
-// show a button without its price).
-export function stripeOffer(env: Env): Offer | null {
-  const monthly = { price: set(env.STRIPE_PRICE_MONTHLY), figure: set(env.PRICE_MONTHLY_CAD) };
-  const yearly = { price: set(env.STRIPE_PRICE_YEARLY), figure: set(env.PRICE_YEARLY_CAD) };
+function offerOf(monthlyPrice: string | undefined, monthlyFigure: string | undefined, yearlyPrice: string | undefined, yearlyFigure: string | undefined): Offer | null {
+  const monthly = { price: set(monthlyPrice), figure: set(monthlyFigure) };
+  const yearly = { price: set(yearlyPrice), figure: set(yearlyFigure) };
   for (const o of [monthly, yearly]) {
     if (!o.price || !PRICE_RE.test(o.price) || !o.figure || !FIGURE_RE.test(o.figure)) return null;
   }
   return { monthly: monthly as Offer["monthly"], yearly: yearly as Offer["yearly"] };
+}
+
+// Each plan's two prices. Pro's is null when any of its four values is
+// missing or not in its expected form (the page then says Pro is not
+// available yet rather than show a button without its price); Ultra's when
+// any of its five is (the product id with them). The figures must match the
+// prices in Stripe; nothing checks that.
+export function stripeOffers(env: Env): Offers {
+  const pro = offerOf(env.STRIPE_PRICE_MONTHLY, env.PRICE_MONTHLY_CAD, env.STRIPE_PRICE_YEARLY, env.PRICE_YEARLY_CAD);
+  const product = set(env.STRIPE_PRODUCT_ULTRA);
+  const ultra = product && PRODUCT_RE.test(product)
+    ? offerOf(env.STRIPE_PRICE_ULTRA_MONTHLY, env.PRICE_ULTRA_MONTHLY_CAD, env.STRIPE_PRICE_ULTRA_YEARLY, env.PRICE_ULTRA_YEARLY_CAD)
+    : null;
+  return { pro, ultra: ultra && product ? { ...ultra, product } : null };
+}
+
+// Pro's two prices, as before Ultra.
+export function stripeOffer(env: Env): Offer | null {
+  return stripeOffers(env).pro;
+}
+
+// -- which plan a subscription pays for ----------------------------------------------
+
+// The ids that name Ultra: its product, and its two prices, each read on its
+// own (a figure left out of form does not make a paid Ultra subscription read
+// as Pro). Mapping by product keeps a subscriber on an older Ultra price on
+// Ultra after a price change.
+function ultraIds(env: Env): { product: string | null; prices: Set<string> } {
+  const product = set(env.STRIPE_PRODUCT_ULTRA);
+  const prices = [set(env.STRIPE_PRICE_ULTRA_MONTHLY), set(env.STRIPE_PRICE_ULTRA_YEARLY)]
+    .filter((p): p is string => p !== null && PRICE_RE.test(p));
+  return { product: product && PRODUCT_RE.test(product) ? product : null, prices: new Set(prices) };
+}
+
+const namesUltra = (ids: ReturnType<typeof ultraIds>, item: { price: string | null; product: string | null }): boolean =>
+  (!!ids.product && item.product === ids.product) || (!!item.price && ids.prices.has(item.price));
+
+// The plan a subscription pays for: Ultra when its one item is on the Ultra
+// product (or one of the Ultra prices), else Pro, as before Ultra. A
+// subscription with no item read, or several, is Pro: an unknown product
+// never grants Ultra.
+export function planOfSubscription(env: Env, s: Pick<SubscriptionState, "item">): "pro" | "ultra" {
+  return s.item && namesUltra(ultraIds(env), s.item) ? "ultra" : "pro";
+}
+
+// Whether the subscription carries a pending update (a change Stripe applies
+// only once its invoice is paid) that names Ultra: the change is not paid for
+// yet, so a notice that sees it grants nothing and is answered 5xx.
+export function pendingUltra(env: Env, s: Pick<SubscriptionState, "pending">): boolean {
+  if (!s.pending) return false;
+  const ids = ultraIds(env);
+  return s.pending.some((item) => namesUltra(ids, item));
 }
 
 // The form-action directive of the Content-Security-Policy (index.tsx). Every
@@ -160,15 +212,34 @@ const userHint = (meta: unknown): string | null => {
   return u && USER_RE.test(u) ? u : null;
 };
 
+// An item's price and its product (a string id, or the expanded object's).
+const priceOf = (item: J): { price: string | null; product: string | null } => {
+  const price = obj(item.price);
+  return { price: str(price?.id) ?? str(item.price), product: idOf(price?.product) };
+};
+
 // A Subscription object. The period end is on each item in current
 // versions and on the subscription itself in older ones; the latest wins.
+// item: the subscription's one item (its id, price, product and the
+// interval it bills at), null when it has none or several, which the site
+// never makes. pending: the items of
+// a pending update (pending_update.subscription_items), null when there is none.
 export function readSubscription(o: J): SubscriptionState | null {
   const id = str(o.id);
   const customerId = idOf(o.customer);
   const status = str(o.status);
   if (!id || !customerId || !status) return null;
-  const periodEnd = latest([secs(o.current_period_end), ...listData(o.items).map((i) => secs(i.current_period_end))]);
-  return { id, customerId, status, periodEnd, userId: userHint(o.metadata) };
+  const items = listData(o.items);
+  const periodEnd = latest([secs(o.current_period_end), ...items.map((i) => secs(i.current_period_end))]);
+  const only = items.length === 1 ? items[0] : null;
+  const itemId = only ? str(only.id) : null;
+  const every = only ? obj(obj(only.price)?.recurring)?.interval : null;
+  const interval = every === "month" ? "monthly" : every === "year" ? "yearly" : null;
+  const item = only && itemId && ITEM_RE.test(itemId) ? { id: itemId, interval, ...priceOf(only) } as const : null;
+  const update = obj(o.pending_update);
+  const pendingItems = update && Array.isArray(update.subscription_items) ? update.subscription_items.map(obj).filter((x): x is J => x !== null) : [];
+  const pending = update ? pendingItems.map(priceOf) : null;
+  return { id, customerId, status, periodEnd, userId: userHint(o.metadata), item, pending };
 }
 
 const isoOf = (v: unknown): string | null => {
@@ -314,7 +385,8 @@ export async function rawBody(request: Request, max = NOTICE_MAX_BYTES): Promise
 export function stripeSource(env: Env): PaymentSource | null {
   const keys = stripeKeys(env);
   if (!keys) return null;
-  const offer = stripeOffer(env);
+  const offers = stripeOffers(env);
+  const offer = offers.pro;
   const key = keys.secretKey;
 
   async function subscription(id: string): Promise<ReadSubscription> {
@@ -327,6 +399,11 @@ export function stripeSource(env: Env): PaymentSource | null {
     kind: "stripe",
     available: () => offer !== null,
     offer: () => (offer ? { monthly: offer.monthly.figure, yearly: offer.yearly.figure } : null),
+    offerFor: (plan) => {
+      const o = offers[plan];
+      return o ? { monthly: o.monthly.figure, yearly: o.yearly.figure } : null;
+    },
+    priceFor: (plan, interval) => offers[plan]?.[interval].price ?? null,
 
     // A Checkout Session in subscription mode for the chosen price. The
     // user id rides as client_reference_id (checkout.session.completed) and
@@ -340,10 +417,11 @@ export function stripeSource(env: Env): PaymentSource | null {
     // customer_update[address], which it lists among the parameters it has
     // no use for, are not sent.
     async checkoutUrl(input: CheckoutInput): Promise<string | null | "busy"> {
-      if (!offer) return null;
+      const chosen = offers[input.plan];
+      if (!offer || !chosen) return null;
       const form: [string, string][] = [
         ["mode", "subscription"],
-        ["line_items[0][price]", offer[input.interval].price],
+        ["line_items[0][price]", chosen[input.interval].price],
         ["line_items[0][quantity]", "1"],
         ["client_reference_id", input.userId],
         ["subscription_data[metadata][user_id]", input.userId],
@@ -364,12 +442,37 @@ export function stripeSource(env: Env): PaymentSource | null {
       return onHost(res.body.url, CHECKOUT_HOST);
     },
 
+    // The portal for the stored customer. With a flow, the session opens at
+    // one change of the subscription's one item (flow_data of type
+    // subscription_update_confirm: the subscription, the item and the price
+    // to move it to), where Stripe's page shows the amount due before the
+    // reader confirms and handles the card's authentication, then returns to
+    // the flow's own address. Stripe refuses such a session (a 4xx) when the
+    // portal's configuration does not list the price, or the subscription
+    // cannot take the change; the plain portal is then opened in its place,
+    // so the reader is never left on an error.
     async portalUrl(input: PortalInput): Promise<string | null> {
-      const res = await call<J>(key, "POST", "/billing_portal/sessions", "portal session", [
+      const base: [string, string][] = [
         ["customer", input.customerId],
         ["return_url", input.returnUrl],
         ["locale", PORTAL_LOCALE[input.lang]],
-      ]);
+      ];
+      if (input.flow) {
+        const f = input.flow;
+        const res = await call<J>(key, "POST", "/billing_portal/sessions", "portal flow session", [
+          ...base,
+          ["flow_data[type]", "subscription_update_confirm"],
+          ["flow_data[subscription_update_confirm][subscription]", f.subscriptionId],
+          ["flow_data[subscription_update_confirm][items][0][id]", f.itemId],
+          ["flow_data[subscription_update_confirm][items][0][price]", f.priceId],
+          ["flow_data[subscription_update_confirm][items][0][quantity]", "1"],
+          ["flow_data[after_completion][type]", "redirect"],
+          ["flow_data[after_completion][redirect][return_url]", f.doneUrl],
+        ]);
+        if (res.ok) return onHost(res.body.url, PORTAL_HOST);
+        if (res.status < 400 || res.status >= 500) return null;
+      }
+      const res = await call<J>(key, "POST", "/billing_portal/sessions", "portal session", base);
       return res.ok ? onHost(res.body.url, PORTAL_HOST) : null;
     },
 

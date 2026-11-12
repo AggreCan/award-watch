@@ -7,7 +7,8 @@
 // and, once the block allows a ranking, tenders/open.json and
 // tenders/open-levels.json, both kept parsed while their ETags hold. It never
 // reads the records database and never writes. Free lists the first
-// RULES.free.matches notices; Pro up to RULES.pro.matches, MATCH_PAGE a page.
+// RULES.free.matches notices; Pro up to RULES.pro.matches, MATCH_PAGE a page;
+// Ultra up to RULES.ultra.matches (matchCap reads the reader's own plan).
 //
 // The states, each with the disclaimer: no claim (the page's one filled
 // button leads to the claim), the profile gone from the data, a profile
@@ -32,7 +33,7 @@ import { PageHead, Panel } from "../layout";
 import { typeLabel } from "../pages/instruments";
 import { TYPE_CODES, type TypeCode } from "../instruments";
 import { fiscalLabel } from "../records_db";
-import { MATCH_PAGE, RULES, matchCap } from "./entitlements";
+import { MATCH_PAGE, type Plan, RULES, matchCap } from "./entitlements";
 import { checkOrganization, readClaim } from "./org_claim";
 import { ORG_PATH } from "./org_pages";
 import { accountPage } from "./pages";
@@ -53,7 +54,8 @@ export type MatchesState =
   | { kind: "empty"; id: string; name: string; fy: [number, number] }
   | { kind: "uncoded" | "thin"; id: string; name: string; block: MatchBlock }
   | {
-    kind: "ready"; id: string; name: string; block: MatchBlock; profile: Profile; pro: boolean;
+    // The reader's plan, whose cap the list keeps (matchCap); pro: a paid plan, which pages the list.
+    kind: "ready"; id: string; name: string; block: MatchBlock; profile: Profile; plan: Plan; pro: boolean;
     // null when the open notices cannot be read.
     list: { matches: Ranked[]; uncoded: number } | null;
     page: number; levels: Parameters<typeof levelText>[2]; buyerNames: Map<string, string>; typeNames: Map<string, string>;
@@ -103,7 +105,7 @@ const ListPanel: FC<{ lang: Lang; s: Extract<MatchesState, { kind: "ready" }> }>
   const n = (v: number) => fmtInt(v, lang);
   if (!s.list) return <Panel title={t(lang, "fit.panel_list")}><p>{t(lang, "fit.unavailable")}</p></Panel>;
   const total = s.list.matches.length;
-  const cap = matchCap(s.pro ? "pro" : "free");
+  const cap = matchCap(s.plan);
   const listed = Math.min(total, cap);
   const size = s.pro ? MATCH_PAGE : cap;
   const pages = Math.max(1, Math.ceil(listed / size));
@@ -306,7 +308,7 @@ export async function readMatches(c: Context<AppEnv>, who: Account): Promise<Mat
   const list = open ? rankNotices(block, open.filter((r) => !closingPassed(r.closing, clock)), profile.organization.province) : null;
   const raw = c.req.query("page") ?? "";
   return {
-    kind: "ready", id, name, block, profile, pro: who.plan === "pro", list, page: PAGE_RE.test(raw) ? Number(raw) : 1, levels,
+    kind: "ready", id, name, block, profile, plan: who.plan, pro: who.plan !== "free", list, page: PAGE_RE.test(raw) ? Number(raw) : 1, levels,
     ...(await namesFor(c, lang, block, profile, open)),
   };
 }

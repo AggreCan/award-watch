@@ -548,11 +548,14 @@ export function datasetJsonLd(sets: readonly DataSet[], dataAsOf: string | null,
 // PRICE_MONTHLY_CAD and PRICE_YEARLY_CAD), taxes not included; and the
 // page's questions as a FAQPage, word for word as the page shows them. No
 // Product without a price: the page leaves it out while the checkout is
-// not configured.
+// not configured. While Ultra is on sale (ultra holds its figures, from
+// PRICE_ULTRA_MONTHLY_CAD and PRICE_ULTRA_YEARLY_CAD), Ultra is a Product of
+// its own beside Pro's, with its two offers.
 export type Faq = { q: string; a: string };
 
 export function proJsonLd(
-  lang: Lang, o: { price: { monthly: string; yearly: string } | null; description: string; faq: readonly Faq[] },
+  lang: Lang,
+  o: { price: { monthly: string; yearly: string } | null; ultra?: { monthly: string; yearly: string } | null; description: string; faq: readonly Faq[] },
 ): object[] {
   const url = canonicalUrl("/pro", lang);
   const org = publisher(lang);
@@ -587,6 +590,23 @@ export function proJsonLd(
       offers: [
         offer(o.price.monthly, "MON", { en: "Pro, monthly", fr: "Pro, mensuel" }),
         offer(o.price.yearly, "ANN", { en: "Pro, yearly", fr: "Pro, annuel" }),
+      ],
+    });
+  }
+  if (o.price && o.ultra) {
+    out.push({
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "@id": `${SITE_ORIGIN}/pro#ultra-product`,
+      name: "Award Watch Ultra",
+      description: t(lang, "propage.ultra_who"),
+      url: `${url}#ultra`,
+      image: absoluteUrl(LOGO_PATH),
+      brand: { "@type": "Brand", name: SITE_NAME },
+      category: lang === "fr" ? "Abonnement à un service de données" : "Data service subscription",
+      offers: [
+        offer(o.ultra.monthly, "MON", { en: "Ultra, monthly", fr: "Ultra, mensuel" }),
+        offer(o.ultra.yearly, "ANN", { en: "Ultra, yearly", fr: "Ultra, annuel" }),
       ],
     });
   }

@@ -156,6 +156,10 @@ describe("the quota", () => {
     expect(keyQuota("pro")).toEqual({ perDay: KEY_PER_DAY, perMinute: KEY_PER_MINUTE });
     expect(keyQuota("pro")).toEqual({ perDay: 20_000, perMinute: 600 });
     expect(keyQuota("free")).toBeNull();
+    // Ultra has the keyed API, at a key's limits at or above Pro's.
+    expect(keyQuota("ultra")).not.toBeNull();
+    expect(keyQuota("ultra")!.perDay).toBeGreaterThanOrEqual(KEY_PER_DAY);
+    expect(PLANS).toContain("ultra");
     for (const plan of PLANS) expect(keyQuota(plan) !== null, plan).toBe(allowed({ plan }, "api"));
   });
 });

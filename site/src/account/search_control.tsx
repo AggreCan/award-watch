@@ -31,7 +31,7 @@ import type { AppEnv } from "../env";
 import { fmtInt, t, type Lang } from "../i18n";
 import type { InterestFilter } from "../pages/interest";
 import { ProNote } from "../pro";
-import { SAVED_SEARCH_MAX, allowed } from "./entitlements";
+import { RULES, allowed } from "./entitlements";
 import { capFor, searchState } from "./searches";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
@@ -98,7 +98,7 @@ const Cap: FC<{ lang: Lang; state: SaveState }> = ({ lang, state }) => state.pro
   </p>
 ) : (
   <ProNote lang={lang}>
-    {t(lang, "account.cap_note", { n: fmtInt(state.n, lang), cap: fmtInt(state.cap, lang), max: fmtInt(SAVED_SEARCH_MAX, lang) })}{" "}
+    {t(lang, "account.cap_note", { n: fmtInt(state.n, lang), cap: fmtInt(state.cap, lang), max: fmtInt(RULES.pro.saved_searches, lang) })}{" "}
     <a href="/account/billing">{t(lang, "billing.link_plans")}</a>
   </ProNote>
 );

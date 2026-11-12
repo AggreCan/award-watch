@@ -89,6 +89,12 @@
   /* The accent's soft ground: the head band of the plan card on offer
      (src/pro.tsx PlanCards), under ink labels and the chip. */
   --accent-soft: #e6f2ec;
+  /* Ultra's sapphire (operator's ruling of 2026-11-06), the landing page's
+     --sap: its chip, its plan card's frame, head and checks, and the brand
+     subscript of an Ultra account, nothing else; charts keep the emerald.
+     7.2:1 on white; its soft ground under the card's head band. */
+  --ultra: #0f52ba;
+  --ultra-soft: #e3ebf9;
   --amber: #b45309;
   --on-amber: #ffffff;
   /* The edge of a field or a button: 3.46:1 on white, past the 3:1 a
@@ -118,6 +124,7 @@
   --on-bar-2: #e8eef2;
   --on-bar-muted: #9fb0bd;
   --bar-accent: #2fc985;
+  --bar-ultra: #7eb0ff;
   --bar-field: #ffffff12;
   --bar-edge: #ffffff66;
   /* Charts: one hue, the mark's emerald a step lighter than the button's
@@ -169,6 +176,9 @@
   --sel: #172033;
   --accent: #34d399;
   --accent-soft: #122b22;
+  /* Sapphire lifted for the dark ground: 8.1:1 on the panel. */
+  --ultra: #7eb0ff;
+  --ultra-soft: #13223d;
   --amber: #fbbf24;
   --on-amber: #0b1120;
   --field-border: #5b6b80;
@@ -211,6 +221,8 @@
     --sel: #172033;
     --accent: #34d399;
     --accent-soft: #122b22;
+    --ultra: #7eb0ff;
+    --ultra-soft: #13223d;
     --amber: #fbbf24;
     --on-amber: #0b1120;
     --field-border: #5b6b80;
@@ -294,12 +306,13 @@ kbd { display: inline-block; min-width: 20px; padding: 0 4px; border: 1px solid 
    muted tone (the data date, the timers' labels, the placeholder, a free
    plan), the accent and the check are the bright emerald (the rule, the
    wordmark's check, the Pro chip, a Pro plan, the reload link), a
-   control's edge is white at 40%, and the hover ground is the bar's lighter
-   step. Nothing below the bar sees these values. */
+   control's edge is white at 40%, the sapphire is the lifted one of the
+   dark theme (an Ultra plan, 7.8:1 on the bar), and the hover ground is the
+   bar's lighter step. Nothing below the bar sees these values. */
 .topbar {
   --panel: var(--bar); --hover: var(--bar-hover);
   --ink: var(--on-bar); --ink-2: var(--on-bar-2); --muted: var(--on-bar-muted);
-  --accent: var(--bar-accent); --check: var(--bar-accent); --field-border: var(--bar-edge);
+  --accent: var(--bar-accent); --check: var(--bar-accent); --field-border: var(--bar-edge); --ultra: var(--bar-ultra);
   display: flex; align-items: center; gap: 8px 16px;
   height: var(--topbar); padding: 0 var(--gutter);
   background: var(--bar); color: var(--ink); border-bottom: 2px solid var(--accent);
@@ -310,9 +323,10 @@ kbd { display: inline-block; min-width: 20px; padding: 0 4px; border: 1px solid 
 .brand-lockup, .brand-wordmark { display: block; flex: none; width: auto; height: 24px; }
 .brand-mark { display: block; flex: none; width: 28px; height: 28px; color: var(--ink); }
 /* The signed-in reader's plan after the wordmark, set at its foot like a
-   subscript: muted for free, the accent for pro. */
+   subscript: muted for free, the accent for pro, the sapphire for ultra. */
 .brand-plan { flex: none; align-self: flex-end; margin: 0 0 1px 6px; font-size: 11px; line-height: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
 .brand-plan-pro { color: var(--accent); }
+.brand-plan-ultra { color: var(--ultra); }
 .mark-check { fill: var(--check); }
 .topbar-meta { display: flex; align-items: center; gap: 8px 16px; margin-left: auto; font-size: 12px; line-height: 16px; color: var(--muted); }
 .asof { white-space: nowrap; }
@@ -1277,6 +1291,19 @@ a > .pro-tag:last-child { margin-right: 0; }
    (an analytics view) stands 6 px from it. */
 .eyebrow:has(> .pro-tag) { display: flex; align-items: center; gap: 6px; }
 .eyebrow > .pro-tag { margin: 0; }
+/* Ultra's chip (src/pro.tsx UltraTag): the Pro chip's box, type and spacing
+   in the sapphire, with its 2 x 2 tiles. It goes where the Pro chip goes and
+   nowhere else: the rail, the tabs and the plan cards. */
+.ultra-tag {
+  display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; margin: 0 6px; padding: 0 5px;
+  border: 2px solid var(--ultra); border-radius: 4px; background: var(--panel); color: var(--ultra);
+  font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; font-variant-numeric: normal;
+  text-transform: none; text-decoration: none; white-space: nowrap; vertical-align: middle;
+}
+.ultra-tag svg { display: block; flex: none; width: 12px; height: 12px; fill: currentColor; }
+a > .ultra-tag:last-child { margin-right: 0; }
+.btn > .ultra-tag, .plan-card-head > .ultra-tag, .panel-tools > .ultra-tag, .eyebrow > .ultra-tag { margin: 0; }
+.rail-item > .ultra-tag { margin: 0 0 0 auto; }
 /* A gate note: the chip first, one sentence, a link. Muted small type, no
    box; the line is as tall as the chip. */
 /* No measure cap: a tease line with its link wraps only at the panel's edge (operator, 2026-11-07). */
@@ -1562,6 +1589,10 @@ th[aria-sort="descending"] .th-sort::after {
   min-height: var(--plan-head-h); padding: var(--plan-head-pad) 16px; background: var(--head); border-bottom: 1px solid var(--border-2);
 }
 .plan-card-offer .plan-card-head { background: var(--accent-soft); border-bottom-color: var(--accent); }
+/* Ultra's card, while Ultra is on sale: framed in its sapphire as Pro's is in
+   the accent, its head on the sapphire's soft ground, its checks in sapphire. */
+.plan-card.plan-card-ultra { border: 2px solid var(--ultra); }
+.plan-card-ultra .plan-card-head { background: var(--ultra-soft); border-bottom-color: var(--ultra); }
 .plan-card .plan-card-head h3 {
   margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink);
 }
@@ -1590,6 +1621,7 @@ th[aria-sort="descending"] .th-sort::after {
 .plan-card .plan-list .plan-lacks { color: var(--muted); }
 .plan-mark { display: block; flex: none; width: 12px; height: 12px; fill: var(--muted); }
 .plan-card-offer .plan-mark { fill: var(--accent); }
+.plan-card-ultra .plan-mark { fill: var(--ultra); }
 .plan-mark.plan-mark-none { fill: none; stroke: var(--border-2); stroke-width: 2; }
 .plan-card .plan-buttons {
   display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; margin: auto 16px 8px; padding-top: var(--plan-buttons-above);

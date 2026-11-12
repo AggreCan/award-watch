@@ -105,6 +105,18 @@ export interface Env {
   // only while both price ids and both figures are set.
   PRICE_MONTHLY_CAD?: string;
   PRICE_YEARLY_CAD?: string;
+  // Ultra, the plan above Pro (docs/accounts.md, Ultra): its Stripe product
+  // id (prod_...), its two price ids and the two figures shown beside them,
+  // variables in wrangler.jsonc like Pro's. Nothing offers Ultra unless all
+  // five are set and in form, the payment source offers Pro, and the
+  // entitlement_tiers table is on the accounts database (payments.ts
+  // ultraOnSale). The product id also maps a subscription to Ultra in the
+  // webhook (stripe.ts planOfSubscription).
+  STRIPE_PRODUCT_ULTRA?: string;
+  STRIPE_PRICE_ULTRA_MONTHLY?: string;
+  STRIPE_PRICE_ULTRA_YEARLY?: string;
+  PRICE_ULTRA_MONTHLY_CAD?: string;
+  PRICE_ULTRA_YEARLY_CAD?: string;
 
   // -- the landing page (src/pages/landing.tsx, docs/landing.md) ---------------
   // Brandfetch's Logo API client id, for the logos in the landing page's

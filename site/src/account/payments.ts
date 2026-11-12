@@ -12,7 +12,9 @@
 
 import type { Env } from "../env";
 import type { Lang } from "../i18n";
-import { stripeSource } from "./stripe";
+import { type PaidPlan, tiersReady } from "./entitlements";
+import { stripeOffers, stripeSource } from "./stripe";
+import { accountsEnabled } from "./switch";
 
 export const INTERVALS = ["monthly", "yearly"] as const;
 export type Interval = (typeof INTERVALS)[number];
@@ -22,6 +24,8 @@ export const isInterval = (v: unknown): v is Interval => v === "monthly" || v ==
 export type CheckoutInput = {
   userId: string;
   email: string;
+  // The plan bought: Pro, or Ultra while it is on sale (ultraOnSale).
+  plan: PaidPlan;
   interval: Interval;
   lang: Lang;
   // The service's customer from an earlier subscription, so a returning
@@ -31,11 +35,24 @@ export type CheckoutInput = {
   cancelUrl: string;
 };
 
-export type PortalInput = { customerId: string; returnUrl: string; lang: Lang };
+// flow: open the portal at one change of the subscription's one item, its
+// price moved to priceId (a move between plans, billing.tsx moveBetweenPlans),
+// returning to doneUrl once confirmed.
+export type PortalFlow = { subscriptionId: string; itemId: string; priceId: string; doneUrl: string };
+export type PortalInput = { customerId: string; returnUrl: string; lang: Lang; flow?: PortalFlow };
+
+// One item's price and product, as the service names them.
+export type ItemPrice = { price: string | null; product: string | null };
 
 // A subscription as the service reports it. periodEnd is ISO, null when the
-// service gave none.
-export type SubscriptionState = { id: string; customerId: string; status: string; periodEnd: string | null; userId: string | null };
+// service gave none. item is its one item (null when it has none or
+// several), with the interval its price bills at (null for any other than
+// a month or a year); pending the items of a pending update, null when there
+// is none.
+export type SubscriptionState = {
+  id: string; customerId: string; status: string; periodEnd: string | null; userId: string | null;
+  item: ({ id: string; interval: Interval | null } & ItemPrice) | null; pending: ItemPrice[] | null;
+};
 
 // What a verified notice asks for. userId on the last two is the hint the
 // subscription carries in its metadata (set at checkout), used only when the
@@ -68,6 +85,11 @@ export interface PaymentSource {
   // The two prices as the page shows them (text in Canadian dollars), or
   // null while not available.
   offer(): Readonly<Record<Interval, string>> | null;
+  // The same for either plan: Pro's is offer(); Ultra's is null unless its
+  // five variables are set and in form (whether it is on sale is ultraOnSale's).
+  offerFor(plan: PaidPlan): Readonly<Record<Interval, string>> | null;
+  // The service's price id for a plan and interval, null when not configured.
+  priceFor(plan: PaidPlan, interval: Interval): string | null;
   // "busy": a checkout with other choices was started for the user moments
   // ago, and a second subscription is not started beside it.
   checkoutUrl(input: CheckoutInput): Promise<string | null | "busy">;
@@ -89,6 +111,8 @@ export const stubPayments: PaymentSource = {
   kind: "stub",
   available: () => false,
   offer: () => null,
+  offerFor: () => null,
+  priceFor: () => null,
   checkoutUrl: async () => null,
   portalUrl: async () => null,
   readNotice: async () => ({ ok: false }),
@@ -99,4 +123,21 @@ export const stubPayments: PaymentSource = {
 
 export function paymentSource(env: Env): PaymentSource {
   return stripeSource(env) ?? stubPayments;
+}
+
+// Whether Ultra can be bought: the accounts switch is on, the payment source
+// offers Pro, all five Ultra variables are set and in form, and the
+// entitlement_tiers table is on the accounts database (entitlements.ts
+// tiersReady, a true answer kept for the isolate's life). It decides the
+// third plan card, the Ultra section of /pro, the landing page's Ultra card,
+// Ultra's offers in the Product markup, the Ultra checkout and moves, and
+// whether the Ultra message may be sent. The cheap checks come first, so a
+// site without the Ultra variables never reads the database for it. An
+// account the operator granted Ultra uses its features and sees its labels
+// whatever this answers.
+export async function ultraOnSale(env: Env): Promise<boolean> {
+  if (!accountsEnabled(env)) return false;
+  if (!paymentSource(env).available()) return false;
+  if (!stripeOffers(env).ultra) return false;
+  return tiersReady(env);
 }

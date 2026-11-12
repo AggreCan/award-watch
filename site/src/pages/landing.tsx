@@ -59,7 +59,10 @@ import {
 import { FitDisclaimer, type ReasonContext, bandText, reasonText } from "../fit";
 import { BrandMark, BrandWordmark, FooterRow, MetaTags, noDataPage, todayOf, varyOnCookie } from "../layout";
 import { LANDING_ORGS_A, LANDING_ORGS_B, type LandingOrg, brandfetchLogoUrl } from "../landing_orgs";
-import { type ProPrice, PLAN_ROWS, ProTag, SUBSCRIBE_PATH, checkoutPrice, planLine, rowFor, sameDayHours } from "../pro";
+import {
+  type ProPrice, PLAN_ROWS, ProTag, SUBSCRIBE_PATH, ULTRA_SUBSCRIBE_PATH, UltraTag, checkoutPrice, planLine, rowFor, sameDayHours, ultraCheckoutPrice,
+  ultraLines,
+} from "../pro";
 import { MAX_YEARS } from "../records_db";
 import { DAILY_RUNS_UTC } from "../refresh";
 import { homeJsonLd, pageSeo } from "../seo";
@@ -132,18 +135,10 @@ const CHECK_PATH = "M6.5 11.3 3.2 8l1.1-1.1 2.2 2.2 5.2-5.2 1.1 1.1z";
 const Check: FC = () => <svg class="lp-ck" viewBox="0 0 16 16" aria-hidden="true"><path d={CHECK_PATH} /></svg>;
 const Ring: FC = () => <svg class="lp-ck lp-ck-none" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" /></svg>;
 
-// Ultra's chip: the word and the 2 x 2 tiles in sapphire (operator's ruling of
-// 2026-11-06), with the long form for assistive technology. Drawn on the
-// Ultra card alone, since chips live in the rail, the window tabs and the
-// plan cards only.
-export const ULTRA_GLYPH_PATH = "M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z";
-const UltraTag: FC<{ lang: Lang }> = ({ lang }) => (
-  <span class="ultra-tag">
-    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d={ULTRA_GLYPH_PATH} /></svg>
-    {t(lang, "landing.ultra")}
-    <span class="visually-hidden">{` ${t(lang, "landing.ultra_hidden")}`}</span>
-  </span>
-);
+// Ultra's chip is the site's own (src/pro.tsx UltraTag), drawn on the Ultra
+// card alone at this page's 11 px, since chips live in the rail, the window
+// tabs and the plan cards only.
+export { ULTRA_GLYPH_PATH } from "../pro";
 
 // -- the hero's map ------------------------------------------------------------------
 
@@ -396,8 +391,10 @@ const PlanList: FC<{ lang: Lang; plan: "free" | "pro" }> = ({ lang, plan }) => (
   </ul>
 );
 
-// Ultra's rows: the planned scope, its unset figures saying so (operator's
-// ruling on tier lines, 2026-11-06). Every row is one Ultra will have.
+// Ultra's rows while it is not on sale: the planned scope, its unset figures
+// saying so (operator's ruling on tier lines, 2026-11-06). Every row is one
+// Ultra will have. Once it is on sale (ultraOnSale), the card lists what
+// Ultra holds that day, with Ultra's own figures (src/pro.tsx ultraLines).
 export const ULTRA_ROWS = [
   "landing.everything_pro", "landing.ultra_builder", "landing.ultra_schedule", "landing.ultra_dashboard", "landing.ultra_caps",
 ] as const;
@@ -441,7 +438,38 @@ export const UltraBox: FC<{ lang: Lang } & UltraState> = ({ lang, done, error, e
   </div>
 );
 
-const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState }> = ({ lang, price, ultra }) => {
+// The Ultra card. While Ultra is not on sale: no price, the "Coming soon"
+// tag, the planned rows and the one-field form. While it is (sale holds its
+// figures): the monthly figure large and the yearly beside it, the "for"
+// line, "Everything in Pro" and Ultra's own figures, and Subscribe to Ultra
+// through the sign-in page, outlined in sapphire as the form's button is;
+// the form leaves the card, and the addresses it kept stay for the message.
+const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null }> = ({ lang, ultra, sale }) => {
+  const figure = (n: string) => t(lang, "plans.figure", { n: decimal(lang, n) });
+  return sale ? (
+    <div class="lp-plan lp-plan-ultra" id={ULTRA_ANCHOR}>
+      <h3 class="lp-plan-nm">{t(lang, "ultra.tag")}<UltraTag lang={lang} size={11} /></h3>
+      <p class="lp-pr">{figure(sale.monthly)}<small>{t(lang, "landing.price_rest", { yearly: figure(sale.yearly) })}</small></p>
+      <p class="lp-for">{t(lang, "plans.ultra_for")}</p>
+      <ul class="lp-plan-list lp-plan-list-wrap">
+        {[t(lang, "landing.everything_pro"), ...ultraLines(lang)].map((line) => <li><Check /><span>{line}</span></li>)}
+      </ul>
+      <p class="lp-plan-acts"><a class="lp-btn" href={ULTRA_SUBSCRIBE_PATH}>{t(lang, "plans.ultra_subscribe")}</a></p>
+    </div>
+  ) : (
+    <div class="lp-plan lp-plan-ultra" id={ULTRA_ANCHOR}>
+      <h3 class="lp-plan-nm">{t(lang, "ultra.tag")}<UltraTag lang={lang} size={11} /></h3>
+      <p class="lp-pr lp-pr-unset">{t(lang, "landing.ultra_price")} <span class="lp-soon-tag">{t(lang, "landing.ultra_soon")}</span></p>
+      <p class="lp-for">{t(lang, "landing.ultra_for")}</p>
+      <ul class="lp-plan-list lp-plan-list-wrap">
+        {ULTRA_ROWS.map((k) => <li><Check /><span>{t(lang, k)}</span></li>)}
+      </ul>
+      <UltraBox lang={lang} {...ultra} />
+    </div>
+  );
+};
+
+const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: ProPrice | null }> = ({ lang, price, ultra, sale }) => {
   const figure = (n: string) => t(lang, "plans.figure", { n: decimal(lang, n) });
   return (
     <section class="lp-pricing" aria-labelledby="lp-plans-h">
@@ -469,15 +497,7 @@ const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState }> = ({ 
               <a class="lp-btn" href="/pro">{t(lang, "landing.everything_pro")}</a>
             </p>
           </div>
-          <div class="lp-plan lp-plan-ultra" id={ULTRA_ANCHOR}>
-            <h3 class="lp-plan-nm">{t(lang, "landing.ultra")}<UltraTag lang={lang} /></h3>
-            <p class="lp-pr lp-pr-unset">{t(lang, "landing.ultra_price")} <span class="lp-soon-tag">{t(lang, "landing.ultra_soon")}</span></p>
-            <p class="lp-for">{t(lang, "landing.ultra_for")}</p>
-            <ul class="lp-plan-list lp-plan-list-wrap">
-              {ULTRA_ROWS.map((k) => <li><Check /><span>{t(lang, k)}</span></li>)}
-            </ul>
-            <UltraBox lang={lang} {...ultra} />
-          </div>
+          <UltraCard lang={lang} ultra={ultra} sale={sale} />
         </div>
         {price ? <p class="lp-plans-note">{t(lang, "plans.seller")}</p> : null}
       </div>
@@ -505,11 +525,12 @@ export async function landingPage(c: Context<AppEnv>, ultra: UltraState | null, 
   // The 3-month window's first page, as the radar's overview reads it: none
   // to read when the window is empty, null when the file is missing.
   const firstEnding = three && three.n > 0 ? await loadExpiringPage(c.env, "3m", 1).catch(() => null) : [];
+  const ultraPrice = await ultraCheckoutPrice(c.env);
   c.header("Cache-Control", ultra ? "no-store" : "public, max-age=300");
   varyOnCookie(c);
   return c.html(html`<!doctype html>${(
     <LandingDoc lang={lang} on={accountsEnabled(c.env)} stats={stats} clock={clock} endingN={three?.n} ending={firstEnding ?? []}
-      profile={profile} price={checkoutPrice(c.env)} logo={c.env.BRANDFETCH_CLIENT_ID?.trim() || null} ultra={ultra} />
+      profile={profile} price={checkoutPrice(c.env)} logo={c.env.BRANDFETCH_CLIENT_ID?.trim() || null} ultra={ultra} ultraPrice={ultraPrice} />
   ) as any}`, status);
 }
 
@@ -544,7 +565,7 @@ export async function ultraSubmit(c: Context<AppEnv>, post: InterestPost): Promi
   if (!email) return ultraAnswer(c, { error: "interest.err_email", email: typed.slice(0, EMAIL_MAX) }, 400, fragment);
   try {
     await c.env.DB.prepare(INSERT_INTEREST)
-      .bind(email, ULTRA_KIND, ULTRA_PARAMS, t(lang, "landing.ultra"), lang, new Date().toISOString(), newToken()).run();
+      .bind(email, ULTRA_KIND, ULTRA_PARAMS, t(lang, "ultra.tag"), lang, new Date().toISOString(), newToken()).run();
   } catch (e) {
     console.error(`interest not stored: ${String(e).slice(0, 200)}`);
     return ultraAnswer(c, { error: "form.err_unavailable", email }, 503, fragment);
@@ -552,12 +573,14 @@ export async function ultraSubmit(c: Context<AppEnv>, post: InterestPost): Promi
   return ultraAnswer(c, { done: true, email }, 200, fragment);
 }
 
+// ultraPrice: Ultra's figures while it is on sale (src/pro.tsx
+// ultraCheckoutPrice), which turn its card from the waitlist to the price.
 type DocProps = {
   lang: Lang; on: boolean; stats: Stats; clock: Clock; endingN: number | undefined; ending: readonly ExpiringRow[];
-  profile: Profile | null; price: ProPrice | null; logo: string | null; ultra?: UltraState | null;
+  profile: Profile | null; price: ProPrice | null; logo: string | null; ultra?: UltraState | null; ultraPrice?: ProPrice | null;
 };
 
-export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null }) => {
+export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null, ultraPrice = null }) => {
   const counts = stats.counts;
   const seo = pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] });
   const lobbying = sourceLoaded("lobbying", null, stats) === true;
@@ -792,7 +815,7 @@ export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, endi
             </div>
           </section>
 
-          {on ? <Plans lang={lang} price={price} ultra={ultra ?? {}} /> : null}
+          {on ? <Plans lang={lang} price={price} ultra={ultra ?? {}} sale={ultraPrice} /> : null}
 
           <section class="lp-close" aria-labelledby="lp-close-h">
             <div class="lp-wrap">

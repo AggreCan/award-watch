@@ -8,7 +8,7 @@ import { competitiveLabel, fmtInt, statusLabel, t, type Key, type Lang } from ".
 import {
   SOCIAL_CARD_HEIGHT, SOCIAL_CARD_URL, SOCIAL_CARD_WIDTH, type Seo, alternates, canonicalUrl, defaultDescription, pageTitle,
 } from "./seo";
-import { allowed } from "./account/entitlements";
+import { type Plan, allowed } from "./account/entitlements";
 import { type RailAccount, railAccount } from "./account/session";
 import { accountsEnabled } from "./account/switch";
 import { ProTag } from "./pro";
@@ -461,7 +461,11 @@ const TipScript: FC<{ tables: TableUse }> = ({ tables }) =>
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 59;
+export const STYLES_VERSION = 60;
+
+// The subscript after the wordmark for a signed-in reader, by plan: Ultra's
+// in its sapphire (public/styles.css .brand-plan-ultra), Pro's in the accent.
+export const PLAN_TAG: Record<Plan, Key> = { free: "account.plan_tag_free", pro: "account.plan_tag_pro", ultra: "account.plan_tag_ultra" };
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -543,7 +547,7 @@ export const Layout: FC<
             {/* The signed-in reader's plan, a subscript after the wordmark (operator, 2026-11-03); nothing while signed out. */}
             {shell?.account?.email && shell.account.plan ? (
               <span class={`brand-plan brand-plan-${shell.account.plan}`}>
-                {t(lang, shell.account.plan === "pro" ? "account.plan_tag_pro" : "account.plan_tag_free")}
+                {t(lang, PLAN_TAG[shell.account.plan])}
               </span>
             ) : null}
           </a>

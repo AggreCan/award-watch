@@ -7,6 +7,7 @@ import { env } from "cloudflare:test";
 import { beforeAll } from "vitest";
 import accountsSchema from "../accounts_schema.sql?raw";
 import accountsDev from "../seed/accounts_dev.sql?raw";
+import { forgetTiers } from "../src/account/entitlements";
 import { app } from "../src/index";
 import { testEnv } from "./assets";
 import { homeRequest } from "./home";
@@ -119,6 +120,54 @@ export const MANUAL_GRANT_SQL =
 
 export async function grantPro(email: string, endsAt: string | null = null): Promise<void> {
   await ACCOUNTS.prepare(MANUAL_GRANT_SQL).bind(endsAt, email).run();
+}
+
+// Ultra by hand: a pro row and its tier row in one batch, as the console's
+// grant writes them (src/account/entitlements.ts entitlementWrites).
+export async function grantUltra(email: string, endsAt: string | null = null): Promise<string> {
+  const user = await userId(email);
+  const id = crypto.randomUUID().replace(/-/g, "");
+  const at = new Date().toISOString();
+  await ACCOUNTS.batch([
+    ACCOUNTS.prepare(
+      "INSERT INTO entitlements (id, user_id, plan, source, starts_at, ends_at, reference, created_at) VALUES (?, ?, 'pro', 'manual', ?, ?, 'manual grant', ?)",
+    ).bind(id, user, at, endsAt, at),
+    ACCOUNTS.prepare("INSERT INTO entitlement_tiers (entitlement_id, tier) VALUES (?, 'ultra')").bind(id),
+  ]);
+  return id;
+}
+
+// Stripe's two secrets and Pro's four variables, test values (the code holds no price).
+export const PRO_SALE = {
+  STRIPE_SECRET_KEY: "sk_test_fake0000", STRIPE_WEBHOOK_SECRET: "whsec_fake0000",
+  STRIPE_PRICE_MONTHLY: "price_monthlyTEST", STRIPE_PRICE_YEARLY: "price_yearlyTEST",
+  PRICE_MONTHLY_CAD: "12", PRICE_YEARLY_CAD: "120.50",
+};
+// Ultra's five variables, test values: with PRO_SALE and the tier table, Ultra is on sale (payments.ts ultraOnSale).
+export const ULTRA_VARS = {
+  STRIPE_PRODUCT_ULTRA: "prod_ultraTEST", STRIPE_PRICE_ULTRA_MONTHLY: "price_ultraMonthlyTEST", STRIPE_PRICE_ULTRA_YEARLY: "price_ultraYearlyTEST",
+  PRICE_ULTRA_MONTHLY_CAD: "30", PRICE_ULTRA_YEARLY_CAD: "301.50",
+};
+export const ultraEnv = (extra: Record<string, unknown> = {}) => onEnv({ ...PRO_SALE, ...ULTRA_VARS, ...extra });
+
+// entitlement_tiers taken off the database for the length of fn, then made
+// again from accounts_schema.sql: the database before the operator applies
+// the schema. The isolate's memory of having seen the table goes with it.
+const TIERS_SCHEMA = statements(accountsSchema).filter((s) => s.includes("entitlement_tiers"));
+export async function withoutTiers<T>(fn: () => Promise<T>): Promise<T> {
+  // The tier rows written so far are kept aside and put back, so later tests see them.
+  const kept = (await ACCOUNTS.prepare("SELECT entitlement_id, tier FROM entitlement_tiers").all<{ entitlement_id: string; tier: string }>()).results ?? [];
+  await ACCOUNTS.prepare("DROP TABLE IF EXISTS entitlement_tiers").run();
+  forgetTiers();
+  try {
+    return await fn();
+  } finally {
+    await ACCOUNTS.batch(TIERS_SCHEMA.map((s) => ACCOUNTS.prepare(s)));
+    if (kept.length) {
+      await ACCOUNTS.batch(kept.map((r) => ACCOUNTS.prepare("INSERT OR IGNORE INTO entitlement_tiers (entitlement_id, tier) VALUES (?, ?)").bind(r.entitlement_id, r.tier)));
+    }
+    forgetTiers();
+  }
 }
 
 // A page as it reads without Save this search (src/account/search_control.tsx),

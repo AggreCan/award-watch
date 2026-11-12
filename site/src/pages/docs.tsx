@@ -13,6 +13,7 @@ import { t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { OGL_URL, pageSeo, type PageKey } from "../seo";
 import { AccountsPrivacy, PaymentsPrivacy } from "../account/privacy";
+import { ultraOnSale } from "../account/payments";
 import { accountsEnabled } from "../account/switch";
 import { CONTACT_EMAIL } from "../contact";
 
@@ -111,7 +112,26 @@ const PRO_TERMS: [Key, Key][] = [
   ["terms.pro_changes_title", "terms.pro_changes"],
 ];
 
-export function termsPage(c: Context<AppEnv>): Promise<Response> {
+// The same parts once Ultra can be bought (account/payments.ts ultraOnSale):
+// the paid plans, Pro and Ultra, with Moving Between Plans after the renewal.
+// Until then the page keeps the Pro terms above, word for word, so the terms
+// change on the day Ultra opens and not before.
+const PAID_TERMS: [Key, Key][] = [
+  ["terms.pro_includes_title_ultra", "terms.pro_includes_ultra"],
+  ["terms.pro_prices_title", "terms.pro_prices_ultra"],
+  ["terms.pro_renewal_title", "terms.pro_renewal"],
+  ["terms.pro_change_title", "terms.pro_change"],
+  ["terms.pro_cancel_title", "terms.pro_cancel_ultra"],
+  ["terms.pro_refund_title", "terms.pro_refund_ultra"],
+  ["terms.pro_failed_title", "terms.pro_failed_ultra"],
+  ["terms.pro_abuse_title", "terms.pro_abuse_ultra"],
+  ["terms.pro_law_title", "terms.pro_law"],
+  ["terms.pro_changes_title", "terms.pro_changes"],
+];
+
+export async function termsPage(c: Context<AppEnv>): Promise<Response> {
+  const ultra = await ultraOnSale(c.env);
+  const parts = ultra ? PAID_TERMS : PRO_TERMS;
   return doc(c, "terms", "terms.title", "terms.lead", (lang) => [
     { id: "use", title: "terms.toc_use", body: <p>{t(lang, "terms.use")}</p> },
     {
@@ -150,12 +170,12 @@ export function termsPage(c: Context<AppEnv>): Promise<Response> {
     {
       // The billing page is named in words only: with the switch off no
       // public page may link to /account (test/accounts-switch.test.ts).
-      id: "pro", title: "terms.toc_pro", body: (
+      id: "pro", title: ultra ? "terms.toc_pro_ultra" : "terms.toc_pro", body: (
         <>
-          <p>{tj(lang, "terms.pro_intro", { warranty: link("#warranty", t(lang, "terms.toc_warranty")) })}</p>
+          <p>{tj(lang, ultra ? "terms.pro_intro_ultra" : "terms.pro_intro", { warranty: link("#warranty", t(lang, "terms.toc_warranty")) })}</p>
           <h3>{t(lang, "terms.pro_seller_title")}</h3>
-          <p>{tj(lang, "terms.pro_seller", { email: <Mail /> })}</p>
-          {PRO_TERMS.map(([title, body]) => (
+          <p>{tj(lang, ultra ? "terms.pro_seller_ultra" : "terms.pro_seller", { email: <Mail /> })}</p>
+          {parts.map(([title, body]) => (
             <>
               <h3>{t(lang, title)}</h3>
               <p>{t(lang, body, { email: CONTACT_EMAIL })}</p>

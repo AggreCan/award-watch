@@ -24,7 +24,7 @@ import { t, tj, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, noDataPage, page } from "../layout";
 import { PlaceChips, type PlaceQuery, placeNames, placeParams, readPlaceQuery } from "../places";
 import { allowsIntraday, requestPlan } from "../plan";
-import { ProNote, ProPanel, SameDayLegend, checkoutPrice } from "../pro";
+import { ProNote, ProPanel, SameDayLegend, checkoutPrice, ultraCheckoutPrice } from "../pro";
 import { breadcrumbJsonLd, pageSeo } from "../seo";
 import { sameDayView } from "./intraday";
 
@@ -79,8 +79,9 @@ export async function sameDayPage(c: Context<AppEnv>): Promise<Response> {
     );
   } else {
     const account = await railAccount(c).catch(() => undefined);
+    const ultra = await ultraCheckoutPrice(c.env);
     body = (
-      <ProPanel lang={lang} signedIn={!!account?.email} price={checkoutPrice(c.env)} text={t(lang, "sameday.pro_text")}
+      <ProPanel lang={lang} signedIn={!!account?.email} price={checkoutPrice(c.env)} ultra={ultra} text={t(lang, "sameday.pro_text")}
         foot={<SameDayLegend lang={lang} />}
         free={tj(lang, "sameday.free", {
           open: <a href="/tenders">{t(lang, "sameday.free_open")}</a>,

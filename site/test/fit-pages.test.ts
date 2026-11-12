@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { MATCH_PAGE, RULES } from "../src/account/entitlements";
 import { allKeys, rawEntry, type Key } from "../src/i18n";
-import { ACCOUNTS, decode, get, grantPro, nbsp, newEmail, offEnv, onEnv, signIn, userId, useAccountsDb } from "./accounts-helpers";
+import { ACCOUNTS, decode, get, grantPro, grantUltra, nbsp, newEmail, offEnv, onEnv, signIn, userId, useAccountsDb } from "./accounts-helpers";
 import { FILES, makeFakeAssets } from "./assets";
 
 useAccountsDb();
@@ -61,10 +61,11 @@ const E = (o: { block?: unknown; open?: unknown; stats?: unknown } = {}) => onEn
   }),
 });
 
-async function reader(o: { pro?: boolean; org?: string | null } = {}): Promise<string> {
+async function reader(o: { pro?: boolean; ultra?: boolean; org?: string | null } = {}): Promise<string> {
   const email = newEmail("matches");
   const cookie = await signIn(email, { env: E() });
   if (o.pro) await grantPro(email);
+  if (o.ultra) await grantUltra(email);
   if (o.org !== null) {
     const now = new Date().toISOString();
     await ACCOUNTS.prepare("INSERT INTO org_claims (user_id, organization_id, segment, competitors, created_at, updated_at) VALUES (?, ?, NULL, '[]', ?, ?)")
@@ -227,6 +228,19 @@ describe("the page", () => {
     // A page past the last shows the last; anything else the first.
     expect(rowsOf((await open(cookie, env, `${PATH}?page=9`)).html)).toEqual(rowsOf(last.html));
     expect(rowsOf((await open(cookie, env, `${PATH}?page=x`)).html)).toEqual(rowsOf(first.html));
+    expect(filled(first.html)).toBe(0);
+  });
+
+  it("lists up to RULES.ultra.matches on Ultra, its own cap and never Free's, MATCH_PAGE a page", async () => {
+    expect(RULES.ultra.matches).toBeGreaterThanOrEqual(RULES.pro.matches);
+    const cookie = await reader({ ultra: true });
+    const env = E({ block: BLOCK, open: matching(230) });
+    const first = await open(cookie, env);
+    expect(rowsOf(first.html)).toEqual(matching(MATCH_PAGE).map((r) => r.reference));
+    const listed = Math.min(230, RULES.ultra.matches);
+    expect(first.html).toContain(`Page 1 of ${Math.ceil(listed / MATCH_PAGE)}`);
+    expect(first.html).not.toContain("The Free plan lists");
+    if (listed < 230) expect(first.html).toContain(`The first ${listed} of 230 matching notices are listed, the closest first.`);
     expect(filled(first.html)).toBe(0);
   });
 

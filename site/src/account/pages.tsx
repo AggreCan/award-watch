@@ -18,7 +18,7 @@ import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
 import { type Brief, briefValue } from "./briefings";
-import { RULES, SAVED_SEARCH_MAX, WATCH_MAX, allowed, watchCap } from "./entitlements";
+import { RULES, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX, type FeedKind } from "./feeds";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch } from "./searches";
 import type { Account } from "./session";
@@ -270,6 +270,9 @@ export function linkView(
 
 export function planLabel(lang: Lang, account: Pick<Account, "plan" | "planUntil">): string {
   if (account.plan === "free") return t(lang, "account.plan_free");
+  if (account.plan === "ultra") {
+    return account.planUntil ? t(lang, "account.plan_ultra_until", { date: day(account.planUntil) }) : t(lang, "account.plan_ultra_open");
+  }
   return account.planUntil ? t(lang, "account.plan_pro_until", { date: day(account.planUntil) }) : t(lang, "account.plan_pro_open");
 }
 
@@ -277,7 +280,9 @@ export function planLabel(lang: Lang, account: Pick<Account, "plan" | "planUntil
 // subscription names the end of the period paid (billing.tsx), not the end
 // of its grace; any other plan reads as planLabel.
 export function planLine(lang: Lang, account: Pick<Account, "plan" | "planUntil">, billing?: BillingLine | null): string {
-  if (billing?.stripe && account.plan === "pro") return t(lang, "billing.plan_stripe", { date: day(billing.periodEnd ?? account.planUntil) });
+  if (billing?.stripe && account.plan !== "free") {
+    return t(lang, account.plan === "ultra" ? "billing.plan_stripe_ultra" : "billing.plan_stripe", { date: day(billing.periodEnd ?? account.planUntil) });
+  }
   return planLabel(lang, account);
 }
 
@@ -310,12 +315,13 @@ const StartPanel: FC<{ lang: Lang; account: Account; counts: OverviewCounts }> =
   const deliver = allowed(account, "delivery");
   const watching = { n: n(counts.watches ?? 0), cap: n(watchCap(account.plan)) };
   const held = { n: n(counts.searches), cap: n(counts.cap) };
+  // A Free account's lines name Pro's own figures, from the plans.
   const watchFigures = mail
     ? t(lang, "account.start_follow_cap", watching)
-    : t(lang, "watches.cap_free", { ...watching, max: n(WATCH_MAX) });
+    : t(lang, "watches.cap_free", { ...watching, max: n(RULES.pro.watchlists) });
   const searchFigures = deliver
     ? t(lang, "account.start_search_cap", held)
-    : t(lang, "account.cap_note", { ...held, max: n(SAVED_SEARCH_MAX) });
+    : t(lang, "account.cap_note", { ...held, max: n(RULES.pro.saved_searches) });
   return (
     <Panel title={t(lang, "account.start_panel")}>
       <ul class="start-steps">
@@ -374,7 +380,7 @@ export function overviewView(
   counts: OverviewCounts,
   extra: { billing?: BillingLine | null; notice?: string | null; weekly?: { on: boolean } | null } = {},
 ) {
-  const stripe = extra.billing?.stripe && account.plan === "pro";
+  const stripe = extra.billing?.stripe && account.plan !== "free";
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.title")} lead={t(lang, "account.lead", { email: account.email })} />
@@ -477,7 +483,7 @@ const LastDeliveryLine: FC<{ lang: Lang; last: LastDelivery | null; deliver: Del
 // Pro holds and sends, and the billing page.
 const CapNote: FC<{ lang: Lang; n: number; cap: number }> = ({ lang, n, cap }) => (
   <ProNote lang={lang}>
-    {t(lang, "account.cap_note", { n: fmtInt(n, lang), cap: fmtInt(cap, lang), max: fmtInt(SAVED_SEARCH_MAX, lang) })}{" "}
+    {t(lang, "account.cap_note", { n: fmtInt(n, lang), cap: fmtInt(cap, lang), max: fmtInt(RULES.pro.saved_searches, lang) })}{" "}
     <a href="/account/billing">{t(lang, "billing.link_plans")}</a>
   </ProNote>
 );

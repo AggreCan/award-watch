@@ -123,8 +123,11 @@ export const ACCOUNT_STRINGS = {
   // The subscript after the wordmark for a signed-in reader.
   "account.plan_tag_free": { en: "free", fr: "gratuit" },
   "account.plan_tag_pro": { en: "pro", fr: "pro" },
+  "account.plan_tag_ultra": { en: "ultra", fr: "ultra" },
   "account.plan_pro_open": { en: "Pro, no end date", fr: "Pro, sans date de fin" },
   "account.plan_pro_until": { en: "Pro, until {date}", fr: "Pro, jusqu'au {date}" },
+  "account.plan_ultra_open": { en: "Ultra, no end date", fr: "Ultra, sans date de fin" },
+  "account.plan_ultra_until": { en: "Ultra, until {date}", fr: "Ultra, jusqu'au {date}" },
   "account.searches": { en: "Saved searches", fr: "Recherches enregistrées" },
   "account.searches_n": { en: "{n} of {cap}", fr: "{n} sur {cap}" },
   "account.keys": { en: "API keys", fr: "Clés d'API" },
@@ -757,9 +760,10 @@ export const ACCOUNT_STRINGS = {
     en: "Prices in Canadian dollars. Taxes added at checkout.",
     fr: "Prix en dollars canadiens. Taxes ajoutées au paiement.",
   },
+  // {plan} is the plan the panel sells, Pro or Ultra (billing.tsx planName); the same holds for every {plan} below.
   "billing.processor": {
-    en: "Payment is taken on Stripe's page. Card details go to Stripe and never reach this site. Pro is sold through Link, the merchant of record run by Stripe, on behalf of Allwater Software Inc., which publishes Award Watch. The card statement reads LINK.COM followed by Allwater's name; Link sends the receipts and handles refunds and the applicable sales taxes.",
-    fr: "Le paiement se fait sur la page de Stripe. Les données de carte vont à Stripe et n'atteignent jamais ce site. Pro est vendu par l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le compte d'Allwater Software Inc., qui publie Award Watch. Le relevé de carte indique LINK.COM suivi du nom d'Allwater; Link envoie les reçus et s'occupe des remboursements et des taxes de vente applicables.",
+    en: "Payment is taken on Stripe's page. Card details go to Stripe and never reach this site. {plan} is sold through Link, the merchant of record run by Stripe, on behalf of Allwater Software Inc., which publishes Award Watch. The card statement reads LINK.COM followed by Allwater's name; Link sends the receipts and handles refunds and the applicable sales taxes.",
+    fr: "Le paiement se fait sur la page de Stripe. Les données de carte vont à Stripe et n'atteignent jamais ce site. {plan} est vendu par l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le compte d'Allwater Software Inc., qui publie Award Watch. Le relevé de carte indique LINK.COM suivi du nom d'Allwater; Link envoie les reçus et s'occupe des remboursements et des taxes de vente applicables.",
   },
   "billing.renewal": {
     en: "The subscription renews at the end of each period until it is cancelled. A cancellation takes effect at the end of the period already paid, which is not refunded.",
@@ -797,12 +801,35 @@ export const ACCOUNT_STRINGS = {
   "billing.status_paused": { en: "Paused", fr: "En pause" },
   "billing.status_other": { en: "Being confirmed", fr: "En cours de confirmation" },
   "billing.past_due_note": {
-    en: "The last renewal payment did not go through. Update the card on Stripe's page to keep Pro.",
-    fr: "Le dernier paiement de renouvellement n'est pas passé. Mettez la carte à jour sur la page de Stripe pour conserver Pro.",
+    en: "The last renewal payment did not go through. Update the card on Stripe's page to keep {plan}.",
+    fr: "Le dernier paiement de renouvellement n'est pas passé. Mettez la carte à jour sur la page de Stripe pour conserver {plan}.",
   },
   "billing.manage_text": {
     en: "Stripe's page switches between monthly and yearly, updates the card, lists the receipts and cancels the subscription.",
     fr: "La page de Stripe permet de passer du mensuel à l'annuel, de mettre la carte à jour, de consulter les reçus et d'annuler l'abonnement.",
+  },
+  // The same line while Ultra is on sale, or for an Ultra subscriber: Stripe's page moves between the plans too.
+  "billing.manage_text_ultra": {
+    en: "Stripe's page switches between monthly and yearly and between Pro and Ultra, updates the card, lists the receipts and cancels the subscription.",
+    fr: "La page de Stripe permet de passer du mensuel à l'annuel et de Pro à Ultra, de mettre la carte à jour, de consulter les reçus et d'annuler l'abonnement.",
+  },
+  // Ultra, the plan above Pro (billing.tsx): the panels while Ultra is on sale, and a move between the plans.
+  // {monthly} and {yearly} are the operator's figures (PRICE_ULTRA_MONTHLY_CAD, PRICE_ULTRA_YEARLY_CAD).
+  "billing.panel_plans": { en: "Plans", fr: "Forfaits" },
+  "billing.panel_subscribe_ultra": { en: "Subscribe to Ultra", fr: "S'abonner à Ultra" },
+  "billing.other_plan": { en: "Subscribe to {plan} instead", fr: "S'abonner plutôt à {plan}" },
+  "billing.panel_move": { en: "Move to Ultra", fr: "Passer à Ultra" },
+  "billing.move_text": {
+    en: "Ultra is CA${monthly} a month or CA${yearly} a year. Moving now charges the price of Ultra for the rest of the current period, less the unused part of Pro, taxes added; Stripe's page shows the amount before you confirm. Ultra starts once the payment is confirmed.",
+    fr: "Ultra coûte {monthly} $ CA par mois ou {yearly} $ CA par année. Passer à Ultra maintenant facture le prix d'Ultra pour le reste de la période en cours, moins la partie inutilisée de Pro, taxes ajoutées; la page de Stripe indique le montant avant votre confirmation. Ultra commence une fois le paiement confirmé.",
+  },
+  "billing.move_down_text": {
+    en: "Moving to Pro takes effect at the end of the period already paid; Ultra continues until then.",
+    fr: "Passer à Pro prend effet à la fin de la période déjà payée; Ultra continue jusque-là.",
+  },
+  "billing.move_sent": {
+    en: "Ultra starts once Stripe confirms the payment, usually within a minute. Reload this page to see it.",
+    fr: "Ultra commence une fois le paiement confirmé par Stripe, habituellement en moins d'une minute. Rechargez cette page pour le voir.",
   },
   "billing.manage": { en: "Manage the subscription", fr: "Gérer l'abonnement" },
   "billing.panel_receipts": { en: "Earlier Receipts", fr: "Reçus antérieurs" },
@@ -824,41 +851,42 @@ export const ACCOUNT_STRINGS = {
     fr: "L'abonnement Pro n'a pas pu être annulé, donc le compte n'a pas été supprimé. Réessayez dans quelques minutes.",
   },
   "billing.msg_done": {
-    en: "Thank you. Pro starts once Stripe confirms the payment, usually within a minute. Reload this page to see it.",
-    fr: "Merci. Pro commence dès que Stripe confirme le paiement, en général en moins d'une minute. Rechargez cette page pour le voir.",
+    en: "Thank you. {plan} starts once Stripe confirms the payment, usually within a minute. Reload this page to see it.",
+    fr: "Merci. {plan} commence dès que Stripe confirme le paiement, en général en moins d'une minute. Rechargez cette page pour le voir.",
   },
   "billing.field": { en: "Billing", fr: "Facturation" },
   "billing.link_plans": { en: "Plans and prices", fr: "Forfaits et prix" },
   "billing.plan_stripe": { en: "Pro, paid until {date}", fr: "Pro, payé jusqu'au {date}" },
+  "billing.plan_stripe_ultra": { en: "Ultra, paid until {date}", fr: "Ultra, payé jusqu'au {date}" },
   // The refund of the first payment (billing.tsx RefundPanel, refund.ts). The
   // panel's title is the Terms' own heading (terms.pro_refund_title). {email}
   // is the contact address, {days} the window (REFUND_DAYS).
   "billing.refund_text": {
-    en: "Refund now returns your first payment in full, taxes included, and ends Pro at once.",
-    fr: "Rembourser maintenant vous rend votre premier paiement en entier, taxes comprises, et met fin à Pro immédiatement.",
+    en: "Refund now returns your first payment in full, taxes included, and ends {plan} at once.",
+    fr: "Rembourser maintenant vous rend votre premier paiement en entier, taxes comprises, et met fin à {plan} immédiatement.",
   },
   "billing.refund_now": { en: "Refund now", fr: "Rembourser maintenant" },
   "billing.refund_confirm_text": {
-    en: "This cannot be undone. Your first payment is refunded in full, taxes included, to the payment method used, and the subscription is cancelled at once. Pro ends when Stripe confirms the refund, usually within a minute.",
-    fr: "Cette action est irréversible. Votre premier paiement est remboursé en entier, taxes comprises, au mode de paiement utilisé, et l'abonnement est annulé immédiatement. Pro prend fin dès que Stripe confirme le remboursement, en général en moins d'une minute.",
+    en: "This cannot be undone. Your first payment is refunded in full, taxes included, to the payment method used, and the subscription is cancelled at once. {plan} ends when Stripe confirms the refund, usually within a minute.",
+    fr: "Cette action est irréversible. Votre premier paiement est remboursé en entier, taxes comprises, au mode de paiement utilisé, et l'abonnement est annulé immédiatement. {plan} prend fin dès que Stripe confirme le remboursement, en général en moins d'une minute.",
   },
   "billing.refund_confirm": {
-    en: "I want my first payment refunded and Pro ended now.",
-    fr: "Je veux que mon premier paiement soit remboursé et que Pro prenne fin maintenant.",
+    en: "I want my first payment refunded and {plan} ended now.",
+    fr: "Je veux que mon premier paiement soit remboursé et que {plan} prenne fin maintenant.",
   },
   "billing.refund_button": { en: "Refund my first payment", fr: "Rembourser mon premier paiement" },
-  "billing.refund_keep": { en: "Keep Pro", fr: "Garder Pro" },
+  "billing.refund_keep": { en: "Keep {plan}", fr: "Garder {plan}" },
   "billing.refund_done": {
-    en: "Your first payment is being refunded in full, taxes included, and the subscription is cancelled. Pro ends when Stripe confirms the refund, usually within a minute. Reload this page to see it.",
-    fr: "Votre premier paiement est en voie d'être remboursé en entier, taxes comprises, et l'abonnement est annulé. Pro prend fin dès que Stripe confirme le remboursement, en général en moins d'une minute. Rechargez cette page pour le voir.",
+    en: "Your first payment is being refunded in full, taxes included, and the subscription is cancelled. {plan} ends when Stripe confirms the refund, usually within a minute. Reload this page to see it.",
+    fr: "Votre premier paiement est en voie d'être remboursé en entier, taxes comprises, et l'abonnement est annulé. {plan} prend fin dès que Stripe confirme le remboursement, en général en moins d'une minute. Rechargez cette page pour le voir.",
   },
   "billing.refund_sent": {
-    en: "Your first payment is being refunded in full, taxes included. The subscription could not be cancelled at Stripe just now; the site's operator is told and cancels it by hand. Pro ends when Stripe confirms the refund, usually within a minute.",
-    fr: "Votre premier paiement est en voie d'être remboursé en entier, taxes comprises. L'abonnement n'a pas pu être annulé chez Stripe pour l'instant; l'exploitant du site en est informé et l'annule lui-même. Pro prend fin dès que Stripe confirme le remboursement, en général en moins d'une minute.",
+    en: "Your first payment is being refunded in full, taxes included. The subscription could not be cancelled at Stripe just now; the site's operator is told and cancels it by hand. {plan} ends when Stripe confirms the refund, usually within a minute.",
+    fr: "Votre premier paiement est en voie d'être remboursé en entier, taxes comprises. L'abonnement n'a pas pu être annulé chez Stripe pour l'instant; l'exploitant du site en est informé et l'annule lui-même. {plan} prend fin dès que Stripe confirme le remboursement, en général en moins d'une minute.",
   },
   "billing.refund_err_failed": {
-    en: "The refund did not go through, so nothing was changed: Pro and the subscription continue. Write to {email} from your account's address to ask for the refund.",
-    fr: "Le remboursement n'a pas abouti, donc rien n'a changé : Pro et l'abonnement continuent. Écrivez à {email} depuis l'adresse de votre compte pour demander le remboursement.",
+    en: "The refund did not go through, so nothing was changed: {plan} and the subscription continue. Write to {email} from your account's address to ask for the refund.",
+    fr: "Le remboursement n'a pas abouti, donc rien n'a changé : {plan} et l'abonnement continuent. Écrivez à {email} depuis l'adresse de votre compte pour demander le remboursement.",
   },
   "billing.refund_err_window": {
     en: "The {days} days after your first payment have passed, so nothing was refunded. Write to {email} from your account's address with any question.",
@@ -951,6 +979,8 @@ export const ACCOUNT_STRINGS = {
   "admin.count_sessions": { en: "Signed-in browsers", fr: "Navigateurs connectés" },
   "admin.count_pro_manual": { en: "On Pro now, granted by hand", fr: "En Pro maintenant, accordé à la main" },
   "admin.count_pro_stripe": { en: "On Pro now, paid through Stripe", fr: "En Pro maintenant, payé par Stripe" },
+  "admin.count_ultra_manual": { en: "On Ultra now, granted by hand", fr: "En Ultra maintenant, accordé à la main" },
+  "admin.count_ultra_stripe": { en: "On Ultra now, paid through Stripe", fr: "En Ultra maintenant, payé par Stripe" },
   "admin.count_subscriptions": { en: "Subscriptions by status", fr: "Abonnements par état" },
   "admin.count_sent": { en: "Deliveries sent, last {n} days", fr: "Envois effectués, {n} derniers jours" },
   "admin.count_failed": { en: "Deliveries not sent, last {n} days", fr: "Envois échoués, {n} derniers jours" },
@@ -1017,14 +1047,20 @@ export const ACCOUNT_STRINGS = {
   "admin.source_stripe": { en: "Through Stripe", fr: "Par Stripe" },
   "admin.revoke": { en: "Revoke", fr: "Révoquer" },
   "admin.grant_until": {
-    en: "End date (UTC, optional). Pro ends at the start of that day; leave it empty for no end.",
-    fr: "Date de fin (UTC, facultative). Pro prend fin au début de ce jour; laissez vide pour aucune fin.",
+    en: "End date (UTC, optional). The plan ends at the start of that day; leave it empty for no end.",
+    fr: "Date de fin (UTC, facultative). Le forfait prend fin au début de ce jour; laissez vide pour aucune fin.",
   },
   "admin.grant_reference": {
     en: "Reference, a note or a payment reference (never an address)",
     fr: "Référence, une note ou une référence de paiement (jamais une adresse)",
   },
-  "admin.grant_button": { en: "Grant Pro", fr: "Accorder Pro" },
+  // The grant's plan select (admin.tsx): Pro, or Ultra, which needs entitlement_tiers on the database.
+  "admin.grant_plan": { en: "Plan", fr: "Forfait" },
+  "admin.grant_button": { en: "Grant the plan", fr: "Accorder le forfait" },
+  "admin.err_no_tiers": {
+    en: "The Ultra table is not on the database yet: apply accounts_schema.sql.",
+    fr: "La table d'Ultra n'est pas encore dans la base de données : appliquez accounts_schema.sql.",
+  },
   "admin.panel_subscription": { en: "Subscription", fr: "Abonnement" },
   "admin.sub_none": { en: "No Stripe customer is bound to this account.", fr: "Aucun client Stripe n'est lié à ce compte." },
   "admin.sub_no_keys": {
@@ -1187,6 +1223,7 @@ export const ACCOUNT_STRINGS = {
   },
   "admin.delete_button": { en: "Delete the account", fr: "Supprimer le compte" },
   "admin.msg_granted": { en: "Pro granted.", fr: "Pro accordé." },
+  "admin.msg_granted_ultra": { en: "Ultra granted.", fr: "Ultra accordé." },
   "admin.msg_revoked": { en: "The row was revoked.", fr: "La ligne a été révoquée." },
   "admin.msg_nothing": {
     en: "Nothing was revoked; the row was revoked or had ended already.",
@@ -1284,6 +1321,7 @@ export const ACCOUNT_STRINGS = {
   "admin.any": { en: "Any", fr: "Indifférent" },
   "admin.plan_free_now": { en: "Free now", fr: "Gratuit maintenant" },
   "admin.plan_pro_now": { en: "Pro now", fr: "Pro maintenant" },
+  "admin.plan_ultra_now": { en: "Ultra now", fr: "Ultra maintenant" },
   "admin.delivery_some": { en: "On for at least one search", fr: "Activé pour au moins une recherche" },
   "admin.delivery_none": { en: "Off for every search", fr: "Désactivé pour toutes les recherches" },
   "admin.sub_filter_none": { en: "No subscription", fr: "Aucun abonnement" },
@@ -2188,6 +2226,16 @@ export const ACCOUNT_STRINGS = {
   "announce.ultra_lead": { en: "Ultra, the plan above Pro, is open on Award Watch.", fr: "Ultra, le forfait au-dessus de Pro, est ouvert sur Award Watch." },
   "announce.ultra_asked": { en: "This address asked to be told when it opened.", fr: "Cette adresse a demandé à être avertie de son ouverture." },
   "announce.ultra_plans": { en: "Plans and prices", fr: "Forfaits et prix" },
+  // Before the Ultra card's own lines, with Ultra's figures on the day it is sent (src/pro.tsx ultraLines).
+  "announce.ultra_holds": {
+    en: "Ultra includes everything in Pro, with these figures:",
+    fr: "Ultra comprend tout ce que comprend Pro, avec ces chiffres :",
+  },
+  // The console's refusal while Ultra cannot be bought (account/payments.ts ultraOnSale): the message says it is open.
+  "admin.announce_ultra_off_sale": {
+    en: "Ultra cannot be bought yet, so the message was not sent.",
+    fr: "Ultra ne peut pas encore être acheté; le message n'a donc pas été envoyé.",
+  },
   "announce.ultra_only": { en: "This is the only message about Ultra.", fr: "C'est le seul message au sujet d'Ultra." },
   "announce.ultra_why": {
     en: "You receive this because the address was entered on the Ultra card of the site's home page.",

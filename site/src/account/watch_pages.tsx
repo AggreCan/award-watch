@@ -20,7 +20,7 @@ import { PageHead, Panel } from "../layout";
 import { EMAIL_MAX } from "../pages/interest";
 import { ProNote, ProTag } from "../pro";
 import { EVENT_KEY, WATCH_KIND_KEY, watchEventLines, watchMoreText } from "./digests";
-import { WATCH_MAX, allowed, watchCap } from "./entitlements";
+import { RULES, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX } from "./feeds";
 import { type CalendarRow, FeedCell, Honeypot } from "./pages";
 import { type Account, readSession } from "./session";
@@ -114,7 +114,7 @@ export const WatchControl: FC<{ lang: Lang; state: ControlState | null; kind: Wa
       </p>
     ) : (
       <ProNote lang={lang}>
-        {t(lang, "watches.cap_free", { n: fmtInt(state.n, lang), cap: fmtInt(state.cap, lang), max: fmtInt(WATCH_MAX, lang) })}{" "}
+        {t(lang, "watches.cap_free", { n: fmtInt(state.n, lang), cap: fmtInt(state.cap, lang), max: fmtInt(RULES.pro.watchlists, lang) })}{" "}
         <a href="/account/billing">{t(lang, "billing.link_plans")}</a>
       </ProNote>
     );
@@ -249,7 +249,7 @@ export function watchesView(
     ? <p>{t(lang, "watches.cap_pro", { cap: fmtInt(cap, lang) })}</p>
     : (
       <ProNote lang={lang}>
-        {t(lang, "watches.cap_free", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang), max: fmtInt(WATCH_MAX, lang) })}{" "}
+        {t(lang, "watches.cap_free", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang), max: fmtInt(RULES.pro.watchlists, lang) })}{" "}
         <a href="/account/billing">{t(lang, "billing.link_plans")}</a>
       </ProNote>
     );

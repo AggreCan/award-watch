@@ -37,19 +37,24 @@
 // only: the accounts-open message every row but the Ultra card's, the Ultra
 // message those alone, so one never marks the other's rows and an address on
 // both gets each once. An address holding an account is not passed over for
-// the Ultra message, since it asked for that message on the card.
+// the Ultra message, since it asked for that message on the card. The Ultra
+// message is sent only while Ultra can be bought (ultraMessageAllowed): the
+// console refuses it before then. It lists what Ultra holds the day it is
+// sent, with Ultra's own figures (src/pro.tsx ultraLines), and no price.
 
 import type { Context } from "hono";
 import { readForm } from "../body";
 import { loadStats } from "../data";
 import type { AppEnv, Env } from "../env";
-import { t, tn, type Lang } from "../i18n";
+import { t, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { CONTACT_EMAIL } from "../pages/docs";
 import { ULTRA_KIND } from "../pages/interest";
+import { ULTRA_LINES, ultraLines } from "../pro";
 import { STOP_CODES, sendWithHeaders } from "./deliveries";
 import { deliveryHeaders } from "./digests";
 import { button, escapeHtml, list, mutedLink, para, shell } from "./mail_html";
+import { ultraOnSale } from "./payments";
 import { randomHex, sha256Hex } from "./secrets";
 import type { MailMessage } from "./sender";
 
@@ -180,24 +185,37 @@ export function accountsOpenMessage(lang: Lang, to: string, labels: readonly str
 
 export type UltraLinks = { plans: string; stop: string };
 
+// Whether the Ultra message may be sent: it says Ultra is open, so only
+// while Ultra can be bought (payments.ts ultraOnSale).
+export function ultraMessageAllowed(env: Env): Promise<boolean> {
+  return ultraOnSale(env);
+}
+
+// What the message lists under "Ultra includes everything in Pro, with
+// these figures:": the Ultra card's own lines, the matching notices left out.
+export const ULTRA_MESSAGE_LINES: readonly Key[] = ULTRA_LINES.filter((k) => k !== "plans.matches");
+
 // The Ultra message's two links: the plans page and the link off the lists.
 export function ultraLinks(base: string, lang: Lang, token: string): UltraLinks {
   const fr = lang === "fr";
   return { plans: `${base}/pro${fr ? "?lang=fr" : ""}`, stop: `${base}/interest/stop?t=${token}${fr ? "&lang=fr" : ""}` };
 }
 
-// The Ultra message: Ultra is open, the address asked to be told, the plans
-// page as the button, the only-message line with the link off the lists, and
-// the shell's footer with why it came; the preheader is the asked-to-be-told
-// line. Every line is the site's own; nothing in it was typed by a visitor.
+// The Ultra message: Ultra is open, the address asked to be told, what Ultra
+// holds with its own figures, the plans page as the button, the
+// only-message line with the link off the lists, and the shell's footer with
+// why it came; the preheader is the asked-to-be-told line. Every line is the
+// site's own; nothing in it was typed by a visitor.
 export function ultraOpenMessage(lang: Lang, to: string, links: UltraLinks): MailMessage & { headers: Record<string, string> } {
   const plans = t(lang, "announce.ultra_plans");
   const stop = t(lang, "announce.stop_link");
   const tagline = `${t(lang, "site.name")} · ${t(lang, "site.tagline")}`;
   const link = (label: string, url: string) => t(lang, "digest.text_link", { label, url });
+  const holds = ultraLines(lang, ULTRA_MESSAGE_LINES);
   const text = [
     t(lang, "announce.ultra_lead"),
     t(lang, "announce.ultra_asked"),
+    [t(lang, "announce.ultra_holds"), ...holds.map((l) => `- ${l}`)].join("\n"),
     link(plans, links.plans),
     `${t(lang, "announce.ultra_only")}\n${link(stop, links.stop)}`,
     `${t(lang, "announce.ultra_why")}\n${tagline}\n${CONTACT_EMAIL}\n`,
@@ -206,6 +224,8 @@ export function ultraOpenMessage(lang: Lang, to: string, links: UltraLinks): Mai
   const body =
     para(escapeHtml(t(lang, "announce.ultra_lead"))) +
     para(escapeHtml(t(lang, "announce.ultra_asked"))) +
+    para(escapeHtml(t(lang, "announce.ultra_holds"))) +
+    list(holds) +
     button(links.plans, plans) +
     para(`${escapeHtml(t(lang, "announce.ultra_only"))} ${mutedLink(links.stop, stop)}`, true);
   const html = shell({

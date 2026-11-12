@@ -15,7 +15,7 @@
 //   GET  /admin/accounts                               every account, filtered, sorted, 50 to a page
 //   GET  /admin/accounts.csv                           the same view as CSV, at most 10,000 rows
 //   GET  /admin/users/:id                              one account: rows, plan, subscription, activity, actions
-//   POST /admin/users/:id/grant                        Pro by hand (end date optional, reference required)
+//   POST /admin/users/:id/grant                        Pro or Ultra by hand (end date optional, reference required)
 //   POST /admin/users/:id/entitlements/:eid/revoke     revoke one row
 //   POST /admin/users/:id/sign-out                     revoke every session
 //   POST /admin/users/:id/unblock                      lift a block
@@ -58,20 +58,20 @@ import { EMAIL_MAX, normalizeEmail } from "../pages/interest";
 import { accessEmail, accessRequired } from "./admin_access";
 import {
   ANNOUNCE_MAX, type AnnounceCounts, type AnnounceKind, accountsOpenMessage, announceCounts, announceKindOf, announceLinks, missingColumn,
-  runAnnouncement, ultraLinks, ultraOpenMessage,
+  runAnnouncement, ultraLinks, ultraMessageAllowed, ultraOpenMessage,
 } from "./announce";
 import {
   type AccountFilter, type AccountListRow, type AccountQuery, type AccountSort, type AccountsPage, type BlockRow, type Overview,
   type UserDetail, type UserHit, type UserRow, ACCOUNT_CSV_ROWS, ACCOUNT_FILTERS, ACCOUNT_FILTER_NAMES, ACCOUNT_MAX_PAGE,
   ACCOUNT_PAGE_SIZE, DEFAULT_SORT, ID_RE, USER_DELIVERY_ROWS, WEEK_DAYS, accountsForCsv, accountsPage, blockAccount, changeAddress,
-  findUsers, firstDir, grantPro, isBlocked, operatorAudit, operatorEmails, overview, readAccountQuery, revocable, revokeEntitlement,
+  findUsers, firstDir, grantPlan, isBlocked, operatorAudit, operatorEmails, overview, readAccountQuery, revocable, revokeEntitlement,
   unblockAccount, userDetail,
 } from "./admin_ops";
 import { type LiveSubscription, type PaidCharge, operatorStripe } from "./admin_stripe";
 import { endForDeletion } from "./billing";
 import { BriefingsOverviewPanel, BriefingsUserPanels } from "./briefing_pages";
 import { type BriefingOverview, briefingOverview, userBriefings } from "./briefings";
-import { type PlanState, planFor } from "./entitlements";
+import { type PlanState, isPlan, planFor } from "./entitlements";
 import { type FeedCounts, type FeedView, feedCounts, userFeeds } from "./feeds";
 import { CLAIM_TOP_N, type Claim, type ClaimOverview, claimDetail, claimOverview } from "./org_claim";
 import { planLabel } from "./pages";
@@ -262,8 +262,10 @@ const Table: FC<{ heads: string[]; rows: unknown[][]; th?: (label: string, i: nu
 );
 
 const statusWord = (lang: Lang, status: string) => t(lang, status === "deleted" ? "admin.status_deleted" : "admin.status_active");
+// A plan as a row states it: the users cache (free or pro, an Ultra account
+// cached as pro), or the accounts table's plan read through the tier.
 const cachedPlan = (lang: Lang, u: { plan: string; plan_until: string | null }) =>
-  planLabel(lang, { plan: u.plan === "pro" ? "pro" : "free", planUntil: u.plan_until });
+  planLabel(lang, { plan: isPlan(u.plan) ? u.plan : "free", planUntil: u.plan_until });
 
 function auditRows(lang: Lang, rows: Overview["audit"], withUser: boolean): unknown[][] {
   return rows.map((a) => [
@@ -408,6 +410,12 @@ function overviewView(
           <dt>{t(lang, "admin.count_sessions")}</dt><dd>{fmtInt(o.sessions, lang)}</dd>
           <dt>{t(lang, "admin.count_pro_manual")}</dt><dd>{fmtInt(o.proManual, lang)}</dd>
           <dt>{t(lang, "admin.count_pro_stripe")}</dt><dd>{fmtInt(o.proStripe, lang)}</dd>
+          {o.ultraManual === null || o.ultraStripe === null ? null : (
+            <>
+              <dt>{t(lang, "admin.count_ultra_manual")}</dt><dd>{fmtInt(o.ultraManual, lang)}</dd>
+              <dt>{t(lang, "admin.count_ultra_stripe")}</dt><dd>{fmtInt(o.ultraStripe, lang)}</dd>
+            </>
+          )}
           <dt>{t(lang, "admin.count_subscriptions")}</dt><dd>{subs}</dd>
           <dt>{t(lang, "admin.count_sent", { n: WEEK_DAYS })}</dt><dd>{fmtInt(o.sent, lang)}</dd>
           <dt>{t(lang, "admin.count_failed", { n: WEEK_DAYS })}</dt><dd>{fmtInt(o.failed, lang)}</dd>
@@ -477,7 +485,7 @@ const FILTER_LABEL: Record<AccountFilter, Key> = {
 
 // A value without a word here is a Stripe status, shown as Stripe writes it.
 const OPTION_LABEL: { [K in AccountFilter]?: Partial<Record<string, Key>> } = {
-  plan: { free: "admin.plan_free_now", pro: "admin.plan_pro_now" },
+  plan: { free: "admin.plan_free_now", pro: "admin.plan_pro_now", ultra: "admin.plan_ultra_now" },
   status: { active: "admin.status_active", deleted: "admin.status_deleted" },
   blocked: { yes: "admin.yes", no: "admin.no" },
   delivery: { on: "admin.delivery_some", off: "admin.delivery_none" },
@@ -637,7 +645,7 @@ admin.get("/accounts.csv", (c) =>
 // -- one account -------------------------------------------------------------------------------
 
 const NOTICE: Record<string, Key> = {
-  granted: "admin.msg_granted", revoked: "admin.msg_revoked", nothing: "admin.msg_nothing", cancel_end: "admin.msg_cancel_end",
+  granted: "admin.msg_granted", granted_ultra: "admin.msg_granted_ultra", revoked: "admin.msg_revoked", nothing: "admin.msg_nothing", cancel_end: "admin.msg_cancel_end",
   cancel_now: "admin.msg_cancel_now", refunded: "admin.msg_refunded", blocked: "admin.msg_blocked", already_blocked: "admin.msg_already_blocked",
   unblocked: "admin.msg_unblocked", not_blocked: "admin.msg_not_blocked", email: "admin.msg_email", email_unsent: "admin.msg_email_unsent",
   signed_out: "admin.msg_signed_out", deleted: "admin.msg_deleted",
@@ -666,7 +674,7 @@ const deliveryWord = (lang: Lang, status: string, items: number) =>
 
 type UserState = {
   plan: PlanState; stripeOn: boolean; live: LiveSubscription | "missing" | null | undefined;
-  notice?: string | null; errors?: Key[]; until?: string; reference?: string;
+  notice?: string | null; errors?: Key[]; until?: string; reference?: string; grantPlan?: "pro" | "ultra";
   // The account's calendar feeds (feeds.ts), never their secrets; null without the table.
   feeds?: FeedView[] | null;
   // The organization the account claims (org_claim.ts); false for none, null without the table.
@@ -771,6 +779,14 @@ function userView(lang: Lang, op: Account, d: UserDetail, s: UserState, now: Dat
         {deleted ? null : (
           <form method="post" action={`/admin/users/${u.id}/grant`} class="stack">
             <Csrf op={op} />
+            {/* Ultra by hand works whether or not Ultra is on sale, once entitlement_tiers is on the database. */}
+            <label>
+              {t(lang, "admin.grant_plan")}
+              <select name="plan">
+                <option value="pro" selected={s.grantPlan !== "ultra"}>{t(lang, "pro.tag")}</option>
+                <option value="ultra" selected={s.grantPlan === "ultra"}>{t(lang, "ultra.tag")}</option>
+              </select>
+            </label>
             <label>
               {t(lang, "admin.grant_until")}
               <input name="until" type="date" min={tomorrow} value={s.until ?? ""} />
@@ -929,18 +945,26 @@ admin.post("/users/:id/grant", async (c) => {
   return guarded(c, async () => {
     const until = clean(fields, "until", 20);
     const reference = clean(fields, "reference", REFERENCE_MAX + 1);
+    // The plan granted: Pro unless the form names Ultra (a form from before the plan select names none).
+    const raw = clean(fields, "plan", 10);
+    const plan = raw === "ultra" ? "ultra" : raw === "" || raw === "pro" ? "pro" : null;
     const now = new Date();
     const errors: Key[] = [];
     let endsAt: string | null = null;
     if (user.status !== "active") errors.push("admin.err_deleted");
+    if (!plan) errors.push("form.rejected");
     if (until) {
       endsAt = DATE_RE.test(until) && !Number.isNaN(Date.parse(`${until}T00:00:00.000Z`)) ? `${until}T00:00:00.000Z` : null;
       if (!endsAt || endsAt <= now.toISOString() || new Date(endsAt).toISOString().slice(0, 10) !== until) errors.push("admin.err_date");
     }
     if (!noteOk(reference, REFERENCE_MAX)) errors.push("admin.err_reference");
-    if (errors.length) return userPage(c, user.id, { errors, until, reference: reference.slice(0, REFERENCE_MAX), status: 400, notice: null });
-    await grantPro(c.env, user.id, op.userId, endsAt, reference, now);
-    return c.redirect(userPath(user.id, "granted"), 303);
+    const again = (e: Key[]) => userPage(c, user.id, {
+      errors: e, until, reference: reference.slice(0, REFERENCE_MAX), grantPlan: plan ?? "pro", status: 400, notice: null,
+    });
+    if (errors.length || !plan) return again(errors);
+    // Without entitlement_tiers an Ultra grant writes nothing and says which file to apply.
+    if ((await grantPlan(c.env, user.id, op.userId, plan, endsAt, reference, now)) === "no_tiers") return again(["admin.err_no_tiers"]);
+    return c.redirect(userPath(user.id, plan === "ultra" ? "granted_ultra" : "granted"), 303);
   });
 });
 
@@ -1348,8 +1372,11 @@ const ANNOUNCE_WORDS: Record<AnnounceKind, { title: Key; lead: Key; waiting: Key
 };
 
 // Mail that cannot leave (the stub sender) and a forms database without
-// notice_at are refusals: the page says so and offers no form.
+// notice_at are refusals: the page says so and offers no form. So is the
+// Ultra message while Ultra cannot be bought (announce.tsx ultraMessageAllowed):
+// the message says Ultra is open.
 async function announceState(c: Context<AppEnv>, kind: AnnounceKind): Promise<AnnounceState> {
+  if (kind === "ultra" && !(await ultraMessageAllowed(c.env))) return { counts: null, refusal: "admin.announce_ultra_off_sale" };
   let counts: AnnounceCounts;
   try {
     counts = await announceCounts(c.env, kind);

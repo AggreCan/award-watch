@@ -15,7 +15,7 @@
 
 import { watchDetail } from "./watches";
 import type { Env } from "../env";
-import { planFor } from "./entitlements";
+import { type PaidPlan, entitlementWrites, missingTiers, planFor, withTiers } from "./entitlements";
 import { newId } from "./secrets";
 import { revokeAllSessions } from "./session";
 
@@ -146,15 +146,32 @@ async function refreshPlan(env: Env, userId: string, now: Date): Promise<void> {
   if (user) await planFor(env, user, now);
 }
 
-// A manual Pro row from now to endsAt (null for no end), as the documented
-// insert writes it; then the cached plan on users is brought up to date.
-export async function grantPro(env: Env, userId: string, operatorId: string, endsAt: string | null, reference: string, now = new Date()): Promise<void> {
+// A manual row of the plan from now to endsAt (null for no end), as the
+// documented insert writes it, in one batch with its tier row for Ultra
+// (entitlementWrites); then the cached plan on users is brought up to date.
+// "no_tiers": an Ultra grant on a database without entitlement_tiers, which
+// writes nothing (the batch is one transaction) and says which file to apply.
+// A grant of Ultra by hand works whether or not Ultra is on sale.
+export async function grantPlan(
+  env: Env, userId: string, operatorId: string, plan: PaidPlan, endsAt: string | null, reference: string, now = new Date(),
+): Promise<"granted" | "no_tiers"> {
+  const db = env.ACCOUNTS!;
   const at = now.toISOString();
-  await env.ACCOUNTS!.prepare(
-    "INSERT INTO entitlements (id, user_id, plan, source, starts_at, ends_at, reference, created_at) VALUES (?, ?, 'pro', 'manual', ?, ?, ?, ?)",
-  ).bind(newId(), userId, at, endsAt, reference, at).run();
+  try {
+    await db.batch(entitlementWrites(db, { id: newId(), userId, plan, source: "manual", startsAt: at, endsAt, reference, createdAt: at }));
+  } catch (e) {
+    if (plan === "ultra" && missingTiers(e)) return "no_tiers";
+    throw e;
+  }
   await refreshPlan(env, userId, now);
-  await operatorAudit(env, userId, "operator_granted", operatorId, endsAt ? `until ${endsAt.slice(0, 10)}` : "no end", now);
+  const end = endsAt ? `until ${endsAt.slice(0, 10)}` : "no end";
+  await operatorAudit(env, userId, "operator_granted", operatorId, plan === "ultra" ? `ultra, ${end}` : end, now);
+  return "granted";
+}
+
+// Pro by hand, as before Ultra.
+export async function grantPro(env: Env, userId: string, operatorId: string, endsAt: string | null, reference: string, now = new Date()): Promise<void> {
+  await grantPlan(env, userId, operatorId, "pro", endsAt, reference, now);
 }
 
 // Revokes one row of the account that is not revoked or ended yet. False
@@ -203,7 +220,8 @@ export type UserHit = { id: string; email: string; status: string; plan: string;
 
 export type Overview = {
   active: number; deleted: number; blocked: number | null; sessions: number; codesToday: number;
-  proManual: number; proStripe: number; subscriptions: { status: string; n: number }[];
+  // Accounts on Pro and on Ultra now, by the source of the deciding row; Ultra's null before entitlement_tiers exists.
+  proManual: number; proStripe: number; ultraManual: number | null; ultraStripe: number | null; subscriptions: { status: string; n: number }[];
   sent: number; failed: number; bugs: { all: number; week: number } | null;
   audit: AuditRow[]; latestBugs: BugRow[] | null;
 };
@@ -217,7 +235,7 @@ export async function overview(env: Env, now = new Date()): Promise<Overview> {
   const at = now.toISOString();
   const today = `${at.slice(0, 10)}T00:00:00.000Z`;
   const week = new Date(now.getTime() - WEEK_DAYS * 86_400_000).toISOString();
-  const [counts, pro, subs, audit] = await db.batch([
+  const { results: [counts, pro, subs, audit], tiers } = await withTiers(async (tiers) => ({ tiers, results: await db.batch([
     db.prepare(
       "SELECT (SELECT COUNT(*) FROM users WHERE status = 'active') AS active, (SELECT COUNT(*) FROM users WHERE status = 'deleted') AS deleted, " +
       "(SELECT COUNT(*) FROM sessions WHERE revoked_at IS NULL AND expires_at > ?1) AS sessions, " +
@@ -225,18 +243,23 @@ export async function overview(env: Env, now = new Date()): Promise<Overview> {
       "(SELECT COUNT(*) FROM deliveries WHERE status = 'sent' AND sent_at >= ?3) AS sent, " +
       "(SELECT COUNT(*) FROM deliveries WHERE status = 'failed' AND sent_at >= ?3) AS failed",
     ).bind(at, today, week),
-    // Accounts whose plan is Pro now, by the source of the row that decides
-    // it: the latest live row per active account, as planFromRows picks it.
+    // Accounts whose plan is Pro or Ultra now, by the plan and the source of
+    // the row that decides it: the latest live row per active account, as
+    // planFromRows picks it, its plan read through its tier (Ultra is a pro
+    // row with a tier row beside it).
     db.prepare(
-      "SELECT source, COUNT(*) AS n FROM (SELECT e.plan, e.source, ROW_NUMBER() OVER (PARTITION BY e.user_id ORDER BY e.created_at DESC, e.id DESC) AS r " +
+      `SELECT plan, source, COUNT(*) AS n FROM (SELECT ${tiers ? "COALESCE(t.tier, e.plan)" : "e.plan"} AS plan, e.source, ` +
+      "ROW_NUMBER() OVER (PARTITION BY e.user_id ORDER BY e.created_at DESC, e.id DESC) AS r " +
       "FROM entitlements e JOIN users u ON u.id = e.user_id AND u.status = 'active' " +
-      "WHERE e.revoked_at IS NULL AND e.starts_at <= ?1 AND (e.ends_at IS NULL OR e.ends_at > ?1)) WHERE r = 1 AND plan = 'pro' GROUP BY source",
+      (tiers ? "LEFT JOIN entitlement_tiers t ON t.entitlement_id = e.id " : "") +
+      "WHERE e.revoked_at IS NULL AND e.starts_at <= ?1 AND (e.ends_at IS NULL OR e.ends_at > ?1)) WHERE r = 1 AND plan IN ('pro', 'ultra') " +
+      "GROUP BY plan, source",
     ).bind(at),
     db.prepare("SELECT COALESCE(status, 'none') AS status, COUNT(*) AS n FROM payment_customers GROUP BY 1 ORDER BY n DESC, status"),
     db.prepare("SELECT id, user_id, event, at, detail FROM audit ORDER BY id DESC LIMIT ?").bind(OVERVIEW_AUDIT_ROWS),
-  ]);
+  ]) }));
   const c = (counts.results?.[0] ?? {}) as Record<string, number>;
-  const bySource = new Map(((pro.results ?? []) as { source: string; n: number }[]).map((r) => [r.source, r.n]));
+  const byPlan = new Map(((pro.results ?? []) as { plan: string; source: string; n: number }[]).map((r) => [`${r.plan} ${r.source}`, r.n]));
   const blocked = await optional(async () => (await db.prepare("SELECT COUNT(*) AS n FROM account_blocks").first<{ n: number }>())?.n ?? 0);
   const bugs = await optional(async () => {
     const r = await db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS week FROM bug_reports").bind(week)
@@ -248,7 +271,8 @@ export async function overview(env: Env, now = new Date()): Promise<Overview> {
   ).bind(OVERVIEW_BUG_ROWS).all<BugRow>()).results ?? []);
   return {
     active: c.active ?? 0, deleted: c.deleted ?? 0, blocked, sessions: c.sessions ?? 0, codesToday: c.codes ?? 0,
-    proManual: bySource.get("manual") ?? 0, proStripe: bySource.get("stripe") ?? 0,
+    proManual: byPlan.get("pro manual") ?? 0, proStripe: byPlan.get("pro stripe") ?? 0,
+    ultraManual: tiers ? byPlan.get("ultra manual") ?? 0 : null, ultraStripe: tiers ? byPlan.get("ultra stripe") ?? 0 : null,
     subscriptions: (subs.results ?? []) as { status: string; n: number }[],
     sent: c.sent ?? 0, failed: c.failed ?? 0, bugs, audit: (audit.results ?? []) as AuditRow[], latestBugs,
   };
@@ -282,7 +306,7 @@ export const ACCOUNT_CSV_ROWS = 10_000;
 // filter. subscription is Stripe's status as payment_customers stores it,
 // or none for an account with no row or no status.
 export const ACCOUNT_FILTERS = {
-  plan: ["free", "pro"],
+  plan: ["free", "pro", "ultra"],
   status: ["active", "deleted"],
   blocked: ["yes", "no"],
   delivery: ["on", "off"],
@@ -356,13 +380,14 @@ export type AccountListRow = {
 
 // One row per account, ?1 the moment. The plan is the deciding entitlement
 // row's, as planFromRows picks it, under the overview's rule for Pro now (an
-// active account only). The last sign-in is the newest session's start, so
-// an account whose sessions have all been swept (90 days after they end)
-// shows none. A database without account_blocks reads every account as not
-// blocked, as the rest of the console does.
-const accountsWith = (blocks: boolean) =>
+// active account only), read through its tier (ultra for a pro row with an
+// Ultra tier). The last sign-in is the newest session's start, so an account
+// whose sessions have all been swept (90 days after they end) shows none. A
+// database without account_blocks reads every account as not blocked, as the
+// rest of the console does; one without entitlement_tiers reads Ultra as Pro.
+const accountsWith = (blocks: boolean, tiers: boolean) =>
   "WITH a AS (SELECT u.id, u.email, u.created_at, u.lang, u.status, " +
-  "CASE WHEN u.status = 'active' AND e.plan = 'pro' THEN 'pro' ELSE 'free' END AS plan, " +
+  `CASE WHEN u.status = 'active' AND e.plan = 'pro' THEN ${tiers ? "COALESCE(t.tier, 'pro')" : "'pro'"} ELSE 'free' END AS plan, ` +
   "CASE WHEN u.status = 'active' AND e.plan = 'pro' THEN e.ends_at END AS plan_until, " +
   "b.created_at AS blocked_at, p.status AS sub_status, " +
   "(SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS last_sign_in, " +
@@ -372,6 +397,7 @@ const accountsWith = (blocks: boolean) =>
   "FROM users u " +
   "LEFT JOIN entitlements e ON e.id = (SELECT x.id FROM entitlements x WHERE x.user_id = u.id AND x.revoked_at IS NULL " +
   "AND x.starts_at <= ?1 AND (x.ends_at IS NULL OR x.ends_at > ?1) ORDER BY x.created_at DESC, x.id DESC LIMIT 1) " +
+  (tiers ? "LEFT JOIN entitlement_tiers t ON t.entitlement_id = e.id " : "") +
   (blocks ? "LEFT JOIN account_blocks b ON b.user_id = u.id " : "LEFT JOIN (SELECT NULL AS user_id, NULL AS created_at WHERE 0) b ON b.user_id = u.id ") +
   "LEFT JOIN payment_customers p ON p.user_id = u.id) ";
 
@@ -387,13 +413,17 @@ const accountBinds = (a: AccountQuery, now: Date) => {
   return [now.toISOString(), a.q ? likePrefix(a.q) : null, f.plan, f.status, f.blocked, f.delivery, f.subscription, f.language];
 };
 
-async function withBlocks<T>(run: (blocks: boolean) => Promise<T>): Promise<T> {
-  try {
-    return await run(true);
-  } catch (e) {
-    if (missingTable(e)) return run(false);
-    throw e;
-  }
+// The accounts statements with both optional tables, then without whichever
+// the database lacks (entitlement_tiers through withTiers, account_blocks here).
+async function withBlocks<T>(run: (head: string) => Promise<T>): Promise<T> {
+  return withTiers(async (tiers) => {
+    try {
+      return await run(accountsWith(true, tiers));
+    } catch (e) {
+      if (missingTable(e) && !missingTiers(e)) return run(accountsWith(false, tiers));
+      throw e;
+    }
+  });
 }
 
 export type AccountsPage = { rows: AccountListRow[]; total: number; page: number; pages: number };
@@ -403,8 +433,7 @@ export type AccountsPage = { rows: AccountListRow[]; total: number; page: number
 export async function accountsPage(env: Env, a: AccountQuery, now = new Date()): Promise<AccountsPage> {
   const db = env.ACCOUNTS!;
   const binds = accountBinds(a, now);
-  return withBlocks(async (blocks) => {
-    const head = accountsWith(blocks);
+  return withBlocks(async (head) => {
     const select = (page: number) =>
       db.prepare(`${head}SELECT * FROM a ${ACCOUNT_WHERE}ORDER BY ${ORDER_BY[a.sort][a.dir]} LIMIT ?9 OFFSET ?10`)
         .bind(...binds, ACCOUNT_PAGE_SIZE, (page - 1) * ACCOUNT_PAGE_SIZE);
@@ -420,8 +449,8 @@ export async function accountsPage(env: Env, a: AccountQuery, now = new Date()):
 // The same rows for the CSV, from the first, at most ACCOUNT_CSV_ROWS.
 export async function accountsForCsv(env: Env, a: AccountQuery, now = new Date()): Promise<AccountListRow[]> {
   const db = env.ACCOUNTS!;
-  return withBlocks(async (blocks) =>
-    (await db.prepare(`${accountsWith(blocks)}SELECT * FROM a ${ACCOUNT_WHERE}ORDER BY ${ORDER_BY[a.sort][a.dir]} LIMIT ?9`)
+  return withBlocks(async (head) =>
+    (await db.prepare(`${head}SELECT * FROM a ${ACCOUNT_WHERE}ORDER BY ${ORDER_BY[a.sort][a.dir]} LIMIT ?9`)
       .bind(...accountBinds(a, now), ACCOUNT_CSV_ROWS).all<AccountListRow>()).results ?? []);
 }
 
@@ -462,10 +491,13 @@ export const USER_BUG_ROWS = 20;
 export async function userDetail(env: Env, userId: string, now = new Date()): Promise<UserDetail | null> {
   const db = env.ACCOUNTS!;
   const at = now.toISOString();
-  const [user, ents, pay, live, newest, classes, searches, keys, deliveries, audit] = await db.batch([
+  // The entitlements with their plan read through the tier (ultra for a pro row with an Ultra tier row).
+  const [user, ents, pay, live, newest, classes, searches, keys, deliveries, audit] = await withTiers((tiers) => db.batch([
     db.prepare("SELECT id, email, created_at, last_seen_at, lang, status, plan, plan_until, deleted_at FROM users WHERE id = ?").bind(userId),
     db.prepare(
-      "SELECT id, plan, source, starts_at, ends_at, reference, created_at, revoked_at FROM entitlements WHERE user_id = ? ORDER BY created_at DESC, id DESC",
+      `SELECT e.id, ${tiers ? "COALESCE(t.tier, e.plan)" : "e.plan"} AS plan, e.source, e.starts_at, e.ends_at, e.reference, e.created_at, e.revoked_at ` +
+      `FROM entitlements e ${tiers ? "LEFT JOIN entitlement_tiers t ON t.entitlement_id = e.id " : ""}` +
+      "WHERE e.user_id = ? ORDER BY e.created_at DESC, e.id DESC",
     ).bind(userId),
     db.prepare("SELECT customer_id, subscription_id, status, current_period_end, updated_at FROM payment_customers WHERE user_id = ?").bind(userId),
     db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?").bind(userId, at),
@@ -486,7 +518,7 @@ export async function userDetail(env: Env, userId: string, now = new Date()): Pr
       "WHERE s.user_id = ? ORDER BY d.id DESC LIMIT ?",
     ).bind(userId, USER_DELIVERY_ROWS),
     db.prepare("SELECT id, user_id, event, at, detail FROM audit WHERE user_id = ? ORDER BY id DESC LIMIT ?").bind(userId, USER_AUDIT_ROWS),
-  ]);
+  ]));
   const row = (user.results?.[0] ?? null) as UserRow | null;
   if (!row) return null;
   const block = await optional(() =>

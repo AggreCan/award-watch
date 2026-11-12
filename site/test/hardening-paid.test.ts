@@ -39,7 +39,7 @@ const INTRADAY_SCHEMA = (env as unknown as { INTRADAY_SCHEMA_SQL: string }).INTR
 const PAID = { reference: "cb-778-77800001", title: "Wombat burrow census, paid view only" };
 const BAND = /<section class="panel intraday">[\s\S]*?<\/section>/;
 const RAIL_ACCOUNT = /<li><a class="rail-item rail-account"[^>]*><span class="rail-label">[^<]*<\/span><\/a><\/li>/;
-const PLAN_MARK = /<span class="brand-plan brand-plan-(?:free|pro)">[^<]*<\/span>/;
+const PLAN_MARK = /<span class="brand-plan brand-plan-(?:free|pro|ultra)">[^<]*<\/span>/;
 
 beforeAll(async () => {
   await applySql(SEARCH, INTRADAY_SCHEMA);

@@ -33,6 +33,7 @@
 
 import type { Context } from "hono";
 import { type FC, useContext } from "hono/jsx";
+import { allowed } from "../account/entitlements";
 import { accountsEnabled } from "../account/switch";
 import { isOwnAddress } from "../api";
 import { readForm } from "../body";
@@ -344,9 +345,10 @@ export const InterestBody: FC<{ lang: Lang; filter: InterestFilter; on?: boolean
 // The block as a page shows it: a panel under its head band, the link to the
 // page that explains alerts, and the script that keeps the reader on the page.
 export const InterestPanel: FC<{ lang: Lang; filter: InterestFilter | null } & InterestState> = ({ lang, filter, ...state }) => {
-  // Offered with the switch on, to a reader who does not hold Pro (a Pro reader has the delivery already).
+  // Offered with the switch on, to a reader whose plan lacks delivery (a Pro or Ultra reader has it already).
   const shell = useContext(RailContext);
-  const on = (shell?.accountsOn ?? false) && shell?.account?.plan !== "pro";
+  const plan = shell?.account?.plan ?? null;
+  const on = (shell?.accountsOn ?? false) && !(plan && allowed({ plan }, "delivery"));
   return filter ? (
     <>
       <Panel title={t(lang, "interest.title")} class="interest" tools={<a href="/alerts">{t(lang, "interest.about")}</a>}>
