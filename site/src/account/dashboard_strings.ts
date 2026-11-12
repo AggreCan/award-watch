@@ -104,4 +104,9 @@ export const DASHBOARD_STRINGS = {
     fr: "L'API : les requêtes de chaque clé aujourd'hui et le plafond quotidien du forfait.",
   },
   "dash.gate": { en: "The dashboard is part of Ultra.", fr: "Le tableau de bord fait partie d'Ultra." },
+  // The privacy page's line (account/privacy.tsx), while Ultra is on sale.
+  "dash.privacy": {
+    en: "A dashboard keeps the panels you chose, their order and their width. A panel names a saved search, a briefing, an analytics view's address or a block of your organization's page. The panels are deleted with the account.",
+    fr: "Un tableau de bord conserve les panneaux que vous avez choisis, leur ordre et leur largeur. Un panneau nomme une recherche enregistrée, un bulletin, l'adresse d'une vue d'analyse ou un bloc de la page de votre organisation. Les panneaux sont supprimés avec le compte.",
+  },
 } as const satisfies Record<string, { en: string; fr: string }>;

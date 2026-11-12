@@ -173,7 +173,7 @@ describe("whether Ultra is on sale", () => {
 
 const PUBLIC = [
   "/", "/?lang=fr", "/pro", "/pro?lang=fr", "/terms", "/terms?lang=fr", "/tenders/same-day", "/tenders/same-day?lang=fr", "/expiring/6m",
-  "/expiring/12m?lang=fr", "/privacy", "/tenders", "/organizations/org-a000000001",
+  "/expiring/12m?lang=fr", "/privacy", "/data", "/tenders", "/organizations/org-a000000001",
 ];
 
 describe("while Ultra is off sale", () => {
@@ -373,6 +373,24 @@ describe("the Terms", () => {
     expect(fr).toContain("Forfaits payants (Pro et Ultra)");
     expect(fr).toContain("<h3>Passer d'un forfait à l'autre</h3>");
     for (const p of [after, fr]) expect(p).not.toContain(EM_DASH);
+  });
+
+  it("say on the privacy page what a dashboard keeps, and on the Data page each paid plan's API figure for the day, only while Ultra is on sale", async () => {
+    const kept = "A dashboard keeps the panels you chose, their order and their width.";
+    expect(text((await page("/privacy", payEnv())).body)).not.toContain(kept);
+    const privacy = text((await page("/privacy", saleEnv())).body);
+    expect(privacy).toContain(kept);
+    expect(privacy).toContain("The panels are deleted with the account.");
+    expect(text((await page("/privacy?lang=fr", saleEnv())).body)).toContain("Un tableau de bord conserve les panneaux que vous avez choisis");
+    const pro = keyQuota("pro")!.perDay.toLocaleString("en-CA");
+    const ultra = keyQuota("ultra")!.perDay.toLocaleString("en-CA");
+    const before = text((await page("/data", payEnv())).body);
+    expect(before).toContain(`requests a minute and ${pro} a day, counted by UTC day.`);
+    expect(before).not.toContain(ultra);
+    const data = text((await page("/data", saleEnv())).body);
+    expect(data).toContain(`Its day, counted by UTC day, holds ${pro} requests on Pro and ${ultra} on Ultra.`);
+    expect(data).not.toContain(`and ${pro} a day, counted by UTC day.`);
+    for (const p of [privacy, data]) expect(p).not.toContain(EM_DASH);
   });
 });
 

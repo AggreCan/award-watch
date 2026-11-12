@@ -7,7 +7,8 @@ import { WATCH_DELIVERY_DAYS } from "./watches";
 // The privacy page's first section while accounts are open, in place of "No
 // Accounts" (pages/docs.tsx). It states what accounts_schema.sql keeps and
 // what it never keeps.
-export const AccountsPrivacy: FC<{ lang: Lang }> = ({ lang }) => (
+// dashboard: Ultra is on sale (pages/docs.tsx), so the section says what a dashboard keeps.
+export const AccountsPrivacy: FC<{ lang: Lang; dashboard?: boolean }> = ({ lang, dashboard }) => (
   <>
     <p>{t(lang, "account.privacy_kept")}</p>
     <p>{t(lang, "account.privacy_mail")}</p>
@@ -15,6 +16,7 @@ export const AccountsPrivacy: FC<{ lang: Lang }> = ({ lang }) => (
     <p>{t(lang, "calfeed.privacy_page")}</p>
     <p>{t(lang, "orgclaim.privacy")}</p>
     <p>{t(lang, "briefing.privacy")}</p>
+    {dashboard ? <p>{t(lang, "dash.privacy")}</p> : null}
     <p>{t(lang, "weekly.privacy")}</p>
     <p>{t(lang, "bugs.privacy", { days: BUG_REPORT_DAYS })}</p>
     <p>{t(lang, "account.privacy_secrets")}</p>

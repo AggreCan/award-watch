@@ -6,7 +6,7 @@
 // cannot drift from the routes.
 
 import type { FC } from "hono/jsx";
-import { KEYED_ENDPOINTS, KEYED_PARAMS, KEY_PER_DAY, KEY_PER_MINUTE, OPEN_Q_MAX, RECORD_PAGES_MAX } from "../api_keyed_spec";
+import { KEYED_ENDPOINTS, KEYED_PARAMS, KEY_PER_DAY, KEY_PER_DAY_ULTRA, KEY_PER_MINUTE, OPEN_Q_MAX, RECORD_PAGES_MAX } from "../api_keyed_spec";
 import { Table } from "../columns";
 import { fmtInt, t, tj, type Lang } from "../i18n";
 import { SITE_ORIGIN } from "../seo";
@@ -14,7 +14,8 @@ import { REQUEST_LIMITS } from "./docs";
 
 export const KEYED_EXAMPLE = `curl -H "Authorization: Bearer $AWARDWATCH_KEY" "${SITE_ORIGIN}/api/v1/tenders/open?province=ON&closing=7"`;
 
-export const KeyedApiDocs: FC<{ lang: Lang }> = ({ lang }) => {
+// ultra: Ultra is on sale (pages/data.tsx), so the limits state each paid plan's figure for the day.
+export const KeyedApiDocs: FC<{ lang: Lang; ultra?: boolean }> = ({ lang, ultra }) => {
   const mono = (s: string) => <span class="mono">{s}</span>;
   return (
     <>
@@ -53,7 +54,13 @@ export const KeyedApiDocs: FC<{ lang: Lang }> = ({ lang }) => {
         </Table>
       </div>
       <p>{t(lang, "keyed.answers")}</p>
-      <p>{t(lang, "keyed.limits", { minute: fmtInt(KEY_PER_MINUTE, lang), day: fmtInt(KEY_PER_DAY, lang), address: REQUEST_LIMITS.api })}</p>
+      <p>
+        {ultra
+          ? t(lang, "keyed.limits_plans", {
+            minute: fmtInt(KEY_PER_MINUTE, lang), day: fmtInt(KEY_PER_DAY, lang), ultra_day: fmtInt(KEY_PER_DAY_ULTRA, lang), address: REQUEST_LIMITS.api,
+          })
+          : t(lang, "keyed.limits", { minute: fmtInt(KEY_PER_MINUTE, lang), day: fmtInt(KEY_PER_DAY, lang), address: REQUEST_LIMITS.api })}
+      </p>
       <p>{t(lang, "keyed.errors")}</p>
       <p>{t(lang, "keyed.example")}</p>
       <pre class="cite-block">{KEYED_EXAMPLE}</pre>

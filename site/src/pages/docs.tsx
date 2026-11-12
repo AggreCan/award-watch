@@ -187,14 +187,16 @@ export async function termsPage(c: Context<AppEnv>): Promise<Response> {
   ], true);
 }
 
-export function privacyPage(c: Context<AppEnv>): Promise<Response> {
+export async function privacyPage(c: Context<AppEnv>): Promise<Response> {
   // While accounts are open (src/account/switch.ts) the first section says what an account keeps,
   // and the second what paying for Pro gives Stripe and leaves on the site.
   const accounts = accountsEnabled(c.env);
+  // Once Ultra can be bought the accounts section also says what a dashboard keeps.
+  const dashboard = accounts && (await ultraOnSale(c.env));
   const logos = !!c.env.BRANDFETCH_CLIENT_ID;
   return doc(c, "privacy", "privacy.title", "privacy.lead", (lang) => [
     accounts
-      ? { id: "accounts", title: "account.privacy_toc", body: <AccountsPrivacy lang={lang} /> }
+      ? { id: "accounts", title: "account.privacy_toc", body: <AccountsPrivacy lang={lang} dashboard={dashboard} /> }
       : { id: "accounts", title: "privacy.toc_accounts", body: <p>{t(lang, "privacy.accounts")}</p> },
     ...(accounts ? [{ id: "payments", title: "billing.privacy_toc", body: <PaymentsPrivacy lang={lang} /> } satisfies Section] : []),
     { id: "browser", title: "privacy.toc_browser", body: <p>{t(lang, "privacy.cookie")}</p> },

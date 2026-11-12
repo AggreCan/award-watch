@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { ultraOnSale } from "../account/payments";
 import { accountsEnabled } from "../account/switch";
 import { HowToCite } from "../cite";
 import { Table } from "../columns";
@@ -199,6 +200,8 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
   // file's name to the 12-month list's free view rather than to the file's
   // 404 (the file's own address still answers 404 to such a request).
   const pro = accountsEnabled(c.env);
+  // Once Ultra can be bought, the keyed API's limits state both paid plans' figures.
+  const ultra = pro && (await ultraOnSale(c.env));
   const deepFile = pro && allowsRadarDepth(await requestPlan(c));
   const fileHref = (d: (typeof DOWNLOADS)[number]) => (d.paid && pro && !deepFile ? "/expiring/12m" : `/downloads/${d.file}`);
   const toc: [string, Key][] = [
@@ -339,7 +342,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
           {pro ? (
             <ProNote lang={lang}>{tj(lang, "data.api_keys", { keys: <a href="/account/keys">{t(lang, "data.api_keys_link")}</a> })}</ProNote>
           ) : null}
-          {pro ? <KeyedApiDocs lang={lang} /> : null}
+          {pro ? <KeyedApiDocs lang={lang} ultra={ultra} /> : null}
 
           <h2 id="licence">{t(lang, "data.toc_licence")}</h2>
           <p>{tj(lang, "data.licence_text", { ogl: <a href={OGL_URL[lang]}>{t(lang, "data.ogl")}</a>, odla: <a href={ODLA_URL}>{t(lang, "data.odla")}</a> })}</p>

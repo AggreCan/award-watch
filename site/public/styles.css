@@ -1234,6 +1234,11 @@ tr[data-phone-cut] { display: none !important; }
   .restack td[colspan], .restack td[colspan]:first-child { padding-left: 0; }
   .restack td[colspan]::before { content: none; }
   .restack td:empty { display: none; }
+  /* A flag wraps inside its cell's width, so a long one (French) never widens the block past the screen. */
+  .restack td .flag { height: auto; min-height: 24px; max-width: 100%; padding: 4px 8px; white-space: normal; text-align: left; }
+  /* A mono cell (an identifier, a date with its time) wraps in its restacked cell rather than widen the block:
+     the selector repeats the one that keeps it on one line in a table's row, to outrank it. */
+  .restack td.mono:not(.num):not(.c-date):not(.wrap):not(:has(br, .nw)) { white-space: normal; overflow-wrap: anywhere; }
   /* The row's main cell (its first, or the one marked lead-cell, moved up)
      is a heading across the block, over the label and value pairs. */
   .restack tbody tr { display: flex; flex-direction: column; }

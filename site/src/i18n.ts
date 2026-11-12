@@ -2907,6 +2907,11 @@ const STRINGS = {
     en: "Each key may make {minute} requests a minute and {day} a day, counted by UTC day. The limit of {address} API requests a minute from one address applies as well.",
     fr: "Chaque clé peut faire {minute} requêtes par minute et {day} par jour, comptées par jour UTC. La limite de {address} requêtes à l'API par minute depuis une même adresse s'applique aussi.",
   },
+  // The same once Ultra can be bought: each paid plan's own figure for the day (api_keyed_spec.ts keyQuota).
+  "keyed.limits_plans": {
+    en: "Each key may make {minute} requests a minute. Its day, counted by UTC day, holds {day} requests on Pro and {ultra_day} on Ultra. The limit of {address} API requests a minute from one address applies as well.",
+    fr: "Chaque clé peut faire {minute} requêtes par minute. Sa journée, comptée par jour UTC, en compte {day} avec Pro et {ultra_day} avec Ultra. La limite de {address} requêtes à l'API par minute depuis une même adresse s'applique aussi.",
+  },
   "keyed.errors": {
     en: "An error answers JSON with an error field: 400 for a parameter the endpoint does not take or cannot use, 401 for a missing, unknown or revoked key, 403 for a key whose account is not on Pro, 404 for an address, id or page that does not exist, 429 past a limit (Retry-After says when to try again) and 503 while the data or the account service cannot be read.",
     fr: "Une erreur répond en JSON avec un champ error : 400 pour un paramètre que le point d'accès ne prend pas ou ne peut pas utiliser, 401 pour une clé absente, inconnue ou révoquée, 403 pour une clé dont le compte n'est pas au forfait Pro, 404 pour une adresse, un identifiant ou une page qui n'existe pas, 429 au-delà d'une limite (Retry-After indique quand réessayer) et 503 tant que les données ou le service des comptes ne peuvent pas être lus.",
