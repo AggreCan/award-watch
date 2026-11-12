@@ -498,3 +498,21 @@ CREATE TABLE IF NOT EXISTS weekly_mail (
 );
 -- The delivery job's list of the accounts due, oldest choice first.
 CREATE INDEX IF NOT EXISTS idx_weekly_mail_due ON weekly_mail(mail, on_at);
+
+-- The dashboard (src/account/dashboard.tsx; docs/accounts.md, Dashboard): the panels an Ultra
+-- account chose, in its order. kind is checked by the site (dashboard.tsx PANEL_KINDS), not by a
+-- CHECK, so a new kind of panel needs no rebuild of this table. ref names what the panel shows: a
+-- saved search's, saved view's or briefing's id, a window ('3m'), a block ('years'), or ''.
+-- wide is 1 for full width. At most DASHBOARD_MAX per account, held inside the insert. Goes with
+-- the account, and a panel goes with the search, view or briefing it shows.
+CREATE TABLE IF NOT EXISTS dashboard_panels (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL,
+  ref TEXT NOT NULL DEFAULT '',
+  pos INTEGER NOT NULL,
+  wide INTEGER NOT NULL DEFAULT 1 CHECK (wide IN (0, 1)),
+  created_at TEXT NOT NULL,
+  UNIQUE (user_id, kind, ref)
+);
+CREATE INDEX IF NOT EXISTS idx_dashboard_panels_user ON dashboard_panels(user_id, pos);

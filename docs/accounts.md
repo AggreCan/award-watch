@@ -529,7 +529,8 @@ logs name no key.
 
 ## Deletion
 
-`/account/delete` asks for a ticked box, deletes the account's watches, its
+`/account/delete` asks for a ticked box, deletes the account's dashboard
+panels, its watches, its
 claim of an organization, its briefings, its weekly email row and its
 calendar feeds (statements of their own, so a database without those tables
 still deletes the rest), then in one batch: revokes every
@@ -1929,6 +1930,141 @@ a refund the press would refuse. The audit keeps 90 days, longer than the 14.
   proration invoice under Managed Payments, and how an Ultra refund shows in
   the payment's breakdown (operator step 5). If the portal applies a move up
   before its payment, the webhook still grants nothing until a paid notice.
+
+## Dashboard
+
+`/account/dashboard` is Ultra's: one page of up to 12 panels an account
+chooses from what the site already shows it, in its own order, each full
+width or half width. The figure is the `dashboard` feature of `RULES` (0 on
+Free and Pro, 12 on Ultra; `DASHBOARD_MAX` is the ceiling whatever the plan).
+The code is `site/src/account/dashboard.tsx` (the table, the panels, the
+page and its posts), `dashboard_rule.ts` (who has it and the rail's item),
+`dashboard_add.tsx` (Add to dashboard) and `dashboard_strings.ts`; the rail
+item is in `site/src/layout.tsx`. The tests are `site/test/dashboard.test.ts`
+and a 12-panel entry in `site/test/cpu-budget.test.ts`.
+
+### The table
+
+| Table | Columns | Rule |
+|---|---|---|
+| `dashboard_panels` | `id`, `user_id`, `kind`, `ref`, `pos`, `wide` (1 full width, 0 half), `created_at`; unique on (`user_id`, `kind`, `ref`) | At most the plan's figure per account and at most 2 briefing panels, both held inside the insert (`ADD_PANEL_SQL`), so two posts at once cannot pass either; the same item once |
+
+`kind` is checked by the site (`PANEL_KINDS`), not by a CHECK, so a new kind
+needs no rebuild. A panel goes with the account (`deleteAccount`), and with
+the saved search or briefing it shows when that is removed on its page.
+
+### The panels
+
+Each panel is a reader the account pages already have, with a LIMIT of 5
+where it lists rows. No statement about the data is new but the radar's 5-row
+form, `RADAR_TOP_SQL` (`RADAR_ROWS_END_SQL` without its offset, `LIMIT 5`).
+
+| Kind | `ref` | Shows | Reads |
+|---|---|---|---|
+| `tenders` | a saved search of kind tenders | how many open notices match it, the 5 closing soonest | `tenders/open.json` (kept parsed), filtered as `/tenders` filters (`readTenderQuery`, `filterTenders`) |
+| `radar` | a saved search of kind expiring, or `3m`, `6m`, `12m` | the window's count and counted value, the 5 ending soonest | records: `RADAR_TOTAL_SQL` and `RADAR_TOP_SQL`; a search naming a province reads the radar's province statements (`RADAR_PROV_TOTAL_SQL`, `RADAR_PROV_ROWS_END_SQL`, its page of rows) and shows 5 |
+| `records` | a saved search of kind organization, buyer or segment | its records by source, the last two fiscal years | records: `ORG_COUNTS_SQL`, `BUYER_COUNTS_SQL` or `SEGMENT_COUNTS_SQL` (`records_deliveries.ts`) |
+| `watches` | none | the week's events on every watch: a count by kind, the 5 newest | records: `readEvents` over the 7 data dates ending with the data date; accounts: the watches |
+| `view` | an analytics view's address | the view's first chart at its source and period | records: `BUYER_QUARTERS_SQL`, `ORG_YEARS_SQL` or `SEGMENT_YEARS_SQL`, and the buyer's or organization's name by its key (`BUYER_NAME_SQL`, `ORG_NAME_SQL`) |
+| `briefing` | a briefing | the week so far, from the week's Monday: new notices, awards, notable amendments, contracts ending next quarter, as counts | records: `readBriefing`'s statements |
+| `org` | a block: `years`, `segments`, `share`, `ending`, `buyers`, `instruments` | that block of Your organization | records: the block's own statement of `readBlocks` (the years over the last two fiscal years; the ending block through `RADAR_TOP_SQL`; the share with the segments statement that names its segment) |
+| `matches` | none | the 5 closest matching notices, with the disclaimer | the claim, the profile entry, `tenders/open.json` |
+| `api` | none | each live key's requests today, with the plan's daily figure | accounts: the keys and `keyUsage` |
+
+A view's `ref` is its own address until saved views exist: the path, then its
+source and its period (`?source=awards&years=10`, or `?from=2019&source=history&to=2022`),
+the keys in order (`viewAddress`). Anything else in the address (a segment,
+the organizations compared, the language) changes nothing of the first chart
+and is dropped; an unknown parameter, a source the view does not offer or a
+period the view does not offer makes it no view's (`viewRef`).
+
+Each panel's head names its kind and its item (the site's own label: the
+saved search's, the briefing's, the window's, the organization's or the
+view's name) and links See all to the page it comes from. Matching notices
+keep the advisory line inside their panel; no panel shows the holder's
+record, so no other advisory line is needed. A panel whose item was removed
+says so and offers Remove. A panel that cannot be read says so; the others
+render.
+
+### A page view
+
+The account's rows are read at once by the readers the account pages use
+(the panels, the saved searches, the briefings, the claim, the watches, the
+keys). Every panel's records statements go in one batch with the state row;
+when that batch fails, each panel is read on its own, so one table the
+nightly has not made yet leaves the other panels. The watches and the
+briefings send their own batches through their own readers (`readEvents`,
+`readBriefing`), at once with the first. At most two static files are parsed:
+`tenders/open.json` and, with an organization panel or matching notices, the
+claimed organization's profile shard. A Free or Pro reader reads no records.
+
+### Routes
+
+| Route | What it does |
+|---|---|
+| `GET /account/dashboard` | the panels; `?edit=1` adds Move up, Move down, Full width or Half width and Remove to each head, and the Add a Panel panel with one select and Add, the page's one filled button |
+| `POST /account/dashboard/panels` | add a panel: `kind` and `ref` from a page's Add to dashboard, or `panel` (`kind:ref`) from the select |
+| `POST /account/dashboard/panels/:id/move` | `dir` up or down |
+| `POST /account/dashboard/panels/:id/width` | `wide` 1 or 0 |
+| `POST /account/dashboard/panels/:id/delete` | remove it |
+
+Every post is behind the session, the CSRF value and the Origin, in the form
+bucket (`FORM_LIMIT`, 5 a minute). A post returns to the dashboard with what
+happened (`?m=added`, `full`, `briefings_full`, `unsaved`), in edit mode from
+the page's own controls. The page is `private, no-store`.
+
+### The starting layout
+
+An Ultra account with no panel stored sees the starting layout, computed and
+not stored: the watches, the 3-month list, matching notices and the
+organization's years block when it has claimed one, its first two saved
+tender searches, and the API panel when it holds a live key. Its first
+change (an add, a move, a width, a removal) writes the starting layout as its
+rows, then applies the change, so the panels the reader kept stay where they
+were.
+
+### What each reader sees
+
+- **Ultra**, whether or not Ultra is on sale (a grant by hand included): the
+  panels, and Add to dashboard on each analytics view's head, on each saved
+  search a panel can show and on each briefing of the searches page.
+- **Free and Pro while Ultra is on sale**: the head, What the Dashboard Holds
+  (the nine kinds, one sentence each), the gate line with Plans and prices,
+  and the three plan cards, Ultra's link the page's filled button. No records
+  read.
+- **Free and Pro while Ultra is off sale**: the site's 404, as before Ultra.
+- **Signed out**: the sign-in page with `next=/account/dashboard` while
+  Ultra is on sale; the site's 404 while it is not.
+- **The rail**: Dashboard, with the Ultra chip, first in Your lists, while
+  Ultra is on sale or the account holds it, for every reader the rail shows
+  an account to; never with the accounts switch off.
+- **The plan cards**: Ultra's card has a row of its own, "A dashboard of up
+  to 12 panels"; Free's and Pro's show it in the hollow ring, muted. Only
+  beside Ultra's card: the two cards drawn while Ultra is off sale keep their
+  rows.
+
+### Operator step
+
+Apply the schema, as for every earlier table (it adds `dashboard_panels` and
+its index and changes nothing else):
+
+```
+cd site
+npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+```
+
+Until then an Ultra account sees the starting layout, and the edit controls
+and every post say the layout cannot be saved yet.
+
+### Known limits
+
+- The form bucket's 5 posts a minute holds a long rearrangement: a panel
+  moves one place a post.
+- A saved search's label is shown as it was saved, in the language of the
+  page it was saved from; the searches page rebuilds it in the page's
+  language.
+- A view's period is checked against `PERIODS`; a period added there later is
+  accepted with it.
 
 ## Operator console
 

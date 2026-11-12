@@ -13,6 +13,7 @@
 
 import { SEGMENTS, SEGMENT_SHORT } from "./constants";
 import { ACCOUNT_STRINGS } from "./account/strings";
+import { DASHBOARD_STRINGS } from "./account/dashboard_strings";
 import { CALENDAR_STRINGS } from "./calendar_strings";
 
 export type Lang = "en" | "fr";
@@ -22,6 +23,8 @@ type Entry = { en: string; fr: string };
 const STRINGS = {
   // The accounts module's strings live with the module (src/account/strings.ts).
   ...ACCOUNT_STRINGS,
+  // The dashboard's strings (src/account/dashboard_strings.ts).
+  ...DASHBOARD_STRINGS,
   // The calendar files' strings (src/calendar_strings.ts).
   ...CALENDAR_STRINGS,
   "site.name": { en: "Award Watch", fr: "Award Watch" },
@@ -3195,8 +3198,8 @@ const STRINGS = {
   },
   "propage.ultra_title": { en: "Ultra", fr: "Ultra" },
   "propage.ultra_text": {
-    en: "Ultra includes everything in Pro, with these figures: {searches} saved searches by email, {watches} watches, {years} fiscal years of analytics and API keys of {day} requests a day each.",
-    fr: "Ultra comprend tout ce que comprend Pro, avec ces chiffres : {searches} recherches enregistrées par courriel, {watches} suivis, {years} exercices d'analyses et des clés d'API de {day} requêtes par jour chacune.",
+    en: "Ultra includes everything in Pro, with these figures: {searches} saved searches by email, {watches} watches, {years} fiscal years of analytics, API keys of {day} requests a day each, and a dashboard of up to {panels} panels you choose.",
+    fr: "Ultra comprend tout ce que comprend Pro, avec ces chiffres : {searches} recherches enregistrées par courriel, {watches} suivis, {years} exercices d'analyses, des clés d'API de {day} requêtes par jour chacune, et un tableau de bord d'au plus {panels} panneaux que vous choisissez.",
   },
   "propage.ultra_who": {
     en: "For people who follow a whole market: many buyers, segments and competitors at once.",

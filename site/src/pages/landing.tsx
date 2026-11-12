@@ -60,7 +60,7 @@ import { FitDisclaimer, type ReasonContext, bandText, reasonText } from "../fit"
 import { BrandMark, BrandWordmark, FooterRow, MetaTags, noDataPage, todayOf, varyOnCookie } from "../layout";
 import { LANDING_ORGS_A, LANDING_ORGS_B, type LandingOrg, brandfetchLogoUrl } from "../landing_orgs";
 import {
-  type ProPrice, PLAN_ROWS, ProTag, SUBSCRIBE_PATH, ULTRA_SUBSCRIBE_PATH, UltraTag, checkoutPrice, planLine, rowFor, sameDayHours, ultraCheckoutPrice,
+  type ProPrice, ProTag, SUBSCRIBE_PATH, ULTRA_SUBSCRIBE_PATH, UltraTag, checkoutPrice, planLine, planRows, rowFor, sameDayHours, ultraCheckoutPrice,
   ultraLines,
 } from "../pro";
 import { MAX_YEARS } from "../records_db";
@@ -378,9 +378,10 @@ const MatchShot: FC<{ lang: Lang }> = ({ lang }) => {
 
 // -- the plans -------------------------------------------------------------------------
 
+// The rows Free or Pro has: Ultra's card here lists its own lines (ultraLines).
 const PlanList: FC<{ lang: Lang; plan: "free" | "pro" }> = ({ lang, plan }) => (
   <ul class="lp-plan-list">
-    {PLAN_ROWS.map((row) => {
+    {planRows(["free", "pro"]).map((row) => {
       const { wording, has } = rowFor(row, plan);
       return has ? (
         <li><Check /><span>{planLine(lang, wording)}</span></li>

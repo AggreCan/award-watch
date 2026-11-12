@@ -59,6 +59,12 @@
 //   POST /account/billing/change       a move between Pro and Ultra, on the portal    (session, CSRF)
 //   POST /account/billing/refund       refund the first payment, then cancel at once  (session read from the database, CSRF)
 //   POST /account/billing/webhook      the payment service's notices                  (signature only)
+//   GET  /account/dashboard            the dashboard's panels; ?edit=1 its controls   (session; Ultra, else what it holds
+//                                      while Ultra is on sale, else the site's 404)
+//   POST /account/dashboard/panels     add a panel (kind and ref, or panel)            (session, CSRF, plan's figure)
+//   POST /account/dashboard/panels/:id/move    one place up or down (dir)              (session, CSRF)
+//   POST /account/dashboard/panels/:id/width   full or half width (wide)               (session, CSRF)
+//   POST /account/dashboard/panels/:id/delete  remove it                               (session, CSRF)
 //
 // Every POST but the stop link's and the webhook's (which Stripe sends,
 // signed; billing.tsx) is refused with a 403 when its Origin names another
@@ -99,6 +105,8 @@ import {
   isBriefingDelivery, isBriefingKind, lastBriefingRuns, listBriefings, narrowOf, setBriefingDelivery, subjectOf,
 } from "./briefings";
 import { bugPage, fileBug } from "./bugs";
+import { type EditOp, addPanelPost, dashboardOpen, dashboardPage, deletePanelsFor, deletePanelsOf, editPanelPost } from "./dashboard";
+import { DASHBOARD_PATH } from "./dashboard_rule";
 import { type Plan, RULES, allowed, planFor, watchCap } from "./entitlements";
 import {
   FEEDS_MAX, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
@@ -146,8 +154,9 @@ account.use("*", async (c, next) => {
   await next();
   // A calendar feed is read by a calendar app, never a page: private as
   // well; so is the organization an account claims, its page and its files,
-  // and the notices matching it.
-  const own = FEED_ICS.test(c.req.path) || c.req.path === ORG_PATH || c.req.path.startsWith(`${ORG_PATH}/`) || c.req.path === MATCH_PATH;
+  // and the notices matching it; and the dashboard, whose 404 stays as it was.
+  const own = FEED_ICS.test(c.req.path) || c.req.path === ORG_PATH || c.req.path.startsWith(`${ORG_PATH}/`) || c.req.path === MATCH_PATH ||
+    (c.req.path === DASHBOARD_PATH && c.res.status === 200);
   c.header("Cache-Control", own ? "private, no-store" : "no-store");
   c.header("X-Robots-Tag", "noindex, nofollow");
 });
@@ -641,7 +650,12 @@ account.post("/searches/:id/delete", async (c) => {
   if (post instanceof Response) return post;
   const { account: who } = post;
   return guarded(c, async () => {
-    if (await deleteSearch(c.env, who.userId, c.req.param("id") ?? "")) await audit(c.env, who.userId, "search_deleted");
+    const id = c.req.param("id") ?? "";
+    if (await deleteSearch(c.env, who.userId, id)) {
+      await audit(c.env, who.userId, "search_deleted");
+      // Its dashboard panel goes with it (dashboard.tsx).
+      await deletePanelsFor(c.env, who.userId, ["tenders", "radar", "records"], id);
+    }
     return c.redirect("/account/searches?m=deleted", 303);
   });
 });
@@ -701,7 +715,12 @@ account.post("/briefings/:id/delete", async (c) => {
   if (post instanceof Response) return post;
   const { account: who } = post;
   return guarded(c, async () => {
-    if (await deleteBriefing(c.env, who.userId, c.req.param("id") ?? "")) await audit(c.env, who.userId, "briefing_removed");
+    const id = c.req.param("id") ?? "";
+    if (await deleteBriefing(c.env, who.userId, id)) {
+      await audit(c.env, who.userId, "briefing_removed");
+      // Its dashboard panel goes with it (dashboard.tsx).
+      await deletePanelsFor(c.env, who.userId, ["briefing"], id);
+    }
     return c.redirect("/account/searches?m=b_removed#briefings", 303);
   });
 });
@@ -1367,6 +1386,44 @@ account.post("/bug", async (c) => {
   return guarded(c, () => fileBug(c, post.account, post.fields));
 });
 
+// -- the dashboard (dashboard.tsx) -------------------------------------------------------------
+
+// While Ultra is not on sale the address is the site's 404 for anyone who does
+// not hold it (dashboardOpen), so it reads as it did before Ultra; a reader
+// signed out signs in and comes back (?next).
+account.get("/dashboard", async (c) => {
+  const open = await dashboardOpen(c, async () => {
+    if (!getCookie(c, SESSION_COOKIE)) return { state: "none" };
+    const read = await readSession(c);
+    return read.state === "ok" ? { state: "ok", plan: read.account.plan } : read;
+  });
+  if (!open) return c.notFound();
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => dashboardPage(c, who));
+});
+
+account.post("/dashboard/panels", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => addPanelPost(c, post.account, post.fields));
+});
+
+// The three changes of a panel: one place up or down, full or half width, removed.
+const PANEL_OPS: Record<string, (fields: Record<string, string>) => EditOp | null> = {
+  move: (f) => (f.dir === "up" || f.dir === "down" ? { op: "move", dir: f.dir } : null),
+  width: (f) => (f.wide === "1" || f.wide === "0" ? { op: "width", wide: f.wide === "1" } : null),
+  delete: () => ({ op: "delete" }),
+};
+
+account.post("/dashboard/panels/:id/:op{move|width|delete}", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const op = PANEL_OPS[c.req.param("op") ?? ""]?.(post.fields) ?? null;
+  if (!op) return c.text(t(c.get("lang"), "form.rejected"), 400);
+  return guarded(c, () => editPanelPost(c, post.account, c.req.param("id") ?? "", op, post.fields));
+});
+
 // -- deletion ----------------------------------------------------------------------------------------
 
 account.get("/delete", async (c) => {
@@ -1384,13 +1441,14 @@ account.get("/delete", async (c) => {
 // an organization, the weekly email's row and sign-in requests are deleted;
 // so are the address's rows in the alerts form's table. The entitlement rows
 // stay, tied to the id alone, as the record of what was granted. The
-// watches, the claim, the briefings, the weekly email and the feeds go
-// first, each on its own, so a database without their tables yet still
-// deletes the rest.
+// dashboard's panels, the watches, the claim, the briefings, the weekly email
+// and the feeds go first, each on its own, so a database without their
+// tables yet still deletes the rest.
 export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new Date()): Promise<void> {
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
   const tomb = `deleted:${await sha256Hex(`${randomHex(32)}\n${who.email}`)}`;
+  await deletePanelsOf(c.env, who.userId);
   await deleteWatchesOf(c.env, who.userId);
   await deleteClaimOf(c.env, who.userId);
   await deleteBriefingsOf(c.env, who.userId);

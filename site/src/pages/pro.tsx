@@ -43,7 +43,7 @@ export const PRO_PATH = "/pro";
 // What Pro includes: the Pro card's lines, each beside the feature the plans
 // grant for it.
 export function proIncludes(lang: Lang): { feature: Feature; text: string }[] {
-  return PLAN_ROWS.map((row) => ({ feature: row.feature, text: planLine(lang, row.pro) }));
+  return PLAN_ROWS.flatMap((row) => (row.pro ? [{ feature: row.feature, text: planLine(lang, row.pro) }] : []));
 }
 
 // The questions, word for word as the page shows them and as the FAQPage
@@ -77,6 +77,7 @@ const UltraSection: FC<{ lang: Lang; ultra: ProPrice }> = ({ lang, ultra }) => (
       {t(lang, "propage.ultra_text", {
         searches: fmtInt(RULES.ultra.saved_searches, lang), watches: fmtInt(RULES.ultra.watchlists, lang), years: fmtInt(planYears("ultra"), lang),
         day: fmtInt(keyQuota("ultra")?.perDay ?? 0, lang),
+        panels: fmtInt(RULES.ultra.dashboard, lang),
       })}
     </p>
     <p>{t(lang, "propage.ultra_who")}</p>

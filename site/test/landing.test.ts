@@ -350,10 +350,12 @@ describe("the two switch states", () => {
       expect(cards).toHaveLength(3);
       const rows = (card: string) => [...card.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)]
         .map((m) => nbsp(textOf(m[1])).replace(nbsp(`${t(lang, "plans.lacks")} `), ""));
+      // The rows Free or Pro has: a row only Ultra has (the dashboard) is on Ultra's own card.
+      const ROWS = PLAN_ROWS.filter((r) => r.free || r.pro);
       for (const [i, plan] of (["free", "pro"] as const).entries()) {
-        expect(rows(cards[i]), `${lang} ${plan}`).toEqual(PLAN_ROWS.map((r) => nbsp(planLine(lang, rowFor(r, plan).wording))));
+        expect(rows(cards[i]), `${lang} ${plan}`).toEqual(ROWS.map((r) => nbsp(planLine(lang, rowFor(r, plan).wording))));
         // A row the plan lacks is marked so in words and by the ring.
-        expect(cards[i].match(/class="lp-lacks"/g)?.length ?? 0).toBe(PLAN_ROWS.filter((r) => !rowFor(r, plan).has).length);
+        expect(cards[i].match(/class="lp-lacks"/g)?.length ?? 0).toBe(ROWS.filter((r) => !rowFor(r, plan).has).length);
       }
       expect(rows(cards[2])).toEqual(ULTRA_ROWS.map((k) => nbsp(t(lang, k))));
       const monthly = lang === "fr" ? `${PRICE[1].replace(".", ",")} $ CA` : `CA$${PRICE[1]}`;

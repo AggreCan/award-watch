@@ -23,6 +23,8 @@ import {
   type Briefing, type BriefingKind, type BriefingOverview, type BriefingRun, type BriefingSubject, WEEK_DAYS, briefValue, briefingName,
   briefingPath, briefingState, readBriefing, sharedCap,
 } from "./briefings";
+import { AddToDashboard } from "./dashboard_add";
+import { holdsDashboard } from "./dashboard_rule";
 import { briefingParts } from "./digests";
 import { allowed } from "./entitlements";
 import { type Account, readSession } from "./session";
@@ -152,6 +154,7 @@ export const BriefingsPanel: FC<{ lang: Lang; account: Account; briefings: (Brie
   { lang, account, briefings },
 ) => {
   const pro = allowed(account, "delivery");
+  const dash = holdsDashboard(account.plan);
   return (
     <Panel title={t(lang, "briefing.list_title")} id="briefings" count={fmtInt(briefings.length, lang)}
       tools={<a href="/pro/briefing-sample">{t(lang, "briefing.sample_link")}</a>}>
@@ -165,7 +168,13 @@ export const BriefingsPanel: FC<{ lang: Lang; account: Account; briefings: (Brie
             <tbody>
               {briefings.map((b) => (
                 <tr>
-                  <td data-label={t(lang, "briefing.col")}><a href={briefingPath(b)}>{briefingLabel(lang, b)}</a></td>
+                  {/* An Ultra account adds a briefing to its dashboard from its row (dashboard.tsx). */}
+                  {dash ? (
+                    <td data-label={t(lang, "briefing.col")}>
+                      <a href={briefingPath(b)}>{briefingLabel(lang, b)}</a>
+                      <AddToDashboard lang={lang} account={account} kind="briefing" panelRef={b.id} />
+                    </td>
+                  ) : <td data-label={t(lang, "briefing.col")}><a href={briefingPath(b)}>{briefingLabel(lang, b)}</a></td>}
                   <td data-label={t(lang, "account.col_delivery")}>
                     {pro ? (
                       <>

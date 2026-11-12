@@ -247,8 +247,9 @@ describe("the plan cards while Ultra is on sale", () => {
         expect(ultra).toMatch(/^<div class="plan-card plan-card-ultra"><div class="plan-card-head"><h3>Ultra<\/h3><span class="ultra-tag"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">/);
         expect(ultra).toContain(`<path d="${ULTRA_GLYPH_PATH}"></path>`);
         PLAN_ROWS.forEach((row, i) => expect(rowsOf(ultra)[i], `${lang} ${path} ${i}`).toEqual({ lacks: false, text: text(planLine(lang, row.ultra)) }));
-        // The chip in the card's head and nowhere else on the page.
-        expect(html.match(/class="ultra-tag"/g), path).toHaveLength(1);
+        // The chip in the card's head, and in the rail's Dashboard item (src/layout.tsx), and nowhere else on the page.
+        expect(html.match(/class="ultra-tag"/g), path).toHaveLength(2);
+        expect(html).toMatch(/<a class="rail-item" href="\/account\/dashboard"><span class="rail-label">[^<]+<\/span><span class="ultra-tag">/);
         expect(html).not.toContain(EM_DASH);
         expect(html).not.toContain(EN_DASH);
       }
@@ -273,9 +274,9 @@ describe("the plan cards while Ultra is on sale", () => {
     expect(ultraLines("en")).toEqual([
       `${RULES.ultra.saved_searches} saved searches, by email`, `${RULES.ultra.watchlists} watches, each change by email`,
       `Analytics: every view, ${planYears("ultra")} fiscal years`, `API: ${KEYS_MAX} keys of ${keyQuota("ultra")!.perDay.toLocaleString("en-CA")} requests a day`,
-      `${RULES.ultra.matches} matching notices for your organization`,
+      `${RULES.ultra.matches} matching notices for your organization`, `A dashboard of up to ${RULES.ultra.dashboard} panels`,
     ]);
-    expect(ULTRA_LINES).toHaveLength(5);
+    expect(ULTRA_LINES).toHaveLength(6);
   });
 
   it("lead a reader without a session to the sign-in page and on to Ultra's panel, a Free reader to its billing page", async () => {
@@ -297,7 +298,7 @@ describe("the Pro page while Ultra is on sale", () => {
     expect(ultra).toBeGreaterThan(who);
     expect(ultra).toBeLessThan(html.indexOf('<h2 id="free">'));
     const days = keyQuota("ultra")!.perDay.toLocaleString("en-CA");
-    expect(html).toContain(`<p>Ultra includes everything in Pro, with these figures: ${RULES.ultra.saved_searches} saved searches by email, ${RULES.ultra.watchlists} watches, ${planYears("ultra")} fiscal years of analytics and API keys of ${days} requests a day each.</p>`);
+    expect(html).toContain(`<p>Ultra includes everything in Pro, with these figures: ${RULES.ultra.saved_searches} saved searches by email, ${RULES.ultra.watchlists} watches, ${planYears("ultra")} fiscal years of analytics, API keys of ${days} requests a day each, and a dashboard of up to ${RULES.ultra.dashboard} panels you choose.</p>`);
     expect(html).toContain("<p>For people who follow a whole market: many buyers, segments and competitors at once.</p>");
     expect(html).toContain('<p class="pro-price">Ultra is CA$30 a month or CA$301.50 a year, taxes added at checkout.</p>');
     expect(html).toContain("<h3>Can I move from Pro to Ultra, or back?</h3>");
@@ -512,8 +513,9 @@ describe("Ultra's strings", () => {
       }
     }
     const COMPARATIVE = /\b(more|higher|above|unlimited|plus|davantage|supérieure?s?|au-dessus|illimitée?s?)\b/i;
+    // "au plus" is French for "at most", Ultra's own bound on its dashboard (propage.ultra_text, plans.dashboard), not a comparison.
     for (const key of KEYS.filter((k) => k.startsWith("plans.") || k.startsWith("propage.ultra"))) {
-      expect(rawEntry(key).en + " " + rawEntry(key).fr, key).not.toMatch(COMPARATIVE);
+      expect((rawEntry(key).en + " " + rawEntry(key).fr).replace(/\bau plus\b/g, ""), key).not.toMatch(COMPARATIVE);
     }
     // No price figure is written into a string.
     for (const key of KEYS) expect(rawEntry(key).en + rawEntry(key).fr, key).not.toMatch(/\$\s?[0-9]|[0-9]\s?\$/);

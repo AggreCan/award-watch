@@ -65,6 +65,7 @@ import {
   fiscalLabel, fiscalYearOf, num, orgIdOf, orgNumber, quarterEnd, readRecords, segmentCode, segmentNumber,
 } from "../records_db";
 import { railAccount } from "../account/session";
+import { AddToDashboard, dashboardAccount, viewPanelRef } from "../account/dashboard_add";
 import { growthPct, windowOf } from "./expiring";
 import { retiredIdRedirect } from "./organization";
 import { contractSearchUrl, grantUrl, money, shareText } from "./shared";
@@ -314,6 +315,9 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
   const title = t(lang, "analytics.title_of", { name: s.name });
   const ok = read.state === "ready";
   if (!ok) c.header("Retry-After", "3600");
+  // An Ultra account adds the view, at its source and period, to its dashboard (account/dashboard.tsx); no one else sees it.
+  const dash = s.pro ? await dashboardAccount(c) : null;
+  const add = dash ? <AddToDashboard lang={lang} account={dash} kind="view" panelRef={viewPanelRef(s.base, frame)} button /> : null;
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={s.stats.data_as_of} active={s.active}
@@ -323,7 +327,7 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
         lead={t(lang, "analytics.lead", {
           source: sourceLabel(lang, frame.source), first: fiscalLabel(lang, frame.first), last: fiscalLabel(lang, frame.last),
         })}
-        actions={<a href={s.back} class="btn">{t(lang, s.backKey)}</a>}>
+        actions={<>{add}<a href={s.back} class="btn">{t(lang, s.backKey)}</a></>}>
         <p class="page-note">{t(lang, "analytics.note_sources")} {t(lang, "analytics.note_fiscal")}</p>
         {frame.capped ? <p class="page-note">{t(lang, "analytics.period_capped", { n: frame.most })}</p> : null}
         {frame.longer && s.ultra ? <p class="page-note">{t(lang, "analytics.ultra_years", { n: ULTRA_YEARS })}</p> : null}

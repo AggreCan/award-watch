@@ -18,6 +18,8 @@ import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
 import { type Brief, briefValue } from "./briefings";
+import { AddToDashboard } from "./dashboard_add";
+import { holdsDashboard } from "./dashboard_rule";
 import { RULES, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX, type FeedKind } from "./feeds";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch } from "./searches";
@@ -479,6 +481,11 @@ const LastDeliveryLine: FC<{ lang: Lang; last: LastDelivery | null; deliver: Del
   return <p class="muted small">{line}</p>;
 };
 
+// The dashboard's panel each kind of saved search becomes (dashboard.tsx PANEL_KINDS).
+const DASH_KINDS: Readonly<Partial<Record<string, string>>> = {
+  tenders: "tenders", expiring: "radar", organization: "records", buyer: "records", segment: "records",
+};
+
 // The foot of a Free account's searches: how many it holds of its cap, what
 // Pro holds and sends, and the billing page.
 const CapNote: FC<{ lang: Lang; n: number; cap: number }> = ({ lang, n, cap }) => (
@@ -592,6 +599,7 @@ export function searchesView(
 ) {
   const { searches, cap, pending } = state;
   const canDeliver = allowed(account, "delivery");
+  const dash = holdsDashboard(account.plan);
   const held = searches.length + (state.briefings?.n ?? 0);
   const full = held >= cap;
   const capLine = t(lang, account.plan === "free" ? "account.cap_free" : "account.cap_pro", { cap: fmtInt(cap, lang) });
@@ -633,7 +641,13 @@ export function searchesView(
               <tbody>
                 {searches.map((s) => (
                   <tr>
-                    <td data-label={t(lang, "account.col_search")}><a href={s.params}>{s.label}</a></td>
+                    {/* An Ultra account adds a search to its dashboard from its row (dashboard.tsx); the sort reads the label alone. */}
+                    {dash && DASH_KINDS[s.kind] ? (
+                      <td data-label={t(lang, "account.col_search")} data-sort={s.label}>
+                        <a href={s.params}>{s.label}</a>
+                        <AddToDashboard lang={lang} account={account} kind={DASH_KINDS[s.kind]!} panelRef={s.id} />
+                      </td>
+                    ) : <td data-label={t(lang, "account.col_search")}><a href={s.params}>{s.label}</a></td>}
                     <td data-label={t(lang, "account.col_delivery")}>
                       {canDeliver ? (
                         <>

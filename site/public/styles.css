@@ -572,6 +572,22 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
   .panel-grid:has(> :nth-child(3):last-child) > :last-child:nth-child(odd):not(:first-child) { grid-column: auto; }
 }
 .panel-form { max-width: 720px; }
+/* The dashboard (src/account/dashboard.tsx): its panels one under another,
+   and from 1,280 px two tracks, a full-width panel taking the row and a
+   half-width one a track. Below that every panel takes the row, so no table
+   is squeezed under its column. */
+.dash-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gutter); align-items: start; margin: 0 0 var(--gutter); }
+.dash-grid > .panel { margin: 0; }
+@media (min-width: 1280px) {
+  .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-grid > .panel:not(.dash-half) { grid-column: 1 / -1; }
+}
+/* A panel's item under its kind in the head band: the site's own label, in
+   its own case. Edit mode's controls sit beside See all; Add to dashboard
+   stands on its own line under a row's label. */
+.panel-head h2 .dash-item { display: block; margin-top: 2px; font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink-2); }
+.dash-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+td > .dash-add { margin-top: 4px; }
 
 /* -- stat tiles: four to a row, large tabular figures, one line under -------- */
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gutter); margin: 0 0 var(--gutter); }

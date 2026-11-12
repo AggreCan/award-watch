@@ -9,9 +9,10 @@ import {
   SOCIAL_CARD_HEIGHT, SOCIAL_CARD_URL, SOCIAL_CARD_WIDTH, type Seo, alternates, canonicalUrl, defaultDescription, pageTitle,
 } from "./seo";
 import { type Plan, allowed } from "./account/entitlements";
+import { DASHBOARD_PATH, dashboardInRail } from "./account/dashboard_rule";
 import { type RailAccount, railAccount } from "./account/session";
 import { accountsEnabled } from "./account/switch";
-import { ProTag } from "./pro";
+import { ProTag, UltraTag } from "./pro";
 import { clockOf } from "./closing";
 import { type TableUse, TableUseContext } from "./columns";
 import { type RefreshStamps, RefreshTimers } from "./refresh";
@@ -251,8 +252,10 @@ export const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, la
 // page's clock (clockOf), which the top bar's timers count from.
 // accountsOn: the accounts switch, for the top bar's same-day timer (refresh.tsx).
 // stamps: the data the page was built from, for both timers (refresh.tsx).
+// dashboard: the rail shows the Dashboard item (dashboardInRail).
 export type Shell = {
   rail: RailCounts | null; here: string; account?: RailAccount; now?: number; accountsOn?: boolean; stamps?: RefreshStamps;
+  dashboard?: boolean;
 };
 export const RailContext = createContext<Shell | null>(null);
 
@@ -323,7 +326,9 @@ export function railStates(entries: readonly RailEntry[], here: string, section?
 // without moving anything above them. Nothing in it assumes a signed-in
 // reader: the watchlist lives in this browser, and alerts are a link to the
 // page that says they are coming and takes an address meanwhile.
-const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: string; account?: RailAccount }> = ({ lang, active, rail, here, account }) => {
+const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: string; account?: RailAccount; dashboard?: boolean }> = ({
+  lang, active, rail, here, account, dashboard,
+}) => {
   const year = rail?.year ?? new Date().toISOString().slice(0, 4);
   const expiring = rail?.ending12m !== undefined || rail?.ending3m !== undefined;
   // Pro exists only while the accounts switch is on, which is when the shell
@@ -399,6 +404,15 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
       <div class="rail-group rail-user">
         <p class="rail-head" id="rail-lists">{t(lang, "rail.lists")}</p>
         <ul aria-labelledby="rail-lists">
+          {/* Ultra's dashboard (src/account/dashboard.tsx), its chip in the count's slot: only while the shell says so (dashboardInRail). */}
+          {account && dashboard ? (
+            <li>
+              <a class="rail-item" href="/account/dashboard" aria-current={active === DASHBOARD_PATH ? "page" : undefined}>
+                <span class="rail-label">{t(lang, "rail.dashboard")}</span>
+                <UltraTag lang={lang} />
+              </a>
+            </li>
+          ) : null}
           <li>
             <a class="rail-item" href="/watchlist" aria-current={active === "/watchlist" ? "page" : undefined}>
               <span class="rail-label">{t(lang, "footer.watchlist")}</span>
@@ -461,7 +475,7 @@ const TipScript: FC<{ tables: TableUse }> = ({ tables }) =>
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 60;
+export const STYLES_VERSION = 61;
 
 // The subscript after the wordmark for a signed-in reader, by plan: Ultra's
 // in its sapphire (public/styles.css .brand-plan-ultra), Pro's in the accent.
@@ -565,7 +579,7 @@ export const Layout: FC<
           </div>
         </header>
         <div class="frame">
-          <Rail lang={lang} active={active} rail={shell?.rail ?? null} here={shell?.here ?? ""} account={shell?.account} />
+          <Rail lang={lang} active={active} rail={shell?.rail ?? null} here={shell?.here ?? ""} account={shell?.account} dashboard={shell?.dashboard} />
           <div class="content">
             <TableUseContext.Provider value={tables}>
               <main id="main">{props.children}</main>
@@ -618,6 +632,7 @@ export async function page(c: Context<AppEnv>, body: unknown, status = 200): Pro
   // that names the signed-in address is never stored by a shared cache.
   const account = await railAccount(c).catch(() => undefined);
   if (account) shell.account = account;
+  if (account && (await dashboardInRail(c.env, account.plan))) shell.dashboard = true;
   if (account?.email) c.header("Cache-Control", "private, no-store");
   return c.html(html`<!doctype html>${(<RailContext.Provider value={shell}>{body as any}</RailContext.Provider>) as any}`, status as any);
 }
@@ -707,6 +722,7 @@ export async function publicPage(c: Context<AppEnv>, body: unknown, status = 200
   };
   // What railAccount gives a request with no session.
   if (shell.accountsOn) shell.account = { email: null, plan: null };
+  if (shell.account && (await dashboardInRail(c.env, null))) shell.dashboard = true;
   c.header("Cache-Control", status === 200 ? `public, max-age=${maxAge}` : "no-store");
   return c.html(html`<!doctype html>${(<RailContext.Provider value={shell}>{body as any}</RailContext.Provider>) as any}`, status as any);
 }

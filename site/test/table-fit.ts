@@ -43,6 +43,8 @@ export const SHEET = {
   cmapFrom: px(/@media \(min-width: (\d+)px\) \{ \.cmap \{ grid-template-columns: minmax\(0, 1fr\) minmax\(var\(--cmap-list-min/, "where the map's list stands beside it"),
   // A block inside a panel that is not a table's wrapper keeps this margin.
   panelInset: px(/^\.panel > :not\([^)]*\) \{ margin: (\d+)px; \}/m, "the margin of a block inside a panel"),
+  // The dashboard's two tracks from this window, a half-width panel taking one (src/account/dashboard.tsx).
+  dashFrom: px(/@media \(min-width: (\d+)px\) \{\n\s*\.dash-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/, "where the dashboard takes two tracks"),
 };
 
 // The blocks that run to a panel's edges rather than keep its inset: the
@@ -97,7 +99,7 @@ export function edges(): number[] {
   // The first window at which the grid holds two tracks of its least width.
   let split = SHEET.gridFrom;
   while (mainWidth(split) < 2 * SHEET.gridTrack + SHEET.gutter) split += 1;
-  const all = [...RANGES.map((r) => r.from), SHEET.railFrom, SHEET.gridFrom, split, SHEET.threeFrom, SHEET.tocFrom, SHEET.cmapFrom];
+  const all = [...RANGES.map((r) => r.from), SHEET.railFrom, SHEET.gridFrom, split, SHEET.threeFrom, SHEET.tocFrom, SHEET.cmapFrom, SHEET.dashFrom];
   return [...new Set(all)].sort((a, b) => a - b);
 }
 
@@ -185,6 +187,8 @@ function boxWidth(box: El, w: number): number {
     if (i === n - 1 && n % 2 === 1) return main;
     return half;
   }
+  // A half-width panel of the dashboard takes one of its two tracks from dashFrom; every other panel there takes the row.
+  if (grid && has(grid, "dash-grid") && has(cell, "dash-half") && w >= SHEET.dashFrom) return (main - SHEET.gutter) / 2;
   if (has(box, "doc")) {
     const layout = box.parent;
     const toc = layout && has(layout, "doc-layout") && !has(layout, "doc-alone") && w >= SHEET.tocFrom ? SHEET.toc + SHEET.gutter : 0;

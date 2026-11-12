@@ -50,9 +50,11 @@ export const cachedPlanOf = (p: Plan): "free" | "pro" => (p === "ultra" ? "pro" 
 // organization, closest first (src/account/fit_pages.tsx), MATCH_PAGE a page.
 // match_mail: how many of the week's new matching notices one message a week
 // lists (src/account/fit_mail.ts): the weekly email, or Pro's watch mail.
+// dashboard: how many panels /account/dashboard holds (src/account/dashboard.tsx).
 export const FEATURES = [
   "saved_searches", "delivery", "api", "export_filtered", "intraday", "radar_depth", "bug_reports", "analytics", "watchlists",
   "watch_mail", "matches", "match_mail",
+  "dashboard",
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -68,11 +70,13 @@ export const MATCH_PAGE = 50;
 type Rules = {
   saved_searches: number; delivery: boolean; api: boolean; export_filtered: boolean; intraday: boolean; radar_depth: boolean;
   bug_reports: boolean; analytics: boolean; watchlists: number; watch_mail: boolean; matches: number; match_mail: number;
+  dashboard: number;
 };
 
 const PRO_RULES: Rules = {
   saved_searches: 25, delivery: true, api: true, export_filtered: true, intraday: true, radar_depth: true, bug_reports: true,
   analytics: true, watchlists: 25, watch_mail: true, matches: 200, match_mail: 10,
+  dashboard: 0,
 };
 
 // Ultra holds every Pro feature, with figures of its own on the counted ones:
@@ -84,6 +88,7 @@ export const RULES: Readonly<Record<Plan, Rules>> = {
   free: {
     saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false, radar_depth: false, bug_reports: false,
     analytics: false, watchlists: 3, watch_mail: false, matches: 5, match_mail: 3,
+    dashboard: 0,
   },
   pro: PRO_RULES,
   ultra: {
@@ -92,11 +97,12 @@ export const RULES: Readonly<Record<Plan, Rules>> = {
     watchlists: WATCH_MAX,
     matches: 500,
     match_mail: 25,
+    dashboard: 12,
   },
 };
 
 // The figures a plan gives as counts rather than as yes or no.
-export const COUNTED_FEATURES = ["saved_searches", "watchlists", "matches", "match_mail"] as const satisfies readonly Feature[];
+export const COUNTED_FEATURES = ["saved_searches", "watchlists", "matches", "match_mail", "dashboard"] as const satisfies readonly Feature[];
 export type CountedFeature = (typeof COUNTED_FEATURES)[number];
 export const isCounted = (f: Feature): f is CountedFeature => (COUNTED_FEATURES as readonly Feature[]).includes(f);
 

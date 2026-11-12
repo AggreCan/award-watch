@@ -286,9 +286,9 @@ function memoryAccounts(tokenHash: string, claim: boolean): D1Database {
 }
 
 // The same pages through the real app with the session cookie, the switch on and the accounts in memory.
-// mark is what the page shows only for this account, so the render is the signed-in one.
-async function signedInRatio(path: string, per: number, accounts: D1Database, mark: string): Promise<number> {
-  const fitEnv = { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true" };
+// mark is what the page shows only for this account, so the render is the signed-in one. extra adds bindings.
+async function signedInRatio(path: string, per: number, accounts: D1Database, mark: string, extra: object = {}): Promise<number> {
+  const fitEnv = { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true", ...extra };
   const request = () => app.request(path, {
     headers: { "sec-fetch-mode": "navigate", cookie: COOKIE, "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}` },
   }, fitEnv);
@@ -324,6 +324,91 @@ const SIGNED_IN_BUDGET: [name: string, path: string, claim: boolean, mark: strin
   ["/account/organization, claim", "/account/organization", true, "<h2>Notices Matching ", 21, 8], // [6.7]
   ["/account/matches, claim", "/account/matches", true, "<h2>Open Notices That Match</h2>", 21, 8], // [6.9]
 ];
+
+// -- an Ultra account's dashboard of twelve panels ------------------------------------------
+//
+// src/account/dashboard.tsx: the session, an Ultra entitlement and the
+// account's rows answered from memory (twelve panels: two tender searches,
+// the 3- and 12-month lists, an organization search, the watches, an
+// analytics view, a briefing, two blocks of the claimed organization,
+// matching notices and the API), and a records database that answers at once
+// with a row or two for each statement, so the time is the Worker's own: the
+// 900 open notices filtered twice and ranked once, the radar's rows, the
+// chart, the tables.
+const DASH_AT = new Date().toISOString();
+const S1 = "1".repeat(32);
+const S2 = "2".repeat(32);
+const S3 = "3".repeat(32);
+const B1 = "4".repeat(32);
+const DASH_PANELS = [
+  ["tenders", S1], ["tenders", S2], ["radar", "3m"], ["radar", "12m"], ["records", S3], ["watches", ""],
+  ["view", "/organizations/org-a000000001/analytics?source=awards&years=10"], ["briefing", B1], ["org", "years"], ["org", "ending"], ["matches", ""], ["api", ""],
+].map(([kind, ref], i) => ({ id: `${i}`.padStart(32, "d"), kind, ref, pos: i, wide: i % 3 ? 0 : 1, created_at: DASH_AT }));
+
+function ultraAccounts(tokenHash: string): D1Database {
+  const at = DASH_AT;
+  const session = {
+    id: FIT_SESSION_ID, token_hash: tokenHash, expires_at: "2999-01-01T00:00:00.000Z", revoked_at: null, last_seen_at: at, user_id: "budget-ultra",
+    email: "ultra@example.com", lang: "en", status: "active", plan: "pro", plan_until: null, created_at: at,
+  };
+  const all = (sql: string): Record<string, unknown>[] => {
+    if (sql.includes("FROM sessions s JOIN users u")) return [session];
+    if (sql.includes("FROM entitlements e LEFT JOIN entitlement_tiers")) {
+      return [{ id: "e-ultra", plan: "ultra", starts_at: "2026-01-01T00:00:00.000Z", ends_at: null, created_at: "2026-01-01T00:00:00.000Z", revoked_at: null }];
+    }
+    if (sql.includes("FROM dashboard_panels")) return DASH_PANELS;
+    if (sql.includes("FROM saved_searches")) {
+      return [
+        { id: S1, kind: "tenders", params: "/tenders?segment=82", label: "Notices in segment 82", lang: "en", created_at: at, deliver: "off" },
+        { id: S2, kind: "tenders", params: "/tenders?q=services", label: "Notices with services", lang: "en", created_at: at, deliver: "off" },
+        { id: S3, kind: "organization", params: "/organizations/org-a000000001", label: "Exemplar", lang: "en", created_at: at, deliver: "off" },
+      ];
+    }
+    if (sql.includes("FROM briefings")) {
+      return [{ id: B1, kind: "segment", subject: "81", segment: "", label: "81", lang: "en", created_at: at, deliver: "off", last_delivered_at: null }];
+    }
+    if (sql.startsWith("SELECT organization_id, segment, competitors")) {
+      return [{ organization_id: "org-a000000001", segment: null, competitors: "[]", created_at: at, updated_at: at }];
+    }
+    if (sql.includes("FROM watches")) {
+      return [{ id: "w1", kind: "organization", target: "org-a000000001", segment: "", label: "Exemplar", events: "award,grant,amended,ends_12m", cadence: "daily", created_at: at, last_sent_day: null }];
+    }
+    if (sql.includes("FROM api_keys")) return [{ id: "k1", name: "Reports", prefix: "abcd", created_at: at, last_used_at: null, revoked_at: null }];
+    return [];
+  };
+  const statement = (sql: string) => {
+    const s = {
+      sql,
+      bind: () => s,
+      first: async () => all(sql)[0] ?? null,
+      all: async () => ({ results: all(sql), success: true, meta: {} }),
+      raw: async () => [],
+      run: async () => ({ results: [], success: true, meta: { changes: 0 } }),
+    };
+    return s;
+  };
+  return {
+    prepare: statement,
+    batch: async (list: { sql: string }[]) => list.map((s) => ({ results: all(s.sql), success: true, meta: { changes: 0 } })),
+  } as unknown as D1Database;
+}
+
+// A row or two for each records statement a panel reads: the state, a radar row, a year's counts, an event.
+const RADAR_J = JSON.stringify({
+  kind: "award", reference: "EN578-000001", title_en: "A contract", title_fr: "Un contrat", organization_id: "org-a000000001", organization: "Exemplar",
+  buyer_id: "pwgsc-tpsgc", buyer_en: "PSPC", buyer_fr: "SPAC", start: "2024-01-01", end: "2027-01-15", value: 300000, currency: "CAD", competitive: 1,
+  method_en: null, method_fr: null, instrument_en: null, instrument_fr: null, n_amendments: 0, value_growth: null, tender_reference: null, segments: ["81"], provinces: ["ON"],
+});
+const dashRecords = stubDb((sql) => {
+  if (sql.includes("FROM rec_meta")) return [{ key: "state", value: "ready" }, { key: "as_of", value: "2026-10-31" }];
+  if (sql.includes("SELECT endd, j FROM rec_expiring")) return Array.from({ length: 5 }, (_, i) => ({ endd: "2027-01-15", j: RADAR_J.replace("000001", `00000${i}`) }));
+  if (sql.includes("COUNT(*) AS n, SUM(cents) AS cents, SUM(nv)")) return [{ n: 12, cents: 123_456_700, n_no_value: 1 }];
+  if (sql.includes("FROM records") || sql.includes("FROM rec_segment_years") || sql.includes("FROM rec_buyer_quarters")) {
+    return [{ src: 1, fy: 2025, n: 4, cents: 50_000_000, n_no_value: 0, n_nc: 0 }, { src: 1, fy: 2026, n: 2, cents: 30_000_000, n_no_value: 0, n_nc: 0 }];
+  }
+  if (sql.includes("FROM rec_orgs")) return [{ name: "Exemplar Translation Services Inc." }];
+  return [];
+});
 
 describe("CPU budget per route (a synthetic guard, not a production number)", () => {
   it("keeps each route's render within its bound over the yardstick", async () => {
@@ -363,5 +448,22 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
       if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
     }
     expect(over, seen.join(", ")).toEqual([]);
+  }, 120_000);
+
+  // About three times the larger of two ratios measured when the dashboard was added (2026-11-11, in brackets),
+  // rounded up: about as much as the 3-month list's 500 contracts signed out.
+  const DASHBOARD_BOUND = 27; // [8.75, 8.36]
+  it("keeps an Ultra account's dashboard of twelve panels within its bound (accounts and records answered from memory)", async () => {
+    clearParsedCache();
+    clearClosingCache();
+    const accounts = ultraAccounts(await sha256Hex(SECRET));
+    // What the entry times: twelve panels, each drawn from its reads, none unreadable.
+    const first = await app.request("/account/dashboard", { headers: { "sec-fetch-mode": "navigate", cookie: COOKIE } },
+      { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true", RECORDS: dashRecords });
+    const html = await first.text();
+    expect(html.match(/<section class="panel dash-panel/g)).toHaveLength(12);
+    expect(html).not.toContain("This panel cannot be read right now.");
+    const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid">', { RECORDS: dashRecords });
+    expect(r, `/account/dashboard, 12 panels ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_BOUND);
   }, 120_000);
 });

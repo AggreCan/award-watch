@@ -24,7 +24,7 @@ import { RULES } from "../src/account/entitlements";
 import { COMPETITORS_MAX } from "../src/account/org_claim";
 import { KEY_PER_DAY } from "../src/api_keyed_spec";
 import { EXPIRING_WINDOWS } from "../src/data";
-import { PLAN_CARD_ROWS, PLAN_LINE_MAX, PLAN_ROWS, PRO_GLYPH_PATH, PRO_INCLUDES, planLine, proPrice } from "../src/pro";
+import { PLAN_CARD_ROWS, PLAN_LINE_MAX, PLAN_ROWS, PRO_GLYPH_PATH, PRO_INCLUDES, cardRows, planLine, planRows, proPrice } from "../src/pro";
 import { FREE_YEARS, MAX_YEARS } from "../src/records_db";
 import { SAME_DAY_RUNS_UTC } from "../src/refresh";
 import { routeTemplate } from "../src/views";
@@ -389,7 +389,8 @@ describe("the radar's tabs and tiles", () => {
       "export_filtered", "delivery", "analytics", "bug_reports",
     ]);
     expect(PRO_INCLUDES.map(([, key]) => key)).toContain("plans.pro_briefing");
-    expect(PRO_INCLUDES).toEqual(PLAN_ROWS.map((r) => [r.feature, r.pro.key]));
+    // A row only Ultra has (the dashboard) is not one of Pro's.
+    expect(PRO_INCLUDES).toEqual(PLAN_ROWS.flatMap((r) => (r.pro ? [[r.feature, r.pro.key]] : [])));
     // The rows Free has come first, then the rows only Pro has, so the hollow marks gather at the foot.
     const firstLack = PLAN_ROWS.findIndex((r) => !r.free);
     expect(firstLack).toBeGreaterThan(0);
@@ -420,13 +421,16 @@ describe("the plan cards", () => {
           const panel = teaseOf(page);
           // One span for every card: the head band, the price, the "for" line,
           // one row an entry, the buttons and the note (the stylesheet reads it).
+          // Two cards draw the rows Free or Pro has; a row only Ultra has comes with Ultra's card.
+          const ROWS = planRows(["free", "pro"]);
+          expect(ROWS).toEqual(PLAN_ROWS.filter((r) => r.free || r.pro));
           expect(PLAN_CARD_ROWS).toBe(3 + PLAN_ROWS.length + 2);
-          expect(panel, at).toContain(`<div class="plan-cards" style="--plan-rows:${PLAN_ROWS.length};--plan-card-rows:${PLAN_CARD_ROWS}">`);
+          expect(panel, at).toContain(`<div class="plan-cards" style="--plan-rows:${ROWS.length};--plan-card-rows:${cardRows(ROWS.length)}">`);
           const cards = cardsOf(panel);
           expect(cards, at).toHaveLength(2);
           // Every card exactly one <li> an entry, and no row span of its own.
           for (const card of cards) {
-            expect(card.match(/<li[ >]/g), at).toHaveLength(PLAN_ROWS.length);
+            expect(card.match(/<li[ >]/g), at).toHaveLength(ROWS.length);
             expect(card, at).not.toContain("style=");
           }
           const [free, pro] = cards;
@@ -435,17 +439,17 @@ describe("the plan cards", () => {
           expect(pro, at).toMatch(/^<div class="plan-card plan-card-offer"><div class="plan-card-head"><h3>Pro<\/h3><span class="pro-tag">/);
           const freeRows = rowsOf(free);
           const proRows = rowsOf(pro);
-          expect(freeRows, at).toHaveLength(PLAN_ROWS.length);
-          expect(proRows, at).toHaveLength(PLAN_ROWS.length);
-          PLAN_ROWS.forEach((row, i) => {
-            // Pro has every row, in its own words with a check.
-            expect(proRows[i], `${at} row ${i}`).toEqual({ lacks: false, hollow: false, text: nbsp(planLine(lang, row.pro)), said: null });
+          expect(freeRows, at).toHaveLength(ROWS.length);
+          expect(proRows, at).toHaveLength(ROWS.length);
+          ROWS.forEach((row, i) => {
+            // Pro has every row of the two cards, in its own words with a check.
+            expect(proRows[i], `${at} row ${i}`).toEqual({ lacks: false, hollow: false, text: nbsp(planLine(lang, row.pro!)), said: null });
             // Free has its own words with a check, or Pro's in a hollow ring, said in words for a screen reader.
             expect(freeRows[i], `${at} row ${i}`).toEqual(row.free
               ? { lacks: false, hollow: false, text: nbsp(planLine(lang, row.free)), said: null }
-              : { lacks: true, hollow: true, text: nbsp(planLine(lang, row.pro)), said: nbsp(`${t(lang, "plans.lacks")} `) });
+              : { lacks: true, hollow: true, text: nbsp(planLine(lang, row.pro!)), said: nbsp(`${t(lang, "plans.lacks")} `) });
           });
-          expect(freeRows.filter((r) => r.lacks).length, at).toBe(PLAN_ROWS.filter((r) => !r.free).length);
+          expect(freeRows.filter((r) => r.lacks).length, at).toBe(ROWS.filter((r) => !r.free).length);
           expect(freeRows.filter((r) => r.lacks).length, at).toBeGreaterThan(0);
           expect(panel, at).not.toContain(EM_DASH);
         }
@@ -502,11 +506,21 @@ describe("the plan cards", () => {
     // No comparative: a line names what its own plan gets.
     const COMPARATIVE = /\b(more|higher|above|unlimited|limits above|plus|davantage|supérieure?s?|au-dessus|illimitée?s?)\b/i;
     for (const card of [free, pro, freeFr, proFr]) expect(card.replace(/<[^>]+>/g, " "), card.slice(0, 60)).not.toMatch(COMPARATIVE);
-    for (const key of allKeys().filter((k) => k.startsWith("plans."))) expect(rawEntry(key).en + " " + rawEntry(key).fr, key).not.toMatch(COMPARATIVE);
-    // Every row is one the plans give Pro and not Free, or for a counted feature a larger figure on Pro.
+    // "au plus" is French for "at most", a plan's own bound (plans.dashboard), not a comparison.
+    for (const key of allKeys().filter((k) => k.startsWith("plans."))) {
+      expect((rawEntry(key).en + " " + rawEntry(key).fr).replace(/\bau plus\b/g, ""), key).not.toMatch(COMPARATIVE);
+    }
+    // Every row Pro has is one the plans give Pro and not Free, or for a counted feature a larger figure on Pro;
+    // a row only Ultra has is one the plans give Ultra alone.
     for (const row of PLAN_ROWS) {
       const pro = RULES.pro[row.feature];
       const free = RULES.free[row.feature];
+      if (!row.pro) {
+        expect(row.free, row.ultra.key).toBeNull();
+        expect(RULES.ultra[row.feature] as number, row.ultra.key).toBeGreaterThan(pro as number);
+        expect(pro, row.ultra.key).toBe(free);
+        continue;
+      }
       if (typeof pro === "number") {
         expect(pro, row.pro.key).toBeGreaterThan(free as number);
       } else {

@@ -102,9 +102,11 @@ export type Wording = { key: Key; vars?: (lang: Lang) => Record<string, string> 
 // figure, so test/seo-intent.test.ts and test/radar-gate.test.ts can hold
 // every row to RULES), and each plan's wording, null where the plan has none
 // of it. Ultra has every row, each with Ultra's own figure (at or above
-// Pro's); every row so far is one Pro has too. Every card draws every row in
-// this order, so the lists line up across the cards.
-export type PlanRow = { feature: Feature; free: Wording | null; pro: Wording; ultra: Wording };
+// Pro's); a row Pro has not is Ultra's alone (the dashboard), its feature one
+// Ultra gives a figure Pro does not. Every card draws every row it is shown
+// with in this order, so the lists line up across the cards; a row only
+// Ultra has is drawn only beside Ultra's card (planRows).
+export type PlanRow = { feature: Feature; free: Wording | null; pro: Wording | null; ultra: Wording };
 
 // The longest a row's line may run, in characters, in either language: one
 // line at a card's narrowest (300 px, 13 px type, the mark beside it). The
@@ -199,21 +201,32 @@ export const PLAN_ROWS: readonly PlanRow[] = [
   // with the organizations it sits beside (COMPETITORS_MAX in account/org_claim.ts is MAX_RIVALS).
   { feature: "analytics", free: null, ...same({ key: "plans.pro_org", vars: count(() => MAX_RIVALS) }) },
   { feature: "bug_reports", free: null, ...same({ key: "plans.pro_bugs" }) },
+  // Ultra's alone: the dashboard's panels (src/account/dashboard.tsx), its figure from RULES.
+  { feature: "dashboard", free: null, pro: null, ultra: { key: "plans.dashboard", vars: count(() => RULES.ultra.dashboard) } },
 ];
+
+// The rows a set of cards draws: those one of its plans has, so the two
+// cards drawn while Ultra is not on sale keep their rows, and a row only
+// Ultra has comes with Ultra's card.
+export function planRows(plans: readonly Plan[]): readonly PlanRow[] {
+  return PLAN_ROWS.filter((r) => plans.some((p) => r[p] !== null));
+}
 
 // What Pro adds, each line under the feature that carries it, so a test can
 // hold the list to the plans (test/radar-gate.test.ts): the rows' Pro column.
-export const PRO_INCLUDES: readonly (readonly [Feature, Key])[] = PLAN_ROWS.map((r) => [r.feature, r.pro.key] as const);
+export const PRO_INCLUDES: readonly (readonly [Feature, Key])[] = PLAN_ROWS.flatMap((r) => (r.pro ? [[r.feature, r.pro.key] as const] : []));
 // The same for Ultra: the rows' Ultra column.
 export const ULTRA_INCLUDES: readonly (readonly [Feature, Key])[] = PLAN_ROWS.map((r) => [r.feature, r.ultra.key] as const);
 
 // The lines that say what Ultra holds beyond the plan cards (the landing
 // page's Ultra card while Ultra is on sale, and the Ultra message), each the
 // Ultra wording of a PLAN_ROWS row, so the figures are read from RULES and the
-// constants and never typed: searches, watches, analytics, the keyed API and
-// the matching notices. The landing card leads with "Everything in Pro"; the
-// message leaves out the matching notices.
-export const ULTRA_LINES: readonly Key[] = ["plans.pro_searches", "plans.pro_watches", "plans.pro_analytics", "plans.api_keys", "plans.matches"];
+// constants and never typed: searches, watches, analytics, the keyed API, the
+// matching notices and the dashboard. The landing card leads with "Everything
+// in Pro"; the message leaves out the matching notices.
+export const ULTRA_LINES: readonly Key[] = [
+  "plans.pro_searches", "plans.pro_watches", "plans.pro_analytics", "plans.api_keys", "plans.matches", "plans.dashboard",
+];
 
 export function ultraLines(lang: Lang, keys: readonly Key[] = ULTRA_LINES): string[] {
   return keys.map((key) => {
@@ -235,7 +248,7 @@ export function rowFor(row: PlanRow, plan: Plan): { wording: Wording; has: boole
   const own = row[plan];
   if (own) return { wording: own, has: true };
   const above = PLANS.slice(PLANS.indexOf(plan) + 1).map((p) => row[p]).find((w): w is Wording => w !== null);
-  return { wording: above ?? row.pro, has: false };
+  return { wording: above ?? row.ultra, has: false };
 }
 
 // The two figures, as the billing page offers them: the operator's text
@@ -292,10 +305,12 @@ export type PlanCard = {
 };
 
 // The rows of every card: the head band, the price, the "for" line, one a
-// PLAN_ROWS entry, the buttons and the note under them. Every card spans
-// them all (a card without a note leaves the last empty), so the stylesheet's
-// subgrid puts each row at one height across the cards (.plan-cards).
-export const PLAN_CARD_ROWS = 3 + PLAN_ROWS.length + 2;
+// row the cards draw (planRows), the buttons and the note under them. Every
+// card spans them all (a card without a note leaves the last empty), so the
+// stylesheet's subgrid puts each row at one height across the cards
+// (.plan-cards). PLAN_CARD_ROWS is the figure for every row of PLAN_ROWS.
+export const cardRows = (rows: number): number => 3 + rows + 2;
+export const PLAN_CARD_ROWS = cardRows(PLAN_ROWS.length);
 
 // The marks before a row, on a 16-unit box drawn at 12 px: a check for what
 // the plan has (in the accent on the plan offered, muted on the others) and
@@ -312,7 +327,7 @@ const Mark: FC<{ has: boolean }> = ({ has }) => has
 const cardClass = (card: PlanCard) =>
   card.plan === "ultra" ? "plan-card plan-card-ultra" : card.offered ? "plan-card plan-card-offer" : "plan-card";
 
-const PlanCardView: FC<{ lang: Lang; card: PlanCard }> = ({ lang, card }) => (
+const PlanCardView: FC<{ lang: Lang; card: PlanCard; rows: readonly PlanRow[] }> = ({ lang, card, rows }) => (
   <div class={cardClass(card)}>
     <div class="plan-card-head">
       <h3>{card.name}</h3>
@@ -322,7 +337,7 @@ const PlanCardView: FC<{ lang: Lang; card: PlanCard }> = ({ lang, card }) => (
     <p class="plan-price"><span class="plan-name">{card.name}</span> <span class="plan-figure">{card.price as any}</span></p>
     <p class="plan-for">{card.forLine}</p>
     <ul class="plan-list">
-      {PLAN_ROWS.map((row) => {
+      {rows.map((row) => {
         const { wording, has } = rowFor(row, card.plan);
         return has ? (
           <li><Mark has /><span>{planLine(lang, wording)}</span></li>
@@ -342,11 +357,14 @@ const PlanCardView: FC<{ lang: Lang; card: PlanCard }> = ({ lang, card }) => (
 // The cards side by side, in the order given, the same height and every
 // row at one height across them (public/styles.css .plan-cards). Three fit
 // side by side where the column allows it; two and one below.
-export const PlanCards: FC<{ lang: Lang; plans: readonly PlanCard[] }> = ({ lang, plans }) => (
-  <div class="plan-cards" style={`--plan-rows:${PLAN_ROWS.length};--plan-card-rows:${PLAN_CARD_ROWS}`}>
-    {plans.map((card) => <PlanCardView lang={lang} card={card} />)}
-  </div>
-);
+export const PlanCards: FC<{ lang: Lang; plans: readonly PlanCard[] }> = ({ lang, plans }) => {
+  const rows = planRows(plans.map((c) => c.plan));
+  return (
+    <div class="plan-cards" style={`--plan-rows:${rows.length};--plan-card-rows:${cardRows(rows.length)}`}>
+      {plans.map((card) => <PlanCardView lang={lang} card={card} rows={rows} />)}
+    </div>
+  );
+};
 
 // Who reads the cards, and where: a tease panel (a reader without the
 // page's feature, so signed out or Free), the Pro page, the billing page.

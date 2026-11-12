@@ -855,6 +855,7 @@ describe("the period by plan", () => {
   const ULTRA_LINE = "Periods of up to 20 fiscal years are part of Ultra.";
   const sale = () => ultraEnv();
   const tabs = (html: string) => /<nav class="tabs tabs-small toolbar-row" aria-label="Period">[\s\S]*?<\/nav>/.exec(html)?.[0] ?? "";
+  const inMain = (html: string) => html.slice(html.indexOf("<main"), html.indexOf("</main>"));
 
   it("are 3, 10 and 20 fiscal years, every statement's LIMIT held to the longest and its years to the period", () => {
     expect([planYears("free"), planYears("pro"), planYears("ultra")]).toEqual([FREE_YEARS, MAX_YEARS, ULTRA_YEARS]);
@@ -877,7 +878,8 @@ describe("the period by plan", () => {
       const { html } = await page(`${VIEWS[0]}?source=history&years=20`, { cookie, env });
       expect(html).toContain("federal fiscal years 2007-08 to 2026-27.");
       expect(tabs(html)).toContain('aria-current="page">20 fiscal years</a>');
-      expect(html).not.toContain("ultra-tag");
+      // No Ultra chip in the view itself: the reader holds Ultra. (The rail's Dashboard item carries one.)
+      expect(inMain(html)).not.toContain("ultra-tag");
       expect(html).not.toContain(ULTRA_LINE);
       // Every year of the twenty in the quarters' table, the years before the records' first with nothing in them.
       for (const fy of ["2007-08", "2013-14", "2014-15", "2026-27"]) expect(html, fy).toContain(`>${fy}`);
@@ -904,7 +906,8 @@ describe("the period by plan", () => {
     expect(tabs(html)).toContain('aria-current="page">10 fiscal years</a>');
     // The tab carries the Ultra chip, the only one on the page.
     expect(tabs(html)).toMatch(/>20 fiscal years<span class="ultra-tag"><svg/);
-    expect(html.match(/class="ultra-tag"/g)).toHaveLength(1);
+    // One chip in the view, on the tab; the rail's Dashboard item carries the page's other one.
+    expect(inMain(html).match(/class="ultra-tag"/g)).toHaveLength(1);
     const custom = (await page(`${VIEWS[0]}?source=history&from=2005&to=2026`, { cookie: proCookie, env: sale() })).html;
     expect(custom).toContain("At most 10 fiscal years are shown at once");
     expect(custom).toContain(ULTRA_LINE);

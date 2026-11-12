@@ -326,6 +326,7 @@ describe("the Ultra message", () => {
     `- ${RULES.ultra.watchlists} watches, each change by email`,
     `- Analytics: every view, ${ULTRA_YEARS} fiscal years`,
     `- API: ${KEYS_MAX} keys of ${KEY_PER_DAY_ULTRA.toLocaleString("en-CA")} requests a day`,
+    `- A dashboard of up to ${RULES.ultra.dashboard} panels`,
   ].join("\n");
 
   it("refuses to be sent while Ultra cannot be bought: the page says so and offers no form, and a post sends nothing", async () => {
