@@ -168,8 +168,9 @@
   // same for the plan above Pro: its Stripe product id, its monthly and
   // yearly price ids and their two figures. Nothing offers Ultra until all
   // five are set and the entitlement_tiers table is applied (docs/accounts.md,
-  // Ultra). The two figures are set ahead of the ids: until Ultra is on sale
-  // they show its price on the landing page's card, beside "Coming soon".
+  // Ultra). With all five set, Ultra is on sale from the moment the table is
+  // on the accounts database; until then the two figures show its price on
+  // the landing page's card, beside "Coming soon".
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
@@ -180,9 +181,9 @@
     "STRIPE_PRICE_YEARLY": "price_1UXstXIP2lpoGRa5H1NF6Od3",
     "PRICE_MONTHLY_CAD": "18.99",
     "PRICE_YEARLY_CAD": "189.99",
-    "STRIPE_PRODUCT_ULTRA": "",
-    "STRIPE_PRICE_ULTRA_MONTHLY": "",
-    "STRIPE_PRICE_ULTRA_YEARLY": "",
+    "STRIPE_PRODUCT_ULTRA": "prod_Vc4vQ9HheohQoH",
+    "STRIPE_PRICE_ULTRA_MONTHLY": "price_1UaqlrIP2lpoGRa5HcXsLV44",
+    "STRIPE_PRICE_ULTRA_YEARLY": "price_1UaqmoIP2lpoGRa54JFX2voW",
     "PRICE_ULTRA_MONTHLY_CAD": "38.99",
     "PRICE_ULTRA_YEARLY_CAD": "389.99"
   },

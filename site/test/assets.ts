@@ -155,5 +155,9 @@ export const TEST_NOW = "2026-10-31T16:00:00Z";
 export const testClock = clockAt(Date.parse(TEST_NOW));
 
 export function testEnv(assets: Fetcher = fakeAssets, now: string = TEST_NOW) {
-  return { ...(env as object), ASSETS: assets, NOW: now } as typeof env & { ASSETS: Fetcher; NOW: string };
+  // wrangler.jsonc holds Ultra's Stripe ids once Ultra is on sale. A test states Ultra's variables itself
+  // (accounts-helpers.ts ULTRA_VARS), so every test env starts without the ids: Ultra is off sale unless a
+  // test puts it on sale.
+  const noUltra = { STRIPE_PRODUCT_ULTRA: "", STRIPE_PRICE_ULTRA_MONTHLY: "", STRIPE_PRICE_ULTRA_YEARLY: "" };
+  return { ...(env as object), ...(noUltra as object), ASSETS: assets, NOW: now } as typeof env & { ASSETS: Fetcher; NOW: string };
 }
