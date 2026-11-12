@@ -1,5 +1,5 @@
 // The API usage page, /account/api (src/account/api_usage_page.tsx, the read
-// DAILY_SQL in src/account/api_usage.ts, keyQuota in src/api_keyed_spec.ts;
+// DAILY_SQL and TOTAL_SQL in src/account/api_usage.ts, keyQuota in src/api_keyed_spec.ts;
 // docs/accounts.md, The usage page), against the local accounts database with
 // keys made through the keys page and rows written as the count writes them.
 // The clock is the fixtures' (test/assets.ts): 16:00 UTC on 2026-10-31.
@@ -12,7 +12,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 import { KEYS_MAX, type KeyRow } from "../src/account/api_keys";
-import { DAILY_SQL, USAGE_KEEP_DAYS, dayPlus } from "../src/account/api_usage";
+import { DAILY_SQL, TOTAL_SQL, USAGE_KEEP_DAYS, dayPlus } from "../src/account/api_usage";
 import { AXIS_FLOOR, SERIES_FIT, axisTop, seriesRests, usageDays, usageSeries, weekLabels } from "../src/account/api_usage_page";
 import { PLANS, allowed } from "../src/account/entitlements";
 import { KEY_PER_DAY, KEY_PER_MINUTE, keyQuota } from "../src/api_keyed_spec";
@@ -425,45 +425,106 @@ describe("the table's width", () => {
 // -- the read ----------------------------------------------------------------------------------
 
 describe("the read", () => {
-  it("takes at most KEYS_MAX keys, the ones in use first, and the page says when a revoked key may be left out", async () => {
-    const made = await proWithKeys("usage-bound", ["k1", "k2", "k3", "k4", "k5"]);
+  // Six keys with requests in the window, one of them revoked: the page draws the five in use, and the total is all six.
+  async function sixKeys(tag: string) {
+    const made = await proWithKeys(tag, ["k1", "k2", "k3", "k4", "k5"]);
     const token = await csrf(made.cookie, "/account/keys");
     await post(`/account/keys/${made.keys[0].id}/revoke`, { csrf: token }, { cookie: made.cookie });
     await post("/account/keys", { csrf: token, name: "k6" }, { cookie: made.cookie });
     const all = await ACCOUNTS.prepare("SELECT k.id, k.name, k.revoked_at FROM api_keys k JOIN users u ON u.id = k.user_id WHERE u.email = ?")
       .bind(made.email).all<{ id: string; name: string; revoked_at: string | null }>();
-    const keys = all.results ?? [];
-    expect(keys).toHaveLength(KEYS_MAX + 1);
+    const keys = (all.results ?? []).sort((a, b) => a.name.localeCompare(b.name));
+    expect(keys.map((k) => k.name)).toEqual(["k1", "k2", "k3", "k4", "k5", "k6"]);
+    // Each key its own count a day, varying by day, over the window and two days before it; the revoked one every third day.
     const rows: [string, string, number][] = [];
-    for (const k of keys) for (let i = 0; i < USAGE_KEEP_DAYS + 2; i++) rows.push([k.id, dayPlus(TODAY, -i), 1]);
+    keys.forEach((k, j) => {
+      for (let i = 0; i < USAGE_KEEP_DAYS + 2; i++) if (j > 0 || i % 3 === 0) rows.push([k.id, dayPlus(TODAY, -i), 10 * (j + 1) + (i % 7)]);
+    });
     await seed(rows);
     const userId = (await ACCOUNTS.prepare("SELECT id FROM users WHERE email = ?").bind(made.email).first<{ id: string }>())!.id;
+    // Each day's sum over the six, worked out here from the rows.
+    const sum = new Map<string, number>();
+    for (const [, day, n] of rows) if (day >= FIRST && day <= TODAY) sum.set(day, (sum.get(day) ?? 0) + n);
+    return { made, keys, userId, sum };
+  }
+
+  it("draws at most KEYS_MAX keys, the ones in use first, and totals every key, with a line for the one left out", async () => {
+    const { made, keys, userId, sum } = await sixKeys("usage-bound");
     const read = await ACCOUNTS.prepare(DAILY_SQL).bind(userId, TODAY, FIRST, KEYS_MAX).all<{ key_id: string; day: string }>();
     const results = read.results ?? [];
     // Five keys, sixty days each: the window's rows alone, and the revoked key's left for the five in use.
     expect(results).toHaveLength(KEYS_MAX * USAGE_KEEP_DAYS);
     expect(new Set(results.map((r) => r.key_id))).toEqual(new Set(keys.filter((k) => !k.revoked_at).map((k) => k.id)));
     expect(results.every((r) => r.day >= FIRST && r.day <= TODAY)).toBe(true);
+    // The total: every day of the window, the six keys added, and six keys counted.
+    const total = (await ACCOUNTS.prepare(TOTAL_SQL).bind(userId, TODAY, FIRST).all<{ day: string; n: number; n_keys: number }>()).results ?? [];
+    expect(total.map((r) => r.day)).toEqual(usageDays(TODAY));
+    for (const r of total) expect(r.n, r.day).toBe(sum.get(r.day));
+    expect(new Set(total.map((r) => r.n_keys))).toEqual(new Set([6]));
     const main = mainOf(await page("/account/api", { cookie: made.cookie }));
     expect(main).not.toContain("k1 (revoked)");
-    expect(main).toContain("The chart and the totals count at most 5 keys with requests in these days, the keys in use first, then the ones revoked most recently.");
+    expect(count(main, /<div class="chart-title">/g)).toBe(1 + KEYS_MAX);
+    // The tiles, the total's panel and the table's first column: the six keys, every day.
+    const fmt = (v: number) => v.toLocaleString("en-CA");
+    const windowSum = [...sum.values()].reduce((a, b) => a + b, 0);
+    expect(main).toContain(`<span class="tile-label">Requests today</span><span class="tile-value">${fmt(sum.get(TODAY)!)}</span>`);
+    expect(main).toContain(`<span class="tile-label">Requests in 60 days</span><span class="tile-value">${fmt(windowSum)}</span>`);
+    for (const day of usageDays(TODAY)) {
+      expect(main, day).toContain(`<td data-label="Day (UTC)" class="mono">${day}</td><td data-label="All keys" class="mono num">${fmt(sum.get(day)!)}</td>`);
+      expect(main, day).toContain(`<title>All keys, ${day}\n${fmt(sum.get(day)!)} requests</title>`);
+    }
+    // One line under the table, in both languages; the cap is a key's and its line is as before.
+    expect(main).toContain('</table></div><p class="muted small">1 revoked key made requests in these days and has no chart or column of its own; ' +
+      "its requests are counted in All keys.</p>");
+    expect(main).toContain("The cap, 20,000 requests a key a day, is above the top of each key's scale.");
+    const fr = mainOf(await page("/account/api?lang=fr", { cookie: made.cookie }));
+    expect(fr).toContain("1 clé révoquée a fait des requêtes au cours de ces jours et n’a pas de graphique ni de colonne à part; " +
+      "ses requêtes sont comptées dans Toutes les clés.");
     // With room (a key in use without a request in the window), the revoked key's days come back and the line goes.
     await ACCOUNTS.prepare("DELETE FROM api_usage WHERE key_id = ?").bind(keys.find((k) => k.name === "k6")!.id).run();
     const again = mainOf(await page("/account/api", { cookie: made.cookie }));
     expect(again).toContain('<div class="chart-title">k1 (revoked)</div>');
     expect(again).toContain('<div class="chart-title">k6</div>');
-    expect(again).not.toContain("at most 5 keys");
+    expect(again).not.toContain("revoked key made requests");
+    expect(again).not.toContain("counted in All keys");
   });
 
-  it("is a constant with ?N placeholders that reads api_usage through its primary key, never the whole table", async () => {
-    expect(DAILY_SQL).not.toMatch(/\?(?!\d)/);
+  it("names how many keys are left out when there are several", async () => {
+    // Five keys with requests, revoked, then five in use with requests too: five drawn, five counted in the line.
+    const made = await proWithKeys("usage-ten", ["Old a", "Old b", "Old c", "Old d", "Old e"]);
+    const token = await csrf(made.cookie, "/account/keys");
+    await seed(made.keys.map((k, j): [string, string, number] => [k.id, dayPlus(TODAY, -2), 100 * (j + 1)]));
+    for (const k of made.keys) await post(`/account/keys/${k.id}/revoke`, { csrf: token }, { cookie: made.cookie });
+    for (const name of ["New a", "New b", "New c", "New d", "New e"]) expect((await post("/account/keys", { csrf: token, name }, { cookie: made.cookie })).status).toBe(200);
+    const fresh = (await ACCOUNTS.prepare("SELECT k.id FROM api_keys k JOIN users u ON u.id = k.user_id WHERE u.email = ? AND k.revoked_at IS NULL")
+      .bind(made.email).all<{ id: string }>()).results ?? [];
+    expect(fresh).toHaveLength(KEYS_MAX);
+    await seed(fresh.map((k): [string, string, number] => [k.id, TODAY, 7]));
+    const main = mainOf(await page("/account/api", { cookie: made.cookie }));
+    expect(count(main, /<div class="chart-title">/g)).toBe(1 + KEYS_MAX);
+    expect(main).not.toContain("(revoked)</div>");
+    expect(main).toContain(`<td data-label="Day (UTC)" class="mono">${dayPlus(TODAY, -2)}</td><td data-label="All keys" class="mono num">1,500</td>`);
+    expect(main).toContain('<span class="tile-label">Requests in 60 days</span><span class="tile-value">1,535</span>');
+    expect(main).toContain("5 revoked keys made requests in these days and have no chart or column of their own; their requests are counted in All keys.");
+    const fr = mainOf(await page("/account/api?lang=fr", { cookie: made.cookie }));
+    expect(fr).toContain("5 clés révoquées ont fait des requêtes au cours de ces jours et n’ont pas de graphique ni de colonne à part; " +
+      "leurs requêtes sont comptées dans Toutes les clés.");
+    for (const html of [main, fr]) expect(html).not.toContain(EM_DASH);
+  });
+
+  it("are constants with ?N placeholders that read api_usage through its primary key, never the whole table, each bounded", async () => {
     expect(DAILY_SQL).toContain("LIMIT ?4");
-    const plan = ((await ACCOUNTS.prepare(`EXPLAIN QUERY PLAN ${DAILY_SQL}`).bind("u", TODAY, FIRST, KEYS_MAX).all()).results ?? [])
-      .map((r) => String((r as { detail?: unknown }).detail));
-    const detail = plan.join("\n");
-    expect(plan.filter((s) => /^SCAN (api_usage|u)\b/.test(s) && !/USING/.test(s)), detail).toEqual([]);
-    expect(plan.filter((s) => /api_usage|\bu\b/.test(s)).every((s) => s.includes("sqlite_autoindex_api_usage_1")), detail).toBe(true);
-    expect(plan.some((s) => s.includes("idx_api_keys_user")), detail).toBe(true);
+    expect(TOTAL_SQL).toMatch(new RegExp(`LIMIT ${USAGE_KEEP_DAYS}$`));
+    for (const [sql, binds] of [[DAILY_SQL, ["u", TODAY, FIRST, KEYS_MAX]], [TOTAL_SQL, ["u", TODAY, FIRST]]] as const) {
+      expect(sql).not.toMatch(/\?(?!\d)/);
+      const plan = ((await ACCOUNTS.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...binds).all()).results ?? [])
+        .map((r) => String((r as { detail?: unknown }).detail));
+      const detail = `${sql}\n${plan.join("\n")}`;
+      expect(plan.filter((s) => /^SCAN (api_usage|api_keys|u|k)\b/.test(s) && !/USING/.test(s)), detail).toEqual([]);
+      expect(plan.filter((s) => /api_usage|\bu\b/.test(s)).every((s) => s.includes("sqlite_autoindex_api_usage_1")), detail).toBe(true);
+      expect(plan.some((s) => s.includes("sqlite_autoindex_api_usage_1")), detail).toBe(true);
+      expect(plan.some((s) => s.includes("idx_api_keys_user")), detail).toBe(true);
+    }
   });
 });
 
@@ -509,6 +570,13 @@ describe("the readers", () => {
       expect(main).not.toContain("<table");
       expect(main).not.toContain("rank-bars");
       expect(error).toHaveBeenCalledWith("api usage: not readable for the usage page");
+      // The total's statement failing is the same: no figure from half a read.
+      const total = failing(TOTAL_SQL);
+      const again = mainOf(decode(nbsp(await (await get("/account/api", { cookie: made.cookie, env: onEnv({ ACCOUNTS: total.db }) })).text())));
+      expect(total.used).toContain(TOTAL_SQL);
+      expect(again).not.toContain("Requests today</span>");
+      expect(again).not.toContain("<table");
+      expect(count(again, /The counts cannot be read just now\./g)).toBe(2);
     } finally {
       error.mockRestore();
     }

@@ -24,7 +24,7 @@ import { foldText } from "../src/search_db";
 import { ACCOUNTS, csrf, decode, get, grantPro, nbsp, newEmail, offEnv, onEnv, post, signIn, userId, useAccountsDb } from "./accounts-helpers";
 import { FILES, makeFakeAssets } from "./assets";
 import { applySql } from "./setup";
-import { find, misfits, panelTitle, tablesIn } from "./table-fit";
+import { find, leastWidths, misfits, panelTitle, tablesIn } from "./table-fit";
 
 useAccountsDb();
 
@@ -412,31 +412,43 @@ function counting(db: D1Database): { binding: D1Database; sizes: number[] } {
 describe("the page", () => {
   let free: Reader;
   let pro: Reader;
+  // The organization and the five it can be compared with: the share table at its largest.
+  let six: Reader;
   beforeAll(async () => {
     free = await reader("page-free");
     pro = await reader("page-pro", true);
-    for (const r of [free, pro]) await send(r, "/account/organization", { org: A1 });
+    six = await reader("page-six", true);
+    for (const r of [free, pro, six]) await send(r, "/account/organization", { org: A1 });
     await send(pro, "/account/organization/compare", { org: A2 });
+    for (const org of [A2, ...MORE.slice(0, 4)]) await send(six, "/account/organization/compare", { org });
   });
 
-  // The share of a segment takes a column per organization compared, so its
-  // width grows with the comparison (1,236 px with six organizations): it has
-  // no design yet that fits a 700 px window. Every other table on the page is
-  // held to its column.
   const SHARE = ["Share of a Segment", "Part d'un segment"];
   const share = (tb: Parameters<typeof panelTitle>[0]) => SHARE.some((h) => panelTitle(tb).replace(/\u2019/g, "'").startsWith(h));
   const titled = (html: string, title: string) => tablesIn(html).filter((tb) => panelTitle(tb).replace(/\u2019/g, "'") === title);
 
-  it("fits its tables into their column from 700 px, in both languages, the years and segments blocks at their largest", async () => {
+  it("fits its tables into their column from 700 px, in both languages, the years, segments and share blocks at their largest", async () => {
     let tables = 0;
-    for (const r of [free, pro]) {
+    for (const r of [free, pro, six]) {
       for (const path of ["/account/organization", "/account/organization?lang=fr"]) {
         const html = await text(await page(r, path));
-        tables += tablesIn(html).filter((tb) => !share(tb)).length;
-        expect(misfits(html, share), path).toEqual([]);
+        tables += tablesIn(html).length;
+        expect(misfits(html), path).toEqual([]);
       }
     }
     expect(tables).toBeGreaterThan(0);
+    // The share of a segment with six organizations, a row each, over the period and in one fiscal year: the
+    // organization, its share and its value, 372 px at its least in every range, checked at every edge.
+    for (const path of ["/account/organization", "/account/organization?lang=fr", "/account/organization?year=2025",
+      "/account/organization?year=2025&lang=fr"]) {
+      const html = await text(await page(six, path));
+      const shares = tablesIn(html).filter(share);
+      expect(shares, path).toHaveLength(1);
+      expect(find(shares[0], (e) => e.tag === "th").map((th) => th.cls.find((c) => c.startsWith("k-"))), path).toEqual(["k-main", "k-count", "k-total"]);
+      expect(find(shares[0], (e) => e.tag === "tr").length - 1, path).toBe(6);
+      expect(leastWidths(shares[0]), path).toEqual({ all: 372, xxl: 372, xl: 372, lg: 372, md: 372 });
+      expect(misfits(html, (tb) => !share(tb)), path).toEqual([]);
+    }
     // At their largest: the years block with all four sources (its width is the same with one), the segments
     // block with both sources that carry a segment, a column each.
     for (const [path, years, segments] of [
@@ -529,15 +541,21 @@ describe("the page", () => {
     expect(html).toContain('href="/segments/43"');
     expect(html).not.toContain('href="/segments/77"');
     expect(html).toContain("(published contracts: 1; grants: 1)");
-    // The share of segment 81 (its largest, no segment chosen): 2024-25 all of $1,000,000; 2025-26 a quarter of
-    // $2,000,000 each, the withheld $1,000,000 in the denominator alone; over the period 50% and 17% of $3,000,000.
+    // The share of segment 81 (its largest, no segment chosen), over the whole period by default: of $3,000,000
+    // ($1,000,000 in 2024-25, $2,000,000 in 2025-26 with the withheld $1,000,000 in the denominator alone), 50% and 17%.
     expect(html).toContain("The largest: 81");
     expect(html).toContain("Records whose supplier is withheld count in the segment's value and in no organization's share");
-    expect(html).toMatch(/2025-26<\/td><td[^>]*>\$2,000,000<\/td><td[^>]*>25%<br\/><span class="muted small">\$500,000<\/span><\/td><td[^>]*>25%<br\/>/);
-    expect(html).toMatch(/2024-25<\/td><td[^>]*>\$1,000,000<\/td><td[^>]*>100%<br\/><span class="muted small">\$1,000,000<\/span><\/td><td[^>]*>0%<br\/>/);
-    expect(html).toMatch(/10 fiscal years<\/strong><\/td><td[^>]*>\$3,000,000<\/td><td[^>]*>50%<br\/>.*?<\/td><td[^>]*>17%<br\/>/);
-    // The table's columns are the organization's, then the competitors in the order chosen.
-    expect(html.indexOf(`<th class="k-share num"><button type="button" class="th-sort">${NAME1}</button></th>`)).toBeLessThan(html.indexOf(`<th class="k-share num"><button type="button" class="th-sort">${NAME2}</button></th>`));
+    expect(html).toContain("<p>Each organization's share of the segment's counted value over the 10 fiscal years from 2017-18 to 2026-27 (to date), " +
+      "and its own value there; the segment's whole value, the denominator, is $3,000,000.</p>");
+    // A row an organization, its own first and marked as its own, then the competitors in the order chosen, each
+    // name linked to its profile.
+    expect(html).toContain('<th class="k-main"><button type="button" class="th-sort">Organization</button></th>' +
+      '<th class="k-count num"><button type="button" class="th-sort">Share</button></th>' +
+      '<th class="k-total num"><button type="button" class="th-sort">Value</button></th>');
+    expect(html).toContain(`<tr><td data-label="Organization"><a href="/organizations/${A1}">${NAME1}</a><br/><span class="muted small">Your organization</span></td>` +
+      '<td data-label="Share" class="mono num">50%</td><td data-label="Value" class="mono num">$1,500,000</td></tr>' +
+      `<tr><td data-label="Organization"><a href="/organizations/${A2}">${NAME2}</a></td>` +
+      '<td data-label="Share" class="mono num">17%</td><td data-label="Value" class="mono num">$500,000</td></tr>');
     // Its contracts ending within 12 months: two of the three, the soonest first, and the radar's own filter for all of them.
     expect(html).toContain("2 contracts of this organization end within 12 months of the data date, the soonest on 2027-01-15; their counted value is $500,000.");
     expect(html.indexOf("Contract EN578-111111-001")).toBeLessThan(html.indexOf("Contract F1700-222222"));
@@ -578,12 +596,101 @@ describe("the page", () => {
     await send(pro, "/account/organization/segment", { segment: "43" });
     const html = await text(await page(pro, "/account/organization?source=history"));
     expect(html).toMatch(/<a href="\/account\/organization\?source=history" rel="nofollow" aria-current="page">PSPC contract history<\/a>/);
-    expect(html).toMatch(/2020-21<\/td><td[^>]*>\$200,000<\/td><td[^>]*>100%<br\/>/);
+    expect(html).toContain("the segment's whole value, the denominator, is $200,000.</p>");
+    expect(html).toContain('<span class="muted small">Your organization</span></td><td data-label="Share" class="mono num">100%</td>' +
+      '<td data-label="Value" class="mono num">$200,000</td>');
     expect(html).toContain("/account/organization/share.csv?source=history");
     const awards = await text(await page(pro));
     // Segment 43 holds no award notice: the share block says the segment has no value.
     expect(awards).toContain("The segment has no counted value in these fiscal years.");
     await send(pro, "/account/organization/segment", { segment: "" });
+  });
+
+  // The share table's fiscal year (?year=): the shares and values in that year alone, the chart as it was.
+  const shareBlock = (html: string) => {
+    const at = html.indexOf("<h2>Share of a Segment</h2>");
+    return html.slice(at, html.indexOf('<section class="panel"', at));
+  };
+  const rowOf = (html: string, id: string) => new RegExp(`<tr><td data-label="Organization"><a href="/organizations/${id}">[^<]*</a>(?:<br/><span[^>]*>[^<]*</span>)?</td>` +
+    '<td data-label="Share" class="mono num">([^<]*)</td><td data-label="Value" class="mono num">([^<]*)</td></tr>').exec(html)?.slice(1);
+
+  it("shows the share in the fiscal year the address names, the whole period by default and for any other value", async () => {
+    const period = shareBlock(await text(await page(pro)));
+    // A select with its button, the whole period first, then each fiscal year newest first, the current one to date.
+    expect(period).toContain('<form method="get" action="/account/organization" class="account-inline"><label class="field">' +
+      '<span class="field-label">Fiscal year</span><select name="year"><option value="all" selected="">All 10 fiscal years</option>' +
+      '<option value="2026">2026-27 (to date)</option><option value="2025">2025-26</option>');
+    expect(period).toContain('<option value="2017">2017-18</option></select></label><button type="submit" class="btn">Show</button></form>');
+    expect(rowOf(period, A1)).toEqual(["50%", "$1,500,000"]);
+    // 2025-26: a quarter of $2,000,000 each, the withheld $1,000,000 in the denominator alone.
+    const y2025 = shareBlock(await text(await page(pro, "/account/organization?year=2025")));
+    expect(y2025).toContain('<option value="all">All 10 fiscal years</option>');
+    expect(y2025).toContain('<option value="2025" selected="">2025-26</option>');
+    expect(y2025).toContain("<p>Each organization's share of the segment's counted value in 2025-26, and its own value there; " +
+      "the segment's whole value, the denominator, is $2,000,000.</p>");
+    expect(rowOf(y2025, A1)).toEqual(["25%", "$500,000"]);
+    expect(rowOf(y2025, A2)).toEqual(["25%", "$500,000"]);
+    // 2024-25: all of $1,000,000 to the organization; the competitor, with no record that year, 0% and no value.
+    const y2024 = shareBlock(await text(await page(pro, "/account/organization?year=2024")));
+    expect(rowOf(y2024, A1)).toEqual(["100%", "$1,000,000"]);
+    expect(rowOf(y2024, A2)).toEqual(["0%", ""]);
+    // The chart is the same whatever the year.
+    const chart = (html: string) => html.slice(html.indexOf('<div class="chart">'), html.indexOf("</svg>", html.indexOf('<div class="chart">')));
+    expect(chart(y2025)).toBe(chart(period));
+    // A year of the span with no counted value says so; one outside it, or anything else, is the whole period.
+    const y2019 = shareBlock(await text(await page(pro, "/account/organization?year=2019")));
+    expect(y2019).toContain('<p class="muted">The segment has no counted value in 2019-20.</p>');
+    expect(y2019).not.toContain("<table");
+    for (const q of ["year=2016", "year=2027", "year=all", "year=25", "year=2025x", "year="]) {
+      expect(shareBlock(await text(await page(pro, `/account/organization?${q}`))), q).toBe(period);
+    }
+    // Spaces around the year are read as the source's value is, trimmed.
+    expect(rowOf(shareBlock(await text(await page(pro, "/account/organization?year=%202025%20"))), A1)).toEqual(["25%", "$500,000"]);
+  });
+
+  it("keeps the fiscal year beside the source and the segment when either changes", async () => {
+    const html = shareBlock(await text(await page(pro, "/account/organization?source=history&year=2020")));
+    // The source tabs keep the year; the year form keeps the source; the segment's post carries both.
+    expect(html).toContain('<a href="/account/organization?year=2020" rel="nofollow">Award notices</a>');
+    expect(html).toContain('<a href="/account/organization?source=history&year=2020" rel="nofollow" aria-current="page">PSPC contract history</a>');
+    expect(html).toContain('<form method="get" action="/account/organization" class="account-inline"><input type="hidden" name="source" value="history"/>');
+    expect(html).toContain('<input type="hidden" name="source" value="history"/><input type="hidden" name="year" value="2020"/>');
+    // The whole period leaves the year out of every address.
+    const period = shareBlock(await text(await page(pro, "/account/organization?source=history")));
+    expect(period).toContain('<a href="/account/organization" rel="nofollow">Award notices</a>');
+    expect(period).not.toContain('name="year" value=');
+    // The segment's post comes back to the same source and year; a year that is not four digits is left out.
+    const back = async (fields: Record<string, string>) => (await send(pro, "/account/organization/segment", fields)).headers.get("location");
+    expect(await back({ segment: "81", source: "history", year: "2020" })).toBe("/account/organization?m=segment&source=history&year=2020");
+    expect(await back({ segment: "81", year: "2025" })).toBe("/account/organization?m=segment&year=2025");
+    expect(await back({ segment: "81", source: "history", year: "20x5" })).toBe("/account/organization?m=segment&source=history");
+    expect(await back({ segment: "", year: "2025", lang: "fr" })).toBe("/account/organization?m=segment&year=2025&lang=fr");
+    // In French the form carries the language, and the year reads as the block writes it.
+    const fr = await text(await page(pro, "/account/organization?lang=fr&year=2025"));
+    expect(fr).toContain('<input type="hidden" name="lang" value="fr"/><label class="field"><span class="field-label">Exercice</span>' +
+      '<select name="year"><option value="all">Les 10 exercices</option><option value="2026">2026-2027 (à ce jour)</option>' +
+      '<option value="2025" selected="">2025-2026</option>');
+    expect(fr).toContain("<p>La part de chaque organisation dans la valeur comptée du segment pour l'exercice 2025-2026, et sa propre valeur; " +
+      "la valeur totale du segment, le dénominateur, est de 2 000 000 $.</p>");
+    expect(fr).toContain('<th class="k-main"><button type="button" class="th-sort">Organisation</button></th>' +
+      '<th class="k-count num"><button type="button" class="th-sort">Part</button></th>' +
+      '<th class="k-total num"><button type="button" class="th-sort">Valeur</button></th>');
+    expect(fr).toContain(`<a href="/organizations/${A1}">${NAME1}</a><br/><span class="muted small">Votre organisation</span></td>` +
+      '<td data-label="Part" class="mono num">25 %</td><td data-label="Valeur" class="mono num">500 000 $</td>');
+    expect(await text(await page(pro, "/account/organization?lang=fr&year=2019"))).toContain("Le segment n'a aucune valeur comptée pour l'exercice 2019-2020.");
+    expect(fr).not.toContain(EM_DASH);
+  });
+
+  it("keeps the share file every fiscal year and every organization, whatever year the page shows, and Free its tease", async () => {
+    const lines = async (path: string) => (await (await page(pro, path)).text()).trim().split("\r\n");
+    const all = await lines("/account/organization/share.csv");
+    expect(all).toHaveLength(1 + 10 * 2);
+    expect(await lines("/account/organization/share.csv?year=2025")).toEqual(all);
+    expect(shareBlock(await text(await page(pro, "/account/organization?year=2025")))).toContain('<a href="/account/organization/share.csv" rel="nofollow">');
+    const tease = await text(await page(free, "/account/organization?year=2025"));
+    expect(tease).toMatch(/<h2>Share of a Segment<span class="pro-tag">/);
+    expect(tease).not.toContain('<select name="year">');
+    expect(tease).not.toContain("Your organization</span>");
   });
 
   it("keeps the claim and the comparison when the records database cannot answer", async () => {

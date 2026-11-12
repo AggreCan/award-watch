@@ -467,7 +467,7 @@ describe("the Pro view", () => {
     expect(chosen).not.toContain(">2023-24</span>");
     expect(chosen).not.toContain(">2018-19</span>");
     // Only the data date's year is counted to date, so a period that ends before it marks none.
-    expect(chosen).not.toContain("(to date)</td><td");
+    expect(chosen).not.toContain("(to date)");
     expect(chosen).toContain('<option value="2019" selected="">2019-20</option>');
     expect(decode(chosen)).toContain("/buyers/pwgsc-tpsgc/analytics/quarters.csv?source=history&from=2019&to=2022");
     // The period tabs still offer the latest n, none of them current; the source tabs keep the years.
@@ -538,7 +538,7 @@ describe("the Pro view", () => {
     expect(buyers.indexOf("/buyers/pwgsc-tpsgc")).toBeLessThan(buyers.indexOf("/buyers/dnd-mdn"));
     // Distinct organizations in 2026-27 in segment 82.
     const y26 = new Set(RECS.filter((r) => r.src === 2 && r.sid === 82 && r.fy === 2026 && r.oid !== null).map((r) => r.oid)).size;
-    expect(html).toMatch(new RegExp(`2026-27 \\(to date\\)</td>(?:<td[^>]*>[^<]*</td>){4}<td data-label="Organizations" class="mono num">${y26}</td>`));
+    expect(html).toMatch(new RegExp(`2026-27<br/><span class="muted small">\\(to date\\)</span></td>(?:<td[^>]*>[^<]*</td>){4}<td data-label="Organizations" class="mono num">${y26}</td>`));
   });
 
   // The tips (src/chart.tsx, public/tooltip.js): each mark's SVG <title>, and
@@ -629,6 +629,45 @@ describe("the Pro view's tables", () => {
       }
     }
     expect(tables).toBeGreaterThan(40);
+  });
+
+  // The data date's fiscal year in a date column (112 px): the year, and "(to date)" on a muted line under it. A
+  // mono cell holding a line break may wrap (styles.css); the sort script reads up to the break, the year alone.
+  it("write the data date's fiscal year in a date column as the year over a muted line, in both languages", async () => {
+    await sessions();
+    const words = { en: ["Fiscal year", "2026-27", "(to date)"], fr: ["Exercice", "2026-2027", "(à ce jour)"] } as const;
+    const panels: Record<string, string[]> = {
+      [VIEWS[0]]: ["Value by Fiscal Quarter", "Average and Median Value by Fiscal Year", "Ten Largest Records", "Non-Competitive Share by Fiscal Year",
+        "Change in Value Through Amendments"],
+      [VIEWS[1]]: ["Value by Fiscal Year", "Ten Largest Records", "Change in Value Through Amendments"],
+      [VIEWS[2]]: ["Buyers and Organizations by Fiscal Year", "Average and Median Value by Fiscal Year", "Ten Largest Records"],
+    };
+    const french: Record<string, string> = {
+      "Value by Fiscal Quarter": "Valeur par trimestre", "Average and Median Value by Fiscal Year": "Valeur moyenne et médiane par exercice",
+      "Ten Largest Records": "Dix dossiers de plus grande valeur", "Non-Competitive Share by Fiscal Year": "Part non concurrentielle par exercice",
+      "Change in Value Through Amendments": "Variation de la valeur par modifications", "Value by Fiscal Year": "Valeur par exercice",
+      "Buyers and Organizations by Fiscal Year": "Acheteurs et organisations par exercice",
+    };
+    for (const view of VIEWS) {
+      for (const lang of ["en", "fr"] as const) {
+        const [label, year, mark] = words[lang];
+        const path = `${view}?source=history&years=10${lang === "fr" ? "&lang=fr" : ""}`;
+        const { html } = await page(path, { cookie: proCookie });
+        // Each panel with a date cell in the data date's year, and that cell's markup.
+        const found: string[] = [];
+        for (const section of html.split('<section class="panel"').slice(1)) {
+          const title = /<h2>([^<]*)/.exec(section)?.[1] ?? "";
+          const cells = [...section.matchAll(new RegExp(`<td data-label="${label}" class="mono(?: mdh)?">([\\s\\S]*?)</td>`, "g"))].map((m) => m[1]);
+          const current = cells.filter((c) => c.startsWith(year));
+          if (!current.length) continue;
+          found.push(title.replace(/&#39;/g, "'"));
+          for (const c of current) expect(c, `${path}: ${title}`).toBe(`${year}<br/><span class="muted small">${mark}</span>`);
+        }
+        expect(found, path).toEqual(lang === "en" ? panels[view] : panels[view].map((t) => french[t]));
+        expect(html, path).not.toContain(`${mark}</td>`);
+        expect(misfits(html), path).toEqual([]);
+      }
+    }
   });
 });
 

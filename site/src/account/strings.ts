@@ -451,9 +451,14 @@ export const ACCOUNT_STRINGS = {
     en: "The cap, {cap} requests a key a day, is above the top of each key's scale.",
     fr: "Le plafond, {cap} requêtes par clé par jour, dépasse le haut de l'échelle de chaque clé.",
   },
-  "apiusage.left_out": {
-    en: "The chart and the totals count at most {n} keys with requests in these days, the keys in use first, then the ones revoked most recently.",
-    fr: "Le graphique et les totaux comptent au plus {n} clés ayant des requêtes au cours de ces jours, d'abord les clés en service, puis les plus récemment révoquées.",
+  // Under the table: the revoked keys with requests in the window past the five the page draws.
+  "apiusage.unshown_one": {
+    en: "{n} revoked key made requests in these days and has no chart or column of its own; its requests are counted in All keys.",
+    fr: "{n} clé révoquée a fait des requêtes au cours de ces jours et n'a pas de graphique ni de colonne à part; ses requêtes sont comptées dans Toutes les clés.",
+  },
+  "apiusage.unshown_many": {
+    en: "{n} revoked keys made requests in these days and have no chart or column of their own; their requests are counted in All keys.",
+    fr: "{n} clés révoquées ont fait des requêtes au cours de ces jours et n'ont pas de graphique ni de colonne à part; leurs requêtes sont comptées dans Toutes les clés.",
   },
   "apiusage.counted": {
     en: "Requests are counted by UTC day, and one refused at the cap is not counted. Each day's count is kept for {days} days.",
@@ -1673,8 +1678,17 @@ export const ACCOUNT_STRINGS = {
     en: "Add up to {n} organizations to compare in the panel above; until then the block shows yours alone.",
     fr: "Ajoutez jusqu'à {n} organisations à comparer dans le panneau ci-dessus; d'ici là, le bloc montre la vôtre seule.",
   },
-  "orgclaim.col_segment_value": { en: "Segment value", fr: "Valeur du segment" },
-  "orgclaim.share_period": { en: "{n} fiscal years", fr: "{n} exercices" },
+  // The share table's fiscal year: the whole period first, then each year.
+  "orgclaim.share_period": { en: "All {n} fiscal years", fr: "Les {n} exercices" },
+  "orgclaim.share_table_period": {
+    en: "Each organization's share of the segment's counted value over the {n} fiscal years from {first} to {last}, and its own value there; the segment's whole value, the denominator, is {total}.",
+    fr: "La part de chaque organisation dans la valeur comptée du segment au cours des {n} exercices de {first} à {last}, et sa propre valeur; la valeur totale du segment, le dénominateur, est de {total}.",
+  },
+  "orgclaim.share_table_year": {
+    en: "Each organization's share of the segment's counted value in {fy}, and its own value there; the segment's whole value, the denominator, is {total}.",
+    fr: "La part de chaque organisation dans la valeur comptée du segment pour l'exercice {fy}, et sa propre valeur; la valeur totale du segment, le dénominateur, est de {total}.",
+  },
+  "orgclaim.none_share_year": { en: "The segment has no counted value in {fy}.", fr: "Le segment n'a aucune valeur comptée pour l'exercice {fy}." },
   "orgclaim.none_share": {
     en: "No record of this source ({source}) names this organization in a segment in the last {n} fiscal years.",
     fr: "Aucun dossier de cette source ({source}) ne nomme cette organisation dans un segment au cours des {n} derniers exercices.",

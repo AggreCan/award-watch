@@ -125,7 +125,7 @@ import {
   changeCompetitors, checkOrganization, claimOrganization, claimSummary, deleteClaim, deleteClaimOf, followClaimedId, isClaimBlock,
   isShareSource, orgIdIn, readClaim, setClaimSegment,
 } from "./org_claim";
-import { ORG_PATH, orgCsv, orgPage, segmentChoice } from "./org_pages";
+import { ORG_PATH, orgCsv, orgPage, segmentChoice, yearChoice } from "./org_pages";
 import { MATCH_PATH, matchesPage } from "./fit_pages";
 import {
   DAY_SLOTS, type Follow, type WatchKind, followOf, followValue, isWatchKind, readEvents, segmentOf, targetOf, watchPath,
@@ -1249,10 +1249,13 @@ account.post("/organization/segment", async (c) => {
   const { account: who, fields } = post;
   const segment = segmentChoice(fields.segment);
   if (segment === false) return c.text(t(c.get("lang"), "form.rejected"), 400);
-  const source = isShareSource(fields.source) && fields.source !== "awards" ? `source=${fields.source}` : "";
+  // Back to the source and fiscal year the block showed; the page drops a year outside its span.
+  const year = yearChoice(fields.year);
+  const shown = [isShareSource(fields.source) && fields.source !== "awards" ? `source=${fields.source}` : "", year !== null ? `year=${year}` : ""]
+    .filter(Boolean).join("&");
   return guarded(c, async () => {
     const saved = await setClaimSegment(c.env, who.userId, segment);
-    return orgBack(c, saved ? "segment" : "", source);
+    return orgBack(c, saved ? "segment" : "", shown);
   });
 });
 

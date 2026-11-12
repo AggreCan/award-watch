@@ -293,14 +293,41 @@ const SegmentsBlock: FC<{ lang: Lang; rows: Row[]; years: Row[]; f: ClaimFrame }
   );
 };
 
-// The organization's share of one segment's counted value by fiscal year,
-// beside the organizations the account chose, in its order (ORG_SHARE_SQL,
-// ?11 = 0): small multiples on one scale, then the table with the
-// segment's whole value, the denominator, in its own column.
+// The share block's fiscal year in the address (?year=, the fiscal year's
+// first calendar year, as the keyed API's year parameter): four digits, else
+// null. The segment's post carries it back to the page with this check alone.
+export const yearChoice = (raw: string | undefined | null): number | null => {
+  const v = (raw ?? "").trim();
+  return /^\d{4}$/.test(v) ? Number(v) : null;
+};
+
+// The fiscal year the share table shows: one of the span's, or null for the
+// whole period. Any other value reads as the whole period, never as an
+// error, as a source the block does not offer reads as award notices.
+export function shareYear(raw: string | undefined | null, f: ClaimFrame): number | null {
+  const y = yearChoice(raw);
+  return y !== null && y >= f.first && y <= f.current ? y : null;
+}
+
+// The page's address with the share block's source and fiscal year, each
+// left out at its default (award notices, the whole period), so changing
+// one keeps the other.
+export function orgAddress(source: MoneySource, year: number | null): string {
+  const q = [source !== "awards" ? `source=${source}` : "", year !== null ? `year=${year}` : ""].filter(Boolean).join("&");
+  return `${ORG_PATH}${q ? `?${q}` : ""}`;
+}
+
+// The organization's share of one segment's counted value, beside the
+// organizations the account chose, in its order (ORG_SHARE_SQL, ?11 = 0):
+// small multiples on one scale by fiscal year, then a table a row an
+// organization for the fiscal year the address names (?year=), or the whole
+// period by default, with the segment's whole value there, the denominator,
+// in the line above it. A column an organization made the table 1,236 px
+// wide with six, more than a 700 px window gives it; a row each needs 372.
 const ShareBlock: FC<{
-  lang: Lang; account: Account; rows: Row[]; segments: Row[]; f: ClaimFrame; source: MoneySource; chosen: string | null;
+  lang: Lang; account: Account; rows: Row[]; segments: Row[]; f: ClaimFrame; source: MoneySource; chosen: string | null; year: number | null;
   orgs: { oid: number; id: string; name: string }[];
-}> = ({ lang, account, rows, segments, f, source, chosen, orgs }) => {
+}> = ({ lang, account, rows, segments, f, source, chosen, year, orgs }) => {
   const segment = shareSegment(chosen, segments, source);
   const options = segments.filter((r) => int(r.src) === SOURCE_NUMBER[source]).map((r) => int(r.sid));
   const largest = options[0] ?? null;
@@ -312,10 +339,17 @@ const ShareBlock: FC<{
   const part = (oid: number, fy: number) => rows.find((r) => num(r.oid) === oid && int(r.fy) === fy);
   const periodWhole = [...whole.values()].reduce((a, b) => a + b, 0);
   const pct = (v: number) => t(lang, "pct", { n: Math.round(v) });
+  // The table's denominator and each organization's records and value, in the year shown or over the period.
+  const shownWhole = year === null ? periodWhole : whole.get(year) ?? 0;
+  const figures = orgs.map((o) => {
+    const mine = rows.filter((r) => num(r.oid) === o.oid && (year === null || int(r.fy) === year));
+    return { o, n: mine.reduce((sum, r) => sum + int(r.n), 0), cents: mine.reduce((sum, r) => sum + int(r.cents), 0) };
+  });
+  const period = t(lang, "orgclaim.share_period", { n: fmtInt(years.length, lang) });
   const tabs = (
     <nav class="tabs toolbar-row" aria-label={t(lang, "analytics.sources_nav")}>
       {SHARE_SOURCES.map((s) => (
-        <a href={`${ORG_PATH}${s === "awards" ? "" : `?source=${s}`}`} rel="nofollow" aria-current={s === source ? "page" : undefined}>{sourceLabel(lang, s)}</a>
+        <a href={orgAddress(s, year)} rel="nofollow" aria-current={s === source ? "page" : undefined}>{sourceLabel(lang, s)}</a>
       ))}
     </nav>
   );
@@ -328,6 +362,7 @@ const ShareBlock: FC<{
           <Csrf account={account} />
           <input type="hidden" name="lang" value={lang} />
           <input type="hidden" name="source" value={source} />
+          {year !== null ? <input type="hidden" name="year" value={String(year)} /> : null}
           <label class="field">
             <span class="field-label">{t(lang, "col.segment")}</span>
             <select name="segment">
@@ -359,42 +394,48 @@ const ShareBlock: FC<{
                 return [fy, (c / w) * 100, [partOf(lang, c, w, (v) => money(lang, v / 100))]];
               }),
             }))} />
-          <div class="table-wrap">
-            <Table cols={[
-              { kind: "main", label: t(lang, "analytics.col_fy") },
-              { kind: "total", label: t(lang, "orgclaim.col_segment_value") },
-              ...orgs.map((o) => ({ kind: "share" as const, label: o.name })),
-            ]}>
-              <tbody>
-                {years.map((fy) => {
-                  const w = whole.get(fy) ?? 0;
-                  return (
+          {/* The year is chosen as the segment is, a select with its button: eleven links ("2026-2027 (à ce jour)" among
+              them) would take four or five rows in a 320 px window. A get, so the year is the address. */}
+          <form method="get" action={ORG_PATH} class="account-inline">
+            {source !== "awards" ? <input type="hidden" name="source" value={source} /> : null}
+            {lang === "fr" ? <input type="hidden" name="lang" value="fr" /> : null}
+            <label class="field">
+              <span class="field-label">{t(lang, "analytics.col_fy")}</span>
+              <select name="year">
+                <option value="all" selected={year === null}>{period}</option>
+                {years.map((fy) => <option value={String(fy)} selected={fy === year}>{fyLabel(lang, fy, f.current)}</option>)}
+              </select>
+            </label>
+            <button type="submit" class="btn">{t(lang, "analytics.share_apply")}</button>
+          </form>
+          {shownWhole > 0 ? <>
+            <p>{year === null
+              ? t(lang, "orgclaim.share_table_period", {
+                n: fmtInt(years.length, lang), first: fiscalLabel(lang, f.first), last: fyLabel(lang, f.current, f.current), total: money(lang, shownWhole / 100),
+              })
+              : t(lang, "orgclaim.share_table_year", { fy: fyLabel(lang, year, f.current), total: money(lang, shownWhole / 100) })}</p>
+            <div class="table-wrap">
+              <Table cols={[
+                { kind: "main", label: t(lang, "col.organization") },
+                { kind: "count", label: t(lang, "analytics.col_share") },
+                { kind: "total", label: t(lang, "col.value") },
+              ]}>
+                <tbody>
+                  {figures.map(({ o, n, cents }, i) => (
                     <tr>
-                      <td data-label={t(lang, "analytics.col_fy")} class="mono">{fyLabel(lang, fy, f.current)}</td>
-                      <td data-label={t(lang, "orgclaim.col_segment_value")} class="mono num">{money(lang, w / 100)}</td>
-                      {orgs.map((o) => {
-                        const c = int(part(o.oid, fy)?.cents);
-                        // A year the segment has no counted value has no share to state.
-                        return (
-                          <td data-label={o.name} class="mono num">
-                            {w > 0 ? <>{fmtPct(c, w, lang) || pct(0)}<br /></> : null}<span class="muted small">{money(lang, c / 100)}</span>
-                          </td>
-                        );
-                      })}
+                      <td data-label={t(lang, "col.organization")}>
+                        <a href={`/organizations/${o.id}`}>{o.name}</a>
+                        {i === 0 ? <><br /><span class="muted small">{t(lang, "orgclaim.is_yours")}</span></> : null}
+                      </td>
+                      <td data-label={t(lang, "analytics.col_share")} class="mono num">{fmtPct(cents, shownWhole, lang)}</td>
+                      {/* No record there, no value: the cell stays empty, and a phone's block leaves it out. */}
+                      <td data-label={t(lang, "col.value")} class="mono num">{n ? money(lang, cents / 100) : null}</td>
                     </tr>
-                  );
-                })}
-                <tr>
-                  <td data-label={t(lang, "analytics.col_fy")}><strong>{t(lang, "orgclaim.share_period", { n: fmtInt(years.length, lang) })}</strong></td>
-                  <td data-label={t(lang, "orgclaim.col_segment_value")} class="mono num">{money(lang, periodWhole / 100)}</td>
-                  {orgs.map((o) => {
-                    const c = rows.filter((r) => num(r.oid) === o.oid).reduce((sum, r) => sum + int(r.cents), 0);
-                    return <td data-label={o.name} class="mono num">{fmtPct(c, periodWhole, lang) || pct(0)}<br /><span class="muted small">{money(lang, c / 100)}</span></td>;
-                  })}
-                </tr>
-              </tbody>
-            </Table>
-          </div>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          </> : <p class="muted">{t(lang, "orgclaim.none_share_year", { fy: fyLabel(lang, year ?? f.current, f.current) })}</p>}
         </> : <p class="muted">{t(lang, "orgclaim.none_share_value")}</p>}
       </>}
     </Panel>
@@ -579,6 +620,8 @@ export interface ClaimedState {
   frame: ClaimFrame;
   source: MoneySource;
   segment: string | null;
+  // The share table's fiscal year (?year=), null for the whole period.
+  year: number | null;
   // null when the profile is gone and nothing was read.
   read: BlocksRead | null;
   open: Map<string, number> | null;
@@ -651,7 +694,7 @@ export function claimedView(lang: Lang, account: Account, s: ClaimedState) {
         {s.pro ? <>
           <SegmentsBlock lang={lang} rows={rows.segments ?? []} years={rows.years ?? []} f={s.frame} />
           <ShareBlock lang={lang} account={account} rows={rows.share ?? []} segments={rows.segments ?? []} f={s.frame} source={s.source}
-            chosen={s.segment} orgs={orgs} />
+            chosen={s.segment} year={s.year} orgs={orgs} />
           <EndingBlock lang={lang} id={s.id} rows={ending} total={rows.endingTotal?.[0]} />
           <BuyersBlock lang={lang} id={s.id} rows={rows.buyers ?? []} open={s.open} />
           <InstrumentsBlock lang={lang} id={s.id} rows={rows.instruments ?? []} today={s.frame.today} />
@@ -726,6 +769,7 @@ export async function orgPage(c: Context<AppEnv>, who: Account, extra: { errors?
   const pro = allowed(who, "analytics");
   const frame = claimFrame(await dataDate(c));
   const source = sourceOf(c);
+  const year = shareYear(c.req.query("year"), frame);
   const segment = f.claim.segment;
   const competitors = f.competitors.map((x) => ({ id: x.id, name: x.profile.organization.display_name }));
   const [read, found, open, matches] = await Promise.all([
@@ -738,7 +782,7 @@ export async function orgPage(c: Context<AppEnv>, who: Account, extra: { errors?
     f.own ? readOrgMatches(c, id, f.own).catch(() => null) : Promise.resolve(null),
   ]);
   return accountPage(c, t(lang, "orgclaim.title"), claimedView(lang, who, {
-    id, profile: f.own, createdAt: f.claim.createdAt, competitors, notices, q, found, pro, frame, source, segment, read, open, errors: extra.errors,
+    id, profile: f.own, createdAt: f.claim.createdAt, competitors, notices, q, found, pro, frame, source, segment, year, read, open, errors: extra.errors,
     matches,
   }), extra.status ?? 200);
 }

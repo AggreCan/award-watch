@@ -1121,7 +1121,15 @@ note says what the plan lacks. From the top:
   1280 px, ten below 1440 px) the keys with the fewest requests over the
   window rest. A resting key's count shows on a line under a day only on a
   day it made requests; while the read holds five keys with requests, the
-  keys that rest are the ones that made none, so no line appears.
+  keys that rest are the ones that made none, so no line appears. All keys
+  (the total's panel, the table's first column and the two request tiles)
+  is every key's requests, shown or not: when more than five keys made
+  requests in the window, the page draws the keys in use and the ones
+  revoked most recently, and a line under the table says how many revoked
+  keys have no chart or column of their own and that their requests are
+  counted in All keys ("1 revoked key made requests in these days and has
+  no chart or column of its own; its requests are counted in All keys.").
+  With five or fewer there is no line.
 - The chart has two forms, chosen by two tabs in its panel's head. Bars,
   the page's own form: a bar for each day with a request, with the fade the
   site's other amounts wear, and today's bar in the pale step, since the
@@ -1131,13 +1139,17 @@ note says what the plan lacks. From the top:
   address, so nothing is stored, and any other value of `chart` is the
   bars. The scale, the cap's line and the table are the same in both.
 
-It reads the account's keys and one statement, `DAILY_SQL` in
-`site/src/account/api_usage.ts`: the day's rows of at most 5 keys with
-requests in the window (the live ones first, then the ones revoked most
-recently), at most 300 rows through the primary key. When that statement
-cannot be read the page still answers 200 with the limits, an empty chart
-and the line saying the counts cannot be read. The tests are
-`site/test/api-usage-page.test.ts`.
+It reads the account's keys and two statements in one batch, so both count
+the same moment, from `site/src/account/api_usage.ts`: `DAILY_SQL`, the
+day's rows of at most 5 keys with requests in the window (the live ones
+first, then the ones revoked most recently), at most 300 rows through the
+primary key; and `TOTAL_SQL`, each day's requests summed over every key of
+the account with the number of keys that have a row in the window, one row a
+day and at most 60 (`LIMIT 60`), each key's days read through the primary
+key and the keys through `idx_api_keys_user`. When either cannot be read
+the page still answers 200 with the limits, an empty chart and the line
+saying the counts cannot be read. The tests are
+`site/test/api-usage-page.test.ts`, which read both statements' plans.
 
 ### Endpoints
 
@@ -2079,12 +2091,23 @@ weekly block) and `org_pages.tsx` (the page and the files); the tests are
   source or all of them, a year without records at 0; records by
   segment, award notices and PSPC contract history apart, each record once
   in its first segment, with the published contracts and grants (no segment)
-  counted beside; the share of one segment's counted value by fiscal year
-  for the organization and its competitors, in their order, with the
-  segment's whole value as the denominator (supplier-withheld records count
-  in it and in nobody's share; an organization with no record in a year
-  shows 0%), one source at a time (award notices by default, PSPC contract
-  history as a tab), the segment chosen or else the organization's largest;
+  counted beside; the share of one segment's counted value for the
+  organization and its competitors, one source at a time (award notices by
+  default, PSPC contract history as a tab), the segment chosen or else the
+  organization's largest: a chart by fiscal year, a panel each on one scale,
+  then a table a row an organization (its own first, marked as its own, then
+  the competitors in their order, each linked to its profile) with its share
+  and its value in one fiscal year or over the whole period, the whole
+  period by default. A line above the table says what it shows and gives the
+  segment's whole value there, the denominator (supplier-withheld records
+  count in it and in nobody's share; an organization with no record there
+  shows 0% and no value). The fiscal year is a select with its Show button,
+  a get that writes `?year=<first calendar year>` (`?year=2025` is 2025-26)
+  into the address beside `?source=`; the source tabs keep the year, the
+  year's form keeps the source, and the segment's post carries both back. A
+  year outside the ten, or any other value, reads as the whole period. The
+  table is 372 px at its least (the organization, a share, a value), so it
+  fits from a 700 px window with five competitors as with none;
   its contracts ending within 12 months, the radar's own rows for
   `/expiring/12m?supplier=<id>`, 25 shown; the buyers it has records with
   (up to 100 by records over ten fiscal years, 25 shown), each source's

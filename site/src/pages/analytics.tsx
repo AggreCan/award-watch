@@ -172,6 +172,14 @@ async function readNamed(c: Context<AppEnv>, named: Record<string, Query>): Prom
 // A fiscal year's label, the data date's marked as counted to date.
 const fy = (lang: Lang, year: number, current: number) =>
   year === current ? t(lang, "analytics.to_date", { fy: fiscalLabel(lang, year) }) : fiscalLabel(lang, year);
+
+// The same in a date column (112 px), where "2026-2027 (à ce jour)" on one
+// line ran into the next column: the year, and under it a muted "(to date)",
+// as a date cell carries its second fact. The line break lets the cell wrap
+// (styles.css, td.mono) and ends what public/sort.js reads, so the cell
+// still sorts by its year.
+const FyCell: FC<{ lang: Lang; year: number; current: number }> = ({ lang, year, current }) =>
+  year === current ? <>{fiscalLabel(lang, year)}<br /><span class="muted small">{t(lang, "analytics.to_date_line")}</span></> : <>{fiscalLabel(lang, year)}</>;
 const int = (v: unknown): number => num(v) ?? 0;
 const share = (lang: Lang, part: number | null, whole: number | null) => (part !== null && whole !== null && whole > 0 ? fmtPct(part, whole, lang) : "");
 
@@ -445,7 +453,7 @@ const ValuesPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = 
             <tbody>
               {[...rows].reverse().map((r) => (
                 <tr>
-                  <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
+                  <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
                   <td data-label={t(lang, "analytics.col_valued")} class="mono num">{fmtInt(int(r.n_pos), lang)}</td>
                   <td data-label={t(lang, "analytics.col_median")} class="mono num">{int(r.n_pos) > 0 ? money(lang, dollars(r.med)) : ""}</td>
                   <td data-label={t(lang, "analytics.col_average")} class="mono num">{int(r.n_pos) > 0 ? money(lang, average(r)) : ""}</td>
@@ -500,7 +508,7 @@ const GrowthPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = 
                 const before = int(r.first_cents);
                 return (
                   <tr>
-                    <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
+                    <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
                     <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
                     <td data-label={t(lang, "analytics.col_amended")} class="mono num">{shareText(lang, int(r.n_amended), int(r.n), n)}</td>
                     <td data-label={t(lang, "analytics.col_compared")} class="mono num mdh">{n(int(r.n_compared))}</td>
@@ -591,7 +599,7 @@ const RecordsPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: "organiza
                         {typeof r.buyer_id === "string" ? <a href={`/buyers/${r.buyer_id}`}>{buyerName ?? r.buyer_id}</a> : <span class="muted">{t(lang, "common.not_stated")}</span>}
                       </td>
                     ) : null}
-                    <td data-label={t(lang, "analytics.col_fy")} class={org ? "mono mdh" : "mono"}>{fy(lang, int(r.fy), frame.current)}</td>
+                    <td data-label={t(lang, "analytics.col_fy")} class={org ? "mono mdh" : "mono"}><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
                     <td data-label={t(lang, "col.value")} class="mono num">{money(lang, dollars(r.cents))}</td>
                   </tr>
                 );
@@ -855,7 +863,7 @@ const QuarterTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
             const noValue = mine.reduce((s, r) => s + int(r.n_no_value), 0);
             return (
               <tr>
-                <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, y, frame.current)}</td>
+                <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={y} current={frame.current} /></td>
                 {[1, 2, 3, 4].map((q) => {
                   const r = cell(y, q);
                   return <td data-label={quarter(q)} class="mono num mdh">{r ? money(lang, dollars(r.cents)) : ""}</td>;
@@ -899,7 +907,7 @@ const CompetitionView: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, 
           <tbody>
             {[...rows].reverse().map((r) => (
               <tr>
-                <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
+                <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
                 <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
                 <td data-label={t(lang, "org.col_nc_count")} class="mono num">{shareText(lang, int(r.n_nc), int(r.n), n)}</td>
                 <td data-label={t(lang, "competitive.unstated")} class="mono num mdh">{n(int(r.n_unstated))}</td>
@@ -1075,7 +1083,7 @@ const OrgYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
         <tbody>
           {[...rows].reverse().map((r) => (
             <tr>
-              <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
+              <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
               <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
               <td data-label={t(lang, "col.value")} class="mono num">{money(lang, dollars(r.cents))}</td>
               <td data-label={t(lang, "analytics.col_no_value")} class="mono num mdh">{n(int(r.n_no_value))}</td>
@@ -1306,7 +1314,7 @@ const SegmentYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang,
         <tbody>
           {[...rows].reverse().map((r) => (
             <tr>
-              <td data-label={t(lang, "analytics.col_fy")} class="mono">{fy(lang, int(r.fy), frame.current)}</td>
+              <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
               <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
               <td data-label={t(lang, "col.value")} class="mono num">{money(lang, dollars(r.cents))}</td>
               <td data-label={t(lang, "analytics.col_no_value")} class="mono num mdh">{n(int(r.n_no_value))}</td>

@@ -946,6 +946,8 @@ const STRINGS = {
   "analytics.rules_link": { en: "Methodology, Analytics", fr: "Méthodologie, Analyses" },
   "analytics.none": { en: "No record of this source in these fiscal years.", fr: "Aucun dossier de cette source pour ces exercices." },
   "analytics.to_date": { en: "{fy} (to date)", fr: "{fy} (à ce jour)" },
+  // The same mark on its own line, under the year in a date column.
+  "analytics.to_date_line": { en: "(to date)", fr: "(à ce jour)" },
   "analytics.quarter": { en: "Q{n}", fr: "T{n}" },
   "analytics.chart_aria": { en: "Chart by fiscal year", fr: "Graphique par exercice" },
   "analytics.chart_quarters": { en: "{source}: value by fiscal quarter", fr: "{source} : valeur par trimestre d'exercice" },

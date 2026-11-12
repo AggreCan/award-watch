@@ -43,6 +43,19 @@ export const DAILY_SQL =
   "AND EXISTS (SELECT 1 FROM api_usage u WHERE u.key_id = k.id AND u.day BETWEEN ?3 AND ?2) " +
   "ORDER BY k.revoked_at IS NOT NULL, k.revoked_at DESC, k.created_at DESC, k.id LIMIT ?4)";
 
+// The usage page's "All keys": each day's requests from ?3 to ?2 over every
+// key of one user (?1), the keys DAILY_SQL leaves out included, and how many
+// of those keys have a row in the window (n_keys, the same on each row), so
+// the page can say how many have no series of their own. One row a day, at
+// most USAGE_KEEP_DAYS; every key's days read through the primary key, the
+// keys through idx_api_keys_user. Rows go after USAGE_KEEP_DAYS days, so a
+// key reads at most that many.
+export const TOTAL_SQL =
+  "SELECT day, SUM(n) AS n, (SELECT COUNT(*) FROM api_keys k WHERE k.user_id = ?1 " +
+  "AND EXISTS (SELECT 1 FROM api_usage u WHERE u.key_id = k.id AND u.day BETWEEN ?3 AND ?2)) AS n_keys " +
+  "FROM api_usage WHERE day BETWEEN ?3 AND ?2 AND key_id IN (SELECT id FROM api_keys WHERE user_id = ?1) " +
+  `GROUP BY day ORDER BY day LIMIT ${USAGE_KEEP_DAYS}`;
+
 // The sweep: days before ?1, through idx_api_usage_day.
 export const USAGE_SWEEP_SQL = "DELETE FROM api_usage WHERE day < ?1";
 
@@ -102,18 +115,35 @@ export async function keyUsage(env: Env, userId: string, now: Date): Promise<Map
 }
 
 export type DayCount = { key_id: string; day: string; n: number };
+export type DayTotal = { day: string; n: number };
+
+// The usage page's read: the days of the keys it draws (DAILY_SQL), each
+// day's total over every key and how many keys have a row in the window
+// (TOTAL_SQL).
+export type UsageRead = { rows: DayCount[]; totals: DayTotal[]; keys: number };
 
 // The first day of the usage page's window, which ends on `day`.
 const windowStart = (day: string): string => dayPlus(day, -(USAGE_KEEP_DAYS - 1));
 
-// The usage page's rows (DAILY_SQL): a key and a day with no request have
-// none. Null when the table cannot be read; the page then says so. Never
-// throws.
-export async function dailyUsage(env: Env, userId: string, now: Date): Promise<DayCount[] | null> {
+// The usage page's rows: a key and a day with no request have none, nor a day
+// with no request from any key. Both statements in one batch, so the total
+// and the keys' rows are counted at the same moment. Null when the table
+// cannot be read; the page then says so. Never throws.
+export async function dailyUsage(env: Env, userId: string, now: Date): Promise<UsageRead | null> {
   const day = utcDay(now);
+  const first = windowStart(day);
   try {
-    const res = await env.ACCOUNTS!.prepare(DAILY_SQL).bind(userId, day, windowStart(day), KEYS_MAX).all<DayCount>();
-    return (res.results ?? []).map((r) => ({ key_id: r.key_id, day: r.day, n: Number(r.n) || 0 }));
+    const db = env.ACCOUNTS!;
+    const [daily, total] = await db.batch<Record<string, unknown>>([
+      db.prepare(DAILY_SQL).bind(userId, day, first, KEYS_MAX),
+      db.prepare(TOTAL_SQL).bind(userId, day, first),
+    ]);
+    const totals = (total.results ?? []).map((r) => ({ day: String(r.day), n: Number(r.n) || 0, keys: Number(r.n_keys) || 0 }));
+    return {
+      rows: (daily.results ?? []).map((r) => ({ key_id: String(r.key_id), day: String(r.day), n: Number(r.n) || 0 })),
+      totals: totals.map(({ day, n }) => ({ day, n })),
+      keys: totals[0]?.keys ?? 0,
+    };
   } catch {
     console.error("api usage: not readable for the usage page");
     return null;

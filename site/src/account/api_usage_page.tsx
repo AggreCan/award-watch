@@ -5,10 +5,11 @@
 //
 // routes.tsx mounts it behind the session. A plan without the keyed API has
 // no usage to show and is sent to the keys page, whose gate note says what
-// the plan lacks. The page reads the account's keys and one statement on
-// api_usage (DAILY_SQL). When that statement cannot be read the page still
-// answers, with the limits, an empty chart and the keys page's line saying
-// the counts cannot be read.
+// the plan lacks. The page reads the account's keys and two statements on
+// api_usage in one batch: the days of the keys it draws (DAILY_SQL) and each
+// day's total over every key (TOTAL_SQL). When they cannot be read the page
+// still answers, with the limits, an empty chart and the keys page's line
+// saying the counts cannot be read.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -19,8 +20,8 @@ import type { AppEnv } from "../env";
 import { fmtInt, t, tj, tn, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
 import { REQUEST_LIMITS } from "../pages/docs";
-import { KEYS_MAX, type KeyRow, listKeys } from "./api_keys";
-import { type DayCount, USAGE_KEEP_DAYS, dailyUsage, dayPlus, nowOf, utcDay } from "./api_usage";
+import { type KeyRow, listKeys } from "./api_keys";
+import { type DayCount, type DayTotal, USAGE_KEEP_DAYS, type UsageRead, dailyUsage, dayPlus, nowOf, utcDay } from "./api_usage";
 import { accountPage } from "./pages";
 import type { Account } from "./session";
 
@@ -38,9 +39,13 @@ export function usageDays(today: string): string[] {
 export type UsageSeries = { id: string | null; label: string; revoked: boolean; values: number[] };
 
 // One series a key: every key in use, then each revoked key the read has rows
-// for, each group in the keys page's order; with more than one, the total of
-// them all comes first. A name two series share carries the key's prefix.
-export function usageSeries(lang: Lang, keys: readonly KeyRow[], rows: readonly DayCount[], days: readonly string[]): UsageSeries[] {
+// for, each group in the keys page's order; with more than one, the total
+// comes first. The total is the database's over every key (TOTAL_SQL), the
+// keys the read left out included; without it, the series' own sum. A name
+// two series share carries the key's prefix.
+export function usageSeries(
+  lang: Lang, keys: readonly KeyRow[], rows: readonly DayCount[], days: readonly string[], totals?: readonly DayTotal[],
+): UsageSeries[] {
   const at = new Map(days.map((d, i) => [d, i]));
   const counts = new Map<string, number[]>();
   for (const r of rows) {
@@ -61,8 +66,14 @@ export function usageSeries(lang: Lang, keys: readonly KeyRow[], rows: readonly 
     };
   });
   if (series.length < 2) return series;
-  const total = days.map((_, i) => series.reduce((n, s) => n + s.values[i], 0));
+  const total = totals ? dayValues(totals, days) : days.map((_, i) => series.reduce((n, s) => n + s.values[i], 0));
   return [{ id: null, label: t(lang, "apiusage.series_all"), revoked: false, values: total }, ...series];
+}
+
+// Each day's total in the days' order, a day with no row at 0.
+export function dayValues(totals: readonly DayTotal[], days: readonly string[]): number[] {
+  const by = new Map(totals.map((r) => [r.day, r.n]));
+  return days.map((d) => by.get(d) ?? 0);
 }
 
 // The table: the day's column (the main one, at least MAIN_MIN, 128 px) and a
@@ -71,7 +82,8 @@ export function usageSeries(lang: Lang, keys: readonly KeyRow[], rows: readonly 
 // 480 = 608), the total and five keys, KEYS_MAX. Up to 1439 px it is 951
 // px: ten fit (928). The most the page shows is eleven: five keys in use
 // with no request in the window, five revoked ones that have some (DAILY_SQL
-// reads at most KEYS_MAX keys with rows) and the total, 1,008 px, which the
+// reads at most KEYS_MAX keys with rows; a line under the table counts the
+// others, whose requests the total holds) and the total, 1,008 px, which the
 // 1,111 px from 1440 px holds.
 export const SERIES_FIT = { md: 6, lg: 10 } as const;
 
@@ -140,19 +152,20 @@ const FORMS: [ChartForm, string, "apiusage.form_bars" | "apiusage.form_lines"][]
   ["bars", "/account/api", "apiusage.form_bars"], ["lines", "/account/api?chart=lines", "apiusage.form_lines"],
 ];
 
-export type UsageView = { quota: KeyQuota; keys: KeyRow[]; rows: DayCount[] | null; today: string; form?: ChartForm };
+export type UsageView = { quota: KeyQuota; keys: KeyRow[]; usage: UsageRead | null; today: string; form?: ChartForm };
 
 export function usageView(lang: Lang, view: UsageView) {
-  const { quota, keys, rows, today } = view;
+  const { quota, keys, usage, today } = view;
+  const rows = usage?.rows ?? null;
   const form = view.form ?? "bars";
   const days = usageDays(today);
   const first = days[0];
-  const series = rows ? usageSeries(lang, keys, rows, days) : [];
+  const series = usage ? usageSeries(lang, keys, usage.rows, days, usage.totals) : [];
   const last = days.length - 1;
   const n = (v: number) => fmtInt(v, lang);
   const keysLink = <a href="/account/keys">{t(lang, "account.keys_title")}</a>;
-  // The total's own series when there is one, else the one key's (or nothing).
-  const all = series[0]?.values ?? days.map(() => 0);
+  // Every key's requests a day, the tiles' figures, whichever keys have a series.
+  const all = usage ? dayValues(usage.totals, days) : days.map(() => 0);
   const live = series.filter((s) => s.id !== null && !s.revoked);
   const total = series.length > 1;
   // The cap is a key's: the total of several keys has none.
@@ -167,9 +180,9 @@ export function usageView(lang: Lang, view: UsageView) {
       : { line: s.values.map((v, i) => ({ x: dayPos(days[i]) + 0.5, value: v, title: tip(s, i) })) }),
     rule: ruled(s) ? quota.perDay : undefined,
   })) : [{ title: t(lang, "apiusage.series_all"), line: [] }];
-  // Keys revoked inside the window that the read may have left out, past KEYS_MAX keys with rows (DAILY_SQL).
-  const read = new Set((rows ?? []).map((r) => r.key_id));
-  const leftOut = read.size >= KEYS_MAX && keys.some((k) => k.revoked_at && k.revoked_at >= first && !read.has(k.id));
+  // Keys with requests in the window that have no series: past KEYS_MAX keys with rows, DAILY_SQL leaves the
+  // revoked ones longest gone out. Their requests are in the total.
+  const unshown = usage ? Math.max(0, usage.keys - new Set(usage.rows.map((r) => r.key_id)).size) : 0;
   const bars: RankedBar[] = live.map((s) => {
     const share = partOf(lang, s.values[last], quota.perDay, n);
     return { label: s.label, value: s.values[last], text: share, title: tipText(s.label, [share]) };
@@ -211,7 +224,6 @@ export function usageView(lang: Lang, view: UsageView) {
         }
         foot={<>
           {form === "bars" && all[last] > 0 ? <p>{t(lang, "apiusage.today_pale")}</p> : null}
-          {leftOut ? <p>{t(lang, "apiusage.left_out", { n: n(KEYS_MAX) })}</p> : null}
           <p>{t(lang, "apiusage.counted", { days: USAGE_KEEP_DAYS })}</p>
         </>}>
         {rows === null ? <p class="muted">{t(lang, "account.keys_usage_unread")}</p> : null}
@@ -254,6 +266,7 @@ export function usageView(lang: Lang, view: UsageView) {
             </Table>
           </div>
         ) : null}
+        {unshown ? <p class="muted small">{tn(lang, "apiusage.unshown_one", "apiusage.unshown_many", unshown, { n: n(unshown) })}</p> : null}
       </Panel>
       <p class="muted small">{tj(lang, "apiusage.keys_page", { keys: keysLink })}</p>
     </>
@@ -268,6 +281,6 @@ export async function usagePage(c: Context<AppEnv>, who: Account): Promise<Respo
   if (!quota) return c.redirect("/account/keys", 303);
   const now = nowOf(c.env);
   const keys = await listKeys(c.env, who.userId);
-  const rows = keys.length ? await dailyUsage(c.env, who.userId, now) : [];
-  return accountPage(c, t(lang, "apiusage.title"), usageView(lang, { quota, keys, rows, today: utcDay(now), form: chartForm(c.req.query("chart")) }));
+  const usage = keys.length ? await dailyUsage(c.env, who.userId, now) : { rows: [], totals: [], keys: 0 };
+  return accountPage(c, t(lang, "apiusage.title"), usageView(lang, { quota, keys, usage, today: utcDay(now), form: chartForm(c.req.query("chart")) }));
 }
