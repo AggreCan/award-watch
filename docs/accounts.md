@@ -25,7 +25,7 @@ the schema is `site/accounts_schema.sql`; the tests are
   Every message carries a link that turns its delivery off without signing
   in.
 - **Watches.** Any account follows up to 3 organizations, buyers,
-  published contracts or open tender notices (Pro, 25) and sees what
+  published contracts or open tender notices (Pro, 25; Ultra, 100) and sees what
   happened to each over the last 30 data dates; Pro gets one message a data
   date with those events (*Watches*).
 - **Your organization.** Any account names the organization it is,
@@ -104,11 +104,11 @@ Every datetime is ISO in UTC.
 | `feeds` | one row per calendar feed: kind (`search`, `watchlist`, `all`), the saved search it follows, the address's secret, created and revocation times, the UTC day a calendar last read it | a time of reading, an address, a user agent |
 | `org_claims` | one row per account that named its organization: the organization id, up to five organization ids to compare it with, the share block's segment, when it was chosen and last changed (*Your organization*) | anything typed, a name, any sign of which other accounts chose the same organization |
 
-Limits: at most 25 saved searches per account (Free keeps 3), at most 5 live
-API keys, at most 5 sign-in requests per address per hour, at most 5 wrong
-codes per address per hour across all its requests, at most 5 bug reports
-per account in any 24 hours, at most 600 keyed API requests a minute and
-20,000 a UTC day per key.
+Limits: at most 25 saved searches per account on Pro, 100 on Ultra (Free
+keeps 3), at most 5 live API keys, at most 5 sign-in requests per address per
+hour, at most 5 wrong codes per address per hour across all its requests, at
+most 5 bug reports per account in any 24 hours, at most 600 keyed API
+requests a minute and 20,000 a UTC day per key on Pro (50,000 on Ultra).
 
 Retention: sign-in requests and wrong tries are deleted after a day (and
 with the account); sessions 90 days after they end; audit rows after 90
@@ -879,12 +879,16 @@ watches reach it:
 
 Each end's title starts with the holder ("Ends: {holder} · {buyer} ·
 {title}"), a person's record reading "Individual, name withheld". The radar
-rows come from one statement, `WATCH_ENDS_SQL` in `feeds.ts`: every
-organization and buyer watch of the account in a slot of three bound values
-(the target, the segment mark, the horizon's last day; 25 slots, 77 values,
-within D1's 100), through `rec_expiring_end` over the window's dates, soonest
-first, at most 500 rows, with `COUNT(*) OVER ()` giving how many matched, so
-the cap's last event counts the rows past the ones read. Single published
+rows come from `WATCH_ENDS_SQL` in `feeds.ts`: the organization and buyer
+watches of the account, each in a slot of three bound values (the target,
+the segment mark, the horizon's last day; 25 slots, 77 values, within D1's
+100), through `rec_expiring_end` over the window's dates, soonest first, at
+most 500 rows, with `COUNT(*) OVER ()` giving how many matched, so the cap's
+last event counts the rows past the ones read. An account with more than 25
+such watches (Ultra) sends one statement per group of 25 in the same batch;
+the groups' rows are merged by the row's key, so a row two groups reach is
+one event, sorted again and cut at 500 (`mergeEnds`; see *Ultra, Its
+figures* for the count past the cut). Single published
 contracts add one `PUBLISHED_CONTRACT_SQL` each to the same batch. A records
 database that is absent, loading or failing answers 503, never an empty
 calendar; a watchlist with no date in its horizon is a valid calendar with no
@@ -930,7 +934,8 @@ watches' feed as the feed reads them.
   one-event file does; the radar's rows carry no cancellation.
 - An instrument's expiry comes from a second statement in the same batch,
   `WATCH_INSTRUMENTS_SQL`: the organizations' numbers in 25 slots (27 bound
-  values), one row per instrument and holder organization with its regions'
+  values; one statement per group of 25 organizations, merged and cut as the
+  ends are), one row per instrument and holder organization with its regions'
   names, soonest first, at most 500, with `COUNT(*) OVER ()` for the cap's
   last event. The statement reads the instruments ending in the window
   through `rec_instruments_expiry (expiry)` (CROSS JOIN keeps them the outer
@@ -1212,10 +1217,13 @@ are paired with.
 4. `KEY_LIMIT` (namespace 2009, 600 a minute), keyed `key:<key id>`: a
    429 with `Retry-After: 60`. A limiter fault lets the request through.
 5. The day's count in `api_usage`: one statement inserts the key's row for
-   the UTC day at 1 or adds one while the count is under 20,000. At the cap
-   no row comes back and nothing is written: a 429 with `Retry-After` set to
-   the seconds left until 00:00 UTC. A write that fails lets the request
-   through uncounted (fail open), and `/me` then reports `requests: null`.
+   the UTC day at 1 or adds one while the count is under the holder's plan's
+   figure (`keyQuota`: 20,000 on Pro, 50,000 on Ultra), which it binds. At
+   the cap no row comes back and nothing is written: a 429 with
+   `Retry-After` set to the seconds left until 00:00 UTC, its text naming
+   the plan's figure, as `/me`'s `limits.per_day` does. A write that fails
+   lets the request through uncounted (fail open), and `/me` then reports
+   `requests: null`.
 
 While the switch is on, every answer under `/api/v1`, a refusal included,
 is sent `Cache-Control: private, no-store` with `Vary: Authorization,
@@ -1232,7 +1240,9 @@ the further-segment rows it passes over, so a key spending its whole day on
 the deepest pages reads about 100 million rows: some 3 billion in a month,
 an eighth of the 25 billion D1 includes. The per-address cap (60 a minute)
 still applies, so 600 a minute matters only for a key used from several
-addresses.
+addresses. Ultra's 50,000 a day serves one machine's steady script (one
+address is held to 86,400 a day); its five keys at the cap make 7.5 million
+requests a month, inside the Workers plan's 10 million.
 
 ### Operator step at landing
 
@@ -1640,19 +1650,103 @@ their end.
 
 ## Ultra
 
-Ultra is the plan above Pro: every Pro feature, with figures of its own.
-It is built to deploy inert. Nothing offers it, and no public page or
-account page changes in any byte, until the operator sets its five Stripe
-variables and applies the schema; an account the operator grants Ultra by
-hand uses its features and sees its labels before then. For now `RULES.ultra`
-holds Pro's figures for every counted feature: Ultra's own figures come
-with the code that serves them (the watch statements in groups under D1's
-100 bound values, the keyed API's count by plan, the longer analytics
-period), raised together, so no card promises a figure before it works.
-The code is `site/src/account/entitlements.ts` (the plan and the tier
-table), `payments.ts` (`ultraOnSale`), `stripe.ts` and `billing.tsx` (the
-payments), `site/src/pro.tsx` (the cards and the chip); the tests are
-`site/test/ultra.test.ts` and `site/test/accounts-ultra-billing.test.ts`.
+Ultra is the plan above Pro: every Pro feature, with figures of its own
+(*Its figures*). It is built to deploy inert. Nothing offers it, and no
+public page or account page changes in any byte, until the operator sets
+its five Stripe variables and applies the schema; an account the operator
+grants Ultra by hand uses its features, its figures and sees its labels
+before then. The one line that changed for every reader is the paid cards'
+API row, which names the keys as well as the day ("API: 5 keys of 20,000
+requests a day" on Pro). The code is `site/src/account/entitlements.ts`
+(the plan, the tier table and the figures), `payments.ts` (`ultraOnSale`),
+`stripe.ts` and `billing.tsx` (the payments), `site/src/pro.tsx` (the
+cards and the chip); the tests are `site/test/ultra.test.ts`,
+`site/test/accounts-ultra-billing.test.ts` and
+`site/test/ultra-limits.test.ts` (the figures), with the twenty fiscal
+years in `site/test/analytics.test.ts`.
+
+### Its figures
+
+| Figure | Free | Pro | Ultra | Where it lives |
+|---|---|---|---|---|
+| Saved searches (briefings share them) | 3, on the site | 25, by email | 100, by email | `RULES.<plan>.saved_searches`; `SAVED_SEARCH_MAX` is the ceiling, Ultra's |
+| Watches | 3 | 25 | 100 | `RULES.<plan>.watchlists`; `WATCH_MAX` is the ceiling, Ultra's |
+| Matching notices listed | 5 | 200 | 500 | `RULES.<plan>.matches` |
+| Matching notices mailed a week | 3 | 10 | 25 | `RULES.<plan>.match_mail` |
+| Keyed API | none | 5 keys of 20,000 requests a day | 5 keys of 50,000 a day | `KEYS_MAX`; `KEY_PER_DAY`, `KEY_PER_DAY_ULTRA` through `keyQuota(plan)` |
+| Analytics | first chart, 3 fiscal years | every view, 10 | every view, 20 | `planYears(plan)`: `FREE_YEARS`, `MAX_YEARS`, `ULTRA_YEARS` |
+
+Unchanged on Ultra: the holder's record's windows (3 and 12 months), the
+organizations compared (5, held by the `org_claims` CHECK) and the keyed
+API's 600 a minute (one rate-limit binding; the per-address cap of 60 a
+minute applies anyway). Every line that prints a figure reads it from there:
+the plan cards (each plan its own), the Pro page's Ultra section, the
+landing page's Ultra card and the Ultra message (`ultraLines`), the keyed
+API's 429 and `/me`, the keys and usage pages.
+
+**The watch statements in groups.** D1 binds at most 100 values to a
+statement (`D1_BINDS_MAX`), and SQLite holds an expression to a depth of 100
+(the calendar feed's slots are an OR). The events statements bind 30 days
+and one value a subject, the contracts ending three values a watch, the
+instruments one an organization: 26 subjects fitted them, 101 do not. So
+each statement takes at most `TARGET_CHUNK` (25) subjects (55, 77 and 27
+bound values), and a reader with more sends one statement per group in the
+same batch:
+
+- `readEvents` (the watches page, the watch mail, the weekly email, the
+  tender notices' sweep): each subject is in one group only, so its rows and
+  counts come from one pair of statements and are filed under it whole, in
+  the statement's order. Its name and signature are as before.
+- `watchEnds` (the calendar feed): the contracts ending of every group are
+  merged by the row's key (read as text, a 64-bit integer a JavaScript
+  number cannot hold), so a row two groups reach is one event, sorted again
+  by end date and key and cut at 500 (`mergeEnds`). A group reads 500 rows at
+  most, so every row one statement over all the slots would keep is read by
+  its group. When no group was cut the count past the 500 is exact; when one
+  was, a row two groups both reach past their cuts counts twice, so the
+  feed's last event can then say more than one statement would, never less.
+  The instruments' rows name their holder, so they never repeat across
+  groups and their totals add up exactly (`mergeInstruments`).
+
+`site/test/ultra-limits.test.ts` holds every statement the modules build to
+100 bound values with 100 watches of each kind, and holds the groups to one
+statement over every subject on a fixture (the values written into it, since
+D1 binds no more than 100), the events and the feed's rows alike.
+
+**Analytics.** A view reads at most the reader's plan's fiscal years
+(`planYears`); `choosePeriod` takes that figure, and a longer span keeps
+its latest and says so ("At most 20 fiscal years are shown at once"). Every
+statement's LIMIT is bound by `ULTRA_YEARS` and each still filters `fy
+BETWEEN` the period. The records database already holds every fiscal year
+its sources publish (the nightly writes no window: published contracts and
+grants reach back to the mid-2000s, notices to 2012, history to 2009), so
+twenty years needed no pipeline change. The period tabs read 3, 5, 10 and 20
+years; the 20 is offered to a reader whose plan gives it and, while Ultra is
+on sale, to every other with the Ultra chip, leading to the view at the
+reader's own period, whose head then says "Periods of up to 20 fiscal years
+are part of Ultra." Off sale a reader without Ultra sees no 20 and no line,
+and `?years=20` reads as `?years=10` did. A chart over more than 12 years
+draws every other fiscal year's label (and the first), so a label keeps the
+room a ten-year axis gives it (`chart.tsx fiscalAxis`).
+
+**After a move to a smaller plan** nothing is deleted. Saved searches,
+briefings and watches past the plan's figure are kept and listed. The
+deliveries cover the first ones by creation date up to the figure: the saved
+searches' run and the briefings' run count the account's searches and
+briefings made before each one (`madeBefore`, the order the shared cap
+counts them in) and pass over the rest; the watch mail, the weekly email,
+the calendar feed's watches and the watches page's events cover the first
+watches by creation date up to the figure, the claimed organization's watch
+beside them (`withinCap`, `coveredWatches`). The pages say how many wait:
+"This account holds 27 saved searches, past the 25 of its plan. The first
+25 are sent; remove some to choose which." and the watches' own line, on a
+plan that sends them; a Free account, sent nothing, reads its figures in its
+foot's own line ("This account holds 4 of 3 saved searches. ..."). The
+calendar feeds of saved searches (a search's own, and the searches in the
+"all" feed) keep reading their searches whatever their place: an account
+keeps five feeds at most (`FEEDS_MAX`) anyway. While Ultra is on sale a Pro
+account's searches, watches and usage pages give Ultra's figure beside its
+own, with "Plans and prices".
 
 ### The tier table
 
@@ -2084,7 +2178,7 @@ keys and the console read every account as not blocked.
 A watch follows one page: an organization, a buyer (optionally narrowed to one
 UNSPSC segment), a single record (an award notice, a PSPC history record or a
 published contract) or an open tender notice, and lists what happens to it.
-Every signed-in account keeps watches: 3 on Free, 25 on Pro (`watchlists`,
+Every signed-in account keeps watches: 3 on Free, 25 on Pro, 100 on Ultra (`watchlists`,
 held to the cap inside the insert, as `addSearch` holds its own), plus the
 organization watch on the organization it claims (*Your organization*), which
 is outside the cap. Pro also gets the events by email (`watch_mail`). The code is `site/src/account/watches.ts`
@@ -2178,8 +2272,9 @@ from `rec_events` in the records database (`docs/analytics.md`, *Events*).
   that a claim change leaves over its cap is refused its next watch, and the
   new claim's watch waits (the page says so) until the account is back within
   its plan, so moving the claim cannot pile watches up past the cap. An
-  account holds 26 watches at most; the events statements read 26 subjects of
-  a kind (`TARGET_SLOTS`).
+  account holds 101 watches at most (Ultra's 100 and its own); a read covers
+  101 subjects of a kind (`TARGET_SLOTS`), 25 to a statement
+  (`TARGET_CHUNK`; *Ultra, Its figures*).
 - The watches page marks that watch "Your organization, outside the limit"
   ("Votre organisation, hors de la limite") and its count, like the
   overview's, reads "N of 25, plus your organization" ("N sur 25, plus votre
@@ -2826,7 +2921,7 @@ are `site/test/briefings.test.ts`.
   checks it) and a buyer's segment; the label is the site's ("81
   Engineering", a buyer's name from the data, "Fisheries and Oceans Canada ·
   81 Engineering"), never typed. A buyer no longer in the data adds nothing.
-- Briefings and saved searches share one cap (3 on Free, 25 on Pro): each
+- Briefings and saved searches share one cap (3 on Free, 25 on Pro, 100 on Ultra): each
   insert counts both tables inside the statement, so two posts at once cannot
   pass it. `addSearch` does the same (it counts the searches alone while the
   `briefings` table is not on the database yet).
@@ -2930,7 +3025,7 @@ switch off it is the site's 404.
 
 ### Bounds and privacy
 
-Briefings share the 25 cap; 10 rows a section, six sections, so 60 rows a
+Briefings share the saved searches' cap (25 on Pro, 100 on Ultra); 10 rows a section, six sections, so 60 rows a
 message; one batch a briefing; 300 messages a run shared with the saved
 searches and the watch mail; one fiscal year for the largest records. A
 briefing row keeps the kind, the subject (a segment code or a buyer id), the

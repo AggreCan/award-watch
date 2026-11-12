@@ -5,14 +5,18 @@
 // account's watch mail (watch_mail) and its runs (watch_deliveries); the
 // events themselves are the records database's (watch_events.ts).
 //
-// Any signed-in account keeps watches: 3 on Free, 25 on Pro (entitlements.ts
-// watchlists), held to the cap inside the insert so two posts at once cannot
-// pass it. The organization watch of the organization the account claims
-// ("Your organization", org_claim.ts) is outside the cap, since a claim
-// without its events would be of little use. The rule reads the claim inside
-// the same statements (claimedOf), so a claim changed or removed makes the
-// watch count from then on, and no watch is ever deleted for it. Only Pro's
-// are mailed (watch_mail). A label is the site's own,
+// Any signed-in account keeps watches: 3 on Free, 25 on Pro, 100 on Ultra
+// (entitlements.ts watchlists), held to the cap inside the insert so two posts
+// at once cannot pass it. The organization watch of the organization the
+// account claims ("Your organization", org_claim.ts) is outside the cap, since
+// a claim without its events would be of little use. The rule reads the claim
+// inside the same statements (claimedOf), so a claim changed or removed makes
+// the watch count from then on, and no watch is ever deleted for it. After a
+// move to a plan with a smaller figure nothing is deleted either: the watches
+// past it are kept and listed, and the events (on the page, in the watch mail,
+// the weekly email and the calendar feed) cover the first ones by creation date
+// up to the figure (coveredWatches). Only paid plans' are mailed (watch_mail).
+// A label is the site's own,
 // written from the data when the watch is added, never typed by the reader. A
 // watch follows an id: when the nightly retires an organization or a buyer id
 // into another (the aliases the profiles redirect through), followAliases
@@ -22,6 +26,7 @@
 import { loadAlias, loadBuyerAlias } from "../data";
 import type { Env } from "../env";
 import { WATCH_MAX, watchCap, type Plan } from "./entitlements";
+import { followClaimedId } from "./org_claim";
 import { missingTable } from "./records_deliveries";
 import { newId } from "./secrets";
 import { type EventKind, KINDS_FOR, type WatchKind, isEventKind, isWatchKind } from "./watch_events";
@@ -92,6 +97,26 @@ export function ownWatch(watches: readonly Watch[], claimed: string | null): Wat
 
 export const countedWatches = (watches: readonly Watch[], claimed: string | null): number =>
   watches.length - (ownWatch(watches, claimed) ? 1 : 0);
+
+// The watches whose events a plan covers, in the list's order (oldest first):
+// the claimed organization's, and of the others the first `cap` by creation.
+// An account within its plan keeps every watch; one past it (after a move to
+// a plan with a smaller figure) keeps the rest listed, without events, until
+// it removes some.
+export function withinCap<W extends Pick<Watch, "kind" | "target">>(watches: readonly W[], cap: number, claimed: string | null): W[] {
+  const own = claimed ? watches.find((w) => w.kind === "organization" && w.target === claimed) : undefined;
+  let room = cap;
+  return watches.filter((w) => w === own || room-- > 0);
+}
+
+// The same for a job that has not read the claim: a list within the cap needs
+// no claim and reads nothing; a longer one reads it (org_claim.ts
+// followClaimedId, as the watches page does).
+export async function coveredWatches(env: Env, userId: string, watches: readonly Watch[], plan: Plan): Promise<Watch[]> {
+  const cap = watchCap(plan);
+  if (watches.length <= cap) return [...watches];
+  return withinCap(watches, cap, await followClaimedId(env, userId).catch(() => null));
+}
 
 export async function listWatches(env: Env, userId: string): Promise<Watch[]> {
   const res = await env.ACCOUNTS!.prepare(LIST_SQL).bind(userId).all<WatchRow>();

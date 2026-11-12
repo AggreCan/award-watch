@@ -13,7 +13,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { runDeliveries } from "../src/account/deliveries";
 import { valueChange } from "../src/account/digests";
 import {
-  DAY_SLOTS, EVENT_COUNTS_SQL, EVENT_KINDS, EVENT_ROWS_SQL, INDEX_OF, KINDS_FOR, NARROW_COUNTS_SQL, NARROW_ROWS_SQL, TARGET_SLOTS,
+  DAY_SLOTS, EVENT_COUNTS_SQL, EVENT_KINDS, EVENT_ROWS_SQL, INDEX_OF, KINDS_FOR, NARROW_COUNTS_SQL, NARROW_ROWS_SQL, TARGET_CHUNK,
   WATCH_EVENTS_SQL, WATCH_KINDS, eventCounts, segmentOf, targetOf, watchPath,
 } from "../src/account/watch_events";
 import { ADD_WATCH_SQL, watchDetail, watchOverview } from "../src/account/watches";
@@ -140,15 +140,15 @@ describe("the events statements", () => {
     for (const kind of WATCH_KINDS) {
       for (const sql of [EVENT_ROWS_SQL[kind], EVENT_COUNTS_SQL[kind]]) {
         expect(sql, sql).toMatch(/LIMIT \d+$/);
-        expect(sql, sql).toContain(`?${DAY_SLOTS + TARGET_SLOTS}`);
-        expect(sql, sql).not.toContain(`?${DAY_SLOTS + TARGET_SLOTS + 1}`);
-        const targets = Array.from({ length: TARGET_SLOTS }, (_, i) => (kind === "organization" ? (i === 0 ? ORG_N : -1) : i === 0 ? "x" : ""));
+        expect(sql, sql).toContain(`?${DAY_SLOTS + TARGET_CHUNK}`);
+        expect(sql, sql).not.toContain(`?${DAY_SLOTS + TARGET_CHUNK + 1}`);
+        const targets = Array.from({ length: TARGET_CHUNK }, (_, i) => (kind === "organization" ? (i === 0 ? ORG_N : -1) : i === 0 ? "x" : ""));
         const steps = await plan(sql, [...days, ...targets]);
         expect(steps.filter((s) => /^SCAN rec_events\b/.test(s)), `${sql}\n${steps.join("\n")}`).toEqual([]);
         expect(steps.some((s) => s.includes(`SEARCH rec_events USING INDEX ${INDEX_OF[kind]}`)), `${sql}\n${steps.join("\n")}`).toBe(true);
       }
       // An instrument's holders: one seek of its row per event row read, never a scan.
-      const steps = await plan(EVENT_ROWS_SQL[kind], [...days, ...Array.from({ length: TARGET_SLOTS }, () => (kind === "organization" ? ORG_N : "x"))]);
+      const steps = await plan(EVENT_ROWS_SQL[kind], [...days, ...Array.from({ length: TARGET_CHUNK }, () => (kind === "organization" ? ORG_N : "x"))]);
       expect(steps.filter((s) => /^SCAN i\b|^SCAN rec_instruments\b/.test(s)), steps.join("\n")).toEqual([]);
       expect(steps.some((s) => /SEARCH i USING (COVERING )?INDEX rec_instruments_agr \(agr=\?\)/.test(s)), steps.join("\n")).toBe(true);
     }
@@ -159,7 +159,7 @@ describe("the events statements", () => {
       // Either subject-first index seeks the pairs: the buyer and the day, or the segment and the day.
       expect(steps.some((s) => /SEARCH rec_events USING INDEX rec_events_(buyer|segment) /.test(s)), steps.join("\n")).toBe(true);
     }
-    expect(DAY_SLOTS + TARGET_SLOTS).toBeLessThanOrEqual(100);
+    expect(DAY_SLOTS + TARGET_CHUNK).toBeLessThanOrEqual(100);
     expect(EVENT_KINDS).toEqual(["award", "grant", "amended", "cancelled", "ends_12m", "ends_6m", "ended", "notice", "notice_amended",
       "notice_closed", "notice_cancelled", "notice_awarded", "instrument_gained", "instrument_lost", "instrument_expires_6m"]);
   });

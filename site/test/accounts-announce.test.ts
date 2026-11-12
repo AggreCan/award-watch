@@ -17,9 +17,10 @@ import { INSERT_INTEREST, newToken } from "../src/pages/interest";
 import {
   ACCOUNTS, DB, csrf, decode, get, lastMail, nbsp, newEmail, offEnv, onEnv, post, signIn, ultraEnv, useAccountsDb, userId, withoutTiers,
 } from "./accounts-helpers";
+import { KEYS_MAX } from "../src/account/api_keys";
 import { RULES } from "../src/account/entitlements";
-import { KEY_PER_DAY } from "../src/api_keyed_spec";
-import { MAX_YEARS } from "../src/records_db";
+import { KEY_PER_DAY_ULTRA } from "../src/api_keyed_spec";
+import { ULTRA_YEARS } from "../src/records_db";
 
 useAccountsDb();
 
@@ -323,8 +324,8 @@ describe("the Ultra message", () => {
     "Ultra includes everything in Pro, with these figures:",
     `- ${RULES.ultra.saved_searches} saved searches, by email`,
     `- ${RULES.ultra.watchlists} watches, each change by email`,
-    `- Analytics: every view, ${MAX_YEARS} fiscal years`,
-    `- Keyed API: ${KEY_PER_DAY.toLocaleString("en-CA")} requests a day`,
+    `- Analytics: every view, ${ULTRA_YEARS} fiscal years`,
+    `- API: ${KEYS_MAX} keys of ${KEY_PER_DAY_ULTRA.toLocaleString("en-CA")} requests a day`,
   ].join("\n");
 
   it("refuses to be sent while Ultra cannot be bought: the page says so and offers no form, and a post sends nothing", async () => {

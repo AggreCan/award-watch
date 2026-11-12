@@ -48,7 +48,7 @@ import { type RecordsWait, missingTable } from "./records_deliveries";
 import { randomHex } from "./secrets";
 import { readEvents } from "./watch_events";
 import { groupsFor } from "./watch_mail";
-import { followAliases, listWatches } from "./watches";
+import { coveredWatches, followAliases, listWatches } from "./watches";
 
 // Accounts the run reads, and messages it sends, in one run; the next hour
 // (or the next data date of the week) goes on with the rest.
@@ -306,8 +306,10 @@ export async function runWeekly(
         o.plans.set(a.user_id, plan);
       }
       const lang: Lang = a.lang === "fr" ? "fr" : "en";
-      // The account's watches, on the ids the nightly's merges left, each read over the whole week.
-      const watches = (await followAliases(env, a.user_id, await listWatches(env, a.user_id))).watches;
+      // The account's watches, on the ids the nightly's merges left, each read over the whole week; past the
+      // plan's figure (after a move to a smaller plan), the first ones by creation date only.
+      const listed = (await followAliases(env, a.user_id, await listWatches(env, a.user_id))).watches;
+      const watches = await coveredWatches(env, a.user_id, listed, plan);
       let groups: WatchGroup[] = [];
       let total = 0;
       if (watches.length) {

@@ -23,6 +23,7 @@ import { REQUEST_LIMITS } from "../pages/docs";
 import { type KeyRow, listKeys } from "./api_keys";
 import { type DayCount, type DayTotal, USAGE_KEEP_DAYS, type UsageRead, dailyUsage, dayPlus, nowOf, utcDay } from "./api_usage";
 import { accountPage } from "./pages";
+import { ultraOnSale } from "./payments";
 import type { Account } from "./session";
 
 // The least top of the chart's axis: a key making a few requests a day (or
@@ -152,7 +153,10 @@ const FORMS: [ChartForm, string, "apiusage.form_bars" | "apiusage.form_lines"][]
   ["bars", "/account/api", "apiusage.form_bars"], ["lines", "/account/api?chart=lines", "apiusage.form_lines"],
 ];
 
-export type UsageView = { quota: KeyQuota; keys: KeyRow[]; usage: UsageRead | null; today: string; form?: ChartForm };
+// ultraDay: a key's day on Ultra, for a reader on a plan with a smaller one
+// while Ultra is on sale (payments.ts ultraOnSale); one plain line then says
+// it under the page. Absent or null otherwise, so the page is as before.
+export type UsageView = { quota: KeyQuota; keys: KeyRow[]; usage: UsageRead | null; today: string; form?: ChartForm; ultraDay?: number | null };
 
 export function usageView(lang: Lang, view: UsageView) {
   const { quota, keys, usage, today } = view;
@@ -269,6 +273,9 @@ export function usageView(lang: Lang, view: UsageView) {
         {unshown ? <p class="muted small">{tn(lang, "apiusage.unshown_one", "apiusage.unshown_many", unshown, { n: n(unshown) })}</p> : null}
       </Panel>
       <p class="muted small">{tj(lang, "apiusage.keys_page", { keys: keysLink })}</p>
+      {view.ultraDay ? (
+        <p class="muted small">{t(lang, "apiusage.ultra_note", { day: n(view.ultraDay) })} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></p>
+      ) : null}
     </>
   );
 }
@@ -282,5 +289,9 @@ export async function usagePage(c: Context<AppEnv>, who: Account): Promise<Respo
   const now = nowOf(c.env);
   const keys = await listKeys(c.env, who.userId);
   const usage = keys.length ? await dailyUsage(c.env, who.userId, now) : { rows: [], totals: [], keys: 0 };
-  return accountPage(c, t(lang, "apiusage.title"), usageView(lang, { quota, keys, usage, today: utcDay(now), form: chartForm(c.req.query("chart")) }));
+  // Ultra's figure, for a plan with a smaller one, only while Ultra can be bought.
+  const ultra = keyQuota("ultra");
+  const ultraDay = ultra && ultra.perDay > quota.perDay && (await ultraOnSale(c.env)) ? ultra.perDay : null;
+  return accountPage(c, t(lang, "apiusage.title"),
+    usageView(lang, { quota, keys, usage, today: utcDay(now), form: chartForm(c.req.query("chart")), ultraDay }));
 }

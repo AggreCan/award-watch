@@ -540,6 +540,15 @@ export async function listBriefings(env: Env, userId: string): Promise<Briefing[
 // The cap the saved searches and the briefings share: the plan's, at most SAVED_SEARCH_MAX.
 export const sharedCap = (plan: Plan): number => Math.min(savedSearchCap(plan), SAVED_SEARCH_MAX);
 
+// The count of the account's rows in table made before the row r (the alias
+// of a saved search or a briefing in the statement that uses it): by
+// creation, then by id, the order the shared cap counts them in. Past the
+// plan's figure (after a move to a smaller plan) only the first ones in that
+// order are sent (deliveries.ts, runBriefings). Through each table's index on
+// user_id, at most SAVED_SEARCH_MAX rows an account.
+export const madeBefore = (r: string, table: "saved_searches" | "briefings") =>
+  `(SELECT COUNT(*) FROM ${table} x WHERE x.user_id = ${r}.user_id AND (x.created_at < ${r}.created_at OR (x.created_at = ${r}.created_at AND x.id < ${r}.id)))`;
+
 // One insert, held to the shared cap inside the statement (both tables
 // counted), so two posts at once cannot pass it: delivery weekly on a plan
 // with delivery, off otherwise. "exists" when the same subject (and segment)
@@ -640,14 +649,18 @@ export const emptyBriefingReport = (): BriefingReport => ({ sent: 0, failed: 0, 
 // weekday on or before the data date, ?2 the cap): delivery weekly, an active
 // account that is not blocked, not covered since ?1, and no message refused
 // for it since then (it waits for next week, whose message covers both).
+// n_before counts the account's saved searches and briefings made before it
+// (madeBefore above): past the plan's figure, after a move to a smaller plan,
+// only the first ones by creation date are sent.
 export const BRIEFINGS_DUE_SQL =
-  "SELECT b.id, b.user_id, b.kind, b.subject, b.segment, b.label, b.lang, b.deliver, b.last_delivered_at, b.secret, u.email, u.plan, u.plan_until " +
+  "SELECT b.id, b.user_id, b.kind, b.subject, b.segment, b.label, b.lang, b.deliver, b.last_delivered_at, b.secret, u.email, u.plan, u.plan_until, " +
+  `${madeBefore("b", "saved_searches")} + ${madeBefore("b", "briefings")} AS n_before ` +
   "FROM briefings b JOIN users u ON u.id = b.user_id WHERE b.deliver = 'weekly' AND u.status = 'active' " +
   "AND (b.last_delivered_at IS NULL OR substr(b.last_delivered_at, 1, 10) < ?1) " +
   "AND NOT EXISTS (SELECT 1 FROM briefing_deliveries d WHERE d.briefing_id = b.id AND d.status = 'failed' AND d.sent_at >= ?1) " +
   "AND NOT EXISTS (SELECT 1 FROM account_blocks x WHERE x.user_id = b.user_id) ORDER BY b.created_at, b.id LIMIT ?2";
 
-type DueRow = BriefingRow & { user_id: string; secret: string | null; email: string; plan: string; plan_until: string | null };
+type DueRow = BriefingRow & { user_id: string; secret: string | null; email: string; plan: string; plan_until: string | null; n_before: number };
 
 // The briefing taken for the week by this run: one statement that holds only
 // while no run has covered it since the week's weekday.
@@ -714,7 +727,7 @@ export async function runBriefings(
         plan = (await planFor(env, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now)).plan;
         o.plans.set(row.user_id, plan);
       }
-      if (!allowed({ plan }, "delivery")) {
+      if (!allowed({ plan }, "delivery") || (row.n_before ?? 0) >= sharedCap(plan)) {
         report.skipped++;
         continue;
       }

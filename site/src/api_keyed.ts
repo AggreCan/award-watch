@@ -37,7 +37,7 @@ import { countRequest, nowOf, secondsToNextDay, utcDay } from "./account/api_usa
 import { allowed } from "./account/entitlements";
 import { accountsEnabled } from "./account/switch";
 import { withoutContacts } from "./api";
-import { KEY_PER_DAY, KEY_PER_MINUTE, LIST_PAGES_MAX, OPEN_Q_MAX, PAGE_ROWS, RECORD_PAGES_MAX } from "./api_keyed_spec";
+import { KEY_PER_DAY, KEY_PER_MINUTE, LIST_PAGES_MAX, OPEN_Q_MAX, PAGE_ROWS, RECORD_PAGES_MAX, keyQuota } from "./api_keyed_spec";
 import { clockOf, closingPassed } from "./closing";
 import { MONEY_SOURCES, PROVINCES, SEGMENT_CODES, type MoneySource } from "./constants";
 import {
@@ -86,10 +86,12 @@ const meter: MiddlewareHandler<AppEnv> = async (c, next) => {
     return c.json({ error: `This key has made ${KEY_PER_MINUTE} requests in the last minute. Wait a minute and try again.` }, 429);
   }
   const now = nowOf(c.env);
-  const n = await countRequest(c.env, holder.keyId, utcDay(now));
+  // The day's cap is the holder's plan's: requireApiKey let only a plan with the API through.
+  const perDay = keyQuota(holder.plan)?.perDay ?? KEY_PER_DAY;
+  const n = await countRequest(c.env, holder.keyId, utcDay(now), perDay);
   if (n === "spent") {
     c.header("Retry-After", String(secondsToNextDay(now)));
-    return c.json({ error: `This key has made its ${KEY_PER_DAY} requests for the day. The count starts again at 00:00 UTC.` }, 429);
+    return c.json({ error: `This key has made its ${perDay} requests for the day. The count starts again at 00:00 UTC.` }, 429);
   }
   counted.set(c.req.raw, n);
   await next();
@@ -396,12 +398,14 @@ keyedApi.get("/me", (c) => {
   const holder = apiKeyOf(c)!;
   const n = counted.get(c.req.raw) ?? null;
   const prefix = KEY_RE.exec(presentedKey(c.req.raw.headers) ?? "")?.[1];
+  // The holder's plan's figures, the ones the count above was held to.
+  const perDay = keyQuota(holder.plan)?.perDay ?? KEY_PER_DAY;
   return c.json({
     key: prefix ? `aw_${prefix}` : null,
     plan: holder.plan,
     plan_until: holder.planUntil,
     // The day's count, this request included; null when it could not be written.
-    usage: { day: utcDay(nowOf(c.env)), requests: n, remaining: n === null ? null : Math.max(0, KEY_PER_DAY - n) },
-    limits: { per_minute: KEY_PER_MINUTE, per_day: KEY_PER_DAY },
+    usage: { day: utcDay(nowOf(c.env)), requests: n, remaining: n === null ? null : Math.max(0, perDay - n) },
+    limits: { per_minute: KEY_PER_MINUTE, per_day: perDay },
   });
 });

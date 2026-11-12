@@ -4,13 +4,18 @@
 // rules in docs/analytics.md "Events"), read per subject and per day.
 //
 // Every statement is a constant here with ?N placeholders: DAY_SLOTS days
-// (unused ones bound to "", which no day is) and TARGET_SLOTS subjects of one
+// (unused ones bound to "", which no day is) and TARGET_CHUNK subjects of one
 // kind (unused ones bound to -1 or "", which no subject is), so a statement
 // seeks each subject and day pair through the kind's index (rec_events_org,
 // _buyer, _ref: the subject first) and reads nothing else; a buyer watch
 // narrowed to a segment reads its own pair of statements, its buyer and
-// segment bound. Each ends in a LIMIT. An account reads one batch: the state
-// row and two statements per kind of watch it holds and per narrowed watch.
+// segment bound. Each ends in a LIMIT. D1 takes at most 100 bound values a
+// statement (D1_BINDS_MAX), so a statement holds TARGET_CHUNK subjects: an
+// account with more of one kind (Ultra follows up to WATCH_MAX) sends one pair
+// of statements per group of TARGET_CHUNK. A subject is in one group only, so
+// its rows and counts come from one pair and are filed under it as before. An
+// account reads one batch: the state row and two statements per group of
+// each kind of watch it holds and per narrowed watch.
 // The rows statement joins each standing offer or supply arrangement row
 // (ref 'sosa:<agreement>') to its rec_instruments row through
 // rec_instruments_agr, for the holders it counts now: one seek per row read,
@@ -62,10 +67,23 @@ export const INDEX_OF: Readonly<Record<WatchKind, string>> = {
 
 // The watches page reads 30 data dates; a message 7 at most (deliveries.ts SPAN_DAYS_MAX).
 export const DAY_SLOTS = 30;
-// One account's watches of one kind: the plans' ceiling (entitlements.ts
-// WATCH_MAX) and the claimed organization's watch, which is outside the cap
-// (watches.ts), so a Pro account's 25 organizations and its own are all read.
+// One account's watches of one kind that a read covers: the plans' ceiling
+// (entitlements.ts WATCH_MAX) and the claimed organization's watch, which is
+// outside the cap (watches.ts), so an Ultra account's 100 organizations and its
+// own are all read.
 export const TARGET_SLOTS = WATCH_MAX + 1;
+// The most values D1 binds to one statement.
+export const D1_BINDS_MAX = 100;
+// The subjects one statement takes: DAY_SLOTS + TARGET_CHUNK = 55 bound values
+// here, and feeds.ts builds its watch statements on the same groups.
+export const TARGET_CHUNK = 25;
+// A list cut into groups of `size` (TARGET_CHUNK unless given), in order,
+// each item in one group.
+export function chunked<T>(items: readonly T[], size = TARGET_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
 // The newest rows a watch lists of each kind; the rest are a count.
 export const ROWS_PER_KIND = 10;
 // A buyer watch not narrowed to a segment reports an amendment only when the
@@ -75,7 +93,7 @@ export const EVENT_NOTABLE_CENTS = 10_000_000;
 export const EVENT_NOTABLE_SHARE = 0.5;
 
 const DAYS = Array.from({ length: DAY_SLOTS }, (_, i) => `?${i + 1}`).join(", ");
-const TARGETS = Array.from({ length: TARGET_SLOTS }, (_, i) => `?${DAY_SLOTS + i + 1}`).join(", ");
+const TARGETS = Array.from({ length: TARGET_CHUNK }, (_, i) => `?${DAY_SLOTS + i + 1}`).join(", ");
 const NOTABLE =
   ` AND (kind <> 'amended' OR cents IS NULL OR ocents IS NULL OR abs(cents - ocents) >= ${EVENT_NOTABLE_CENTS} ` +
   `OR abs(cents - ocents) >= ${EVENT_NOTABLE_SHARE} * abs(ocents))`;
@@ -99,17 +117,26 @@ const countsSql = (col: string, where: string, slots: number) =>
   `SELECT ${col} AS t, kind, day, SUM(COALESCE(more, 1)) AS n FROM rec_events WHERE ${where} ` +
   `GROUP BY ${col}, kind, day ORDER BY t, kind, day LIMIT ${slots * EVENT_KINDS.length * DAY_SLOTS}`;
 
-const whereOf = (kind: WatchKind) => `${COLUMN[kind]} IN (${TARGETS}) AND day IN (${DAYS})${kind === "buyer" ? NOTABLE : ""}`;
+const whereOf = (kind: WatchKind, targets = TARGETS) => `${COLUMN[kind]} IN (${targets}) AND day IN (${DAYS})${kind === "buyer" ? NOTABLE : ""}`;
+
+// The rows and counts statements of one kind over n subjects at once. The
+// site sends them over TARGET_CHUNK (EVENT_ROWS_SQL, EVENT_COUNTS_SQL); the
+// tests build them over every subject an account can hold, as the one
+// statement the groups must answer the same as.
+export function eventStatementsOver(kind: WatchKind, n: number): { rows: string; counts: string } {
+  const targets = Array.from({ length: n }, (_, i) => `?${DAY_SLOTS + i + 1}`).join(", ");
+  return { rows: rowsSql(COLUMN[kind], whereOf(kind, targets), n), counts: countsSql(COLUMN[kind], whereOf(kind, targets), n) };
+}
 // A buyer narrowed to one segment: ?31 the buyer, ?32 the segment.
 const NARROW = `buyer = ?${DAY_SLOTS + 1} AND sid = ?${DAY_SLOTS + 2} AND day IN (${DAYS})`;
 
 export const EVENT_ROWS_SQL: Readonly<Record<WatchKind, string>> = {
-  organization: rowsSql("oid", whereOf("organization"), TARGET_SLOTS), buyer: rowsSql("buyer", whereOf("buyer"), TARGET_SLOTS),
-  contract: rowsSql("ref", whereOf("contract"), TARGET_SLOTS), tender: rowsSql("ref", whereOf("tender"), TARGET_SLOTS),
+  organization: rowsSql("oid", whereOf("organization"), TARGET_CHUNK), buyer: rowsSql("buyer", whereOf("buyer"), TARGET_CHUNK),
+  contract: rowsSql("ref", whereOf("contract"), TARGET_CHUNK), tender: rowsSql("ref", whereOf("tender"), TARGET_CHUNK),
 };
 export const EVENT_COUNTS_SQL: Readonly<Record<WatchKind, string>> = {
-  organization: countsSql("oid", whereOf("organization"), TARGET_SLOTS), buyer: countsSql("buyer", whereOf("buyer"), TARGET_SLOTS),
-  contract: countsSql("ref", whereOf("contract"), TARGET_SLOTS), tender: countsSql("ref", whereOf("tender"), TARGET_SLOTS),
+  organization: countsSql("oid", whereOf("organization"), TARGET_CHUNK), buyer: countsSql("buyer", whereOf("buyer"), TARGET_CHUNK),
+  contract: countsSql("ref", whereOf("contract"), TARGET_CHUNK), tender: countsSql("ref", whereOf("tender"), TARGET_CHUNK),
 };
 export const NARROW_ROWS_SQL = rowsSql("buyer", NARROW, 1);
 export const NARROW_COUNTS_SQL = countsSql("buyer", NARROW, 1);
@@ -218,6 +245,8 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // The events of up to TARGET_SLOTS watches of each kind on up to DAY_SLOTS
 // days, in one batch with the state row; asOf is the database's data date.
+// The subjects of a kind go TARGET_CHUNK to a pair of statements, each
+// subject in one pair only, so its rows and counts are filed under it whole.
 // Nothing here throws.
 export async function readEvents(env: Env, watches: readonly Subject[], days: readonly string[]): Promise<EventsRead> {
   const db = env.RECORDS;
@@ -228,15 +257,18 @@ export async function readEvents(env: Env, watches: readonly Subject[], days: re
   for (const kind of WATCH_KINDS) {
     const own = watches.filter((w) => w.kind === kind && !w.segment).slice(0, TARGET_SLOTS);
     if (!own.length) continue;
-    const bound = own.map((w) => (kind === "organization" ? orgNumber(w.target) : w.target)).filter((v) => v !== null) as (number | string)[];
-    plans.push({
-      rows: EVENT_ROWS_SQL[kind], counts: EVENT_COUNTS_SQL[kind],
-      binds: [...dayBinds, ...Array.from({ length: TARGET_SLOTS }, (_, i) => bound[i] ?? blank(kind))],
-      slot: (t) => {
-        const target = kind === "organization" ? (num(t) === null ? null : orgIdOf(num(t)!)) : str(t);
-        return target ? { kind, target } : null;
-      },
-    });
+    // Each subject once: two of its watches would otherwise file its rows twice.
+    const bound = [...new Set(own.map((w) => (kind === "organization" ? orgNumber(w.target) : w.target)).filter((v) => v !== null) as (number | string)[])];
+    for (const group of chunked(bound)) {
+      plans.push({
+        rows: EVENT_ROWS_SQL[kind], counts: EVENT_COUNTS_SQL[kind],
+        binds: [...dayBinds, ...Array.from({ length: TARGET_CHUNK }, (_, i) => group[i] ?? blank(kind))],
+        slot: (t) => {
+          const target = kind === "organization" ? (num(t) === null ? null : orgIdOf(num(t)!)) : str(t);
+          return target ? { kind, target } : null;
+        },
+      });
+    }
   }
   for (const w of watches.filter((x) => x.kind === "buyer" && x.segment).slice(0, TARGET_SLOTS)) {
     plans.push({ rows: NARROW_ROWS_SQL, counts: NARROW_COUNTS_SQL, binds: [...dayBinds, w.target, Number(w.segment)], slot: () => w });

@@ -19,12 +19,12 @@ import { app } from "../src/index";
 import { bucketFor } from "../src/limits";
 import { allowsAnalytics } from "../src/plan";
 import {
-  ALL_SQL, BUYER_DUE_SQL, BUYER_QUARTERS_SQL, EARLIEST_FY, MAX_RIVALS, ORG_YEARS_SQL, SEGMENT_YEARS_SQL, STATE_SQL, choosePeriod, fiscalLabel,
-  fiscalYearOf, orgIdOf, orgNumber, quarterEnd,
+  ALL_SQL, BUYER_DUE_SQL, BUYER_QUARTERS_SQL, EARLIEST_FY, FREE_YEARS, MAX_RIVALS, MAX_YEARS, ORG_YEARS_SQL, SEGMENT_YEARS_SQL, STATE_SQL, ULTRA_YEARS,
+  choosePeriod, fiscalLabel, fiscalYearOf, orgIdOf, orgNumber, planYears, quarterEnd,
 } from "../src/records_db";
 import { csvCell } from "../src/pages/analytics";
 import { routeTemplate } from "../src/views";
-import { get, grantPro, newEmail, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
+import { get, grantPro, grantUltra, newEmail, onEnv, signIn, ultraEnv, useAccountsDb, withoutTiers } from "./accounts-helpers";
 import { testEnv } from "./assets";
 import { applySql } from "./setup";
 import { misfits, tablesIn } from "./table-fit";
@@ -838,6 +838,101 @@ describe("the CSV files", () => {
     expect(routeTemplate("GET", VIEWS[0])).toEqual({ route: "/buyers/:id/analytics", kind: "page" });
     expect(routeTemplate("GET", VIEWS[2])).toEqual({ route: "/segments/:nn/analytics", kind: "page" });
     expect(routeTemplate("GET", CSVS[1])).toEqual({ route: "/organizations/:id/analytics/:table.csv", kind: "download" });
+  });
+});
+
+// -- Ultra's twenty fiscal years (records_db.ts planYears) ---------------------------------------
+
+describe("the period by plan", () => {
+  let ultraCookie = "";
+  async function ultra(): Promise<string> {
+    if (ultraCookie) return ultraCookie;
+    const email = newEmail("ultra-analytics");
+    ultraCookie = await signIn(email);
+    await grantUltra(email);
+    return ultraCookie;
+  }
+  const ULTRA_LINE = "Periods of up to 20 fiscal years are part of Ultra.";
+  const sale = () => ultraEnv();
+  const tabs = (html: string) => /<nav class="tabs tabs-small toolbar-row" aria-label="Period">[\s\S]*?<\/nav>/.exec(html)?.[0] ?? "";
+
+  it("are 3, 10 and 20 fiscal years, every statement's LIMIT held to the longest and its years to the period", () => {
+    expect([planYears("free"), planYears("pro"), planYears("ultra")]).toEqual([FREE_YEARS, MAX_YEARS, ULTRA_YEARS]);
+    expect([FREE_YEARS, MAX_YEARS, ULTRA_YEARS]).toEqual([3, 10, 20]);
+    expect(choosePeriod(EARLIEST_FY.toString(), "2026", 2026, ULTRA_YEARS)).toEqual({ first: 2007, last: 2026, capped: true });
+    expect(choosePeriod("2010", "2026", 2026, ULTRA_YEARS)).toEqual({ first: 2010, last: 2026, capped: false });
+    expect(choosePeriod("2010", "2026", 2026, MAX_YEARS)).toEqual({ first: 2017, last: 2026, capped: true });
+    // A first year it cannot use reads as the default period (ten) on every plan.
+    expect(choosePeriod("1999", "2026", 2026, ULTRA_YEARS)).toEqual({ first: 2017, last: 2026, capped: false });
+    for (const sql of ALL_SQL) {
+      const limit = Number(/LIMIT (\d+)$/.exec(sql)?.[1]);
+      if (/ORDER BY fy LIMIT/.test(sql)) expect(limit, sql).toBe(ULTRA_YEARS);
+    }
+    expect(BUYER_QUARTERS_SQL).toMatch(new RegExp(`LIMIT ${4 * ULTRA_YEARS}$`));
+  });
+
+  it("give an Ultra reader twenty fiscal years, read and charted, its tab unmarked, on sale or not", async () => {
+    const cookie = await ultra();
+    for (const env of [onEnv(), sale()]) {
+      const { html } = await page(`${VIEWS[0]}?source=history&years=20`, { cookie, env });
+      expect(html).toContain("federal fiscal years 2007-08 to 2026-27.");
+      expect(tabs(html)).toContain('aria-current="page">20 fiscal years</a>');
+      expect(html).not.toContain("ultra-tag");
+      expect(html).not.toContain(ULTRA_LINE);
+      // Every year of the twenty in the quarters' table, the years before the records' first with nothing in them.
+      for (const fy of ["2007-08", "2013-14", "2014-15", "2026-27"]) expect(html, fy).toContain(`>${fy}`);
+      expect(misfits(html)).toEqual([]);
+    }
+    // A longer span keeps its latest twenty, and says so; the file reads the same twenty.
+    const { html } = await page(`${VIEWS[1]}?source=history&from=${EARLIEST_FY}&to=2026`, { cookie });
+    expect(html).toContain("federal fiscal years 2007-08 to 2026-27.");
+    expect(html).toContain("At most 20 fiscal years are shown at once, so this view shows the latest 20 of the period chosen.");
+    const csv = await get(`${CSVS[0]}?source=history&years=20`, { cookie });
+    expect(csv.headers.get("content-disposition")).toContain("-quarters-history-2007-2026.csv");
+    // The records' first fiscal year, 2014-15, is in it; a Pro reader's file of the same address reads its ten.
+    expect(await csv.text()).toMatch(/^2014,2014-15,1,/m);
+    await sessions();
+    const pro = await get(`${CSVS[0]}?source=history&years=20`, { cookie: proCookie });
+    expect(pro.headers.get("content-disposition")).toContain("-quarters-history-2017-2026.csv");
+  });
+
+  it("hold a Pro reader to ten, with Ultra's period offered and the line saying so only while Ultra is on sale", async () => {
+    await sessions();
+    const { html } = await page(`${VIEWS[0]}?source=history&years=20`, { cookie: proCookie, env: sale() });
+    expect(html).toContain("federal fiscal years 2017-18 to 2026-27.");
+    expect(html).toContain(`<p class="page-note">${ULTRA_LINE}</p>`);
+    expect(tabs(html)).toContain('aria-current="page">10 fiscal years</a>');
+    // The tab carries the Ultra chip, the only one on the page.
+    expect(tabs(html)).toMatch(/>20 fiscal years<span class="ultra-tag"><svg/);
+    expect(html.match(/class="ultra-tag"/g)).toHaveLength(1);
+    const custom = (await page(`${VIEWS[0]}?source=history&from=2005&to=2026`, { cookie: proCookie, env: sale() })).html;
+    expect(custom).toContain("At most 10 fiscal years are shown at once");
+    expect(custom).toContain(ULTRA_LINE);
+    // In French too.
+    const fr = decode((await page(`${VIEWS[0]}?source=history&years=20&lang=fr`, { cookie: proCookie, env: sale() })).html).replace(/’/g, "'");
+    expect(fr).toContain("Les périodes d'au plus 20 exercices font partie d'Ultra.");
+    // Off sale, and without the tier table: no twenty, no line, and the page what ?years=10 gives, byte for byte.
+    const ten = await (await get(`${VIEWS[0]}?source=history&years=10`, { cookie: proCookie, env: onEnv() })).text();
+    expect(await (await get(`${VIEWS[0]}?source=history&years=20`, { cookie: proCookie, env: onEnv() })).text()).toBe(ten);
+    expect(ten).not.toContain("20 fiscal years");
+    expect(ten).not.toContain("Ultra");
+    await withoutTiers(async () => {
+      expect(await (await get(`${VIEWS[0]}?source=history&years=10`, { cookie: proCookie, env: sale() })).text()).toBe(ten);
+    });
+  });
+
+  it("offer a free reader the twenty with the Ultra chip while on sale, and show it its own three years", async () => {
+    await sessions();
+    for (const cookie of [undefined, freeCookie]) {
+      const { html } = await page(`${VIEWS[2]}?source=awards&years=20`, { cookie, env: sale() });
+      expect(html).toContain(`federal fiscal years ${LAST - 2}-${String(LAST - 1).slice(2)} to 2026-27.`);
+      expect(html).toContain(ULTRA_LINE);
+      expect(tabs(html)).toMatch(/>10 fiscal years<span class="pro-tag">/);
+      expect(tabs(html)).toMatch(/>20 fiscal years<span class="ultra-tag">/);
+      const plain = await (await get(`${VIEWS[2]}?source=awards&years=20`, { cookie, env: onEnv() })).text();
+      expect(plain).not.toContain("20 fiscal years");
+      expect(plain).not.toContain(ULTRA_LINE);
+    }
   });
 });
 

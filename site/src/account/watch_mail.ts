@@ -6,7 +6,8 @@
 // (planFor, so a lapsed or revoked plan stops at once), that is not blocked,
 // and not covered for today's data date yet: its watches, moved to the
 // surviving id of any organization or buyer the nightly merged
-// (followAliases); the ones due (daily: not covered for this data date;
+// (followAliases), and past the plan's figure only the first ones by creation
+// date (watches.ts coveredWatches); the ones due (daily: not covered for this data date;
 // weekly: never, or seven or more days ago), each with its own days (since
 // the data date it was last covered, at most SPAN_DAYS_MAX back). One message
 // lists their events, grouped by watch in the order single records,
@@ -43,7 +44,7 @@ import { allowed, planFor, type Plan } from "./entitlements";
 import { type RecordsWait, missingTable } from "./records_deliveries";
 import { randomHex } from "./secrets";
 import { DAY_SLOTS, type EventRow, TARGET_SLOTS, closedOn, eventIdentity, foundKey, listed, readEvents, watchPath } from "./watch_events";
-import { WATCH_DELIVERY_DAYS, type Watch, followAliases, listWatches } from "./watches";
+import { WATCH_DELIVERY_DAYS, type Watch, coveredWatches, followAliases, listWatches } from "./watches";
 
 // Accounts read in one run; the next hour reads the rest (each one covered
 // for the data date leaves the list).
@@ -240,7 +241,8 @@ export async function runWatchMail(
         continue;
       }
       const all = (await followAliases(env, a.user_id, await listWatches(env, a.user_id))).watches;
-      const due = all.filter((w) => isDue(w.cadence, w.last_sent_day, dataDate));
+      // Past the plan's figure (after a move to a smaller plan), the first ones by creation date only.
+      const due = (await coveredWatches(env, a.user_id, all, plan)).filter((w) => isDue(w.cadence, w.last_sent_day, dataDate));
       if (!due.length) continue;
       const spans = new Map(due.map((w) => [w.id, new Set(watchDays(w, dataDate))]));
       const days = [...new Set(due.flatMap((w) => [...spans.get(w.id)!]))].sort().reverse().slice(0, DAY_SLOTS);

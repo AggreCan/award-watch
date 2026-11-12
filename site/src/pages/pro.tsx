@@ -35,7 +35,7 @@ import {
   ultraCheckoutPrice,
 } from "../pro";
 import { CONTACT_EMAIL } from "./docs";
-import { MAX_YEARS } from "../records_db";
+import { MAX_YEARS, planYears } from "../records_db";
 import { type Faq, pageSeo, proJsonLd } from "../seo";
 
 export const PRO_PATH = "/pro";
@@ -75,7 +75,7 @@ const UltraSection: FC<{ lang: Lang; ultra: ProPrice }> = ({ lang, ultra }) => (
     <h2 id="ultra">{t(lang, "propage.ultra_title")}</h2>
     <p>
       {t(lang, "propage.ultra_text", {
-        searches: fmtInt(RULES.ultra.saved_searches, lang), watches: fmtInt(RULES.ultra.watchlists, lang), years: fmtInt(MAX_YEARS, lang),
+        searches: fmtInt(RULES.ultra.saved_searches, lang), watches: fmtInt(RULES.ultra.watchlists, lang), years: fmtInt(planYears("ultra"), lang),
         day: fmtInt(keyQuota("ultra")?.perDay ?? 0, lang),
       })}
     </p>

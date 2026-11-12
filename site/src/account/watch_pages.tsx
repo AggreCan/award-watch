@@ -237,6 +237,11 @@ export function watchesView(
     moved?: number; merged?: number; calendar?: WatchCalendar | null;
     // The claimed organization's id after the merges (org_claim.ts followClaimedId); its watch is outside the cap.
     claimed?: string | null;
+    // The watches whose events the plan covers (watches.ts withinCap): all of them unless the account holds
+    // more than its plan's figure, after a move to a smaller plan. The others are listed without events.
+    covered?: readonly Watch[];
+    // Ultra's figure, for a paid account on a smaller one while Ultra is on sale; null or absent otherwise.
+    ultra?: number | null;
   },
 ) {
   const { watches } = state;
@@ -245,8 +250,12 @@ export function watchesView(
   const days = new Set(state.days);
   const own = ownWatch(watches, state.claimed ?? null);
   const counted = countedWatches(watches, state.claimed ?? null);
+  const covered = new Set(state.covered ?? watches);
   const capLine = canMail
-    ? <p>{t(lang, "watches.cap_pro", { cap: fmtInt(cap, lang) })}</p>
+    ? (state.ultra
+      ? <p>{t(lang, "watches.cap_note_pro", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang), ultra: fmtInt(state.ultra, lang) })}{" "}
+        <a href="/account/billing">{t(lang, "billing.link_plans")}</a></p>
+      : <p>{t(lang, "watches.cap_pro", { cap: fmtInt(cap, lang) })}</p>)
     : (
       <ProNote lang={lang}>
         {t(lang, "watches.cap_free", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang), max: fmtInt(RULES.pro.watchlists, lang) })}{" "}
@@ -280,6 +289,9 @@ export function watchesView(
       </Panel>
       <Panel title={t(lang, "watches.panel")} count={t(lang, own ? "watches.n_own" : "watches.n", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang) })}
         foot={capLine}>
+        {/* Past the plan's figure (after a move to a smaller plan): nothing deleted, and the line says which are covered.
+            A Free account is sent nothing, so its foot's own line ("n of cap") says it instead. */}
+        {counted > cap && canMail ? <p>{t(lang, "watches.over_cap", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang) })}</p> : null}
         {watches.length ? (
           <div class="table-wrap">
             {/* Sorted in the page by what is followed; the other cells are lists and forms. */}
@@ -301,7 +313,7 @@ export function watchesView(
                         {w === own ? <><br /><span class="muted small">{t(lang, "watches.own_note")}</span></> : null}
                         {last ? <><br /><span class="muted small mono">{t(lang, "watches.last_event", { date: last })}</span></> : null}
                       </td>
-                      <td data-label={t(lang, "watches.col_events")}><Events lang={lang} w={w} read={state.read} days={days} /></td>
+                      <td data-label={t(lang, "watches.col_events")}>{covered.has(w) ? <Events lang={lang} w={w} read={state.read} days={days} /> : null}</td>
                       <td data-label={t(lang, "watches.col_settings")}>
                         <form method="post" action={`/account/watches/${w.id}`} class="watch-settings">
                           <Csrf account={account} />

@@ -134,7 +134,9 @@ import {
 import { type WatchCalendar, watchStopView, watchStoppedView, watchesView } from "./watch_pages";
 import {
   addWatch, countedWatches, deleteWatch, deleteWatchesOf, followAliases, isCadence, listWatches, mailOf, setMail, setWatch, watchCount,
+  withinCap,
 } from "./watches";
+import { ultraOnSale } from "./payments";
 import { deleteWeeklyOf, turnWeeklyOff, turnWeeklyOn, weeklyReady, weeklyState, weeklyStopRow } from "./weekly";
 
 export const account = new Hono<AppEnv>();
@@ -519,9 +521,12 @@ async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: 
     ? t(lang, who.plan === "free" ? "account.cap_free" : "account.cap_pro", { cap })
     : SEARCH_NOTICE[m] ? t(lang, SEARCH_NOTICE[m]) : null;
   // No feeds table on the database yet: the page leaves the feeds out.
-  const calendar = feeds === null ? null : await calendarView(c, lang, who.userId, searches, feeds);
+  const calendar = feeds === null ? null : await calendarView(c, lang, who, searches, feeds);
+  // Ultra's figure beside a Pro account's, only while Ultra can be bought (payments.ts ultraOnSale).
+  const ultra = RULES.ultra.saved_searches > cap && allowed(who, "delivery") && (await ultraOnSale(c.env)) ? RULES.ultra.saved_searches : null;
   return accountPage(c, t(lang, "account.searches_title"),
-    searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar, briefings: briefed }), extra.status ?? 200);
+    searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar, briefings: briefed, ultra }),
+    extra.status ?? 200);
 }
 
 // What a page counts a feed's events with, as the feed reads them: the
@@ -535,7 +540,9 @@ async function eventContext(c: Context<AppEnv>, lang: Lang): Promise<{ lang: Lan
 // "all" feed (feeds.ts), each with how many events it holds now (null when
 // what it reads cannot be read): a search's counted from the open notices,
 // the "all" feed's as the feed reads it, with the account's watches.
-async function calendarView(c: Context<AppEnv>, lang: Lang, userId: string, searches: SavedSearch[], feeds: FeedRow[]): Promise<CalendarView> {
+async function calendarView(
+  c: Context<AppEnv>, lang: Lang, who: Pick<Account, "userId" | "plan">, searches: SavedSearch[], feeds: FeedRow[],
+): Promise<CalendarView> {
   const tenders = searches.filter((s) => s.kind === FEED_SEARCH_KIND);
   const open = tenders.length ? await loadOpenList(c.env).catch(() => null) : null;
   const clock = clockOf(c.env);
@@ -552,7 +559,7 @@ async function calendarView(c: Context<AppEnv>, lang: Lang, userId: string, sear
   }));
   const allFeed = feeds.find((f) => f.kind === "all");
   if (tenders.length || allFeed) {
-    const watches = allFeed ? await feedWatches(c.env, userId).catch(() => null) : null;
+    const watches = allFeed ? await feedWatches(c.env, who.userId, who.plan).catch(() => null) : null;
     const n = watches ? await feedSize(c.env, {
       kind: "all", searches: tenders.map(({ id, params, label, lang: l }) => ({ id, params, label, lang: l })), watches,
     }, await eventContext(c, lang)) : null;
@@ -1006,9 +1013,11 @@ async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, stat
   const { watches, moved, merged, claimed } = aligned;
   const dataDate = stats?.data_as_of?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
   const days = Array.from({ length: DAY_SLOTS }, (_, i) => addDays(dataDate, -i));
-  const read = watches.length ? await readEvents(c.env, watches, days) : null;
-  const m = said ?? c.req.query("m") ?? "";
   const cap = watchCap(who.plan);
+  // Past the plan's figure (after a move to a smaller plan), events for the first ones by creation date only.
+  const covered = withinCap(watches, cap, claimed);
+  const read = covered.length ? await readEvents(c.env, covered, days) : null;
+  const m = said ?? c.req.query("m") ?? "";
   const notice = m === "cap"
     ? allowed(who, "watch_mail") ? t(lang, "watches.control_cap_pro", { cap: fmtInt(cap, lang) })
       : t(lang, "watches.cap_free", { n: fmtInt(countedWatches(watches, claimed), lang), cap: fmtInt(cap, lang), max: fmtInt(RULES.pro.watchlists, lang) })
@@ -1019,12 +1028,14 @@ async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, stat
   const calendar: WatchCalendar | null = feeds === null ? null : {
     feed: row ? {
       id: row.id, address: feedAddress(siteBase(c), row, lang), lastRead: row.last_read_day,
-      events: allowed(who, "delivery") ? await feedSize(c.env, { kind: "watchlist", searches: [], watches }, await eventContext(c, lang)) : null,
+      events: allowed(who, "delivery") ? await feedSize(c.env, { kind: "watchlist", searches: [], watches: covered }, await eventContext(c, lang)) : null,
     } : null,
     full: feeds.length >= FEEDS_MAX,
   };
+  // Ultra's figure beside a Pro account's, only while Ultra can be bought (payments.ts ultraOnSale).
+  const ultra = RULES.ultra.watchlists > cap && allowed(who, "watch_mail") && (await ultraOnSale(c.env)) ? RULES.ultra.watchlists : null;
   return accountPage(c, t(lang, "watches.title"),
-    watchesView(lang, who, { watches, read, days, mail, notice, moved, merged, calendar, claimed }), status);
+    watchesView(lang, who, { watches, read, days, mail, notice, moved, merged, calendar, claimed, covered, ultra }), status);
 }
 
 account.get("/watches", async (c) => {

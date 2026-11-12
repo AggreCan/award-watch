@@ -10,14 +10,17 @@
 // list, fiscal years from the data date. There is no text to search and no
 // column or order chosen by the request.
 //
-// Every statement is bounded: at most MAX_YEARS fiscal years of one buyer,
+// Every statement is bounded: at most ULTRA_YEARS fiscal years of one buyer,
 // one organization or one segment (DUE_YEARS for the contracts ending),
 // through the index on that column (records_buyer, records_org,
 // records_segment, or the summary tables' own), and every list ends in a
-// LIMIT. A view sends one batch: the state row and
+// LIMIT. The period a view reads is the reader's plan's (planYears): the
+// statements' LIMITs are held to the longest, Ultra's, and each still filters
+// fy BETWEEN the period's first and last year. A view sends one batch: the state row and
 // its charts' statements, so a page is one round trip and a free view reads
 // one statement beside the state.
 
+import type { Plan } from "./account/entitlements";
 import { SEGMENT_CODES, type MoneySource } from "./constants";
 import type { Env } from "./env";
 import { ORG_ID_RE } from "./data";
@@ -32,10 +35,15 @@ export const SEGMENT_SOURCES: readonly MoneySource[] = ["awards", "history"];
 // amendments (records.ocents and namd; records_db.AMENDED_SOURCES).
 export const AMENDED_SOURCES: readonly MoneySource[] = ["awards", "history"];
 
-// The periods a view offers, in fiscal years ending with the data date's.
-export const PERIODS = [3, 5, 10] as const;
+// The periods a view offers, in fiscal years ending with the data date's; the
+// last only to a reader whose plan reaches it, or while Ultra is on sale
+// (pages/analytics.tsx PeriodTabs).
+export const PERIODS = [3, 5, 10, 20] as const;
 export type Period = (typeof PERIODS)[number];
+// The fiscal years a view reads at once on Pro, and the default period on every plan.
 export const MAX_YEARS = 10;
+// The same on Ultra: the longest any statement reads, and the bound of their LIMITs.
+export const ULTRA_YEARS = 20;
 // The first fiscal year a chosen period may start in: the first year the
 // export gives a yearly file (export_static.FIRST_YEAR); an earlier date is
 // a typing error in the source.
@@ -47,6 +55,10 @@ export const DUE_QUARTERS = 8;
 export const DUE_YEARS = 3;
 // What a reader without the paid feature sees of the first chart.
 export const FREE_YEARS = 3;
+// The fiscal years a plan's reader sees of a view at once: FREE_YEARS of the
+// first chart, MAX_YEARS of every chart on Pro, ULTRA_YEARS on Ultra.
+export const PLAN_YEARS: Readonly<Record<Plan, number>> = { free: FREE_YEARS, pro: MAX_YEARS, ultra: ULTRA_YEARS };
+export const planYears = (plan: Plan): number => PLAN_YEARS[plan];
 // The top lists; the share chart's organizations (the profile's and up to
 // MAX_RIVALS chosen from the segment's RIVALS_N largest).
 export const TOP_N = 10;
@@ -85,18 +97,19 @@ export function quarterEnd(fy: number, fq: number): string {
 // null when the address names neither, so ?years= applies. The last year is
 // one from EARLIEST_FY to the data date's, anything else reading as the data
 // date's; the first is one up to it, anything else reading as the MAX_YEARS
-// ending with the last; a longer span keeps its latest MAX_YEARS and says so
-// (capped), so no statement reads more than MAX_YEARS fiscal years.
+// (the default period) ending with the last; a span longer than max (the
+// reader's plan's figure, planYears) keeps its latest max and says so
+// (capped), so no statement reads more than max fiscal years.
 export interface ChosenPeriod { first: number; last: number; capped: boolean }
 
-export function choosePeriod(from: string | null, to: string | null, current: number): ChosenPeriod | null {
+export function choosePeriod(from: string | null, to: string | null, current: number, max: number = MAX_YEARS): ChosenPeriod | null {
   if (from === null && to === null) return null;
   const year = (v: string | null) => (v !== null && /^\d{4}$/.test(v.trim()) ? Number(v.trim()) : null);
   const asked = year(to);
   const last = asked !== null && asked >= EARLIEST_FY && asked <= current ? asked : current;
   const first = year(from);
-  if (first === null || first < EARLIEST_FY || first > last) return { first: Math.max(EARLIEST_FY, last - MAX_YEARS + 1), last, capped: false };
-  if (last - first + 1 > MAX_YEARS) return { first: last - MAX_YEARS + 1, last, capped: true };
+  if (first === null || first < EARLIEST_FY || first > last) return { first: Math.max(EARLIEST_FY, last - Math.min(MAX_YEARS, max) + 1), last, capped: false };
+  if (last - first + 1 > max) return { first: last - max + 1, last, capped: true };
   return { first, last, capped: false };
 }
 
@@ -121,9 +134,9 @@ export const STATE_SQL = "SELECT key, value FROM rec_meta WHERE key IN ('state',
 const BUYER = "bid = (SELECT bid FROM rec_buyers WHERE id = ?1) AND src = ?2 AND fy BETWEEN ?3 AND ?4";
 
 // The buyer view's first chart and its free view: the summary table, at most
-// four quarters of ten years.
+// four quarters of ULTRA_YEARS years.
 export const BUYER_QUARTERS_SQL =
-  `SELECT fy, fq, n, cents, n_no_value FROM rec_buyer_quarters WHERE ${BUYER} ORDER BY fy, fq LIMIT 40`;
+  `SELECT fy, fq, n, cents, n_no_value FROM rec_buyer_quarters WHERE ${BUYER} ORDER BY fy, fq LIMIT ${4 * ULTRA_YEARS}`;
 
 // Value by segment: every row of the buyer's notices, so a notice in two
 // segments counts in each, as on the segment pages.
@@ -136,7 +149,7 @@ export const BUYER_SEGMENTS_SQL =
 export const BUYER_COMPETITION_SQL =
   "SELECT fy, COUNT(*) AS n, SUM(CASE WHEN comp = 0 THEN 1 ELSE 0 END) AS n_nc, SUM(CASE WHEN comp IS NULL THEN 1 ELSE 0 END) AS n_unstated, " +
   "SUM(CASE WHEN cents > 0 THEN cents END) AS pos, SUM(CASE WHEN comp = 0 AND cents > 0 THEN cents END) AS pos_nc " +
-  `FROM records WHERE ${BUYER} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${MAX_YEARS}`;
+  `FROM records WHERE ${BUYER} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${ULTRA_YEARS}`;
 
 // The organizations with the largest values, and how many organizations the
 // buyer paid in the period (the window count runs over the groups before the
@@ -153,7 +166,7 @@ const ORG = "oid = ?1 AND src = ?2 AND fy BETWEEN ?3 AND ?4";
 export const ORG_YEARS_SQL =
   "SELECT fy, COUNT(*) AS n, SUM(cents) AS cents, SUM(CASE WHEN vnote = 1 THEN 1 ELSE 0 END) AS n_no_value, " +
   "SUM(CASE WHEN comp = 0 THEN 1 ELSE 0 END) AS n_nc " +
-  `FROM records WHERE ${ORG} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${MAX_YEARS}`;
+  `FROM records WHERE ${ORG} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${ULTRA_YEARS}`;
 
 export const ORG_BUYERS_SQL =
   "SELECT b.id AS id, b.name_en AS name_en, b.name_fr AS name_fr, r.n AS n, r.cents AS cents, r.n_buyers AS n_buyers FROM (" +
@@ -173,15 +186,15 @@ const SEGMENT = "sid = ?1 AND src = ?2 AND fy BETWEEN ?3 AND ?4";
 // to ?10 the ones the reader chose (an unused slot is bound to -1, which no
 // organization's number is), and, when the reader chose none, the segment's
 // ?11 largest others (?11 is 0 otherwise), so the default comparison costs no
-// second round trip. Ten years of six organizations, plus a row for a year
-// none of them has, is at most MAX_YEARS * SHARE_SLOTS rows.
+// second round trip. A period's years of six organizations, plus a row for a
+// year none of them has, is at most ULTRA_YEARS * SHARE_SLOTS rows.
 const SLOTS = Array.from({ length: SHARE_SLOTS }, (_, i) => `?${i + 5}`).join(", ");
 export const ORG_SHARE_SQL =
   "SELECT y.fy AS fy, y.n AS seg_n, y.cents AS seg_cents, r.oid AS oid, r.n AS n, r.cents AS cents FROM rec_segment_years y LEFT JOIN (" +
   `SELECT fy, oid, COUNT(*) AS n, SUM(cents) AS cents FROM records WHERE ${SEGMENT} AND (oid IN (${SLOTS}) OR oid IN (` +
   `SELECT oid FROM records WHERE ${SEGMENT} AND oid IS NOT NULL AND oid <> ?5 GROUP BY oid ` +
   "ORDER BY SUM(cents) DESC, COUNT(*) DESC, oid LIMIT ?11)) GROUP BY fy, oid" +
-  `) r ON r.fy = y.fy WHERE y.sid = ?1 AND y.src = ?2 AND y.fy BETWEEN ?3 AND ?4 ORDER BY y.fy, r.oid LIMIT ${MAX_YEARS * SHARE_SLOTS}`;
+  `) r ON r.fy = y.fy WHERE y.sid = ?1 AND y.src = ?2 AND y.fy BETWEEN ?3 AND ?4 ORDER BY y.fy, r.oid LIMIT ${ULTRA_YEARS * SHARE_SLOTS}`;
 
 // The segment's organizations with the largest values: the share chart's
 // choices on a profile, the winners list on the segment view.
@@ -193,7 +206,7 @@ export const SEGMENT_WINNERS_SQL =
 
 // The segment view's first chart and its free view: the summary table.
 export const SEGMENT_YEARS_SQL =
-  `SELECT fy, n, cents, n_no_value, n_buyers, n_orgs FROM rec_segment_years WHERE ${SEGMENT} ORDER BY fy LIMIT ${MAX_YEARS}`;
+  `SELECT fy, n, cents, n_no_value, n_buyers, n_orgs FROM rec_segment_years WHERE ${SEGMENT} ORDER BY fy LIMIT ${ULTRA_YEARS}`;
 
 export const SEGMENT_BUYERS_SQL =
   "SELECT b.id AS id, b.name_en AS name_en, b.name_fr AS name_fr, r.n AS n, r.cents AS cents, r.n_buyers AS n_buyers FROM (" +
@@ -216,8 +229,8 @@ export const SEGMENT_ENTRANTS_SQL =
 // rec_segment_years), so no statement sorts a year's values at request
 // time. n_pos counts the records with a counted value above zero, the ones
 // the two figures rest on; pos is their sum, med their median.
-export const BUYER_VALUES_SQL = `SELECT fy, n_pos, pos, med FROM rec_buyer_years WHERE ${BUYER} ORDER BY fy LIMIT ${MAX_YEARS}`;
-export const SEGMENT_VALUES_SQL = `SELECT fy, n_pos, pos, med FROM rec_segment_years WHERE ${SEGMENT} ORDER BY fy LIMIT ${MAX_YEARS}`;
+export const BUYER_VALUES_SQL = `SELECT fy, n_pos, pos, med FROM rec_buyer_years WHERE ${BUYER} ORDER BY fy LIMIT ${ULTRA_YEARS}`;
+export const SEGMENT_VALUES_SQL = `SELECT fy, n_pos, pos, med FROM rec_segment_years WHERE ${SEGMENT} ORDER BY fy LIMIT ${ULTRA_YEARS}`;
 
 // Value growth through amendments, by the fiscal year of the award (award
 // notices and history, the sources that number their versions): the
@@ -229,8 +242,8 @@ const GROWTH =
   "SELECT fy, COUNT(*) AS n, SUM(CASE WHEN namd > 0 THEN 1 ELSE 0 END) AS n_amended, " +
   `SUM(CASE WHEN ${COMPARED} THEN 1 ELSE 0 END) AS n_compared, SUM(CASE WHEN ${COMPARED} AND cents > ocents THEN 1 ELSE 0 END) AS n_grew, ` +
   `SUM(CASE WHEN ${COMPARED} THEN ocents END) AS first_cents, SUM(CASE WHEN ${COMPARED} THEN cents END) AS last_cents FROM records WHERE`;
-export const BUYER_GROWTH_SQL = `${GROWTH} ${BUYER} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${MAX_YEARS}`;
-export const ORG_GROWTH_SQL = `${GROWTH} ${ORG} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${MAX_YEARS}`;
+export const BUYER_GROWTH_SQL = `${GROWTH} ${BUYER} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${ULTRA_YEARS}`;
+export const ORG_GROWTH_SQL = `${GROWTH} ${ORG} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${ULTRA_YEARS}`;
 
 // The TOP_N records with the largest counted values, each with the reference
 // and title its row links and shows, and the names of the other party.

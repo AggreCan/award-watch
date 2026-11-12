@@ -18,7 +18,8 @@ import { keyQuota } from "../src/api_keyed_spec";
 import { allKeys, rawEntry, t, type Key } from "../src/i18n";
 import { app } from "../src/index";
 import { PLAN_LINE_MAX, PLAN_ROWS, ULTRA_GLYPH_PATH, ULTRA_INCLUDES, ULTRA_LINES, planLine, rowFor, ultraLines } from "../src/pro";
-import { MAX_YEARS } from "../src/records_db";
+import { KEYS_MAX } from "../src/account/api_keys";
+import { planYears } from "../src/records_db";
 import {
   ACCOUNTS, PRO_SALE, ULTRA_VARS, csrf, decode, grantPro, grantUltra, nbsp, newEmail, nextIp, onEnv, post, signIn, ultraEnv, useAccountsDb, userId,
   withoutTiers,
@@ -271,7 +272,7 @@ describe("the plan cards while Ultra is on sale", () => {
     }
     expect(ultraLines("en")).toEqual([
       `${RULES.ultra.saved_searches} saved searches, by email`, `${RULES.ultra.watchlists} watches, each change by email`,
-      `Analytics: every view, ${MAX_YEARS} fiscal years`, `Keyed API: ${keyQuota("ultra")!.perDay.toLocaleString("en-CA")} requests a day`,
+      `Analytics: every view, ${planYears("ultra")} fiscal years`, `API: ${KEYS_MAX} keys of ${keyQuota("ultra")!.perDay.toLocaleString("en-CA")} requests a day`,
       `${RULES.ultra.matches} matching notices for your organization`,
     ]);
     expect(ULTRA_LINES).toHaveLength(5);
@@ -296,7 +297,7 @@ describe("the Pro page while Ultra is on sale", () => {
     expect(ultra).toBeGreaterThan(who);
     expect(ultra).toBeLessThan(html.indexOf('<h2 id="free">'));
     const days = keyQuota("ultra")!.perDay.toLocaleString("en-CA");
-    expect(html).toContain(`<p>Ultra includes everything in Pro, with these figures: ${RULES.ultra.saved_searches} saved searches by email, ${RULES.ultra.watchlists} watches, ${MAX_YEARS} fiscal years of analytics and API keys of ${days} requests a day each.</p>`);
+    expect(html).toContain(`<p>Ultra includes everything in Pro, with these figures: ${RULES.ultra.saved_searches} saved searches by email, ${RULES.ultra.watchlists} watches, ${planYears("ultra")} fiscal years of analytics and API keys of ${days} requests a day each.</p>`);
     expect(html).toContain("<p>For people who follow a whole market: many buyers, segments and competitors at once.</p>");
     expect(html).toContain('<p class="pro-price">Ultra is CA$30 a month or CA$301.50 a year, taxes added at checkout.</p>');
     expect(html).toContain("<h3>Can I move from Pro to Ultra, or back?</h3>");

@@ -12,7 +12,7 @@ import { fmtInt, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { EMAIL_MAX } from "../pages/interest";
 import { CHECK_PATH, PLAN_ROWS, ProNote, ProTag, planLine as planRowLine } from "../pro";
-import { KEYED_ENDPOINTS, KEY_PER_DAY, KEY_PER_MINUTE } from "../api_keyed_spec";
+import { KEYED_ENDPOINTS, KEY_PER_DAY, KEY_PER_MINUTE, keyQuota } from "../api_keyed_spec";
 import { MAX_Q } from "../search_db";
 import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
@@ -586,6 +586,8 @@ export function searchesView(
     errors?: Key[]; url?: string; calendar?: CalendarView | null;
     // The weekly briefings' panel (briefing_pages.tsx) and how many the account holds: they share the cap.
     briefings?: { n: number; panel: unknown } | null;
+    // Ultra's figure, for a paid account on a smaller one while Ultra is on sale; null or absent otherwise.
+    ultra?: number | null;
   },
 ) {
   const { searches, cap, pending } = state;
@@ -593,6 +595,13 @@ export function searchesView(
   const held = searches.length + (state.briefings?.n ?? 0);
   const full = held >= cap;
   const capLine = t(lang, account.plan === "free" ? "account.cap_free" : "account.cap_pro", { cap: fmtInt(cap, lang) });
+  const foot = !canDeliver ? <CapNote lang={lang} n={held} cap={cap} />
+    : state.ultra ? (
+      <p>
+        {t(lang, "account.cap_note_pro", { n: fmtInt(held, lang), cap: fmtInt(cap, lang), ultra: fmtInt(state.ultra, lang) })}{" "}
+        <a href="/account/billing">{t(lang, "billing.link_plans")}</a>
+      </p>
+    ) : <p>{capLine}</p>;
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.searches_title")} lead={t(lang, "account.searches_lead_deliver")}
@@ -610,7 +619,10 @@ export function searchesView(
       ) : null}
       <Panel title={t(lang, "account.searches_title")}
         count={t(lang, "account.searches_n", { n: fmtInt(held, lang), cap: fmtInt(cap, lang) })}
-        foot={canDeliver ? <p>{capLine}</p> : <CapNote lang={lang} n={held} cap={cap} />}>
+        foot={foot}>
+        {/* Past the plan's figure (after a move to a smaller plan): nothing deleted, and the line says which are sent.
+            A Free account sends none, so its foot's own line ("n of cap") says it instead. */}
+        {held > cap && canDeliver ? <p>{t(lang, "account.over_cap", { n: fmtInt(held, lang), cap: fmtInt(cap, lang) })}</p> : null}
         {searches.length ? (
           <div class="table-wrap">
             {/* Sorted in the page by the search; the other cells are forms. */}
@@ -832,7 +844,7 @@ export function keysView(
         {state.keys.length ? (
           <p class="muted small">
             {state.usage === null ? `${t(lang, "account.keys_usage_unread")} ` : ""}
-            {t(lang, "account.keys_usage_note", { day: fmtInt(KEY_PER_DAY, lang), minute: fmtInt(KEY_PER_MINUTE, lang) })}
+            {t(lang, "account.keys_usage_note", { day: fmtInt(keyQuota(account.plan)?.perDay ?? KEY_PER_DAY, lang), minute: fmtInt(KEY_PER_MINUTE, lang) })}
           </p>
         ) : null}
       </Panel>

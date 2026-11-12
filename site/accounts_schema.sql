@@ -89,7 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
 -- A saved search: the same kinds, filter keys and server-built labels as the
 -- alerts form (site/src/pages/interest.tsx, the interest table of the forms
--- database). At most 25 per user; the plan sets the cap at or below that.
+-- database). At most 100 per user (Ultra's figure); the plan sets the cap at or below that.
 CREATE TABLE IF NOT EXISTS saved_searches (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
@@ -309,10 +309,10 @@ CREATE TABLE IF NOT EXISTS account_blocks (
 -- kinds followed, comma-separated (all the kind of watch can follow, unless
 -- the reader chose fewer). cadence is how often its events are mailed on the
 -- Pro plan. last_sent_day is the data date up to which the watch mail has
--- covered its events. At most 3 per account on the Free plan and 25 on Pro,
--- held to the cap inside the insert; the organization watch on the
--- organization the account claims (org_claims) is outside that cap, so an
--- account holds at most 26. A tender notice's watch ends when the notice
+-- covered its events. At most 3 per account on the Free plan, 25 on Pro and
+-- 100 on Ultra, held to the cap inside the insert; the organization watch on
+-- the organization the account claims (org_claims) is outside that cap, so an
+-- account holds at most 101. A tender notice's watch ends when the notice
 -- closes (watch_mail.ts). Goes with the account.
 CREATE TABLE IF NOT EXISTS watches (
   id TEXT PRIMARY KEY,

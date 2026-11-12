@@ -218,6 +218,17 @@ export const ACCOUNT_STRINGS = {
     en: "This account holds {n} of {cap} saved searches. Pro holds up to {max} and sends them by email, daily or weekly.",
     fr: "Recherches enregistrées de ce compte : {n} sur {cap}. Pro en conserve jusqu'à {max} et les envoie par courriel, chaque jour ou chaque semaine.",
   },
+  // A paid account's foot of its searches while Ultra is on sale (account/payments.ts ultraOnSale), with "Plans and prices".
+  "account.cap_note_pro": {
+    en: "This account holds {n} of {cap} saved searches. Ultra holds up to {ultra}.",
+    fr: "Recherches enregistrées de ce compte : {n} sur {cap}. Ultra en conserve jusqu'à {ultra}.",
+  },
+  // An account holding more than its plan's figure, after a move to a smaller plan: nothing is deleted
+  // (account/deliveries.ts and briefings.ts send the first ones by creation date).
+  "account.over_cap": {
+    en: "This account holds {n} saved searches, past the {cap} of its plan. The first {cap} are sent; remove some to choose which.",
+    fr: "Ce compte conserve {n} recherches enregistrées, au-delà des {cap} de son forfait. Les {cap} premières sont envoyées; retirez-en pour choisir lesquelles.",
+  },
   "account.deliver_gate": { en: "Off. Email delivery is part of Pro.", fr: "Désactivé. L'envoi par courriel fait partie de Pro." },
   "account.msg_added": { en: "The search is saved.", fr: "La recherche est enregistrée." },
   "account.msg_exists": { en: "That search is already saved.", fr: "Cette recherche est déjà enregistrée." },
@@ -481,6 +492,11 @@ export const ACCOUNT_STRINGS = {
   "apiusage.keys_page": {
     en: "The keys, their names and the endpoints are on the {keys} page.",
     fr: "Les clés, leurs noms et les points d'accès sont sur la page {keys}.",
+  },
+  // Under the page for a plan with a smaller day while Ultra is on sale (account/payments.ts ultraOnSale), with "Plans and prices".
+  "apiusage.ultra_note": {
+    en: "Ultra's keys make up to {day} requests a day each.",
+    fr: "Les clés d'Ultra font jusqu'à {day} requêtes par jour chacune.",
   },
 
   // -- deletion ------------------------------------------------------------------------
@@ -1537,6 +1553,17 @@ export const ACCOUNT_STRINGS = {
     fr: "Pages suivies par ce compte : {n} sur {cap}. Pro en suit jusqu'à {max} et envoie leurs événements par courriel.",
   },
   "watches.cap_pro": { en: "Up to {cap} pages.", fr: "Jusqu'à {cap} pages." },
+  // A paid account's foot of its watches while Ultra is on sale (account/payments.ts ultraOnSale), with "Plans and prices".
+  "watches.cap_note_pro": {
+    en: "This account follows {n} of {cap} pages. Ultra follows up to {ultra}.",
+    fr: "Pages suivies par ce compte : {n} sur {cap}. Ultra en suit jusqu'à {ultra}.",
+  },
+  // An account following more than its plan's figure, after a move to a smaller plan: nothing is deleted
+  // (account/watches.ts coveredWatches: the events of the first ones by creation date).
+  "watches.over_cap": {
+    en: "This account follows {n} pages, past the {cap} of its plan. Events are listed and sent for the first {cap}; remove some to choose which.",
+    fr: "Ce compte suit {n} pages, au-delà des {cap} de son forfait. Les événements sont présentés et envoyés pour les {cap} premières; retirez-en pour choisir lesquelles.",
+  },
   "watches.add_note": {
     en: "To add one, use the Follow button on an organization, a buyer, a published contract or an open tender notice.",
     fr: "Pour en ajouter un, utilisez le bouton Suivre d'une organisation, d'un acheteur, d'un contrat publié ou d'un appel d'offres ouvert.",

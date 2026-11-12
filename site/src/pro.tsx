@@ -18,6 +18,7 @@
 // the third, with its own wording of every row.
 
 import type { FC } from "hono/jsx";
+import { KEYS_MAX } from "./account/api_keys";
 import { PLANS, RULES, type Feature, type Plan } from "./account/entitlements";
 import { paymentSource, ultraOnSale } from "./account/payments";
 import { stripeOffer, stripeOffers } from "./account/stripe";
@@ -26,7 +27,7 @@ import { EXPIRING_WINDOWS } from "./data";
 import type { Env } from "./env";
 import { decimal, fmtInt, numberLocale, t, tj, type Key, type Lang } from "./i18n";
 import { Panel } from "./layout";
-import { FREE_YEARS, MAX_RIVALS, MAX_YEARS } from "./records_db";
+import { MAX_RIVALS, planYears } from "./records_db";
 import { SAME_DAY_RUNS_UTC } from "./refresh";
 
 // The glyph before the word, one path on a 16-unit box drawn at 12 px in
@@ -119,8 +120,9 @@ export const sameDayHours = (lang: Lang) => {
   return fmtInt(b - a, lang);
 };
 const count = (n: () => number) => (lang: Lang) => ({ n: fmtInt(n(), lang) });
-// A key's requests a day on a plan with the keyed API (api_keyed_spec.ts keyQuota, the one place a plan's figures come from).
-const perDay = (plan: Plan) => (lang: Lang) => ({ day: fmtInt(keyQuota(plan)?.perDay ?? KEY_PER_DAY, lang) });
+// The keys a paid plan makes (account/api_keys.ts KEYS_MAX) and a key's requests a day on that plan
+// (api_keyed_spec.ts keyQuota, the one place a plan's figures come from).
+const keysOf = (plan: Plan) => (lang: Lang) => ({ keys: fmtInt(KEYS_MAX, lang), day: fmtInt(keyQuota(plan)?.perDay ?? KEY_PER_DAY, lang) });
 
 // The rows Free has come first, then those Pro adds, so the hollow marks
 // gather at the foot of the Free card and what each plan adds reads down the
@@ -157,10 +159,12 @@ export const PLAN_ROWS: readonly PlanRow[] = [
   },
   // A calendar feed is a delivery, as mail is (src/account/feeds.ts); a record's own file stays free.
   { feature: "delivery", free: { key: "plans.free_feeds" }, ...same({ key: "plans.pro_feeds" }) },
+  // Each plan's own fiscal years (records_db.ts planYears).
   {
     feature: "analytics",
-    free: { key: "plans.free_analytics", vars: count(() => FREE_YEARS) },
-    ...same({ key: "plans.pro_analytics", vars: count(() => MAX_YEARS) }),
+    free: { key: "plans.free_analytics", vars: count(() => planYears("free")) },
+    pro: { key: "plans.pro_analytics", vars: count(() => planYears("pro")) },
+    ultra: { key: "plans.pro_analytics", vars: count(() => planYears("ultra")) },
   },
   // The matching notices /account/matches lists (src/account/fit_pages.tsx): a count, as the watches are.
   {
@@ -186,7 +190,7 @@ export const PLAN_ROWS: readonly PlanRow[] = [
   },
   {
     feature: "api", free: { key: "plans.free_api" },
-    pro: { key: "plans.pro_api", vars: perDay("pro") }, ultra: { key: "plans.pro_api", vars: perDay("ultra") },
+    pro: { key: "plans.api_keys", vars: keysOf("pro") }, ultra: { key: "plans.api_keys", vars: keysOf("ultra") },
   },
   { feature: "export_filtered", free: { key: "plans.free_instruments" }, ...same({ key: "plans.pro_instruments" }) },
   // A weekly briefing is a delivery, as a saved search's mail is (src/account/briefings.ts).
@@ -209,7 +213,7 @@ export const ULTRA_INCLUDES: readonly (readonly [Feature, Key])[] = PLAN_ROWS.ma
 // constants and never typed: searches, watches, analytics, the keyed API and
 // the matching notices. The landing card leads with "Everything in Pro"; the
 // message leaves out the matching notices.
-export const ULTRA_LINES: readonly Key[] = ["plans.pro_searches", "plans.pro_watches", "plans.pro_analytics", "plans.pro_api", "plans.matches"];
+export const ULTRA_LINES: readonly Key[] = ["plans.pro_searches", "plans.pro_watches", "plans.pro_analytics", "plans.api_keys", "plans.matches"];
 
 export function ultraLines(lang: Lang, keys: readonly Key[] = ULTRA_LINES): string[] {
   return keys.map((key) => {

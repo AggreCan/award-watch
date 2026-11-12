@@ -44,8 +44,8 @@ export const cachedPlanOf = (p: Plan): "free" | "pro" => (p === "ultra" ? "pro" 
 // (src/pages/analytics.tsx, docs/analytics.md).
 // watchlists: how many organizations, buyers, published contracts and tender
 // notices an account follows (src/account/watches.ts), with their events on
-// the watches page: 3 on Free, WATCH_MAX on Pro. watch_mail: those events by
-// email, daily or weekly per watch (src/account/watch_mail.ts).
+// the watches page: 3 on Free, 25 on Pro, WATCH_MAX on Ultra. watch_mail: those
+// events by email, daily or weekly per watch (src/account/watch_mail.ts).
 // matches: how many matching notices /account/matches lists for the claimed
 // organization, closest first (src/account/fit_pages.tsx), MATCH_PAGE a page.
 // match_mail: how many of the week's new matching notices one message a week
@@ -56,12 +56,12 @@ export const FEATURES = [
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
-// The ceiling on saved searches whatever the plan (accounts_schema.sql says
-// the same).
-export const SAVED_SEARCH_MAX = 25;
-// The ceiling on watches whatever the plan (accounts_schema.sql says the same);
-// the claimed organization's watch is held beside it (watches.ts).
-export const WATCH_MAX = 25;
+// The ceiling on saved searches whatever the plan, Ultra's figure (accounts_schema.sql
+// says the same). A line naming a plan's own figure reads RULES, never this.
+export const SAVED_SEARCH_MAX = 100;
+// The ceiling on watches whatever the plan, Ultra's figure (accounts_schema.sql says
+// the same); the claimed organization's watch is held beside it (watches.ts).
+export const WATCH_MAX = 100;
 // The matching notices on one page of /account/matches.
 export const MATCH_PAGE = 50;
 
@@ -71,21 +71,28 @@ type Rules = {
 };
 
 const PRO_RULES: Rules = {
-  saved_searches: SAVED_SEARCH_MAX, delivery: true, api: true, export_filtered: true, intraday: true, radar_depth: true, bug_reports: true,
-  analytics: true, watchlists: WATCH_MAX, watch_mail: true, matches: 200, match_mail: 10,
+  saved_searches: 25, delivery: true, api: true, export_filtered: true, intraday: true, radar_depth: true, bug_reports: true,
+  analytics: true, watchlists: 25, watch_mail: true, matches: 200, match_mail: 10,
 };
 
-// Ultra holds every Pro feature, and for now Pro's figures: its own figures
-// come with the code that serves them (the watch statements cut into groups
-// under D1's bound values, the API's count by plan, the longer analytics
-// period), raised together, so no figure is promised before it works.
+// Ultra holds every Pro feature, with figures of its own on the counted ones:
+// the ceilings above, which the watch statements serve in groups under D1's
+// bound values (watch_events.ts, feeds.ts). Its other figures are named where
+// they are served: the keyed API's day (api_keyed_spec.ts KEY_PER_DAY_ULTRA)
+// and the analytics years (records_db.ts ULTRA_YEARS).
 export const RULES: Readonly<Record<Plan, Rules>> = {
   free: {
     saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false, radar_depth: false, bug_reports: false,
     analytics: false, watchlists: 3, watch_mail: false, matches: 5, match_mail: 3,
   },
   pro: PRO_RULES,
-  ultra: { ...PRO_RULES },
+  ultra: {
+    ...PRO_RULES,
+    saved_searches: SAVED_SEARCH_MAX,
+    watchlists: WATCH_MAX,
+    matches: 500,
+    match_mail: 25,
+  },
 };
 
 // The figures a plan gives as counts rather than as yes or no.

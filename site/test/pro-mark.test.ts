@@ -19,6 +19,7 @@ import wrangler from "../wrangler.jsonc?raw";
 import { allKeys, rawEntry, SAME_IN_BOTH, t, type Key } from "../src/i18n";
 import { app } from "../src/index";
 import { STYLES_VERSION } from "../src/layout";
+import { KEYS_MAX } from "../src/account/api_keys";
 import { RULES } from "../src/account/entitlements";
 import { COMPETITORS_MAX } from "../src/account/org_claim";
 import { KEY_PER_DAY } from "../src/api_keyed_spec";
@@ -463,9 +464,9 @@ describe("the plan cards", () => {
     // Analytics: the fiscal years Free sees against every view.
     expect(free).toContain(`<span>Analytics: first chart, ${FREE_YEARS} fiscal years</span>`);
     expect(pro).toContain(`<span>Analytics: every view, ${MAX_YEARS} fiscal years</span>`);
-    // The keyed API's daily limit, from api_keyed_spec, against the open API.
+    // The keyed API's keys and daily limit, from api_keys and api_keyed_spec, against the open API.
     expect(free).toContain("<span>Open JSON API</span>");
-    expect(pro).toContain(`<span>Keyed API: ${KEY_PER_DAY.toLocaleString("en-CA")} requests a day</span>`);
+    expect(pro).toContain(`<span>API: ${KEYS_MAX} keys of ${KEY_PER_DAY.toLocaleString("en-CA")} requests a day</span>`);
     // Contracts ending: the windows by name, from EXPIRING_WINDOWS; same-day notices every 2 hours, from the schedule.
     expect(free).toContain("<span>Contracts ending: the 3-month list</span>");
     expect(pro).toContain("<span>Contracts ending: 6- and 12-month lists</span>");
@@ -481,7 +482,7 @@ describe("the plan cards", () => {
     const [freeFr, proFr] = await at("fr");
     expect(freeFr).toContain(`<span>${RULES.free.saved_searches} recherches enregistrées, sur le site</span>`);
     expect(proFr).toContain(`<span>${RULES.pro.saved_searches} recherches enregistrées, par courriel</span>`);
-    expect(proFr).toContain(`<span>API avec clé : ${KEY_PER_DAY.toLocaleString("fr-CA").replace(/\s/g, " ")} requêtes par jour</span>`);
+    expect(proFr).toContain(`<span>API : ${KEYS_MAX} clés de ${KEY_PER_DAY.toLocaleString("fr-CA").replace(/\s/g, " ")} requêtes par jour</span>`);
     // Your organization's page beside the competitors it compares, as many as org_claim allows.
     expect(pro).toContain(`<span>Your organization beside ${COMPETITORS_MAX} others</span>`);
     // The week's matching notices by email: each plan's own count, from RULES, on the same wording.
@@ -492,7 +493,7 @@ describe("the plan cards", () => {
     // Every figure on a card is one of the plans' or the constants', or a window's months.
     const figures = new Set([RULES.free.saved_searches, RULES.pro.saved_searches, RULES.free.watchlists, RULES.pro.watchlists,
       RULES.free.matches, RULES.pro.matches, RULES.free.match_mail, RULES.pro.match_mail, FREE_YEARS, MAX_YEARS,
-      KEY_PER_DAY, hours, COMPETITORS_MAX, 3, 6, 12].map(String));
+      KEY_PER_DAY, KEYS_MAX, hours, COMPETITORS_MAX, 3, 6, 12].map(String));
     for (const card of [free, pro, freeFr, proFr]) {
       for (const { text } of rowsOf(card)) {
         for (const n of text.match(/[0-9][0-9 ,]*[0-9]|[0-9]/g) ?? []) expect(figures, `${n} in "${text}"`).toContain(n.replace(/[ ,]/g, ""));

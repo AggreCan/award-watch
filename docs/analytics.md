@@ -252,15 +252,19 @@ Each view reads one source at a time (`?source=awards`, `history`,
 `contracts` or `grants`; a segment view `awards` or `history`), because no
 figure ever adds two sources. The default is the source with the most
 records on the entity's own page (award notices on a tie, and on a segment
-view). `?years=3`, `5` or `10` sets the period:
+view). `?years=3`, `5`, `10` or `20` sets the period:
 that many fiscal years ending with the one the data date falls in, which is
-partial and marked so. `?from=` and `?to=` set it by its first and last
-fiscal year instead, and win over `?years=` when either is present
-(`records_db.choosePeriod`): the last is a year from 2000 (`EARLIEST_FY`) to
-the data date's, anything else reading as the data date's; the first is a
-year from 2000 up to the last, anything else reading as the ten years ending
-with the last; a span longer than ten keeps its latest ten and says so in
-the view's head. The form beside the period tabs writes the two fields, and
+partial and marked so, at most the reader's plan's figure (`planYears`: ten
+on Pro, twenty on Ultra; a longer one reads as the plan's own). `?from=` and
+`?to=` set it by its first and last fiscal year instead, and win over
+`?years=` when either is present (`records_db.choosePeriod`): the last is a
+year from 2000 (`EARLIEST_FY`) to the data date's, anything else reading as
+the data date's; the first is a year from 2000 up to the last, anything else
+reading as the ten years ending with the last; a span longer than the
+plan's figure keeps its latest and says so in the view's head. The 20 is
+offered as a tab only to a reader whose plan gives it, and while Ultra is on
+sale to every other with the Ultra chip (`docs/accounts.md`, *Ultra, Its
+figures*). The form beside the period tabs writes the two fields, and
 every link and form on the view carries the period as it was chosen, so a
 period is an address that can be linked.
 

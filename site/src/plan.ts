@@ -63,6 +63,14 @@ export function allowsAnalytics(plan: Plan): boolean {
 // addresses are the site's 404 and no page links them), else "pro" or
 // "free". The plan is read only once the switch is on.
 export async function analyticsAccess(c: Context<AppEnv>): Promise<"pro" | "free" | null> {
+  const plan = await analyticsPlan(c);
+  return plan === null ? null : allowsAnalytics(plan) ? "pro" : "free";
+}
+
+// The plan a request reads an analytics view under, whose figure sets the
+// fiscal years it sees at once (records_db.ts planYears); null while the
+// accounts switch is off, as above.
+export async function analyticsPlan(c: Context<AppEnv>): Promise<Plan | null> {
   if (!accountsEnabled(c.env)) return null;
-  return allowsAnalytics(await requestPlan(c)) ? "pro" : "free";
+  return requestPlan(c);
 }

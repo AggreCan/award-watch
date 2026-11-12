@@ -18,9 +18,10 @@ export const USAGE_KEEP_DAYS = 60;
 export const USAGE_DAYS_SHOWN = 30;
 
 // One statement a request: the key's row for the day, made at 1 or counted up
-// by one while it is under the cap (?3). No row back means the day's cap is
-// spent, and the row is left as it was, so a refused request is not counted.
-// Through the primary key (key_id, day).
+// by one while it is under the cap (?3, the holder's plan's figure,
+// api_keyed_spec.ts keyQuota). No row back means the day's cap is spent, and
+// the row is left as it was, so a refused request is not counted. Through the
+// primary key (key_id, day).
 export const COUNT_SQL =
   "INSERT INTO api_usage (key_id, day, n) VALUES (?1, ?2, 1) " +
   "ON CONFLICT (key_id, day) DO UPDATE SET n = api_usage.n + 1 WHERE api_usage.n < ?3 RETURNING n";
@@ -87,9 +88,10 @@ export function secondsToNextDay(now: Date): number {
 // cap, or null when the count could not be written (the request goes on).
 export type Counted = number | "spent" | null;
 
-export async function countRequest(env: Env, keyId: string, day: string): Promise<Counted> {
+// perDay: the cap of the holder's plan (keyQuota), Pro's when not given.
+export async function countRequest(env: Env, keyId: string, day: string, perDay: number = KEY_PER_DAY): Promise<Counted> {
   try {
-    const row = await env.ACCOUNTS!.prepare(COUNT_SQL).bind(keyId, day, KEY_PER_DAY).first<{ n: number }>();
+    const row = await env.ACCOUNTS!.prepare(COUNT_SQL).bind(keyId, day, perDay).first<{ n: number }>();
     return row ? row.n : "spent";
   } catch {
     console.error("api usage: request not counted, let through");

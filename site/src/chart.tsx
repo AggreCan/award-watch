@@ -187,6 +187,9 @@ export interface AxisLabel {
   minor?: boolean;
   // False for a label a phone leaves out (below 700 px only some years show).
   phone?: boolean;
+  // Never drawn at any width, but kept in the axis's spacing (clearOfAnchors):
+  // every other year of a long fiscal axis (fiscalAxis).
+  hidden?: boolean;
 }
 
 // The labels of a chart with one bar a year, from first to last: every other
@@ -413,7 +416,7 @@ export const ChartStack: FC<{
             const lefts = xLabels.map((l) => pct(l.x));
             const shown = clearOfAnchors(lefts);
             // An end label always shows, even a minor one, as it stands for the axis's start or end.
-            return xLabels.map((l, i) => shown[i]
+            return xLabels.map((l, i) => shown[i] && !l.hidden
               ? <span class={labelClass(l, anchor(lefts[i]))} style={`left:${f(lefts[i])}%`}>{l.text}</span>
               : null);
           })()}
@@ -446,17 +449,25 @@ export function yearAxis(domain: [number, number]): { labels: AxisLabel[]; grid:
 // yearly bars, 4 for quarters), and on a quarterly axis a gridline at each
 // year's start after the first. A fiscal label is wider than a calendar
 // year's, so every other one rests below 1200 px past six years and a phone
-// shows the first and the last past four.
+// shows the first and the last past four. Past LONG_AXIS_YEARS (Ultra's
+// twenty) every other one is never drawn, the first and last aside, and of
+// the rest every other one rests below 1200 px, so a label still has the room
+// a ten-year axis gives it.
+export const LONG_AXIS_YEARS = 12;
+
 export function fiscalAxis(first: number, last: number, label: (fy: number) => string, per = 1): { labels: AxisLabel[]; grid: number[] } {
   const labels: AxisLabel[] = [];
   const grid: number[] = [];
   const span = last - first + 1;
+  const long = span > LONG_AXIS_YEARS;
   for (let fy = first; fy <= last; fy++) {
     if (fy > first) grid.push(fy * per);
+    const hidden = long && (last - fy) % 2 === 1 && fy !== first;
     labels.push({
       x: fy * per + per / 2, text: label(fy),
-      minor: span > 6 && (last - fy) % 2 === 1,
+      minor: long ? (last - fy) % 4 === 2 : span > 6 && (last - fy) % 2 === 1,
       phone: span <= 4 || fy === first || fy === last,
+      ...(hidden ? { hidden } : {}),
     });
   }
   return { labels, grid: per > 1 ? grid : [] };

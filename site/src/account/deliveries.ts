@@ -10,10 +10,13 @@
 //   2. stats.json reads and its data date is today's UTC date, so the nightly
 //      has published today's files;
 //   3. each saved search with delivery daily or weekly (DELIVERABLE_KINDS
-//      holds every kind), whose owner's plan allows delivery, and that is
-//      due: not delivered for this data date, and for weekly, never
-//      delivered or delivered seven or more days ago; one that failed once
-//      for this data date waits for the next one.
+//      holds every kind), whose owner's plan allows delivery and covers it
+//      (one of the first of the account's saved searches and briefings by
+//      creation date, as many as the plan's figure; an account holds more only
+//      after a move to a smaller plan), and that is due: not delivered for
+//      this data date, and for weekly, never delivered or delivered seven or
+//      more days ago; one that failed once for this data date waits for the
+//      next one.
 //
 // A tender or radar search's items are the records since the previous
 // delivery's data date, at most SPAN_DAYS_MAX days back (one day for a first
@@ -62,7 +65,7 @@ import {
   type Entity, type Mark, type RecordsWait, type Rise, MARK_WRITE_SQL, entityOf, isRecordsKind, loadMark, markText, missingTable, readCounts,
   rises,
 } from "./records_deliveries";
-import { type BriefingReport, briefingActive, briefingCounts, runBriefings } from "./briefings";
+import { type BriefingReport, briefingActive, briefingCounts, madeBefore, runBriefings, sharedCap } from "./briefings";
 import { DELIVERABLE_KINDS } from "./searches";
 import { randomHex } from "./secrets";
 import { type MailMessage, senderFor } from "./sender";
@@ -102,7 +105,8 @@ export interface RunReport {
   sent: number;
   failed: number;
   empty: number;
-  // Due searches whose owner's plan does not allow delivery.
+  // Due searches whose owner's plan does not allow delivery, or does not
+  // cover them (past the plan's figure, after a move to a smaller plan).
   skipped: number;
   // Organization, buyer and segment searches left for a later run, and why
   // (records): the records database was not ready at today's data date, or
@@ -149,22 +153,32 @@ export function spanStart(deliver: Cadence, lastDelivered: string | null, dataDa
 type DueRow = {
   id: string; user_id: string; kind: string; params: string; label: string; lang: string; deliver: string;
   last_delivered_at: string | null; email: string; plan: string; plan_until: string | null; secret: string | null;
+  // How many of the account's saved searches and briefings were made before this one (the cap they share).
+  n_before: number;
 };
 
 // The searches that can be due on the data date, oldest first; isDue then
 // applies the weekly rule. A search that failed once for this data date is
 // left for the next one, so an address the mail service refuses is not
-// tried every hour.
+// tried every hour. n_before counts the briefings too, and the searches alone
+// while the briefings table is not on the database yet.
+const CANDIDATES_SQL = (before: string) =>
+  "SELECT s.id, s.user_id, s.kind, s.params, s.label, s.lang, s.deliver, s.last_delivered_at, u.email, u.plan, u.plan_until, " +
+  `k.secret, ${before} AS n_before FROM saved_searches s JOIN users u ON u.id = s.user_id LEFT JOIN delivery_tokens k ON k.search_id = s.id ` +
+  "WHERE u.status = 'active' AND s.deliver IN ('daily', 'weekly') " +
+  `AND s.kind IN (${DELIVERABLE_KINDS.map(() => "?").join(", ")}) ` +
+  "AND (s.last_delivered_at IS NULL OR substr(s.last_delivered_at, 1, 10) < ?) " +
+  "AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.saved_search_id = s.id AND d.status = 'failed' AND d.sent_at >= ?) " +
+  "ORDER BY s.created_at, s.id";
+
 async function candidates(env: Env, dataDate: string): Promise<DueRow[]> {
-  const res = await env.ACCOUNTS!.prepare(
-    "SELECT s.id, s.user_id, s.kind, s.params, s.label, s.lang, s.deliver, s.last_delivered_at, u.email, u.plan, u.plan_until, " +
-    "k.secret FROM saved_searches s JOIN users u ON u.id = s.user_id LEFT JOIN delivery_tokens k ON k.search_id = s.id " +
-    "WHERE u.status = 'active' AND s.deliver IN ('daily', 'weekly') " +
-    `AND s.kind IN (${DELIVERABLE_KINDS.map(() => "?").join(", ")}) ` +
-    "AND (s.last_delivered_at IS NULL OR substr(s.last_delivered_at, 1, 10) < ?) " +
-    "AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.saved_search_id = s.id AND d.status = 'failed' AND d.sent_at >= ?) " +
-    "ORDER BY s.created_at, s.id",
-  ).bind(...DELIVERABLE_KINDS, dataDate, dataDate).all<DueRow>();
+  const binds = [...DELIVERABLE_KINDS, dataDate, dataDate];
+  const res = await env.ACCOUNTS!.prepare(CANDIDATES_SQL(`${madeBefore("s", "saved_searches")} + ${madeBefore("s", "briefings")}`))
+    .bind(...binds).all<DueRow>()
+    .catch((e) => {
+      if (!missingTable(e)) throw e;
+      return env.ACCOUNTS!.prepare(CANDIDATES_SQL(madeBefore("s", "saved_searches"))).bind(...binds).all<DueRow>();
+    });
   return res.results ?? [];
 }
 
@@ -446,7 +460,8 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         plan = (await planFor(env, { id: s.user_id, plan: s.plan, plan_until: s.plan_until }, now)).plan;
         plans.set(s.user_id, plan);
       }
-      if (!allowed({ plan }, "delivery")) {
+      // Past the plan's figure (after a move to a smaller plan), the first ones by creation date only.
+      if (!allowed({ plan }, "delivery") || (s.n_before ?? 0) >= sharedCap(plan)) {
         report.skipped++;
         continue;
       }

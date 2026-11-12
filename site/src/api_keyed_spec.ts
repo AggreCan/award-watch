@@ -11,22 +11,25 @@ import type { Key } from "./i18n";
 // at most a few pages of 100; the day's new notices; the three radar
 // windows, about 250 pages at 12 months; the records of a few hundred
 // organizations) makes a few thousand requests a day, in bursts that 600 a
-// minute leaves room for. At 20,000 a day a key makes at most 600,000
-// requests a month, against the 10 million the Workers plan includes.
+// minute leaves room for. At 20,000 a day (Pro's figure) a key makes at most
+// 600,000 requests a month, against the 10 million the Workers plan
+// includes; at Ultra's 50,000, 1.5 million, and Ultra's five keys at their
+// cap 7.5 million. One address is held to 60 a minute anyway (86,400 a day).
 // KEY_PER_MINUTE is the KEY_LIMIT binding's limit in wrangler.jsonc (a test
-// holds the two equal); the per-address API cap (API_LIMIT, 60 a minute)
-// applies to every request as well.
+// holds the two equal), the same on both plans; the per-address API cap
+// (API_LIMIT, 60 a minute) applies to every request as well.
 export const KEY_PER_MINUTE = 600;
 export const KEY_PER_DAY = 20_000;
+export const KEY_PER_DAY_ULTRA = 50_000;
 
 export type KeyQuota = { perDay: number; perMinute: number };
 
-// One key's limits on a plan, as the usage page (account/api_usage_page.tsx)
-// states them; null for a plan without the keyed API. Every plan that has it
-// gets the limits above today; a plan with figures of its own returns them
-// here.
+// One key's limits on a plan, as the usage page (account/api_usage_page.tsx),
+// the keys page, /me and the 429's text state them and as the day's count
+// (account/api_usage.ts) binds them; null for a plan without the keyed API.
 export function keyQuota(plan: Plan): KeyQuota | null {
-  return allowed({ plan }, "api") ? { perDay: KEY_PER_DAY, perMinute: KEY_PER_MINUTE } : null;
+  if (!allowed({ plan }, "api")) return null;
+  return { perDay: plan === "ultra" ? KEY_PER_DAY_ULTRA : KEY_PER_DAY, perMinute: KEY_PER_MINUTE };
 }
 
 // A list answers PAGE_ROWS rows a page; the hosted search keeps its own 50

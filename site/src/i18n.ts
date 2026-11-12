@@ -2661,6 +2661,11 @@ const STRINGS = {
     en: "At most {n} fiscal years are shown at once, so this view shows the latest {n} of the period chosen.",
     fr: "Au plus {n} exercices sont présentés à la fois; cette vue présente donc les {n} derniers de la période choisie.",
   },
+  // Under the head of a view asked for Ultra's period by a plan without it, while Ultra is on sale ({n} is ULTRA_YEARS).
+  "analytics.ultra_years": {
+    en: "Periods of up to {n} fiscal years are part of Ultra.",
+    fr: "Les périodes d'au plus {n} exercices font partie d'Ultra.",
+  },
   "analytics.free_more_buyer": {
     en: "It also gives the average and median value by fiscal year, the ten largest records, the change in value through amendments and the contracts ending in each of the next eight fiscal quarters, for any period of up to ten fiscal years.",
     fr: "Elle donne aussi la valeur moyenne et médiane par exercice, les dix dossiers de plus grande valeur, la variation de valeur par modifications et les contrats prenant fin pendant chacun des huit prochains trimestres, pour toute période d'au plus dix exercices.",
@@ -3535,7 +3540,9 @@ const STRINGS = {
   // 12-month list's on Pro, each plan's own figure on the one wording.
   "plans.lines": { en: "Holder's record: the {m}-month list", fr: "Dossiers du titulaire : liste de {m} mois" },
   "plans.free_api": { en: "Open JSON API", fr: "API JSON ouverte" },
-  "plans.pro_api": { en: "Keyed API: {day} requests a day", fr: "API avec clé : {day} requêtes par jour" },
+  // The keyed API (src/api_keyed_spec.ts keyQuota, account/api_keys.ts KEYS_MAX): each paid plan's own keys
+  // and day, on the one wording. The French runs 40 characters at Ultra's figures.
+  "plans.api_keys": { en: "API: {keys} keys of {day} requests a day", fr: "API : {keys} clés de {day} requêtes par jour" },
   "plans.free_instruments": { en: "Standing offer pages", fr: "Pages des offres à commandes" },
   "plans.pro_instruments": { en: "Standing offer CSV files", fr: "Fichiers CSV des offres à commandes" },
   "plans.pro_briefing": { en: "Weekly briefing by email", fr: "Bulletin hebdomadaire par courriel" },

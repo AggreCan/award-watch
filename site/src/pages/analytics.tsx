@@ -24,11 +24,12 @@
 //
 // One source at a time (?source=), because no figure ever adds two sources;
 // the contracts ending are the radar's, each contract once across the three
-// contract sources, and say so. The period is ?years= 3, 5 or 10 fiscal
+// contract sources, and say so. The period is ?years= 3, 5, 10 or 20 fiscal
 // years ending with the data date's, or ?from= and ?to= its first and last
-// fiscal year (at most ten, none after the data date's), so a chosen period
-// is an address. A value the view cannot use reads as the default, never an
-// error.
+// fiscal year (none after the data date's), so a chosen period is an
+// address; a period reads at most the reader's plan's years (ten on Pro,
+// twenty on Ultra, records_db.ts planYears), the latest of a longer one. A
+// value the view cannot use reads as the default, never an error.
 //
 // The paid tier's part (feature analytics, src/plan.ts analyticsAccess).
 // While the accounts switch is off every address here is the site's 404 and
@@ -41,7 +42,7 @@
 // robots.txt keeps crawlers off them, so a crawl never becomes D1 reads.
 
 import type { Context } from "hono";
-import { ProTag } from "../pro";
+import { ProTag, UltraTag } from "../pro";
 import type { FC } from "hono/jsx";
 import {
   ChartStack, RankedBars, barGap, fiscalAxis, moneyTip, partOf, recordsText, tipHead, tipText, type Panel as ChartPanel, type RankedBar,
@@ -53,10 +54,11 @@ import { BUYER_ID_RE, ORG_ID_RE, SEGMENT_RE, loadBuyer, loadBuyerAlias, loadProf
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
-import { analyticsAccess } from "../plan";
+import { allowsAnalytics, analyticsPlan } from "../plan";
+import { ultraOnSale } from "../account/payments";
 import {
   AMENDED_SOURCES, BUYER_COMPETITION_SQL, BUYER_DUE_SQL, BUYER_GROWTH_SQL, BUYER_QUARTERS_SQL, BUYER_RECORDS_SQL, BUYER_SEGMENTS_SQL,
-  BUYER_SUPPLIERS_SQL, BUYER_VALUES_SQL, DUE_QUARTERS, DUE_YEARS, EARLIEST_FY, ENTRANT_LOOKBACK, FREE_YEARS, MAX_RIVALS, MAX_YEARS,
+  BUYER_SUPPLIERS_SQL, BUYER_VALUES_SQL, DUE_QUARTERS, DUE_YEARS, EARLIEST_FY, ENTRANT_LOOKBACK, FREE_YEARS, MAX_RIVALS, MAX_YEARS, ULTRA_YEARS, planYears,
   ORG_BUYERS_SQL, ORG_GROWTH_SQL, ORG_RECORDS_SQL, ORG_SEGMENTS_SQL, ORG_SHARE_SQL, ORG_YEARS_SQL, PERIODS, SEGMENT_BUYERS_SQL,
   SEGMENT_DUE_SQL, SEGMENT_ENTRANTS_SQL, SEGMENT_RECORDS_SQL, SEGMENT_SOURCES, RIVALS_N, SEGMENT_VALUES_SQL, SEGMENT_WINNERS_SQL,
   SEGMENT_YEARS_SQL, SHARE_SLOTS, SOURCE_NUMBER, TOP_N, type Period, type Query, type Read, type Row, choosePeriod, dollars,
@@ -88,13 +90,18 @@ interface Frame {
   // The fiscal year the data date falls in, counted to date.
   current: number;
   // The period was chosen by its first and last fiscal year (?from, ?to)
-  // rather than as the latest n, and capped: it was longer than MAX_YEARS,
-  // so its latest MAX_YEARS are shown.
+  // rather than as the latest n, and capped: it was longer than the reader's
+  // plan gives (most, records_db.ts planYears), so its latest most are shown.
   custom: boolean;
   capped: boolean;
   // The free view was asked for something it does not give (a longer period,
   // a segment or organizations to compare), and says so.
   asked: boolean;
+  // The fiscal years the reader's plan shows at once (planYears).
+  most: number;
+  // The address asked for a period longer than the plan gives that Ultra
+  // gives (ULTRA_YEARS); the view says so while Ultra is on sale.
+  longer: boolean;
 }
 
 // The source by the most records on the entity's own page; the first of the
@@ -103,20 +110,34 @@ function largestSource(counts: Partial<Record<MoneySource, number>>, allowed: re
   return allowed.reduce((best, s) => ((counts[s] ?? 0) > (counts[best] ?? 0) ? s : best), allowed[0]);
 }
 
-function readFrame(c: Context<AppEnv>, stats: Stats, pro: boolean, allowed: readonly MoneySource[], fallback: MoneySource): Frame {
+// most: the fiscal years the reader's plan shows at once (planYears); a
+// period longer than that reads as the plan's own, the latest most years.
+function readFrame(
+  c: Context<AppEnv>, stats: Stats, pro: boolean, allowed: readonly MoneySource[], fallback: MoneySource, most: number = pro ? MAX_YEARS : FREE_YEARS,
+): Frame {
   const url = new URL(c.req.url);
   const raw = (url.searchParams.get("source") ?? "").trim().toLowerCase();
   const source = (allowed as readonly string[]).includes(raw) ? (raw as MoneySource) : fallback;
   const current = fiscalYearOf(todayOf(stats.data_as_of));
-  const latest = (years: number): Frame => ({ source, years, first: current - years + 1, last: current, current, custom: false, capped: false, asked: false });
+  const latest = (years: number): Frame => ({
+    source, years, first: current - years + 1, last: current, current, custom: false, capped: false, asked: false, most, longer: false,
+  });
+  const asked = Number(url.searchParams.get("years"));
+  // Ultra's period asked by a plan that does not give it.
+  const ultraAsked = asked === ULTRA_YEARS && most < ULTRA_YEARS;
   if (!pro) {
     const extra = ["years", "from", "to", "segment", "vs"].some((k) => url.searchParams.has(k));
-    return { ...latest(FREE_YEARS), asked: extra };
+    return { ...latest(FREE_YEARS), asked: extra, longer: ultraAsked };
   }
-  const chosen = choosePeriod(url.searchParams.get("from"), url.searchParams.get("to"), current);
-  if (chosen) return { ...latest(chosen.last - chosen.first + 1), first: chosen.first, last: chosen.last, custom: true, capped: chosen.capped };
-  const asked = Number(url.searchParams.get("years"));
-  return latest((PERIODS as readonly number[]).includes(asked) ? asked : DEFAULT_YEARS);
+  const chosen = choosePeriod(url.searchParams.get("from"), url.searchParams.get("to"), current, most);
+  if (chosen) {
+    return {
+      ...latest(chosen.last - chosen.first + 1), first: chosen.first, last: chosen.last, custom: true, capped: chosen.capped,
+      longer: chosen.capped && most < ULTRA_YEARS,
+    };
+  }
+  const years = (PERIODS as readonly number[]).includes(asked) ? Math.min(asked, most) : DEFAULT_YEARS;
+  return { ...latest(years), longer: ultraAsked };
 }
 
 // A view's address: the source, then the period as the reader chose it
@@ -221,14 +242,19 @@ const SourceTabs: FC<{ lang: Lang; base: string; frame: Frame; allowed: readonly
 
 // The periods: each a link for Pro; for the free view the longer ones carry
 // the Pro mark and lead to the same view, which says they are part of Pro.
-const PeriodTabs: FC<{ lang: Lang; base: string; frame: Frame; pro: boolean; more?: Record<string, string | readonly string[]> }> = ({
-  lang, base, frame, pro, more,
+// Ultra's period (ULTRA_YEARS) is offered to a reader whose plan gives it
+// and, while Ultra is on sale (ultra), to every other with the Ultra mark,
+// leading to the view at the reader's own period, which says it is part of
+// Ultra; otherwise it is not offered, and the tabs are as before Ultra.
+const PeriodTabs: FC<{ lang: Lang; base: string; frame: Frame; pro: boolean; ultra: boolean; more?: Record<string, string | readonly string[]> }> = ({
+  lang, base, frame, pro, ultra, more,
 }) => (
   <nav class="tabs tabs-small toolbar-row" aria-label={t(lang, "analytics.period_nav")}>
-    {PERIODS.map((n) => (
+    {PERIODS.filter((n) => n <= MAX_YEARS || n <= frame.most || ultra).map((n) => (
       <a href={query(base, { ...frame, years: n, custom: false }, more)} rel="nofollow"
         aria-current={!frame.custom && n === frame.years ? "page" : undefined}>
-        {t(lang, "analytics.period", { n })}{!pro && n > FREE_YEARS ? <ProTag lang={lang} /> : null}
+        {t(lang, "analytics.period", { n })}
+        {n > frame.most && n > MAX_YEARS ? <UltraTag lang={lang} /> : !pro && n > FREE_YEARS ? <ProTag lang={lang} /> : null}
       </a>
     ))}
   </nav>
@@ -237,8 +263,9 @@ const PeriodTabs: FC<{ lang: Lang; base: string; frame: Frame; pro: boolean; mor
 // A period by its first and last fiscal year, as a form that writes ?from=
 // and ?to= into the address, so the view it opens can be linked. Every year
 // from EARLIEST_FY to the data date's is offered; the view itself caps a
-// longer span at MAX_YEARS. For the free view the button carries the Pro
-// mark and leads to the same view, which says the choice is part of Pro.
+// longer span at the reader's plan's figure. For the free view the button
+// carries the Pro mark and leads to the same view, which says the choice is
+// part of Pro.
 const PeriodForm: FC<{ lang: Lang; base: string; frame: Frame; pro: boolean; more?: Record<string, string | readonly string[]> }> = ({
   lang, base, frame, pro, more,
 }) => {
@@ -273,6 +300,8 @@ interface Shell {
   base: string;
   frame: Frame;
   pro: boolean;
+  // Ultra's period offered to a reader whose plan lacks it: while Ultra is on sale (Ctx ultra).
+  ultra: boolean;
   allowed: readonly MoneySource[];
   more?: Record<string, string | readonly string[]>;
   active: string;
@@ -296,11 +325,12 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
         })}
         actions={<a href={s.back} class="btn">{t(lang, s.backKey)}</a>}>
         <p class="page-note">{t(lang, "analytics.note_sources")} {t(lang, "analytics.note_fiscal")}</p>
-        {frame.capped ? <p class="page-note">{t(lang, "analytics.period_capped", { n: MAX_YEARS })}</p> : null}
+        {frame.capped ? <p class="page-note">{t(lang, "analytics.period_capped", { n: frame.most })}</p> : null}
+        {frame.longer && s.ultra ? <p class="page-note">{t(lang, "analytics.ultra_years", { n: ULTRA_YEARS })}</p> : null}
       </PageHead>
       <div class="toolbar">
         <SourceTabs lang={lang} base={s.base} frame={frame} allowed={s.allowed} more={s.more} />
-        <PeriodTabs lang={lang} base={s.base} frame={frame} pro={s.pro} more={s.more} />
+        <PeriodTabs lang={lang} base={s.base} frame={frame} pro={s.pro} ultra={s.ultra} more={s.more} />
         <PeriodForm lang={lang} base={s.base} frame={frame} pro={s.pro} more={s.more} />
       </div>
       {ok ? (body as any) : (
@@ -718,15 +748,20 @@ function buyerQueries(id: string, f: Frame, tables: readonly string[]): Record<s
   return out;
 }
 
-type Ctx = { c: Context<AppEnv>; lang: Lang; stats: Stats; pro: boolean };
+// most: the fiscal years the reader's plan shows at once (planYears). ultra:
+// Ultra's period is offered to a reader whose plan lacks it, which is only
+// while Ultra is on sale (payments.ts ultraOnSale, whose cheap checks come
+// first, so a site without Ultra's variables reads nothing for it).
+type Ctx = { c: Context<AppEnv>; lang: Lang; stats: Stats; pro: boolean; most: number; ultra: boolean };
 
 async function context(c: Context<AppEnv>): Promise<Ctx | Response> {
-  const access = await analyticsAccess(c);
-  if (!access) return c.notFound();
+  const plan = await analyticsPlan(c);
+  if (!plan) return c.notFound();
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
   if (!stats) return noDataPage(c, "analytics.title");
-  return { c, lang, stats, pro: access === "pro" };
+  const most = planYears(plan);
+  return { c, lang, stats, pro: allowsAnalytics(plan), most, ultra: most < ULTRA_YEARS && (await ultraOnSale(c.env)) };
 }
 
 async function signedIn(c: Context<AppEnv>): Promise<boolean> {
@@ -753,17 +788,17 @@ async function resolveBuyer(c: Context<AppEnv>, stats: Stats, suffix: string) {
 export async function buyerAnalytics(c: Context<AppEnv>): Promise<Response> {
   const ctx = await context(c);
   if (ctx instanceof Response) return ctx;
-  const { lang, stats, pro } = ctx;
+  const { lang, stats, pro, most, ultra } = ctx;
   const b = await resolveBuyer(c, stats, "/analytics");
   if (b instanceof Response) return b;
   const id = b.buyer.id;
   const counts = { awards: b.buyer.n_awards, history: b.buyer.n_history, contracts: b.buyer.n_contracts, grants: b.buyer.n_grants };
-  const frame = readFrame(c, stats, pro, MONEY_SOURCES, largestSource(counts, MONEY_SOURCES));
+  const frame = readFrame(c, stats, pro, MONEY_SOURCES, largestSource(counts, MONEY_SOURCES), pro ? most : FREE_YEARS);
   const { read, rows } = await readNamed(c, buyerQueries(id, frame, pro ? VIEW_TABLES.buyer : ["quarters"]));
   const name = pick(lang, b.buyer.name_en, b.buyer.name_fr) ?? b.buyer.name_en;
   const base = `/buyers/${id}/analytics`;
   const s: Shell = {
-    view: "buyer", lang, stats, name, base, frame, pro, allowed: MONEY_SOURCES, active: "/buyers", back: `/buyers/${id}`, backKey: "analytics.back_buyer",
+    view: "buyer", lang, stats, name, base, frame, pro, ultra, allowed: MONEY_SOURCES, active: "/buyers", back: `/buyers/${id}`, backKey: "analytics.back_buyer",
     crumbs: [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "buyers.title"), path: "/buyers" }, { name, path: `/buyers/${id}` }],
   };
   if (read.state !== "ready") return shell(c, s, read, null);
@@ -981,7 +1016,7 @@ async function orgData(c: Context<AppEnv>, oid: number, self: string, frame: Fra
 export async function organizationAnalytics(c: Context<AppEnv>): Promise<Response> {
   const ctx = await context(c);
   if (ctx instanceof Response) return ctx;
-  const { lang, stats, pro } = ctx;
+  const { lang, stats, pro, most, ultra } = ctx;
   const id = (c.req.param("id") ?? "").toLowerCase();
   const oid = orgNumber(id);
   if (oid === null) return c.notFound();
@@ -994,7 +1029,7 @@ export async function organizationAnalytics(c: Context<AppEnv>): Promise<Respons
   }
   const o = profile.organization;
   const counts = { awards: o.n_awards, history: o.n_history, contracts: o.n_contracts, grants: o.n_grants };
-  const frame = readFrame(c, stats, pro, MONEY_SOURCES, largestSource(counts, MONEY_SOURCES));
+  const frame = readFrame(c, stats, pro, MONEY_SOURCES, largestSource(counts, MONEY_SOURCES), pro ? most : FREE_YEARS);
   const base = `/organizations/${id}/analytics`;
   const name = o.display_name;
   const data = pro
@@ -1005,7 +1040,7 @@ export async function organizationAnalytics(c: Context<AppEnv>): Promise<Respons
   const more: Record<string, string | readonly string[]> = pro && data.segment !== null
     ? { segment: segmentCode(data.segment), vs: chosen } : {};
   const s: Shell = {
-    view: "organization", lang, stats, name, base, frame, pro, allowed: MONEY_SOURCES, active: "/organizations", more,
+    view: "organization", lang, stats, name, base, frame, pro, ultra, allowed: MONEY_SOURCES, active: "/organizations", more,
     back: `/organizations/${id}`, backKey: "analytics.back_organization",
     crumbs: [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "nav.organizations"), path: "/organizations" }, { name, path: `/organizations/${id}` }],
   };
@@ -1214,16 +1249,16 @@ function segmentQueries(sid: number, f: Frame, tables: readonly string[]): Recor
 export async function segmentAnalytics(c: Context<AppEnv>): Promise<Response> {
   const ctx = await context(c);
   if (ctx instanceof Response) return ctx;
-  const { lang, stats, pro } = ctx;
+  const { lang, stats, pro, most, ultra } = ctx;
   const code = c.req.param("nn") ?? "";
   const sid = SEGMENT_RE.test(code) ? segmentNumber(code) : null;
   if (sid === null) return c.notFound();
-  const frame = readFrame(c, stats, pro, SEGMENT_SOURCES, "awards");
+  const frame = readFrame(c, stats, pro, SEGMENT_SOURCES, "awards", pro ? most : FREE_YEARS);
   const { read, rows } = await readNamed(c, segmentQueries(sid, frame, pro ? VIEW_TABLES.segment : ["years"]));
   const name = segmentLabel(lang, code);
   const base = `/segments/${code}/analytics`;
   const s: Shell = {
-    view: "segment", lang, stats, name, base, frame, pro, allowed: SEGMENT_SOURCES, active: "/segments",
+    view: "segment", lang, stats, name, base, frame, pro, ultra, allowed: SEGMENT_SOURCES, active: "/segments",
     back: `/segments/${code}`, backKey: "analytics.back_segment",
     crumbs: [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "segments.title"), path: "/segments" }, { name: `${code} ${name}`, path: `/segments/${code}` }],
   };
@@ -1419,10 +1454,12 @@ const span = (table: string, f: Frame) => (table === "due" ? `from-${f.current}`
 // for a file that is not there), read with that table's statement alone, sent
 // private and never stored by a shared cache.
 export async function analyticsCsv(c: Context<AppEnv>, view: View): Promise<Response> {
-  const access = await analyticsAccess(c);
+  const plan = await analyticsPlan(c);
   const file = c.req.param("table") ?? "";
   const table = file.replace(/\.csv$/, "");
-  if (access !== "pro" || !(VIEW_TABLES[view] as readonly string[]).includes(table)) return c.notFound();
+  if (!plan || !allowsAnalytics(plan) || !(VIEW_TABLES[view] as readonly string[]).includes(table)) return c.notFound();
+  // The period at most the reader's plan gives, as on the view.
+  const most = planYears(plan);
   const lang = c.get("lang");
   const stats = await loadStats(c.env);
   if (!stats) return noDataPage(c, "analytics.title");
@@ -1432,7 +1469,7 @@ export async function analyticsCsv(c: Context<AppEnv>, view: View): Promise<Resp
     const b = await resolveBuyer(c, stats, `/analytics/${file}`);
     if (b instanceof Response) return b;
     const counts = { awards: b.buyer.n_awards, history: b.buyer.n_history, contracts: b.buyer.n_contracts, grants: b.buyer.n_grants };
-    const frame = readFrame(c, stats, true, MONEY_SOURCES, largestSource(counts, MONEY_SOURCES));
+    const frame = readFrame(c, stats, true, MONEY_SOURCES, largestSource(counts, MONEY_SOURCES), most);
     key = `${b.buyer.id}-${table}-${span(table, frame)}`;
     data = { ...(await readNamed(c, buyerQueries(b.buyer.id, frame, [table]))), segment: null };
   } else if (view === "organization") {
@@ -1442,14 +1479,14 @@ export async function analyticsCsv(c: Context<AppEnv>, view: View): Promise<Resp
     if (oid === null || !profile) return c.notFound();
     const o = profile.organization;
     const counts = { awards: o.n_awards, history: o.n_history, contracts: o.n_contracts, grants: o.n_grants };
-    const frame = readFrame(c, stats, true, MONEY_SOURCES, largestSource(counts, MONEY_SOURCES));
+    const frame = readFrame(c, stats, true, MONEY_SOURCES, largestSource(counts, MONEY_SOURCES), most);
     key = `${id}-${table}-${span(table, frame)}`;
     data = await orgData(c, oid, id, frame, [table]);
   } else {
     const code = c.req.param("nn") ?? "";
     const sid = SEGMENT_RE.test(code) ? segmentNumber(code) : null;
     if (sid === null) return c.notFound();
-    const frame = readFrame(c, stats, true, SEGMENT_SOURCES, "awards");
+    const frame = readFrame(c, stats, true, SEGMENT_SOURCES, "awards", most);
     key = `segment-${code}-${table}-${span(table, frame)}`;
     data = { ...(await readNamed(c, segmentQueries(sid, frame, [table]))), segment: null };
   }

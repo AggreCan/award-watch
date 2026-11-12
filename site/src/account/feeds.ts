@@ -61,8 +61,8 @@ import { isBlocked } from "./admin_ops";
 import { type Plan, allowed, lastKnownPlan, planFor } from "./entitlements";
 import { newId, randomHex, sameHash } from "./secrets";
 import { OUTAGE_TRUST_MS } from "./session";
-import { TARGET_SLOTS } from "./watch_events";
-import { type Watch, listWatches, survivorOf } from "./watches";
+import { TARGET_CHUNK, TARGET_SLOTS, chunked } from "./watch_events";
+import { type Watch, coveredWatches, listWatches, survivorOf } from "./watches";
 
 export const FEED_KINDS = ["search", "watchlist", "all"] as const;
 export type FeedKind = (typeof FEED_KINDS)[number];
@@ -183,10 +183,13 @@ export type FeedState = {
 };
 
 // The account's watches for a feed; none while the table is not on the
-// database yet.
-export async function feedWatches(env: Env, userId: string): Promise<FeedWatch[]> {
+// database yet. With the plan, past its figure (after a move to a smaller
+// plan) the first ones by creation date only, as the watch mail reads them.
+export async function feedWatches(env: Env, userId: string, plan?: Plan): Promise<FeedWatch[]> {
   try {
-    return (await listWatches(env, userId)).map(({ kind, target, segment, events }) => ({ kind, target, segment, events }));
+    const listed = await listWatches(env, userId);
+    const watches = plan ? await coveredWatches(env, userId, listed, plan) : listed;
+    return watches.map(({ kind, target, segment, events }) => ({ kind, target, segment, events }));
   } catch (e) {
     if (missingTable(e)) return [];
     throw e;
@@ -245,7 +248,7 @@ export async function readFeed(env: Env, id: string, secret: string, now = new D
       lastKnown.delete(id);
       return { state: "none" };
     }
-    const watches = kind === "search" ? [] : await feedWatches(env, row.user_id);
+    const watches = kind === "search" ? [] : await feedWatches(env, row.user_id, plan.plan);
     known = {
       id, userId: row.user_id, kind, searchId: row.search_id, searches, watches, plan: plan.plan, planUntil: plan.until,
       secret: row.secret, verifiedAt: now.getTime(),
@@ -305,9 +308,13 @@ export function horizonDays(events: readonly string[]): number {
   return events.includes("ends_12m") ? WINDOW_DAYS["12m"] : events.includes("ends_6m") ? WINDOW_DAYS["6m"] : 0;
 }
 
-// One slot per watch an account can hold (entitlements.ts WATCH_MAX, and the
-// claimed organization's beside them).
-export const ENDS_SLOTS = TARGET_SLOTS;
+// The watches one statement takes, as the events' statements do
+// (watch_events.ts TARGET_CHUNK): 2 + 3 * 25 = 77 bound values for the
+// contracts ending, 2 + 25 = 27 for the instruments, under D1's 100. An
+// account with more (Ultra holds up to WATCH_MAX, and the claimed
+// organization's beside them) sends one statement per group in the same
+// batch (watchEnds).
+export const ENDS_SLOTS = TARGET_CHUNK;
 
 // The contracts an account's organization and buyer watches hold in the
 // radar's window (rec_expiring), soonest end first: the rows ending from the
@@ -318,24 +325,64 @@ export const ENDS_SLOTS = TARGET_SLOTS;
 // buyer filters read one), its segment mark (' 43 ', or '' for the whole
 // buyer) and the last day of its horizon. typeof keeps a buyer's id made of
 // digits from reading as an organization's number. An unused slot is bound to
-// -1, '' and '', which match no row. A row two watches reach is one row; n
-// counts every match before the LIMIT, so the feed's last event can say how
+// -1, '' and '', which match no row. A row two watches of one group reach is
+// one row; kt, the row's key as text (a 64-bit integer a JavaScript number
+// cannot hold exactly), lets the groups' rows be merged so a row two groups
+// reach is one row too, and sorted as the statement sorts them. n counts every
+// match of the group before the LIMIT, so the feed's last event can say how
 // many more there are.
 const endsSlot = (i: number): string => {
   const t = 3 + 3 * i;
   return `(endd <= ?${t + 2} AND ((typeof(?${t}) <> 'text' AND oid = ?${t}) OR (typeof(?${t}) = 'text' AND (buyer = ?${t} OR client = ?${t}))) ` +
     `AND (?${t + 1} = '' OR instr(segs, ?${t + 1}) > 0))`;
 };
-export const WATCH_ENDS_SQL =
-  "SELECT endd, j, COUNT(*) OVER () AS n FROM rec_expiring WHERE endd BETWEEN ?1 AND ?2 AND (" +
-  `${Array.from({ length: ENDS_SLOTS }, (_, i) => endsSlot(i)).join(" OR ")}) ORDER BY endd, k LIMIT ${FEED_EVENTS_MAX}`;
+// The statement over n slots: ENDS_SLOTS in every one the site sends. Its slots are an OR, which SQLite (D1, and
+// the local database) also bounds, at an expression depth of 100: one statement over every watch an account holds
+// would pass it as well as the bound values.
+const watchEndsSqlOver = (n: number): string =>
+  "SELECT endd, j, CAST(k AS TEXT) AS kt, COUNT(*) OVER () AS n FROM rec_expiring WHERE endd BETWEEN ?1 AND ?2 AND (" +
+  `${Array.from({ length: n }, (_, i) => endsSlot(i)).join(" OR ")}) ORDER BY endd, k LIMIT ${FEED_EVENTS_MAX}`;
+export const WATCH_ENDS_SQL = watchEndsSqlOver(ENDS_SLOTS);
 
 export type EndsSlot = { target: number | string; mark: string; last: string };
 
-export function endsBinds(first: string, slots: readonly EndsSlot[]): (string | number)[] {
+// slots: at most ENDS_SLOTS (one group), unless a test asks for another number with n.
+export function endsBinds(first: string, slots: readonly EndsSlot[], n = ENDS_SLOTS): (string | number)[] {
   const last = slots.reduce((m, s) => (s.last > m ? s.last : m), first);
-  const bound = Array.from({ length: ENDS_SLOTS }, (_, i) => slots[i]);
+  const bound = Array.from({ length: n }, (_, i) => slots[i]);
   return [first, last, ...bound.flatMap((s) => (s ? [s.target, s.mark, s.last] : [-1, "", ""]))];
+}
+
+// The rows of every group as one list: each row once by its key, soonest end
+// first then by key, as one statement over every slot would give them, cut at
+// FEED_EVENTS_MAX; beyond is how many matched past the rows kept. A group
+// reads FEED_EVENTS_MAX rows at most, so every row one statement would keep is
+// read by the group it is in (its place in its group is no later than its
+// place in all). When no group was cut (each read every row it matched), the
+// count is exact. When one was, its rows past the cut cannot be told from
+// another group's, and a row two groups both reach past their cuts counts
+// twice: beyond can then be more than one statement would say, never less.
+export function mergeEnds(groups: readonly Row[][]): { rows: Row[]; beyond: number } {
+  const byKey = new Map<string, Row>();
+  let unread = 0;
+  for (const rows of groups) {
+    unread += Math.max(0, (num(rows[0]?.n) ?? 0) - rows.length);
+    for (const r of rows) {
+      const key = typeof r.kt === "string" ? r.kt : String(r.kt);
+      if (!byKey.has(key)) byKey.set(key, r);
+    }
+  }
+  const order = (r: Row) => (typeof r.kt === "string" && /^-?\d+$/.test(r.kt) ? BigInt(r.kt) : 0n);
+  const all = [...byKey.values()].sort((a, b) => {
+    const ea = String(a.endd ?? "");
+    const eb = String(b.endd ?? "");
+    if (ea !== eb) return ea < eb ? -1 : 1;
+    const ka = order(a);
+    const kb = order(b);
+    return ka === kb ? 0 : ka < kb ? -1 : 1;
+  });
+  const rows = all.slice(0, FEED_EVENTS_MAX);
+  return { rows, beyond: all.length - rows.length + unread };
 }
 
 // How far ahead an organization watch reads the instruments it holds: the
@@ -344,8 +391,8 @@ export function endsBinds(first: string, slots: readonly EndsSlot[]): (string | 
 // module back through the account pages, so its constants are not set yet
 // while this one is (calendar.test.ts holds the two equal).
 export const INSTRUMENT_DAYS = 182;
-// One slot per organization watch an account can hold.
-export const INSTRUMENT_SLOTS = TARGET_SLOTS;
+// The organization watches one statement takes, in groups as the contracts ending go.
+export const INSTRUMENT_SLOTS = TARGET_CHUNK;
 
 // The standing offers and supply arrangements the account's organization
 // watches hold (?3 to ?27, each an organization's number; an unused slot is
@@ -355,17 +402,35 @@ export const INSTRUMENT_SLOTS = TARGET_SLOTS;
 // first, at most FEED_EVENTS_MAX rows, COUNT(*) OVER () counting every match
 // so the cap's last event can say how many more. rec_instruments_expiry
 // narrows the instruments to the window (CROSS JOIN keeps them the outer
-// table) and the holders of each come through rec_holders_instrument.
-export const WATCH_INSTRUMENTS_SQL =
+// table) and the holders of each come through rec_holders_instrument. A row
+// names its holder, so the groups' rows never repeat: merged, sorted again
+// and cut, their totals add up exactly (mergeInstruments).
+export const watchInstrumentsSqlOver = (n: number): string =>
   "SELECT i.agr, i.type_en, i.type_fr, i.desc_en, i.desc_fr, i.user_en, i.user_fr, i.start, i.expiry, i.n, h.oid, " +
   "MIN(h.name) AS name, group_concat(COALESCE(h.region_en, h.region), char(31)) AS regions_en, " +
   "group_concat(COALESCE(h.region_fr, h.region_en, h.region), char(31)) AS regions_fr, COUNT(*) OVER () AS total " +
   "FROM rec_instruments i CROSS JOIN rec_holders h ON h.ik = i.k WHERE i.expiry BETWEEN ?1 AND ?2 AND h.oid IN (" +
-  `${Array.from({ length: INSTRUMENT_SLOTS }, (_, i) => `?${3 + i}`).join(", ")}) ` +
+  `${Array.from({ length: n }, (_, i) => `?${3 + i}`).join(", ")}) ` +
   `GROUP BY i.k, h.oid ORDER BY i.expiry, i.agr, h.oid LIMIT ${FEED_EVENTS_MAX}`;
+export const WATCH_INSTRUMENTS_SQL = watchInstrumentsSqlOver(INSTRUMENT_SLOTS);
 
-export function instrumentBinds(first: string, owners: readonly number[]): (string | number)[] {
-  return [first, addDays(first, INSTRUMENT_DAYS), ...Array.from({ length: INSTRUMENT_SLOTS }, (_, i) => owners[i] ?? -1)];
+export function instrumentBinds(first: string, owners: readonly number[], n = INSTRUMENT_SLOTS): (string | number)[] {
+  return [first, addDays(first, INSTRUMENT_DAYS), ...Array.from({ length: n }, (_, i) => owners[i] ?? -1)];
+}
+
+// The instruments of every group as one list, as one statement over every
+// organization would give it: soonest expiry first, then by agreement and
+// holder, cut at FEED_EVENTS_MAX, and how many matched past the rows kept.
+export function mergeInstruments(groups: readonly Row[][]): { rows: Row[]; beyond: number } {
+  const text = (v: unknown) => String(v ?? "");
+  const all = groups.flat().sort((a, b) => {
+    if (text(a.expiry) !== text(b.expiry)) return text(a.expiry) < text(b.expiry) ? -1 : 1;
+    if (text(a.agr) !== text(b.agr)) return text(a.agr) < text(b.agr) ? -1 : 1;
+    return (num(a.oid) ?? 0) - (num(b.oid) ?? 0);
+  });
+  const total = groups.reduce((n, rows) => n + Math.max(num(rows[0]?.total) ?? 0, rows.length), 0);
+  const rows = all.slice(0, FEED_EVENTS_MAX);
+  return { rows, beyond: Math.max(0, total - rows.length) };
 }
 
 // The watches' contract ends: each followed record's end whatever its date,
@@ -417,12 +482,14 @@ export async function watchEnds(env: Env, watches: readonly FeedWatch[], ctx: Ev
     const held = slots.get(key);
     if (!held || held.last < last) slots.set(key, { target, mark: w.segment ? ` ${w.segment} ` : "", last });
   });
-  const bound = [...slots.values()].slice(0, ENDS_SLOTS);
-  const owners = [...new Set((await Promise.all(holders.map((w) => idOf("organization", w.target))))
-    .map((id) => orgNumber(id)).filter((n): n is number => n !== null))].slice(0, INSTRUMENT_SLOTS);
+  // Every watch an account can hold (organizations and buyers each at their fullest, at most), ENDS_SLOTS (and
+  // INSTRUMENT_SLOTS) to a statement.
+  const endsGroups = chunked([...slots.values()].slice(0, 2 * TARGET_SLOTS), ENDS_SLOTS);
+  const ownerGroups = chunked([...new Set((await Promise.all(holders.map((w) => idOf("organization", w.target))))
+    .map((id) => orgNumber(id)).filter((n): n is number => n !== null))].slice(0, TARGET_SLOTS), INSTRUMENT_SLOTS);
   const queries: Query[] = [
-    ...(bound.length ? [{ sql: WATCH_ENDS_SQL, params: endsBinds(ctx.dataDate, bound) }] : []),
-    ...(owners.length ? [{ sql: WATCH_INSTRUMENTS_SQL, params: instrumentBinds(ctx.dataDate, owners) }] : []),
+    ...endsGroups.map((group) => ({ sql: WATCH_ENDS_SQL, params: endsBinds(ctx.dataDate, group) })),
+    ...ownerGroups.map((group) => ({ sql: WATCH_INSTRUMENTS_SQL, params: instrumentBinds(ctx.dataDate, group) })),
     ...published.map((p) => ({ sql: PUBLISHED_CONTRACT_SQL, params: [p.dept, p.ref] })),
   ];
   let rows: Row[][] = [];
@@ -440,23 +507,22 @@ export async function watchEnds(env: Env, watches: readonly FeedWatch[], ctx: Ev
     push(facts ? contractEvent(ctx.lang, facts, ctx.base) : null);
   }
   let at = 0;
-  const ends = bound.length ? rows[at++] ?? [] : [];
-  const held = owners.length ? rows[at++] ?? [] : [];
+  const ends = mergeEnds(endsGroups.map(() => rows[at++] ?? []));
+  const held = mergeInstruments(ownerGroups.map(() => rows[at++] ?? []));
   published.forEach((p, i) => {
     const facts = publishedFacts(ctx.lang, p.dept, p.ref, rows[at + i] ?? []);
     push(facts ? contractEvent(ctx.lang, facts, ctx.base) : null);
   });
-  for (const r of ends) {
+  for (const r of ends.rows) {
     const row = radarRow(r, ctx.dataDate);
     push(row ? contractEvent(ctx.lang, expiringFacts(ctx.lang, row), ctx.base) : null);
   }
-  for (const r of held) {
+  for (const r of held.rows) {
     const facts = instrumentFacts(ctx.lang, r);
     push(facts ? instrumentEvent(ctx.lang, facts, ctx.base) : null);
   }
-  // Each statement's rows past the ones read, every one later than them.
-  const past = (read: Row[], column: string) => Math.max(0, (num(read[0]?.[column]) ?? 0) - read.length);
-  return { events, beyond: past(ends, "n") + past(held, "total") };
+  // Each list's rows past the ones read, every one later than them.
+  return { events, beyond: ends.beyond + held.beyond };
 }
 
 // -- a feed's events --------------------------------------------------------------------------
