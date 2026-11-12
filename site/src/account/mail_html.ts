@@ -67,13 +67,25 @@ const DARK_CSS = [
   ".logo-dark{display:block!important}",
 ].join("");
 
-const HEAD_CSS = `
+// A client's reading of a message, light or dark, for the site's own view of
+// one in a frame (MailView below).
+export type MailScheme = "light" | "dark";
+
+// The dark rules' line of the head: under the query, as every message that
+// is sent carries them; for a view in a frame, the scheme forced, the rules
+// applied as they stand (dark) or left out (light).
+function darkRules(scheme?: MailScheme): string {
+  if (scheme === "light") return "";
+  return scheme === "dark" ? `\n  ${DARK_CSS}` : `\n  @media (prefers-color-scheme: dark){ ${DARK_CSS} }`;
+}
+
+const headCss = (scheme?: MailScheme) => `
   body{margin:0;padding:0;background:${C.page};}
   table{border-collapse:collapse;}
-  img{border:0;outline:none;text-decoration:none;}
-  @media (prefers-color-scheme: dark){ ${DARK_CSS} }
+  img{border:0;outline:none;text-decoration:none;}${darkRules(scheme)}
   @media only screen and (max-width:620px){ .wrap{width:100%!important;} .pad{padding-left:18px!important;padding-right:18px!important;} }
 `;
+const HEAD_CSS = headCss();
 
 // The two hosted wordmarks at 2x, 142 by 20 CSS pixels, served from the
 // site's /brand/ (written by brand/make_wordmark_png.py): ink on a baked
@@ -112,22 +124,32 @@ export interface Shell {
   // The footer's first line, markup built from escaped parts (whyLine); empty
   // for a message with no reason line (the address-change notice).
   why: string;
+  // Absent for every message that is sent. The public sample of the weekly
+  // briefing (briefing_pages.tsx) shows its message in a frame on the site:
+  // the same document with the reader's scheme forced, since a frame follows
+  // the browser's scheme rather than the page's theme, and its links opening
+  // a new tab, as a webmail client opens them, never inside the frame.
+  view?: MailView;
 }
+
+export type MailView = { scheme: MailScheme };
 
 export function shell(o: Shell): string {
   const host = hostOf(o.site);
   const home = siteLink(o.site, "/", o.lang);
   const tagline = `${escapeHtml(t(o.lang, "site.name"))} · ${escapeHtml(t(o.lang, "site.tagline"))}`;
   const why = o.why ? `\n    <p class="muted" style="margin:0 0 6px 0;font:12px/1.5 ${FONT};color:${C.muted};">${o.why}</p>` : "";
+  const schemes = o.view ? o.view.scheme : "light dark";
+  const base = o.view ? `\n<base target="_blank">` : "";
   return `<!DOCTYPE html>
 <html lang="${o.lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<meta name="supported-color-schemes" content="light dark">
-<title>${escapeHtml(o.subject)}</title>
-<style>${HEAD_CSS}</style>
+<meta name="color-scheme" content="${schemes}">
+<meta name="supported-color-schemes" content="${schemes}">
+<title>${escapeHtml(o.subject)}</title>${base}
+<style>${o.view ? headCss(o.view.scheme) : HEAD_CSS}</style>
 </head>
 <body class="bg" style="margin:0;padding:0;background:${C.page};">
 <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(o.preheader)}</div>

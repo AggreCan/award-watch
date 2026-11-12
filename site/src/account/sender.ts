@@ -77,6 +77,14 @@ export function stubSender(env: Env): Sender {
 
 const FROM_NAME = "Award Watch";
 
+// Who a message comes from, as an inbox lists it: the name and MAIL_FROM,
+// read here for the provider below and for the public sample of the weekly
+// briefing (briefing_pages.tsx), which shows them above its message. address
+// is null while MAIL_FROM is unset.
+export function mailSender(env: Env): { name: string; address: string | null } {
+  return { name: FROM_NAME, address: env.MAIL_FROM?.trim() || null };
+}
+
 // What a failed send leaves in the log: the binding's error code
 // (E_SENDER_NOT_VERIFIED, E_DAILY_LIMIT_EXCEEDED, ...) or the error's name.
 // Never the message text, which can quote the recipient's address; the
@@ -97,14 +105,15 @@ export function errorTag(e: unknown): string {
 // machine-sent, so mail servers send no out-of-office reply to it.
 export function providerSender(env: Env): Sender | null {
   const mail = env.MAIL;
-  const from = env.MAIL_FROM?.trim();
+  const sender = mailSender(env);
+  const from = sender.address;
   if (!mail || !from) return null;
   return {
     kind: "provider",
     async send(m) {
       try {
         await mail.send({
-          from: { email: from, name: FROM_NAME },
+          from: { email: from, name: sender.name },
           to: m.to,
           replyTo: CONTACT_EMAIL,
           subject: m.subject,

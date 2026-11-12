@@ -25,7 +25,7 @@ import { fiscalLabel } from "../records_db";
 import type { BriefingData, BriefingSubject, Quarter } from "./briefings";
 import { RULES } from "./entitlements";
 import type { RecordsKind, Rise } from "./records_deliveries";
-import { C, FONT, button, escapeHtml, h1, h2, inkLink, mutedLink, para, shell, siteLink, textFooter, whyLine } from "./mail_html";
+import { C, FONT, type MailView, button, escapeHtml, h1, h2, inkLink, mutedLink, para, shell, siteLink, textFooter, whyLine } from "./mail_html";
 import { type EventKind, type EventRow, INSTRUMENT_REF, type Listed, type WatchKind, isInstrumentKind } from "./watch_events";
 import type { MailMessage } from "./sender";
 
@@ -766,9 +766,10 @@ export function watchDigest(o: WatchDigest): DigestMessage {
 // fiscal year's largest records, and the standing offers and supply
 // arrangements ending within 6 months with their holders; each section
 // SECTION_ROWS rows at most (briefings.ts), then a line with how many more or
-// the list on the site. The public sample
-// (/pro/briefing-sample) renders the same parts with no recipient and no
-// footer of its own.
+// the list on the site. The public sample (/pro/briefing-sample,
+// briefing_pages.tsx) shows this same message whole in a frame: built here,
+// with the Email lists page in place of the stop link and the view's scheme
+// forced (mail_html.ts Shell.view).
 export interface BriefingDigest {
   lang: Lang;
   to: string;
@@ -779,6 +780,8 @@ export interface BriefingDigest {
   // "81 Engineering", a buyer's name, or a buyer narrowed to a segment.
   name: string;
   data: BriefingData;
+  // The public sample's frame only; absent for every message that is sent.
+  view?: MailView;
 }
 
 const BRIEFING_MONTHS: Readonly<Record<number, Key>> = {
@@ -1046,6 +1049,7 @@ export function briefingDigest(o: BriefingDigest): DigestMessage {
     html: shell({
       lang, site: o.site, subject: parts.subject, preheader: parts.preheader, body: parts.body,
       why: whyLine(why, [{ href: searches, label: t(lang, "briefing.searches_link") }, { href: o.stopUrl, label: t(lang, "briefing.stop_link") }]),
+      ...(o.view ? { view: o.view } : {}),
     }),
   };
 }

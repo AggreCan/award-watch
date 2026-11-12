@@ -2130,6 +2130,17 @@ export const ACCOUNT_STRINGS = {
   "briefing.sample_subject": { en: "Subject", fr: "Objet" },
   "briefing.sample_preheader": { en: "Preview line", fr: "Ligne d'aperçu" },
   "briefing.sample_message": { en: "The Message", fr: "Le message" },
+  // The reading pane: who the message is from, the two inboxes and their frames, and the line under them.
+  "briefing.sample_from": { en: "From", fr: "De" },
+  "briefing.sample_schemes": { en: "Inbox colours", fr: "Couleurs de la messagerie" },
+  "briefing.sample_light": { en: "Light inbox", fr: "Messagerie claire" },
+  "briefing.sample_dark": { en: "Dark inbox", fr: "Messagerie sombre" },
+  "briefing.sample_frame_light": { en: "The message in a light inbox", fr: "Le message dans une messagerie claire" },
+  "briefing.sample_frame_dark": { en: "The message in a dark inbox", fr: "Le message dans une messagerie sombre" },
+  "briefing.sample_note": {
+    en: "Links in the message open in a new tab. Here \"{stop}\" opens the {lists} page; in a subscriber's message it turns that briefing's email off.",
+    fr: "Les liens du message s'ouvrent dans un nouvel onglet. Ici, « {stop} » ouvre la page {lists}; dans le message d'un abonné, il désactive le courriel de ce bulletin.",
+  },
   "briefing.sample_unavailable": {
     en: "The sample is not available right now: the records database cannot answer. Try again in a few minutes.",
     fr: "L'exemple n'est pas disponible pour le moment : la base des dossiers ne répond pas. Réessayez dans quelques minutes.",

@@ -146,5 +146,8 @@ export type AppEnv = {
   // sameDayAt: the last same-day cut's time, set by the band (pages/intraday.tsx
   // sameDayView) when a page shows the same-day notices; page() hands it to
   // the top bar's sub-daily timer (src/refresh.tsx).
-  Variables: { lang: Lang; sameDayAt?: string };
+  // mailFrame: set by the weekly briefing sample's message route
+  // (account/briefing_pages.tsx), whose answer takes the frame's own headers
+  // in place of the site's (sampleFrameHeaders).
+  Variables: { lang: Lang; sameDayAt?: string; mailFrame?: boolean };
 };

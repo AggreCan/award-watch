@@ -1532,13 +1532,44 @@ a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offse
 .toolbar > .save-search { margin: 0; border-top: 1px solid var(--border); }
 
 /* Weekly briefings (src/account/briefing_pages.tsx): the Subscribe control in
-   its panel on a segment or buyer page, and the public sample's message, which
-   keeps the light ground the mail is drawn on (its colours are inline, as the
-   mail's are) in either theme, at the mail's 600 px column. */
+   its panel on a segment or buyer page. */
 .briefing-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
 .briefing-control .muted { max-width: 60ch; }
-.briefing-sample { max-width: 600px; margin-top: 16px; padding: 16px 20px; background: #ffffff; color: #0f172a; border: 1px solid var(--border); overflow-wrap: anywhere; }
-.briefing-sample table { width: 100%; }
+
+/* The public sample's reading pane (/pro/briefing-sample): the inbox's line
+   for the message (the sender, the subject, the preview line), then the
+   message in a frame, a light inbox or a dark one. The pane is a mail
+   client's column, 640 px at most: the mail's 600 px card and its 12 px
+   margins fit inside it from 700 px up, and on a phone the pane takes the
+   screen's whole width, as a phone's mail app does, so the mail's own narrow
+   rules (its max-width:620px query, read against the frame's width) lay the
+   card out to fit. The frame shown follows ?scheme= (data-scheme), or, with
+   none, the site's theme, by the same rules as every colour here. Without
+   script a frame is a fixed height that scrolls inside the pane;
+   public/briefing-sample.js sets each to its message's height. */
+.inbox { max-width: 640px; }
+.panel > dl.inbox-head { display: block; padding: 12px 16px; font-size: 13px; line-height: 20px; }
+.inbox-head dd { padding: 0; border: 0; overflow-wrap: anywhere; }
+.inbox-head .inbox-from { color: var(--ink); }
+.inbox-head .inbox-address { color: var(--muted); }
+.inbox-head .inbox-subject { margin-top: 2px; color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
+.inbox-head .inbox-preview { color: var(--muted); }
+.panel > .inbox-frame { display: block; width: 100%; height: 80vh; min-height: 420px; margin: 0; border: 0; background: var(--panel); }
+.inbox[data-scheme="light"] .inbox-dark, .inbox[data-scheme="dark"] .inbox-light, .inbox[data-scheme="auto"] .inbox-dark { display: none; }
+.inbox[data-scheme="auto"] .tabs .inbox-tab-light { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+:root[data-theme="dark"] .inbox[data-scheme="auto"] .inbox-light { display: none; }
+:root[data-theme="dark"] .inbox[data-scheme="auto"] .inbox-dark { display: block; }
+:root[data-theme="dark"] .inbox[data-scheme="auto"] .tabs .inbox-tab-light { color: var(--ink-2); border-bottom-color: transparent; font-weight: 500; }
+:root[data-theme="dark"] .inbox[data-scheme="auto"] .tabs .inbox-tab-dark { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .inbox[data-scheme="auto"] .inbox-light { display: none; }
+  :root:not([data-theme="light"]) .inbox[data-scheme="auto"] .inbox-dark { display: block; }
+  :root:not([data-theme="light"]) .inbox[data-scheme="auto"] .tabs .inbox-tab-light { color: var(--ink-2); border-bottom-color: transparent; font-weight: 500; }
+  :root:not([data-theme="light"]) .inbox[data-scheme="auto"] .tabs .inbox-tab-dark { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+}
+@media (max-width: 699px) {
+  .inbox { max-width: none; margin-left: calc(-1 * var(--gutter)); margin-right: calc(-1 * var(--gutter)); border-left: 0; border-right: 0; }
+}
 
 /* -- sorting a table by its head (src/columns.tsx, public/sort.js) -----------
    The label is a button where the page sorts the rows, a link where the

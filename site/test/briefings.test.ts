@@ -9,7 +9,8 @@
 // empty; the standing offers and supply arrangements ending within 6 months,
 // their window, their "See all" link and its filters, their empty line; the
 // run's claim and stop link; the public sample, the same with and without a
-// session; and every statement's plan. Every expected line is written out
+// session, and its message's frame, a subscriber's message line for line but
+// for the lines the sample changes; and every statement's plan. Every expected line is written out
 // from the rows below, never read back from the code under test.
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -22,6 +23,7 @@ import { readInstrumentQuery } from "../src/instruments";
 import { BUYER_DUE_SQL, SEGMENT_DUE_SQL } from "../src/records_db";
 import { ACCOUNTS, csrf, decode, get, grantPro, nbsp, newEmail, onEnv, post, signIn, useAccountsDb, userId } from "./accounts-helpers";
 import { FILES, makeFakeAssets } from "./assets";
+import { SAMPLE_ADDRESS } from "./mail-fixtures";
 import { applySql } from "./setup";
 
 useAccountsDb();
@@ -785,36 +787,157 @@ describe("subscribing", () => {
 });
 
 describe("the public sample", () => {
-  it("is built from this week's data, the same with and without a session, cached for an hour", async () => {
+  const PAGE = "/pro/briefing-sample";
+  const MESSAGE = "/pro/briefing-sample/message";
+  const LOCAL = "http://localhost";
+  const segment81 = { kind: "segment" as const, subject: "81", segment: "" };
+  const SANDBOX = 'sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"';
+  const FRAME_CSP = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'self'; form-action 'none'; frame-ancestors 'self'";
+  // The site's data date is 2026-10-31: the week from 2026-10-25, the quarter after Q3.
+  const sampleData = async () => {
+    const read = await readBriefing(env as never, segment81, "2026-10-31", "2026-10-24");
+    if (read.state !== "ready") throw new Error(read.state);
+    return read.data;
+  };
+
+  it("is the same page with and without a session, cached for an hour: the inbox's line, the tabs and the two frames", async () => {
     const cookie = await signIn(newEmail("brief-sample"));
-    const bare = await get("/pro/briefing-sample");
-    const signed = await get("/pro/briefing-sample", { cookie });
+    const bare = await get(PAGE);
+    const signed = await get(PAGE, { cookie });
     expect(bare.status).toBe(200);
     expect(bare.headers.get("cache-control")).toBe("public, max-age=3600");
     expect(signed.headers.get("cache-control")).toBe("public, max-age=3600");
     const body = await bare.text();
     expect(await signed.text()).toBe(body);
     expect(body).toContain("A Sample of the Weekly Briefing");
-    // The site's data date is 2026-10-31: the week from 2026-10-25, the quarter after Q3.
-    expect(decode(body)).toContain("81 Engineering, week to 2026-10-31");
-    expect(decode(body)).toContain("Contracts ending next quarter, Q4 2026-27 (January to March 2027): 3, $1,050,000 (1 without a value)");
-    // Section 6 as the mail writes it, from the site's data date: 2026-10-31 to 2027-05-01.
-    expect(decode(body)).toContain("Standing offers and supply arrangements ending within 6 months: 3</h2>");
-    expect(decode(body)).toContain(">W8486-150001/001/QD</a>");
-    expect(decode(body)).toContain("Departmental Individual Standing Offer · Calibration services · National Defence · expires 2026-11-01 · 2 holders</div>");
-    expect(decode(body)).toMatch(/href="[^"]*\/instruments\?segment=81&within=6" [^>]*>See all 3<\/a>/);
-    expect(body).not.toContain("F5211-200001");
+    // The page keeps the site's own headers; only the message route has its own.
+    expect(bare.headers.get("x-frame-options")).toBe("DENY");
+    expect(bare.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    // The inbox's line: the sender's name and MAIL_FROM as wrangler.jsonc sets it, the subject, the preview line.
+    expect(body).toContain('<dd class="inbox-from"><strong>Award Watch</strong> <span class="inbox-address">&lt;alerts@awardwatch.ca&gt;</span></dd>');
+    expect(body).toContain('<dt class="visually-hidden">From</dt>');
+    expect(decode(body)).toMatch(/<dd class="inbox-subject">81 Engineering this week: [^<]*3 contracts ending next quarter<\/dd>/);
+    expect(decode(body)).toMatch(/<dd class="inbox-preview">[^<]*Next quarter, Q4 2026-27: 3 contracts ending, [^<]*<\/dd>/);
+    // No scheme in the address: both frames, the stylesheet showing the one of the site's theme.
+    expect(body).toContain('<section class="panel inbox" data-scheme="auto" aria-labelledby="inbox-title">');
+    expect(body).toContain(`<iframe class="inbox-frame inbox-light" src="${MESSAGE}/light" title="The message in a light inbox" ${SANDBOX} loading="lazy"></iframe>`);
+    expect(body).toContain(`<iframe class="inbox-frame inbox-dark" src="${MESSAGE}/dark" title="The message in a dark inbox" ${SANDBOX} loading="lazy"></iframe>`);
+    expect(body).toContain(`<a href="${PAGE}?scheme=light" class="inbox-tab-light" data-scheme="light">Light inbox</a>`);
+    expect(body).toContain(`<a href="${PAGE}?scheme=dark" class="inbox-tab-dark" data-scheme="dark">Dark inbox</a>`);
+    expect(body).toContain('<script src="/briefing-sample.js" defer=""></script>');
+    expect(decode(body)).toContain('Here "Stop this briefing" opens the <a href="/alerts">Email Lists</a> page;');
+    // The message is in the frames alone: the page carries none of its markup.
+    expect(body).not.toContain('class="briefing-sample"');
+    expect(body).not.toContain("81 Engineering, week to 2026-10-31");
     expect(body).not.toContain("aw_session");
     expect(body).not.toContain(EM_DASH);
-    const fr = await (await get("/pro/briefing-sample?lang=fr")).text();
-    expect(nbsp(decode(fr))).toContain("81 Ingénierie, semaine se terminant le 2026-10-31");
-    expect(nbsp(decode(fr))).toContain("Offres à commandes et arrangements en matière d’approvisionnement prenant fin d’ici 6 mois : 3</h2>");
-    expect(nbsp(decode(fr))).toMatch(/href="[^"]*\/instruments\?segment=81&within=6&lang=fr" [^>]*>Voir les 3<\/a>/);
-    // A records database that cannot answer: the page's shell and one line, never stored.
-    const down = await get("/pro/briefing-sample", { env: onEnv({ RECORDS: undefined }) });
+    // ?scheme= names the inbox and its tab; any other value names none.
+    const dark = await (await get(`${PAGE}?scheme=dark`)).text();
+    expect(dark).toContain('<section class="panel inbox" data-scheme="dark"');
+    expect(dark).toContain(`<a href="${PAGE}?scheme=dark" class="inbox-tab-dark" data-scheme="dark" aria-current="page">Dark inbox</a>`);
+    expect(dark).toContain(`<a href="${PAGE}?scheme=light" class="inbox-tab-light" data-scheme="light">Light inbox</a>`);
+    expect(await (await get(`${PAGE}?scheme=sepia`)).text()).toContain('data-scheme="auto"');
+    // French: the French message in both frames, whatever the cookie says.
+    const fr = nbsp(decode(await (await get(`${PAGE}?lang=fr`)).text()));
+    expect(fr).toContain(`src="${MESSAGE}/light?lang=fr" title="Le message dans une messagerie claire"`);
+    expect(fr).toContain(`src="${MESSAGE}/dark?lang=fr" title="Le message dans une messagerie sombre"`);
+    expect(fr).toContain(">Messagerie claire</a>");
+    expect(fr).toContain(">Messagerie sombre</a>");
+    expect(fr).toMatch(/<dd class="inbox-subject">81 Ingénierie cette semaine : /);
+    expect(fr).toContain("Ici, « Arrêter ce bulletin » ouvre la page <a href=\"/alerts\">Listes de diffusion</a>;");
+    // A records database that cannot answer: the page's shell and one line, never stored, and no frame.
+    const down = await get(PAGE, { env: onEnv({ RECORDS: undefined }) });
     expect(down.status).toBe(503);
     expect(down.headers.get("cache-control")).toBe("no-store");
-    expect(await down.text()).toContain("The sample is not available right now");
+    const downText = await down.text();
+    expect(downText).toContain("The sample is not available right now");
+    expect(downText).not.toContain("<iframe");
+  });
+
+  it("serves the message a subscriber is sent, line for line, but for the forced scheme, the new-tab links and the stop link", async () => {
+    const data = await sampleData();
+    for (const lang of ["en", "fr"] as const) {
+      const q = lang === "fr" ? "?lang=fr" : "";
+      const name = lang === "fr" ? "81 Ingénierie" : "81 Engineering";
+      // A subscriber's message for the same segment and week, from the subscriber's own builder.
+      const sent = briefingDigest({
+        lang, to: "a@example.com", site: LOCAL, stopUrl: `${LOCAL}/account/stop?b=B&t=T${lang === "fr" ? "&lang=fr" : ""}`, briefing: segment81, name, data,
+      }).html;
+      // The dark rules a dark client applies: the ones under the message's own query.
+      const query = /\n {2}@media \(prefers-color-scheme: dark\)\{ ([^\n]*) \}\n/.exec(sent);
+      expect(query, lang).not.toBeNull();
+      const rules = query![1];
+      expect(rules).toContain(".bg{background:#0b1220!important}");
+      // Every line the sample changes, written out: the scheme, the links' target, the rules, the stop link.
+      const stop = `${LOCAL}/account/stop?b=B&amp;t=T${lang === "fr" ? "&amp;lang=fr" : ""}`;
+      expect(sent.split(stop)).toHaveLength(2);
+      const asSample = (scheme: "light" | "dark") => sent
+        .replace('<meta name="color-scheme" content="light dark">', `<meta name="color-scheme" content="${scheme}">`)
+        .replace('<meta name="supported-color-schemes" content="light dark">', `<meta name="supported-color-schemes" content="${scheme}">`)
+        .replace("</title>\n", '</title>\n<base target="_blank">\n')
+        .replace(query![0], scheme === "dark" ? `\n  ${rules}\n` : "\n")
+        .replace(stop, `${LOCAL}/alerts${q}`);
+      for (const scheme of ["light", "dark"] as const) {
+        const res = await get(`${MESSAGE}/${scheme}${q}`);
+        expect(res.status, `${lang} ${scheme}`).toBe(200);
+        const doc = await res.text();
+        expect(doc, `${lang} ${scheme}`).toBe(asSample(scheme));
+        expect(doc).not.toContain("prefers-color-scheme");
+        expect(doc).not.toContain("/account/stop");
+        expect(doc).not.toContain("a@example.com");
+        expect(doc).not.toContain(EM_DASH);
+        // Dark: the dark rules stand in the head's style with no query around them; light: none of them.
+        if (scheme === "dark") expect(doc).toContain(`<style>\n  body{margin:0;padding:0;background:#f8fafc;}\n  table{border-collapse:collapse;}\n  img{border:0;outline:none;text-decoration:none;}\n  ${rules}\n  @media only screen`);
+        else expect(doc).not.toContain(".logo-dark{display:block!important}");
+        // The message route's own headers: its policy, framed by the site alone, kept out of search results, cached as the page is.
+        expect(res.headers.get("content-security-policy")).toBe(FRAME_CSP);
+        expect(res.headers.get("x-frame-options")).toBe("SAMEORIGIN");
+        expect(res.headers.get("x-robots-tag")).toBe("noindex");
+        expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
+        expect(res.headers.get("content-type")).toBe("text/html; charset=UTF-8");
+      }
+    }
+    // The week as the mail writes it, from the site's data date; section 6 from 2026-10-31 to 2027-05-01.
+    const en = decode(await (await get(`${MESSAGE}/light`)).text());
+    expect(en).toContain("81 Engineering, week to 2026-10-31");
+    expect(en).toContain("Contracts ending next quarter, Q4 2026-27 (January to March 2027): 3, $1,050,000 (1 without a value)");
+    expect(en).toContain("Standing offers and supply arrangements ending within 6 months: 3</h2>");
+    expect(en).toContain(">W8486-150001/001/QD</a>");
+    expect(en).toContain("Departmental Individual Standing Offer · Calibration services · National Defence · expires 2026-11-01 · 2 holders</div>");
+    expect(en).toMatch(/href="[^"]*\/instruments\?segment=81&within=6" [^>]*>See all 3<\/a>/);
+    expect(en).not.toContain("F5211-200001");
+    const fr = nbsp(decode(await (await get(`${MESSAGE}/dark?lang=fr`)).text()));
+    expect(fr).toContain("81 Ingénierie, semaine se terminant le 2026-10-31");
+    expect(fr).toContain("Offres à commandes et arrangements en matière d’approvisionnement prenant fin d’ici 6 mois : 3</h2>");
+    expect(fr).toMatch(/href="[^"]*\/instruments\?segment=81&within=6&lang=fr" [^>]*>Voir les 3<\/a>/);
+  });
+
+  it("prints no mailing address, whatever MAIL_ADDRESS holds, and answers one line, 503, when the records cannot", async () => {
+    const withAddress = onEnv({ MAIL_ADDRESS: SAMPLE_ADDRESS });
+    for (const path of [PAGE, `${MESSAGE}/light`, `${MESSAGE}/dark?lang=fr`]) {
+      const res = await get(path, { env: withAddress });
+      expect(res.status, path).toBe(200);
+      const text = await res.text();
+      expect(text, path).not.toContain(SAMPLE_ADDRESS);
+      expect(text, path).not.toContain("Exampletown");
+    }
+    for (const path of [`${MESSAGE}/light`, `${MESSAGE}/dark?lang=fr`]) {
+      const down = await get(path, { env: onEnv({ RECORDS: undefined }) });
+      expect(down.status, path).toBe(503);
+      expect(down.headers.get("cache-control"), path).toBe("no-store");
+      expect(down.headers.get("content-security-policy"), path).toBe(FRAME_CSP);
+      const text = nbsp(await down.text());
+      expect(text, path).toContain(path.endsWith("fr")
+        ? "<p>L’exemple n’est pas disponible pour le moment : la base des dossiers ne répond pas. Réessayez dans quelques minutes.</p>"
+        : "<p>The sample is not available right now: the records database cannot answer. Try again in a few minutes.</p>");
+      expect(text, path).toContain(`<meta name="color-scheme" content="${path.includes("dark") ? "dark" : "light"}">`);
+    }
+    // A scheme the route does not know is the site's 404, under the site's own headers.
+    const other = await get(`${MESSAGE}/sepia`);
+    expect(other.status).toBe(404);
+    expect(other.headers.get("x-frame-options")).toBe("DENY");
+    expect(other.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    expect(other.headers.get("x-robots-tag")).toBeNull();
   });
 
   it("is linked from the Pro page and the email lists page", async () => {

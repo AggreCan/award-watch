@@ -113,14 +113,16 @@ describe("with the switch off", () => {
     expect(mail.used).toEqual([]);
   });
 
-  it("answers the weekly briefing's sample with the site's 404, reading neither database (account/briefing_pages.tsx)", async () => {
+  it("answers the weekly briefing's sample and its message's frames with the site's 404, reading neither database (account/briefing_pages.tsx)", async () => {
     const { used, binding: db } = trap<D1Database>();
     const records = trap<D1Database>("the records database");
     const env = { ...testEnv(), ACCOUNTS: db, RECORDS: records.binding };
     const notFound = (await render("/nothing-here", env)).body;
-    const sample = await render("/pro/briefing-sample", env);
-    expect(sample.status).toBe(404);
-    expect(sample.body).toBe(notFound);
+    for (const path of ["/pro/briefing-sample", "/pro/briefing-sample/message/light", "/pro/briefing-sample/message/dark"]) {
+      const sample = await render(path, env);
+      expect(sample.status, path).toBe(404);
+      expect(sample.body, path).toBe(notFound);
+    }
     expect(used).toEqual([]);
     expect(records.used).toEqual([]);
   });

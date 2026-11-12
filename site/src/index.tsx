@@ -50,7 +50,7 @@ import { GUIDES_SITEMAP, contractSitemap, guidesSitemap, sitemapFile } from "./s
 import { guidePage, guidesIndex } from "./pages/guides";
 import { proPage } from "./pages/pro";
 import { instrumentRoute, instrumentsCsv, instrumentsIndex } from "./pages/instruments";
-import { SAMPLE_PATH, briefingSamplePage } from "./account/briefing_pages";
+import { SAMPLE_MESSAGE_PATH, SAMPLE_PATH, briefingSampleMessage, briefingSamplePage, sampleFrameHeaders } from "./account/briefing_pages";
 import { account } from "./account/routes";
 import { admin } from "./account/admin";
 import { interestStopPage, interestStopPost } from "./account/announce";
@@ -69,6 +69,12 @@ function movedTo(c: Context<AppEnv>, path: string): Response {
 // below. Exported so test/home.ts can serve the app home (pages/home.tsx),
 // which "/" gives a signed-in reader only, through the same middleware.
 export function siteMiddleware(app: Hono<AppEnv>): void {
+  // The weekly briefing sample's message, shown in a frame on the sample page
+  // (account/briefing_pages.tsx): its answer alone takes its own policy, frame
+  // option and noindex in place of the site's. Registered first, so it runs
+  // after the site's headers below are set; every other answer keeps them.
+  app.use("*", sampleFrameHeaders);
+
   // The pages load nothing from third parties, and the policy says exactly
   // that, with one exception: the landing page's band shows organizations'
   // logos as Brandfetch's Logo API links (pages/landing.tsx, docs/landing.md),
@@ -245,8 +251,11 @@ app.post("/interest/stop", interestStopPost);
 // accounts switch is off, as /tenders/same-day is.
 app.get("/pro", proPage);
 // This week's weekly briefing for one segment, built live, the same for every
-// reader (account/briefing_pages.tsx); the 404 while the switch is off.
+// reader (account/briefing_pages.tsx), then the message itself as a
+// subscriber's message carries it, light or dark, for the page's frame; both
+// the 404 while the switch is off.
 app.get(SAMPLE_PATH, briefingSamplePage);
+app.get(`${SAMPLE_MESSAGE_PATH}/:scheme`, briefingSampleMessage);
 app.get("/data", dataPage);
 app.get("/methodology", methodologyPage);
 // The guides (pages/guides.tsx, src/guides.ts): the index, then one guide by its slug.

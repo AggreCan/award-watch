@@ -37,8 +37,8 @@ the schema is `site/accounts_schema.sql`; the tests are
 - **Weekly briefings.** Any account subscribes to a segment or a buyer from
   its page; Pro gets one message a week about it: the week's notices,
   awards and notable amendments, and the contracts ending next fiscal quarter.
-  A public sample is built live at `/pro/briefing-sample` (*Weekly
-  briefings*).
+  A public sample is built live at `/pro/briefing-sample`, the message as
+  an inbox shows it, light or dark (*Weekly briefings*).
 - **Weekly email.** Any account, Free or Pro, can turn on one message a
   week, with a box on the sign-in form or a control on the account page:
   what changed on the pages it follows, or the site's week in figures, and
@@ -3022,7 +3022,8 @@ standing offers and supply arrangements ending within 6 months with their
 holders' count. Pro (`delivery`) gets the message; a Free account keeps the
 briefing with its email off. The code is `site/src/account/briefings.ts` (the rows, the records
 statements, the run, the console figures), `briefing_pages.tsx` (the control,
-the searches page's panel, the stop page, the public sample) and
+the searches page's panel, the stop page, the public sample and its message's
+frame) and
 `digests.ts` `briefingDigest` (the message, in the digest shell); the tests
 are `site/test/briefings.test.ts`.
 
@@ -3148,16 +3149,60 @@ random bytes made with the first message.
 
 ### The public sample
 
-`/pro/briefing-sample` renders this week's briefing for segment 81
-(Engineering) with the same reader and the same message, from the seven data
-dates ending with the site's data date, headed "A sample of the weekly
-briefing, built from this week's data". It is linked from the briefing panels,
-`/pro` and the Email lists page. It reads no session (the same page for every
-reader, the rail's Sign in item for all), keeps nothing about the reader,
-reads the records database once (one batch) and is cached `public,
-max-age=3600` (`layout.tsx` `publicPage`). A database that cannot answer gives
-the page's shell with "not available right now", 503, never stored. With the
-switch off it is the site's 404.
+`/pro/briefing-sample` shows this week's briefing for segment 81
+(Engineering) as an inbox shows it, built with the same reader and the same
+message as a subscriber's, from the seven data dates ending with the site's
+data date, headed "A sample of the weekly briefing, built from this week's
+data". It is linked from the briefing panels, `/pro` and the Email lists page.
+
+The page holds a reading pane, 640 px wide at most and the screen's full
+width on a phone: the inbox's line for the message (the sender's name and
+`MAIL_FROM`, read by `sender.ts` `mailSender` as the mail job reads them, the
+subject, the preview line), then the message in a frame, with two tabs,
+"Light inbox" and "Dark inbox" (`Messagerie claire`, `Messagerie sombre`).
+The frame is the message's whole document, served at
+`/pro/briefing-sample/message/light` or `/dark` (`?lang=fr` on a French page):
+`digests.ts` `briefingDigest`, the subscriber's own builder, with the shell's
+view (`mail_html.ts` `Shell.view`). A frame follows the browser's scheme and
+not the site's theme switch, so each address forces its scheme, and the
+document differs from a subscriber's message in these lines alone:
+
+| Line | A subscriber's message | The sample's frame |
+|---|---|---|
+| `<meta name="color-scheme">`, `<meta name="supported-color-schemes">` | `light dark` | `light`, or `dark` |
+| `<base target="_blank">` after the title | absent | present: links open a new tab, as a webmail client opens them, never inside the frame |
+| The dark rules in the head's `<style>` | under `@media (prefers-color-scheme: dark)` | dark: the same rules with no query, as a dark client applies them; light: left out |
+| The footer's stop link | `/account/stop?b=<briefing id>&t=<secret>` | `/alerts`, the Email lists page: no briefing, no secret |
+
+The footer's "Briefings and delivery" link is the subscriber's own,
+`/account/searches`, which carries nothing about anyone. The briefing's
+message prints no mailing address (that line is the weekly email's,
+*Weekly email*), so the sample has none either. Without `?scheme=` the page
+starts on the site's theme: both frames are in the page (`loading="lazy"`)
+and the stylesheet shows the one the theme names. The tabs are links to
+`?scheme=light` and `?scheme=dark`; with script, `public/briefing-sample.js`
+switches in place, sizes each frame to its message so the page scrolls as
+one, and stays on the reader's choice. Without script each frame is 80% of
+the window high and scrolls inside the pane. On a phone the frame is as wide
+as the screen, so the mail's own narrow rule (`max-width:620px`, read against
+the frame's width) lays out the card as a phone's mail app does.
+
+The frame's `sandbox` is `allow-same-origin allow-popups
+allow-popups-to-escape-sandbox`: the page reads the document's height, and
+its links open an ordinary new tab; no script, form or navigation of the page.
+The message route answers with its own `Content-Security-Policy`
+(`default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri
+'self'; form-action 'none'; frame-ancestors 'self'`), `X-Frame-Options:
+SAMEORIGIN` and `X-Robots-Tag: noindex`, set by `sampleFrameHeaders` after the
+site's own headers; every other answer, its 404 and 429 included, keeps the
+site's.
+
+Neither reads a session (the same page for every reader, the rail's Sign in
+item for all), keeps anything about the reader, or reads the records database
+more than once (one batch each); both are cached `public, max-age=3600`
+(`layout.tsx` `publicPage` for the page). A database that cannot answer gives
+the page's shell with "not available right now", and the frame that line
+alone, each 503, never stored. With the switch off both are the site's 404.
 
 ### Bounds and privacy
 
