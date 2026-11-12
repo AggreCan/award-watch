@@ -18,6 +18,8 @@ files the site ships are generated from these SVGs by `site/scripts/make-icons.p
 | `wordmark.svg` | "award watch" with the check built into its own first two letters. |
 | `lockup.svg` | The mark beside "Award Watch". |
 | `make_mark.py` | Regenerates every file above. Run `python brand/make_mark.py`. |
+| `product/award-watch-pro.png`, `product/award-watch-ultra.png` | The paid plans' images for the payment page (Stripe's Checkout shows a product's image beside its name): the mark in white on the plan's colour, with the plan's glyph and name. 1024 by 1024. |
+| `make_product_images.py` | Writes `product/pro.html` and `product/ultra.html` from `mark-two-tone.svg`; its head says how to capture each as the PNG. |
 | `make_wordmark_png.py` | Renders `wordmark.svg` with Chrome headless as the sign-in message's two header images, `site/public/brand/wordmark.png` (ink on white) and `wordmark-dark.png` (light ink on transparent), 284 by 40 pixels each, and checks each file's size and ground. Run `python brand/make_wordmark_png.py` after changing the wordmark. |
 
 `explorations/` holds the directions tried on 2026-10-31 before this one (three grid
