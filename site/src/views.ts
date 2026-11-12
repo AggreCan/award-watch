@@ -1,5 +1,6 @@
 import type { Context, Next } from "hono";
 import type { AppEnv } from "./env";
+import { GUIDE_SLUGS } from "./guides";
 import { DOWNLOADS, YEARLY_DOWNLOAD } from "./pages/data";
 
 // Aggregate counts of what the Worker serves, written to Workers Analytics
@@ -65,6 +66,8 @@ const PAGES = new Set([
   "/analytics",
   // The app home at its own address (pages/home.tsx), counted apart from "/", where a reader without a session gets the landing page.
   "/overview",
+  // The guides' index (pages/guides.tsx); each guide is counted at its own address below.
+  "/guides",
 ]);
 const API_FIXED = new Set(["/api/stats"]);
 const DOWNLOAD_FILES = new Set(DOWNLOADS.map((d) => d.file));
@@ -126,7 +129,10 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   if (radar) return { route: `/data/expiring/${radar[1]}/:file`, kind: "file" };
   // The timers' stamps (src/refresh.tsx), which a page asks for while a run is under way.
   if (path === "/robots.txt" || path === "/llms.txt" || path === "/refresh.json") return { route: path, kind: "file" };
-  if (/^\/sitemap(?:-[0-9]+)?\.xml$/.test(path)) return { route: "/sitemap.xml", kind: "file" };
+  if (/^\/sitemap(?:-[0-9]+|-guides)?\.xml$/.test(path)) return { route: "/sitemap.xml", kind: "file" };
+  // One guide at its own address, so the views say which guides are read; any other path under it is one template.
+  const guide = /^\/guides\/([^/]+)$/.exec(path);
+  if (guide) return { route: GUIDE_SLUGS.has(guide[1]) ? path : "/guides/:slug", kind: "page" };
   // The standing offers and supply arrangements (pages/instruments.tsx): the numbers folded into the template.
   if (path === "/instruments") return { route: path, kind: "page" };
   if (path === "/instruments/rows.csv") return { route: path, kind: "download" };

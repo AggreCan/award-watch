@@ -8,6 +8,7 @@
 import type { Context } from "hono";
 import type { Buyer, Category, ContractDetail, Profile, TenderDetail } from "./data";
 import type { AppEnv } from "./env";
+import type { Guide } from "./guides";
 import { fmtInt, frTypography, pick, provinceName, segmentLabel, t, type Key, type Lang } from "./i18n";
 import { publishedReference } from "./data";
 
@@ -40,7 +41,8 @@ type Both = Record<Lang, string>;
 export type PageKey =
   | "home" | "overview" | "tenders" | "tenders_new" | "same_day" | "awards" | "awards_erroneous" | "expiring" | "organizations" | "buyers"
   | "segments" | "rankings" | "analytics"
-  | "feeds" | "watchlist" | "methodology" | "data" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts" | "pro";
+  | "feeds" | "watchlist" | "methodology" | "data" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts" | "pro"
+  | "guides";
 
 // A result list shows about 60 characters of a title; the whole <title>,
 // " | Award Watch" included, stays within it (test/seo-intent.test.ts).
@@ -255,6 +257,15 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     description: {
       en: "Email alerts on new federal tenders and on the suppliers, buyers and contracts you follow, plus 12 months of contracts ending: the recompetes ahead.",
       fr: "Alertes par courriel sur les appels d'offres fédéraux et sur les fournisseurs, acheteurs et contrats suivis, et 12 mois de remises en concurrence.",
+    },
+  },
+  // The guides' index (pages/guides.tsx); each guide's own title and description come from src/guides.ts (guideSeo).
+  guides: {
+    path: "/guides",
+    name: { en: "Guides to Federal Procurement Records", fr: "Guides sur les marchés publics fédéraux" },
+    description: {
+      en: "Plain guides to federal procurement records: reading a CanadaBuys tender notice, standing offers, and the three records of one contract.",
+      fr: "Guides sur les dossiers des marchés fédéraux : lire un avis d'AchatsCanada, les offres à commandes, et les trois dossiers d'un même contrat.",
     },
   },
 };
@@ -764,6 +775,43 @@ export function buyerSeo(b: Buyer, lang: Lang, crumbs: { name: string; path?: st
     socialTitle: name,
     description: clip(t(lang, "buyer.description", { name })),
     jsonLd: [breadcrumbJsonLd(crumbs)],
+  };
+}
+
+// One guide (pages/guides.tsx): its own title, or the shorter one written for
+// the result list where the heading and the site's name pass TITLE_MAX, then
+// the heading alone; its summary as the description; the trail and an
+// Article dated by the day the guide was last checked against its sources,
+// published and written by the publisher the About page names.
+export function guideSeo(g: Guide, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
+  const path = `/guides/${g.slug}`;
+  const heading = local(lang, g.title);
+  const listed = local(lang, g.seoTitle ?? g.title);
+  const description = local(lang, g.summary);
+  const org = publisher(lang);
+  const url = canonicalUrl(path, lang);
+  return {
+    path,
+    title: [pageTitle(listed), listed].find((s) => s.length <= TITLE_MAX) ?? listed,
+    socialTitle: heading,
+    description,
+    jsonLd: [
+      breadcrumbJsonLd(crumbs),
+      {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "@id": `${url}#article`,
+        headline: heading,
+        description,
+        inLanguage: lang === "fr" ? "fr-CA" : "en-CA",
+        url,
+        mainEntityOfPage: url,
+        dateModified: g.checked,
+        image: SOCIAL_CARD_URL,
+        author: org,
+        publisher: org,
+      },
+    ],
   };
 }
 

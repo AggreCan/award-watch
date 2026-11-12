@@ -11,7 +11,8 @@ import { homeRequest } from "./home";
 import { CONTRACT_SITEMAP_SQL } from "../src/records_tables";
 import { proIncludes } from "../src/pages/pro";
 import { DESCRIPTION_MAX, TITLE_MAX, expiringWindowSeo } from "../src/seo";
-import { CONTRACT_PARTS, SITEMAP_PART_MAX, SITEMAP_URL_MAX, contractPartKeys, withLanguages } from "../src/sitemaps";
+import { CONTRACT_PARTS, SITEMAP_PART_MAX, SITEMAP_URL_MAX, contractPartKeys, withGuidesPart, withLanguages } from "../src/sitemaps";
+import { guidesChecked } from "../src/guides";
 import { onEnv, offEnv, useAccountsDb } from "./accounts-helpers";
 import { testEnv } from "./assets";
 import { applySql } from "./setup";
@@ -58,6 +59,9 @@ const SECTIONS = [
   "/", "/overview", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous", "/expiring", "/expiring/3m",
   "/organizations", "/buyers", "/segments", "/rankings", "/feeds", "/alerts", "/watchlist", "/methodology", "/data", "/cite",
   "/corrections", "/about", "/terms", "/privacy", "/pro", "/analytics",
+  // The guides (pages/guides.tsx): the index, and each guide's own title and description from src/guides.ts.
+  "/guides", "/guides/reading-a-canadabuys-tender-notice", "/guides/standing-offers-and-supply-arrangements",
+  "/guides/three-records-of-one-federal-contract",
 ];
 
 describe("result-list titles and descriptions", () => {
@@ -113,7 +117,7 @@ describe("result-list titles and descriptions", () => {
 describe("structured data", () => {
   it("parses on every page that carries it, in both languages", async () => {
     const pages = ["/", "/data", "/pro", "/tenders/cb-100-10000001", "/awards/cb-400-40000004", "/organizations/org-a000000001",
-      "/buyers/pwgsc-tpsgc", "/segments/82", "/expiring/3m", "/tenders/same-day"];
+      "/buyers/pwgsc-tpsgc", "/segments/82", "/expiring/3m", "/tenders/same-day", "/guides/three-records-of-one-federal-contract"];
     for (const lang of ["en", "fr"] as const) {
       for (const path of pages) {
         const url = lang === "fr" ? `${path}?lang=fr` : path;
@@ -529,16 +533,19 @@ describe("the published contracts' sitemaps", () => {
     expect(steps).toMatch(/SEARCH \w+ USING INTEGER PRIMARY KEY \(rowid>\? AND rowid<\?\)/);
   });
 
-  it("are listed in the index after the pipeline's parts while the records database is ready, and not otherwise", async () => {
+  it("are listed in the index after the pipeline's parts and the guides' part while the records database is ready, and not otherwise", async () => {
     const index = await (await get("/sitemap.xml")).text();
     const pipelineParts = [...sitemapIndex.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
     const listed = [...index.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
-    expect(listed).toEqual([...pipelineParts, ...Array.from({ length: CONTRACT_PARTS }, (_, i) => `${O}/sitemap-contracts-${i + 1}.xml`)]);
+    expect(listed).toEqual([...pipelineParts, `${O}/sitemap-guides.xml`, ...Array.from({ length: CONTRACT_PARTS }, (_, i) => `${O}/sitemap-contracts-${i + 1}.xml`)]);
     expect(index).toContain(`<sitemap><loc>${O}/sitemap-contracts-1.xml</loc><lastmod>2026-10-31</lastmod></sitemap>`);
-    expect(await (await get("/sitemap.xml", { ...onEnv(), RECORDS: undefined })).text()).toBe(sitemapIndex);
+    // Without a ready records database the index is the pipeline's with the guides' part alone added (src/sitemaps.ts).
+    const withGuides = withGuidesPart(sitemapIndex);
+    expect(withGuides).toBe(sitemapIndex.replace("</sitemapindex>", `<sitemap><loc>${O}/sitemap-guides.xml</loc><lastmod>${guidesChecked()}</lastmod></sitemap></sitemapindex>`));
+    expect(await (await get("/sitemap.xml", { ...onEnv(), RECORDS: undefined })).text()).toBe(withGuides);
     await seedRecords("loading");
     try {
-      expect(await (await get("/sitemap.xml")).text()).toBe(sitemapIndex);
+      expect(await (await get("/sitemap.xml")).text()).toBe(withGuides);
       const part = await get("/sitemap-contracts-1.xml");
       expect(part.status).toBe(503);
       expect(part.headers.get("retry-after")).toBe("3600");

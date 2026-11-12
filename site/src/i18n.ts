@@ -4092,6 +4092,28 @@ const STRINGS = {
   },
   // The landing page's nav: a short word for the overview, so the French bar stays on one line.
   "landing.nav_overview": { en: "Overview", fr: "Aperçu" },
+
+  // -- the guides' frame (src/pages/guides.tsx): the rail's and footer's word, the index's lead and the
+  // lines around each guide. The guides' own text is src/guides.ts's, English and French side by side.
+  "nav.guides": { en: "Guides", fr: "Guides" },
+  "guides.lead": {
+    en: "Plain explanations of the federal procurement records the site reads, each checked against the official pages it cites.",
+    fr: "Des explications simples des dossiers d'approvisionnement fédéral que lit le site, chacune vérifiée par rapport aux pages officielles qu'elle cite.",
+  },
+  "guides.checked": { en: "Checked against its sources on {date}.", fr: "Vérifié par rapport à ses sources le {date}." },
+  "guides.sources": { en: "Sources", fr: "Sources" },
+  "guides.sources_intro": {
+    en: "The official pages this guide's rules were read from:",
+    fr: "Les pages officielles d'où sont tirées les règles de ce guide :",
+  },
+  // A source read in English only: its title as the page gives it, marked for a French reader.
+  "guides.english_page": { en: "{title}", fr: "{title} (en anglais)" },
+  "guides.govern": {
+    en: "The official sources govern. This guide explains them and gives no legal or business advice.",
+    fr: "Les sources officielles font foi. Ce guide les explique et ne donne aucun conseil juridique ou d'affaires.",
+  },
+  "guides.not_found": { en: "Guide Not Found", fr: "Guide introuvable" },
+  "guides.back": { en: "All guides", fr: "Tous les guides" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;
@@ -4136,6 +4158,9 @@ export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "tender.documents",
   "tender.documents_one",
   "tender.documents_many",
+  // The guides' name in the rail and the footer, and the head of each guide's list of official pages.
+  "nav.guides",
+  "guides.sources",
 ]);
 
 export function allKeys(): Key[] {

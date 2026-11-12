@@ -55,6 +55,9 @@ const PAGES: [string, string, string, string][] = [
 // Pages that answer without the data files, in both languages.
 const STATIC: [string, string, string][] = [
   ["/methodology", "<h1>Methodology</h1>", "<h1>Méthodologie</h1>"],
+  // The guides' index and one guide (pages/guides.tsx), whose text is the code's own.
+  ["/guides", "<h1>Guides</h1>", "<h1>Guides</h1>"],
+  ["/guides/three-records-of-one-federal-contract", "<h1>Three Federal Records of One Contract</h1>", "<h1>Trois dossiers fédéraux d’un même contrat</h1>"],
   ["/feeds", "<h1>Atom Feeds</h1>", "<h1>Fils Atom</h1>"],
   ["/watchlist", "<h1>Watchlist</h1>", "<h1>Liste de suivi</h1>"],
   ["/corrections", "<h1>Report a Correction</h1>", "<h1>Signaler une correction</h1>"],
@@ -132,7 +135,7 @@ describe("every page", () => {
     const nav = html.match(/<nav class="rail" aria-label="Main">[\s\S]*?<\/nav>/)?.[0] ?? "";
     expect([...nav.matchAll(/<a class="rail-item[^"]*" href="([^"]+)"/g)].map((m) => m[1])).toEqual([
       "/tenders", "/tenders/new", "/tenders?closing=7", "/awards", "/awards/2026", "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m", "/organizations",
-      "/buyers", "/segments", "/rankings", "/feeds", "/alerts", "/data", "/methodology", "/watchlist", "/alerts",
+      "/buyers", "/segments", "/rankings", "/feeds", "/alerts", "/data", "/methodology", "/guides", "/watchlist", "/alerts",
     ]);
     expect(nav).toContain('<a class="rail-item" href="/tenders"><span class="rail-label">Open tender notices</span><span class="rail-n">3</span></a>');
     expect(nav).toContain('<a class="rail-item rail-child soon" href="/tenders?closing=7"><span class="rail-label">Closing within 7 days</span><span class="rail-n" data-soon-count="">1</span></a>');
@@ -153,7 +156,7 @@ describe("every page", () => {
     // A page's own section is marked in the rail.
     expect(await text("/buyers")).toContain('<a class="rail-item" href="/buyers" aria-current="page">');
     const footer = html.slice(html.indexOf('<footer class="site-footer">'));
-    for (const href of ["/methodology", "/feeds", "/alerts", "/watchlist", "/corrections", "/cite", "/data#downloads", "/data#sources", "/about", "/terms", "/privacy"]) {
+    for (const href of ["/methodology", "/guides", "/feeds", "/alerts", "/watchlist", "/corrections", "/cite", "/data#downloads", "/data#sources", "/about", "/terms", "/privacy"]) {
       expect(footer, href).toContain(`href="${href}"`);
     }
     expect(html).toContain("Data date: 2026-10-31");

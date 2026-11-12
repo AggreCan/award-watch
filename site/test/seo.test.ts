@@ -5,6 +5,7 @@ import { app } from "../src/index";
 import { DOWNLOADS } from "../src/pages/data";
 import { scriptJson } from "../src/layout";
 import { DESCRIPTION_MAX, SITE_ORIGIN, TITLE_MAX, breadcrumbJsonLd, organizationDescription, recordTitle } from "../src/seo";
+import { withGuidesPart } from "../src/sitemaps";
 import { emptyAssets, fakeAssets, testEnv } from "./assets";
 import profileFixtures from "./fixtures/profiles-a00.json";
 import sitemapPart from "./fixtures/sitemap-1.xml?raw";
@@ -227,11 +228,12 @@ function robotsAllow(rules: string[], path: string): boolean {
 
 describe("crawler files", () => {
   it("/sitemap.xml is the index and each part comes from data/sitemaps, in both languages", async () => {
-    // Without the records database the index is the pipeline's file as written.
+    // Without the records database the index is the pipeline's file as written, with the guides' part
+    // the Worker adds (src/sitemaps.ts withGuidesPart).
     const index = await app.request("/sitemap.xml", {}, { ...testEnv(), RECORDS: undefined });
     expect(index.status).toBe(200);
     expect(index.headers.get("content-type")).toBe("application/xml; charset=utf-8");
-    expect(await index.text()).toBe(sitemapIndex);
+    expect(await index.text()).toBe(withGuidesPart(sitemapIndex));
     const part = await get("/sitemap-1.xml");
     expect(part.status).toBe(200);
     // Each page of the part twice, English then French (test/seo-intent.test.ts reads the alternates).

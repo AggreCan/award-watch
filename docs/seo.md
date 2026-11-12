@@ -132,6 +132,7 @@ button of each tease panel. The side menu is unchanged.
 | Data | one `Dataset` for the whole site, with a `Dataset` part for each downloadable set (open tenders, award notices, PSPC contract history, published contracts and grants by year, organizations, buyers, contracts ending within 3 months), each with its files, its licence (Open Government Licence, Canada) and the government dataset it is read from |
 | Pro | `Product` with one `Offer` a billing period, in Canadian dollars, taxes not included (only while the checkout is configured); `FAQPage` with the page's questions word for word |
 | Record pages | `BreadcrumbList` (tenders, awards, PSPC history, published contracts, organizations, buyers, segments, directory pages) |
+| Guides | `BreadcrumbList`, and an `Article` with the guide's title and summary, its language, the publisher as author and publisher, and the day the guide was last checked against its sources as `dateModified` |
 
 Google retired the sitelinks search box in 2024 and shows FAQ results only
 for a few government and health sites, so the `SearchAction` and the
@@ -163,7 +164,12 @@ data, where a square logo is wanted.
   about 10,000 contracts (20,000 addresses with French). The scheme has room
   for 3.2 million contracts before a part reaches 50,000 addresses. The
   index lists these parts only while the records database is ready; during a
-  reload a part answers 503 with a retry time, and a crawler comes back.
+  reload a part answers 503 with a retry time, and a crawler comes back;
+- since 2026-11-11, `/sitemap-guides.xml`: the guides' index and each guide,
+  in both languages, each dated by the day it was last checked against its
+  sources. The Worker writes it from the guides themselves, so a new guide
+  is listed without a change to the nightly export, and the index always
+  names it.
 
 In all, about 3.4 million addresses: 2.6 million for the published
 contracts and 0.8 million for everything else, each language counted.

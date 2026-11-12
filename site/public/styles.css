@@ -1698,3 +1698,12 @@ html.js .cmap-toggles { display: flex; }
    across two. The panel gives the list its 16 px margin. */
 .view-list { columns: 3 16rem; column-gap: 32px; padding: 0; list-style: none; }
 .view-list li { break-inside: avoid; margin: 0 0 4px; line-height: 20px; overflow-wrap: anywhere; }
+
+/* The guides (pages/guides.tsx). A term's definition goes under the term on a
+   phone, where the French terms are too long for the term column; a source's
+   address breaks anywhere rather than widen the page. */
+@media (max-width: 699px) {
+  .doc dl.terms { grid-template-columns: minmax(0, 1fr); }
+  .doc dl.terms dd { padding-top: 0; border-top: 0; }
+}
+.doc ol.sources li { margin: 0 0 8px; overflow-wrap: anywhere; }

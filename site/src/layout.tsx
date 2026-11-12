@@ -369,6 +369,8 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
     { href: "/alerts", label: t(lang, "rail.email_lists"), section: "/alerts" },
     { href: "/data", label: t(lang, "nav.data"), section: "/data" },
     { href: "/methodology", label: t(lang, "nav.methodology"), section: "/methodology" },
+    // The guides (pages/guides.tsx): the index, and the section of every guide under it.
+    { href: "/guides", label: t(lang, "nav.guides"), section: "/guides" },
   ];
   return (
     <nav class="rail" aria-label={t(lang, "nav.main_label")}>
@@ -459,7 +461,7 @@ const TipScript: FC<{ tables: TableUse }> = ({ tables }) =>
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 55;
+export const STYLES_VERSION = 56;
 
 // The top bar's search field, on every page: a plain GET form to /search
 // (src/pages/search.tsx), so it works without the scripts. A form with one
@@ -491,6 +493,7 @@ export const FooterRow: FC<{ lang: Lang; lobbyingLoaded: boolean; on: boolean; b
       {/* The rail's Browse group hides on a phone, where these links stand in for it; no chip here. */}
       <FooterAnalyticsLink lang={lang} on={on} />
       <a href="/methodology">{t(lang, "footer.methodology")}</a>
+      <a href="/guides">{t(lang, "nav.guides")}</a>
       <a href="/data#downloads">{t(lang, "footer.download")}</a>
       <a href="/feeds">{t(lang, "footer.feeds")}</a>
       <a href="/alerts">{t(lang, "rail.email_lists")}</a>

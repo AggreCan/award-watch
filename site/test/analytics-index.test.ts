@@ -125,7 +125,7 @@ describe("the rail's Analytics item", () => {
           : `<li><a class="rail-item" href="/analytics"><span class="rail-label">Analyses</span>${CHIP_FR}</a></li>`;
         expect(browse, `${who} ${lang}`).toContain(item);
         const hrefs = [...browse.matchAll(/<a class="rail-item[^"]*" href="([^"]+)"/g)].map((m) => m[1]);
-        expect(hrefs, `${who} ${lang}`).toEqual(["/segments", "/rankings", "/analytics", "/feeds", "/alerts", "/data", "/methodology"]);
+        expect(hrefs, `${who} ${lang}`).toEqual(["/segments", "/rankings", "/analytics", "/feeds", "/alerts", "/data", "/methodology", "/guides"]);
         // No word space beside the chip: its own margins make the gap.
         expect(browse, `${who} ${lang}`).not.toMatch(/[\s ]<span class="pro-tag">/);
       }

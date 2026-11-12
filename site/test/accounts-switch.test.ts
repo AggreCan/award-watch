@@ -23,6 +23,8 @@ const PUBLIC_PAGES = [
   "/tenders/cb-200-20005019", "/awards/cb-400-40000004",
   // The pages a search is saved from (account/search_control.tsx), filtered and not.
   "/tenders?segment=82&province=BC&sort=published", "/expiring/3m", "/expiring/3m?segment=82", "/tenders?lang=fr",
+  // The guides (pages/guides.tsx): the index and a guide in each language.
+  "/guides", "/guides/reading-a-canadabuys-tender-notice", "/guides/three-records-of-one-federal-contract?lang=fr",
 ];
 
 const ACCOUNT_ROUTES: [string, string][] = [

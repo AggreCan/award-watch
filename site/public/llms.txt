@@ -31,6 +31,10 @@ Downloads are limited to ten per minute per address.
 
 - https://awardwatch.ca/overview: the day at a glance: open tender notices by province, the notices new today and closing soon, the newest awards, and the contracts ending within 3 months
 - https://awardwatch.ca/methodology: how organizations and buyers are merged and how money is counted, source by source
+- https://awardwatch.ca/guides: plain explanations of federal procurement records, each checked against the official pages it cites
+- https://awardwatch.ca/guides/reading-a-canadabuys-tender-notice: what each part of a federal tender notice on CanadaBuys means
+- https://awardwatch.ca/guides/standing-offers-and-supply-arrangements: what standing offers and supply arrangements are, who uses them and who holds them
+- https://awardwatch.ca/guides/three-records-of-one-federal-contract: the award notice, PSPC contract history and the published contract over $10,000, and why their values differ
 - https://awardwatch.ca/tenders: the open tender notices
 - https://awardwatch.ca/organizations: every organization A to Z by province
 - https://awardwatch.ca/pro: what Pro, the paid plan, adds to the free pages and what it costs

@@ -46,7 +46,8 @@ import { newTendersPage, tendersPage } from "./pages/tenders";
 import { watchlistPage } from "./pages/watchlist";
 import { llmsTxt, robotsTxt } from "./seo";
 import { refreshStampsRoute } from "./refresh";
-import { contractSitemap, sitemapFile } from "./sitemaps";
+import { GUIDES_SITEMAP, contractSitemap, guidesSitemap, sitemapFile } from "./sitemaps";
+import { guidePage, guidesIndex } from "./pages/guides";
 import { proPage } from "./pages/pro";
 import { instrumentRoute, instrumentsCsv, instrumentsIndex } from "./pages/instruments";
 import { SAMPLE_PATH, briefingSamplePage } from "./account/briefing_pages";
@@ -248,6 +249,9 @@ app.get("/pro", proPage);
 app.get(SAMPLE_PATH, briefingSamplePage);
 app.get("/data", dataPage);
 app.get("/methodology", methodologyPage);
+// The guides (pages/guides.tsx, src/guides.ts): the index, then one guide by its slug.
+app.get("/guides", guidesIndex);
+app.get("/guides/:slug", guidePage);
 app.get("/cite", citePage);
 app.get("/about", aboutPage);
 app.get("/terms", termsPage);
@@ -262,6 +266,8 @@ app.get("/llms.txt", llmsTxt);
 app.get("/:file{sitemap(?:-[0-9]+)?\\.xml}", sitemapFile);
 // The published contracts' parts, read from the records database (src/sitemaps.ts).
 app.get("/:file{sitemap-contracts-[0-9]+\\.xml}", contractSitemap);
+// The guides' part, written from src/guides.ts (src/sitemaps.ts).
+app.get(`/${GUIDES_SITEMAP}`, () => guidesSitemap());
 
 // The Atom feeds (feeds.py) are static files, but wrangler.jsonc runs the
 // Worker first for /data/feeds/* so the measure middleware counts each poll

@@ -1,9 +1,10 @@
 // The sitemaps: the index and the parts the pipeline writes under
 // data/sitemaps/ (export_static.write_sitemaps), and the parts of the
 // published contracts, which the Worker reads from the records database
-// because 1.3 million pages are too many files for the static export.
+// because 1.3 million pages are too many files for the static export, and
+// the guides' part, which the Worker writes from src/guides.ts.
 // Everything is served from the site root (/sitemap.xml, /sitemap-<n>.xml,
-// /sitemap-contracts-<n>.xml) because a sitemap may only list URLs at or
+// /sitemap-contracts-<n>.xml, /sitemap-guides.xml) because a sitemap may only list URLs at or
 // below its own directory. docs/seo.md describes the scheme.
 //
 // Languages: the pipeline lists each page once, by its English address. The
@@ -15,6 +16,7 @@
 import type { Context } from "hono";
 import { BUYER_ID_RE, assetResponse } from "./data";
 import type { AppEnv } from "./env";
+import { GUIDES, guidesChecked } from "./guides";
 import type { Lang } from "./i18n";
 import { REF_MAX } from "./pages/published";
 import { contractPath } from "./pages/shared";
@@ -95,6 +97,32 @@ export function withLanguages(xml: string): string {
   return urlset(out);
 }
 
+// The guides' part (/sitemap-guides.xml): the index and each guide, from
+// src/guides.ts, so a guide added there is listed without a pipeline change.
+// Each page is dated by the day its guide was last checked, the index by the
+// newest of those days.
+export const GUIDES_SITEMAP = "sitemap-guides.xml";
+
+function guidePages(): [string, string][] {
+  return [["/guides", guidesChecked()], ...GUIDES.map((g): [string, string] => [`/guides/${g.slug}`, g.checked])];
+}
+
+export function guidesSitemap(): Response {
+  const out: string[] = [];
+  for (const [path, lastmod] of guidePages()) {
+    const alt = links(path);
+    out.push(entry(path, "en", lastmod, alt), entry(path, "fr", lastmod, alt));
+  }
+  return new Response(urlset(out), { headers: XML_HEADERS });
+}
+
+// The index with the guides' part after the pipeline's parts, whatever state the records database is in.
+export function withGuidesPart(xml: string): string {
+  const at = xml.lastIndexOf("</sitemapindex>");
+  if (at < 0) return xml;
+  return `${xml.slice(0, at)}<sitemap><loc>${SITE_ORIGIN}/${GUIDES_SITEMAP}</loc><lastmod>${guidesChecked()}</lastmod></sitemap>${xml.slice(at)}`;
+}
+
 // The index with the published contracts' parts after the pipeline's, each
 // dated by the records database's data date.
 export function withContractParts(xml: string, lastmod: string | null): string {
@@ -121,7 +149,8 @@ export async function sitemapFile(c: Context<AppEnv>): Promise<Response> {
   const text = await res.text();
   if (m[1]) return new Response(withLanguages(text), { headers: XML_HEADERS });
   const records = await readRecords(c.env, []);
-  const body = records.state === "ready" ? withContractParts(text, records.asOf) : text;
+  const index = withGuidesPart(text);
+  const body = records.state === "ready" ? withContractParts(index, records.asOf) : index;
   return new Response(body, { headers: XML_HEADERS });
 }
 
