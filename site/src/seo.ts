@@ -264,8 +264,8 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/guides",
     name: { en: "Guides to Federal Procurement Records", fr: "Guides sur les marchés publics fédéraux" },
     description: {
-      en: "Plain guides to federal procurement records: reading a CanadaBuys tender notice, standing offers, and the three records of one contract.",
-      fr: "Guides sur les dossiers des marchés fédéraux : lire un avis d'AchatsCanada, les offres à commandes, et les trois dossiers d'un même contrat.",
+      en: "Plain guides to federal procurement records: tender notices, ACANs, standing offers, Indigenous set-asides, one contract's records and contracts ending.",
+      fr: "Guides sur les dossiers des marchés fédéraux : avis d'appel d'offres, PAC, offres à commandes, marchés réservés, dossiers d'un contrat, fins de contrats.",
     },
   },
 };

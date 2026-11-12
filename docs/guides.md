@@ -20,6 +20,11 @@ were read from.
   address in the block's `links`, so the two languages cannot link apart.
   Body links go to the site's own pages; official pages go in the sources.
 - A table's columns are kinds of the column system (`site/src/columns.tsx`).
+  Give the room to the words: a column of sentences is `main`, and a column
+  that names each row in a word or two is a fixed kind (`label`, `text`).
+  Two `main` columns share the room equally, which suits a comparison. A
+  short naming column left as `main` takes all the spare width and leaves
+  the sentences beside it to wrap in 192 px.
   An amount is `{ money: n }`, and the page formats it in the reader's
   language.
 - A source is the official page's title as the page gives it, its publisher
@@ -54,6 +59,9 @@ were read from.
    government domain, and checks the result-list tags, the sitemap, the
    absence of account links and Pro marks, and the writing rules a test can
    check (no em-dash or en-dash, none of the banned words, no question).
+   A link to a page the records database serves, such as a published
+   contract, needs that row seeded in the test, as the guide on set-asides'
+   example contract is.
 
 ## What a guide says
 

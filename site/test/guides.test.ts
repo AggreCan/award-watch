@@ -5,19 +5,43 @@
 // domain; the sitemap's part, the result-list tags and the structured data;
 // no account link and no Pro mark in a guide whatever the accounts switch
 // says; the rail and footer links; and the writing rules a test can check.
-import { describe, expect, it } from "vitest";
+import { env } from "cloudflare:test";
+import { beforeAll, describe, expect, it } from "vitest";
 import { app } from "../src/index";
 import { CLOSING_SOON_DAYS } from "../src/constants";
-import { EXAMPLE_PROFILE, GUIDES, type Block, type Both, type Guide, type Link, type Text } from "../src/guides";
+import { EXAMPLE_PROFILE, EXAMPLE_SET_ASIDE, GUIDES, type Block, type Both, type Guide, type Link, type Text } from "../src/guides";
 import { allKeys, rawEntry } from "../src/i18n";
+import { EXPIRING_TEASER_ROWS } from "../src/pages/expiring";
 import { guideText } from "../src/pages/guides";
 import { DESCRIPTION_MAX, TITLE_MAX } from "../src/seo";
 import { routeTemplate } from "../src/views";
 import { nextIp, onEnv, useAccountsDb } from "./accounts-helpers";
 import { FILES, makeFakeAssets, testEnv } from "./assets";
+import { applySql } from "./setup";
 import { expectTablesFit } from "./table-fit";
 
 useAccountsDb();
+
+// The published contract the guide on set-asides links, in the records
+// database its page reads: a mandatory set-aside, as its department reported it.
+const RECORDS = (env as unknown as { RECORDS: D1Database }).RECORDS;
+const RECORDS_SCHEMA = (env as unknown as { RECORDS_SCHEMA_SQL: string }).RECORDS_SCHEMA_SQL;
+const [setAsideDept, setAsideRef] = EXAMPLE_SET_ASIDE.slice("/contracts/".length).split("/").map(decodeURIComponent);
+beforeAll(async () => {
+  await applySql(RECORDS, RECORDS_SCHEMA);
+  await RECORDS.batch([
+    RECORDS.prepare("DELETE FROM rec_contract_indigenous WHERE k = 9301"),
+    RECORDS.prepare("DELETE FROM rec_contracts WHERE k = 9301"),
+    RECORDS.prepare("INSERT OR REPLACE INTO rec_buyers (bid, id, name_en, name_fr) VALUES (9301, ?1, 'National Defence', 'Défense nationale')").bind(setAsideDept),
+    RECORDS.prepare("INSERT OR REPLACE INTO rec_meta (key, value) VALUES ('state', 'ready'), ('as_of', '2026-10-31'), ('rules', '2')"),
+    RECORDS.prepare(
+      "INSERT INTO rec_contracts (k, dept, ref, pid, bid, oid, wh, cdate, start, endd, value, orig, amend, proc, comp, ctype, inst, period, bids, desc_en, desc_fr) " +
+      "VALUES (9301, ?1, ?2, NULL, 9301, NULL, 0, '2026-03-26', '2026-03-26', '2027-03-31', 193398816, 193398816, 0, 'OB', 1, 'G', 'C', '2026-2027-Q1', 1, " +
+      "'Road motor vehicles', 'Véhicules automobiles de route')",
+    ).bind(setAsideDept, setAsideRef),
+    RECORDS.prepare("INSERT INTO rec_contract_indigenous (k, psib, ib) VALUES (9301, 'MS', 0)"),
+  ]);
+});
 
 const O = "https://awardwatch.ca";
 const EM_DASH = String.fromCharCode(0x2014);
@@ -85,8 +109,9 @@ const figures = (s: string, lang: "en" | "fr") =>
 const internalLinks = (g: Guide) => pieces(g).flatMap((p) => Object.values(p.links ?? {}).map((l) => l.href));
 
 // The fixtures the guides' links need beside the shared ones: the example
-// profile with records in all three contract sources and an instrument, and an
-// instruments list to filter.
+// profile with records in all three contract sources and an instrument, an
+// instruments list to filter, and the 6- and 12-month lists of contracts
+// ending (the 3-month list's rows, as the radar's other tests build them).
 const shard = EXAMPLE_PROFILE.slice("/organizations/org-".length, "/organizations/org-".length + 3);
 const exampleId = EXAMPLE_PROFILE.slice("/organizations/".length);
 const exampleProfile = (() => {
@@ -120,7 +145,12 @@ const INSTRUMENTS = {
       regions: ["NC"], segments: [], start: null, expiry: "2027-06-30", n_holders: 1, n_holders_withheld: 0 },
   ],
 };
-const linkEnv = () => testEnv(makeFakeAssets({}, { [`profiles/${shard}.json`]: exampleProfile, "instruments/index.json": INSTRUMENTS }));
+const deeperWindows = Object.fromEntries(["6m", "12m"].flatMap((w) => [
+  [`expiring/${w}/index.json`, { ...(FILES["expiring/3m/index.json"] as object), window: w }],
+  [`expiring/${w}/1.json`, FILES["expiring/3m/1.json"]],
+]));
+const linkEnv = () =>
+  testEnv(makeFakeAssets({}, { [`profiles/${shard}.json`]: exampleProfile, "instruments/index.json": INSTRUMENTS, ...deeperWindows }));
 
 describe("the routes", () => {
   it("serve the index and every guide in both languages, cached as the other document pages are", async () => {
@@ -228,9 +258,13 @@ describe("links and sources", () => {
     const env = linkEnv();
     const targets = new Set<string>(GUIDES.flatMap(internalLinks));
     // The guides link the parts of the site the brief names: the open notices, a type filter, the
-    // Methodology's statuses and places, the standing offers list, a profile's sections, the Data page.
+    // Methodology's statuses and places, the standing offers list, a profile's sections, the Data page;
+    // the open ACANs and the counting of competitive records; a contract reporting a set-aside; the three
+    // lists of contracts ending and the overview of them.
     for (const want of ["/tenders", "/methodology#statuses", "/methodology#places", "/methodology#counting", "/instruments", "/data#sources",
-      `${EXAMPLE_PROFILE}#awards`, `${EXAMPLE_PROFILE}#history`, `${EXAMPLE_PROFILE}#contracts`, `${EXAMPLE_PROFILE}#instruments`]) {
+      `${EXAMPLE_PROFILE}#awards`, `${EXAMPLE_PROFILE}#history`, `${EXAMPLE_PROFILE}#contracts`, `${EXAMPLE_PROFILE}#instruments`,
+      "/tenders?type=Advance%20Contract%20Award%20Notice", "/methodology#competitive", "/methodology#expiring", EXAMPLE_SET_ASIDE,
+      "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m"]) {
       expect(targets.has(want), want).toBe(true);
     }
     expect([...targets].some((h) => h.startsWith("/tenders?type="))).toBe(true);
@@ -273,6 +307,21 @@ describe("links and sources", () => {
         expect(frPage, s.url).toContain(french);
       }
     }
+  });
+
+  it("send the guide on set-asides to a contract page that shows the field it describes", async () => {
+    const page = nbsp(decode(await html(EXAMPLE_SET_ASIDE, linkEnv())));
+    expect(page).toContain("<dt>Procurement Strategy for Indigenous Business</dt>");
+    expect(page).toContain("Mandatory Set-Aside");
+    const frPage = nbsp(decode(await html(fr(EXAMPLE_SET_ASIDE), linkEnv())));
+    expect(frPage).toContain("Contrat réservé obligatoire");
+  });
+
+  it("hold what the guide on contracts ending says every reader sees to the number the pages show", () => {
+    const g = GUIDES.find((x) => x.slug === "when-a-federal-contract-ends")!;
+    const ending = pieces(g).filter((p) => p.where.includes("#ending"));
+    expect(ending.some((p) => filled(p, "en").includes(`their first ${EXPIRING_TEASER_ROWS} contracts`))).toBe(true);
+    expect(ending.some((p) => filled(p, "fr").includes(`les ${EXPIRING_TEASER_ROWS} premiers contrats`))).toBe(true);
   });
 
   it("hold the closing-soon window to the one the pages use", () => {

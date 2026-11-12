@@ -8,6 +8,9 @@ import { headOrder } from "../public/sort.js";
 // main column of a table (its title, description, or the name a row is
 // about) takes whatever width is left. Tables lay out at a fixed width:
 // content never moves a column, and a long word breaks inside its cell.
+// A guide's comparison table (src/guides.ts) may have two main columns, two
+// columns of sentences side by side, which share that width equally; every
+// other table has one.
 
 export const COLUMN_WIDTHS = {
   date: 112, // a date or a year

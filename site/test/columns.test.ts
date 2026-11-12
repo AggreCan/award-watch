@@ -29,6 +29,7 @@ const PAGES = [
   "/rankings", "/rankings/2026?source=contracts&by=count", "/data", "/feeds", "/watchlist", "/methodology",
   // The guides that draw a table in a document (pages/guides.tsx, src/guides.ts).
   "/guides/reading-a-canadabuys-tender-notice", "/guides/standing-offers-and-supply-arrangements", "/guides/three-records-of-one-federal-contract",
+  "/guides/advance-contract-award-notices-acan", "/guides/indigenous-business-set-asides-psib", "/guides/when-a-federal-contract-ends",
 ];
 
 describe("column widths", () => {
@@ -79,8 +80,10 @@ describe("column widths", () => {
             const rest = cls.includes("mdh") ? "md" : cls.includes("lgh") ? "lg" : cls.includes("xlh") ? "xl" : cls.includes("xxh") ? "xxl" : undefined;
             return { kind: k[0].slice(2), rest } as Column;
           });
-          // One main column per table, which takes the width the others leave.
-          expect(kinds.filter((c) => c.kind === "main"), path).toHaveLength(1);
+          // One main column per table, which takes the width the others leave. A guide's table may have
+          // two: a comparison sets two columns of sentences side by side, and they share that width equally.
+          const mains = kinds.filter((c) => c.kind === "main").length;
+          expect(path.startsWith("/guides/") ? [1, 2] : [1], path).toContain(mains);
           expect(attrs, path).toContain(`style="${tableStyle(kinds)}"`);
         }
       }
