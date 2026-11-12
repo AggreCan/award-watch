@@ -30,7 +30,7 @@ is built with it as well; no message writes its own `<html>`.
 |---|---|
 | Preheader | one hidden line, the one an inbox lists after the subject |
 | Header | the wordmark linking the site, the host name linking the home page, an emerald rule under both |
-| Body | the message's own pieces: `h1`, `h2`, `para` (muted for a note and for the line with a stop link), `list`, `button`, `inkLink`, `mutedLink` |
+| Body | the message's own pieces: `h1` (the message's title), `h2` (a section's heading in its band, below), `para` (muted for a note and for the line with a stop link), `list`, `button`, `inkLink`, `mutedLink` |
 | Footer | why the message came, with its links (`whyLine`; the address-change notice has no such line; the weekly email adds the sender's name and mailing address on the next line), then the tagline and `contact@awardwatch.ca` |
 
 The layout is design/email's (`design/email/build.py`): a 600 px column of
@@ -40,10 +40,34 @@ code sits in a ruled band at 32 px in a monospace face. A change to the shell
 belongs in `design/email/build.py` too, so the review sheet keeps showing
 what is sent.
 
+A section's heading opens its list on a band, as a panel on the site opens
+on its head band. The messages with sections draw every heading with `h2`:
+the weekly briefing's six sections, the records message's two parts, each
+watch in the watch mail, and the "Your organization" and matching notices
+blocks (the watch mail and the weekly email). The weekly email's watch
+lines and the site's figures sit under the message's title and have no
+section heading.
+
+| Part of the band | Light | Dark |
+|---|---|---|
+| Ground, the column's full width | `#e2e8f0`, 1.23:1 on the white card (the `bgcolor` attribute for Outlook and the inline style) | `#202d44` (`.sect`), 1.26:1 on the card `#111a2b` |
+| Left edge, 3 px | the header rule's emerald `#0f7b4f`, 5.29:1 on the card | the same emerald, 3.29:1 on the card |
+| Heading, 13 px bold capitals spaced 1 px (the site's 0.08em) | ink `#0f172a`, 14.48:1 on the band | `#e5edf7` (`.ink`), 11.70:1 on the band |
+
+The capitals come from `text-transform`, so the words a screen reader reads
+and a reader copies stay as written; a long name wraps inside the band
+(`word-break: break-word`). The band has 20 px above it and 8 px below, as
+the padding of a cell around it (Outlook keeps a cell's padding and drops a
+table's margin), so it reads with the list under it and apart from the one
+above. A row's title (15 px, weight 600, as written) is unchanged. The
+plain-text part writes the heading in capitals on its own line after a
+blank one (`h2Text`): "AWARDS THIS WEEK: 19".
+
 The dark overrides recolour the text classes (`ink`, `ink2`, `muted`) and,
 by name, the links inside each: a link carries its own inline colour, which
-a rule on the paragraph around it does not reach. Apple Mail and iOS Mail
-apply them; Gmail inverts colours on its own.
+a rule on the paragraph around it does not reach. The section band's rule
+(`.sect`) names its ground alone, so the emerald edge stays. Apple Mail and
+iOS Mail apply them; Gmail inverts colours on its own.
 
 What the shell keeps out, for Gmail's Promotions tab and for the reader:
 
@@ -53,7 +77,8 @@ What the shell keeps out, for Gmail's Promotions tab and for the reader:
   click. The only values that differ from one reader to the next are the
   tokens a sign-in link or a stop link needs to work.
 - One button at most, dark ink on the white panel; no coloured background but
-  the pale page around the panel.
+  the pale page around the panel and the slate grounds of the code's band
+  and the section bands.
 - The plain-text part goes with every message, and the list messages keep
   `List-Unsubscribe` with its one-click partner.
 
@@ -117,7 +142,16 @@ and keep their own tests.
   in the address-change notice, whose text part ends on its contact line)
   are named by their dictionary keys in `site/test-mail/checks.ts`, so the
   exception holds in both languages and covers nothing else. The header's
-  link to the home page is the HTML part's alone.
+  link to the home page is the HTML part's alone. The HTML part is read as
+  the reader sees it: a section's heading in capitals, so the text part
+  must write it in capitals.
+- Every `h2` is the first thing in its band (`bandProblems` in
+  `site/test-mail/checks.ts`), and each band is checked in the light colours
+  it carries inline and in the dark rules: the heading at 4.5:1 or better on
+  the band, the band at 1.2:1 or better against the card, the `bgcolor`
+  attribute the same colour as the inline ground, the left edge the header
+  rule's emerald at 3:1 or better against the card, and the heading free to
+  wrap inside the band (`word-break: break-word`, no `nowrap`).
 - Every link that carries a colour is reached by a rule of the dark query:
   its own class recoloured, or a rule for the links inside a class around
   it (`linksLeftLight` in `site/test-mail/checks.ts`), so no link keeps the
@@ -166,7 +200,9 @@ reader's address, a link or a line in one part only, the reason line or the
 stop link removed, `List-Unsubscribe` missing or naming another link, a
 subject of 100 characters, an empty subject, the shell's header or footer
 left out, an empty preheader, a second button, an image of the message's
-own) and checks that each one fails.
+own; on a briefing, a heading out of its band, a band too faint on the
+card, a band with no dark rule, an edge in a second hue, a heading in mixed
+case in the text part) and checks that each one fails.
 
 Run the suite before shipping a change to a message, to the shell, to a
 string a message uses (`site/src/account/strings.ts`), to the sender, or to a

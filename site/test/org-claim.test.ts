@@ -1030,7 +1030,7 @@ describe("the weekly block of the watch mail", () => {
     const en = watchDigest(base("en", weekOpening("en", SITE, A1, NAME1, week.facts)));
     expect(en.subject).toBe(`Your organization this week: ${NAME1}`);
     expect(en.text.startsWith([
-      `Your organization: ${NAME1}`,
+      "YOUR ORGANIZATION: EXEMPLAR TRANSLATION SERVICES INC.",
       `  New records naming you this week: 2 (1 award notice, 1 published contract) · ${SITE}/organizations/${A1}/records`,
       `  Your contracts ending within 12 months: 2, soonest 2027-01-15 ($500,000 in all) · ${SITE}/expiring/12m?supplier=${A1}`,
       "  Buyers you have won from with new notices this week: Public Services and Procurement Canada (5), Fisheries and Oceans Canada (1)" +
@@ -1042,7 +1042,7 @@ describe("the weekly block of the watch mail", () => {
     const frText = nbsp(fr.text).replace(/’/g, "'");
     expect(nbsp(fr.subject)).toBe(`Votre organisation cette semaine : ${NAME1}`);
     expect(frText.startsWith([
-      `Votre organisation : ${NAME1}`,
+      "VOTRE ORGANISATION : EXEMPLAR TRANSLATION SERVICES INC.",
       `  Nouveaux dossiers vous nommant cette semaine : 2 (1 avis d'attribution, 1 contrat publié) · ${SITE}/organizations/${A1}/records?lang=fr`,
       `  Vos contrats prenant fin d'ici 12 mois : 2, le plus proche le 2027-01-15 (500 000 $ en tout) · ${SITE}/expiring/12m?supplier=${A1}&lang=fr`,
       "  Acheteurs dont vous avez déjà obtenu des contrats et qui ont publié de nouveaux avis cette semaine : " +
@@ -1057,7 +1057,8 @@ describe("the weekly block of the watch mail", () => {
     const group = { kind: "organization" as const, label: NAME2, path: `/organizations/${A2}`, events: [] };
     const both = watchDigest({ ...base("en", weekOpening("en", SITE, A1, NAME1, week.facts), [group]), total: 1 });
     expect(both.subject).toBe(`1 update on what you follow: ${NAME2}`);
-    expect(both.text.indexOf(`Your organization: ${NAME1}`)).toBeLessThan(both.text.indexOf("Your Watches"));
+    expect(both.text.startsWith("YOUR ORGANIZATION: EXEMPLAR TRANSLATION SERVICES INC.\n")).toBe(true);
+    expect(both.text.indexOf("YOUR ORGANIZATION: EXEMPLAR TRANSLATION SERVICES INC.")).toBeLessThan(both.text.indexOf("Your Watches"));
     // Without a block the message is what it was.
     const plain = { ...base("en", undefined, [group]), total: 1 };
     expect(watchDigest({ ...plain, opening: null })).toEqual(watchDigest(plain));
@@ -1067,7 +1068,7 @@ describe("the weekly block of the watch mail", () => {
     const zero = weekOpening("en", SITE, A1, NAME1, { records: [], ending: { n: 0, cents: null, soonest: null }, buyers: [] });
     expect(zero.lines).toEqual([]);
     expect(zero.heading).toBe("Your organization: nothing new this week.");
-    expect(watchDigest(base("en", zero)).text.startsWith("Your organization: nothing new this week.\n\n")).toBe(true);
+    expect(watchDigest(base("en", zero)).text.startsWith("YOUR ORGANIZATION: NOTHING NEW THIS WEEK.\n\n")).toBe(true);
     const fr = weekOpening("fr", SITE, A1, NAME1, { records: [], ending: { n: 0, cents: null, soonest: null }, buyers: [] });
     expect(nbsp(fr.heading)).toBe("Votre organisation : rien de nouveau cette semaine.");
   });

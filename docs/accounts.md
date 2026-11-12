@@ -1902,7 +1902,7 @@ a refund the press would refuse. The audit keeps 90 days, longer than the 14.
    (4000 0000 0000 0341) and check the subscription stays Pro and active;
    move down and advance the clock past the period's end; refund an Ultra
    first payment; check the proration invoice carries tax under Managed
-   Payments.
+   Payments. Done on 2026-11-12 (*The sandbox run*).
 6. **The five variables** in `site/wrangler.jsonc`:
    `STRIPE_PRODUCT_ULTRA`, `STRIPE_PRICE_ULTRA_MONTHLY`,
    `STRIPE_PRICE_ULTRA_YEARLY`, `PRICE_ULTRA_MONTHLY_CAD` and
@@ -1925,11 +1925,37 @@ a refund the press would refuse. The audit keeps 90 days, longer than the 14.
   next paid notice grant Pro, and an update notice lower them to Pro: the
   product is then unknown to the site. Keep the product id set while any
   Ultra subscription bills.
-- **Not confirmed in Stripe's sandbox yet:** whether the portal holds a move
-  up until it is paid, whether it switches plans, prorates and taxes the
-  proration invoice under Managed Payments, and how an Ultra refund shows in
-  the payment's breakdown (operator step 5). If the portal applies a move up
-  before its payment, the webhook still grants nothing until a paid notice.
+- **Not covered by the sandbox run:** the yearly prices, the French
+  checkout, and a move that changes the billing interval (monthly Pro to
+  yearly Ultra).
+
+### The sandbox run
+
+Operator step 5, run on 2026-11-12 against a sandbox that copies the live
+account (the
+same products, prices and portal settings), with the site on the local
+machine and Stripe's events replayed to the local webhook. Monthly prices,
+a British Columbia address, test clocks for the passing of time.
+
+| Check | What Stripe did | What the site did |
+|---|---|---|
+| Buy Ultra | CA$38.99 plus CA$4.68 tax, paid | Ultra on the paid notice |
+| Buy Pro, then move to Ultra in the portal | A proration invoice of CA$20.00 plus CA$2.40 tax, paid at once | Pro until the proration's paid notice, then Ultra; Refund now no longer offered |
+| The same move with a card that attaches and fails its charges (4000 0000 0000 0341) | The charge declined; the subscription stayed on Pro's price and active, with a pending update; the update lapsed and its invoice was voided | Pro throughout |
+| Move down to Pro | The change held to the period's end, then a Pro renewal billed | Ultra to the period's end, Pro from the renewal |
+| Refund now on an Ultra first payment | CA$43.67 refunded, the subscription cancelled | Free |
+| Tax on a proration invoice | Charged, as on a first invoice | no part |
+
+Three things the run showed:
+
+- A price whose tax behaviour is left unspecified is charged as exclusive
+  under Managed Payments (tax added on top), the same as a price set to
+  exclusive.
+- Managed Payments refuses a change to a subscription's default payment
+  method through the API; a card is replaced in the portal, as a customer
+  does it.
+- The portal's return addresses are built from `SITE_URL`, so a local run
+  returns to the address that variable names.
 
 ## Dashboard
 
@@ -3070,6 +3096,9 @@ are `site/test/briefings.test.ts`.
 
 For a subject S at data date D, the span is the seven data dates ending with
 D (after a message that failed, back to the last one covered, at most 14).
+Each section opens on its heading in a tinted band with its count, in
+capitals ("AWARDS THIS WEEK: 19"; the plain-text part in capitals too), and
+its rows follow (docs/mail.md, *The shell*).
 
 | Section | Rows | Read from |
 |---|---|---|

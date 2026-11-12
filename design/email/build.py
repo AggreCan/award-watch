@@ -26,8 +26,10 @@ ROOT = HERE.parents[1]
 WORDMARK_SVG = (ROOT / "brand" / "wordmark.svg").read_text(encoding="utf-8")
 FONT_B64 = base64.b64encode((ROOT / "site" / "public" / "fonts" / "InterVariable.woff2").read_bytes()).decode()
 
+# "sect" is the band under a section's heading in the messages that have
+# sections (the site's mail_html.ts h2); none of the prototypes here has one.
 C = {
-    "page": "#f8fafc", "panel": "#ffffff", "head": "#eef2f7", "border": "#e2e8f0", "border2": "#cbd5e1",
+    "page": "#f8fafc", "panel": "#ffffff", "head": "#eef2f7", "sect": "#e2e8f0", "border": "#e2e8f0", "border2": "#cbd5e1",
     "ink": "#0f172a", "ink2": "#334155", "muted": "#5b6b80", "accent": "#0f7b4f", "amber": "#b45309",
 }
 FONT = "'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
@@ -54,6 +56,7 @@ DARK_RULES = [
     (".ink2, .ink2 a", "color:#c7d2e0!important"),
     (".muted, .muted a", "color:#8da0b8!important"),
     (".band", "background:#17233a!important;border-color:#2b3a52!important"),
+    (".sect", "background:#202d44!important"),
     (".rule", "border-color:#243044!important"),
     (".btn", "background:#e5edf7!important"),
     (".btn a", "color:#0f172a!important"),

@@ -29,6 +29,14 @@
 // reached by a dark rule: its own class recoloured, or a rule for the links
 // inside a class around it. A paragraph link once kept the light ink on the
 // dark card and could not be read.
+//
+// A section's heading sits in its band (mail_html.ts h2), in capitals by its
+// style; the HTML part's visible text reads it in capitals, as the reader
+// sees it, and the text part must write it so. Each band is held, in the
+// light colours inline and in the dark rules, to its words at HEADING_MIN on
+// the band, the band at BAND_MIN against the card, and its edge, the
+// header's emerald, at EDGE_MIN against the card; and its heading free to
+// wrap inside it on a phone.
 import { expect } from "vitest";
 import { sendWithHeaders } from "../src/account/deliveries";
 import { deliveryHeaders, siteLink } from "../src/account/digests";
@@ -68,14 +76,120 @@ export interface Shape {
 
 // -- the dark rules and the links -----------------------------------------------------------------
 
-// The selectors the dark query recolours, read from the message itself.
-export function darkColoured(html: string): Set<string> {
+// The dark query's rules, read from the message itself.
+function darkBlock(html: string): string {
   const at = html.indexOf("@media (prefers-color-scheme: dark){");
-  const block = at < 0 ? "" : html.slice(at, html.indexOf("@media only screen", at));
+  return at < 0 ? "" : html.slice(at, html.indexOf("@media only screen", at));
+}
+
+// The selectors the dark query recolours.
+export function darkColoured(html: string): Set<string> {
   const out = new Set<string>();
-  for (const [, selectors, rule] of block.matchAll(/([.a-z0-9 ,-]+)\{([^}]*)\}/g)) {
+  for (const [, selectors, rule] of darkBlock(html).matchAll(/([.a-z0-9 ,-]+)\{([^}]*)\}/g)) {
     if (!/(?:^|;)color:/.test(rule)) continue;
     for (const s of selectors.split(",")) out.add(s.trim());
+  }
+  return out;
+}
+
+// A style's declarations by property, "!important" off.
+function declarations(style: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const part of style.split(";")) {
+    const at = part.indexOf(":");
+    if (at > 0) out.set(part.slice(0, at).trim().toLowerCase(), part.slice(at + 1).replace(/!important/i, "").trim());
+  }
+  return out;
+}
+
+// The dark query's declarations by selector.
+function darkDeclarations(html: string): Map<string, Map<string, string>> {
+  const out = new Map<string, Map<string, string>>();
+  for (const [, selectors, rule] of darkBlock(html).matchAll(/([.a-z0-9 ,-]+)\{([^}]*)\}/g)) {
+    for (const s of selectors.split(",")) out.set(s.trim(), declarations(rule));
+  }
+  return out;
+}
+
+// -- the section bands ----------------------------------------------------------------------------
+
+// WCAG 2 contrast of two #rrggbb colours.
+const channel = (v: number) => {
+  const s = v / 255;
+  return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+};
+const luminance = (hex: string) => {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
+};
+const contrast = (a: string, b: string): number => {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+};
+
+// A heading's words on its band, as body text (WCAG 1.4.3); the band against
+// the card, a step the eye finds (the site's panel head is 1.26 on the light
+// panel); the edge against the card, as a boundary (WCAG 1.4.11).
+export const HEADING_MIN = 4.5;
+export const BAND_MIN = 1.2;
+export const EDGE_MIN = 3;
+
+const HEX_RE = /#[0-9a-f]{6}\b/i;
+const attrOf = (attrs: string, name: string) => new RegExp(`\\s${name}="([^"]*)"`).exec(attrs)?.[1] ?? "";
+const classesOf = (attrs: string) => attrOf(attrs, "class").split(/\s+/).filter(Boolean);
+const hexOf = (v: string | undefined) => (v ? HEX_RE.exec(v)?.[0].toLowerCase() ?? null : null);
+
+// What a dark client gives an element: the first of its classes with a dark rule for the property.
+function darkOf(dark: Map<string, Map<string, string>>, classes: string[], prop: string): string | null {
+  for (const c of classes) {
+    const v = hexOf(dark.get(`.${c}`)?.get(prop));
+    if (v) return v;
+  }
+  return null;
+}
+
+// What is wrong with the message's section bands, one line each; none when
+// every h2 is the first thing in its band and each band holds in both schemes.
+export function bandProblems(html: string): string[] {
+  const body = html.slice(html.indexOf("<body"));
+  const dark = darkDeclarations(html);
+  const card = { light: hexOf(declarations(attrOf(/<table\b[^>]*class="wrap card"[^>]*>/.exec(body)?.[0] ?? "", "style")).get("background")),
+    dark: hexOf(dark.get(".card")?.get("background")) };
+  const emerald = hexOf(/border-bottom:2px solid (#[0-9a-f]{6})/.exec(body)?.[1]);
+  const out: string[] = [];
+  if (!card.light || !card.dark || !emerald) return ["the shell's card or header rule is not found"];
+  const bands = [...body.matchAll(/<td\b([^>]*)><h2\b([^>]*)>([^<]*)<\/h2>/g)];
+  const heads = (body.match(/<h2\b/g) ?? []).length;
+  if (bands.length !== heads) out.push(`${heads - bands.length} of ${heads} headings not the first thing in a cell`);
+  for (const [, td, h, words] of bands) {
+    const name = `"${words}"`;
+    const style = declarations(attrOf(td, "style"));
+    const ground = hexOf(style.get("background"));
+    const bgcolor = hexOf(attrOf(td, "bgcolor"));
+    const face = declarations(attrOf(h, "style"));
+    const ink = hexOf(face.get("color"));
+    const edge = hexOf(style.get("border-left"));
+    // On a phone a long heading wraps inside its band.
+    if (face.get("white-space") === "nowrap" || face.get("word-break") !== "break-word") out.push(`${name}: the heading cannot wrap inside its band`);
+    if (!ground || !bgcolor || ground !== bgcolor) {
+      out.push(`${name}: the band's bgcolor (${bgcolor}) and its inline ground (${ground}) differ or are missing`);
+      continue;
+    }
+    if (!ink) out.push(`${name}: no inline colour on the heading`);
+    else if (contrast(ink, ground) < HEADING_MIN) out.push(`${name}: light, the heading at ${contrast(ink, ground).toFixed(2)} on its band`);
+    if (contrast(ground, card.light) < BAND_MIN) out.push(`${name}: light, the band at ${contrast(ground, card.light).toFixed(2)} on the card`);
+    if (edge !== emerald) out.push(`${name}: the edge (${edge}) is not the header's emerald (${emerald})`);
+    else if (contrast(edge, card.light) < EDGE_MIN) out.push(`${name}: light, the edge at ${contrast(edge, card.light).toFixed(2)} on the card`);
+    const darkGround = darkOf(dark, classesOf(td), "background");
+    const darkInk = darkOf(dark, classesOf(h), "color");
+    const darkEdge = darkOf(dark, classesOf(td), "border-color") ?? edge;
+    if (!darkGround || !darkInk) {
+      out.push(`${name}: no dark rule for the band's ground (${darkGround}) or the heading's words (${darkInk})`);
+      continue;
+    }
+    if (contrast(darkInk, darkGround) < HEADING_MIN) out.push(`${name}: dark, the heading at ${contrast(darkInk, darkGround).toFixed(2)} on its band`);
+    if (contrast(darkGround, card.dark) < BAND_MIN) out.push(`${name}: dark, the band at ${contrast(darkGround, card.dark).toFixed(2)} on the card`);
+    if (darkEdge && contrast(darkEdge, card.dark) < EDGE_MIN) out.push(`${name}: dark, the edge at ${contrast(darkEdge, card.dark).toFixed(2)} on the card`);
   }
   return out;
 }
@@ -108,12 +222,20 @@ export function linksLeftLight(html: string): string[] {
 const BLOCK = "p|h1|h2|div|td|tr|li|ul|ol|table|body|html|title";
 const INLINE = "a|span|b";
 
+// The words of an element whose style sets them in capitals (a section's
+// heading), in capitals as the reader sees them; an entity is left whole.
+const capitals = (html: string, lang: Lang) =>
+  html.replace(/(<([a-z0-9]+)\b[^>]*\sstyle="[^"]*text-transform:uppercase[^"]*"[^>]*>)([^<]*)(<\/\2>)/gi,
+    (_all, open: string, _tag: string, words: string, close: string) =>
+      open + words.replace(/&[^;\s]*;|[^&]+/g, (s) => (s.startsWith("&") ? s : s.toLocaleUpperCase(lang))) + close);
+
 // The HTML part's visible text: the head and the hidden preheader left out,
-// images (the wordmarks' alternative text) left out, a line break at every
-// block element and, when fine, at every inline one too.
-function visible(html: string, fine: boolean): string {
+// images (the wordmarks' alternative text) left out, the words a style sets
+// in capitals in capitals, a line break at every block element and, when
+// fine, at every inline one too.
+function visible(html: string, fine: boolean, lang: Lang): string {
   const tags = fine ? `${BLOCK}|${INLINE}` : BLOCK;
-  return decode(html
+  return decode(capitals(html, lang)
     .replace(/<head>[\s\S]*?<\/head>/i, "")
     .replace(/<div style="display:none;[^"]*">[\s\S]*?<\/div>/i, "")
     .replace(/<img\b[^>]*>/gi, "")
@@ -195,6 +317,9 @@ export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: re
   // Every coloured link is reached by a rule of the dark query.
   expect(linksLeftLight(m.html), `${what}: links a dark client leaves in the light ink`).toEqual([]);
 
+  // Every section heading in its band, which holds in the light colours and the dark rules.
+  expect(bandProblems(m.html), `${what}: the section bands`).toEqual([]);
+
   // No em-dash anywhere.
   for (const [part, s] of [["subject", m.subject], ["text", m.text], ["html", m.html]] as const) {
     expect(s.includes(EM_DASH), `${what}: an em-dash in the ${part}`).toBe(false);
@@ -214,14 +339,14 @@ export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: re
     expect(/^(?:https?:\/\/|mailto:)/.test(href), `${what}: link ${href}`).toBe(true);
     if (href.startsWith("mailto:")) expect(m.text.includes(href.slice("mailto:".length)), `${what}: ${href} in the text part`).toBe(true);
   }
-  expect(m.text.includes(CONTACT_EMAIL), `${what}: the contact address`).toBe(visible(m.html, false).includes(CONTACT_EMAIL));
+  expect(m.text.includes(CONTACT_EMAIL), `${what}: the contact address`).toBe(visible(m.html, false, lang).includes(CONTACT_EMAIL));
 
   // The same lines in both parts, each direction.
   const host = new URL(shape.site).host;
   const skip = new Set((shape.onePart ?? []).flatMap(([key, vars]) => pieces(t(lang, key, vars))));
   const textFlow = flow(m.text);
-  const htmlFlow = flow(visible(m.html, false));
-  for (const piece of pieces(visible(m.html, true))) {
+  const htmlFlow = flow(visible(m.html, false, lang));
+  for (const piece of pieces(visible(m.html, true, lang))) {
     if (piece === host || skip.has(piece)) continue;
     expect(textFlow.includes(piece), `${what}: the HTML part's "${piece}" is not in the text part`).toBe(true);
   }

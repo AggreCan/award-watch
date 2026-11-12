@@ -652,7 +652,8 @@ describe("the watch mail", () => {
     expect(m.subject).toBe("3 updates on what you follow: Exemplar Works Ltd., National Defence");
     const text = m.text!;
     expect(text).toContain("3 updates on 2 of the 4 pages you follow. Data date 2026-10-31.");
-    expect(text.indexOf("Exemplar Works Ltd. · Organization")).toBeLessThan(text.indexOf("National Defence · Buyer"));
+    expect(text.indexOf("\n\nEXEMPLAR WORKS LTD. · ORGANIZATION\n")).toBeLessThan(text.indexOf("\n\nNATIONAL DEFENCE · BUYER\n"));
+    expect(text.indexOf("\n\nEXEMPLAR WORKS LTD. · ORGANIZATION\n")).toBeGreaterThan(0);
     expect(text).toContain("- Hull repair\n  New award or contract · Value $1,250,000\n  First seen 2026-10-31 · Also on your watch of National Defence\n  https://awardwatch.ca/awards/aw-1");
     expect(text.split("- Hull repair").length).toBe(2);
     expect(text).toContain("- Boots\n  Contract amended · $120,000 to $268,000 (+$148,000, +123%) · end moved from 2026-12-31 to 2027-01-20 · amendment 1\n  First seen 2026-10-31");
@@ -685,7 +686,7 @@ describe("the watch mail", () => {
     expect(report.watch).toMatchObject({ sent: 1, empty: 0 });
     const [m] = mail.to(email);
     expect(m.subject).toMatch(/^Your organization this week: /);
-    expect(m.text).toMatch(/^Your organization: [^\n]+\n  New records naming you this week: 1 \(1 award notice\) · https:\/\/awardwatch\.ca\/organizations\/org-a000000001\/records\n/);
+    expect(m.text).toMatch(/^YOUR ORGANIZATION: EXEMPLAR TRANSLATION SERVICES INC\.\n  New records naming you this week: 1 \(1 award notice\) · https:\/\/awardwatch\.ca\/organizations\/org-a000000001\/records\n/);
     expect(m.text).not.toContain("updates on");
     for (const part of [m.subject, m.html!, m.text!]) expect(part).not.toContain(EM_DASH);
     // The data date is a Saturday: a daily account gets no block on it, and an empty daily message stays unsent.

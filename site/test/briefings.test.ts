@@ -327,7 +327,7 @@ describe("the briefing's statements", () => {
       expect(read.data.instruments.n).toBe(12);
       expect(read.data.instruments.rows.map((r) => r.expiry)).toEqual(Array.from({ length: 10 }, (_, i) => `2027-01-${String(i + 1).padStart(2, "0")}`));
       const m = briefingDigest({ lang: "en", to: "a@example.com", site: SITE, stopUrl: `${SITE}/s`, briefing: subject, name: "95 Land", data: read.data });
-      expect(m.text).toContain("Standing offers and supply arrangements ending within 6 months: 12\n- EP000-260011/001/XL · Supply Arrangement · Item 11 · expires 2027-01-01 · 12 holders\n");
+      expect(m.text).toContain("STANDING OFFERS AND SUPPLY ARRANGEMENTS ENDING WITHIN 6 MONTHS: 12\n- EP000-260011/001/XL · Supply Arrangement · Item 11 · expires 2027-01-01 · 12 holders\n");
       expect(m.text).toContain("\nSee all 12: https://awardwatch.ca/instruments?segment=95&within=6\n");
       expect(m.text.match(/^- EP000-/gm)).toHaveLength(10);
     } finally {
@@ -341,7 +341,7 @@ describe("the briefing's statements", () => {
 const EXPECTED_EN = `81 Engineering, week to 2026-11-02
 Data dates 2026-10-27 to 2026-11-02.
 
-New notices this week: 2
+NEW NOTICES THIS WEEK: 2
 - Geotechnical services
   Public Services and Procurement Canada · Closes 2026-11-05 14:00 ET, closes in 3 days
   https://awardwatch.ca/tenders/cb-2
@@ -349,7 +349,7 @@ New notices this week: 2
   Fisheries and Oceans Canada · Closes 2026-11-23 14:00 ET, closes in 21 days
   https://awardwatch.ca/tenders/cb-1
 
-Awards this week: 2
+AWARDS THIS WEEK: 2
 Award notices: 1, $4,200,000
 PSPC contract history: 1 (1 without a value)
 - Engineering support, Esquimalt Graving Dock
@@ -359,7 +359,7 @@ PSPC contract history: 1 (1 without a value)
   Supplier not named · Fisheries and Oceans Canada · No counted value · PSPC contract history
   https://awardwatch.ca/history/f1700-260001-001
 
-Contracts ending next quarter, Q4 2026-27 (January to March 2027): 3, $1,050,000 (1 without a value)
+CONTRACTS ENDING NEXT QUARTER, Q4 2026-27 (JANUARY TO MARCH 2027): 3, $1,050,000 (1 WITHOUT A VALUE)
 New to the list this week: 2.
 - Fisheries Engineering Services, Pacific Region
   Kerr Wood Leidal Associates Ltd. · Fisheries and Oceans Canada · ends 2027-03-31 · $1,000,000 · 2 amendments, +163% · new this week
@@ -372,7 +372,7 @@ New to the list this week: 2.
   https://awardwatch.ca/history/w8486-1234
 In the 6-month list of contracts ending: https://awardwatch.ca/expiring/6m?segment=81
 
-Notable amendments this week: 2
+NOTABLE AMENDMENTS THIS WEEK: 2
 - Hydrotechnical assessment, Big Qualicum River
   Kerr Wood Leidal Associates Ltd. · Fisheries and Oceans Canada · $120,000 to $268,000 (+$148,000, +123%) · end moved from 2026-03-31 to 2027-03-31
   https://awardwatch.ca/awards/f1700-240456-001
@@ -380,12 +380,12 @@ Notable amendments this week: 2
   Supplier not named · Fisheries and Oceans Canada · $10,000 to $30,000 (+$20,000, +200%)
   https://awardwatch.ca/awards/aw-small
 
-Largest records this fiscal year (2026-27 to date): 2
+LARGEST RECORDS THIS FISCAL YEAR (2026-27 TO DATE): 2
 - Joint Support Ship engineering services · Chantier Davie Canada Inc. · National Defence · $38,900,000 · 2026-07-14 · Award notice
 - Coastal engineering · Kerr Wood Leidal Associates Ltd. · Fisheries and Oceans Canada · $500,000 · PSPC contract history
 Analytics for this segment: https://awardwatch.ca/segments/81/analytics
 
-Standing offers and supply arrangements ending within 6 months: 3
+STANDING OFFERS AND SUPPLY ARRANGEMENTS ENDING WITHIN 6 MONTHS: 3
 - EN578-170432/005/EI · Supply Arrangement · Engineering services · Public Services and Procurement Canada · expires 2026-12-15 · 1 holder
   https://awardwatch.ca/instruments/EN578-170432%2F005%2FEI
 - E60ZT-120002/001/ZT · Regional Master Standing Offer · Environmental consulting services · Fisheries and Oceans Canada · expires 2027-03-31 · 14 holders
@@ -407,7 +407,7 @@ contact@awardwatch.ca
 const EXPECTED_FR = `81 Ingénierie, semaine se terminant le 2026-11-02
 Dates des données : du 2026-10-27 au 2026-11-02.
 
-Nouveaux avis cette semaine : 2
+NOUVEAUX AVIS CETTE SEMAINE : 2
 - Services géotechniques
   Services publics et Approvisionnement Canada · Ferme le 2026-11-05 à 14 h 00 HE, ferme dans 3 jours
   https://awardwatch.ca/tenders/cb-2?lang=fr
@@ -415,7 +415,7 @@ Nouveaux avis cette semaine : 2
   Pêches et Océans Canada · Ferme le 2026-11-23 à 14 h 00 HE, ferme dans 21 jours
   https://awardwatch.ca/tenders/cb-1?lang=fr
 
-Attributions cette semaine : 2
+ATTRIBUTIONS CETTE SEMAINE : 2
 Avis d’attribution : 1, 4 200 000 $
 Historique des contrats de SPAC : 1 (1 sans valeur)
 - Soutien en ingénierie, cale sèche d'Esquimalt
@@ -425,7 +425,7 @@ Historique des contrats de SPAC : 1 (1 sans valeur)
   Fournisseur non nommé · Pêches et Océans Canada · Aucune valeur comptée · Historique des contrats de SPAC
   https://awardwatch.ca/history/f1700-260001-001?lang=fr
 
-Contrats prenant fin le trimestre prochain, T4 2026-2027 (janvier à mars 2027) : 3, 1 050 000 $ (1 sans valeur)
+CONTRATS PRENANT FIN LE TRIMESTRE PROCHAIN, T4 2026-2027 (JANVIER À MARS 2027) : 3, 1 050 000 $ (1 SANS VALEUR)
 Nouveaux dans la liste cette semaine : 2.
 - Services d'ingénierie des pêches, région du Pacifique
   Kerr Wood Leidal Associates Ltd. · Pêches et Océans Canada · prend fin le 2027-03-31 · 1 000 000 $ · 2 modifications, +163 % · nouveau cette semaine
@@ -438,7 +438,7 @@ Nouveaux dans la liste cette semaine : 2.
   https://awardwatch.ca/history/w8486-1234?lang=fr
 Dans la liste de 6 mois des contrats prenant fin : https://awardwatch.ca/expiring/6m?segment=81&lang=fr
 
-Modifications notables cette semaine : 2
+MODIFICATIONS NOTABLES CETTE SEMAINE : 2
 - Évaluation hydrotechnique, rivière Big Qualicum
   Kerr Wood Leidal Associates Ltd. · Pêches et Océans Canada · de 120 000 $ à 268 000 $ (+148 000 $, +123 %) · fin reportée du 2026-03-31 au 2027-03-31
   https://awardwatch.ca/awards/f1700-240456-001?lang=fr
@@ -446,12 +446,12 @@ Modifications notables cette semaine : 2
   Fournisseur non nommé · Pêches et Océans Canada · de 10 000 $ à 30 000 $ (+20 000 $, +200 %)
   https://awardwatch.ca/awards/aw-small?lang=fr
 
-Dossiers les plus importants de l’exercice (2026-2027 à ce jour) : 2
+DOSSIERS LES PLUS IMPORTANTS DE L’EXERCICE (2026-2027 À CE JOUR) : 2
 - Services d'ingénierie, navires de soutien interarmées · Chantier Davie Canada Inc. · Défense nationale · 38 900 000 $ · 2026-07-14 · Avis d’attribution
 - Coastal engineering · Kerr Wood Leidal Associates Ltd. · Pêches et Océans Canada · 500 000 $ · Historique des contrats de SPAC
 Analyse de ce segment : https://awardwatch.ca/segments/81/analytics?lang=fr
 
-Offres à commandes et arrangements en matière d’approvisionnement prenant fin d’ici 6 mois : 3
+OFFRES À COMMANDES ET ARRANGEMENTS EN MATIÈRE D’APPROVISIONNEMENT PRENANT FIN D’ICI 6 MOIS : 3
 - EN578-170432/005/EI · Arrangement en matière d'approvisionnement · Services d'ingénierie · Services publics et Approvisionnement Canada · expire le 2026-12-15 · 1 titulaire
   https://awardwatch.ca/instruments/EN578-170432%2F005%2FEI?lang=fr
 - E60ZT-120002/001/ZT · Offre à commandes principale régionale · Services d'experts-conseils en environnement · Pêches et Océans Canada · expire le 2027-03-31 · 14 titulaires
@@ -544,8 +544,8 @@ describe("the message", () => {
     expect(read.data.instruments).toMatchObject({ n: 0, rows: [] });
     const en = briefingDigest({ lang: "en", to: "a@example.com", site: SITE, stopUrl: `${SITE}/s`, briefing: s, name: "72 Construction", data: read.data });
     const fr = briefingDigest({ lang: "fr", to: "a@example.com", site: SITE, stopUrl: `${SITE}/s`, briefing: s, name: "72 Construction", data: read.data });
-    expect(en.text).toContain("\n\nStanding offers and supply arrangements ending within 6 months: none\n\nA contract's value");
-    expect(nbsp(fr.text)).toContain("\n\nOffres à commandes et arrangements en matière d’approvisionnement prenant fin d’ici 6 mois : aucun\n\nLa valeur");
+    expect(en.text).toContain("\n\nSTANDING OFFERS AND SUPPLY ARRANGEMENTS ENDING WITHIN 6 MONTHS: NONE\n\nA contract's value");
+    expect(nbsp(fr.text)).toContain("\n\nOFFRES À COMMANDES ET ARRANGEMENTS EN MATIÈRE D’APPROVISIONNEMENT PRENANT FIN D’ICI 6 MOIS : AUCUN\n\nLa valeur");
     for (const m of [en, fr]) {
       expect(m.text).not.toContain("/instruments");
       expect(m.html).not.toContain("/instruments");
@@ -587,7 +587,7 @@ describe("the message", () => {
     expect(m.text).toContain("In the 6-month list of contracts ending: https://awardwatch.ca/expiring/6m?buyer=dfo-mpo&segment=81");
     // Its instruments: the buyer's as end user, in the segment; the end user is the buyer, so the line leaves it out.
     expect(read.data.instruments.rows.map((r) => r.agr)).toEqual(["E60ZT-120002/001/ZT", "F5211-200001/002/VAN"]);
-    expect(m.text).toContain("Standing offers and supply arrangements ending within 6 months: 2\n" +
+    expect(m.text).toContain("STANDING OFFERS AND SUPPLY ARRANGEMENTS ENDING WITHIN 6 MONTHS: 2\n" +
       "- E60ZT-120002/001/ZT · Regional Master Standing Offer · Environmental consulting services · expires 2027-03-31 · 14 holders\n" +
       "  https://awardwatch.ca/instruments/E60ZT-120002%2F001%2FZT\n" +
       "- F5211-200001/002/VAN · Regional Individual Standing Offer · Hydrometric station maintenance · expires 2027-05-03 · 3 holders\n" +
@@ -650,9 +650,9 @@ describe("the run", () => {
     expect(report.report).toMatchObject({ sent: 1, empty: 1 });
     const [m] = mail.to(email);
     expect(m.subject).toBe("72 Construction this week: 1 contract ending next quarter");
-    for (const line of ["New notices this week: none", "Awards this week: none", "Notable amendments this week: none",
-      "Standing offers and supply arrangements ending within 6 months: none",
-      "Contracts ending next quarter, Q4 2026-27 (January to March 2027): 1, $200,000", "- Roof repair\n  Roofing Ltd. · Public Services and Procurement Canada · ends 2027-02-01 · $200,000"]) {
+    for (const line of ["NEW NOTICES THIS WEEK: NONE", "AWARDS THIS WEEK: NONE", "NOTABLE AMENDMENTS THIS WEEK: NONE",
+      "STANDING OFFERS AND SUPPLY ARRANGEMENTS ENDING WITHIN 6 MONTHS: NONE",
+      "CONTRACTS ENDING NEXT QUARTER, Q4 2026-27 (JANUARY TO MARCH 2027): 1, $200,000", "- Roof repair\n  Roofing Ltd. · Public Services and Procurement Canada · ends 2027-02-01 · $200,000"]) {
       expect(m.text).toContain(line);
     }
     expect((await runs(only))[0]).toMatchObject({ status: "sent" });
@@ -706,7 +706,7 @@ describe("the run", () => {
     await runAt(good.binding, "2026-11-09");
     expect(good.to(email)).toHaveLength(1);
     expect(good.to(email)[0].text).toContain("71 Mining, week to 2026-11-09\nData dates 2026-10-27 to 2026-11-09.");
-    expect(good.to(email)[0].text).toContain("Contracts ending next quarter, Q4 2026-27 (January to March 2027): 2 (2 without a value)");
+    expect(good.to(email)[0].text).toContain("CONTRACTS ENDING NEXT QUARTER, Q4 2026-27 (JANUARY TO MARCH 2027): 2 (2 WITHOUT A VALUE)");
     await seed();
   });
 });

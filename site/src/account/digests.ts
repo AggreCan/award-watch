@@ -25,7 +25,7 @@ import { fiscalLabel } from "../records_db";
 import type { BriefingData, BriefingSubject, Quarter } from "./briefings";
 import { RULES } from "./entitlements";
 import type { RecordsKind, Rise } from "./records_deliveries";
-import { C, FONT, type MailView, button, escapeHtml, h1, h2, inkLink, mutedLink, para, shell, siteLink, textFooter, whyLine } from "./mail_html";
+import { C, FONT, type MailView, button, escapeHtml, h1, h2, h2Text, inkLink, mutedLink, para, shell, siteLink, textFooter, whyLine } from "./mail_html";
 import { type EventKind, type EventRow, INSTRUMENT_REF, type Listed, type WatchKind, isInstrumentKind } from "./watch_events";
 import type { MailMessage } from "./sender";
 
@@ -450,7 +450,7 @@ export function recordsDigest(o: RecordsDigest): DigestMessage {
       const leftHtml = l.left ? (l.left.days <= AMBER_DAYS ? amber(escapeHtml(l.left.text)) : escapeHtml(l.left.text)) : "";
       return row(l.title, tenderLink(o, r), escapeHtml(l.line2), [l.closes ? escapeHtml(l.closes) : "", leftHtml].filter(Boolean).join(" · "), i === 0);
     })), more?.html ?? "");
-    text.push(t(lang, "digest.tenders_title"), intro, o.tenders.map((r) => {
+    text.push(h2Text(lang, t(lang, "digest.tenders_title")), intro, o.tenders.map((r) => {
       const l = tenderLines(lang, r, o.dataDate);
       return `- ${l.title}\n  ${l.line2}\n  ${[l.closes, l.left?.text].filter(Boolean).join(", ")}\n  ${tenderLink(o, r)}`;
     }).join("\n\n"), ...(more ? [more.text] : []));
@@ -464,7 +464,7 @@ export function recordsDigest(o: RecordsDigest): DigestMessage {
       const l = riseLines(lang, r);
       return row(l.title, analyticsLink(o, r), escapeHtml(l.line2), escapeHtml(l.line3), i === 0);
     })));
-    text.push(t(lang, "digest.records_counted"), intro, o.rows.map((r) => {
+    text.push(h2Text(lang, t(lang, "digest.records_counted")), intro, o.rows.map((r) => {
       const l = riseLines(lang, r);
       return `- ${l.title}\n  ${l.line2}\n  ${l.line3}\n  ${analyticsLink(o, r)}`;
     }).join("\n\n"));
@@ -530,8 +530,8 @@ function openingHtml(o: DigestOpening): string[] {
   return [h2(o.heading), ...o.lines.map((l) => para(inkLink(l.url, l.text)))];
 }
 
-function openingText(o: DigestOpening): string {
-  return [o.heading, ...o.lines.map((l) => `  ${l.text} · ${l.url}`)].join("\n");
+function openingText(lang: Lang, o: DigestOpening): string {
+  return [h2Text(lang, o.heading), ...o.lines.map((l) => `  ${l.text} · ${l.url}`)].join("\n");
 }
 
 // The matching notices block (fit_mail.ts fitDigestBlock builds it in the
@@ -580,7 +580,7 @@ function matchesText(lang: Lang, m: DigestMatches): string {
   const d = m.disclaimer;
   const tail = [...(m.more ? [link(m.more.text, m.more.url)] : []), ...(m.note ? [m.note] : [])];
   return [
-    m.heading,
+    h2Text(lang, m.heading),
     m.rows.map((r) => `- ${r.title}\n  ${r.detail}\n  ${r.url}`).join("\n\n"),
     ...(tail.length ? [tail.join("\n")] : []),
     [`${d.before}${d.label}${d.after}`, link(d.label, d.url), m.credit].join("\n"),
@@ -705,14 +705,14 @@ export function watchDigest(o: WatchDigest): DigestMessage {
   const html: string[] = [
     ...(open ? openingHtml(open) : []), ...(fit ? matchesHtml(fit) : []), ...(alone ? [] : [h1(title), para(escapeHtml(lead))]),
   ];
-  const text: string[] = [...(open ? [openingText(open)] : []), ...(fit ? [matchesText(lang, fit)] : []), ...(alone ? [] : [title, lead])];
+  const text: string[] = [...(open ? [openingText(lang, open)] : []), ...(fit ? [matchesText(lang, fit)] : []), ...(alone ? [] : [title, lead])];
   for (const g of o.groups) {
     const href = siteLink(o.site, g.path, lang);
     const n = g.events.reduce((sum, e) => sum + e.n, 0);
     const head = `${g.label} · ${t(lang, WATCH_KIND_KEY[g.kind])}`;
     const count = tn(lang, "watches.count_one", "watches.count_many", n, { n: fmtInt(n, lang) });
     html.push(h2(head), para(inkLink(href, count)));
-    const lines: string[] = [`${head}\n${t(lang, "digest.text_link", { label: count, url: href })}`];
+    const lines: string[] = [`${h2Text(lang, head)}\n${t(lang, "digest.text_link", { label: count, url: href })}`];
     for (const e of g.events) {
       if (e.rows.length) {
         html.push(rows(e.rows.map((r, i) => {
@@ -858,7 +858,7 @@ export function briefingParts(o: Pick<BriefingDigest, "lang" | "site" | "briefin
   // instruments, whose title is the number a reader quotes).
   type Layout = "rows" | "line" | "line+link";
   const section = (heading: string, notes: string[], lines: BriefingLine[], rest: number, restPath: string | null, layout: Layout = "rows") => {
-    const block: string[] = [heading, ...notes];
+    const block: string[] = [h2Text(lang, heading), ...notes];
     html.push(h2(heading), ...notes.map((x) => para(escapeHtml(x))));
     if (lines.length) html.push(rows(lines.map((l, i) => briefingRow(l.title, l.href ? link(l.href) : null, l.lineHtml, i === 0))));
     for (const l of lines) {

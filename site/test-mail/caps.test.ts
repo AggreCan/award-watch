@@ -7,7 +7,8 @@
 // accounts-open and Ultra runs' cap a run, run again until no address waits;
 // the sign-in codes an address may ask for in an hour; and the live check's
 // one message per template. Then the checks themselves, each made to fail on
-// a message planted with the fault it looks for.
+// a message planted with the fault it looks for, the section bands' on a
+// briefing.
 import { describe, expect, it } from "vitest";
 import { ANNOUNCE_MAX, LISTS_SHOWN, announceCounts, runAnnouncement } from "../src/account/announce";
 import { BRIEFINGS_RUN_MAX, SECTION_ROWS } from "../src/account/briefings";
@@ -28,7 +29,7 @@ import { t, type Lang } from "../src/i18n";
 import { INSERT_INTEREST, newToken } from "../src/pages/interest";
 import { ACCOUNTS, DB, decode, nbsp, newEmail, onEnv, post, useAccountsDb } from "../test/accounts-helpers";
 import { DAY, SAMPLE_ADDRESS, SITE, matchesInput, tender, tenderInput, weeklyInput } from "../test/mail-fixtures";
-import { LOCAL, type Sent, checkMessage, shapeOf, viaLogSender } from "./checks";
+import { LOCAL, type Sent, bandProblems, checkMessage, shapeOf, viaLogSender } from "./checks";
 
 useAccountsDb();
 
@@ -410,5 +411,32 @@ describe("the checks", () => {
 
   it.each(PLANTED)("fail a message planted with %s", (_label, plant) => {
     expect(() => checkMessage(plant(good()), shape, "en")).toThrow();
+  });
+
+  // The section bands, on a briefing: six sections, each heading in its band.
+  const briefing = () => briefingDigest({
+    lang: "en", to: "reader@example.com", site: SITE, stopUrl: `${SITE}/account/stop?b=${"a".repeat(32)}&t=${"b".repeat(32)}`,
+    briefing: { kind: "segment", subject: "81", segment: "" }, name: "81", data: mailCheckBriefingData(DAY),
+  });
+  const briefingShape = shapeOf("briefing", "planted briefing", SITE);
+
+  it("pass a briefing as built, its six headings in their bands", () => {
+    const m = briefing();
+    expect((m.html.match(/<td class="sect" bgcolor="#e2e8f0"[^>]*><h2 /g) ?? []).length).toBe(6);
+    expect(bandProblems(m.html)).toEqual([]);
+    expect(() => checkMessage(m, briefingShape, "en")).not.toThrow();
+  });
+
+  const BANDS: [string, (m: ReturnType<typeof briefing>) => Sent][] = [
+    ["a heading out of its band", (m) => ({ ...m, html: m.html.replace(/<td class="sect"[^>]*><h2 /, "<td><h2 ") })],
+    ["a band too faint on the card", (m) => ({ ...m, html: m.html.replaceAll("#e2e8f0;border-left", "#f8fafc;border-left").replaceAll('bgcolor="#e2e8f0"', 'bgcolor="#f8fafc"') })],
+    ["a band with no dark rule", (m) => ({ ...m, html: m.html.replace(/\.sect\{[^}]*\}/, "") })],
+    ["a band's edge in a second hue", (m) => ({ ...m, html: m.html.replace("border-left:3px solid #0f7b4f", "border-left:3px solid #b45309") })],
+    ["a heading in mixed case in the text part", (m) => ({ ...m, text: m.text.replace("AWARDS THIS WEEK", "Awards this week") })],
+  ];
+
+  it.each(BANDS)("fail a briefing planted with %s", (_label, plant) => {
+    expect(() => checkMessage(briefing(), briefingShape, "en")).not.toThrow();
+    expect(() => checkMessage(plant(briefing()), briefingShape, "en")).toThrow();
   });
 });

@@ -421,7 +421,7 @@ describe("a segment search", () => {
     await runDeliveries(jobEnv(mail.binding, week({ [DAY]: [tender("cb-43-0002")] })));
     const [m] = mail.to(email);
     expect(m.subject).toBe("1 new tender notice: 43 IT and telecom");
-    expect(m.text).not.toContain("Records counted");
+    expect(m.text).not.toContain("RECORDS COUNTED");
     expect(await deliveriesOf(search)).toEqual([{ status: "sent", items: 1 }]);
     expect((await markOf(search))?.counts).toEqual(SEGMENT_NOW);
   });

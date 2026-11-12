@@ -182,7 +182,7 @@ const DETAIL = "Public Services and Procurement Canada · closes 2026-11-20 · "
 const DETAIL_FR = "Services publics et Approvisionnement Canada · clôture le 2026-11-20 · " +
   "Classe UNSPSC 821118 Services de rédaction et de soutien : 5 avis d'attribution, 2 dossiers de l'historique des contrats de SPAC";
 
-const FREE_EN = `New open notices this week that match ${NAME1}
+const FREE_EN = `NEW OPEN NOTICES THIS WEEK THAT MATCH EXEMPLAR TRANSLATION SERVICES INC.
 
 - Close match: Matching notice 0
   ${DETAIL}
@@ -203,7 +203,7 @@ Award Watch calculates matches from public records. A match is not advice and ma
 Terms of Use: ${SITE}/terms#warranty
 Contains information licensed under the Open Government Licence, Canada.`;
 
-const FREE_FR = `Nouveaux avis ouverts cette semaine qui correspondent à ${NAME1}
+const FREE_FR = `NOUVEAUX AVIS OUVERTS CETTE SEMAINE QUI CORRESPONDENT À EXEMPLAR TRANSLATION SERVICES INC.
 
 - Correspondance étroite : Avis correspondant 0
   ${DETAIL_FR}
@@ -334,7 +334,7 @@ describe("the messages", () => {
     const site = weeklyDigest({ ...weeklyInput("en", { news: false }), matches });
     expect(site.subject).toBe("The week on Award Watch: 412 new tender notices, 5 matching notices");
     const figures = site.text.indexOf("1,250 contracts ending within 3 months");
-    const heading = site.text.indexOf(`New open notices this week that match ${NAME1}`);
+    const heading = site.text.indexOf("NEW OPEN NOTICES THIS WEEK THAT MATCH EXEMPLAR TRANSLATION SERVICES INC.");
     expect(heading).toBeGreaterThan(figures);
     expect(site.text.indexOf("Free: 3 watches")).toBeGreaterThan(heading);
     const watch = weeklyDigest({ ...weeklyInput("en"), matches });
@@ -345,7 +345,12 @@ describe("the messages", () => {
     expect(plain(fr.subject)).toBe("La semaine sur Award Watch : 412 nouveaux avis d'appel d'offres, 5 avis correspondants");
     // The HTML part: the rows link the notices, the disclaimer links the Terms' No Warranty section in full.
     const html = decode(site.html);
-    expect(html).toContain(`<h2 class="ink" style="margin:18px 0 6px 0;`);
+    expect(html).toContain(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px 0 8px 0;">` +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
+      `<td class="sect" bgcolor="#e2e8f0" style="background:#e2e8f0;border-left:3px solid #0f7b4f;padding:9px 12px;">` +
+      `<h2 class="ink" style="margin:0;font:700 13px/1.4 'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;` +
+      `letter-spacing:1px;text-transform:uppercase;word-break:break-word;color:#0f172a;">` +
+      `New open notices this week that match Exemplar Translation Services Inc.</h2></td></tr></table></td></tr></table>`);
     expect(html).toContain(`href="${SITE}/tenders/cb-910-00000000"`);
     expect(html).toContain(`See the <a href="${SITE}/terms#warranty" style="color:#5b6b80;">Terms of Use</a>.`);
     expect(html).toContain(`<a href="${SITE}/account/matches" style="color:#334155;">2 more on the site</a>`);
@@ -360,7 +365,7 @@ describe("the messages", () => {
     const base = { lang: "en" as const, to: "reader@example.com", site: SITE, dataDate: D, stopUrl: `${SITE}/account/stop?w=x&t=y`, watched: 1 };
     const both = watchDigest({ ...base, groups: [], total: 0, opening, matches });
     expect(both.subject).toBe(`Your organization this week: ${NAME1}`);
-    expect(both.text.startsWith(`Your organization: nothing new this week.\n\nNew open notices this week that match ${NAME1}\n\n- Close match: Matching notice 0\n`)).toBe(true);
+    expect(both.text.startsWith("YOUR ORGANIZATION: NOTHING NEW THIS WEEK.\n\nNEW OPEN NOTICES THIS WEEK THAT MATCH EXEMPLAR TRANSLATION SERVICES INC.\n\n- Close match: Matching notice 0\n")).toBe(true);
     expect(both.text).not.toContain("Your Watches");
     const alone = watchDigest({ ...base, groups: [], total: 0, matches });
     expect(alone.subject).toBe(`New open notices this week that match ${NAME1}`);
@@ -368,7 +373,8 @@ describe("the messages", () => {
     const group = { kind: "organization" as const, label: "Sample Harbour Marine Ltd.", path: "/organizations/org-a000000002", events: [] };
     const beside = watchDigest({ ...base, groups: [group], total: 1, opening, matches });
     expect(beside.subject).toBe("1 update on what you follow: Sample Harbour Marine Ltd.");
-    expect(beside.text.indexOf("New open notices this week that match")).toBeLessThan(beside.text.indexOf("Your Watches"));
+    expect(beside.text.indexOf("\n\nNEW OPEN NOTICES THIS WEEK THAT MATCH EXEMPLAR TRANSLATION SERVICES INC.\n\n")).toBeGreaterThan(0);
+    expect(beside.text.indexOf("\n\nNEW OPEN NOTICES THIS WEEK THAT MATCH EXEMPLAR TRANSLATION SERVICES INC.\n\n")).toBeLessThan(beside.text.indexOf("Your Watches"));
     expect(watchDigest({ ...base, groups: [group], total: 1, opening, matches: null })).toEqual(watchDigest({ ...base, groups: [group], total: 1, opening }));
   });
 });
@@ -453,7 +459,7 @@ describe("the runs", () => {
     expect(monday.watch).toMatchObject({ sent: 1 });
     const [m] = mail.to(pro.email);
     expect(m.subject).toBe(`Your organization this week: ${NAME1}`);
-    expect(m.text).toContain(`Your organization: nothing new this week.\n\nNew open notices this week that match ${NAME1}\n\n`);
+    expect(m.text).toContain("YOUR ORGANIZATION: NOTHING NEW THIS WEEK.\n\nNEW OPEN NOTICES THIS WEEK THAT MATCH EXEMPLAR TRANSLATION SERVICES INC.\n\n");
     expect((m.text?.match(/^- Close match: /gm) ?? []).length).toBe(RULES.pro.match_mail);
     expect(m.text).toContain(`Terms of Use: ${SITE}/terms#warranty`);
     expect(m.text).toContain("Contains information licensed under the Open Government Licence, Canada.");
@@ -481,7 +487,7 @@ describe("the runs", () => {
     expect(report.weekly).toMatchObject({ sent: 1, failed: 0 });
     const [m] = mail.to(free.email);
     expect(m.subject).toBe("The week on Award Watch, to 2026-11-02");
-    expect(m.text).not.toContain("New open notices this week that match");
+    expect(m.text).not.toContain("NEW OPEN NOTICES THIS WEEK THAT MATCH");
     expect(m.text).toContain("You receive this because you turned on the weekly email for your account.");
   });
 });

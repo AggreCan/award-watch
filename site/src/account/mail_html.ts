@@ -16,10 +16,11 @@
 // linking the site, the host name linking the home page), the body, and the
 // muted footer (why the message came, with its links, then the tagline and
 // the contact address). The builders here are the body's pieces: the
-// heading, the paragraph, the list, the button (one a message at most), the
-// links. A change here belongs in design/email/build.py too, so the review
-// sheet keeps showing what is sent; the mail suite (site/test-mail/) holds
-// every message to the header and the footer.
+// heading, a section's heading in its band, the paragraph, the list, the
+// button (one a message at most), the links. A change here belongs in
+// design/email/build.py too, so the review sheet keeps showing what is sent;
+// the mail suite (site/test-mail/) holds every message to the header and the
+// footer.
 //
 // No image but the wordmarks and no address that differs per reader: every
 // message loads the same two files from the site, so nothing here can tell
@@ -38,8 +39,10 @@ export function siteLink(site: string, path: string, lang: Lang): string {
   return `${site}${path}${path.includes("?") ? "&" : "?"}lang=fr`;
 }
 
+// sect is a section heading's band (h2 below): the hairline's slate, a
+// step deeper than head, the sign-in code's band.
 export const C = {
-  page: "#f8fafc", panel: "#ffffff", head: "#eef2f7", border: "#e2e8f0", border2: "#cbd5e1",
+  page: "#f8fafc", panel: "#ffffff", head: "#eef2f7", sect: "#e2e8f0", border: "#e2e8f0", border2: "#cbd5e1",
   ink: "#0f172a", ink2: "#334155", muted: "#5b6b80", accent: "#0f7b4f", amber: "#b45309",
 };
 export const FONT = "'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
@@ -52,6 +55,7 @@ export const MONO = "ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono'
 // does not reach, so each text class names its links too (a paragraph
 // link kept the light ink on the dark card until 2026-11-10); the mail
 // suite holds every coloured link in every message to one of these rules.
+// A section's band keeps its emerald edge, so its rule names the ground alone.
 const DARK_CSS = [
   ".bg{background:#0b1220!important}",
   ".card{background:#111a2b!important;border-color:#243044!important}",
@@ -59,6 +63,7 @@ const DARK_CSS = [
   ".ink2, .ink2 a{color:#c7d2e0!important}",
   ".muted, .muted a{color:#8da0b8!important}",
   ".band{background:#17233a!important;border-color:#2b3a52!important}",
+  ".sect{background:#202d44!important}",
   ".rule{border-color:#243044!important}",
   ".btn{background:#e5edf7!important}",
   ".btn a{color:#0f172a!important}",
@@ -185,10 +190,31 @@ export function h1(text: string): string {
   return `<h1 class="ink" style="margin:0 0 12px 0;font:700 20px/1.3 ${FONT};color:${C.ink};">${escapeHtml(text)}</h1>`;
 }
 
-// A part's heading inside one message (the records digest's two parts).
+// A section's heading inside one message (a briefing's sections, the records
+// digest's two parts, a watch in the watch mail, the "Your organization" and
+// matching notices blocks), drawn as the site's panel head: a tinted band the
+// column's width, an emerald left edge, the words in small bold spaced
+// capitals, so it never reads as a row's 15 px title. The capitals are the
+// style's, so a screen reader and a copy keep the words as written (the text
+// part writes them, h2Text). The space around it is a cell's padding, which
+// Outlook keeps where it drops a table's margin: 20 px above, 8 below, so the
+// band goes with the list under it. bgcolor is Outlook's; Gmail, which drops
+// classes in some views, reads the inline colours; the dark rules recolour
+// the ground (.sect) and the words (.ink). The spacing is the site's 0.08em
+// at 13 px, in pixels, which Outlook reads. break-word wraps a long name
+// inside the band on a phone.
 export function h2(text: string): string {
-  return `<h2 class="ink" style="margin:18px 0 6px 0;font:700 16px/1.3 ${FONT};color:${C.ink};">${escapeHtml(text)}</h2>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px 0 8px 0;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
+    `<td class="sect" bgcolor="${C.sect}" style="background:${C.sect};border-left:3px solid ${C.accent};padding:9px 12px;">` +
+    `<h2 class="ink" style="margin:0;font:700 13px/1.4 ${FONT};letter-spacing:1px;text-transform:uppercase;word-break:break-word;color:${C.ink};">` +
+    `${escapeHtml(text)}</h2></td></tr></table></td></tr></table>`;
 }
+
+// The same heading in the plain-text part: in capitals, as the band shows
+// it, on its own line after a blank one (each message joins its blocks with
+// one), so it stands apart from the "- " items under it.
+export const h2Text = (lang: Lang, text: string): string => text.toLocaleUpperCase(lang);
 
 // html is markup already escaped. A muted paragraph is the smaller note
 // under a message's button, and the line with a list message's stop link.
