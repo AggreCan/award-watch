@@ -95,6 +95,8 @@ function pieces(g: Guide): Piece[] {
   }
   // A source's title is the page's own, in the language it was read in; its publisher is said in both.
   for (const [n, s] of g.sources.entries()) out.push({ where: `${g.slug} source ${n} publisher`, both: s.publisher });
+  // The sentence over the guide's email list (test/accounts-funnel.test.ts), held to the same writing rules.
+  if (g.action) out.push({ where: `${g.slug} action`, both: g.action.text });
   return out;
 }
 
@@ -500,7 +502,7 @@ describe("the writing", () => {
   it("keeps each guide's English between 600 and 1,000 words of running text", () => {
     for (const g of GUIDES) {
       const words = pieces(g)
-        .filter((p) => !/ (title|publisher)$| column | row /.test(p.where) && !p.where.endsWith(" summary") && !p.where.endsWith(" seoTitle"))
+        .filter((p) => !/ (title|publisher|action)$| column | row /.test(p.where) && !p.where.endsWith(" summary") && !p.where.endsWith(" seoTitle"))
         .map((p) => filled(p, "en").split(/\s+/).filter(Boolean).length)
         .reduce((a, b) => a + b, 0);
       expect(words, g.slug).toBeGreaterThanOrEqual(600);

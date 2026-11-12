@@ -140,17 +140,19 @@ export async function setWatch(env: Env, userId: string, id: string, events: rea
 
 // A page's watch for the reader: the id of the account's watch of it (the
 // whole buyer first), its segment, how many of the account's watches count
-// toward the cap, and whether this page is the claimed organization's (free,
-// so the button stays at the cap).
+// toward the cap, whether this page is the claimed organization's (free,
+// so the button stays at the cap), and whether the account claims an
+// organization at all (claimed: a profile then asks it nothing, fit_panels.tsx
+// ClaimAsk). One statement, as before.
 export async function watchState(
   env: Env, userId: string, kind: WatchKind, target: string,
-): Promise<{ id: string | null; segment: string; n: number; free: boolean }> {
+): Promise<{ id: string | null; segment: string; n: number; free: boolean; claimed: boolean }> {
   const row = await env.ACCOUNTS!.prepare(
     "SELECT (SELECT id FROM watches WHERE user_id = ?1 AND kind = ?2 AND target = ?3 ORDER BY segment, created_at LIMIT 1) AS id, " +
     "(SELECT segment FROM watches WHERE user_id = ?1 AND kind = ?2 AND target = ?3 ORDER BY segment, created_at LIMIT 1) AS segment, " +
-    `${countedOf("?1")} AS n, (?2 = 'organization' AND ?3 IS ${claimedOf("?1")}) AS free`,
-  ).bind(userId, kind, target).first<{ id: string | null; segment: string | null; n: number; free: number | null }>();
-  return { id: row?.id ?? null, segment: row?.segment ?? "", n: row?.n ?? 0, free: row?.free === 1 };
+    `${countedOf("?1")} AS n, (?2 = 'organization' AND ?3 IS ${claimedOf("?1")}) AS free, ${claimedOf("?1")} IS NOT NULL AS claimed`,
+  ).bind(userId, kind, target).first<{ id: string | null; segment: string | null; n: number; free: number | null; claimed: number | null }>();
+  return { id: row?.id ?? null, segment: row?.segment ?? "", n: row?.n ?? 0, free: row?.free === 1, claimed: row?.claimed === 1 };
 }
 
 // -- merges --------------------------------------------------------------------------------

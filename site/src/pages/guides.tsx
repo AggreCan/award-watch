@@ -3,9 +3,21 @@
 // src/guides.ts's, English and French side by side; this file only draws it.
 // The frame's words (the index's lead, the checked line, the sources' head)
 // are the dictionary's. docs/guides.md says how to add a guide.
+//
+// A guide that declares an action ends, before its sources, on the email list
+// it is about: the lists' own form (pages/interest.tsx InterestBody), posting
+// where it posts on the list pages, under a band of the document with the
+// guide's sentence. Its line offering Pro is left out, as a guide links no
+// account page. The form is drawn for a reader not signed in while the
+// accounts switch is on, the same for every such reader; with the switch off,
+// or for a signed-in reader, a guide is as it was. The plain lists read no
+// file; a list of one notice type reads the open notices' facets, as the
+// tender list's own form does, to name the type.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { readSession } from "../account/session";
+import { accountsEnabled } from "../account/switch";
 import { Table, type Column } from "../columns";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
@@ -13,6 +25,7 @@ import { GUIDES, guideBySlug, type Block, type Both, type Cell, type Guide, type
 import { fmtMoney, frTypography, t, type Lang } from "../i18n";
 import { Layout, PageHead, lowerRedirect, notFoundPage, page } from "../layout";
 import { guideSeo, pageSeo } from "../seo";
+import { InterestBody, interestFilter } from "./interest";
 
 // A guide's words in the reader's language. French takes the dictionary's
 // typography, and a no-break space inside a grouped figure ("10 000 $"), so
@@ -79,6 +92,15 @@ const GuideBlock: FC<{ lang: Lang; block: Block }> = ({ lang, block }) => {
   }
 };
 
+// A reader not signed in while the accounts switch is on: the one a guide's
+// email list is drawn for. A signed-in reader's guide is as it was. The shell
+// reads the session anyway (one answer a request), and nothing is read while
+// the switch is off.
+async function signedOut(c: Context<AppEnv>): Promise<boolean> {
+  if (!accountsEnabled(c.env)) return false;
+  return (await readSession(c).catch(() => ({ state: "unavailable" }) as const)).state !== "ok";
+}
+
 export function guidePath(g: Guide): string {
   return `/guides/${g.slug}`;
 }
@@ -117,6 +139,9 @@ export async function guidePage(c: Context<AppEnv>): Promise<Response> {
   const moved = lowerRedirect(c, guidePath(g));
   if (moved) return moved;
   const title = guideText(lang, g.title);
+  const list = g.action && (await signedOut(c))
+    ? await interestFilter(c.env, lang, g.action.list.kind, g.action.list.path).catch(() => null)
+    : null;
   const crumbs = [
     { name: t(lang, "common.home"), path: "/" },
     { name: t(lang, "nav.guides"), path: "/guides" },
@@ -141,6 +166,14 @@ export async function guidePage(c: Context<AppEnv>): Promise<Response> {
               {s.blocks.map((b) => <GuideBlock lang={lang} block={b} />)}
             </>
           ))}
+          {list && g.action ? (
+            <>
+              <h2>{t(lang, "interest.title")}</h2>
+              <p>{guideText(lang, g.action.text)} <a href="/alerts">{t(lang, "interest.about")}</a></p>
+              <InterestBody lang={lang} filter={list} on={false} />
+              <script src="/interest.js" defer></script>
+            </>
+          ) : null}
           <h2 id="sources">{t(lang, "guides.sources")}</h2>
           <p>{t(lang, "guides.sources_intro")}</p>
           <ol class="sources">

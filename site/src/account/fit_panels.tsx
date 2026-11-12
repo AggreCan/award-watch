@@ -9,9 +9,11 @@
 // drawn only for a request whose session reads (session.ts readSession, one
 // read a request, shared with the shell), and page() then sends the response
 // private, no-store, since the shell names the signed-in address. A request
-// without a session reads nothing here and gets the same bytes as before.
-// Only the account's own claim is read, so one reader's organization never
-// reaches another's page.
+// without a session reads nothing here; while the switch is on it gets the
+// invitation in the notice panel's place and the profile's line asking whether
+// the organization is the reader's (below), the same bytes for every such
+// request, so the page keeps its public headers. Only the account's own claim
+// is read, so one reader's organization never reaches another's page.
 //
 // Reads, for a signed-in account: the claim (one accounts row,
 // CLAIM_READ_SQL) and the claimed profile's shard entry (two more files for a
@@ -40,6 +42,7 @@ import { checkOrganization, readClaim } from "./org_claim";
 import { missingTable } from "./records_deliveries";
 import { readSession } from "./session";
 import { accountsEnabled } from "./switch";
+import type { ControlState } from "./watch_pages";
 
 const MATCHES = "/account/matches";
 const ORGANIZATION = "/account/organization";
@@ -144,6 +147,48 @@ export const NoticeMatchPanel: FC<{ lang: Lang; fit: NoticeFit | null; notice: T
       <FitDisclaimer lang={lang} />
     </Panel>
   );
+};
+
+// -- a reader not signed in, and an account that names no organization ----------------------
+//
+// Both are told what a named organization gets, in words the same for every
+// such reader, so a public page keeps its public cache. The page's Follow
+// control has already read the session (watch_pages.tsx watchControl: "out"
+// for a reader not signed in while the switch is on, null while it is off or
+// the database cannot say), and these read nothing more.
+
+// The sign-in, returning to a page of the site once the address has proved itself (routes.tsx safeNext).
+export const signInTo = (next: string): string => `/account/sign-in?next=${encodeURIComponent(next)}`;
+
+// The claim page opened on one profile: its search holds the id, and its one
+// result carries the button that names it (org_pages.tsx orgPage, org_claim.ts
+// findOrganizations reads a profile's id as the profile itself).
+export const claimPath = (id: string): string => `${ORGANIZATION}?q=${encodeURIComponent(id)}`;
+
+// In the match panel's place on an open notice, for a reader not signed in: what
+// a free account that names its organization sees there. No filled button: the
+// notice on CanadaBuys stays the page's one.
+export const NoticeMatchInvite: FC<{ lang: Lang; watch: ControlState | null }> = ({ lang, watch }) =>
+  watch?.at === "out" ? (
+    <Panel title={t(lang, "fit.panel_notice")}>
+      <p>{tj(lang, "fit.notice_out", { link: <a href={signInTo(watch.next)}>{t(lang, "fit.notice_out_link")}</a> })}</p>
+    </Panel>
+  ) : null;
+
+// The line under an organization profile's head: whether this organization is
+// the reader's, with the way to name it. A reader not signed in goes to the
+// sign-in, which returns to the claim page opened on this profile; an account
+// that names none goes straight there; an account that names one, this or
+// another, is asked nothing. Only on a profile with an award notice, a PSPC
+// contract history record or a published contract (records, the sum of the
+// three counts the profile already holds): a match is read from those
+// (public/fit.js), never from grants or lobbying. A link, not a button:
+// Follow is the profile's one filled button.
+export const ClaimAsk: FC<{ lang: Lang; watch: ControlState | null; id: string; records: number }> = ({ lang, watch, id, records }) => {
+  if (!watch || records <= 0 || (watch.at === "in" && watch.claimed)) return null;
+  const out = watch.at === "out";
+  const link = <a href={out ? signInTo(claimPath(id)) : claimPath(id)}>{t(lang, out ? "fit.org_ask_out" : "fit.org_ask_in")}</a>;
+  return <p class="page-note claim-ask">{tj(lang, "fit.org_ask", { link })}</p>;
 };
 
 // -- the short list: /tenders and the organization page --------------------------------------

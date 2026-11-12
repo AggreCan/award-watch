@@ -158,8 +158,9 @@ describe("with the switch on", () => {
   // the analytics index, and on a profile the link to its analytics view,
   // marked Pro (nothing a free reader is offered is hidden; operator's
   // ruling of 2026-11-03, docs/analytics.md); and the links to the
-  // Pro page, in the footer and as the home page's email line (docs/seo.md).
-  // Nothing else changes.
+  // Pro page, in the footer and as the home page's email line (docs/seo.md);
+  // and on a profile, for a reader not signed in, the line asking whether the
+  // organization is theirs. Nothing else changes.
   const CHIP = / ?<span class="pro-tag">[\s\S]*?<\/span><\/span>/g;
   const SAME_DAY_ITEM = /<li><a class="rail-item rail-child" href="\/tenders\/same-day">[\s\S]*?<\/a><\/li>/;
   // The index of the analytics views (pages/analytics_index.tsx), in the rail's Browse group.
@@ -177,6 +178,9 @@ describe("with the switch on", () => {
   const HOME_FEEDS = '<a href="/feeds" class="btn">Atom feeds</a>';
   // The Follow control under a profile's head (account/watch_pages.tsx): for a reader not signed in, a form that
   // posts an address to the sign-in with the page and what to follow, Follow the profile's one filled button.
+  // The line under a profile's head that asks a reader not signed in whether the organization is theirs, on a
+  // profile with award notices or contract records (account/fit_panels.tsx ClaimAsk); the fixture's has both.
+  const CLAIM_ASK = /<p class="page-note claim-ask">[\s\S]*?<\/p>/;
   const FOLLOW = new RegExp(
     '<form method="post" action="/account/sign-in" class="watch-control watch-signin">' +
     '<input type="hidden" name="lang" value="en"/><input type="hidden" name="next" value="/organizations/org-a000000001"/>' +
@@ -208,8 +212,9 @@ describe("with the switch on", () => {
       expect(HOME_PRO.test(on.body), path).toBe(appHome(path));
       expect(on.body.includes(HOME_BUTTON), path).toBe(appHome(path));
       expect(FOLLOW.test(on.body), path).toBe(path.startsWith("/organizations/"));
+      expect(CLAIM_ASK.test(on.body), path).toBe(path.startsWith("/organizations/"));
       const stripped = on.body.replace(item, "").replace(CHIP, "").replace(SAME_DAY_ITEM, "").replace(ANALYTICS_ITEM, "").replace(NOTE, "").replace(INTEREST_PRO, "")
-        .replace(FOOTER_PRO, "").replace(FOOTER_ANALYTICS, "").replace(HOME_PRO, "").replace(FOLLOW, "").replace(HOME_BUTTON, HOME_FEEDS)
+        .replace(FOOTER_PRO, "").replace(FOOTER_ANALYTICS, "").replace(HOME_PRO, "").replace(FOLLOW, "").replace(CLAIM_ASK, "").replace(HOME_BUTTON, HOME_FEEDS)
         .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');
       expect(ANALYTICS.test(stripped), path).toBe(path.startsWith("/organizations/"));
       expect(off.body, path).not.toContain("pro-tag");

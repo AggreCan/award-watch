@@ -10,6 +10,7 @@
 // i18n.ts; the page applies the same typography when it renders.
 
 import type { ColumnKind, Rest } from "./columns";
+import type { InterestKind } from "./pages/interest";
 
 export type Both = { en: string; fr: string };
 // An address on the site (a path, with a query or a fragment) and its words in each language.
@@ -29,6 +30,10 @@ export type Section = { id: string; title: Both; blocks: Block[] };
 // address. fr is the French page, given only where that page itself was read (or the file is bilingual);
 // a French reader is otherwise sent to the English page, and told so.
 export type Source = { title: string; publisher: Both; url: string; fr?: { title: string; url: string } };
+// What a reader can do once the guide is read: the email list it is about, as a list page's own form saves
+// it (kind, and the page with its filter, src/pages/interest.tsx interestFilter), under one sentence in each
+// language. The page draws it after the last section and before the sources, while the accounts switch is on.
+export type GuideAction = { list: { kind: InterestKind; path: string }; text: Both };
 export type Guide = {
   slug: string;
   title: Both;
@@ -40,9 +45,16 @@ export type Guide = {
   checked: string;
   sections: Section[];
   sources: Source[];
+  action?: GuideAction;
 };
 
 const a = (href: string, en: string, fr: string): Link => ({ href, text: { en, fr } });
+// A guide's email list: the plain list of new tender notices, one of a notice type, or the contracts
+// within 3 months of their end, each with its sentence.
+const tenderList = (en: string, fr: string, type?: string): GuideAction => ({
+  list: { kind: "tenders", path: type ? `/tenders?type=${encodeURIComponent(type)}` : "/tenders" }, text: { en, fr },
+});
+const endingList = (en: string, fr: string): GuideAction => ({ list: { kind: "expiring", path: "/expiring" }, text: { en, fr } });
 const tx = (en: string, fr: string, links?: Record<string, Link>): Text => (links ? { en, fr, links } : { en, fr });
 const p = (en: string, fr: string, links?: Record<string, Link>): Block => ({ kind: "p", text: tx(en, fr, links) });
 const both = (en: string, fr: string): Both => ({ en, fr });
@@ -353,6 +365,10 @@ const TENDER_NOTICE: Guide = {
     "Ce que veut dire chaque partie d'un avis d'appel d'offres fédéral sur AchatsCanada : type, méthode, clôture, modifications, accords, codes, régions.",
   ),
   checked: "2026-11-11",
+  action: tenderList(
+    "To keep track of new federal tender notices, save this list with your email address.",
+    "Pour suivre les nouveaux avis d'appel d'offres fédéraux, enregistrez cette liste avec votre adresse courriel.",
+  ),
   sections: [
     {
       id: "notice",
@@ -615,6 +631,12 @@ const STANDING_OFFERS: Guide = {
     "Ce que sont les offres à commandes et les arrangements en matière d'approvisionnement, comment on s'en sert, qui peut s'en servir et qui les détient.",
   ),
   checked: "2026-11-11",
+  // The instruments page offers no email list; the tender notices of the type that seeks standing offers.
+  action: tenderList(
+    "To keep track of new requests for standing offers, save this list with your email address.",
+    "Pour suivre les nouvelles demandes d'offre à commandes, enregistrez cette liste avec votre adresse courriel.",
+    "Request for Standing Offer",
+  ),
   sections: [
     {
       id: "overview",
@@ -791,6 +813,10 @@ const THREE_RECORDS: Guide = {
     "L'avis d'attribution, l'historique des contrats de SPAC et le contrat publié de plus de 10 000 $ : qui les publie, quand, pourquoi leurs valeurs diffèrent.",
   ),
   checked: "2026-11-11",
+  action: endingList(
+    "To keep track of federal contracts as they come within 3 months of their end, save this list with your email address.",
+    "Pour suivre les contrats fédéraux à mesure qu'ils arrivent à moins de 3 mois de leur fin, enregistrez cette liste avec votre adresse courriel.",
+  ),
   sections: [
     {
       id: "records",
@@ -962,6 +988,11 @@ const ACAN: Guide = {
     "Ce qu'est un préavis d'adjudication de contrat fédéral, quand il peut être publié, sa durée, qui peut présenter un énoncé de capacités et ce qui suit.",
   ),
   checked: "2026-11-11",
+  action: tenderList(
+    "To keep track of new advance contract award notices, save this list with your email address.",
+    "Pour suivre les nouveaux préavis d'adjudication de contrat, enregistrez cette liste avec votre adresse courriel.",
+    "Advance Contract Award Notice",
+  ),
   sections: [
     {
       id: "acan",
@@ -1159,6 +1190,10 @@ const PSIB: Guide = {
     "La Stratégie d'approvisionnement auprès des entreprises autochtones : marchés réservés, admissibilité, cible de 5 % et champs des contrats publiés.",
   ),
   checked: "2026-11-11",
+  action: tenderList(
+    "To keep track of new federal tender notices, set-asides among them, save this list with your email address.",
+    "Pour suivre les nouveaux avis d'appel d'offres fédéraux, marchés réservés compris, enregistrez cette liste avec votre adresse courriel.",
+  ),
   sections: [
     {
       id: "psib",
@@ -1351,6 +1386,10 @@ const CONTRACT_END: Guide = {
     "Comment s'exercent les options d'un contrat fédéral, sa prolongation par modification et ses limites, et où voir les contrats qui prennent bientôt fin.",
   ),
   checked: "2026-11-11",
+  action: endingList(
+    "To keep track of the contracts that reach 3 months from their end, save this list with your email address.",
+    "Pour suivre les contrats qui arrivent à 3 mois de leur fin, enregistrez cette liste avec votre adresse courriel.",
+  ),
   sections: [
     {
       id: "end-date",

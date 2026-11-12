@@ -423,7 +423,8 @@ describe("the Ultra card's form", () => {
 
   it("styles the field, the button and the thanks line in the card's own classes, under a new stylesheet version", () => {
     // 3 brought the card's rules; 4 and 5 the nav with Overview (a wider bar, the short French word; no wrap). 5 is the version once Overview joined them (test/overview.test.ts).
-    expect(LANDING_VERSION).toBe(5);
+    // 6 brought the matching notices' example card (test/accounts-funnel.test.ts).
+    expect(LANDING_VERSION).toBe(6);
     for (const rule of [".lp-ultra {", ".lp-ultra-form {", ".lp-ultra .hp {", ".lp-ultra-field input {", ".lp-ultra-btn {", ".lp-ultra-error {",
       ".lp-ultra-done {", ".lp-ultra-thanks {", ".lp-ultra-noted {", ".lp-plan-ultra { scroll-margin-top:"]) {
       expect(LANDING_CSS, rule).toContain(rule);

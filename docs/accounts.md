@@ -154,6 +154,16 @@ cascade). The sweep runs with each sign-in request.
 6. `POST /account/sign-out` ends the session on this browser, or on every
    browser (`scope=all`).
 
+The sign-in page serves a first visit and a return with the same form: its
+heading is "Create a Free Account or Sign In", its lead says an account is
+free and needs no card or password, and beside the form from 1200 px
+(under it below) the panel "What a Free Account Gives You" lists the Free
+plan card's own lines for saved searches, watches, matching notices and the
+week's matches by email (`PLAN_ROWS`, figures from `RULES`; the holder's
+record stays on the plan cards), the weekly email while the form offers its box, and one line with
+Pro's own figures linking `/pro`. The line that a Follow or a briefing rides
+along stays in the form's panel, above the list; the code step is unchanged.
+
 Both sign-in posts count against `AUTH_LIMIT` (5 a minute per address) while
 the switch is on. Every signed-in form carries a CSRF value derived from the
 cookie's secret, checked on the post.
@@ -2320,14 +2330,32 @@ Pro.
   same data, and the disclaimer; or the one line that says why there are
   none (no open match, the open notices unreadable, or a block that cannot
   rank, in `/account/matches`' words).
-- **Nothing** for a reader not signed in, and on the notice page and
-  `/tenders` nothing while the claimed organization's block cannot rank
-  notices (no block yet, nothing in the window, published contracts only, too
-  few records with codes, or the organization gone from the data): the
-  account pages say which.
-- **Caching.** The notice page and `/tenders` are public pages: signed out,
-  they are the same bytes with the same headers as before the panels
-  (`public, max-age=300`, with `Vary: Cookie` while accounts are on). A panel
+- **A reader not signed in** gets, on an open notice's page, a short panel
+  in the match panel's place under the same title: a free account that names
+  its organization sees there what the notice has in common with that
+  organization's records, with "Create a free account or sign in" linking
+  `/account/sign-in?next=/tenders/<reference>`. On an organization's profile,
+  one line after the Follow control asks "Is this your organization?" and
+  links the sign-in with `next` set to `/account/organization?q=<id>`, the
+  claim page opened on that profile as its one result, one press from naming
+  it. A signed-in account that names no organization gets the same line
+  linking `/account/organization?q=<id>` itself; one that names any
+  organization gets nothing. The line shows only on a profile with an award
+  notice, a contract history record or a published contract, read from the
+  counts the profile already holds; grants and lobbying are never matched.
+  Both read only what the Follow control reads (the session and, signed in,
+  its one statement, which also says whether the account claims an
+  organization), and neither carries a filled button. A closed notice shows
+  nothing, and with the switch off neither exists.
+- **Nothing more** on `/tenders` for a reader not signed in, and on the
+  notice page and `/tenders` nothing while the claimed organization's block
+  cannot rank notices (no block yet, nothing in the window, published
+  contracts only, too few records with codes, or the organization gone from
+  the data): the account pages say which.
+- **Caching.** The notice page, the profile and `/tenders` are public pages:
+  signed out, every reader gets the same bytes with the same headers as
+  before (`public, max-age=300`, with `Vary: Cookie` while accounts are on),
+  the invitation and the profile's line included. A panel
   or the line is drawn only for a session the request reads, and the shell
   then names the signed-in address, so `layout.page` sends the response
   `private, no-store`, as for the Follow control and Save this search. Only

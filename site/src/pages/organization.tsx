@@ -7,6 +7,7 @@
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
+import { ClaimAsk } from "../account/fit_panels";
 import { accountsEnabled } from "../account/switch";
 import { WatchControl, watchControl } from "../account/watch_pages";
 import { ChartStack, type Panel as ChartPanel, ShortMoney, moneyTip, recordsText, yearLabels } from "../chart";
@@ -599,6 +600,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           </p>
         ) : null}
         <WatchControl lang={lang} state={watch} kind="organization" target={o.id} primary />
+        {/* Is this your organization: the claim's way in, from the Follow control's reading of the session. */}
+        <ClaimAsk lang={lang} watch={watch} id={o.id} records={o.n_awards + o.n_history + o.n_contracts} />
         <InstrumentsLine lang={lang} part={instruments} />
       </PageHead>
 

@@ -238,7 +238,7 @@ export const PLAN_CARD_ROWS = 3 + PLAN_ROWS.length + 2;
 // the plan has (in the accent on the plan offered, muted on the others) and
 // a hollow ring for what it lacks. Hidden from assistive technology; a row
 // the plan lacks says so in words instead.
-const CHECK_PATH = "M6.5 11.3 3.2 8l1.1-1.1 2.2 2.2 5.2-5.2 1.1 1.1z";
+export const CHECK_PATH = "M6.5 11.3 3.2 8l1.1-1.1 2.2 2.2 5.2-5.2 1.1 1.1z";
 
 const Mark: FC<{ has: boolean }> = ({ has }) => has
   ? <svg class="plan-mark" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d={CHECK_PATH} /></svg>

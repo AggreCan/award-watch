@@ -11,14 +11,14 @@ import type { AppEnv } from "../env";
 import { fmtInt, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { EMAIL_MAX } from "../pages/interest";
-import { ProNote, ProTag } from "../pro";
+import { CHECK_PATH, PLAN_ROWS, ProNote, ProTag, planLine as planRowLine } from "../pro";
 import { KEYED_ENDPOINTS, KEY_PER_DAY, KEY_PER_MINUTE } from "../api_keyed_spec";
 import { MAX_Q } from "../search_db";
 import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
 import { type Brief, briefValue } from "./briefings";
-import { SAVED_SEARCH_MAX, WATCH_MAX, allowed, watchCap } from "./entitlements";
+import { RULES, SAVED_SEARCH_MAX, WATCH_MAX, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX, type FeedKind } from "./feeds";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch } from "./searches";
 import type { Account } from "./session";
@@ -94,6 +94,43 @@ const againHref = (next?: string | null, follow?: Follow | null, brief?: Brief |
   return query ? `/account/sign-in?${query}` : "/account/sign-in";
 };
 
+// What a free account gives, beside the form from 1200 px and under it below
+// (public/styles.css .signin-grid), for a first visit and a return alike: the
+// Free plan card's own lines (src/pro.tsx PLAN_ROWS, their figures read from
+// RULES when drawn, so the card and this list never disagree), the weekly
+// email while the form offers its box, then one line with Pro's own figures
+// and the plans' page. No chip and no filled button: Send the code stays the
+// page's one.
+// The holder's record stays on the plan cards: its line means nothing to a reader who has not met it.
+export const FREE_LINES: readonly Key[] = ["plans.free_searches", "plans.free_watches", "plans.matches", "plans.match_mail"];
+
+export function freeLines(lang: Lang, weekly: boolean): string[] {
+  const lines = FREE_LINES.map((key) => {
+    const row = PLAN_ROWS.find((r) => r.free?.key === key);
+    return row?.free ? planRowLine(lang, row.free) : "";
+  }).filter(Boolean);
+  return weekly ? [...lines, t(lang, "account.free_weekly")] : lines;
+}
+
+const FreePanel: FC<{ lang: Lang; weekly: boolean }> = ({ lang, weekly }) => {
+  const n = (v: number) => fmtInt(v, lang);
+  return (
+    <Panel title={t(lang, "account.free_title")} class="free-panel">
+      <ul class="plain free-lines">
+        {freeLines(lang, weekly).map((line) => (
+          <li><svg class="plan-mark" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d={CHECK_PATH} /></svg><span>{line}</span></li>
+        ))}
+      </ul>
+      <p class="muted small">
+        {tj(lang, "account.free_pro", {
+          searches: n(RULES.pro.saved_searches), watches: n(RULES.pro.watchlists), matches: n(RULES.pro.matches), mail: n(RULES.pro.match_mail),
+          plans: <a href="/pro">{t(lang, "billing.link_plans")}</a>,
+        })}
+      </p>
+    </Panel>
+  );
+};
+
 // offerWeekly: the box for the weekly email, while its table is on the
 // database (weekly.ts weeklyReady). Never ticked by the site, on a first view
 // or after an error.
@@ -109,34 +146,38 @@ export function signInView(
     <>
       <PageHead lang={lang} title={t(lang, "account.sign_in_title")} lead={t(lang, "account.sign_in_lead")} />
       <Notice message={state.notice} />
-      <Panel title={t(lang, "account.email_panel")} class="panel-form">
-        {errors.length ? (
-          <ul class="errors" role="alert">
-            {errors.map((e) => <li>{e === "account.err_limited" ? t(lang, e, { n: state.limitN ?? 0 }) : t(lang, e)}</li>)}
-          </ul>
-        ) : null}
-        <FollowNote lang={lang} follow={state.follow} />
-        <BriefNote lang={lang} brief={state.brief} />
-        <form method="post" action="/account/sign-in" class="stack">
-          <input type="hidden" name="lang" value={lang} />
-          <Next next={state.next} />
-          <FollowField follow={state.follow} />
-          <BriefField brief={state.brief} />
-          <label>
-            {t(lang, "interest.email")}
-            <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={state.email ?? ""} />
-          </label>
-          <Honeypot lang={lang} />
-          {state.offerWeekly ? (
-            <label class="account-check">
-              <input type="checkbox" name="weekly" value="1" />
-              <span>{t(lang, "weekly.opt_in")}</span>
-            </label>
+      {/* The form first, so the line that a Follow or a briefing rides along stays above the general list. */}
+      <div class="signin-grid">
+        <Panel title={t(lang, "account.email_panel")} class="panel-form">
+          {errors.length ? (
+            <ul class="errors" role="alert">
+              {errors.map((e) => <li>{e === "account.err_limited" ? t(lang, e, { n: state.limitN ?? 0 }) : t(lang, e)}</li>)}
+            </ul>
           ) : null}
-          <button type="submit" class="btn btn-primary">{t(lang, "account.send_code")}</button>
-        </form>
-        <p class="muted small">{tj(lang, "account.sign_in_privacy", { privacy: <a href="/privacy#accounts">{t(lang, "footer.privacy")}</a> })}</p>
-      </Panel>
+          <FollowNote lang={lang} follow={state.follow} />
+          <BriefNote lang={lang} brief={state.brief} />
+          <form method="post" action="/account/sign-in" class="stack">
+            <input type="hidden" name="lang" value={lang} />
+            <Next next={state.next} />
+            <FollowField follow={state.follow} />
+            <BriefField brief={state.brief} />
+            <label>
+              {t(lang, "interest.email")}
+              <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={state.email ?? ""} />
+            </label>
+            <Honeypot lang={lang} />
+            {state.offerWeekly ? (
+              <label class="account-check">
+                <input type="checkbox" name="weekly" value="1" />
+                <span>{t(lang, "weekly.opt_in")}</span>
+              </label>
+            ) : null}
+            <button type="submit" class="btn btn-primary">{t(lang, "account.send_code")}</button>
+          </form>
+          <p class="muted small">{tj(lang, "account.sign_in_privacy", { privacy: <a href="/privacy#accounts">{t(lang, "footer.privacy")}</a> })}</p>
+        </Panel>
+        <FreePanel lang={lang} weekly={!!state.offerWeekly} />
+      </div>
     </>
   );
 }

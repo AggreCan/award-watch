@@ -7,7 +7,7 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { WatchControl, watchControl } from "../account/watch_pages";
-import { FitNudge, NoticeMatchPanel, noticeFit } from "../account/fit_panels";
+import { FitNudge, NoticeMatchInvite, NoticeMatchPanel, noticeFit } from "../account/fit_panels";
 import { Table } from "../columns";
 import {
   REFERENCE_RE, loadOpenFirst, loadStats, loadTender, publishedReference, tenderAttachments, type Attachment, type TenderDetail,
@@ -201,6 +201,8 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       </div>
 
       <NoticeMatchPanel lang={lang} fit={fit} notice={d} />
+      {/* For a reader not signed in, while the switch is on: what a free account that names its organization sees here. */}
+      <NoticeMatchInvite lang={lang} watch={watch} />
 
       <DocumentsPanel lang={lang} d={d} documents={tenderAttachments(d)} clock={clock} closes={closes} notice={notice} noticeUrl={noticeUrl} />
 

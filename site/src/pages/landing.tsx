@@ -2,8 +2,9 @@
 // (docs/landing.md). A document of its own, not the railed app shell: a navy
 // hero with the Canada map of open tenders, the scrolling band of the largest
 // award holders, four figures, three feature bands with product shots built
-// from the live rows, the three steps, the plan cards and a closing band,
-// then the site's footer. A signed-in reader gets the app home
+// from the live rows, a band on matching notices with one example match drawn
+// from sample values (switch on only), the three steps, the plan cards and a
+// closing band, then the site's footer. A signed-in reader gets the app home
 // (pages/home.tsx) at the same address, so both answers carry Vary: Cookie
 // while the accounts switch is on. Every reader finds the app home at
 // /overview too, the nav's first link and the footer's.
@@ -16,7 +17,8 @@
 //
 // While the switch is off nothing is Pro: no plan cards, chip, price or Pro
 // line, no link to /pro or /analytics outside the footer (where the footer
-// has none either), no sign-in. The pieces that change between the two
+// has none either), no sign-in, and no band on matching notices, which a
+// free account makes. The pieces that change between the two
 // states each have their own class, so the switch guards
 // (test/accounts-switch.test.ts, test/radar-gate.test.ts) can name them.
 //
@@ -35,7 +37,9 @@ import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
 import { html } from "hono/html";
 import type { FC } from "hono/jsx";
+import { MATCH_MAX, type FitNotice, type MatchBlock, type Score, scoreNotice } from "../../public/fit.js";
 import { RULES } from "../account/entitlements";
+import { signInTo } from "../account/fit_panels";
 import { SESSION_COOKIE, readSession } from "../account/session";
 import { accountsEnabled } from "../account/switch";
 import { followValue } from "../account/watch_events";
@@ -52,6 +56,7 @@ import {
   competitiveLabel, decimal, fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, provinceName, sourceLabel, t, tj, tn,
   type Key, type Lang,
 } from "../i18n";
+import { FitDisclaimer, type ReasonContext, bandText, reasonText } from "../fit";
 import { BrandMark, BrandWordmark, FooterRow, MetaTags, noDataPage, todayOf, varyOnCookie } from "../layout";
 import { LANDING_ORGS_A, LANDING_ORGS_B, type LandingOrg, brandfetchLogoUrl } from "../landing_orgs";
 import { type ProPrice, PLAN_ROWS, ProTag, SUBSCRIBE_PATH, checkoutPrice, planLine, rowFor, sameDayHours } from "../pro";
@@ -70,7 +75,7 @@ import { money, provincesText } from "./shared";
 
 // The stylesheet's version: bump it with any change to public/landing.css so
 // a cached copy is never paired with new markup.
-export const LANDING_VERSION = 5;
+export const LANDING_VERSION = 6;
 
 // The display face, self-hosted beside Inter (public/fonts, SIL Open Font
 // License in BricolageGrotesque-OFL.txt), preloaded by this page alone.
@@ -317,6 +322,61 @@ const ProfileShot: FC<{ lang: Lang; profile: Profile; on: boolean; lobbying: boo
           {tiles.map((x) => <div class="lp-tile"><span>{x.label}</span><b class="num">{x.value}</b><small>{x.note}</small></div>)}
         </div>
       ) : null}
+    </div>
+  );
+};
+
+// -- the matching notices' example ---------------------------------------------------------
+
+// One match as /account/matches draws it (account/fit_pages.tsx): the band,
+// the points out of MATCH_MAX, every reason with its record counts and its
+// points, then the line every match carries. Scored by the rules themselves
+// (public/fit.js) from fixed sample values, so its points add up as the
+// rules count them; the organization and the notice are made up, as the
+// tests' fixtures are, and the card's head says it is an example. The class's
+// name is UNSPSC's, as the open notices give it. Nothing is read.
+export const SAMPLE_ORG = "Sample Facility Services Ltd.";
+export const SAMPLE_BLOCK: MatchBlock = {
+  fy: [2021, 2025], n: [12, 4, 0], coded: [12, 4], newest: null,
+  classes: [["721015", 9, 3]], families: [["7210", 10, 4]], segments: [["72", 12, 4]],
+  buyers: [], provinces: [["ON", 8, 2]], types: [["Request for Proposal", 6, 1]], held: [],
+};
+export const SAMPLE_NOTICE: FitNotice = {
+  codes: ["72101507"], segments: ["72"], provinces: ["ON"], provinces_derived: null, buyer_id: null, notice_type_en: "Request for Proposal",
+};
+const SAMPLE_CONTEXT: ReasonContext = {
+  name: SAMPLE_ORG,
+  notice: { notice_type_en: "Request for Proposal", notice_type_fr: "Demande de propositions" },
+  levels: [{ code: "721015", en: "Building support services", fr: "Services de soutien des bâtiments", n: 1 }],
+};
+let sample: Score | null = null;
+export const sampleScore = (): Score => (sample ??= scoreNotice(SAMPLE_BLOCK, SAMPLE_NOTICE, null));
+
+// The section's action: the sign-in, returning to the page that names the organization.
+export const MATCH_SIGN_IN = signInTo("/account/organization");
+
+const MatchShot: FC<{ lang: Lang }> = ({ lang }) => {
+  const score = sampleScore();
+  return (
+    <div class="lp-shot lp-match">
+      <div class="lp-shot-head"><span>{t(lang, "landing.match_example")}</span></div>
+      <div class="lp-match-body">
+        <p class="lp-match-band">
+          <b>{bandText(lang, score.band)}</b> <span>{t(lang, "fit.points", { n: fmtInt(score.points, lang), max: fmtInt(MATCH_MAX, lang) })}</span>
+        </p>
+        <p class="lp-match-ti">{t(lang, "landing.match_title")}</p>
+        <p class="lp-match-su">{t(lang, "landing.match_for", { name: SAMPLE_ORG })}</p>
+      </div>
+      <ul class="lp-reasons">
+        {score.reasons.map((r) => (
+          <li>
+            <span>{reasonText(lang, r, SAMPLE_CONTEXT)}</span>
+            <b class="num" aria-hidden="true">{t(lang, "fit.pts", { n: fmtInt(r.points, lang) })}</b>
+            <span class="visually-hidden">{t(lang, "fit.pts_aria", { n: fmtInt(r.points, lang) })}</span>
+          </li>
+        ))}
+      </ul>
+      <FitDisclaimer lang={lang} />
     </div>
   );
 };
@@ -684,6 +744,29 @@ export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, endi
               {profile ? <ProfileShot lang={lang} profile={profile} on={on} lobbying={lobbying} /> : null}
             </div>
           </section>
+
+          {/* With the accounts switch on only: a free account names its organization (test/home.ts LANDING_SWITCH_PIECES). */}
+          {on ? (
+            <section class="lp-feat lp-paper lp-flip lp-fit" aria-labelledby="lp-f4">
+              <div class="lp-wrap">
+                <MatchShot lang={lang} />
+                <div class="lp-copy">
+                  <p class="lp-eyebrow">{t(lang, "landing.f4_eyebrow")}</p>
+                  <h2 id="lp-f4">{t(lang, "landing.f4_heading")}</h2>
+                  <p class="lp-t">{t(lang, "landing.f4_text")}</p>
+                  <div class="lp-acts">
+                    <a class="lp-btn lp-btn-fill" href={MATCH_SIGN_IN}>{t(lang, "landing.f4_button")}</a>
+                  </div>
+                  <p class="lp-pro">
+                    {t(lang, "landing.f4_plans", {
+                      free: fmtInt(RULES.free.matches, lang), free_mail: fmtInt(RULES.free.match_mail, lang),
+                      pro: fmtInt(RULES.pro.matches, lang), pro_mail: fmtInt(RULES.pro.match_mail, lang),
+                    })}
+                  </p>
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           <section class="lp-steps" aria-labelledby="lp-how-h">
             <div class="lp-wrap">

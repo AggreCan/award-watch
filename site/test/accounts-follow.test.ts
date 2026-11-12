@@ -391,7 +391,7 @@ describe("the sign-in page with follow", () => {
 
   it("answers the inline form's errors on the sign-in page with the existing lines, the address, next and follow kept", async () => {
     const keeps = (html: string, typed: string) => {
-      expect(html).toContain("<h1>Sign In</h1>");
+      expect(html).toContain("<h1>Create a Free Account or Sign In</h1>");
       expect(html).toContain(`value="${typed}"`);
       expect(html).toContain(`<input type="hidden" name="next" value="/organizations/${ORG}"/>`);
       expect(html).toContain(`<input type="hidden" name="follow" value="organization:${ORG}"/>`);
@@ -508,7 +508,7 @@ describe("the hour's ceiling on sign-in messages asked for through a Follow form
       const res = await post("/account/sign-in", await pageForm(`/organizations/${ORG}`, email));
       expect(res.status).toBe(200);
       const html = await text(res);
-      expect(html).toContain("<h1>Sign In</h1>");
+      expect(html).toContain("<h1>Create a Free Account or Sign In</h1>");
       expect(html).toContain(`value="${email}"`);
       expect(html).toContain(`<input type="hidden" name="next" value="/organizations/${ORG}"/>`);
       expect(html).not.toContain('name="follow"');
@@ -573,7 +573,7 @@ describe("a post that carries follow without a page's headers", () => {
     const res = await post("/account/sign-in", await pageForm(`/organizations/${ORG}`, email), { origin: null });
     expect(res.status).toBe(200);
     const html = await text(res);
-    expect(html).toContain("<h1>Sign In</h1>");
+    expect(html).toContain("<h1>Create a Free Account or Sign In</h1>");
     expect(html).toContain(`value="${email}"`);
     expect(html).toContain(`<input type="hidden" name="next" value="/organizations/${ORG}"/>`);
     expect(html).not.toContain('name="follow"');

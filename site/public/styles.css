@@ -1320,6 +1320,14 @@ a > .pro-tag:last-child { margin-right: 0; }
 .start-steps p { margin: 0; max-width: 72ch; }
 .start-search { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; max-width: 480px; margin: 0; }
 .start-search input { flex: 1 1 15em; min-width: 0; }
+/* The sign-in page (account/pages.tsx signInView): the form, then what a free account gives, beside it
+   from 1200 px and under it below, the two no wider than the form's panel alone. */
+.signin-grid { display: grid; grid-template-columns: minmax(0, 720px); gap: var(--gutter); align-items: start; margin: 0 0 var(--gutter); }
+.signin-grid > .panel { margin: 0; }
+@media (min-width: 1200px) { .signin-grid { grid-template-columns: minmax(0, 640px) minmax(0, 480px); } }
+.free-lines li { display: flex; align-items: flex-start; gap: 8px; margin: 0; }
+.free-lines li + li { margin-top: 8px; }
+.free-lines .plan-mark { margin-top: 6px; fill: var(--accent); }
 /* On a phone the tables restack, and a select with its button wraps rather than overflow the cell. */
 @media (max-width: 699px) {
   .account-inline { flex-wrap: wrap; white-space: normal; }

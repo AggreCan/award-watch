@@ -4015,6 +4015,23 @@ const STRINGS = {
     fr: "Pro trace {years} exercices et suit {n} entreprises par courriel.",
   },
   "landing.tile_reports": { en: "reports", fr: "rapports" },
+  // The matching notices' band, with the accounts switch on only (src/pages/landing.tsx MatchShot): what a
+  // free account that names its organization gets, each plan's own figures from RULES, and one match drawn
+  // from sample values under a head that says so. A match names what a notice and records have in common.
+  "landing.f4_eyebrow": { en: "Matching notices", fr: "Avis correspondants" },
+  "landing.f4_heading": { en: "See which open tenders match your records", fr: "Voyez quels appels d'offres ouverts correspondent à vos dossiers" },
+  "landing.f4_text": {
+    en: "Name your organization in a free account. The site ranks the open notices by what each has in common with its award notices and contract history, and shows every reason with its record counts.",
+    fr: "Indiquez votre organisation dans un compte gratuit. Le site classe les avis ouverts selon ce que chacun a en commun avec ses avis d'attribution et son historique des contrats, et montre chaque raison avec son nombre de dossiers.",
+  },
+  "landing.f4_button": { en: "Name your organization", fr: "Indiquer votre organisation" },
+  "landing.f4_plans": {
+    en: "Free lists {free} matching notices and emails {free_mail} a week. Pro lists {pro} and emails {pro_mail} a week.",
+    fr: "Le forfait Gratuit présente {free} avis correspondants et en envoie {free_mail} par semaine par courriel. Pro en présente {pro} et en envoie {pro_mail} par semaine.",
+  },
+  "landing.match_example": { en: "Example, with sample values", fr: "Exemple, avec des valeurs fictives" },
+  "landing.match_title": { en: "Building maintenance services", fr: "Services d'entretien de bâtiments" },
+  "landing.match_for": { en: "Compared with the records of {name}", fr: "Comparé aux dossiers de {name}" },
   "landing.how_eyebrow": { en: "How it works", fr: "Comment ça marche" },
   "landing.how_heading": { en: "Public records, read every night", fr: "Des dossiers publics, lus chaque nuit" },
   "landing.step1_heading": { en: "We read the sources", fr: "Nous lisons les sources" },

@@ -102,13 +102,18 @@ describe("the sign-in form's box", () => {
     expect(await (await get("/account/sign-in?weekly=1")).text()).toBe(html);
   });
 
-  it("is the page's only difference from the page without the table, which is the sign-in page as it was", async () => {
+  // With the box goes its line in the list of what a free account gives (account/pages.tsx FreePanel): the
+  // list names the weekly email only while the form offers it.
+  const FREE_LINE = /<li><svg class="plan-mark"[^>]*><path [^>]*><\/path><\/svg><span>The weekly email, each Monday<\/span><\/li>/;
+
+  it("is, with its line in the free account's list, the page's only difference from the page without the table", async () => {
     const withTable = await (await get("/account/sign-in?next=%2Ftenders")).text();
     const without = await withoutTable(async () => (await get("/account/sign-in?next=%2Ftenders")).text());
     expect(withTable.split('name="weekly"').length - 1).toBe(1);
+    expect(withTable).toMatch(FREE_LINE);
     expect(without).not.toContain('name="weekly"');
     expect(without).not.toContain("weekly email");
-    expect(decode(withTable).replace(BOX_HTML, "")).toBe(decode(without));
+    expect(decode(withTable).replace(BOX_HTML, "").replace(FREE_LINE, "")).toBe(decode(without));
   });
 });
 

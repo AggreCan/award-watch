@@ -285,6 +285,22 @@ html.js .theme-toggle { display: inline-flex; }
 .lp-tile span { display: block; font-size: 12px; line-height: 16px; color: var(--muted); }
 .lp-tile b { display: block; font-family: var(--display); font-size: 26px; line-height: 32px; font-weight: 800; letter-spacing: -.02em; }
 .lp-tile small { font-size: 12px; color: var(--muted); }
+/* The matching notices' example (src/pages/landing.tsx MatchShot), with the accounts switch on only: one
+   match as the account's page draws it, its band and points, then each reason with its record counts and
+   its points in the accent, then the line every match carries. The head says it is an example. */
+.lp-match-body { padding: 16px 16px 14px; }
+.lp-match-band { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.lp-match-band b { font-family: var(--display); font-size: 22px; line-height: 28px; font-weight: 800; letter-spacing: -.01em; }
+.lp-match-band span { font-size: 13px; line-height: 20px; color: var(--muted); }
+.lp-match-ti { margin-top: 8px; font-size: 15px; line-height: 22px; font-weight: 600; }
+.lp-match-su { font-size: 13px; line-height: 20px; color: var(--muted); }
+.lp-reasons { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.lp-reasons li { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line);
+  font-size: 14px; line-height: 20px; }
+.lp-reasons li > span:first-child { min-width: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.lp-reasons b { flex: none; font-weight: 700; color: var(--em); }
+.lp-match .fit-disclaimer { padding: 12px 16px 14px; font-size: 13px; line-height: 20px; color: var(--muted); }
+.lp-match .fit-disclaimer a { color: inherit; }
 
 /* -- steps ------------------------------------------------------------------- */
 .lp-steps { padding-block: 64px; border-top: 1px solid var(--line); }
@@ -367,7 +383,8 @@ html.js .theme-toggle { display: inline-flex; }
 }
 @media (max-width: 1000px) {
   .lp-hero .lp-wrap, .lp-feat .lp-wrap, .lp-feat.lp-flip .lp-wrap, .lp-close .lp-wrap { grid-template-columns: minmax(0, 1fr); }
-  .lp-feat.lp-flip .lp-copy { order: 0; }
+  /* One column: every band's words before its card, the flipped bands' too (their card is first in the document). */
+  .lp-feat.lp-flip .lp-copy { order: -1; }
   .lp-hero h1 { font-size: 48px; }
   .lp-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lp-step-grid, .lp-shot-grid { grid-template-columns: minmax(0, 1fr); }

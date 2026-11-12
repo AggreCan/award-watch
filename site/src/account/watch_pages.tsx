@@ -35,7 +35,7 @@ import { type MailRow, type Watch, countedWatches, ownWatch, watchState } from "
 
 export type ControlState =
   | { at: "out"; next: string }
-  | { at: "in"; account: Account; id: string | null; segment: string; n: number; cap: number; mail: boolean; free: boolean };
+  | { at: "in"; account: Account; id: string | null; segment: string; n: number; cap: number; mail: boolean; free: boolean; claimed: boolean };
 
 // What the control shows for this request: null while the switch is off, when
 // the accounts database cannot say, or when it cannot be read.
@@ -48,7 +48,7 @@ export async function watchControl(c: Context<AppEnv>, kind: WatchKind, target: 
     const s = await watchState(c.env, read.account.userId, kind, target);
     return {
       at: "in", account: read.account, id: s.id, segment: s.segment, n: s.n, cap: watchCap(read.account.plan),
-      mail: allowed(read.account, "watch_mail"), free: s.free,
+      mail: allowed(read.account, "watch_mail"), free: s.free, claimed: s.claimed,
     };
   } catch {
     return null;

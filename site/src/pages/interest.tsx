@@ -142,7 +142,8 @@ export const LIST_CATEGORIES = CATEGORY_ORDER.slice(0, 3);
 
 async function tendersFilter(env: Env, lang: Lang, url: URL): Promise<InterestFilter> {
   const q = readTenderQuery(url);
-  const facets = (await loadOpenFirst(env).catch(() => null))?.facets;
+  // The open notices' facets name a buyer, a notice type or a method; a list asking none of them reads no file.
+  const facets = q.buyer || q.type || q.method ? (await loadOpenFirst(env).catch(() => null))?.facets : undefined;
   const facet = (list: readonly FacetCount[] | undefined, value: string) => list?.find((f) => f.value === value);
   const pairs: [string, string][] = [];
   const named: string[] = [];

@@ -33,8 +33,9 @@ In order: the nav (the wordmark, Overview, Tenders, Awards, Contracts ending,
 and with the switch on Analytics and Pro; the language and theme switches;
 Sign in; "Track tenders free"), the hero (the claim, the search box, the Canada map
 of open tenders), the scrolling band of forty organizations, four figures,
-three feature bands each with a product shot, the three steps, the plan
-cards, the closing band and the site's footer links.
+three feature bands each with a product shot, with the switch on a fourth on
+matching notices, the three steps, the plan cards, the closing band and the
+site's footer links.
 
 | Part | Source |
 |---|---|
@@ -45,6 +46,7 @@ cards, the closing band and the site's footer links.
 | Ending within 3 months | `expiring/index.json` for the count, the first page of the 3-month window (`expiring/3m/1.json`) for the rows, soonest first |
 | Profile shot | the profile of `stats.json` `top_organizations_year[0]`, the organization with the largest award value this year, cut from its shard (`loadProfile`) |
 | Band | `site/src/landing_orgs.ts`: forty ids, names and domains |
+| Matching notices' example | fixed sample values in `landing.tsx` (`SAMPLE_BLOCK`, `SAMPLE_NOTICE`), scored by `public/fit.js` at render; no file |
 
 A missing `stats.json` gives the no-data page (503), as on the app home. Any
 other missing file leaves its part out (the map card, a shot, the profile)
@@ -67,6 +69,17 @@ leaves out the plan cards, the Pro lines under the feature bands, the hero's
 Pro and Analytics links; the footer has no Pro or Analytics link either.
 "Track tenders free" leads to the Atom feeds, the third step names the feeds
 and the browser watchlist, and the profile shot shows the watchlist button.
+
+With the switch on the page adds, after the companies' band, a band on
+matching notices: name your organization in a free account and the site
+ranks the open notices by what each has in common with its award notices
+and contract history, every reason shown. Its one action, "Name your
+organization", leads to `/account/sign-in?next=%2Faccount%2Forganization`; a
+line states Free's and Pro's figures from `RULES` (matches listed, matches a
+week by email). Its card is one match as `/account/matches` draws it (the
+band, the points out of 100, each reason with its record counts and points)
+for a made-up organization and notice, under the head "Example, with sample
+values", with the matching notices' disclaimer. It reads nothing.
 
 With the switch on the page adds the three plan cards: Free and Pro draw
 every row of `PLAN_ROWS` in order, as the Pro page does, Pro with its price

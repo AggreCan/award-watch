@@ -63,6 +63,25 @@ were read from.
    contract, needs that row seeded in the test, as the guide on set-asides'
    example contract is.
 
+## What a guide ends with
+
+A guide may declare an `action`: the email list it is about (a kind and a
+list page's address, as `interestFilter` in `site/src/pages/interest.tsx`
+reads them) and one sentence in each language. For a reader not signed in,
+while the accounts switch is on, the page draws it after the last section and
+before the sources, the same for every such reader: a band
+"Email Lists", the sentence with the link to `/alerts`, and the lists' own
+form (`InterestBody`), which posts to `/interest` as on the list pages and
+saves the list it was served with. Its line offering Pro is left out, since
+a guide links no account page. With the switch off, or for a signed-in
+reader, a guide is as it was. The six guides: the tender notice and set-aside guides save every new
+tender notice; the ACAN guide the new notices of the type Advance Contract
+Award Notice, and the standing offers guide those of the type Request for
+Standing Offer, each while the open notices carry that type (otherwise
+every new tender notice, as on the tender list); the three-records and
+contract-end guides the contracts within 3 months of their end. A plain list
+reads no file; a list of one type reads the open notices' facets.
+
 ## What a guide says
 
 A guide explains the rules and the records. It never says how to win, never

@@ -15,10 +15,20 @@ export const ACCOUNT_STRINGS = {
   },
 
   // -- sign-in and the code ------------------------------------------------------
-  "account.sign_in_title": { en: "Sign In", fr: "Connexion" },
+  // One page and one form for a first visit and a return: the address makes the account the first time it
+  // proves itself, and signs it in after that (routes.tsx, POST /account/check).
+  "account.sign_in_title": { en: "Create a Free Account or Sign In", fr: "Créer un compte gratuit ou se connecter" },
   "account.sign_in_lead": {
-    en: "Enter your email address. The site sends a 6-digit code and a link, and either one signs you in. There is no password.",
-    fr: "Entrez votre adresse courriel. Le site envoie un code à 6 chiffres et un lien, et l'un ou l'autre vous connecte. Il n'y a pas de mot de passe.",
+    en: "An account is free and needs no card or password. Enter your email address and the site sends a 6-digit code and a link. Either one signs you in, and the first sign-in creates the account.",
+    fr: "Un compte est gratuit et ne demande ni carte ni mot de passe. Entrez votre adresse courriel et le site envoie un code à 6 chiffres et un lien. L'un ou l'autre vous connecte, et la première connexion crée le compte.",
+  },
+  // Beside the form (pages.tsx FreePanel): the Free plan card's own lines (src/pro.tsx PLAN_ROWS), then the
+  // weekly email, then Pro's own figures, read from RULES. No line compares the plans.
+  "account.free_title": { en: "What a Free Account Gives You", fr: "Ce que donne un compte gratuit" },
+  "account.free_weekly": { en: "The weekly email, each Monday", fr: "Le courriel hebdomadaire, chaque lundi" },
+  "account.free_pro": {
+    en: "Pro: {searches} saved searches and {watches} watches, each change by email; {matches} matching notices, {mail} a week by email. {plans}",
+    fr: "Pro : {searches} recherches enregistrées et {watches} suivis, chaque changement par courriel; {matches} avis correspondants, {mail} par semaine par courriel. {plans}",
   },
   "account.email_panel": { en: "Email Address", fr: "Adresse courriel" },
   "account.send_code": { en: "Send the code", fr: "Envoyer le code" },
@@ -2430,6 +2440,21 @@ export const ACCOUNT_STRINGS = {
     en: "Tell the site which organization is yours to see what this notice has in common with its records: {link}.",
     fr: "Indiquez au site quelle organisation est la vôtre pour voir ce que cet avis a en commun avec ses dossiers : {link}.",
   },
+  // The panel's place on an open notice for a reader not signed in (fit_panels.tsx NoticeMatchInvite): the
+  // same for every such reader, with the sign-in that returns to the notice.
+  "fit.notice_out": {
+    en: "A free account that names its organization sees here what this notice has in common with that organization's records, each reason with its record counts. {link}",
+    fr: "Un compte gratuit qui indique son organisation voit ici ce que cet avis a en commun avec les dossiers de cette organisation, chaque raison avec son nombre de dossiers. {link}",
+  },
+  "fit.notice_out_link": { en: "Create a free account or sign in", fr: "Créer un compte gratuit ou se connecter" },
+  // The line under an organization profile's head (fit_panels.tsx ClaimAsk), for a reader not signed in or a
+  // signed-in account that names no organization, on a profile with award notices or contract records.
+  "fit.org_ask": {
+    en: "Is this your organization? {link} and see the open tender notices that match its records.",
+    fr: "Est-ce votre organisation? {link} et voyez les avis d'appel d'offres ouverts qui correspondent à ses dossiers.",
+  },
+  "fit.org_ask_out": { en: "Name it in a free account", fr: "Indiquez-la dans un compte gratuit" },
+  "fit.org_ask_in": { en: "Name it in your account", fr: "Indiquez-la dans votre compte" },
   "fit.none_reason": {
     en: "None of this notice's UNSPSC codes shares a segment with the award notices or PSPC contract history of {name}.",
     fr: "Aucun code UNSPSC de cet avis ne partage de segment avec les avis d'attribution ou l'historique des contrats de SPAC de {name}.",

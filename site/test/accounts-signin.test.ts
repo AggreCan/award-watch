@@ -365,7 +365,7 @@ describe("the account pages in French", () => {
     for (const path of ["/account/sign-in?lang=fr", "/account/check?lang=fr", "/account?lang=fr", "/account/searches?lang=fr", "/account/keys?lang=fr", "/account/delete?lang=fr"]) {
       const html = nbsp(await (await get(path, { cookie: path.startsWith("/account/sign-in") || path.startsWith("/account/check") ? undefined : cookie })).text());
       expect(html, path).toContain('<html lang="fr">');
-      for (const english of ["Sign In", "Saved Searches", "API Keys", "Your Account", "Delete the Account", "Enter Your Code"]) {
+      for (const english of ["Create a Free Account or Sign In", "Saved Searches", "API Keys", "Your Account", "Delete the Account", "Enter Your Code"]) {
         expect(html, `${path}: ${english}`).not.toContain(`<h1>${english}</h1>`);
       }
       expect(html, path).not.toContain(String.fromCharCode(0x2014));
@@ -376,7 +376,7 @@ describe("the account pages in French", () => {
       expect(visible, path).not.toMatch(/\{\w+\}/);
     }
     const french = nbsp(await (await get("/account/sign-in?lang=fr")).text());
-    expect(french).toContain("<h1>Connexion</h1>");
+    expect(french).toContain("<h1>Créer un compte gratuit ou se connecter</h1>");
     expect(french).toContain("Envoyer le code");
   });
 

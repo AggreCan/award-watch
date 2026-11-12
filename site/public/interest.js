@@ -10,7 +10,9 @@
    form then saves the address shown, and its wording comes from the form's
    data attributes: the site's own wording while the filters are the ones the
    page was served with, otherwise "every new notice" or "the filters above".
-   The site writes the exact wording again in its answer.
+   The site writes the exact wording again in its answer. The same form on
+   another page (a guide's list, src/pages/guides.tsx) saves the list it was
+   served with.
 
    On the Email lists page (src/pages/alerts.tsx) the same posting applies to
    the chooser, and choosing one of the filters under "New tender notices
@@ -40,6 +42,9 @@
     var params = form.elements.namedItem("params");
     var label = box.querySelector(".interest-label");
     if (!params || !label) return;
+    // Only the list's own page follows its address: elsewhere (a guide, the
+    // page a plain post answers with) the form saves the list it was served with.
+    if (params.value.split("?")[0] !== location.pathname) return;
     var served = filterKey(params.value.split("?")[1] || "", keys);
     var servedLabel = label.textContent;
     function update() {

@@ -302,7 +302,11 @@ describe("the public pages, read signed out and by two accounts with different c
       expect(r.res.headers.get("vary")).toContain("Cookie");
     }
     expect(new Set([out.raw, a.raw, b.raw]).size).toBe(3);
-    expect(out.html).not.toMatch(FEATURE);
+    // The public body holds, in the panel's place, the invitation every reader not signed in gets
+    // (test/accounts-funnel.test.ts), and nothing else of the feature.
+    const invite = panel(main(out.html), NOTICE_PANEL);
+    expect(invite).toContain("A free account that names its organization sees here");
+    expect(out.html.replace(invite, "")).not.toMatch(FEATURE);
     // A's panel: its close match; B's: no match, with the notice type it shares.
     expect(panel(main(a.html), NOTICE_PANEL)).toContain("<strong>Close match</strong>");
     expect(panel(main(a.html), NOTICE_PANEL)).toContain(NAME1);

@@ -317,6 +317,8 @@ describe("around the page", () => {
     // (account/fit_panels.tsx, test/fit-panels.test.ts).
     for (const key of ["fit.panel_notice", "fit.notice_lead", "fit.nudge", "fit.none_reason", "fit.no_codes", "fit.also_common",
       "fit.tenders_panel", "fit.tenders_all_one", "fit.tenders_all_many", "fit.tenders_none"]) expect(keys, key).toContain(key);
+    // So are the lines a reader not signed in meets: the notice page's invitation and the profile's question.
+    for (const key of ["fit.notice_out", "fit.notice_out_link", "fit.org_ask", "fit.org_ask_out", "fit.org_ask_in"]) expect(keys, key).toContain(key);
     for (const key of keys) {
       const { en, fr } = rawEntry(key);
       expect(en, key).not.toMatch(EN);

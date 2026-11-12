@@ -409,7 +409,7 @@ describe("the sign-in pages with brief", () => {
 
   it("answers the form's errors on the sign-in page with the existing lines, the address, next and brief kept", async () => {
     const keeps = (html: string, typed: string) => {
-      expect(html).toContain("<h1>Sign In</h1>");
+      expect(html).toContain("<h1>Create a Free Account or Sign In</h1>");
       expect(html).toContain(`value="${typed}"`);
       expect(html).toContain(`<input type="hidden" name="next" value="/segments/${SEGMENT}"/>`);
       expect(html).toContain(FIELD_HTML);
@@ -522,7 +522,7 @@ describe("the hour's ceiling on sign-in messages, which a briefing's request sha
       const res = await post("/account/sign-in", await linkForm(`/segments/${SEGMENT}`, email));
       expect(res.status).toBe(200);
       const html = await text(res);
-      expect(html).toContain("<h1>Sign In</h1>");
+      expect(html).toContain("<h1>Create a Free Account or Sign In</h1>");
       expect(html).toContain(`value="${email}"`);
       expect(html).toContain(`<input type="hidden" name="next" value="/segments/${SEGMENT}"/>`);
       expect(html).not.toContain('name="brief"');
@@ -573,7 +573,7 @@ describe("a post that carries brief without a page's headers", () => {
     const res = await post("/account/sign-in", await linkForm(`/segments/${SEGMENT}`, email), { origin: null });
     expect(res.status).toBe(200);
     const html = await text(res);
-    expect(html).toContain("<h1>Sign In</h1>");
+    expect(html).toContain("<h1>Create a Free Account or Sign In</h1>");
     expect(html).toContain(`value="${email}"`);
     expect(html).toContain(`<input type="hidden" name="next" value="/segments/${SEGMENT}"/>`);
     expect(html).not.toContain('name="brief"');
