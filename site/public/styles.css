@@ -352,6 +352,15 @@ html.js .theme-toggle { display: inline-flex; }
   .topbar-search { order: 1; flex: 1 1 100%; min-width: 0; max-width: none; }
   .topbar-meta { order: 2; }
 }
+/* From 700 to 799 px the bar holds the lockup, the field, the data date and
+   both buttons on one line only if the field and the gaps give way. In
+   French, with the field at its 160 px floor, the line ran 26 px past a
+   700 px window and put the theme button off the edge, more for a
+   signed-in reader, whose plan follows the wordmark. */
+@media (min-width: 700px) and (max-width: 799px) {
+  .topbar, .topbar-meta { gap: 8px 10px; }
+  .topbar-search { min-width: 96px; }
+}
 
 /* -- frame: the rail and the content column ----------------------------------- */
 .content { min-width: 0; display: flex; flex-direction: column; }
