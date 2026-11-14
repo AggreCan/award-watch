@@ -329,6 +329,67 @@ def test_similar_names_by_prefix_match_key_and_family_are_listed_apart(db, tmp_p
     assert (e["held"], e["total"], e["others"]) == (1, 6, 5) and lines.label(j) == ("none", 0, None)
 
 
+PLACES = ("Alma", "Boxey", "Digby", "Fortune", "Gabarus", "Hampton", "Inverness", "Jeddore", "Keels", "Lamaline",
+          "Meteghan", "Neils Harbour", "Ogden")
+
+
+def harbours(conn, places, *, code="C211"):
+    """One earlier contract for a harbour authority of each place, and the row's own for the first."""
+    for i, place in enumerate(places[1:]):
+        published(conn, f"H-{i}", f"Harbour Authority of {place}", start="2023-04-01", end="2024-03-31", code=code)
+    published(conn, "H-R", f"Harbour Authority of {places[0]}", start="2026-04-01", end="2027-03-31", code=code)
+    conn.commit()
+
+
+def test_an_opening_as_many_holders_as_the_limit_share_still_lists_them(db, tmp_path):
+    """Twelve holders of one line whose names open alike: the limit, so each is listed beside the others."""
+    assert lines.SIMILAR_GROUP_MAX == 12 and len(PLACES) == 13
+    harbours(db, PLACES[:12])
+    counts, rows = night(db, tmp_path)
+    sim = rows[f"contract:{TRIBUNALS}:H-R"]["sim"]
+    assert sorted(name for _, name, *_ in sim) == sorted(f"Harbour Authority of {p}" for p in PLACES[1:12])
+    assert counts["common"] == 0 and counts["sim_cut"] == 0
+
+
+def test_an_opening_too_many_holders_of_a_line_share_lists_no_one(db, tmp_path):
+    """Thirteen: "Harbour Authority of" is a common phrase in that line, not one organization's spellings. Another
+    line, where two of them meet alone, still lists the one beside the other; the review file names the opening."""
+    harbours(db, PLACES)
+    published(db, "H-O1", "Harbour Authority of Boxey", start="2023-04-01", end="2024-03-31", code="D317")
+    published(db, "H-O2", "Harbour Authority of Alma", start="2026-05-01", end="2027-04-30", code="D317", value=75_000.0)
+    db.commit()
+    counts, rows = night(db, tmp_path)
+    assert rows[f"contract:{TRIBUNALS}:H-R"]["sim"] == []
+    assert [name for _, name, *_ in rows[f"contract:{TRIBUNALS}:H-O2"]["sim"]] == ["Harbour Authority of Boxey"]
+    assert counts["common"] == 1 and counts["similar"] == 1
+    body = (tmp_path / "review" / lines.REVIEW_FILE).read_text(encoding="utf-8")
+    assert "## Common openings: 1 in their lines, each left out of the similar names there" in body
+    row = next(x for x in body.split("\n") if x.startswith("harbour authority of\t"))
+    assert row.split("\t")[1:6] == ["13", "3", TRIBUNALS, "code", "C211"]
+    assert row.split("\t")[6].count(";") == lines.COMMON_SHOWN - 1 and "Harbour Authority of Alma" in row
+
+
+def test_a_record_lists_sim_max_similar_names_at_most_the_most_records_first(db, tmp_path):
+    """A corporate family of more members than the site reads in one record: the record keeps SIM_MAX of them,
+    those with the most records, in the order it lists them, so the site still reads it."""
+    holder, n = "Borealis Holdings Ltd", lines.SIM_MAX + 3
+    members = [f"Unit {i:02d} Works" for i in range(n)]
+    for i, name in enumerate(members):
+        published(db, f"F-{i}", name, start="2023-04-01", end="2024-03-31", code="C211")
+    for i in (7, n - 1):
+        published(db, f"F-{i}-b", members[i], start="2024-04-01", end="2025-03-31", code="C211")
+    published(db, "F-R", holder, start="2026-04-01", end="2027-03-31", code="C211")
+    for name in (holder, *members):
+        db.execute("INSERT INTO organization_families (family, organization_id, note, source) VALUES ('Borealis', ?, "
+                   "'subsidiary', 'name')", (org(db, name),))
+    db.commit()
+    counts, rows = night(db, tmp_path)
+    sim = rows[f"contract:{TRIBUNALS}:F-R"]["sim"]
+    assert len(sim) == lines.SIM_MAX and counts["sim_cut"] == 1 and counts["common"] == 0
+    assert {members[7], members[n - 1]} <= {name for _, name, *_ in sim}
+    assert [s[0] for s in sim] == sorted(s[0] for s in sim)
+
+
 def test_amendments_and_a_moved_end_are_the_rows_own(db, tmp_path):
     holder = "Amended Ltd"
     notice(db, "AW-A", holder, start="2025-04-01", end="2026-03-31", value=100_000.0)
@@ -394,7 +455,8 @@ def test_the_review_file_counts_the_labels_samples_them_and_lists_every_similar_
 
 def test_the_constants_are_the_sites():
     ts = (REPO / "site" / "src" / "lines.ts").read_text(encoding="utf-8")
-    for name in ("LINE_YEARS", "RUN_GAP_DAYS", "RUN_OVERLAP_DAYS", "LONG_RUN", "CODE_CHARS", "SIMILAR_PREFIX"):
+    for name in ("LINE_YEARS", "RUN_GAP_DAYS", "RUN_OVERLAP_DAYS", "LONG_RUN", "CODE_CHARS", "SIMILAR_PREFIX",
+                 "SIMILAR_GROUP_MAX", "SIM_MAX"):
         found = re.search(rf"export const {name} = (\d+);", ts)
         assert found and int(found.group(1)) == getattr(lines, name), name
     assert lines.J_VERSION == int(re.search(r"export const J_VERSION = (\d+);", ts).group(1))

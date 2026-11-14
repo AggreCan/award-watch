@@ -29,7 +29,8 @@ words; site/src/lines.ts holds the same constants and tests/test_lines.py holds 
 * Similar names: other organizations in the line whose display name has the holder's match key
   (match_key.match_key), whose normalized name shares its first SIMILAR_PREFIX characters with the holder's, or
   which sit in one of the holder's corporate families; each is listed with its own records that start on or
-  before the row's, and never added to the holder's.
+  before the row's, and never added to the holder's. An opening that more than SIMILAR_GROUP_MAX holders of the
+  line share is a common phrase (the harbour authorities') and lists no one; a record lists SIM_MAX names at most.
 
 A row whose holder is withheld as a person, or not named, gets no record; nor does one with no buyer.
 
@@ -39,8 +40,8 @@ names. It carries no days_left, so a row goes to D1 again only when its figures 
 
 The review file (data/out/review/holder-lines.txt, for the operator; the workflow saves it to R2's private
 review/ prefix with the other review files) gives the labels' counts by source and window, 50 rows of each label
-sampled by a hash of their key, and every similar-name pair. It names organizations and records, never an
-account or a reader.
+sampled by a hash of their key, every similar-name pair, and the openings left out as common with their lines. It
+names organizations and records, never an account or a reader.
 """
 
 from __future__ import annotations
@@ -74,6 +75,14 @@ RUN_OVERLAP_DAYS = 60
 LONG_RUN = 3
 CODE_CHARS = 4
 SIMILAR_PREFIX = 20
+# An opening that more holders of one line share than this is a common phrase ("Harbour Authority of ..."), not one
+# organization's spellings, and lists no one in that line. Set from the first production night (2026-11-13): the
+# largest groups by opening were 163 harbour authorities, 21 administrations portuaires and 15 John Howard
+# societies, each a body of its own; the largest that was one organization's spellings and divisions had 11.
+SIMILAR_GROUP_MAX = 12
+# The most similar names one record lists, those with the most records first. The site refuses a record with more
+# (SIM_MAX in site/src/lines.ts), so a large corporate family cannot cost a row its record.
+SIM_MAX = 50
 
 # records.src, the numbers the site reads.
 AWARDS, HISTORY, CONTRACTS = 1, 2, 3
@@ -302,6 +311,9 @@ def contracts_scan(conn: sqlite3.Connection) -> Iterator[Rec]:
 
 # -- the organizations: names and similar names ------------------------------------------
 
+# What an opening's key starts with in the index of similar names (the match key's is "k", a family's "f").
+_PREFIX_KEY = "p\x1f"
+
 class _Orgs:
     """Display names, normalized names, match keys and corporate families, read once; match keys computed when first
     asked for."""
@@ -327,7 +339,7 @@ class _Orgs:
             key = match_key(name)
             out = [f"k\x1f{key.key}"] if key else []
             if len(norm) >= SIMILAR_PREFIX:
-                out.append(f"p\x1f{norm[:SIMILAR_PREFIX]}")
+                out.append(f"{_PREFIX_KEY}{norm[:SIMILAR_PREFIX]}")
             out += [f"f\x1f{f}" for f in sorted(self.families.get(oid, ()))]
             got = self.keys[oid] = tuple(out)
         return got
@@ -349,6 +361,11 @@ class Line:
         for o in self.by_org:
             for k in orgs.similar_keys(o):
                 self.similar[k].add(o)
+        # The openings too many holders of this line share (SIMILAR_GROUP_MAX): each is taken out of the index, and
+        # kept here with its holders for the review file.
+        self.common: dict[str, frozenset[str]] = {}
+        for k in [k for k, held in self.similar.items() if k.startswith(_PREFIX_KEY) and len(held) > SIMILAR_GROUP_MAX]:
+            self.common[k[len(_PREFIX_KEY):]] = frozenset(self.similar.pop(k))
 
 
 def _back_to_back(held: list[Rec], own: Rec) -> int:
@@ -442,7 +459,8 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
     twins: dict[str, list[str]] = defaultdict(list)
     for kept, twin in conn.execute("SELECT source_key, twin_key FROM expiring_twins ORDER BY source_key, twin_key"):
         twins[kept].append(twin)
-    counts = {"rows": 0, "withheld": 0, "no_buyer": 0, "run": 0, "earlier": 0, "none": 0, "uncoded": 0, "similar": 0}
+    counts = {"rows": 0, "withheld": 0, "no_buyer": 0, "run": 0, "earlier": 0, "none": 0, "uncoded": 0, "similar": 0,
+              "common": 0, "sim_cut": 0}
 
     # The records each row is counted by, its own and its twins', read first, so the night knows the lines to fill.
     named = [r for r in radar if r["organization_id"] and not r["supplier_withheld"]]
@@ -519,6 +537,12 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
             entry, sim = source_figures(own, r["organization_id"], lines[at], orgs)
             entries.append(entry)
             sims += sim
+        if len(sims) > SIM_MAX:
+            # The most records first, then the latest start; what is kept stays in the order it was listed in.
+            order = sorted(range(len(sims)), key=lambda i: sims[i][4], reverse=True)
+            order.sort(key=lambda i: -sims[i][3])
+            sims = [sims[i] for i in sorted(order[:SIM_MAX])]
+            counts["sim_cut"] += 1
         own = mine.get(KIND_SRC[r["kind"]])
         j = {
             "v": J_VERSION, "fy": [fy_first, fy_last], "buyer": buyer, "oid": org_number(r["organization_id"]),
@@ -537,6 +561,10 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
         rows.append((r["source_key"], json.dumps(j, ensure_ascii=False, separators=(",", ":"), sort_keys=True), stamp))
         reviewed.append((r, j, band, figure, decided))
     counts["rows"] = len(rows)
+    # The openings left out of the similar names, one row per line that has one, for the review file.
+    common = [(src, buyer, level, ",".join(sorted(keys)), opening, sorted(orgs.name(o) for o in held))
+              for (src, buyer, level, keys), line in lines.items() for opening, held in line.common.items()]
+    counts["common"] = len(common)
     # Rebuilt whole in one transaction: a fault leaves last night's rows as they were, never half a table.
     try:
         conn.execute("DELETE FROM expiring_lines")
@@ -546,7 +574,8 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
         conn.rollback()
         raise
     counts["seconds"] = round(time.monotonic() - started)
-    shown = write_review(reviewed, as_of, (review_dir or config.OUT_DIR / "review") / REVIEW_FILE, stamp=stamp)
+    shown = write_review(reviewed, as_of, (review_dir or config.OUT_DIR / "review") / REVIEW_FILE, stamp=stamp,
+                         common=common)
     return counts, shown
 
 
@@ -559,8 +588,12 @@ def _sample_order(key: str) -> bytes:
 BANDS = ("run", "earlier", "none", "no label")
 
 
-def write_review(reviewed: list, as_of: date, path: Path, *, stamp: str) -> str | None:
-    """Write the operator's review of tonight's records (or remove the file when there are none); returns where."""
+COMMON_SHOWN = 4
+
+
+def write_review(reviewed: list, as_of: date, path: Path, *, stamp: str, common: Iterable[tuple] = ()) -> str | None:
+    """Write the operator's review of tonight's records (or remove the file when there are none); returns where.
+    common is the openings left out of the similar names: (src, buyer, level, keys, opening, the holders' names)."""
     if not reviewed:
         path.unlink(missing_ok=True)
         return None
@@ -580,7 +613,9 @@ def write_review(reviewed: list, as_of: date, path: Path, *, stamp: str) -> str 
     out = [f"# Holder's record, run of {stamp}, data date {as_of.isoformat()}: {len(reviewed)} radar rows with a named holder. "
            f"Rules: {LINE_YEARS} fiscal years; back to back from {RUN_GAP_DAYS} days before a start to {RUN_OVERLAP_DAYS} "
            f"after it; long run from {LONG_RUN}; published codes cut at {CODE_CHARS} characters; similar names from "
-           f"{SIMILAR_PREFIX}. For the operator: no step publishes this file, and it holds no account or reader.",
+           f"{SIMILAR_PREFIX}, an opening shared by more than {SIMILAR_GROUP_MAX} holders of a line left out, "
+           f"{SIM_MAX} names a record at most. For the operator: no step publishes this file, and it holds no account "
+           f"or reader.",
            "", "## Labels by the row's own source and window (each window counts the rows ending within it)",
            "# source\twindow\t" + "\t".join(BANDS)]
     for kind in ("award", "history", "contract"):
@@ -602,6 +637,11 @@ def write_review(reviewed: list, as_of: date, path: Path, *, stamp: str) -> str 
     out += ["", f"## Similar names: {len(pairs)} pairs, every one",
             "# holder_id\tholder\tsimilar_id\tsimilar\tsrc\tcontracts\tlast_start\tsource_key"]
     out += ["\t".join(str(x) for x in p) for p in sorted(pairs, key=lambda p: (p[0], p[2], p[4], p[7]))]
+    shared = sorted(common, key=lambda c: (-len(c[5]), c[4], c[0], c[1] or "", c[2], c[3]))
+    out += ["", f"## Common openings: {len(shared)} in their lines, each left out of the similar names there",
+            "# opening\tholders\tsrc\tbuyer\tlvl\tkeys\tthe first names"]
+    out += ["\t".join([opening, str(len(names)), str(src), buyer or "", level, keys, "; ".join(names[:COMMON_SHOWN])])
+            for src, buyer, level, keys, opening, names in shared]
     path.write_text("\n".join(out) + "\n", encoding="utf-8", newline="\n")
     try:
         return path.relative_to(config.REPO_ROOT).as_posix()

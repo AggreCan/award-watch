@@ -2942,7 +2942,13 @@ earlier record or more in one source; no earlier record, none in a source
 with a kind of work. Organizations of a similar name (the same match key,
 the same first 20 characters of the normalized name, `SIMILAR_PREFIX`, or a
 corporate family in common) are listed under their own names and never
-added to the holder's. The pipeline's constants and `lines.ts`'s are held
+added to the holder's. An opening that more than 12 holders of one line
+share (`SIMILAR_GROUP_MAX`) is a common phrase and lists no one there: on
+the first production night "Harbour Authority of" opened the names of 163
+holders of one line, each a body of its own, and the largest group that was
+one organization's spellings and divisions had 11. A record lists 50 similar
+names at most (`SIM_MAX`), those with the most records, because the site
+refuses a record that carries more. The pipeline's constants and `lines.ts`'s are held
 equal by `test_lines.py`; the Methodology page (`/methodology#holders`)
 prints every figure from `lines.ts`.
 

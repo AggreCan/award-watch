@@ -19,6 +19,9 @@ export const RUN_OVERLAP_DAYS = 60;
 export const LONG_RUN = 3;
 export const CODE_CHARS = 4;
 export const SIMILAR_PREFIX = 20;
+// An opening more holders of a line share than this is a common phrase (the
+// harbour authorities'), and lists no one there.
+export const SIMILAR_GROUP_MAX = 12;
 // The form of j the pipeline writes; a row of another form is not read.
 export const J_VERSION = 1;
 
@@ -57,9 +60,9 @@ const KEY_RE: Readonly<Record<LineLevel, RegExp>> = {
   class: /^[0-9]{6}$/, family: /^[0-9]{4}$/, code: new RegExp(`^[A-Z0-9]{${CODE_CHARS}}$`),
 };
 // The bounds stop a runaway row: a notice names a handful of classes, a line
-// a few similar names.
+// a few similar names (the pipeline keeps the SIM_MAX with the most records).
 const KEYS_MAX = 40;
-const SIM_MAX = 50;
+export const SIM_MAX = 50;
 const METH_RE = /^(OB|TC|ST|TN|AC)$/;
 
 function isSource(v: unknown): v is LineSource {

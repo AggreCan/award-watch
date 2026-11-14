@@ -76,9 +76,11 @@ MONTH_SEP = " | "
 MONTH_PART_SEP = "; "
 NO_DAY = "the day's figures were not written tonight"
 
-# The operator console's count of accounts on Pro (site/src/account/admin_ops.ts,
-# overview, without its split by source): of each active account's live
-# entitlements, the latest by created_at then id, when its plan is pro.
+# The operator console's count of accounts on a paid plan (site/src/account/admin_ops.ts,
+# overview, without its split by plan and source): of each active account's live
+# entitlements, the latest by created_at then id, when its plan is pro. An Ultra
+# account's deciding row is a pro row with a tier row beside it, in a table the
+# funnel does not read (it may not exist yet), so Pro here holds Ultra too.
 # "Now" is written as toISOString writes the stored times, so they compare as
 # text. A test holds the two statements together.
 NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"

@@ -113,12 +113,20 @@ def test_the_statement_counts_the_day_and_the_levels_in_the_real_schema():
 
 
 def test_pro_is_counted_as_the_operator_console_counts_it():
-    # site/src/account/admin_ops.ts, overview: the same statement with its "now" as ?1 and its split by source.
+    # site/src/account/admin_ops.ts, overview: the same rows (each active account's latest live entitlement) with
+    # its "now" as ?1. The console adds a split by plan and source and reads Ultra through entitlement_tiers, a
+    # table the funnel cannot count on; an Ultra account's deciding row is a pro row, so the funnel's Pro holds it.
     admin = (ROOT / "site" / "src" / "account" / "admin_ops.ts").read_text(encoding="utf-8")
-    admin_sql = "".join(re.findall(r'"([^"]*)"', admin.split("// Accounts whose plan is Pro now", 1)[1].split(".bind(", 1)[0]))
+    block = admin.split("// Accounts whose plan is Pro or Ultra now", 1)[1].split(".bind(", 1)[0]
     ours = funnel.PRO_SQL.replace(funnel.NOW, "?1")
-    core = ours.split("FROM (", 1)[1]
-    assert core.replace("SELECT e.plan, ", "SELECT e.plan, e.source, ") + " GROUP BY source" in admin_sql, admin_sql
+    shared = ("ROW_NUMBER() OVER (PARTITION BY e.user_id ORDER BY e.created_at DESC, e.id DESC) AS r ",
+              "FROM entitlements e JOIN users u ON u.id = e.user_id AND u.status = 'active' ",
+              "WHERE e.revoked_at IS NULL AND e.starts_at <= ?1 AND (e.ends_at IS NULL OR e.ends_at > ?1)) WHERE r = 1 AND plan ")
+    for piece in shared:
+        assert piece in block, piece
+    assert ours == "SELECT COUNT(*) FROM (SELECT e.plan, " + "".join(shared) + "= 'pro'"
+    # Without the tier table the console reads e.plan as the funnel does, and counts the same two plans.
+    assert '"e.plan"' in block and "IN ('pro', 'ultra')" in block
 
 
 # -- the answer, the row and the line ---------------------------------------------------

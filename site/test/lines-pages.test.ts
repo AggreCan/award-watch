@@ -345,6 +345,7 @@ describe("around the pages", () => {
       expect(section).toContain("Records count from the 10 fiscal years ending with the data date's.");
       expect(section).toContain("no more than 120 days after the earlier one ends and no more than 60 days before");
       expect(section).toContain("begins with the same 20 characters");
+      expect(section).toContain("An opening that more than 12 holders in a line of work share, as the harbour authorities do, is a common phrase");
       expect([...section.matchAll(/<td data-label="Label">([^<]*)<\/td>/g)].map((m) => m[1])).toEqual(["Long run", "Earlier records", "No earlier record"]);
       expect(section).toContain("3 or more of the holder's contracts back to back, this one included, in one source");
       expect(section).not.toContain("/account");
@@ -352,5 +353,6 @@ describe("around the pages", () => {
     }
     const fr = decode(nbsp(await (await get("/methodology?lang=fr", { env: offEnv() })).text()));
     expect(fr).toContain('<h2 id="holders">Dossiers du titulaire</h2>');
+    expect(fr.replace(/’/g, "'")).toContain("Un début de nom que plus de 12 titulaires partagent dans un même genre de travail");
   });
 });

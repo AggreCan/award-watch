@@ -8,7 +8,7 @@ import type { AppEnv } from "../env";
 import { fmtInt, t, tj, type Key } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { pageSeo } from "../seo";
-import { CODE_CHARS, LINE_YEARS, LONG_RUN, RUN_GAP_DAYS, RUN_OVERLAP_DAYS, SIMILAR_PREFIX } from "../lines";
+import { CODE_CHARS, LINE_YEARS, LONG_RUN, RUN_GAP_DAYS, RUN_OVERLAP_DAYS, SIMILAR_GROUP_MAX, SIMILAR_PREFIX } from "../lines";
 import { BAND_KEY } from "../lines_view";
 import { ENTRANT_LOOKBACK, FREE_YEARS } from "../records_db";
 import { EXPIRING_TEASER_ROWS } from "./expiring";
@@ -213,7 +213,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
               </tbody>
             </Table>
           </div>
-          <p>{t(lang, "methodology.holders_similar", { prefix: fmtInt(SIMILAR_PREFIX, lang) })}</p>
+          <p>{t(lang, "methodology.holders_similar", { prefix: fmtInt(SIMILAR_PREFIX, lang), group: fmtInt(SIMILAR_GROUP_MAX, lang) })}</p>
           <p>{t(lang, "methodology.holders_limits")}</p>
 
           <h2 id="people">{t(lang, "methodology.toc_people")}</h2>
