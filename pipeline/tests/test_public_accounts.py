@@ -247,6 +247,24 @@ def test_federal_payees_by_the_strict_test_and_the_general_resolvers_readings_ke
     assert sorted(linked.loose) == [("Department of Exemplar Affairs Canda", "exa-aex"), ("SW Inc", "sw-te")]
 
 
+def test_a_provincial_or_territorial_government_is_a_named_payee_and_no_federal_institution(conn, world):
+    """open.canada.ca lists the provinces and territories among its organizations, so each is a buyer; a payment
+    to one is a payment to a named payee, never one between federal institutions."""
+    buyers.upsert_ckan(conn, {"name": "sp", "title_translated": {"en": "Government of Sample Province",
+                                                                 "fr": "Gouvernement de la Province exemplaire"},
+                              "shortform": {"en": "SP", "fr": "PE"}}, now=STAMP)
+    conn.commit()
+    assert pa.other_governments(conn) == {"sp"}
+    index = pa.FederalIndex(conn, {})
+    for name in ("Government of Sample Province", "Gouvernement de la Province exemplaire"):
+        assert index.match([name]) == (False, None), name
+    # A federal institution's titles still match, and a buyer named for the federal government is not left out.
+    assert index.match(["Sample Works Canada"]) == (True, "sw-te")
+    assert not pa.OTHER_GOVERNMENT_RE.match("Government of Canada")
+    assert pa.OTHER_GOVERNMENT_RE.match("Government of the Northwest Territories")
+    assert not pa.OTHER_GOVERNMENT_RE.match("Governor General of Sample")
+
+
 def test_the_place_written_after_a_name_is_cut_and_a_name_without_a_comma_is_not():
     places = pa.Places()
     places.add("Ottawa", "Ottawa", "Ontario", "Ontario")

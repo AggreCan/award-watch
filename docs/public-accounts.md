@@ -131,7 +131,13 @@ Nothing goes to the records database or the accounts database in this slice.
    department name of these files or of a buyer title (`buyer_names` sources
    ckan, seed and alias). No shortening, no acronym rule. Such a row names a
    buyer and never an organization; the department's page counts it apart. On
-   2025-26: 954 rows, 139 spellings.
+   2025-26: 954 rows, 139 spellings. The titles of a provincial or
+   territorial government are left out (`other_governments`: a buyer whose
+   English name begins "Government of", Canada's aside): open.canada.ca
+   lists the provinces and territories among its organizations, so each is
+   a buyer, and a payment to one is a payment to a named payee. The first
+   production night (2026-11-14) had set the Government of Ontario, of Yukon
+   and nine more apart as federal: 13 of the first 300 rows of that list.
 3. **The place in a name.** Some 2026 payees still carry their place
    ("<Firm> LLP, Ottawa, Ontario"). A trailing comma part is cut, before the
    name is normalized, while it is a province or state, the row's own city or

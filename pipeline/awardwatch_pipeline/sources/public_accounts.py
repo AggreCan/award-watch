@@ -97,7 +97,7 @@ PERSONS_FILE = "public-accounts-persons.txt"
 # Raised whenever this module reads a row differently (the person rules, the strip, the row kinds): with the
 # name rules, the shared person test and the hand-kept hashes it makes rules(), and a file applied under other
 # rules is read again on the next night.
-RULES_VERSION = 1
+RULES_VERSION = 2
 
 # What the export shows (site/src/public_accounts.tsx holds the same figures): the newest fiscal years a
 # profile and a buyer file carry, a profile's rows a year, a buyer file's payees.
@@ -562,8 +562,21 @@ def federal_forms(text: str, places: Places, *own: object) -> list[str]:
     return out
 
 
+# A buyer that is another government: open.canada.ca lists the provinces and territories among its organizations
+# ("Government of Ontario"), so each is a buyer, and none is a federal institution.
+OTHER_GOVERNMENT_RE = re.compile(r"^\s*government\s+of\s+(?!canada\b)", re.IGNORECASE)
+
+
+def other_governments(conn: sqlite3.Connection) -> set[str]:
+    """The buyers that are a provincial or territorial government, by their English name."""
+    return {bid for bid, name in conn.execute("SELECT id, name_en FROM buyers") if OTHER_GOVERNMENT_RE.match(name or "")}
+
+
 class FederalIndex:
-    """name_key -> buyer ids, from the department names of these files and the buyer titles."""
+    """name_key -> buyer ids, from the department names of these files and the buyer titles. A provincial or
+    territorial government's titles are left out: a payment to one is a payment to a named payee, not one between
+    federal institutions (on the first production night, 2026-11-14, 13 of the first 300 payees set apart as
+    federal were the Government of Ontario, of Yukon and nine more)."""
 
     def __init__(self, conn: sqlite3.Connection, departments: dict[tuple[str, str | None], str | None]) -> None:
         self.keys: dict[str, set[str]] = defaultdict(set)
@@ -571,8 +584,10 @@ class FederalIndex:
             for name in (en, fr):
                 if name and bid:
                     self.add(name, bid)
+        other = other_governments(conn)
         for raw, bid in conn.execute(f"SELECT raw_name, buyer_id FROM buyer_names WHERE source IN ({buyers._titles_in()})"):
-            self.add(raw, bid)
+            if bid not in other:
+                self.add(raw, bid)
 
     def add(self, name: str, bid: str) -> None:
         key = buyers.name_key(name)
