@@ -1,0 +1,54 @@
+[
+  {
+    "reference": "cb-900-90000404",
+    "amendment": 0,
+    "title_en": "Office furniture, regional offices",
+    "title_fr": "Mobilier de bureau, bureaux régionaux",
+    "buyer_id": "pwgsc-tpsgc",
+    "buyer_en": "Public Services and Procurement Canada",
+    "buyer_fr": "Services publics et Approvisionnement Canada",
+    "published": "2026-11-12",
+    "closing": "2026-12-15T14:00:00",
+    "category": [
+      "GD"
+    ],
+    "notice_type_en": "Request for Proposal",
+    "notice_type_fr": "Demande de propositions",
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "segments": [
+      "56"
+    ],
+    "provinces": [
+      "ON"
+    ],
+    "first_seen": "2026-11-13",
+    "status": "open"
+  },
+  {
+    "reference": "cb-900-90000303",
+    "amendment": 0,
+    "title_en": "Engineering services, community water systems",
+    "title_fr": "Services d'ingénierie, réseaux d'eau communautaires",
+    "buyer_id": "isc-sac",
+    "buyer_en": "Indigenous Services Canada",
+    "buyer_fr": "Services aux Autochtones Canada",
+    "published": "2026-11-12",
+    "closing": "2026-12-10T14:00:00",
+    "category": [
+      "SRV"
+    ],
+    "notice_type_en": "Request for Proposal",
+    "notice_type_fr": "Demande de propositions",
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "segments": [
+      "81"
+    ],
+    "provinces": [
+      "MB"
+    ],
+    "first_seen": "2026-11-13",
+    "status": "open"
+  }
+]

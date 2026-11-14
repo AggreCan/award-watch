@@ -963,6 +963,50 @@ blockquote { margin: 0 0 8px; padding: 8px 16px; border-left: 2px solid var(--bo
 .cite-block { margin: 0 0 8px; padding: 8px 16px; background: var(--band); border: 1px solid var(--border); font-family: var(--font); font-size: 12px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cite-copy { min-height: 24px; padding: 1px 8px; font-size: 12px; line-height: 20px; }
 
+/* -- a guide's figure (src/pages/guides.tsx GuideFigure) ---------------------
+   A capture of one of the site's pages, never wider than it was captured nor
+   than the column. Both themes' pictures are in the page and one shows, as
+   the theme toggle and the system setting choose (a lazy image that is not
+   displayed is never fetched); each holds its phone file for the phone
+   breakpoint. The marks are drawn over the image in percent of it, each the
+   field's own box: a 2 px edge in the emerald, 3 px out from the field, and
+   its number in a square to the left of the edge, its top level with the
+   edge's top (square, as every corner but a control's and a chip's). A
+   square on a field at the image's left edge hangs into the frame's 8 px
+   indent and the column's padding, 2 px clear of the column's edge. The
+   numeral is in the filled button's type (white on the emerald 5.3:1, navy
+   on the lifted emerald 9.9:1), the square ringed in the panel so it reads
+   over the capture. scripts/guide-figure-marks.mjs holds these numbers for
+   the capture tool, which refuses a figure whose marks would cover text.
+   The wide marks show from 700 px, the phone ones below. */
+.guide-figure { margin: 8px 0 24px; }
+.fig-frame { position: relative; width: calc(100% - 8px); max-width: var(--fig-wide); margin-left: 8px; }
+.fig-frame picture { display: block; }
+.fig-frame img { display: block; width: 100%; max-width: 100%; height: auto; }
+.fig-frame .fig-dark { display: none; }
+:root[data-theme="dark"] .fig-frame .fig-light { display: none; }
+:root[data-theme="dark"] .fig-frame .fig-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .fig-frame .fig-light { display: none; }
+  :root:not([data-theme="light"]) .fig-frame .fig-dark { display: block; }
+}
+.fig-marks { position: absolute; inset: 0; pointer-events: none; }
+.fig-marks-phone { display: none; }
+.fig-mark { position: absolute; outline: 2px solid var(--accent); outline-offset: 3px; }
+.fig-num {
+  position: absolute; top: -5px; left: -25px; width: 20px; height: 20px;
+  border: 2px solid var(--panel); background: var(--accent); color: var(--on-primary);
+  font-size: 12px; line-height: 16px; font-weight: 700; text-align: center;
+}
+.fig-legend { margin: 12px 0 8px; }
+.fig-legend li::marker { font-weight: 700; }
+.doc .fig-caption { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; }
+@media (max-width: 699px) {
+  .fig-frame { max-width: var(--fig-phone); }
+  .fig-marks-wide { display: none; }
+  .fig-marks-phone { display: block; }
+}
+
 /* -- forms ----------------------------------------------------------------- */
 .stack { display: flex; flex-direction: column; gap: 16px; max-width: 640px; }
 .stack label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 20px; font-weight: 500; }

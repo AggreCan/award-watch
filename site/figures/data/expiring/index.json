@@ -1,0 +1,61 @@
+{
+  "as_of": "2026-11-13",
+  "by_buyer": [
+    {
+      "buyer_en": "National Defence",
+      "buyer_fr": "Défense nationale",
+      "buyer_id": "dnd-mdn",
+      "n": 1,
+      "total": 87000
+    },
+    {
+      "buyer_en": "Fisheries and Oceans Canada",
+      "buyer_fr": "Pêches et Océans Canada",
+      "buyer_id": "dfo-mpo",
+      "n": 1,
+      "total": 1250000
+    },
+    {
+      "buyer_en": "Statistics Canada",
+      "buyer_fr": "Statistique Canada",
+      "buyer_id": "statcan",
+      "n": 1,
+      "total": 412000
+    }
+  ],
+  "by_segment": [
+    {
+      "code": "72",
+      "n": 1,
+      "total": 1250000
+    },
+    {
+      "code": "81",
+      "n": 1,
+      "total": 412000
+    },
+    {
+      "code": "73",
+      "n": 1,
+      "total": 87000
+    }
+  ],
+  "windows": [
+    {
+      "window": "3m",
+      "n": 3,
+      "n_no_value": 0,
+      "total": 1749000
+    },
+    {
+      "window": "6m",
+      "n": 9,
+      "total": 3920500
+    },
+    {
+      "window": "12m",
+      "n": 17,
+      "total": 8735000
+    }
+  ]
+}

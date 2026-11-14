@@ -14,8 +14,8 @@ were read from.
   and its meta description), the day it was last checked, its sections and
   its sources.
 - A section is an id, a title and blocks: a paragraph, a list, a definition
-  list (`terms`) or a table. Every piece of text carries its English and its
-  French side by side.
+  list (`terms`), a table or a figure (see Figures). Every piece of text
+  carries its English and its French side by side.
 - A link inside a sentence is a `{slot}` written in both languages, with one
   address in the block's `links`, so the two languages cannot link apart.
   Body links go to the site's own pages; official pages go in the sources.
@@ -53,7 +53,9 @@ were read from.
    again and update the guide and the day.
 6. Add a line for it to `site/public/llms.txt`. A guide with a table goes on
    the table-fit list in `site/test/columns.test.ts`.
-7. Run the tests. `site/test/guides.test.ts` holds the two languages to the
+7. Give it at least one figure of the page its text describes, and run
+   `npm run figures` (see Figures).
+8. Run the tests. `site/test/guides.test.ts` holds the two languages to the
    same sections, links and figures, requests every link inside a guide and
    finds its fragment, checks that every source is an https page on a
    government domain, and checks the result-list tags, the sitemap, the
@@ -62,6 +64,127 @@ were read from.
    A link to a page the records database serves, such as a published
    contract, needs that row seeded in the test, as the guide on set-asides'
    example contract is.
+
+## Figures
+
+A figure is a capture of one of the site's own pages, cropped to the part a
+section explains, with numbered marks on the fields the section's text
+explains and a legend under it. A figure never pictures a Government of
+Canada page (CanadaBuys, canada.ca): their terms forbid commercial
+reproduction without written permission and any reproduction of the Canada
+wordmark, arms or flag, so no government symbol appears in a capture.
+
+### The sample records
+
+The pages are rendered from records made for the figures, in
+`site/figures/`, never from real ones, so a figure never freezes a real
+firm's record:
+
+- `tenders.json` and `contracts.json`: tender notices, award notices and
+  contract history records, each served in the detail shard its reference
+  hashes to;
+- `data/`: the other files the pages read under `/data/`, at their paths;
+- `records.sql`: rows of the records database (published contracts,
+  standing offers).
+
+A supplier is plainly a sample ("Sample Supplier Inc."), never an invented
+name that could match a real firm. A buyer may be a real federal
+institution. Dates, amounts and field values follow the real formats, and so
+do reference numbers, kept in ranges the real series are nowhere near, so a
+figure never shows a real record's number beside a sample supplier:
+CanadaBuys references `cb-900-9000…`, published contracts
+`C-<fiscal year>-Q<n>-9…`, PSPC contract numbers `CW9…`, and PSPC
+solicitation, procurement and agreement numbers with a `99` block
+(`EN578-99…`, `F5211-99…`); `site/test/guide-figures.test.ts` holds every
+sample reference to those patterns. The samples' clock is their data date,
+2026-11-13, at noon in Ottawa. They are kept apart from
+`site/test/fixtures/`, so a test fixture change never moves a figure.
+
+### Adding a figure
+
+1. Add any record the page needs to `site/figures/`.
+2. Add a `figure(...)` block to the section whose text it pictures, in
+   `site/src/guides.ts`: an id, the page captured (a site path), the CSS
+   selector of the element the image is cropped to, the alt text and the
+   caption in both languages, and three to six marks. A mark is
+   `mark(target, en, fr)`: a CSS selector read inside that element
+   (`field(dl, n)` takes a definition list's nth label and value as one
+   target) and one short sentence. The sentence says only what the guide's
+   own sections say about that field. A mark that would need a fact the guide
+   does not state is left out. Every caption ends with the sample line
+   (`guides.figure_sample` in `site/src/i18n.ts`).
+3. Run `npm run figures` in `site/`, then the tests.
+
+### The tool
+
+`npm run figures` (`site/scripts/make-guide-figures.mjs`):
+
+1. renders every captured page through the Worker, from the sample records
+   (`site/figures/render.test.ts` under `site/vitest.figures.config.ts`, a
+   suite of its own that `npm test` never runs);
+2. serves those pages beside `site/public` over local HTTP (nothing under
+   `/data/`), so their stylesheet, scripts and fonts load as on the site;
+3. opens one headless browser (Edge; `FIGURES_BROWSER` names another, such
+   as Chrome) and loads each page in both languages, at two widths and in
+   both themes. The wide image is the desktop layout (from 1000 px) at the
+   widest viewport whose crop fits the figure's room in the guide's column
+   (846 px less the frame's 8 px indent, 838), shown at its own size; the
+   phone image is a 390 px viewport, shown in 316 px (0.854 of its size for
+   the usual 370 px crop). It waits for the fonts and the layout, reads the
+   box of the region and of each mark's target, and captures the region with
+   6 px around it as WebP at device scale 2;
+4. places each mark as the page will draw it, at the scale the guide shows
+   that image, and refuses the figure when a mark's edge or number covers any
+   line of text inside the image (a `Range` over each text node gives the
+   lines), when an edge falls outside the image, or when a number falls
+   outside it anywhere but into the room on its left. The numbers it places
+   by are `site/scripts/guide-figure-marks.mjs`'s, the stylesheet's own
+   (the test holds the two equal). A target hard against its neighbours'
+   text cannot pass: mark the line or the cell that holds it instead;
+5. writes `site/public/figures/guides/<slug>/<id>.<en|fr>.<wide|phone>.<light|dark>.webp`,
+   removes the files of figures that no longer exist, and writes
+   `site/src/guide_figures.gen.ts` (each image's size, the viewport it was
+   laid out at and each mark's box in percent of the image), which the page
+   reads.
+
+It prints one line a figure: its sizes and the scale the guide shows it at.
+It stops with an error, and changes no file, when a region or a target is
+missing or not visible at some language, width or theme, when light and dark
+lay out apart, when a figure's text would show below 0.85 of its size, or
+when a mark would cover text (all such marks of the run are named at once).
+`npm run figures -- --check <folder>` then loads each guide that holds
+a figure at 1440 and 390 px, light and dark, in both languages, fails on a
+sideways scroll, a figure showing the wrong file or the wrong number of
+marks, or a fetched file of the hidden theme, and saves each figure as it
+shows into the folder. The browser runs on a debugging port nothing else
+answers on, so another headless browser on the machine is never touched. It
+is closed on every way out with its whole process tree, any process still
+carrying the run's debugging port or profile is stopped, and its profile is
+removed.
+
+The browser's WebP encoder is lossy at every quality; the tool uses 90.
+
+Run the tool again whenever a pictured page's layout or wording changes, a
+sample record changes, or a figure's page, region or marks change.
+`site/test/guide-figures.test.ts` fails until it is run: it holds the
+positions file to each figure's page, region and targets, fetches all eight
+files of every figure through the assets binding, finds no file that belongs
+to no figure, and checks the drawn page and the stylesheet.
+
+### On the page
+
+The page draws both themes' pictures and the stylesheet shows the reader's
+theme's (a lazy image that is not shown is never fetched), each with its
+phone file below 700 px, with its width and height so nothing shifts. The
+marks are the page's own, placed over the image in percent of it, so they
+follow the theme and stay sharp: each is the field's own box, with a 2 px
+emerald edge drawn 3 px out from the field, and its number in a 20 px square
+to the left of the edge, its top level with the edge's top. The frame is
+indented 8 px, so a square on a field at the image's left edge hangs into the
+indent and the column's 16 px padding and stays 2 px clear of the column's
+edge. The marks are hidden from screen readers, and the numbered legend under
+the image says each mark's sentence as page text. The images are static
+files and never reach the Worker.
 
 ## What a guide ends with
 

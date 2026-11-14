@@ -1,0 +1,202 @@
+{
+  "award:cw9391528": {
+    "kind": "award",
+    "reference": "CW9391528",
+    "amendment": 1,
+    "amended": "2026-08-05",
+    "amendment_type_en": "Amendment",
+    "amendment_type_fr": "Modification",
+    "amendments": [
+      {
+        "amendment": 0,
+        "amended": null,
+        "amendment_type_en": "Original",
+        "amendment_type_fr": "Original",
+        "amount": 213000,
+        "status": "active",
+        "total_value": 213000
+      },
+      {
+        "amendment": 1,
+        "amended": "2026-08-05",
+        "amendment_type_en": "Amendment",
+        "amendment_type_fr": "Modification",
+        "amount": 34500,
+        "status": "active",
+        "total_value": 247500
+      }
+    ],
+    "amount": 34500,
+    "awarded": "2025-11-20",
+    "buyer_en": "Public Services and Procurement Canada",
+    "buyer_fr": "Services publics et Approvisionnement Canada",
+    "buyer_id": "pwgsc-tpsgc",
+    "category": [
+      "SRV"
+    ],
+    "codes": [
+      {
+        "code": "7818",
+        "desc_en": "Transport repair or maintenance services",
+        "desc_fr": "Services de réparation ou d'entretien de moyens de transport"
+      }
+    ],
+    "competitive": true,
+    "contract_number": "CW9391528",
+    "currency": "CAD",
+    "description_en": null,
+    "description_fr": null,
+    "end": "2027-05-31",
+    "end_users_en": [
+      "Department of Fisheries and Oceans (DFO)"
+    ],
+    "end_users_fr": [
+      "Ministère des Pêches et des Océans (MPO)"
+    ],
+    "first_seen": "2025-12-05",
+    "gsin": null,
+    "gsin_desc_en": null,
+    "gsin_desc_fr": null,
+    "instrument_type_en": "Contract",
+    "instrument_type_fr": "Contrat",
+    "last_seen": "2026-11-13",
+    "limited_reason_en": null,
+    "limited_reason_fr": null,
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "notice_type_en": "Request for Proposal",
+    "notice_type_fr": "Demande de propositions",
+    "organization_id": "org-0000000003",
+    "procurement_number": "F5211-990412",
+    "provinces": [
+      "NS"
+    ],
+    "published": "2025-12-04",
+    "regions_delivery_en": [
+      "Nova Scotia"
+    ],
+    "regions_delivery_fr": [
+      "Nouvelle-Écosse"
+    ],
+    "selection_en": "Lowest Price",
+    "selection_fr": "Prix le plus bas",
+    "solicitation": "F5211-990412",
+    "source_file": "awardNoticeComplete-avisAttributionComplet.csv",
+    "start": "2025-12-01",
+    "status": "active",
+    "supplier": "Sample Marine Services Ltd.",
+    "supplier_city": "Halifax",
+    "supplier_country": "CA",
+    "supplier_province": "NS",
+    "tender_reference": "cb-900-90000505",
+    "title_en": "Vessel hull inspection services",
+    "title_fr": "Services d'inspection de coques de navires",
+    "total_value": 247500,
+    "trade_agreements_en": [
+      "Canadian Free Trade Agreement (CFTA)"
+    ],
+    "trade_agreements_fr": [
+      "Accord de libre-échange canadien (ALEC)"
+    ],
+    "value": 247500
+  },
+  "history:cw9391528": {
+    "kind": "history",
+    "reference": "CW9391528",
+    "amendment": 1,
+    "amended": "2026-08-05",
+    "amendment_type_en": "Amendment",
+    "amendment_type_fr": "Modification",
+    "amendments": [
+      {
+        "amendment": 0,
+        "amended": null,
+        "amendment_type_en": "Original",
+        "amendment_type_fr": "Original",
+        "amount": 213000,
+        "status": "active",
+        "total_value": 213000
+      },
+      {
+        "amendment": 1,
+        "amended": "2026-08-05",
+        "amendment_type_en": "Amendment",
+        "amendment_type_fr": "Modification",
+        "amount": 34500,
+        "status": "active",
+        "total_value": 247500
+      }
+    ],
+    "amount": 34500,
+    "awarded": "2025-11-20",
+    "buyer_en": "Public Services and Procurement Canada",
+    "buyer_fr": "Services publics et Approvisionnement Canada",
+    "buyer_id": "pwgsc-tpsgc",
+    "category": [
+      "SRV"
+    ],
+    "client_en": "Fisheries and Oceans Canada",
+    "client_fr": "Pêches et Océans Canada",
+    "client_id": "dfo-mpo",
+    "codes": [
+      {
+        "code": "7818",
+        "desc_en": "Transport repair or maintenance services",
+        "desc_fr": "Services de réparation ou d'entretien de moyens de transport"
+      }
+    ],
+    "competitive": true,
+    "contract_number": "CW9391528",
+    "currency": "CAD",
+    "description_en": null,
+    "description_fr": null,
+    "end": "2027-05-31",
+    "first_seen": "2025-12-05",
+    "gsin": null,
+    "gsin_desc_en": null,
+    "gsin_desc_fr": null,
+    "instrument_type_en": "Contract",
+    "instrument_type_fr": "Contrat",
+    "last_seen": "2026-11-13",
+    "limited_reason_en": null,
+    "limited_reason_fr": null,
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "notice_type_en": null,
+    "notice_type_fr": null,
+    "organization_id": "org-0000000003",
+    "procurement_number": "F5211-990412",
+    "provinces": [
+      "NS"
+    ],
+    "published": "2025-12-04",
+    "regions_delivery_en": [
+      "Nova Scotia"
+    ],
+    "regions_delivery_fr": [
+      "Nouvelle-Écosse"
+    ],
+    "selection_en": null,
+    "selection_fr": null,
+    "solicitation": "F5211-990412",
+    "source_file": "contractHistoryComplete-contratsOctroyesComplet.csv",
+    "start": "2025-12-01",
+    "status": "active",
+    "supplier": "Sample Marine Services Ltd.",
+    "supplier_city": "Halifax",
+    "supplier_country": "CA",
+    "supplier_operating": null,
+    "supplier_province": "NS",
+    "tender_reference": null,
+    "title_en": "Vessel hull inspection services",
+    "title_fr": "Services d'inspection de coques de navires",
+    "total_value": 247500,
+    "trade_agreements_en": [
+      "Canadian Free Trade Agreement (CFTA)"
+    ],
+    "trade_agreements_fr": [
+      "Accord de libre-échange canadien (ALEC)"
+    ],
+    "value": 247500
+  }
+}

@@ -9,6 +9,7 @@
     "search:local": "node scripts/load-search-local.mjs",
     "test": "vitest run",
     "test:mail": "vitest run --config vitest.mail.config.ts",
+    "figures": "node scripts/make-guide-figures.mjs",
     "typecheck": "tsc --noEmit",
     "deploy": "wrangler deploy",
     "data:local": "node scripts/copy-data.mjs"

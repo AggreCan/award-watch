@@ -15,6 +15,14 @@ export const MAIL_SUITE = {
   include: ["test-mail/**/*.test.ts"],
   exclude: [...configDefaults.exclude],
 };
+// The guides' figures (docs/guides.md, Figures): the pages the capture tool
+// photographs, rendered from the sample records in figures/ by
+// vitest.figures.config.ts, which `npm run figures` runs. Neither other
+// suite takes figures/ (their includes are test/ and test-mail/).
+export const FIGURES_SUITE = {
+  include: ["figures/**/*.test.ts"],
+  exclude: [...configDefaults.exclude],
+};
 
 // The files under public/ that the static assets layer serves, the nightly's
 // data/ folder left out: each path, its size and its first four bytes, so
@@ -54,8 +62,8 @@ export function workersPool() {
         // ships, so the "switch off" tests hold while the site runs with it
         // on; the "switch on" tests set it themselves (test/accounts-helpers.ts).
         ACCOUNTS_ENABLED: "false",
-        // Each suite's include and exclude, for test/mail-suite-apart.test.ts.
-        SUITES: JSON.stringify({ default: DEFAULT_SUITE, mail: MAIL_SUITE }),
+        // Each suite's include and exclude, for test/mail-suite-apart.test.ts and test/guide-figures.test.ts.
+        SUITES: JSON.stringify({ default: DEFAULT_SUITE, mail: MAIL_SUITE, figures: FIGURES_SUITE }),
       },
     },
   });

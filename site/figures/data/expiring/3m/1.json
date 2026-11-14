@@ -1,0 +1,93 @@
+[
+  {
+    "kind": "contract",
+    "reference": "dnd-mdn:C-2026-2027-Q1-90318",
+    "title_en": "Simulator maintenance services",
+    "title_fr": "Services d'entretien de simulateurs",
+    "organization_id": "org-0000000001",
+    "organization": "Sample Supplier Inc.",
+    "buyer_id": "dnd-mdn",
+    "buyer_en": "National Defence",
+    "buyer_fr": "Défense nationale",
+    "start": "2026-05-01",
+    "end": "2026-11-30",
+    "days_left": 17,
+    "value": 87000,
+    "currency": "CAD",
+    "competitive": 1,
+    "method_en": null,
+    "method_fr": null,
+    "instrument_en": "Contract",
+    "instrument_fr": "Contrat",
+    "n_amendments": 0,
+    "value_growth": null,
+    "tender_reference": null,
+    "segments": [
+      "73"
+    ],
+    "provinces": [
+      "ON"
+    ]
+  },
+  {
+    "kind": "award",
+    "reference": "CW9377940",
+    "title_en": "Survey data collection support",
+    "title_fr": "Soutien à la collecte de données d'enquête",
+    "organization_id": "org-0000000004",
+    "organization": "Sample Research Inc.",
+    "buyer_id": "statcan",
+    "buyer_en": "Statistics Canada",
+    "buyer_fr": "Statistique Canada",
+    "start": "2025-02-03",
+    "end": "2027-01-29",
+    "days_left": 77,
+    "value": 412000,
+    "currency": "CAD",
+    "competitive": 1,
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "instrument_en": "Contract",
+    "instrument_fr": "Contrat",
+    "n_amendments": 2,
+    "value_growth": 0.18,
+    "tender_reference": null,
+    "segments": [
+      "81"
+    ],
+    "provinces": [
+      "ON",
+      "QC"
+    ]
+  },
+  {
+    "kind": "history",
+    "reference": "CW9369912",
+    "title_en": "Small craft harbour dredging",
+    "title_fr": "Dragage de ports pour petits bateaux",
+    "organization_id": "org-0000000003",
+    "organization": "Sample Marine Services Ltd.",
+    "buyer_id": "dfo-mpo",
+    "buyer_en": "Fisheries and Oceans Canada",
+    "buyer_fr": "Pêches et Océans Canada",
+    "start": "2025-06-16",
+    "end": "2027-02-05",
+    "days_left": 84,
+    "value": 1250000,
+    "currency": "CAD",
+    "competitive": 0,
+    "method_en": "Non-competitive",
+    "method_fr": "Non concurrentielle",
+    "instrument_en": "Contract",
+    "instrument_fr": "Contrat",
+    "n_amendments": 1,
+    "value_growth": 0.32,
+    "tender_reference": null,
+    "segments": [
+      "72"
+    ],
+    "provinces": [
+      "NS"
+    ]
+  }
+]

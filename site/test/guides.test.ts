@@ -92,6 +92,12 @@ function pieces(g: Guide): Piece[] {
       b.cols.forEach((c, n) => out.push({ where: `${where} column ${n}`, both: c.label }));
       b.rows.forEach((r, n) => r.forEach((cell, k) => { if (!("money" in cell)) out.push({ where: `${where} row ${n} cell ${k}`, both: cell }); }));
     }
+    // A figure's words (test/guide-figures.test.ts checks the rest of it), held to the same writing rules.
+    if (b.kind === "figure") {
+      out.push({ where: `${where} figure alt`, both: b.alt });
+      out.push({ where: `${where} figure caption`, both: b.caption });
+      b.callouts.forEach((c, n) => text(`${where} figure callout ${n}`, c.text));
+    }
   };
   for (const s of g.sections) {
     out.push({ where: `${g.slug}#${s.id} title`, both: s.title });
@@ -484,7 +490,8 @@ describe("the writing", () => {
   ];
 
   it("has no em-dash or en-dash in either language, the sources' titles included", () => {
-    expect(FRAME.length).toBe(9);
+    // The tenth is the line that ends every figure's caption (guides.figure_sample).
+    expect(FRAME.length).toBe(10);
     for (const s of GUIDES.flatMap((g) => g.sources)) {
       for (const title of [s.title, s.fr?.title ?? ""]) {
         expect(title, s.url).not.toContain(EM_DASH);
@@ -522,8 +529,9 @@ describe("the writing", () => {
 
   it("keeps each guide's English between 600 and 1,000 words of running text", () => {
     for (const g of GUIDES) {
+      // A figure's alt text, caption and legend describe the picture; they are not the guide's running text.
       const words = pieces(g)
-        .filter((p) => !/ (title|publisher|action)$| column | row /.test(p.where) && !p.where.endsWith(" summary") && !p.where.endsWith(" seoTitle"))
+        .filter((p) => !/ (title|publisher|action)$| column | row | figure /.test(p.where) && !p.where.endsWith(" summary") && !p.where.endsWith(" seoTitle"))
         .map((p) => filled(p, "en").split(/\s+/).filter(Boolean).length)
         .reduce((a, b) => a + b, 0);
       expect(words, g.slug).toBeGreaterThanOrEqual(600);

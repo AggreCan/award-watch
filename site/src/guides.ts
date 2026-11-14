@@ -20,11 +20,31 @@ export type Text = Both & { links?: Record<string, Link> };
 // A table cell: words in both languages, or an amount the page formats in the reader's language.
 export type Cell = Both | { money: number };
 export type Column = { kind: ColumnKind; label: Both; rest?: Rest };
+// A numbered mark on a figure: target is a CSS selector read inside the figure's region on the captured page, and
+// text is the legend's line for it, which says only what the guide's own sections say about that field.
+export type Callout = { target: string; text: Text };
+// A figure (docs/guides.md, Figures): one of the site's own pages, rendered from the sample records in
+// site/figures/ and never from a real record, captured by `npm run figures` (scripts/make-guide-figures.mjs) and
+// cropped to the element region names. page is the site path captured. The tool writes the images under
+// public/figures/guides/<slug>/ and each mark's place to src/guide_figures.gen.ts.
+export type Figure = { kind: "figure"; id: string; shot: { page: string; region: string }; alt: Both; caption: Both; callouts: Callout[] };
+// What the tool measured for one figure (src/guide_figures.gen.ts): per language, the wide image (the desktop
+// layout, its region at most the guide column's 846 px) and the phone one (a 390 px viewport). width and height
+// are CSS pixels, the files being twice that; viewport is the width the page was laid out at; each box is a
+// mark's left, top, width and height in percent of the image, in the order of the callouts.
+export type FigureBox = readonly [left: number, top: number, width: number, height: number];
+export type FigureShot = { readonly width: number; readonly height: number; readonly viewport: number; readonly boxes: readonly FigureBox[] };
+export type FigureEntry = {
+  readonly slug: string; readonly page: string; readonly region: string; readonly targets: readonly string[];
+  readonly en: { readonly wide: FigureShot; readonly phone: FigureShot };
+  readonly fr: { readonly wide: FigureShot; readonly phone: FigureShot };
+};
 export type Block =
   | { kind: "p"; text: Text }
   | { kind: "list"; items: Text[] }
   | { kind: "terms"; items: { term: Both; text: Text }[] }
-  | { kind: "table"; cols: Column[]; rows: Cell[][] };
+  | { kind: "table"; cols: Column[]; rows: Cell[][] }
+  | Figure;
 export type Section = { id: string; title: Both; blocks: Block[] };
 // An official page a guide's rules were read from: its title as the page gives it, its publisher and its
 // address. fr is the French page, given only where that page itself was read (or the file is bilingual);
@@ -58,6 +78,12 @@ const endingList = (en: string, fr: string): GuideAction => ({ list: { kind: "ex
 const tx = (en: string, fr: string, links?: Record<string, Link>): Text => (links ? { en, fr, links } : { en, fr });
 const p = (en: string, fr: string, links?: Record<string, Link>): Block => ({ kind: "p", text: tx(en, fr, links) });
 const both = (en: string, fr: string): Both => ({ en, fr });
+// A figure and its marks, each mark's sentence in both languages.
+const figure = (id: string, page: string, region: string, alt: Both, caption: Both, callouts: Callout[]): Figure =>
+  ({ kind: "figure", id, shot: { page, region }, alt, caption, callouts });
+const mark = (target: string, en: string, fr: string): Callout => ({ target, text: { en, fr } });
+// The nth field of a definition list on a captured page, its label and its value as one target.
+const field = (dl: string, n: number): string => `${dl} > dt:nth-of-type(${n}), ${dl} > dt:nth-of-type(${n}) + dd`;
 
 // -- the publishers and pages the guides cite ------------------------------------------
 
@@ -627,6 +653,25 @@ export const EXAMPLE_AWARD = "/awards/cb-391-38769273";
 // applicable trading partner, and asks for the Canadian Content Attestation Form (read on CanadaBuys, in its open
 // data and on awardwatch.ca on 2026-11-14; it closes 2026-12-03).
 export const EXAMPLE_BUY_CANADIAN = "/tenders/cb-342-43639893";
+// The pages the figures are captured from, drawn from the sample records in site/figures/, made for the figures
+// and never real, their reference numbers in ranges the real series are nowhere near: three tender notices (the
+// second with security requirements in its description, a limited tendering reason of None and a trade
+// agreements line that names NAFTA; the third with a Buy Canadian statement in its description), an advance
+// contract award notice, one day's new notices, one contract's award notice (linking the tender notice it
+// followed) and PSPC contract history record, published contracts (the same contract's amendment, one after an
+// ACAN, one under a set-aside), a standing offer and the 3-month list of contracts ending.
+const SAMPLE_NOTICE = "/tenders/cb-900-90000101";
+const SAMPLE_NOTICE_SECURITY = "/tenders/cb-900-90000303";
+const SAMPLE_NOTICE_BUY_CANADIAN = "/tenders/cb-900-90000606";
+const SAMPLE_NEW = "/tenders/new";
+const SAMPLE_ACAN = "/tenders/cb-900-90000202";
+const SAMPLE_AWARD = "/awards/cw9391528";
+const SAMPLE_HISTORY = "/history/cw9391528";
+const SAMPLE_PUBLISHED = "/contracts/dfo-mpo/C-2026-2027-Q2-90088";
+const SAMPLE_PUBLISHED_ACAN = "/contracts/nrcan-rncan/C-2026-2027-Q2-90231";
+const SAMPLE_PUBLISHED_PSIB = "/contracts/isc-sac/C-2026-2027-Q2-90117";
+const SAMPLE_INSTRUMENT = `/instruments/${encodeURIComponent("EN578-991533/001/ZT")}`;
+const SAMPLE_ENDING = "/expiring/3m";
 // The addresses of the guides that link one another.
 const ACAN_PATH = "/guides/advance-contract-award-notices-acan";
 const PSIB_PATH = "/guides/indigenous-business-set-asides-psib";
@@ -671,6 +716,24 @@ const TENDER_NOTICE: Guide = {
         p(
           "CanadaBuys gives each notice a reference number, and the buying department gives it a solicitation number. To follow a requirement from its tender notice to its award notice, CanadaBuys recommends the solicitation number.",
           "AchatsCanada donne à chaque avis un numéro de référence, et le ministère acheteur lui donne un numéro d'invitation. Pour suivre un besoin de son avis d'appel d'offres à son avis d'attribution, AchatsCanada recommande le numéro d'invitation.",
+        ),
+        figure(
+          "notice-head", SAMPLE_NOTICE, "header.page-head .page-head-row",
+          both(
+            "The head of a tender notice's page on Award Watch: its title, its status, its closing time, its buyer, its reference number and a button to the notice on CanadaBuys.",
+            "L'en-tête de la page d'un avis d'appel d'offres sur Award Watch : son titre, son statut, son heure de clôture, son acheteur, son numéro de référence et un bouton vers l'avis sur AchatsCanada.",
+          ),
+          both("The head of a tender notice's page on Award Watch.", "L'en-tête de la page d'un avis d'appel d'offres sur Award Watch."),
+          [
+            mark(".lead", "Award Watch works out on each page view whether the notice is open, closing within 7 days or past its closing time.",
+              "Award Watch établit à chaque affichage si l'avis est ouvert, s'il ferme d'ici 7 jours ou si son heure de clôture est passée."),
+            mark(".page-actions a", "The notice on CanadaBuys is the record, and each notice page links to it.",
+              "L'avis publié sur AchatsCanada fait foi, et chaque page d'avis y renvoie."),
+            mark("p.page-note:has(.mono)", "The reference number CanadaBuys gives the notice, and the amendment count from CanadaBuys' data.",
+              "Le numéro de référence qu'AchatsCanada donne à l'avis, et le nombre de modifications tiré des données d'AchatsCanada."),
+            mark(".page-note + .page-note", "Award Watch never shows contact details; the notice on CanadaBuys has them.",
+              "Award Watch n'affiche jamais les coordonnées; l'avis sur AchatsCanada les donne."),
+          ],
         ),
       ],
     },
@@ -799,6 +862,23 @@ const TENDER_NOTICE: Guide = {
           "A notice's status reads Open while it accepts bids, then Expired or Cancelled. Questions, errors and requests to extend a closing date go to the contracting officer.",
           "Le statut d'un avis est Ouvert tant qu'il accepte des soumissions, puis Expiré ou Annulé. Les questions, les erreurs et les demandes de prolongation de la date de clôture s'adressent à l'agent de négociation des contrats.",
         ),
+        figure(
+          "notice-dates", SAMPLE_NOTICE, ".panel-grid",
+          both(
+            "The Key Dates and Buyer panels of a tender notice's page on Award Watch: the publication, closing and amendment dates, the buyer, the end user and the solicitation number.",
+            "Les panneaux Dates clés et Acheteur de la page d'un avis d'appel d'offres sur Award Watch : les dates de publication, de clôture et de modification, l'acheteur, l'utilisateur final et le numéro d'invitation.",
+          ),
+          both("The dates and the buyer of a tender notice on Award Watch.", "Les dates et l'acheteur d'un avis d'appel d'offres sur Award Watch."),
+          [
+            mark(field(":scope > .panel:first-child dl", 2), "Award Watch reads the closing time as Eastern time (ET), the zone CanadaBuys publishes it in.",
+              "Award Watch lit l'heure de clôture en heure de l'Est (HE), le fuseau dans lequel AchatsCanada la publie."),
+            mark(field(":scope > .panel:first-child dl", 3), "Award Watch shows the amendment date and the amendment count from CanadaBuys' data.",
+              "Award Watch affiche la date de modification et le nombre de modifications tiré des données d'AchatsCanada."),
+            mark(field(":scope > .panel:last-child dl", 3),
+              "The solicitation number the buying department gives the notice, which CanadaBuys recommends for following a requirement to its award notice.",
+              "Le numéro d'invitation que le ministère acheteur donne à l'avis, qu'AchatsCanada recommande pour suivre un besoin jusqu'à son avis d'attribution."),
+          ],
+        ),
       ],
     },
     {
@@ -853,6 +933,23 @@ const TENDER_NOTICE: Guide = {
         p(
           "In CanadaBuys' data the line can also read None, or refer to the tender description or documents.",
           "Dans les données d'AchatsCanada, la ligne peut aussi indiquer Aucun, ou renvoyer à la description ou aux documents de l'appel d'offres.",
+        ),
+        figure(
+          "notice-procurement", SAMPLE_NOTICE, "section.panel:has(> dl.wide)",
+          both(
+            "The Procurement panel of a tender notice's page on Award Watch: category, notice type, procurement method, selection criteria, trade agreements, regions and provinces.",
+            "Le panneau Approvisionnement de la page d'un avis d'appel d'offres sur Award Watch : catégorie, type d'avis, méthode d'approvisionnement, critères de sélection, accords commerciaux, régions et provinces.",
+          ),
+          both("A tender notice's procurement details on Award Watch.", "Les détails d'approvisionnement d'un avis d'appel d'offres sur Award Watch."),
+          [
+            mark(field("dl.wide", 2), "The notice type says what the buyer is asking for.", "Le type d'avis indique ce que demande l'acheteur."),
+            mark(field("dl.wide", 3), "The procurement method says how bids are sought.", "La méthode d'approvisionnement indique comment les soumissions sont demandées."),
+            mark(field("dl.wide", 5), "The trade agreements line lists the agreements that apply.", "La ligne des accords commerciaux énumère les accords qui s'appliquent."),
+            mark(field("dl.wide", 7), "The regions of delivery are where the contract will be delivered.",
+              "Les régions de livraison sont les endroits où le contrat sera exécuté."),
+            mark(field("dl.wide", 8), "Award Watch maps the National Capital Region to Ontario and Quebec.",
+              "Award Watch associe la région de la capitale nationale à l'Ontario et au Québec."),
+          ],
         ),
       ],
     },
@@ -1067,6 +1164,21 @@ const STANDING_OFFERS: Guide = {
             nmso: a("/instruments?type=NMSO", "national master standing offers", "offres à commandes principales et nationales"),
           },
         ),
+        figure(
+          "instrument-details", SAMPLE_INSTRUMENT, "section.panel:has(> dl.wide)",
+          both(
+            "The Details panel of a standing offer's page on Award Watch: its type, its description in English and in French, its commodity code, its end user, its start and expiry dates, its segment and the day it first appeared in PSPC's file.",
+            "Le panneau Détails de la page d'une offre à commandes sur Award Watch : son type, sa description en anglais et en français, son code de marchandise, son utilisateur final, ses dates de début et d'expiration, son segment et le jour où elle a paru pour la première fois dans le fichier de SPAC.",
+          ),
+          both("The details of a standing offer on Award Watch.", "Les détails d'une offre à commandes sur Award Watch."),
+          [
+            mark(field("dl.wide", 1), "A national master standing offer is used by many departments or agencies throughout Canada.",
+              "Une offre à commandes principale et nationale est utilisée par de nombreux ministères ou organismes partout au Canada."),
+            mark(field("dl.wide", 4), "Its UNSPSC codes, from PSPC's weekly file.", "Ses codes UNSPSC, tirés du fichier hebdomadaire de SPAC."),
+            mark(field("dl.wide", 5), "Each instrument sets its own users.", "Chaque instrument fixe ses propres utilisateurs."),
+            mark(field("dl.wide", 7), "The day the instrument expires.", "La date d'expiration de l'instrument."),
+          ],
+        ),
         p(
           "An instrument's page lists its holders with their regions and links each to its profile where it has one. A profile lists the instruments its organization holds, as in {profile}. The notices that set new ones up are on the tender list by type: {rfso} and {rfsa}.",
           "La page d'un instrument présente ses titulaires avec leurs régions et lie chacun à son profil, s'il en a un. Un profil présente les instruments que détient son organisation, comme dans {profile}. Les avis qui en établissent de nouveaux se trouvent dans la liste des appels d'offres par type : {rfso} et {rfsa}.",
@@ -1080,6 +1192,22 @@ const STANDING_OFFERS: Guide = {
           "Call-ups and contracts under these instruments are reported among the published contracts, where the Treasury Board's schema recommends that departments give the standing offer or supply arrangement number. An instrument's page counts as call-ups the published contracts that give its number in that field, so one reported without it is not counted there. {three} explains how those records differ from award notices.",
           "Les commandes subséquentes et les contrats découlant de ces instruments figurent parmi les contrats publiés, où le schéma du Conseil du Trésor recommande aux ministères d'indiquer le numéro de l'offre à commandes ou de l'arrangement. La page d'un instrument compte comme commandes subséquentes les contrats publiés qui donnent son numéro dans ce champ; un contrat déclaré sans ce numéro n'y est donc pas compté. {three} explique en quoi ces dossiers diffèrent des avis d'attribution.",
           { three: a("/guides/three-records-of-one-federal-contract", "Three Federal Records of One Contract", "Trois dossiers fédéraux d'un même contrat") },
+        ),
+        figure(
+          "instrument-holders", SAMPLE_INSTRUMENT, "section.panel:has(#holders)",
+          both(
+            "The Holders panel of a standing offer's page on Award Watch: each holder with its regions, the call-ups counted against the offer and their value.",
+            "Le panneau des titulaires de la page d'une offre à commandes sur Award Watch : chaque titulaire avec ses régions, les commandes subséquentes comptées pour l'offre et leur valeur.",
+          ),
+          both("The holders of a standing offer on Award Watch.", "Les titulaires d'une offre à commandes sur Award Watch."),
+          [
+            mark("tbody tr:first-child td:first-child a", "An instrument's page links each holder to its profile where it has one.",
+              "La page d'un instrument lie chaque titulaire à son profil, s'il en a un."),
+            mark("tbody tr:first-child td:nth-child(2)", "Each holder is listed with its regions.", "Chaque titulaire est présenté avec ses régions."),
+            mark("tbody tr:nth-child(3) td:nth-child(4)",
+              "An instrument's page counts as call-ups the published contracts that give its number, so one reported without it is not counted there.",
+              "La page d'un instrument compte comme commandes subséquentes les contrats publiés qui donnent son numéro; un contrat déclaré sans ce numéro n'y est donc pas compté."),
+          ],
         ),
       ],
     },
@@ -1159,6 +1287,24 @@ const THREE_RECORDS: Guide = {
           "It carries two values. CanadaBuys defines the contract amount as the value of the awarded contract including taxes, and the total contract value as the cumulative total of the original and all amendments. Notices from PSPC's Automated Buyer Environment are transferred to CanadaBuys once a month, so one may reach the data files up to a month after the award.",
           "Il porte deux valeurs. AchatsCanada définit le montant du contrat comme la valeur du contrat attribué, taxes comprises, et la valeur totale du contrat comme le total cumulé de la version initiale et de toutes les modifications. Les avis de l'Environnement automatisé de l'acheteur de SPAC sont transférés à AchatsCanada une fois par mois; un avis peut donc arriver dans les fichiers jusqu'à un mois après l'attribution.",
         ),
+        figure(
+          "award-value", SAMPLE_AWARD, ".panel-stack > section.panel:nth-of-type(2)",
+          both(
+            "The Contract Value panel of an award notice's page on Award Watch: the value counted, the total contract value and the contract amount.",
+            "Le panneau Valeur du contrat de la page d'un avis d'attribution sur Award Watch : la valeur retenue, la valeur totale du contrat et le montant du contrat.",
+          ),
+          both("The values of an award notice on Award Watch.", "Les valeurs d'un avis d'attribution sur Award Watch."),
+          [
+            mark(field("dl", 1),
+              "Award Watch counts a notice at the total value on its newest amendment when that is positive, else at the amount on its newest amendment.",
+              "Award Watch compte un avis à la valeur totale de sa plus récente modification lorsqu'elle est positive, sinon au montant de sa plus récente modification."),
+            mark(field("dl", 2), "The total contract value is the cumulative total of the original and all amendments.",
+              "La valeur totale du contrat est le total cumulé de la version initiale et de toutes les modifications."),
+            mark(field("dl", 3),
+              "The contract amount, which CanadaBuys defines as the value of the awarded contract including taxes; on this sample it is the newest amendment's amount.",
+              "Le montant du contrat, qu'AchatsCanada définit comme la valeur du contrat attribué, taxes comprises; dans cet exemple, c'est le montant de la plus récente modification."),
+          ],
+        ),
       ],
     },
     {
@@ -1173,6 +1319,22 @@ const THREE_RECORDS: Guide = {
           "Its records carry the same two value fields as award notices, and name as end user the department the contract was put in place for. The contracting entity is always PSPC, so Award Watch files each record under that client department ({buyers}).",
           "Ses dossiers portent les deux mêmes champs de valeur que les avis d'attribution, et nomment comme utilisateur final le ministère pour lequel le contrat a été conclu. L'entité contractante est toujours SPAC; Award Watch classe donc chaque dossier sous ce ministère client ({buyers}).",
           { buyers: a(`${METHODOLOGY}#buyers`, "Methodology", "Méthodologie") },
+        ),
+        figure(
+          "history-parties", SAMPLE_HISTORY, ".panel-stack",
+          both(
+            "The Supplier and Buyer, Contract Value and Key Dates panels of a PSPC contract history record's page on Award Watch: the supplier, PSPC as the contracting entity, the client department, the values and the dates.",
+            "Les panneaux Fournisseur et acheteur, Valeur du contrat et Dates clés de la page d'un dossier de l'historique des contrats de SPAC sur Award Watch : le fournisseur, SPAC comme entité contractante, le ministère client, les valeurs et les dates.",
+          ),
+          both("A PSPC contract history record on Award Watch.", "Un dossier de l'historique des contrats de SPAC sur Award Watch."),
+          [
+            mark(field(":scope > section:nth-of-type(1) dl", 3), "The contracting entity is always PSPC.", "L'entité contractante est toujours SPAC."),
+            mark(field(":scope > section:nth-of-type(1) dl", 4),
+              "The department the contract was put in place for, which Award Watch files the record under.",
+              "Le ministère pour lequel le contrat a été conclu, sous lequel Award Watch classe le dossier."),
+            mark(`${field(":scope > section:nth-of-type(2) dl", 2)}, ${field(":scope > section:nth-of-type(2) dl", 3)}`,
+              "The same two value fields as the award notices.", "Les deux mêmes champs de valeur que les avis d'attribution."),
+          ],
         ),
       ],
     },
@@ -1191,6 +1353,22 @@ const THREE_RECORDS: Guide = {
         p(
           "Its schema recommends values that include all applicable taxes. A row gives the original value at award, the amendment value for an amendment, and the total value of the contract and all its amendments. An option is left out of the original value and reported as an amendment once it is exercised. The schema recommends the contract number as the procurement identification number, and allows a commitment or requisition number instead.",
           "Son schéma recommande des valeurs qui comprennent toutes les taxes applicables. Une ligne donne la valeur initiale à l'attribution, la valeur de la modification pour une modification, et la valeur totale du contrat et de toutes ses modifications. Une option est exclue de la valeur initiale et déclarée comme modification lorsqu'elle est levée. Le schéma recommande le numéro du contrat comme numéro d'identification de l'approvisionnement, et permet à la place un numéro d'engagement ou de demande.",
+        ),
+        figure(
+          "published-value", SAMPLE_PUBLISHED, ".panel-stack > section.panel:nth-of-type(2)",
+          both(
+            "The Contract Value panel of a published contract's page on Award Watch, for an amendment row: the contract value, the original value, the amendment value and the values counted.",
+            "Le panneau Valeur du contrat de la page d'un contrat publié sur Award Watch, pour une ligne de modification : la valeur du contrat, la valeur initiale, la valeur de la modification et les valeurs retenues.",
+          ),
+          both("The values of a published contract's amendment row on Award Watch.", "Les valeurs de la ligne de modification d'un contrat publié sur Award Watch."),
+          [
+            mark(field("dl", 1), "The total value of the contract and all its amendments.", "La valeur totale du contrat et de toutes ses modifications."),
+            mark(field("dl", 2), "The original value at award.", "La valeur initiale à l'attribution."),
+            mark(field("dl", 3), "The amendment value, for an amendment.", "La valeur de la modification, pour une modification."),
+            mark(field("dl", 4),
+              "A published contract row counts at its own value: the amendment value for an amendment, else the original value, else the contract value.",
+              "Une ligne de contrat publié compte à sa valeur propre : la valeur de la modification pour une modification, sinon la valeur initiale, sinon la valeur du contrat."),
+          ],
         ),
       ],
     },
@@ -1342,6 +1520,23 @@ const ACAN: Guide = {
           "The buyer may negotiate with the named business during the posting period. That business should not start work or incur costs before the contract is awarded.",
           "L'acheteur peut négocier avec l'entreprise désignée pendant la période d'affichage. Cette entreprise ne devrait ni commencer les travaux ni engager de coûts avant l'attribution du contrat.",
         ),
+        figure(
+          "acan-dates", SAMPLE_ACAN, ".panel-grid",
+          both(
+            "The Key Dates and Buyer panels of an advance contract award notice's page on Award Watch: the publication, closing and amendment dates, the expected contract dates, the buyer and the solicitation number.",
+            "Les panneaux Dates clés et Acheteur de la page d'un préavis d'adjudication de contrat sur Award Watch : les dates de publication, de clôture et de modification, les dates prévues du contrat, l'acheteur et le numéro d'invitation.",
+          ),
+          both("The dates of an advance contract award notice on Award Watch.", "Les dates d'un préavis d'adjudication de contrat sur Award Watch."),
+          [
+            mark(field(":scope > .panel:first-child dl", 1), "An ACAN is first posted for at least 15 calendar days.",
+              "Un PAC est d'abord affiché pendant au moins 15 jours civils."),
+            mark(field(":scope > .panel:first-child dl", 2), "The buyer may extend the posting period for a complex procurement.",
+              "L'acheteur peut prolonger la période d'affichage pour un approvisionnement complexe."),
+            mark(field(":scope > .panel:first-child dl", 3),
+              "New information or a significant clarification can mean an amended ACAN with a later closing date.",
+              "Un nouveau renseignement ou une précision importante peut donner lieu à un PAC modifié dont la date de clôture est reportée."),
+          ],
+        ),
       ],
     },
     {
@@ -1451,6 +1646,21 @@ const ACAN: Guide = {
         p(
           "Among the published contracts over $10,000, the Treasury Board's schema gives the solicitation procedure AC to a contract awarded to a supplier identified under an ACAN process, where no other statement of capabilities could meet the government's requirements. For such a contract it recommends reporting one bid and the section 6 exception relied on. A contract awarded without soliciting bids is TN, and the competitive procedures are OB, TC and ST.",
           "Parmi les contrats publiés de plus de 10 000 $, le schéma du Conseil du Trésor attribue la méthode d'invitation à soumissionner AC à un contrat attribué à un fournisseur désigné dans le cadre d'un processus de PAC, lorsqu'aucun autre énoncé de capacités ne répondait aux exigences du gouvernement. Pour un tel contrat, il recommande de déclarer une soumission et l'exception de l'article 6 invoquée. Un contrat attribué sans appel d'offres porte le code TN, et les méthodes concurrentielles sont OB, TC et ST.",
+        ),
+        figure(
+          "acan-published", SAMPLE_PUBLISHED_ACAN, ".panel-grid > section.panel",
+          both(
+            "The Procurement panel of a published contract's page on Award Watch, for a contract awarded after an ACAN: the solicitation procedure AC, the competition, the instrument type, the commodity type, the number of bids and the procurement number.",
+            "Le panneau Approvisionnement de la page d'un contrat publié sur Award Watch, pour un contrat attribué à la suite d'un PAC : le mode d'invitation AC, la mise en concurrence, le type d'instrument, le type de marchandise, le nombre de soumissions et le numéro d'approvisionnement.",
+          ),
+          both("A published contract awarded after an ACAN, on Award Watch.", "Un contrat publié attribué à la suite d'un PAC, sur Award Watch."),
+          [
+            mark(field(":scope > dl", 1), "The schema gives the solicitation procedure AC to a contract awarded to a supplier identified under an ACAN process.",
+              "Le schéma attribue la méthode d'invitation à soumissionner AC à un contrat attribué à un fournisseur désigné dans le cadre d'un processus de PAC."),
+            mark(field(":scope > dl", 2), "Award Watch counts an ACAN among the non-competitive records.", "Award Watch compte un PAC parmi les dossiers non concurrentiels."),
+            mark(field(":scope > dl", 5), "For such a contract, the schema recommends reporting one bid.",
+              "Pour un tel contrat, le schéma recommande de déclarer une soumission."),
+          ],
         ),
         p(
           "{three} explains how award notices and published contracts differ.",
@@ -1641,6 +1851,23 @@ const PSIB: Guide = {
           "A published contract's page shows both fields in its Procurement panel, in the schema's terms, as on this {example}. The first appears only for a mandatory or voluntary set-aside, with its code, and the second only when it reads Yes. Neither is shown for a contract with an individual whose name the site withholds.",
           "La page d'un contrat publié affiche les deux champs dans son panneau Approvisionnement, dans les termes du schéma, comme sur ce {example}. Le premier ne paraît que pour un marché réservé obligatoire ou facultatif, avec son code, et le second seulement s'il indique Oui. Aucun des deux n'est affiché pour un contrat conclu avec un particulier dont le site masque le nom.",
           { example: a(EXAMPLE_SET_ASIDE, "published contract with a mandatory set-aside", "contrat publié visé par un marché réservé obligatoire") },
+        ),
+        figure(
+          "psib-published", SAMPLE_PUBLISHED_PSIB, ".panel-grid > section.panel",
+          both(
+            "The Procurement panel of a published contract's page on Award Watch, for a contract under a mandatory set-aside: the Procurement Strategy for Indigenous Business field with its code MS, and the notes under it.",
+            "Le panneau Approvisionnement de la page d'un contrat publié sur Award Watch, pour un contrat visé par un marché réservé obligatoire : le champ de la Stratégie d'approvisionnement auprès des entreprises autochtones avec son code MS, et les notes qui le suivent.",
+          ),
+          both("A published contract under a mandatory set-aside, on Award Watch.", "Un contrat publié visé par un marché réservé obligatoire, sur Award Watch."),
+          [
+            mark(field(":scope > dl", 7),
+              "The Procurement Strategy for Indigenous Business field appears only for a mandatory or voluntary set-aside, with its code.",
+              "Le champ de la Stratégie d'approvisionnement auprès des entreprises autochtones ne paraît que pour un marché réservé obligatoire ou facultatif, avec son code."),
+            mark(":scope > dl + p", "The set-aside as the department reported it in its published contracts.",
+              "Le marché réservé tel que le ministère l'a déclaré dans ses contrats publiés."),
+            mark(":scope > p:last-of-type", "The page shows the fields in the terms of the Treasury Board's schema.",
+              "La page présente les champs dans les termes du schéma du Conseil du Trésor."),
+          ],
         ),
         p(
           "The {expiring} tag a row PSIB: Mandatory Set-Aside, PSIB: Voluntary Set-Aside or Indigenous business, outside PSIB, as the department reported it in its published contracts. A row kept from an award notice or PSPC contract history takes the mark of the published contract matched to it ({rules}).",
@@ -1843,6 +2070,23 @@ const CONTRACT_END: Guide = {
             overview: a("/expiring", "overview of contracts ending soon", "aperçu des contrats prenant fin bientôt"),
           },
         ),
+        figure(
+          "ending-list", SAMPLE_ENDING, "section.panel:has(table)",
+          both(
+            "The 3-month list of contracts ending on Award Watch: each contract's end date and days left, its title, reference and source, its supplier, its value and its method.",
+            "La liste de 3 mois des contrats prenant fin sur Award Watch : la date de fin et les jours restants de chaque contrat, son titre, sa référence et sa source, son fournisseur, sa valeur et sa méthode.",
+          ),
+          both("The 3-month list of contracts ending, on Award Watch.", "La liste de 3 mois des contrats prenant fin, sur Award Watch."),
+          [
+            mark(".panel-head .panel-count", "The contracts whose newest version ends within 3 months of the data date.",
+              "Les contrats dont la plus récente version prend fin d'ici 3 mois après la date des données."),
+            mark("tbody tr:first-child td:first-child", "The end date is the date the record states, read from the contract's newest version.",
+              "La date de fin est celle qu'indique le dossier, lue dans la plus récente version du contrat."),
+            mark("tbody tr:nth-child(2) td.lead-cell > span.small",
+              "Each contract is listed once across the three sources: the award notice, PSPC contract history and the published contract.",
+              "Chaque contrat est présenté une seule fois entre les trois sources : l'avis d'attribution, l'historique des contrats de SPAC et le contrat publié."),
+          ],
+        ),
         p(
           "An end date is the date the record states. A contract can be extended, renewed or replaced, and the lists say nothing about what follows its end ({rules}).",
           "Une date de fin est celle qu'indique le dossier. Un contrat peut être prolongé, renouvelé ou remplacé, et les listes n'indiquent rien de ce qui suit sa fin ({rules}).",
@@ -1965,6 +2209,22 @@ const HOW_TO_BID: Guide = {
             new: a("/tenders/new", "new notices", "nouveaux avis"),
           },
         ),
+        figure(
+          "new-notices", SAMPLE_NEW, "section.panel:has(table)",
+          both(
+            "One day's new notices on Award Watch: each notice's title and reference, its buyer, its closing time and status.",
+            "Les nouveaux avis d'une journée sur Award Watch : le titre et la référence de chaque avis, son acheteur, son heure de clôture et son statut.",
+          ),
+          both("The new notices of one day, on Award Watch.", "Les nouveaux avis d'une journée, sur Award Watch."),
+          [
+            mark(".panel-head", "Award Watch lists the new notices by the day first seen.",
+              "Award Watch présente les nouveaux avis selon le jour où ils ont été vus pour la première fois."),
+            mark("tbody tr:first-child td.c-buyer", "PSPC issues tender notices on behalf of federal departments, agencies and Crown corporations.",
+              "SPAC lance des avis d'appel d'offres au nom de ministères et d'organismes fédéraux et de sociétés d'État."),
+            mark("tbody tr:first-child td.c-date", "A bid can be modified and resubmitted until the tender closes.",
+              "Une soumission peut être modifiée et soumise de nouveau jusqu'à la clôture de l'appel d'offres."),
+          ],
+        ),
       ],
     },
     {
@@ -2061,6 +2321,22 @@ const HOW_TO_BID: Guide = {
             award: a(EXAMPLE_AWARD, "award notice", "avis d'attribution"),
           },
         ),
+        figure(
+          "award-head", SAMPLE_AWARD, "header.page-head .page-head-row",
+          both(
+            "The head of an award notice's page on Award Watch: its title, status, supplier, value and end date, its reference, a button to the award notice on CanadaBuys and one to the tender notice it followed.",
+            "L'en-tête de la page d'un avis d'attribution sur Award Watch : son titre, son statut, son fournisseur, sa valeur et sa date de fin, sa référence, un bouton vers l'avis d'attribution sur AchatsCanada et un autre vers l'avis d'appel d'offres qui l'a précédé.",
+          ),
+          both("The head of an award notice's page on Award Watch.", "L'en-tête de la page d'un avis d'attribution sur Award Watch."),
+          [
+            mark("p.eyebrow, h1", "Award Watch lists the award notices.", "Award Watch présente les avis d'attribution."),
+            mark("p.page-note", "After a competitive process, a bidder may ask the contracting officer for a debriefing.",
+              "Après un processus concurrentiel, un soumissionnaire peut demander un compte rendu à l'agent de négociation des contrats."),
+            mark(".page-actions",
+              "For contracts issued through the government's procurement application, award notices are posted on CanadaBuys automatically. This award notice links the tender notice it followed.",
+              "Pour les contrats attribués par l'application d'approvisionnement du gouvernement, les avis d'attribution sont affichés automatiquement sur AchatsCanada. Cet avis d'attribution renvoie à l'avis d'appel d'offres qui l'a précédé."),
+          ],
+        ),
         p(
           "After a competitive process, a bidder may ask the contracting officer for a debriefing once told of the results or of an award to someone else, a right CanadaBuys traces to the Directive on the Management of Procurement and some trade agreements. A debriefing typically gives the successful supplier's name, the contract value and an outline of why the bid was not successful.",
           "Après un processus concurrentiel, un soumissionnaire peut demander un compte rendu à l'agent de négociation des contrats une fois informé des résultats ou de l'attribution du contrat à quelqu'un d'autre, un droit qu'AchatsCanada rattache à la Directive sur la gestion de l'approvisionnement et à certains accords commerciaux. Un compte rendu comprend en général le nom du fournisseur retenu, la valeur du contrat et un résumé des raisons pour lesquelles la soumission n'a pas été retenue.",
@@ -2122,6 +2398,27 @@ const TRADE: Guide = {
             example: a(EXAMPLE_NOTICE, "request for proposal", "appel d'offres"),
             acan: a(EXAMPLE_ACAN, "advance contract award notice", "préavis d'adjudication de contrat"),
           },
+        ),
+        figure(
+          "trade-line", SAMPLE_NOTICE_SECURITY, "section.panel:has(> dl.wide)",
+          both(
+            "The Procurement panel of a tender notice's page on Award Watch: category, notice type, procurement method, selection criteria, the limited tendering reason, the trade agreements line, regions and provinces.",
+            "Le panneau Approvisionnement de la page d'un avis d'appel d'offres sur Award Watch : catégorie, type d'avis, méthode d'approvisionnement, critères de sélection, motif de l'appel d'offres limité, ligne des accords commerciaux, régions et provinces.",
+          ),
+          both("A tender notice's trade agreements line on Award Watch.", "La ligne des accords commerciaux d'un avis d'appel d'offres sur Award Watch."),
+          [
+            mark(field("dl.wide", 5),
+              "A limited tendering reason gives the reason a contract is not awarded through competitive solicitation, and reads None where none applies.",
+              "Le motif de l'appel d'offres limité donne la raison pour laquelle un contrat n'est pas attribué par voie concurrentielle, et indique Aucune lorsqu'aucun motif ne s'applique."),
+            mark(field("dl.wide", 6), "A federal tender notice lists the trade agreements that apply to the procurement.",
+              "Un avis d'appel d'offres fédéral énumère les accords commerciaux qui s'appliquent à l'approvisionnement."),
+            mark("dl.wide > dt:nth-of-type(6) + dd li:nth-child(1)",
+              "The line also names the Canadian Free Trade Agreement (CFTA), which the Treasury Board counts among the internal agreements.",
+              "La ligne nomme aussi l'Accord de libre-échange canadien (ALEC), que le Conseil du Trésor range parmi les accords sur le commerce intérieur."),
+            mark("dl.wide > dt:nth-of-type(6) + dd li:nth-child(5)",
+              "The North American Free Trade Agreement (NAFTA) has no row in the Treasury Board's threshold tables.",
+              "L'Accord de libre-échange nord-américain (ALENA) n'a aucune ligne dans les tableaux de seuils du Conseil du Trésor."),
+          ],
         ),
       ],
     },
@@ -2372,6 +2669,23 @@ const SECURITY: Guide = {
           "CanadaBuys' data dictionary has no field for security requirements. Where a notice's description states them, Award Watch shows it on the notice page, as on this {example}: its description says there are security requirements associated with the solicitation of offers, and refers the reader to the section on security clearances for more.",
           "Le dictionnaire de données d'AchatsCanada ne comporte aucun champ pour les exigences de sécurité. Lorsque la description d'un avis les énonce, Award Watch l'affiche sur la page de l'avis, comme sur cet {example} : sa description indique que la demande d'offres comporte des exigences relatives à la sécurité, et renvoie à la section sur les attestations de sécurité pour plus de renseignements.",
           { example: a(EXAMPLE_NOTICE, "tender notice from Indigenous Services Canada", "avis d'appel d'offres de Services aux Autochtones Canada") },
+        ),
+        figure(
+          "security-description", SAMPLE_NOTICE_SECURITY, "section.panel:has(.prose)",
+          both(
+            "The Description as Published panel of a tender notice's page on Award Watch, whose description states that the notice has security requirements and where they are set out.",
+            "Le panneau de la description publiée de la page d'un avis d'appel d'offres sur Award Watch, dont la description indique que l'avis comporte des exigences de sécurité et où elles sont énoncées.",
+          ),
+          both("A tender notice's description on Award Watch.", "La description d'un avis d'appel d'offres sur Award Watch."),
+          [
+            mark(".panel-head h2", "Where a notice's description states its security requirements, Award Watch shows it on the notice page.",
+              "Lorsque la description d'un avis énonce ses exigences de sécurité, Award Watch l'affiche sur la page de l'avis."),
+            mark(".prose p:nth-child(2)", "CanadaBuys' data dictionary has no field for security requirements; a notice's description can state them.",
+              "Le dictionnaire de données d'AchatsCanada ne comporte aucun champ pour les exigences de sécurité; la description d'un avis peut les énoncer."),
+            mark(".prose p:nth-child(3)",
+              "The CSP points to the bid solicitation documents included in the tender notice, and to the Security Requirements Check List the contracting department completes.",
+              "Le PSC renvoie aux documents de demande de soumissions inclus dans l'avis d'appel d'offres et à la Liste de vérification des exigences relatives à la sécurité que remplit le ministère responsable du contrat."),
+          ],
         ),
       ],
     },
@@ -2759,6 +3073,25 @@ const BUY_CANADIAN: Guide = {
           "Cette {example} de la Défense nationale indique qu'elle est assujettie à la Politique sur la PFCCC et seulement ouverte aux fournisseurs canadiens et aux fournisseurs d'un partenaire commercial concerné, et demande un formulaire d'attestation relative au contenu canadien. Chaque politique fait soumettre à l'offrant sa propre attestation ou déclaration :",
           { example: a(EXAMPLE_BUY_CANADIAN, "request for standing offer", "demande d'offre à commandes") },
         ),
+        figure(
+          "buy-canadian-description", SAMPLE_NOTICE_BUY_CANADIAN, "section.panel:has(.prose)",
+          both(
+            "The Description as Published panel of a tender notice's page on Award Watch, whose description states that the notice is subject to the CSCC Policy, who may bid and the attestation forms offerors submit.",
+            "Le panneau de la description publiée de la page d'un avis d'appel d'offres sur Award Watch, dont la description indique que l'avis est assujetti à la Politique sur la PFCCC, qui peut soumissionner et les formulaires d'attestation que soumettent les offrants.",
+          ),
+          both("A tender notice's description on Award Watch.", "La description d'un avis d'appel d'offres sur Award Watch."),
+          [
+            mark(".panel-head h2",
+              "CanadaBuys' data dictionary has no field for these policies; a notice may state them in its description, which Award Watch shows under Description as Published.",
+              "Le dictionnaire de données d'AchatsCanada ne comporte aucun champ pour ces politiques; un avis peut les énoncer dans sa description, qu'Award Watch affiche sous Description publiée."),
+            mark(".prose p:nth-child(2)",
+              "When the CSCC Policy applies, competition is open to Canadian suppliers and, if any international trade agreement applies to the solicitation, to suppliers of an applicable trading partner.",
+              "Lorsque la Politique sur la PFCCC s'applique, la concurrence est ouverte aux fournisseurs canadiens et, si des accords commerciaux internationaux s'appliquent à la demande d'offres, aux fournisseurs d'un partenaire commercial concerné."),
+            mark(".prose p:nth-child(3)",
+              "Under the CSCC Policy, the offeror submits a Supplier Eligibility Attestation Form and, when applicable, a Canadian Content Attestation Form.",
+              "Selon la Politique sur la PFCCC, l'offrant soumet un formulaire d'attestation relative à l'admissibilité du fournisseur et, s'il y a lieu, un formulaire d'attestation relative au contenu canadien."),
+          ],
+        ),
         {
           kind: "table",
           cols: [
@@ -2861,6 +3194,11 @@ export const GUIDE_SLUGS: ReadonlySet<string> = new Set(GUIDES.map((g) => g.slug
 
 export function guideBySlug(slug: string): Guide | undefined {
   return GUIDES.find((g) => g.slug === slug);
+}
+
+// Every figure in the guides, with the guide it belongs to: what the capture tool renders and the tests check.
+export function guideFigures(): { slug: string; figure: Figure }[] {
+  return GUIDES.flatMap((g) => g.sections.flatMap((s) => s.blocks.filter((b): b is Figure => b.kind === "figure").map((f) => ({ slug: g.slug, figure: f }))));
 }
 
 // The newest day any guide was checked: the date the sitemap gives the section.

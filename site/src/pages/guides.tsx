@@ -13,6 +13,15 @@
 // or for a signed-in reader, a guide is as it was. The plain lists read no
 // file; a list of one notice type reads the open notices' facets, as the
 // tender list's own form does, to name the type.
+//
+// A figure (docs/guides.md, Figures) is a capture of one of the site's own
+// pages, rendered from sample records: both themes' pictures, the stylesheet
+// showing the one of the reader's theme, each with the phone file at the
+// phone breakpoint, lazy-loaded with their sizes so nothing shifts and the
+// hidden theme's file is never fetched. The numbered marks are drawn by the
+// page over the image, in percent of it, so they take the theme and stay
+// sharp; they are hidden from screen readers, and the legend under the image
+// says each mark's sentence as page text.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -21,7 +30,8 @@ import { accountsEnabled } from "../account/switch";
 import { Table, type Column } from "../columns";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { GUIDES, guideBySlug, type Block, type Both, type Cell, type Guide, type Text } from "../guides";
+import { GUIDE_FIGURES } from "../guide_figures.gen";
+import { GUIDES, guideBySlug, type Block, type Both, type Cell, type Figure, type FigureShot, type Guide, type Text } from "../guides";
 import { fmtMoney, frTypography, t, type Lang } from "../i18n";
 import { Layout, PageHead, lowerRedirect, notFoundPage, page } from "../layout";
 import { guideSeo, pageSeo } from "../seo";
@@ -53,8 +63,61 @@ const Inline: FC<{ lang: Lang; text: Text }> = ({ lang, text }) => {
 
 const cellText = (lang: Lang, c: Cell): string => ("money" in c ? fmtMoney(c.money, lang) : guideText(lang, c));
 
-const GuideBlock: FC<{ lang: Lang; block: Block }> = ({ lang, block }) => {
+export const FIGURE_WIDTHS = ["wide", "phone"] as const;
+export const FIGURE_THEMES = ["light", "dark"] as const;
+export type FigureWidth = (typeof FIGURE_WIDTHS)[number];
+export type FigureTheme = (typeof FIGURE_THEMES)[number];
+// The phone files' breakpoint, the stylesheet's (max-width: 699px).
+export const FIGURE_PHONE_MEDIA = "(max-width: 699px)";
+
+// One image of a figure, as scripts/make-guide-figures.mjs names it: static, so it never reaches the Worker.
+export function figureFile(slug: string, id: string, lang: Lang, width: FigureWidth, theme: FigureTheme): string {
+  return `/figures/guides/${slug}/${id}.${lang}.${width}.${theme}.webp`;
+}
+
+// A mark's box in percent of the image, its number in its corner.
+const Marks: FC<{ shot: FigureShot; width: FigureWidth }> = ({ shot, width }) => (
+  <div class={`fig-marks fig-marks-${width}`} aria-hidden="true">
+    {shot.boxes.map(([x, y, w, h], i) => (
+      <span class="fig-mark" style={`left:${x}%;top:${y}%;width:${w}%;height:${h}%`}><span class="fig-num">{i + 1}</span></span>
+    ))}
+  </div>
+);
+
+// A figure the tool has not measured yet draws nothing (the tests ask for every one).
+const GuideFigure: FC<{ lang: Lang; slug: string; figure: Figure }> = ({ lang, slug, figure }) => {
+  const measured = GUIDE_FIGURES[figure.id];
+  if (!measured || measured.slug !== slug) return null;
+  const shots = measured[lang];
+  const alt = guideText(lang, figure.alt);
+  const picture = (theme: FigureTheme) => (
+    <picture class={`fig-${theme}`}>
+      <source media={FIGURE_PHONE_MEDIA} srcset={figureFile(slug, figure.id, lang, "phone", theme)} width={shots.phone.width} height={shots.phone.height} />
+      <img src={figureFile(slug, figure.id, lang, "wide", theme)} width={shots.wide.width} height={shots.wide.height} alt={alt}
+        loading="lazy" decoding="async" />
+    </picture>
+  );
+  // Never wider than the capture: each image's own width, the phone one's at the phone breakpoint.
+  return (
+    <figure class="guide-figure" id={`figure-${figure.id}`}>
+      <div class="fig-frame" style={`--fig-wide:${shots.wide.width}px;--fig-phone:${shots.phone.width}px`}>
+        {picture("light")}
+        {picture("dark")}
+        <Marks shot={shots.wide} width="wide" />
+        <Marks shot={shots.phone} width="phone" />
+      </div>
+      <figcaption>
+        <ol class="fig-legend">{figure.callouts.map((c) => <li><Inline lang={lang} text={c.text} /></li>)}</ol>
+        <p class="fig-caption">{guideText(lang, figure.caption)} {t(lang, "guides.figure_sample")}</p>
+      </figcaption>
+    </figure>
+  );
+};
+
+const GuideBlock: FC<{ lang: Lang; slug: string; block: Block }> = ({ lang, slug, block }) => {
   switch (block.kind) {
+    case "figure":
+      return <GuideFigure lang={lang} slug={slug} figure={block} />;
     case "p":
       return <p><Inline lang={lang} text={block.text} /></p>;
     case "list":
@@ -163,7 +226,7 @@ export async function guidePage(c: Context<AppEnv>): Promise<Response> {
           {g.sections.map((s) => (
             <>
               <h2 id={s.id}>{guideText(lang, s.title)}</h2>
-              {s.blocks.map((b) => <GuideBlock lang={lang} block={b} />)}
+              {s.blocks.map((b) => <GuideBlock lang={lang} slug={g.slug} block={b} />)}
             </>
           ))}
           {list && g.action ? (

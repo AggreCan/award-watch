@@ -322,8 +322,9 @@ how many in their user agent, for example
 or `inoreader.com; 9 subscribers`. The Worker keeps only that number, in
 `double2`; the user agent itself is never written. The file name goes in
 `blob7` only when the file was served (200 or 304), so a typed path that
-found nothing is never stored. Other static files under `/data/` and
-`/fonts/` never reach the Worker and are not counted, and neither is a request
+found nothing is never stored. Other static files under `/data/`,
+`/fonts/` and `/figures/` (the guides' images) never reach the Worker and are
+not counted, and neither is a request
 the per-address limits answer with 429. Feed polls have their own cap in the
 Worker (`FEED_LIMIT`, 600 a minute per address, `site/src/limits.ts`), so a
 feed service polling many feeds from one address is not refused.

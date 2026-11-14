@@ -1,0 +1,32 @@
+{
+  "data_as_of": "2026-11-13",
+  "counts": {
+    "awards": 2,
+    "awards_30d": 0,
+    "buyers": 5,
+    "contracts": 6,
+    "grants": 0,
+    "history": 1,
+    "lobbying": 0,
+    "organizations": 5,
+    "tenders_new_today": 0,
+    "tenders_open": 2
+  },
+  "new_tenders": [],
+  "closing_soon": [],
+  "closing_soon_times": [],
+  "recent_awards": [],
+  "top_organizations_year": [],
+  "runs": [],
+  "sources": [
+    {
+      "source": "tenders", "file": "openTenderNotice-ouvertAvisAppelOffres.csv",
+      "last_modified": "2026-11-13T11:20:00Z", "last_read": "2026-11-13T12:41:00Z"
+    },
+    {
+      "source": "contracts", "file": "contracts.csv",
+      "last_modified": "2026-11-13T05:10:00Z", "last_read": "2026-11-13T12:52:00Z"
+    }
+  ],
+  "totals": {}
+}

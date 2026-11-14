@@ -4521,6 +4521,11 @@ const STRINGS = {
   },
   "guides.not_found": { en: "Guide Not Found", fr: "Guide introuvable" },
   "guides.back": { en: "All guides", fr: "Tous les guides" },
+  // The end of every figure's caption: the page pictured is drawn from a record made for the guide, never a real one.
+  "guides.figure_sample": {
+    en: "The record pictured is a sample made for this guide.",
+    fr: "Le dossier illustré est un exemple créé pour ce guide.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

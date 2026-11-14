@@ -19,6 +19,7 @@
     "src/**/*.tsx",
     "test/**/*.ts",
     "test-mail/**/*.ts",
+    "figures/**/*.ts",
     "node_modules/@cloudflare/vitest-pool-workers/types/cloudflare-test.d.ts"
   ]
 }

@@ -1,0 +1,386 @@
+{
+  "cb-900-90000101": {
+    "reference": "cb-900-90000101",
+    "amendment": 2,
+    "amended": "2026-11-10",
+    "amendments": [
+      {
+        "amendment": 0,
+        "amended": null,
+        "closing": "2026-12-01T14:00:00",
+        "first_seen": "2026-11-04",
+        "published": "2026-11-03",
+        "status": "open",
+        "title_en": "Translation services, official languages",
+        "title_fr": "Services de traduction, langues officielles"
+      },
+      {
+        "amendment": 1,
+        "amended": "2026-11-06",
+        "closing": "2026-12-01T14:00:00",
+        "first_seen": "2026-11-07",
+        "published": "2026-11-03",
+        "status": "open",
+        "title_en": "Translation services, official languages",
+        "title_fr": "Services de traduction, langues officielles"
+      },
+      {
+        "amendment": 2,
+        "amended": "2026-11-10",
+        "closing": "2026-12-08T14:00:00",
+        "first_seen": "2026-11-11",
+        "published": "2026-11-03",
+        "status": "open",
+        "title_en": "Translation services, official languages",
+        "title_fr": "Services de traduction, langues officielles"
+      }
+    ],
+    "buyer_en": "Public Services and Procurement Canada",
+    "buyer_fr": "Services publics et Approvisionnement Canada",
+    "buyer_id": "pwgsc-tpsgc",
+    "category": [
+      "SRV"
+    ],
+    "closing": "2026-12-08T14:00:00",
+    "codes": [
+      {
+        "code": "82111701",
+        "desc_en": "Written translation services",
+        "desc_fr": "Services de traduction écrite"
+      }
+    ],
+    "description_en": "Translation of reports, publications and correspondence between English and French, ordered as each requirement arises.",
+    "description_fr": "Traduction de rapports, de publications et de correspondance entre l'anglais et le français, commandée à mesure que les besoins se présentent.",
+    "end_expected": "2030-03-31",
+    "end_users_en": [
+      "Statistics Canada (StatCan)"
+    ],
+    "end_users_fr": [
+      "Statistique Canada (StatCan)"
+    ],
+    "first_seen": "2026-11-04",
+    "gsin": null,
+    "gsin_desc_en": null,
+    "gsin_desc_fr": null,
+    "last_seen": "2026-11-13",
+    "limited_reason_en": null,
+    "limited_reason_fr": null,
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "notice_type_en": "Request for Proposal",
+    "notice_type_fr": "Demande de propositions",
+    "provinces": [
+      "ON",
+      "QC"
+    ],
+    "published": "2026-11-03",
+    "regions_delivery_en": [
+      "National Capital Region (NCR)"
+    ],
+    "regions_delivery_fr": [
+      "Région de la capitale nationale (RCN)"
+    ],
+    "regions_opportunity_en": [
+      "Canada"
+    ],
+    "regions_opportunity_fr": [
+      "Canada"
+    ],
+    "related_awards": [],
+    "selection_en": "Highest Combined Rating of Technical Merit and Price",
+    "selection_fr": "Cote combinée la plus élevée pour le mérite technique et le prix",
+    "solicitation": "EN578-990115",
+    "source_file": "openTenderNotice-ouvertAvisAppelOffres.csv",
+    "start_expected": "2027-04-01",
+    "status": "open",
+    "title_en": "Translation services, official languages",
+    "title_fr": "Services de traduction, langues officielles",
+    "trade_agreements_en": [
+      "Canadian Free Trade Agreement (CFTA)",
+      "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)",
+      "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+      "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)"
+    ],
+    "trade_agreements_fr": [
+      "Accord de libre-échange canadien (ALEC)",
+      "Accord économique et commercial global (AECG) entre le Canada et l'Union européenne (UE)",
+      "Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)",
+      "Accord de Partenariat transpacifique global et progressiste (PTPGP)"
+    ],
+    "description_cut": {}
+  },
+  "cb-900-90000202": {
+    "reference": "cb-900-90000202",
+    "amendment": 1,
+    "amended": "2026-11-09",
+    "amendments": [
+      {
+        "amendment": 0,
+        "amended": null,
+        "closing": "2026-11-17T14:00:00",
+        "first_seen": "2026-11-03",
+        "published": "2026-11-02",
+        "status": "open",
+        "title_en": "Licence for high-resolution lidar data",
+        "title_fr": "Licence de données lidar à haute résolution"
+      },
+      {
+        "amendment": 1,
+        "amended": "2026-11-09",
+        "closing": "2026-11-24T14:00:00",
+        "first_seen": "2026-11-10",
+        "published": "2026-11-02",
+        "status": "open",
+        "title_en": "Licence for high-resolution lidar data",
+        "title_fr": "Licence de données lidar à haute résolution"
+      }
+    ],
+    "buyer_en": "Natural Resources Canada",
+    "buyer_fr": "Ressources naturelles Canada",
+    "buyer_id": "nrcan-rncan",
+    "category": [
+      "SRV"
+    ],
+    "closing": "2026-11-24T14:00:00",
+    "codes": [
+      {
+        "code": "811516",
+        "desc_en": "Cartography",
+        "desc_fr": "Cartographie"
+      }
+    ],
+    "description_en": "The department intends to award a contract to Sample Supplier Inc. for a licence to high-resolution lidar data it holds. A supplier that can meet the requirements may submit a statement of capabilities.",
+    "description_fr": "Le ministère compte attribuer un contrat à Sample Supplier Inc. pour une licence de données lidar à haute résolution qu'elle détient. Un fournisseur capable de satisfaire aux exigences peut présenter un énoncé des capacités.",
+    "end_expected": "2027-03-31",
+    "end_users_en": null,
+    "end_users_fr": null,
+    "first_seen": "2026-11-03",
+    "gsin": null,
+    "gsin_desc_en": null,
+    "gsin_desc_fr": null,
+    "last_seen": "2026-11-13",
+    "limited_reason_en": null,
+    "limited_reason_fr": null,
+    "method_en": "Advance contract award notice",
+    "method_fr": "Préavis d'attribution du contrat",
+    "notice_type_en": "Advance Contract Award Notice",
+    "notice_type_fr": "Préavis d'attribution du contrat",
+    "provinces": [
+      "ON"
+    ],
+    "published": "2026-11-02",
+    "regions_delivery_en": [
+      "Ontario (except NCR)"
+    ],
+    "regions_delivery_fr": [
+      "Ontario (sauf RCN)"
+    ],
+    "regions_opportunity_en": [
+      "Canada"
+    ],
+    "regions_opportunity_fr": [
+      "Canada"
+    ],
+    "related_awards": [],
+    "selection_en": "Not applicable",
+    "selection_fr": "Sans objet",
+    "solicitation": "NRCan-5099901234",
+    "source_file": "openTenderNotice-ouvertAvisAppelOffres.csv",
+    "start_expected": "2026-12-01",
+    "status": "open",
+    "title_en": "Licence for high-resolution lidar data",
+    "title_fr": "Licence de données lidar à haute résolution",
+    "trade_agreements_en": [
+      "Canadian Free Trade Agreement (CFTA)",
+      "World Trade Organization Agreement on Government Procurement (WTO GPA)"
+    ],
+    "trade_agreements_fr": [
+      "Accord de libre-échange canadien (ALEC)",
+      "Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)"
+    ],
+    "description_cut": {}
+  },
+  "cb-900-90000303": {
+    "reference": "cb-900-90000303",
+    "amendment": 0,
+    "amended": null,
+    "amendments": [
+      {
+        "amendment": 0,
+        "amended": null,
+        "closing": "2026-12-10T14:00:00",
+        "first_seen": "2026-11-13",
+        "published": "2026-11-12",
+        "status": "open",
+        "title_en": "Engineering services, community water systems",
+        "title_fr": "Services d'ingénierie, réseaux d'eau communautaires"
+      }
+    ],
+    "buyer_en": "Indigenous Services Canada",
+    "buyer_fr": "Services aux Autochtones Canada",
+    "buyer_id": "isc-sac",
+    "category": [
+      "SRV"
+    ],
+    "closing": "2026-12-10T14:00:00",
+    "codes": [
+      {
+        "code": "811015",
+        "desc_en": "Civil engineering",
+        "desc_fr": "Génie civil"
+      }
+    ],
+    "description_en": "Engineering services for the design of community water and wastewater systems in Manitoba.\n\nThis sample notice has security requirements associated with the solicitation of offers.\n\nThe section on security clearances in the solicitation documents and the Security Requirements Check List set out the requirements.",
+    "description_fr": "Services d'ingénierie pour la conception de réseaux communautaires d'eau potable et d'eaux usées au Manitoba.\n\nCet avis fictif comporte des exigences relatives à la sécurité associées à la demande d'offres.\n\nLa section sur les attestations de sécurité des documents de demande de soumissions et la Liste de vérification des exigences relatives à la sécurité énoncent les exigences.",
+    "end_expected": "2029-03-31",
+    "end_users_en": [
+      "Indigenous Services Canada (ISC)"
+    ],
+    "end_users_fr": [
+      "Services aux Autochtones Canada (SAC)"
+    ],
+    "first_seen": "2026-11-13",
+    "gsin": null,
+    "gsin_desc_en": null,
+    "gsin_desc_fr": null,
+    "last_seen": "2026-11-13",
+    "limited_reason_en": "None",
+    "limited_reason_fr": "Aucune",
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "notice_type_en": "Request for Proposal",
+    "notice_type_fr": "Demande de propositions",
+    "provinces": [
+      "MB"
+    ],
+    "published": "2026-11-12",
+    "regions_delivery_en": [
+      "Manitoba"
+    ],
+    "regions_delivery_fr": [
+      "Manitoba"
+    ],
+    "regions_opportunity_en": [
+      "Canada"
+    ],
+    "regions_opportunity_fr": [
+      "Canada"
+    ],
+    "related_awards": [],
+    "selection_en": "Highest Combined Rating of Technical Merit and Price",
+    "selection_fr": "Cote combinée la plus élevée pour le mérite technique et le prix",
+    "solicitation": "1099900303",
+    "source_file": "newTenderNotice-nouvelAvisAppelOffres.csv",
+    "start_expected": "2027-04-01",
+    "status": "open",
+    "title_en": "Engineering services, community water systems",
+    "title_fr": "Services d'ingénierie, réseaux d'eau communautaires",
+    "trade_agreements_en": [
+      "Canadian Free Trade Agreement (CFTA)",
+      "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)",
+      "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+      "Comprehensive and Progressive Agreement for Trans-Pacific Partnership (CPTPP)",
+      "North American Free Trade Agreement (NAFTA)",
+      "Canada-Korea Free Trade Agreement (CKFTA)"
+    ],
+    "trade_agreements_fr": [
+      "Accord de libre-échange canadien (ALEC)",
+      "Accord économique et commercial global (AECG) entre le Canada et l'Union européenne (UE)",
+      "Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)",
+      "Accord de Partenariat transpacifique global et progressiste (PTPGP)",
+      "Accord de libre-échange nord-américain (ALENA)",
+      "Accord de libre-échange Canada-Corée"
+    ],
+    "description_cut": {}
+  },
+  "cb-900-90000606": {
+    "reference": "cb-900-90000606",
+    "amendment": 0,
+    "amended": null,
+    "amendments": [
+      {
+        "amendment": 0,
+        "amended": null,
+        "closing": "2026-12-17T14:00:00",
+        "first_seen": "2026-11-11",
+        "published": "2026-11-10",
+        "status": "open",
+        "title_en": "Cold-weather clothing",
+        "title_fr": "Vêtements pour temps froid"
+      }
+    ],
+    "buyer_en": "National Defence",
+    "buyer_fr": "Défense nationale",
+    "buyer_id": "dnd-mdn",
+    "category": [
+      "GD"
+    ],
+    "closing": "2026-12-17T14:00:00",
+    "codes": [
+      {
+        "code": "5310",
+        "desc_en": "Clothing",
+        "desc_fr": "Vêtements"
+      }
+    ],
+    "description_en": "This sample notice seeks cold-weather clothing.\n\nThis solicitation is subject to the Policy on Prioritizing Canadian Suppliers and Canadian Content in Strategic Federal Procurements (CSCC Policy). It is open only to Canadian Suppliers and Suppliers of an Applicable Trading Partner.\n\nOfferors submit the Supplier Eligibility Attestation Form and the Canadian Content Attestation Form.",
+    "description_fr": "Cet avis fictif vise des vêtements pour temps froid.\n\nCette demande d'offres est assujettie à la Politique sur la priorisation des fournisseurs canadiens et du contenu canadien dans les approvisionnements stratégiques fédéraux (Politique sur la PFCCC). Elle est ouverte uniquement aux fournisseurs canadiens et aux fournisseurs d'un partenaire commercial concerné.\n\nLes offrants soumettent les formulaires d'attestation relative à l'admissibilité du fournisseur et au contenu canadien.",
+    "end_expected": "2029-03-31",
+    "end_users_en": [
+      "Department of National Defence (DND)"
+    ],
+    "end_users_fr": [
+      "Ministère de la Défense nationale (MDN)"
+    ],
+    "first_seen": "2026-11-11",
+    "gsin": null,
+    "gsin_desc_en": null,
+    "gsin_desc_fr": null,
+    "last_seen": "2026-11-13",
+    "limited_reason_en": null,
+    "limited_reason_fr": null,
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "notice_type_en": "Request for Proposal",
+    "notice_type_fr": "Demande de propositions",
+    "provinces": [
+      "ON",
+      "QC"
+    ],
+    "published": "2026-11-10",
+    "regions_delivery_en": [
+      "Ontario (except NCR)",
+      "Quebec (except NCR)"
+    ],
+    "regions_delivery_fr": [
+      "Ontario (sauf RCN)",
+      "Québec (sauf RCN)"
+    ],
+    "regions_opportunity_en": [
+      "Canada"
+    ],
+    "regions_opportunity_fr": [
+      "Canada"
+    ],
+    "related_awards": [],
+    "selection_en": "Lowest Price",
+    "selection_fr": "Prix le plus bas",
+    "solicitation": "W8486-990606",
+    "source_file": "openTenderNotice-ouvertAvisAppelOffres.csv",
+    "start_expected": "2027-04-01",
+    "status": "open",
+    "title_en": "Cold-weather clothing",
+    "title_fr": "Vêtements pour temps froid",
+    "trade_agreements_en": [
+      "Canadian Free Trade Agreement (CFTA)",
+      "World Trade Organization Agreement on Government Procurement (WTO GPA)",
+      "Canada-European Union Comprehensive Economic and Trade Agreement (CETA)"
+    ],
+    "trade_agreements_fr": [
+      "Accord de libre-échange canadien (ALEC)",
+      "Accord sur les marchés publics de l'Organisation mondiale du commerce (AMP-OMC)",
+      "Accord économique et commercial global (AECG) entre le Canada et l'Union européenne (UE)"
+    ],
+    "description_cut": {}
+  }
+}
