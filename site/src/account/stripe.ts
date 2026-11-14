@@ -46,6 +46,19 @@ const CALL_TIMEOUT_MS = 10_000;
 // request and errors if they're not the same",
 // docs.stripe.com/api/idempotent_requests), it is answered "busy".
 export const CHECKOUT_WINDOW_MS = 10 * 60_000;
+// How long a Checkout Session stays payable. Stripe's default is a day
+// ("expires_at ... The Epoch time in seconds at which the Checkout Session
+// will expire. It can be anywhere from 30 minutes to 24 hours after Checkout
+// Session creation. By default, this value is 24 hours from creation",
+// docs.stripe.com/api/checkout/sessions/create), which kept a first buyer's
+// earlier open session payable for that long. The value sent is this long
+// after the start of the ten minutes the session's idempotency key names, so
+// 50 to 60 minutes after the session is made: two requests under one key
+// must carry the same parameters (Stripe "compares incoming parameters to
+// those of the original request and errors if they're not the same",
+// docs.stripe.com/api/idempotent_requests), and a press repeated inside the
+// ten minutes is given back the first session with its original expiry.
+export const CHECKOUT_EXPIRES_MS = 60 * 60_000;
 // A Checkout Session's id as Stripe gives it ("cs_test_..." or "cs_live_...";
 // the retrieve call takes at most 66 characters).
 export const SESSION_RE = /^cs_[A-Za-z0-9_]{1,63}$/;
@@ -243,13 +256,37 @@ const priceOf = (item: J): { price: string | null; product: string | null } => {
 // interval it bills at), null when it has none or several, which the site
 // never makes. pending: the items of
 // a pending update (pending_update.subscription_items), null when there is none.
+//
+// cancelAtPeriodEnd: the subscription ends when its current period does and
+// is not charged again. Stripe sets it two ways. cancel_at_period_end is
+// "Whether this subscription will (if status=active) or did (if
+// status=canceled) cancel at the end of the current billing period";
+// cancel_at is "A date in the future at which the subscription will
+// automatically get canceled" (docs.stripe.com/api/subscriptions/object).
+// The customer portal sets the first under classic billing mode and only the
+// second under flexible billing mode, the default for subscriptions made
+// through API versions from 2025-09-30.clover on, STRIPE_VERSION among them
+// ("flexible billing mode uses cancel_at directly rather than
+// cancel_at_period_end ... cancel_at_period_end is set to false and
+// cancel_at is set to the maximum current_period_end across all subscription
+// items", docs.stripe.com/billing/subscriptions/billing-mode/compare and
+// docs.stripe.com/billing/subscriptions/billing-mode). So either the flag, or a
+// cancel_at no later than the period's end, reads as the same thing. A
+// cancel_at further off is not: the subscription renews into the period
+// that holds it first ("the subscription's cycle remains unaffected until
+// the subscription renews into the period that contains the cancel_at
+// date", docs.stripe.com/billing/subscriptions/cancel), and its update
+// notice then reads as ending.
 export function readSubscription(o: J): SubscriptionState | null {
   const id = str(o.id);
   const customerId = idOf(o.customer);
   const status = str(o.status);
   if (!id || !customerId || !status) return null;
   const items = listData(o.items);
-  const periodEnd = latest([secs(o.current_period_end), ...items.map((i) => secs(i.current_period_end))]);
+  const ends = [secs(o.current_period_end), ...items.map((i) => secs(i.current_period_end))].filter((v): v is number => v !== null);
+  const periodEnd = latest(ends);
+  const cancelAt = secs(o.cancel_at);
+  const cancelAtPeriodEnd = o.cancel_at_period_end === true || (cancelAt !== null && ends.length > 0 && cancelAt <= Math.max(...ends));
   const only = items.length === 1 ? items[0] : null;
   const itemId = only ? str(only.id) : null;
   const every = only ? obj(obj(only.price)?.recurring)?.interval : null;
@@ -258,7 +295,7 @@ export function readSubscription(o: J): SubscriptionState | null {
   const update = obj(o.pending_update);
   const pendingItems = update && Array.isArray(update.subscription_items) ? update.subscription_items.map(obj).filter((x): x is J => x !== null) : [];
   const pending = update ? pendingItems.map(priceOf) : null;
-  return { id, customerId, status, periodEnd, userId: userHint(o.metadata), item, pending, createdAt: isoOf(o.created) };
+  return { id, customerId, status, periodEnd, userId: userHint(o.metadata), item, pending, createdAt: isoOf(o.created), cancelAtPeriodEnd };
 }
 
 function isoOf(v: unknown): string | null {
@@ -272,9 +309,12 @@ function readCheckout(o: J): Notice {
   const subscriptionId = idOf(o.subscription);
   if (o.mode !== "subscription" || !userId || !USER_RE.test(userId) || !customerId || !subscriptionId) return { kind: "other" };
   // An unpaid session (a bank debit still clearing) binds the customer and
-  // grants nothing; the invoice.paid that follows grants.
+  // grants nothing; the invoice.paid that follows grants. invoiceId: "ID of
+  // the invoice created by the Checkout Session, if it exists"
+  // (docs.stripe.com/api/checkout/sessions/object), the payment a deleted
+  // account's refund looks for (billing.tsx cancelForDeleted).
   const paid = o.payment_status === "paid" || o.payment_status === "no_payment_required";
-  return { kind: "checkout", userId, customerId, subscriptionId, paid, createdAt: isoOf(o.created) };
+  return { kind: "checkout", userId, customerId, subscriptionId, paid, createdAt: isoOf(o.created), invoiceId: idOf(o.invoice) };
 }
 
 // An Invoice: the subscription under parent.subscription_details in current
@@ -294,7 +334,7 @@ function readInvoice(o: J): Notice {
   // where the time it was paid stands in (billing.tsx, reversed).
   const chargeId = idOf(o.charge) ?? listData(o.payments).map((p) => idOf(obj(p.payment)?.charge)).find((c) => c !== null) ?? null;
   const paidAt = isoOf(obj(o.status_transitions)?.paid_at);
-  return { kind: "period_paid", subscriptionId, customerId, userId, periodEnd, chargeId, paidAt };
+  return { kind: "period_paid", subscriptionId, customerId, userId, periodEnd, chargeId, paidAt, invoiceId: str(o.id) };
 }
 
 // A Charge refunded in full: refunded true, or the amount refunded reaching
@@ -475,8 +515,10 @@ export function stripeSource(env: Env): PaymentSource | null {
       ];
       if (input.customerId) form.push(["customer", input.customerId]);
       else form.push(["customer_email", input.email]);
-      const idempotencyKey =
-        `checkout-${input.userId}-${input.plan}-${input.interval}-${input.lang}-${Math.floor(Date.now() / CHECKOUT_WINDOW_MS)}`;
+      // The ten minutes the request falls in name the key and set the expiry (CHECKOUT_EXPIRES_MS).
+      const slot = Math.floor(Date.now() / CHECKOUT_WINDOW_MS);
+      form.push(["expires_at", String(Math.floor((slot * CHECKOUT_WINDOW_MS + CHECKOUT_EXPIRES_MS) / 1000))]);
+      const idempotencyKey = `checkout-${input.userId}-${input.plan}-${input.interval}-${input.lang}-${slot}`;
       let res = await call<J>(key, "POST", "/checkout/sessions", "checkout session", form, idempotencyKey);
       for (let tries = 1; !res.ok && res.status === 409 && tries < IN_FLIGHT_TRIES; tries++) {
         await new Promise((resolve) => setTimeout(resolve, IN_FLIGHT_WAIT_MS));
@@ -501,8 +543,9 @@ export function stripeSource(env: Env): PaymentSource | null {
       // based on information provided during the payment flow",
       // docs.stripe.com/api/checkout/sessions/object), so a first buyer's
       // open session cannot be found this way; its key keeps two of one
-      // choice to one. A list that cannot be read leaves the others as they
-      // are; an expiry Stripe refuses sends the reader nowhere.
+      // choice to one, and its own expires_at ends it within the hour
+      // (CHECKOUT_EXPIRES_MS). A list that cannot be read leaves the others
+      // as they are; an expiry Stripe refuses sends the reader nowhere.
       const own = str(res.body.id);
       const query = new URLSearchParams([["customer", input.customerId], ["status", "open"], ["limit", String(OPEN_READ)]]);
       const open = await call<J>(key, "GET", `/checkout/sessions?${query}`, "checkout session list");

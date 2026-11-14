@@ -643,6 +643,71 @@ link to it: "Refund now, on the Plan and Billing page, still returns your
 first payment in full. Deleting the account refunds nothing." Deleting the
 account inside the 14 days refunds nothing by itself.
 
+**A payment that lands after the deletion.** A paid notice
+(`checkout.session.completed` paid, or `invoice.paid`) can reach an account
+no longer active: the reader deleted it with Stripe's checkout open in
+another tab, or deleted it before a payment's notices landed. The webhook
+then cancels the subscription at once and grants nothing, as before, and
+the payment itself is refunded in full through Stripe (the operator's
+ruling of 2026-11-14). The code is `cancelForDeleted` and `refundLanded` in
+`site/src/account/billing.tsx`; the tests are
+`site/test/recs-money.test.ts`. In order:
+
+1. `DELETE /v1/subscriptions/<id>`; a cancellation Stripe cannot confirm
+   answers 500, so the notice comes again.
+2. The audit row `plan_changed` "stripe paid on a deleted account,
+   cancelled <sub id>", written once.
+3. The payment: the charge the invoice names, else the invoice the notice
+   names (`GET /v1/invoices/<id>` with its payments, the charge found as the
+   console finds it), else the subscription's newest paid invoice that took
+   money (a checkout naming no invoice). A charge refunded in full already
+   (by an earlier notice of the same payment, the console or Stripe's
+   dashboard) counts as refunded and nothing is asked.
+4. The refund: `POST /v1/refunds` with `charge=<id>` and no amount, under
+   the header `Idempotency-Key: operator-refund-<charge id>`, the console's
+   and Refund now's own key and parameters. The checkout and the invoice of
+   one payment, a notice delivered again, and a retry after an answer lost
+   on the way back make one refund: Stripe gives the first answer back
+   under the key for at least 24 hours ("Retries with the same key return
+   the saved response, including 500 errors",
+   docs.stripe.com/api/idempotent_requests), and "Once entirely refunded, a
+   charge can't be refunded again" (docs.stripe.com/api/refunds/create). A
+   refund Stripe gives as `succeeded`, `pending` or `requires_action` is
+   taken; otherwise the charge is read again, and refunded in full there is
+   taken too.
+5. The customer and the cancelled subscription are bound to the deleted
+   account (`payment_customers`, status `canceled`), so the refund's own
+   notices find it.
+6. The outcome, a second audit row with the same words and then "refunded",
+   or "unrefunded <reason>".
+
+A refusal that asking again cannot change is recorded and the notice
+answers 200, so a payment that cannot be refunded does not keep its notice
+coming back: a disputed charge (Stripe: "You can't issue a refund outside the
+dispute process while the dispute is open"; no refund is asked,
+`charge_disputed`), a refund Stripe gives back `failed` or `canceled` (its
+`failure_reason`), a refusal answered 400, 402 or 404 (Stripe's error
+`code`, or `refused`; "Retrying a cached 400 response with the same key
+returns the same error", docs.stripe.com/error-low-level), no invoice or
+charge that took money (`no_charge`), and a charge of another customer
+(`other_customer`, never refunded). Stripe's documentation names no age
+past which a card payment cannot be refunded; a refusal for its age would
+be one of those answers. Anything else (409, 429, 401, 403, a 5xx, no
+answer, an `idempotency_error`) answers 500, and the notice comes again.
+
+The refund's own `charge.refunded` records the charge in
+`payment_reversals` once and ends nothing (the account has no live row);
+`refund.failed`, if the card cannot take it, writes `refund_failed` under
+the account's id as for any refund. The daily check reads the audit rows
+(*Payments*, *Known limits*): "refunded in full", "could not be refunded
+(<reason>)", or, while only the first row stands, "not confirmed yet".
+A subscription that could still bill but reports no payment ("stripe live
+on a deleted account") is cancelled and named as before, with nothing
+refunded. The delete page's lines are unchanged: a late `invoice.paid` for
+the subscription the deletion cancelled changes nothing, as before, so a
+period paid while the account was open is not refunded by the deletion. The
+one exception is under *Payments*, *Known limits*.
+
 ## Bug reports
 
 A Pro account can report a bug at `/account/bug` (feature `bug_reports`;
@@ -1494,7 +1559,7 @@ API version (`STRIPE_VERSION`, `2026-10-28.endive`).
 
 | Route | Guards | What it does |
 |---|---|---|
-| `GET /account/billing` | session | The plan today. Without a subscription: what Pro includes, a monthly and a yearly button with the configured prices and "Taxes added at checkout". With one: its status, the end of the period paid and a button to Stripe's portal, and, while the account is offered it, the Refund of the First Payment panel (*Refund of the first payment*, below); `?refund=confirm` shows that panel's confirmation step. Without the keys or the prices: "Paying for Pro is not available yet." |
+| `GET /account/billing` | session | The plan today. Without a subscription: what Pro includes, a monthly and a yearly button with the configured prices and "Taxes added at checkout". With one: its status, the end of the period paid and a button to Stripe's portal (while a cancellation is set there, the end reads "Ends, does not renew" with a line saying the plan continues until then: *A cancellation set in the portal*, below), and, while the account is offered it, the Refund of the First Payment panel (*Refund of the first payment*, below); `?refund=confirm` shows that panel's confirmation step. Without the keys or the prices: "Paying for Pro is not available yet." |
 | `POST /account/billing/checkout` | session, CSRF, Origin | Creates a Checkout Session and redirects (303) to it, under an `Idempotency-Key` naming the user, the choice (the plan, the interval, the page's language) and the ten minutes the request falls in: two checkouts of one choice started together get the one session, and another choice (back from Stripe's page by its back link, then the other interval or plan) starts its own at once. For a returning customer the other open sessions of the customer are then expired, so only the new one can be paid (*Checkout and its way back*, below). A request Stripe is still handling after three tries, or the same key with other details, gets "A checkout started from this account a moment ago is still being prepared at Stripe. Try again in a minute, or in ten minutes if this message comes back." (409). A user whose subscription can still bill is sent to Stripe's portal instead (a billing page left open from before the subscription would otherwise start a second one). |
 | `POST /account/billing/portal` | session, CSRF, Origin | Creates a portal session for the stored customer and redirects (303) to it. |
 | `POST /account/billing/change` | session, CSRF, Origin | A move between Pro and Ultra, opened on Stripe's portal at the move itself (*Ultra*, *Moving between the plans*). |
@@ -1508,7 +1573,9 @@ the 3 days of grace (`billingLine`). A row is written and extended only by a
 paid notice, so the date never names a period not paid yet; the
 subscription's `current_period_end` moves forward at the renewal, before
 its payment is taken, and the billing page shows it only as "Current period
-ends". The overview links the billing page in either case.
+ends". While a cancellation is set for the end of that period the overview
+reads "Pro, ends on <date>" (or Ultra) with the same date. The overview
+links the billing page in either case.
 
 While a subscription can still bill (`liveSubscription`) the billing page
 draws no Subscribe panel, since a checkout would go to the portal: the plan
@@ -1528,7 +1595,8 @@ quantity 1, `client_reference_id` and `subscription_data[metadata][user_id]`
 set to the user id, the user's address in `customer_email` (or, for a
 returning subscriber, the stored `customer`), `success_url`
 `/account?billing=done&session={CHECKOUT_SESSION_ID}`, `cancel_url`
-`/account/billing`, and `locale` `en` or `fr-CA` from the page language. No
+`/account/billing`, `locale` `en` or `fr-CA` from the page language, and
+`expires_at` (below). No
 `automatic_tax` and no `customer_update[address]`: under Managed Payments
 the service computes and collects the tax itself from the address Checkout
 asks for, and its documentation lists both among the parameters an
@@ -1560,10 +1628,30 @@ reader is sent on; an expiry Stripe refuses answers "could not be reached"
 others open. A first buyer's open session cannot be found that way: a
 session made with `customer_email` has no customer until it completes, and
 Stripe's list filters by customer, not by `client_reference_id`. Its earlier
-session stays open until its own `expires_at` ("By default, this value is
-24 hours from creation", docs.stripe.com/api/checkout/sessions/create);
-paying both would make a second subscription, which the daily check names
-(below).
+session stays open until its own `expires_at`; paying both within that time
+would make a second subscription, which the daily check names (below).
+
+Every session is therefore made with `expires_at`, so it stays payable
+about an hour instead of Stripe's day ("The Epoch time in seconds at which
+the Checkout Session will expire. It can be anywhere from 30 minutes to 24
+hours after Checkout Session creation. By default, this value is 24 hours
+from creation", docs.stripe.com/api/checkout/sessions/create). The value is
+in seconds: 60 minutes (`CHECKOUT_EXPIRES_MS` in
+`site/src/account/stripe.ts`) after the start of the ten minutes the
+session's idempotency key names, so 50 to 60 minutes after the session is
+made. It follows the key's ten minutes because Stripe refuses one key with
+other parameters: a second press of the same choice inside those ten
+minutes sends the same value and is given back the first session, with its
+original expiry. A reader who comes back to an expired session finds
+Stripe's page saying so ("customers loading the Checkout Session see a
+message saying the Checkout Session is expired",
+docs.stripe.com/api/checkout/sessions/expire) and can pay nothing there.
+Stripe's documentation does not say where that page links; its back button,
+when Checkout shows one, is `cancel_url` ("customers will be directed to
+this URL if they decide to cancel payment and return to your website"),
+the billing page, where Subscribe starts a new session. The success address
+is reached only by a session that completed, so an expired one binds
+nothing there.
 
 The site's Content-Security-Policy keeps `form-action 'self'` on every page,
 except that the billing pages also allow `https://checkout.stripe.com` and
@@ -1572,6 +1660,45 @@ browser applies `form-action` to the redirect after a form post, so without
 them the 303 to Stripe would be blocked. A custom Checkout domain in Stripe
 would need its host added there (`site/src/account/stripe.ts`); a session
 URL on any other host is refused with the "could not be reached" page.
+
+#### A cancellation set in the portal
+
+A subscriber who cancels on Stripe's portal keeps the plan to the end of
+the period paid, and the site says so. Stripe marks such a subscription in
+one of two ways: `cancel_at_period_end` ("Whether this subscription will
+(if status=active) or did (if status=canceled) cancel at the end of the
+current billing period") or `cancel_at` ("A date in the future at which the
+subscription will automatically get canceled",
+docs.stripe.com/api/subscriptions/object). The portal sets the flag under
+classic billing mode and only `cancel_at` under flexible billing mode
+("`cancel_at_period_end` is set to `false` and `cancel_at` is set to the
+maximum `current_period_end` across all subscription items",
+docs.stripe.com/billing/subscriptions/billing-mode/compare), the default for
+subscriptions made through the API from version `2025-09-30.clover` on
+(docs.stripe.com/billing/subscriptions/billing-mode). `readSubscription`
+reads either: the flag, or a `cancel_at` no later than the current period's
+end. A `cancel_at` further off is left alone: the subscription renews into
+the period that holds it first, and that update then reads as ending.
+
+`bind` writes the result to `payment_customers.cancel_at_period_end` from
+the checkout notice's read of the subscription, the paid invoice's read and
+every update notice's snapshot (the way back from checkout too); a notice
+with no read keeps the stored value. While it is 1 for a subscription that
+can still bill, the billing page shows "Ends, does not renew" with the
+period's end in place of "Current period ends", and the line "The
+subscription was cancelled and is not charged again. Pro continues until
+<date>, and Stripe's page can undo the cancellation until then." (Ultra for
+an Ultra subscriber); the overview and the billing page's lead read "Pro,
+ends on <date>". Undoing the cancellation on the portal sends an update
+with neither set, and the usual lines come back. The flag changes no plan:
+`customer.subscription.deleted` ends the row at the period's end, as for
+any cancellation. The console's subscription panel reads it the same way
+("Ends at the period end").
+
+A database made before the column still works: each read and the write
+that name it fall back to the row without it, the flag reading 0, and one
+log line per isolate says so (`missingFlag`); no notice and no page fails
+for it. The column is added once by hand (step 8 of *Operator steps*).
 
 ### What each notice does
 
@@ -1586,13 +1713,13 @@ checkout, granted", "stripe renewed, extended", "stripe ended, canceled",
 
 | Event | Effect |
 |---|---|
-| `checkout.session.completed` | Binds the customer and subscription to the user named by `client_reference_id`, reads the subscription from Stripe for its status and period end, and, when the session is paid and the subscription active, writes a Pro row from now to the period end plus 3 days of grace. A session still unpaid (a bank debit clearing) grants nothing; its `invoice.paid` grants. An account deleted while Stripe's page was open has the new subscription cancelled at once; a paid one is also an item of the daily check ("stripe paid on a deleted account, cancelled <sub id>"). |
-| `invoice.paid` | Extends the subscription's live row to the paid period's end plus 3 days (never shortening it), or writes a row when none is live (a first period whose checkout notice has not arrived, a renewal paid after a lapse). The status recorded is the one Stripe gives on the read this notice makes for the plan, never the one held before it, so a checkout or an update taken while the read was on its way is not written over. Nothing for a subscription already canceled or expired, nor for a payment already reversed: its charge is in `payment_reversals`, or the customer has a reversal made at or after the invoice was paid (a notice delayed past its refund names no charge in current API versions). A checkout made before a reversal of its customer grants nothing either; one made after it grants. On a deleted account the subscription is cancelled, nothing is granted, and the daily check names it. |
-| `customer.subscription.updated` | Records the status and the period end. `canceled`, `unpaid` or `incomplete_expired` sets the live row's end to now. `past_due` changes nothing: Pro runs to the end of the grace while Stripe retries the card. A `canceled` or `incomplete_expired` status of the bound subscription is never replaced: Stripe calls canceled "a terminal state that can't be updated", so an update saying otherwise was sent before it. On a deleted account, a subscription Stripe says can still bill is cancelled and named by the daily check ("stripe live on a deleted account, cancelled <sub id>"). |
+| `checkout.session.completed` | Binds the customer and subscription to the user named by `client_reference_id`, reads the subscription from Stripe for its status and period end, and, when the session is paid and the subscription active, writes a Pro row from now to the period end plus 3 days of grace. A session still unpaid (a bank debit clearing) grants nothing; its `invoice.paid` grants. An account deleted while Stripe's page was open has the new subscription cancelled at once; a paid session's payment is then refunded in full through Stripe and named by the daily check (*Deletion*, below). |
+| `invoice.paid` | Extends the subscription's live row to the paid period's end plus 3 days (never shortening it), or writes a row when none is live (a first period whose checkout notice has not arrived, a renewal paid after a lapse). The status recorded is the one Stripe gives on the read this notice makes for the plan, never the one held before it, so a checkout or an update taken while the read was on its way is not written over. Nothing for a subscription already canceled or expired, nor for a payment already reversed: its charge is in `payment_reversals`, or the customer has a reversal made at or after the invoice was paid (a notice delayed past its refund names no charge in current API versions). A checkout made before a reversal of its customer grants nothing either; one made after it grants. On a deleted account the subscription is cancelled, nothing is granted, the payment is refunded in full through Stripe, and the daily check names it (*Deletion*, below). |
+| `customer.subscription.updated` | Records the status, the period end and whether a cancellation is set for that end (*A cancellation set in the portal*, below). `canceled`, `unpaid` or `incomplete_expired` sets the live row's end to now. `past_due` changes nothing: Pro runs to the end of the grace while Stripe retries the card. A `canceled` or `incomplete_expired` status of the bound subscription is never replaced: Stripe calls canceled "a terminal state that can't be updated", so an update saying otherwise was sent before it. On a deleted account, a subscription Stripe says can still bill is cancelled and named by the daily check ("stripe live on a deleted account, cancelled <sub id>"). |
 | `customer.subscription.deleted` | Sets the live row's end to now. |
-| `charge.refunded` | When the charge is refunded in full (`refunded` true, or `amount_refunded` reaching `amount`): records the charge in `payment_reversals` at the reversal's own time (the event's `created`, Stripe's whole seconds; the time the notice is taken when it has none) and ends now every live Stripe row of the account bound to the charge's customer that existed at that time. A row written after it is kept when Stripe made its subscription after the reversal (a subscription bought after a Refund now, on the same customer, whenever the refund's notice lands), and ends otherwise (a payment notice delayed past its own refund); its subscription is read from Stripe for that, and a failed read answers 500. A partial refund changes nothing. |
+| `charge.refunded` | When the charge is refunded in full (`refunded` true, or `amount_refunded` reaching `amount`): records the charge in `payment_reversals` at the reversal's own time (the event's `created`, Stripe's whole seconds; the time the notice is taken when it has none) and ends now every live Stripe row of the account bound to the charge's customer that existed at that time. A row written after it is kept when Stripe made its subscription after the reversal (a subscription bought after a Refund now, on the same customer, whenever the refund's notice lands), and ends otherwise (a payment notice delayed past its own refund); its subscription is read from Stripe for that, and a failed read answers 500. A partial refund changes nothing. The notice of a refund made for a deleted account (*Deletion*) records its charge once and ends nothing, the account having no live row. |
 | `charge.dispute.created` | The same as a full refund, for the account bound to the disputed charge's customer (the charge is read from Stripe for it; a failed read answers 500 and the notice comes again). |
-| `refund.failed` | A refund Stripe took that failed later (a pending refund the balance did not cover within 45 days, a closed card). No plan changes: the plan ended with the refund's notice, and what follows is the operator's decision. An audit row `refund_failed` holds the charge's id and Stripe's `failure_reason` under the account's id (the customer is the refund's, or the charge's, read from Stripe), and the daily check names the account. |
+| `refund.failed` | A refund Stripe took that failed later (a pending refund the balance did not cover within 45 days, a closed card). No plan changes: the plan ended with the refund's notice, and what follows is the operator's decision. An audit row `refund_failed` holds the charge's id and Stripe's `failure_reason` under the account's id (the customer is the refund's, or the charge's, read from Stripe), and the daily check names the account. That covers a refund made for a deleted account too: its customer is bound to the deleted account when the refund is made. |
 | any other type | Recorded and answered 200; nothing changes. |
 
 The user is found by the subscription or customer already bound, and
@@ -1633,9 +1760,8 @@ until it gets a 2xx) answers 200 the second time and changes nothing.
   cannot confirm one, the account is kept and the page says to try again. A
   subscription whose notices had not landed yet is cancelled when its first
   paid or subscription notice lands on the deleted account, which then
-  grants nothing and leaves an item on the daily check: that payment was
-  taken, and whether to refund it is the operator's decision (the site
-  refunds nothing by itself).
+  grants nothing; a payment that notice reports is refunded in full
+  through Stripe, and the daily check names it either way (*Deletion*).
 - **A refund from the billing page fails closed.** Anything Stripe refuses,
   or any read it does not answer, refunds nothing and cancels nothing, and
   the reader is sent to the contact address (*Refund of the first payment*).
@@ -1814,8 +1940,9 @@ check in Stripe's dashboard and on the site:
 
 ### What is kept
 
-`payment_customers` holds Stripe's ids, the subscription's status and the
-end of the period paid; `payment_events` holds Stripe's event ids and types;
+`payment_customers` holds Stripe's ids, the subscription's status, the
+end of the period paid and whether a cancellation is set for that end;
+`payment_events` holds Stripe's event ids and types;
 `payment_reversals` holds the charges refunded in full or disputed, with
 their customer ids and the time the refund or dispute was made (the event's
 own `created`; the column's comment in `accounts_schema.sql` still says
@@ -1873,8 +2000,9 @@ is deleted, tied to the id alone like the entitlement rows.
    read that resource", docs.stripe.com/keys/restricted-api-keys), so
    Checkout Sessions write also covers reading a session on the way back
    from checkout, listing a returning customer's open sessions and expiring
-   them. The operator console and the billing page's refund need Refunds
-   write and Invoices read as well (*Stripe key permissions*).
+   them. The operator console, the billing page's refund and the webhook's
+   refund of a payment that lands on a deleted account (*Deletion*) need
+   Refunds write and Invoices read as well (*Stripe key permissions*).
 7. **The four variables** in `site/wrangler.jsonc`: `STRIPE_PRICE_MONTHLY`
    and `STRIPE_PRICE_YEARLY` (the price ids), `PRICE_MONTHLY_CAD` `"18.99"` and
    `PRICE_YEARLY_CAD` `"189.99"` (shown on the billing page as CA$18.99 and
@@ -1887,6 +2015,15 @@ is deleted, tied to the id alone like the entitlement rows.
 
    ```
    npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+   ```
+
+   A database made before `payment_customers.cancel_at_period_end` takes
+   the column once (`CREATE TABLE IF NOT EXISTS` does not add a column to a
+   table already there); until then the site reads the flag as 0 (*A
+   cancellation set in the portal*):
+
+   ```
+   npx wrangler d1 execute awardwatch-accounts --remote --command="ALTER TABLE payment_customers ADD COLUMN cancel_at_period_end INTEGER NOT NULL DEFAULT 0"
    ```
 
 9. **A test in Stripe's test mode, locally.** Never put test keys on the
@@ -1927,9 +2064,11 @@ their end.
   the idempotency key, once a subscription is bound the checkout button
   sends the user to the portal, and the way back from checkout binds it
   even when its notices fail. Two subscriptions can still come from a first
-  buyer who pays two open sessions of different choices (the earlier one
-  cannot be found to expire), or from checkouts started either side of a
-  ten-minute boundary before either notice or return was taken. The second
+  buyer who pays two open sessions of different choices within the hour
+  each stays payable (the earlier one cannot be found to expire; its own
+  `expires_at` ends it 50 to 60 minutes after it was made), or from
+  checkouts started either side of a ten-minute boundary before either
+  notice or return was taken. The second
   is bound only if the first has ended; the audit records "stripe second
   subscription", and the daily check names the account (below). Cancel the
   extra one in the dashboard, then refund it. A Stripe failure is kept under
@@ -1944,20 +2083,43 @@ their end.
 
   ```
   An account is billed by more than one Stripe subscription: account <user id>, subscriptions <sub id> and <sub id>. Each bills every period: cancel the extra one in Stripe's dashboard and refund what it took.
-  A payment landed on a deleted account: account <user id>, subscription <sub id>. The subscription is cancelled and nothing was granted. Whether to refund the payment is the operator's decision (Stripe's dashboard).
+  A payment landed on a deleted account: account <user id>, subscription <sub id>. The subscription is cancelled, nothing was granted, and the payment was refunded in full. No action is needed; a refund that fails later has a line of its own.
+  A payment landed on a deleted account: account <user id>, subscription <sub id>. The subscription is cancelled and nothing was granted, but the payment could not be refunded (<reason>). Look at the payment in Stripe's dashboard. A disputed payment is settled through its dispute; for any other reason, refund the person another way.
+  A payment landed on a deleted account: account <user id>, subscription <sub id>. The subscription is cancelled and nothing was granted. The refund of the payment is not confirmed yet; the site asks again each time Stripe resends the notice, for up to three days. If this line is still here after that, refund the payment in Stripe's dashboard.
   A subscription that could still bill reached a deleted account: account <user id>, subscription <sub id>. It is cancelled and nothing was granted. Check in Stripe's dashboard whether it took a payment after the deletion.
   A refund failed after Stripe took it: account <user id>, charge <charge id> (<reason>). The site changed no plan; the money is back in the Stripe balance. Refund the person another way, or grant the plan by hand.
   ```
 
   The first stands while two live Stripe rows of the account name two
   subscriptions, so cancelling the extra one (its notice ends its row)
-  clears it. The other three are audit rows (`plan_changed` "stripe paid on
-  a deleted account, cancelled <sub id>" or "stripe live on a deleted
-  account, cancelled <sub id>", and `refund_failed`), which nothing clears:
-  each repeats for 14 days (`MONEY_ITEM_DAYS`). The site refunds nothing by
-  itself; whether a payment that landed on a deleted account is refunded is
-  the operator's decision. A fault reading the statement is logged and
-  never a line of its own.
+  clears it. The others are audit rows (`plan_changed` "stripe paid on a
+  deleted account, cancelled <sub id>", the same followed by "refunded" or
+  "unrefunded <reason>", "stripe live on a deleted account, cancelled <sub
+  id>", and `refund_failed`), which nothing clears: each repeats for 14 days
+  (`MONEY_ITEM_DAYS`). A payment's first row reads "not confirmed yet" until
+  its outcome row is written, which then stands in its place
+  (`readMoneyItems`); a row written before the refunds existed reads the
+  same way, and asks for the refund by hand. The reasons are Stripe's
+  error codes or `failure_reason` (`charge_disputed`,
+  `refund_disputed_payment` and so on), or the site's own `no_charge` and
+  `other_customer` (*Deletion*). A fault reading the statement is logged
+  and never a line of its own.
+- **A refund for a deleted account that Stripe answers 500.** Stripe keeps
+  that answer under the charge's key for at least 24 hours and gives it to
+  every retry, so the notice answers 500 until the key is pruned; Stripe
+  resends a notice for up to three days, so a later delivery makes the
+  refund. A refund that is still not made when Stripe stops is the "not
+  confirmed yet" line, for the operator.
+- **A paid checkout notice that lands after the deletion is refunded** even
+  when the site had bound its subscription before (the way back from
+  checkout binds it while the notices still fail, or a notice that granted
+  the plan failed afterwards and came again), since `checkout.session.completed`
+  on a deleted account always cancels and refunds. The delete page's "the
+  period already paid is not refunded" does not hold for that payment.
+- **The cancellation flag follows the last notice taken**, as the status
+  does: an update notice delivered after a later one (Stripe keeps no
+  order) can show the older state until the next notice. It decides no
+  plan.
 - Prices change in Stripe (a new price, then the variables); existing
   subscriptions keep their price until moved in the dashboard.
 
@@ -2811,7 +2973,10 @@ each page.
 With the console, the restricted key of *Payments*, step 6, needs:
 Subscriptions write (cancelling, already needed for deletion), Refunds
 write, and Invoices and Charges read. The billing page's own refund
-(*Refund of the first payment*) uses the same four. Without the Stripe
+(*Refund of the first payment*) uses the same four, and so does the
+webhook's refund of a payment that lands on a deleted account (*Deletion*:
+Subscriptions write to cancel, Invoices read for the invoice, Charges read
+for its charge, Refunds write). Without the Stripe
 secrets the user page shows the stored row alone and offers no
 cancellation or refund, and the billing page offers no refund either.
 

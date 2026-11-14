@@ -285,10 +285,15 @@ export function planLabel(lang: Lang, account: Pick<Account, "plan" | "planUntil
 
 // The plan as the overview and the billing page state it: a live Stripe
 // subscription names the end of the period paid (billing.tsx), not the end
-// of its grace; any other plan reads as planLabel.
+// of its grace, as the date the plan ends when a cancellation is set for it
+// (billingLine ends); any other plan reads as planLabel.
 export function planLine(lang: Lang, account: Pick<Account, "plan" | "planUntil">, billing?: BillingLine | null): string {
   if (billing?.stripe && account.plan !== "free") {
-    return t(lang, account.plan === "ultra" ? "billing.plan_stripe_ultra" : "billing.plan_stripe", { date: day(billing.periodEnd ?? account.planUntil) });
+    const ultra = account.plan === "ultra";
+    const key = billing.ends
+      ? (ultra ? "billing.plan_stripe_ultra_ends" : "billing.plan_stripe_ends")
+      : (ultra ? "billing.plan_stripe_ultra" : "billing.plan_stripe");
+    return t(lang, key, { date: day(billing.periodEnd ?? account.planUntil) });
   }
   return planLabel(lang, account);
 }

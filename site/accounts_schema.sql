@@ -172,7 +172,7 @@ CREATE TABLE IF NOT EXISTS entitlement_tiers (
 -- One row per delivery run of a saved search (src/account/deliveries.ts):
 -- sent (the message left), failed (the mail service refused it) or empty
 -- (nothing new, no message). sent_at is the run's time; items is how many
--- records matched, past the 50 a message lists.
+-- records matched, past the 50 a message lists. Rows go after 90 days.
 CREATE TABLE IF NOT EXISTS deliveries (
   id INTEGER PRIMARY KEY,
   saved_search_id TEXT NOT NULL REFERENCES saved_searches(id) ON DELETE CASCADE,
@@ -254,9 +254,11 @@ CREATE INDEX IF NOT EXISTS idx_audit_at ON audit(at);
 -- is the end of the period paid for. The plan is still decided by the
 -- entitlements rows; this row tells the billing page what to offer and the
 -- webhook which user a notice is about. No card, no address, no amount.
--- cancel_at_period_end is Stripe's flag of the same name, 1 once the person
--- has cancelled in Stripe's portal and the subscription runs to the end of
--- the period paid, so the billing page can say it does not renew. A database
+-- cancel_at_period_end is 1 once the person has cancelled in Stripe's portal
+-- and the subscription runs to the end of the period paid: Stripe's flag of
+-- the same name, or a cancel_at date no later than the period's end, which is
+-- how the portal records it under the API version the site pins (stripe.ts
+-- readSubscription). The billing page then says it does not renew. A database
 -- made before the column takes it once, by hand (docs/accounts.md, Operator
 -- steps): ALTER TABLE payment_customers ADD COLUMN cancel_at_period_end
 -- INTEGER NOT NULL DEFAULT 0;

@@ -49,10 +49,12 @@ export type ItemPrice = { price: string | null; product: string | null };
 // several), with the interval its price bills at (null for any other than
 // a month or a year); pending the items of a pending update, null when there
 // is none. createdAt: when the service made it (ISO), when it says.
+// cancelAtPeriodEnd: a cancellation is set for the end of the current period,
+// so the subscription is not charged again (stripe.ts readSubscription).
 export type SubscriptionState = {
   id: string; customerId: string; status: string; periodEnd: string | null; userId: string | null;
   item: ({ id: string; interval: Interval | null } & ItemPrice) | null; pending: ItemPrice[] | null;
-  createdAt?: string | null;
+  createdAt?: string | null; cancelAtPeriodEnd?: boolean;
 };
 
 // A checkout session read back on the way home from the service's page
@@ -68,11 +70,13 @@ export type CheckoutSession = {
 export type Notice =
   // createdAt: when the session was made; paidAt: when the invoice was paid;
   // chargeId: the charge that paid it, when the invoice names one. Read
-  // against the reversals already taken (billing.tsx).
-  | { kind: "checkout"; userId: string; customerId: string; subscriptionId: string; paid: boolean; createdAt: string | null }
+  // against the reversals already taken (billing.tsx). invoiceId: the
+  // invoice the session made, or the one paid, when the notice names it; the
+  // payment a refund on a deleted account looks for.
+  | { kind: "checkout"; userId: string; customerId: string; subscriptionId: string; paid: boolean; createdAt: string | null; invoiceId?: string | null }
   | {
     kind: "period_paid"; subscriptionId: string; customerId: string; userId: string | null; periodEnd: string | null;
-    chargeId: string | null; paidAt: string | null;
+    chargeId: string | null; paidAt: string | null; invoiceId?: string | null;
   }
   | { kind: "subscription"; subscription: SubscriptionState; deleted: boolean }
   // A charge refunded in full, or disputed: the money for a period went back

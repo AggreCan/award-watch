@@ -145,7 +145,9 @@ export type RefundToCancel = { userId: string; subscriptionId: string };
 //   clears it. At ?1, the check's instant.
 // - deleted: a payment, or a subscription that could still bill, that landed
 //   on a deleted account (billing.tsx cancelForDeleted): "<user id> paid|live
-//   <subscription id>". Whether to refund is the operator's decision.
+//   <subscription id>", a payment's followed by what became of its refund,
+//   "refunded" or "unrefunded <reason>"; a payment's item without it is a
+//   refund not confirmed yet, and gives way to its outcome (readMoneyItems).
 // - failed: a refund Stripe took that failed later (refund.failed,
 //   billing.tsx onRefundFailed): "<user id> <charge id> <reason>".
 // The last two are audit rows, which nothing clears: each stands for
@@ -164,9 +166,11 @@ export const MONEY_ITEMS_SQL =
   "(SELECT group_concat(item, ',') FROM (SELECT a.user_id || ' ' || a.detail AS item, MAX(a.at) AS t FROM audit a " +
   `WHERE a.event = 'refund_failed' AND a.at >= ?2 GROUP BY item ORDER BY t DESC LIMIT ${MONEY_ITEMS_MAX})) AS failed`;
 
+// deleted.refund, for a payment: "unconfirmed" while no outcome is recorded,
+// "refunded", or "refused" with Stripe's code or the site's reason.
 export type MoneyItems = {
   second: { userId: string; subscriptions: string[] }[];
-  deleted: { userId: string; kind: "paid" | "live"; subscriptionId: string }[];
+  deleted: { userId: string; kind: "paid" | "live"; subscriptionId: string; refund?: "unconfirmed" | "refunded" | "refused"; reason?: string }[];
   failed: { userId: string; chargeId: string; reason: string }[];
 };
 
@@ -382,9 +386,19 @@ function moneyAlerts(m: MoneyItems | null): string[] {
   if (!m) return [];
   return [
     ...m.second.map((s) => `An account is billed by more than one Stripe subscription: account ${s.userId}, subscriptions ${s.subscriptions.join(" and ")}. Each bills every period: cancel the extra one in Stripe's dashboard and refund what it took.`),
-    ...m.deleted.map((d) => d.kind === "paid"
-      ? `A payment landed on a deleted account: account ${d.userId}, subscription ${d.subscriptionId}. The subscription is cancelled and nothing was granted. Whether to refund the payment is the operator's decision (Stripe's dashboard).`
-      : `A subscription that could still bill reached a deleted account: account ${d.userId}, subscription ${d.subscriptionId}. It is cancelled and nothing was granted. Check in Stripe's dashboard whether it took a payment after the deletion.`),
+    ...m.deleted.map((d) => {
+      const landed = `A payment landed on a deleted account: account ${d.userId}, subscription ${d.subscriptionId}.`;
+      if (d.kind === "live") {
+        return `A subscription that could still bill reached a deleted account: account ${d.userId}, subscription ${d.subscriptionId}. It is cancelled and nothing was granted. Check in Stripe's dashboard whether it took a payment after the deletion.`;
+      }
+      if (d.refund === "refunded") {
+        return `${landed} The subscription is cancelled, nothing was granted, and the payment was refunded in full. No action is needed; a refund that fails later has a line of its own.`;
+      }
+      if (d.refund === "refused") {
+        return `${landed} The subscription is cancelled and nothing was granted, but the payment could not be refunded (${d.reason}). Look at the payment in Stripe's dashboard. A disputed payment is settled through its dispute; for any other reason, refund the person another way.`;
+      }
+      return `${landed} The subscription is cancelled and nothing was granted. The refund of the payment is not confirmed yet; the site asks again each time Stripe resends the notice, for up to three days. If this line is still here after that, refund the payment in Stripe's dashboard.`;
+    }),
     ...m.failed.map((f) => `A refund failed after Stripe took it: account ${f.userId}, charge ${f.chargeId} (${f.reason}). The site changed no plan; the money is back in the Stripe balance. Refund the person another way, or grant the plan by hand.`),
   ];
 }
@@ -395,16 +409,26 @@ const SUBSCRIPTION_RE = /^sub_[A-Za-z0-9]{1,100}$/;
 const PAYMENT_RE = /^(ch|py|re|pyr)_[A-Za-z0-9]{1,100}$/;
 const REASON_RE = /^[a-z_]{1,40}$/;
 
-// The row MONEY_ITEMS_SQL answers, each item in its own shape; anything else is dropped.
+// The row MONEY_ITEMS_SQL answers, each item in its own shape; anything else
+// is dropped. A payment's item without an outcome gives way to one with it
+// for the same account and subscription (the first row a refund on a
+// deleted account writes, then its outcome: billing.tsx cancelForDeleted).
 export function readMoneyItems(row: unknown): MoneyItems {
   const r = row && typeof row === "object" ? (row as Record<string, unknown>) : {};
   const items = (v: unknown): string[][] => (typeof v === "string" && v ? v.split(",").map((x) => x.split(" ")) : []);
+  const deleted = items(r.deleted).flatMap<MoneyItems["deleted"][number]>(([userId, kind, subscriptionId, outcome, reason, rest]) => {
+    if (rest !== undefined || !USER_RE.test(userId ?? "") || (kind !== "paid" && kind !== "live") || !SUBSCRIPTION_RE.test(subscriptionId ?? "")) return [];
+    if (kind === "live") return outcome === undefined ? [{ userId, kind, subscriptionId }] : [];
+    if (outcome === undefined) return [{ userId, kind, subscriptionId, refund: "unconfirmed" as const }];
+    if (outcome === "refunded" && reason === undefined) return [{ userId, kind, subscriptionId, refund: "refunded" as const }];
+    if (outcome === "unrefunded" && REASON_RE.test(reason ?? "")) return [{ userId, kind, subscriptionId, refund: "refused" as const, reason }];
+    return [];
+  });
+  const settled = new Set(deleted.filter((d) => d.refund === "refunded" || d.refund === "refused").map((d) => `${d.userId} ${d.subscriptionId}`));
   return {
     second: items(r.second).flatMap(([userId, ...subs]) =>
       USER_RE.test(userId ?? "") && subs.length > 1 && subs.every((s) => SUBSCRIPTION_RE.test(s)) ? [{ userId, subscriptions: subs }] : []),
-    deleted: items(r.deleted).flatMap(([userId, kind, subscriptionId, rest]) =>
-      rest === undefined && USER_RE.test(userId ?? "") && (kind === "paid" || kind === "live") && SUBSCRIPTION_RE.test(subscriptionId ?? "")
-        ? [{ userId, kind, subscriptionId }] : []),
+    deleted: deleted.filter((d) => d.refund !== "unconfirmed" || !settled.has(`${d.userId} ${d.subscriptionId}`)),
     failed: items(r.failed).flatMap(([userId, chargeId, reason, rest]) =>
       rest === undefined && USER_RE.test(userId ?? "") && PAYMENT_RE.test(chargeId ?? "") && REASON_RE.test(reason ?? "")
         ? [{ userId, chargeId, reason }] : []),

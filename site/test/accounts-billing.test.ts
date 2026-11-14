@@ -57,6 +57,8 @@ function answer(method: string, path: string): Reply {
   if (key === "POST /v1/checkout/sessions") return { body: { id: "cs_test_1", object: "checkout.session", url: "https://checkout.stripe.com/c/pay/cs_test_1#fragment" } };
   if (key === "POST /v1/billing_portal/sessions") return { body: { id: "bps_1", object: "billing_portal.session", url: "https://billing.stripe.com/p/session/test_1" } };
   const id = path.split("/").pop() ?? "";
+  // No paid invoice is held here: a payment on a deleted account is looked for and not found (its refund: recs-money.test.ts).
+  if (key === "GET /v1/invoices") return { body: { object: "list", data: [], has_more: false } };
   if (key === "GET /v1/subscriptions/:id") return subs.has(id) ? { body: subs.get(id) } : { status: 404, body: { error: { code: "resource_missing" } } };
   if (key === "DELETE /v1/subscriptions/:id") {
     const s = subs.get(id);
@@ -317,7 +319,8 @@ describe("the webhook's notices", () => {
     const { sub, cus } = ids();
     subs.set(sub, subscriptionObject(sub, cus, "active", nowS() + 30 * DAY_S, user));
     expect((await deliver(checkoutCompleted(user, sub, cus))).status).toBe(200);
-    expect(sent.map((s) => `${s.method} ${new URL(s.url).pathname}`)).toEqual([`DELETE /v1/subscriptions/${sub}`]);
+    // The cancellation first, then the payment is looked for to be refunded.
+    expect(sent.map((s) => `${s.method} ${new URL(s.url).pathname}`)).toEqual([`DELETE /v1/subscriptions/${sub}`, "GET /v1/invoices"]);
     expect(await ACCOUNTS.prepare("SELECT COUNT(*) AS n FROM entitlements WHERE user_id = ?").bind(user).first()).toEqual({ n: 0 });
   });
 
@@ -428,6 +431,8 @@ describe("checkout and the portal", () => {
       cancel_url: "http://localhost/account/billing",
       locale: "en",
       customer_email: email,
+      // Unix seconds, within the hour (test/recs-money.test.ts holds its value to the key's ten minutes).
+      expires_at: expect.stringMatching(/^[0-9]{10}$/),
     });
   });
 

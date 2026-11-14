@@ -2,7 +2,9 @@
 // as Stripe holds it now, cancel one at the period end or at once, find the
 // charge behind the latest paid invoice, and refund that charge in full. The
 // billing page's own refund (refund.ts) uses the same refund, and reads the
-// account's first payment here too. The same plain fetch as stripe.ts (a
+// account's first payment here too; so does the webhook's refund of a
+// payment that lands on a deleted account (billing.tsx cancelForDeleted),
+// which reads the invoice the notice names. The same plain fetch as stripe.ts (a
 // Bearer key, form-encoded bodies, the pinned API version), written again
 // here because stripe.ts keeps its request helper to itself.
 //
@@ -37,7 +39,12 @@ const REFUND_TRIES = 3;
 const REFUND_WAIT_MS = 400;
 
 type J = Record<string, unknown>;
-type Call = { ok: true; body: J } | { ok: false; status: number };
+// On a refusal, Stripe's error.code and error.type when its body names them
+// (a fixed word, read for the caller and never logged).
+type Call = { ok: true; body: J } | { ok: false; status: number; code: string | null; type: string | null };
+
+const WORD_RE = /^[a-z_]{1,40}$/;
+const word = (v: unknown): string | null => (typeof v === "string" && WORD_RE.test(v) ? v : null);
 
 const obj = (v: unknown): J | null => (v !== null && typeof v === "object" && !Array.isArray(v) ? (v as J) : null);
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 && v.length <= 255 ? v : null);
@@ -64,14 +71,15 @@ async function call(
     const res = await fetch(`${STRIPE_API}${path}${query}`, { method, headers, body, signal: AbortSignal.timeout(CALL_TIMEOUT_MS) });
     if (!res.ok) {
       console.error(`stripe (operator): ${label} answered ${res.status}`);
-      await res.body?.cancel().catch(() => undefined);
-      return { ok: false, status: res.status };
+      const error = res.status >= 400 && res.status < 500 ? obj(obj(await res.json().catch(() => null))?.error) : null;
+      if (!error) await res.body?.cancel().catch(() => undefined);
+      return { ok: false, status: res.status, code: word(error?.code), type: word(error?.type) };
     }
     const parsed = obj(await res.json());
-    return parsed ? { ok: true, body: parsed } : { ok: false, status: 0 };
+    return parsed ? { ok: true, body: parsed } : { ok: false, status: 0, code: null, type: null };
   } catch {
     console.error(`stripe (operator): ${label} unreachable`);
-    return { ok: false, status: 0 };
+    return { ok: false, status: 0, code: null, type: null };
   }
 }
 
@@ -120,15 +128,27 @@ export interface OperatorStripe {
   firstPayment(customerId: string): Promise<FirstPayment | "none" | null>;
   // One charge as Stripe holds it now; null when it could not be read.
   charge(id: string): Promise<ChargeState | null>;
+  // The charge that paid one invoice: "none" when Stripe has no such invoice
+  // or it took no money through a charge; null when Stripe could not be asked.
+  invoicePayment(invoiceId: string): Promise<ChargeState | "none" | null>;
   // The refund's id and status, or null when Stripe refused or could not be reached.
   refund(chargeId: string): Promise<{ id: string; status: string } | null>;
+  // The same refund with Stripe's whole answer: the refund taken (its status,
+  // and its failure_reason when it failed at once), or the refusal's status
+  // with Stripe's error code and type (0: no answer).
+  refundAnswer(chargeId: string): Promise<RefundAnswer>;
 }
+
+export type RefundAnswer =
+  | { ok: true; id: string; status: string; failureReason: string | null }
+  | { ok: false; status: number; code: string | null; type: string | null };
 
 // The idempotency key of a refund: the charge's own id, so a second press, a
 // reload of the post or a retry after a timeout (within Stripe's 24 hours)
 // returns the first refund instead of asking for a second one. The billing
-// page's refund uses the same key with the same parameters, so the
-// operator's press and the reader's on one charge are one refund too.
+// page's refund and the webhook's refund on a deleted account use the same
+// key with the same parameters, so any two of them on one charge are one
+// refund too.
 export const refundKey = (chargeId: string) => `operator-refund-${chargeId}`;
 
 function chargeOf(o: J): ChargeState | null {
@@ -196,7 +216,25 @@ export function operatorStripe(env: Env): OperatorStripe | null {
     if (!res.ok) return res.status === 404 ? "missing" : null;
     const state = readSubscription(res.body);
     if (!state) return null;
-    return { status: state.status, periodEnd: state.periodEnd, cancelAtPeriodEnd: res.body.cancel_at_period_end === true };
+    // The flag, or a cancel_at at the period's end, as the customer portal sets it under flexible billing (stripe.ts readSubscription).
+    return { status: state.status, periodEnd: state.periodEnd, cancelAtPeriodEnd: state.cancelAtPeriodEnd === true };
+  }
+
+  // A full refund of the charge (no amount given: whatever has not been
+  // refunded yet, which Stripe never lets exceed the charge), under the
+  // charge's idempotency key, asked again while Stripe answers that the
+  // same key is in flight or does not answer at all.
+  async function refundAnswer(chargeId: string): Promise<RefundAnswer> {
+    const ask = () => call(key, "POST", "/refunds", "refund", { form: [["charge", chargeId]], idempotencyKey: refundKey(chargeId) });
+    let res = await ask();
+    for (let tries = 1; !res.ok && tries < REFUND_TRIES && (res.status === 409 || (res.status === 0 && tries < 2)); tries++) {
+      await new Promise((resolve) => setTimeout(resolve, REFUND_WAIT_MS));
+      res = await ask();
+    }
+    if (!res.ok) return res;
+    const id = str(res.body.id);
+    if (!id) return { ok: false, status: 0, code: null, type: null };
+    return { ok: true, id, status: str(res.body.status) ?? "pending", failureReason: word(res.body.failure_reason) };
   }
 
   return {
@@ -273,20 +311,21 @@ export function operatorStripe(env: Env): OperatorStripe | null {
 
     charge,
 
-    // A full refund of the charge (no amount given: whatever has not been
-    // refunded yet, which Stripe never lets exceed the charge), under the
-    // charge's idempotency key, asked again while Stripe answers that the
-    // same key is in flight or does not answer at all.
-    async refund(chargeId) {
-      const ask = () => call(key, "POST", "/refunds", "refund", { form: [["charge", chargeId]], idempotencyKey: refundKey(chargeId) });
-      let res = await ask();
-      for (let tries = 1; !res.ok && tries < REFUND_TRIES && (res.status === 409 || (res.status === 0 && tries < 2)); tries++) {
-        await new Promise((resolve) => setTimeout(resolve, REFUND_WAIT_MS));
-        res = await ask();
-      }
-      if (!res.ok) return null;
-      const id = str(res.body.id);
-      return id ? { id, status: str(res.body.status) ?? "pending" } : null;
+    // One invoice with its payments (GET /v1/invoices/<id>, Invoices read),
+    // and the charge behind it as invoiceCharge finds it. A zero invoice
+    // took no money.
+    async invoicePayment(invoiceId) {
+      const res = await call(key, "GET", `/invoices/${encodeURIComponent(invoiceId)}`, "invoice read", { query: [["expand[]", "payments"]] });
+      if (!res.ok) return res.status === 404 ? "none" : null;
+      if ((int(res.body.amount_paid) ?? 0) === 0) return "none";
+      return invoiceCharge(res.body);
     },
+
+    async refund(chargeId) {
+      const answer = await refundAnswer(chargeId);
+      return answer.ok ? { id: answer.id, status: answer.status } : null;
+    },
+
+    refundAnswer,
   };
 }

@@ -860,6 +860,13 @@ export const ACCOUNT_STRINGS = {
   "billing.panel_subscription": { en: "Your Subscription", fr: "Votre abonnement" },
   "billing.field_status": { en: "Status", fr: "État" },
   "billing.field_period": { en: "Current period ends", fr: "Fin de la période en cours" },
+  // In its place while a cancellation is set in Stripe's portal (billing.tsx billingView): the period's end, with no renewal after it.
+  "billing.field_ends": { en: "Ends, does not renew", fr: "Prend fin, sans renouvellement" },
+  // {date} is that end; {plan} the account's paid plan.
+  "billing.ends_note": {
+    en: "The subscription was cancelled and is not charged again. {plan} continues until {date}, and Stripe's page can undo the cancellation until then.",
+    fr: "L'abonnement a été annulé et ne sera plus facturé. {plan} continue jusqu'au {date}, et la page de Stripe permet de revenir sur l'annulation d'ici là.",
+  },
   "billing.status_active": { en: "Active", fr: "Actif" },
   "billing.status_trialing": { en: "Trial", fr: "Essai" },
   "billing.status_past_due": { en: "Renewal payment overdue", fr: "Paiement de renouvellement en retard" },
@@ -932,6 +939,9 @@ export const ACCOUNT_STRINGS = {
   "billing.link_plans": { en: "Plans and prices", fr: "Forfaits et prix" },
   "billing.plan_stripe": { en: "Pro, paid until {date}", fr: "Pro, payé jusqu'au {date}" },
   "billing.plan_stripe_ultra": { en: "Ultra, paid until {date}", fr: "Ultra, payé jusqu'au {date}" },
+  // The same two while a cancellation is set for the end of the period paid (billing.tsx billingLine ends).
+  "billing.plan_stripe_ends": { en: "Pro, ends on {date}", fr: "Pro, prend fin le {date}" },
+  "billing.plan_stripe_ultra_ends": { en: "Ultra, ends on {date}", fr: "Ultra, prend fin le {date}" },
   // The refund of the first payment (billing.tsx RefundPanel, refund.ts). The
   // panel's title is the Terms' own heading (terms.pro_refund_title). {email}
   // is the contact address, {days} the window (REFUND_DAYS).

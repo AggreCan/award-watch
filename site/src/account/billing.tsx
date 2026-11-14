@@ -33,6 +33,7 @@ import { decimal, t, tj, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
 import { CONTACT_EMAIL } from "../contact";
 import { PlanCards, planCards, type PlanReader } from "../pro";
+import { type ChargeState, operatorStripe } from "./admin_stripe";
 import { audit } from "./audit";
 import { type PaidPlan, type Plan, entitlementWrites, isPaidPlan, planFor, planRank, withTiers } from "./entitlements";
 import { type DeleteFacts, accountPage, planLine } from "./pages";
@@ -66,14 +67,41 @@ const STATUS_KEY: Record<string, Key> = {
   unpaid: "billing.status_unpaid", incomplete: "billing.status_incomplete", paused: "billing.status_paused",
 };
 
+// cancel_at_period_end: 1 while a cancellation is set for the end of the
+// current period (stripe.ts readSubscription), 0 otherwise and on a database
+// made before the column.
 export type PaymentRow = {
   user_id: string; customer_id: string; subscription_id: string | null; status: string | null; current_period_end: string | null;
+  cancel_at_period_end: number;
 };
 
+// payment_customers.cancel_at_period_end came after the table
+// (accounts_schema.sql, applied by hand): a database without it answers
+// "no such column" to a read and "has no column named" to an insert. Each
+// statement that names it is tried again without it, and the flag reads 0,
+// so no page and no notice fails for want of it. One line per isolate says so.
+export const missingFlag = (e: unknown): boolean =>
+  /no such column:?\s*cancel_at_period_end|has no column named cancel_at_period_end/i.test(String((e as { message?: unknown })?.message ?? e));
+let flagMissingSaid = false;
+function sayFlagMissing(): void {
+  if (flagMissingSaid) return;
+  flagMissingSaid = true;
+  console.error("billing: payment_customers.cancel_at_period_end missing, read as 0 until accounts_schema.sql is applied");
+}
+
+const PAYMENT_ROW_SQL = "SELECT user_id, customer_id, subscription_id, status, current_period_end";
+
 export async function paymentRow(env: Env, userId: string): Promise<PaymentRow | null> {
-  return env.ACCOUNTS!.prepare(
-    "SELECT user_id, customer_id, subscription_id, status, current_period_end FROM payment_customers WHERE user_id = ?",
-  ).bind(userId).first<PaymentRow>();
+  const db = env.ACCOUNTS!;
+  try {
+    return await db.prepare(`${PAYMENT_ROW_SQL}, cancel_at_period_end FROM payment_customers WHERE user_id = ?`).bind(userId).first<PaymentRow>();
+  } catch (e) {
+    if (!missingFlag(e)) throw e;
+    sayFlagMissing();
+    const row = await db.prepare(`${PAYMENT_ROW_SQL} FROM payment_customers WHERE user_id = ?`).bind(userId)
+      .first<Omit<PaymentRow, "cancel_at_period_end">>();
+    return row ? { ...row, cancel_at_period_end: 0 } : null;
+  }
 }
 
 // A subscription that can still bill: bound and not ended.
@@ -85,7 +113,9 @@ export const langQuery = (lang: Lang, first: "?" | "&") => (lang === "fr" ? `${f
 
 // -- the overview's line ---------------------------------------------------------------
 
-export type BillingLine = { stripe: boolean; periodEnd: string | null };
+// ends: the subscription behind that row is cancelled for the end of its
+// period and does not renew, so the line says the plan ends on that date.
+export type BillingLine = { stripe: boolean; periodEnd: string | null; ends?: boolean };
 
 // Whether the plan the overview shows comes from a live Stripe row (the
 // latest live row, ordered as planFromRows orders them), and the end of the
@@ -99,17 +129,33 @@ export type BillingLine = { stripe: boolean; periodEnd: string | null };
 // (grant, switchPlan, lowerTo), so it never names a period not paid yet.
 // The subscription's current_period_end moves forward at the renewal, before
 // its payment is taken, and stays there through past_due.
+//
+// ends: the row's subscription is the one bound, can still bill, and has a
+// cancellation set for its period's end (payment_customers.cancel_at_period_end).
+// It ends there: Stripe's customer.subscription.deleted ends the row then. A
+// read that fails, the column missing among its causes, reads as not ending.
 export async function billingLine(env: Env, userId: string, now = new Date()): Promise<BillingLine | null> {
+  let line: BillingLine & { reference: string | null };
   try {
     const row = await env.ACCOUNTS!.prepare(
-      "SELECT plan, source, ends_at FROM entitlements WHERE user_id = ?1 AND revoked_at IS NULL AND starts_at <= ?2 " +
+      "SELECT plan, source, ends_at, reference FROM entitlements WHERE user_id = ?1 AND revoked_at IS NULL AND starts_at <= ?2 " +
       "AND (ends_at IS NULL OR ends_at > ?2) ORDER BY created_at DESC, id DESC LIMIT 1",
-    ).bind(userId, now.toISOString()).first<{ plan: string; source: string; ends_at: string | null }>();
+    ).bind(userId, now.toISOString()).first<{ plan: string; source: string; ends_at: string | null; reference: string | null }>();
     const stripe = row?.plan === "pro" && row.source === "stripe";
     const end = stripe && row.ends_at ? Date.parse(row.ends_at) : NaN;
-    return { stripe, periodEnd: Number.isFinite(end) ? plusDays(new Date(end), -GRACE_DAYS) : null };
+    line = { stripe, periodEnd: Number.isFinite(end) ? plusDays(new Date(end), -GRACE_DAYS) : null, reference: stripe ? row.reference : null };
   } catch {
     return null;
+  }
+  const { reference, ...out } = line;
+  if (!reference) return out;
+  try {
+    const bound = await env.ACCOUNTS!.prepare(
+      "SELECT status, cancel_at_period_end FROM payment_customers WHERE user_id = ? AND subscription_id = ?",
+    ).bind(userId, reference).first<{ status: string | null; cancel_at_period_end: number }>();
+    return { ...out, ends: !!bound?.cancel_at_period_end && !ENDED.has(bound.status ?? "") };
+  } catch {
+    return out;
   }
 }
 
@@ -306,6 +352,10 @@ export function billingView(
   const notePlan = ended ? planName(lang, state.lastPlan ?? "pro") : vars.plan;
   // Stripe's page moves between the plans too while both are on sale, or for an Ultra subscriber.
   const manageKey: Key = ultra || paid === "ultra" ? "billing.manage_text_ultra" : "billing.manage_text";
+  // A cancellation set in Stripe's portal (the flag, or a cancel_at at the
+  // period's end): the period's end is when the subscription ends, without
+  // renewal, and while the plan runs a line says so and how to undo it.
+  const ending = !!row?.cancel_at_period_end && !!row.current_period_end;
   return (
     <>
       <PageHead lang={lang} title={t(lang, "billing.title")} lead={t(lang, "billing.lead", { plan: planLine(lang, account, state.line) })}
@@ -322,11 +372,12 @@ export function billingView(
             <dd>{t(lang, STATUS_KEY[row.status ?? ""] ?? "billing.status_other")}</dd>
             {row.current_period_end ? (
               <>
-                <dt>{t(lang, "billing.field_period")}</dt>
+                <dt>{t(lang, ending ? "billing.field_ends" : "billing.field_period")}</dt>
                 <dd class="mono">{day(row.current_period_end)}</dd>
               </>
             ) : null}
           </dl>
+          {ending && paid ? <p>{t(lang, "billing.ends_note", { plan: vars.plan, date: day(row.current_period_end) })}</p> : null}
           <p>{t(lang, manageKey)}</p>
           <form method="post" action="/account/billing/portal">
             <Hidden account={account} lang={lang} />
@@ -490,6 +541,7 @@ export async function bindReturn(env: Env, who: Account, sessionId: string, now 
     const run: Run = { env, db: env.ACCOUNTS!, source, now, at: now.toISOString() };
     const { bound, before } = await bind(run, who.userId, {
       customerId: session.customerId, subscriptionId: session.subscriptionId, status: state.status, periodEnd: state.periodEnd,
+      ends: state.cancelAtPeriodEnd ?? null,
     });
     if (bound && before?.subscription_id !== session.subscriptionId) {
       await audit(env, who.userId, "plan_changed", "stripe checkout return, bound", now);
@@ -579,7 +631,8 @@ export async function deleteFacts(env: Env, who: Account): Promise<DeleteFacts> 
 // account is then kept and the user asked to try again. A subscription the
 // site has no live row for (its notices not taken yet) is cancelled when its
 // first notice lands on the deleted account (onCheckout, onPeriodPaid,
-// onSubscription).
+// onSubscription), and a payment that notice reports is refunded
+// (cancelForDeleted).
 export async function endForDeletion(env: Env, userId: string, now = new Date()): Promise<boolean> {
   const source = paymentSource(env);
   if (source.kind === "stub") return true;
@@ -655,16 +708,114 @@ function apply(run: Run, notice: Notice): Promise<void> {
 // open, or after a second subscription's checkout, or with notices still on
 // their way): the subscription is cancelled at once, nothing is granted, and
 // the audit row names it, which the daily check reads (watchdog.ts
-// MONEY_ITEMS_SQL). paid: the notice reports a payment ("stripe paid on a
-// deleted account"); otherwise a subscription that could still bill ("stripe
-// live on a deleted account"). Whether a payment is refunded is the
-// operator's decision; nothing here refunds. A cancellation Stripe cannot
-// confirm, or a row the database does not take, is thrown, so the notice
-// answers 500 and comes again (a second cancellation is one already made).
-async function cancelForDeleted(run: Run, user: UserRow, subscriptionId: string, paid: boolean): Promise<void> {
+// MONEY_ITEMS_SQL). Without a payment (a subscription that could still bill,
+// "stripe live on a deleted account, cancelled <sub>") that is all.
+//
+// With one (a paid checkout, invoice.paid), the payment itself is then
+// refunded in full (refundLanded), the operator's ruling of 2026-11-14. The
+// row "stripe paid on a deleted account, cancelled <sub>" is written first,
+// once, and stands on the daily check as a refund not confirmed yet; the
+// outcome is a second row, the same words followed by "refunded" or by
+// "unrefunded <reason>" for a refusal asking again cannot change, which the
+// daily check reads in its place. The customer and the cancelled
+// subscription are bound to the account before that row (bind, status
+// canceled), so the refund's own notices find it: charge.refunded changes
+// nothing (no Stripe row is live) and refund.failed names the account.
+//
+// A cancellation Stripe cannot confirm, a refund it neither takes nor
+// refuses for good, or a row the database does not take, is thrown, so the
+// notice answers 500 and comes again: a second cancellation is one already
+// made, the refund is asked under the charge's own key (the console's), and
+// a payment refunded meanwhile reads refunded before anything is asked.
+type LandedPayment = { customerId: string; invoiceId: string | null; chargeId: string | null };
+
+async function cancelForDeleted(run: Run, user: UserRow, subscriptionId: string, payment: LandedPayment | null): Promise<void> {
   if (!(await run.source.cancel(subscriptionId))) throw new Error("cancel failed");
-  await run.db.prepare("INSERT INTO audit (user_id, event, at, detail) VALUES (?, 'plan_changed', ?, ?)")
-    .bind(user.id, run.at, `stripe ${paid ? "paid" : "live"} on a deleted account, cancelled ${subscriptionId}`.slice(0, 120)).run();
+  const detail = `stripe ${payment ? "paid" : "live"} on a deleted account, cancelled ${subscriptionId}`.slice(0, 120);
+  await auditOnce(run, user.id, detail);
+  if (!payment) return;
+  const outcome = await refundLanded(run, subscriptionId, payment);
+  await bind(run, user.id, { customerId: payment.customerId, subscriptionId, status: "canceled", periodEnd: null, ends: false });
+  const full = `${detail} ${outcome}`;
+  await auditOnce(run, user.id, full.length <= 120 ? full : `${detail} ${outcome.split(" ")[0]}`.slice(0, 120));
+}
+
+// An audit row plan_changed, written unless the account has it already: a
+// notice that comes again, or the checkout and the invoice of one payment,
+// write it once. Thrown on a fault, so the notice comes again.
+async function auditOnce(run: Run, userId: string, detail: string): Promise<void> {
+  await run.db.prepare(
+    "INSERT INTO audit (user_id, event, at, detail) SELECT ?1, 'plan_changed', ?2, ?3 " +
+    "WHERE NOT EXISTS (SELECT 1 FROM audit WHERE user_id = ?1 AND event = 'plan_changed' AND detail = ?3)",
+  ).bind(userId, run.at, detail).run();
+}
+
+// A refund Stripe took: done, on its way to the card, or waiting on the
+// person's bank details ("Refund is created and customer is emailed:
+// requires_action", docs.stripe.com/refunds). Stripe finishes each one, and
+// one that fails later comes back as refund.failed.
+const REFUND_TAKEN = new Set(["succeeded", "pending", "requires_action"]);
+// A refund Stripe gave back as failed or canceled at once: it carries its
+// failure_reason, and asking under the same key gives it back again.
+const REFUND_ENDED = new Set(["failed", "canceled"]);
+// Refusals asking again cannot change, from Stripe's own list
+// (docs.stripe.com/error-low-level): "400 Bad Request: The request was
+// unacceptable", "402 Request Failed: The parameters were valid but the
+// request failed", "404 Not Found"; and "Retrying a cached 400 response with
+// the same key returns the same error". Not among them: 409 ("The request
+// conflicts with another request, potentially due to using the same
+// idempotent key"), 429, 401 and 403 (the key, which the operator fixes),
+// 5xx ("Treat the outcome of a request that returns 500 as indeterminate"),
+// no answer, and an idempotency_error of any status.
+const REFUSED_FOR_GOOD = new Set([400, 402, 404]);
+
+const refundedInFull = (c: ChargeState): boolean => c.amount > 0 && c.refunded >= c.amount;
+
+// The payment a notice on a deleted account reports, refunded in full
+// through Stripe: the charge it names, else the charge behind the invoice it
+// names (GET /v1/invoices/<id> with its payments), else the charge behind the
+// subscription's newest paid invoice that took money (a checkout naming no
+// invoice). The refund is the console's own (admin_stripe.ts refundAnswer):
+// POST /v1/refunds with the charge and no amount, under the header
+// Idempotency-Key: operator-refund-<charge id>. "Once entirely refunded, a
+// charge can't be refunded again. This method will raise an error when called
+// on an already-refunded charge" (docs.stripe.com/api/refunds/create), and
+// "Stripe saves the status code and body of the first request made with a
+// given idempotency key ... Retries with the same key return the saved
+// response" for at least 24 hours (docs.stripe.com/api/idempotent_requests),
+// so two notices of one payment, a notice delivered again and a retry after a
+// lost answer make one refund. The charge is read first and again after any
+// answer that is not a refund taken, as a lost answer is reconciled ("Retrieve
+// the relevant object", docs.stripe.com/error-low-level): refunded in full
+// there is "refunded".
+//
+// Returns "refunded", or "unrefunded <reason>" for what asking again cannot
+// change: no invoice or charge took money ("no_charge"), a charge of another
+// customer ("other_customer", never refunded), a disputed charge ("You can't
+// issue a refund outside the dispute process while the dispute is open",
+// docs.stripe.com/disputes/how-disputes-work; "charge_disputed"), a refund
+// Stripe gives back failed or canceled (its failure_reason), or a refusal of
+// REFUSED_FOR_GOOD (Stripe's error code, "refused" when it names none).
+// Anything else is thrown.
+async function refundLanded(run: Run, subscriptionId: string, p: LandedPayment): Promise<string> {
+  const stripe = operatorStripe(run.env);
+  if (!stripe) throw new Error("no keys");
+  const found = p.chargeId
+    ? await stripe.charge(p.chargeId)
+    : p.invoiceId ? await stripe.invoicePayment(p.invoiceId) : await stripe.latestPaidCharge(subscriptionId);
+  if (found === null) throw new Error("payment unreadable");
+  if (found === "none") return "unrefunded no_charge";
+  if (found.customerId !== null && found.customerId !== p.customerId) return "unrefunded other_customer";
+  if (refundedInFull(found)) return "refunded";
+  if (found.disputed) return "unrefunded charge_disputed";
+  const made = await stripe.refundAnswer(found.chargeId);
+  if (made.ok && REFUND_TAKEN.has(made.status)) return "refunded";
+  if (made.ok && REFUND_ENDED.has(made.status)) return `unrefunded ${made.failureReason ?? made.status}`;
+  const after = await stripe.charge(found.chargeId);
+  if (after && refundedInFull(after)) return "refunded";
+  if (after?.disputed) return "unrefunded charge_disputed";
+  if (!made.ok && REFUSED_FOR_GOOD.has(made.status) && made.type !== "idempotency_error") return `unrefunded ${made.code ?? "refused"}`;
+  throw new Error("refund not confirmed");
 }
 
 const userById = (db: D1Database, id: string) =>
@@ -694,19 +845,39 @@ function unmatched(type: string): void {
 // docs.stripe.com/api/subscriptions/object), so a notice that says
 // otherwise afterwards was sent before it (Stripe does not keep their order).
 // Returns the row as it was, and whether anything was written.
+//
+// ends: whether a cancellation is set for the period's end, from the
+// subscription as this notice or read gives it (the checkout read, the paid
+// invoice's read, the update's snapshot, the way back from checkout); null
+// when there was none to give, which keeps the flag held for the same
+// subscription (0 for another). Written as the status is, the last notice
+// taken deciding; it changes no plan, only the billing page's words. A
+// database without the column takes the rest of the row (missingFlag).
 async function bind(
-  run: Run, userId: string, s: { customerId: string; subscriptionId: string; status: string | null; periodEnd: string | null },
+  run: Run, userId: string,
+  s: { customerId: string; subscriptionId: string; status: string | null; periodEnd: string | null; ends?: boolean | null },
 ): Promise<{ bound: boolean; before: PaymentRow | null; wrote: boolean }> {
   const before = await paymentRow(run.env, userId);
   if (before?.subscription_id && before.subscription_id !== s.subscriptionId && !ENDED.has(before.status ?? "")) {
     return { bound: false, before, wrote: false };
   }
   if (before?.subscription_id === s.subscriptionId && ENDED.has(before.status ?? "")) return { bound: true, before, wrote: false };
-  await run.db.prepare(
-    "INSERT INTO payment_customers (user_id, customer_id, subscription_id, status, current_period_end, updated_at) VALUES (?, ?, ?, ?, ?, ?) " +
-    "ON CONFLICT(user_id) DO UPDATE SET customer_id = excluded.customer_id, subscription_id = excluded.subscription_id, " +
-    "status = excluded.status, current_period_end = excluded.current_period_end, updated_at = excluded.updated_at",
-  ).bind(userId, s.customerId, s.subscriptionId, s.status, s.periodEnd, run.at).run();
+  const held = before?.subscription_id === s.subscriptionId ? !!before.cancel_at_period_end : false;
+  const flag = (s.ends ?? held) ? 1 : 0;
+  const values = [userId, s.customerId, s.subscriptionId, s.status, s.periodEnd, run.at];
+  const columns = "user_id, customer_id, subscription_id, status, current_period_end, updated_at";
+  const update = "ON CONFLICT(user_id) DO UPDATE SET customer_id = excluded.customer_id, subscription_id = excluded.subscription_id, " +
+    "status = excluded.status, current_period_end = excluded.current_period_end, updated_at = excluded.updated_at";
+  try {
+    await run.db.prepare(
+      `INSERT INTO payment_customers (${columns}, cancel_at_period_end) VALUES (?, ?, ?, ?, ?, ?, ?) ${update}, ` +
+      "cancel_at_period_end = excluded.cancel_at_period_end",
+    ).bind(...values, flag).run();
+  } catch (e) {
+    if (!missingFlag(e)) throw e;
+    sayFlagMissing();
+    await run.db.prepare(`INSERT INTO payment_customers (${columns}) VALUES (?, ?, ?, ?, ?, ?) ${update}`).bind(...values).run();
+  }
   return { bound: true, before, wrote: true };
 }
 
@@ -831,8 +1002,8 @@ async function onCheckout(run: Run, n: Extract<Notice, { kind: "checkout" }>): P
   if (!user) return unmatched("checkout.session.completed");
   if (user.status !== "active") {
     // Deleted while Stripe's page was open: no account is left to serve. A
-    // paid session put money on it, which the daily check names.
-    if (n.paid) return cancelForDeleted(run, user, n.subscriptionId, true);
+    // paid session put money on it, which is refunded (cancelForDeleted).
+    if (n.paid) return cancelForDeleted(run, user, n.subscriptionId, { customerId: n.customerId, invoiceId: n.invoiceId ?? null, chargeId: null });
     if (!(await run.source.cancel(n.subscriptionId))) throw new Error("cancel failed");
     await audit(run.env, user.id, "plan_changed", "stripe cancelled, account deleted", run.now);
     return;
@@ -843,7 +1014,8 @@ async function onCheckout(run: Run, n: Extract<Notice, { kind: "checkout" }>): P
   const periodEnd = state === "missing" ? null : state.periodEnd;
   // The plan bought, from the subscription's product; a pending update naming Ultra answers 500 before anything is written.
   const want = state !== "missing" && n.paid && (status === "active" || status === "trialing") && periodEnd ? wantOf(run, state) : null;
-  const { bound } = await bind(run, user.id, { customerId: n.customerId, subscriptionId: n.subscriptionId, status, periodEnd });
+  const ends = state === "missing" ? null : state.cancelAtPeriodEnd ?? null;
+  const { bound } = await bind(run, user.id, { customerId: n.customerId, subscriptionId: n.subscriptionId, status, periodEnd, ends });
   if (!bound) await audit(run.env, user.id, "plan_changed", "stripe second subscription", run.now);
   if (want && periodEnd) {
     if (await reversed(run, n.customerId, null, n.createdAt)) {
@@ -872,29 +1044,34 @@ async function onCheckout(run: Run, n: Extract<Notice, { kind: "checkout" }>): P
 // was on its way (Stripe keeps no order between notices) would otherwise be
 // written over by an older status. When the subscription is not read (no
 // period on the invoice) or Stripe no longer knows it, the held one stays.
-// An account no longer active has the subscription cancelled and nothing
-// granted (cancelForDeleted).
+// An account no longer active has the subscription cancelled, nothing
+// granted and the payment refunded (cancelForDeleted). The cancellation flag
+// is the read's too, and held as it was without one.
 async function onPeriodPaid(run: Run, n: Extract<Notice, { kind: "period_paid" }>): Promise<void> {
   const user = await userFor(run.db, n.subscriptionId, n.customerId, n.userId);
   if (!user) return unmatched("invoice.paid");
   const row = await paymentRow(run.env, user.id);
   const same = row?.subscription_id === n.subscriptionId;
   if (same && ENDED.has(row!.status ?? "")) return;
-  if (user.status !== "active") return cancelForDeleted(run, user, n.subscriptionId, true);
+  if (user.status !== "active") {
+    return cancelForDeleted(run, user, n.subscriptionId, { customerId: n.customerId, invoiceId: n.invoiceId ?? null, chargeId: n.chargeId });
+  }
   let want: Want = null;
   let fresh: string | null = null;
+  let ends: boolean | null = null;
   if (n.periodEnd) {
     const state = await run.source.subscription(n.subscriptionId);
     if (state === null) throw new Error("subscription unreadable");
     if (state !== "missing") {
       want = wantOf(run, state);
       fresh = state.status;
+      ends = state.cancelAtPeriodEnd ?? null;
     }
   }
   const kept = same ? row!.current_period_end : null;
   const periodEnd = n.periodEnd && (!kept || n.periodEnd > kept) ? n.periodEnd : kept;
   const status = fresh ?? (same ? row!.status : null);
-  await bind(run, user.id, { customerId: n.customerId, subscriptionId: n.subscriptionId, status, periodEnd });
+  await bind(run, user.id, { customerId: n.customerId, subscriptionId: n.subscriptionId, status, periodEnd, ends });
   if (!n.periodEnd) return;
   // A notice delayed past the refund or dispute of the payment it reports.
   if (await reversed(run, n.customerId, n.chargeId, n.paidAt)) {
@@ -1011,9 +1188,11 @@ async function onSubscription(run: Run, s: SubscriptionState, deleted: boolean):
     const now = await run.source.subscription(s.id);
     if (now === null) throw new Error("subscription unreadable");
     if (now === "missing" || ENDED.has(now.status)) return;
-    return cancelForDeleted(run, user, s.id, false);
+    return cancelForDeleted(run, user, s.id, null);
   }
-  const { bound, before, wrote } = await bind(run, user.id, { customerId: s.customerId, subscriptionId: s.id, status, periodEnd: s.periodEnd });
+  const { bound, before, wrote } = await bind(run, user.id, {
+    customerId: s.customerId, subscriptionId: s.id, status, periodEnd: s.periodEnd, ends: s.cancelAtPeriodEnd ?? null,
+  });
   if (ENDS_PRO.has(status)) return endNow(run, user, s.id, status);
   if (bound && !wrote) return;
   if (bound && before?.status !== status) await audit(run.env, user.id, "plan_changed", `stripe status ${status.slice(0, 40)}`, run.now);

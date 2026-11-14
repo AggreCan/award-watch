@@ -85,6 +85,15 @@ function answer(method: string, url: URL, form: URLSearchParams): Reply {
     return { body: s };
   }
   if (route === "GET /v1/charges/:id") return charges.has(id) ? { body: charges.get(id) } : { status: 404, body: {} };
+  // A payment on a deleted account is refunded (billing.tsx cancelForDeleted; test/recs-money.test.ts has the rest):
+  // no paid invoice is held here, and a charge a test names is refunded in full.
+  if (route === "GET /v1/invoices") return { body: { object: "list", data: [], has_more: false } };
+  if (route === "POST /v1/refunds") {
+    const ch = charges.get(form.get("charge") ?? "");
+    if (!ch) return { status: 400, body: { error: { type: "invalid_request_error", code: "resource_missing" } } };
+    Object.assign(ch, { amount_refunded: ch.amount, refunded: true });
+    return { body: { id: `re_${ch.id}`, object: "refund", status: "succeeded", charge: ch.id } };
+  }
   return { status: 400, body: { error: { message: `unexpected ${route}` } } };
 }
 
@@ -372,10 +381,15 @@ describe("2. a deleted account", () => {
     const b = await buyer("late-delete");
     const paid = ids();
     subs.set(paid.sub, subscriptionObject(paid.sub, paid.cus, "active", nowS() + 30 * DAY_S, b.user));
+    // The invoice names its charge (older API versions do), which is refunded once the subscription is cancelled.
+    const ch = `ch_p${paid.sub.slice(5)}`;
+    charges.set(ch, { id: ch, object: "charge", customer: paid.cus, amount: 1900, amount_refunded: 0, refunded: false, currency: "cad", created: nowS() });
     expect((await post("/account/delete", { csrf: await csrf(b.cookie, "/account", { env: payEnv() }), confirm: "yes" }, { cookie: b.cookie, env: payEnv() })).status).toBe(200);
     sent = [];
-    expect((await deliver(invoicePaid(paid.sub, paid.cus, nowS() + 30 * DAY_S, b.user))).status).toBe(200);
+    expect((await deliver(invoicePaid(paid.sub, paid.cus, nowS() + 30 * DAY_S, b.user, { charge: ch }))).status).toBe(200);
     expect(calls()).toContain(`DELETE /v1/subscriptions/${paid.sub}`);
+    expect(calls()).toContain("POST /v1/refunds");
+    expect(charges.get(ch)!.refunded).toBe(true);
     expect(subs.get(paid.sub)!.status).toBe("canceled");
     expect(await stripeRows(b.user)).toEqual([]);
     expect(await audits(b.user)).toContain(`plan_changed stripe paid on a deleted account, cancelled ${paid.sub}`);
@@ -393,7 +407,7 @@ describe("2. a deleted account", () => {
     expect(calls().filter((c) => c.startsWith("DELETE"))).toEqual([]);
     const lines = await alertsFor(b.user);
     expect(lines).toContain(`A payment landed on a deleted account: account ${b.user}, subscription ${paid.sub}. ` +
-      "The subscription is cancelled and nothing was granted. Whether to refund the payment is the operator's decision (Stripe's dashboard).");
+      "The subscription is cancelled, nothing was granted, and the payment was refunded in full. No action is needed; a refund that fails later has a line of its own.");
     expect(lines).toContain(`A subscription that could still bill reached a deleted account: account ${b.user}, subscription ${live.sub}. ` +
       "It is cancelled and nothing was granted. Check in Stripe's dashboard whether it took a payment after the deletion.");
   });
