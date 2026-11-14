@@ -326,8 +326,8 @@ describe("the Ultra message", () => {
     `- ${RULES.ultra.watchlists} watches, each change by email`,
     `- Analytics: every view, ${ULTRA_YEARS} fiscal years`,
     `- API: ${KEYS_MAX} keys of ${KEY_PER_DAY_ULTRA.toLocaleString("en-CA")} requests a day`,
-    `- A dashboard of up to ${RULES.ultra.dashboard} panels`,
     `- ${RULES.ultra.saved_views} saved analytics views`,
+    `- A dashboard of up to ${RULES.ultra.dashboard} panels`,
     "- Saved views by email, weekly or monthly",
   ].join("\n");
 

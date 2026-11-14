@@ -226,17 +226,20 @@ export const PRO_INCLUDES: readonly (readonly [Feature, Key])[] = PLAN_ROWS.flat
 // The same for Ultra: the rows' Ultra column.
 export const ULTRA_INCLUDES: readonly (readonly [Feature, Key])[] = PLAN_ROWS.map((r) => [r.feature, r.ultra.key] as const);
 
-// The lines that say what Ultra holds beyond the plan cards (the landing
-// page's Ultra card while Ultra is on sale, and the Ultra message), each the
-// Ultra wording of a PLAN_ROWS row, so the figures are read from RULES and the
-// constants and never typed: searches, watches, analytics, the keyed API, the
-// matching notices, the dashboard, the saved views and their email. The
-// landing card leads with "Everything in Pro"; the message leaves out the
-// matching notices.
-export const ULTRA_LINES: readonly Key[] = [
-  "plans.pro_searches", "plans.pro_watches", "plans.pro_analytics", "plans.api_keys", "plans.matches", "plans.dashboard",
-  "plans.saved_views", "plans.view_mail",
-];
+// The rows where Ultra's line is its own: a row Pro lacks, or one where Ultra
+// has a figure of its own (a row both plans share is one wording, `same`,
+// so the two are the same object). Read from PLAN_ROWS, in the cards' order,
+// so a row given Ultra its own figure joins every list of them by itself.
+// The list was kept by hand until 2026-11-14 and left out the matching
+// notices by email (25 a week against Pro's 10), so the landing page's Ultra
+// card showed fewer lines than the card on /pro.
+export const ULTRA_OWN_ROWS: readonly PlanRow[] = PLAN_ROWS.filter((r) => r.pro !== r.ultra);
+
+// Those rows' lines, for what names Ultra apart from Pro: the landing page's
+// Ultra card before Ultra is on sale, under "Everything in Pro", and the
+// Ultra message, which leaves out the matching notices. The figures are read
+// from RULES and the constants and never typed.
+export const ULTRA_LINES: readonly Key[] = ULTRA_OWN_ROWS.map((r) => r.ultra.key);
 
 export function ultraLines(lang: Lang, keys: readonly Key[] = ULTRA_LINES): string[] {
   return keys.map((key) => {

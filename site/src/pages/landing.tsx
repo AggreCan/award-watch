@@ -38,7 +38,7 @@ import { getCookie } from "hono/cookie";
 import { html } from "hono/html";
 import type { FC } from "hono/jsx";
 import { MATCH_MAX, type FitNotice, type MatchBlock, type Score, scoreNotice } from "../../public/fit.js";
-import { RULES } from "../account/entitlements";
+import { type Plan, RULES } from "../account/entitlements";
 import { signInTo } from "../account/fit_panels";
 import { SESSION_COOKIE, readSession } from "../account/session";
 import { ultraFigures } from "../account/stripe";
@@ -379,10 +379,15 @@ const MatchShot: FC<{ lang: Lang }> = ({ lang }) => {
 
 // -- the plans -------------------------------------------------------------------------
 
-// The rows Free or Pro has: Ultra's card here lists its own lines (ultraLines).
-const PlanList: FC<{ lang: Lang; plan: "free" | "pro" }> = ({ lang, plan }) => (
-  <ul class="lp-plan-list">
-    {planRows(["free", "pro"]).map((row) => {
+// A plan's rows, as the cards on /pro draw them (src/pro.tsx planRows and
+// rowFor): the rows one of the plans on sale has, each in this plan's own
+// wording, a row it lacks marked so. While Ultra is on sale all three cards
+// draw the same rows, so their lists stay level and none can differ from
+// /pro's; before, the two cards draw the rows Free or Pro has, and Ultra's
+// card lists its own lines (ultraRows).
+const PlanList: FC<{ lang: Lang; plan: Plan; plans: readonly Plan[]; wrap?: boolean }> = ({ lang, plan, plans, wrap }) => (
+  <ul class={wrap ? "lp-plan-list lp-plan-list-wrap" : "lp-plan-list"}>
+    {planRows(plans).map((row) => {
       const { wording, has } = rowFor(row, plan);
       return has ? (
         <li><Check /><span>{planLine(lang, wording)}</span></li>
@@ -447,7 +452,8 @@ export const UltraBox: FC<{ lang: Lang } & UltraState> = ({ lang, done, error, e
 // the price once its two figures are set (planned; "Price to be set" until
 // then), its rows and the one-field form. While it is (sale holds its
 // figures): the monthly figure large and the yearly beside it, the "for"
-// line, "Everything in Pro" and Ultra's own figures, and Subscribe to Ultra
+// line, every row of the plan cards in Ultra's own wording (the rows of its
+// card on /pro, in the same order), and Subscribe to Ultra
 // through the sign-in page, outlined in sapphire as the form's button is;
 // the form leaves the card, and the addresses it kept stay for the message.
 const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null; planned: ProPrice | null }> = ({ lang, ultra, sale, planned }) => {
@@ -457,9 +463,7 @@ const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null; plan
       <h3 class="lp-plan-nm">{t(lang, "ultra.tag")}<UltraTag lang={lang} size={11} /></h3>
       <p class="lp-pr">{figure(sale.monthly)}<small>{t(lang, "landing.price_rest", { yearly: figure(sale.yearly) })}</small></p>
       <p class="lp-for">{t(lang, "plans.ultra_for")}</p>
-      <ul class="lp-plan-list lp-plan-list-wrap">
-        {[t(lang, "landing.everything_pro"), ...ultraLines(lang)].map((line) => <li><Check /><span>{line}</span></li>)}
-      </ul>
+      <PlanList lang={lang} plan="ultra" plans={ON_SALE} wrap />
       <p class="lp-plan-acts"><a class="lp-btn" href={ULTRA_SUBSCRIBE_PATH}>{t(lang, "plans.ultra_subscribe")}</a></p>
     </div>
   ) : (
@@ -482,8 +486,14 @@ const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null; plan
   );
 };
 
+// The plans whose rows the cards draw: all three while Ultra is on sale, the
+// two before.
+const ON_SALE: readonly Plan[] = ["free", "pro", "ultra"];
+const BEFORE_ULTRA: readonly Plan[] = ["free", "pro"];
+
 const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: ProPrice | null; planned: ProPrice | null }> = ({ lang, price, ultra, sale, planned }) => {
   const figure = (n: string) => t(lang, "plans.figure", { n: decimal(lang, n) });
+  const plans = sale ? ON_SALE : BEFORE_ULTRA;
   return (
     <section class="lp-pricing" aria-labelledby="lp-plans-h">
       <div class="lp-wrap">
@@ -495,7 +505,7 @@ const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: P
             <h3 class="lp-plan-nm">{t(lang, "plans.free")}</h3>
             <p class="lp-pr">{figure("0")}</p>
             <p class="lp-for">{t(lang, "plans.free_for")}</p>
-            <PlanList lang={lang} plan="free" />
+            <PlanList lang={lang} plan="free" plans={plans} />
             <p class="lp-plan-acts"><a class="lp-btn" href="/account/sign-in">{t(lang, "plans.create_free")}</a></p>
           </div>
           <div class="lp-plan lp-plan-pro">
@@ -504,7 +514,7 @@ const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: P
               ? <p class="lp-pr">{figure(price.monthly)}<small>{t(lang, "landing.price_rest", { yearly: figure(price.yearly) })}</small></p>
               : <p class="lp-pr lp-pr-unset">{t(lang, "plans.unavailable")}</p>}
             <p class="lp-for">{t(lang, "plans.pro_for")}</p>
-            <PlanList lang={lang} plan="pro" />
+            <PlanList lang={lang} plan="pro" plans={plans} />
             <p class="lp-plan-acts">
               <a class="lp-btn lp-btn-fill" href={SUBSCRIBE_PATH}>{t(lang, "expiring.pro_sign_in")}</a>
               <a class="lp-btn" href="/pro">{t(lang, "landing.everything_pro")}</a>

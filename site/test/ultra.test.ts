@@ -17,7 +17,7 @@ import { ultraOnSale } from "../src/account/payments";
 import { keyQuota } from "../src/api_keyed_spec";
 import { allKeys, rawEntry, t, type Key } from "../src/i18n";
 import { app } from "../src/index";
-import { PLAN_LINE_MAX, PLAN_ROWS, ULTRA_GLYPH_PATH, ULTRA_INCLUDES, ULTRA_LINES, planLine, rowFor, ultraLines } from "../src/pro";
+import { PLAN_LINE_MAX, PLAN_ROWS, ULTRA_GLYPH_PATH, ULTRA_INCLUDES, ULTRA_LINES, ULTRA_OWN_ROWS, planLine, rowFor, ultraLines } from "../src/pro";
 import { KEYS_MAX } from "../src/account/api_keys";
 import { planYears } from "../src/records_db";
 import {
@@ -281,13 +281,24 @@ describe("the plan cards while Ultra is on sale", () => {
         expect(t(lang, key).length, `${lang} ${key}`).toBeLessThanOrEqual(PLAN_LINE_MAX);
       }
     }
+    // Ultra's own lines are read from the rows, in the cards' order: every row Pro lacks or reads otherwise on, and
+    // no row the two plans share. The list was kept by hand until 2026-11-14 and had left out the matching notices
+    // by email, so the landing page's Ultra card showed fewer lines than the card on /pro.
     expect(ultraLines("en")).toEqual([
       `${RULES.ultra.saved_searches} saved searches, by email`, `${RULES.ultra.watchlists} watches, each change by email`,
-      `Analytics: every view, ${planYears("ultra")} fiscal years`, `API: ${KEYS_MAX} keys of ${keyQuota("ultra")!.perDay.toLocaleString("en-CA")} requests a day`,
-      `${RULES.ultra.matches} matching notices for your organization`, `A dashboard of up to ${RULES.ultra.dashboard} panels`,
-      `${RULES.ultra.saved_views} saved analytics views`, "Saved views by email, weekly or monthly",
+      `Analytics: every view, ${planYears("ultra")} fiscal years`, `${RULES.ultra.matches} matching notices for your organization`,
+      `${RULES.ultra.match_mail} matching notices a week, by email`,
+      `API: ${KEYS_MAX} keys of ${keyQuota("ultra")!.perDay.toLocaleString("en-CA")} requests a day`,
+      `${RULES.ultra.saved_views} saved analytics views`, `A dashboard of up to ${RULES.ultra.dashboard} panels`,
+      "Saved views by email, weekly or monthly",
     ]);
-    expect(ULTRA_LINES).toHaveLength(8);
+    expect(ULTRA_LINES).toEqual(ULTRA_OWN_ROWS.map((r) => r.ultra.key));
+    for (const row of PLAN_ROWS) {
+      const own = !row.pro || planLine("en", row.pro) !== planLine("en", row.ultra);
+      expect(ULTRA_OWN_ROWS.includes(row), row.ultra.key).toBe(own);
+    }
+    // Each line names one row, so a key finds its row.
+    expect(new Set(ULTRA_LINES).size).toBe(ULTRA_LINES.length);
   });
 
   it("lead a reader without a session to the sign-in page and on to Ultra's panel, a Free reader to its billing page", async () => {
@@ -378,8 +389,20 @@ describe("the landing page's Ultra card", () => {
       const yearly = lang === "fr" ? "301,50 $ CA" : "CA$301.50";
       expect(card, lang).toContain(`<p class="lp-pr">${figure}<small>${text(t(lang, "landing.price_rest", { yearly }))}</small></p>`);
       expect(card, lang).toContain(`<p class="lp-for">${text(t(lang, "plans.ultra_for"))}</p>`);
+      // The card lists what the Ultra card on /pro lists, row for row: every row of the plan cards in Ultra's wording.
       const rows = [...card.matchAll(/<li><svg[^>]*><path[^>]*><\/path><\/svg><span>([^<]*)<\/span><\/li>/g)].map((m) => m[1]);
-      expect(rows, lang).toEqual([text(t(lang, "landing.everything_pro")), ...ultraLines(lang).map(text)]);
+      expect(rows, lang).toEqual(PLAN_ROWS.map((r) => text(planLine(lang, r.ultra))));
+      expect(rows, lang).toContain(text(planLine(lang, PLAN_ROWS.find((r) => r.feature === "match_mail")!.ultra)));
+      const pro = text((await page(lang === "fr" ? "/pro?lang=fr" : "/pro", saleEnv())).body);
+      const proCard = /<[a-z]+ class="plan-card plan-card-ultra"[\s\S]*?<\/ul>/.exec(pro)?.[0] ?? "";
+      for (const line of rows) expect(proCard, `${lang}: ${line}`).toContain(line);
+      // Free's and Pro's cards draw the same rows beside it, the ones only Ultra has marked as lacking.
+      const lists = [...on.matchAll(/<ul class="lp-plan-list[^"]*">([\s\S]*?)<\/ul>/g)].map((m) => m[1]);
+      expect(lists, lang).toHaveLength(3);
+      for (const list of lists) expect(list.match(/<li/g)?.length ?? 0, lang).toBe(PLAN_ROWS.length);
+      const onlyUltra = PLAN_ROWS.filter((r) => !r.free && !r.pro).length;
+      expect(onlyUltra).toBeGreaterThan(0);
+      expect(lists[1].match(/class="lp-lacks"/g)?.length ?? 0, lang).toBe(onlyUltra);
       expect(card, lang).toContain(`<a class="lp-btn" href="/account/sign-in?next=%2Faccount%2Fbilling%3Fplan%3Dultra">${text(t(lang, "plans.ultra_subscribe"))}</a>`);
       expect(on.match(/class="lp-btn lp-btn-fill"/g)?.length ?? 0, lang).toBe(1);
     }

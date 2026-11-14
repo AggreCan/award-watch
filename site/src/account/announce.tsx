@@ -193,7 +193,7 @@ export function ultraMessageAllowed(env: Env): Promise<boolean> {
 
 // What the message lists under "Ultra includes everything in Pro, with
 // these figures:": the Ultra card's own lines, the matching notices left out.
-export const ULTRA_MESSAGE_LINES: readonly Key[] = ULTRA_LINES.filter((k) => k !== "plans.matches");
+export const ULTRA_MESSAGE_LINES: readonly Key[] = ULTRA_LINES.filter((k) => k !== "plans.matches" && k !== "plans.match_mail");
 
 // The Ultra message's two links: the plans page and the link off the lists.
 export function ultraLinks(base: string, lang: Lang, token: string): UltraLinks {
