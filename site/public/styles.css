@@ -1210,7 +1210,11 @@ tr[data-phone-cut] { display: none !important; }
   .tile { padding: 12px; }
   .tile-value { font-size: 24px; line-height: 32px; }
   .page-head-text { flex-basis: 100%; }
-  dl, dl.wide { grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); }
+  /* The label column is 7rem, and wider only where a label holds a word that
+     does not fit it: its least width is its longest word (a label breaks at
+     spaces and, where the browser hyphenates the language, at hyphens, never
+     inside a word), so "d'approvisionnement" and "commerciaux" stay whole. */
+  dl, dl.wide { grid-template-columns: minmax(min-content, 7rem) minmax(0, 1fr); }
   /* A list whose labels are phrases (the result of the Indigenous procurement target): each label above its
      value, since the 7rem column broke a long French word in two ("l'administrat", "eur"). */
   dl.stack { display: block; }

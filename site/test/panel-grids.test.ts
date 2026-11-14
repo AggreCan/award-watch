@@ -145,6 +145,16 @@ describe("a record page's grid", () => {
   });
 });
 
+describe("a label on a phone", () => {
+  it("never breaks inside a word: the label column is 7rem and grows to its longest word", () => {
+    // The column's least width is the labels' own (min-content), which is the longest word only while a label
+    // may not break anywhere: break-word breaks an overlong word as a last resort and adds no breaks to that width.
+    expect(styles).toMatch(/@media \(max-width: 699px\) \{[\s\S]*\n  dl, dl\.wide \{ grid-template-columns: minmax\(min-content, 7rem\) minmax\(0, 1fr\); \}/);
+    expect(styles).toContain("dt { color: var(--muted); overflow-wrap: break-word; hyphens: auto; }");
+    expect(styles).not.toMatch(/\bdt\b[^{}]*\{[^}]*overflow-wrap: anywhere/);
+  });
+});
+
 describe("the rank column", () => {
   it("is a kind of its own, 56 px, a figure's, 48 px in a phone's compact table", () => {
     expect(COLUMN_WIDTHS.rank).toBe(56);
