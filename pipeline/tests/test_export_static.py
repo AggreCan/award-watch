@@ -562,7 +562,7 @@ def test_every_source_the_data_page_lists_has_a_row_with_its_real_last_read(conn
     es.export_static(conn, out, today=TODAY, base_url=BASE)
     rows = load(out, "stats.json")["sources"]
     assert [r["source"] for r in rows] == ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying",
-                                           "registry", "registry"]
+                                           "registry", "registry", "pa_services"]
     assert all(set(r) == {"source", "file", "last_read", "last_modified", "last_modified_http", "loaded"} for r in rows)
     assert all(r["loaded"] is (r["last_read"] is not None) for r in rows)
     buyers_row, tenders_row = rows[0], rows[1]
@@ -1093,3 +1093,98 @@ def test_an_empty_export_maps_every_province_at_zero(tmp_path):
     es.export_static(conn, out, today=TODAY, base_url=BASE)
     empty = {"n": 0, "not_stated": 0, "provinces": dict.fromkeys(PROVINCES, 0)}
     assert load(out, "stats.json")["map"] == {"new_today": empty, "open": empty, "closing_7d": empty}
+
+
+# -- the Public Accounts' payments: their own blocks, and nothing else moves ---------------------------------
+
+PA_HEAD = ("Fscl-yr_Ex-fin,Min-code,Min-portfolio_Portefeuille-min_eng,Min-portfolio_Portefeuille-min_fra,Dept-nbr_No-min,"
+           "Dept-name_Nom-min_eng,Dept-name_Nom-min_fra,Rpt-obj_Art-rppt,Rpt-obj_Art-rppt_eng,Rpt-obj_Art-rppt_fra,"
+           "Contractor-details_Details-entrepr_eng,Contractor-details_Details-entrepr_fra,Contractor-city_Ville-entrepr_eng,"
+           "Contractor-city_Ville-entrepr_fra,Contractor-province_Province-entrepr_eng,Contractor-province_Province-entrepr_fra,"
+           "Contractor-country_Pays-entrepr_eng,Contractor-country_Pays-entrepr_fra,Xpnd-current-yr_Dep-ex-courant,"
+           "Aggregate-payments_Versements-totalisant")
+
+
+def _pa_file(path: Path) -> Path:
+    """A services file whose payees are the seed's suppliers, paid by the seed's National Defence."""
+    import csv
+    import io
+
+    dept = ["2025/2026", "11", "National Defence", "Défense nationale", "018", "Department of National Defence",
+            "Ministère de la Défense nationale", "47", "Informatics Services", "Services informatiques"]
+    place = ["Ottawa", "Ottawa", "Ontario", "Ontario", "", ""]
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(PA_HEAD.split(","))
+    writer.writerows([
+        [*dept, "", "", "", "", "", "", "", "", 2750000, 0],
+        [*dept, ACME, ACME, *place, 0, 2000000],
+        [*dept, NORTH, NORTH, *place, 0, 600000],
+        [*dept, "Service payments under $100,000 (3)", "Paiements de service inférieurs à 100 000 $ (3)", "", "", "", "", "", "", 0, 150000],
+    ])
+    path.write_text(out.getvalue(), encoding="utf-8-sig", newline="")
+    return path
+
+
+def test_payments_change_their_own_blocks_and_the_files_read_and_nothing_else(conn, tmp_path):
+    """No payment meets a contract value: an export with a Public Accounts file applied is byte for byte the export
+    without it (the static tree, the CSV downloads, the organizations' totals and years, the buyers' years), apart
+    from the profiles' and the buyer file's public_accounts blocks and stats.json's rows of files read."""
+    from awardwatch_pipeline import export, organizations
+    from awardwatch_pipeline.sources import contracts, matching
+    from awardwatch_pipeline.sources import public_accounts as pa
+
+    ids = seed(conn)
+    # The department's title as CKAN gives it, which the resolver matches the file's legal name to.
+    conn.execute("INSERT INTO buyer_names (raw_name, source, buyer_id) VALUES ('National Defence', 'ckan', 'dnd-mdn')")
+    conn.commit()
+
+    def snapshot(name: str):
+        out = tmp_path / name
+        es.export_static(conn, out / "static", today=TODAY, base_url=BASE)
+        export.export_csv(conn, out / "csv", today=TODAY)
+        files = {p.relative_to(out).as_posix(): p.read_bytes() for p in out.rglob("*") if p.is_file()}
+        tables = {t: [tuple(r) for r in conn.execute(f"SELECT * FROM {t} ORDER BY 1, 2, 3")]
+                  for t in ("organizations", "organization_years", "buyer_years")}
+        return files, tables
+
+    before, before_tables = snapshot("without")
+    path = _pa_file(tmp_path / "pa.csv")
+    parsed = pa.read_file(path, matching.PersonDrops(), withheld=frozenset())
+    assert [r.kind for r in parsed.rows] == ["header", "named", "named", "under"]
+    pa.apply(conn, parsed, pa.Resource(fy=2025, url="https://example.invalid/idsps-dipss-2026.csv", resource_id="r", ckan_modified=None),
+             digest=contracts.sha256(path), etag=None, last_modified=None, stamp="2026-10-31T02:00:00Z")
+    assert {r[0] for r in conn.execute("SELECT organization_id FROM pa_payments WHERE kind = 'named'")} == {ids[ACME], ids[NORTH]}
+    organizations.recompute(conn, now="2026-10-31T01:00:00Z")
+    indicators.compute(conn, now="2026-10-31T01:00:00Z")
+    after, after_tables = snapshot("with")
+    assert after_tables == before_tables
+    assert set(after) == set(before)
+    changed = sorted(k for k in after if after[k] != before[k])
+    shards = sorted({f"static/profiles/{es.shard_key(ids[ACME])}.json", f"static/profiles/{es.shard_key(ids[NORTH])}.json"})
+    assert changed == sorted([*shards, "static/buyers/dnd-mdn.json", "static/stats.json"])
+
+    def without_block(raw: bytes) -> object:
+        doc = json.loads(raw)
+        for value in (doc.values() if "buyer" not in doc else [doc]):
+            if isinstance(value, dict):
+                value.pop("public_accounts", None)
+        return doc
+
+    for name in [*shards, "static/buyers/dnd-mdn.json"]:
+        assert without_block(after[name]) == without_block(before[name]), name
+    profile = json.loads(after[shards[0]])[ids[ACME]] if es.shard_key(ids[ACME]) in shards[0] else json.loads(after[shards[1]])[ids[ACME]]
+    assert profile["public_accounts"]["services"][0]["rows"][0][:4] == ["dnd-mdn", "47", 2_000_000, ACME]
+    # The profile's own totals are the contract figures they were: no payment in them.
+    assert profile["organization"] == json.loads(before[f"static/profiles/{es.shard_key(ids[ACME])}.json"])[ids[ACME]]["organization"]
+    stats_a, stats_b = json.loads(before["static/stats.json"]), json.loads(after["static/stats.json"])
+    for doc in (stats_a, stats_b):
+        doc.pop("runs")
+    files_b = stats_b.pop("sources")
+    files_a = stats_a.pop("sources")
+    assert stats_a == stats_b
+    assert [r for r in files_b if r["source"] != "pa_services"] == [r for r in files_a if r["source"] != "pa_services"]
+    assert [r["file"] for r in files_b if r["source"] == "pa_services"] == ["idsps-dipss-2026.csv"]
+    buyer = json.loads(after["static/buyers/dnd-mdn.json"])["public_accounts"]
+    assert buyer["classes"] == [{"cls": "47", "en": "Informatics Services", "fr": "Services informatiques", "total": 2_750_000,
+                                 "named": [2, 2_600_000], "under": [3, 150_000], "federal": [0, 0], "withheld": 0}]

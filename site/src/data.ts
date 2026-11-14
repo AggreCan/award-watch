@@ -604,6 +604,10 @@ export interface Profile {
   // absent from older exports and from a profile with nothing in the window.
   // Read through src/fit.tsx profileMatching.
   matching?: unknown;
+  // The payments the Public Accounts report for it, a block of their own
+  // (pipeline sources/public_accounts.py); absent from older exports and from
+  // a profile with none. Read through src/public_accounts.tsx.
+  public_accounts?: unknown;
 }
 
 // -- corporate families ------------------------------------------------------------
@@ -738,6 +742,9 @@ export interface Buyer {
   expiring?: ExpiringPart;
   // The names it also appears under; absent from older exports.
   aliases?: BuyerAlias[];
+  // What the Public Accounts report it paid for professional and special
+  // services; absent from older exports. Read through src/public_accounts.tsx.
+  public_accounts?: unknown;
 }
 
 export interface CategorySummary {

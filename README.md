@@ -55,8 +55,12 @@ and contributions (Treasury Board of Canada Secretariat, consolidated on
 open.canada.ca), the Registry of Lobbyists' monthly communication reports
 (Office of the Commissioner of Lobbying) and the federal corporations extract
 (Corporations Canada) are all published under the Open Government Licence,
-Canada. The Data page on the site lists each file, its publisher and the date
-it was last read.
+Canada. So is the Public Accounts of Canada's yearly file of payments for
+professional and special services (Public Services and Procurement Canada),
+the one source of amounts paid, shown apart and never added to a contract
+value; its records say they are not the official record, which is the Public
+Accounts on the Receiver General's site (`docs/public-accounts.md`). The Data
+page on the site lists each file, its publisher and the date it was last read.
 
 The Registry of Lobbyists' host has refused this project's requests since
 2026-10-31. While it does, the lobbying stage reads the registry's export from

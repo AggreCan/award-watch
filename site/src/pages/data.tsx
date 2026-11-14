@@ -10,6 +10,7 @@ import { decimal, fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, noDataPage, page, todayOf } from "../layout";
 import { allowsRadarDepth, requestPlan } from "../plan";
 import { ProNote } from "../pro";
+import { PAC_URL, paDatasetUrl } from "../public_accounts";
 import { type DataSet, ODLA_URL, OGL_URL, datasetJsonLd, pageSeo } from "../seo";
 import { KeyedApiDocs } from "./keyed_api";
 import { datasetUrl } from "./shared";
@@ -114,6 +115,7 @@ export const LICENCE_ROWS: readonly { material: Key; terms: Key; url?: string }[
   { material: "data.lic.lobbying", terms: "data.lic.odla_terms", url: ODLA_URL },
   { material: "data.lic.organizations", terms: "data.lic.ogl_terms" },
   { material: "data.lic.corporations", terms: "data.lic.ogl_terms" },
+  { material: "data.lic.public_accounts", terms: "data.lic.ogl_terms" },
   { material: "data.lic.computed", terms: "data.lic.computed_terms" },
 ];
 
@@ -129,6 +131,8 @@ export const SOURCE_ROWS: readonly { key: string; name: Key; publisher: Key; fil
   { key: "grants", name: "data.src.grants", publisher: "data.pub.tbs", files: "grants.csv", url: (lang) => datasetUrl("grants", lang) },
   { key: "lobbying", name: "data.src.lobbying", publisher: "data.pub.ocl", files: "communications_ocl_cal.zip", url: (lang) => datasetUrl("lobbying", lang), odla: true },
   { key: "registry", name: "data.src.registry", publisher: "data.pub.ised", files: "federal corporations extract", url: (lang) => `https://open.canada.ca/data/${lang}/dataset/0032ce54-c5dd-4b66-99a0-320a7b5e99f2` },
+  // Payments in a fiscal year, one file a year (pipeline sources/public_accounts.py); its rows in stats.json are pa_services.
+  { key: "pa_services", name: "data.src.pa_services", publisher: "data.pub.pspc", files: "idsps-dipss", url: paDatasetUrl },
 ];
 
 const API_ROWS: [string, Key][] = [
@@ -262,6 +266,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
             </Table>
           </div>
           <p class="muted small">{tj(lang, "data.sources_runs", { runs: <a href="#files">{t(lang, "data.files_read")}</a> })}</p>
+          <p class="muted small">{tj(lang, "data.pa_official", { pac: <a href={PAC_URL[lang]}>{t(lang, "pa.pac_link")}</a> })}</p>
 
           <h2 id="downloads">{t(lang, "data.toc_downloads")}</h2>
           <p>{t(lang, "data.downloads_text")}</p>

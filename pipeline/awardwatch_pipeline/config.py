@@ -112,6 +112,19 @@ SOSA_CA_PEM = PACKAGE_DATA / "sosa_intermediate.pem"
 # the operator releases it by writing its publication date (YYYY-MM-DD) here.
 SOSA_RELEASE = PACKAGE_DATA / "sosa_release.txt"
 
+# The Public Accounts of Canada (sources/public_accounts.py): PSPC's yearly
+# files, Open Government Licence. Slice 1 reads the professional and special
+# services; the works and the contractual obligations come with later slices.
+PA_SERVICES_DATASET = "ac597ff8-ee13-48c3-b315-42e528090af2"
+PA_WORKS_DATASET = "8776785b-445c-42bb-bb53-c29a1bff44dd"
+PA_OBLIGATIONS_DATASET = "02986ea0-3ab7-4a13-b391-209e535726d9"
+# A file held for review (too few rows, class blocks that do not add up) is
+# applied once the operator writes its SHA-256, or its first 12 characters, here.
+PA_RELEASE = PACKAGE_DATA / "public_accounts_release.txt"
+# Payees withheld by hand: one hash of a normalized name per line
+# (public_accounts.withhold_key), never a name, since the repository is public.
+PA_WITHHOLD = PACKAGE_DATA / "public_accounts_withhold.txt"
+
 # The organizations' spelling rule (merges.py, the fourth merge rule: one match
 # key, any place). "on" merges the groups and still lists each one in
 # data/out/review/organization-merges.txt, so the file stays the record of

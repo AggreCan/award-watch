@@ -16,6 +16,7 @@ import { clearClosingCache } from "../src/closing";
 import { clearParsedCache } from "../src/data";
 import { app } from "../src/index";
 import { FILES, TEST_NOW, testEnv } from "./assets";
+import { PA_BUYER_PAYEES, PA_FREE_YEARS, PA_PROFILE_ROWS } from "../src/public_accounts";
 import { homeApp } from "./home";
 
 // -- the scaled-up files ------------------------------------------------------------
@@ -153,6 +154,50 @@ const recordsStub = stubDb((sql, params) => {
 const signedInBody = JSON.stringify(bigExpiringPage(500));
 const signedInAssets = assetsOf({ ...BODIES, "expiring/3m/1.json": signedInBody }, "v1-signed-in");
 
+// -- payments in the Public Accounts ------------------------------------------------------
+//
+// The largest blocks the export writes (src/public_accounts.tsx): a profile with
+// three fiscal years of 100 rows, from ten departments and six classes, a third
+// of them flagged, and a buyer file with fourteen classes and fifty payees. They
+// ride in the files a page reads already, so the time is the render alone.
+const PA_DEPTS = ["pwgsc-tpsgc", "dnd-mdn", "ssc-spc", "esdc-edsc", "hc-sc", "cra-arc", "tbs-sct", "dfo-mpo", "ec", "pa:018"];
+const PA_CLASSES = ["40", "41", "42", "43", "44", "45", "46", "47", "48", "82", "86", "87", "88", "89"];
+const paProfileBlock = {
+  v: 1,
+  services: Array.from({ length: PA_FREE_YEARS }, (_, y) => ({
+    fy: 2025 - y, n: 160, total: 98_765_432, d: PA_DEPTS.length,
+    rows: Array.from({ length: PA_PROFILE_ROWS }, (_, i) => [
+      PA_DEPTS[i % PA_DEPTS.length], PA_CLASSES[i % 6], 9_000_000 - i * 1_234, "Exemplar Translation Services Inc",
+      i % 7 === 0 ? "Services de traduction Exemplar inc." : null, i % 5 === 0 ? "Montréal" : "Ottawa", null,
+      i % 9 === 0 ? ["United Kingdom", "Royaume-Uni"] : i % 5 === 0 ? "QC" : "ON", i % 3 === 0 ? 1 : 0,
+    ]),
+  })),
+  buyers: Object.fromEntries(PA_DEPTS.map((d) => [d, [`Department ${d}`, `Ministère ${d}`]])),
+  classes: Object.fromEntries(PA_CLASSES.map((c) => [c, [`Class ${c} Services`, `Services ${c}`]])),
+  loaded: [2016, 2025],
+};
+const paBuyerBlock = {
+  v: 1, fy: 2025,
+  classes: PA_CLASSES.map((c, i) => ({
+    cls: c, en: `Class ${c} Services`, fr: `Services ${c}`, total: 35_098_042 - i * 1_000, named: [17, 21_593_026], under: [33, 643_992],
+    federal: [4, 12_861_023], withheld: i % 4 === 0 ? 1 : 0,
+  })),
+  payees: Array.from({ length: PA_BUYER_PAYEES }, (_, i) => [
+    `Exemplar Payee ${i} Inc`, null, i % 2 ? "org-a000000001" : null, PA_CLASSES[i % PA_CLASSES.length], 4_962_296 - i * 10_000,
+    "Ottawa", null, "ON",
+  ]),
+  named_rows: 240,
+  years: [[2025, 491_234_567]],
+};
+const paShard = bigProfileShard() as Record<string, Record<string, unknown>>;
+paShard["org-a000000001"] = { ...paShard["org-a000000001"], public_accounts: paProfileBlock };
+const paAssets = assetsOf({
+  ...BODIES,
+  "profiles/a00.json": JSON.stringify(paShard),
+  "buyers/pwgsc-tpsgc.json": JSON.stringify({ ...(FILES["buyers/pwgsc-tpsgc.json"] as Record<string, unknown>), public_accounts: paBuyerBlock }),
+}, "v1-pa");
+const paEnv = { ...env, ASSETS: paAssets };
+
 // -- timing ---------------------------------------------------------------------------
 
 let address = 0;
@@ -160,13 +205,14 @@ let address = 0;
 // without it "/" is the landing page, there being no session here.
 // signedIn: the request carries the stub's Pro session, under the signed-in environment (signedInEnv).
 let signedInEnv: object | null = null;
-async function render(path: string, home = false, signedIn = false): Promise<number> {
+// payments: the files carry the largest Public Accounts blocks (paEnv).
+async function render(path: string, home = false, signedIn = false, payments = false): Promise<number> {
   const res = await (home ? homeApp : app).request(path, {
     headers: {
       "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}`,
       ...(signedIn ? { cookie: SIGNED_IN } : {}),
     },
-  }, signedIn ? signedInEnv! : path === "/" && !home ? landingEnv : env);
+  }, signedIn ? signedInEnv! : payments ? paEnv : path === "/" && !home ? landingEnv : env);
   await res.arrayBuffer();
   return res.status;
 }
@@ -185,13 +231,13 @@ const yardstick = () => JSON.parse(JSON.stringify(ROWS));
 
 // A route's time over the yardstick's, batches of each taken in turn so a
 // change in the machine's load falls on both.
-async function ratio(path: string, per: number, home = false, signedIn = false): Promise<number> {
-  for (let i = 0; i < 3; i++) await render(path, home, signedIn);
+async function ratio(path: string, per: number, home = false, signedIn = false, payments = false): Promise<number> {
+  for (let i = 0; i < 3; i++) await render(path, home, signedIn, payments);
   const route: number[] = [];
   const yard: number[] = [];
   for (let b = 0; b < 5; b++) {
     yard.push(await batch(yardstick, 16));
-    route.push(await batch(() => render(path, home, signedIn), per));
+    route.push(await batch(() => render(path, home, signedIn, payments), per));
   }
   return median(route) / median(yard);
 }
@@ -221,6 +267,12 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   // rows measured 27.2 signed out and 27.4 signed in with no record: the
   // table is most of it, the records about 4.
   ["/expiring/3m (signed in, 500 rows with records)", 95, 8], // [31.6]
+  // Payments in the Public Accounts (src/public_accounts.tsx; measured 2026-11-11 on a busy machine): the
+  // profile above with three fiscal years of 100 rows (8.2 against 5.0 without them in the same run), and the
+  // buyer page without and with fourteen classes and fifty payees.
+  ["/organizations/org-a000000001 (with payments, 300 rows)", 25, 8], // [8.2]
+  ["/buyers/pwgsc-tpsgc", 6, 16], // [2.0]
+  ["/buyers/pwgsc-tpsgc (with payments)", 9, 16], // [2.7]
 ];
 
 // -- a signed-in account that names its organization ---------------------------------------
@@ -426,10 +478,11 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     for (const [name, bound, per] of BUDGET) {
       const home = name === "/ (app home)";
       const signedIn = name.includes("(signed in");
+      const payments = name.includes("(with payments");
       const path = home ? "/" : name.split(" ")[0];
       // The search page answers 503 without its database, after rendering in full.
-      expect([200, 503], name).toContain(await render(path, home, signedIn));
-      const r = await ratio(path, per, home, signedIn);
+      expect([200, 503], name).toContain(await render(path, home, signedIn, payments));
+      const r = await ratio(path, per, home, signedIn, payments);
       seen.push(`${name} ${r.toFixed(2)}`);
       if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
     }

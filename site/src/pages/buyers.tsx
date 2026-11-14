@@ -26,6 +26,7 @@ import { ExpiringSection } from "./expiring";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
 import { holdersPart } from "../instruments";
+import { BuyerPaymentsPanel, buyerPublicAccounts } from "../public_accounts";
 import { HoldersPanel } from "./instruments";
 import {
   AnalyticsLink, AwardTable, BUYER_SOURCE_RESTS, Count, OrgTotalTable, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, money,
@@ -328,6 +329,8 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
         )} />
       ) : <p class="muted">{t(lang, "org.years_none")}</p>}
       </Panel>
+      {/* Payments in a fiscal year, the last panel and apart from the records: none before the source. */}
+      <BuyerPaymentsPanel lang={lang} pa={buyerPublicAccounts(b)} buyer={name} />
       <PhonePagerScript lang={lang} />
     </Layout>,
   );

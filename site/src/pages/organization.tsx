@@ -35,6 +35,7 @@ import {
 } from "./shared";
 import { WATCH_MAX } from "./watchlist";
 import { profileInstruments } from "../instruments";
+import { PaTilesNote, PublicAccountsPanel, profilePublicAccounts } from "../public_accounts";
 import { InstrumentsLine, ProfileInstrumentsPanel } from "./instruments";
 
 const REGISTRY_NAME: Record<string, Key> = {
@@ -348,6 +349,8 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
   const instruments = profileInstruments(profile);
   // The supplier employees on its newest PSPC history record that gives them; none on a file written before them.
   const employees = profileEmployees(profile);
+  // The payments the Public Accounts report for it: a panel of its own, never in a total; none before the source.
+  const payments = profilePublicAccounts(profile);
   const [{ responses, corrections }, directories, interest] = await Promise.all([
     siteRows(c, id), loadDirectories(c.env), interestFilter(c.env, lang, "organization", `/organizations/${o.id}`, { name: o.display_name }),
   ]);
@@ -625,7 +628,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           return listed(s) ? <a class="tile" href={`#${s}`}>{body}</a> : <div class="tile">{body}</div>;
         })}
       </section>
-      <p class="tiles-note"><SourcesSeparate lang={lang} /></p>
+      <p class="tiles-note"><SourcesSeparate lang={lang} /><PaTilesNote lang={lang} pa={payments} /></p>
 
       {profile.expiring ? (
         <ExpiringSection lang={lang} part={profile.expiring} heading="org.expiring" organization={false} phoneRows={PHONE_ROWS}
@@ -705,6 +708,9 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
           {notRead.length ? t(lang, "org.sources_not_read", { list: notRead.map((s) => t(lang, SOURCE_IN[s])).join(", ") }) : null}
         </p>
       ) : null}
+
+      {/* Payments in a fiscal year, after the records and apart from them: no figure of it is in a tile or a total above. */}
+      <PublicAccountsPanel lang={lang} pa={payments} />
 
       <InterestPanel lang={lang} filter={interest} />
 

@@ -1,0 +1,4 @@
+# Public Accounts payees withheld by hand (sources/public_accounts.py, rule "seed"): one hash per line,
+# never a name, since this repository is public. A line is public_accounts.withhold_key of the name's
+# normalized form (normalize.norm_name of the legal part, the place written after it cut). The file's lines
+# are part of public_accounts.rules(), so a line added here reads the yearly files again on the next night.

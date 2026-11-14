@@ -36,7 +36,7 @@ describe("data page", () => {
   it("names every source with its publisher, its licence and when each file was last read", async () => {
     const html = await (await get("/data")).text();
     const sources = section(html, "sources");
-    expect(SOURCE_ROWS.map((s) => s.key)).toEqual(["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry"]);
+    expect(SOURCE_ROWS.map((s) => s.key)).toEqual(["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry", "pa_services"]);
     expect(sources).toContain('<a href="https://open.canada.ca/data/en/dataset/6abd20d4-7a1c-4b38-baa2-9525d0bb2fd2">CanadaBuys tender notices</a>');
     expect(sources).toContain("Public Services and Procurement Canada");
     expect(sources).toContain("Treasury Board of Canada Secretariat");
@@ -77,7 +77,7 @@ describe("data page", () => {
   it("states the licence of every source and of the site's own files, the lobbying registry's its own", async () => {
     const html = await (await get("/data")).text();
     const lic = section(html, "licence");
-    expect(LICENCE_ROWS.length).toBe(6);
+    expect(LICENCE_ROWS.length).toBe(7);
     expect(lic).toContain('Every source but the Registry of Lobbyists is published under the <a href="https://open.canada.ca/en/open-government-licence-canada">Open Government Licence, Canada</a>, and so are the site&#39;s files.');
     // The registry publishes under the Commissioner of Lobbying's Open Data Licence Agreement, not the OGL.
     const odla = '<a href="https://lobbycanada.gc.ca/en/open-data/open-data-licence-agreement/">';

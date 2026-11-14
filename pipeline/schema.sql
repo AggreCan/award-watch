@@ -1059,3 +1059,66 @@ CREATE TABLE IF NOT EXISTS sosa_events (
   UNIQUE (kind, ref, oid, region, day)
 );
 CREATE INDEX IF NOT EXISTS idx_sosa_events_day ON sosa_events(day);
+
+-- ---------------------------------------------------------------------------
+-- The Public Accounts of Canada (sources/public_accounts.py,
+-- docs/public-accounts.md): payments in a fiscal year, a source of their own.
+-- Nothing here is ever added to a contract or agreement value; the export
+-- reads these tables for the "public_accounts" blocks and nothing else.
+-- ---------------------------------------------------------------------------
+
+-- One row per yearly file applied: what was read, when, and under which rules.
+CREATE TABLE IF NOT EXISTS pa_files (
+  family TEXT NOT NULL,                          -- services (works and obligations come later)
+  fy INTEGER NOT NULL,                           -- the fiscal year by its first calendar year (2025 = 2025-26)
+  lang TEXT NOT NULL DEFAULT '',                 -- '' bilingual, en, fr
+  resource_id TEXT NOT NULL,                     -- the dataset record's resource id
+  url TEXT NOT NULL,
+  layout TEXT NOT NULL,                          -- split2026
+  etag TEXT,                                     -- the validators of the copy applied, for the conditional request
+  last_modified TEXT,
+  ckan_modified TEXT,                            -- the resource's last_modified in the dataset record
+  sha256 TEXT,
+  rules TEXT,                                    -- public_accounts.RULES when applied; another reads the file again
+  rows INTEGER NOT NULL,                         -- data rows in the file
+  applied_at TEXT NOT NULL,
+  PRIMARY KEY (family, fy, lang)
+);
+
+-- Professional and special services: every row of every file applied, a
+-- person withheld kept without a name or a place (kind withheld), so the
+-- class totals stay as published and no name does. A row's link to an
+-- organization is computed again every night from the stored names
+-- (public_accounts.relink) and is never a new organization.
+CREATE TABLE IF NOT EXISTS pa_payments (
+  fy INTEGER NOT NULL,
+  seq INTEGER NOT NULL,                          -- the row's number in the file: the rows have no key of their own
+  kind TEXT NOT NULL,                            -- header | named | under | withheld | federal
+  dept_no TEXT,
+  dept_en TEXT NOT NULL,
+  dept_fr TEXT,
+  buyer_id TEXT,                                 -- the department's buyer (buyers.resolve, source public_accounts)
+  cls TEXT NOT NULL,                             -- the class of service's code
+  cls_en TEXT,
+  cls_fr TEXT,
+  payee_raw TEXT,                                -- as written (English); NULL when withheld and on header and under rows
+  payee_fr TEXT,                                 -- the French spelling when it differs
+  payee_norm TEXT,                               -- the legal part normalized, the place written after it cut
+  city TEXT,                                     -- as written; NULL when withheld
+  city_fr TEXT,                                  -- when it differs from city
+  prov TEXT,                                     -- a province, or a state abroad, as written
+  prov_fr TEXT,
+  country TEXT,                                  -- blank in Canada
+  country_fr TEXT,
+  prov_code TEXT,                                -- two letters in Canada, XX abroad; NULL when not stated
+  cents INTEGER,                                 -- the row's amount; a header's is the class total as published
+  n_payees INTEGER,                              -- under rows: the payees the row counts, when it says
+  payee_buyer_id TEXT,                           -- federal rows: the buyer the payee names (NULL: two or more)
+  organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+  pf INTEGER NOT NULL DEFAULT 0,                 -- 1: the province (country abroad) is not among the organization's
+  why TEXT,                                      -- withheld: the person rule (1 to 5, seed); named and unlinked:
+                                                 -- common | key | none
+  PRIMARY KEY (fy, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_pa_payments_org ON pa_payments(organization_id, fy);
+CREATE INDEX IF NOT EXISTS idx_pa_payments_buyer ON pa_payments(buyer_id, fy, cls);

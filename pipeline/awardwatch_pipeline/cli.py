@@ -26,16 +26,19 @@ from .sources import buyers, canadabuys, registry_federal
 from . import indicators
 from . import expiring, export, export_static, lines, migrate, places
 from . import link_sample, records_db, search_db
-from .sources import contracts, grants, lobbying, matching, sosa
+from .sources import contracts, grants, lobbying, matching, public_accounts, sosa
 
 log = logging.getLogger("awardwatch_pipeline")
 # sosa after organizations: its holders link to profiles by name, and tonight's
-# merges and removals are known only then. families after them too: a member
-# merged tonight counts as the organization that took its records. lines after
-# expiring: the holder's record of each radar row, a stage of its own so a
-# fault there leaves the radar and the export standing.
+# merges and removals are known only then. public_accounts after sosa, for the
+# same reason: its payees link to profiles by name, never making one, and a
+# fault there (or a file that fails to download) leaves every stage after it
+# running. families after them too: a member merged tonight counts as the
+# organization that took its records. lines after expiring: the holder's
+# record of each radar row, a stage of its own so a fault there leaves the
+# radar and the export standing.
 STAGES = ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry",
-          "organizations", "sosa", "families", "indicators", "expiring", "lines", "export"]
+          "organizations", "sosa", "public_accounts", "families", "indicators", "expiring", "lines", "export"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -131,6 +134,10 @@ def stage_runners(conn: sqlite3.Connection, client: PoliteClient | None,
         # Standing offers and supply arrangements: the weekly file, applied
         # when its publication date moves, and the nightly upkeep of its holders.
         "sosa": lambda: sosa.run(conn, client, samples=samples),
+        # The Public Accounts' yearly files: the dataset record read nightly in
+        # the release season and weekly otherwise, a file read only when it
+        # changed, the payees linked again every night.
+        "public_accounts": lambda: public_accounts.run(conn, client, samples=samples),
         "families": lambda: families.run(conn),
         "indicators": lambda: indicators.run(conn),
         "expiring": lambda: expiring.run(conn),

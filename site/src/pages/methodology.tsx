@@ -26,7 +26,8 @@ import { EXPIRING_TEASER_ROWS } from "./expiring";
 // rules the pipeline's lines.py counts by, every figure from src/lines.ts.
 // The "Derived provinces" part of "Statuses and Regions" states the place
 // rule of the pipeline's places.py; its figures were counted on the files of
-// 2026-11-06.
+// 2026-11-06. The "Payments in the Public Accounts" section states the rules
+// of the pipeline's sources/public_accounts.py (docs/public-accounts.md).
 
 // Defence Construction Canada's own page of recent awards (a PDF it links),
 // read 2026-11-06: neither CanadaBuys' award file nor the proactive
@@ -41,6 +42,7 @@ const TOC: [string, Key][] = [
   ["organizations", "methodology.toc_organizations"],
   ["buyers", "methodology.toc_buyers"],
   ["counting", "methodology.toc_counting"],
+  ["public-accounts", "methodology.toc_public_accounts"],
   ["competitive", "methodology.toc_competitive"],
   ["statuses", "methodology.toc_statuses"],
   ["expiring", "methodology.toc_expiring"],
@@ -97,6 +99,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           <List lang={lang} keys={[
             "methodology.src_tenders", "methodology.src_same_day", "methodology.src_awards", "methodology.src_history",
             "methodology.src_contracts", "methodology.src_grants", "methodology.src_lobbying", "methodology.src_registry",
+            "methodology.src_public_accounts",
           ]} />
           <p>{tj(lang, "methodology.src_dcc", { link: <a href={DCC_CONTRACTS[lang]} rel="noopener">{t(lang, "methodology.src_dcc_link")}</a> })}</p>
           <p>{tj(lang, "methodology.sources_more", { data: <a href="/data#sources">{t(lang, "nav.data")}</a> })}</p>
@@ -118,9 +121,17 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           <p>{t(lang, "methodology.counting_intro")}</p>
           <List lang={lang} keys={[
             "methodology.count_awards", "methodology.count_contracts", "methodology.count_grants",
-            "methodology.count_years", "methodology.count_currency",
+            "methodology.count_years", "methodology.count_currency", "methodology.count_public_accounts",
           ]} />
           <p><strong>{t(lang, "methodology.never_add")}</strong></p>
+
+          <h2 id="public-accounts">{t(lang, "methodology.toc_public_accounts")}</h2>
+          <p>{t(lang, "methodology.pa_what")}</p>
+          <p>{t(lang, "methodology.pa_thresholds")}</p>
+          <p>{t(lang, "methodology.pa_match")}</p>
+          <p>{t(lang, "methodology.pa_federal")}</p>
+          <p>{t(lang, "methodology.pa_people")}</p>
+          <p>{t(lang, "methodology.pa_limits")}</p>
 
           <h2 id="competitive">{t(lang, "methodology.toc_competitive")}</h2>
           <p>{t(lang, "methodology.competitive_intro")}</p>

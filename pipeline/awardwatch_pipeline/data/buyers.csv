@@ -1,7 +1,7 @@
 # Curated buyer seed, read by sources/buyers.py on every buyers stage.
 # One row per raw spelling a source uses for an institution:
 #   raw_name    the spelling exactly as the source writes it (blank: the row only defines the buyer)
-#   source      the source that writes it: canadabuys | lobbying
+#   source      the source that writes it: canadabuys | lobbying | public_accounts
 #   buyer_id    the open.canada.ca organization name when the institution has one, else a slug of its English name
 #   name_en     English name, used when CKAN does not describe the buyer
 #   name_fr     French name, same
@@ -40,6 +40,17 @@ Old Port of Montreal,canadabuys,old-port-of-montreal-corporation,Old Port of Mon
 Senate of Canada,canadabuys,senate-of-canada,Senate of Canada,Sénat du Canada,,
 Parliamentary Protective Service,canadabuys,parliamentary-protective-service,Parliamentary Protective Service,Service de protection parlementaire,PPS,SPP
 Parlementary Protective Services,canadabuys,parliamentary-protective-service,Parliamentary Protective Service,Service de protection parlementaire,PPS,SPP
+# The Public Accounts of Canada (sources/public_accounts.py) name a department by its legal name. These are
+# the names no CKAN title or resolver rule ties to the right buyer, each to its CKAN organization (read on
+# 2026-11-11); without its row "Royal Canadian Mounted Police External Review Committee" resolved to the RCMP.
+Canada Foundation for Innovation,public_accounts,innovation,Canada Foundation for Innovation,Fondation canadienne pour l'innovation,,
+Canadian Broadcasting Corporation,public_accounts,cbc-radio-canada,Canadian Broadcasting Corporation,Société Radio-Canada,CBC,SRC
+Canadian Transportation Accident Investigation and Safety Board,public_accounts,tsb-bst,Transportation Safety Board of Canada,Bureau de la sécurité des transports du Canada,TSB,BST
+Northern Pipeline Agency,public_accounts,npa-apn,Northern Pipeline Agency Canada,Administration du pipe-line du Nord Canada,NPA,APN
+Office of the Director of Public Prosecutions,public_accounts,ppsc-sppc,Public Prosecution Service of Canada,Service des poursuites pénales du Canada,PPSC,SPPC
+Registrar of the Supreme Court of Canada,public_accounts,scc-csc,Supreme Court of Canada,Cour suprême du Canada,SCC,CSC
+Windsor-Detroit Bridge Authority,public_accounts,wdba-apwd,Windsor-Detroit Bridge Authority,Autorité du pont Windsor-Détroit,WDBA,APWD
+Royal Canadian Mounted Police External Review Committee,public_accounts,erc-cee,RCMP External Review Committee,Comité externe d'examen de la GRC,ERC,CEE
 # An institution only the lobbying registry names (listed apart as kind "institution"); the row gives
 # it its French name, which a buyer made from the registry's English spelling lacks.
 Members of the House of Commons,lobbying,members-of-the-house-of-commons,Members of the House of Commons,Députés de la Chambre des communes,,

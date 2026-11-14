@@ -1646,6 +1646,15 @@ const STRINGS = {
     en: "Federal corporations (Canada Business Corporations Act)",
     fr: "Sociétés fédérales (Loi canadienne sur les sociétés par actions)",
   },
+  "data.src.pa_services": {
+    en: "Public Accounts of Canada, professional and special services",
+    fr: "Comptes publics du Canada, services professionnels et spéciaux",
+  },
+  // Under the sources table: the Public Accounts' own words on their copies.
+  "data.pa_official": {
+    en: "The Public Accounts files say they are not the official record. The official version is the {pac}, prepared by the Receiver General for Canada.",
+    fr: "Les fichiers des Comptes publics indiquent qu'ils ne sont pas la version officielle. La version officielle est celle des {pac}, préparés par le receveur général du Canada.",
+  },
   "data.downloads_text": {
     en: "CSV files rebuilt nightly from the site's database, in UTF-8 with a header row.",
     fr: "Fichiers CSV reconstruits chaque nuit à partir de la base de données du site, en UTF-8 avec une ligne d'en-tête.",
@@ -1731,6 +1740,10 @@ const STRINGS = {
     fr: "Noms et sigles des organisations fédérales (ouvert.canada.ca)",
   },
   "data.lic.corporations": { en: "Corporations Canada federal corporations extract", fr: "Extrait des sociétés fédérales de Corporations Canada" },
+  "data.lic.public_accounts": {
+    en: "Public Accounts of Canada files: professional and special services",
+    fr: "Fichiers des Comptes publics du Canada : services professionnels et spéciaux",
+  },
   "data.lic.computed": {
     en: "The site's merged organizations, buyer mapping, totals and rankings",
     fr: "Les organisations fusionnées, l'association des acheteurs, les totaux et les classements du site",
@@ -1869,8 +1882,13 @@ const STRINGS = {
     fr: "Subventions et contributions : un accord par ministère et numéro de référence. Sa valeur est la valeur à la modification portant le numéro le plus élevé. Les totaux additionnent ces valeurs.",
   },
   "methodology.count_years": {
-    en: "Years are calendar years of the award date (award notices, contract history), the contract date (published contracts) and the agreement start (grants). Fiscal years appear only in source file names.",
-    fr: "Les années sont les années civiles de la date d'attribution (avis d'attribution, historique des contrats), de la date du contrat (contrats publiés) et du début de l'accord (subventions). Les exercices financiers n'apparaissent que dans le nom des fichiers sources.",
+    en: "Years are calendar years of the award date (award notices, contract history), the contract date (published contracts) and the agreement start (grants). The Public Accounts report by fiscal year (April 1 to March 31), and their sections keep that year.",
+    fr: "Les années sont les années civiles de la date d'attribution (avis d'attribution, historique des contrats), de la date du contrat (contrats publiés) et du début de l'accord (subventions). Les Comptes publics déclarent par exercice (du 1er avril au 31 mars), et leurs sections conservent cet exercice.",
+  },
+  // Payments, a source of their own (src/public_accounts.tsx): before the line that sources are never added.
+  "methodology.count_public_accounts": {
+    en: "Public Accounts payments: a payee's payments in a fiscal year are the sum of its rows for that year, one per department and class of service, as published. They are added only to other payments of the same file and year, never to a contract or agreement value.",
+    fr: "Paiements des Comptes publics : les paiements reçus par un bénéficiaire au cours d'un exercice sont la somme de ses lignes de cet exercice, une par ministère et catégorie de services, telles que publiées. Ils ne sont additionnés qu'à d'autres paiements du même fichier et du même exercice, jamais à la valeur d'un contrat ou d'un accord.",
   },
   "methodology.count_currency": {
     en: "A record whose currency is neither the Canadian dollar nor blank is shown with its currency and left out of totals. The profile says how many were left out.",
@@ -2110,9 +2128,104 @@ const STRINGS = {
     fr: "Le site contient ce que publient les éditeurs. Les contrats de moins de 10 000 $, les déclarations tardives et les dossiers qu'un ministère n'a pas publiés n'y figurent pas.",
   },
   "methodology.claim_totals": {
-    en: "Totals are sums of published contract and agreement values. The sources do not report amounts paid, and neither does the site.",
-    fr: "Les totaux sont des sommes de valeurs de contrats et d'accords publiées. Les sources ne déclarent pas les montants versés, le site non plus.",
+    en: "Totals are sums of published contract and agreement values. Amounts paid come from the Public Accounts of Canada alone; they are shown apart, by fiscal year, and never added to a contract or agreement value.",
+    fr: "Les totaux sont des sommes de valeurs de contrats et d'accords publiées. Les montants versés proviennent des seuls Comptes publics du Canada; ils sont présentés à part, par exercice, et ne sont jamais ajoutés à la valeur d'un contrat ou d'un accord.",
   },
+
+  // -- the Public Accounts of Canada: payments in a fiscal year (src/public_accounts.tsx) ------------------
+  // The Methodology section (#public-accounts) and its line in the sources list.
+  "methodology.toc_public_accounts": { en: "Payments in the Public Accounts", fr: "Paiements dans les Comptes publics" },
+  "methodology.src_public_accounts": {
+    en: "Public Accounts of Canada: the yearly files of payments of $100,000 or more for professional and special services, published each autumn for the fiscal year that ended on March 31, and read when a new file appears.",
+    fr: "Comptes publics du Canada : les fichiers annuels des paiements de 100 000 $ ou plus pour des services professionnels et spéciaux, publiés chaque automne pour l'exercice terminé le 31 mars, et lus lorsqu'un nouveau fichier paraît.",
+  },
+  "methodology.pa_what": {
+    en: "The Public Accounts are the only source on the site that reports amounts paid. A row gives what one department reported paying one payee for one class of service in one fiscal year: payments and accrued charges, totalled by the department. It names no contract, so it cannot be tied to a contract record. Payments are shown by fiscal year, in sections of their own, and are never added to a contract or agreement value.",
+    fr: "Les Comptes publics sont la seule source du site qui déclare des montants versés. Une ligne donne ce qu'un ministère a déclaré avoir versé à un bénéficiaire pour une catégorie de services au cours d'un exercice : les paiements et les charges à payer, totalisés par le ministère. Elle ne nomme aucun contrat et ne peut donc pas être reliée à un dossier de contrat. Les paiements sont présentés par exercice, dans des sections distinctes, et ne sont jamais ajoutés à la valeur d'un contrat ou d'un accord.",
+  },
+  "methodology.pa_thresholds": {
+    en: "Each department names every payee it paid $100,000 or more in a class of service in the year. Payees paid less are given only as a number and a total per class, and the site shows those totals as published.",
+    fr: "Chaque ministère nomme tout bénéficiaire à qui il a versé 100 000 $ ou plus dans une catégorie de services au cours de l'exercice. Les bénéficiaires ayant reçu moins ne sont donnés que par leur nombre et un total par catégorie, et le site présente ces totaux tels que publiés.",
+  },
+  "methodology.pa_match": {
+    en: "A payee is matched to an organization when its name, as the Public Accounts write it and without a city or province written after it, gives that organization's ID under the rule above. A name of one word, or made only of common business words, is matched only when the payee's province is among the organization's addresses. A payee that matches no organization is listed under its own name, with no profile. The match is by name alone: the Public Accounts carry no business number.",
+    fr: "Un bénéficiaire est associé à une organisation lorsque son nom, tel que l'écrivent les Comptes publics et sans la ville ou la province qui le suit parfois, donne l'identifiant de cette organisation selon la règle ci-dessus. Un nom d'un seul mot, ou fait uniquement de mots d'affaires courants, n'est associé que si la province du bénéficiaire figure parmi les adresses de l'organisation. Un bénéficiaire qui ne correspond à aucune organisation est présenté sous son propre nom, sans profil. L'association repose sur le nom seul : les Comptes publics ne portent aucun numéro d'entreprise.",
+  },
+  "methodology.pa_federal": {
+    en: "A payee that is a federal department or agency is not an organization on the site. Those payments pay for services between institutions, and the paying department's page lists them apart.",
+    fr: "Un bénéficiaire qui est un ministère ou un organisme fédéral n'est pas une organisation sur le site. Ces paiements règlent des services entre institutions, et la page du ministère payeur les présente à part.",
+  },
+  "methodology.pa_people": {
+    en: "Payees whose names read as private individuals are not named, as on every source. For these files the test is stricter: a name with a courtesy title (Dr, MD), or a professional corporation whose name reads as one person's, such as a physician's, dentist's, lawyer's or notary's, is not named either. Their payments stay in the totals the Public Accounts publish for each class.",
+    fr: "Les bénéficiaires dont le nom se lit comme celui d'un particulier ne sont pas nommés, comme pour toute source. Pour ces fichiers, le critère est plus strict : un nom accompagné d'un titre de civilité (Dr, MD), ou une société professionnelle dont le nom se lit comme celui d'une personne, comme celle d'un médecin, d'un dentiste, d'un avocat ou d'un notaire, n'est pas nommé non plus. Leurs paiements restent compris dans les totaux que publient les Comptes publics pour chaque catégorie.",
+  },
+  "methodology.pa_limits": {
+    en: "Amounts are as published, in dollars. The files appear once a year, in the autumn after the fiscal year ends. The site's copy is not the official record: the official version is the Public Accounts of Canada, prepared by the Receiver General for Canada.",
+    fr: "Les montants sont tels que publiés, en dollars. Les fichiers paraissent une fois par année, à l'automne qui suit la fin de l'exercice. La copie du site n'est pas la version officielle : la version officielle est celle des Comptes publics du Canada, préparés par le receveur général du Canada.",
+  },
+  // A profile's panel (PublicAccountsPanel), below its record panels.
+  "pa.panel": { en: "Payments Reported in the Public Accounts", fr: "Paiements déclarés dans les Comptes publics" },
+  "pa.lead": {
+    en: "Payments and accrued charges of $100,000 or more for professional and special services, by department and class of service, as the Public Accounts of Canada report them for each fiscal year (April 1 to March 31).",
+    fr: "Paiements et charges à payer de 100 000 $ ou plus pour des services professionnels et spéciaux, par ministère et catégorie de services, tels que les Comptes publics du Canada les déclarent pour chaque exercice (du 1er avril au 31 mars).",
+  },
+  "pa.apart": {
+    en: "These are amounts paid, not contract values. They are never added to the contract totals on this page or anywhere on the site.",
+    fr: "Ce sont des montants versés, et non des valeurs de contrats. Ils ne sont jamais ajoutés aux totaux des contrats de cette page ni d'ailleurs sur le site.",
+  },
+  "pa.matched": {
+    en: "Matched to this organization by the payee's name as the Public Accounts write it, shown on each row. The Public Accounts carry no business number.",
+    fr: "Associés à cette organisation d'après le nom du bénéficiaire tel que l'écrivent les Comptes publics, indiqué à chaque ligne. Les Comptes publics ne portent aucun numéro d'entreprise.",
+  },
+  "pa.fy_head": { en: "Fiscal year {fy}", fr: "Exercice {fy}" },
+  "pa.year_total_one": { en: "{amount} from 1 department", fr: "{amount} d'un ministère" },
+  "pa.year_total_many": { en: "{amount} from {n} departments", fr: "{amount} de {n} ministères" },
+  "pa.col_class": { en: "Class of service", fr: "Catégorie de services" },
+  "pa.col_payee": { en: "Payee as written", fr: "Bénéficiaire tel qu'inscrit" },
+  "pa.col_paid": { en: "Paid", fr: "Versé" },
+  "pa.place_differs": { en: "Province not among this profile's addresses", fr: "Province absente des adresses de ce profil" },
+  "pa.rows_cap": { en: "The {shown} largest of {n} rows for this fiscal year.", fr: "Les {shown} plus grandes des {n} lignes de cet exercice." },
+  // The foot of both panels: the source, the official record and the licence.
+  "pa.source": {
+    en: "Public Accounts of Canada, Volume III, professional and special services, fiscal {fy}. {dataset}",
+    fr: "Comptes publics du Canada, volume III, services professionnels et spéciaux, exercice {fy}. {dataset}",
+  },
+  "pa.dataset_link": { en: "The dataset on open.canada.ca", fr: "Le jeu de données sur ouvert.canada.ca" },
+  "pa.not_official": {
+    en: "This copy is not the official record. The official version is the {pac}.",
+    fr: "Cette copie n'est pas la version officielle. La version officielle est celle des {pac}.",
+  },
+  "pa.pac_link": { en: "Public Accounts of Canada", fr: "Comptes publics du Canada" },
+  // The line under a profile's tiles, only on a profile with the panel.
+  "pa.tiles_note": {
+    en: "Payments reported in the Public Accounts are not in these totals. They are shown apart, {below}.",
+    fr: "Les paiements déclarés dans les Comptes publics ne sont pas compris dans ces totaux. Ils sont présentés à part, {below}.",
+  },
+  "pa.below": { en: "further down", fr: "plus bas" },
+  // A buyer page's panel (BuyerPaymentsPanel), the last of the page.
+  "pa.buyer_panel": { en: "Payments for Professional and Special Services", fr: "Paiements pour services professionnels et spéciaux" },
+  "pa.buyer_lead": {
+    en: "What {buyer} reported paying for professional and special services in fiscal {fy}, by class of service, as the Public Accounts of Canada publish it. These are amounts paid, never added to contract values.",
+    fr: "Ce que {buyer} a déclaré avoir versé pour des services professionnels et spéciaux au cours de l'exercice {fy}, par catégorie de services, tel que le publient les Comptes publics du Canada. Ce sont des montants versés, jamais ajoutés aux valeurs de contrats.",
+  },
+  "pa.col_class_total": { en: "Total as published", fr: "Total publié" },
+  "pa.col_listed": { en: "Payees listed", fr: "Bénéficiaires nommés" },
+  "pa.col_under": { en: "Payees under $100,000", fr: "Bénéficiaires de moins de 100 000 $" },
+  "pa.col_federal": { en: "Federal institutions", fr: "Institutions fédérales" },
+  "pa.cell_count": { en: "{n}, {amount}", fr: "{n}, {amount}" },
+  "pa.withheld_one": {
+    en: "{n} payee in these classes reads as a private individual, or is withheld by the Public Accounts, and is not named. Its payment is in the class total.",
+    fr: "{n} bénéficiaire de ces catégories semble être un particulier, ou son nom est retenu par les Comptes publics, et n'est pas nommé. Son paiement est compris dans le total de la catégorie.",
+  },
+  "pa.withheld_many": {
+    en: "{n} payees in these classes read as private individuals, or are withheld by the Public Accounts, and are not named. Their payments are in the class totals.",
+    fr: "{n} bénéficiaires de ces catégories semblent être des particuliers, ou leur nom est retenu par les Comptes publics, et ne sont pas nommés. Leurs paiements sont compris dans les totaux des catégories.",
+  },
+  "pa.federal_note": {
+    en: "Payments to other federal institutions pay for services between departments. They are in the class totals and are not organizations on the site.",
+    fr: "Les paiements à d'autres institutions fédérales règlent des services entre ministères. Ils sont compris dans les totaux des catégories et ne sont pas des organisations sur le site.",
+  },
+  "pa.buyer_payees": { en: "Payees Listed by Name, Fiscal {fy}", fr: "Bénéficiaires nommés, exercice {fy}" },
   "methodology.corrections_text": {
     en: "A wrong match, a buyer filed under the wrong institution or a record shown wrongly can be reported on the {form} page. An organization can publish a response on its profile. Both are reviewed before they appear.",
     fr: "Un mauvais appariement, un acheteur classé sous la mauvaise institution ou un dossier mal affiché peut être signalé à la page {form}. Une organisation peut publier une réponse à son profil. Les deux sont examinés avant leur publication.",
@@ -4238,6 +4351,7 @@ export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "tip.head", // a chart tip's series and period, joined by a comma in both
   "site.name",
   "nav.segments",
+  "pa.cell_count", // a count and an amount, joined by a comma in both
   "common.page_n",
   "common.source",
   "col.code",
