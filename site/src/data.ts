@@ -752,6 +752,10 @@ export interface Buyer {
   // What the Public Accounts report it paid for professional and special
   // services; absent from older exports. Read through src/public_accounts.tsx.
   public_accounts?: unknown;
+  // Its plan, gaps and result under the Indigenous procurement target, as it
+  // reported them; absent from older exports and from a buyer the files do
+  // not name. Read through src/indigenous_target.tsx.
+  indigenous_target?: unknown;
 }
 
 export interface CategorySummary {

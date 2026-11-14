@@ -27,6 +27,7 @@ import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
 import { holdersPart } from "../instruments";
 import { BuyerPaymentsPanel, buyerPublicAccounts } from "../public_accounts";
+import { IndigenousTargetPanel, buyerIndigenousTarget } from "../indigenous_target";
 import { HoldersPanel } from "./instruments";
 import {
   AnalyticsLink, AwardTable, BUYER_SOURCE_RESTS, Count, OrgTotalTable, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, money,
@@ -329,6 +330,10 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
         )} />
       ) : <p class="muted">{t(lang, "org.years_none")}</p>}
       </Panel>
+      {/* The institution's own reports under the Indigenous procurement target, with the Public Accounts after the
+          records: what it reported, apart from every contract figure. Before the payments, which stay the last panel:
+          its plan looks ahead, and a page without either block is as it was. */}
+      <IndigenousTargetPanel lang={lang} ipt={buyerIndigenousTarget(b)} buyer={name} />
       {/* Payments in a fiscal year, the last panel and apart from the records: none before the source. */}
       <BuyerPaymentsPanel lang={lang} pa={buyerPublicAccounts(b)} buyer={name} />
       <PhonePagerScript lang={lang} />

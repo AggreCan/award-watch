@@ -1211,6 +1211,11 @@ tr[data-phone-cut] { display: none !important; }
   .tile-value { font-size: 24px; line-height: 32px; }
   .page-head-text { flex-basis: 100%; }
   dl, dl.wide { grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); }
+  /* A list whose labels are phrases (the result of the Indigenous procurement target): each label above its
+     value, since the 7rem column broke a long French word in two ("l'administrat", "eur"). */
+  dl.stack { display: block; }
+  dl.stack dt { padding-bottom: 0; }
+  dl.stack dd { border-top: 0; padding-top: 2px; }
   .chart-row { grid-template-columns: 3.6rem minmax(0, 1fr); column-gap: 6px; }
   .keys { display: none; }
   html.js .table-wrap[data-phone-page]:not(.paged) tbody > tr:nth-child(n+51) { display: none; }

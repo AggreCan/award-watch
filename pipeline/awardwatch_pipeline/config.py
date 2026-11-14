@@ -46,6 +46,8 @@ DEFAULT_DELAY = 1.0
 # open.canada.ca's CKAN action API.
 CKAN_API = "https://open.canada.ca/data/api/action"
 CKAN_PACKAGE_SHOW = CKAN_API + "/package_show?id={dataset}"
+# A search of the catalogue: the records it finds come whole, with their files.
+CKAN_PACKAGE_SEARCH = CKAN_API + "/package_search?q={q}&fq={fq}&rows={rows}"
 CKAN_ORGANIZATION_LIST = CKAN_API + "/organization_list"
 # The member and dataset lists are not wanted; leaving them out keeps each
 # answer to a few kilobytes.
@@ -124,6 +126,20 @@ PA_RELEASE = PACKAGE_DATA / "public_accounts_release.txt"
 # Payees withheld by hand: one hash of a normalized name per line
 # (public_accounts.withhold_key), never a name, since the repository is public.
 PA_WITHHOLD = PACKAGE_DATA / "public_accounts_withhold.txt"
+
+# Indigenous Services Canada's files on the mandatory minimum 5% Indigenous
+# procurement target (sources/indigenous_target.py), Open Government Licence.
+# The plans and the results come as a new dataset each year, found through the
+# catalogue search; these known ids, newest first, are read when the search does
+# not answer or lists none of a kind (read 2026-11-13).
+IPT_PLAN_DATASETS = ("88bd5306-e0a1-46dd-8e02-909931ade592", "440a10df-4f65-47f4-851c-6acf30d37841")
+IPT_RESULTS_DATASETS = (
+    "65dfa39f-e699-4698-b8c7-29e1b99d7b23", "5d27d152-09d8-4303-adc4-0c46b4a9733b", "34b3aa67-dd04-455b-996f-9d9b5032ed39",
+)
+# A copy held for review (far fewer rows than the copy of the same dataset applied
+# before) is applied once the operator writes its SHA-256, or its first 12
+# characters, here.
+IPT_RELEASE = PACKAGE_DATA / "indigenous_target_release.txt"
 
 # The organizations' spelling rule (merges.py, the fourth merge rule: one match
 # key, any place). "on" merges the groups and still lists each one in

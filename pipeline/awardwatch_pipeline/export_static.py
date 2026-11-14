@@ -109,7 +109,9 @@ change there. Output tree (under data/out/static):
                                 with n_lobbying); a buyer file's "aliases" are the names it also appears under
                                 (buyer_aliases_of); a buyer with a class of the newest Public Accounts file
                                 carries public_accounts (sources/public_accounts.buyer_blocks), apart from its
-                                contract figures
+                                contract figures; a buyer an institution of the Indigenous procurement target's
+                                files resolves to carries indigenous_target (sources/indigenous_target.buyer_blocks):
+                                its plan, gaps and result as reported, apart from every contract figure
   buyers/aliases.json           {"aliases": {old buyer id: listed buyer id}}: the buyer ids the buyers stage
                                 retired (buyer_aliases, chains followed), for a permanent redirect; an alias
                                 whose target is not listed, or whose old id is listed again, is left out
@@ -227,7 +229,7 @@ from .export import SUMS, listed_buyer_ids, register_functions, scrub, scrub_doc
 from .feeds import write_feeds
 from .normalize import INDIGENOUS_MARKS, PROVINCE_CODES, closing_day, employee_count, norm_name, org_id, tender_status_on
 from .sources import buyers as buyer_rules
-from .sources import public_accounts
+from .sources import indigenous_target, public_accounts
 from .sources.buyers import public_spelling
 from .sources.canadabuys_rows import ATTACHMENTS_MAX, government_url
 from .sources.matching import is_person_name
@@ -928,7 +930,7 @@ SOURCE_FILES = {
 # The stages that read a source, in the order the Data page lists them; each
 # key is the "source" of its rows in stats.json "sources".
 SOURCE_ORDER = ("buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry",
-                public_accounts.STATS_SOURCE)
+                public_accounts.STATS_SOURCE, indigenous_target.STATS_SOURCE)
 # The file a source's row names until a read records its own (a source never read yet).
 SOURCE_DEFAULT_FILE = {
     "buyers": "organization_show",
@@ -938,6 +940,7 @@ SOURCE_DEFAULT_FILE = {
     **SOURCE_FILES,
     "registry": "corporations-active-cbca-en.csv",
     public_accounts.STATS_SOURCE: public_accounts.STATS_DEFAULT_FILE,
+    indigenous_target.STATS_SOURCE: indigenous_target.STATS_DEFAULT_FILE,
 }
 # The buyers stage records the time it read the CKAN organization list under
 # this key (sources/buyers.py); a database from before it has only the
@@ -1016,6 +1019,12 @@ def source_files(conn: sqlite3.Connection) -> list[dict]:
             entry(row["source"], row["file"]).update(row)
     except sqlite3.Error as exc:
         log.warning("export: the Public Accounts files could not be listed: %s", exc)
+    # The Indigenous procurement target's files applied, one row each, the same way.
+    try:
+        for row in indigenous_target.source_rows(conn, http_date_iso):
+            entry(row["source"], row["file"]).update(row)
+    except sqlite3.Error as exc:
+        log.warning("export: the Indigenous procurement target files could not be listed: %s", exc)
     for row in seen.values():
         row["loaded"] = row["last_read"] is not None
     for stage in SOURCE_ORDER:
@@ -1790,6 +1799,18 @@ def public_accounts_blocks(conn: sqlite3.Connection, what: str, build: Callable[
         return {}
 
 
+def indigenous_target_blocks(conn: sqlite3.Connection, build: Callable[[], dict[str, dict]]) -> dict[str, dict]:
+    """The Indigenous procurement target's block builder (sources/indigenous_target.py), guarded as the Public
+    Accounts' are: a fault writes the buyer files without the block, logs a notice, and never fails the export."""
+    try:
+        return build()
+    except Exception as exc:
+        log.exception("export: the Indigenous procurement target blocks failed")
+        log_run(conn, "export_indigenous_target", detail=f"buyer files: {type(exc).__name__}: {exc}"[:900],
+                notice=f"the Indigenous procurement target was left out of the buyer files tonight ({type(exc).__name__}: {exc})"[:900])
+        return {}
+
+
 def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, int]:
     """profiles/<abc>.json: every organization's profile, one shard per three hex digits of its id."""
     keys = sorted({shard_key(oid) for oid in m.orgs})
@@ -2065,6 +2086,7 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
     also = buyer_aliases_of(m, listed)
     holders = sosa_export.buyer_holders(conn)
     payments = public_accounts_blocks(conn, "buyer files", lambda: public_accounts.buyer_blocks(conn, orgs=m.orgs, listed=listed))
+    targets = indigenous_target_blocks(conn, lambda: indigenous_target.buyer_blocks(conn, listed=listed))
     for s in summaries:
         bid = s["id"]
         b = m.buyers[bid]
@@ -2088,6 +2110,7 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
             "aliases": also.get(bid, []),
             **({"holders": holders[bid]} if bid in holders else {}),
             **({"public_accounts": payments[bid]} if bid in payments else {}),
+            **({"indigenous_target": targets[bid]} if bid in targets else {}),
         })
     retired = {old: new for old, new in conn.execute("SELECT old_id, new_id FROM buyer_aliases ORDER BY old_id")
                if new in listed and old not in listed and _buyer_id(old)}

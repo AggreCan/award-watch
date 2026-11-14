@@ -59,8 +59,12 @@ Canada. So is the Public Accounts of Canada's yearly file of payments for
 professional and special services (Public Services and Procurement Canada),
 the one source of amounts paid, shown apart and never added to a contract
 value; its records say they are not the official record, which is the Public
-Accounts on the Receiver General's site (`docs/public-accounts.md`). The Data
-page on the site lists each file, its publisher and the date it was last read.
+Accounts on the Receiver General's site (`docs/public-accounts.md`). So are
+Indigenous Services Canada's files on the mandatory minimum 5% Indigenous
+procurement target: each institution's plan, the gaps it reported and its
+latest result, as it reported them, shown on its buyer page apart from every
+contract figure (`docs/indigenous-procurement.md`). The Data page on the site
+lists each file, its publisher and the date it was last read.
 
 The Registry of Lobbyists' host has refused this project's requests since
 2026-10-31. While it does, the lobbying stage reads the registry's export from

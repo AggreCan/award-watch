@@ -1644,6 +1644,7 @@ const STRINGS = {
   "data.pub.tbs": { en: "Treasury Board of Canada Secretariat", fr: "Secrétariat du Conseil du Trésor du Canada" },
   "data.pub.ocl": { en: "Office of the Commissioner of Lobbying", fr: "Commissariat au lobbying" },
   "data.pub.ised": { en: "Innovation, Science and Economic Development Canada", fr: "Innovation, Sciences et Développement économique Canada" },
+  "data.pub.isc": { en: "Indigenous Services Canada", fr: "Services aux Autochtones Canada" },
   "data.src.buyers": { en: "Federal organizations on open.canada.ca", fr: "Organisations fédérales sur ouvert.canada.ca" },
   "data.src.tenders": { en: "CanadaBuys tender notices", fr: "Avis d'appel d'offres d'AchatsCanada" },
   "data.src.awards": { en: "CanadaBuys award notices", fr: "Avis d'attribution d'AchatsCanada" },
@@ -1658,6 +1659,10 @@ const STRINGS = {
   "data.src.pa_services": {
     en: "Public Accounts of Canada, professional and special services",
     fr: "Comptes publics du Canada, services professionnels et spéciaux",
+  },
+  "data.src.indigenous_target": {
+    en: "Mandatory minimum 5% Indigenous procurement target: plans, gaps and results",
+    fr: "Cible minimale obligatoire de 5 % d'approvisionnement auprès des entreprises autochtones : plans, lacunes et résultats",
   },
   // Under the sources table: the Public Accounts' own words on their copies.
   "data.pa_official": {
@@ -1756,6 +1761,10 @@ const STRINGS = {
   "data.lic.public_accounts": {
     en: "Public Accounts of Canada files: professional and special services",
     fr: "Fichiers des Comptes publics du Canada : services professionnels et spéciaux",
+  },
+  "data.lic.indigenous_target": {
+    en: "Indigenous procurement target files: planned procurement, gaps and results",
+    fr: "Fichiers de la cible d'approvisionnement auprès des entreprises autochtones : approvisionnements planifiés, lacunes et résultats",
   },
   "data.lic.computed": {
     en: "The site's merged organizations, buyer mapping, totals and rankings",
@@ -2239,6 +2248,107 @@ const STRINGS = {
     fr: "Les paiements à d'autres institutions fédérales règlent des services entre ministères. Ils sont compris dans les totaux des catégories et ne sont pas des organisations sur le site.",
   },
   "pa.buyer_payees": { en: "Payees Listed by Name, Fiscal {fy}", fr: "Bénéficiaires nommés, exercice {fy}" },
+
+  // -- the mandatory minimum 5% Indigenous procurement target (src/indigenous_target.tsx) --------------------
+  // A buyer page's panel (IndigenousTargetPanel), before the Public Accounts' payments. Plans and results as the
+  // institutions reported them: no word here judges one, and a plan never reads as a commitment.
+  "ipt.panel": { en: "Indigenous Procurement Target", fr: "Cible d'approvisionnement auprès des entreprises autochtones" },
+  "ipt.lead": {
+    en: "What {buyer} reported to Indigenous Services Canada under the mandatory minimum 5% Indigenous procurement target, as Indigenous Services Canada published it.",
+    fr: "Ce que {buyer} a déclaré à Services aux Autochtones Canada au titre de la cible minimale obligatoire de 5 % d'approvisionnement auprès des entreprises autochtones, tel que Services aux Autochtones Canada l'a publié.",
+  },
+  "ipt.apart": {
+    en: "These are the institution's own reports. None of their figures is added to the contract totals on this page or anywhere on the site.",
+    fr: "Ce sont les déclarations de l'institution elle-même. Aucun de leurs chiffres n'est ajouté aux totaux des contrats de cette page ni d'ailleurs sur le site.",
+  },
+  "ipt.plan_lead": {
+    en: "The commodity areas named in the plan {buyer} filed for meeting the target, with the amount it reported may be allocated to each and where the goods or services may be delivered. A plan lists the institution's top commodity areas, its amounts are planning estimates that may change, and it commits the institution to no purchase.",
+    fr: "Les domaines de produits nommés dans le plan que {buyer} a déposé pour atteindre la cible, avec le montant qui, selon sa déclaration, pourrait être alloué à chacun et le lieu où les biens ou services pourraient être livrés. Un plan énumère les principaux domaines de produits de l'institution, ses montants sont des estimations de planification qui peuvent changer, et il n'engage l'institution à aucun achat.",
+  },
+  "ipt.plan_head": { en: "Planned Procurement, Fiscal {fy}", fr: "Approvisionnements planifiés, exercice {fy}" },
+  "ipt.col_category": { en: "Category", fr: "Catégorie" },
+  "ipt.col_object": { en: "Economic object", fr: "Article économique" },
+  "ipt.col_amount": { en: "Amount as reported", fr: "Montant déclaré" },
+  "ipt.col_delivery": { en: "Delivery location", fr: "Lieu de livraison" },
+  "ipt.not_provided": { en: "Not provided", fr: "Non fourni" },
+  "ipt.plan_np": { en: "No data provided for this fiscal year, as the file states.", fr: "Aucune donnée fournie pour cet exercice, selon le fichier." },
+  "ipt.plan_none": {
+    en: "The file has no row for this institution in this fiscal year.",
+    fr: "Le fichier ne contient aucune ligne pour cette institution pour cet exercice.",
+  },
+  "ipt.rows_cap": { en: "The first {shown} of {n} rows for this fiscal year.", fr: "Les {shown} premières des {n} lignes de cet exercice." },
+  "ipt.gaps_cap": { en: "The first {shown} of {n} gaps for this fiscal year.", fr: "Les {shown} premières des {n} lacunes de cet exercice." },
+  "ipt.gaps_head": { en: "Gaps Reported, Fiscal {fy}", fr: "Lacunes signalées, exercice {fy}" },
+  "ipt.gaps_lead": {
+    en: "The goods and services, by economic object, where {buyer} reported an Indigenous business capacity gap, meaning it anticipates challenges or limits in buying them from Indigenous businesses.",
+    fr: "Les biens et services, par article économique, pour lesquels {buyer} a signalé une lacune de capacité des entreprises autochtones, c'est-à-dire des défis ou des limites prévus pour les acheter auprès d'entreprises autochtones.",
+  },
+  // The file's own words for a row that reports no gap, in the page's language.
+  "ipt.gaps_entry": { en: "The file's entry for this institution reads \"{text}\".", fr: "L'entrée du fichier pour cette institution porte la mention « {text} »." },
+  "ipt.gaps_empty": { en: "The file lists no gap for this institution.", fr: "Le fichier n'indique aucune lacune pour cette institution." },
+  "ipt.result_head": { en: "Result, Fiscal {fy}", fr: "Résultat, exercice {fy}" },
+  "ipt.result_lead": {
+    en: "The value of contracts {buyer} reported awarding in the fiscal year, as published.",
+    fr: "La valeur des contrats que {buyer} a déclaré avoir attribués au cours de l'exercice, telle que publiée.",
+  },
+  "ipt.result_a": { en: "Awarded to Indigenous businesses (A)", fr: "Attribués à des entreprises autochtones (A)" },
+  "ipt.result_b": { en: "Awarded to all businesses (B)", fr: "Attribués à toutes les entreprises (B)" },
+  "ipt.result_c": { en: "Exceptions approved by the deputy head (C)", fr: "Exceptions approuvées par l'administrateur général (C)" },
+  "ipt.result_pct": { en: "Percentage, A / (B - C)", fr: "Pourcentage, A / (B - C)" },
+  "ipt.result_met": { en: "Target met", fr: "Cible atteinte" },
+  "ipt.result_received": { en: "Report received", fr: "Rapport reçu" },
+  "ipt.result_note": {
+    en: "The figures, the percentage and the entry under Target met are as the file gives them; the site computes none of them.",
+    fr: "Les chiffres, le pourcentage et l'entrée sous Cible atteinte sont tels que le fichier les donne; le site n'en calcule aucun.",
+  },
+  // The foot: each dataset linked with its fiscal years, the publisher's note on revisions, the licence.
+  "ipt.source": {
+    en: "Published by Indigenous Services Canada from the institutions' reports: {datasets}.",
+    fr: "Publié par Services aux Autochtones Canada à partir des rapports des institutions : {datasets}.",
+  },
+  "ipt.ds_plan_gaps": { en: "planned procurement and gaps, {years}", fr: "approvisionnements planifiés et lacunes, {years}" },
+  "ipt.ds_plan": { en: "planned procurement, {years}", fr: "approvisionnements planifiés, {years}" },
+  "ipt.ds_gaps": { en: "gaps, {years}", fr: "lacunes, {years}" },
+  "ipt.ds_results": { en: "results, {years}", fr: "résultats, {years}" },
+  "ipt.years_two": { en: "{a} and {b}", fr: "{a} et {b}" },
+  "ipt.responsible": {
+    en: "The institutions are responsible for the accuracy of their reports, and Indigenous Services Canada does not revise a dataset after publishing it.",
+    fr: "Les institutions sont responsables de l'exactitude de leurs rapports, et Services aux Autochtones Canada ne révise pas un jeu de données après l'avoir publié.",
+  },
+  // The Methodology section (#indigenous-target) and its line in the sources list.
+  "methodology.toc_indigenous_target": { en: "Indigenous Procurement Target", fr: "Cible d'approvisionnement auprès des entreprises autochtones" },
+  "methodology.src_indigenous_target": {
+    en: "Indigenous Services Canada: the plans and results federal institutions report under the mandatory minimum 5% Indigenous procurement target, each year a new dataset, read when a newer one appears.",
+    fr: "Services aux Autochtones Canada : les plans et les résultats que les institutions fédérales déclarent au titre de la cible minimale obligatoire de 5 % d'approvisionnement auprès des entreprises autochtones, un nouveau jeu de données chaque année, lus lorsqu'un plus récent paraît.",
+  },
+  "methodology.ipt_what": {
+    en: "Federal departments and agencies report to Indigenous Services Canada each year under the mandatory minimum 5% Indigenous procurement target, with a plan for the next two fiscal years and the result of the year that ended, and Indigenous Services Canada publishes both on open.canada.ca. A buyer's page shows the newest plan, the goods and services where the institution reported a gap, and the newest result, each as published.",
+    fr: "Les ministères et organismes fédéraux font rapport chaque année à Services aux Autochtones Canada au titre de la cible minimale obligatoire de 5 % d'approvisionnement auprès des entreprises autochtones, avec un plan pour les deux exercices suivants et le résultat de l'exercice terminé, et Services aux Autochtones Canada publie les deux sur ouvert.canada.ca. La page d'un acheteur présente le plan le plus récent, les biens et services pour lesquels l'institution a signalé une lacune et le résultat le plus récent, chacun tel que publié.",
+  },
+  "methodology.ipt_plan": {
+    en: "A plan row names an economic object (a class of goods or services in the Government of Canada's chart of accounts), its category, the amount the institution reported may be allocated to it, and where the goods or services may be delivered. Institutions list their top commodity areas, the amounts are planning estimates that may change, and Indigenous Services Canada notes that the rows do not break down an institution's planned totals in full. A plan commits an institution to no purchase.",
+    fr: "Une ligne de plan nomme un article économique (une catégorie de biens ou de services du plan comptable du gouvernement du Canada), sa catégorie, le montant qui, selon l'institution, pourrait y être alloué, et le lieu où les biens ou services pourraient être livrés. Les institutions énumèrent leurs principaux domaines de produits, les montants sont des estimations de planification qui peuvent changer, et Services aux Autochtones Canada précise que les lignes ne ventilent pas entièrement les totaux planifiés d'une institution. Un plan n'engage l'institution à aucun achat.",
+  },
+  "methodology.ipt_gaps": {
+    en: "A gap row names an economic object for which the institution reported an Indigenous business capacity gap, meaning it anticipates challenges or limits in buying it from Indigenous businesses. Where the file reports no gap for an institution, the page gives the file's own words.",
+    fr: "Une ligne de lacune nomme un article économique pour lequel l'institution a signalé une lacune de capacité des entreprises autochtones, c'est-à-dire des défis ou des limites prévus pour l'acheter auprès d'entreprises autochtones. Lorsque le fichier n'indique aucune lacune pour une institution, la page reprend les mots du fichier.",
+  },
+  "methodology.ipt_result": {
+    en: "The result gives the value of contracts awarded to Indigenous businesses (A) and to all businesses (B), the exceptions approved by the deputy head (C), the percentage A / (B - C) and whether the 5% target was met. Each is shown as the file gives it; the site computes none of them and adds none to a contract total.",
+    fr: "Le résultat donne la valeur des contrats attribués à des entreprises autochtones (A) et à toutes les entreprises (B), les exceptions approuvées par l'administrateur général (C), le pourcentage A / (B - C) et l'atteinte ou non de la cible de 5 %. Chacun est présenté tel que le fichier le donne; le site n'en calcule aucun et n'en ajoute aucun au total d'un contrat.",
+  },
+  "methodology.ipt_missing": {
+    en: "A figure the file gives as \"No Data Provided\" is shown as not provided, never as zero, and a blank one as not stated.",
+    fr: "Un chiffre que le fichier donne comme « Aucune donnée n'a été fournie » est présenté comme non fourni, jamais comme zéro, et un chiffre vide comme non précisé.",
+  },
+  "methodology.ipt_match": {
+    en: "Each institution is matched to a buyer by its English and French names, under the rules for buyers above. Economic objects are not UNSPSC segments, and the site does not map one to the other.",
+    fr: "Chaque institution est associée à un acheteur d'après ses noms anglais et français, selon les règles sur les acheteurs ci-dessus. Les articles économiques ne sont pas des segments UNSPSC, et le site ne les fait pas correspondre.",
+  },
+  "methodology.ipt_limits": {
+    en: "Plans and results come out at no fixed date, each year as a new dataset. The pipeline looks for the newest of each in the open.canada.ca catalogue every night and reads a file again when it changes. The institutions are responsible for their reports, and Indigenous Services Canada does not revise a dataset after publishing it.",
+    fr: "Les plans et les résultats paraissent à des dates variables, chaque année comme un nouveau jeu de données. Le pipeline cherche chaque nuit le plus récent de chacun dans le catalogue d'ouvert.canada.ca et relit un fichier lorsqu'il change. Les institutions sont responsables de leurs rapports, et Services aux Autochtones Canada ne révise pas un jeu de données après l'avoir publié.",
+  },
   "methodology.corrections_text": {
     en: "A wrong match, a buyer filed under the wrong institution or a record shown wrongly can be reported on the {form} page. An organization can publish a response on its profile. Both are reviewed before they appear.",
     fr: "Un mauvais appariement, un acheteur classé sous la mauvaise institution ou un dossier mal affiché peut être signalé à la page {form}. Une organisation peut publier une réponse à son profil. Les deux sont examinés avant leur publication.",

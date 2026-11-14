@@ -198,6 +198,41 @@ const paAssets = assetsOf({
 }, "v1-pa");
 const paEnv = { ...env, ASSETS: paAssets };
 
+// -- the Indigenous procurement target ------------------------------------------------------
+//
+// The largest block the export writes for the 2025-26 plan (src/indigenous_target.tsx), a little larger:
+// two fiscal years of 26 rows (the most of any institution) each with the longest delivery location the
+// file holds in both languages, 24 gaps (the most) and a result. It rides in the buyer file the page reads
+// already, so the time is the render alone.
+const IPT_WHERE = ["Ontario; British Columbia (multiple sites); Ottawa, ON; NE Vancouver Island, BC; Esquimalt Harbour, BC; Ladysmith, BC; "
+  + "Puntledge River, Courtenay, BC; Ucluelet, BC; Neekas Creek; Coldwater River; Babine Lake; NL; Terrace, BC; Walpole Island; Upper Morice "
+  + "River; Willow River; NT; Paulatuk, NT; Mostly NCR; Canada, Québec; West Coast Vancouver Isl.; North Coast; BC+Yukon",
+"Ontario; Colombie-Britannique (plusieurs sites); Ottawa (Ont.); nord-est de l'île de Vancouver (C.-B.); port d'Esquimalt (C.-B.); "
+  + "Ladysmith (C.-B.); rivière Puntledge, Courtenay (C.-B.); Ucluelet (C.-B.); ruisseau Neekas; rivière Coldwater; lac Babine; T.-N.-L.; "
+  + "Terrace (C.-B.); île Walpole; rivière Upper Morice; rivière Willow; Territoires du Nord-Ouest; Paulatuk (T.-N.-O.); principalement la RCN"];
+const iptCodes = Array.from({ length: 50 }, (_, i) => String(400 + i));
+const iptBlock = {
+  v: 1,
+  objects: Object.fromEntries(iptCodes.map((c, i) => [c, [
+    `Economic object ${c} related to Distributed Computing Environment (DCE) and its parts and peripherals`,
+    `Article économique ${c} de l'environnement d'informatique répartie, y compris pièces et périphériques`,
+    i % 3 ? "Services" : "Goods, land, buildings and works", i % 3 ? "Services" : "Biens, terrains, bâtiments et travaux",
+  ]])),
+  plan: {
+    ds: "88bd5306-e0a1-46dd-8e02-909931ade592", fy: [2025, 2026],
+    years: [2025, 2026].map((fy) => ({ fy, n: 26, rows: iptCodes.slice(0, 26).map((c, i) => [c, i % 9 ? 2_989_480 - i * 1_000 : "np", i % 7 ? IPT_WHERE : "np"]) })),
+  },
+  gaps: { ds: "88bd5306-e0a1-46dd-8e02-909931ade592", years: [{ fy: 2025, n: 24, keys: iptCodes.slice(26), none: null }] },
+  result: { ds: "65dfa39f-e699-4698-b8c7-29e1b99d7b23", fy: 2024, a: 273_885_099, b: 11_738_570_927, c: 6_447_024_797, pct: 0.0518, met: ["Yes", "Oui"] },
+};
+const iptEnv = {
+  ...env,
+  ASSETS: assetsOf({
+    ...BODIES,
+    "buyers/pwgsc-tpsgc.json": JSON.stringify({ ...(FILES["buyers/pwgsc-tpsgc.json"] as Record<string, unknown>), indigenous_target: iptBlock }),
+  }, "v1-ipt"),
+};
+
 // -- timing ---------------------------------------------------------------------------
 
 let address = 0;
@@ -205,14 +240,15 @@ let address = 0;
 // without it "/" is the landing page, there being no session here.
 // signedIn: the request carries the stub's Pro session, under the signed-in environment (signedInEnv).
 let signedInEnv: object | null = null;
-// payments: the files carry the largest Public Accounts blocks (paEnv).
-async function render(path: string, home = false, signedIn = false, payments = false): Promise<number> {
+// payments: the files carry the largest Public Accounts blocks (paEnv); target: the buyer file carries the
+// largest Indigenous procurement target block (iptEnv).
+async function render(path: string, home = false, signedIn = false, payments = false, target = false): Promise<number> {
   const res = await (home ? homeApp : app).request(path, {
     headers: {
       "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}`,
       ...(signedIn ? { cookie: SIGNED_IN } : {}),
     },
-  }, signedIn ? signedInEnv! : payments ? paEnv : path === "/" && !home ? landingEnv : env);
+  }, signedIn ? signedInEnv! : payments ? paEnv : target ? iptEnv : path === "/" && !home ? landingEnv : env);
   await res.arrayBuffer();
   return res.status;
 }
@@ -231,13 +267,13 @@ const yardstick = () => JSON.parse(JSON.stringify(ROWS));
 
 // A route's time over the yardstick's, batches of each taken in turn so a
 // change in the machine's load falls on both.
-async function ratio(path: string, per: number, home = false, signedIn = false, payments = false): Promise<number> {
-  for (let i = 0; i < 3; i++) await render(path, home, signedIn, payments);
+async function ratio(path: string, per: number, home = false, signedIn = false, payments = false, target = false): Promise<number> {
+  for (let i = 0; i < 3; i++) await render(path, home, signedIn, payments, target);
   const route: number[] = [];
   const yard: number[] = [];
   for (let b = 0; b < 5; b++) {
     yard.push(await batch(yardstick, 16));
-    route.push(await batch(() => render(path, home, signedIn, payments), per));
+    route.push(await batch(() => render(path, home, signedIn, payments, target), per));
   }
   return median(route) / median(yard);
 }
@@ -273,6 +309,10 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   ["/organizations/org-a000000001 (with payments, 300 rows)", 25, 8], // [8.2]
   ["/buyers/pwgsc-tpsgc", 6, 16], // [2.0]
   ["/buyers/pwgsc-tpsgc (with payments)", 9, 16], // [2.7]
+  // The Indigenous procurement target (src/indigenous_target.tsx; measured 2026-11-14): the buyer page with the
+  // largest block the 2025-26 plan gives, a little larger (two years of 26 rows, the longest delivery location,
+  // 24 gaps); 2.6 against 1.6 for the plain page and 2.4 with the payments in the same run.
+  ["/buyers/pwgsc-tpsgc (with the target)", 9, 16], // [2.6]
 ];
 
 // -- a signed-in account that names its organization ---------------------------------------
@@ -475,14 +515,19 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     const marked = (await signed.text()).match(/class="muted small line-mark"/g)?.length ?? 0;
     expect(marked).toBe((JSON.parse(signedInBody) as { organization_id: unknown }[]).filter((r) => r.organization_id).length);
     expect(marked).toBeGreaterThan(300);
+    // What the target's entry times: its panel drawn whole, both plan years' 26 rows and the 24 gaps.
+    const withTarget = await (await app.request("/buyers/pwgsc-tpsgc", { headers: { "sec-fetch-mode": "navigate" } }, iptEnv)).text();
+    expect(withTarget.match(/<td data-label="Economic object" class="lead-cell">/g)?.length).toBe(52);
+    expect(withTarget.slice(withTarget.indexOf('<h2 id="indigenous-target">')).match(/<li>Economic object/g)?.length).toBe(24);
     for (const [name, bound, per] of BUDGET) {
       const home = name === "/ (app home)";
       const signedIn = name.includes("(signed in");
       const payments = name.includes("(with payments");
+      const target = name.includes("(with the target");
       const path = home ? "/" : name.split(" ")[0];
       // The search page answers 503 without its database, after rendering in full.
-      expect([200, 503], name).toContain(await render(path, home, signedIn, payments));
-      const r = await ratio(path, per, home, signedIn, payments);
+      expect([200, 503], name).toContain(await render(path, home, signedIn, payments, target));
+      const r = await ratio(path, per, home, signedIn, payments, target);
       seen.push(`${name} ${r.toFixed(2)}`);
       if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
     }

@@ -576,7 +576,7 @@ def test_every_source_the_data_page_lists_has_a_row_with_its_real_last_read(conn
     es.export_static(conn, out, today=TODAY, base_url=BASE)
     rows = load(out, "stats.json")["sources"]
     assert [r["source"] for r in rows] == ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying",
-                                           "registry", "registry", "pa_services"]
+                                           "registry", "registry", "pa_services", "indigenous_target"]
     assert all(set(r) == {"source", "file", "last_read", "last_modified", "last_modified_http", "loaded"} for r in rows)
     assert all(r["loaded"] is (r["last_read"] is not None) for r in rows)
     buyers_row, tenders_row = rows[0], rows[1]
@@ -1202,3 +1202,54 @@ def test_payments_change_their_own_blocks_and_the_files_read_and_nothing_else(co
     buyer = json.loads(after["static/buyers/dnd-mdn.json"])["public_accounts"]
     assert buyer["classes"] == [{"cls": "47", "en": "Informatics Services", "fr": "Services informatiques", "total": 2_750_000,
                                  "named": [2, 2_600_000], "under": [3, 150_000], "federal": [0, 0], "withheld": 0}]
+
+
+# -- the Indigenous procurement target: its own block, and nothing else moves -------------------------------------
+
+
+def test_the_indigenous_target_changes_its_own_block_and_the_files_read_and_nothing_else(conn, tmp_path):
+    """The plans and results meet no contract value: an export with the three files applied is byte for byte the
+    export without them (the static tree, the CSV downloads, the buyers' years), apart from the buyer file of the
+    one listed department they name and stats.json's rows of files read. The files are the test fixtures, cut from
+    the published ones; their other institutions resolve to buyers with no record, which no file lists."""
+    from awardwatch_pipeline import export
+    from awardwatch_pipeline.sources import contracts
+    from awardwatch_pipeline.sources import indigenous_target as ipt
+
+    seed(conn)
+    conn.execute("INSERT INTO buyer_names (raw_name, source, buyer_id) VALUES ('Public Services and Procurement Canada', 'ckan', 'pwgsc-tpsgc')")
+    conn.commit()
+
+    def snapshot(name: str):
+        out = tmp_path / name
+        es.export_static(conn, out / "static", today=TODAY, base_url=BASE)
+        export.export_csv(conn, out / "csv", today=TODAY)
+        files = {p.relative_to(out).as_posix(): p.read_bytes() for p in out.rglob("*") if p.is_file()}
+        return files, [tuple(r) for r in conn.execute("SELECT * FROM buyer_years ORDER BY 1, 2, 3")]
+
+    before, before_years = snapshot("without")
+    fixtures = Path(__file__).resolve().parent / "fixtures"
+    years = {"plan": (2025, 2026, "p"), "gaps": (2025, 2026, "g"), "results": (2024, 2024, "r")}
+    for part, (fy, last, rid) in years.items():
+        path = fixtures / f"indigenous_target_{part}.csv"
+        res = ipt.Resource(part, "ds-" + part, fy, last, rid, f"https://example.invalid/{part}.csv", None, None, None, "search")
+        ipt.apply(conn, ipt.read_file(path, part, res.years), res, digest=contracts.sha256(path), etag=None, last_modified=None,
+                  stamp="2026-10-31T02:00:00Z")
+    after, after_years = snapshot("with")
+    assert after_years == before_years
+    assert set(after) == set(before)
+    changed = sorted(k for k in after if after[k] != before[k])
+    assert changed == ["static/buyers/pwgsc-tpsgc.json", "static/stats.json"]
+    doc = json.loads(after["static/buyers/pwgsc-tpsgc.json"])
+    block = doc.pop("indigenous_target")
+    assert doc == json.loads(before["static/buyers/pwgsc-tpsgc.json"])
+    assert block["result"] == {"ds": "ds-results", "fy": 2024, "a": 234_567_991, "b": 7_413_347_154, "c": 0, "pct": 0.0316,
+                               "met": ["No", "Non"]}
+    assert [y["fy"] for y in block["plan"]["years"]] == [2025, 2026]
+    stats_a, stats_b = json.loads(before["static/stats.json"]), json.loads(after["static/stats.json"])
+    for d in (stats_a, stats_b):
+        d.pop("runs")
+    files_b, files_a = stats_b.pop("sources"), stats_a.pop("sources")
+    assert stats_a == stats_b
+    assert [r for r in files_b if r["source"] != "indigenous_target"] == [r for r in files_a if r["source"] != "indigenous_target"]
+    assert sorted(r["file"] for r in files_b if r["source"] == "indigenous_target") == ["gaps.csv", "plan.csv", "results.csv"]

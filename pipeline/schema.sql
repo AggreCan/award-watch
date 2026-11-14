@@ -1129,3 +1129,106 @@ CREATE TABLE IF NOT EXISTS pa_payments (
 );
 CREATE INDEX IF NOT EXISTS idx_pa_payments_org ON pa_payments(organization_id, fy);
 CREATE INDEX IF NOT EXISTS idx_pa_payments_buyer ON pa_payments(buyer_id, fy, cls);
+
+-- ---------------------------------------------------------------------------
+-- The mandatory minimum 5% Indigenous procurement target
+-- (sources/indigenous_target.py, docs/indigenous-procurement.md): plans, gaps
+-- and results as the institutions reported them and as Indigenous Services
+-- Canada published them. Nothing here is added to a contract value; the
+-- export reads these tables for the buyer files' "indigenous_target" block
+-- and nothing else. Each table holds the newest dataset's file, whole.
+-- ---------------------------------------------------------------------------
+
+-- One row per file applied: plan, gaps, results.
+CREATE TABLE IF NOT EXISTS ipt_files (
+  part TEXT PRIMARY KEY,                         -- plan | gaps | results
+  dataset_id TEXT NOT NULL,                      -- the open.canada.ca dataset ('sample' on a samples run)
+  found TEXT NOT NULL,                           -- search | fallback | sample: how the dataset was found
+  fy INTEGER NOT NULL,                           -- the first fiscal year the file covers (2025 = 2025-26)
+  fy_last INTEGER NOT NULL,                      -- the last (a plan covers two)
+  resource_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  name_en TEXT,                                  -- the file's names in the dataset record
+  name_fr TEXT,
+  encoding TEXT NOT NULL,                        -- utf-8 | cp1252
+  etag TEXT,                                     -- the validators of the copy applied, for the conditional request
+  last_modified TEXT,
+  ckan_modified TEXT,                            -- the resource's last_modified in the dataset record
+  sha256 TEXT,
+  rules TEXT,                                    -- indigenous_target.rules() when applied; another reads the file again
+  rows INTEGER NOT NULL,                         -- data rows in the file
+  applied_at TEXT NOT NULL
+);
+
+-- The planned procurement file: one row per row of the file.
+CREATE TABLE IF NOT EXISTS ipt_plans (
+  seq INTEGER PRIMARY KEY,                       -- the row's number in the file
+  fy INTEGER NOT NULL,
+  kind TEXT NOT NULL,                            -- row | none (the row says No Data Provided for the year)
+  dept_en TEXT NOT NULL,
+  dept_fr TEXT,
+  acronym_en TEXT,
+  acronym_fr TEXT,
+  buyer_id TEXT,                                 -- buyers.resolve, source indigenous_target
+  code TEXT,                                     -- the economic object code as written
+  object_en TEXT,
+  object_fr TEXT,
+  category_en TEXT,
+  category_fr TEXT,
+  subcategory_en TEXT,
+  subcategory_fr TEXT,
+  reporting_en TEXT,
+  reporting_fr TEXT,
+  amount_cents INTEGER,                          -- stated amounts only
+  amount_state TEXT NOT NULL,                    -- stated | not_provided | blank | text
+  amount_raw TEXT,                               -- as written
+  delivery_en TEXT,                              -- as written; NULL when not provided or blank
+  delivery_fr TEXT,
+  delivery_state TEXT NOT NULL                   -- stated | not_provided | blank
+);
+CREATE INDEX IF NOT EXISTS idx_ipt_plans_buyer ON ipt_plans(buyer_id, fy);
+
+-- The gaps file: the economic objects where an institution reports a gap.
+CREATE TABLE IF NOT EXISTS ipt_gaps (
+  seq INTEGER PRIMARY KEY,
+  fy INTEGER NOT NULL,
+  kind TEXT NOT NULL,                            -- gap | none (the row reports no gap, in the file's own words)
+  dept_en TEXT NOT NULL,
+  dept_fr TEXT,
+  acronym_en TEXT,
+  acronym_fr TEXT,
+  buyer_id TEXT,
+  code TEXT,
+  object_en TEXT,                                -- as written; on a none row the file's words for it
+  object_fr TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_ipt_gaps_buyer ON ipt_gaps(buyer_id);
+
+-- The results file: one row per institution and fiscal year.
+CREATE TABLE IF NOT EXISTS ipt_results (
+  seq INTEGER PRIMARY KEY,
+  fy INTEGER NOT NULL,
+  dept_en TEXT NOT NULL,
+  dept_fr TEXT,
+  acronym_en TEXT,
+  acronym_fr TEXT,
+  buyer_id TEXT,
+  phase TEXT,
+  received_en TEXT,
+  received_fr TEXT,
+  a_cents INTEGER,                               -- contracts awarded to Indigenous businesses
+  a_state TEXT NOT NULL,                         -- stated | not_provided | blank | text, as for an amount
+  a_raw TEXT,
+  b_cents INTEGER,                               -- contracts awarded to all businesses
+  b_state TEXT NOT NULL,
+  b_raw TEXT,
+  c_cents INTEGER,                               -- deputy head approved exceptions
+  c_state TEXT NOT NULL,
+  c_raw TEXT,
+  pct REAL,                                      -- the published A / (B - C), as a fraction
+  pct_state TEXT NOT NULL,
+  pct_raw TEXT,
+  met_en TEXT,                                   -- as written ("Yes", "No", "N/A")
+  met_fr TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_ipt_results_buyer ON ipt_results(buyer_id);
