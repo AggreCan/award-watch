@@ -300,6 +300,9 @@ export function viewPoint(c: Context<AppEnv>, visitor = ""): AnalyticsEngineData
     // The device and the visitor code describe a person's browser, so a bot leaves both empty.
     agent, agent === "human" ? deviceClass(ua, c.req.header("sec-ch-ua-mobile")) : "",
     agent === "human" && /^[0-9a-f]{16}$/.test(visitor) ? visitor : "",
+    // The verified-bot category the edge gave the request ("Search Engine Crawler", "AI Search"), empty when it
+    // gave none: which kind of crawler a bot's request was. It names a crawler's kind, never a person's anything.
+    typeof cf?.verifiedBotCategory === "string" ? cf.verifiedBotCategory.trim().slice(0, 40) : "",
   ];
   const doubles = [c.res.status];
   // double2 for a feed only; every other point leaves it empty (read back as 0).

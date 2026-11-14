@@ -107,7 +107,7 @@ describe("measurement middleware", () => {
     expect(p).toEqual({
       indexes: ["/organizations/:id"],
       // No VIEWS_SALT_KEY in the test environment, so no visitor code.
-      blobs: ["/organizations/:id", "page", "fr", "", "news.example.org", "GET", "", "human", "desktop", ""],
+      blobs: ["/organizations/:id", "page", "fr", "", "news.example.org", "GET", "", "human", "desktop", "", ""],
       doubles: [200],
     });
     const raw = JSON.stringify(p);
@@ -143,7 +143,7 @@ describe("measurement middleware", () => {
     Object.defineProperty(req, "cf", { value: { country: "CA", city: "Somewhere", latitude: "1" } });
     await app.fetch(req, { ...testEnv(), VIEWS: dataset });
     // No user agent at all: a program, so a bot with no device and no code.
-    expect(points[0].blobs).toEqual(["/tenders", "page", "en", "CA", "awardwatch.ca", "GET", "", "bot", "", ""]);
+    expect(points[0].blobs).toEqual(["/tenders", "page", "en", "CA", "awardwatch.ca", "GET", "", "bot", "", "", ""]);
     expect(JSON.stringify(points)).not.toContain("Somewhere");
   });
 
@@ -237,7 +237,7 @@ describe("bot or human", () => {
     const env = { ...testEnv(), VIEWS: dataset, VIEWS_SALT_KEY: "test-secret" };
     await app.request("/methodology", { headers: { "cf-connecting-ip": IP, "user-agent": CHROME } }, env);
     await app.request("/methodology", { headers: { "cf-connecting-ip": IP, "user-agent": CHROME, "sec-fetch-site": "same-origin" } }, env);
-    expect(points[0].blobs?.slice(7)).toEqual(["bot", "", ""]);
+    expect(points[0].blobs?.slice(7)).toEqual(["bot", "", "", ""]);
     expect(points[1].blobs?.slice(7, 9)).toEqual(["human", "desktop"]);
     expect(points[1].blobs?.[9]).toMatch(/^[0-9a-f]{16}$/);
   });
@@ -247,7 +247,8 @@ describe("bot or human", () => {
     const req = new Request("http://localhost/tenders", { headers: { "user-agent": CHROME } });
     Object.defineProperty(req, "cf", { value: { country: "US", verifiedBotCategory: "Search Engine Crawler" } });
     await app.fetch(req, { ...testEnv(), VIEWS: dataset, VIEWS_SALT_KEY: "test-secret" });
-    expect(points[0].blobs?.slice(6)).toEqual(["", "bot", "", ""]);
+    // The category itself is the last field, so a day's requests can be told apart by the kind of crawler.
+    expect(points[0].blobs?.slice(6)).toEqual(["", "bot", "", "", "Search Engine Crawler"]);
   });
 });
 
@@ -302,9 +303,9 @@ describe("the daily visitor code", () => {
     await app.request("/methodology", { headers: { ...headers, "user-agent": IPHONE } }, env);
     expect(points).toHaveLength(3);
     const [person, bot, phone] = points.map((p) => p.blobs ?? []);
-    expect(person.slice(6)).toEqual(["", "human", "desktop", await visitorHash("test-secret", utcDay(), IP, UA)]);
+    expect(person.slice(6)).toEqual(["", "human", "desktop", await visitorHash("test-secret", utcDay(), IP, UA), ""]);
     expect(person[9]).toMatch(/^[0-9a-f]{16}$/);
-    expect(bot.slice(6)).toEqual(["", "bot", "", ""]);
+    expect(bot.slice(6)).toEqual(["", "bot", "", "", ""]);
     expect(phone.slice(7, 9)).toEqual(["human", "mobile"]);
     expect(phone[9]).toMatch(/^[0-9a-f]{16}$/);
     expect(phone[9]).not.toBe(person[9]);
@@ -318,6 +319,6 @@ describe("the daily visitor code", () => {
     const { points, dataset } = recorder();
     const res = await app.request("/methodology", { headers: { "user-agent": UA, ...NAVIGATE } }, { ...testEnv(), VIEWS: dataset });
     expect(res.status).toBe(200);
-    expect(points[0].blobs?.slice(7)).toEqual(["human", "desktop", ""]);
+    expect(points[0].blobs?.slice(7)).toEqual(["human", "desktop", "", ""]);
   });
 });

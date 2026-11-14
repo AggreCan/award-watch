@@ -253,12 +253,23 @@ operator only, it keeps the account funnel's daily figures (below).
 | `blob8` | `bot` or `human` (from 2026-10-30) | `human` |
 | `blob9` | people only: `desktop`, `mobile` or `tablet`, read from the user agent; empty for a bot | `mobile` |
 | `blob10` | people only: the daily visitor code, 16 hex characters; empty for a bot and while `VIEWS_SALT_KEY` is not set | `79b509108f501ba3` |
+| `blob11` | the verified-bot category Cloudflare's edge gave the request, empty when it gave none (from 2026-11-14) | `Search Engine Crawler` |
 | `double1` | the status code | `200` |
 | `double2` | feeds only: the subscriber count the feed reader stated, 0 when none | `12` |
 
 The positions never move: the roll-up reads older days with the same
 columns, and a point written before 2026-10-30 reads back with empty strings
-in `blob7` to `blob10`.
+in `blob7` to `blob10`, one before 2026-11-14 with an empty `blob11`.
+
+The category is how the Worker tells a search engine's own crawler from a
+request that only writes its name. Googlebot and Bingbot, verified under
+"Search Engine Crawler" and named in the user agent, are never held to the
+per-address page cap (`searchEngine` in `site/src/limits.ts`): Google reads
+no `Crawl-delay` and slows its crawl of a whole host when it meets 429s,
+and Bing's group in `robots.txt` carries no delay. The edge gives the same
+category to some crawlers of AI indexes (KeenableBot, ExaSearchBot and
+OAI-SearchBot on 2026-11-14), so the name is required too, and those keep
+the budget of *AI crawlers* below.
 
 A path that matches no route is stored as `other`, never as written, since a
 mistyped or pasted address could hold anything. Downloads keep their file
