@@ -81,7 +81,7 @@ describe("saved searches", () => {
     expect(locations).toEqual(["/account/searches?m=added", "/account/searches?m=added", "/account/searches?m=added", "/account/searches?m=cap"]);
     expect(await searches(email)).toHaveLength(3);
     const full = await (await get("/account/searches?m=cap", { cookie })).text();
-    expect(full).toContain("The Free plan keeps up to 3 saved searches.");
+    expect(full).toContain("The Free plan keeps up to 3 saved searches and briefings.");
     expect(full).not.toContain('name="url"');
     await grantPro(email);
     expect((await post("/account/searches", { csrf: token, url: "/buyers/pwgsc-tpsgc" }, { cookie })).headers.get("location")).toBe("/account/searches?m=added");

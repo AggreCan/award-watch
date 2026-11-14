@@ -397,14 +397,16 @@ describe("the sign-in pages with brief", () => {
     const carried = await (await get(`/account/sign-in?next=%2Fsegments%2F${SEGMENT}&brief=segment%3A${SEGMENT}`)).text();
     expect(carried.split(NOTE_HTML).length - 1).toBe(1);
     expect(carried.split(FIELD_HTML).length - 1).toBe(1);
-    expect(carried.replace(NOTE_HTML, "").replace(FIELD_HTML, "")).toBe(plain);
+    // The language toggle keeps the address's query, brief with the rest (layout.tsx langToggle).
+    expect(carried.replace(NOTE_HTML, "").replace(FIELD_HTML, "").replace(`&amp;brief=segment%3A${SEGMENT}&amp;lang=fr"`, '&amp;lang=fr"')).toBe(plain);
     // The code page, after a request made without and with brief for the same address.
     const email = newEmail("b-same");
     const codePlain = await (await post("/account/sign-in", { lang: "en", email, next: `/segments/${SEGMENT}` })).text();
     const codeCarried = await (await post("/account/sign-in", { lang: "en", email, next: `/segments/${SEGMENT}`, brief: `segment:${SEGMENT}` })).text();
     expect(codeCarried.replace(NOTE_HTML, "").replace(FIELD_HTML, "").replace(`&amp;brief=segment%3A${SEGMENT}"`, '"')).toBe(codePlain);
-    // A page with a brief that does not read is the page without one.
-    expect(await (await get(`/account/sign-in?next=%2Fsegments%2F${SEGMENT}&brief=segment%3A99`)).text()).toBe(plain);
+    // A page with a brief that does not read is the page without one (its language toggle keeps the address's query).
+    expect((await (await get(`/account/sign-in?next=%2Fsegments%2F${SEGMENT}&brief=segment%3A99`)).text()).replace("&amp;brief=segment%3A99&amp;lang=fr\"", '&amp;lang=fr"'))
+      .toBe(plain);
   });
 
   it("answers the form's errors on the sign-in page with the existing lines, the address, next and brief kept", async () => {

@@ -205,7 +205,9 @@ export async function checkLink(env: Env, token: string, now = new Date()): Prom
 }
 
 // The user for an address that has just proved it: the existing active row,
-// or a new one. created says which, for the audit trail.
+// or a new one. created says which, for the audit trail. The page's language
+// becomes the account's mail language when the row is made; a later sign-in
+// leaves the account's choice as it is (the overview changes it).
 export async function findOrCreateUser(env: Env, email: string, lang: Lang, now = new Date()): Promise<{ id: string; created: boolean }> {
   const db = env.ACCOUNTS!;
   const at = now.toISOString();
@@ -216,7 +218,7 @@ export async function findOrCreateUser(env: Env, email: string, lang: Lang, now 
   const user = await db.prepare("SELECT id FROM users WHERE email = ? AND status = 'active'").bind(email).first<{ id: string }>();
   if (!user) throw new Error("user row missing after insert");
   await db.batch([
-    db.prepare("UPDATE users SET last_seen_at = ?, lang = ? WHERE id = ?").bind(at, lang, user.id),
+    db.prepare("UPDATE users SET last_seen_at = ? WHERE id = ?").bind(at, user.id),
     db.prepare("UPDATE magic_codes SET user_id = ? WHERE email = ? AND user_id IS NULL").bind(user.id, email),
   ]);
   return { id: user.id, created: (res.meta?.changes ?? 0) === 1 };

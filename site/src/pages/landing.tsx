@@ -58,7 +58,7 @@ import {
   type Key, type Lang,
 } from "../i18n";
 import { FitDisclaimer, type ReasonContext, bandText, reasonText } from "../fit";
-import { BrandMark, BrandWordmark, FooterRow, ICONS_VERSION, MetaTags, noDataPage, todayOf, varyOnCookie } from "../layout";
+import { BrandMark, BrandWordmark, FooterRow, ICONS_VERSION, MetaTags, langToggle, noDataPage, todayOf, varyOnCookie } from "../layout";
 import { LANDING_ORGS_A, LANDING_ORGS_B, type LandingOrg, brandfetchLogoUrl } from "../landing_orgs";
 import {
   type ProPrice, ProTag, SUBSCRIBE_PATH, ULTRA_SUBSCRIBE_PATH, UltraTag, checkoutPrice, planLine, planRows, rowFor, sameDayHours, ultraCheckoutPrice,
@@ -553,7 +553,8 @@ export async function landingPage(c: Context<AppEnv>, ultra: UltraState | null, 
   varyOnCookie(c);
   return c.html(html`<!doctype html>${(
     <LandingDoc lang={lang} on={accountsEnabled(c.env)} stats={stats} clock={clock} endingN={three?.n} ending={firstEnding ?? []}
-      profile={profile} price={checkoutPrice(c.env)} logo={c.env.BRANDFETCH_CLIENT_ID?.trim() || null} ultra={ultra} ultraPrice={ultraPrice} ultraPlanned={ultraFigures(c.env)} />
+      profile={profile} price={checkoutPrice(c.env)} logo={c.env.BRANDFETCH_CLIENT_ID?.trim() || null} ultra={ultra} ultraPrice={ultraPrice} ultraPlanned={ultraFigures(c.env)}
+      search={new URL(c.req.url).search} />
   ) as any}`, status);
 }
 
@@ -603,10 +604,12 @@ export async function ultraSubmit(c: Context<AppEnv>, post: InterestPost): Promi
 type DocProps = {
   lang: Lang; on: boolean; stats: Stats; clock: Clock; endingN: number | undefined; ending: readonly ExpiringRow[];
   profile: Profile | null; price: ProPrice | null; logo: string | null; ultra?: UltraState | null; ultraPrice?: ProPrice | null;
+  // The request's query string, which the language toggle keeps (layout.tsx langToggle).
+  search?: string;
   ultraPlanned?: ProPrice | null;
 };
 
-export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null, ultraPrice = null, ultraPlanned = null }) => {
+export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null, ultraPrice = null, ultraPlanned = null, search = "" }) => {
   const counts = stats.counts;
   const seo = pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] });
   const lobbying = sourceLoaded("lobbying", null, stats) === true;
@@ -673,8 +676,8 @@ export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, endi
               {on ? <a class="lp-on" href="/pro">{t(lang, "pro.tag")}</a> : null}
             </nav>
             <div class="lp-nav-actions">
-              {/* An answer to the Ultra card's post sits at /interest, so its switch names "/" outright. */}
-              <a href={`${ultra ? "/" : ""}?lang=${lang === "fr" ? "en" : "fr"}`} class="lang-toggle" rel="nofollow">{t(lang, "nav.lang")}</a>
+              {/* An answer to the Ultra card's post sits at /interest, so its switch names "/" outright; otherwise the page's own query is kept. */}
+              <a href={ultra ? `/${langToggle("", lang)}` : langToggle(search, lang)} class="lang-toggle" rel="nofollow">{t(lang, "nav.lang")}</a>
               <button type="button" class="theme-toggle">
                 <span class="when-light">{t(lang, "nav.dark")}</span>
                 <span class="when-dark">{t(lang, "nav.light")}</span>

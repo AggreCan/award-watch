@@ -108,6 +108,14 @@ export const ACCOUNT_STRINGS = {
     en: "To save that briefing, sign in here, then press Save this briefing on its page.",
     fr: "Pour enregistrer ce bulletin, connectez-vous ici, puis appuyez sur Enregistrer ce bulletin sur sa page.",
   },
+  // A signed-in form sent with another session's CSRF value, most often one opened before the browser
+  // signed in again (routes.tsx signedInPost): nothing is done, and the page the form was on is reloaded.
+  "account.stale_form_title": { en: "Reload the Page", fr: "Rechargez la page" },
+  "account.stale_form": {
+    en: "This form was opened under an earlier sign-in, and nothing was sent.",
+    fr: "Ce formulaire a été ouvert lors d'une connexion antérieure, et rien n'a été envoyé.",
+  },
+  "account.stale_form_reload": { en: "Reload the page", fr: "Recharger la page" },
   "account.msg_signed_out": { en: "You are signed out.", fr: "Vous êtes déconnecté." },
   "account.msg_signed_out_all": { en: "Every browser is signed out.", fr: "Tous les navigateurs sont déconnectés." },
 
@@ -119,6 +127,17 @@ export const ACCOUNT_STRINGS = {
   "account.field_plan": { en: "Plan", fr: "Forfait" },
   "account.field_since": { en: "Member since", fr: "Membre depuis" },
   "account.field_sessions": { en: "Signed-in browsers", fr: "Navigateurs connectés" },
+  // The language of the account's own mail (pages.tsx MailLangRow, routes.tsx POST /account/mail-language).
+  "account.field_mail_lang": { en: "Email language", fr: "Langue des courriels" },
+  "account.mail_lang_en": { en: "English", fr: "Anglais" },
+  "account.mail_lang_fr": { en: "French", fr: "Français" },
+  "account.mail_lang_to_en": { en: "Switch to English", fr: "Passer à l'anglais" },
+  "account.mail_lang_to_fr": { en: "Switch to French", fr: "Passer au français" },
+  "account.mail_lang_note": {
+    en: "The watch mail and the weekly email. Saved searches, briefings and saved views are each sent in the language of the page they were saved from.",
+    fr: "Le courriel des suivis et le courriel hebdomadaire. Les recherches enregistrées, les bulletins et les vues enregistrées sont envoyés chacun dans la langue de la page d'où ils ont été enregistrés.",
+  },
+  "account.msg_mail_lang": { en: "The email language is saved.", fr: "La langue des courriels est enregistrée." },
   "account.plan_free": { en: "Free", fr: "Gratuit" },
   // The subscript after the wordmark for a signed-in reader.
   "account.plan_tag_free": { en: "free", fr: "gratuit" },
@@ -128,7 +147,8 @@ export const ACCOUNT_STRINGS = {
   "account.plan_pro_until": { en: "Pro, until {date}", fr: "Pro, jusqu'au {date}" },
   "account.plan_ultra_open": { en: "Ultra, no end date", fr: "Ultra, sans date de fin" },
   "account.plan_ultra_until": { en: "Ultra, until {date}", fr: "Ultra, jusqu'au {date}" },
-  "account.searches": { en: "Saved searches", fr: "Recherches enregistrées" },
+  // The overview's row: the saved searches and the briefings share the plan's figure, so it counts both.
+  "account.searches": { en: "Saved searches and briefings", fr: "Recherches enregistrées et bulletins" },
   "account.searches_n": { en: "{n} of {cap}", fr: "{n} sur {cap}" },
   "account.keys": { en: "API keys", fr: "Clés d'API" },
   "account.panel_sign_out": { en: "Sign Out", fr: "Déconnexion" },
@@ -166,8 +186,8 @@ export const ACCOUNT_STRINGS = {
     fr: "Choisissez-y les filtres, puis appuyez sur Enregistrer cette recherche.",
   },
   "account.start_search_cap": {
-    en: "This account holds {n} of {cap} saved searches. Each can be sent by email, daily or weekly.",
-    fr: "Recherches enregistrées de ce compte : {n} sur {cap}. Chacune peut être envoyée par courriel, chaque jour ou chaque semaine.",
+    en: "This account holds {n} of {cap} saved searches and briefings. Each saved search can be sent by email, daily or weekly.",
+    fr: "Recherches enregistrées et bulletins de ce compte : {n} sur {cap}. Chaque recherche peut être envoyée par courriel, chaque jour ou chaque semaine.",
   },
   "account.start_org": { en: "Choose your organization", fr: "Choisir votre organisation" },
   "account.start_org_button": { en: "Find your organization", fr: "Trouver votre organisation" },
@@ -208,26 +228,29 @@ export const ACCOUNT_STRINGS = {
     en: "Paste the address of a tender list, a list of contracts ending, an organization, a buyer or a segment page. The filter is saved as the page shows it. On a tender list, a list of contracts ending or a segment page, Save this search does the same without the address.",
     fr: "Collez l'adresse d'une liste d'appels d'offres, d'une liste de contrats prenant fin, d'une organisation, d'un acheteur ou d'une page de segment. Le filtre est enregistré tel que la page l'affiche. Sur une liste d'appels d'offres, une liste de contrats prenant fin ou une page de segment, Enregistrer cette recherche fait de même sans l'adresse.",
   },
+  // The saved searches and the briefings share the plan's figure (briefings.ts), so every line that
+  // counts them counts both, the count read from both tables (searches.ts heldCount).
   "account.cap_free": {
-    en: "The Free plan keeps up to {cap} saved searches.",
-    fr: "Le forfait Gratuit conserve jusqu'à {cap} recherches enregistrées.",
+    en: "The Free plan keeps up to {cap} saved searches and briefings.",
+    fr: "Le forfait Gratuit conserve jusqu'à {cap} recherches enregistrées et bulletins.",
   },
-  "account.cap_pro": { en: "An account keeps up to {cap} saved searches.", fr: "Un compte conserve jusqu'à {cap} recherches enregistrées." },
   // A Free account's gate notes on the searches page, each with the Pro chip (src/pro.tsx).
   "account.cap_note": {
-    en: "This account holds {n} of {cap} saved searches. Pro holds up to {max} and sends them by email, daily or weekly.",
-    fr: "Recherches enregistrées de ce compte : {n} sur {cap}. Pro en conserve jusqu'à {max} et les envoie par courriel, chaque jour ou chaque semaine.",
+    en: "This account holds {n} of {cap} saved searches and briefings. Pro holds up to {max} and sends them by email, daily or weekly.",
+    fr: "Recherches enregistrées et bulletins de ce compte : {n} sur {cap}. Pro en conserve jusqu'à {max} et les envoie par courriel, chaque jour ou chaque semaine.",
   },
-  // A paid account's foot of its searches while Ultra is on sale (account/payments.ts ultraOnSale), with "Plans and prices".
+  // A paid account at or near its figure while Ultra is on sale above it (account/payments.ts ultraOnSale):
+  // the searches page's foot, with "Plans and prices", and the cap's line on Save this search, the Add a
+  // Search panel and its notice (searches.ts paidCapLine).
   "account.cap_note_pro": {
-    en: "This account holds {n} of {cap} saved searches. Ultra holds up to {ultra}.",
-    fr: "Recherches enregistrées de ce compte : {n} sur {cap}. Ultra en conserve jusqu'à {ultra}.",
+    en: "This account holds {n} of {cap} saved searches and briefings. Ultra holds up to {ultra}.",
+    fr: "Recherches enregistrées et bulletins de ce compte : {n} sur {cap}. Ultra en conserve jusqu'à {ultra}.",
   },
   // An account holding more than its plan's figure, after a move to a smaller plan: nothing is deleted
   // (account/deliveries.ts and briefings.ts send the first ones by creation date).
   "account.over_cap": {
-    en: "This account holds {n} saved searches, past the {cap} of its plan. The first {cap} are sent; remove some to choose which.",
-    fr: "Ce compte conserve {n} recherches enregistrées, au-delà des {cap} de son forfait. Les {cap} premières sont envoyées; retirez-en pour choisir lesquelles.",
+    en: "This account holds {n} saved searches and briefings, past the {cap} of its plan. The first {cap} are sent; remove some to choose which.",
+    fr: "Ce compte conserve {n} recherches enregistrées et bulletins, au-delà des {cap} de son forfait. Les {cap} premiers sont envoyés; retirez-en pour choisir lesquels.",
   },
   "account.deliver_gate": { en: "Off. Email delivery is part of Pro.", fr: "Désactivé. L'envoi par courriel fait partie de Pro." },
   "account.msg_added": { en: "The search is saved.", fr: "La recherche est enregistrée." },
@@ -249,9 +272,16 @@ export const ACCOUNT_STRINGS = {
   "account.save_button": { en: "Save this search", fr: "Enregistrer cette recherche" },
   "account.save_saved": { en: "Search saved", fr: "Recherche enregistrée" },
   "account.save_manage": { en: "Manage your saved searches", fr: "Gérer vos recherches enregistrées" },
+  // A saved search whose email is off, to a plan with delivery: beside Search saved, with the two presses
+  // that turn it on (search_control.tsx), and under its delivery on the searches page (pages.tsx).
+  "account.save_mail_off": { en: "Its email is off.", fr: "Son envoi par courriel est désactivé." },
+  "account.save_mail_daily": { en: "Email it daily", fr: "L'envoyer chaque jour" },
+  "account.save_mail_weekly": { en: "Email it weekly", fr: "L'envoyer chaque semaine" },
+  // A paid account at its figure with no plan above it on sale (Ultra's own, or Pro's while Ultra is not on
+  // sale): Save this search, the Add a Search panel, its notice and the searches page's foot.
   "account.save_cap_pro": {
-    en: "This account holds {cap} saved searches, the most an account keeps.",
-    fr: "Ce compte a {cap} recherches enregistrées, le maximum qu'un compte conserve.",
+    en: "This account holds {n} of {cap} saved searches and briefings, the most an account keeps.",
+    fr: "Recherches enregistrées et bulletins de ce compte : {n} sur {cap}, le maximum qu'un compte conserve.",
   },
 
   // -- calendar feeds (src/account/feeds.ts, the searches and watches pages) -----------
@@ -391,6 +421,10 @@ export const ACCOUNT_STRINGS = {
   "account.keys_none": { en: "No keys yet.", fr: "Aucune clé pour l'instant." },
   "account.msg_key_revoked": { en: "The key is revoked.", fr: "La clé est révoquée." },
   "account.err_key_name": { en: "Give the key a name.", fr: "Donnez un nom à la clé." },
+  "account.err_key_exists": {
+    en: "A key of that name already exists. No new key was made.",
+    fr: "Une clé de ce nom existe déjà. Aucune nouvelle clé n'a été créée.",
+  },
   "account.api_key_missing": { en: "This endpoint needs an API key.", fr: "Ce point d'accès exige une clé d'API." },
   "account.api_key_invalid": {
     en: "The API key is not valid or was revoked.",
@@ -408,9 +442,10 @@ export const ACCOUNT_STRINGS = {
   },
   "account.col_today": { en: "Today", fr: "Aujourd'hui" },
   "account.col_30_days": { en: "Last 30 days", fr: "30 derniers jours" },
+  // {address}: the per-address cap every API request meets first (wrangler.jsonc API_LIMIT, pages/docs.tsx REQUEST_LIMITS).
   "account.keys_usage_note": {
-    en: "Requests are counted by UTC day. Each key may make {day} a day and {minute} a minute.",
-    fr: "Les requêtes sont comptées par jour UTC. Chaque clé peut en faire {day} par jour et {minute} par minute.",
+    en: "Requests are counted by UTC day. Each key may make {day} a day and {minute} a minute, and each address {address} a minute.",
+    fr: "Les requêtes sont comptées par jour UTC. Chaque clé peut en faire {day} par jour et {minute} par minute, et chaque adresse {address} par minute.",
   },
   "account.keys_usage_unread": {
     en: "The counts cannot be read just now.",
@@ -804,6 +839,11 @@ export const ACCOUNT_STRINGS = {
   "billing.privacy_processor": {
     en: "Pro is paid for on Stripe's own pages: the checkout, and the portal where a subscription is changed or cancelled. Card details go to Stripe and never reach this site. Pro is sold through Link, the merchant of record operated by Stripe, on behalf of Allwater Software Inc., and Link sends the receipts.",
     fr: "Pro se paie sur les pages de Stripe : la page de paiement et le portail où un abonnement est modifié ou annulé. Les données de carte vont à Stripe et n'atteignent jamais ce site. Pro est vendu par l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le compte d'Allwater Software Inc., et Link envoie les reçus.",
+  },
+  // The same paragraph while Ultra is on sale (account/privacy.tsx PaymentsPrivacy).
+  "billing.privacy_processor_ultra": {
+    en: "Pro and Ultra are paid for on Stripe's own pages: the checkout, and the portal where a subscription is changed or cancelled. Card details go to Stripe and never reach this site. Pro and Ultra are sold through Link, the merchant of record operated by Stripe, on behalf of Allwater Software Inc., and Link sends the receipts.",
+    fr: "Pro et Ultra se paient sur les pages de Stripe : la page de paiement et le portail où un abonnement est modifié ou annulé. Les données de carte vont à Stripe et n'atteignent jamais ce site. Pro et Ultra sont vendus par l'intermédiaire de Link, le marchand officiel exploité par Stripe, pour le compte d'Allwater Software Inc., et Link envoie les reçus.",
   },
   "billing.privacy_sent": {
     en: "When a checkout starts, the site gives Stripe the account's id and, the first time, its email address, so that the payment is tied to the account.",
@@ -1612,9 +1652,11 @@ export const ACCOUNT_STRINGS = {
     fr: "Gratuit, sans mot de passe. Le site envoie un lien de connexion à cette adresse; après la connexion, les événements de cette page s'affichent sur votre page des suivis : une nouvelle attribution, une modification, une fin proche, un avis nouveau ou fermé.",
   },
   "watches.signin_placeholder": { en: "Your email address", fr: "Votre adresse courriel" },
+  // A paid account at its figure with no plan above it on sale; while Ultra is on sale above it, the
+  // watches page's foot line (watches.cap_note_pro) instead (watch_pages.tsx paidWatchCapLine).
   "watches.control_cap_pro": {
-    en: "This account follows {cap} pages, the most an account keeps.",
-    fr: "Ce compte suit {cap} pages, le maximum qu'un compte conserve.",
+    en: "This account follows {n} of {cap} pages, the most an account keeps.",
+    fr: "Pages suivies par ce compte : {n} sur {cap}, le maximum qu'un compte conserve.",
   },
   "watches.manage": { en: "Manage your watches", fr: "Gérer vos suivis" },
 
@@ -2086,6 +2128,10 @@ export const ACCOUNT_STRINGS = {
   "briefing.segment_all": { en: "The whole buyer", fr: "L'acheteur entier" },
   "briefing.sample_link": { en: "This week's sample", fr: "L'exemple de cette semaine" },
   "briefing.manage": { en: "Manage your briefings", fr: "Gérer vos bulletins" },
+  // A saved briefing whose email is off, to a plan with delivery: under Briefing saved, with the press that
+  // turns it on (briefing_pages.tsx), and under its delivery on the searches page.
+  "briefing.mail_off": { en: "Its weekly email is off.", fr: "Son courriel hebdomadaire est désactivé." },
+  "briefing.mail_turn_on": { en: "Turn it on", fr: "L'activer" },
 
   // The searches page.
   "briefing.list_title": { en: "Weekly Briefings", fr: "Bulletins hebdomadaires" },

@@ -23,6 +23,7 @@ import { EVENT_KEY, WATCH_KIND_KEY, watchEventLines, watchMoreText } from "./dig
 import { RULES, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX } from "./feeds";
 import { type CalendarRow, FeedCell, Honeypot } from "./pages";
+import { ultraOnSale } from "./payments";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
 import {
@@ -33,9 +34,24 @@ import { type MailRow, type Watch, countedWatches, ownWatch, watchState } from "
 
 // -- the control on the pages -------------------------------------------------------------
 
+// mail: the plan sends the watch mail (Pro's cap line); mailOn: and the
+// account's own watch mail is on, so a followed page's events come by email.
+// ultra: Ultra's figure while Ultra is on sale above the plan's, read only for
+// a paid account at its figure.
 export type ControlState =
   | { at: "out"; next: string }
-  | { at: "in"; account: Account; id: string | null; segment: string; n: number; cap: number; mail: boolean; free: boolean; claimed: boolean };
+  | {
+    at: "in"; account: Account; id: string | null; segment: string; n: number; cap: number; mail: boolean; free: boolean; claimed: boolean;
+    mailOn?: boolean; ultra?: number | null;
+  };
+
+// The line a paid account at its figure reads (Follow, the watches page's
+// notice): what it follows of its plan's figure, then Ultra's figure while
+// Ultra is on sale above it, else that its figure is the most an account keeps.
+export function paidWatchCapLine(lang: Lang, n: number, cap: number, ultra: number | null): string {
+  const figures = { n: fmtInt(n, lang), cap: fmtInt(cap, lang) };
+  return ultra ? t(lang, "watches.cap_note_pro", { ...figures, ultra: fmtInt(ultra, lang) }) : t(lang, "watches.control_cap_pro", figures);
+}
 
 // What the control shows for this request: null while the switch is off, when
 // the accounts database cannot say, or when it cannot be read.
@@ -46,9 +62,13 @@ export async function watchControl(c: Context<AppEnv>, kind: WatchKind, target: 
   if (read.state !== "ok") return { at: "out", next: watchPath(kind, target) };
   try {
     const s = await watchState(c.env, read.account.userId, kind, target);
+    const cap = watchCap(read.account.plan);
+    const mail = allowed(read.account, "watch_mail");
+    const atCap = s.free ? s.n > cap : s.n >= cap;
+    const ultra = mail && atCap && RULES.ultra.watchlists > cap && (await ultraOnSale(c.env).catch(() => false)) ? RULES.ultra.watchlists : null;
     return {
-      at: "in", account: read.account, id: s.id, segment: s.segment, n: s.n, cap: watchCap(read.account.plan),
-      mail: allowed(read.account, "watch_mail"), free: s.free, claimed: s.claimed,
+      at: "in", account: read.account, id: s.id, segment: s.segment, n: s.n, cap, mail, mailOn: mail && !s.mailOff, free: s.free, claimed: s.claimed,
+      ultra,
     };
   } catch {
     return null;
@@ -94,7 +114,8 @@ export const WatchControl: FC<{ lang: Lang; state: ControlState | null; kind: Wa
       </form>
     );
   }
-  const note = t(lang, state.mail ? "watches.control_pro" : "watches.control_free");
+  // By email only while the account's own watch mail is on (a Pro account may have turned it off).
+  const note = t(lang, state.mailOn ? "watches.control_pro" : "watches.control_free");
   if (state.id) {
     return (
       <div class="watch-control">
@@ -110,7 +131,7 @@ export const WatchControl: FC<{ lang: Lang; state: ControlState | null; kind: Wa
   if (state.free ? state.n > state.cap : state.n >= state.cap) {
     return state.mail ? (
       <p class="watch-control muted small">
-        {t(lang, "watches.control_cap_pro", { cap: fmtInt(state.cap, lang) })} <a href="/account/watches">{t(lang, "watches.manage")}</a>
+        {paidWatchCapLine(lang, state.n, state.cap, state.ultra ?? null)} <a href="/account/watches">{t(lang, "watches.manage")}</a>
       </p>
     ) : (
       <ProNote lang={lang}>

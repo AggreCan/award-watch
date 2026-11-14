@@ -14,6 +14,7 @@ import { EMAIL_MAX } from "../pages/interest";
 import { CHECK_PATH, PLAN_ROWS, ProNote, ProTag, planLine as planRowLine } from "../pro";
 import { KEYED_ENDPOINTS, KEY_PER_DAY, KEY_PER_MINUTE, keyQuota } from "../api_keyed_spec";
 import { MAX_Q } from "../search_db";
+import { REQUEST_LIMITS } from "../pages/docs";
 import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
@@ -22,7 +23,7 @@ import { AddToDashboard } from "./dashboard_add";
 import { holdsDashboard } from "./dashboard_rule";
 import { RULES, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX, type FeedKind } from "./feeds";
-import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch } from "./searches";
+import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch, paidCapLine } from "./searches";
 import type { Account } from "./session";
 import { CODE_MINUTES } from "./signin";
 import { type Follow, followValue } from "./watch_events";
@@ -184,6 +185,9 @@ export function signInView(
   );
 }
 
+// The code field's pattern: six digits, spaces allowed around and between them.
+const CODE_PATTERN = "\\s*([0-9]\\s*){6}";
+
 // The code form: after a request (email hidden, the lead names it), or typed
 // from scratch (the email as a field).
 export function codeView(
@@ -220,9 +224,10 @@ export function codeView(
               <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={state.email ?? ""} />
             </label>
           )}
+          {/* Six digits, with any spaces a pasted code carries around or inside it, which the check strips (routes.tsx). */}
           <label>
             {t(lang, "account.code")}
-            <input name="code" type="text" required inputmode="numeric" pattern="[0-9]{6}" maxlength={6} autocomplete="one-time-code"
+            <input name="code" type="text" required inputmode="numeric" pattern={CODE_PATTERN} maxlength={20} autocomplete="one-time-code"
               spellcheck={false} class="account-code" />
           </label>
           <button type="submit" class="btn btn-primary">{t(lang, "account.sign_in")}</button>
@@ -289,6 +294,7 @@ export function planLine(lang: Lang, account: Pick<Account, "plan" | "planUntil"
 }
 
 type OverviewCounts = {
+  // searches: the saved searches and the briefings, which share cap (searches.ts heldCount).
   sessions: number; searches: number; cap: number; keys: number;
   // The watches that count toward the cap, and whether the claimed organization's is held beside them (watches.ts watchCount).
   watches?: number | null; watchesOwn?: boolean;
@@ -297,7 +303,8 @@ type OverviewCounts = {
 };
 
 // The first steps, over the overview's own panels while the account follows
-// no page or keeps no saved search: a reader who signed in to track tenders
+// no page or keeps no saved search or briefing (counts.searches is both, the
+// one count every page states: searches.ts heldCount): a reader who signed in to track tenders
 // otherwise lands on settings with nothing to do next. Each step not done
 // yet, with its one action and a line on what it leads to; the panel goes by
 // itself once the account holds both. The claimed organization's watch counts
@@ -377,6 +384,27 @@ const WeeklyRow: FC<{ lang: Lang; account: Account; on: boolean }> = ({ lang, ac
   </>
 );
 
+// The language of the account's own mail (users.lang: the watch mail and the
+// weekly email): set by the sign-in that made the account, and changed here
+// only, with one link-styled button that switches it, as the weekly row's does.
+const MailLangRow: FC<{ lang: Lang; account: Account }> = ({ lang, account }) => {
+  const other: Lang = account.lang === "fr" ? "en" : "fr";
+  return (
+    <>
+      <dt>{t(lang, "account.field_mail_lang")}</dt>
+      <dd>
+        <form method="post" action="/account/mail-language" class="account-inline">
+          <Csrf account={account} />
+          <input type="hidden" name="mail_lang" value={other} />
+          <span>{t(lang, account.lang === "fr" ? "account.mail_lang_fr" : "account.mail_lang_en")}</span>
+          <button type="submit" class="btn-link">{t(lang, other === "fr" ? "account.mail_lang_to_fr" : "account.mail_lang_to_en")}</button>
+        </form>
+        <span class="kv-note">{t(lang, "account.mail_lang_note")}</span>
+      </dd>
+    </>
+  );
+};
+
 export function overviewView(
   lang: Lang, account: Account,
   counts: OverviewCounts,
@@ -398,6 +426,7 @@ export function overviewView(
           <dt>{t(lang, "account.field_since")}</dt><dd class="mono">{day(account.createdAt)}</dd>
           <dt>{t(lang, "account.field_sessions")}</dt><dd>{fmtInt(counts.sessions, lang)}</dd>
           {extra.weekly ? <WeeklyRow lang={lang} account={account} on={extra.weekly.on} /> : null}
+          <MailLangRow lang={lang} account={account} />
           {/* A Free account sees the row too, with the Pro chip, leading to the page's notice (bugs.tsx). */}
           <dt>{t(lang, "bugs.field")}</dt>
           <dd>
@@ -602,11 +631,12 @@ export function searchesView(
   const dash = holdsDashboard(account.plan);
   const held = searches.length + (state.briefings?.n ?? 0);
   const full = held >= cap;
-  const capLine = t(lang, account.plan === "free" ? "account.cap_free" : "account.cap_pro", { cap: fmtInt(cap, lang) });
+  // A paid account's line states what it holds of its figure (searches.ts paidCapLine), Ultra's while on sale above it.
+  const capLine = account.plan === "free" ? t(lang, "account.cap_free", { cap: fmtInt(cap, lang) }) : paidCapLine(lang, held, cap, state.ultra ?? null);
   const foot = !canDeliver ? <CapNote lang={lang} n={held} cap={cap} />
     : state.ultra ? (
       <p>
-        {t(lang, "account.cap_note_pro", { n: fmtInt(held, lang), cap: fmtInt(cap, lang), ultra: fmtInt(state.ultra, lang) })}{" "}
+        {capLine}{" "}
         <a href="/account/billing">{t(lang, "billing.link_plans")}</a>
       </p>
     ) : <p>{capLine}</p>;
@@ -658,6 +688,8 @@ export function searchesView(
                             </select>
                             <button type="submit" class="btn">{t(lang, "account.deliver_save")}</button>
                           </form>
+                          {/* Saved with its email off on every plan, and nothing turns it on by itself: the line says so above the run's. */}
+                          {s.deliver === "off" ? <p class="muted small">{t(lang, "account.save_mail_off")}</p> : null}
                           <LastDeliveryLine lang={lang} last={s.last ?? null} deliver={s.deliver} />
                         </>
                       ) : (
@@ -795,7 +827,11 @@ export function keysView(
       {state.created ? (
         <Panel title={t(lang, "account.panel_new_key")}>
           <p>{t(lang, "account.new_key_text")}</p>
-          <pre class="cite-block account-key">{state.created}</pre>
+          {/* calendar.js adds the Copy button, as it does beside a calendar feed's address. */}
+          <div class="copy-block" data-copy={t(lang, "calfeed.copy")} data-copied={t(lang, "calfeed.copied")}>
+            <pre class="cite-block account-key">{state.created}</pre>
+          </div>
+          <script src="/calendar.js" defer></script>
         </Panel>
       ) : null}
       <Panel title={t(lang, "account.panel_create_key")} class="panel-form" tools={canCreate ? undefined : <ProTag lang={lang} />}>
@@ -858,7 +894,9 @@ export function keysView(
         {state.keys.length ? (
           <p class="muted small">
             {state.usage === null ? `${t(lang, "account.keys_usage_unread")} ` : ""}
-            {t(lang, "account.keys_usage_note", { day: fmtInt(keyQuota(account.plan)?.perDay ?? KEY_PER_DAY, lang), minute: fmtInt(KEY_PER_MINUTE, lang) })}
+            {t(lang, "account.keys_usage_note", {
+              day: fmtInt(keyQuota(account.plan)?.perDay ?? KEY_PER_DAY, lang), minute: fmtInt(KEY_PER_MINUTE, lang), address: fmtInt(REQUEST_LIMITS.api, lang),
+            })}
           </p>
         ) : null}
       </Panel>
@@ -924,6 +962,17 @@ export function deletedView(lang: Lang) {
   return (
     <PageHead lang={lang} title={t(lang, "account.deleted_title")} lead={t(lang, "account.deleted_lead")}
       actions={<a href="/" class="btn">{t(lang, "account.home")}</a>} />
+  );
+}
+
+// A signed-in form sent with a CSRF value that is not this session's
+// (routes.tsx signedInPost): the line, and the page the form was on to reload.
+export function staleFormView(lang: Lang, back: string) {
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "account.stale_form_title")} />
+      <p class="account-notice" role="status">{t(lang, "account.stale_form")} <a href={back}>{t(lang, "account.stale_form_reload")}</a></p>
+    </>
   );
 }
 

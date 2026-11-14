@@ -298,7 +298,7 @@ describe("with the switch on and no session", () => {
       expect(pro, path).toContain("<span>Contracts ending: 6- and 12-month CSVs</span>");
       expect(freeCard(panel), path).toContain("<span>Contracts ending: the 3-month CSV</span>");
       expect(pro, path).toContain("<span>Tender notices, same day, every 2 hours</span>");
-      expect(pro, path).toContain("<span>25 saved searches, by email</span>");
+      expect(pro, path).toContain("<span>25 saved searches and briefings, by email</span>");
       expect(pro, path).toContain("<span>A form to report a site problem</span>");
       expect(freeCard(panel), path).toContain("<span>Contracts ending: the 3-month list</span>");
       expect(pro, path).toContain('<a href="/account/sign-in?next=/account/billing" class="btn btn-primary">Subscribe to Pro</a>');
@@ -337,7 +337,7 @@ describe("with the switch on and no session", () => {
       expect(panel).toContain(`<p>Pro les énumère tous les ${WINDOWS[window].rows}, dont ${WINDOWS[window].rows - 3} prennent fin dans 3 à ${months} mois (${value}), avec tous les filtres et le CSV de ${months} mois.</p>`);
       expect(freeCard(panel)).toContain("<h3>Gratuit</h3>");
       const pro = proCard(panel);
-      expect(pro).toContain("<span>25 recherches enregistrées, par courriel</span>");
+      expect(pro).toContain("<span>25 recherches et bulletins, par courriel</span>");
       expect(pro).toContain("<span>Contrats prenant fin : CSV de 6 et 12 mois</span>");
       expect(freeCard(panel)).toContain("<span>Contrats prenant fin : CSV de 3 mois</span>");
       expect(panel).toContain('<a href="/expiring/3m">liste de 3 mois</a>');

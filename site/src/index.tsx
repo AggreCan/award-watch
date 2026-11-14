@@ -11,6 +11,7 @@ import { throttle } from "./limits";
 import { measure } from "./views";
 import { DEEP_WINDOWS, radarWindowLocked } from "./plan";
 import { accountsEnabled } from "./account/switch";
+import { refreshSessionCookie } from "./account/session";
 import { runWatchdog } from "./watchdog";
 import { fmtInt, fmtMoney, langFrom, t, tj } from "./i18n";
 import { clockAt } from "./closing";
@@ -117,6 +118,9 @@ export function siteMiddleware(app: Hono<AppEnv>): void {
   // After the language middleware so a 429 page still knows its language later.
   app.use("*", throttle);
   app.use("*", measure);
+  // A session extended by this request (account/session.ts) sends its cookie
+  // back on the answer, made private; outside conditional, so a 304 carries it too.
+  app.use("*", refreshSessionCookie);
   // Inside measure, so a page answered 304 is counted with that status.
   app.use("*", conditional);
 }

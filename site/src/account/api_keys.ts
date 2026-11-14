@@ -30,16 +30,24 @@ export async function listKeys(env: Env, userId: string): Promise<KeyRow[]> {
   return res.results ?? [];
 }
 
-// A new key, or "limit" when the user already holds KEYS_MAX live ones.
-export async function createKey(env: Env, userId: string, name: string, now = new Date()): Promise<{ key: string; prefix: string } | "limit"> {
+// A new key; "limit" when the user already holds KEYS_MAX live ones; "exists"
+// when one of its live keys has that name already. Both held inside the
+// insert, so the same form posted again (a reload of the page that showed the
+// new key) makes no second key, and two posts at once cannot pass either.
+export async function createKey(
+  env: Env, userId: string, name: string, now = new Date(),
+): Promise<{ key: string; prefix: string } | "limit" | "exists"> {
   const db = env.ACCOUNTS!;
   const prefix = randomHex(4);
   const key = `aw_${prefix}_${randomHex(32)}`;
   const res = await db.prepare(
-    "INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at) SELECT ?, ?, ?, ?, ?, ? " +
-    "WHERE (SELECT COUNT(*) FROM api_keys WHERE user_id = ? AND revoked_at IS NULL) < ?",
-  ).bind(newId(), userId, name, await sha256Hex(key), prefix, now.toISOString(), userId, KEYS_MAX).run();
-  return (res.meta?.changes ?? 0) === 1 ? { key, prefix } : "limit";
+    "INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6 " +
+    "WHERE (SELECT COUNT(*) FROM api_keys WHERE user_id = ?2 AND revoked_at IS NULL) < ?7 " +
+    "AND NOT EXISTS (SELECT 1 FROM api_keys WHERE user_id = ?2 AND revoked_at IS NULL AND name = ?3)",
+  ).bind(newId(), userId, name, await sha256Hex(key), prefix, now.toISOString(), KEYS_MAX).run();
+  if ((res.meta?.changes ?? 0) === 1) return { key, prefix };
+  const same = await db.prepare("SELECT 1 AS x FROM api_keys WHERE user_id = ? AND revoked_at IS NULL AND name = ?").bind(userId, name).first();
+  return same ? "exists" : "limit";
 }
 
 export async function revokeKey(env: Env, userId: string, id: string, now = new Date()): Promise<boolean> {

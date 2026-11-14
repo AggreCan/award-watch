@@ -262,6 +262,21 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
     Array.prototype.forEach.call(saveRow.querySelectorAll('[data-save="new"]'), function (n) { n.hidden = same; });
   }
 
+  // The top bar's language toggle keeps the address's query with lang
+  // switched (src/layout.tsx langToggle); as the filters rewrite the address,
+  // the toggle follows, so switching language keeps the view shown.
+  var langToggle = document.querySelector("a.lang-toggle");
+  function followToggle() {
+    if (!langToggle || typeof URLSearchParams === "undefined") return;
+    try {
+      var want = new URLSearchParams((langToggle.getAttribute("href") || "").replace(/^[^?]*\?/, "")).get("lang");
+      if (!want) return;
+      var q = new URLSearchParams(location.search);
+      q.set("lang", want);
+      langToggle.setAttribute("href", "?" + q.toString());
+    } catch (e) { /* the toggle keeps the address it was served with */ }
+  }
+
   // -- filtering --------------------------------------------------------------
 
   function filter(all, s) { return filterRows(all, s, Date.now()); }
@@ -582,6 +597,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
       else history.replaceState(null, "", url);
     } catch (e) { /* a sandboxed page may refuse; the view still updates */ }
     followSave(url);
+    followToggle();
     // The alerts block (interest.js) saves the address shown.
     try { document.dispatchEvent(new CustomEvent("aw:view")); } catch (e) { /* the form still reads the address when it is sent */ }
   }

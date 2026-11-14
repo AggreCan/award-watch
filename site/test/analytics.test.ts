@@ -916,7 +916,9 @@ describe("the period by plan", () => {
     expect(fr).toContain("Les périodes d'au plus 20 exercices font partie d'Ultra.");
     // Off sale, and without the tier table: no twenty, no line, and the page what ?years=10 gives, byte for byte.
     const ten = await (await get(`${VIEWS[0]}?source=history&years=10`, { cookie: proCookie, env: onEnv() })).text();
-    expect(await (await get(`${VIEWS[0]}?source=history&years=20`, { cookie: proCookie, env: onEnv() })).text()).toBe(ten);
+    // (The language toggle keeps the address's own query, years=20 with it: layout.tsx langToggle.)
+    expect((await (await get(`${VIEWS[0]}?source=history&years=20`, { cookie: proCookie, env: onEnv() })).text())
+      .replace('href="?source=history&amp;years=20&amp;lang=fr"', 'href="?source=history&amp;years=10&amp;lang=fr"')).toBe(ten);
     expect(ten).not.toContain("20 fiscal years");
     expect(ten).not.toContain("Ultra");
     await withoutTiers(async () => {

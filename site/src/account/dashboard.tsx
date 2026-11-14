@@ -21,7 +21,10 @@
 // layout renders, and the edit controls say the layout cannot be saved yet.
 // An account with no row stored sees the starting layout, computed and not
 // stored; its first change writes it, then applies the change, so the panels
-// the reader kept stay where they were.
+// the reader kept stay where they were. A removal that leaves the account no
+// panel writes a marker row (LAYOUT_MARKER) in the same batch, so the emptied
+// dashboard stays empty and offers Add a Panel rather than the starting
+// layout again; the marker is no panel, and no count or read takes it.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -81,6 +84,10 @@ import { type Watch, listWatches } from "./watches";
 // rebuild of the table; a stored kind the site no longer knows is not shown.
 export const PANEL_KINDS = ["tenders", "radar", "records", "watches", "view", "briefing", "org", "matches", "api"] as const;
 export type PanelKind = (typeof PANEL_KINDS)[number];
+// The row that says an account has written its layout and emptied it: a kind
+// no panel has (isPanelKind refuses it, so no page shows it and no post can
+// name it), ref '', place -1. One an account (the table's unique key).
+export const LAYOUT_MARKER = "layout";
 export const isPanelKind = (v: unknown): v is PanelKind => typeof v === "string" && (PANEL_KINDS as readonly string[]).includes(v);
 
 // The rows a panel that lists rows shows, and the briefings a dashboard holds
@@ -187,25 +194,49 @@ export const PANELS_LIST_SQL = "SELECT id, kind, ref, pos, wide, created_at FROM
 // One insert held to the plan's figure and to BRIEFING_PANELS_MAX briefings
 // inside the statement, so two posts at once cannot pass either; the same item
 // once (the table's unique key). ?1 the id, ?2 the user, ?3 the kind, ?4 the
-// ref, ?5 wide, ?6 the time, ?7 the plan's figure, ?8 the briefings' cap.
+// ref, ?5 wide, ?6 the time, ?7 the plan's figure, ?8 the briefings' cap. The
+// layout's marker takes neither a place nor a count.
 export const ADD_PANEL_SQL =
   "INSERT INTO dashboard_panels (id, user_id, kind, ref, pos, wide, created_at) " +
-  "SELECT ?1, ?2, ?3, ?4, (SELECT COALESCE(MAX(pos), -1) + 1 FROM dashboard_panels WHERE user_id = ?2), ?5, ?6 " +
-  "WHERE (SELECT COUNT(*) FROM dashboard_panels WHERE user_id = ?2) < ?7 " +
+  `SELECT ?1, ?2, ?3, ?4, (SELECT COALESCE(MAX(pos), -1) + 1 FROM dashboard_panels WHERE user_id = ?2 AND kind <> '${LAYOUT_MARKER}'), ?5, ?6 ` +
+  `WHERE (SELECT COUNT(*) FROM dashboard_panels WHERE user_id = ?2 AND kind <> '${LAYOUT_MARKER}') < ?7 ` +
   "AND (?3 <> 'briefing' OR (SELECT COUNT(*) FROM dashboard_panels WHERE user_id = ?2 AND kind = 'briefing') < ?8) " +
   "ON CONFLICT (user_id, kind, ref) DO NOTHING";
+
+// The marker, written when the account holds no panel any more: ?1 a new id,
+// ?2 the user, ?3 the time. With the removal in one batch, after it.
+const MARK_EMPTIED_SQL =
+  "INSERT INTO dashboard_panels (id, user_id, kind, ref, pos, wide, created_at) " +
+  `SELECT ?1, ?2, '${LAYOUT_MARKER}', '', -1, 1, ?3 WHERE NOT EXISTS (SELECT 1 FROM dashboard_panels WHERE user_id = ?2 AND kind <> '${LAYOUT_MARKER}') ` +
+  "ON CONFLICT (user_id, kind, ref) DO NOTHING";
+const markEmptied = (db: D1Database, userId: string, now = new Date()) => db.prepare(MARK_EMPTIED_SQL).bind(newId(), userId, now.toISOString());
 
 // A fault that names dashboard_panels missing: the schema not applied since the dashboard.
 export const missingPanels = (e: unknown): boolean => /no such table:?\s*dashboard_panels/i.test(String((e as { message?: unknown })?.message ?? e));
 
-// The account's panels in order, or null while the table is not on the database.
-export async function listPanels(env: Env, userId: string): Promise<PanelRow[] | null> {
+// The account's panels in order, and whether it has emptied a layout it wrote
+// (the marker); null while the table is not on the database.
+export async function listLayout(env: Env, userId: string): Promise<{ rows: PanelRow[]; emptied: boolean } | null> {
   try {
-    return (await env.ACCOUNTS!.prepare(PANELS_LIST_SQL).bind(userId).all<PanelRow>()).results ?? [];
+    const all = (await env.ACCOUNTS!.prepare(PANELS_LIST_SQL).bind(userId).all<PanelRow>()).results ?? [];
+    return { rows: all.filter((r) => r.kind !== LAYOUT_MARKER), emptied: all.some((r) => r.kind === LAYOUT_MARKER) };
   } catch (e) {
     if (missingPanels(e)) return null;
     throw e;
   }
+}
+
+// The account's panels in order, or null while the table is not on the database.
+export async function listPanels(env: Env, userId: string): Promise<PanelRow[] | null> {
+  return (await listLayout(env, userId))?.rows ?? null;
+}
+
+// The panel of a kind and ref the account holds, by its id: where a post
+// that added it, or found it added, returns to.
+async function panelIdOf(env: Env, userId: string, s: Pick<Spec, "kind" | "ref">): Promise<string | null> {
+  const row = await env.ACCOUNTS!.prepare("SELECT id FROM dashboard_panels WHERE user_id = ? AND kind = ? AND ref = ?")
+    .bind(userId, s.kind, s.ref).first<{ id: string }>();
+  return row?.id ?? null;
 }
 
 export type Spec = { kind: PanelKind; ref: string; wide: boolean };
@@ -220,7 +251,7 @@ export async function addPanel(env: Env, who: { userId: string; plan: Plan }, s:
     const res = await addStatement(db, who.userId, who.plan, s, now.toISOString()).run();
     if ((res.meta?.changes ?? 0) === 1) return "added";
     const row = await db.prepare(
-      "SELECT (SELECT COUNT(*) FROM dashboard_panels WHERE user_id = ?1) AS n, " +
+      `SELECT (SELECT COUNT(*) FROM dashboard_panels WHERE user_id = ?1 AND kind <> '${LAYOUT_MARKER}') AS n, ` +
       "EXISTS (SELECT 1 FROM dashboard_panels WHERE user_id = ?1 AND kind = ?2 AND ref = ?3) AS here",
     ).bind(who.userId, s.kind, s.ref).first<{ n: number; here: number }>();
     if (row?.here === 1) return "exists";
@@ -250,10 +281,16 @@ export async function deletePanelsOf(env: Env, userId: string): Promise<void> {
   }
 }
 
+// A panel that goes with its item and leaves the account no panel marks the
+// layout emptied, as a removal from the page does; an account that never
+// wrote a layout has no row here, and nothing is written for it.
 export async function deletePanelsFor(env: Env, userId: string, kinds: readonly PanelKind[], ref: string): Promise<void> {
+  const db = env.ACCOUNTS!;
+  const which = `user_id = ? AND ref = ? AND kind IN (${kinds.map(() => "?").join(", ")})`;
   try {
-    await env.ACCOUNTS!.prepare(`DELETE FROM dashboard_panels WHERE user_id = ? AND ref = ? AND kind IN (${kinds.map(() => "?").join(", ")})`)
-      .bind(userId, ref, ...kinds).run();
+    const held = await db.prepare(`SELECT COUNT(*) AS n FROM dashboard_panels WHERE ${which}`).bind(userId, ref, ...kinds).first<{ n: number }>();
+    if (!held?.n) return;
+    await db.batch([db.prepare(`DELETE FROM dashboard_panels WHERE ${which}`).bind(userId, ref, ...kinds), markEmptied(db, userId)]);
   } catch (e) {
     if (!missingPanels(e)) throw e;
   }
@@ -268,6 +305,8 @@ export async function deletePanelsFor(env: Env, userId: string, kinds: readonly 
 export type Holdings = {
   panels: PanelRow[] | null; searches: SavedSearch[]; briefings: Briefing[]; claim: Claim | null; watches: Watch[]; keys: KeyRow[];
   views: SavedView[];
+  // The account emptied a layout it wrote (LAYOUT_MARKER): no panel shows the empty dashboard, not the starting layout.
+  emptied?: boolean;
 };
 
 async function absentAs<T>(read: Promise<T>, absent: T): Promise<T> {
@@ -280,11 +319,13 @@ async function absentAs<T>(read: Promise<T>, absent: T): Promise<T> {
 }
 
 export async function readHoldings(env: Env, userId: string): Promise<Holdings> {
-  const [panels, searches, briefings, claim, watches, keys, views] = await Promise.all([
-    listPanels(env, userId), listSearches(env, userId), listBriefings(env, userId), absentAs(readClaim(env, userId), null),
+  const [layout, searches, briefings, claim, watches, keys, views] = await Promise.all([
+    listLayout(env, userId), listSearches(env, userId), listBriefings(env, userId), absentAs(readClaim(env, userId), null),
     absentAs(listWatches(env, userId), [] as Watch[]), listKeys(env, userId), listViews(env, userId),
   ]);
-  return { panels, searches, briefings: briefings ?? [], claim, watches, keys, views: views ?? [] };
+  return {
+    panels: layout?.rows ?? null, emptied: layout?.emptied ?? false, searches, briefings: briefings ?? [], claim, watches, keys, views: views ?? [],
+  };
 }
 
 // The starting layout: the watches, the 3-month list, matching notices and the
@@ -304,8 +345,8 @@ export type Shown = { id: string; kind: PanelKind; ref: string; wide: boolean };
 const STARTER_ID_RE = /^s([0-9]{1,2})$/;
 
 export function shownPanels(h: Holdings): { list: Shown[]; starter: boolean } {
-  if (h.panels && h.panels.length) {
-    const list = h.panels.filter((r) => isPanelKind(r.kind)).map((r) => ({ id: r.id, kind: r.kind as PanelKind, ref: r.ref, wide: r.wide === 1 }));
+  if ((h.panels && h.panels.length) || h.emptied) {
+    const list = (h.panels ?? []).filter((r) => isPanelKind(r.kind)).map((r) => ({ id: r.id, kind: r.kind as PanelKind, ref: r.ref, wide: r.wide === 1 }));
     return { list, starter: false };
   }
   return { list: startingLayout(h).map((s, i) => ({ id: `s${i}`, ...s })), starter: true };
@@ -1052,12 +1093,16 @@ function addChoices(lang: Lang, h: Holdings, taken: ReadonlySet<string>): { labe
   return groups.filter((g) => g.options.length);
 }
 
+// The Add a Panel panel's place on the page, where a removal that empties the dashboard returns.
+const ADD_ANCHOR = "dash-add";
+
 const AddPanel: FC<{ lang: Lang; account: Account; h: Holdings; n: number; cap: number; saved: boolean; taken: ReadonlySet<string> }> = (
   { lang, account, h, n, cap, saved, taken },
 ) => {
   const choices = addChoices(lang, h, taken);
   return (
-    <Panel title={t(lang, "dash.add_panel")} count={t(lang, "dash.count", { n: fmtInt(n, lang), cap: fmtInt(cap, lang) })} class="panel-form">
+    <Panel title={t(lang, "dash.add_panel")} count={t(lang, "dash.count", { n: fmtInt(n, lang), cap: fmtInt(cap, lang) })} class="panel-form"
+      id={ADD_ANCHOR}>
       {!saved ? <p class="muted">{t(lang, "dash.unsaved")}</p>
         : n >= cap ? <p>{t(lang, "dash.full", { cap: fmtInt(cap, lang) })}</p>
         : choices.length ? (
@@ -1114,6 +1159,8 @@ export function dashboardView(
 ) {
   const saved = s.h.panels !== null;
   const stored = s.starter ? 0 : s.drawn.length;
+  // An emptied dashboard offers Add a Panel without the edit mode, as the one thing it can do.
+  const adding = s.edit || (!s.starter && saved && !s.drawn.length);
   const taken = new Set(s.drawn.map((d) => `${d.r.shown.kind}:${d.r.shown.ref}`));
   const action = s.edit
     ? <a href={DASHBOARD_PATH} class="btn">{t(lang, "dash.done")}</a>
@@ -1127,7 +1174,7 @@ export function dashboardView(
       <div class="dash-grid">
         {s.drawn.map((d, i) => <DashPanel lang={lang} account={account} d={d} i={i} n={s.drawn.length} edit={s.edit} saved={saved} />)}
       </div>
-      {s.edit ? <AddPanel lang={lang} account={account} h={s.h} n={s.starter ? s.drawn.length : stored} cap={s.cap} saved={saved} taken={taken} /> : null}
+      {adding ? <AddPanel lang={lang} account={account} h={s.h} n={s.starter ? s.drawn.length : stored} cap={s.cap} saved={saved} taken={taken} /> : null}
     </>
   );
 }
@@ -1195,17 +1242,22 @@ export async function dashboardPage(c: Context<AppEnv>, who: Account): Promise<R
 // -- the posts ------------------------------------------------------------------------------
 
 // Where a post returns: the dashboard, in edit mode for the page's own
-// controls, with what happened, in the page's language.
-function back(c: Context<AppEnv>, fields: Record<string, string>, m = ""): Response {
+// controls, with what happened, in the page's language, at the place the
+// change was made (place: a panel's id, or ADD_ANCHOR), so a reader moving
+// a panel down the page does not scroll back to it after each press.
+function back(c: Context<AppEnv>, fields: Record<string, string>, m = "", place: string | null = null): Response {
   const q = [fields.from === "edit" ? "edit=1" : "", m ? `m=${m}` : "", c.get("lang") === "fr" ? "lang=fr" : ""].filter(Boolean).join("&");
-  return c.redirect(`${DASHBOARD_PATH}${q ? `?${q}` : ""}`, 303);
+  const at = place === null ? "" : place === ADD_ANCHOR ? `#${ADD_ANCHOR}` : `#panel-${place}`;
+  return c.redirect(`${DASHBOARD_PATH}${q ? `?${q}` : ""}${at}`, 303);
 }
 
 // The starting layout written before a first change, when the account has
-// no row yet: the change then applies to the rows as the reader saw them.
+// no row yet and has not emptied a layout it wrote: the change then applies
+// to the rows as the reader saw them.
 async function rowsForChange(env: Env, who: Account): Promise<{ rows: PanelRow[] | null; specs: Spec[] | null }> {
-  const rows = await listPanels(env, who.userId);
-  if (rows === null || rows.length) return { rows, specs: null };
+  const layout = await listLayout(env, who.userId);
+  if (layout === null) return { rows: null, specs: null };
+  if (layout.rows.length || layout.emptied) return { rows: layout.rows, specs: null };
   const h = await readHoldings(env, who.userId);
   const specs = startingLayout(h);
   return { rows: await writeStarter(env, who, specs, new Date()), specs };
@@ -1223,9 +1275,11 @@ export async function addPanelPost(c: Context<AppEnv>, who: Account, fields: Rec
   const spec = specOf(kind, ref, h);
   if (!spec) return c.text(t(lang, "form.rejected"), 400);
   if (h.panels === null) return back(c, fields, "unsaved");
-  if (!h.panels.length) await writeStarter(c.env, who, startingLayout(h), new Date());
+  if (!h.panels.length && !h.emptied) await writeStarter(c.env, who, startingLayout(h), new Date());
   const result = await addPanel(c.env, who, spec);
-  return back(c, fields, result);
+  // At the panel added, or found added; a refusal stays at the top, where its line is.
+  const place = result === "added" || result === "exists" ? await panelIdOf(c.env, who.userId, spec) : null;
+  return back(c, fields, result, place);
 }
 
 export type EditOp = { op: "move"; dir: "up" | "down" } | { op: "width"; wide: boolean } | { op: "delete" };
@@ -1243,7 +1297,11 @@ export async function editPanelPost(c: Context<AppEnv>, who: Account, id: string
   if (!target) return back(c, fields);
   const db = c.env.ACCOUNTS!;
   if (op.op === "delete") {
-    await db.prepare("DELETE FROM dashboard_panels WHERE id = ? AND user_id = ?").bind(target.id, who.userId).run();
+    // The panel that takes its place, else the one before it, else Add a Panel; the last removal marks the layout emptied.
+    const i = rows.findIndex((r) => r.id === target.id);
+    const near = rows[i + 1] ?? rows[i - 1] ?? null;
+    await db.batch([db.prepare("DELETE FROM dashboard_panels WHERE id = ? AND user_id = ?").bind(target.id, who.userId), markEmptied(db, who.userId)]);
+    return back(c, fields, "", near ? near.id : ADD_ANCHOR);
   } else if (op.op === "width") {
     await db.prepare("UPDATE dashboard_panels SET wide = ? WHERE id = ? AND user_id = ?").bind(op.wide ? 1 : 0, target.id, who.userId).run();
   } else {
@@ -1255,7 +1313,7 @@ export async function editPanelPost(c: Context<AppEnv>, who: Account, id: string
       await db.batch(order.map((pid, pos) => db.prepare("UPDATE dashboard_panels SET pos = ? WHERE id = ? AND user_id = ?").bind(pos, pid, who.userId)));
     }
   }
-  return back(c, fields);
+  return back(c, fields, "", target.id);
 }
 
 // Whether the address is the dashboard for this request: while Ultra is on

@@ -201,7 +201,7 @@ export async function privacyPage(c: Context<AppEnv>): Promise<Response> {
     accounts
       ? { id: "accounts", title: "account.privacy_toc", body: <AccountsPrivacy lang={lang} dashboard={dashboard} /> }
       : { id: "accounts", title: "privacy.toc_accounts", body: <p>{t(lang, "privacy.accounts")}</p> },
-    ...(accounts ? [{ id: "payments", title: "billing.privacy_toc", body: <PaymentsPrivacy lang={lang} /> } satisfies Section] : []),
+    ...(accounts ? [{ id: "payments", title: "billing.privacy_toc", body: <PaymentsPrivacy lang={lang} ultra={dashboard} /> } satisfies Section] : []),
     { id: "browser", title: "privacy.toc_browser", body: <p>{t(lang, "privacy.cookie")}</p> },
     {
       id: "counting", title: "privacy.toc_counting", body: (

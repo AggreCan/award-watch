@@ -2,6 +2,7 @@ import type { Context, Next } from "hono";
 import type { AppEnv, Env } from "./env";
 import { t } from "./i18n";
 import { accountsEnabled } from "./account/switch";
+import { isNavigation, refusalPage } from "./limit_page";
 
 // Which cap a request falls under. The API and the downloads get their own
 // because a script can hammer them without ever looking like a visitor; form
@@ -40,7 +41,17 @@ import { accountsEnabled } from "./account/switch";
 // services that poll a feed for many readers ask far less often (a
 // subscribed calendar is read every few hours), so 20 a minute from one of
 // their addresses holds for thousands of feeds.
-export type Bucket = "page" | "api" | "download" | "form" | "feed" | "calendar" | "auth" | "stop" | "hook";
+//
+// The dashboard's posts and the saved views' get "edit", 60 a minute, on the
+// accounts terms: each writes one row of the account's own, and rearranging
+// a dashboard of a dozen panels is a post a place, so the forms' 5 would stop
+// a reader mid-move and spend the cap a billing post or a bug report needs.
+//
+// A refusal to a browser's navigation (a form post, or a page a browser asks
+// for) is a page in the site's shell with a link back (limit_page.tsx); a
+// script, a feed reader or any other request keeps the plain text answer,
+// and the API its JSON.
+export type Bucket = "page" | "api" | "download" | "form" | "edit" | "feed" | "calendar" | "auth" | "stop" | "hook";
 
 // A table of an analytics view as CSV (pages/analytics.tsx, analyticsCsv).
 export const ANALYTICS_CSV = /^\/(?:buyers|organizations|segments)\/[^/]+\/analytics\/[a-z]+\.csv$/;
@@ -60,8 +71,8 @@ export const ORG_CLAIM_CSV = /^\/account\/organization\/[a-z]+\.csv$/;
 // The billing page's own posts (account/routes.tsx); the webhook has its bucket.
 const BILLING_POSTS = new Set(["/account/billing/checkout", "/account/billing/portal", "/account/billing/refund"]);
 // The dashboard's posts (account/dashboard.tsx): each writes the account's
-// layout, so they count with the forms, on the accounts terms; so do the
-// saved views' (account/view_pages.tsx): save one, its email, remove it.
+// layout, so they count in the "edit" bucket, on the accounts terms; so do
+// the saved views' (account/view_pages.tsx): save one, its email, remove it.
 const DASHBOARD_POSTS = /^\/account\/dashboard\/panels(?:\/[^/]+\/(?:move|width|delete))?$/;
 const VIEW_POSTS = /^\/account\/views(?:\/[^/]+(?:\/delete)?)?$/;
 
@@ -79,7 +90,8 @@ export function bucketFor(method: string, path: string): Bucket {
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
   if (path === "/account/stop" || path === "/interest/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";
-  if (method === "POST" && (path === "/account/bug" || BILLING_POSTS.has(path) || DASHBOARD_POSTS.test(path) || VIEW_POSTS.test(path))) return "form";
+  if (method === "POST" && (DASHBOARD_POSTS.test(path) || VIEW_POSTS.test(path))) return "edit";
+  if (method === "POST" && (path === "/account/bug" || BILLING_POSTS.has(path))) return "form";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
     return "form";
   }
@@ -155,8 +167,8 @@ function edgeCategory(c: Context<AppEnv>): unknown {
 }
 
 const BINDING: Record<Bucket, keyof Env> = {
-  page: "PAGE_LIMIT", api: "API_LIMIT", download: "DOWNLOAD_LIMIT", form: "FORM_LIMIT", feed: "FEED_LIMIT", calendar: "CALENDAR_LIMIT",
-  auth: "AUTH_LIMIT", stop: "STOP_LIMIT", hook: "WEBHOOK_LIMIT",
+  page: "PAGE_LIMIT", api: "API_LIMIT", download: "DOWNLOAD_LIMIT", form: "FORM_LIMIT", edit: "EDIT_LIMIT", feed: "FEED_LIMIT",
+  calendar: "CALENDAR_LIMIT", auth: "AUTH_LIMIT", stop: "STOP_LIMIT", hook: "WEBHOOK_LIMIT",
 };
 
 // The address Cloudflare saw. The edge sets this header itself and drops any
@@ -183,7 +195,7 @@ export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response
     }
   }
   let bucket = bucketFor(c.req.method, c.req.path);
-  const accountsOnly = bucket === "auth" || bucket === "stop" || bucket === "hook" || bucket === "calendar" ||
+  const accountsOnly = bucket === "auth" || bucket === "stop" || bucket === "hook" || bucket === "calendar" || bucket === "edit" ||
     ((bucket === "form" || bucket === "download") && c.req.path.startsWith("/account/"));
   if (accountsOnly && !accountsEnabled(c.env)) bucket = "page";
   // A verified search engine's crawler reads the pages at its own pace.
@@ -203,5 +215,6 @@ export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response
   if (bucket === "api") {
     return c.json({ error: t(lang, "limits.too_many_api") }, 429);
   }
+  if (isNavigation(c)) return refusalPage(c, 429);
   return c.text(t(lang, "limits.too_many"), 429);
 }

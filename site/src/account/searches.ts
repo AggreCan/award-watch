@@ -11,7 +11,7 @@
 // then marked confirmed_at, since signing in has proved the address.
 
 import type { Env } from "../env";
-import type { Lang } from "../i18n";
+import { fmtInt, t, type Lang } from "../i18n";
 import { INTEREST_KINDS, type InterestFilter, type InterestKind, ULTRA_KIND, kindOfPath } from "../pages/interest";
 import { SAVED_SEARCH_MAX, savedSearchCap } from "./entitlements";
 import { deleteFeeds } from "./feeds";
@@ -76,25 +76,51 @@ export async function addSearch(
 }
 
 // What a page's Save this search control shows (search_control.tsx): whether
-// the page's filter is saved on the account, and how many the account holds
-// against the cap, the briefings counted as addSearch counts them. One
-// statement, on the table's unique key and the account's rows.
+// the page's filter is saved on the account (its id and its delivery, for the
+// line that turns its email on), and how many the account holds against the
+// cap, the briefings counted as addSearch counts them. One statement, on the
+// table's unique key and the account's rows.
+const SAVED_ROW = "FROM saved_searches WHERE user_id = ?1 AND kind = ?2 AND params = ?3";
 const SEARCH_STATE = (count: string) =>
-  `SELECT EXISTS (SELECT 1 FROM saved_searches WHERE user_id = ?1 AND kind = ?2 AND params = ?3) AS saved, ${count} AS n`;
+  `SELECT EXISTS (SELECT 1 ${SAVED_ROW}) AS saved, (SELECT id ${SAVED_ROW}) AS id, (SELECT deliver ${SAVED_ROW}) AS deliver, ${count} AS n`;
 const STATE_COUNT = "(SELECT COUNT(*) FROM saved_searches WHERE user_id = ?1)";
 
 export async function searchState(
   env: Env, userId: string, filter: Pick<InterestFilter, "kind" | "params">,
-): Promise<{ saved: boolean; n: number }> {
+): Promise<{ saved: boolean; id: string | null; deliver: Delivery | null; n: number }> {
   const db = env.ACCOUNTS!;
   const binds = [userId, filter.kind, filter.params];
+  type Row = { saved: number; id: string | null; deliver: string | null; n: number };
   const row = await db.prepare(SEARCH_STATE(`${STATE_COUNT} + (SELECT COUNT(*) FROM briefings WHERE user_id = ?1)`)).bind(...binds)
-    .first<{ saved: number; n: number }>()
+    .first<Row>()
     .catch((e) => {
       if (!missingTable(e)) throw e;
-      return db.prepare(SEARCH_STATE(STATE_COUNT)).bind(...binds).first<{ saved: number; n: number }>();
+      return db.prepare(SEARCH_STATE(STATE_COUNT)).bind(...binds).first<Row>();
     });
-  return { saved: row?.saved === 1, n: row?.n ?? 0 };
+  const saved = row?.saved === 1;
+  return { saved, id: saved ? row?.id ?? null : null, deliver: saved && isDelivery(row?.deliver) ? (row!.deliver as Delivery) : null, n: row?.n ?? 0 };
+}
+
+// What the account holds against the cap the saved searches and the briefings
+// share: both tables, as addSearch counts them (the searches alone while the
+// briefings table is not on the database). The one count every page states.
+export async function heldCount(env: Env, userId: string): Promise<number> {
+  const db = env.ACCOUNTS!;
+  const row = await db.prepare(`SELECT ${STATE_COUNT} + (SELECT COUNT(*) FROM briefings WHERE user_id = ?1) AS n`).bind(userId).first<{ n: number }>()
+    .catch((e) => {
+      if (!missingTable(e)) throw e;
+      return db.prepare(`SELECT ${STATE_COUNT} AS n`).bind(userId).first<{ n: number }>();
+    });
+  return row?.n ?? 0;
+}
+
+// The line a paid account at its figure reads (Save this search, the searches
+// page's Add a Search, its notice and its foot): what it holds of its plan's
+// figure, then Ultra's figure while Ultra is on sale above it (ultra, from
+// payments.ts ultraOnSale), else that its figure is the most an account keeps.
+export function paidCapLine(lang: Lang, n: number, cap: number, ultra: number | null): string {
+  const figures = { n: fmtInt(n, lang), cap: fmtInt(cap, lang) };
+  return ultra ? t(lang, "account.cap_note_pro", { ...figures, ultra: fmtInt(ultra, lang) }) : t(lang, "account.save_cap_pro", figures);
 }
 
 // Daily or weekly only for a kind the job can deliver; off for any.

@@ -644,13 +644,13 @@ describe("the keys page", () => {
     for (let i = 0; i < 3; i++) await call("/api/v1/me", made.key);
     const html = decode(nbsp(await (await get("/account/keys", { cookie: made.cookie })).text()));
     expect(html).toContain('<td data-label="Today" class="num">3</td><td data-label="Last 30 days" class="num">10</td>');
-    expect(html).toContain("Requests are counted by UTC day. Each key may make 20,000 a day and 600 a minute.");
+    expect(html).toContain("Requests are counted by UTC day. Each key may make 20,000 a day and 600 a minute, and each address 60 a minute.");
     expect(html).not.toContain("No endpoint asks for one yet");
     expect(html).toContain("A key opens the keyed API under /api/v1 while the account is on Pro.");
     for (const e of KEYED_ENDPOINTS) expect(html).toContain(`<dt class="mono">GET ${e.path}</dt>`);
     expect(html).toContain('<a href="/data#api-keyed">Data</a>');
     const fr = decode(nbsp(await (await get("/account/keys?lang=fr", { cookie: made.cookie })).text()));
-    expect(fr).toContain("Chaque clé peut en faire 20 000 par jour et 600 par minute.");
+    expect(fr).toContain("Chaque clé peut en faire 20 000 par jour et 600 par minute, et chaque adresse 60 par minute.");
     expect(fr).toContain("Points d’accès");
   });
 

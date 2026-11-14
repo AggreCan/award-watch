@@ -55,7 +55,13 @@
     // so this bounds the work and tells the crawler to slow; public/robots.txt
     // asks the same of those that read it, and an edge rule in the dashboard
     // is what keeps a crawler that heeds neither from being counted at all.
-    { "name": "CRAWLER_LIMIT", "namespace_id": "2011", "simple": { "limit": 10, "period": 60 } }
+    { "name": "CRAWLER_LIMIT", "namespace_id": "2011", "simple": { "limit": 10, "period": 60 } },
+    // The dashboard's posts and the saved views' (/account/dashboard/panels
+    // and /account/views, src/limits.ts "edit"), only while ACCOUNTS_ENABLED
+    // is "true": each moves, adds or removes one row of the account's own, a
+    // dashboard is rearranged one place a post, and FORM_LIMIT's 5 stays for
+    // the posts that send mail or call the payment service.
+    { "name": "EDIT_LIMIT", "namespace_id": "2012", "simple": { "limit": 60, "period": 60 } }
   ],
   // The daily check (src/watchdog.ts): 06:00 UTC, after the nightly run has had
   // its window and 2 h 15 after the same-day refresh's last cut. It emails the

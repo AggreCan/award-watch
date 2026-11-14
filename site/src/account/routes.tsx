@@ -10,6 +10,7 @@
 //                                      and turns on the weekly email when the sign-in form's box was ticked (weekly)
 //   GET  /account                      the overview                                   (session)
 //   POST /account/weekly               the weekly email on or off                     (session, CSRF)
+//   POST /account/mail-language        the language of the account's own mail         (session, CSRF)
 //   POST /account/sign-out             this browser, or every browser (scope=all)     (session, CSRF)
 //   GET  /account/searches             saved searches, the alerts form's rows to add  (session)
 //   POST /account/searches             add from a page address, or Save this search   (session, CSRF)
@@ -114,6 +115,7 @@ import {
   isBriefingDelivery, isBriefingKind, lastBriefingRuns, listBriefings, narrowOf, setBriefingDelivery, subjectOf,
 } from "./briefings";
 import { bugPage, fileBug } from "./bugs";
+import { refererPath, safeNext } from "./next";
 import { type EditOp, addPanelPost, dashboardOpen, dashboardPage, deletePanelsFor, deletePanelsOf, editPanelPost } from "./dashboard";
 import { DASHBOARD_PATH } from "./dashboard_rule";
 import { type Plan, RULES, allowed, planFor, savedViewCap, watchCap } from "./entitlements";
@@ -123,10 +125,11 @@ import {
 } from "./feeds";
 import {
   type CalendarRow, type CalendarView, accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView,
-  signInView, stopView, stoppedView, unavailableView, weeklyStopView, weeklyStoppedView,
+  signInView, staleFormView, stopView, stoppedView, unavailableView, weeklyStopView, weeklyStoppedView,
 } from "./pages";
 import {
-  type SavedSearch, addSearch, capFor, deleteSearch, importInterest, isDelivery, lastDeliveries, listSearches, pendingInterest, setDelivery,
+  type SavedSearch, addSearch, capFor, deleteSearch, heldCount, importInterest, isDelivery, lastDeliveries, listSearches, paidCapLine,
+  pendingInterest, setDelivery,
 } from "./searches";
 import { randomHex, sameHash, sha256Hex, ipHash } from "./secrets";
 import { isLocalHost, senderFor, signInMessage } from "./sender";
@@ -156,7 +159,7 @@ import { MATCH_PATH, matchesPage } from "./fit_pages";
 import {
   DAY_SLOTS, type Follow, type WatchKind, followOf, followValue, isWatchKind, readEvents, segmentOf, targetOf, watchPath,
 } from "./watch_events";
-import { type WatchCalendar, watchStopView, watchStoppedView, watchesView } from "./watch_pages";
+import { type WatchCalendar, paidWatchCapLine, watchStopView, watchStoppedView, watchesView } from "./watch_pages";
 import {
   addWatch, countedWatches, deleteWatch, deleteWatchesOf, followAliases, isCadence, listWatches, mailOf, setMail, setWatch, watchCount,
   withinCap,
@@ -207,7 +210,7 @@ function unavailable(c: Context<AppEnv>): Promise<Response> {
 // sign-in page (cookie cleared) when the session does not stand, the 503
 // page when the database cannot say.
 async function signedIn(c: Context<AppEnv>): Promise<Account | Response> {
-  const read = await readSession(c, { touch: true });
+  const read = await readSession(c);
   if (read.state === "ok") return read.account;
   if (read.state === "unavailable") return unavailable(c);
   if (getCookie(c, SESSION_COOKIE)) clearSessionCookie(c);
@@ -228,13 +231,21 @@ function signInFor(c: Context<AppEnv>): string {
 }
 
 // A POST that needs the session: the Origin, then the session, then the CSRF
-// value the page's form carried.
+// value the page's form carried. A value that does not match is most often a
+// page opened under an earlier sign-in of this browser (a sign-in revokes the
+// session it replaces, and the old tabs keep its value): a page in the
+// site's shell says so, with a link to reload the page the form was on (its
+// Referer on this site, held to safeNext; else the account page). Still a
+// 403, and nothing is done.
 async function signedInPost(c: Context<AppEnv>): Promise<{ account: Account; fields: Record<string, string> } | Response> {
   const fields = await postFields(c);
   if (fields instanceof Response) return fields;
   const who = await signedIn(c);
   if (who instanceof Response) return who;
-  if (!csrfValid(who, fields.csrf)) return c.text(t(c.get("lang"), "form.rejected"), 403);
+  if (!csrfValid(who, fields.csrf)) {
+    const lang = c.get("lang");
+    return accountPage(c, t(lang, "account.stale_form_title"), staleFormView(lang, refererPath(c.req.header("referer"), c.req.url) ?? "/account"), 403);
+  }
   return { account: who, fields };
 }
 
@@ -262,13 +273,8 @@ function siteBase(c: Context<AppEnv>): string {
 // -- sign-in ----------------------------------------------------------------------------
 
 // The page to return to after signing in (?next=, from a page's Follow link):
-// a path on this site only, never another host, never the sign-in pages.
-const NEXT_MAX = 300;
-export function safeNext(raw: string | undefined | null): string | null {
-  if (!raw || raw.length > NEXT_MAX || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return null;
-  if (/[\u0000-\u001f\u007f]/.test(raw) || raw.startsWith("/account/sign-in") || raw.startsWith("/account/check")) return null;
-  return raw;
-}
+// a path on this site only, never another host, never the sign-in pages (next.ts).
+export { safeNext };
 
 // ?follow= (or the follow field) is carried the same way, beside next: what a
 // public page's Follow form asked to follow (watch_events.ts followOf), added
@@ -466,9 +472,10 @@ account.get("/", async (c) => {
   return guarded(c, async () => {
     const counts = await c.env.ACCOUNTS!.prepare(
       "SELECT (SELECT COUNT(*) FROM sessions WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2) AS sessions, " +
-      "(SELECT COUNT(*) FROM saved_searches WHERE user_id = ?1) AS searches, " +
       "(SELECT COUNT(*) FROM api_keys WHERE user_id = ?1 AND revoked_at IS NULL) AS keys",
-    ).bind(who.userId, new Date().toISOString()).first<{ sessions: number; searches: number; keys: number }>();
+    ).bind(who.userId, new Date().toISOString()).first<{ sessions: number; keys: number }>();
+    // The saved searches with the briefings, which share the cap: the count every page states (searches.ts heldCount).
+    const held = await heldCount(c.env, who.userId);
     const watching = await watchCount(c.env, who.userId);
     const org = await claimSummary(c.env, who.userId);
     const m = c.req.query("m");
@@ -476,17 +483,36 @@ account.get("/", async (c) => {
     const returned = c.req.query("session");
     if ((c.req.query("billing") === "done" || c.req.query("billing") === "done_ultra") && returned) await bindReturn(c.env, who, returned);
     return accountPage(c, t(lang, "account.title"), overviewView(lang, who, {
-      sessions: counts?.sessions ?? 0, searches: counts?.searches ?? 0, cap: capFor(who), keys: counts?.keys ?? 0,
+      sessions: counts?.sessions ?? 0, searches: held, cap: capFor(who), keys: counts?.keys ?? 0,
       watches: watching?.n ?? null, watchesOwn: watching?.own ?? false, org,
     }, {
       billing: await billingLine(c.env, who.userId),
       // Stripe's checkout returns here; the plan changes when its notice lands, often a moment later.
       notice: c.req.query("billing") === "done" ? t(lang, "billing.msg_done", { plan: t(lang, "pro.tag") })
         : c.req.query("billing") === "done_ultra" ? t(lang, "billing.msg_done", { plan: t(lang, "ultra.tag") })
-        : m === "weekly_on" ? t(lang, "weekly.msg_on") : m === "weekly_off" ? t(lang, "weekly.msg_off") : null,
+        : m === "weekly_on" ? t(lang, "weekly.msg_on") : m === "weekly_off" ? t(lang, "weekly.msg_off")
+        : m === "mail_lang" ? t(lang, "account.msg_mail_lang") : null,
       // The weekly email's control; null leaves it out while its table is not on the database.
       weekly: await weeklyState(c.env, who.userId),
     }));
+  });
+});
+
+// The overview's mail language control: the language the account's own mail
+// goes out in (users.lang: the watch mail and the weekly email; a saved
+// search, a briefing and a saved view keep the language of the page each was
+// saved from). The field is mail_lang, apart from the lang every form carries
+// for the page's own language.
+account.post("/mail-language", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  const chosen = fields.mail_lang;
+  if (chosen !== "en" && chosen !== "fr") return c.text(t(c.get("lang"), "form.rejected"), 400);
+  return guarded(c, async () => {
+    const res = await c.env.ACCOUNTS!.prepare("UPDATE users SET lang = ? WHERE id = ? AND lang <> ?").bind(chosen, who.userId, chosen).run();
+    if ((res.meta?.changes ?? 0) === 1) await audit(c.env, who.userId, "mail_lang", chosen);
+    return c.redirect(`/account?m=mail_lang${c.get("lang") === "fr" ? "&lang=fr" : ""}`, 303);
   });
 });
 
@@ -546,13 +572,14 @@ async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: 
   const pending = await Promise.all(waiting.map(async (r) => ({ ...r, label: await labelIn(c, lang, r) })));
   const cap = capFor(who);
   const m = c.req.query("m") ?? "";
-  const notice = m === "cap"
-    ? t(lang, who.plan === "free" ? "account.cap_free" : "account.cap_pro", { cap })
-    : SEARCH_NOTICE[m] ? t(lang, SEARCH_NOTICE[m]) : null;
   // No feeds table on the database yet: the page leaves the feeds out.
   const calendar = feeds === null ? null : await calendarView(c, lang, who, searches, feeds);
   // Ultra's figure beside a Pro account's, only while Ultra can be bought (payments.ts ultraOnSale).
   const ultra = RULES.ultra.saved_searches > cap && allowed(who, "delivery") && (await ultraOnSale(c.env)) ? RULES.ultra.saved_searches : null;
+  // A refused add says what the account holds, the briefings counted with the searches.
+  const notice = m === "cap"
+    ? who.plan === "free" ? t(lang, "account.cap_free", { cap }) : paidCapLine(lang, stored.length + (briefings?.length ?? 0), cap, ultra)
+    : SEARCH_NOTICE[m] ? t(lang, SEARCH_NOTICE[m]) : null;
   return accountPage(c, t(lang, "account.searches_title"),
     searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar, briefings: briefed, ultra }),
     extra.status ?? 200);
@@ -687,11 +714,13 @@ account.post("/searches/:id", async (c) => {
   const deliver = fields.deliver;
   if (!isDelivery(deliver)) return c.text(t(c.get("lang"), "form.rejected"), 400);
   if (deliver !== "off" && !allowed(who, "delivery")) return c.redirect("/account/searches?m=pro", 303);
+  // The line beside Search saved on a list (search_control.tsx) posts next, its page, to return to.
+  const back = typeof fields.next === "string" ? inLang(safeNext(fields.next) ?? "/account/searches", c.get("lang")) : null;
   return guarded(c, async () => {
     // Nothing changes for a search of a kind that cannot be delivered yet (searches.ts).
-    if (!(await setDelivery(c.env, who.userId, c.req.param("id") ?? "", deliver))) return c.redirect("/account/searches", 303);
+    if (!(await setDelivery(c.env, who.userId, c.req.param("id") ?? "", deliver))) return c.redirect(back ?? "/account/searches", 303);
     await audit(c.env, who.userId, "search_changed", deliver);
-    return c.redirect("/account/searches?m=changed", 303);
+    return c.redirect(back ?? "/account/searches?m=changed", 303);
   });
 });
 
@@ -752,10 +781,12 @@ account.post("/briefings/:id", async (c) => {
   const deliver = fields.deliver;
   if (!isBriefingDelivery(deliver)) return c.text(t(c.get("lang"), "form.rejected"), 400);
   if (deliver !== "off" && !allowed(who, "delivery")) return c.redirect("/account/searches?m=b_pro#briefings", 303);
+  // The line under Briefing saved on its page (briefing_pages.tsx) posts next, that page, to return to.
+  const back = typeof fields.next === "string" ? inLang(safeNext(fields.next) ?? "/account/searches#briefings", c.get("lang")) : null;
   return guarded(c, async () => {
-    if (!(await setBriefingDelivery(c.env, who.userId, c.req.param("id") ?? "", deliver))) return c.redirect("/account/searches#briefings", 303);
+    if (!(await setBriefingDelivery(c.env, who.userId, c.req.param("id") ?? "", deliver))) return c.redirect(back ?? "/account/searches#briefings", 303);
     await audit(c.env, who.userId, "briefing_changed", deliver);
-    return c.redirect("/account/searches?m=b_changed#briefings", 303);
+    return c.redirect(back ?? "/account/searches?m=b_changed#briefings", 303);
   });
 });
 
@@ -1093,9 +1124,12 @@ async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, stat
   const covered = withinCap(watches, cap, claimed);
   const read = covered.length ? await readEvents(c.env, covered, days) : null;
   const m = said ?? c.req.query("m") ?? "";
+  // Ultra's figure beside a Pro account's, only while Ultra can be bought (payments.ts ultraOnSale).
+  const ultra = RULES.ultra.watchlists > cap && allowed(who, "watch_mail") && (await ultraOnSale(c.env)) ? RULES.ultra.watchlists : null;
+  const held = countedWatches(watches, claimed);
   const notice = m === "cap"
-    ? allowed(who, "watch_mail") ? t(lang, "watches.control_cap_pro", { cap: fmtInt(cap, lang) })
-      : t(lang, "watches.cap_free", { n: fmtInt(countedWatches(watches, claimed), lang), cap: fmtInt(cap, lang), max: fmtInt(RULES.pro.watchlists, lang) })
+    ? allowed(who, "watch_mail") ? paidWatchCapLine(lang, held, cap, ultra)
+      : t(lang, "watches.cap_free", { n: fmtInt(held, lang), cap: fmtInt(cap, lang), max: fmtInt(RULES.pro.watchlists, lang) })
     : WATCH_NOTICE[m] ? t(lang, WATCH_NOTICE[m]) : null;
   // The watches' calendar feed, with how many events it holds now; no feeds
   // table on the database yet leaves it out.
@@ -1107,8 +1141,6 @@ async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, stat
     } : null,
     full: feeds.length >= FEEDS_MAX,
   };
-  // Ultra's figure beside a Pro account's, only while Ultra can be bought (payments.ts ultraOnSale).
-  const ultra = RULES.ultra.watchlists > cap && allowed(who, "watch_mail") && (await ultraOnSale(c.env)) ? RULES.ultra.watchlists : null;
   return accountPage(c, t(lang, "watches.title"),
     watchesView(lang, who, { watches, read, days, mail, notice, moved, merged, calendar, claimed, covered, ultra }), status);
 }
@@ -1406,6 +1438,8 @@ account.post("/keys", async (c) => {
     if (!name) return keysPage(c, who, { errors: ["account.err_key_name"], status: 400 });
     const made = await createKey(c.env, who.userId, name);
     if (made === "limit") return keysPage(c, who, { status: 409 });
+    // A key of that name in use: most often this form posted again by a reload, which makes nothing.
+    if (made === "exists") return keysPage(c, who, { errors: ["account.err_key_exists"], status: 409 });
     await audit(c.env, who.userId, "key_created", made.prefix);
     return keysPage(c, who, { created: made.key });
   });

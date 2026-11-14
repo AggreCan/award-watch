@@ -608,14 +608,16 @@ export async function deleteBriefingsOf(env: Env, userId: string): Promise<void>
 // the account holds; null before the table exists.
 export async function briefingState(
   env: Env, userId: string, kind: BriefingKind, subject: string,
-): Promise<{ id: string | null; segment: string; n: number } | null> {
+): Promise<{ id: string | null; segment: string; deliver: BriefingDelivery | null; n: number } | null> {
   try {
     const row = await env.ACCOUNTS!.prepare(
       "SELECT (SELECT id FROM briefings WHERE user_id = ?1 AND kind = ?2 AND subject = ?3 ORDER BY segment, created_at LIMIT 1) AS id, " +
       "(SELECT segment FROM briefings WHERE user_id = ?1 AND kind = ?2 AND subject = ?3 ORDER BY segment, created_at LIMIT 1) AS segment, " +
+      "(SELECT deliver FROM briefings WHERE user_id = ?1 AND kind = ?2 AND subject = ?3 ORDER BY segment, created_at LIMIT 1) AS deliver, " +
       "(SELECT COUNT(*) FROM briefings WHERE user_id = ?1) + (SELECT COUNT(*) FROM saved_searches WHERE user_id = ?1) AS n",
-    ).bind(userId, kind, subject).first<{ id: string | null; segment: string | null; n: number }>();
-    return { id: row?.id ?? null, segment: row?.segment ?? "", n: row?.n ?? 0 };
+    ).bind(userId, kind, subject).first<{ id: string | null; segment: string | null; deliver: string | null; n: number }>();
+    const deliver = row?.deliver === "weekly" || row?.deliver === "off" ? row.deliver : null;
+    return { id: row?.id ?? null, segment: row?.segment ?? "", deliver, n: row?.n ?? 0 };
   } catch (e) {
     if (missingTable(e)) return null;
     throw e;

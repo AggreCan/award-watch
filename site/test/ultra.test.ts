@@ -285,7 +285,7 @@ describe("the plan cards while Ultra is on sale", () => {
     // no row the two plans share. The list was kept by hand until 2026-11-14 and had left out the matching notices
     // by email, so the landing page's Ultra card showed fewer lines than the card on /pro.
     expect(ultraLines("en")).toEqual([
-      `${RULES.ultra.saved_searches} saved searches, by email`, `${RULES.ultra.watchlists} watches, each change by email`,
+      `${RULES.ultra.saved_searches} saved searches and briefings, by email`, `${RULES.ultra.watchlists} watches, each change by email`,
       `Analytics: every view, ${planYears("ultra")} fiscal years`, `${RULES.ultra.matches} matching notices for your organization`,
       `${RULES.ultra.match_mail} matching notices a week, by email`,
       `API: ${KEYS_MAX} keys of ${keyQuota("ultra")!.perDay.toLocaleString("en-CA")} requests a day`,
@@ -320,7 +320,7 @@ describe("the Pro page while Ultra is on sale", () => {
     expect(ultra).toBeGreaterThan(who);
     expect(ultra).toBeLessThan(html.indexOf('<h2 id="free">'));
     const days = keyQuota("ultra")!.perDay.toLocaleString("en-CA");
-    expect(html).toContain(`<p>Ultra includes everything in Pro, with these figures: ${RULES.ultra.saved_searches} saved searches by email, ${RULES.ultra.watchlists} watches, ${planYears("ultra")} fiscal years of analytics, API keys of ${days} requests a day each, and a dashboard of up to ${RULES.ultra.dashboard} panels you choose.</p>`);
+    expect(html).toContain(`<p>Ultra includes everything in Pro, with these figures: ${RULES.ultra.saved_searches} saved searches and briefings by email, ${RULES.ultra.watchlists} watches, ${planYears("ultra")} fiscal years of analytics, API keys of ${days} requests a day each, and a dashboard of up to ${RULES.ultra.dashboard} panels you choose.</p>`);
     expect(html).toContain("<p>For people who follow a whole market: many buyers, segments and competitors at once.</p>");
     expect(html).toContain('<p class="pro-price">Ultra is CA$30 a month or CA$301.50 a year, taxes added at checkout.</p>');
     expect(html).toContain("<h3>Can I move from Pro to Ultra, or back?</h3>");

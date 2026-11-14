@@ -63,7 +63,7 @@ describe("the sign-in page", () => {
     const lines = [...p.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((m) => text(m[1]));
     expect(lines).toEqual(freeLines("en", true).map(nbsp));
     expect(lines).toEqual([
-      `${RULES.free.saved_searches} saved searches, on the site`,
+      `${RULES.free.saved_searches} saved searches and briefings, on the site`,
       `${RULES.free.watchlists} watches, on the site`,
       `${RULES.free.matches} matching notices for your organization`,
       `${RULES.free.match_mail} matching notices a week, by email`,
@@ -92,7 +92,7 @@ describe("the sign-in page", () => {
     const html = await read(await get("/account/sign-in?lang=fr"));
     const p = panel(main(html), "Ce que donne un compte gratuit");
     expect([...p.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((m) => text(m[1]))).toEqual(freeLines("fr", true).map((s) => nbsp(s).replace(/’/g, "'")));
-    expect(text(p)).toContain(`${RULES.free.saved_searches} recherches enregistrées, sur le site`);
+    expect(text(p)).toContain(`${RULES.free.saved_searches} recherches et bulletins, sur le site`);
     expect(text(p)).toContain("Le courriel hebdomadaire, chaque lundi");
     expect(text(p)).toContain(`Pro : ${RULES.pro.saved_searches} recherches enregistrées et ${RULES.pro.watchlists} suivis, chaque changement par courriel; ` +
       `${RULES.pro.matches} avis correspondants, ${RULES.pro.match_mail} par semaine par courriel.`);

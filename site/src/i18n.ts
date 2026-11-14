@@ -298,6 +298,9 @@ const STRINGS = {
     en: "Too many requests from this address. Wait a minute and try again.",
     fr: "Trop de requêtes depuis cette adresse. Attendez une minute et réessayez.",
   },
+  // The page a browser gets in place of the line above (src/limit_page.tsx): its title and the link back.
+  "limits.title": { en: "Too Many Requests", fr: "Trop de requêtes" },
+  "limits.back": { en: "Back to the page", fr: "Retour à la page" },
   "limits.too_many_api": {
     en: "Too many requests. The API allows 60 requests a minute per address. For bulk use, start from the downloads.",
     fr: "Trop de requêtes. L'API permet 60 requêtes par minute et par adresse. Pour un usage en masse, utilisez les téléchargements.",
@@ -3426,8 +3429,8 @@ const STRINGS = {
   },
   "propage.q_alerts": { en: "How do the email alerts work?", fr: "Comment fonctionnent les alertes par courriel?" },
   "propage.a_alerts": {
-    en: "Save a filtered tender list or a filtered list of contracts ending, or an organization, a buyer or a segment, and choose daily or weekly email. Each message lists what is new since the last one. Pro keeps up to {n} saved searches.",
-    fr: "Enregistrez une liste filtrée d'appels d'offres ou une liste filtrée de contrats prenant fin, ou une organisation, un acheteur ou un segment, puis choisissez un courriel quotidien ou hebdomadaire. Chaque message énumère ce qui est nouveau depuis le précédent. Pro conserve jusqu'à {n} recherches.",
+    en: "Save a filtered tender list or a filtered list of contracts ending, or an organization, a buyer or a segment, and choose daily or weekly email. Each message lists what is new since the last one. Pro keeps up to {n} saved searches and briefings together.",
+    fr: "Enregistrez une liste filtrée d'appels d'offres ou une liste filtrée de contrats prenant fin, ou une organisation, un acheteur ou un segment, puis choisissez un courriel quotidien ou hebdomadaire. Chaque message énumère ce qui est nouveau depuis le précédent. Pro conserve jusqu'à {n} recherches et bulletins au total.",
   },
   "propage.q_source": { en: "Where does the data come from?", fr: "D'où viennent les données?" },
   "propage.a_source": {
@@ -3461,8 +3464,8 @@ const STRINGS = {
   },
   "propage.ultra_title": { en: "Ultra", fr: "Ultra" },
   "propage.ultra_text": {
-    en: "Ultra includes everything in Pro, with these figures: {searches} saved searches by email, {watches} watches, {years} fiscal years of analytics, API keys of {day} requests a day each, and a dashboard of up to {panels} panels you choose.",
-    fr: "Ultra comprend tout ce que comprend Pro, avec ces chiffres : {searches} recherches enregistrées par courriel, {watches} suivis, {years} exercices d'analyses, des clés d'API de {day} requêtes par jour chacune, et un tableau de bord d'au plus {panels} panneaux que vous choisissez.",
+    en: "Ultra includes everything in Pro, with these figures: {searches} saved searches and briefings by email, {watches} watches, {years} fiscal years of analytics, API keys of {day} requests a day each, and a dashboard of up to {panels} panels you choose.",
+    fr: "Ultra comprend tout ce que comprend Pro, avec ces chiffres : {searches} recherches et bulletins par courriel, {watches} suivis, {years} exercices d'analyses, des clés d'API de {day} requêtes par jour chacune, et un tableau de bord d'au plus {panels} panneaux que vous choisissez.",
   },
   "propage.ultra_who": {
     en: "For people who follow a whole market: many buyers, segments and competitors at once.",
@@ -3790,8 +3793,9 @@ const STRINGS = {
   "plans.pro_radar": { en: "Contracts ending: {a}- and {b}-month lists", fr: "Contrats prenant fin d'ici {a} et {b} mois" },
   "plans.radar_csv": { en: "Contracts ending: the {m}-month CSV", fr: "Contrats prenant fin : CSV de {m} mois" },
   "plans.pro_radar_csv": { en: "Contracts ending: {a}- and {b}-month CSVs", fr: "Contrats prenant fin : CSV de {a} et {b} mois" },
-  "plans.free_searches": { en: "{n} saved searches, on the site", fr: "{n} recherches enregistrées, sur le site" },
-  "plans.pro_searches": { en: "{n} saved searches, by email", fr: "{n} recherches enregistrées, par courriel" },
+  // The saved searches and the weekly briefings share this figure (account/briefings.ts sharedCap), so the row names both.
+  "plans.free_searches": { en: "{n} saved searches and briefings, on the site", fr: "{n} recherches et bulletins, sur le site" },
+  "plans.pro_searches": { en: "{n} saved searches and briefings, by email", fr: "{n} recherches et bulletins, par courriel" },
   "plans.free_watches": { en: "{n} watches, on the site", fr: "{n} suivis, sur le site" },
   "plans.pro_watches": { en: "{n} watches, each change by email", fr: "{n} suivis, chaque changement par courriel" },
   "plans.free_feeds": { en: "A calendar file per notice or contract", fr: "Fichier de calendrier par avis ou contrat" },

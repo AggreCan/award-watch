@@ -383,7 +383,7 @@ describe("the saved views page", () => {
     // Behind the CSRF value and the Origin, in the form bucket.
     expect((await post(`/account/views/${await idOf(ultra)}`, { csrf: "0".repeat(32), deliver: "off" }, { cookie: ultra.cookie, env: sale() })).status).toBe(403);
     expect((await post("/account/views", { csrf: ultra.csrf, address: `${BUYER}?source=awards&years=5` }, { cookie: ultra.cookie, env: sale(), origin: "https://elsewhere.example" })).status).toBe(403);
-    for (const path of ["/account/views", "/account/views/abc", "/account/views/abc/delete"]) expect(bucketFor("POST", path), path).toBe("form");
+    for (const path of ["/account/views", "/account/views/abc", "/account/views/abc/delete"]) expect(bucketFor("POST", path), path).toBe("edit");
     expect(bucketFor("GET", "/account/views")).toBe("page");
   });
 
@@ -393,7 +393,7 @@ describe("the saved views page", () => {
     const [v] = await rowsOf(r.id);
     await ACCOUNTS.prepare("INSERT INTO view_deliveries (view_id, sent_at, day, status) VALUES (?, ?, ?, 'same')").bind(v.id, `${DAY}T16:00:00.000Z`, DAY).run();
     // The dashboard's view panel takes the saved view: its name heads the panel.
-    expect((await send(r, "/account/dashboard/panels", { kind: "view", ref: v.id }, sale())).headers.get("location")).toBe("/account/dashboard?m=added");
+    expect((await send(r, "/account/dashboard/panels", { kind: "view", ref: v.id }, sale())).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#panel-[0-9a-f]{32}$/);
     const panels = () => ACCOUNTS.prepare("SELECT kind, ref FROM dashboard_panels WHERE user_id = ?").bind(r.id).all<{ kind: string; ref: string }>().then((x) => x.results ?? []);
     expect(await panels()).toContainEqual({ kind: "view", ref: v.id });
     const dash = mainOf(await text(await open(r, "/account/dashboard", sale())));

@@ -105,7 +105,7 @@ describe("the figures", () => {
   it("are printed by the plan lines, each plan's own, within PLAN_LINE_MAX in both languages", () => {
     const line = (lang: "en" | "fr", plan: "pro" | "ultra", key: string) =>
       nbsp(planLine(lang, PLAN_ROWS.find((r) => (r[plan]?.key ?? "") === key)![plan]!));
-    expect(line("en", "ultra", "plans.pro_searches")).toBe("100 saved searches, by email");
+    expect(line("en", "ultra", "plans.pro_searches")).toBe("100 saved searches and briefings, by email");
     expect(line("en", "ultra", "plans.pro_watches")).toBe("100 watches, each change by email");
     expect(line("en", "ultra", "plans.pro_analytics")).toBe("Analytics: every view, 20 fiscal years");
     expect(line("en", "ultra", "plans.matches")).toBe("500 matching notices for your organization");
@@ -113,7 +113,7 @@ describe("the figures", () => {
     expect(line("en", "ultra", "plans.api_keys")).toBe("API: 5 keys of 50,000 requests a day");
     expect(line("en", "pro", "plans.api_keys")).toBe("API: 5 keys of 20,000 requests a day");
     expect(line("en", "pro", "plans.pro_analytics")).toBe("Analytics: every view, 10 fiscal years");
-    expect(line("fr", "ultra", "plans.pro_searches")).toBe("100 recherches enregistrées, par courriel");
+    expect(line("fr", "ultra", "plans.pro_searches")).toBe("100 recherches et bulletins, par courriel");
     expect(line("fr", "ultra", "plans.pro_watches")).toBe("100 suivis, chaque changement par courriel");
     expect(line("fr", "ultra", "plans.pro_analytics")).toBe("Analyses : toutes les vues, 20 exercices");
     expect(line("fr", "ultra", "plans.matches")).toBe("500 avis correspondant à votre organisation");
@@ -430,7 +430,7 @@ describe("the keyed API's day by plan", () => {
     for (const [ultra, cap] of [[false, KEY_PER_DAY], [true, KEY_PER_DAY_ULTRA]] as const) {
       const made = await keyFor(ultra ? "ultra-key" : "pro-key", ultra);
       const me = await json(await call("/api/v1/me", made.key));
-      expect(me.limits).toEqual({ per_minute: KEY_PER_MINUTE, per_day: cap });
+      expect(me.limits).toEqual({ per_minute: KEY_PER_MINUTE, per_day: cap, per_minute_per_address: 60 });
       expect(me.usage.remaining).toBe(cap - 1);
       await ACCOUNTS.prepare("UPDATE api_usage SET n = ? WHERE key_id = ? AND day = ?").bind(cap - 1, made.keyId, DAY).run();
       const last = await call("/api/v1/me", made.key);
@@ -443,7 +443,7 @@ describe("the keyed API's day by plan", () => {
       const usage = text(await (await get("/account/api", { cookie: made.cookie })).text());
       expect(usage).toContain(`<span class="tile-value">${cap.toLocaleString("en-CA")}</span>`);
       const keys = text(await (await get("/account/keys", { cookie: made.cookie })).text());
-      expect(keys).toContain(`Each key may make ${cap.toLocaleString("en-CA")} a day and ${KEY_PER_MINUTE} a minute.`);
+      expect(keys).toContain(`Each key may make ${cap.toLocaleString("en-CA")} a day and ${KEY_PER_MINUTE} a minute, and each address 60 a minute.`);
     }
   });
 });
@@ -459,7 +459,7 @@ describe("the account pages' Ultra lines", () => {
     const cookie = await signIn(email, { env: payEnv() });
     await grantPro(email);
     const searches = text(await (await get("/account/searches", { cookie, env: saleEnv() })).text());
-    expect(searches).toContain('<p>This account holds 0 of 25 saved searches. Ultra holds up to 100. <a href="/account/billing">Plans and prices</a></p>');
+    expect(searches).toContain('<p>This account holds 0 of 25 saved searches and briefings. Ultra holds up to 100. <a href="/account/billing">Plans and prices</a></p>');
     const watches = text(await (await get("/account/watches", { cookie, env: saleEnv() })).text());
     expect(watches).toContain('<p>This account follows 0 of 25 pages. Ultra follows up to 100. <a href="/account/billing">Plans and prices</a></p>');
     const fr = text(await (await get("/account/watches?lang=fr", { cookie, env: saleEnv() })).text());
@@ -474,7 +474,7 @@ describe("the account pages' Ultra lines", () => {
       expect(plain, path).not.toContain("Ultra");
       await withoutTiers(async () => expect(await (await get(path, { cookie, env: saleEnv() })).text(), path).toBe(plain));
     }
-    expect(text(await (await get("/account/searches", { cookie, env: payEnv() })).text())).toContain("<p>An account keeps up to 25 saved searches.</p>");
+    expect(text(await (await get("/account/searches", { cookie, env: payEnv() })).text())).toContain("<p>This account holds 0 of 25 saved searches and briefings, the most an account keeps.</p>");
   });
 
   it("give an Ultra account its own figures and no line about Ultra, on sale or not", async () => {
@@ -483,7 +483,7 @@ describe("the account pages' Ultra lines", () => {
     await grantUltra(email);
     for (const e of [payEnv(), saleEnv()]) {
       const searches = text(await (await get("/account/searches", { cookie, env: e })).text());
-      expect(searches).toContain("<p>An account keeps up to 100 saved searches.</p>");
+      expect(searches).toContain("<p>This account holds 0 of 100 saved searches and briefings, the most an account keeps.</p>");
       expect(searches).toContain('<span class="panel-count">0 of 100</span>');
       const watches = text(await (await get("/account/watches", { cookie, env: e })).text());
       expect(watches).toContain("<p>Up to 100 pages.</p>");
@@ -528,11 +528,11 @@ describe("after a move to a smaller plan", () => {
       ).bind(id, user, `/tenders?q=ultra${i}`, `Search number ${i + 1}`, stamp(i)).run();
     }
     const html = text(await (await get("/account/searches", { cookie })).text());
-    expect(html).toContain("<p>This account holds 27 saved searches, past the 25 of its plan. The first 25 are sent; remove some to choose which.</p>");
+    expect(html).toContain("<p>This account holds 27 saved searches and briefings, past the 25 of its plan. The first 25 are sent; remove some to choose which.</p>");
     for (let i = 1; i <= 27; i++) expect(html).toContain(`>Search number ${i}</a>`);
     expect(html).toContain('<span class="panel-count">27 of 25</span>');
     const fr = text(await (await get("/account/searches?lang=fr", { cookie })).text());
-    expect(fr).toContain("Ce compte conserve 27 recherches enregistrées, au-delà des 25 de son forfait. Les 25 premières sont envoyées; retirez-en pour choisir lesquelles.");
+    expect(fr).toContain("Ce compte conserve 27 recherches enregistrées et bulletins, au-delà des 25 de son forfait. Les 25 premiers sont envoyés; retirez-en pour choisir lesquels.");
     // The run: a delivery row for each of the first 25, none for the two after them.
     const mail = fakeMail();
     await runDeliveries(onEnv({ ASSETS: makeFakeAssets({}, week()), MAIL: mail.binding, MAIL_FROM: "alerts@awardwatch.ca", MAIL_SENDER: undefined, RECORDS: undefined }));
@@ -546,7 +546,7 @@ describe("after a move to a smaller plan", () => {
         .bind(nextId(), freeUser, `/tenders?q=free${i}`, `Free search ${i + 1}`, stamp(i)).run();
     }
     const free = text(await (await get("/account/searches", { cookie: await signIn(freeEmail) })).text());
-    expect(free).toContain("This account holds 4 of 3 saved searches. Pro holds up to 25");
+    expect(free).toContain("This account holds 4 of 3 saved searches and briefings. Pro holds up to 25");
     expect(free).not.toContain("past the 3 of its plan");
     for (let i = 1; i <= 4; i++) expect(free).toContain(`>Free search ${i}</a>`);
   });

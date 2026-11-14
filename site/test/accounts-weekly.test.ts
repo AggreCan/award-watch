@@ -99,7 +99,8 @@ describe("the sign-in form's box", () => {
     expect(again).toContain('<input type="checkbox" name="weekly" value="1"/>');
     expect(again).not.toContain(FIELD_HTML);
     // An address cannot tick it for anyone: the page reads no weekly= from its address.
-    expect(await (await get("/account/sign-in?weekly=1")).text()).toBe(html);
+    // (The language toggle keeps the address's query, weekly=1 with it: layout.tsx langToggle.)
+    expect((await (await get("/account/sign-in?weekly=1")).text()).replace('href="?weekly=1&amp;lang=fr"', 'href="?lang=fr"')).toBe(html);
   });
 
   // With the box goes its line in the list of what a free account gives (account/pages.tsx FreePanel): the

@@ -572,8 +572,8 @@ describe("the billing page", () => {
     const [free, pro] = cardsOf(html);
     expect(free).toContain('<h3>Free</h3><span class="plan-current">Your plan</span>');
     expect(free).not.toContain("<a ");
-    expect(free).toContain("<span>3 saved searches, on the site</span>");
-    expect(pro).toContain("<span>25 saved searches, by email</span>");
+    expect(free).toContain("<span>3 saved searches and briefings, on the site</span>");
+    expect(pro).toContain("<span>25 saved searches and briefings, by email</span>");
     expect(pro).toContain('<strong class="plan-amount">CA$12</strong> a month or CA$120.50 a year');
     expect(pro).toContain('<a href="#subscribe" class="btn btn-primary">Subscribe to Pro</a> <a href="/pro" class="btn">About Pro</a>');
     expect(pro).not.toContain("plan-current");

@@ -281,7 +281,7 @@ describe("an Ultra account", () => {
     for (const [kind, ref] of panels) {
       const res = await send(r, "/account/dashboard/panels", { kind, ref });
       expect(res.status, `${kind} ${ref}`).toBe(303);
-      expect(res.headers.get("location"), `${kind} ${ref}`).toBe("/account/dashboard?m=added");
+      expect(res.headers.get("location"), `${kind} ${ref}`).toMatch(/^\/account\/dashboard\?m=added#panel-[0-9a-f]{32}$/);
     }
     expect((await panelRows(r.id)).map((p) => `${p.kind}:${p.ref}`)).toEqual([
       "watches:", "radar:3m", "matches:", "org:years", `tenders:${tenders}`, "api:", ...panels.map(([k, v]) => `${k}:${v}`),
@@ -369,7 +369,7 @@ describe("an Ultra account", () => {
     const r = await reader("dash-blocks");
     await send(r, "/account/organization", { org: A1 });
     for (const ref of ["share", "ending", "buyers", "instruments"]) {
-      expect((await send(r, "/account/dashboard/panels", { kind: "org", ref })).headers.get("location")).toBe("/account/dashboard?m=added");
+      expect((await send(r, "/account/dashboard/panels", { kind: "org", ref })).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#panel-[0-9a-f]{32}$/);
     }
     // Every panel half width.
     for (const p of await panelRows(r.id)) await send(r, `/account/dashboard/panels/${p.id}/width`, { wide: "0", from: "edit" });
@@ -435,7 +435,7 @@ describe("an Ultra account", () => {
     }
     // The first change writes the starting layout (the watches, the 3-month list) and applies to it: the second moves up.
     const moved = await send(r, "/account/dashboard/panels/s1/move", { dir: "up", from: "edit" });
-    expect(moved.headers.get("location")).toBe("/account/dashboard?edit=1");
+    expect(moved.headers.get("location")).toMatch(/^\/account\/dashboard\?edit=1#panel-[0-9a-f]{32}$/);
     expect((await panelRows(r.id)).map((p) => `${p.kind}:${p.ref}`)).toEqual(["radar:3m", "watches:"]);
     const [a, b] = await panelRows(r.id);
     await send(r, `/account/dashboard/panels/${a.id}/move`, { dir: "down" });
@@ -449,9 +449,9 @@ describe("an Ultra account", () => {
     expect((await panelRows(r.id)).length).toBe(2);
     await send(r, `/account/dashboard/panels/${a.id}/delete`);
     expect((await panelRows(r.id)).map((p) => p.id)).toEqual([b.id]);
-    // The form bucket for the four posts, the page's own GET with the pages.
+    // The dashboard's own bucket for the four posts (limits.ts "edit"), the page's own GET with the pages.
     for (const path of ["/account/dashboard/panels", `/account/dashboard/panels/${b.id}/move`, `/account/dashboard/panels/${b.id}/width`,
-      `/account/dashboard/panels/${b.id}/delete`]) expect(bucketFor("POST", path), path).toBe("form");
+      `/account/dashboard/panels/${b.id}/delete`]) expect(bucketFor("POST", path), path).toBe("edit");
     expect(bucketFor("GET", "/account/dashboard")).toBe("page");
     // A Free account's post is sent to the page, which says what the dashboard holds; nothing is written.
     const free = await reader("dash-posts-free", "free");
@@ -467,7 +467,7 @@ describe("an Ultra account", () => {
       .map((x) => x.id);
     expect(ids).toHaveLength(3);
     for (const id of ids.slice(0, BRIEFING_PANELS_MAX)) {
-      expect((await send(r, "/account/dashboard/panels", { kind: "briefing", ref: id })).headers.get("location")).toBe("/account/dashboard?m=added");
+      expect((await send(r, "/account/dashboard/panels", { kind: "briefing", ref: id })).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#panel-[0-9a-f]{32}$/);
     }
     const third = await send(r, "/account/dashboard/panels", { kind: "briefing", ref: ids[2] });
     expect(third.headers.get("location")).toBe("/account/dashboard?m=briefings_full");
@@ -496,7 +496,7 @@ describe("an Ultra account", () => {
     expect(edit.match(/btn-primary/g)).toHaveLength(1);
     expect(edit).toContain('<button type="submit" class="btn btn-primary">Add</button>');
     expect(edit).toContain('<a href="/account/dashboard" class="btn">Done</a>');
-    expect(edit).toContain(`<h2>${t("en", "dash.add_panel")}</h2>`);
+    expect(edit).toContain(`<h2 id="dash-add">${t("en", "dash.add_panel")}</h2>`);
     expect(edit).toContain('<span class="panel-count">3 of 12 panels</span>');
     // The starter's panels carry their places as ids until written; the first has no Move up, the last no Move down.
     expect(edit).toContain('action="/account/dashboard/panels/s0/width"');
@@ -581,7 +581,7 @@ describe("Add to dashboard", () => {
     expect(await text(await get("/account/searches", { cookie: pro.cookie, env: off() }))).not.toContain("account-inline dash-add");
     // The view's own address, posted from its page, is stored as the dashboard writes it.
     const res = await send(ultra, "/account/dashboard/panels", { kind: "view", ref: `/organizations/${A1}/analytics?years=5&source=awards&lang=fr` });
-    expect(res.headers.get("location")).toBe("/account/dashboard?m=added");
+    expect(res.headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#panel-[0-9a-f]{32}$/);
     expect((await panelRows(ultra.id)).map((p) => p.ref)).toContain(`/organizations/${A1}/analytics?source=awards&years=5`);
   });
 });

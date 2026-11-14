@@ -318,7 +318,9 @@ describe("the guards", () => {
     ] as [Record<string, string>, string | undefined][]) {
       const res = await post("/account/bug", fields, { cookie, env, origin });
       expect(res.status, fields.text).toBe(403);
-      expect(await res.text(), fields.text).toBe("The form could not be read.");
+      // Another site's post gets the line; a post without this session's value, the page that says to reload the form's page.
+      if (origin) expect(await res.text(), fields.text).toBe("The form could not be read.");
+      else expect(await res.text(), fields.text).toContain("This form was opened under an earlier sign-in, and nothing was sent.");
     }
     expect(await reports(id)).toEqual([]);
     expect(handed).toEqual([]);

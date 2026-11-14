@@ -43,9 +43,11 @@ export const briefingLabel = (lang: Lang, b: Pick<Briefing, "kind" | "subject" |
 
 // -- the control on a segment page and a buyer page -----------------------------------------------
 
+// deliver: the saved briefing's email, null when none is saved; next: this
+// page, where the line that turns an email off back on returns.
 export type BriefingControlState =
   | { at: "out"; next: string }
-  | { at: "in"; account: Account; id: string | null; segment: string; n: number; cap: number; pro: boolean };
+  | { at: "in"; account: Account; id: string | null; segment: string; n: number; cap: number; pro: boolean; deliver?: string | null; next?: string };
 
 // What the control shows for this request: null while the switch is off, when
 // the accounts database cannot say, or before the briefings table exists.
@@ -59,7 +61,7 @@ export async function briefingControl(c: Context<AppEnv>, kind: BriefingKind, su
     if (!s) return null;
     return {
       at: "in", account: read.account, id: s.id, segment: s.segment, n: s.n, cap: sharedCap(read.account.plan),
-      pro: allowed(read.account, "delivery"),
+      pro: allowed(read.account, "delivery"), deliver: s.deliver, next: briefingPath({ kind, subject }),
     };
   } catch {
     return null;
@@ -92,13 +94,26 @@ export const BriefingPanel: FC<{ lang: Lang; state: BriefingControlState | null;
       </>
     );
   } else if (state.id) {
+    // A briefing saved on Free keeps its email off once the plan has delivery, as nothing turns it on by
+    // itself: the line says so, with the press that turns it on and returns here (routes.tsx, next).
     body = (
-      <div class="briefing-control">
-        <a href="/account/searches#briefings" class="btn watch-on">
-          {t(lang, "briefing.subscribed")}{state.segment ? ` · ${state.segment} ${segmentShort(lang, state.segment)}` : ""}
-        </a>
-        <span class="muted small"><a href="/account/searches#briefings">{t(lang, "briefing.manage")}</a></span>
-      </div>
+      <>
+        <div class="briefing-control">
+          <a href="/account/searches#briefings" class="btn watch-on">
+            {t(lang, "briefing.subscribed")}{state.segment ? ` · ${state.segment} ${segmentShort(lang, state.segment)}` : ""}
+          </a>
+          <span class="muted small"><a href="/account/searches#briefings">{t(lang, "briefing.manage")}</a></span>
+        </div>
+        {state.pro && state.deliver === "off" ? (
+          <form method="post" action={`/account/briefings/${state.id}`} class="briefing-mail">
+            <Csrf account={state.account} />
+            <input type="hidden" name="deliver" value="weekly" />
+            <input type="hidden" name="next" value={state.next ?? "/account/searches#briefings"} />
+            <span class="muted small">{t(lang, "briefing.mail_off")}</span>{" "}
+            <button type="submit" class="btn-link">{t(lang, "briefing.mail_turn_on")}</button>
+          </form>
+        ) : null}
+      </>
     );
   } else if (state.n >= state.cap) {
     body = (
@@ -188,6 +203,7 @@ export const BriefingsPanel: FC<{ lang: Lang; account: Account; briefings: (Brie
                           </select>
                           <button type="submit" class="btn">{t(lang, "account.deliver_save")}</button>
                         </form>
+                        {b.deliver === "off" ? <p class="muted small">{t(lang, "briefing.mail_off")}</p> : null}
                         <RunLine lang={lang} run={b.last} deliver={b.deliver} />
                       </>
                     ) : (

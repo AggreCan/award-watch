@@ -26,7 +26,11 @@ address always serves English to them. This is a crawlable scheme and it
 keeps every existing link working. A `/fr/` prefix would double the routes
 and give a crawler nothing it lacks today, so the scheme stays. The
 language switch in the top bar is `nofollow`; crawlers reach the French
-pages through the alternates and, from this pass, the sitemaps.
+pages through the alternates and, from this pass, the sitemaps. On a page
+that answers 200 the switch keeps the page's own query and changes `lang`
+alone (a list's filters, the emailed sign-in link's token, `next` and
+`follow`), and the tender list's script keeps it in step as the filters
+rewrite the address; on any other answer it is the plain `?lang=`.
 
 **Sitemaps.** The nightly export listed each page once, by its English
 address, 50,000 to a file. No French address appeared in any sitemap. The

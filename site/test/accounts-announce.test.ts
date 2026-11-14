@@ -322,7 +322,7 @@ describe("the Ultra message", () => {
   // What Ultra holds the day the message goes, with Ultra's own figures: the plan cards' lines (src/pro.tsx ultraLines).
   const HOLDS_EN = [
     "Ultra includes everything in Pro, with these figures:",
-    `- ${RULES.ultra.saved_searches} saved searches, by email`,
+    `- ${RULES.ultra.saved_searches} saved searches and briefings, by email`,
     `- ${RULES.ultra.watchlists} watches, each change by email`,
     `- Analytics: every view, ${ULTRA_YEARS} fiscal years`,
     `- API: ${KEYS_MAX} keys of ${KEY_PER_DAY_ULTRA.toLocaleString("en-CA")} requests a day`,
@@ -445,7 +445,7 @@ describe("the Ultra message", () => {
     // In the mail shell: the plans page as the button, the stop link in the muted line under it.
     expect(BUTTON.exec(m.html)?.slice(1)).toEqual([`${LOCAL}/pro`, "Plans and prices"]);
     // The lines of what Ultra holds, as a list before the button; no price in the message.
-    expect(m.html).toContain(`${RULES.ultra.saved_searches} saved searches, by email</li>`);
+    expect(m.html).toContain(`${RULES.ultra.saved_searches} saved searches and briefings, by email</li>`);
     expect(m.html.indexOf("Ultra includes everything in Pro, with these figures:")).toBeLessThan(m.html.indexOf("Plans and prices</a>"));
     expect(m.text).not.toMatch(/CA\$|\$ CA/);
     expect(m.html).toContain(`<a href="${LOCAL}/interest/stop?t=${enToken}" style="color:#5b6b80;">Take this address off the lists</a>`);
@@ -455,7 +455,7 @@ describe("the Ultra message", () => {
     expect(nbsp(f.subject)).toBe("Ultra est ouvert sur Award Watch");
     expect(f.lang).toBe("fr");
     expect(nbsp(f.text)).toContain("Ultra, le forfait au-dessus de Pro, est ouvert sur Award Watch.\n\nCette adresse a demandé à être avertie de son ouverture.");
-    expect(nbsp(f.text)).toContain(`Ultra comprend tout ce que comprend Pro, avec ces chiffres :\n- ${RULES.ultra.saved_searches} recherches enregistrées, par courriel`);
+    expect(nbsp(f.text)).toContain(`Ultra comprend tout ce que comprend Pro, avec ces chiffres :\n- ${RULES.ultra.saved_searches} recherches et bulletins, par courriel`);
     expect(nbsp(f.text)).toContain(`Forfaits et prix : ${LOCAL}/pro?lang=fr`);
     expect(nbsp(f.text)).toContain(`C’est le seul message au sujet d’Ultra.\nRetirer cette adresse des listes : ${LOCAL}/interest/stop?t=${frToken}&lang=fr`);
     for (const part of [f.subject, f.text, f.html]) expect(part).not.toContain(EM_DASH);

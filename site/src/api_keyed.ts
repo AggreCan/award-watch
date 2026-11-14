@@ -38,6 +38,7 @@ import { allowed } from "./account/entitlements";
 import { accountsEnabled } from "./account/switch";
 import { withoutContacts } from "./api";
 import { KEY_PER_DAY, KEY_PER_MINUTE, LIST_PAGES_MAX, OPEN_Q_MAX, PAGE_ROWS, RECORD_PAGES_MAX, keyQuota } from "./api_keyed_spec";
+import { REQUEST_LIMITS } from "./pages/docs";
 import { clockOf, closingPassed } from "./closing";
 import { MONEY_SOURCES, PROVINCES, SEGMENT_CODES, type MoneySource } from "./constants";
 import {
@@ -406,6 +407,8 @@ keyedApi.get("/me", (c) => {
     plan_until: holder.planUntil,
     // The day's count, this request included; null when it could not be written.
     usage: { day: utcDay(nowOf(c.env)), requests: n, remaining: n === null ? null : Math.max(0, perDay - n) },
-    limits: { per_minute: KEY_PER_MINUTE, per_day: perDay },
+    // The key's own minute and day, then the cap each address meets first, whatever key it sends
+    // (wrangler.jsonc API_LIMIT): a script pacing itself from one machine holds to the smaller.
+    limits: { per_minute: KEY_PER_MINUTE, per_day: perDay, per_minute_per_address: REQUEST_LIMITS.api },
   });
 });

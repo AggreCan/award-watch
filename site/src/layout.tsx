@@ -256,8 +256,22 @@ export const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, la
 export type Shell = {
   rail: RailCounts | null; here: string; account?: RailAccount; now?: number; accountsOn?: boolean; stamps?: RefreshStamps;
   dashboard?: boolean;
+  // The request's query string ("?a=b", or ""), for the language toggle (langToggle); "" on any
+  // answer but a 200, so an error page (the site's 404 above all) reads the same whatever was asked.
+  search?: string;
 };
 export const RailContext = createContext<Shell | null>(null);
+
+// The top bar's language toggle: the request's own query with lang set to the
+// other language and every other parameter kept (a list's filters, the
+// emailed link's token, next and follow on the sign-in pages), so switching
+// language changes nothing else. A relative "?..." address, the page's own
+// path. public/tenders.js keeps it in step as the list rewrites the address.
+export function langToggle(search: string, lang: Lang): string {
+  const q = new URLSearchParams(search);
+  q.set("lang", lang === "fr" ? "en" : "fr");
+  return `?${q.toString()}`;
+}
 
 // The nightly's stamp from the rail's read of stats.json, and the last
 // same-day cut's when the page drew the band (pages/intraday.tsx).
@@ -577,7 +591,7 @@ export const Layout: FC<
           <div class="topbar-meta">
             <span class="asof">{t(lang, "nav.data_date", { date: props.dataAsOf ?? t(lang, "common.na") })}</span>
             <RefreshTimers lang={lang} now={shell?.now ?? Date.now()} on={shell?.accountsOn ?? false} stamps={shell?.stamps} />
-            <a href={`?lang=${lang === "fr" ? "en" : "fr"}`} class="lang-toggle" rel="nofollow">
+            <a href={langToggle(shell?.search ?? "", lang)} class="lang-toggle" rel="nofollow">
               {t(lang, "nav.lang")}
             </a>
             <button type="button" class="theme-toggle">
@@ -632,7 +646,7 @@ export async function page(c: Context<AppEnv>, body: unknown, status = 200): Pro
   const url = new URL(c.req.url);
   const shell: Shell = {
     rail, here: viewKey(`${url.pathname}${url.search}`), now: clockOf(c.env).now, accountsOn: accountsEnabled(c.env),
-    stamps: pageStamps(c, rail),
+    stamps: pageStamps(c, rail), search: status === 200 ? url.search : "",
   };
   c.header("Cache-Control", status === 200 ? "public, max-age=300" : "no-store");
   varyOnCookie(c);
@@ -726,7 +740,7 @@ export async function publicPage(c: Context<AppEnv>, body: unknown, status = 200
   const url = new URL(c.req.url);
   const shell: Shell = {
     rail, here: viewKey(`${url.pathname}${url.search}`), now: clockOf(c.env).now, accountsOn: accountsEnabled(c.env),
-    stamps: pageStamps(c, rail),
+    stamps: pageStamps(c, rail), search: status === 200 ? url.search : "",
   };
   // What railAccount gives a request with no session.
   if (shell.accountsOn) shell.account = { email: null, plan: null };

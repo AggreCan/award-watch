@@ -461,8 +461,8 @@ describe("the plan cards", () => {
     const at = async (lang: "en" | "fr") => cardsOf(teaseOf(nbsp(decode(await html(`/tenders/same-day?lang=${lang}`, { env: paid() })))));
     const [free, pro] = await at("en");
     // Saved searches and watches: each plan's count, from RULES.
-    expect(free).toContain(`<span>${RULES.free.saved_searches} saved searches, on the site</span>`);
-    expect(pro).toContain(`<span>${RULES.pro.saved_searches} saved searches, by email</span>`);
+    expect(free).toContain(`<span>${RULES.free.saved_searches} saved searches and briefings, on the site</span>`);
+    expect(pro).toContain(`<span>${RULES.pro.saved_searches} saved searches and briefings, by email</span>`);
     expect(free).toContain(`<span>${RULES.free.watchlists} watches, on the site</span>`);
     expect(pro).toContain(`<span>${RULES.pro.watchlists} watches, each change by email</span>`);
     // Analytics: the fiscal years Free sees against every view.
@@ -484,8 +484,8 @@ describe("the plan cards", () => {
     expect(pro).toContain(`<span>Tender notices, same day, every ${hours} hours</span>`);
     expect(free).toContain('<strong class="plan-amount">CA$0</strong>');
     const [freeFr, proFr] = await at("fr");
-    expect(freeFr).toContain(`<span>${RULES.free.saved_searches} recherches enregistrées, sur le site</span>`);
-    expect(proFr).toContain(`<span>${RULES.pro.saved_searches} recherches enregistrées, par courriel</span>`);
+    expect(freeFr).toContain(`<span>${RULES.free.saved_searches} recherches et bulletins, sur le site</span>`);
+    expect(proFr).toContain(`<span>${RULES.pro.saved_searches} recherches et bulletins, par courriel</span>`);
     expect(proFr).toContain(`<span>API : ${KEYS_MAX} clés de ${KEY_PER_DAY.toLocaleString("fr-CA").replace(/\s/g, " ")} requêtes par jour</span>`);
     // Your organization's page beside the competitors it compares, as many as org_claim allows.
     expect(pro).toContain(`<span>Your organization beside ${COMPETITORS_MAX} others</span>`);
@@ -863,12 +863,12 @@ describe("a Free account", () => {
     const token = await csrf(cookie, "/account/searches");
     for (const url of ["/tenders?segment=82", "/expiring", "/segments/82"]) await post("/account/searches", { csrf: token, url }, { cookie });
     const page = decode(await html("/account/searches", { cookie }));
-    expect(page).toContain(`<div class="panel-foot"><p class="pro-note">${CHIP_EN}This account holds 3 of 3 saved searches. Pro holds up to 25 and sends them by email, daily or weekly. <a href="/account/billing">Plans and prices</a></p></div>`);
+    expect(page).toContain(`<div class="panel-foot"><p class="pro-note">${CHIP_EN}This account holds 3 of 3 saved searches and briefings. Pro holds up to 25 and sends them by email, daily or weekly. <a href="/account/billing">Plans and prices</a></p></div>`);
     // The tender list is a kind the delivery job serves: its delivery reads Off in a note, no select.
     expect(page).toContain(`<p class="pro-note">${CHIP_EN}Off. Email delivery is part of Pro. <a href="/account/billing">Plans and prices</a></p>`);
     expect(page).not.toContain('<select name="deliver"');
     const fr = decode(await html("/account/searches?lang=fr", { cookie }));
-    expect(fr).toContain(`${CHIP_FR}Recherches enregistrées de ce compte : 3 sur 3. Pro en conserve jusqu’à 25 et les envoie par courriel, chaque jour ou chaque semaine.`);
+    expect(fr).toContain(`${CHIP_FR}Recherches enregistrées et bulletins de ce compte : 3 sur 3. Pro en conserve jusqu’à 25 et les envoie par courriel, chaque jour ou chaque semaine.`);
     expect(fr).toContain(`${CHIP_FR}Désactivé. L’envoi par courriel fait partie de Pro.`);
     // Pro: the select, the plain cap line, no chip.
     await grantPro(email);

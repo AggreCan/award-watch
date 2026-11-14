@@ -32,10 +32,11 @@ export const AccountsPrivacy: FC<{ lang: Lang; dashboard?: boolean }> = ({ lang,
 
 // The privacy page's Payments section while accounts are open, after the
 // accounts section. Reversals go with the payment notices after EVENT_DAYS
-// (billing.tsx, sweep).
-export const PaymentsPrivacy: FC<{ lang: Lang }> = ({ lang }) => (
+// (billing.tsx, sweep). ultra: Ultra is on sale (pages/docs.tsx), so the
+// first paragraph names both paid plans, as the Terms do from that day.
+export const PaymentsPrivacy: FC<{ lang: Lang; ultra?: boolean }> = ({ lang, ultra }) => (
   <>
-    <p>{t(lang, "billing.privacy_processor")}</p>
+    <p>{t(lang, ultra ? "billing.privacy_processor_ultra" : "billing.privacy_processor")}</p>
     <p>{t(lang, "billing.privacy_sent")}</p>
     <p>{t(lang, "billing.privacy_kept", { days: EVENT_DAYS })}</p>
     <p>{t(lang, "billing.privacy_delete")}</p>

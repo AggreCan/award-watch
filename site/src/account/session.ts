@@ -5,8 +5,9 @@
 // the hashes in constant time.
 //
 // The cookie is HttpOnly (no script reads it), Secure, SameSite=Lax (another
-// site's form post does not carry it) and lasts 30 days, extended on use (at
-// most once an hour, so a page view is not a write). The __Host- prefix makes
+// site's form post does not carry it) and lasts 30 days, extended by any
+// request that reads it (at most once an hour, so a page view is not a
+// write; refreshSessionCookie sends it back). The __Host- prefix makes
 // a browser refuse it unless it is Secure, on Path=/ and without a Domain, so
 // no other host under the domain can set or shadow it. Every form a session
 // posts also carries a CSRF value derived from the cookie's secret, which a
@@ -19,7 +20,7 @@
 // hour the request is treated as one the database cannot answer: a
 // revocation made through another isolate stands at most an hour unseen.
 
-import type { Context } from "hono";
+import type { Context, Next } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv, Env } from "../env";
 import type { Lang } from "../i18n";
@@ -122,10 +123,17 @@ type Row = {
 // One read per request: the shell and the page share it.
 const perRequest = new WeakMap<Request, Promise<SessionRead>>();
 
-export function readSession(c: Context<AppEnv>, opts: { touch?: boolean } = {}): Promise<SessionRead> {
+// The cookie of a session this request extended, to send back once the
+// answer is made (refreshSessionCookie).
+const extended = new WeakMap<Request, string>();
+
+// Whoever reads first, the shell, a control or an account route, the read
+// extends a session that stands and was last extended over an hour ago: any
+// page a signed-in reader opens counts as use (docs/accounts.md, Sign-in flow).
+export function readSession(c: Context<AppEnv>): Promise<SessionRead> {
   let read = perRequest.get(c.req.raw);
   if (!read) {
-    read = lookup(c, !!opts.touch);
+    read = lookup(c);
     perRequest.set(c.req.raw, read);
   }
   return read;
@@ -135,9 +143,27 @@ export function readSession(c: Context<AppEnv>, opts: { touch?: boolean } = {}):
 // signed out (the rail shows "Sign in", not the address just removed).
 export function markSignedOut(c: Context<AppEnv>): void {
   perRequest.set(c.req.raw, Promise.resolve({ state: "none" }));
+  extended.delete(c.req.raw);
 }
 
-async function lookup(c: Context<AppEnv>, touch: boolean): Promise<SessionRead> {
+// The extended session's cookie goes out on the answer, whatever made it (a
+// page, a redirect, a file, a 304), once it is made: an answer that already
+// sets the cookie (a new sign-in's, or a sign-out's that clears it) keeps
+// its own. The cookie carries the session's secret, so that answer is
+// private and no-store: no shared cache may keep it and hand it to another
+// reader. A page that names the signed-in address is already that (layout.tsx
+// page()); a 304 keeps its tag, which is taken from the body alone
+// (conditional.ts), and a browser takes a cookie from a 304 as from a 200.
+export async function refreshSessionCookie(c: Context<AppEnv>, next: Next): Promise<void> {
+  await next();
+  const raw = extended.get(c.req.raw);
+  if (!raw) return;
+  if (c.res.headers.getSetCookie().some((s) => s.startsWith(`${SESSION_COOKIE}=`))) return;
+  setCookie(c, SESSION_COOKIE, raw, cookieOptions(SESSION_DAYS * 86_400));
+  c.header("Cache-Control", "private, no-store");
+}
+
+async function lookup(c: Context<AppEnv>): Promise<SessionRead> {
   const db = c.env.ACCOUNTS;
   const raw = getCookie(c, SESSION_COOKIE);
   if (!db || !raw) return { state: "none" };
@@ -175,14 +201,14 @@ async function lookup(c: Context<AppEnv>, touch: boolean): Promise<SessionRead> 
     plan: plan.plan, planUntil: plan.until, sessionId: id, csrf: await csrfFor(secret), stale: false,
   };
   let expiresAt = row.expires_at;
-  if (touch && now.getTime() - Date.parse(row.last_seen_at) > TOUCH_MS) {
+  if (accountsEnabled(c.env) && now.getTime() - Date.parse(row.last_seen_at) > TOUCH_MS) {
     expiresAt = plusDays(now, SESSION_DAYS);
     try {
       await db.batch([
         db.prepare("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?").bind(at, expiresAt, id),
         db.prepare("UPDATE users SET last_seen_at = ? WHERE id = ?").bind(at, row.user_id),
       ]);
-      setCookie(c, SESSION_COOKIE, raw, cookieOptions(SESSION_DAYS * 86_400));
+      extended.set(c.req.raw, raw);
     } catch {
       expiresAt = row.expires_at; // the session keeps its old end; nothing else changes
     }

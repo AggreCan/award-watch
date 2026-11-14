@@ -291,7 +291,7 @@ describe("the cap", () => {
     await ACCOUNTS.prepare("INSERT INTO briefings (id, user_id, kind, subject, segment, label, lang, created_at, deliver) VALUES (?, ?, 'segment', '43', '', 'x', 'en', ?, 'off')")
       .bind(crypto.randomUUID(), await userId(email), new Date().toISOString()).run();
     expect((await press(fieldsOf(await html(LIST, cookie)), cookie)).headers.get("location")).toBe(LIST);
-    const NOTE = "This account holds 3 of 3 saved searches. Pro holds up to 25 and sends them by email, daily or weekly. Plans and prices";
+    const NOTE = "This account holds 3 of 3 saved searches and briefings. Pro holds up to 25 and sends them by email, daily or weekly. Plans and prices";
     // Another view of the list: the cap in place of the button.
     const OTHER = "/tenders?segment=43";
     const row = rowOf(await html(OTHER, cookie));
@@ -325,13 +325,13 @@ describe("the cap", () => {
     for (const [path, find] of [[LIST, rowOf], ["/segments/82", lineOf]] as const) {
       const part = find(await html(path, cookie));
       expect(part, path).toContain(
-        '<p class="muted small">This account holds 25 saved searches, the most an account keeps. <a href="/account/searches">Manage your saved searches</a></p>',
+        '<p class="muted small">This account holds 25 of 25 saved searches and briefings, the most an account keeps. <a href="/account/searches">Manage your saved searches</a></p>',
       );
       expect(part, path).not.toContain("<button");
       expect(part, path).not.toMatch(/\bPro\b|pro-tag|\/account\/billing|\/pro\b|\bmore\b|unlimited/i);
     }
     const fr = text(rowOf(await html("/tenders?lang=fr", cookie)));
-    expect(fr).toContain("Ce compte a 25 recherches enregistrées, le maximum qu'un compte conserve. <a href=\"/account/searches\">Gérer vos recherches enregistrées</a>");
+    expect(fr).toContain("Recherches enregistrées et bulletins de ce compte : 25 sur 25, le maximum qu'un compte conserve. <a href=\"/account/searches\">Gérer vos recherches enregistrées</a>");
     expect((await press({ csrf: await csrf(cookie), lang: "en", url: LIST, next: LIST }, cookie)).headers.get("location")).toBe(LIST);
     expect(await rows(email)).toHaveLength(25);
   });
@@ -342,7 +342,7 @@ describe("the cap", () => {
     await hold(email, 3);
     const row = text(rowOf(await html("/tenders?lang=fr", cookie)).replace(/<[^>]+>/g, ""));
     expect(row).toBe(
-      "Pro (forfait payant)Recherches enregistrées de ce compte : 3 sur 3. Pro en conserve jusqu'à 25 et les envoie par courriel, " +
+      "Pro (forfait payant)Recherches enregistrées et bulletins de ce compte : 3 sur 3. Pro en conserve jusqu'à 25 et les envoie par courriel, " +
       "chaque jour ou chaque semaine. Forfaits et prix",
     );
   });

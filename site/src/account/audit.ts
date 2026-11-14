@@ -23,6 +23,8 @@ export type AuditEvent =
   // The weekly email (weekly.ts): where it was turned on or off ("at sign-in",
   // "account"), or how the unsubscribe link was used ("link", "one_click").
   | "weekly_on" | "weekly_off" | "weekly_stopped"
+  // The language of the account's own mail, chosen on the overview: "en" or "fr".
+  | "mail_lang"
   // The refund of the first payment from the billing page (refund.ts):
   // refund_requested and refund_cancel_failed carry the subscription's Stripe
   // id (the daily check reads it, watchdog.ts), refund_refused a fixed reason,

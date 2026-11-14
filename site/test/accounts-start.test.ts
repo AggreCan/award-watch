@@ -70,7 +70,7 @@ describe("the first steps on the account overview", () => {
       "On a result's profile, use the Follow button. Its events then show on your watches page: a new award, an amendment, an end date near, " +
         "a new or closed notice. This account follows 0 of 3 pages. Pro follows up to 25 and sends their events by email.",
       "Set the filters there, then press Save this search. " +
-        "This account holds 0 of 3 saved searches. Pro holds up to 25 and sends them by email, daily or weekly.",
+        "This account holds 0 of 3 saved searches and briefings. Pro holds up to 25 and sends them by email, daily or weekly.",
       "Tell the site which organization is yours to see its records by fiscal year on one page. The choice is private to your account.",
     ]);
     // The figures, not the chip: the panel holds no Pro mark and no link to the plans.
@@ -86,7 +86,7 @@ describe("the first steps on the account overview", () => {
     const cookie = await signIn(email);
     const before = mainOf(await overview(cookie));
     const lists = text(before);
-    expect(lists).toContain('<li><a href="/account/searches">Saved searches</a><span class="num">0 of 3</span></li>');
+    expect(lists).toContain('<li><a href="/account/searches">Saved searches and briefings</a><span class="num">0 of 3</span></li>');
     expect(lists).toContain('<li><a href="/account/watches">Watches</a><span class="num">0 of 3</span></li>');
     expect(lists).toContain('<a href="/account/organization">Your organization</a><span class="kv-note">None chosen yet</span>');
     await addWatch(cookie);
@@ -163,7 +163,7 @@ describe("the first steps on the account overview", () => {
       "On a result's profile, use the Follow button. Its events then show on your watches page and come by email: a new award, an amendment, " +
         "an end date near, a new or closed notice. This account follows 0 of 25 pages.",
       "Set the filters there, then press Save this search. " +
-        "This account holds 0 of 25 saved searches. Each can be sent by email, daily or weekly.",
+        "This account holds 0 of 25 saved searches and briefings. Each saved search can be sent by email, daily or weekly.",
       "Tell the site which organization is yours to see, on one page, its records by fiscal year and segment, its contracts ending within " +
         "12 months and the buyers it has won from. The choice is private to your account.",
     ]);
@@ -192,7 +192,7 @@ describe("the first steps on the account overview", () => {
         "attribution, une modification, une fin proche, un avis nouveau ou fermé. Pages suivies par ce compte : 0 sur 3. Pro en suit " +
         "jusqu'à 25 et envoie leurs événements par courriel.",
       "Choisissez-y les filtres, puis appuyez sur Enregistrer cette recherche. " +
-        "Recherches enregistrées de ce compte : 0 sur 3. Pro en conserve jusqu'à 25 et les envoie par courriel, chaque jour ou chaque semaine.",
+        "Recherches enregistrées et bulletins de ce compte : 0 sur 3. Pro en conserve jusqu'à 25 et les envoie par courriel, chaque jour ou chaque semaine.",
       "Indiquez au site quelle organisation est la vôtre pour voir ses dossiers par exercice sur une même page. Ce choix reste privé à votre compte.",
     ]);
     expect(text(html)).not.toMatch(/Start Here|Follow an organization|Save a search|Choose your organization/);
@@ -210,7 +210,7 @@ describe("the first steps on the account overview", () => {
       "Sur le profil d'un résultat, utilisez le bouton Suivre. Ses événements s'affichent ensuite sur votre page des suivis et arrivent par " +
         "courriel : une nouvelle attribution, une modification, une fin proche, un avis nouveau ou fermé. Pages suivies par ce compte : 0 sur 25.",
       "Choisissez-y les filtres, puis appuyez sur Enregistrer cette recherche. " +
-        "Recherches enregistrées de ce compte : 0 sur 25. Chacune peut être envoyée par courriel, chaque jour ou chaque semaine.",
+        "Recherches enregistrées et bulletins de ce compte : 0 sur 25. Chaque recherche peut être envoyée par courriel, chaque jour ou chaque semaine.",
       "Indiquez au site quelle organisation est la vôtre pour voir au même endroit ses dossiers par exercice et par segment, ses contrats " +
         "prenant fin d'ici 12 mois et les acheteurs auprès desquels elle a obtenu des contrats. Ce choix reste privé à votre compte.",
     ]);

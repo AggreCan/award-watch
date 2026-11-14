@@ -9,8 +9,9 @@
 // A report keeps the page (a path on the site), what happened and what was
 // expected, as typed, with the user id and the time. Five per user in any
 // 24 hours, counted inside the insert so posts sent together cannot pass
-// the cap. Rows go after BUG_REPORT_DAYS (signin.ts, sweep) and with the
-// account (routes.tsx, deleteAccount).
+// the cap; the same report from the same account within ten minutes is
+// stored and sent once (store). Rows go after BUG_REPORT_DAYS (signin.ts,
+// sweep) and with the account (routes.tsx, deleteAccount).
 //
 // The message takes the daily check's path (watchdog.ts): the ALERTS binding,
 // from ALERT_FROM to ALERT_EMAIL, a destination verified in the zone's Email
@@ -164,15 +165,26 @@ export function sentView(lang: Lang) {
 export type BugReport = { id: string; userId: string; plan: string; lang: Lang; page: string | null; text: string; expected: string | null };
 
 // One insert, held to BUG_REPORTS_PER_DAY in the 24 hours before it inside
-// the statement. False when the cap is reached.
-async function store(env: Env, r: BugReport, now: Date): Promise<boolean> {
-  const res = await env.ACCOUNTS!.prepare(
+// the statement, and to one copy of the same report (the same page, text and
+// expected) from the account in the BUG_REPEAT_MS before it: the form posted
+// again by a reload of the "sent" page stores nothing and sends nothing.
+// "repeat" for that one, "limited" when the cap is reached.
+export const BUG_REPEAT_MS = 10 * 60_000;
+
+async function store(env: Env, r: BugReport, now: Date): Promise<"stored" | "repeat" | "limited"> {
+  const db = env.ACCOUNTS!;
+  const since = new Date(now.getTime() - BUG_REPEAT_MS).toISOString();
+  const res = await db.prepare(
     "INSERT INTO bug_reports (id, user_id, page, text, expected, created_at) " +
-    "SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM bug_reports WHERE user_id = ? AND created_at > ?) < ?",
+    "SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE (SELECT COUNT(*) FROM bug_reports WHERE user_id = ?2 AND created_at > ?7) < ?8 " +
+    "AND NOT EXISTS (SELECT 1 FROM bug_reports WHERE user_id = ?2 AND created_at > ?9 AND page IS ?3 AND text = ?4 AND expected IS ?5)",
   ).bind(
-    r.id, r.userId, r.page, r.text, r.expected, now.toISOString(), r.userId, new Date(now.getTime() - DAY_MS).toISOString(), BUG_REPORTS_PER_DAY,
+    r.id, r.userId, r.page, r.text, r.expected, now.toISOString(), new Date(now.getTime() - DAY_MS).toISOString(), BUG_REPORTS_PER_DAY, since,
   ).run();
-  return (res.meta?.changes ?? 0) === 1;
+  if ((res.meta?.changes ?? 0) === 1) return "stored";
+  const repeat = await db.prepare("SELECT 1 AS x FROM bug_reports WHERE user_id = ?1 AND created_at > ?2 AND page IS ?3 AND text = ?4 AND expected IS ?5")
+    .bind(r.userId, since, r.page, r.text, r.expected).first();
+  return repeat ? "repeat" : "limited";
 }
 
 // Base64 in lines of 76: a report may hold accented letters and a line of
@@ -258,9 +270,10 @@ export async function fileBug(c: Context<AppEnv>, who: Account, fields: Record<s
   const report: BugReport = {
     id: newId(), userId: who.userId, plan: who.plan, lang, page, text: values.text, expected: values.expected || null,
   };
-  if (!(await store(c.env, report, now))) {
-    return accountPage(c, t(lang, "bugs.title"), formView(lang, who, values, ["bugs.err_limited"]), 429);
-  }
+  const stored = await store(c.env, report, now);
+  if (stored === "limited") return accountPage(c, t(lang, "bugs.title"), formView(lang, who, values, ["bugs.err_limited"]), 429);
+  // The same report again within minutes (a reload of the page below): it was sent, and is not sent twice.
+  if (stored === "repeat") return accountPage(c, t(lang, "bugs.sent_title"), sentView(lang));
   const sent = await sendToOperator(c.env, report, now);
   await audit(c.env, who.userId, "bug_reported", sent, now);
   return accountPage(c, t(lang, "bugs.sent_title"), sentView(lang));

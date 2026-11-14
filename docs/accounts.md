@@ -48,7 +48,10 @@ the schema is `site/accounts_schema.sql`; the tests are
   address a calendar app subscribes to, its open notices' closings as
   events (*Calendar feeds*). Every notice and contract page also offers its
   closing or end date as a one-event file, to any reader.
-- **API keys.** Issued and revoked on the account; shown once. A key of a
+- **API keys.** Issued and revoked on the account; shown once, with a Copy
+  button. An account's live keys each have their own name: a post naming a
+  live key's name (the create form posted again by a reload) makes no key
+  and says a key of that name exists. A key of a
   Pro account opens the keyed API under `/api/v1` (*The keyed API*); the
   keys page shows each key's requests today and over 30 days. The usage
   page, `/account/api` (linked from the keys page's head and the account's
@@ -148,7 +151,19 @@ cascade). The sweep runs with each sign-in request.
    and sets the cookie `__Host-aw_session` (`HttpOnly`, `Secure`, `SameSite=Lax`,
    `Path=/`, 30 days). The cookie holds the session id and a 32-byte
    secret; the row holds the secret's hash. The session is extended to 30
-   days from the last use, at most once an hour. The `__Host-` prefix makes
+   days from the last use, at most once an hour. Any request that reads the
+   session is a use, whoever reads it first: a public list, the app home, a
+   profile, the dashboard, an account page (`session.ts` `readSession`). The
+   cookie goes back on that request's answer once it is made
+   (`refreshSessionCookie`, after the handlers and around the 304 check), and
+   that answer is sent `private, no-store`, since the cookie carries the
+   secret; an answer that sets the cookie itself (a new sign-in, a sign-out)
+   keeps its own. A 304 carries the cookie with its tag unchanged, the tag
+   being taken from the body. The page the address signed in from on its
+   first sign-in sets the account's mail language (`users.lang`); a later
+   sign-in leaves it, and the overview changes it (*Mail language*). The
+   code field takes a pasted code with spaces around or inside it, which the
+   check strips. The `__Host-` prefix makes
    a browser refuse the cookie unless it is `Secure`, on `Path=/` and
    without a `Domain`, so no other host under the domain can set or shadow
    it. A session the browser already held, for this account or another,
@@ -168,7 +183,23 @@ along stays in the form's panel, above the list; the code step is unchanged.
 
 Both sign-in posts count against `AUTH_LIMIT` (5 a minute per address) while
 the switch is on. Every signed-in form carries a CSRF value derived from the
-cookie's secret, checked on the post.
+cookie's secret, checked on the post. A post whose value is not the
+session's, most often a form opened before this browser signed in again (a
+sign-in revokes the session it replaces, and the open tabs keep its value),
+does nothing and answers 403 with a page in the site's shell: "This form was
+opened under an earlier sign-in, and nothing was sent." and a link to reload
+the page the form was on (its `Referer` on this site, held to `safeNext`;
+else the account page).
+
+### Mail language
+
+The overview's Account panel shows the language the account's own mail goes
+out in (`users.lang`: the watch mail and the weekly email), with one
+link-styled button that switches it between English and French (`POST
+/account/mail-language`, `mail_lang=en|fr`, with the CSRF value; the audit
+row `mail_lang` carries the language). A saved search, a briefing and a
+saved view keep the language of the page each was saved from, as the line
+under the row says.
 
 ## The switch
 
@@ -450,7 +481,18 @@ the console is the safer way, since its batch is one transaction.
   IP address) on both sign-in posts; 5 requests an hour per email in the
   database. The keyed API adds `KEY_LIMIT` (600 a minute per key, keyed by
   the key's id) on top of `API_LIMIT` (60 a minute per address), and a
-  daily quota per key in the database (*The keyed API*).
+  daily quota per key in the database (*The keyed API*). The dashboard's
+  posts and the saved views' count against `EDIT_LIMIT` (60 a minute per
+  address, namespace 2012), apart from `FORM_LIMIT`'s 5, so a long
+  rearrangement leaves the billing posts and the bug report their own
+  count. A refusal to a browser's navigation (a form post, or a page a
+  browser asks for: `Sec-Fetch-Mode: navigate` or an `Accept` naming
+  `text/html`) is a page in the site's shell, in the reader's language, with
+  the line and a link back to the page the browser came from (its `Referer`
+  on this site, held to `safeNext`; else the account page, or the home page
+  while the switch is off), keeping the 429 and `Retry-After: 60`
+  (`site/src/limit_page.tsx`). Any other request keeps the plain text line,
+  and the API its JSON.
 - **Cross-site posts refused.** Every POST checks `Origin`; the session
   cookie is `SameSite=Lax`; every signed-in form carries a CSRF value. A
   post without `Origin` (not a browser) is let through.
@@ -582,7 +624,9 @@ A post passes the usual guards (session, CSRF, `Origin`) and counts against
 `FORM_LIMIT` with the other forms (`bucketFor` in `site/src/limits.ts`; while
 the switch is off it counts as a page, as any unknown path does). It stores the row (at most 5 per account
 in any 24 hours, counted inside the insert; a sixth answers the form with a
-message, 429), then sends the operator a plain-text message through the
+message, 429; the same page, text and expected from the same account within
+ten minutes, the form posted again by a reload of the answer, is neither
+stored nor sent, and answers the same "sent" page), then sends the operator a plain-text message through the
 daily check's path: the `ALERTS` binding, from `ALERT_FROM` to
 `ALERT_EMAIL`. `MAIL` is never used for it. The subject is "Bug report from
 a Pro account"; the body (base64, since a report can hold accents and long
@@ -619,11 +663,24 @@ The states: the button; `Search saved` (`Recherche enregistrée`) and the line
 `Manage your saved searches`, both links to `/account/searches`, as a saved
 briefing reads, once the page's filter is saved; at the plan's cap, for
 Free the searches page's own gate note (`account.cap_note`, with the Pro chip
-and the link to the plans), for Pro "This account holds 25 saved searches,
-the most an account keeps." with the searches page's link. One statement
-reads both, the filter's row by the table's unique key and the account's
-count with its briefings, which share the cap (`searches.ts`
+and the link to the plans), for a paid plan what the account holds of its
+figure, the briefings counted with the searches: "This account holds 25 of
+25 saved searches and briefings. Ultra holds up to 100." while Ultra is on
+sale above the plan's figure, "This account holds 25 of 25 saved searches
+and briefings, the most an account keeps." otherwise (`searches.ts`
+`paidCapLine`), with the searches page's link. One statement reads all of
+it, the filter's row (its id and its email) by the table's unique key and
+the account's count with its briefings, which share the cap (`searches.ts`
 `searchState`).
+
+A saved search is kept with its email off on every plan, and nothing turns
+it on by itself. To a plan with delivery, a saved search whose email is off
+reads so beside `Search saved`: "Its email is off." with `Email it daily`
+and `Email it weekly`, link-styled buttons that post `deliver` to `POST
+/account/searches/<id>` with `next`, this page, where the answer returns
+(held to `safeNext`). On a toolbar they submit the row's detached form to
+that address (`formaction`); under a head they are a form of their own. The
+searches page says the same under each such search's delivery select.
 
 A press is `POST /account/searches`, the searches page's own Add a Search
 post, with one more field: `next`, the page to return to. The address in
@@ -1238,7 +1295,7 @@ saying the counts cannot be read. The tests are
 | `GET /api/v1/search` | the hosted search's own statements (`site/src/search_db.ts`) | `q` (required, at most 200 characters, folded to eight words), `page` (1 to 200) | 50 organizations a page; buyers on page 1 |
 | `GET /api/v1/organizations/{id}/records` | the records database (`ORG_RECORDS_SQL`) | `source` (required: `awards`, `history`, `contracts`, `grants`), `year`, `page` (1 to 50) | 100 rows a page; the ten fiscal years ending with the data date's, or the one asked for; through `records_org` |
 | `GET /api/v1/buyers/{id}/records` | the records database (`BUYER_RECORDS_SQL`) | as above | as above, through `records_buyer` |
-| `GET /api/v1/me` | nothing past the checks | none | the key's prefix, plan, plan end, the day's count, the limits |
+| `GET /api/v1/me` | nothing past the checks | none | the key's prefix, plan, plan end, the day's count, the limits: `per_minute` and `per_day` for the key, `per_minute_per_address` (60, `API_LIMIT`) for the address every request meets first |
 
 A parameter an endpoint does not take, a single-valued one given twice, or a
 value it cannot use is a 400 whose message names no value from the request.
@@ -1289,7 +1346,8 @@ the further-segment rows it passes over, so a key spending its whole day on
 the deepest pages reads about 100 million rows: some 3 billion in a month,
 an eighth of the 25 billion D1 includes. The per-address cap (60 a minute)
 still applies, so 600 a minute matters only for a key used from several
-addresses. Ultra's 50,000 a day serves one machine's steady script (one
+addresses; the keys page's note and `/me` state the 60 beside the 600, so a
+script pacing itself from one machine paces to the 60. Ultra's 50,000 a day serves one machine's steady script (one
 address is held to 86,400 a day); its five keys at the cap make 7.5 million
 requests a month, inside the Workers plan's 10 million.
 
@@ -1946,6 +2004,9 @@ is true:
   to Ultra through the sign-in page, in place of the waitlist form;
 - the Terms' paid-plan section covers Pro and Ultra, with Moving Between
   Plans after the renewal (the Pro terms stay word for word until then);
+- the Privacy page's Payments section names both plans in its first
+  paragraph ("Pro and Ultra are paid for on Stripe's own pages", sold
+  through Link), as its accounts section adds what a dashboard keeps;
 - the billing page offers Ultra's checkout and the moves; and the Ultra
   message may be sent from the console (*The Ultra message*).
 
@@ -2184,10 +2245,16 @@ claimed organization's profile shard. A Free or Pro reader reads no records.
 | `POST /account/dashboard/panels/:id/width` | `wide` 1 or 0 |
 | `POST /account/dashboard/panels/:id/delete` | remove it |
 
-Every post is behind the session, the CSRF value and the Origin, in the form
-bucket (`FORM_LIMIT`, 5 a minute). A post returns to the dashboard with what
-happened (`?m=added`, `full`, `briefings_full`, `unsaved`), in edit mode from
-the page's own controls. The page is `private, no-store`.
+Every post is behind the session, the CSRF value and the Origin, in a
+bucket of its own with the saved views' posts (`EDIT_LIMIT`, 60 a minute
+per address; `bucketFor` "edit"), so a rearrangement never spends the
+forms' 5. A post returns to the dashboard with what happened (`?m=added`,
+`full`, `briefings_full`, `unsaved`), in edit mode from the page's own
+controls, at the place the change was made: a move or a width at the
+panel's own anchor (`#panel-<id>`), an add at the panel added (or found
+added), a removal at the panel that took its place, else the one before it,
+else Add a Panel (`#dash-add`). A refusal stays at the top, where its line
+is. The page is `private, no-store`.
 
 ### The starting layout
 
@@ -2198,6 +2265,17 @@ tender searches, and the API panel when it holds a live key. Its first
 change (an add, a move, a width, a removal) writes the starting layout as its
 rows, then applies the change, so the panels the reader kept stay where they
 were.
+
+The starting layout appears only before the account's first change. A
+removal that leaves the account no panel (from the page, or with the saved
+search, briefing or view the panel showed) writes, in the same batch, a
+marker row of the kind `layout` (`LAYOUT_MARKER`; ref `''`, place -1; the
+table has no CHECK on `kind`, so no schema change). No page shows it, no
+post can name it, and no count or place takes it (`ADD_PANEL_SQL`, the
+panel count, the order a move rewrites). An account holding the marker and
+no panel sees an empty dashboard with Add a Panel, edit mode or not, and its
+next add writes that panel alone. Deleting the account removes the marker
+with the panels.
 
 ### What each reader sees
 
@@ -2235,8 +2313,8 @@ and every post say the layout cannot be saved yet.
 
 ### Known limits
 
-- The form bucket's 5 posts a minute holds a long rearrangement: a panel
-  moves one place a post.
+- A panel moves one place a post; the dashboard's own bucket (60 a minute)
+  holds a rearrangement of every panel several times over.
 - A saved search's label is shown as it was saved, in the language of the
   page it was saved from; the searches page rebuilds it in the page's
   language.
@@ -2366,8 +2444,8 @@ with `List-Unsubscribe` and its one-click partner.
 | `POST /account/views/:id/delete` | remove it, and its dashboard panel |
 | `GET`, `POST /account/stop?v=&t=` | the view's stop page, and turning its email off (one-click too) |
 
-Every post is behind the session, the CSRF value and the Origin, in the form
-bucket (`FORM_LIMIT`). The audit records `view_saved` (the kind),
+Every post is behind the session, the CSRF value and the Origin, in the
+dashboard's bucket (`EDIT_LIMIT`, 60 a minute per address). The audit records `view_saved` (the kind),
 `view_changed` (the cadence), `view_removed` and `view_stopped`, never the
 address or the name.
 
@@ -2694,7 +2772,15 @@ from `rec_events` in the records database (`docs/analytics.md`, *Events*).
   form adds a choice of the whole buyer or one of the 57 segments. The label
   is read from the data, never typed. A followed page reads `Following` and
   links the watches page. A Free account at its cap sees the cap with the Pro
-  chip instead of the button; Pro at 25 sees the cap.
+  chip instead of the button; a paid account at its figure sees what it
+  follows of it: "This account follows 25 of 25 pages. Ultra follows up to
+  100." while Ultra is on sale above the plan's figure, "This account follows
+  25 of 25 pages, the most an account keeps." otherwise (`watch_pages.tsx`
+  `paidWatchCapLine`; the watches page's notice for a refused post says the
+  same). The line under the button says the events come by email only while
+  the account's own watch mail is on (its `watch_mail` row, on when there is
+  none yet, since the first watch writes it on); a Pro account that turned
+  its watch mail off reads that they show on the watches page.
 - `/account/watches` lists each watch with its events of the last 30 data
   dates (the 10 newest of each kind, then how many more), the newest day any
   event was found on, the kinds it follows (checkboxes, at least one) and, on
@@ -3580,10 +3666,22 @@ are `site/test/briefings.test.ts`.
 - Briefings and saved searches share one cap (3 on Free, 25 on Pro, 100 on Ultra): each
   insert counts both tables inside the statement, so two posts at once cannot
   pass it. `addSearch` does the same (it counts the searches alone while the
-  `briefings` table is not on the database yet).
+  `briefings` table is not on the database yet). Every page states that one
+  count, both tables with the same fallback (`searches.ts` `heldCount`): the
+  overview's "Saved searches and briefings" row, the searches page's count,
+  Save this search and each cap line, which says what the account holds
+  ("This account holds 20 of 25 saved searches and briefings"). The plan
+  cards' row and the Pro page's answers name both: "25 saved searches and
+  briefings, by email".
 - `/account/searches` lists the briefings in their own panel: delivery
   (weekly or off; Free sees the gate note), the newest run, Remove. Turning
   delivery on is Pro's (`POST /account/briefings/:id`).
+- Nothing turns a briefing's email on by itself: one saved on Free (or with
+  its email turned off) stays off after a plan with delivery starts. To such
+  a plan, a saved briefing whose email is off says so, "Its weekly email is
+  off.", under "Briefing saved" on its page with `Turn it on`, which posts
+  `deliver=weekly` and `next` (the page, held to `safeNext`, where the
+  answer returns), and under its delivery on the searches page.
 
 ### The message
 
