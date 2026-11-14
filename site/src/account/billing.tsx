@@ -35,13 +35,13 @@ import { CONTACT_EMAIL } from "../contact";
 import { PlanCards, planCards, type PlanReader } from "../pro";
 import { audit } from "./audit";
 import { type PaidPlan, type Plan, entitlementWrites, isPaidPlan, planFor, planRank, withTiers } from "./entitlements";
-import { accountPage, planLine } from "./pages";
+import { type DeleteFacts, accountPage, planLine } from "./pages";
 import {
   INTERVALS, type Interval, type Notice, type PaymentSource, type SubscriptionState, isInterval, paymentSource, ultraOnSale,
 } from "./payments";
 import { newId, plusDays } from "./secrets";
 import type { Account } from "./session";
-import { pendingUltra, planOfSubscription } from "./stripe";
+import { SESSION_RE, pendingUltra, planOfSubscription } from "./stripe";
 
 // Days of Pro past the end of a paid period: room for a renewal whose
 // payment or notice is late, so a paying user is not dropped for an hour.
@@ -93,14 +93,39 @@ export type BillingLine = { stripe: boolean; periodEnd: string | null };
 // the plan as before, since the payment tables are applied by hand. An
 // Ultra row says pro in entitlements (its tier is beside it), so it reads as
 // a Stripe row here too.
+//
+// The period paid is the row's own end less the grace: a row is written and
+// extended only by a paid notice, to the paid period's end plus GRACE_DAYS
+// (grant, switchPlan, lowerTo), so it never names a period not paid yet.
+// The subscription's current_period_end moves forward at the renewal, before
+// its payment is taken, and stays there through past_due.
 export async function billingLine(env: Env, userId: string, now = new Date()): Promise<BillingLine | null> {
   try {
     const row = await env.ACCOUNTS!.prepare(
-      "SELECT (SELECT plan || ' ' || source FROM entitlements WHERE user_id = ?1 AND revoked_at IS NULL AND starts_at <= ?2 " +
-      "AND (ends_at IS NULL OR ends_at > ?2) ORDER BY created_at DESC, id DESC LIMIT 1) AS top, " +
-      "(SELECT current_period_end FROM payment_customers WHERE user_id = ?1) AS period_end",
-    ).bind(userId, now.toISOString()).first<{ top: string | null; period_end: string | null }>();
-    return { stripe: row?.top === "pro stripe", periodEnd: row?.period_end ?? null };
+      "SELECT plan, source, ends_at FROM entitlements WHERE user_id = ?1 AND revoked_at IS NULL AND starts_at <= ?2 " +
+      "AND (ends_at IS NULL OR ends_at > ?2) ORDER BY created_at DESC, id DESC LIMIT 1",
+    ).bind(userId, now.toISOString()).first<{ plan: string; source: string; ends_at: string | null }>();
+    const stripe = row?.plan === "pro" && row.source === "stripe";
+    const end = stripe && row.ends_at ? Date.parse(row.ends_at) : NaN;
+    return { stripe, periodEnd: Number.isFinite(end) ? plusDays(new Date(end), -GRACE_DAYS) : null };
+  } catch {
+    return null;
+  }
+}
+
+// The paid plan the bound subscription last paid for: its newest Stripe row,
+// ended or not, read through the tier table; null when it has none or the
+// rows cannot be read. For the lines that name the plan once it has ended
+// (the overdue note, the delete page), when the account's plan is Free.
+export async function subscriptionPlan(env: Env, userId: string, subscriptionId: string | null): Promise<PaidPlan | null> {
+  if (!subscriptionId) return null;
+  try {
+    const row = await withTiers((tiers) => env.ACCOUNTS!.prepare(
+      `SELECT ${tiers ? "COALESCE(t.tier, e.plan)" : "e.plan"} AS plan FROM entitlements e ` +
+      (tiers ? "LEFT JOIN entitlement_tiers t ON t.entitlement_id = e.id " : "") +
+      "WHERE e.user_id = ?1 AND e.source = 'stripe' AND e.reference = ?2 ORDER BY e.created_at DESC, e.id DESC LIMIT 1",
+    ).bind(userId, subscriptionId).first<{ plan: string }>());
+    return isPaidPlan(row?.plan) ? row.plan : null;
   } catch {
     return null;
   }
@@ -256,6 +281,9 @@ export function billingView(
     // Ultra's two figures while it is on sale (ultraOnSale), else null; and
     // the plan the Subscribe panel offers (?plan=ultra, Pro otherwise).
     ultra?: Readonly<Record<Interval, string>> | null; chosen?: PaidPlan;
+    // The plan the bound subscription last paid for (subscriptionPlan), for
+    // the overdue note once the account's own plan has ended.
+    lastPlan?: PaidPlan | null;
   },
 ) {
   const { offer, row, canManage } = state;
@@ -271,6 +299,11 @@ export function billingView(
     : null;
   // The refund's messages name the contact address, the days and the plan; the other errors have none of them to fill.
   const vars = { email: CONTACT_EMAIL, days: REFUND_DAYS, plan: planName(lang, paid ?? "pro") };
+  // A subscription that can still bill while the plan is Free (past_due past
+  // its grace, unpaid, a payment refunded or disputed): its plan is named by
+  // what it paid for, and the note says how to get that plan back.
+  const ended = live && !paid;
+  const notePlan = ended ? planName(lang, state.lastPlan ?? "pro") : vars.plan;
   // Stripe's page moves between the plans too while both are on sale, or for an Ultra subscriber.
   const manageKey: Key = ultra || paid === "ultra" ? "billing.manage_text_ultra" : "billing.manage_text";
   return (
@@ -280,8 +313,10 @@ export function billingView(
       {state.errors?.length ? <ul class="errors" role="alert">{state.errors.map((e) => <li>{t(lang, e, vars)}</li>)}</ul> : null}
       {state.notice ? <p class="account-notice" role="status">{state.notice}</p> : null}
       {live && row ? (
-        <Panel title={t(lang, "billing.panel_subscription")} class="panel-form">
-          {overdue ? <p role="status"><strong>{t(lang, "billing.past_due_note", { plan: vars.plan })}</strong></p> : null}
+        <Panel title={t(lang, "billing.panel_subscription")} id="subscription" class="panel-form">
+          {overdue ? (
+            <p role="status"><strong>{t(lang, ended ? "billing.past_due_note_ended" : "billing.past_due_note", { plan: notePlan })}</strong></p>
+          ) : null}
           <dl class="wide">
             <dt>{t(lang, "billing.field_status")}</dt>
             <dd>{t(lang, STATUS_KEY[row.status ?? ""] ?? "billing.status_other")}</dd>
@@ -301,9 +336,10 @@ export function billingView(
       ) : null}
       {move ? <MovePanel lang={lang} account={account} move={move} ultra={ultra} /> : null}
       {live && state.refund ? <RefundPanel lang={lang} account={account} step={state.refund} plan={vars.plan} /> : null}
-      {/* Free beside Pro (and Ultra while it is on sale), the account's own plan marked; a plan's link leads to its Subscribe panel below. */}
+      {/* Free beside Pro (and Ultra while it is on sale), the account's own plan marked; a plan's link leads to its Subscribe
+          panel below, or, while a subscription can still bill and that panel is not drawn, to the subscription's own panel. */}
       <Panel title={t(lang, ultra ? "billing.panel_plans" : "billing.panel_pro")}>
-        <PlanCards lang={lang} plans={planCards(lang, { price: offer, ultra, reader: readerOf(account.plan), place: "billing", chosen, move })} />
+        <PlanCards lang={lang} plans={planCards(lang, { price: offer, ultra, reader: readerOf(account.plan), place: "billing", chosen, move, live })} />
       </Panel>
       {live ? null : (
         <Panel title={t(lang, chosen === "ultra" ? "billing.panel_subscribe_ultra" : "billing.panel_subscribe")} id="subscribe" class="panel-form">
@@ -381,9 +417,10 @@ export async function billingPage(
   const ultra = (await ultraOnSale(c.env)) ? source.offerFor("ultra") : null;
   const noticeKey = refundNotice(asked) ?? (ultra || who.plan === "ultra" ? moveNotice(c.req.query("move") ?? "") : null);
   const notice = noticeKey ? t(lang, noticeKey, { plan: planName(lang, isPaidPlan(who.plan) ? who.plan : "pro") }) : null;
+  const lastPlan = !isPaidPlan(who.plan) && liveSubscription(row) ? await subscriptionPlan(c.env, who.userId, row!.subscription_id) : null;
   const view = billingView(lang, who, {
     offer: source.offer(), canManage: source.kind !== "stub", row, line, errors: extra.errors, refund, notice,
-    ultra, chosen: c.req.query("plan") === "ultra" ? "ultra" : "pro",
+    ultra, chosen: c.req.query("plan") === "ultra" ? "ultra" : "pro", lastPlan,
   });
   return accountPage(c, t(lang, "billing.title"), view, extra.status ?? 200);
 }
@@ -398,8 +435,17 @@ const planField = (v: string | undefined): PaidPlan | null => (v === undefined |
 // A user whose subscription can still bill goes to the portal, where it is
 // changed: a second checkout would start a second subscription (a page left
 // open from before the first one, say). Ultra is bought only while it is on
-// sale; the idempotency key names the user and the minutes, not the plan, so
-// a checkout of the other plan in the same ten minutes answers busy.
+// sale; the idempotency key names the user, the plan, the interval, the
+// language and the ten minutes (stripe.ts), so another choice starts its own
+// checkout and a returning customer's other open one is expired. The success
+// address carries Stripe's {CHECKOUT_SESSION_ID} template ("Add the
+// {CHECKOUT_SESSION_ID} template variable to the success_url when you create
+// the Checkout Session ... this happens automatically after your customer
+// pays and is redirected to the success page",
+// docs.stripe.com/payments/checkout/custom-success-page), which the
+// overview reads on the way back (bindReturn).
+export const CHECKOUT_SESSION_TEMPLATE = "{CHECKOUT_SESSION_ID}";
+
 export async function startCheckout(c: Context<AppEnv>, who: Account, fields: Record<string, string>, base: string): Promise<Response> {
   const lang = c.get("lang");
   const interval = fields.interval;
@@ -412,12 +458,45 @@ export async function startCheckout(c: Context<AppEnv>, who: Account, fields: Re
   if (liveSubscription(row)) return openPortal(c, who, base);
   const url = await source.checkoutUrl({
     userId: who.userId, email: who.email, plan, interval, lang, customerId: row?.customer_id ?? null,
-    successUrl: `${base}/account?billing=${plan === "ultra" ? "done_ultra" : "done"}${langQuery(lang, "&")}`,
+    successUrl: `${base}/account?billing=${plan === "ultra" ? "done_ultra" : "done"}${langQuery(lang, "&")}&session=${CHECKOUT_SESSION_TEMPLATE}`,
     cancelUrl: plan === "ultra" ? `${base}/account/billing?plan=ultra${langQuery(lang, "&")}` : `${base}/account/billing${langQuery(lang, "?")}`,
   });
   if (url === "busy") return billingPage(c, who, { errors: ["billing.err_busy"], status: 409 });
   if (!url) return billingPage(c, who, { errors: ["billing.err_service"], status: 503 });
   return c.redirect(url, 303);
+}
+
+// The way back from Stripe's checkout (/account?billing=done&session=<id>):
+// the session is read from Stripe and, when it was made for this account and
+// is complete, its customer and subscription are bound with the
+// subscription's status as Stripe gives it, the way the checkout notice's
+// bind does. So a payer whose first notices failed (Stripe retries them for
+// up to three days) is sent to the portal by Subscribe instead of starting a
+// second subscription. Nothing is granted here: the plan stays with the
+// signed notices. Any failure (an id of another shape, Stripe unreachable,
+// another account's session, a session not complete, a fault) binds nothing
+// and the page answers as before; nothing is logged but the call's status.
+export async function bindReturn(env: Env, who: Account, sessionId: string, now = new Date()): Promise<void> {
+  if (!SESSION_RE.test(sessionId)) return;
+  const source = paymentSource(env);
+  if (source.kind === "stub") return;
+  try {
+    const session = await source.checkoutSession(sessionId);
+    if (!session || session === "missing" || !session.complete || session.userId !== who.userId) return;
+    if (!session.customerId || !session.subscriptionId) return;
+    const state = await source.subscription(session.subscriptionId);
+    if (!state || state === "missing" || state.customerId !== session.customerId) return;
+    if (state.userId !== null && state.userId !== who.userId) return;
+    const run: Run = { env, db: env.ACCOUNTS!, source, now, at: now.toISOString() };
+    const { bound, before } = await bind(run, who.userId, {
+      customerId: session.customerId, subscriptionId: session.subscriptionId, status: state.status, periodEnd: state.periodEnd,
+    });
+    if (bound && before?.subscription_id !== session.subscriptionId) {
+      await audit(env, who.userId, "plan_changed", "stripe checkout return, bound", now);
+    }
+  } catch {
+    console.error("billing: checkout return not bound");
+  }
 }
 
 // POST /account/billing/portal: the service's own page for the stored
@@ -473,18 +552,54 @@ export async function moveBetweenPlans(c: Context<AppEnv>, who: Account, fields:
 
 // -- deletion -----------------------------------------------------------------------------
 
-// Before an account is deleted, its subscription is cancelled at once, so a
-// deleted account is never charged again. False when the service could not
-// confirm it; the account is then kept and the user asked to try again.
+// What the delete page says of payments (pages.tsx deleteView): the plan a
+// subscription of the account pays for, named as it is (the account's own
+// paid plan, else the plan its bound subscription last paid for while that
+// subscription can still bill), and whether the billing page offers Refund
+// now, so the page can point to it: deleting refunds nothing. The stub reads
+// no payment table; a fault reading them names the account's own plan only
+// and offers no pointer.
+export async function deleteFacts(env: Env, who: Account): Promise<DeleteFacts> {
+  const own = isPaidPlan(who.plan) ? who.plan : null;
+  if (paymentSource(env).kind === "stub") return { paid: own, refund: false };
+  try {
+    const row = await paymentRow(env, who.userId);
+    const refund = (await refundState(env, who.userId, row, await billingLine(env, who.userId))) === "offer";
+    const paid = own ?? (liveSubscription(row) ? (await subscriptionPlan(env, who.userId, row!.subscription_id)) ?? "pro" : null);
+    return { paid, refund };
+  } catch {
+    return { paid: own, refund: false };
+  }
+}
+
+// Before an account is deleted, every subscription of it that can still
+// bill is cancelled at once: the bound one first, then every other one a
+// live Stripe row names (a second subscription from a checkout started
+// beside the first). False when the service could not confirm one; the
+// account is then kept and the user asked to try again. A subscription the
+// site has no live row for (its notices not taken yet) is cancelled when its
+// first notice lands on the deleted account (onCheckout, onPeriodPaid,
+// onSubscription).
 export async function endForDeletion(env: Env, userId: string, now = new Date()): Promise<boolean> {
   const source = paymentSource(env);
   if (source.kind === "stub") return true;
   const row = await paymentRow(env, userId);
-  if (!row || !liveSubscription(row)) return true;
-  if (!(await source.cancel(row.subscription_id!))) return false;
-  await env.ACCOUNTS!.prepare("UPDATE payment_customers SET status = 'canceled', updated_at = ? WHERE user_id = ?")
-    .bind(now.toISOString(), userId).run();
-  await audit(env, userId, "plan_changed", "stripe cancelled with the account", now);
+  const at = now.toISOString();
+  const refs = new Set<string>();
+  if (row && liveSubscription(row)) refs.add(row.subscription_id!);
+  const rows = (await env.ACCOUNTS!.prepare(
+    "SELECT DISTINCT reference FROM entitlements WHERE user_id = ?1 AND source = 'stripe' AND revoked_at IS NULL " +
+    "AND reference IS NOT NULL AND starts_at <= ?2 AND (ends_at IS NULL OR ends_at > ?2) ORDER BY reference",
+  ).bind(userId, at).all<{ reference: string }>()).results ?? [];
+  for (const r of rows) refs.add(r.reference);
+  for (const id of refs) {
+    if (!(await source.cancel(id))) return false;
+    if (id === row?.subscription_id) {
+      await env.ACCOUNTS!.prepare("UPDATE payment_customers SET status = 'canceled', updated_at = ? WHERE user_id = ? AND subscription_id = ?")
+        .bind(at, userId, id).run();
+    }
+    await audit(env, userId, "plan_changed", "stripe cancelled with the account", now);
+  }
   return true;
 }
 
@@ -532,7 +647,24 @@ function apply(run: Run, notice: Notice): Promise<void> {
   if (notice.kind === "period_paid") return onPeriodPaid(run, notice);
   if (notice.kind === "subscription") return onSubscription(run, notice.subscription, notice.deleted);
   if (notice.kind === "reversed") return onReversed(run, notice);
+  if (notice.kind === "refund_failed") return onRefundFailed(run, notice);
   return Promise.resolve();
+}
+
+// A notice for an account no longer active (deleted while Stripe's page was
+// open, or after a second subscription's checkout, or with notices still on
+// their way): the subscription is cancelled at once, nothing is granted, and
+// the audit row names it, which the daily check reads (watchdog.ts
+// MONEY_ITEMS_SQL). paid: the notice reports a payment ("stripe paid on a
+// deleted account"); otherwise a subscription that could still bill ("stripe
+// live on a deleted account"). Whether a payment is refunded is the
+// operator's decision; nothing here refunds. A cancellation Stripe cannot
+// confirm, or a row the database does not take, is thrown, so the notice
+// answers 500 and comes again (a second cancellation is one already made).
+async function cancelForDeleted(run: Run, user: UserRow, subscriptionId: string, paid: boolean): Promise<void> {
+  if (!(await run.source.cancel(subscriptionId))) throw new Error("cancel failed");
+  await run.db.prepare("INSERT INTO audit (user_id, event, at, detail) VALUES (?, 'plan_changed', ?, ?)")
+    .bind(user.id, run.at, `stripe ${paid ? "paid" : "live"} on a deleted account, cancelled ${subscriptionId}`.slice(0, 120)).run();
 }
 
 const userById = (db: D1Database, id: string) =>
@@ -555,20 +687,27 @@ function unmatched(type: string): void {
 // Records which subscription belongs to the user. The stored one is
 // replaced when it is the same subscription, when there is none, or when it
 // has ended; a notice about another subscription while a live one is bound
-// leaves the binding alone (and says so). Returns the row as it was.
+// leaves the binding alone (and says so). A terminal status of the same
+// subscription is never replaced: canceled "is a terminal state that can't
+// be updated", and incomplete_expired "is a terminal status"
+// (docs.stripe.com/billing/subscriptions/overview,
+// docs.stripe.com/api/subscriptions/object), so a notice that says
+// otherwise afterwards was sent before it (Stripe does not keep their order).
+// Returns the row as it was, and whether anything was written.
 async function bind(
   run: Run, userId: string, s: { customerId: string; subscriptionId: string; status: string | null; periodEnd: string | null },
-): Promise<{ bound: boolean; before: PaymentRow | null }> {
+): Promise<{ bound: boolean; before: PaymentRow | null; wrote: boolean }> {
   const before = await paymentRow(run.env, userId);
   if (before?.subscription_id && before.subscription_id !== s.subscriptionId && !ENDED.has(before.status ?? "")) {
-    return { bound: false, before };
+    return { bound: false, before, wrote: false };
   }
+  if (before?.subscription_id === s.subscriptionId && ENDED.has(before.status ?? "")) return { bound: true, before, wrote: false };
   await run.db.prepare(
     "INSERT INTO payment_customers (user_id, customer_id, subscription_id, status, current_period_end, updated_at) VALUES (?, ?, ?, ?, ?, ?) " +
     "ON CONFLICT(user_id) DO UPDATE SET customer_id = excluded.customer_id, subscription_id = excluded.subscription_id, " +
     "status = excluded.status, current_period_end = excluded.current_period_end, updated_at = excluded.updated_at",
   ).bind(userId, s.customerId, s.subscriptionId, s.status, s.periodEnd, run.at).run();
-  return { bound: true, before };
+  return { bound: true, before, wrote: true };
 }
 
 type LiveRow = { id: string; ends_at: string | null; plan: PaidPlan };
@@ -668,10 +807,12 @@ async function endNow(run: Run, user: UserRow, subscriptionId: string, status: s
 }
 
 // Whether a payment was taken back: its charge is a recorded reversal, or the
-// customer has a reversal taken at or after the moment it was paid, which is
+// customer has a reversal made at or after the moment it was paid, which is
 // how a notice delayed past its own refund reads when it names no charge
-// (current invoices do not). A payment made after the reversal was taken (the
-// next period's) is not caught by it.
+// (current invoices do not). A reversal is recorded at the time it was made
+// (onReversed), so a payment made after it (the next period's, or a
+// subscription bought after a Refund now) is not caught by it, whenever
+// either notice is taken.
 async function reversed(run: Run, customerId: string, chargeId: string | null, paidAt: string | null): Promise<boolean> {
   const row = await run.db.prepare(
     "SELECT 1 AS x FROM payment_reversals WHERE charge_id = ?1 OR (customer_id = ?2 AND ?3 IS NOT NULL AND at >= ?3) LIMIT 1",
@@ -689,7 +830,9 @@ async function onCheckout(run: Run, n: Extract<Notice, { kind: "checkout" }>): P
   const user = await userById(run.db, n.userId);
   if (!user) return unmatched("checkout.session.completed");
   if (user.status !== "active") {
-    // Deleted while Stripe's page was open: no account is left to serve.
+    // Deleted while Stripe's page was open: no account is left to serve. A
+    // paid session put money on it, which the daily check names.
+    if (n.paid) return cancelForDeleted(run, user, n.subscriptionId, true);
     if (!(await run.source.cancel(n.subscriptionId))) throw new Error("cancel failed");
     await audit(run.env, user.id, "plan_changed", "stripe cancelled, account deleted", run.now);
     return;
@@ -723,21 +866,35 @@ async function onCheckout(run: Run, n: Extract<Notice, { kind: "checkout" }>): P
 // notice), and a pending update naming Ultra answers 500 so the notice comes
 // again once it is settled. One Stripe no longer knows keeps the live row's
 // plan, as before Ultra.
+//
+// The status written is the one Stripe gave on that read, never the one the
+// site held before it: a checkout notice or an update taken while the read
+// was on its way (Stripe keeps no order between notices) would otherwise be
+// written over by an older status. When the subscription is not read (no
+// period on the invoice) or Stripe no longer knows it, the held one stays.
+// An account no longer active has the subscription cancelled and nothing
+// granted (cancelForDeleted).
 async function onPeriodPaid(run: Run, n: Extract<Notice, { kind: "period_paid" }>): Promise<void> {
   const user = await userFor(run.db, n.subscriptionId, n.customerId, n.userId);
   if (!user) return unmatched("invoice.paid");
   const row = await paymentRow(run.env, user.id);
   const same = row?.subscription_id === n.subscriptionId;
   if (same && ENDED.has(row!.status ?? "")) return;
+  if (user.status !== "active") return cancelForDeleted(run, user, n.subscriptionId, true);
   let want: Want = null;
+  let fresh: string | null = null;
   if (n.periodEnd) {
     const state = await run.source.subscription(n.subscriptionId);
     if (state === null) throw new Error("subscription unreadable");
-    if (state !== "missing") want = wantOf(run, state);
+    if (state !== "missing") {
+      want = wantOf(run, state);
+      fresh = state.status;
+    }
   }
   const kept = same ? row!.current_period_end : null;
   const periodEnd = n.periodEnd && (!kept || n.periodEnd > kept) ? n.periodEnd : kept;
-  await bind(run, user.id, { customerId: n.customerId, subscriptionId: n.subscriptionId, status: same ? row!.status : null, periodEnd });
+  const status = fresh ?? (same ? row!.status : null);
+  await bind(run, user.id, { customerId: n.customerId, subscriptionId: n.subscriptionId, status, periodEnd });
   if (!n.periodEnd) return;
   // A notice delayed past the refund or dispute of the payment it reports.
   if (await reversed(run, n.customerId, n.chargeId, n.paidAt)) {
@@ -749,14 +906,24 @@ async function onPeriodPaid(run: Run, n: Extract<Notice, { kind: "period_paid" }
 
 // charge.refunded (in full) and charge.dispute.created: the money for a
 // period went back, or is being taken back, so the Stripe Pro of the account
-// bound to the charge's customer ends now, every live Stripe row of it: a
-// charge no longer names its subscription. The subscription itself is left
-// as it is (the operator cancels it in the dashboard when it should not bill
-// again), and a later invoice.paid grants again, being a new payment. A
-// dispute's charge is read for its customer; a failed read answers 500, so
-// the notice comes again.
+// bound to the charge's customer ends now: every Stripe row of it that
+// existed when the refund or dispute was made (a charge no longer names its
+// subscription). That moment is the event's own time (stripe.ts readEvent),
+// not when the notice is taken, which can be later and out of order: a
+// subscription bought after a Refund now, on the same customer, keeps its
+// row whenever the refund's notice lands. A row written after that moment
+// is its subscription's: when Stripe made the subscription after the
+// reversal it is kept (no charge made before could pay for it); otherwise
+// (a payment notice delayed past the refund, Stripe's own time unknown) it
+// ends too, so a refunded payment never keeps a plan. The subscription
+// itself is left as it is (the operator cancels it in the dashboard when it
+// should not bill again), and a later invoice.paid grants again, being a new
+// payment. A dispute's charge is read for its customer, and a later row's
+// subscription for its time; a failed read answers 500, so the notice comes
+// again. A notice without its time is read as made when taken, as before.
 async function onReversed(run: Run, n: Extract<Notice, { kind: "reversed" }>): Promise<void> {
   const type = n.why === "refunded" ? "charge.refunded" : "charge.dispute.created";
+  const madeAt = n.at ?? run.at;
   let customerId = n.customerId;
   if (!customerId) {
     const read = await run.source.chargeCustomer(n.chargeId);
@@ -764,21 +931,64 @@ async function onReversed(run: Run, n: Extract<Notice, { kind: "reversed" }>): P
     if (read === "missing") return unmatched(type);
     customerId = read;
   }
-  // Kept whether or not an account is bound yet, so a checkout or invoice
-  // notice that arrives after it grants nothing for the charge.
+  // Kept whether or not an account is bound yet, at the reversal's own time,
+  // so a checkout or invoice notice that arrives after it grants nothing for
+  // a payment made before it, and one made after it grants (reversed()).
   await run.db.prepare("INSERT INTO payment_reversals (charge_id, customer_id, why, at) VALUES (?, ?, ?, ?) ON CONFLICT(charge_id) DO NOTHING")
-    .bind(n.chargeId, customerId, n.why, run.at).run();
+    .bind(n.chargeId, customerId, n.why, madeAt).run();
   const bound = await run.db.prepare("SELECT user_id FROM payment_customers WHERE customer_id = ? LIMIT 1")
     .bind(customerId).first<{ user_id: string }>();
   const user = bound ? await userById(run.db, bound.user_id) : null;
   if (!user) return unmatched(type);
-  const res = await run.db.prepare(
-    "UPDATE entitlements SET ends_at = ?1 WHERE user_id = ?2 AND source = 'stripe' AND revoked_at IS NULL " +
-    "AND (ends_at IS NULL OR ends_at > ?1)",
-  ).bind(run.at, user.id).run();
-  if (!res.meta?.changes) return;
+  const live = (await run.db.prepare(
+    "SELECT id, reference, created_at FROM entitlements WHERE user_id = ?1 AND source = 'stripe' AND revoked_at IS NULL " +
+    "AND (ends_at IS NULL OR ends_at > ?2) ORDER BY created_at, id",
+  ).bind(user.id, run.at).all<{ id: string; reference: string | null; created_at: string }>()).results ?? [];
+  const end: string[] = [];
+  const after = new Map<string, string[]>();
+  for (const r of live) {
+    if (r.created_at <= madeAt || !r.reference) end.push(r.id);
+    else after.set(r.reference, [...(after.get(r.reference) ?? []), r.id]);
+  }
+  for (const [subscriptionId, rows] of after) {
+    const state = await run.source.subscription(subscriptionId);
+    if (state === null) throw new Error("subscription unreadable");
+    const madeLater = state !== "missing" && !!state.createdAt && state.createdAt > madeAt;
+    if (!madeLater) end.push(...rows);
+  }
+  if (!end.length) return;
+  const ended = await run.db.batch(end.map((id) =>
+    run.db.prepare("UPDATE entitlements SET ends_at = ?1 WHERE id = ?2 AND (ends_at IS NULL OR ends_at > ?1)").bind(run.at, id)));
+  if (!ended.some((r) => r.meta?.changes)) return;
   await audit(run.env, user.id, "plan_changed", `stripe ended, ${n.why}`, run.now);
   await planFor(run.env, user, run.now);
+}
+
+// refund.failed: a refund Stripe took (a pending refund the balance never
+// covered within 45 days, a closed card) did not reach the person. "In the
+// rare instance that a refund fails, Stripe notifies you using the
+// refund.failed event ... you need to arrange an alternative way to provide
+// your customer with a refund" (docs.stripe.com/refunds, Handle failed
+// refunds). The plan is not changed (it ended with the refund's notice, and
+// what follows is the operator's decision): an audit row refund_failed names
+// the charge and Stripe's reason, under the account's id, and the daily check
+// names the account (watchdog.ts MONEY_ITEMS_SQL). The row is written so a
+// fault answers 500 and the notice comes again. The customer is the refund's
+// own, or the charge's, read from Stripe (a failed read answers 500).
+async function onRefundFailed(run: Run, n: Extract<Notice, { kind: "refund_failed" }>): Promise<void> {
+  let customerId = n.customerId;
+  if (!customerId && n.chargeId) {
+    const read = await run.source.chargeCustomer(n.chargeId);
+    if (read === null) throw new Error("charge unreadable");
+    if (read === "missing") return unmatched("refund.failed");
+    customerId = read;
+  }
+  const bound = customerId
+    ? await run.db.prepare("SELECT user_id FROM payment_customers WHERE customer_id = ? LIMIT 1").bind(customerId).first<{ user_id: string }>()
+    : null;
+  if (!bound) return unmatched("refund.failed");
+  await run.db.prepare("INSERT INTO audit (user_id, event, at, detail) VALUES (?, 'refund_failed', ?, ?)")
+    .bind(bound.user_id, run.at, `${n.chargeId ?? n.refundId ?? "unknown"} ${n.reason}`.slice(0, 120)).run();
 }
 
 // customer.subscription.updated and .deleted: the status and period end are
@@ -788,13 +998,24 @@ async function onReversed(run: Run, n: Extract<Notice, { kind: "reversed" }>): P
 // up: the items change before the payment is taken, so an update naming
 // Ultra raises nothing, and invoice.paid raises the plan once it is paid. A
 // move down (the subscription's product ranks below its live row's) is
-// applied at once, keeping the row's end (lowerTo).
+// applied at once, keeping the row's end (lowerTo). A notice after the bound
+// subscription has ended (a retried update sent before its cancellation)
+// changes nothing (bind). On an account no longer active, a subscription
+// that Stripe says can still bill is cancelled (cancelForDeleted); one that
+// has ended, the cancellation's own notice among them, is recorded as before.
 async function onSubscription(run: Run, s: SubscriptionState, deleted: boolean): Promise<void> {
   const status = deleted ? "canceled" : s.status;
   const user = await userFor(run.db, s.id, s.customerId, s.userId);
   if (!user) return unmatched(deleted ? "customer.subscription.deleted" : "customer.subscription.updated");
-  const { bound, before } = await bind(run, user.id, { customerId: s.customerId, subscriptionId: s.id, status, periodEnd: s.periodEnd });
+  if (user.status !== "active" && !ENDED.has(status)) {
+    const now = await run.source.subscription(s.id);
+    if (now === null) throw new Error("subscription unreadable");
+    if (now === "missing" || ENDED.has(now.status)) return;
+    return cancelForDeleted(run, user, s.id, false);
+  }
+  const { bound, before, wrote } = await bind(run, user.id, { customerId: s.customerId, subscriptionId: s.id, status, periodEnd: s.periodEnd });
   if (ENDS_PRO.has(status)) return endNow(run, user, s.id, status);
+  if (bound && !wrote) return;
   if (bound && before?.status !== status) await audit(run.env, user.id, "plan_changed", `stripe status ${status.slice(0, 40)}`, run.now);
   await lowerTo(run, user, s.id, planOfSubscription(run.env, s));
 }

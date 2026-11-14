@@ -16,7 +16,7 @@ import type { Context } from "hono";
 import type { Env } from "../env";
 import type { Lang } from "../i18n";
 import type {
-  CheckoutInput, Interval, Notice, NoticeResult, PaymentSource, PortalInput, ReadSubscription, SubscriptionState,
+  CheckoutInput, CheckoutSession, Interval, Notice, NoticeResult, PaymentSource, PortalInput, ReadSubscription, SubscriptionState,
 } from "./payments";
 import { sameHash, toHex } from "./secrets";
 import { accountsEnabled } from "./switch";
@@ -34,14 +34,24 @@ export const SIGNATURE_TOLERANCE_S = 300;
 // Worker hold a large body before the signature is checked.
 export const NOTICE_MAX_BYTES = 1024 * 1024;
 const CALL_TIMEOUT_MS = 10_000;
-// Checkout sessions are created under an Idempotency-Key naming the user and
-// the ten minutes the request falls in: two checkouts started together (two
-// tabs, a double click) get the one session Stripe made for the first, so
-// they cannot start two subscriptions. A second request in the same minutes
-// with other parameters (the other interval, the other language) is refused
-// by Stripe and answered "busy"; one still in flight at Stripe answers 409
-// and is asked again shortly.
+// Checkout sessions are created under an Idempotency-Key naming the user, the
+// choice (the plan, the interval and the page's language) and the ten
+// minutes the request falls in: two checkouts of one choice started together
+// (two tabs, a double click) get the one session Stripe made for the first,
+// so they cannot start two subscriptions, and another choice (back from
+// Stripe's page by its back link, then the other interval) starts its own.
+// One still in flight at Stripe answers 409 and is asked again shortly;
+// still in flight after that, or the same key with other details (Stripe's
+// idempotency layer "compares incoming parameters to those of the original
+// request and errors if they're not the same",
+// docs.stripe.com/api/idempotent_requests), it is answered "busy".
 export const CHECKOUT_WINDOW_MS = 10 * 60_000;
+// A Checkout Session's id as Stripe gives it ("cs_test_..." or "cs_live_...";
+// the retrieve call takes at most 66 characters).
+export const SESSION_RE = /^cs_[A-Za-z0-9_]{1,63}$/;
+// Open sessions of a returning customer read before one is expired: a
+// customer has a session or two open at most.
+const OPEN_READ = 10;
 const IN_FLIGHT_TRIES = 3;
 const IN_FLIGHT_WAIT_MS = 400;
 
@@ -248,13 +258,13 @@ export function readSubscription(o: J): SubscriptionState | null {
   const update = obj(o.pending_update);
   const pendingItems = update && Array.isArray(update.subscription_items) ? update.subscription_items.map(obj).filter((x): x is J => x !== null) : [];
   const pending = update ? pendingItems.map(priceOf) : null;
-  return { id, customerId, status, periodEnd, userId: userHint(o.metadata), item, pending };
+  return { id, customerId, status, periodEnd, userId: userHint(o.metadata), item, pending, createdAt: isoOf(o.created) };
 }
 
-const isoOf = (v: unknown): string | null => {
+function isoOf(v: unknown): string | null {
   const s = secs(v);
   return s === null ? null : new Date(s * 1000).toISOString();
-};
+}
 
 function readCheckout(o: J): Notice {
   const userId = str(o.client_reference_id);
@@ -289,29 +299,52 @@ function readInvoice(o: J): Notice {
 
 // A Charge refunded in full: refunded true, or the amount refunded reaching
 // the amount charged. A partial refund changes nothing. The charge names its
-// customer; it no longer names its invoice in current versions.
-function readRefund(o: J): Notice {
+// customer; it no longer names its invoice in current versions. at is the
+// event's own time (below).
+function readRefund(o: J, at: string | null): Notice {
   const chargeId = str(o.id);
   const amount = typeof o.amount === "number" ? o.amount : null;
   const back = typeof o.amount_refunded === "number" ? o.amount_refunded : null;
   const full = o.refunded === true || (amount !== null && amount > 0 && back !== null && back >= amount);
   if (!chargeId || !full) return { kind: "other" };
-  return { kind: "reversed", chargeId, customerId: idOf(o.customer), why: "refunded" };
+  return { kind: "reversed", chargeId, customerId: idOf(o.customer), why: "refunded", ...(at ? { at } : {}) };
 }
 
 // A Dispute names its charge but not the customer, which billing.tsx reads
 // from the charge.
-function readDispute(o: J): Notice {
+function readDispute(o: J, at: string | null): Notice {
   const chargeId = idOf(o.charge);
-  return chargeId ? { kind: "reversed", chargeId, customerId: null, why: "disputed" } : { kind: "other" };
+  return chargeId ? { kind: "reversed", chargeId, customerId: null, why: "disputed", ...(at ? { at } : {}) } : { kind: "other" };
 }
 
+// refund.failed, whose object is the Refund (docs.stripe.com/api/events/types:
+// "Occurs whenever a refund has failed"): its charge and its customer, both
+// nullable on a Refund, and its failure_reason, one of Stripe's fixed words
+// (lost_or_stolen_card, expired_or_canceled_card, insufficient_funds and so
+// on; docs.stripe.com/api/refunds/object). A refund naming neither a charge
+// nor a customer cannot be tied to an account.
+const REASON_RE = /^[a-z_]{1,40}$/;
+function readRefundFailed(o: J): Notice {
+  const chargeId = idOf(o.charge);
+  const customerId = idOf(o.customer);
+  const reason = str(o.failure_reason);
+  if (!chargeId && !customerId) return { kind: "other" };
+  return { kind: "refund_failed", chargeId, refundId: str(o.id), customerId, reason: reason && REASON_RE.test(reason) ? reason : "unknown" };
+}
+
+// The event's own created time, ISO: "Time at which the object was created.
+// Measured in seconds since the Unix epoch" (docs.stripe.com/api/events/object).
+// It is when the refund or dispute happened, whenever the notice is taken;
+// Stripe keeps it whole seconds, and "doesn't guarantee the delivery of
+// events in the order that they're generated" (docs.stripe.com/webhooks), so
+// it is read as that moment and never as an order of notices.
 export function readEvent(event: unknown): NoticeResult {
   const e = obj(event);
   const id = str(e?.id);
   const type = str(e?.type);
   if (!e || !id || !/^evt_[A-Za-z0-9_]+$/.test(id) || !type) return { ok: false };
   const o = obj(obj(e.data)?.object);
+  const at = isoOf(e.created);
   let notice: Notice = { kind: "other" };
   if (o) {
     if (type === "checkout.session.completed") notice = readCheckout(o);
@@ -319,8 +352,9 @@ export function readEvent(event: unknown): NoticeResult {
     else if (type === "customer.subscription.updated" || type === "customer.subscription.deleted") {
       const subscription = readSubscription(o);
       if (subscription) notice = { kind: "subscription", subscription, deleted: type === "customer.subscription.deleted" };
-    } else if (type === "charge.refunded") notice = readRefund(o);
-    else if (type === "charge.dispute.created") notice = readDispute(o);
+    } else if (type === "charge.refunded") notice = readRefund(o, at);
+    else if (type === "charge.dispute.created") notice = readDispute(o, at);
+    else if (type === "refund.failed") notice = readRefundFailed(o);
   }
   return { ok: true, id, type, notice };
 }
@@ -441,14 +475,59 @@ export function stripeSource(env: Env): PaymentSource | null {
       ];
       if (input.customerId) form.push(["customer", input.customerId]);
       else form.push(["customer_email", input.email]);
-      const idempotencyKey = `checkout-${input.userId}-${Math.floor(Date.now() / CHECKOUT_WINDOW_MS)}`;
+      const idempotencyKey =
+        `checkout-${input.userId}-${input.plan}-${input.interval}-${input.lang}-${Math.floor(Date.now() / CHECKOUT_WINDOW_MS)}`;
       let res = await call<J>(key, "POST", "/checkout/sessions", "checkout session", form, idempotencyKey);
       for (let tries = 1; !res.ok && res.status === 409 && tries < IN_FLIGHT_TRIES; tries++) {
         await new Promise((resolve) => setTimeout(resolve, IN_FLIGHT_WAIT_MS));
         res = await call<J>(key, "POST", "/checkout/sessions", "checkout session", form, idempotencyKey);
       }
       if (!res.ok) return res.errorType === "idempotency_error" ? "busy" : null;
-      return onHost(res.body.url, CHECKOUT_HOST);
+      const url = onHost(res.body.url, CHECKOUT_HOST);
+      if (!url || !input.customerId) return url;
+      // A returning customer's other open sessions (another choice left by
+      // Stripe's back link) are expired before the reader is sent on, so
+      // only this one can be paid. Sessions are listed by the customer
+      // they were made for ("Only return the Checkout Sessions for the
+      // Customer specified", status "open": "Payment processing has not
+      // started", docs.stripe.com/api/checkout/sessions/list) and expired
+      // by POST .../expire ("A Checkout Session can be expired when it is in
+      // one of these statuses: open. After it expires, a customer can't
+      // complete a Checkout Session", docs.stripe.com/api/checkout/sessions/expire).
+      // The session just made (or given back under the key) is kept, so the
+      // same choice pressed twice keeps its one session. A first checkout
+      // names no customer, and a session made with customer_email has none
+      // until it completes ("Checkout will create a new customer object
+      // based on information provided during the payment flow",
+      // docs.stripe.com/api/checkout/sessions/object), so a first buyer's
+      // open session cannot be found this way; its key keeps two of one
+      // choice to one. A list that cannot be read leaves the others as they
+      // are; an expiry Stripe refuses sends the reader nowhere.
+      const own = str(res.body.id);
+      const query = new URLSearchParams([["customer", input.customerId], ["status", "open"], ["limit", String(OPEN_READ)]]);
+      const open = await call<J>(key, "GET", `/checkout/sessions?${query}`, "checkout session list");
+      if (!open.ok) return url;
+      for (const s of listData(open.body)) {
+        const id = str(s.id);
+        if (!id || id === own || s.status !== "open" || !SESSION_RE.test(id)) continue;
+        const ended = await call<J>(key, "POST", `/checkout/sessions/${encodeURIComponent(id)}/expire`, "checkout session expire");
+        if (!ended.ok) return null;
+      }
+      return url;
+    },
+
+    async checkoutSession(id: string): Promise<CheckoutSession | "missing" | null> {
+      if (!SESSION_RE.test(id)) return "missing";
+      const res = await call<J>(key, "GET", `/checkout/sessions/${encodeURIComponent(id)}`, "checkout session read");
+      if (!res.ok) return res.status === 404 ? "missing" : null;
+      const o = res.body;
+      const userId = str(o.client_reference_id);
+      return {
+        userId: userId && USER_RE.test(userId) ? userId : null,
+        customerId: o.mode === "subscription" ? idOf(o.customer) : null,
+        subscriptionId: o.mode === "subscription" ? idOf(o.subscription) : null,
+        complete: o.status === "complete",
+      };
     },
 
     // The portal for the stored customer. With a flow, the session opens at

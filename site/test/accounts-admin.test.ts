@@ -1457,7 +1457,8 @@ describe("deleting the account", () => {
     failing.add("GET /v1/subscriptions/:id");
     const res = await adminPost(op, `/admin/users/${r.id}/delete`, { confirm: "yes" });
     expect(res.status).toBe(503);
-    expect(await text(res)).toContain("The Pro subscription could not be cancelled, so the account was not deleted.");
+    // The line names no plan since deletion cancels every subscription that can still bill (review of 2026-11-14, finding 9).
+    expect(await text(res)).toContain("The subscription could not be cancelled, so the account was not deleted.");
     expect((await userRow(r.id))?.status).toBe("active");
     failing.clear();
     const ok = await adminPost(op, `/admin/users/${r.id}/delete`, { confirm: "yes" });

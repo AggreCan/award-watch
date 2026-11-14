@@ -104,7 +104,9 @@ import { KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
 import { keyUsage, nowOf } from "./api_usage";
 import { usagePage } from "./api_usage_page";
 import { audit } from "./audit";
-import { billingLine, billingPage, billingWebhook, endForDeletion, moveBetweenPlans, openPortal, startCheckout } from "./billing";
+import {
+  billingLine, billingPage, billingWebhook, bindReturn, deleteFacts, endForDeletion, moveBetweenPlans, openPortal, startCheckout,
+} from "./billing";
 import { pressRefund } from "./refund";
 import { BriefingsPanel, briefingLabel, briefingStopView, briefingStoppedView } from "./briefing_pages";
 import {
@@ -470,6 +472,9 @@ account.get("/", async (c) => {
     const watching = await watchCount(c.env, who.userId);
     const org = await claimSummary(c.env, who.userId);
     const m = c.req.query("m");
+    // Stripe's checkout returns with its session's id (billing.tsx bindReturn): the subscription is bound before the page is drawn.
+    const returned = c.req.query("session");
+    if ((c.req.query("billing") === "done" || c.req.query("billing") === "done_ultra") && returned) await bindReturn(c.env, who, returned);
     return accountPage(c, t(lang, "account.title"), overviewView(lang, who, {
       sessions: counts?.sessions ?? 0, searches: counts?.searches ?? 0, cap: capFor(who), keys: counts?.keys ?? 0,
       watches: watching?.n ?? null, watchesOwn: watching?.own ?? false, org,
@@ -1575,7 +1580,7 @@ account.get("/delete", async (c) => {
   const who = await signedIn(c);
   if (who instanceof Response) return who;
   const lang = c.get("lang");
-  return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who));
+  return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, undefined, await deleteFacts(c.env, who)));
 });
 
 // The user row stays, marked deleted, its email replaced by "deleted:" and
@@ -1627,11 +1632,13 @@ account.post("/delete", async (c) => {
   if (post instanceof Response) return post;
   const { account: who, fields } = post;
   const lang = c.get("lang");
-  if (fields.confirm !== "yes") return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["account.err_confirm"]), 400);
+  if (fields.confirm !== "yes") {
+    return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["account.err_confirm"], await deleteFacts(c.env, who)), 400);
+  }
   return guarded(c, async () => {
-    // A deleted account must not be charged again: its subscription is cancelled first, or nothing is deleted.
+    // A deleted account must not be charged again: its subscriptions are cancelled first, or nothing is deleted.
     if (!(await endForDeletion(c.env, who.userId))) {
-      return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["billing.err_delete"]), 503);
+      return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["billing.err_delete"], await deleteFacts(c.env, who)), 503);
     }
     await deleteAccount(c, who);
     await revokeAllSessions(c.env, who.userId);

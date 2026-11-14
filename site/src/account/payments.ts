@@ -48,10 +48,18 @@ export type ItemPrice = { price: string | null; product: string | null };
 // service gave none. item is its one item (null when it has none or
 // several), with the interval its price bills at (null for any other than
 // a month or a year); pending the items of a pending update, null when there
-// is none.
+// is none. createdAt: when the service made it (ISO), when it says.
 export type SubscriptionState = {
   id: string; customerId: string; status: string; periodEnd: string | null; userId: string | null;
   item: ({ id: string; interval: Interval | null } & ItemPrice) | null; pending: ItemPrice[] | null;
+  createdAt?: string | null;
+};
+
+// A checkout session read back on the way home from the service's page
+// (billing.tsx bindReturn): the account it was made for, and the customer
+// and subscription it made once complete.
+export type CheckoutSession = {
+  userId: string | null; customerId: string | null; subscriptionId: string | null; complete: boolean;
 };
 
 // What a verified notice asks for. userId on the last two is the hint the
@@ -69,8 +77,13 @@ export type Notice =
   | { kind: "subscription"; subscription: SubscriptionState; deleted: boolean }
   // A charge refunded in full, or disputed: the money for a period went back
   // or is being taken back. customerId is null when the notice does not name
-  // it (a dispute), and the charge is read for it.
-  | { kind: "reversed"; chargeId: string; customerId: string | null; why: "refunded" | "disputed" }
+  // it (a dispute), and the charge is read for it. at: when the refund or
+  // dispute was made (the event's own time), when the notice says.
+  | { kind: "reversed"; chargeId: string; customerId: string | null; why: "refunded" | "disputed"; at?: string }
+  // A refund that failed after it was taken: its charge (or the refund's own
+  // id when it names none), its customer when it names one, and the reason
+  // the service gives, a fixed word.
+  | { kind: "refund_failed"; chargeId: string | null; refundId: string | null; customerId: string | null; reason: string }
   | { kind: "other" };
 
 export type NoticeResult = { ok: true; id: string; type: string; notice: Notice } | { ok: false };
@@ -90,9 +103,13 @@ export interface PaymentSource {
   offerFor(plan: PaidPlan): Readonly<Record<Interval, string>> | null;
   // The service's price id for a plan and interval, null when not configured.
   priceFor(plan: PaidPlan, interval: Interval): string | null;
-  // "busy": a checkout with other choices was started for the user moments
-  // ago, and a second subscription is not started beside it.
+  // "busy": the same checkout was started for the user a moment ago and the
+  // service is still preparing it (or holds it with other details), and a
+  // second subscription is not started beside it.
   checkoutUrl(input: CheckoutInput): Promise<string | null | "busy">;
+  // A checkout session by its id: "missing" when the service has no such
+  // session; null when it could not be asked.
+  checkoutSession(id: string): Promise<CheckoutSession | "missing" | null>;
   portalUrl(input: PortalInput): Promise<string | null>;
   // A notice from the service, checked against its signature before
   // anything in it is read. Never trusts an unsigned body.
@@ -114,6 +131,7 @@ export const stubPayments: PaymentSource = {
   offerFor: () => null,
   priceFor: () => null,
   checkoutUrl: async () => null,
+  checkoutSession: async () => null,
   portalUrl: async () => null,
   readNotice: async () => ({ ok: false }),
   subscription: async () => null,

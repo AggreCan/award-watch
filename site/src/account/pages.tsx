@@ -874,15 +874,27 @@ export function keysView(
 
 // -- deletion -----------------------------------------------------------------------------------
 
-export function deleteView(lang: Lang, account: Account, errors?: Key[]) {
+// paid: the plan a subscription of the account pays for (its own paid plan,
+// or the one its bound subscription last paid for), null for none; refund:
+// the billing page offers Refund now (billing.tsx refundState), which a line
+// points to, since deleting refunds nothing.
+export type DeleteFacts = { paid: "pro" | "ultra" | null; refund: boolean };
+
+export function deleteView(lang: Lang, account: Account, errors?: Key[], facts: DeleteFacts = { paid: null, refund: false }) {
+  const plan = facts.paid ? t(lang, facts.paid === "ultra" ? "ultra.tag" : "pro.tag") : null;
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.delete_title")} lead={t(lang, "account.delete_lead")}
         actions={<a href="/account" class="btn">{t(lang, "account.title")}</a>} />
       <Panel title={t(lang, "account.panel_delete_what")} class="panel-form">
         <Errors lang={lang} errors={errors} />
+        {facts.refund ? (
+          <p>{tj(lang, "account.delete_refund", {
+            page: <a href={`/account/billing${lang === "fr" ? "?lang=fr" : ""}#refund`}>{t(lang, "account.delete_refund_page")}</a>,
+          })}</p>
+        ) : null}
         <ul class="account-list">
-          <li>{t(lang, "account.delete_subscription")}</li>
+          <li>{plan ? t(lang, "account.delete_subscription", { plan }) : t(lang, "account.delete_subscription_any")}</li>
           <li>{t(lang, "account.delete_searches")}</li>
           <li>{t(lang, "watches.delete")}</li>
           <li>{t(lang, "orgclaim.delete")}</li>

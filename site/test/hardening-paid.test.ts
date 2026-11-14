@@ -466,16 +466,18 @@ describe("checkout for a subscriber, and the delete page", () => {
     const token = await csrf(s.cookie, "/account/billing", { env: payEnv() });
     const res = await post("/account/billing/checkout", { csrf: token, interval: "monthly" }, { cookie: s.cookie, env: payEnv() });
     expect(res.headers.get("location")).toMatch(/^https:\/\/checkout\.stripe\.com\/c\/pay\/cs_h\d+$/);
-    expect(sent.map((x) => `${x.method} ${x.path}`)).toEqual(["POST /v1/checkout/sessions"]);
+    // A returning customer's other open sessions are then listed to be expired (hardening-money.test.ts); this fake lists none.
+    expect(sent.map((x) => `${x.method} ${x.path}`)).toEqual(["POST /v1/checkout/sessions", "GET /v1/checkout/sessions"]);
   });
 
   it("the delete page says a subscription is cancelled first, in both languages", async () => {
+    // A Free account has no plan to name (hardening-money.test.ts covers Pro and Ultra).
     const cookie = await signIn(newEmail("delete-page"), { env: payEnv() });
     const en = await (await get("/account/delete", { cookie, env: payEnv() })).text();
-    expect(en).toContain("A Pro subscription, if there is one, is cancelled first, at once: it is not charged again, and the period already paid is not refunded.");
+    expect(en).toContain("A paid subscription, if there is one, is cancelled first, at once: it is not charged again, and the period already paid is not refunded.");
     // The site sets French apostrophes curly, and the space before a colon unbreakable, on the way out.
     const fr = nbsp(await (await get("/account/delete?lang=fr", { cookie, env: payEnv() })).text()).replace(/&#39;|’/g, "'");
-    expect(fr).toContain("Un abonnement Pro, s'il y en a un, est d'abord annulé, immédiatement : il n'est plus facturé, et la période déjà payée n'est pas remboursée.");
+    expect(fr).toContain("Un abonnement payant, s'il y en a un, est d'abord annulé, immédiatement : il n'est plus facturé, et la période déjà payée n'est pas remboursée.");
     for (const page of [en, fr]) expect(page).not.toContain(String.fromCharCode(0x2014));
   });
 });
@@ -965,7 +967,8 @@ describe("the checkout's idempotency key", () => {
   const checkout = (b: { cookie: string; token: string }, interval: string, lang = "en") =>
     post("/account/billing/checkout", { csrf: b.token, interval, lang }, { cookie: b.cookie, env: payEnv() });
 
-  it("gives two checkouts started together the one session, under a key naming the user and the ten minutes", async () => {
+  // The key names the choice too since the review of 2026-11-14 (finding 7): Stripe's back link, then another choice, must work at once.
+  it("gives two checkouts started together the one session, under a key naming the user, the choice and the ten minutes", async () => {
     const b = await buyer("idem-same");
     const [one, two] = await Promise.all([checkout(b, "monthly"), checkout(b, "monthly")]);
     expect([one.status, two.status]).toEqual([303, 303]);
@@ -973,31 +976,30 @@ describe("the checkout's idempotency key", () => {
     expect(sessions).toBe(1);
     const keys = sent.filter((x) => x.path === "/v1/checkout/sessions").map((x) => x.idempotencyKey);
     expect(new Set(keys).size).toBe(1);
-    expect(keys[0]).toBe(`checkout-${b.user}-${Math.floor(Date.now() / (10 * 60_000))}`);
+    expect(keys[0]).toBe(`checkout-${b.user}-pro-monthly-en-${Math.floor(Date.now() / (10 * 60_000))}`);
     // Another user at the same moment has a session of their own.
     const c = await buyer("idem-other");
     expect((await checkout(c, "monthly")).headers.get("location")).not.toBe(one.headers.get("location"));
     expect(sessions).toBe(2);
   });
 
-  it("refuses a second checkout with other choices in the same minutes, starting nothing", async () => {
+  it("starts a checkout of other choices in the same minutes at once, and keeps one session for one choice", async () => {
     const b = await buyer("idem-busy");
     expect((await checkout(b, "monthly")).status).toBe(303);
     for (const [interval, lang] of [["yearly", "en"], ["monthly", "fr"]]) {
       const res = await checkout(b, interval, lang);
-      expect(res.status, `${interval} ${lang}`).toBe(409);
-      const page = nbsp((await res.text()).replace(/&#39;|’/g, "'"));
-      expect(page).toContain(lang === "fr"
-        ? "Un paiement avec d'autres choix a été commencé depuis ce compte il y a un instant"
-        : "A checkout with other choices was started from this account a moment ago");
+      expect(res.status, `${interval} ${lang}`).toBe(303);
+      expect(res.headers.get("location"), `${interval} ${lang}`).toMatch(/^https:\/\/checkout\.stripe\.com\/c\/pay\/cs_h\d+$/);
     }
-    expect(sessions).toBe(1);
+    expect(sessions).toBe(3);
+    expect((await checkout(b, "yearly")).status).toBe(303);
+    expect(sessions).toBe(3);
   });
 
   it("asks again when Stripe is still handling the first request, and gets its session", async () => {
     const b = await buyer("idem-flight");
     expect((await checkout(b, "monthly")).status).toBe(303);
-    inFlightOnce.add(`checkout-${b.user}-${Math.floor(Date.now() / (10 * 60_000))}`);
+    inFlightOnce.add(`checkout-${b.user}-pro-monthly-en-${Math.floor(Date.now() / (10 * 60_000))}`);
     const res = await checkout(b, "monthly");
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe("https://checkout.stripe.com/c/pay/cs_h1");

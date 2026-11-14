@@ -503,10 +503,21 @@ export const ACCOUNT_STRINGS = {
   "account.delete_title": { en: "Delete the Account", fr: "Supprimer le compte" },
   "account.delete_lead": { en: "Deleting the account cannot be undone.", fr: "La suppression du compte est définitive." },
   "account.panel_delete_what": { en: "What Is Removed", fr: "Ce qui est retiré" },
+  // {plan} is the account's paid plan, or the plan its subscription last paid for (Pro or Ultra); the _any line has none to name.
   "account.delete_subscription": {
-    en: "A Pro subscription, if there is one, is cancelled first, at once: it is not charged again, and the period already paid is not refunded.",
-    fr: "Un abonnement Pro, s'il y en a un, est d'abord annulé, immédiatement : il n'est plus facturé, et la période déjà payée n'est pas remboursée.",
+    en: "A subscription to {plan}, if there is one, is cancelled first, at once: it is not charged again, and the period already paid is not refunded.",
+    fr: "Un abonnement à {plan}, s'il y en a un, est d'abord annulé, immédiatement : il n'est plus facturé, et la période déjà payée n'est pas remboursée.",
   },
+  "account.delete_subscription_any": {
+    en: "A paid subscription, if there is one, is cancelled first, at once: it is not charged again, and the period already paid is not refunded.",
+    fr: "Un abonnement payant, s'il y en a un, est d'abord annulé, immédiatement : il n'est plus facturé, et la période déjà payée n'est pas remboursée.",
+  },
+  // While the billing page offers Refund now (billing.tsx refundState): {page} links its panel.
+  "account.delete_refund": {
+    en: "Refund now, on the {page}, still returns your first payment in full. Deleting the account refunds nothing.",
+    fr: "Rembourser maintenant, sur la {page}, vous rend encore votre premier paiement en entier. La suppression du compte ne rembourse rien.",
+  },
+  "account.delete_refund_page": { en: "Plan and Billing page", fr: "page Forfait et facturation" },
   "account.delete_searches": {
     en: "Every saved search and every API key.",
     fr: "Toutes les recherches enregistrées et toutes les clés d'API.",
@@ -820,6 +831,11 @@ export const ACCOUNT_STRINGS = {
     en: "The last renewal payment did not go through. Update the card on Stripe's page to keep {plan}.",
     fr: "Le dernier paiement de renouvellement n'est pas passé. Mettez la carte à jour sur la page de Stripe pour conserver {plan}.",
   },
+  // The same once the plan has ended (past its grace, or unpaid): {plan} is the one the subscription paid for.
+  "billing.past_due_note_ended": {
+    en: "The last renewal payment did not go through, so {plan} has ended. Update the card on Stripe's page to get {plan} back.",
+    fr: "Le dernier paiement de renouvellement n'est pas passé, donc {plan} a pris fin. Mettez la carte à jour sur la page de Stripe pour retrouver {plan}.",
+  },
   "billing.manage_text": {
     en: "Stripe's page switches between monthly and yearly, updates the card, lists the receipts and cancels the subscription.",
     fr: "La page de Stripe permet de passer du mensuel à l'annuel, de mettre la carte à jour, de consulter les reçus et d'annuler l'abonnement.",
@@ -858,13 +874,15 @@ export const ACCOUNT_STRINGS = {
     en: "The payment service could not be reached. Nothing was charged. Try again in a few minutes.",
     fr: "Le service de paiement est injoignable. Rien n'a été facturé. Réessayez dans quelques minutes.",
   },
+  // The same checkout still in flight at Stripe, or held there under its key with other details (stripe.ts).
   "billing.err_busy": {
-    en: "A checkout with other choices was started from this account a moment ago, in another page or tab. Finish it there, or start again in ten minutes.",
-    fr: "Un paiement avec d'autres choix a été commencé depuis ce compte il y a un instant, dans une autre page ou un autre onglet. Terminez-le là, ou recommencez dans dix minutes.",
+    en: "A checkout started from this account a moment ago is still being prepared at Stripe. Try again in a minute, or in ten minutes if this message comes back.",
+    fr: "Un paiement commencé depuis ce compte il y a un instant est encore en préparation chez Stripe. Réessayez dans une minute, ou dans dix minutes si ce message revient.",
   },
+  // Deletion cancels every subscription that can still bill (billing.tsx endForDeletion), Pro or Ultra.
   "billing.err_delete": {
-    en: "The Pro subscription could not be cancelled, so the account was not deleted. Try again in a few minutes.",
-    fr: "L'abonnement Pro n'a pas pu être annulé, donc le compte n'a pas été supprimé. Réessayez dans quelques minutes.",
+    en: "The subscription could not be cancelled, so the account was not deleted. Try again in a few minutes.",
+    fr: "L'abonnement n'a pas pu être annulé, donc le compte n'a pas été supprimé. Réessayez dans quelques minutes.",
   },
   "billing.msg_done": {
     en: "Thank you. {plan} starts once Stripe confirms the payment, usually within a minute. Reload this page to see it.",

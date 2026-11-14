@@ -26,8 +26,10 @@ export type AuditEvent =
   // The refund of the first payment from the billing page (refund.ts):
   // refund_requested and refund_cancel_failed carry the subscription's Stripe
   // id (the daily check reads it, watchdog.ts), refund_refused a fixed reason,
-  // refund_made the refund's status. Never an amount.
-  | "refund_requested" | "refund_refused" | "refund_made" | "refund_cancel_failed";
+  // refund_made the refund's status. Never an amount. refund_failed (the
+  // webhook, billing.tsx): a refund Stripe took that failed later, with the
+  // charge's id and Stripe's reason, a fixed word; the daily check reads it.
+  | "refund_requested" | "refund_refused" | "refund_made" | "refund_cancel_failed" | "refund_failed";
 
 export const AUDIT_DAYS = 90;
 

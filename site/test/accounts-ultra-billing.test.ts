@@ -209,7 +209,7 @@ describe("checkout of either plan", () => {
     expect(ultra.headers.get("location")).toBe("https://checkout.stripe.com/c/pay/cs_test_1");
     const session = sent.find((s) => new URL(s.url).pathname === "/v1/checkout/sessions")!;
     expect(session.form.get("line_items[0][price]")).toBe(PRICE.ultra.yearly);
-    expect(session.form.get("success_url")).toBe("http://localhost/account?billing=done_ultra");
+    expect(session.form.get("success_url")).toBe("http://localhost/account?billing=done_ultra&session={CHECKOUT_SESSION_ID}");
     expect(session.form.get("cancel_url")).toBe("http://localhost/account/billing?plan=ultra");
     // A form without a plan buys Pro, as before Ultra.
     sent = [];

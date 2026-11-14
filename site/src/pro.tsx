@@ -401,13 +401,24 @@ export type PlanPlace = "tease" | "pro_page" | "billing";
 // not on sale (a grant by hand) sees the two cards as a Pro reader does,
 // without the mark of its own plan. On the billing page, chosen is the plan
 // its Subscribe panel offers (that plan's link is the filled one), and move
-// the move its subscription can make, if any.
+// the move its subscription can make, if any. live: the account's
+// subscription can still bill (billing.tsx liveSubscription), so the page
+// draws no Subscribe panel (a checkout would go to the portal): a link that
+// would lead to that panel leads to the subscription's own panel instead
+// (#subscription, "Manage the subscription", plain, beside the panel's own
+// filled button), on Pro's card only, and Ultra's card has no link. That is
+// a Free reader whose subscription is past_due past its grace, unpaid,
+// incomplete, or had a payment refunded or disputed, and a reader whose plan
+// is not the subscription's (a grant by hand over it).
 export const SUBSCRIBE_PATH = "/account/sign-in?next=/account/billing";
 export const ULTRA_SUBSCRIBE_PATH = `/account/sign-in?next=${encodeURIComponent("/account/billing?plan=ultra")}`;
 
 export function planCards(
   lang: Lang,
-  o: { price: ProPrice | null; reader: PlanReader; place: PlanPlace; ultra?: ProPrice | null; chosen?: "pro" | "ultra"; move?: "up" | "down" | null },
+  o: {
+    price: ProPrice | null; reader: PlanReader; place: PlanPlace; ultra?: ProPrice | null; chosen?: "pro" | "ultra"; move?: "up" | "down" | null;
+    live?: boolean;
+  },
 ): PlanCard[] {
   const { price, reader, place } = o;
   const ultra = o.ultra ?? null;
@@ -415,11 +426,15 @@ export function planCards(
   const go = (href: string, key: Key, primary = false): PlanAction => ({ href, label: t(lang, key), primary });
   const account = place === "billing" ? [] : [go("/account", "expiring.pro_account")];
   const about = !paid && place !== "pro_page" ? [go("/pro", "pro.about_button")] : [];
+  // A subscription that can still bill: its own panel, where Manage is; no Subscribe panel is drawn.
+  const bound = place === "billing" && !!o.live;
+  const manage = [go("#subscription", "billing.manage")];
   // On the billing page with Ultra's panel chosen, Pro's link leads back to Pro's panel and is no longer the filled one.
   const ultraChosen = place === "billing" && !!ultra && o.chosen === "ultra";
   const buy = reader === "out" ? [go(SUBSCRIBE_PATH, "expiring.pro_sign_in", true)]
     : place !== "billing" ? [go("/account/billing", "propage.billing", true)]
     : !price ? []
+    : bound ? manage
     : ultraChosen ? [go(`/account/billing${lang === "fr" ? "?lang=fr" : ""}#subscribe`, "billing.panel_subscribe")]
     : [go("#subscribe", "billing.panel_subscribe", true)];
   const proActions = reader === "pro" ? account
@@ -457,6 +472,7 @@ export function planCards(
   if (!ultra) return cards;
   // Ultra's way in: through the sign-in page, to the billing page's Ultra panel, or a move for a Pro reader.
   const ultraActions: PlanAction[] = reader === "out" ? [go(ULTRA_SUBSCRIBE_PATH, "plans.ultra_subscribe")]
+    : bound && !(reader === "pro" && o.move === "up") ? (reader === "ultra" ? account : [])
     : reader === "free" ? [place === "billing"
       ? go(ultraChosen ? "#subscribe" : `/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#subscribe`, "plans.ultra_subscribe", ultraChosen)
       : go(`/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#subscribe`, "plans.ultra_subscribe")]

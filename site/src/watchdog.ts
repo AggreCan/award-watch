@@ -20,7 +20,10 @@ import { faultSummary } from "./search_db";
 // A refund pressed on the billing page (src/account/refund.ts) whose
 // subscription can still bill is an alert, one line per account, naming the
 // account's id and the subscription's Stripe id and nothing else, until the
-// subscription is cancelled (REFUNDS_TO_CANCEL_SQL below).
+// subscription is cancelled (REFUNDS_TO_CANCEL_SQL below). So are an account
+// billed by two Stripe subscriptions, a payment that landed on a deleted
+// account and a refund that failed after Stripe took it (MONEY_ITEMS_SQL),
+// each naming ids and nothing else.
 //
 // The same-day refresh (docs/intraday.md) sends no email of its own: a
 // failed cut is a row in intraday_runs, not a red workflow run, so this
@@ -102,6 +105,9 @@ export type IntradayRuns = {
 // account with a status that bills, so cancelling it (the console, Stripe's
 // dashboard and its notice) clears it. Over the audit's 90 days from ?1, at
 // most REFUND_ITEMS_MAX, as "<user id> <subscription id>" joined by commas.
+// A reversal is kept at the refund's own time, Stripe's whole seconds
+// (billing.tsx onReversed), and the press's audit row at the site's clock,
+// so "after the press" allows the minute before it.
 export const REFUND_ITEMS_MAX = 20;
 export const REFUNDS_TO_CANCEL_SQL =
   "SELECT group_concat(item, ',') AS items FROM (SELECT DISTINCT a.user_id || ' ' || p.subscription_id AS item " +
@@ -109,11 +115,47 @@ export const REFUNDS_TO_CANCEL_SQL =
   "WHERE a.event IN ('refund_cancel_failed', 'refund_requested') AND a.at >= ?1 " +
   "AND (p.status IS NULL OR p.status NOT IN ('canceled', 'incomplete_expired')) " +
   "AND (a.event = 'refund_cancel_failed' OR EXISTS (SELECT 1 FROM payment_reversals r " +
-  "WHERE r.customer_id = p.customer_id AND r.why = 'refunded' AND r.at >= a.at)) " +
+  "WHERE r.customer_id = p.customer_id AND r.why = 'refunded' AND r.at >= strftime('%Y-%m-%dT%H:%M:%fZ', a.at, '-60 seconds'))) " +
   `ORDER BY item LIMIT ${REFUND_ITEMS_MAX})`;
 export const REFUND_LOOKBACK_DAYS = 90;
 
 export type RefundToCancel = { userId: string; subscriptionId: string };
+
+// Three more items of the money path (docs/accounts.md, Payments), in one
+// statement over the accounts database, each the newest first, at most
+// MONEY_ITEMS_MAX of each:
+// - second: an account billed by more than one Stripe subscription, which
+//   is two live Stripe rows naming two subscriptions (a checkout started
+//   beside a first one whose notices had not landed yet). Each item is the
+//   user id and the subscriptions, space-separated; it stands while both
+//   rows are live, so cancelling the extra one (its notice ends its row)
+//   clears it. At ?1, the check's instant.
+// - deleted: a payment, or a subscription that could still bill, that landed
+//   on a deleted account (billing.tsx cancelForDeleted): "<user id> paid|live
+//   <subscription id>". Whether to refund is the operator's decision.
+// - failed: a refund Stripe took that failed later (refund.failed,
+//   billing.tsx onRefundFailed): "<user id> <charge id> <reason>".
+// The last two are audit rows, which nothing clears: each stands for
+// MONEY_ITEM_DAYS from ?2.
+export const MONEY_ITEMS_MAX = 20;
+export const MONEY_ITEM_DAYS = 14;
+export const MONEY_ITEMS_SQL =
+  "SELECT (SELECT group_concat(item, ',') FROM (SELECT e.user_id || ' ' || replace(group_concat(DISTINCT e.reference), ',', ' ') AS item " +
+  "FROM entitlements e WHERE e.source = 'stripe' AND e.revoked_at IS NULL AND e.reference IS NOT NULL " +
+  "AND e.starts_at <= ?1 AND (e.ends_at IS NULL OR e.ends_at > ?1) " +
+  `GROUP BY e.user_id HAVING COUNT(DISTINCT e.reference) > 1 ORDER BY MAX(e.created_at) DESC LIMIT ${MONEY_ITEMS_MAX})) AS second, ` +
+  "(SELECT group_concat(item, ',') FROM (SELECT a.user_id || ' ' || CASE WHEN a.detail LIKE 'stripe paid %' THEN 'paid' ELSE 'live' END || ' ' || " +
+  "substr(a.detail, instr(a.detail, ' sub_') + 1) AS item, MAX(a.at) AS t FROM audit a WHERE a.event = 'plan_changed' AND a.at >= ?2 " +
+  "AND (a.detail LIKE 'stripe paid on a deleted account, cancelled sub%' OR a.detail LIKE 'stripe live on a deleted account, cancelled sub%') " +
+  `GROUP BY item ORDER BY t DESC LIMIT ${MONEY_ITEMS_MAX})) AS deleted, ` +
+  "(SELECT group_concat(item, ',') FROM (SELECT a.user_id || ' ' || a.detail AS item, MAX(a.at) AS t FROM audit a " +
+  `WHERE a.event = 'refund_failed' AND a.at >= ?2 GROUP BY item ORDER BY t DESC LIMIT ${MONEY_ITEMS_MAX})) AS failed`;
+
+export type MoneyItems = {
+  second: { userId: string; subscriptions: string[] }[];
+  deleted: { userId: string; kind: "paid" | "live"; subscriptionId: string }[];
+  failed: { userId: string; chargeId: string; reason: string }[];
+};
 
 export type RunStatus = {
   run_at?: string;
@@ -152,6 +194,8 @@ export type Inputs = {
   // Refunds whose subscription can still bill (REFUNDS_TO_CANCEL_SQL), or
   // null when not read (no ACCOUNTS binding, or a fault).
   refundsToCancel?: RefundToCancel[] | null;
+  // The money path's other items (MONEY_ITEMS_SQL), or null when not read.
+  money?: MoneyItems | null;
   // The last finished day's figures (readFigures), or null when there is no current line.
   figures?: string | null;
 };
@@ -299,11 +343,43 @@ export function collectAlerts(i: Inputs): string[] {
   for (const r of i.refundsToCancel ?? []) {
     out.push(`A refund of a first payment pressed on the billing page went through, but its subscription can still bill: account ${r.userId}, subscription ${r.subscriptionId}. Cancel it at once in the operator console (the account's page, Cancel the subscription, At once) or in Stripe's dashboard.`);
   }
+  out.push(...moneyAlerts(i.money ?? null));
   return out;
+}
+
+// The money items' lines: ids, Stripe's fixed reason and nothing else.
+function moneyAlerts(m: MoneyItems | null): string[] {
+  if (!m) return [];
+  return [
+    ...m.second.map((s) => `An account is billed by more than one Stripe subscription: account ${s.userId}, subscriptions ${s.subscriptions.join(" and ")}. Each bills every period: cancel the extra one in Stripe's dashboard and refund what it took.`),
+    ...m.deleted.map((d) => d.kind === "paid"
+      ? `A payment landed on a deleted account: account ${d.userId}, subscription ${d.subscriptionId}. The subscription is cancelled and nothing was granted. Whether to refund the payment is the operator's decision (Stripe's dashboard).`
+      : `A subscription that could still bill reached a deleted account: account ${d.userId}, subscription ${d.subscriptionId}. It is cancelled and nothing was granted. Check in Stripe's dashboard whether it took a payment after the deletion.`),
+    ...m.failed.map((f) => `A refund failed after Stripe took it: account ${f.userId}, charge ${f.chargeId} (${f.reason}). The site changed no plan; the money is back in the Stripe balance. Refund the person another way, or grant the plan by hand.`),
+  ];
 }
 
 const USER_RE = /^[0-9a-f]{32}$/;
 const SUBSCRIPTION_RE = /^sub_[A-Za-z0-9]{1,100}$/;
+// A refund's charge, or the refund itself when it names none (Stripe's ch_, py_, re_ and pyr_ ids).
+const PAYMENT_RE = /^(ch|py|re|pyr)_[A-Za-z0-9]{1,100}$/;
+const REASON_RE = /^[a-z_]{1,40}$/;
+
+// The row MONEY_ITEMS_SQL answers, each item in its own shape; anything else is dropped.
+export function readMoneyItems(row: unknown): MoneyItems {
+  const r = row && typeof row === "object" ? (row as Record<string, unknown>) : {};
+  const items = (v: unknown): string[][] => (typeof v === "string" && v ? v.split(",").map((x) => x.split(" ")) : []);
+  return {
+    second: items(r.second).flatMap(([userId, ...subs]) =>
+      USER_RE.test(userId ?? "") && subs.length > 1 && subs.every((s) => SUBSCRIPTION_RE.test(s)) ? [{ userId, subscriptions: subs }] : []),
+    deleted: items(r.deleted).flatMap(([userId, kind, subscriptionId, rest]) =>
+      rest === undefined && USER_RE.test(userId ?? "") && (kind === "paid" || kind === "live") && SUBSCRIPTION_RE.test(subscriptionId ?? "")
+        ? [{ userId, kind, subscriptionId }] : []),
+    failed: items(r.failed).flatMap(([userId, chargeId, reason, rest]) =>
+      rest === undefined && USER_RE.test(userId ?? "") && PAYMENT_RE.test(chargeId ?? "") && REASON_RE.test(reason ?? "")
+        ? [{ userId, chargeId, reason }] : []),
+  };
+}
 
 // The row REFUNDS_TO_CANCEL_SQL answers: its items, each an account id and a
 // subscription id in their own shapes; anything else in the text is dropped.
@@ -469,6 +545,19 @@ async function readRefunds(env: Env, now: Date): Promise<RefundToCancel[] | null
   }
 }
 
+// The money items, or null: as with the refunds, no binding or a fault is
+// logged and never a line of its own.
+async function readMoney(env: Env, now: Date): Promise<MoneyItems | null> {
+  if (!env.ACCOUNTS) return null;
+  try {
+    const since = new Date(now.getTime() - MONEY_ITEM_DAYS * 24 * HOUR).toISOString();
+    return readMoneyItems(await env.ACCOUNTS.prepare(MONEY_ITEMS_SQL).bind(now.toISOString(), since).first());
+  } catch (e) {
+    console.log(`watchdog: money items not read (${faultSummary(e)})`);
+    return null;
+  }
+}
+
 export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const stats = await loadStats(env).catch(() => null);
   let backupUploaded: Date | null = null;
@@ -507,9 +596,10 @@ export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const { intraday, intradayProblem } = await readIntraday(env, now);
   const livePro = await countLivePro(env, now);
   const refundsToCancel = await readRefunds(env, now);
+  const money = await readMoney(env, now);
   return {
     now, dataAsOf, backupUploaded, status, statusProblem: problems.join(" ") || null, intraday, intradayProblem, livePro,
-    figures, refundsToCancel,
+    figures, refundsToCancel, money,
   };
 }
 

@@ -423,7 +423,8 @@ describe("checkout and the portal", () => {
       client_reference_id: await userId(email),
       "subscription_data[metadata][user_id]": await userId(email),
       "managed_payments[enabled]": "true",
-      success_url: "http://localhost/account?billing=done",
+      // Stripe's template, sent as written (hardening-money.test.ts reads it back on the return).
+      success_url: "http://localhost/account?billing=done&session={CHECKOUT_SESSION_ID}",
       cancel_url: "http://localhost/account/billing",
       locale: "en",
       customer_email: email,
@@ -440,7 +441,7 @@ describe("checkout and the portal", () => {
     const form = Object.fromEntries(sent[0].form);
     expect(form).toMatchObject({
       "line_items[0][price]": "price_monthlyTEST", locale: "fr-CA", customer: cus,
-      success_url: "http://localhost/account?billing=done&lang=fr", cancel_url: "http://localhost/account/billing?lang=fr",
+      success_url: "http://localhost/account?billing=done&lang=fr&session={CHECKOUT_SESSION_ID}", cancel_url: "http://localhost/account/billing?lang=fr",
     });
     expect(form.customer_email).toBeUndefined();
     // Managed Payments is asked for on every session (it applies only to a

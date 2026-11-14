@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import accountsSchema from "../accounts_schema.sql?raw";
 import { LIVE_PRO_SQL, planFromRows, type EntitlementRow } from "../src/account/entitlements";
 import {
-  BACKUP_KEY, FIGURES_KEY, INTRADAY_RUNS_SQL, INTRADAY_STEP_NOTICES, LOOKUP_MAX_BYTES, REFUNDS_TO_CANCEL_SQL, buildEmail, collectAlerts,
+  BACKUP_KEY, FIGURES_KEY, INTRADAY_RUNS_SQL, INTRADAY_STEP_NOTICES, LOOKUP_MAX_BYTES, MONEY_ITEMS_SQL, REFUNDS_TO_CANCEL_SQL, buildEmail, collectAlerts,
   collectNotices, gatherInputs, readFigures, readIntradayRuns, readStatus, runWatchdog,
 } from "../src/watchdog";
 import { testEnv } from "./assets";
@@ -276,11 +276,14 @@ describe("daily check: the same-day refresh's runs", () => {
     // The window's bound written as intraday_runs writes its times; the plans' instant as toISOString writes it.
     // The accounts database also answers the refunds to cancel (test/accounts-refund.test.ts), over the audit's 90 days.
     expect(search.calls).toEqual([{ sql: INTRADAY_RUNS_SQL, params: ["2026-10-19T06:00:00Z"] }]);
+    // And the money items (test/hardening-money.test.ts): the check's instant, and their 14 days.
     expect(accounts.calls).toEqual([
       { sql: LIVE_PRO_SQL, params: ["2026-10-20T06:00:00.000Z"] },
       { sql: REFUNDS_TO_CANCEL_SQL, params: ["2026-07-22T06:00:00.000Z"] },
+      { sql: MONEY_ITEMS_SQL, params: ["2026-10-20T06:00:00.000Z", "2026-10-06T06:00:00.000Z"] },
     ]);
     expect(inputs.refundsToCancel).toEqual([]);
+    expect(inputs.money).toEqual({ second: [], deleted: [], failed: [] });
     expect(inputs.intraday).toEqual({ lastOk: "2026-10-20T03:45:30Z", runs: 9, failed: 0, rowsNew: 12 });
     expect(inputs.intradayProblem).toBeNull();
     expect(inputs.livePro).toBe(2);
