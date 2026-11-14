@@ -7,8 +7,9 @@
 // made up), and the strings: no word of section 3.3 of the design, no dash.
 import { describe, expect, it } from "vitest";
 import { allKeys, rawEntry, type Key } from "../src/i18n";
-import { LONG_RUN, type LineRecord, type LineSource, lineKey, lineLabel, parseLine } from "../src/lines";
+import { type FollowRecord, LONG_RUN, type LineRecord, type LineSource, lineKey, lineLabel, parseFollow, parseLine } from "../src/lines";
 import { markText } from "../src/lines_view";
+import { matchedLines } from "../src/pages/follows";
 import { HolderPanel, type HolderState } from "../src/pages/holders";
 
 const src3 = (o: Partial<LineSource>): LineSource => ({
@@ -179,15 +180,18 @@ describe("the four worked examples in words", () => {
 const EN = /\b(strong|weak|entrench\w*|dominan\w*|vulnerab\w*|risk\w*|safe|beatable|winnable|contest\w*|uncontested|challeng\w*|lock\w*|captive|stronghold|grip|favour\w*|favor\w*|prefer\w*|insider|monopol\w*|sole[ -]source|low competition|uncompetitive|suspicious|questionable|red flag|opportunit\w*|likely|odds|probabl\w*|predict\w*|forecast\w*|should|recommend\w*|renew\w*|incumbent\w*)\b/i;
 const FR = /(?<![\p{L}\p{N}])(fort|forte|faibles?|enracin\p{L}*|dominan\p{L}*|vulnérab\p{L}*|risqu\p{L}*|contest\p{L}*|verrouill\p{L}*|captif|captive|bastion|favori\p{L}*|privilégi\p{L}*|initié\p{L}*|monopol\p{L}*|fournisseur unique|faible concurrence|suspect\p{L}*|douteu\p{L}*|occasion\p{L}*|probab\p{L}*|prédi\p{L}*|prévision\p{L}*|recommand\p{L}*|devrai\p{L}*|reconduct\p{L}*|reconduit\p{L}*|renouvel\p{L}*)(?![\p{L}\p{N}])/iu;
 const CHANCE_KEYS: Key[] = ["line.not_odds", "methodology.holders_what"];
-const ADVICE_KEYS: Key[] = ["line.disclaimer", "methodology.holders_what", "terms.advisory"];
+const ADVICE_KEYS: Key[] = ["line.disclaimer", "methodology.holders_what", "terms.advisory", "follow.disclaimer", "terms.advisory_follows"];
 
 describe("the strings", () => {
-  const keys = allKeys().filter((k) => k.startsWith("line.") || k.startsWith("methodology.holders") || k === "methodology.toc_holders" ||
-    k === "plans.lines" || k === "terms.advisory") as Key[];
+  const keys = allKeys().filter((k) => k.startsWith("line.") || k.startsWith("follow.") || k.startsWith("methodology.holders") ||
+    k.startsWith("methodology.toc_holders") || k === "plans.lines" || k.startsWith("terms.advisory")) as Key[];
 
   it("keep every word of section 3.3 out, in both languages", () => {
-    expect(keys.length).toBeGreaterThan(55);
-    for (const key of ["line.panel", "line.signed_out", "line.free_window", "methodology.holders_limits", "plans.lines", "terms.advisory"] as Key[]) {
+    expect(keys.length).toBeGreaterThan(90);
+    for (const key of [
+      "line.panel", "line.signed_out", "line.free_window", "methodology.holders_limits", "plans.lines", "terms.advisory", "follow.panel",
+      "follow.lead", "follow.free_cap", "follow.disclaimer", "methodology.holders_follow", "methodology.toc_holders_follows", "terms.advisory_follows",
+    ] as Key[]) {
       expect(keys, key).toContain(key);
     }
     for (const key of keys) {
@@ -213,9 +217,65 @@ describe("the strings", () => {
     }
   });
 
-  it("put the Terms paragraph as section 9.2 writes it, in both languages", () => {
-    const { en, fr } = rawEntry("terms.advisory");
+  it("put the Terms paragraph as section 9.2 writes it while may follow shows, and without it otherwise", () => {
+    const off = rawEntry("terms.advisory");
+    expect(off.en).toBe("Some features calculate, from public records, what may interest a reader, such as the notices that match the records of the organization a reader names and a contract holder's earlier records with the same buyer. These calculations follow the fixed rules on the {methodology} page. They do not constitute advice, they say nothing about the merit of any organization or about how any buyer procures, and they may be wrong or incomplete. They are Award Watch's own and are neither produced nor endorsed by the Government of Canada. Award Watch is not responsible for their accuracy or for any decision made on them, including a decision to bid or not to bid.");
+    expect(off.fr).toBe("Certaines fonctions calculent, à partir de dossiers publics, ce qui peut intéresser un lecteur, comme les avis qui correspondent aux dossiers de l'organisation qu'il indique et les dossiers antérieurs du titulaire d'un contrat auprès du même acheteur. Ces calculs suivent les règles fixes décrites à la page {methodology}. Ils ne constituent pas un conseil, ne disent rien du mérite d'une organisation ni de la façon dont un acheteur passe ses marchés, et peuvent être erronés ou incomplets. Ils sont propres à Award Watch et ne sont ni produits ni approuvés par le gouvernement du Canada. Award Watch n'est pas responsable de leur exactitude ni d'aucune décision prise sur leur base, y compris celle de soumissionner ou non.");
+    expect(off.en + off.fr).not.toMatch(/may follow|faire suite/);
+    const { en, fr } = rawEntry("terms.advisory_follows");
     expect(en).toBe("Some features calculate, from public records, what may interest a reader, such as the notices that match the records of the organization a reader names, a contract holder's earlier records with the same buyer and the earlier contracts an open notice may follow. These calculations follow the fixed rules on the {methodology} page. They do not constitute advice, they say nothing about the merit of any organization or about how any buyer procures, and they may be wrong or incomplete. They are Award Watch's own and are neither produced nor endorsed by the Government of Canada. Award Watch is not responsible for their accuracy or for any decision made on them, including a decision to bid or not to bid.");
     expect(fr).toBe("Certaines fonctions calculent, à partir de dossiers publics, ce qui peut intéresser un lecteur, comme les avis qui correspondent aux dossiers de l'organisation qu'il indique, les dossiers antérieurs du titulaire d'un contrat auprès du même acheteur et les contrats antérieurs auxquels un avis ouvert pourrait faire suite. Ces calculs suivent les règles fixes décrites à la page {methodology}. Ils ne constituent pas un conseil, ne disent rien du mérite d'une organisation ni de la façon dont un acheteur passe ses marchés, et peuvent être erronés ou incomplets. Ils sont propres à Award Watch et ne sont ni produits ni approuvés par le gouvernement du Canada. Award Watch n'est pas responsable de leur exactitude ni d'aucune décision prise sur leur base, y compris celle de soumissionner ou non.");
+  });
+});
+
+// -- may follow -------------------------------------------------------------------------
+
+// The design's worked example (section 4.3) as the pipeline's follows.py writes its closest row on the development
+// copy: a close text match, 7 of 8 words, ending 31 days before the expected start; the holder's record, run 1.
+const THS: FollowRecord = {
+  v: 1, src: 1, ref: "cb-725-74465042", t: ["NPP S5678424 - THS SA - One (1) Computer Application Support.", null], oid: 7, wh: 0,
+  end: "2026-10-23", deg: "close", sol: null, num: null, buyer: "dnd-mdn", client: 0, lvl: "class", code: ["801116"], words: [7, 8],
+  days: -31, from: "start",
+  line: rec([{ src: 1, lvl: "class", key: ["801116"], held: 2, run: 1, first: "2025-11-17", total: 28, others: 20, c: 2, nc: 0, u: 0 }],
+    { buyer: "dnd-mdn", own: { comp: 1, meth: "ST", bids: null, amd: 0, growth: null, end0: "2026-10-23", end: "2026-10-23" } }),
+};
+const plain = (s: string) => s.replace(/[\u00a0\u202f]/g, " ").replace(/\u2019/g, "'");
+
+describe("may follow's rows", () => {
+  it("read the worked example and refuse a row that does not read in full", () => {
+    expect(parseFollow(JSON.stringify(THS))).toEqual(THS);
+    const withheld = { ...THS, oid: null, wh: 1, line: null };
+    expect(parseFollow(JSON.stringify(withheld))).toEqual(withheld);
+    const number = { ...THS, deg: "number", sol: "W8486-207442/A", lvl: null, code: [] };
+    expect(parseFollow(JSON.stringify(number))).toEqual(number);
+    const bad: [string, unknown][] = [
+      ["another form", { ...THS, v: 2 }], ["a number match naming no number", { ...THS, deg: "number" }],
+      ["a text match naming a number", { ...THS, num: "W8486-207442" }], ["a text match sharing no code", { ...THS, lvl: null, code: [] }],
+      ["a withheld holder named", { ...THS, wh: 1 }], ["a withheld holder with a record", { ...THS, oid: null, wh: 1 }],
+      ["a family at class level", { ...THS, code: ["8011"] }], ["more words shared than all", { ...THS, words: [9, 8] }],
+      ["a broken record", { ...THS, line: { ...THS.line, v: 2 } }], ["a buyer that is no id", { ...THS, buyer: "DND MDN" }],
+      ["a source out of range", { ...THS, src: 4 }], ["a bad end", { ...THS, end: "2026-10" }],
+    ];
+    for (const [why, v] of bad) expect(parseFollow(JSON.stringify(v)), why).toBeNull();
+    expect(parseFollow("{")).toBeNull();
+    expect(parseFollow("x".repeat(20_001))).toBeNull();
+  });
+
+  it("say what matched in the worked example's words, in both languages", () => {
+    expect(matchedLines("en", { j: THS, holder: "H", buyer: "National Defence" })).toEqual([
+      "Same buyer, National Defence", "Same UNSPSC class, 801116", "Titles share 7 of 8 words",
+      "End date 31 days before this notice's expected start",
+    ]);
+    expect(matchedLines("fr", { j: THS, holder: "H", buyer: "Défense nationale" }).map(plain)).toEqual([
+      "Même acheteur, Défense nationale", "Même classe UNSPSC, 801116", "Les titres ont 7 mots sur 8 en commun",
+      "Date de fin 31 jours avant le début prévu de cet avis",
+    ]);
+    const one: FollowRecord = { ...THS, words: [1, 3], days: 1, from: "pub", code: ["801116", "801117"] };
+    expect(matchedLines("fr", { j: one, holder: null, buyer: null }).map(plain)).toEqual([
+      "Même acheteur, dnd-mdn", "Mêmes classes UNSPSC, 801116, 801117", "Les titres ont 1 mot sur 3 en commun",
+      "Date de fin 1 jour après la publication de cet avis",
+    ]);
+    expect(matchedLines("en", { j: { ...THS, days: 0 }, holder: null, buyer: "B" }).at(-1)).toBe("End date on this notice's expected start");
+    expect(markText("en", THS.line!)).toBe("Earlier records · 1 earlier");
   });
 });

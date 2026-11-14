@@ -29,7 +29,7 @@ import { allowsRadarDepth, requestPlan } from "../plan";
 import { ProNote } from "../pro";
 import { MAX_YEARS, dollars, fiscalYearOf, num, orgIdOf, orgNumber } from "../records_db";
 import {
-  EARLIER_CLASSES_MAX, EARLIER_SHOWN, INCUMBENTS_MAX, type Row, readEarlierAwards, readIncumbents, readOrgFeed,
+  EARLIER_CLASSES_MAX, EARLIER_SHOWN, INCUMBENTS_MAX, type Read, type Row, readEarlierAwards, readFollows, readIncumbents, readOrgFeed,
 } from "../records_tables";
 import { SITE_ORIGIN } from "../seo";
 import { money } from "./shared";
@@ -77,13 +77,28 @@ export function nearestTitles(rows: Row[], en: string | null, fr: string | null)
 
 export type Earlier = { state: "ready"; rows: Row[] } | { state: "unavailable" } | null;
 
-// null when the notice is not open or names no buyer or class; otherwise the rows or "unavailable".
-export async function loadEarlierAwards(env: Env, d: TenderDetail, open: boolean, today: string): Promise<Earlier> {
+// What a read of rec_follows left (pages/follows.tsx reads it): null when
+// none was asked for; noFollows when the database holds no rec_follows yet.
+export type FollowsRead = (Read & { noFollows?: true }) | null;
+
+// The earlier awards: null when the notice is not open or names no buyer or
+// class; otherwise the rows or "unavailable". tref, the notice's reference in
+// lower case, asks for the earlier contracts it may follow too (a signed-in
+// reader while FOLLOWS_PANEL is "on"): in the same batch, or in a batch of
+// their own when the notice reads no earlier awards. Without it the page
+// reads exactly what it read before may follow.
+export async function loadEarlierAwards(
+  env: Env, d: TenderDetail, open: boolean, today: string, tref?: string,
+): Promise<{ earlier: Earlier; follows: FollowsRead }> {
   const classes = tenderClasses(d.codes);
-  if (!open || !d.buyer_id || !classes.length) return null;
-  const read = await readEarlierAwards(env, d.buyer_id, firstDay(today), classes);
-  if (read.state !== "ready") return { state: "unavailable" };
-  return { state: "ready", rows: nearestTitles(read.rows[0] ?? [], d.title_en, d.title_fr) };
+  if (!open) return { earlier: null, follows: null };
+  if (!d.buyer_id || !classes.length) return { earlier: null, follows: tref === undefined ? null : await readFollows(env, tref) };
+  const read = await readEarlierAwards(env, d.buyer_id, firstDay(today), classes, tref);
+  const earlier: Earlier = read.state !== "ready" ? { state: "unavailable" }
+    : { state: "ready", rows: nearestTitles(read.rows[0] ?? [], d.title_en, d.title_fr) };
+  if (tref === undefined) return { earlier, follows: null };
+  if (read.state !== "ready") return { earlier, follows: read };
+  return { earlier, follows: read.noFollows ? read : { ...read, rows: [read.rows[1] ?? []] } };
 }
 
 export const EarlierAwards: FC<{ lang: Lang; earlier: Earlier }> = ({ lang, earlier }) => {

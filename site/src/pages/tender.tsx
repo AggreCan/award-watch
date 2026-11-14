@@ -18,6 +18,7 @@ import { categoryLabel, fmtInt, pick, segmentLabel, t, tj, tn, type Key, type La
 import { clockOf, closesAtUtc, closesLine, closingTime, tenderState, type Clock } from "../closing";
 import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { EarlierAwards, loadEarlierAwards } from "./backbone";
+import { FollowsPanel, followsAccess, followsFromRead } from "./follows";
 import { closingStart } from "../calendar";
 import { tenderIcsPath } from "./ics";
 import { tenderInstruments } from "../instruments";
@@ -109,8 +110,16 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
 
   const clock = clockOf(c.env);
   const state = tenderState(d.status, d.closing, clock);
+  const today = todayOf(stats.data_as_of);
+  // The earlier contracts an open notice may follow (pages/follows.tsx), for a signed-in reader while FOLLOWS_PANEL
+  // is "on": read in the earlier awards' batch. Otherwise nothing is asked for and the page is as it was.
+  const follow = state === "open" || state === "closing" ? await followsAccess(c) : null;
   // The buyer's earlier records like this notice, while it is open (records database).
-  const earlier = await loadEarlierAwards(c.env, d, state === "open" || state === "closing", todayOf(stats.data_as_of));
+  const loaded = await loadEarlierAwards(c.env, d, state === "open" || state === "closing", today,
+    follow ? d.reference.toLowerCase() : undefined);
+  const earlier = loaded.earlier;
+  const firstSeen = [d.first_seen, ...d.amendments.map((v) => v.first_seen)].filter(Boolean).sort()[0] ?? null;
+  const follows = follow ? followsFromRead(loaded.follows, follow.plan, lang, firstSeen) : null;
   // A notice closing soon: the countdown goes under its closing time.
   const closes = state === "closing" ? closesAtUtc(d.closing) : null;
   const notice = closes ? d.reference.toLowerCase() : undefined;
@@ -319,6 +328,8 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       </Panel>
 
       <TenderInstrumentsPanel lang={lang} rows={tenderInstruments(d)} />
+
+      {follows ? <FollowsPanel lang={lang} state={follows} today={today} /> : null}
 
       <EarlierAwards lang={lang} earlier={earlier} />
 

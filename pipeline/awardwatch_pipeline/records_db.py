@@ -167,8 +167,10 @@ EXPIRING_PROV = Table(16, "rec_expiring_prov", "pk", ("k", "prov", "derived"))
 CONTRACT_INDIGENOUS = Table(17, "rec_contract_indigenous", "k", ("psib", "ib"))
 # The holder's record of a radar row (lines.py, lines_rows), keyed as its rec_expiring row.
 LINES = Table(18, "rec_lines", "k", ("sk", "j"))
+# The earlier contracts an open notice may follow (follows.py, follows_rows), keyed by the notice and the record.
+FOLLOWS = Table(19, "rec_follows", "k", ("tref", "rank", "j"))
 TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE, DETAILS, CLASSES, EXPIRING, CONTRACTS, GSIN,
-          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV, CONTRACT_INDIGENOUS, LINES)
+          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV, CONTRACT_INDIGENOUS, LINES, FOLLOWS)
 BY_CODE = {t.code: t for t in TABLES}
 
 # The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
@@ -176,9 +178,9 @@ BY_CODE = {t.code: t for t in TABLES}
 # rec_buyer_years, rec_due. Recorded in meta (META_LAYOUT) by the full load
 # that wrote it; a sync that finds another reloads in full by itself. The
 # tables added beside them (rec_details to rec_gsin, then rec_events, rec_instruments, rec_holders,
-# rec_expiring_prov, rec_contract_indigenous and rec_lines) leave it at 2: no table D1 holds changed form, the
-# nightly schema creates a missing table, and its rows are all new to the ledger, so the ordinary changes fill
-# it. A column added to any of the eighteen raises it.
+# rec_expiring_prov, rec_contract_indigenous, rec_lines and rec_follows) leave it at 2: no table D1 holds changed
+# form, the nightly schema creates a missing table, and its rows are all new to the ledger, so the ordinary changes
+# fill it. A column added to any of the nineteen raises it.
 LAYOUT = 2
 
 # The source numbers the site's records_db.ts SOURCE_NUMBER repeats.
@@ -666,6 +668,16 @@ def lines_rows(conn: sqlite3.Connection, window: Iterable[tuple], tally: dict | 
         yield row[0], sk, j
 
 
+def follows_rows(conn: sqlite3.Connection) -> Iterator[tuple]:
+    """rec_follows's rows, in FOLLOWS.written order, from the lines stage's tender_follows: one per open notice and
+    earlier record kept (follows.py), keyed by the notice's reference and the record's own key, so a record that
+    moves rank is one row changed; tref is the notice's URL reference in lower case, what its page asks by. A night
+    whose stage kept none gives no rows, and the table empties with it."""
+    for tref, rank, j in conn.execute("SELECT reference, rank, j FROM tender_follows ORDER BY reference, rank"):
+        data = json.loads(j)
+        yield key_of(f"follow:{tref}:{data.get('src')}:{data.get('ref')}"), tref, rank, j
+
+
 # -- the published contracts' pages (rec_contracts, rec_gsin, rec_contract_indigenous) --
 
 # One row per row of the contracts table, keyed as its records row is
@@ -882,7 +894,8 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
     and the one an award date after it is read against (NOTICE_DAY).
     static_dir is the static export (default data/out/static), whose 12-month
     radar window becomes rec_expiring and rec_expiring_prov, and with the lines
-    stage's expiring_lines, rec_lines.
+    stage's expiring_lines, rec_lines; the stage's tender_follows becomes
+    rec_follows.
     """
     day = today or date.fromisoformat(today_iso()[:10])
     as_of = day.isoformat()
@@ -977,8 +990,13 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
 
     # The published contracts' pages, and the names of the GSIN codes they carry.
     left_out = {"grants_withheld": counts.grants_withheld, "bad_buyers": counts.bad_buyers}
-    # The holder's record of each window row the lines stage counted (lines.py).
+    # The holder's record of each window row the lines stage counted (lines.py), and the earlier contracts each
+    # open notice may follow (follows.py).
     fill(LINES, lines_rows(conn, window, left_out))
+    try:
+        fill(FOLLOWS, follows_rows(conn))
+    except sqlite3.IntegrityError:
+        raise ValueError("two earlier contracts of one notice have the same key; key_of needs more bits") from None
     try:
         fill(CONTRACTS, published_rows(conn, left_out))
     except sqlite3.IntegrityError:

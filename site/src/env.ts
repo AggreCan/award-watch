@@ -50,6 +50,13 @@ export interface Env {
   // The switch: "true" opens /account. Anything else keeps every account
   // route a 404 and every public page exactly as it was.
   ACCOUNTS_ENABLED?: string;
+  // May follow's switch (src/pages/follows.tsx): "on" shows a signed-in
+  // reader the earlier contracts an open notice may follow, and the
+  // Methodology and the Terms describe them. Anything else ("off" in
+  // wrangler.jsonc until the operator's hand check of production matches):
+  // the notice page byte for byte as before, no records statement for it,
+  // and no word of may follow on any page.
+  FOLLOWS_PANEL?: string;
   // "log" writes sign-in messages to the local outbox, and only on a local
   // host. Unset (production), they go out through the MAIL binding, or to
   // the stub sender when the binding or MAIL_FROM is missing.

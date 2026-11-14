@@ -8,7 +8,10 @@ import type { AppEnv } from "../env";
 import { fmtInt, t, tj, type Key } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { pageSeo } from "../seo";
-import { CODE_CHARS, LINE_YEARS, LONG_RUN, RUN_GAP_DAYS, RUN_OVERLAP_DAYS, SIMILAR_GROUP_MAX, SIMILAR_PREFIX } from "../lines";
+import {
+  CODE_CHARS, FOLLOW_AFTER_DAYS, FOLLOW_BEFORE_DAYS, FOLLOW_CLOSE, FOLLOW_MAX, FOLLOW_MIN, LINE_YEARS, LONG_RUN, RUN_GAP_DAYS,
+  RUN_OVERLAP_DAYS, SIMILAR_GROUP_MAX, SIMILAR_PREFIX, followsPanelOn,
+} from "../lines";
 import { BAND_KEY } from "../lines_view";
 import { ENTRANT_LOOKBACK, FREE_YEARS } from "../records_db";
 import { EXPIRING_TEASER_ROWS } from "./expiring";
@@ -23,7 +26,10 @@ import { EXPIRING_TEASER_ROWS } from "./expiring";
 // The "Matching notices" section states the rules public/fit.js scores by,
 // its table and figures drawn from that module's constants; the Terms' No
 // Warranty section links the page. The "Holder's record" section states the
-// rules the pipeline's lines.py counts by, every figure from src/lines.ts.
+// rules the pipeline's lines.py counts by, every figure from src/lines.ts;
+// while FOLLOWS_PANEL is "on" it is named for the earlier contracts too and
+// holds may follow's paragraph (#follows, the rules of follows.py), and
+// otherwise says nothing of them.
 // The "Derived provinces" part of "Statuses and Regions" states the place
 // rule of the pipeline's places.py; its figures were counted on the files of
 // 2026-11-06. The "Payments in the Public Accounts" section states the rules
@@ -86,6 +92,9 @@ const List = ({ keys, lang, vars }: { keys: Key[]; lang: "en" | "fr"; vars?: Par
 export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env).catch(() => null);
+  const follows = followsPanelOn(c.env);
+  const tocKey = (id: string, key: Key): Key => (id === "holders" && follows ? "methodology.toc_holders_follows" : key);
+  const pct = (share: number) => fmtInt(Math.round(share * 100), lang);
   return page(
     c,
     <Layout lang={lang} title={t(lang, "methodology.title")} dataAsOf={stats?.data_as_of ?? null} active="/methodology" seo={pageSeo("methodology", lang)}>
@@ -93,7 +102,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
       <div class="doc-layout">
         <nav class="toc" aria-label={t(lang, "toc.label")}>
           <span class="toc-title">{t(lang, "toc.title")}</span>
-          {TOC.map(([id, key]) => <a href={`#${id}`}>{t(lang, key)}</a>)}
+          {TOC.map(([id, key]) => <a href={`#${id}`}>{t(lang, tocKey(id, key))}</a>)}
         </nav>
         <div class="doc">
 
@@ -217,7 +226,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           </p>
           <p>{t(lang, "methodology.matching_limits", { min: fmtInt(MATCH_MIN, lang) })}</p>
 
-          <h2 id="holders">{t(lang, "methodology.toc_holders")}</h2>
+          <h2 id="holders">{t(lang, tocKey("holders", "methodology.toc_holders"))}</h2>
           <p>{t(lang, "methodology.holders_what")}</p>
           <p>{t(lang, "methodology.holders_cell", { chars: fmtInt(CODE_CHARS, lang), years: fmtInt(LINE_YEARS, lang) })}</p>
           <p>{t(lang, "methodology.holders_run", { gap: fmtInt(RUN_GAP_DAYS, lang), overlap: fmtInt(RUN_OVERLAP_DAYS, lang) })}</p>
@@ -237,6 +246,14 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
             </Table>
           </div>
           <p>{t(lang, "methodology.holders_similar", { prefix: fmtInt(SIMILAR_PREFIX, lang), group: fmtInt(SIMILAR_GROUP_MAX, lang) })}</p>
+          {follows ? (
+            <p id="follows">
+              {t(lang, "methodology.holders_follow", {
+                years: fmtInt(LINE_YEARS, lang), min: pct(FOLLOW_MIN), close: pct(FOLLOW_CLOSE), before: fmtInt(FOLLOW_BEFORE_DAYS, lang),
+                after: fmtInt(FOLLOW_AFTER_DAYS, lang), max: fmtInt(FOLLOW_MAX, lang),
+              })}
+            </p>
+          ) : null}
           <p>{t(lang, "methodology.holders_limits")}</p>
 
           <h2 id="people">{t(lang, "methodology.toc_people")}</h2>

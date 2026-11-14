@@ -2121,6 +2121,13 @@ const STRINGS = {
     en: "One organization can appear under several names, and its records are then split between profiles. Where another holder in the same line of work has a name that begins with the same {prefix} characters, shares the merge rules' match key, or belongs to the same corporate family, its records are listed beside the holder's, under its own name and counted apart. An opening that more than {group} holders in a line of work share, as the harbour authorities do, is a common phrase and adds no one to the list. A holder can therefore have more records than shown, and a label never adds the two.",
     fr: "Une même organisation peut figurer sous plusieurs noms, et ses dossiers sont alors répartis entre plusieurs profils. Lorsqu'un autre titulaire du même genre de travail porte un nom qui commence par les mêmes {prefix} caractères, partage la clé de rapprochement des règles de fusion ou appartient à la même famille d'entreprises, ses dossiers sont présentés à côté de ceux du titulaire, sous son propre nom et comptés à part. Un début de nom que plus de {group} titulaires partagent dans un même genre de travail, comme celui des administrations portuaires, est une formule courante et n'ajoute personne à la liste. Un titulaire peut donc avoir plus de dossiers que ce qui est montré, et un libellé n'additionne jamais les deux.",
   },
+  // While FOLLOWS_PANEL is "on" (pages/follows.tsx): the section's name in the contents and its heading, and the
+  // paragraph on may follow (the rules of the pipeline's follows.py, every figure from src/lines.ts).
+  "methodology.toc_holders_follows": { en: "Holder's Record and Earlier Contracts", fr: "Dossiers du titulaire et contrats antérieurs" },
+  "methodology.holders_follow": {
+    en: "An open notice may follow a contract of the same buyer, or of the client department it names first, awarded in the last {years} fiscal years and no later than the day the notice was published, when one of these holds: the two carry the same solicitation number; the notice's title or description names the contract's number; or the two share a UNSPSC class (a family when the notice carries none), their titles share at least {min}% of their distinct words (words of four letters or more, without digits or common procurement words), and the contract ends between {before} days before and {after} days after the notice's expected start, or its publication date when it states none. The notice's own numbers, those of standing offers and supply arrangements, and a number that contracts of more than one organization carry are not compared, and standing offers and supply arrangements themselves are left out. A text match is close from {close}% of the words, partial from {min}%. Up to {max} contracts are kept, number matches first, then by the share of words, then by the end date nearest the start; a contract published in two sources is kept once. Each kept contract carries its holder's record by the rules above.",
+    fr: "Un avis ouvert pourrait faire suite à un contrat du même acheteur, ou du ministère client qu'il nomme en premier, attribué au cours des {years} derniers exercices et au plus tard le jour de la publication de l'avis, lorsque l'une de ces conditions est remplie : les deux portent le même numéro d'invitation; le titre ou la description de l'avis nomme le numéro du contrat; ou les deux partagent une classe UNSPSC (une famille lorsque l'avis n'en porte aucune), leurs titres ont au moins {min} % de leurs mots distincts en commun (les mots de quatre lettres ou plus, sans chiffres ni mots courants des achats), et le contrat prend fin entre {before} jours avant et {after} jours après le début prévu de l'avis, ou sa date de publication s'il n'en précise aucun. Les numéros propres à l'avis, ceux des offres à commandes et des arrangements en matière d'approvisionnement, et un numéro que portent des contrats de plus d'une organisation ne sont pas comparés, et les offres à commandes et les arrangements en matière d'approvisionnement eux-mêmes sont écartés. Un rapprochement de texte est étroit à partir de {close} % des mots, partiel à partir de {min} %. Au plus {max} contrats sont retenus, les rapprochements par numéro d'abord, puis selon la part de mots communs, puis selon la date de fin la plus proche du début; un contrat publié dans deux sources n'est retenu qu'une fois. Chaque contrat retenu porte les dossiers de son titulaire selon les règles ci-dessus.",
+  },
   "methodology.holders_limits": {
     en: "Departments code the same work in different ways, so one kind of work can be split across codes, and a broad class can gather unrelated work. A contract that carries only a UNSPSC segment gets no label. A supplier withheld as a private individual is never named; its contracts count only in a total. One organization under several names is shown under each name (above), and two businesses with the same name share one profile, which says so. Nothing here is public: a reader must be signed in, and no file, feed or API carries these labels.",
     fr: "Les ministères codent un même travail de façons différentes : un même genre de travail peut donc se répartir entre plusieurs codes, et une classe large peut réunir des travaux sans rapport. Un contrat qui ne porte qu'un segment UNSPSC ne reçoit aucun libellé. Un fournisseur non divulgué parce qu'il s'agit d'un particulier n'est jamais nommé; ses contrats ne comptent que dans un total. Une organisation qui figure sous plusieurs noms est présentée sous chacun d'eux (ci-dessus), et deux entreprises qui portent le même nom partagent un profil, qui l'indique. Rien de ceci n'est public : il faut être connecté, et aucun fichier, aucun fil ni aucune API ne porte ces libellés.",
@@ -2692,7 +2699,13 @@ const STRINGS = {
     fr: "Les chiffres sont tirés des sources telles que publiées et peuvent en reprendre les erreurs. Le site et ses fichiers sont fournis tels quels, sans garantie d'exactitude, d'exhaustivité ou d'adéquation à un usage.",
   },
   // Between the warranty and the liability paragraphs, so the Pro section's reference to No Warranty covers it.
+  // terms.advisory_follows replaces it while FOLLOWS_PANEL is "on" (pages/docs.tsx): the same paragraph naming may
+  // follow too, as section 9.2 of the design writes it.
   "terms.advisory": {
+    en: "Some features calculate, from public records, what may interest a reader, such as the notices that match the records of the organization a reader names and a contract holder's earlier records with the same buyer. These calculations follow the fixed rules on the {methodology} page. They do not constitute advice, they say nothing about the merit of any organization or about how any buyer procures, and they may be wrong or incomplete. They are Award Watch's own and are neither produced nor endorsed by the Government of Canada. Award Watch is not responsible for their accuracy or for any decision made on them, including a decision to bid or not to bid.",
+    fr: "Certaines fonctions calculent, à partir de dossiers publics, ce qui peut intéresser un lecteur, comme les avis qui correspondent aux dossiers de l'organisation qu'il indique et les dossiers antérieurs du titulaire d'un contrat auprès du même acheteur. Ces calculs suivent les règles fixes décrites à la page {methodology}. Ils ne constituent pas un conseil, ne disent rien du mérite d'une organisation ni de la façon dont un acheteur passe ses marchés, et peuvent être erronés ou incomplets. Ils sont propres à Award Watch et ne sont ni produits ni approuvés par le gouvernement du Canada. Award Watch n'est pas responsable de leur exactitude ni d'aucune décision prise sur leur base, y compris celle de soumissionner ou non.",
+  },
+  "terms.advisory_follows": {
     en: "Some features calculate, from public records, what may interest a reader, such as the notices that match the records of the organization a reader names, a contract holder's earlier records with the same buyer and the earlier contracts an open notice may follow. These calculations follow the fixed rules on the {methodology} page. They do not constitute advice, they say nothing about the merit of any organization or about how any buyer procures, and they may be wrong or incomplete. They are Award Watch's own and are neither produced nor endorsed by the Government of Canada. Award Watch is not responsible for their accuracy or for any decision made on them, including a decision to bid or not to bid.",
     fr: "Certaines fonctions calculent, à partir de dossiers publics, ce qui peut intéresser un lecteur, comme les avis qui correspondent aux dossiers de l'organisation qu'il indique, les dossiers antérieurs du titulaire d'un contrat auprès du même acheteur et les contrats antérieurs auxquels un avis ouvert pourrait faire suite. Ces calculs suivent les règles fixes décrites à la page {methodology}. Ils ne constituent pas un conseil, ne disent rien du mérite d'une organisation ni de la façon dont un acheteur passe ses marchés, et peuvent être erronés ou incomplets. Ils sont propres à Award Watch et ne sont ni produits ni approuvés par le gouvernement du Canada. Award Watch n'est pas responsable de leur exactitude ni d'aucune décision prise sur leur base, y compris celle de soumissionner ou non.",
   },
@@ -4193,6 +4206,60 @@ const STRINGS = {
     en: "Signed-in readers see each holder's record with the buyer under its name. {signin}",
     fr: "Les lecteurs connectés voient, sous le nom de chaque titulaire, ses dossiers auprès de l'acheteur. {signin}",
   },
+  // -- may follow (src/lines.ts, src/pages/follows.tsx; docs/accounts.md, May follow), shown only while
+  // FOLLOWS_PANEL is "on". A match is described as what matched, never as a claim that a notice replaces a contract;
+  // test/lines.test.ts holds the same list of words out of every string here.
+  "follow.panel": { en: "Earlier Contracts This Notice May Follow", fr: "Contrats antérieurs auxquels cet avis pourrait faire suite" },
+  "follow.lead": {
+    en: "Contracts of the same buyer whose numbers, codes or title match this notice's and that end near its expected start. A match of text and codes, not a statement that this notice replaces any of them.",
+    fr: "Contrats du même acheteur dont les numéros, les codes ou le titre correspondent à ceux de cet avis et qui prennent fin près de son début prévu. Un rapprochement de texte et de codes, et non une affirmation que cet avis remplace l'un d'eux.",
+  },
+  "follow.col_contract": { en: "Earlier contract", fr: "Contrat antérieur" },
+  "follow.col_holder": { en: "Holder", fr: "Titulaire" },
+  "follow.col_matched": { en: "What matched", fr: "Ce qui correspond" },
+  "follow.degree_number": { en: "Number match", fr: "Rapprochement par numéro" },
+  "follow.degree_close": { en: "Close text match", fr: "Rapprochement de texte étroit" },
+  "follow.degree_partial": { en: "Partial text match", fr: "Rapprochement de texte partiel" },
+  "follow.ended": { en: "Ended {date}", fr: "Terminé le {date}" },
+  "follow.ends": { en: "Ends {date}", fr: "Prend fin le {date}" },
+  "follow.days_one": { en: "{n} day", fr: "{n} jour" },
+  "follow.days_many": { en: "{n} days", fr: "{n} jours" },
+  "follow.m_solicitation": { en: "Same solicitation number, {number}", fr: "Même numéro d'invitation, {number}" },
+  "follow.m_number": { en: "This notice names its number, {number}", fr: "Cet avis nomme son numéro, {number}" },
+  "follow.m_buyer": { en: "Same buyer, {buyer}", fr: "Même acheteur, {buyer}" },
+  "follow.m_client": { en: "Same client department, {buyer}", fr: "Même ministère client, {buyer}" },
+  "follow.m_class": { en: "Same UNSPSC class, {code}", fr: "Même classe UNSPSC, {code}" },
+  "follow.m_classes": { en: "Same UNSPSC classes, {code}", fr: "Mêmes classes UNSPSC, {code}" },
+  "follow.m_family": { en: "Same UNSPSC family, {code}", fr: "Même famille UNSPSC, {code}" },
+  "follow.m_families": { en: "Same UNSPSC families, {code}", fr: "Mêmes familles UNSPSC, {code}" },
+  "follow.m_words_one": { en: "Titles share {shared} of {all} words", fr: "Les titres ont {shared} mot sur {all} en commun" },
+  "follow.m_words": { en: "Titles share {shared} of {all} words", fr: "Les titres ont {shared} mots sur {all} en commun" },
+  // The end date against the notice's expected start, or its publication when it states none: words without a
+  // tense, since a contract ending before the start may still be running on the data date.
+  "follow.m_before_start": { en: "End date {days} before this notice's expected start", fr: "Date de fin {days} avant le début prévu de cet avis" },
+  "follow.m_after_start": { en: "End date {days} after this notice's expected start", fr: "Date de fin {days} après le début prévu de cet avis" },
+  "follow.m_on_start": { en: "End date on this notice's expected start", fr: "Date de fin le jour du début prévu de cet avis" },
+  "follow.m_before_pub": { en: "End date {days} before this notice was published", fr: "Date de fin {days} avant la publication de cet avis" },
+  "follow.m_after_pub": { en: "End date {days} after this notice was published", fr: "Date de fin {days} après la publication de cet avis" },
+  "follow.m_on_pub": { en: "End date on the day this notice was published", fr: "Date de fin le jour de la publication de cet avis" },
+  "follow.none": {
+    en: "No earlier contract of this buyer matches this notice's numbers, codes and title near its expected start.",
+    fr: "Aucun contrat antérieur de cet acheteur ne correspond aux numéros, aux codes et au titre de cet avis près de son début prévu.",
+  },
+  "follow.free_cap": {
+    en: "The Free plan shows {free} earlier contract, the closest. Pro shows up to {pro}, each with its holder's record. {plans}",
+    fr: "Le forfait Gratuit présente {free} contrat antérieur, le plus proche. Pro en présente jusqu'à {pro}, chacun avec les dossiers de son titulaire. {plans}",
+  },
+  "follow.disclaimer": {
+    en: "Award Watch finds these contracts by matching numbers, codes and title words in public records. A match does not mean this notice replaces a contract, is not advice and may be wrong. See the {terms}.",
+    fr: "Award Watch trouve ces contrats en rapprochant les numéros, les codes et les mots des titres de dossiers publics. Un rapprochement ne signifie pas que cet avis remplace un contrat, ne constitue pas un conseil et peut être erroné. Voir les {terms}.",
+  },
+  "follow.how": { en: "How earlier contracts are matched", fr: "Comment les contrats antérieurs sont rapprochés" },
+  "follow.pending": {
+    en: "Earlier contracts are matched each night: a notice first seen today is matched after the next nightly update.",
+    fr: "Les contrats antérieurs sont rapprochés chaque nuit : un avis vu pour la première fois aujourd'hui l'est après la prochaine mise à jour de nuit.",
+  },
+  "follow.unavailable": { en: "Earlier contracts are not available right now.", fr: "Les contrats antérieurs ne sont pas disponibles pour le moment." },
   // The rail's Analytics item and the index of the analytics views it opens
   // (pages/analytics_index.tsx): the lead, the gate note for a reader whose
   // plan lacks the views, the search box, and the lists' lines.

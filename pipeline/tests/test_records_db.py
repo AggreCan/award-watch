@@ -774,6 +774,42 @@ def test_the_holders_record_is_one_row_per_window_row_keyed_as_it_and_asked_for_
     assert manifest["deletes"]["rec_lines"] == len(rows) and db.execute("SELECT COUNT(*) FROM rec_lines").fetchone() == (0,)
 
 
+def test_the_earlier_contracts_a_notice_may_follow_are_one_row_each_asked_for_by_the_notice(seeded, tmp_path):
+    """rec_follows (follows.py through follows_rows): one row for each record the lines stage kept for an open notice,
+    keyed by the notice and the record, so a record that moves rank is one row changed; tref the notice's URL
+    reference in lower case, rank and j as the stage wrote them. A table added beside the others: code 19, the layout
+    as it was, so no reload."""
+    conn, _ = seeded
+    j = lambda ref: json.dumps({"v": 1, "src": 1, "ref": ref, "deg": "close"}, separators=(",", ":"))  # noqa: E731
+    stage = [("cb-935-21285129", 1, j("cb-725-74465042")), ("cb-935-21285129", 2, j("cb-648-6250154")),
+             ("en578-123456-a-1", 1, j("cb-1-2"))]
+    conn.executemany("INSERT INTO tender_follows (reference, rank, j, computed_at) VALUES (?, ?, ?, 'x')", stage)
+    conn.commit()
+    db = d1()
+    out = tmp_path / "records"
+    manifest = night(conn, out, db, static_dir=tmp_path / "static")
+    rows = db.execute("SELECT k, tref, rank, j FROM rec_follows ORDER BY tref, rank").fetchall()
+    assert [(t, r, x) for _, t, r, x in rows] == stage and manifest["expected"]["rec_follows"] == 3
+    assert rows[0][0] == rd.key_of("follow:cb-935-21285129:1:cb-725-74465042")
+    plan = " ".join(str(r[-1]) for r in db.execute("EXPLAIN QUERY PLAN SELECT j FROM rec_follows WHERE tref = ? ORDER BY rank "
+                                                   "LIMIT 3", ("x",)))
+    assert "rec_follows_tref" in plan and "SCAN" not in plan, plan
+    assert rd.FOLLOWS.code == 19 and rd.BY_CODE[19] is rd.FOLLOWS and rd.LAYOUT == 2
+    # The two kept records trade places: two rows changed, none added or removed.
+    conn.execute("DELETE FROM tender_follows WHERE reference = 'cb-935-21285129'")
+    conn.executemany("INSERT INTO tender_follows (reference, rank, j, computed_at) VALUES (?, ?, ?, 'x')",
+                     [(t, 3 - r, x) for t, r, x in stage[:2]])
+    conn.commit()
+    manifest = night(conn, out, db, static_dir=tmp_path / "static")
+    assert manifest["deletes"].get("rec_follows", 0) == 0 and db.execute("SELECT COUNT(*) FROM rec_follows").fetchone() == (3,)
+    assert db.execute("SELECT j FROM rec_follows WHERE tref = 'cb-935-21285129' AND rank = 1").fetchone() == (j("cb-648-6250154"),)
+    # A night that kept none empties the table.
+    conn.execute("DELETE FROM tender_follows")
+    conn.commit()
+    manifest = night(conn, out, db, static_dir=tmp_path / "static")
+    assert manifest["deletes"]["rec_follows"] == 3 and db.execute("SELECT COUNT(*) FROM rec_follows").fetchone() == (0,)
+
+
 def test_two_window_rows_whose_lower_case_reference_is_one_keep_the_first():
     window = [(2, None, '{"kind":"contract","reference":"d:ab-1"}'), (1, None, '{"kind":"contract","reference":"d:AB-1"}')]
     conn = connect(memory=True)

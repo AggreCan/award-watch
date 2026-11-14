@@ -16,6 +16,7 @@ import { AccountsPrivacy, PaymentsPrivacy } from "../account/privacy";
 import { ultraOnSale } from "../account/payments";
 import { accountsEnabled } from "../account/switch";
 import { CONTACT_EMAIL } from "../contact";
+import { followsPanelOn } from "../lines";
 
 export { CONTACT_EMAIL };
 
@@ -131,6 +132,7 @@ const PAID_TERMS: [Key, Key][] = [
 
 export async function termsPage(c: Context<AppEnv>): Promise<Response> {
   const ultra = await ultraOnSale(c.env);
+  const followsOn = followsPanelOn(c.env);
   const parts = ultra ? PAID_TERMS : PRO_TERMS;
   return doc(c, "terms", "terms.title", "terms.lead", (lang) => [
     { id: "use", title: "terms.toc_use", body: <p>{t(lang, "terms.use")}</p> },
@@ -150,7 +152,8 @@ export async function termsPage(c: Context<AppEnv>): Promise<Response> {
         <>
           <p>{t(lang, "terms.warranty")}</p>
           {/* The Methodology page as a whole: its contents name each calculation's section. */}
-          <p>{tj(lang, "terms.advisory", { methodology: link("/methodology", t(lang, "nav.methodology")) })}</p>
+          {/* May follow is named only while its switch is on (pages/follows.tsx). */}
+          <p>{tj(lang, followsOn ? "terms.advisory_follows" : "terms.advisory", { methodology: link("/methodology", t(lang, "nav.methodology")) })}</p>
           <p>{t(lang, "terms.liability")}</p>
         </>
       ),

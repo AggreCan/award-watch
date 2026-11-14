@@ -13,6 +13,7 @@
 // reads each one's plan.
 
 import type { Env } from "./env";
+import { FOLLOW_MAX } from "./lines";
 import { type Query, type Read, type Row, readRecords } from "./records_db";
 
 // -- a published contract (pages/published.tsx) --------------------------------------
@@ -365,9 +366,36 @@ export const EARLIER_AWARDS_SQL =
   `GROUP BY c.rk ORDER BY shared DESC, day DESC LIMIT ${EARLIER_POOL}) p JOIN rec_details d ON d.k = p.rk ` +
   `LEFT JOIN rec_orgs o ON o.oid = d.oid ORDER BY p.shared DESC, p.day DESC LIMIT ${EARLIER_POOL}`;
 
-export function readEarlierAwards(env: Env, buyer: string, first: string, classes: readonly number[]): Promise<Read> {
+// tref, for a reader who sees the earlier contracts the notice may follow
+// (pages/follows.tsx): those in the same batch (rows[1], FOLLOWS_SQL). A
+// database without rec_follows yet is read again without it, and noFollows
+// says so.
+export async function readEarlierAwards(
+  env: Env, buyer: string, first: string, classes: readonly number[], tref?: string,
+): Promise<Read & { noFollows?: true }> {
   const slots = Array.from({ length: EARLIER_CLASSES_MAX }, (_, i) => classes[i] ?? -1);
-  return readRecords(env, [{ sql: EARLIER_AWARDS_SQL, params: [buyer, first, ...slots] }]);
+  const earlier: Query = { sql: EARLIER_AWARDS_SQL, params: [buyer, first, ...slots] };
+  if (tref === undefined) return readRecords(env, [earlier]);
+  const read = await readRecords(env, [earlier, { sql: FOLLOWS_SQL, params: [tref] }]);
+  if (read.state !== "failed" || !read.noTable) return read;
+  return { ...(await readRecords(env, [earlier])), noFollows: true };
+}
+
+// -- the earlier contracts an open notice may follow (pages/follows.tsx) -----------------
+
+// rec_follows through rec_follows_tref (tref, rank), read only for a
+// signed-in reader while FOLLOWS_PANEL is "on": the notice's kept records,
+// closest first, FOLLOW_MAX at most, each with its holder's name and the
+// names of the buyer it matched. ?1 the notice's URL reference in lower case.
+export const FOLLOWS_SQL =
+  "SELECT f.rank AS rank, f.j AS j, o.name AS holder, b.name_en AS buyer_en, b.name_fr AS buyer_fr FROM rec_follows f " +
+  "LEFT JOIN rec_orgs o ON o.oid = json_extract(f.j, '$.oid') LEFT JOIN rec_buyers b ON b.id = json_extract(f.j, '$.buyer') " +
+  `WHERE f.tref = ?1 ORDER BY f.rank LIMIT ${FOLLOW_MAX}`;
+
+// One statement beside the state row, for a notice that reads no earlier
+// awards (no buyer or no class); noTable as above.
+export function readFollows(env: Env, tref: string): Promise<Read> {
+  return readRecords(env, [{ sql: FOLLOWS_SQL, params: [tref] }]);
 }
 
 // -- the incumbents of a buyer or a segment (pages/incumbents.tsx) ---------------------
@@ -424,7 +452,7 @@ export function readContractSitemap(env: Env, first: string, last: string): Prom
 // Every statement here, for the tests that read their plans and their bounds.
 export const TABLE_SQL: readonly string[] = [
   CONTRACT_SITEMAP_SQL, EARLIER_AWARDS_SQL, BUYER_INCUMBENTS_SQL, SEGMENT_INCUMBENTS_SQL, ORG_FEED_SQL,
-  PUBLISHED_CONTRACT_SQL, PUBLISHED_INDIGENOUS_SQL, LINES_BY_KEY_SQL, LINE_BY_KEY_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
+  PUBLISHED_CONTRACT_SQL, PUBLISHED_INDIGENOUS_SQL, LINES_BY_KEY_SQL, LINE_BY_KEY_SQL, FOLLOWS_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
   RADAR_ROWS_END_DESC_SQL, RADAR_ROWS_VALUE_ASC_SQL, RADAR_CSV_END_DESC_SQL, RADAR_CSV_VALUE_ASC_SQL,
   RADAR_FACETS_SQL, RADAR_BUYERS_SQL, RADAR_CLIENTS_SQL, RADAR_SUPPLIERS_SQL,
   ...Object.values(RECORDS_SQL.organization), ...Object.values(RECORDS_SQL.buyer), ...RADAR_PROV_SQL,

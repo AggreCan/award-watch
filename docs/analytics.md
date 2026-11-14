@@ -48,6 +48,7 @@ reads it, with prepared statements.
 | `rec_gsin` | GSIN code a published contract carries: its names | about 10,000 at most |
 | `rec_contract_indigenous` | published contract row (its `rec_contracts` `k`) whose `indigenous_business` names a set-aside under the Procurement Strategy for Indigenous Business (`psib` MS or VS) or whose `indigenous_business_excluding_psib` says yes (`ib` 1); none for a vendor withheld as a person | tens of thousands (143 of the first 5,290 rows of `contracts.csv`) |
 | `rec_lines` | row of `rec_expiring` (its `k`) whose holder is named: the holder's record with the buyer as JSON (`j`, the pipeline's `lines.py`), asked for by `sk`, the row's kind and reference in lower case (*Holder's record* in `docs/accounts.md`) | about the window's rows (1,894 of the development copy's 1,906, about 355 bytes each) |
+| `rec_follows` | earlier contract an open notice may follow, up to 3 a notice: `tref` the notice's URL reference in lower case, `rank` 1 the closest, `j` the record, what matched and the record's own holder's record as JSON (the pipeline's `follows.py`; *May follow* in `docs/accounts.md`) | a few hundred to a few thousand (3 rows for 1 of the development copy's 25 open notices, about 900 bytes each) |
 | `rec_events` | thing that happened on a data date of the last 90 to an organization, a buyer, a single record or a tender notice, plus a count row past 100 a subject a day (*Events*) | thousands a night, a few hundred thousand |
 | `rec_instruments` | standing offer or supply arrangement the pipeline keeps (`docs/sosa.md`): its fields and its call-ups as JSON | a few thousand |
 | `rec_holders` | active holder of one, by region, whose name is shown | about 10,000 |
@@ -562,6 +563,17 @@ signed-in reader only (`readLines`, `readLine`); a database without it shows
 the pages as they were. Like `rec_expiring_prov`, it is a table of its own
 that the nightly schema creates, so it needs no full reload, and `LAYOUT`
 stays 2.
+
+`rec_follows` is written from the lines stage's `tender_follows`
+(`records_db.follows_rows`): one row per open notice and earlier contract
+kept, keyed by `key_of('follow:<tref>:<src>:<record reference>')`, so a
+contract that moves rank is one row changed rather than a delete and an
+insert, and found by `rec_follows_tref (tref, rank)`. An open notice's page
+reads it (`FOLLOWS_SQL`, three rows at most, with the holder's and the
+buyer's names joined) only for a signed-in reader while the Worker's
+`FOLLOWS_PANEL` is "on", in the earlier awards' batch, or in a batch of its
+own for a notice with no class; a database without it shows the page as it
+was. The nightly schema creates it, no full reload, `LAYOUT` stays 2.
 
 ## Earlier awards, incumbents and organization feeds
 

@@ -235,6 +235,21 @@ CREATE TABLE IF NOT EXISTS rec_lines (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS rec_lines_sk ON rec_lines (sk);
 
+-- The earlier contracts each open tender notice may follow (pipeline
+-- follows.py, records_db.follows_rows; docs/accounts.md "May follow"), up to
+-- three a notice, rank 1 the closest: j is the record matched, what matched
+-- and the record's own holder's record, as JSON. Read only for a signed-in
+-- reader, and only while the Worker's FOLLOWS_PANEL is "on". A table of its
+-- own: the nightly schema creates it, its rows are all new to the ledger, and
+-- a page reading a database without it shows what it did before.
+CREATE TABLE IF NOT EXISTS rec_follows (
+  k INTEGER PRIMARY KEY,                         -- key_of('follow:<tref>:<src>:<record reference>')
+  tref TEXT NOT NULL,                            -- the notice's reference in its URL form, lower case
+  rank INTEGER NOT NULL,
+  j TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rec_follows_tref ON rec_follows (tref, rank);
+
 -- The page of each published contract (/contracts/<department>/<reference>,
 -- site/src/pages/published.tsx): one row per row of the contracts table,
 -- keyed as its row of records is, with every field the page shows. A

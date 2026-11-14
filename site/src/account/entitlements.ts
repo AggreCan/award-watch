@@ -54,10 +54,13 @@ export const cachedPlanOf = (p: Plan): "free" | "pro" => (p === "ultra" ? "pro" 
 // saved_views: how many analytics views an account keeps with their source,
 // period and choices (src/account/saved_views.ts, /account/views); view_mail:
 // those views by email, weekly or monthly (src/account/view_mail.ts).
+// follows: how many earlier contracts an open notice's page shows a reader
+// (src/pages/follows.tsx, while FOLLOWS_PANEL is "on"), the closest first;
+// Free's without their holders' records.
 export const FEATURES = [
   "saved_searches", "delivery", "api", "export_filtered", "intraday", "radar_depth", "bug_reports", "analytics", "watchlists",
   "watch_mail", "matches", "match_mail",
-  "dashboard", "saved_views", "view_mail",
+  "dashboard", "saved_views", "view_mail", "follows",
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -76,13 +79,13 @@ export const MATCH_PAGE = 50;
 type Rules = {
   saved_searches: number; delivery: boolean; api: boolean; export_filtered: boolean; intraday: boolean; radar_depth: boolean;
   bug_reports: boolean; analytics: boolean; watchlists: number; watch_mail: boolean; matches: number; match_mail: number;
-  dashboard: number; saved_views: number; view_mail: boolean;
+  dashboard: number; saved_views: number; view_mail: boolean; follows: number;
 };
 
 const PRO_RULES: Rules = {
   saved_searches: 25, delivery: true, api: true, export_filtered: true, intraday: true, radar_depth: true, bug_reports: true,
   analytics: true, watchlists: 25, watch_mail: true, matches: 200, match_mail: 10,
-  dashboard: 0, saved_views: 10, view_mail: false,
+  dashboard: 0, saved_views: 10, view_mail: false, follows: 3,
 };
 
 // Ultra holds every Pro feature, with figures of its own on the counted ones:
@@ -94,7 +97,7 @@ export const RULES: Readonly<Record<Plan, Rules>> = {
   free: {
     saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false, radar_depth: false, bug_reports: false,
     analytics: false, watchlists: 3, watch_mail: false, matches: 5, match_mail: 3,
-    dashboard: 0, saved_views: 0, view_mail: false,
+    dashboard: 0, saved_views: 0, view_mail: false, follows: 1,
   },
   pro: PRO_RULES,
   ultra: {
@@ -110,7 +113,7 @@ export const RULES: Readonly<Record<Plan, Rules>> = {
 };
 
 // The figures a plan gives as counts rather than as yes or no.
-export const COUNTED_FEATURES = ["saved_searches", "watchlists", "matches", "match_mail", "dashboard", "saved_views"] as const satisfies readonly Feature[];
+export const COUNTED_FEATURES = ["saved_searches", "watchlists", "matches", "match_mail", "dashboard", "saved_views", "follows"] as const satisfies readonly Feature[];
 export type CountedFeature = (typeof COUNTED_FEATURES)[number];
 export const isCounted = (f: Feature): f is CountedFeature => (COUNTED_FEATURES as readonly Feature[]).includes(f);
 
@@ -295,6 +298,11 @@ export function matchCap(plan: Plan): number {
 // How many of the week's new matching notices a plan's weekly message lists.
 export function matchMailCap(plan: Plan): number {
   return RULES[plan].match_mail;
+}
+
+// How many earlier contracts an open notice's page shows a plan: the pipeline keeps FOLLOW_MAX (src/lines.ts).
+export function followCap(plan: Plan): number {
+  return RULES[plan].follows;
 }
 
 // How many analytics views a plan keeps: none on Free.

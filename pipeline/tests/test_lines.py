@@ -460,6 +460,13 @@ def test_the_constants_are_the_sites():
         found = re.search(rf"export const {name} = (\d+);", ts)
         assert found and int(found.group(1)) == getattr(lines, name), name
     assert lines.J_VERSION == int(re.search(r"export const J_VERSION = (\d+);", ts).group(1))
+    # May follow's (follows.py), the shares as fractions.
+    from awardwatch_pipeline import follows
+
+    for name in ("FOLLOW_MIN", "FOLLOW_CLOSE", "FOLLOW_BEFORE_DAYS", "FOLLOW_AFTER_DAYS", "FOLLOW_MAX"):
+        found = re.search(rf"export const {name} = (\d+(?:\.\d+)?);", ts)
+        assert found and float(found.group(1)) == getattr(follows, name), name
+    assert follows.J_VERSION == int(re.search(r"export const FOLLOW_J_VERSION = (\d+);", ts).group(1))
 
 
 def test_the_label_rule():

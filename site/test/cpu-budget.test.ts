@@ -145,9 +145,21 @@ const LINE_J = JSON.stringify({
   own: { comp: 1, meth: "OB", bids: 3, amd: 2, growth: 0.25, end0: "2026-09-30", end: "2026-11-20" },
   sim: [["org-b000000001", "Exemplar Translation Services Limited", 1, 2, "2024-04-01"]],
 });
+// The earlier contracts an open notice may follow, three as Pro sees them, each
+// with its holder's record (src/pages/follows.tsx), about as long as the
+// pipeline writes them (titles of 200 characters).
+const FOLLOW_ROWS = [1, 2, 3].map((rank) => ({
+  rank, holder: "Exemplar Translation Services Inc.", buyer_en: "Fisheries and Oceans Canada", buyer_fr: "Pêches et Océans Canada",
+  j: JSON.stringify({
+    v: 1, src: 1, ref: `cb-72${rank}-74465042`, t: ["Translation services ".repeat(10).trim(), "Services de traduction ".repeat(8).trim()],
+    oid: 1, wh: 0, end: "2026-10-23", deg: rank === 1 ? "number" : "close", sol: rank === 1 ? "EN578-260001" : null, num: null,
+    buyer: "dfo-mpo", client: 1, lvl: "class", code: ["821118", "811015"], words: [7, 8], days: -70, from: "start", line: JSON.parse(LINE_J),
+  }),
+}));
 const recordsStub = stubDb((sql, params) => {
   if (sql.includes("FROM rec_meta")) return [{ key: "state", value: "ready" }, { key: "as_of", value: "2026-10-31" }];
   if (sql.includes("FROM rec_lines")) return (JSON.parse(String(params[0])) as string[]).map((sk) => ({ sk, j: LINE_J }));
+  if (sql.includes("FROM rec_follows")) return FOLLOW_ROWS;
   return [];
 });
 // The 3-month window's first page at its production size, under its own ETags.
@@ -303,6 +315,10 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   // rows measured 27.2 signed out and 27.4 signed in with no record: the
   // table is most of it, the records about 4.
   ["/expiring/3m (signed in, 500 rows with records)", 95, 8], // [31.6]
+  // A Pro reader's open notice with may follow's panel on (FOLLOWS_PANEL; src/pages/follows.tsx): three earlier
+  // contracts read beside the earlier awards and drawn with their holders' marks (measured 2026-11-14 at 2.29; the
+  // same page with the panel off measured 3.25 in the next run, so the panel is within the machine's noise).
+  ["/tenders/cb-100-10000001 (signed in, may follow on)", 10, 16], // [2.29]
   // Payments in the Public Accounts (src/public_accounts.tsx; measured 2026-11-11 on a busy machine): the
   // profile above with three fiscal years of 100 rows (8.2 against 5.0 without them in the same run), and the
   // buyer page without and with fourteen classes and fifty payees.
@@ -508,7 +524,9 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     clearClosingCache();
     const over: string[] = [];
     const seen: string[] = [];
-    signedInEnv = { ...env, ASSETS: signedInAssets, ACCOUNTS_ENABLED: "true", ACCOUNTS: await accountsStub(), RECORDS: recordsStub };
+    signedInEnv = {
+      ...env, ASSETS: signedInAssets, ACCOUNTS_ENABLED: "true", ACCOUNTS: await accountsStub(), RECORDS: recordsStub, FOLLOWS_PANEL: "on",
+    };
     // What the signed-in entry times: a private page with a mark under every named holder of its 500 rows.
     const signed = await app.request("/expiring/3m", { headers: { "sec-fetch-mode": "navigate", cookie: SIGNED_IN } }, signedInEnv);
     expect(signed.headers.get("cache-control")).toBe("private, no-store");
@@ -519,6 +537,9 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     const withTarget = await (await app.request("/buyers/pwgsc-tpsgc", { headers: { "sec-fetch-mode": "navigate" } }, iptEnv)).text();
     expect(withTarget.match(/<td data-label="Economic object" class="lead-cell">/g)?.length).toBe(52);
     expect(withTarget.slice(withTarget.indexOf('<h2 id="indigenous-target">')).match(/<li>Economic object/g)?.length).toBe(24);
+    // And on the notice: may follow's three rows, each holder with its mark.
+    const notice = await (await app.request("/tenders/cb-100-10000001", { headers: { "sec-fetch-mode": "navigate", cookie: SIGNED_IN } }, signedInEnv)).text();
+    expect(notice.match(/class="muted small line-mark"/g)).toHaveLength(3);
     for (const [name, bound, per] of BUDGET) {
       const home = name === "/ (app home)";
       const signedIn = name.includes("(signed in");

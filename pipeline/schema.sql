@@ -869,6 +869,18 @@ CREATE TABLE IF NOT EXISTS expiring_lines (
   computed_at TEXT NOT NULL
 );
 
+-- The earlier contracts each open tender notice may follow (follows.py, docs/accounts.md "May follow"), up to
+-- follows.FOLLOW_MAX a notice, rank 1 the closest: j is the record matched, what matched and the record's own
+-- holder's record, as JSON. Rebuilt whole by the lines stage after expiring_lines; the records sync sends it to D1
+-- as rec_follows. Never exported to a static file.
+CREATE TABLE IF NOT EXISTS tender_follows (
+  reference TEXT NOT NULL,                       -- the notice's reference in its URL form, lower case (the tender page's)
+  rank INTEGER NOT NULL,
+  j TEXT NOT NULL,
+  computed_at TEXT NOT NULL,
+  PRIMARY KEY (reference, rank)
+);
+
 -- Nightly link sampling (link_sample.py, docs/link-sampling.md): one row per
 -- government link checked, from the sample drawn each night. Rows older than
 -- link_sample.RETENTION_DAYS (60) are deleted by the night that writes the

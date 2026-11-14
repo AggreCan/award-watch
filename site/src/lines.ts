@@ -4,12 +4,16 @@
 // (pipeline/awardwatch_pipeline/lines.py) and the records sync sends them to
 // rec_lines; this module holds the rules' constants (the pipeline's test
 // holds the two sets equal), the check of a row's JSON, and the label rule.
-// The words are in src/lines_view.tsx and src/pages/holders.tsx.
+// The words are in src/lines_view.tsx and src/pages/holders.tsx. Beside
+// them, may follow (pipeline follows.py, rec_follows): the earlier contracts
+// an open notice may follow, its constants and the check of its rows; the
+// panel is src/pages/follows.tsx.
 //
 // A label names the records (a run of contracts, earlier records, none),
 // never the business or the buyer, and always stands with its figure.
 
 import { BUYER_ID_RE, DAY_RE, ORG_ID_RE } from "./data";
+import type { Env } from "./env";
 import { isObj, isStr } from "./valid";
 
 // The rules (pipeline lines.py repeats each; its test compares them).
@@ -24,6 +28,22 @@ export const SIMILAR_PREFIX = 20;
 export const SIMILAR_GROUP_MAX = 12;
 // The form of j the pipeline writes; a row of another form is not read.
 export const J_VERSION = 1;
+
+// May follow's rules (pipeline follows.py repeats each; its test compares
+// them): a text match from FOLLOW_MIN of the title words in common, close
+// from FOLLOW_CLOSE; the earlier contract ending from FOLLOW_BEFORE_DAYS
+// before the notice's expected start to FOLLOW_AFTER_DAYS after it; at most
+// FOLLOW_MAX kept a notice. The site shows them while FOLLOWS_PANEL is "on".
+export const FOLLOW_MIN = 0.5;
+export const FOLLOW_CLOSE = 0.75;
+export const FOLLOW_BEFORE_DAYS = 180;
+export const FOLLOW_AFTER_DAYS = 120;
+export const FOLLOW_MAX = 3;
+export const FOLLOW_J_VERSION = 1;
+
+// May follow's switch: "on" alone shows the panel (src/pages/follows.tsx)
+// and the words the Methodology and the Terms give it.
+export const followsPanelOn = (env: Pick<Env, "FOLLOWS_PANEL">): boolean => env.FOLLOWS_PANEL === "on";
 
 // records.src: 1 award notices, 2 PSPC contract history, 3 published contracts.
 export type LineSrc = 1 | 2 | 3;
@@ -84,23 +104,79 @@ const isSimilar = (v: unknown): v is SimilarName =>
   Array.isArray(v) && v.length === 5 && isStr(v[0]) && ORG_ID_RE.test(v[0]) && isStr(v[1]) && v[1].trim() !== "" && v[1].length <= 300 &&
   isSrc(v[2]) && isInt(v[3], 1) && isStr(v[4]) && DAY_RE.test(v[4]);
 
-// A row's j, read and checked whole, or null: a row that does not read in
-// full is never shown in part, as a profile's matching block is not.
-export function parseLine(text: unknown): LineRecord | null {
-  if (!isStr(text) || text.length > 20_000) return null;
-  let v: unknown;
+const parsed = (text: unknown, max: number): unknown => {
+  if (!isStr(text) || text.length > max) return null;
   try {
-    v = JSON.parse(text);
+    return JSON.parse(text);
   } catch {
     return null;
   }
+};
+
+const isBuyer = (v: unknown): v is string => isStr(v) && v.length <= 80 && BUYER_ID_RE.test(v);
+
+// A record's figures, checked whole, or null (a rec_lines row's j, or the
+// holder's record a may-follow row carries).
+function checkLine(v: unknown): LineRecord | null {
   if (!isObj(v) || v.v !== J_VERSION) return null;
   const fy = v.fy;
   const ok = Array.isArray(fy) && fy.length === 2 && isInt(fy[0], 2000) && isInt(fy[1], 2000) && fy[0] <= fy[1] && fy[1] <= 2200 &&
-    (v.buyer === null || (isStr(v.buyer) && v.buyer.length <= 80 && BUYER_ID_RE.test(v.buyer))) && (v.oid === null || isInt(v.oid)) &&
+    (v.buyer === null || isBuyer(v.buyer)) && (v.oid === null || isInt(v.oid)) &&
     Array.isArray(v.s) && v.s.length <= 3 && v.s.every(isSource) && new Set(v.s.map((e: LineSource) => e.src)).size === v.s.length &&
     isOwn(v.own) && Array.isArray(v.sim) && v.sim.length <= SIM_MAX && v.sim.every(isSimilar);
   return ok ? (v as unknown as LineRecord) : null;
+}
+
+// A row's j, read and checked whole, or null: a row that does not read in
+// full is never shown in part, as a profile's matching block is not.
+export function parseLine(text: unknown): LineRecord | null {
+  return checkLine(parsed(text, 20_000));
+}
+
+// -- may follow ----------------------------------------------------------------------
+
+// One earlier contract an open notice may follow (rec_follows.j, the
+// pipeline's follows.py): the record (its source, its reference in the
+// records tables' form, its titles in each language, its holder's number or
+// withheld, its end), the degree of the match and what matched (the number
+// it carries that the notice's solicitation is or its text names, the
+// buyer matched and whether through the notice's client department, the
+// classes or families shared, the title words shared of all, the days from
+// the notice's expected start or publication to its end), and the record's
+// own holder's record, null for a withheld holder.
+export type FollowDegree = "number" | "close" | "partial";
+export interface FollowRecord {
+  v: number; src: LineSrc; ref: string; t: [string | null, string | null]; oid: number | null; wh: 0 | 1; end: string | null;
+  deg: FollowDegree; sol: string | null; num: string | null; buyer: string; client: 0 | 1; lvl: "class" | "family" | null;
+  code: string[]; words: [number, number]; days: number | null; from: "start" | "pub"; line: LineRecord | null;
+}
+
+const isText = (v: unknown, max: number): v is string => isStr(v) && v.trim() !== "" && v.length <= max;
+const isNumberText = (v: unknown): boolean => v === null || isText(v, 120);
+
+function checkFollow(v: unknown): FollowRecord | null {
+  if (!isObj(v) || v.v !== FOLLOW_J_VERSION || !isSrc(v.src) || !isText(v.ref, 300)) return null;
+  const t = v.t;
+  if (!Array.isArray(t) || t.length !== 2 || !t.every((x) => x === null || isText(x, 300))) return null;
+  if (!(v.wh === 0 || v.wh === 1) || !(v.oid === null || isInt(v.oid)) || (v.wh === 1 && v.oid !== null) || !isDayOrNull(v.end)) return null;
+  if (!(v.deg === "number" || v.deg === "close" || v.deg === "partial") || !isNumberText(v.sol) || !isNumberText(v.num)) return null;
+  // A number match names the number; a text match shares a class or family and names none.
+  if (v.deg === "number" ? v.sol === null && v.num === null : v.sol !== null || v.num !== null || v.lvl === null) return null;
+  if (!isBuyer(v.buyer) || !(v.client === 0 || v.client === 1) || !(v.from === "start" || v.from === "pub")) return null;
+  const lvl = v.lvl;
+  if (!(lvl === null || lvl === "class" || lvl === "family") || !Array.isArray(v.code) || v.code.length > KEYS_MAX) return null;
+  const re = lvl === null ? null : KEY_RE[lvl as LineLevel];
+  if (re === null ? v.code.length !== 0 : v.code.length < 1 || !v.code.every((k) => isStr(k) && re.test(k))) return null;
+  const w = v.words;
+  if (!Array.isArray(w) || w.length !== 2 || !isInt(w[0]) || !isInt(w[1]) || w[0] > w[1]) return null;
+  if (!(v.days === null || (typeof v.days === "number" && Number.isInteger(v.days)))) return null;
+  if (v.line !== null && (v.wh === 1 || checkLine(v.line) === null)) return null;
+  return v as unknown as FollowRecord;
+}
+
+// A rec_follows row's j, read and checked whole, or null.
+export function parseFollow(text: unknown): FollowRecord | null {
+  return checkFollow(parsed(text, 20_000));
 }
 
 // -- the label -----------------------------------------------------------------------

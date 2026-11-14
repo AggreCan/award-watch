@@ -420,8 +420,9 @@ jobs:
       # hundreds of batches, hence the longer limit; the batch files go once
       # applied, to spare the runner's disk. The static export gives the
       # radar's 12-month window (rec_expiring, and its provinces in
-      # rec_expiring_prov, and with the lines stage's table the holder's
-      # record of each row in rec_lines), so this runs after it.
+      # rec_expiring_prov, and with the lines stage's tables the holder's
+      # record of each row in rec_lines and the earlier contracts each open
+      # notice may follow in rec_follows), so this runs after it.
       - name: Sync the records database
         id: records
         if: ${{ !cancelled() && steps.verify.outputs.export_ok == 'true' && steps.verify.outputs.db_ok == 'true' }}
@@ -444,7 +445,7 @@ jobs:
             "$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/$batch"
             rm -f "$out/$batch"
           done
-          "$WRANGLER" d1 execute awardwatch-records --remote --json --command "SELECT (SELECT COUNT(*) FROM records) AS records, (SELECT COUNT(*) FROM rec_orgs) AS rec_orgs, (SELECT COUNT(*) FROM rec_buyers) AS rec_buyers, (SELECT COUNT(*) FROM rec_buyer_quarters) AS rec_buyer_quarters, (SELECT COUNT(*) FROM rec_segment_years) AS rec_segment_years, (SELECT COUNT(*) FROM rec_buyer_years) AS rec_buyer_years, (SELECT COUNT(*) FROM rec_due) AS rec_due, (SELECT COUNT(*) FROM rec_details) AS rec_details, (SELECT COUNT(*) FROM rec_classes) AS rec_classes, (SELECT COUNT(*) FROM rec_expiring) AS rec_expiring, (SELECT COUNT(*) FROM rec_contracts) AS rec_contracts, (SELECT COUNT(*) FROM rec_gsin) AS rec_gsin, (SELECT COUNT(*) FROM rec_events) AS rec_events, (SELECT COUNT(*) FROM rec_instruments) AS rec_instruments, (SELECT COUNT(*) FROM rec_holders) AS rec_holders, (SELECT COUNT(*) FROM rec_expiring_prov) AS rec_expiring_prov, (SELECT COUNT(*) FROM rec_contract_indigenous) AS rec_contract_indigenous, (SELECT COUNT(*) FROM rec_lines) AS rec_lines" > "$out/count.json"
+          "$WRANGLER" d1 execute awardwatch-records --remote --json --command "SELECT (SELECT COUNT(*) FROM records) AS records, (SELECT COUNT(*) FROM rec_orgs) AS rec_orgs, (SELECT COUNT(*) FROM rec_buyers) AS rec_buyers, (SELECT COUNT(*) FROM rec_buyer_quarters) AS rec_buyer_quarters, (SELECT COUNT(*) FROM rec_segment_years) AS rec_segment_years, (SELECT COUNT(*) FROM rec_buyer_years) AS rec_buyer_years, (SELECT COUNT(*) FROM rec_due) AS rec_due, (SELECT COUNT(*) FROM rec_details) AS rec_details, (SELECT COUNT(*) FROM rec_classes) AS rec_classes, (SELECT COUNT(*) FROM rec_expiring) AS rec_expiring, (SELECT COUNT(*) FROM rec_contracts) AS rec_contracts, (SELECT COUNT(*) FROM rec_gsin) AS rec_gsin, (SELECT COUNT(*) FROM rec_events) AS rec_events, (SELECT COUNT(*) FROM rec_instruments) AS rec_instruments, (SELECT COUNT(*) FROM rec_holders) AS rec_holders, (SELECT COUNT(*) FROM rec_expiring_prov) AS rec_expiring_prov, (SELECT COUNT(*) FROM rec_contract_indigenous) AS rec_contract_indigenous, (SELECT COUNT(*) FROM rec_lines) AS rec_lines, (SELECT COUNT(*) FROM rec_follows) AS rec_follows" > "$out/count.json"
           python -m awardwatch_pipeline records-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --counts "$out/count.json"
           "$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/finish.sql"
           python -m awardwatch_pipeline records-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"

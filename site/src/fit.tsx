@@ -174,10 +174,12 @@ export const METHOD_HREF = "/methodology#matching";
 // The advisory features (the Terms' paragraph on calculations covers each):
 // the line every surface showing one carries, the link to its rules, and
 // the Methodology section the link opens. A later feature adds its kind here.
-export type AdvisoryKind = "fit" | "line";
+export type AdvisoryKind = "fit" | "line" | "follow";
 const ADVISORY: Readonly<Record<AdvisoryKind, { text: Key; how: Key; href: string; cls: string }>> = {
   fit: { text: "fit.disclaimer", how: "fit.how", href: METHOD_HREF, cls: "fit-disclaimer" },
   line: { text: "line.disclaimer", how: "line.how", href: "/methodology#holders", cls: "line-disclaimer" },
+  // Only while FOLLOWS_PANEL is "on", when the Methodology holds the paragraph it links (pages/follows.tsx).
+  follow: { text: "follow.disclaimer", how: "follow.how", href: "/methodology#follows", cls: "follow-disclaimer" },
 };
 
 // The line beside every calculation the site shows, with the way to its

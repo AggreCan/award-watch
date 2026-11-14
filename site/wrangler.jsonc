@@ -179,7 +179,12 @@
   // five are set and the entitlement_tiers table is applied (docs/accounts.md,
   // Ultra). With all five set, Ultra is on sale from the moment the table is
   // on the accounts database; until then the two figures show its price on
-  // the landing page's card, beside "Coming soon".
+  // the landing page's card, beside "Coming soon". FOLLOWS_PANEL is may
+  // follow's switch (src/pages/follows.tsx, docs/accounts.md "May follow"):
+  // "on" shows a signed-in reader the earlier contracts an open notice may
+  // follow; "off" keeps the notice page and every other page as they were.
+  // It stays "off" until the operator's hand check of the production matches
+  // (the review file's may-follow section) passes.
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
@@ -194,7 +199,8 @@
     "STRIPE_PRICE_ULTRA_MONTHLY": "price_1UaqlrIP2lpoGRa5HcXsLV44",
     "STRIPE_PRICE_ULTRA_YEARLY": "price_1UaqmoIP2lpoGRa54JFX2voW",
     "PRICE_ULTRA_MONTHLY_CAD": "38.99",
-    "PRICE_ULTRA_YEARLY_CAD": "389.99"
+    "PRICE_ULTRA_YEARLY_CAD": "389.99",
+    "FOLLOWS_PANEL": "off"
   },
   // Workers Logs keeps the console lines (which name events and counts, never
   // an address, a code or a token) and not the per-request invocation log,

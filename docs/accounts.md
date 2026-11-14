@@ -3198,15 +3198,173 @@ prints every figure from `lines.ts`.
 
 ### Later
 
-May follow (the earlier contracts an open notice may follow), the matching
-notices' line, the mail and the CSV columns are later slices. The Terms
-paragraph already names may follow.
+The matching notices' line, the mail and the CSV columns are later slices.
+May follow, the second slice, is below (*May follow*), behind a switch of its
+own.
 
 ### Operator steps
 
 None for the tables. After the first nightly with the stage, read
 `review/holder-lines.txt` in the bucket: the split by label and source, the
 sampled rows and the similar-name pairs. The constants are confirmed there.
+
+## May follow
+
+On an open notice's page, a signed-in reader sees the earlier contracts of
+the same buyer the notice may follow, each with what matched: "Earlier
+Contracts This Notice May Follow" ("Contrats antérieurs auxquels cet avis
+pourrait faire suite"). It is the holder's record's second slice and the
+site's third advisory feature. The code is
+`pipeline/awardwatch_pipeline/follows.py` (the rules, run inside the `lines`
+stage), `records_db.py` (`rec_follows`), `site/src/lines.ts` (the constants,
+the switch and the row's check), `site/src/pages/follows.tsx` (the panel) and
+`loadEarlierAwards` in `site/src/pages/backbone.tsx`. The tests are
+`pipeline/tests/test_follows.py`, `pipeline/tests/test_records_db.py`,
+`site/test/follows-pages.test.ts` and `site/test/lines.test.ts`.
+
+### The switch
+
+`FOLLOWS_PANEL` in `site/wrangler.jsonc` ships "off". Anything but "on": the
+notice page is the same for every reader whatever `rec_follows` holds, it runs
+no records statement for may follow (its batch is the state row and the
+earlier awards, as before), and no page names may follow: the Methodology
+section is "Holder's Record" without the paragraph, and the Terms' advisory
+paragraph names matching notices and the holder's record only
+(`terms.advisory`). "On": the panel shows, the section is "Holder's Record and
+Earlier Contracts" with its paragraph (`#follows`), and the Terms read
+`terms.advisory_follows` (section 9.2 of the design). The pipeline computes,
+syncs and reviews the matches whatever the switch, so the operator can judge
+them on production data first. `follows-pages.test.ts` holds both states.
+
+### The rules
+
+For each notice open on the data date and every award notice, PSPC history
+record and published contract of the notice's buyer, or of the client
+department it names first among its end users, dated in the 10 fiscal years
+ending with the data date's (`LINE_YEARS`) and no later than the day the
+notice was published:
+
+- **Number match**: the record carries the notice's solicitation number, or
+  the notice's title or description names one of the record's numbers (an
+  award notice's solicitation and contract number, a history record's
+  solicitation, contract and procurement numbers, a published contract's
+  reference and procurement id), each folded to its letters and digits, 5 at
+  least. The notice's own numbers, the numbers of standing offers and supply
+  arrangements (from CanadaBuys' instrument types, the published call-ups'
+  `standing_offer_number` and the standing offers file), and a number that
+  the buyer's earlier records of more than one organization carry are not
+  compared. The last rule came from the development copy: read over its award
+  notices as if they were open, the awards of one call number (five
+  organizations) matched each other by number with no title word in common,
+  and same-solicitation matches were the closest for 115 of 136 notices; with
+  the rule, 8 of 41.
+- **Text match**: the record shares a UNSPSC class with the notice (a family
+  when the notice has none), their titles share at least half their distinct
+  words (`FOLLOW_MIN`; words of four letters or more, no digit, outside the
+  earlier awards' stop list and thirteen procurement words, English else
+  French), and the record ends from 180 days before the notice's expected
+  start to 120 after it (`FOLLOW_BEFORE_DAYS`, `FOLLOW_AFTER_DAYS`), or its
+  publication date when it states none. Close from three quarters of the words
+  (`FOLLOW_CLOSE`), partial below. A published contract has no UNSPSC code and
+  follows by number only.
+- Standing offers and supply arrangements themselves, cancelled notices and
+  records awarded after the notice was published are left out.
+- Order: number matches, then the share of words, then the end nearest the
+  start, then the record's key; one contract published in two sources (a
+  contract number in common, or the same organization ending within 3 days)
+  is kept once; 3 kept (`FOLLOW_MAX`).
+- Each kept record carries its holder's record in its own source, counted by
+  the radar rows' code (`lines.own_figures`: the same line, the common-opening
+  rule and the 50 similar names at most), so an ended contract has one too. A
+  holder withheld as a person is kept, shown as "Individual, name withheld"
+  and given no record.
+
+The pipeline's constants and `lines.ts`'s are held equal by `test_lines.py`;
+the stop list is held to `backbone.tsx`'s by `test_follows.py`; the
+Methodology paragraph prints every figure from `lines.ts`.
+
+### The nightly
+
+- The `lines` stage reads the open notices, then, before its one pass over
+  the sources, the records that could match: by SQL, those ending near some
+  notice's start and coded in a class or family some notice carries, and
+  those carrying a number some notice seeks (the separators dropped in SQL,
+  then folded exactly; the published contracts through `idx_contracts_buyer`
+  for the notices' buyers only). It indexes them by buyer and kind of work,
+  each list in order of end, and by buyer and number, so a notice reads only
+  its own buyers' records ending in its own window and the records carrying
+  its numbers. The kept records' lines join the pass's cells, so the pass
+  fills them with the radar rows'.
+- `tender_follows` (notice reference in its URL form, lower case; rank; `j`)
+  is rebuilt after `expiring_lines`, in a transaction of its own. A fault in
+  may follow is raised once the holders' records are written: the stage reads
+  as failed, `expiring_lines` is tonight's and `tender_follows` keeps the
+  night before's rows. The stage's log row adds the `follow_` counts (open
+  notices, records read, notices matched, by degree, kept, matched past 3,
+  similar names cut, seconds).
+- The records sync writes `rec_follows` (code 19) from `tender_follows`, keyed
+  by notice and record. `rec_follows` is in `records_schema.sql`, which the
+  nightly applies before each sync: no operator SQL, no full reload, `LAYOUT`
+  stays 2. The workflow's count statement (`COUNT_SQL`) names it.
+- The review file `holder-lines.txt` gains a section: the counts, then the
+  closest match of 100 open notices that have one, sampled by a hash of the
+  reference, with both titles, the degree, the holder, what matched, the
+  words, the end, the days and the holder's label.
+- On the development copy (25 open notices, data date 2026-11-01): 1 notice
+  kept 3 records, the design's worked example to the figure (7 of 8 words,
+  ending 31 days before the start, Earlier records · 1 earlier; then two
+  partial matches of 6 of 9 words), 474 records read, under a second for the
+  whole stage.
+- At about production's size (an inflated copy: 1.32 million published
+  contract rows, 291,600 award notice versions, 295,920 history versions,
+  975 notices), may follow's own work took 23 s: the standing offers' numbers
+  3.4 s, the SQL that finds the records that could match 7.3 s, reading the
+  265,080 it found 10.4 s, indexing and matching 2.0 s. Every copy there ends
+  inside the notices' window, which production's records do not, so the copy
+  overstates the records read. The stage's log row gives `follow_seconds`
+  from the first night; the stage took 43 s on 36,730 radar rows before may
+  follow. Reading the numbers of 884 descriptions of 10,000 characters in
+  each language takes under 2 s even with a number every 37 characters.
+
+### Where it shows
+
+After the instruments' current holders, before "Earlier awards like this
+one", on an open notice's page, for a signed-in reader while the switch is
+on: the lead, a table (earlier contract with its source and end; holder; what
+matched: the degree in bold over one line each for the number, the buyer or
+client department, the classes or families shared, the words shared and the
+end date against the expected start or the publication), the disclaimer with
+its links to the Terms' No Warranty section and `/methodology#follows`, and
+the licence line. Free: the closest one, without its holder's record, and
+when more were kept, one line with each plan's figure and a link to the
+plans. Pro and Ultra: up to 3, each named holder with its label and figure
+under its name, as on the radar. None kept: one line saying so; a notice first
+seen after the records database's data date: one line saying it is matched
+after the next night; a database that cannot answer: one line; a database
+without `rec_follows`: the page as it was. No chip and no filled button are
+added. Nothing for a reader not signed in, a notice that is not open, or while
+the switch is off. Nothing reaches a static file, a feed, the open or keyed
+API, a CSV or a sitemap.
+
+### Reads and bounds
+
+- A signed-in reader on an open notice with a class, switch on: one statement
+  more in the earlier awards' batch (`FOLLOWS_SQL`, three rows at most through
+  `rec_follows_tref`, with the holder's and the buyer's names); a notice
+  without a class reads it alone. Signed out, or switch off: no read.
+- The CPU guard times a Pro reader's notice with three rows at 2.29 times the
+  yardstick (bound 10); the same page with the panel off measured 3.25 in the
+  next run, inside the machine's noise.
+- `RULES.follows`: Free 1, Pro 3, Ultra 3 (`followCap`).
+
+### Operator steps
+
+None for the tables. Read the may-follow section of `review/holder-lines.txt`
+after the first nightly with the stage; the design's gate is 7 or more of 10
+close matches reading as plausible. Then set `FOLLOWS_PANEL` to "on" and
+deploy the Worker, and add the plan cards' row ("Earlier contracts per open
+notice: 1" on Free, "3" on Pro and Ultra), which waits for the switch because
+no page may name may follow while it is off.
 
 ## Weekly briefings
 

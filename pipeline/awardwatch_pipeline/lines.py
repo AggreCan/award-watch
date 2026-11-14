@@ -38,10 +38,17 @@ j is what the site reads (rec_lines.j, sent by records_db.py): the window's fisc
 number, one entry per source with a kind of work, the row's own method, bids and amendments, and the similar
 names. It carries no days_left, so a row goes to D1 again only when its figures change.
 
+The stage also chooses, for each open tender notice, the earlier contracts it may follow (follows.py). They are
+chosen before the pass over the sources, so the pass fills their lines beside the rows', and each carries its own
+holder's record by the same code (own_figures). tender_follows is rebuilt after expiring_lines, in a transaction of
+its own; a fault in may follow is raised once the holders' records are written, so the stage reads as failed and
+the radar's records never wait on it.
+
 The review file (data/out/review/holder-lines.txt, for the operator; the workflow saves it to R2's private
 review/ prefix with the other review files) gives the labels' counts by source and window, 50 rows of each label
-sampled by a hash of their key, every similar-name pair, and the openings left out as common with their lines. It
-names organizations and records, never an account or a reader.
+sampled by a hash of their key, every similar-name pair, the openings left out as common with their lines, and may
+follow's counts and the closest match of 100 sampled notices. It names organizations and records, never an account
+or a reader.
 """
 
 from __future__ import annotations
@@ -53,12 +60,12 @@ import re
 import sqlite3
 import time
 from collections import defaultdict
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from . import config, expiring
+from . import config, expiring, follows
 from .db import log_run, now_iso
 from .export_static import read_segments
 from .match_key import match_key
@@ -173,7 +180,9 @@ class _Notices:
     publication date when the award date falls after the data date.
     """
 
-    def __init__(self, conn: sqlite3.Connection, src: int, names: expiring._Names, segments: set[str], as_of: str):
+    def __init__(self, conn: sqlite3.Connection, src: int, names: expiring._Names, segments: set[str], as_of: str,
+                 extra: str = ""):
+        # extra: more columns of the newest version (", title_en, ..."), which wanted_rows hands back beside each Rec.
         self.conn, self.src, self.names, self.segments, self.as_of = conn, src, names, segments, as_of
         self.kind = "award" if src == AWARDS else "history"
         table, codes = ("awards", "award_codes") if src == AWARDS else ("contract_history", "history_codes")
@@ -189,7 +198,7 @@ class _Notices:
             f"(SELECT group_concat(c.unspsc, ' ') FROM {codes} c WHERE c.reference = newest.reference "
             "AND c.amendment = newest.amendment) AS codes, "
             f"(SELECT substr(z.\"end\", 1, 10) FROM {table} z WHERE z.reference = newest.reference ORDER BY z.amendment "
-            "LIMIT 1) AS end0 FROM newest"
+            f"LIMIT 1) AS end0{extra} FROM newest"
         )
 
     def rec(self, r: sqlite3.Row) -> Rec | None:
@@ -206,16 +215,22 @@ class _Notices:
 
     def wanted(self, refs: set[str]) -> dict[str, Rec]:
         """The records a night's rows name, by key."""
+        return {rec.key: rec for rec, _ in self.wanted_rows(refs)}
+
+    def wanted_rows(self, refs: set[str]) -> list[tuple[Rec, sqlite3.Row]]:
+        """The records of these references, each beside its row (the extra columns too), in reference order; a
+        cancelled notice gives none."""
         if not refs:
-            return {}
+            return []
         self.conn.execute("DROP TABLE IF EXISTS temp.lines_want")
         self.conn.execute("CREATE TEMP TABLE lines_want (ref TEXT PRIMARY KEY)")
         self.conn.executemany("INSERT OR IGNORE INTO temp.lines_want VALUES (?)", ((r,) for r in refs))
-        out = {}
-        for r in self.conn.execute(f"{self.base} WHERE reference IN (SELECT ref FROM temp.lines_want)", {"as_of": self.as_of}):
+        out = []
+        for r in self.conn.execute(f"{self.base} WHERE reference IN (SELECT ref FROM temp.lines_want) ORDER BY reference",
+                                   {"as_of": self.as_of}):
             rec = self.rec(r)
             if rec is not None:
-                out[rec.key] = rec
+                out.append((rec, r))
         self.conn.execute("DROP TABLE IF EXISTS temp.lines_want")
         return out
 
@@ -282,6 +297,29 @@ def _groups(cursor: Iterable[sqlite3.Row]) -> Iterator[list[sqlite3.Row]]:
         yield group
 
 
+def contract_groups(conn: sqlite3.Connection, rows: set[tuple[str, str]], columns: str = _CONTRACT_COLUMNS
+                    ) -> dict[tuple[str, str], list[sqlite3.Row]]:
+    """The groups of the published contract rows named ((owner_org, reference), any row of a group), each group's
+    rows oldest first, by (owner_org, group key); columns is what each row carries (gk among them)."""
+    if not rows:
+        return {}
+    conn.execute("DROP TABLE IF EXISTS temp.lines_want_rows")
+    conn.execute("CREATE TEMP TABLE lines_want_rows (owner_org TEXT, reference TEXT, PRIMARY KEY (owner_org, reference))")
+    conn.executemany("INSERT OR IGNORE INTO temp.lines_want_rows VALUES (?, ?)", rows)
+    keys = {f"{r[0]}\x1f{r[1]}" for r in conn.execute(
+        f"SELECT c.owner_org, {_gk('c.')} FROM contracts c JOIN temp.lines_want_rows w "
+        "ON w.owner_org = c.owner_org AND w.reference = c.reference")}
+    conn.execute("DROP TABLE IF EXISTS temp.lines_want_groups")
+    conn.execute("CREATE TEMP TABLE lines_want_groups (k TEXT PRIMARY KEY)")
+    conn.executemany("INSERT OR IGNORE INTO temp.lines_want_groups VALUES (?)", ((k,) for k in keys))
+    out = {(g[0]["owner_org"], g[0]["gk"]): g for g in _groups(conn.execute(
+        f"SELECT * FROM (SELECT {columns} FROM contracts) WHERE owner_org || char(31) || gk IN "
+        f"(SELECT k FROM temp.lines_want_groups) {_ORDER}"))}
+    for t in ("lines_want_rows", "lines_want_groups"):
+        conn.execute(f"DROP TABLE IF EXISTS temp.{t}")
+    return out
+
+
 def contracts_wanted(conn: sqlite3.Connection, rows: set[tuple[str, str]]) -> dict[str, Rec]:
     """The published contracts a night's rows name ((owner_org, reference) of a group's newest row), as Recs keyed
     by the radar's own key ('contract:<owner_org>:<reference>')."""
@@ -290,18 +328,11 @@ def contracts_wanted(conn: sqlite3.Connection, rows: set[tuple[str, str]]) -> di
     conn.execute("DROP TABLE IF EXISTS temp.lines_want_rows")
     conn.execute("CREATE TEMP TABLE lines_want_rows (owner_org TEXT, reference TEXT, PRIMARY KEY (owner_org, reference))")
     conn.executemany("INSERT OR IGNORE INTO temp.lines_want_rows VALUES (?, ?)", rows)
-    groups = {(r[0], r[1]): r[2] for r in conn.execute(
+    named = {(r[0], r[1]): r[2] for r in conn.execute(
         f"SELECT c.owner_org, c.reference, {_gk('c.')} FROM contracts c JOIN temp.lines_want_rows w "
         "ON w.owner_org = c.owner_org AND w.reference = c.reference")}
-    conn.execute("DROP TABLE IF EXISTS temp.lines_want_groups")
-    conn.execute("CREATE TEMP TABLE lines_want_groups (k TEXT PRIMARY KEY)")
-    conn.executemany("INSERT OR IGNORE INTO temp.lines_want_groups VALUES (?)", ((f"{o}\x1f{g}",) for (o, _), g in groups.items()))
-    recs = {(g[0]["owner_org"], g[0]["gk"]): contract_rec(g) for g in _groups(conn.execute(
-        f"SELECT * FROM (SELECT {_CONTRACT_COLUMNS} FROM contracts) WHERE owner_org || char(31) || gk IN "
-        f"(SELECT k FROM temp.lines_want_groups) {_ORDER}"))}
-    for t in ("lines_want_rows", "lines_want_groups"):
-        conn.execute(f"DROP TABLE IF EXISTS temp.{t}")
-    return {f"contract:{o}:{ref}": recs[(o, g)] for (o, ref), g in groups.items() if (o, g) in recs}
+    recs = {key: contract_rec(g) for key, g in contract_groups(conn, rows).items()}
+    return {f"contract:{o}:{ref}": recs[(o, g)] for (o, ref), g in named.items() if (o, g) in recs}
 
 
 def contracts_scan(conn: sqlite3.Connection) -> Iterator[Rec]:
@@ -411,6 +442,29 @@ def source_figures(own: Rec, org: str, line: Line, orgs: _Orgs) -> tuple[dict, l
     return entry, sim
 
 
+def cut_similar(sims: list[list]) -> tuple[list[list], bool]:
+    """A record's similar names held to SIM_MAX: those with the most records, then the latest start, kept in the order
+    they were listed in; and whether any was left out."""
+    if len(sims) <= SIM_MAX:
+        return sims, False
+    order = sorted(range(len(sims)), key=lambda i: sims[i][4], reverse=True)
+    order.sort(key=lambda i: -sims[i][3])
+    return [sims[i] for i in sorted(order[:SIM_MAX])], True
+
+
+def own_figures(own: Rec, org: str, line_of: Callable[[int, str, str, frozenset[str]], Line], orgs: _Orgs
+                ) -> tuple[list[dict], list[list], bool]:
+    """A record's holder's record in its own source alone (may follow's earlier contracts, follows.py): its entry, its
+    similar names held to SIM_MAX, and whether any was cut; no entry for a record with no kind of work. The line and
+    its rules (SIMILAR_GROUP_MAX among them) are a radar row's."""
+    level, keys = own.kinds()
+    if not level or not own.buyer:
+        return [], [], False
+    entry, sim = source_figures(own, org, line_of(own.src, own.buyer, level, keys), orgs)
+    sim, cut = cut_similar(sim)
+    return [entry], sim, cut
+
+
 def label(j: dict) -> tuple[str | None, int | None, int | None]:
     """A record's label, the figure beside it and the source that decided it, as site/src/lines.ts reads them: "run"
     (LONG_RUN or more back to back in one source: the longest run), "earlier" (at least one earlier record in one
@@ -438,7 +492,8 @@ def window(as_of: date) -> tuple[int, int, str, str]:
 
 def compute(conn: sqlite3.Connection, *, today: date | None = None, now: str | None = None,
             review_dir: Path | None = None) -> dict[str, int]:
-    """Rebuild expiring_lines from expiring_contracts and expiring_twins; returns the counts."""
+    """Rebuild expiring_lines from expiring_contracts and expiring_twins, and tender_follows from the open notices;
+    returns the counts."""
     return _build(conn, today=today, now=now, review_dir=review_dir)[0]
 
 
@@ -499,6 +554,26 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
             needed.update((rec.src, buyer, level, k) for k in keys if level)
         plans[r["source_key"]] = (buyer, mine)
 
+    # May follow (follows.py): the open notices and the earlier records each may follow, chosen before the pass below
+    # so that the pass fills the chosen records' lines beside the rows'. A fault there is held until the holders'
+    # records are written and then fails the stage, so the radar's records never wait on it.
+    chosen: follows.Chosen | None = None
+    follow_fault: Exception | None = None
+    follow_started = time.monotonic()
+    try:
+        chosen = follows.choose(conn, as_of=as_of.isoformat(), first_day=first_day, last_day=last_day, names=names,
+                                segments=segments)
+        for kept in chosen.kept.values():
+            for m in kept:
+                rec = m.cand.rec
+                level, keys = rec.kinds()
+                if level and rec.buyer and rec.org and not m.cand.withheld:
+                    needed.update((rec.src, rec.buyer, level, k) for k in keys)
+    except Exception as exc:  # noqa: BLE001 - raised again once the holders' records are written
+        log.exception("lines: may follow failed before the pass")
+        chosen, follow_fault = None, exc
+    follow_seconds = time.monotonic() - follow_started
+
     # One pass over each source: a record dated in the window is kept only where a line reads it.
     pools: dict[tuple[int, str, str, str], list[Rec]] = defaultdict(list)
     buyers = {(src, b) for src, b, _, _ in needed}
@@ -519,6 +594,13 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
         keep(rec)
 
     lines: dict[tuple, Line] = {}
+
+    def line_of(src: int, buyer: str, level: str, keys: frozenset[str]) -> Line:
+        at = (src, buyer, level, keys)
+        if at not in lines:
+            lines[at] = Line((x for k in sorted(keys) for x in pools.get((src, buyer, level, k), ())), orgs)
+        return lines[at]
+
     rows, reviewed = [], []
     for r in radar:
         plan = plans.get(r["source_key"])
@@ -531,18 +613,11 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
             level, keys = own.kinds()
             if not level:
                 continue
-            at = (src, buyer, level, keys)
-            if at not in lines:
-                lines[at] = Line((x for k in sorted(keys) for x in pools.get((src, buyer, level, k), ())), orgs)
-            entry, sim = source_figures(own, r["organization_id"], lines[at], orgs)
+            entry, sim = source_figures(own, r["organization_id"], line_of(src, buyer, level, keys), orgs)
             entries.append(entry)
             sims += sim
-        if len(sims) > SIM_MAX:
-            # The most records first, then the latest start; what is kept stays in the order it was listed in.
-            order = sorted(range(len(sims)), key=lambda i: sims[i][4], reverse=True)
-            order.sort(key=lambda i: -sims[i][3])
-            sims = [sims[i] for i in sorted(order[:SIM_MAX])]
-            counts["sim_cut"] += 1
+        sims, cut = cut_similar(sims)
+        counts["sim_cut"] += cut
         own = mine.get(KIND_SRC[r["kind"]])
         j = {
             "v": J_VERSION, "fy": [fy_first, fy_last], "buyer": buyer, "oid": org_number(r["organization_id"]),
@@ -573,10 +648,55 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
     except BaseException:
         conn.rollback()
         raise
+
+    # May follow's rows, each kept record with its own holder's record by the same lines (own_figures), then
+    # tender_follows rebuilt whole in a transaction of its own.
+    labels: dict[tuple[str, int], str] = {}
+    if chosen is not None:
+        follow_started = time.monotonic()
+        counts.update({f"follow_{k}": v for k, v in chosen.counts.items()})
+        counts["follow_sim_cut"] = 0
+
+        def record_of(m: follows.Match) -> dict | None:
+            c, rec = m.cand, m.cand.rec
+            if c.withheld or not rec.org:
+                return None
+            s, sim, cut = own_figures(rec, rec.org, line_of, orgs)
+            counts["follow_sim_cut"] += cut
+            return {
+                "v": J_VERSION, "fy": [fy_first, fy_last], "buyer": rec.buyer, "oid": org_number(rec.org), "s": s,
+                # The value change is the radar's figure, read for its rows alone; the panel shows the label.
+                "own": {"comp": rec.comp, "meth": rec.meth, "bids": rec.bids, "amd": max(c.versions - 1, 0), "growth": None,
+                        "end0": rec.end0 or rec.end, "end": rec.end},
+                "sim": sim,
+            }
+
+        try:
+            follow_rows = follows.rows(chosen, record_of, stamp)
+            follows.write(conn, follow_rows)
+            labels = {(tref, rank): _short_label(json.loads(j)["line"]) for tref, rank, j, _ in follow_rows}
+            counts["follow_rows"] = len(follow_rows)
+        except Exception as exc:  # noqa: BLE001 - raised again below, after the review file
+            log.exception("lines: may follow failed after the pass")
+            follow_fault = exc
+        follow_seconds += time.monotonic() - follow_started
+        counts["follow_seconds"] = round(follow_seconds)
     counts["seconds"] = round(time.monotonic() - started)
+    extra = follows.review(chosen, orgs.name, labels) if chosen is not None and follow_fault is None else []
     shown = write_review(reviewed, as_of, (review_dir or config.OUT_DIR / "review") / REVIEW_FILE, stamp=stamp,
-                         common=common)
+                         common=common, extra=extra)
+    if follow_fault is not None:
+        raise follows.FollowsFailed(f"the holders' records were written; may follow was not "
+                                    f"({type(follow_fault).__name__}: {follow_fault})") from follow_fault
     return counts, shown
+
+
+def _short_label(j: dict | None) -> str:
+    """A record's label and figure for the review file ("run 7", "earlier 2", "none 0"), or why there is none."""
+    if j is None:
+        return "no record (withheld)"
+    band, figure, _ = label(j)
+    return f"{band} {figure}" if band else "no kind of work"
 
 
 # -- the review file --------------------------------------------------------------------
@@ -591,10 +711,12 @@ BANDS = ("run", "earlier", "none", "no label")
 COMMON_SHOWN = 4
 
 
-def write_review(reviewed: list, as_of: date, path: Path, *, stamp: str, common: Iterable[tuple] = ()) -> str | None:
+def write_review(reviewed: list, as_of: date, path: Path, *, stamp: str, common: Iterable[tuple] = (),
+                 extra: list[str] | None = None) -> str | None:
     """Write the operator's review of tonight's records (or remove the file when there are none); returns where.
-    common is the openings left out of the similar names: (src, buyer, level, keys, opening, the holders' names)."""
-    if not reviewed:
+    common is the openings left out of the similar names: (src, buyer, level, keys, opening, the holders' names);
+    extra, lines written after them (may follow's section, follows.review)."""
+    if not reviewed and not extra:
         path.unlink(missing_ok=True)
         return None
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -642,6 +764,7 @@ def write_review(reviewed: list, as_of: date, path: Path, *, stamp: str, common:
             "# opening\tholders\tsrc\tbuyer\tlvl\tkeys\tthe first names"]
     out += ["\t".join([opening, str(len(names)), str(src), buyer or "", level, keys, "; ".join(names[:COMMON_SHOWN])])
             for src, buyer, level, keys, opening, names in shared]
+    out += extra or []
     path.write_text("\n".join(out) + "\n", encoding="utf-8", newline="\n")
     try:
         return path.relative_to(config.REPO_ROOT).as_posix()
