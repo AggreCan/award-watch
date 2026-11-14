@@ -211,6 +211,9 @@ class PoliteClient:
                 resp = self.session.get(url, headers=req_headers, timeout=(min(CONNECT_TIMEOUT_S, timeout), timeout),
                                         stream=True)
             except requests.RequestException as exc:
+                if _malformed(exc):
+                    # Never sent, so no host was asked and no retry can help.
+                    raise FetchError(f"{url}: {exc!r}") from exc
                 self._mark(host)
                 # ConnectTimeout is a ConnectionError too: the host took no
                 # connection at all, which a read timeout does not mean.
@@ -345,6 +348,9 @@ class PoliteClient:
                 resp = self.session.get(url, headers=req_headers,
                                         timeout=(min(CONNECT_TIMEOUT_S, timeout), timeout), stream=True)
             except requests.RequestException as exc:
+                if _malformed(exc):
+                    # Never sent, so no host was asked and no retry can help.
+                    raise FetchError(f"{url}: {exc!r}") from exc
                 self._mark(host)
                 self._retry_or_fail(url, attempt, repr(exc), host=host,
                                     connect=isinstance(exc, requests.ConnectionError), transient=_transient(exc))
@@ -468,6 +474,14 @@ class PoliteClient:
             "fetched_at": time.time(),
         }
         path_meta.write_text(json.dumps(meta), encoding="utf-8")
+
+
+def _malformed(exc: BaseException) -> bool:
+    """A request that could never be sent: an address with no scheme or no host, or a scheme the session does
+    not speak. Trying again changes nothing, so it fails at once (a stage that built a relative address once
+    waited through three backoffs on each, 45 seconds for three addresses)."""
+    return isinstance(exc, (requests.exceptions.MissingSchema, requests.exceptions.InvalidSchema,
+                            requests.exceptions.InvalidURL))
 
 
 def _transient(exc: BaseException) -> bool:

@@ -53,6 +53,32 @@ def test_retries_then_succeeds(tmp_path):
     assert client.get("https://x.example/y") == b"ok"
 
 
+def test_a_malformed_address_fails_at_once_without_a_retry(tmp_path):
+    import requests
+
+    class Unsendable:
+        def __init__(self) -> None:
+            self.n = 0
+
+        def get(self, url, headers=None, timeout=None, stream=False):
+            self.n += 1
+            raise requests.exceptions.MissingSchema(f"Invalid URL {url!r}: No scheme supplied")
+
+    clock = Clock()
+    session = Unsendable()
+    client = PoliteClient(session=session, cache_dir=tmp_path, sleep=clock.sleep, clock=clock.now)
+    for call in (lambda: client.get("/dataset/file.csv"), lambda: client.download("/dataset/file.csv", tmp_path / "f.csv")):
+        with pytest.raises(FetchError) as caught:
+            call()
+        assert "MissingSchema" in str(caught.value) and not caught.value.transient
+    # One try each, and no backoff slept.
+    assert session.n == 2 and sum(clock.sleeps) == 0
+    # It does not count toward the breaker that stops a run after repeated failures.
+    for _ in range(8):
+        with pytest.raises(FetchError):
+            client.get("/dataset/file.csv")
+
+
 def test_404_raises_without_tripping_breaker(tmp_path):
     client, _, _ = make({}, tmp_path)
     for _ in range(6):
