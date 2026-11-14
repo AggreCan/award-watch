@@ -178,7 +178,7 @@ app.get("/expiring/:window/rows.csv", expiringRowsCsv);
 // The directory's routes come before the profile's, which would read
 // "directory" as an id.
 app.get("/organizations", organizationsIndex);
-app.get("/organizations/directory", (c) => c.redirect("/organizations", 301));
+app.get("/organizations/directory", (c) => movedTo(c, "/organizations"));
 app.get("/organizations/directory/:code", directoryPage);
 app.get("/organizations/directory/:code/:page", directoryPage);
 app.get("/organizations/:id", organizationPage);
@@ -242,7 +242,8 @@ app.post("/interest", async (c) => {
   if (post.place === "lists") return listsSubmit(c, post);
   return field(post.body, "kind", 20) === ULTRA_KIND ? ultraSubmit(c, post) : interestSubmit(c, post);
 });
-app.get("/interest", (c) => c.redirect("/alerts", 302));
+// The query string is kept, so an address written with lang=fr arrives in French.
+app.get("/interest", (c) => c.redirect(`/alerts${new URL(c.req.url).search}`, 302));
 // The link in the accounts-open message that takes an address off the email
 // lists (account/announce.tsx): open whatever the accounts switch says.
 app.get("/interest/stop", interestStopPage);

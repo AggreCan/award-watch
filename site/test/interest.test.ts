@@ -284,6 +284,7 @@ describe("POST /interest", () => {
     const res = await get("/interest");
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("/alerts");
+    expect((await get("/interest?lang=fr")).headers.get("location")).toBe("/alerts?lang=fr");
   });
 
   it("normalizes an address and caps its length", () => {

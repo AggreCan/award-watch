@@ -40,6 +40,8 @@ describe("the organizations page", () => {
     const bare = await get("/organizations/directory");
     expect(bare.status).toBe(301);
     expect(bare.headers.get("location")).toBe("/organizations");
+    // The query string goes with it: a French address arrives in French (the language is the query's, else the cookie's).
+    expect((await get("/organizations/directory?lang=fr")).headers.get("location")).toBe("/organizations?lang=fr");
   });
 });
 
