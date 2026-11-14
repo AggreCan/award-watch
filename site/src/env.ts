@@ -75,6 +75,9 @@ export interface Env {
   WEBHOOK_LIMIT?: RateLimit;
   // A calendar feed's reads per address (wrangler.jsonc "ratelimits", src/account/feeds.ts).
   CALENDAR_LIMIT?: RateLimit;
+  // An AI crawler's requests, counted by the crawler's name across all its
+  // addresses (wrangler.jsonc "ratelimits", src/limits.ts AI_CRAWLERS).
+  CRAWLER_LIMIT?: RateLimit;
   // The keyed API's requests per API key (wrangler.jsonc "ratelimits",
   // src/api_keyed.ts), on top of API_LIMIT's per-address cap.
   KEY_LIMIT?: RateLimit;

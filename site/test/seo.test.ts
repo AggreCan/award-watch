@@ -286,8 +286,14 @@ describe("crawler files", () => {
     const bing = rules.indexOf("User-agent: bingbot");
     expect(bing).toBeGreaterThan(crawl);
     const everyone = rules.slice(0, crawl);
-    const bingRules = rules.slice(bing, rules.indexOf("User-agent: ShapBot"));
+    const search = rules.indexOf("User-agent: Applebot");
+    const bingRules = rules.slice(bing, search);
     expect(bingRules.slice(1)).toEqual(everyone.slice(2));
+    // The crawlers of AI search indexes: the same rules, the single record pages closed, ten seconds apart.
+    const searchRules = rules.slice(search, rules.indexOf("User-agent: ShapBot"));
+    const own = searchRules.filter((l) => !l.startsWith("User-agent: "));
+    expect(own.slice(0, everyone.length - 2)).toEqual(everyone.slice(2));
+    expect(own.slice(everyone.length - 2)).toEqual(["Disallow: /contracts/", "Disallow: /awards/", "Disallow: /history/", "Crawl-delay: 10"]);
     const open = [
       "/", "/tenders", "/tenders?lang=fr", "/tenders/new", "/tenders/new?lang=fr", "/tenders/cb-100-10000001",
       "/organizations", "/organizations/org-a000000001", "/organizations/org-a000000001?lang=fr", "/organizations/directory/on/2",
@@ -298,10 +304,16 @@ describe("crawler files", () => {
       "/tenders?segment=82", "/tenders?lang=fr&segment=82", "/tenders/new?day=2026-10-30", "/rankings?source=contracts",
       "/organizations/org-a000000001/respond", "/api/stats", "/corrections?organization=org-a000000001",
     ];
-    for (const group of [everyone, bingRules]) {
+    for (const group of [everyone, bingRules, searchRules]) {
       for (const path of open) expect(robotsAllow(group, path), path).toBe(true);
       for (const path of shut) expect(robotsAllow(group, path), path).toBe(false);
     }
+    // A record's own page is open to a search engine and closed to an AI index's crawler; the lists stay open to both.
+    for (const path of ["/contracts/dnd-mdn/C-2026-2027-Q1-00052", "/awards/cb-100-10000001", "/history/W8486-123456"]) {
+      expect(robotsAllow(everyone, path), path).toBe(true);
+      expect(robotsAllow(searchRules, path), path).toBe(false);
+    }
+    for (const path of ["/awards", "/expiring/12m", "/guides", "/instruments"]) expect(robotsAllow(searchRules, path), path).toBe(true);
     // Training and bulk-scraping crawlers are kept off the Worker entirely.
     const aiGroup = rules.slice(rules.indexOf("User-agent: ShapBot"), rules.indexOf("Disallow: /") + 1);
     for (const bot of ["ClaudeBot", "GPTBot", "Google-Extended", "CCBot", "Bytespider"]) expect(aiGroup).toContain(`User-agent: ${bot}`);

@@ -810,6 +810,46 @@ training or bulk scraping; the data is downloadable from the Data page. The
 robots test in `site/test/seo.test.ts` checks the groups against these
 paths.
 
+### AI crawlers
+
+The crawlers that build an AI search index or an answer engine (Applebot,
+Claude-SearchBot, OAI-SearchBot, PerplexityBot, KeenableBot, ExaSearchBot and
+the others its group names) have a group of their own between Bingbot's and
+the last one. It repeats the general rules, closes the pages of single
+records to them (`/contracts/`, `/awards/`, `/history/`: 1.3 million
+published contracts, the award notices and the contract history, each one a
+row of the bulk files) and asks for ten seconds between requests
+(`Crawl-delay: 10`). The organization, notice, buyer and segment pages, the
+lists and the guides stay open to them.
+
+Why: in November 2026 Applebot went from 8,000 requests a day to 270,000 in
+two days, mostly single record pages, and with KeenableBot and
+Claude-SearchBot made most of the site's requests. Every page is rendered by
+the Worker, so each request is one of the account's monthly Worker requests
+(10 million included on the paid plan, then billed by the million); a static
+file under `/data/` is not.
+
+What each crawler does with the file, from its own documentation: all of them
+keep to `Disallow`; Anthropic's crawlers keep to `Crawl-delay`; Apple's
+"does not follow crawl-delay" and "adjusts automatically when a site slows
+down or returns errors"; KeenableBot and ExaSearchBot say nothing of the
+delay. So the Worker holds the same crawlers to a budget of its own
+(`site/src/limits.ts`, `AI_CRAWLERS` and `CRAWLER_LIMIT` in
+`site/wrangler.jsonc`): ten requests a minute for each crawler, counted by
+the crawler's name across all its addresses, at each Cloudflare location.
+Past it the answer is 429 with `Retry-After: 60`, before anything is read
+for the request; `/robots.txt`, `/llms.txt` and `/sitemap.xml` are never
+refused. A search engine's own crawler (Googlebot, Bingbot, Yandex) and an
+assistant fetching one page for a person who asked (ChatGPT-User,
+Claude-User, Perplexity-User) are not on the list. A test holds the list to
+the crawlers `robots.txt` names (`site/test/limits.test.ts`).
+
+A 429 still runs the Worker, so the budget bounds the work and tells a
+crawler to slow; it does not stop a crawler that ignores both the file and
+the answer from being counted. That takes a rule at Cloudflare's edge, set
+in the dashboard: AI Crawl Control allows or blocks a crawler by name on
+every plan, and a request blocked there never reaches the Worker.
+
 ### Links to organization pages
 
 A profile's inbound links are its sitemap entry, the lists that name it (an

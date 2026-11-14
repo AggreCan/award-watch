@@ -951,7 +951,7 @@ describe("the rest of the site", () => {
     expect(decode(billing)).toContain("<span>Analytics: every view, 10 fiscal years</span>");
     const robots = await (await app.request("/robots.txt", {}, env)).text();
     for (const rule of ["Disallow: /buyers/*/analytics", "Disallow: /organizations/*/analytics", "Disallow: /segments/*/analytics"]) {
-      expect(robots.split(rule).length - 1, rule).toBe(2);
+      expect(robots.split(rule).length - 1, rule).toBe(3);
     }
   });
 });

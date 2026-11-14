@@ -46,7 +46,16 @@
     // checks the feed in the accounts database. A calendar service reads a
     // subscribed feed every few hours, so this holds for thousands of feeds
     // read from one of its addresses. The Atom feeds keep FEED_LIMIT.
-    { "name": "CALENDAR_LIMIT", "namespace_id": "2010", "simple": { "limit": 20, "period": 60 } }
+    { "name": "CALENDAR_LIMIT", "namespace_id": "2010", "simple": { "limit": 20, "period": 60 } },
+    // An AI crawler (src/limits.ts AI_CRAWLERS), counted by the crawler's name
+    // and not by address, since one asks from hundreds of addresses: ten
+    // requests a minute for each crawler at each Cloudflare location, at most
+    // 14,400 a day there, against the 270,000 a day one of them reached in
+    // November 2026. Every request past it still runs the Worker for the 429,
+    // so this bounds the work and tells the crawler to slow; public/robots.txt
+    // asks the same of those that read it, and an edge rule in the dashboard
+    // is what keeps a crawler that heeds neither from being counted at all.
+    { "name": "CRAWLER_LIMIT", "namespace_id": "2011", "simple": { "limit": 10, "period": 60 } }
   ],
   // The daily check (src/watchdog.ts): 06:00 UTC, after the nightly run has had
   // its window and 2 h 15 after the same-day refresh's last cut. It emails the

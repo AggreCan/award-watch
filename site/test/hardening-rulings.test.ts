@@ -279,7 +279,7 @@ describe("robots.txt", () => {
   it("closes /account to every crawler group that is otherwise open, whatever the switch", async () => {
     const groups = robotsTxt.split(/\n\s*\n/).filter((g) => /^User-agent:/m.test(g));
     const open = groups.filter((g) => /^Allow: \/$/m.test(g));
-    expect(open.map((g) => /^User-agent: (.+)$/m.exec(g)![1])).toEqual(["*", "bingbot"]);
+    expect(open.map((g) => /^User-agent: (.+)$/m.exec(g)![1])).toEqual(["*", "bingbot", "Applebot"]);
     for (const g of open) expect(g.split("\n")).toContain("Disallow: /account");
     for (const env of [offEnv(), onEnv()]) {
       expect(await (await app.request("/robots.txt", {}, env)).text()).toBe(robotsTxt);

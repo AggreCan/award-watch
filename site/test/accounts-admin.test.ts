@@ -1504,7 +1504,7 @@ describe("the docs", () => {
   it("robots.txt keeps every open crawler group off /admin", () => {
     const groups = robotsTxt.split(/\n\s*\n/).filter((g) => /^User-agent:/m.test(g));
     const open = groups.filter((g) => /^Allow: \/$/m.test(g));
-    expect(open).toHaveLength(2);
+    expect(open).toHaveLength(3);
     for (const g of open) expect(g.split("\n")).toContain("Disallow: /admin");
   });
 });

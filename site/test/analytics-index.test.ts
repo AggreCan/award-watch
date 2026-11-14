@@ -408,7 +408,7 @@ describe("the pieces", () => {
   it("count the index as a page of its own, and keep crawlers off its queries", async () => {
     expect(routeTemplate("GET", "/analytics")).toEqual({ route: "/analytics", kind: "page" });
     const robots = await (await app.request("/robots.txt", {}, env)).text();
-    for (const rule of ["Disallow: /analytics?\n", "Allow: /analytics?lang=fr$\n"]) expect(robots.split(rule).length - 1, rule).toBe(2);
+    for (const rule of ["Disallow: /analytics?\n", "Allow: /analytics?lang=fr$\n"]) expect(robots.split(rule).length - 1, rule).toBe(3);
     expect(robots).not.toMatch(/^Disallow: \/analytics$/m);
   });
 });

@@ -62,6 +62,55 @@ Allow: /rankings?lang=fr$
 Disallow: /corrections?
 Allow: /corrections?lang=fr$
 
+# Crawlers that build an AI search index or answer engine may read the site,
+# within a budget: the organization, notice, buyer and segment pages, the
+# lists and the guides, ten seconds apart. The pages of single records
+# (1.3 million published contracts, the award notices and the contract
+# history) are closed to them: each is one row of the bulk files on the Data
+# page (see /llms.txt), and in November 2026 these crawlers asked for those
+# pages faster than the site's request allowance allows. The site holds each
+# of these crawlers to the same budget whether or not it reads this file, and
+# answers 429 past it. A crawler reads only the group that names it, so this
+# group repeats the general rules.
+User-agent: Applebot
+User-agent: Claude-SearchBot
+User-agent: OAI-SearchBot
+User-agent: PerplexityBot
+User-agent: KeenableBot
+User-agent: ExaSearchBot
+User-agent: ExaBot
+User-agent: Amzn-SearchBot
+User-agent: meta-webindexer
+User-agent: Epochal-Search
+User-agent: Reflectionbot
+User-agent: YouBot
+User-agent: DuckAssistBot
+User-agent: Timpibot
+User-agent: AI2Bot
+Allow: /
+Disallow: /api/
+Disallow: /organizations/*/respond
+Disallow: /search
+Disallow: /account
+Disallow: /admin
+Disallow: /buyers/*/analytics
+Disallow: /organizations/*/analytics
+Disallow: /segments/*/analytics
+Disallow: /analytics?
+Allow: /analytics?lang=fr$
+Disallow: /tenders?
+Allow: /tenders?lang=fr$
+Disallow: /tenders/new?
+Allow: /tenders/new?lang=fr$
+Disallow: /rankings?
+Allow: /rankings?lang=fr$
+Disallow: /corrections?
+Allow: /corrections?lang=fr$
+Disallow: /contracts/
+Disallow: /awards/
+Disallow: /history/
+Crawl-delay: 10
+
 # Crawlers that gather pages for AI training or large-scale scraping are not
 # needed to find the records (the data is downloadable on the Data page) and
 # at their pace they use up the request allowance that readers depend on.
