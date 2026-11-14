@@ -9,7 +9,10 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { app } from "../src/index";
 import { CLOSING_SOON_DAYS } from "../src/constants";
-import { EXAMPLE_PROFILE, EXAMPLE_SET_ASIDE, GUIDES, type Block, type Both, type Guide, type Link, type Text } from "../src/guides";
+import { referenceShard } from "../src/data";
+import {
+  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SET_ASIDE, GUIDES, type Block, type Both, type Guide, type Link, type Text,
+} from "../src/guides";
 import { allKeys, rawEntry } from "../src/i18n";
 import { EXPIRING_TEASER_ROWS } from "../src/pages/expiring";
 import { guideText } from "../src/pages/guides";
@@ -151,8 +154,23 @@ const deeperWindows = Object.fromEntries(["6m", "12m"].flatMap((w) => [
   [`expiring/${w}/index.json`, { ...(FILES["expiring/3m/index.json"] as object), window: w }],
   [`expiring/${w}/1.json`, FILES["expiring/3m/1.json"]],
 ]));
+// The example notices and award the guides link: a fixture's record under each live reference, in the shard
+// that reference hashes to.
+const exampleRecords: Record<string, unknown> = {};
+beforeAll(async () => {
+  const tender = (FILES["tenders/20a.json"] as Record<string, any>)["cb-100-10000001"];
+  for (const reference of [EXAMPLE_NOTICE, EXAMPLE_ACAN].map((p) => p.slice("/tenders/".length))) {
+    const path = `tenders/${await referenceShard(reference)}.json`;
+    exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [reference]: { ...structuredClone(tender), reference } };
+  }
+  const award = (FILES["contracts/637.json"] as Record<string, any>)["award:cb-400-40000004"];
+  const awardRef = EXAMPLE_AWARD.slice("/awards/".length);
+  exampleRecords[`contracts/${await referenceShard(awardRef)}.json`] = { [`award:${awardRef}`]: { ...structuredClone(award), reference: awardRef } };
+});
 const linkEnv = () =>
-  testEnv(makeFakeAssets({}, { [`profiles/${shard}.json`]: exampleProfile, "instruments/index.json": INSTRUMENTS, ...deeperWindows }));
+  testEnv(makeFakeAssets({}, {
+    [`profiles/${shard}.json`]: exampleProfile, "instruments/index.json": INSTRUMENTS, ...deeperWindows, ...exampleRecords,
+  }));
 
 describe("the routes", () => {
   it("serve the index and every guide in both languages, cached as the other document pages are", async () => {
@@ -262,11 +280,13 @@ describe("links and sources", () => {
     // The guides link the parts of the site the brief names: the open notices, a type filter, the
     // Methodology's statuses and places, the standing offers list, a profile's sections, the Data page;
     // the open ACANs and the counting of competitive records; a contract reporting a set-aside; the three
-    // lists of contracts ending and the overview of them.
+    // lists of contracts ending and the overview of them; the new notices, the award notices, an example
+    // notice, ACAN and award; and the guides that link one another.
     for (const want of ["/tenders", "/methodology#statuses", "/methodology#places", "/methodology#counting", "/instruments", "/data#sources",
       `${EXAMPLE_PROFILE}#awards`, `${EXAMPLE_PROFILE}#history`, `${EXAMPLE_PROFILE}#contracts`, `${EXAMPLE_PROFILE}#instruments`,
       "/tenders?type=Advance%20Contract%20Award%20Notice", "/methodology#competitive", "/methodology#expiring", EXAMPLE_SET_ASIDE,
-      "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m"]) {
+      "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m", "/tenders/new", "/awards", EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_AWARD,
+      ...GUIDES.map(pathOf)]) {
       expect(targets.has(want), want).toBe(true);
     }
     expect([...targets].some((h) => h.startsWith("/tenders?type="))).toBe(true);

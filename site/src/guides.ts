@@ -69,6 +69,9 @@ const OPO = both("Office of the Procurement Ombud", "Bureau de l'ombud de l'appr
 // PSPC's Buyer's Guide, in each language.
 const GUIDE_EN = "https://canadabuys.canada.ca/en/buyer-s-portal/buyer-s-guide";
 const GUIDE_FR = "https://achatscanada.canada.ca/fr/portail-de-l-acheteur/guide-de-l-acheteur";
+// The Contract Security Program's section of PSPC's pages, in each language.
+const CSP_EN = "https://www.canada.ca/en/public-services-procurement/services/industrial-security/security-requirements-contracting";
+const CSP_FR = "https://www.canada.ca/fr/services-publics-approvisionnement/services/securite-industrielle/exigences-securite-contrats";
 
 const SRC = {
   dictionary: {
@@ -102,11 +105,19 @@ const SRC = {
     title: "How to bid on tender opportunities",
     publisher: PSPC,
     url: "https://canadabuys.canada.ca/en/how-bid-tender-opportunities",
+    fr: {
+      title: "Comment soumissionner sur les occasions de marché",
+      url: "https://achatscanada.canada.ca/fr/pour-commencer/se-preparer-pour-vendre/comment-soumissionner-sur-les-occasions-de-marche",
+    },
   },
   seminar: {
     title: "Seminar notes: Bidding on opportunities",
     publisher: PSPC,
     url: "https://www.canada.ca/en/public-services-procurement/services/acquisitions/support-for-businesses/bid-on-opportunities/bidding.html",
+    fr: {
+      title: "Notes de séminaire : Soumissionner sur des marchés",
+      url: "https://www.canada.ca/fr/services-publics-approvisionnement/services/achats/soutien-aux-entreprises/soumissionner-marches/soumissionner.html",
+    },
   },
   acan: {
     title: "Advanced Contract Award Notice (Buyer's Guide)",
@@ -145,6 +156,10 @@ const SRC = {
     title: "Tender notices and trade agreements (Buyer's Guide)",
     publisher: PSPC,
     url: "https://canadabuys.canada.ca/en/buyer-s-portal/buyer-s-guide/create-solicitation/tender-notices/tender-notices-and-trade-agreements",
+    fr: {
+      title: "Avis d'appel d'offres et accords commerciaux (Guide de l'acheteur)",
+      url: `${GUIDE_FR}/creer-une-demande-d-offres/avis-d-appel-d-offres/avis-d-appel-d-offres-et-accords-commerciaux`,
+    },
   },
   thresholds: {
     title: "Contracting Policy Notice 2025-8, Trade Agreements: Thresholds Update",
@@ -215,6 +230,7 @@ const SRC = {
     title: "Access to Information Act, section 86",
     publisher: JUSTICE,
     url: "https://laws-lois.justice.gc.ca/eng/acts/a-1/page-10.html",
+    fr: { title: "Loi sur l'accès à l'information, article 86", url: "https://laws-lois.justice.gc.ca/fra/lois/a-1/page-10.html" },
   },
   gcr: {
     title: "Government Contracts Regulations (SOR/87-402)",
@@ -338,6 +354,141 @@ const SRC = {
       url: "https://www.canada.ca/fr/secretariat-conseil-tresor/services/avis-politique/2026-1.html",
     },
   },
+  policyNotices: {
+    title: "Contracting policy notices",
+    publisher: TBS,
+    url: "https://www.canada.ca/en/treasury-board-secretariat/services/policy-notice.html",
+    fr: { title: "Avis relatifs à la Politique sur les marchés", url: "https://www.canada.ca/fr/secretariat-conseil-tresor/services/avis-politique.html" },
+  },
+  eProcurement: {
+    title: "Electronic procurement",
+    publisher: PSPC,
+    url: "https://www.canada.ca/en/public-services-procurement/services/acquisitions/support-for-businesses/electronic-procurement-transition.html",
+    fr: {
+      title: "Achats électroniques",
+      url: "https://www.canada.ca/fr/services-publics-approvisionnement/services/achats/soutien-aux-entreprises/transition-achats-electroniques.html",
+    },
+  },
+  register: {
+    title: "How to register your business",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/getting-started/preparing-sell-government/how-register-your-business",
+    fr: {
+      title: "Comment inscrire votre entreprise",
+      url: "https://achatscanada.canada.ca/fr/pour-commencer/se-preparer-pour-vendre/inscrire-votre-entreprise-2",
+    },
+  },
+  registerChecklist: {
+    title: "Use this checklist to prepare to register on SAP Business Network",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/support/use-checklist-prepare-register-sap-business-network",
+    fr: {
+      title: "Utilisez cette liste pour vous préparer à vous inscrire sur SAP Business Network",
+      url: "https://achatscanada.canada.ca/fr/soutien/liste-pour-preparer-inscrire-sap-ariba",
+    },
+  },
+  followUp: {
+    title: "Following up on a bid",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/getting-started/preparing-sell-government/how-bid-tender-opportunities/following-bid",
+    fr: { title: "Suivi des soumissions", url: "https://achatscanada.canada.ca/fr/pour-commencer/se-preparer-pour-vendre/suivi-des-soumissions" },
+  },
+  atAward: {
+    title: "Elements to consider at award (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/award/award-contract/elements-consider-award-0`,
+    fr: {
+      title: "Éléments à prendre en considération lors de l'attribution (Guide de l'acheteur)",
+      url: `${GUIDE_FR}/attribuer/attribuer-un-contrat/elements-prendre-en-consideration-lors-de-l-attribution`,
+    },
+  },
+  sourcing: {
+    title: "Determine the sourcing strategy (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/plan/determine-procurement-strategy/determine-sourcing-strategy`,
+    fr: {
+      title: "Déterminer la stratégie de sélection des fournisseurs (Guide de l'acheteur)",
+      url: `${GUIDE_FR}/planifier/determiner-la-strategie-d-approvisionnement/determiner-la-strategie-de-selection-des-fournisseurs`,
+    },
+  },
+  securitySolicitations: {
+    title: "Security in solicitations of offers (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/plan/contract-security-and-privacy-requirements/security-solicitations-offers`,
+    fr: {
+      title: "Sécurité dans les demandes d'offres (Guide de l'acheteur)",
+      url: `${GUIDE_FR}/planifier/exigences-en-matiere-de-securite-et-de-protection-des-renseignements-personnels-des-contrats/securite-dans-les-demandes-doffres`,
+    },
+  },
+  // The Contract Security Program's pages, in PSPC's industrial security section.
+  cspScreening: {
+    title: "Security screening for government contracts",
+    publisher: PSPC,
+    url: `${CSP_EN}/security-screening-government-contracts.html`,
+    fr: { title: "Enquête de sécurité pour les contrats du gouvernement", url: `${CSP_FR}/enquete-securite-contrats-gouvernement.html` },
+  },
+  cspOrganization: {
+    title: "Obtain a security screening for your organization",
+    publisher: PSPC,
+    url: `${CSP_EN}/organization-security-screening/obtain-security-screening-organization.html`,
+    fr: {
+      title: "Obtention d'une attestation de sécurité pour votre organisation",
+      url: `${CSP_FR}/enquete-securite-organisation/obtention-attestation-securite-organisation.html`,
+    },
+  },
+  cspProvisional: {
+    title: "Provisional security clearance",
+    publisher: PSPC,
+    url: `${CSP_EN}/organization-security-screening/clearances/provisional.html`,
+    fr: { title: "Attestations de sécurité provisoires", url: `${CSP_FR}/enquete-securite-organisation/attestations-securite-organisation/provisoire.html` },
+  },
+  cspSponsorship: {
+    title: "Sponsorship process",
+    publisher: PSPC,
+    url: `${CSP_EN}/organization-security-screening/sponsorship-process.html`,
+    fr: { title: "Processus de parrainage", url: `${CSP_FR}/enquete-securite-organisation/processus-parrainage.html` },
+  },
+  cspLevels: {
+    title: "Levels of security",
+    publisher: PSPC,
+    url: `${CSP_EN}/safeguarding-equipment-sites-assets-information/levels-security.html`,
+    fr: { title: "Niveaux de sécurité", url: `${CSP_FR}/protection-equipement-lieux-biens-renseignements/niveaux-securite.html` },
+  },
+  cspPersonnel: {
+    title: "Personnel security screening overview",
+    publisher: PSPC,
+    url: `${CSP_EN}/personnel-security-screening/overview.html`,
+    fr: { title: "Aperçu d'une enquête de sécurité sur le personnel", url: `${CSP_FR}/enquete-securite-personnel/apercu.html` },
+  },
+  cspTimes: {
+    title: "Costs and processing times for personnel security screenings",
+    publisher: PSPC,
+    url: `${CSP_EN}/personnel-security-screening/costs-processing-times.html`,
+    fr: {
+      title: "Coûts et délais de traitement pour les enquêtes de sécurité sur le personnel",
+      url: `${CSP_FR}/enquete-securite-personnel/couts-delais-traitement.html`,
+    },
+  },
+  // The two example notices, on CanadaBuys (read there on 2026-11-14). Their titles join parts with a dash,
+  // which the guides never print; a comma stands in.
+  exampleNotice: {
+    title: "Physical Security Compliance Project, NCR (tender notice cb-800-75831340)",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-800-75831340",
+    fr: {
+      title: "Projet de conformité de la sécurité matérielle, RCN (avis d'appel d'offres cb-800-75831340)",
+      url: "https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/cb-800-75831340",
+    },
+  },
+  exampleAcan: {
+    title: "ACAN F3757-260564 pH measure and control system (tender notice WS5918268553-Doc5979457667)",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/ws5918268553-doc5979457667",
+    fr: {
+      title: "PAC F3757-260564 Système de mesure et de contrôle du pH (avis d'appel d'offres WS5918268553-Doc5979457667)",
+      url: "https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/ws5918268553-doc5979457667",
+    },
+  },
 } satisfies Record<string, Source>;
 
 // The site's own pages the guides link to.
@@ -349,10 +500,23 @@ export const EXAMPLE_PROFILE = "/organizations/org-77ed664e0c";
 // Indigenous Business, with a business as the supplier (read from the site's 2026 contracts file on 2026-11-11),
 // so its page shows the field the guide on set-asides describes.
 export const EXAMPLE_SET_ASIDE = "/contracts/dnd-mdn/C-2026-2027-Q1-00052";
+// A request for proposal whose description states security requirements and whose trade agreements line names
+// thirteen agreements, NAFTA among them; an advance contract award notice whose limited tendering reason reads
+// Exclusive Rights; and an award notice that links the tender notice it followed. Each was read on CanadaBuys or
+// in its open data and on awardwatch.ca on 2026-11-14; a notice's page stays on the site after it closes.
+export const EXAMPLE_NOTICE = "/tenders/cb-800-75831340";
+export const EXAMPLE_ACAN = "/tenders/ws5918268553-doc5979457667";
+export const EXAMPLE_AWARD = "/awards/cb-391-38769273";
 // The addresses of the guides that link one another.
 const ACAN_PATH = "/guides/advance-contract-award-notices-acan";
 const PSIB_PATH = "/guides/indigenous-business-set-asides-psib";
 const THREE_PATH = "/guides/three-records-of-one-federal-contract";
+const READING_PATH = "/guides/reading-a-canadabuys-tender-notice";
+const SOSA_PATH = "/guides/standing-offers-and-supply-arrangements";
+const ENDING_PATH = "/guides/when-a-federal-contract-ends";
+const BID_PATH = "/guides/how-to-bid-on-government-of-canada-contracts";
+const SECURITY_PATH = "/guides/security-requirements-on-federal-contracts";
+const TRADE_PATH = "/guides/trade-agreements-and-thresholds-on-federal-tenders";
 
 // -- the guides ---------------------------------------------------------------------
 
@@ -1572,8 +1736,688 @@ const CONTRACT_END: Guide = {
   ],
 };
 
+const HOW_TO_BID: Guide = {
+  slug: BID_PATH.slice("/guides/".length),
+  title: both("How to Bid on Government of Canada Contracts, Start to Finish", "Soumissionner sur les marchés du gouvernement du Canada, du début à la fin"),
+  seoTitle: both("How to Bid on Government of Canada Contracts", "Soumissionner sur les marchés du gouvernement du Canada"),
+  summary: both(
+    "The steps to bid on a federal contract, in order: accounts and numbers, notices, documents, submission, award, debriefing and the published records.",
+    "Les étapes pour soumissionner sur un marché fédéral : comptes et numéros, avis, documents, soumission, attribution, compte rendu et dossiers publiés.",
+  ),
+  checked: "2026-11-14",
+  action: tenderList(
+    "To keep track of new federal tender notices as they are posted, save this list with your email address.",
+    "Pour suivre les nouveaux avis d'appel d'offres fédéraux à mesure qu'ils sont publiés, enregistrez cette liste avec votre adresse courriel.",
+  ),
+  sections: [
+    {
+      id: "steps",
+      title: both("The Steps in Order", "Les étapes dans l'ordre"),
+      blocks: [
+        p(
+          "Public Services and Procurement Canada (PSPC) calls CanadaBuys the official source for Government of Canada tender and award notices, and CanadaBuys states that the notices, solicitation documents and attachments are free of charge. Each notice's description says how to prepare the bid, when it is due and how it will be evaluated. In order:",
+          "Services publics et Approvisionnement Canada (SPAC) présente AchatsCanada comme la source officielle des avis d'appel d'offres et d'adjudication du gouvernement du Canada, et AchatsCanada indique que les avis, les documents de sollicitation et les autres documents sont disponibles sans frais. La description de chaque avis précise comment préparer la soumission, sa date limite et la méthode d'évaluation. Dans l'ordre :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Step", "Étape") },
+            { kind: "main", label: both("What happens", "Ce qui se passe") },
+          ],
+          rows: [
+            [
+              both("Register", "S'inscrire"),
+              both(
+                "An SAP Business Network account for the notices PSPC posts in SAP Ariba, and a Canada Revenue Agency business number",
+                "Un compte SAP Business Network pour les avis que SPAC publie dans SAP Ariba, et un numéro d'entreprise de l'Agence du revenu du Canada",
+              ),
+            ],
+            [
+              both("Find a notice", "Trouver un avis"),
+              both(
+                "On CanadaBuys' Tender opportunities page, where the Government Electronic Tendering Service publishes them",
+                "Sur la page Occasions de marché d'AchatsCanada, où le Service électronique d'appels d'offres du gouvernement les publie",
+              ),
+            ],
+            [
+              both("Read", "Lire"),
+              both(
+                "The requirement, any security requirements, the evaluation criteria and the delivery method for bids",
+                "Le besoin, les exigences de sécurité s'il y en a, les critères d'évaluation et la méthode de dépôt des soumissions",
+              ),
+            ],
+            [
+              both("Submit", "Soumissionner"),
+              both("By the method the notice states, before it closes", "Par la méthode qu'indique l'avis, avant sa clôture"),
+            ],
+            [
+              both("Award", "Attribution"),
+              both(
+                "Bids evaluated against the criteria the notice specifies, and an award notice on CanadaBuys where one is required",
+                "Soumissions évaluées selon les critères que précise l'avis, et un avis d'attribution sur AchatsCanada lorsqu'il est exigé",
+              ),
+            ],
+            [
+              both("Debriefing", "Compte rendu"),
+              both("On request to the contracting officer, after a competitive process", "Sur demande à l'agent de négociation des contrats, après un processus concurrentiel"),
+            ],
+            [
+              both("Publication", "Publication"),
+              both("A contract over $10,000, published by the department after each quarter", "Un contrat de plus de 10 000 $, publié par le ministère après chaque trimestre"),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "accounts",
+      title: both("Accounts and Numbers", "Comptes et numéros"),
+      blocks: [
+        p(
+          "PSPC posts in SAP Ariba the tender notices it issues on behalf of federal departments, agencies and Crown corporations. To view and bid on them, a business creates an SAP Business Network account, as CanadaBuys' registration page (modified July 6, 2026) names it, and fills out the Government of Canada's required questionnaire before it can bid. PSPC's electronic procurement page (modified May 29, 2026) calls this registering in SAP Ariba. CanadaBuys' checklist allows one account per Canada Revenue Agency (CRA) business number.",
+          "SPAC publie dans SAP Ariba les avis d'appel d'offres qu'il lance au nom de ministères et d'organismes fédéraux et de sociétés d'État. Pour les consulter et soumissionner, une entreprise crée un compte SAP Business Network, comme le nomme la page d'inscription d'AchatsCanada (modifiée le 6 juillet 2026), et remplit le questionnaire requis du gouvernement du Canada avant de pouvoir soumettre une offre. La page de SPAC sur les achats électroniques (modifiée le 29 mai 2026) parle d'inscription dans SAP Ariba. La liste de vérification d'AchatsCanada permet un seul compte par numéro d'entreprise de l'Agence du revenu du Canada (ARC).",
+        ),
+        p(
+          "CanadaBuys says any business selling goods or services to the Government of Canada needs a CRA business number, and will need it if it wins a contract; a business outside Canada registers for a non-resident one. PSPC's page names a second number, the procurement business number, obtained by registering in the Supplier Registration Information (SRI) system and currently required for bids not processed through SAP Ariba.",
+          "AchatsCanada indique que toute entreprise qui vend des biens ou des services au gouvernement du Canada a besoin d'un numéro d'entreprise de l'ARC, et en aura besoin si elle remporte un contrat; une entreprise à l'extérieur du Canada s'inscrit pour obtenir un numéro pour non-résident. La page de SPAC nomme un second numéro, le numéro d'entreprise-approvisionnement, obtenu en s'inscrivant au système de Données d'inscription des fournisseurs (DIF) et requis à l'heure actuelle pour les soumissions qui ne sont pas traitées par SAP Ariba.",
+        ),
+        p(
+          "Departments and agencies posting without PSPC post directly to CanadaBuys, where the notice's Bidding details tab holds the documents and bidding instructions.",
+          "Les ministères et organismes qui publient sans passer par SPAC le font directement dans AchatsCanada, où l'onglet Détails de l'offre de l'avis contient les documents et les instructions sur la façon de soumissionner.",
+        ),
+      ],
+    },
+    {
+      id: "notices",
+      title: both("Where Notices Are Published", "Où les avis sont publiés"),
+      blocks: [
+        p(
+          "Under Treasury Board Contracting Policy Notice 2025-8, tender notices must be published for procurements subject to the free trade agreements, through the Government Electronic Tendering Service (GETS) via the Tender opportunities page on CanadaBuys. CanadaBuys also shows notices from the broader Canadian public sector and the NATO Support and Procurement Agency. {trade} covers which agreements apply and from what value.",
+          "Selon l'Avis sur la Politique des marchés 2025-8 du Conseil du Trésor, des avis d'appel d'offres doivent être publiés pour les approvisionnements assujettis aux accords de libre-échange, par le Service électronique d'appels d'offres du gouvernement (SEAOG) sur la page Occasions de marché d'AchatsCanada. AchatsCanada affiche aussi des avis du secteur public canadien élargi et de l'Agence OTAN de soutien et d'acquisition. {trade} indique quels accords s'appliquent et à partir de quelle valeur.",
+          { trade: a(TRADE_PATH, "Trade Agreements and Thresholds on a Federal Tender Notice", "Accords commerciaux et seuils dans un avis d'appel d'offres fédéral") },
+        ),
+        p(
+          "Award Watch reads CanadaBuys' open data every day and lists the {open} and the {new} by the day first seen, each linked to its page on CanadaBuys.",
+          "Award Watch lit chaque jour les données ouvertes d'AchatsCanada et présente les {open} et les {new} selon le jour où ils ont été vus pour la première fois, chacun lié à sa page sur AchatsCanada.",
+          {
+            open: a("/tenders", "open tender notices", "avis d'appel d'offres ouverts"),
+            new: a("/tenders/new", "new notices", "nouveaux avis"),
+          },
+        ),
+      ],
+    },
+    {
+      id: "kinds",
+      title: both("Kinds of Notice", "Types d'avis"),
+      blocks: [
+        p(
+          "The notice type says what the buyer asks for. CanadaBuys' data dictionary lists nine types, and PSPC's seminar notes name three as the most commonly used:",
+          "Le type d'avis indique ce que demande l'acheteur. Le dictionnaire de données d'AchatsCanada énumère neuf types, et les notes de séminaire de SPAC en nomment trois comme les plus couramment utilisés :",
+        ),
+        {
+          kind: "terms",
+          items: [
+            {
+              term: both("Request for Proposal", "Demande de propositions"),
+              text: tx(
+                "A call for bids with the specifications and the evaluation criteria for choosing the winning bid, which results in a contract.",
+                "Un appel d'offres qui présente les caractéristiques du besoin et les critères d'évaluation servant à choisir la soumission retenue, laquelle donne lieu à un contrat.",
+              ),
+            },
+            {
+              term: both("Request for Standing Offer", "Demande d'offre à commandes"),
+              text: tx(
+                "For repetitive buying. A supplier that qualifies agrees to a fixed price over a time frame, and the buyer issues it call-ups.",
+                "Pour des achats répétés. Le fournisseur qui se qualifie consent à un prix fixe pendant une période donnée, et l'acheteur lui adresse des commandes subséquentes.",
+              ),
+            },
+            {
+              term: both("Request for Supply Arrangement", "Demande d'arrangement en matière d'approvisionnement"),
+              text: tx(
+                "For repetitive needs with variables, such as statements of work or requirements, that cannot be defined in advance; bids for specific requirements are later solicited from the pre-qualified suppliers.",
+                "Pour des besoins répétés comportant des variables, comme des énoncés des travaux ou des exigences, qui ne peuvent pas être définies d'avance; des soumissions pour des besoins précis sont ensuite demandées aux fournisseurs préqualifiés.",
+              ),
+            },
+          ],
+        },
+        p(
+          "{sosa} explains both instruments, and {reading} explains each field of a notice. An {acan} names the business a buyer intends to award the contract to.",
+          "{sosa} explique ces deux instruments, et {reading} explique chaque champ d'un avis. Un {acan} nomme l'entreprise à laquelle l'acheteur compte attribuer le contrat.",
+          {
+            sosa: a(SOSA_PATH, "Standing Offers and Supply Arrangements", "Offres à commandes et arrangements en matière d'approvisionnement"),
+            acan: a(ACAN_PATH, "advance contract award notice", "préavis d'adjudication de contrat"),
+            reading: a(READING_PATH, "How to Read a Federal Tender Notice on CanadaBuys", "Lire un avis d'appel d'offres fédéral sur AchatsCanada"),
+          },
+        ),
+      ],
+    },
+    {
+      id: "documents",
+      title: both("Reading the Solicitation", "Lire la demande de soumissions"),
+      blocks: [
+        p(
+          "PSPC's seminar notes set out the parts of a solicitation, from general information, which describes the requirement and identifies security requirements, to the evaluation procedures and the clauses of the resulting contract. Since June 2024, PSPC's solicitations follow a modernized format; other departments may still post conventional documents.",
+          "Les notes de séminaire de SPAC présentent les parties d'une demande de soumissions, des renseignements généraux, qui décrivent le besoin et indiquent les exigences en matière de sécurité, aux procédures d'évaluation et aux clauses du contrat subséquent. Depuis juin 2024, les demandes de soumissions de SPAC suivent une présentation modernisée; d'autres ministères peuvent encore publier des documents conventionnels.",
+        ),
+        p(
+          "The notes direct questions, in writing and before their deadline, to the contracting authority named in the solicitation document, the only point of contact; the answers appear as amendments on the notice page.",
+          "Les notes demandent d'adresser les questions par écrit, avant la date limite prévue, à l'autorité contractante nommée dans le document de demande de soumissions, le seul point de contact; les réponses paraissent comme modifications sur la page de l'avis.",
+        ),
+        p(
+          "A security clearance is needed when a contract requires personnel to access classified or protected information, assets or sensitive sites, and the tender opportunity identifies the {security}. {psib} covers set-asides for Indigenous businesses.",
+          "Une attestation de sécurité est nécessaire lorsqu'un contrat exige que le personnel accède à des renseignements, à des biens ou à des lieux protégés ou classifiés, et l'appel d'offres indique les {security}. {psib} traite des marchés réservés aux entreprises autochtones.",
+          {
+            security: a(SECURITY_PATH, "security requirements", "exigences de sécurité"),
+            psib: a(PSIB_PATH, "Indigenous Business Set-Asides in Federal Procurement (PSIB)", "Marchés réservés aux entreprises autochtones dans les achats fédéraux (SAEA)"),
+          },
+        ),
+      ],
+    },
+    {
+      id: "submitting",
+      title: both("Submitting and Evaluation", "Dépôt et évaluation"),
+      blocks: [
+        p(
+          "Each tender notice states the delivery method for bids: SAP Ariba for notices posted to PSPC's electronic procurement solution, and for some opportunities another method, such as a bid receiving unit or Canada Post's Connect service. A bid can be modified and resubmitted until the tender closes.",
+          "Chaque avis d'appel d'offres indique la méthode de dépôt des soumissions : SAP Ariba pour les appels d'offres publiés dans la solution d'achats électroniques de SPAC et, pour certaines occasions de marché, un autre moyen, comme une unité de réception des soumissions ou le service Connexion de Postes Canada. Une soumission peut être modifiée et soumise de nouveau jusqu'à la clôture de l'appel d'offres.",
+        ),
+        p(
+          "Mandatory criteria are assessed pass or fail, and point-rated criteria score the value added over and above them. The seminar notes describe three ways of selecting the winning bid: the lowest priced responsive bid, the best overall value, and the highest rated technical bid within a stipulated budget. This {example} from Indigenous Services Canada states its selection criteria as the highest combined rating of technical merit and price.",
+          "Les critères obligatoires sont évalués sur une base de réussite ou d'échec, et les critères cotés mesurent la valeur ajoutée en plus des exigences obligatoires. Les notes de séminaire décrivent trois façons de choisir la soumission retenue : la soumission recevable la plus basse, le meilleur rapport qualité-prix et la soumission technique la mieux cotée dans les limites d'un budget. Cet {example} de Services aux Autochtones Canada indique comme critère de sélection la cote combinée la plus élevée pour le mérite technique et le prix.",
+          { example: a(EXAMPLE_NOTICE, "request for proposal", "appel d'offres") },
+        ),
+      ],
+    },
+    {
+      id: "award",
+      title: both("Award and Debriefing", "Attribution et compte rendu"),
+      blocks: [
+        p(
+          "PSPC's Buyer's Guide requires an award notice within 72 days of the award for procurements subject to the international trade agreements and the Canadian Free Trade Agreement. For contracts issued through the government's procurement application, award notices are generated and posted on CanadaBuys automatically. Award Watch lists them under {awards}; this {award} links the tender notice it followed.",
+          "Le Guide de l'acheteur de SPAC exige un avis d'attribution dans les 72 jours suivant l'attribution pour les approvisionnements assujettis aux accords commerciaux internationaux et à l'Accord de libre-échange canadien. Pour les contrats attribués par l'application d'approvisionnement du gouvernement, les avis d'attribution sont générés et affichés automatiquement sur AchatsCanada. Award Watch les présente sous {awards}; cet {award} renvoie à l'avis d'appel d'offres qui l'a précédé.",
+          {
+            awards: a("/awards", "award notices", "avis d'attribution"),
+            award: a(EXAMPLE_AWARD, "award notice", "avis d'attribution"),
+          },
+        ),
+        p(
+          "After a competitive process, a bidder may ask the contracting officer for a debriefing once told of the results or of an award to someone else, a right CanadaBuys traces to the Directive on the Management of Procurement and some trade agreements. A debriefing typically gives the successful supplier's name, the contract value and an outline of why the bid was not successful.",
+          "Après un processus concurrentiel, un soumissionnaire peut demander un compte rendu à l'agent de négociation des contrats une fois informé des résultats ou de l'attribution du contrat à quelqu'un d'autre, un droit qu'AchatsCanada rattache à la Directive sur la gestion de l'approvisionnement et à certains accords commerciaux. Un compte rendu comprend en général le nom du fournisseur retenu, la valeur du contrat et un résumé des raisons pour lesquelles la soumission n'a pas été retenue.",
+        ),
+        p(
+          "CanadaBuys recommends taking an objection to the contracting authority first. The Office of the Procurement Ombud can review complaints about the award of certain contracts below $34,700 for goods and $139,000 for services; a supplier has, in most cases, 30 working days after the public notice of award to file. The Canadian International Trade Tribunal takes complaints on procurements covered by at least one trade agreement, within 10 working days of that notice.",
+          "AchatsCanada recommande de soumettre d'abord une objection à l'autorité contractante. Le Bureau de l'ombud de l'approvisionnement peut examiner les plaintes sur l'attribution de certains contrats d'une valeur inférieure à 34 700 $ pour les biens et à 139 000 $ pour les services; un fournisseur dispose, dans la plupart des cas, de 30 jours ouvrables après l'avis public d'attribution pour en déposer une. Le Tribunal canadien du commerce extérieur reçoit les plaintes sur les approvisionnements visés par au moins un accord commercial, déposées dans les 10 jours ouvrables suivant cet avis.",
+        ),
+      ],
+    },
+    {
+      id: "records",
+      title: both("Where the Contract Is Published", "Où le contrat est publié"),
+      blocks: [
+        p(
+          "A contract can then appear in three federal records: the award notice; PSPC's contract history, the contracts PSPC awards on behalf of federal departments and agencies; and the department's publication of each contract over $10,000, due under section 86 of the Access to Information Act within 30 days after each of the first three quarters and 60 days after the fourth. {three} explains how they differ; {ending} covers options and extensions, and the {expiring} list contracts near their end.",
+          "Un contrat peut ensuite figurer dans trois dossiers fédéraux : l'avis d'attribution; l'historique des contrats de SPAC, soit les contrats que SPAC attribue au nom des ministères et organismes fédéraux; et la publication, par le ministère, de chaque contrat de plus de 10 000 $, exigée par l'article 86 de la Loi sur l'accès à l'information dans les 30 jours suivant chacun des trois premiers trimestres et dans les 60 jours suivant le quatrième. {three} explique en quoi ils diffèrent; {ending} traite des options et des prolongations, et les {expiring} présentent les contrats qui approchent de leur fin.",
+          {
+            three: a(THREE_PATH, "Three Federal Records of One Contract", "Trois dossiers fédéraux d'un même contrat"),
+            expiring: a("/expiring", "lists of contracts ending soon", "listes des contrats prenant fin bientôt"),
+            ending: a(ENDING_PATH, "When a Federal Contract Ends", "Quand un contrat fédéral prend fin"),
+          },
+        ),
+      ],
+    },
+  ],
+  sources: [
+    SRC.eProcurement, SRC.register, SRC.registerChecklist, SRC.howToBid, SRC.thresholds, SRC.dictionary, SRC.seminar, SRC.acan, SRC.sourcing,
+    SRC.exampleNotice, SRC.atAward, SRC.followUp, SRC.atia,
+  ],
+};
+
+const TRADE: Guide = {
+  slug: TRADE_PATH.slice("/guides/".length),
+  title: both("Trade Agreements and Thresholds on a Federal Tender Notice", "Accords commerciaux et seuils dans un avis d'appel d'offres fédéral"),
+  seoTitle: both("Trade Agreements and Thresholds on Federal Tenders", "Accords commerciaux et seuils des appels d'offres fédéraux"),
+  summary: both(
+    "The trade agreements line on a federal tender notice, the thresholds in effect for 2026 and 2027, and the limited tendering reasons a notice can give.",
+    "La ligne des accords commerciaux d'un avis fédéral, les seuils en vigueur en 2026 et 2027, et les motifs d'appel d'offres limité qu'un avis peut donner.",
+  ),
+  checked: "2026-11-14",
+  action: tenderList(
+    "To keep track of new federal tender notices and the agreements they name, save this list with your email address.",
+    "Pour suivre les nouveaux avis d'appel d'offres fédéraux et les accords qu'ils nomment, enregistrez cette liste avec votre adresse courriel.",
+  ),
+  sections: [
+    {
+      id: "line",
+      title: both("The Trade Agreements Line", "La ligne des accords commerciaux"),
+      blocks: [
+        p(
+          "A federal tender notice lists the trade agreements that apply to the procurement. CanadaBuys' data dictionary defines the field as a list of any international trade agreements that apply, if applicable, and the line also names the Canadian Free Trade Agreement (CFTA), which the Treasury Board counts among the internal agreements. In CanadaBuys' file of open notices it can also read None, or refer to the tender description or documents.",
+          "Un avis d'appel d'offres fédéral énumère les accords commerciaux qui s'appliquent à l'approvisionnement. Le dictionnaire de données d'AchatsCanada définit ce champ comme une liste de tous les accords commerciaux internationaux qui s'appliquent, le cas échéant, et la ligne nomme aussi l'Accord de libre-échange canadien (ALEC), que le Conseil du Trésor range parmi les accords sur le commerce intérieur. Dans le fichier des avis ouverts d'AchatsCanada, elle peut aussi indiquer Aucun, ou renvoyer à la description ou aux documents de l'appel d'offres.",
+        ),
+        p(
+          "A notice page on Award Watch shows the line under Trade agreements. This {example} lists thirteen agreements, among them the North American Free Trade Agreement (NAFTA), which has no row in the Treasury Board's threshold tables; this {acan} lists one, the CFTA.",
+          "La page d'un avis sur Award Watch affiche la ligne sous Accords commerciaux. Cet {example} énumère treize accords, dont l'Accord de libre-échange nord-américain (ALENA), qui n'a aucune ligne dans les tableaux de seuils du Conseil du Trésor; ce {acan} n'en énumère qu'un, l'ALEC.",
+          {
+            example: a(EXAMPLE_NOTICE, "request for proposal", "appel d'offres"),
+            acan: a(EXAMPLE_ACAN, "advance contract award notice", "préavis d'adjudication de contrat"),
+          },
+        ),
+      ],
+    },
+    {
+      id: "coverage",
+      title: both("When an Agreement Applies", "Quand un accord s'applique"),
+      blocks: [
+        p(
+          "PSPC's Buyer's Guide has the buyer consider the procurement's value, the requesting entity, the type of requirement, any exclusion or exception, set-asides and measures for Indigenous Peoples. The value is estimated in Canadian dollars, options and applicable taxes included; at or above the thresholds in the Treasury Board's contracting policy notice, the procurement might be subject to the agreements. A procurement must not be divided, nor a valuation method chosen, to keep it outside them.",
+          "Le Guide de l'acheteur de SPAC demande à l'acheteur de tenir compte de la valeur de l'approvisionnement, de l'entité requérante, du type d'exigence, des exclusions ou exceptions, des marchés réservés et des mesures pour les peuples autochtones. La valeur est estimée en dollars canadiens, options et taxes applicables comprises; si elle est égale ou supérieure aux seuils de l'avis sur la Politique sur les marchés du Conseil du Trésor, l'approvisionnement pourrait être assujetti aux accords. Un approvisionnement ne doit pas être divisé, ni une méthode d'évaluation choisie, pour le soustraire à leur application.",
+        ),
+        p(
+          "All federal departments and agencies, and all Crown corporations, are subject to the CFTA save those the agreement lists as excepted; the international agreements name the entities they cover in Canada's market access schedules. All goods are covered by the CFTA unless specified otherwise, and for the Department of National Defence, the Royal Canadian Mounted Police and the Canadian Coast Guard the international agreements cover only certain goods.",
+          "Tous les ministères et organismes fédéraux et toutes les sociétés d'État sont assujettis à l'ALEC, sauf les entités qu'il excepte; les accords internationaux nomment les entités qu'ils visent dans les listes d'engagements du Canada en matière d'accès aux marchés publics. Tous les biens sont visés par l'ALEC, sauf indication contraire, et pour le ministère de la Défense nationale, la Gendarmerie royale du Canada et la Garde côtière canadienne, les accords internationaux ne visent que certains biens.",
+        ),
+        p(
+          "An exception, such as the national security exception, can exempt some or all of a procurement from certain obligations. Once it is invoked and applied to a requirement, every procurement document carries this statement: \"This procurement is subject to a national security exception and is, therefore, excluded from all of the obligations of the trade agreements.\"",
+          "Une exception, comme l'exception au titre de la sécurité nationale, peut exempter une partie ou l'ensemble d'un approvisionnement de certaines obligations. Une fois qu'elle est invoquée et appliquée à un besoin, chaque document d'approvisionnement porte cet énoncé : « Le contrat est assujetti à l'exception au titre de la sécurité nationale et est, par conséquent, exempt de toute obligation liée aux accords commerciaux. »",
+        ),
+      ],
+    },
+    {
+      id: "thresholds",
+      title: both("The Thresholds in Force", "Les seuils en vigueur"),
+      blocks: [
+        p(
+          "Treasury Board Contracting Policy Notice 2025-8, Trade Agreements: Thresholds Update, sets the thresholds in effect from January 1, 2026, to December 31, 2027, in Canadian dollars, and amends those of Contracting Policy Notice 2023-6; the thresholds are updated every two years. The notice's page gives no date of issue. The Treasury Board's index lists it under 2025, marked updated, and the page was last modified on February 4, 2026. For departments and agencies:",
+          "L'Avis sur la Politique des marchés 2025-8 du Conseil du Trésor, Accords commerciaux : mise à jour des seuils, fixe les seuils en vigueur du 1er janvier 2026 au 31 décembre 2027, en dollars canadiens, et modifie ceux de l'Avis sur la Politique des marchés 2023-6; les seuils sont mis à jour tous les deux ans. La page de l'avis n'indique aucune date de publication. L'index du Conseil du Trésor le range sous 2025, avec la mention mise à jour, et la page a été modifiée pour la dernière fois le 4 février 2026. Pour les ministères et organismes :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "main", label: both("Agreement or partner", "Accord ou partenaire") },
+            { kind: "value", label: both("Goods", "Biens") },
+            { kind: "value", label: both("Services", "Services") },
+            { kind: "value", label: both("Construction", "Construction") },
+          ],
+          rows: [
+            [both("Canadian Free Trade Agreement (CFTA)", "Accord de libre-échange canadien (ALEC)"), { money: 34_700 }, { money: 139_000 }, { money: 139_000 }],
+            [
+              both(
+                "European Union (CETA), Trans-Pacific (CPTPP), WTO (GPA), United Kingdom, Ukraine",
+                "Union européenne (AECG), Transpacifique (PTPGP), OMC (AMP), Royaume-Uni, Ukraine",
+              ),
+              { money: 239_200 }, { money: 239_200 }, { money: 9_200_000 },
+            ],
+            [both("Peru", "Pérou"), { money: 174_800 }, { money: 174_800 }, { money: 9_200_000 }],
+            [both("Chile, Colombia, Honduras, Panama", "Chili, Colombie, Honduras, Panama"), { money: 145_900 }, { money: 145_900 }, { money: 9_200_000 }],
+            [both("Korea", "Corée"), { money: 100_000 }, { money: 100_000 }, { money: 9_200_000 }],
+          ],
+        },
+        p("For Crown corporations and other government enterprises:", "Pour les sociétés d'État et autres entreprises du gouvernement :"),
+        {
+          kind: "table",
+          cols: [
+            { kind: "main", label: both("Agreement or partner", "Accord ou partenaire") },
+            { kind: "value", label: both("Goods", "Biens") },
+            { kind: "value", label: both("Services", "Services") },
+            { kind: "value", label: both("Construction", "Construction") },
+          ],
+          rows: [
+            [both("Canadian Free Trade Agreement (CFTA)", "Accord de libre-échange canadien (ALEC)"), { money: 694_700 }, { money: 694_700 }, { money: 6_943_900 }],
+            [both("Chile, Colombia, Honduras, Panama, Peru", "Chili, Colombie, Honduras, Panama, Pérou"), { money: 729_700 }, { money: 729_700 }, { money: 23_300_000 }],
+            [both("Trans-Pacific (CPTPP), WTO (GPA), Ukraine", "Transpacifique (PTPGP), OMC (AMP), Ukraine"), { money: 653_200 }, { money: 653_200 }, { money: 9_200_000 }],
+            [both("European Union (CETA) and United Kingdom, Section A", "Union européenne (AECG) et Royaume-Uni, section A"), { money: 653_200 }, { money: 653_200 }, { money: 9_200_000 }],
+            [both("European Union (CETA) and United Kingdom, Section B", "Union européenne (AECG) et Royaume-Uni, section B"), { money: 736_000 }, { money: 736_000 }, { money: 9_200_000 }],
+          ],
+        },
+        p(
+          "The notice shows no Crown corporation thresholds for the Korea agreement, and splits those of the European Union and United Kingdom agreements between Sections A and B. The Buyer's Guide notes that the Korea agreement currently has the lowest threshold for services, $100,000, and that meeting the WTO agreement's procedures for those services also meets the Korea agreement's.",
+          "L'avis n'indique aucun seuil pour les sociétés d'État au titre de l'accord avec la Corée, et répartit ceux des accords avec l'Union européenne et le Royaume-Uni entre les sections A et B. Le Guide de l'acheteur précise que l'accord avec la Corée prévoit actuellement le seuil le plus bas pour les services, 100 000 $, et que le respect des obligations procédurales de l'AMP-OMC pour ces services satisfait aussi à celles de l'accord avec la Corée.",
+        ),
+      ],
+    },
+    {
+      id: "notices",
+      title: both("What Coverage Changes", "Ce que change la couverture"),
+      blocks: [
+        p(
+          "Notice 2025-8 requires tender notices for procurements subject to the free trade agreements, published through the Government Electronic Tendering Service (GETS) on CanadaBuys. The Buyer's Guide requires covered competitive procurements, mini-tenders under a supply arrangement included, to be advertised on GETS unless specific exceptions apply; where the agreements differ, the buyer follows the provision with the highest standard of openness, such as the longer of two solicitation periods.",
+          "L'avis 2025-8 exige des avis d'appel d'offres pour les approvisionnements assujettis aux accords de libre-échange, publiés par le Service électronique d'appels d'offres du gouvernement (SEAOG) sur AchatsCanada. Le Guide de l'acheteur exige que les marchés concurrentiels visés, y compris les mini-appels d'offres découlant d'un arrangement en matière d'approvisionnement, soient annoncés dans le SEAOG, à moins que des exceptions particulières ne s'appliquent; en cas d'incohérence entre les accords, l'acheteur suit la disposition qui offre la norme la plus élevée en matière de transparence, comme la plus longue de deux périodes de soumission.",
+        ),
+        p(
+          "After the award, a procurement subject to the international agreements and the CFTA needs an award notice within 72 days. A complaint to the Canadian International Trade Tribunal requires a procurement covered by at least one trade agreement. {bid} sets out the steps from registration to the award.",
+          "Après l'attribution, un approvisionnement assujetti aux accords internationaux et à l'ALEC exige un avis d'attribution dans les 72 jours. Une plainte au Tribunal canadien du commerce extérieur exige un approvisionnement visé par au moins un accord commercial. {bid} présente les étapes, de l'inscription à l'attribution.",
+          { bid: a(BID_PATH, "How to Bid on Government of Canada Contracts", "Soumissionner sur les marchés du gouvernement du Canada") },
+        ),
+      ],
+    },
+    {
+      id: "limited",
+      title: both("Limited Tendering", "Appel d'offres limité"),
+      blocks: [
+        p(
+          "The Buyer's Guide names three tendering approaches under the agreements: open, selective and limited. Limited tendering lets a buyer depart from certain procedural obligations, such as notices, time periods and the treatment of tenders, in specific circumstances; the rules on technical specifications still apply. It is typically competitive, and can be non-competitive or a sole source when justified. The guide says it should not be used to avoid competition, to discriminate against any business or to protect domestic businesses.",
+          "Le Guide de l'acheteur nomme trois approches d'appel d'offres dans le cadre des accords : ouverte, sélective et limitée. L'appel d'offres limité permet à l'acheteur de s'écarter de certaines obligations procédurales, comme les avis, les périodes et le traitement des offres, dans des circonstances particulières; les règles sur les spécifications techniques s'appliquent toujours. Il est en règle générale concurrentiel, et peut être non concurrentiel ou viser un fournisseur unique lorsque cela est justifié. Selon le guide, il ne devrait pas servir à éviter la concurrence, à discriminer une entreprise ou à protéger les entreprises nationales.",
+        ),
+        p(
+          "A notice's limited tendering reason gives the reason a contract is not awarded through competitive solicitation, and is blank or None where none applies. CanadaBuys' data dictionary lists ten values. Beside each, the table gives the circumstance the Buyer's Guide summarizes for it and the agreements that allow it:",
+          "Le motif de l'appel d'offres limité d'un avis donne la raison pour laquelle un contrat n'est pas attribué par voie concurrentielle, et reste vide ou indique Aucune lorsqu'aucun motif ne s'applique. Le dictionnaire de données d'AchatsCanada énumère dix valeurs. À côté de chacune, le tableau donne la circonstance que résume le Guide de l'acheteur et les accords qui la permettent :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Reason", "Motif") },
+            { kind: "main", label: both("Circumstance (Buyer's Guide)", "Circonstance (Guide de l'acheteur)") },
+            { kind: "label", label: both("Allowed by", "Permis par") },
+          ],
+          rows: [
+            [
+              both("Exclusive Rights", "Droits exclusifs"),
+              both(
+                "Only one business can supply the goods or services, with no reasonable alternative, because of patents, copyrights or other exclusive rights",
+                "Une seule entreprise peut fournir les biens ou les services, sans solution de rechange raisonnable, en raison de brevets, de droits d'auteur ou d'autres droits exclusifs",
+              ),
+              both("All agreements", "Tous les accords"),
+            ],
+            [
+              both("Additional Deliveries", "Livraisons supplémentaires"),
+              both(
+                "More deliveries by the original contractor, where a change of contractor cannot occur for economic or technical reasons and would cause significant inconvenience or substantial duplication of costs",
+                "Des livraisons supplémentaires par l'entrepreneur initial, lorsqu'un changement de fournisseur ne peut se produire pour des raisons économiques ou techniques et causerait des inconvénients importants ou un dédoublement important des coûts",
+              ),
+              both("All agreements", "Tous les accords"),
+            ],
+            [
+              both("No response to bid solicitation", "Aucune réponse à une invitation à soumissionner"),
+              both(
+                "An earlier notice or invitation drew no tenders, no conforming tenders, no business meeting the conditions for participation or only collusive tenders, and the requirements are not substantially modified",
+                "Un avis ou une invitation antérieurs n'ont donné aucune soumission, aucune soumission conforme, aucune entreprise remplissant les conditions de participation ou seulement des soumissions collusoires, et les exigences ne sont pas modifiées substantiellement",
+              ),
+              both("All agreements", "Tous les accords"),
+            ],
+            [
+              both("Extreme Urgency", "Extrême urgence"),
+              both(
+                "Only where strictly necessary, when unforeseeable events leave no time for open or selective tendering",
+                "Seulement lorsque cela est strictement nécessaire, quand des événements imprévisibles ne laissent pas le temps de procéder par appel d'offres ouvert ou sélectif",
+              ),
+              both("All agreements", "Tous les accords"),
+            ],
+            [
+              both("Goods Purchased on a Commodity Market", "Biens achetés sur un marché de produits de base"),
+              both("Goods bought on a commodity market", "Des produits achetés sur un marché de produits de base"),
+              both("All agreements", "Tous les accords"),
+            ],
+            [
+              both("Consulting Services Regarding Matters of a Confidential Nature", "Services de consultation sur des questions de nature confidentielle"),
+              both(
+                "Consulting services on confidential matters whose disclosure could compromise government confidences, cause economic disruption or otherwise be contrary to the public interest",
+                "Des services de consultation sur des questions confidentielles dont la divulgation pourrait compromettre des informations confidentielles du gouvernement, provoquer des perturbations économiques ou être contraire à l'intérêt public",
+              ),
+              both("CFTA; Chile, Colombia, Honduras, Panama, Peru", "ALEC; Chili, Colombie, Honduras, Panama, Pérou"),
+            ],
+            [
+              both("Purchases Made Under Exceptionally Advantageous Conditions", "Achats effectués selon des conditions exceptionnellement avantageuses"),
+              both(
+                "Very short-term purchases in unusual disposals such as a liquidation, receivership or bankruptcy, and never routine purchases from regular suppliers",
+                "Des achats à très court terme lors d'écoulements inhabituels comme une liquidation, une administration judiciaire ou une faillite, et jamais des achats courants auprès de fournisseurs habituels",
+              ),
+              both("All agreements", "Tous les accords"),
+            ],
+            [
+              both("Subscriptions to newspapers, magazines, or other periodicals", "Abonnements à des journaux, à des magazines ou à d'autres périodiques"),
+              both("Subscriptions to newspapers, magazines or other periodicals", "Des abonnements à des journaux, à des magazines ou à d'autres périodiques"),
+              both("CFTA only", "ALEC seulement"),
+            ],
+            [
+              both("Work on a property by a contractor according to a warranty or guarantee", "Travaux effectués sur un bien par un entrepreneur conformément à une garantie"),
+              both(
+                "Work on property by a contractor under a warranty or guarantee held on the property or the original work",
+                "Des travaux exécutés sur un bien par un entrepreneur, conformément à une garantie visant le bien ou les travaux originaux",
+              ),
+              both("CFTA only", "ALEC seulement"),
+            ],
+            [
+              both("Prototype Purchase", "Achat de prototype"),
+              both(
+                "A prototype or first good or service developed at Canada's request for a particular contract of research, experiment, study or original development",
+                "Un prototype ou un premier bien ou service mis au point à la demande du Canada pour un contrat particulier de recherche, d'expérimentation, d'étude ou de développement original",
+              ),
+              both("All agreements", "Tous les accords"),
+            ],
+          ],
+        },
+        p(
+          "The Buyer's Guide's lists hold circumstances with no value among these ten, such as a contract with the winner of a design contest. The two sources differ on confidential consulting. The dictionary, in its file last modified on March 24, 2026, marks the reason for contracts not covered by CETA, the CFTA, the WTO agreement, CPTPP, the Korea agreement or the Ukraine agreement. The Buyer's Guide, modified on August 7, 2026, allows it under the CFTA and the agreements with Chile, Colombia, Honduras, Panama and Peru.",
+          "Les listes du Guide de l'acheteur comprennent des circonstances sans valeur correspondante parmi ces dix, comme un contrat avec le lauréat d'un concours de conception. Les deux sources diffèrent sur les services de consultation confidentiels. Le dictionnaire, dans son fichier modifié pour la dernière fois le 24 mars 2026, réserve ce motif aux marchés qui ne sont pas assujettis à l'AECG, à l'ALEC, à l'AMP-OMC, au PTPGP, à l'accord avec la Corée ou à l'accord avec l'Ukraine. Le Guide de l'acheteur, modifié le 7 août 2026, le permet dans le cadre de l'ALEC et des accords avec le Chili, la Colombie, le Honduras, le Panama et le Pérou.",
+        ),
+        p(
+          "For a procurement subject to the agreements, a contract may be awarded without soliciting offers only where one of the applicable agreement's limited tendering reasons applies, and limited tendering does not always mean a non-competitive process. CanadaBuys' notice page heads the field Reason for limited tendering: on the {acan} it reads Exclusive Rights, and on the {example} it reads None. {guide} explains that notice type.",
+          "Pour un approvisionnement assujetti aux accords, un contrat ne peut être attribué sans demande d'offres que si l'un des motifs d'appel d'offres limité de l'accord applicable s'applique, et l'appel d'offres limité ne signifie pas toujours un processus non concurrentiel. La page d'un avis sur AchatsCanada intitule ce champ Raison pour l'appel d'offres limité : sur le {acan}, il indique Droits exclusifs, et sur l'{example}, Aucune. {guide} explique ce type d'avis.",
+          {
+            acan: a(EXAMPLE_ACAN, "advance contract award notice above", "préavis d'adjudication de contrat ci-dessus"),
+            example: a(EXAMPLE_NOTICE, "request for proposal above", "appel d'offres ci-dessus"),
+            guide: a(ACAN_PATH, "Advance Contract Award Notices (ACANs) and Statements of Capabilities", "Préavis d'adjudication de contrat (PAC) et énoncés de capacités"),
+          },
+        ),
+      ],
+    },
+  ],
+  sources: [
+    SRC.thresholds, SRC.policyNotices, SRC.tradeApplicability, SRC.tradeNotices, SRC.sourcing, SRC.dictionary, SRC.tenderData, SRC.atAward,
+    SRC.followUp, SRC.exampleNotice, SRC.exampleAcan,
+  ],
+};
+
+const SECURITY: Guide = {
+  slug: SECURITY_PATH.slice("/guides/".length),
+  title: both("Security Requirements on Federal Contracts: What a Notice Asks For", "Exigences de sécurité des contrats fédéraux : ce que demande un avis"),
+  seoTitle: both("Security Requirements on Federal Contracts", "Exigences de sécurité des contrats fédéraux"),
+  summary: both(
+    "How a federal tender notice states its security requirements, the screening levels, who sponsors a clearance and when, and PSPC's stated processing times.",
+    "Comment un avis fédéral indique ses exigences de sécurité, les niveaux d'enquête, qui parraine une attestation et quand, et les délais publiés par SPAC.",
+  ),
+  checked: "2026-11-14",
+  action: tenderList(
+    "To keep track of new federal tender notices, those with security requirements among them, save this list with your email address.",
+    "Pour suivre les nouveaux avis d'appel d'offres fédéraux, y compris ceux qui comportent des exigences de sécurité, enregistrez cette liste avec votre adresse courriel.",
+  ),
+  sections: [
+    {
+      id: "program",
+      title: both("The Contract Security Program", "Le Programme de sécurité des contrats"),
+      blocks: [
+        p(
+          "Public Services and Procurement Canada's Contract Security Program (CSP) security-screens organizations and their personnel for solicitations and contracts with security requirements. Those requirements specify the levels of security needed to safeguard sensitive information, assets and work sites, and federal contracts include clauses that contain them.",
+          "Le Programme de sécurité des contrats (PSC) de Services publics et Approvisionnement Canada (SPAC) mène des enquêtes de sécurité sur les organisations et leur personnel pour les appels d'offres et les contrats comportant des exigences de sécurité. Ces exigences précisent les niveaux de sécurité requis pour protéger des renseignements, des biens ou des lieux de travail de nature délicate, et des clauses qui les énoncent sont incluses dans les contrats du gouvernement fédéral.",
+        ),
+        p(
+          "An organization needs a security screening to take part in a solicitation or contract with security requirements, typically before it is awarded the resulting contract. Organization screening determines whether it meets those requirements; personnel screening determines whether an employee can be trusted with protected or classified information, assets or work sites.",
+          "Une organisation a besoin d'une enquête de sécurité pour participer à un appel d'offres ou à un contrat comportant des exigences de sécurité, généralement avant l'attribution du contrat subséquent. L'enquête sur l'organisation détermine si elle satisfait à ces exigences; l'enquête sur le personnel détermine si un employé est digne de confiance avec des renseignements, des biens ou des lieux de travail protégés ou classifiés.",
+        ),
+      ],
+    },
+    {
+      id: "notice",
+      title: both("How a Notice States It", "Comment un avis l'indique"),
+      blocks: [
+        p(
+          "The CSP points to two places for a solicitation's security requirements: the bid solicitation documents included in the tender notice, and the Security Requirements Check List (form TBS/SCT 350-103) the contracting department completes. PSPC's Buyer's Guide requires the solicitation to set out the security needs and the timelines for meeting them, with the completed checklist as an annex; its signature page may be left out. PSPC's seminar notes place the requirements in Part 1, General information, of the solicitation document they outline.",
+          "Le PSC indique deux endroits où trouver les exigences de sécurité d'un appel d'offres : les documents de demande de soumissions inclus dans l'avis d'appel d'offres, et la Liste de vérification des exigences relatives à la sécurité (formulaire SCT/TBS 350-103) que remplit le ministère responsable du contrat. Le Guide de l'acheteur de SPAC exige que la demande d'offres décrive les besoins en matière de sécurité et les échéanciers pour y satisfaire, la liste dûment remplie étant jointe en annexe; sa page de signature peut être omise. Les notes de séminaire de SPAC placent ces exigences dans la partie 1, Renseignements généraux, du document de demande de soumissions qu'elles décrivent.",
+        ),
+        p(
+          "CanadaBuys' data dictionary has no field for security requirements. Where a notice's description states them, Award Watch shows it on the notice page, as on this {example}: its description says there are security requirements associated with the solicitation of offers, and refers the reader to the section on security clearances for more.",
+          "Le dictionnaire de données d'AchatsCanada ne comporte aucun champ pour les exigences de sécurité. Lorsque la description d'un avis les énonce, Award Watch l'affiche sur la page de l'avis, comme sur cet {example} : sa description indique que la demande d'offres comporte des exigences relatives à la sécurité, et renvoie à la section sur les attestations de sécurité pour plus de renseignements.",
+          { example: a(EXAMPLE_NOTICE, "tender notice from Indigenous Services Canada", "avis d'appel d'offres de Services aux Autochtones Canada") },
+        ),
+      ],
+    },
+    {
+      id: "levels",
+      title: both("Levels of Security", "Niveaux de sécurité"),
+      blocks: [
+        p(
+          "Protected information and assets are those whose compromise could cause injury (Protected A), serious injury (Protected B) or extremely grave injury (Protected C) to an individual, organization or government. Classified ones could cause injury (Confidential), serious injury (Secret) or exceptionally grave injury (Top Secret) to the national interest. The CSP pairs each level with a work site zone and the screenings it requires:",
+          "Les renseignements et biens protégés sont ceux qui, s'ils étaient compromis, pourraient porter préjudice (Protégé A), porter un préjudice grave (Protégé B) ou porter un préjudice extrêmement grave (Protégé C) à une personne, à une organisation ou à un gouvernement. Les renseignements et biens classifiés pourraient porter préjudice (Confidentiel), porter des préjudices graves (Secret) ou porter un préjudice extrêmement grave (Très secret) à l'intérêt national. Le PSC associe à chaque niveau une zone de travail et les enquêtes qu'il exige :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Information and assets", "Renseignements et biens") },
+            { kind: "label", label: both("Work site", "Lieu de travail") },
+            { kind: "text", label: both("Organization", "Organisation") },
+            { kind: "main", label: both("Personnel", "Personnel") },
+          ],
+          rows: [
+            [
+              both("Top Secret", "Très secret"), both("High security zone", "Zone de haute sécurité"),
+              both("Facility security clearance (Top Secret)", "Attestation de sécurité d'installation (Très secret)"), both("Top Secret clearance", "Autorisation de niveau Très secret"),
+            ],
+            [
+              both("Secret", "Secret"), both("Security zone", "Zone de sécurité"),
+              both("Facility security clearance (Confidential or Secret)", "Attestation de sécurité d'installation (Confidentiel ou Secret)"),
+              both("Secret clearance", "Autorisation de niveau Secret"),
+            ],
+            [
+              both("Confidential", "Confidentiel"), both("Operations zone", "Zone de travail"),
+              both("Facility security clearance (Confidential or Secret)", "Attestation de sécurité d'installation (Confidentiel ou Secret)"),
+              both("Secret clearance", "Autorisation de niveau Secret"),
+            ],
+            [
+              both("Protected C", "Protégé C"), both("Security zone", "Zone de sécurité"),
+              both("Designated organization screening", "Vérification d'organisation désignée"), both("Enhanced reliability status", "Cote de fiabilité approfondie"),
+            ],
+            [
+              both("Protected A or B", "Protégé A ou B"), both("Operations zone", "Zone de travail"),
+              both("Designated organization screening", "Vérification d'organisation désignée"), both("Reliability status", "Cote de fiabilité"),
+            ],
+          ],
+        },
+        p(
+          "An employee with a security clearance may also access protected information. A provisional security clearance, at either level, covers the pre-solicitation and bid preparation stage.",
+          "Un employé qui détient une autorisation de sécurité peut aussi accéder aux renseignements protégés. Une attestation de sécurité provisoire, à l'un ou l'autre niveau, vise l'étape de préqualification ou de préparation des soumissions.",
+        ),
+      ],
+    },
+    {
+      id: "organization",
+      title: both("Organization Screening", "Enquête sur l'organisation"),
+      blocks: [
+        {
+          kind: "terms",
+          items: [
+            {
+              term: both("Provisional security clearance", "Attestation de sécurité provisoire"),
+              text: tx(
+                "For an organization without the required level that needs access to protected or classified information or assets before or while preparing its bid. Valid for the bid solicitation process only; foreign organizations are not eligible.",
+                "Pour une organisation qui n'a pas le niveau requis et doit accéder à des renseignements ou à des biens protégés ou classifiés avant ou pendant la préparation de sa soumission. Valide pour la durée du processus de demande de soumissions seulement; les organisations étrangères n'y sont pas admissibles.",
+              ),
+            },
+            {
+              term: both("Designated organization screening (DOS)", "Vérification d'organisation désignée (VOD)"),
+              text: tx("Required to obtain contracts at the protected level. Valid for 2 years.", "Obligatoire pour obtenir des contrats de niveau protégé. Valide pendant 2 ans."),
+            },
+            {
+              term: both("Facility security clearance (FSC)", "Attestation de sécurité d'installation (ASI)"),
+              text: tx("Required to obtain contracts at the classified level. Valid for 1 year.", "Obligatoire pour obtenir des contrats de niveau classifié. Valide pendant 1 an."),
+            },
+          ],
+        },
+        p(
+          "Once sponsored, the organization submits an Application for registration form signed and dated within the last 6 months, appoints a company security officer, has that officer and the other individuals the CSP requires complete personnel screening forms, and completes a security agreement that requires it to abide by the Contract Security Manual. At the end of the validity period, the CSP terminates the clearance of an organization that is in no other solicitation and performs no contract, subcontract or lease with security requirements.",
+          "Une fois parrainée, l'organisation soumet un formulaire de Demande d'inscription signé et daté au cours des 6 derniers mois, nomme un agent de sécurité d'entreprise, fait remplir les formulaires d'enquête de sécurité sur le personnel par cet agent et par les autres personnes que le PSC exige, et conclut un accord de sécurité qui l'oblige à se conformer au Manuel de la sécurité des contrats. À la fin de la période de validité, le PSC met fin à l'attestation d'une organisation qui ne participe à aucun autre processus de demande de soumissions et n'exécute aucun contrat, contrat de sous-traitance ou bail comportant des exigences de sécurité.",
+        ),
+      ],
+    },
+    {
+      id: "sponsorship",
+      title: both("Who Sponsors a Clearance, and When", "Qui parraine une attestation, et à quel moment"),
+      blocks: [
+        p(
+          "The CSP screens an organization only once a source the Government of Canada approves has sponsored it. For Canadian contracts these sources include federal procurement, security and project officers, and the security officer of a cleared contractor for a proposed subcontractor. Each clearance has its phase:",
+          "Le PSC ne mène une enquête sur une organisation qu'une fois celle-ci parrainée par une source approuvée par le gouvernement du Canada. Pour les contrats canadiens, ces sources comprennent les agents d'approvisionnement, de sécurité et de projet fédéraux, et l'agent de sécurité d'une organisation autorisée pour un sous-traitant proposé. Chaque attestation a son étape :",
+        ),
+        {
+          kind: "list",
+          items: [
+            tx(
+              "Pre-solicitation and bid preparation: a federal procurement officer may sponsor a provisional clearance when protected or classified information must be accessed to respond to a request for information or an invitation to qualify, take part in industry engagement, attend a bidders' conference or bid on a request for proposals. The organization contacts the procurement officer named in the tender notice and provides a completed Application for registration form.",
+              "Préqualification et préparation de la soumission : un agent d'approvisionnement fédéral peut parrainer une attestation provisoire lorsque l'accès à des renseignements protégés ou classifiés est nécessaire pour répondre à une demande de renseignements ou à une invitation à se qualifier, participer à une consultation de l'industrie, assister à une conférence des soumissionnaires ou répondre à une demande de propositions. L'organisation communique avec l'agent d'approvisionnement nommé dans l'avis d'appel d'offres et lui fournit un formulaire de Demande d'inscription complet.",
+            ),
+            tx(
+              "Bid evaluation: the procurement officer may sponsor a DOS or an FSC when the resulting contract needs access to secure sites or to protected or classified information or assets, and the organization submitted a completed Application for registration form with its bid.",
+              "Évaluation des offres : l'agent d'approvisionnement peut parrainer une VOD ou une ASI lorsque le contrat subséquent exige l'accès à des sites sécurisés ou à des renseignements ou à des biens protégés ou classifiés, et que l'organisation a présenté un formulaire de Demande d'inscription rempli avec sa soumission.",
+            ),
+            tx(
+              "Sole source: a DOS or an FSC may be sponsored before award when an approved source shows that the organization needs that access to perform the contract.",
+              "Fournisseur unique : une VOD ou une ASI peut être parrainée avant l'attribution lorsqu'une source approuvée démontre que l'organisation a besoin de cet accès pour exécuter le contrat.",
+            ),
+            tx(
+              "Subcontracts: a prime contractor may request a clearance for a subcontractor only after the prime contract with security requirements is awarded and a copy given to the CSP, and only if that contract permits subcontracting. Organizations cannot request a pre-clearance, and must not require subcontractors to hold a clearance before a sub-solicitation.",
+              "Sous-traitance : l'entrepreneur principal ne peut demander une attestation pour un sous-traitant qu'après l'attribution du contrat principal comportant des exigences de sécurité et la remise d'une copie au PSC, et seulement si ce contrat autorise la sous-traitance. Les organisations ne peuvent pas demander d'autorisation préalable ni exiger que leurs sous-traitants détiennent une attestation avant un processus de sous-sollicitation.",
+            ),
+          ],
+        },
+        p(
+          "Where screening is mandatory, PSPC's Buyer's Guide has the solicitation include the Application for registration form, which offerors submit with their offer even if already cleared. The CSP confirms in writing to the buyer, before award, whether offerors meet the security requirements. If the recommended offeror cannot obtain the clearance and no risk mitigation is agreed, the buyer may need to select the next highest-ranked compliant offeror.",
+          "Lorsque l'enquête est obligatoire, le Guide de l'acheteur de SPAC prévoit que la demande d'offres comprenne le formulaire de Demande d'inscription, que les offrants soumettent avec leur offre même s'ils détiennent déjà les autorisations requises. Le PSC confirme par écrit à l'acheteur, avant l'attribution, si les offrants satisfont aux exigences de sécurité. Si l'offrant recommandé ne peut pas obtenir l'autorisation et qu'aucune mesure d'atténuation des risques n'est convenue, l'acheteur peut devoir sélectionner le prochain offrant conforme le mieux classé.",
+        ),
+      ],
+    },
+    {
+      id: "personnel",
+      title: both("Personnel Screening", "Enquête sur le personnel"),
+      blocks: [
+        p(
+          "An organization must itself be screened before it requests screening for its employees, and individuals cannot initiate their own: the company security officer or the alternate does so for them, and the screening belongs to the organization. An employee who needs access to protected or classified information, assets or work sites must be screened before work begins. The levels are reliability status for protected access, a security clearance for classified access, and enhanced security screening for personnel who support security and intelligence functions.",
+          "Une organisation doit elle-même avoir fait l'objet d'une enquête avant de demander des enquêtes pour ses employés, et les personnes ne peuvent pas initier leur propre enquête : l'agent de sécurité d'entreprise ou son remplaçant le fait pour elles, et l'enquête appartient à l'organisation. Un employé qui doit accéder à des renseignements, à des biens ou à des lieux de travail protégés ou classifiés doit faire l'objet d'une enquête avant le début des travaux. Les niveaux sont la cote de fiabilité pour l'accès protégé, l'autorisation de sécurité pour l'accès classifié et l'enquête de sécurité approfondie pour les employés qui exercent des fonctions liées à la sécurité et au renseignement.",
+        ),
+      ],
+    },
+    {
+      id: "time",
+      title: both("How Long It Takes", "Délais"),
+      blocks: [
+        p(
+          "Organization screening starts once the CSP confirms the organization's eligibility, and personnel screening once it receives a properly completed request.",
+          "L'enquête sur l'organisation commence une fois que le PSC confirme l'admissibilité de l'organisation, et l'enquête sur le personnel une fois qu'il reçoit une demande dûment remplie.",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Screening", "Enquête") },
+            { kind: "main", label: both("Time stated by the CSP", "Délai indiqué par le PSC") },
+          ],
+          rows: [
+            [both("Provisional security clearance", "Attestation de sécurité provisoire"), both("Varies with the level", "Variable selon le niveau")],
+            [both("Designated organization screening", "Vérification d'organisation désignée"), both("Up to 4 months", "Jusqu'à 4 mois")],
+            [both("Facility security clearance", "Attestation de sécurité d'installation"), both("6 months or more", "6 mois ou plus")],
+            [both("Reliability status, simple request", "Cote de fiabilité, demande simple"), both("7 business days", "7 jours ouvrables")],
+            [both("Reliability status, complex request", "Cote de fiabilité, demande complexe"), both("120 business days", "120 jours ouvrables")],
+            [
+              both("Secret clearance, simple request", "Cote de sécurité de niveau Secret, demande simple"),
+              both("75 business days, in addition to the reliability screening", "75 jours ouvrables, en plus du délai de vérification de la fiabilité"),
+            ],
+            [
+              both("Secret clearance, complex request", "Cote de sécurité de niveau Secret, demande complexe"),
+              both("120 business days, in addition to the reliability screening", "120 jours ouvrables, en plus du délai de vérification de la fiabilité"),
+            ],
+          ],
+        },
+        p(
+          "The organization times depend on the forms' completeness, the organization's response time, the level and the complexity of the organization and individuals screened; additional safeguards add to them. A personnel request is complex when the background needs more checks, such as an out-of-country verification for an applicant who lived in another country continuously for 6 months or longer during the period assessed. The CSP charges no fee for personnel screening; the applicant pays for fingerprints and police certificates. The organization times are from a CSP page modified in June 2026, and the personnel times from one last modified in 2025.",
+          "Les délais de l'enquête sur l'organisation dépendent de l'exhaustivité des formulaires, de la rapidité de réponse de l'organisation, du niveau et de la complexité de l'organisation et des personnes visées; les mesures de sécurité supplémentaires les allongent. Une demande d'enquête sur le personnel est complexe lorsque les antécédents exigent des vérifications supplémentaires, comme une vérification hors du pays si le demandeur a vécu de manière continue 6 mois ou plus dans un autre pays pendant la période évaluée. Le PSC n'impose pas de frais pour l'enquête sur le personnel; le demandeur paie les empreintes digitales et les certificats de police. Les délais touchant les organisations viennent d'une page du PSC modifiée en juin 2026, et ceux touchant le personnel d'une page modifiée pour la dernière fois en 2025.",
+        ),
+      ],
+    },
+  ],
+  sources: [
+    SRC.cspScreening, SRC.cspOrganization, SRC.cspProvisional, SRC.cspSponsorship, SRC.cspLevels, SRC.cspPersonnel, SRC.cspTimes,
+    SRC.securitySolicitations, SRC.seminar, SRC.dictionary, SRC.exampleNotice,
+  ],
+};
+
 // The order of the index, and of the sitemap's part.
-export const GUIDES: readonly Guide[] = [TENDER_NOTICE, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END];
+export const GUIDES: readonly Guide[] = [HOW_TO_BID, TENDER_NOTICE, TRADE, SECURITY, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END];
 
 export const GUIDE_SLUGS: ReadonlySet<string> = new Set(GUIDES.map((g) => g.slug));
 

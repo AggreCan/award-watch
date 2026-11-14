@@ -33,7 +33,10 @@ Downloads are limited to ten per minute per address.
 - https://awardwatch.ca/overview: the day at a glance: open tender notices by province, the notices new today and closing soon, the newest awards, and the contracts ending within 3 months
 - https://awardwatch.ca/methodology: how organizations and buyers are merged and how money is counted, source by source
 - https://awardwatch.ca/guides: plain explanations of federal procurement records, each checked against the official pages it cites
+- https://awardwatch.ca/guides/how-to-bid-on-government-of-canada-contracts: the steps to bid on a federal contract, from registration and the numbers a supplier needs to the award, the debriefing and the published records
 - https://awardwatch.ca/guides/reading-a-canadabuys-tender-notice: what each part of a federal tender notice on CanadaBuys means
+- https://awardwatch.ca/guides/trade-agreements-and-thresholds-on-federal-tenders: the trade agreements line on a tender notice, the thresholds in effect for 2026 and 2027, and the limited tendering reasons
+- https://awardwatch.ca/guides/security-requirements-on-federal-contracts: how a notice states its security requirements, the screening levels, who sponsors a clearance and the processing times PSPC states
 - https://awardwatch.ca/guides/advance-contract-award-notices-acan: what an advance contract award notice is, how long it is posted, who may submit a statement of capabilities and how it is recorded
 - https://awardwatch.ca/guides/standing-offers-and-supply-arrangements: what standing offers and supply arrangements are, who uses them and who holds them
 - https://awardwatch.ca/guides/indigenous-business-set-asides-psib: set-asides under the Procurement Strategy for Indigenous Business, who is eligible, the 5% target and the published contracts' two fields
