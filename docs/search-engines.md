@@ -851,7 +851,19 @@ delay. So the Worker holds the same crawlers to a budget of its own
 the crawler's name across all its addresses, at each Cloudflare location.
 Past it the answer is 429 with `Retry-After: 60`, before anything is read
 for the request; `/robots.txt`, `/llms.txt` and `/sitemap.xml` are never
-refused. A search engine's own crawler (Googlebot, Bingbot, Yandex) and an
+refused.
+
+That count is kept apart at each Cloudflare location and is approximate
+(Cloudflare's page for the binding says its limits "are local to the
+Cloudflare location" and that "requests can exceed your configured limit"),
+so by itself it did not hold: on 2026-11-14, with the budget live, Applebot
+arrived at four locations and was still served 124 pages a minute, about
+half the Worker's CPU time. So these crawlers are also served only during
+the first six seconds of each minute by the UTC clock (`CRAWLER_WINDOW_S`,
+`crawlerWindow`): a tenth of the time, the same at every location, with no
+shared count to keep. Outside it the answer is 429 with `Retry-After` set to
+the seconds left in the minute, before the limiter is asked. A refusal costs
+about 0.6 ms of CPU time where a rendered page costs about 9. A search engine's own crawler (Googlebot, Bingbot, Yandex) and an
 assistant fetching one page for a person who asked (ChatGPT-User,
 Claude-User, Perplexity-User) are not on the list. A test holds the list to
 the crawlers `robots.txt` names (`site/test/limits.test.ts`).

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
-import { AI_CRAWLERS, CRAWLER_RETRY_S, SEARCH_ENGINE_CATEGORY, bucketFor, crawlerOf, searchEngine } from "../src/limits";
+import { AI_CRAWLERS, CRAWLER_RETRY_S, CRAWLER_WINDOW_S, SEARCH_ENGINE_CATEGORY, bucketFor, crawlerOf, crawlerWindow, searchEngine } from "../src/limits";
 import robotsTxt from "../public/robots.txt?raw";
 import { testEnv } from "./assets";
 
@@ -164,6 +164,45 @@ describe("an AI crawler's budget", () => {
     crawl.keys.length = 0;
     expect((await as(READER, "203.0.113.50", "/methodology", extra)).status).toBe(200);
     expect((await as(GOOGLEBOT, "66.249.66.1", "/methodology", extra)).status).toBe(200);
+    expect(crawl.keys).toEqual([]);
+  });
+
+  it("is served in the first seconds of each minute only, at every location alike, and refused the rest before anything is counted", async () => {
+    // The window itself: the first CRAWLER_WINDOW_S seconds of the UTC minute, and the wait to the next one.
+    const minute = Date.parse("2026-11-14T22:10:00Z");
+    expect(CRAWLER_WINDOW_S).toBe(6);
+    expect(crawlerWindow(minute)).toEqual({ open: true, wait: 0 });
+    expect(crawlerWindow(minute + 5_999)).toEqual({ open: true, wait: 0 });
+    expect(crawlerWindow(minute + 6_000)).toEqual({ open: false, wait: 54 });
+    expect(crawlerWindow(minute + 59_999)).toEqual({ open: false, wait: 1 });
+    expect(crawlerWindow(minute + 60_000)).toEqual({ open: true, wait: 0 });
+    // A tenth of the minute, whatever the minute.
+    let open = 0;
+    for (let s = 0; s < 3600; s++) if (crawlerWindow(minute + s * 1000).open) open++;
+    expect(open).toBe(360);
+
+    const at = (ua: string, path: string, now: string, extra: Record<string, unknown>) =>
+      app.request(path, { headers: { "user-agent": ua, "cf-connecting-ip": "17.22.237.11" } }, { ...testEnv(undefined, now), ...extra });
+    const crawl = keeper();
+    const pages = keeper();
+    const extra = { CRAWLER_LIMIT: crawl.limiter, PAGE_LIMIT: pages.limiter };
+    // Inside the window it is counted and served as before.
+    expect((await at(APPLEBOT, "/methodology", "2026-11-14T22:10:03Z", extra)).status).toBe(200);
+    expect(crawl.keys).toEqual(["crawler:applebot"]);
+    // Outside it: 429 with the seconds to the next minute, and neither the crawler's limiter nor the page cap is asked.
+    crawl.keys.length = 0;
+    pages.keys.length = 0;
+    const res = await at(APPLEBOT, "/organizations/org-a000000001", "2026-11-14T22:10:20Z", extra);
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBe("40");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect((await res.text()).length).toBeLessThan(200);
+    expect(crawl.keys).toEqual([]);
+    expect(pages.keys).toEqual([]);
+    // The rules and the map stay open outside the window, and so does every page for a reader and a search engine.
+    for (const path of ["/robots.txt", "/llms.txt"]) expect((await at(APPLEBOT, path, "2026-11-14T22:10:20Z", extra)).status, path).not.toBe(429);
+    expect((await at(READER, "/methodology", "2026-11-14T22:10:20Z", extra)).status).toBe(200);
+    expect((await at(GOOGLEBOT, "/methodology", "2026-11-14T22:10:20Z", extra)).status).toBe(200);
     expect(crawl.keys).toEqual([]);
   });
 

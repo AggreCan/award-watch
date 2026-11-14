@@ -140,6 +140,25 @@ const CRAWLER_OPEN = new Set(["/robots.txt", "/llms.txt", "/sitemap.xml"]);
 // The seconds a refused crawler is asked to wait: the budget's own period.
 export const CRAWLER_RETRY_S = 60;
 
+// The part of each minute in which such a crawler is served: its first
+// CRAWLER_WINDOW_S seconds, by the UTC clock, a tenth of the time. Outside it
+// the answer is 429 with the seconds to the next minute, before anything is
+// read or counted. The limiter above cannot hold a crawler by itself: its
+// counts "are local to the Cloudflare location" and approximate ("requests
+// can exceed your configured limit", Cloudflare's rate limiting binding
+// page), and on 2026-11-14 Applebot, arriving at four locations, was still
+// served 124 pages a minute under a limit of ten, half the Worker's CPU time.
+// The clock is the same everywhere, so this holds whatever the number of
+// locations, with nothing shared to keep. Inside the window the limiter
+// still counts.
+export const CRAWLER_WINDOW_S = 6;
+
+// Whether a crawler is served at this instant, and the seconds to wait when not.
+export function crawlerWindow(nowMs: number): { open: boolean; wait: number } {
+  const second = Math.floor(nowMs / 1000) % 60;
+  return second < CRAWLER_WINDOW_S ? { open: true, wait: 0 } : { open: false, wait: 60 - second };
+}
+
 // -- search engines ---------------------------------------------------------------------------
 //
 // Googlebot and Bingbot index the site for people's searches, and the site
@@ -182,6 +201,14 @@ export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response
   // past it is a few bytes, and its addresses are never counted one by one.
   const crawler = crawlerOf(c.req.header("user-agent"));
   if (crawler && c.env.CRAWLER_LIMIT && !CRAWLER_OPEN.has(c.req.path)) {
+    // Outside the crawlers' part of the minute: refused at once, the limiter not asked.
+    const fixed = c.env.NOW ? Date.parse(c.env.NOW) : Number.NaN;
+    const window = crawlerWindow(Number.isFinite(fixed) ? fixed : Date.now());
+    if (!window.open) {
+      c.header("Retry-After", String(window.wait));
+      c.header("Cache-Control", "no-store");
+      return c.text(t(c.get("lang") ?? "en", "limits.too_many"), 429);
+    }
     let within = true;
     try {
       within = (await c.env.CRAWLER_LIMIT.limit({ key: `crawler:${crawler}` })).success;
