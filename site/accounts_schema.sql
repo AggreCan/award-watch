@@ -180,6 +180,31 @@ CREATE TABLE IF NOT EXISTS deliveries (
   items INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL                           -- sent | failed | empty
 );
+-- The job asks, for each search it may deliver, whether a run already holds a
+-- row for it, and the searches page asks for a search's newest row: both by
+-- the search, so neither reads the whole table.
+CREATE INDEX IF NOT EXISTS idx_deliveries_search ON deliveries(saved_search_id, id);
+
+-- One row per run of the hourly delivery job (src/account/deliveries.ts
+-- runDeliveries), written when the run ends: its time, the data date it read
+-- (NULL when it stopped before reading one), how it ended (done, capped,
+-- limited, fault, not_today, no_data, no_mail, off), the messages it sent
+-- and the ones the mail service refused, across every part, how many items
+-- were still due when it ended, and why it stopped early, in a few words
+-- that name no account and no address. The daily check (src/watchdog.ts)
+-- reads the last day's rows, so a day whose runs all failed, or that had no
+-- run, is said. Rows go after 90 days.
+CREATE TABLE IF NOT EXISTS delivery_runs (
+  id INTEGER PRIMARY KEY,
+  at TEXT NOT NULL,
+  data_date TEXT,
+  outcome TEXT NOT NULL,
+  sent INTEGER NOT NULL DEFAULT 0,
+  failed INTEGER NOT NULL DEFAULT 0,
+  left_due INTEGER NOT NULL DEFAULT 0,
+  detail TEXT                                    -- at most 120 characters
+);
+CREATE INDEX IF NOT EXISTS idx_delivery_runs_at ON delivery_runs(at);
 
 -- The secret behind a delivery's stop link (/account/stop?s=<search id>&t=
 -- <secret>, and the List-Unsubscribe header), made from 16 random bytes the
@@ -229,13 +254,20 @@ CREATE INDEX IF NOT EXISTS idx_audit_at ON audit(at);
 -- is the end of the period paid for. The plan is still decided by the
 -- entitlements rows; this row tells the billing page what to offer and the
 -- webhook which user a notice is about. No card, no address, no amount.
+-- cancel_at_period_end is Stripe's flag of the same name, 1 once the person
+-- has cancelled in Stripe's portal and the subscription runs to the end of
+-- the period paid, so the billing page can say it does not renew. A database
+-- made before the column takes it once, by hand (docs/accounts.md, Operator
+-- steps): ALTER TABLE payment_customers ADD COLUMN cancel_at_period_end
+-- INTEGER NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS payment_customers (
   user_id TEXT PRIMARY KEY REFERENCES users(id),
   customer_id TEXT NOT NULL,                     -- Stripe's cus_ id
   subscription_id TEXT,                          -- Stripe's sub_ id, the latest one bound
   status TEXT,
   current_period_end TEXT,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  cancel_at_period_end INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_payment_customers_subscription ON payment_customers(subscription_id);
 CREATE INDEX IF NOT EXISTS idx_payment_customers_customer ON payment_customers(customer_id);
