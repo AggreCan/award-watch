@@ -156,13 +156,14 @@ describe("page metadata", () => {
     expect(dataset["@type"]).toBe("Dataset");
     expect(dataset.license).toBe("https://open.canada.ca/en/open-government-licence-canada");
     expect(dataset.dateModified).toBe("2026-10-31");
-    // The free files only: the paid 12-month radar file is left out; the checksums are no dataset.
+    // The free files only: the paid 6- and 12-month radar files are left out; the checksums are no dataset.
     const files = dataset.hasPart.flatMap((p: any) => p.distribution.map((d: any) => d.name));
     // The alias map (listed) is ids, no records, and stays out of the record sets.
     for (const d of DOWNLOADS.filter((d) => !d.paid && !d.listed && d.file.endsWith(".csv"))) expect(files).toContain(d.file);
     // The alias map is a dataset part of its own (seo.ts DATA_SETS): ids and reasons, no record data.
     expect(files).toContain("organization-aliases.csv");
     expect(files).not.toContain("expiring-12m.csv");
+    expect(files).not.toContain("expiring-6m.csv");
     for (const part of dataset.hasPart) {
       expect(part.license).toBe(dataset.license);
       for (const d of part.distribution) expect(d.contentUrl).toBe(`${O}/downloads/${d.name}`);
@@ -253,6 +254,7 @@ describe("crawler files", () => {
     const text = await res.text();
     expect(text).toContain(`${O}/downloads/organizations.csv`);
     expect(text).toContain(`${O}/downloads/expiring-12m.csv`);
+    expect(text).toContain(`${O}/downloads/expiring-6m.csv`);
     expect(text).toContain(`${O}/methodology`);
     expect(text).not.toContain("\u2014");
     const profile = await app.request("/organizations/org-a000000001", {}, testEnv(fakeAssets));

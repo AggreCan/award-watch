@@ -141,10 +141,11 @@ export const PLAN_ROWS: readonly PlanRow[] = [
     free: { key: "plans.free_radar", vars: (lang) => ({ m: windowMonths(0, lang) }) },
     ...same({ key: "plans.pro_radar", vars: (lang) => ({ a: windowMonths(1, lang), b: windowMonths(2, lang) }) }),
   },
+  // The radar's CSV files: Free's the 3-month file, Pro's the 6- and 12-month files.
   {
     feature: "radar_depth",
     free: { key: "plans.radar_csv", vars: (lang) => ({ m: windowMonths(0, lang) }) },
-    ...same({ key: "plans.radar_csv", vars: (lang) => ({ m: windowMonths(2, lang) }) }),
+    ...same({ key: "plans.pro_radar_csv", vars: (lang) => ({ a: windowMonths(1, lang), b: windowMonths(2, lang) }) }),
   },
   // Each plan's own count of searches and of watches; the mail is what Free lacks.
   {

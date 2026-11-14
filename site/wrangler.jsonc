@@ -88,12 +88,12 @@
     // switch is off the Worker passes each file on as it is. A path spelled
     // another way (an encoded character, a doubled slash) is redirected by
     // the static layer to its plain form, which these patterns then match.
-    // The 12-month radar CSV follows the same rule (src/index.tsx). It comes
-    // from R2 through the Worker already, since no static file has its path;
-    // the entry keeps a copy ever published under public/ from serving it
-    // past the gate.
+    // The 6- and 12-month radar CSVs follow the same rule (src/index.tsx).
+    // They come from R2 through the Worker already, since no static file has
+    // their paths; the entries keep a copy ever published under public/ from
+    // serving one past the gate.
     // Every other static file is still served before the Worker runs.
-    "run_worker_first": ["/data/feeds/*", "/data/expiring/6m/*", "/data/expiring/12m/*", "/downloads/expiring-12m.csv"]
+    "run_worker_first": ["/data/feeds/*", "/data/expiring/6m/*", "/data/expiring/12m/*", "/downloads/expiring-6m.csv", "/downloads/expiring-12m.csv"]
   },
   "d1_databases": [
     {

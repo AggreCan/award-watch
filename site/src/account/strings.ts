@@ -756,8 +756,8 @@ export const ACCOUNT_STRINGS = {
   },
   // The radar's deeper windows (pages/expiring.tsx, plan.ts allowsRadarDepth).
   "billing.pro_radar": {
-    en: "The 6-month and 12-month lists of contracts ending, with their CSV file; the Free plan keeps the 3-month list.",
-    fr: "Les listes des contrats prenant fin d'ici 6 et 12 mois, avec leur fichier CSV; le forfait Gratuit conserve la liste à 3 mois.",
+    en: "The 6-month and 12-month lists of contracts ending, each with its CSV file; the Free plan keeps the 3-month list.",
+    fr: "Les listes des contrats prenant fin d'ici 6 et 12 mois, chacune avec son fichier CSV; le forfait Gratuit conserve la liste à 3 mois.",
   },
   // The analytics views (pages/analytics.tsx, plan.ts allowsAnalytics).
   "billing.pro_analytics": {

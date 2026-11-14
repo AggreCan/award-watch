@@ -197,14 +197,16 @@ depth (`radar_depth`, `site/src/plan.ts` `radarWindowLocked`). For a request
 whose plan lacks it, `/expiring/6m` and `/expiring/12m` show the window's
 count and total, its first 10 contracts and what Pro includes, with no
 filters or pages; the files under `/data/expiring/6m/` and
-`/data/expiring/12m/` answer the site's 404, and `/downloads/expiring-12m.csv`
-the download route's 404. A Pro request gets the full pages and the files
-(marked `private, no-store`). The overview, the 3-month window, its CSV
-(`expiring-3m.csv`, which the overview, the 3-month list and the free view
-link) and the feeds (which carry the 3-month window only) stay free.
-`wrangler.jsonc` runs the Worker first for those two folders and the
-12-month CSV so it can refuse them; while the switch is off it passes them
-on as they are. `site/test/radar-gate.test.ts` proves both states.
+`/data/expiring/12m/` answer the site's 404, and `/downloads/expiring-6m.csv`
+and `/downloads/expiring-12m.csv` the download route's 404 (each file by its
+own window's gate, the same rule for both). A Pro request gets the full pages
+and the files (marked `private, no-store`); each window's full page links its
+own CSV. The overview, the 3-month window, its CSV (`expiring-3m.csv`, which
+the overview, the 3-month list and the free view link) and the feeds (which
+carry the 3-month window only) stay free. `wrangler.jsonc` runs the Worker
+first for those two folders and the 6- and 12-month CSVs so it can refuse
+them; while the switch is off it passes them on as they are.
+`site/test/radar-gate.test.ts` proves both states.
 
 The analytics views (`/buyers/<id>/analytics`, `/organizations/<id>/analytics`,
 `/segments/<nn>/analytics`, feature `analytics`, `site/src/plan.ts`
@@ -227,9 +229,12 @@ analytics index (`/analytics`) and for the Email lists, the radar's 6- and 12-mo
 links to the 12-month list on profiles and buyer pages. The free view's
 panel names the price from `PRICE_MONTHLY_CAD` and `PRICE_YEARLY_CAD`,
 taxes added at checkout, and leaves the line out when the checkout would
-offer no price. On the Data page the 12-month file's row carries the chip
-and, for a request without the feature, leads to the 12-month list's free
-view; the file's own address still answers 404. A Free account's overview
+offer no price. On the Data page the 6-month and 12-month files' rows carry
+the chip and, for a request without the feature, lead to their own list's
+free view (`/expiring/6m`, `/expiring/12m`); each file's own address still
+answers 404. The 6-month row is listed once the export's list of downloads
+names the file (`DOWNLOADS` `listed`), since a site deploy can land before
+the nightly that first writes it. A Free account's overview
 lists API keys, API usage and bug reports with the chip, and its saved
 searches carry one-line notes at the cap and in the delivery column.
 `site/test/pro-mark.test.ts` holds the placements and the chip's styles.

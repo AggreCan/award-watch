@@ -25,6 +25,7 @@ import { TenderInstrumentsPanel } from "./instruments";
 import { tenderSeo } from "../seo";
 import {
   BuyerLink, CountdownScript, PublishedDescription, closingHasZone, closingText, derivedPlacesText, money, otherLanguageMark, provincesText,
+  shownDescription,
   sourceFileText,
   tenderNoticeUrl,
 } from "./shared";
@@ -121,7 +122,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   const noticeUrl = tenderNoticeUrl(shownRef, lang);
   const title = pick(lang, d.title_en, d.title_fr) ?? shownRef;
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "tenders.title"), path: "/tenders" }, { name: shownRef }];
-  const description = pick(lang, d.description_en, d.description_fr);
+  const { text: description, cut: descriptionCut } = shownDescription(lang, d);
   const descriptionMark = otherLanguageMark(lang, d.description_en, d.description_fr);
   const versions = [...d.amendments].sort((a, b) => b.amendment - a.amendment);
   const endUsers = listOf(lang, d.end_users_en, d.end_users_fr);
@@ -139,7 +140,7 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
   const fit = open ? await noticeFit(c, d) : null;
   const description_ = description ? (
     <Panel title={descriptionMark ? `${t(lang, "tender.description_heading")} ${descriptionMark}` : t(lang, "tender.description_heading")}>
-      <PublishedDescription lang={lang} text={description} full={noticeUrl} />
+      <PublishedDescription lang={lang} text={description} cut={descriptionCut} full={noticeUrl} />
     </Panel>
   ) : null;
 

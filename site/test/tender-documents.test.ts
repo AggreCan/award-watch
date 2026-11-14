@@ -5,12 +5,13 @@
 // the page's clock, live while the notice closes soon; the fallback to the
 // CanadaBuys notice when the file names none or predates the field; both
 // languages, no em-dash and no contact detail.
+import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { clockAt, closesLine, countdownLine } from "../src/closing";
 import { documentUrl, tenderAttachments, type TenderDetail } from "../src/data";
 import { app } from "../src/index";
 import rowsPy from "../../pipeline/awardwatch_pipeline/sources/canadabuys_rows.py?raw";
-import { DESCRIPTION_KEPT, DESCRIPTION_SLACK, publishedText } from "../src/pages/shared";
+import { DESCRIPTION_KEPT_UNMARKED, DESCRIPTION_SLACK, descriptionCut, publishedText, shownDescription } from "../src/pages/shared";
 import { FILES, TEST_NOW, makeFakeAssets, testEnv } from "./assets";
 
 const EM_DASH = String.fromCharCode(0x2014);
@@ -61,44 +62,140 @@ const panel = (html: string) => {
 
 describe("a description the site keeps only the start of", () => {
   const WORDS = "The work includes mechanical systems for the ablutions building and related site services. ";
-  // As the pipeline stores a long one: its first DESCRIPTION_KEPT characters, ending inside a word.
-  const cutText = `First paragraph.\n\n${WORDS.repeat(9)}`.slice(0, DESCRIPTION_KEPT);
+  // The pipeline's figures (sources/canadabuys_rows.py): what a tender notice keeps, what an award notice and
+  // a history record keep, and what a row stored before the cut was recorded holds.
+  const figure = (name: string) => Number(new RegExp(`^${name} = ([0-9_]+)$`, "m").exec(rowsPy)?.[1].replace(/_/g, ""));
+  const TENDER_MAX = figure("TENDER_DESCRIPTION_MAX");
+  const AWARD_MAX = figure("DESCRIPTION_MAX");
+  // As the pipeline stores a long one today: the start, ending on a whole word, with the cut recorded.
+  const kept = `First paragraph.\n\n${WORDS.repeat(9)}`.trim();
+  // As a row stored before the cut was recorded holds one: its first 600 characters, ending inside a word.
+  const oldCut = `First paragraph.\n\n${WORDS.repeat(9)}`.slice(0, DESCRIPTION_KEPT_UNMARKED);
   const whole = "A short description, whole as published.";
-  const described = (text: string | null) => shard("cb-200-20005019", (e) => { e.description_en = text; e.description_fr = null; });
+  const described = (text: string | null, cut?: unknown) => shard("cb-200-20005019", (e) => {
+    e.description_en = text;
+    e.description_fr = null;
+    if (cut !== undefined) e.description_cut = cut;
+  });
+  const descriptionPanel = (html: string) => {
+    const at = html.indexOf("<h2>Description as Published</h2>");
+    return html.slice(at, html.indexOf("</section>", at));
+  };
 
-  it("keeps as many characters as the pipeline stores", () => {
-    expect(Number(/^DESCRIPTION_MAX = (\d+)$/m.exec(rowsPy)?.[1])).toBe(DESCRIPTION_KEPT);
+  it("reads a row stored before the mark at the length the pipeline stored it", () => {
+    expect(figure("UNMARKED_DESCRIPTION_MAX")).toBe(DESCRIPTION_KEPT_UNMARKED);
+    expect(TENDER_MAX).toBe(10000);
+    expect(AWARD_MAX).toBe(600);
+    // The pipeline's description_cut, as the site reads it.
+    expect(descriptionCut({ en: TENDER_MAX }, "en")).toBe(TENDER_MAX);
+    expect(descriptionCut({ en: TENDER_MAX }, "fr")).toBe(0);
+    expect(descriptionCut({}, "en")).toBe(0);
+    for (const bad of [undefined, null, [], "600", { en: "600" }, { en: 0 }, { en: -5 }, { en: 1.5 }, { de: 600 }]) {
+      expect(descriptionCut(bad, "en"), JSON.stringify(bad)).toBeUndefined();
+    }
   });
 
-  it("ends at its last whole word with an ellipsis, and says where the whole text is", async () => {
-    expect(cutText).toHaveLength(DESCRIPTION_KEPT);
-    const shown = publishedText(cutText);
-    expect(shown.cut).toBe(true);
-    expect(shown.text.endsWith("\u2026")).toBe(true);
-    // Nothing of the half word the cut left, and no punctuation before the ellipsis.
-    expect(cutText.startsWith(shown.text.slice(0, -1))).toBe(true);
-    expect(shown.text).toMatch(/\w\u2026$/);
-    expect(cutText[shown.text.length - 1]).toMatch(/[\s,;:.]/);
-    // A cut that ended on spaces is stored shorter; it still reads as cut.
-    expect(publishedText(cutText.slice(0, DESCRIPTION_KEPT - DESCRIPTION_SLACK)).cut).toBe(true);
-    expect(publishedText(cutText.slice(0, DESCRIPTION_KEPT - DESCRIPTION_SLACK - 1)).cut).toBe(false);
-    const html = await page("/tenders/cb-200-20005019", TEST_NOW, described(cutText));
-    const at = html.indexOf("<h2>Description as Published</h2>");
-    const panelHtml = html.slice(at, html.indexOf("</section>", at));
+  it("marks a text the pipeline cut, with the figure it kept, in both languages", async () => {
+    const shown = publishedText(kept, TENDER_MAX);
+    expect(shown).toEqual({ text: `${kept.replace(/[.\s]+$/, "")}…`, cut: true, kept: TENDER_MAX });
+    const panelHtml = descriptionPanel(await page("/tenders/cb-200-20005019", TEST_NOW, described(kept, { en: TENDER_MAX })));
     expect(panelHtml).toContain("<p>First paragraph.</p>");
-    expect(panelHtml).toContain("\u2026</p></div>");
-    expect(panelHtml).toMatch(/<p class="muted small">The site keeps the first 600 characters of a description\. The whole text is on <a href="https:\/\/canadabuys\.canada\.ca\/[^"]+" rel="noopener">the CanadaBuys notice<\/a>\.<\/p>/);
-    const fr = nbsp(await page("/tenders/cb-200-20005019?lang=fr", TEST_NOW, shard("cb-200-20005019", (e) => { e.description_fr = cutText; })));
+    expect(panelHtml).toContain("site services…</p></div>");
+    expect(panelHtml).toMatch(/<p class="muted small">The site keeps the first 10,000 characters of a description\. The whole text is on <a href="https:\/\/canadabuys\.canada\.ca\/[^"]+" rel="noopener">the CanadaBuys notice<\/a>\.<\/p>/);
+    const fr = nbsp(await page("/tenders/cb-200-20005019?lang=fr", TEST_NOW, shard("cb-200-20005019", (e) => {
+      e.description_fr = kept;
+      e.description_cut = { fr: TENDER_MAX };
+    })));
     // The apostrophe is typeset on a French page, so it is matched as any one character.
-    expect(fr).toMatch(/Le site conserve les 600 premiers caractères d(.|&#39;)une description\. Le texte complet se trouve dans <a href=/);
+    expect(fr).toMatch(/Le site conserve les 10 000 premiers caractères d(.|&#39;)une description\. Le texte complet se trouve dans <a href=/);
     expect(fr).not.toContain(EM_DASH);
+  });
+
+  it("shows a text the pipeline kept whole as it is, whatever its length", async () => {
+    // 600 characters long, which the length rule would read as cut.
+    const long = `${WORDS.repeat(6)}${"x".repeat(600 - WORDS.length * 6)}`;
+    expect(long).toHaveLength(600);
+    expect(publishedText(long).cut).toBe(true);
+    expect(publishedText(long, 0)).toEqual({ text: long, cut: false });
+    const html = await page("/tenders/cb-200-20005019", TEST_NOW, described(long, {}));
+    expect(html).toContain(`<div class="prose"><p>${long}</p></div></section>`);
+    expect(html).not.toContain("The site keeps the first");
+  });
+
+  it("follows the language the page shows when its own is blank", () => {
+    const d = { description_en: null, description_fr: kept, description_cut: { fr: TENDER_MAX } };
+    expect(shownDescription("en", d)).toEqual({ text: kept, cut: TENDER_MAX });
+    expect(shownDescription("fr", d)).toEqual({ text: kept, cut: TENDER_MAX });
+    const both = { description_en: whole, description_fr: kept, description_cut: { fr: TENDER_MAX } };
+    expect(shownDescription("en", both)).toEqual({ text: whole, cut: 0 });
+    expect(shownDescription("en", { description_en: whole, description_fr: null })).toEqual({ text: whole, cut: undefined });
+  });
+
+  it("reads a row stored before the mark by its length: to its last whole word, with the figure it was stored at", async () => {
+    expect(oldCut).toHaveLength(DESCRIPTION_KEPT_UNMARKED);
+    const shown = publishedText(oldCut);
+    expect(shown.cut).toBe(true);
+    expect(shown.text.endsWith("…")).toBe(true);
+    // Nothing of the half word the cut left, and no punctuation before the ellipsis.
+    expect(oldCut.startsWith(shown.text.slice(0, -1))).toBe(true);
+    expect(shown.text).toMatch(/\w…$/);
+    expect(oldCut[shown.text.length - 1]).toMatch(/[\s,;:.]/);
+    // A cut that ended on spaces is stored shorter; it still reads as cut.
+    expect(publishedText(oldCut.slice(0, DESCRIPTION_KEPT_UNMARKED - DESCRIPTION_SLACK)).cut).toBe(true);
+    expect(publishedText(oldCut.slice(0, DESCRIPTION_KEPT_UNMARKED - DESCRIPTION_SLACK - 1)).cut).toBe(false);
+    // A mark that does not read is no mark.
+    for (const mark of [undefined, { en: "all" }]) {
+      const panelHtml = descriptionPanel(await page("/tenders/cb-200-20005019", TEST_NOW, described(oldCut, mark)));
+      expect(panelHtml).toContain("…</p></div>");
+      expect(panelHtml).toContain("The site keeps the first 600 characters of a description.");
+    }
+    const fr = nbsp(await page("/tenders/cb-200-20005019?lang=fr", TEST_NOW, shard("cb-200-20005019", (e) => { e.description_fr = oldCut; })));
+    expect(fr).toMatch(/Le site conserve les 600 premiers caractères d(.|&#39;)une description\. Le texte complet se trouve dans <a href=/);
   });
 
   it("leaves a shorter description as it is, with no line under it", async () => {
     expect(publishedText(whole)).toEqual({ text: whole, cut: false });
-    const html = await page("/tenders/cb-200-20005019", TEST_NOW, described(whole));
-    expect(html).toContain(`<div class="prose"><p>${whole}</p></div></section>`);
-    expect(html).not.toContain("The site keeps the first");
+    for (const mark of [undefined, {}]) {
+      const html = await page("/tenders/cb-200-20005019", TEST_NOW, described(whole, mark));
+      expect(html).toContain(`<div class="prose"><p>${whole}</p></div></section>`);
+      expect(html).not.toContain("The site keeps the first");
+    }
+  });
+
+  it("marks an award notice's and a history record's cut at the figure they keep", async () => {
+    const contracts = (key: string, cut: unknown) => {
+      const s = clone(FILES["contracts/637.json"]) as Record<string, Record<string, unknown>>;
+      s[key].description_en = oldCut;
+      s[key].description_cut = cut;
+      return { "contracts/637.json": s };
+    };
+    const award = await page("/awards/cb-400-40000004", TEST_NOW, contracts("award:cb-400-40000004", { en: AWARD_MAX }));
+    expect(award).toMatch(/<p class="muted small">The site keeps the first 600 characters of a description\. The whole text is on <a href="https:\/\/canadabuys\.canada\.ca\/[^"]+" rel="noopener">/);
+    const history = await page("/history/w8472-000633", TEST_NOW, contracts("history:W8472-000633", { en: AWARD_MAX }));
+    expect(history).toContain('<p class="muted small">The site keeps the first 600 characters of a description.</p>');
+    // Kept whole: no line, though the length rule would have read it as cut.
+    const wholeAward = await page("/awards/cb-400-40000004", TEST_NOW, contracts("award:cb-400-40000004", {}));
+    expect(wholeAward).not.toContain("The site keeps the first");
+    expect(wholeAward).not.toContain("…</p></div>");
+    expect(publishedText(oldCut).cut).toBe(true);
+  });
+
+  it("breaks a long link in a description rather than widen the page", async () => {
+    // A quarter of the open notices' first 10,000 characters hold a word too long for a phone's line.
+    const styles = (env as unknown as { STYLES_CSS: string }).STYLES_CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(/\n\.prose \{([^}]*)\}/.exec(styles)?.[1]).toContain("overflow-wrap: anywhere;");
+    const link = `https://canadabuys.canada.ca/${"a".repeat(120)}.pdf`;
+    const html = await page("/tenders/cb-200-20005019", TEST_NOW, described(`See ${link} for the plans.`, {}));
+    expect(html).toContain(`<div class="prose"><p>See ${link} for the plans.</p></div>`);
+  });
+
+  it("gives the API the mark with the text", async () => {
+    const res = await app.request("/api/tenders/cb-200-20005019", { headers: { "cf-connecting-ip": `198.18.9.${(address++ % 250) + 1}` } },
+      testEnv(makeFakeAssets({}, described(kept, { en: TENDER_MAX }))));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.description_cut).toEqual({ en: TENDER_MAX });
+    expect(body.description_en).toBe(kept);
   });
 });
 

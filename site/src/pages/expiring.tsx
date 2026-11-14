@@ -91,16 +91,19 @@ export function windowOf(daysLeft: number): ExpiringWindow | null {
   if (daysLeft < 0) return null;
   return EXPIRING_WINDOWS.find((w) => daysLeft <= WINDOW_DAYS[w]) ?? null;
 }
-// The radar's two CSV files. The 12-month one is part of Pro once the
-// accounts switch is on (index.tsx refuses it as expiringFile refuses the
-// window files); the 3-month one stays free, so the overview, the 3-month
-// list and the free view of a deeper window link it.
+// The radar's CSV files, one a window. The 6- and 12-month ones are part of
+// Pro once the accounts switch is on, each by its own window's gate
+// (index.tsx refuses them as expiringFile refuses the window files, by the
+// window pages/data.tsx DOWNLOADS names); the 3-month one stays free, so the
+// overview, the 3-month list and the free view of a deeper window link it. A
+// deep window's full list links its own file.
 export const EXPIRING_CSV = "expiring-12m.csv";
+export const EXPIRING_CSV_6M = "expiring-6m.csv";
 export const EXPIRING_CSV_3M = "expiring-3m.csv";
-type CsvWindow = "3m" | "12m";
-const CSV_FILE: Record<CsvWindow, string> = { "3m": EXPIRING_CSV_3M, "12m": EXPIRING_CSV };
-const CSV_DOWNLOAD: Record<CsvWindow, Key> = { "3m": "expiring.download_3m", "12m": "expiring.download" };
-const CSV_LINK: Record<CsvWindow, Key> = { "3m": "expiring.csv_link_3m", "12m": "expiring.csv_link" };
+type CsvWindow = ExpiringWindow;
+const CSV_FILE: Record<CsvWindow, string> = { "3m": EXPIRING_CSV_3M, "6m": EXPIRING_CSV_6M, "12m": EXPIRING_CSV };
+const CSV_DOWNLOAD: Record<CsvWindow, Key> = { "3m": "expiring.download_3m", "6m": "expiring.download_6m", "12m": "expiring.download" };
+const CSV_LINK: Record<CsvWindow, Key> = { "3m": "expiring.csv_link_3m", "6m": "expiring.csv_link_6m", "12m": "expiring.csv_link" };
 export const EXPIRING_FEED = "feeds/canada/expiring.xml";
 
 const WINDOW_LABEL: Record<ExpiringWindow, Key> = { "3m": "expiring.window_3m", "6m": "expiring.window_6m", "12m": "expiring.window_12m" };
@@ -972,7 +975,7 @@ const Select: FC<{ name: string; label: Key; any?: Key; opts: Option[]; value: s
 
 // The head of a window's page, the same on the full list and on the free
 // view: how many contracts the window holds, their value, and a CSV (the
-// 3-month file on the 3-month list and on the free view, else the 12-month).
+// 3-month file on the free view, else the window's own).
 const WindowHead: FC<{
   lang: Lang; crumbs: { name: string; path?: string }[]; title: string; idx: ExpiringWindowIndex; months: string; date: string; csv: CsvWindow;
 }> = ({ lang, crumbs, title, idx, months, date, csv }) => (
@@ -990,8 +993,10 @@ const WindowHead: FC<{
 function proTeaserText(lang: Lang, window: ExpiringWindow, idx: ExpiringWindowIndex, three: ExpiringWindowIndex | null): unknown {
   const all = fmtInt(idx.rows, lang);
   const beyond = three ? idx.rows - three.rows : 0;
-  if (!three || beyond <= 0) return t(lang, "expiring.pro_text_all", { all });
-  const vars = { all, beyond: fmtInt(beyond, lang), months: fmtInt(Number(window.slice(0, -1)), lang) };
+  // The window's months, which also name its own CSV file.
+  const months = fmtInt(Number(window.slice(0, -1)), lang);
+  if (!three || beyond <= 0) return t(lang, "expiring.pro_text_all", { all, months });
+  const vars = { all, beyond: fmtInt(beyond, lang), months };
   return idx.total !== null && three.total !== null
     ? tj(lang, "expiring.pro_text", { ...vars, total_beyond: <ShortMoney lang={lang} value={idx.total - three.total} /> })
     : t(lang, "expiring.pro_text_no_total", vars);
@@ -1116,8 +1121,8 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
       offset: (n - 1) * EXPIRING_PAGE_ROWS, total: idx.rows, prev: prevPath, next: nextPath, replaces: "radar-pager",
     };
   const csvPath = `${path}/rows.csv${expiringQueryString(view)}`;
-  // The 3-month list's own rows are all in the free 3-month file.
-  const csv: CsvWindow = window === "3m" ? "3m" : "12m";
+  // Each list links its own window's file: the 3-month list the free 3-month file.
+  const csv: CsvWindow = window;
   // The heads the window orders by, each a link to the same view in its next order, from the first page.
   const sortHref = (v: string) => `${path}${expiringQueryString({ ...view, sort: v as RadarOrder })}`;
   const sorts = { end: headSort(RADAR_ORDERS, q.sort, "end", sortHref), value: headSort(RADAR_ORDERS, q.sort, "value", sortHref) };

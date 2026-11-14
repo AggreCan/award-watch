@@ -33,6 +33,9 @@ and the site serves only these names):
   expiring-3m.csv         the same columns for the rows ending within the 3-month window of the data
                           date (expiring.WINDOWS), as the site's 3-month list counts them: the file the
                           site keeps free once the 6- and 12-month windows are part of its paid plan
+  expiring-6m.csv         the same columns for the rows ending within the 6-month window, as the site's
+                          6-month list counts them; part of the paid plan with the 12-month file, by the
+                          same gate (site/src/index.tsx)
   organization-aliases.csv  the alias map: every retired organization id and the live id that holds its
                           records now (export_static.resolve_aliases, chains followed), with the reason
                           (business_number, truncation, spelling, seed, or normalization for a change to
@@ -194,7 +197,8 @@ FIRST_YEAR = {"awards": 2012, "history": 2009, "contracts": 2004, "grants": 2005
 CSV_PART_BYTES = 250 * 1024 * 1024
 # Rows between two looks at a part's size, so a part ends within a few MiB of the cap.
 PART_CHECK_ROWS = 1000
-FIXED_FILES = ("open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv", "expiring-12m.csv")
+FIXED_FILES = ("open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv", "expiring-6m.csv",
+               "expiring-12m.csv")
 
 OPEN_TENDERS = """
     SELECT t.reference, t.amendment, t.solicitation, t.title_en, t.title_fr, t.published, t.closing, t.amended,
@@ -281,13 +285,17 @@ _EXPIRING_SELECT = """
            client_buyer_name, client_buyer_name_fr, value_flag
     FROM expiring_contracts"""
 EXPIRING = _EXPIRING_SELECT + " ORDER BY end, source_key"
-# The 3-month file: the rows that end on or after the data date and within the
-# 3-month window of it, the rule export_static.write_expiring applies to the
-# site's 3-month list (days_left counted again from the data date). It stays
-# free when the longer windows are part of the site's paid plan.
+# The 3- and 6-month files: the rows that end on or after the data date and
+# within the window of it, the rule export_static.write_expiring applies to the
+# site's 3- and 6-month lists (days_left counted again from the data date). The
+# 3-month file stays free when the longer windows are part of the site's paid
+# plan; the 6-month file is part of it, as the 12-month file is.
 EXPIRING_3M_DAYS = dict(expiring.WINDOWS)["3m"]
-EXPIRING_3M = (_EXPIRING_SELECT + " WHERE substr(end, 1, 10) BETWEEN :as_of AND date(:as_of, :span)"
-               " ORDER BY end, source_key")
+EXPIRING_6M_DAYS = dict(expiring.WINDOWS)["6m"]
+EXPIRING_WINDOW = (_EXPIRING_SELECT + " WHERE substr(end, 1, 10) BETWEEN :as_of AND date(:as_of, :span)"
+                   " ORDER BY end, source_key")
+# The files cut to a window, by file name, with the window's days.
+EXPIRING_WINDOW_FILES = {"expiring-3m.csv": EXPIRING_3M_DAYS, "expiring-6m.csv": EXPIRING_6M_DAYS}
 # A buyer is listed (buyers.csv, and buyers/, the rankings and stats.json in the
 # static export) when it has a record in a column the buyers list shows: an
 # open tender notice on the data date, an award notice, a contract history
@@ -502,8 +510,8 @@ def export_csv(conn: sqlite3.Connection, out_dir: Path | None = None, *, today: 
             counts.update(_write_parts(out / name, conn.execute(query, args), CSV_PART_BYTES))
     counts["organizations.csv"] = _write(out / "organizations.csv", conn.execute(ORGANIZATIONS))
     counts["buyers.csv"] = _write(out / "buyers.csv", conn.execute(BUYERS, {"as_of": as_of}))
-    counts["expiring-3m.csv"] = _write(out / "expiring-3m.csv", conn.execute(
-        EXPIRING_3M, {"as_of": as_of, "span": f"+{EXPIRING_3M_DAYS} days"}))
+    for name, days in EXPIRING_WINDOW_FILES.items():
+        counts[name] = _write(out / name, conn.execute(EXPIRING_WINDOW, {"as_of": as_of, "span": f"+{days} days"}))
     counts["expiring-12m.csv"] = _write(out / "expiring-12m.csv", conn.execute(EXPIRING))
     counts[ALIASES_FILE] = write_alias_map(conn, out / ALIASES_FILE)
     # A yearly file from an earlier night whose year no longer has rows (a

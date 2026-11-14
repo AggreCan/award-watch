@@ -330,7 +330,7 @@ describe("the two switch states", () => {
     expect(page).toContain('<a class="lp-btn lp-btn-sm lp-on" href="/account/sign-in">Sign in</a>');
     expect(page).toContain('<a class="lp-btn lp-on" href="/pro">See Pro plans</a>');
     expect(page).toContain('<p class="lp-pro">Pro sees new notices within 2 hours of posting.</p>');
-    expect(page).toContain('<p class="lp-pro">Pro opens the 6- and 12-month lists and the CSV.</p>');
+    expect(page).toContain('<p class="lp-pro">Pro opens the 6- and 12-month lists and their CSV files.</p>');
     expect(page).toContain('<p class="lp-pro">Pro charts 10 fiscal years and watches 25 companies by email.</p>');
     // The chips sit on the plan cards and nowhere else.
     const pricing = section(page, "lp-pricing");

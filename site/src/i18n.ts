@@ -572,7 +572,8 @@ const STRINGS = {
   "tender.gsin": { en: "GSIN", fr: "NIBS" },
   "tender.codes": { en: "UNSPSC Codes", fr: "Codes UNSPSC" },
   "tender.description_heading": { en: "Description as Published", fr: "Description publiée" },
-  // Under a description the site keeps only the start of (pages/shared.tsx PublishedDescription).
+  // Under a description the site keeps only the start of (pages/shared.tsx PublishedDescription); {n} is the
+  // figure the pipeline cut that text at (10,000 on a tender notice, 600 on an award notice or history record).
   "tender.description_cut": {
     en: "The site keeps the first {n} characters of a description. The whole text is on {notice}.",
     fr: "Le site conserve les {n} premiers caractères d'une description. Le texte complet se trouve dans {notice}.",
@@ -734,6 +735,10 @@ const STRINGS = {
     en: "Download contracts ending within 3 months (CSV)",
     fr: "Télécharger les contrats prenant fin d'ici 3 mois (CSV)",
   },
+  "expiring.download_6m": {
+    en: "Download contracts ending within 6 months (CSV)",
+    fr: "Télécharger les contrats prenant fin d'ici 6 mois (CSV)",
+  },
   "expiring.feed": {
     en: "Atom feed of contracts now within 3 months of their end",
     fr: "Fil Atom des contrats désormais à moins de 3 mois de leur fin",
@@ -853,6 +858,7 @@ const STRINGS = {
   "expiring.part_more_many": { en: "The other {more} are in {list}.", fr: "Les {more} autres se trouvent dans {list}." },
   "expiring.list_link_12m": { en: "the 12-month list", fr: "la liste de 12 mois" },
   "expiring.csv_link": { en: "the 12-month CSV file", fr: "le fichier CSV de 12 mois" },
+  "expiring.csv_link_6m": { en: "the 6-month CSV file", fr: "le fichier CSV de 6 mois" },
   "expiring.csv_link_3m": { en: "the 3-month CSV file", fr: "le fichier CSV de 3 mois" },
   "expiring.see_all": { en: "All contracts ending soon", fr: "Tous les contrats prenant fin bientôt" },
   // The 6- and 12-month windows for a request whose plan lacks radar_depth,
@@ -864,8 +870,8 @@ const STRINGS = {
   },
   "expiring.pro_title": { en: "Part of Pro", fr: "Offert avec le forfait Pro" },
   "expiring.pro_text": {
-    en: "Pro lists all {all}, {beyond} of them ending 3 to {months} months out ({total_beyond}), with every filter and the 12-month CSV.",
-    fr: "Pro les énumère tous les {all}, dont {beyond} prennent fin dans 3 à {months} mois ({total_beyond}), avec tous les filtres et le CSV de 12 mois.",
+    en: "Pro lists all {all}, {beyond} of them ending 3 to {months} months out ({total_beyond}), with every filter and the {months}-month CSV.",
+    fr: "Pro les énumère tous les {all}, dont {beyond} prennent fin dans 3 à {months} mois ({total_beyond}), avec tous les filtres et le CSV de {months} mois.",
   },
   "expiring.pro_includes": { en: "Pro includes:", fr: "Le forfait Pro comprend :" },
   "expiring.pro_radar": {
@@ -873,8 +879,8 @@ const STRINGS = {
     fr: "les listes complètes des contrats prenant fin d'ici 6 et 12 mois, avec tous leurs filtres et toutes leurs pages",
   },
   "expiring.pro_csv": {
-    en: "the 12-month CSV file of contracts ending",
-    fr: "le fichier CSV de 12 mois des contrats prenant fin",
+    en: "the 6-month and 12-month CSV files of contracts ending",
+    fr: "les fichiers CSV de 6 et de 12 mois des contrats prenant fin",
   },
   "expiring.pro_intraday": {
     en: "same-day tender notices on the tender lists, read from CanadaBuys every two hours",
@@ -1676,12 +1682,16 @@ const STRINGS = {
     en: "Every contract ending within 3 months of the data date, in the 12-month file's columns",
     fr: "Tous les contrats prenant fin dans les 3 mois suivant la date des données, avec les colonnes du fichier de 12 mois",
   },
+  "data.file.expiring_6m": {
+    en: "Every contract ending within 6 months of the data date, in the 12-month file's columns",
+    fr: "Tous les contrats prenant fin dans les 6 mois suivant la date des données, avec les colonnes du fichier de 12 mois",
+  },
   "data.file.expiring": {
     en: "Every contract ending within 12 months of the data date, one row each, listed once across sources",
     fr: "Tous les contrats prenant fin dans les 12 mois suivant la date des données, une ligne chacun, une seule fois toutes sources confondues",
   },
-  // Beside the 12-month file on the Data page: it is part of Pro from the
-  // accounts switch (index.tsx). No price is named.
+  // Beside the 6- and 12-month files on the Data page: they are part of Pro
+  // from the accounts switch (index.tsx). No price is named.
   "data.file.pro": { en: "Part of Pro.", fr: "Fait partie de Pro." },
   "data.file.sums": { en: "SHA-256 checksums of the files above", fr: "Sommes de contrôle SHA-256 des fichiers ci-dessus" },
   "data.yearly_awards": { en: "Award Notices by Year of Award", fr: "Avis d'attribution par année d'attribution" },
@@ -1709,7 +1719,7 @@ const STRINGS = {
     en: "Each address may make 60 API requests a minute. Bulk use should start from the CSV files.",
     fr: "Chaque adresse peut faire 60 requêtes à l'API par minute. Un usage en vrac devrait partir des fichiers CSV.",
   },
-  // While the accounts switch is on: the 12-month file's note and the line on keys, each with the Pro chip.
+  // While the accounts switch is on: the 6- and 12-month files' note and the line on keys, each with the Pro chip.
   "data.file.pro_on": { en: "Part of Pro. The 3-month file is free.", fr: "Fait partie de Pro. Le fichier de 3 mois est gratuit." },
   "data.api_keys": {
     en: "{keys} come with Pro and open the keyed API below.",
@@ -1963,8 +1973,8 @@ const STRINGS = {
     fr: "Les périodes sont cumulatives : d'ici 3, 6 et 12 mois après la date des données. Un contrat qui prend fin d'ici 3 mois figure aussi dans les listes de 6 et de 12 mois.",
   },
   "methodology.expiring_pro": {
-    en: "The full 6-month and 12-month lists and the 12-month CSV file are part of Pro, the site's paid plan; every reader still sees their counts, their totals and their first {n} contracts.",
-    fr: "Les listes complètes de 6 et de 12 mois et le fichier CSV de 12 mois font partie de Pro, le forfait payant du site; chaque lecteur en voit toujours le nombre, le total et les {n} premiers contrats.",
+    en: "The full 6-month and 12-month lists and their CSV files are part of Pro, the site's paid plan; every reader still sees their counts, their totals and their first {n} contracts.",
+    fr: "Les listes complètes de 6 et de 12 mois et leurs fichiers CSV font partie de Pro, le forfait payant du site; chaque lecteur en voit toujours le nombre, le total et les {n} premiers contrats.",
   },
   "methodology.expiring_growth": {
     en: "Amendments counts the versions beyond the original. Value growth is the newest total value over the original amount, minus one, shown as a percentage. It is left blank when either figure is unknown.",
@@ -3653,6 +3663,7 @@ const STRINGS = {
   "plans.free_radar": { en: "Contracts ending: the {m}-month list", fr: "Contrats prenant fin : liste de {m} mois" },
   "plans.pro_radar": { en: "Contracts ending: {a}- and {b}-month lists", fr: "Contrats prenant fin d'ici {a} et {b} mois" },
   "plans.radar_csv": { en: "Contracts ending: the {m}-month CSV", fr: "Contrats prenant fin : CSV de {m} mois" },
+  "plans.pro_radar_csv": { en: "Contracts ending: {a}- and {b}-month CSVs", fr: "Contrats prenant fin : CSV de {a} et {b} mois" },
   "plans.free_searches": { en: "{n} saved searches, on the site", fr: "{n} recherches enregistrées, sur le site" },
   "plans.pro_searches": { en: "{n} saved searches, by email", fr: "{n} recherches enregistrées, par courriel" },
   "plans.free_watches": { en: "{n} watches, on the site", fr: "{n} suivis, sur le site" },
@@ -3919,12 +3930,12 @@ const STRINGS = {
   // 3-month list with no total), and without the count beyond 3 months
   // (the 3-month figures not read).
   "expiring.pro_text_no_total": {
-    en: "Pro lists all {all}, {beyond} of them ending 3 to {months} months out, with every filter and the 12-month CSV.",
-    fr: "Pro les énumère tous les {all}, dont {beyond} prennent fin dans 3 à {months} mois, avec tous les filtres et le CSV de 12 mois.",
+    en: "Pro lists all {all}, {beyond} of them ending 3 to {months} months out, with every filter and the {months}-month CSV.",
+    fr: "Pro les énumère tous les {all}, dont {beyond} prennent fin dans 3 à {months} mois, avec tous les filtres et le CSV de {months} mois.",
   },
   "expiring.pro_text_all": {
-    en: "Pro lists all {all}, with every filter and the 12-month CSV.",
-    fr: "Pro les énumère tous les {all}, avec tous les filtres et le CSV de 12 mois.",
+    en: "Pro lists all {all}, with every filter and the {months}-month CSV.",
+    fr: "Pro les énumère tous les {all}, avec tous les filtres et le CSV de {months} mois.",
   },
   // expiring.lead without a total (the 12-month window has none), and as it
   // read before the review when the index carries no 12-month window.
@@ -4205,7 +4216,7 @@ const STRINGS = {
     fr: "Chaque avis d'attribution avec son titulaire et sa valeur. Chaque contrat publié par date de fin, avec les modifications qui l'ont fait croître.",
   },
   "landing.f2_button": { en: "See this month's awards", fr: "Voir les attributions du mois" },
-  "landing.f2_pro": { en: "Pro opens the {a}- and {b}-month lists and the CSV.", fr: "Pro ouvre les listes de {a} et de {b} mois et le fichier CSV." },
+  "landing.f2_pro": { en: "Pro opens the {a}- and {b}-month lists and their CSV files.", fr: "Pro ouvre les listes de {a} et de {b} mois et leurs fichiers CSV." },
   "landing.shot_awarded": { en: "Awarded, last 30 days", fr: "Attribués, 30 derniers jours" },
   "landing.f3_eyebrow": { en: "Companies and buyers", fr: "Entreprises et acheteurs" },
   "landing.f3_heading": { en: "Follow any company, or any department", fr: "Suivez une entreprise, ou un ministère" },

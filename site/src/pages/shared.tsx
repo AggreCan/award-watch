@@ -110,27 +110,61 @@ export function otherLanguageMark(lang: Lang, en: string | null | undefined, fr:
   return !(mine && mine.trim()) && other && other.trim() ? t(lang, "common.other_lang_only") : null;
 }
 
-// A description as published. The pipeline keeps the first DESCRIPTION_KEPT
-// characters of one (sources/canadabuys_rows.py DESCRIPTION_MAX; a test holds
-// the two equal) and drops the spaces a cut leaves at its end, so a text
-// within DESCRIPTION_SLACK of that length is the start of a longer one. Such
-// a text is shown to its last whole word with an ellipsis, and a line says
-// the site keeps the start only and where the whole is: the notice on
-// CanadaBuys when the page has one (full), else nothing more. On the
-// development copy 13 of 24 notices and a third of the award notices are
-// cut; about one text in 300 is that long and whole, and reads as cut.
-export const DESCRIPTION_KEPT = 600;
+// A description as published. The pipeline keeps the start of a long one, cut
+// at its last whole word (sources/canadabuys_rows.py: 10,000 characters of a
+// tender notice's, 600 of an award notice's or a contract history record's),
+// and the detail says which text it cut and within how many characters:
+// description_cut, {"en": n, "fr": n} for each text cut, {} when both are
+// whole (export_static.description_cut). A cut text is shown with an
+// ellipsis, and a line gives that figure and where the whole is: the notice
+// on CanadaBuys when the page has one (full), else nothing more.
+//
+// A detail without description_cut holds a text stored before the pipeline
+// recorded its cuts: the first DESCRIPTION_KEPT_UNMARKED characters, cut
+// mid-word (sources/canadabuys_rows.py UNMARKED_DESCRIPTION_MAX; a test holds
+// the two equal), with the spaces at the cut dropped. For such a text alone
+// the length decides: within DESCRIPTION_SLACK of that figure it is the start
+// of a longer one, shown to its last whole word; about one whole text in 300
+// is that long and reads as cut. Award notices and history records a legacy
+// file alone holds keep this reading, since their rows are not read again.
+export const DESCRIPTION_KEPT_UNMARKED = 600;
 export const DESCRIPTION_SLACK = 10;
 
-export function publishedText(text: string): { text: string; cut: boolean } {
-  if (text.length < DESCRIPTION_KEPT - DESCRIPTION_SLACK) return { text, cut: false };
-  const at = text.search(/\s+\S*$/);
-  const head = (at > DESCRIPTION_KEPT / 2 ? text.slice(0, at) : text).replace(/[\s,;:.]+$/, "");
-  return { text: `${head}\u2026`, cut: true };
+// The cut description_cut gives one language's text: n when the pipeline cut
+// it within n characters, 0 when it is whole, undefined when the detail
+// carries no mark, or one that does not read, so the length decides.
+export function descriptionCut(mark: unknown, lang: Lang): number | undefined {
+  if (typeof mark !== "object" || mark === null || Array.isArray(mark)) return undefined;
+  const entries = Object.entries(mark as Record<string, unknown>);
+  if (!entries.every(([k, v]) => (k === "en" || k === "fr") && Number.isInteger(v) && (v as number) > 0)) return undefined;
+  const n = (mark as Record<string, unknown>)[lang];
+  return typeof n === "number" ? n : 0;
 }
 
-export const PublishedDescription: FC<{ lang: Lang; text: string; full?: string | null }> = ({ lang, text, full }) => {
-  const shown = publishedText(text);
+// The description a page shows (pick: its own language's, else the other's)
+// and the cut of that same text.
+export function shownDescription(
+  lang: Lang, d: { description_en: string | null; description_fr: string | null; description_cut?: unknown },
+): { text: string | null; cut: number | undefined } {
+  const own = lang === "fr" ? d.description_fr : d.description_en;
+  const shown: Lang = own && own.trim() ? lang : lang === "fr" ? "en" : "fr";
+  return { text: pick(lang, d.description_en, d.description_fr), cut: descriptionCut(d.description_cut, shown) };
+}
+
+// kept: the characters the site keeps of the text, the figure the line under it names.
+export function publishedText(text: string, cut?: number): { text: string; cut: false } | { text: string; cut: true; kept: number } {
+  if (cut !== undefined) {
+    // Cut by the pipeline at a whole word: the text already ends on one.
+    return cut > 0 ? { text: `${text.replace(/[\s,;:.]+$/, "")}\u2026`, cut: true, kept: cut } : { text, cut: false };
+  }
+  if (text.length < DESCRIPTION_KEPT_UNMARKED - DESCRIPTION_SLACK) return { text, cut: false };
+  const at = text.search(/\s+\S*$/);
+  const head = (at > DESCRIPTION_KEPT_UNMARKED / 2 ? text.slice(0, at) : text).replace(/[\s,;:.]+$/, "");
+  return { text: `${head}\u2026`, cut: true, kept: DESCRIPTION_KEPT_UNMARKED };
+}
+
+export const PublishedDescription: FC<{ lang: Lang; text: string; cut?: number; full?: string | null }> = ({ lang, text, cut, full }) => {
+  const shown = publishedText(text, cut);
   return (
     <>
       <div class="prose">{shown.text.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
@@ -138,9 +172,9 @@ export const PublishedDescription: FC<{ lang: Lang; text: string; full?: string 
         <p class="muted small">
           {full
             ? tj(lang, "tender.description_cut", {
-              n: fmtInt(DESCRIPTION_KEPT, lang), notice: <a href={full} rel="noopener">{t(lang, "tender.documents_none_link")}</a>,
+              n: fmtInt(shown.kept, lang), notice: <a href={full} rel="noopener">{t(lang, "tender.documents_none_link")}</a>,
             })
-            : t(lang, "tender.description_cut_plain", { n: fmtInt(DESCRIPTION_KEPT, lang) })}
+            : t(lang, "tender.description_cut_plain", { n: fmtInt(shown.kept, lang) })}
         </p>
       ) : null}
     </>

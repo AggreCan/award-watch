@@ -32,7 +32,30 @@ from urllib.parse import unquote, urlsplit
 from .. import places
 from ..normalize import iso_date, iso_datetime, squash, star_list, tender_status
 
+# The most characters of a description stored, by the table it goes to. A
+# longer text is cut at its last whole word within the figure, and the row
+# records the cut in description_en_cut and description_fr_cut (the figure,
+# 0 for a text stored whole), which the export passes to the site as
+# description_cut so a page marks a cut text exactly (description).
+#
+# Measured on the CanadaBuys files of 2026-11-13: a tender notice's
+# description runs to 990 characters at the median, 4,839 at the 90th
+# percentile and 75,805 at most, and the 600 kept before cut 22,450 of the
+# 31,334 notices (684 of the 943 open). At 10,000, 913 notices are cut (60
+# open), the detail shards grow by 84 MB in all and by 91 KB at most each
+# (the largest of 64 live shards was 67 KB, against the Worker's 300 KB a
+# request), and open-tenders.csv by about 3 MB. Award notices and contract
+# history stay at 600: their detail shards (contracts/<abc>.json) averaged
+# 239 KB on 2026-11-13 and 6 of 128 sampled were already above 300 KB, so
+# every character more would add to the pages over it.
+TENDER_DESCRIPTION_MAX = 10_000
 DESCRIPTION_MAX = 600
+DESCRIPTION_MAX_BY_STAGE = {"tenders": TENDER_DESCRIPTION_MAX, "awards": DESCRIPTION_MAX, "history": DESCRIPTION_MAX}
+# A row stored before the cut was recorded holds the first 600 characters,
+# cut mid-word, with NULL in both cut columns; the site reads such a text by
+# its length (site/src/pages/shared.tsx DESCRIPTION_KEPT_UNMARKED, which a
+# site test holds equal to this).
+UNMARKED_DESCRIPTION_MAX = 600
 # The documents kept for a notice version, at most: a solicitation with more
 # is rare, and a detail shard stays small (the Worker parses about 300 KB a request).
 ATTACHMENTS_MAX = 50
@@ -158,9 +181,22 @@ def json_list(items: list[str]) -> str | None:
     return json.dumps(items, ensure_ascii=False) if items else None
 
 
-def cut(value: object) -> str | None:
+def description(value: object, limit: int) -> tuple[str | None, int | None]:
+    """A description as stored and its cut: (text, 0) when it fits in limit characters, (start, limit) when it
+    does not, the start ending at its last whole word within limit; (None, None) for a blank cell.
+
+    The cut looks one character past the limit, so a text whose limit falls on a space keeps the word before
+    it. A start with no space in its second half (a long URL) is cut at the limit itself, which a reader still
+    sees as cut because the row says so. The scan runs back from the limit, so a long run of spaces costs no
+    more than its length."""
     text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
-    return text[:DESCRIPTION_MAX].rstrip() or None
+    if not text:
+        return None, None
+    if len(text) <= limit:
+        return text, 0
+    at = next((i for i in range(limit, -1, -1) if text[i].isspace()), -1)
+    kept = text[:at].rstrip() if at > 0 else ""
+    return (kept if len(kept) > limit // 2 else text[:limit].rstrip()), limit
 
 
 def entity_list(value: object) -> list[str]:
@@ -191,9 +227,14 @@ def aligned(codes: list[str], descs: list[str]) -> list[str | None]:
 Coded = tuple[str, str | None, str | None]
 
 
-def common_fields(get: Getter) -> tuple[dict[str, object], list[Coded], list[Coded]]:
+def common_fields(get: Getter, stage: str = "tenders") -> tuple[dict[str, object], list[Coded], list[Coded]]:
     """The fields every table shares, the version's UNSPSC codes (trimmed, in file order) and its GSIN codes,
-    each code with its descriptions. The loader adds source_file to the fields."""
+    each code with its descriptions. The loader adds source_file to the fields. stage names the table the row
+    goes to, which sets how much of a description is kept (DESCRIPTION_MAX_BY_STAGE); the same-day refresh
+    reads tender notices, the default."""
+    limit = DESCRIPTION_MAX_BY_STAGE[stage]
+    description_en, cut_en = description(get("description_en"), limit)
+    description_fr, cut_fr = description(get("description_fr"), limit)
     gsins = star_list(get("gsin"))
     gsin_codes = list(zip(gsins, aligned(gsins, star_list(get("gsin_desc_en"))),
                           aligned(gsins, star_list(get("gsin_desc_fr")))))
@@ -230,8 +271,10 @@ def common_fields(get: Getter) -> tuple[dict[str, object], list[Coded], list[Cod
         # provinces, provinces_derived and provinces_from (places.py); a
         # tender's are read again with its regions of opportunity (tender_fields).
         **places.fields(delivery_en + delivery_fr),
-        "description_en": cut(get("description_en")),
-        "description_fr": cut(get("description_fr")),
+        "description_en": description_en,
+        "description_fr": description_fr,
+        "description_en_cut": cut_en,
+        "description_fr_cut": cut_fr,
     }
     return rec, codes, gsin_codes
 

@@ -42,7 +42,14 @@ log. UNSPSC codes go to the *_codes tables and unspsc_codes
 codes to gsin_codes, and the delivery regions to provinces through
 normalize.region_provinces, with the provinces derived from a city they
 name, or from a tender's regions of opportunity, kept apart
-(places.derive). Descriptions are cut at 600 characters. Contacts
+(places.derive). A description longer than its table keeps
+(canadabuys_rows.DESCRIPTION_MAX_BY_STAGE: 10,000 characters on a tender
+notice, 600 on an award notice or a contract history record) is cut at its
+last whole word within the figure, and the row records the cut
+(description_en_cut, description_fr_cut) for the site to mark. A change to
+that rule reaches stored rows only when their files are read again; for
+tender notices the first run after it reads the complete file at once
+(DESCRIPTION_RULE_STAGES). Contacts
 are stored for the operator and never exported. A tender's documents are
 stored as the links the file names that point at a Government of Canada host
 (canadabuys_rows.attachments); the others are counted in the log row
@@ -79,7 +86,8 @@ from . import buyers, canadabuys_rows, matching
 # The column maps and the field normalizers live in canadabuys_rows, which the
 # same-day refresh (intraday.py) reads rows with too; the names stay importable here.
 from .canadabuys_rows import (  # noqa: F401
-    COLUMNS, DESCRIPTION_MAX, REQUIRED, cut as _cut, entity_list, json_list as _json, text as _text, unspsc_code,
+    COLUMNS, DESCRIPTION_MAX, DESCRIPTION_MAX_BY_STAGE, REQUIRED, TENDER_DESCRIPTION_MAX, entity_list,
+    json_list as _json, text as _text, unspsc_code,
 )
 
 log = logging.getLogger(__name__)
@@ -160,6 +168,32 @@ def complete_due(conn: sqlite3.Connection, name: str, now: datetime) -> bool:
     return when is None or now - when >= COMPLETE_EVERY
 
 
+# A change to how a stage cuts its descriptions (canadabuys_rows.description)
+# reaches its stored rows only when their files are read again. Every tender
+# notice since 2022-08-08 is in the complete file, so for tenders the first run
+# after such a change reads that file at once, past its conditional request and
+# its checksum, and records the rule under description_rule_key once the read
+# has rewritten the rows. Award notices and contract history keep 600
+# characters, so their pages read as before: their rows take the recorded cut
+# as their files come round (the fiscal-year file nightly, the complete file
+# weekly), and a row only a legacy file holds keeps the site's length rule.
+DESCRIPTION_RULE_STAGES = ("tenders",)
+
+
+def description_rule_key(stage: str) -> str:
+    return f"canadabuys:{stage}:description_rule"
+
+
+def description_rule(stage: str) -> str:
+    """The rule a stage's rows are cut by: its figure, cut at a whole word with the cut recorded."""
+    return f"{DESCRIPTION_MAX_BY_STAGE[stage]} whole words, recorded"
+
+
+def description_rule_due(conn: sqlite3.Connection, stage: str) -> bool:
+    """True when the stage rewrites its rows after a change to its description rule and has not yet."""
+    return stage in DESCRIPTION_RULE_STAGES and get_meta(conn, description_rule_key(stage)) != description_rule(stage)
+
+
 def plan(conn: sqlite3.Connection, stage: str, now: datetime) -> list[SourceFile]:
     """The files a stage reads tonight, in the order it reads them (the newest snapshot last)."""
     files = files_for(stage, now.date())
@@ -170,7 +204,7 @@ def plan(conn: sqlite3.Connection, stage: str, now: datetime) -> list[SourceFile
     reread = stage in (get_meta(conn, matching.REREAD_LEGACY_KEY) or "").split(",")
     if (first_load or reread) and "legacy" in files:
         out.append(files["legacy"])
-    if first_load or complete_due(conn, files["complete"].name, now):
+    if first_load or complete_due(conn, files["complete"].name, now) or description_rule_due(conn, stage):
         out.append(files["complete"])
     out += [files[kind] for kind in ("new", "open", "fy") if kind in files]
     return out
@@ -259,7 +293,7 @@ class _Context:
 
 def _common(ctx: _Context, get: Callable[[str], str]) -> tuple[dict[str, object], list[tuple[str, str | None, str | None]]]:
     """The fields every table shares, and the version's UNSPSC codes with their descriptions."""
-    rec, codes, gsins = canadabuys_rows.common_fields(get)
+    rec, codes, gsins = canadabuys_rows.common_fields(get, ctx.stage)
     for code, desc_en, desc_fr in gsins:
         have = ctx.gsin.get(code, (None, None))
         ctx.gsin[code] = (have[0] or desc_en, have[1] or desc_fr)
@@ -354,10 +388,11 @@ def _history(ctx: _Context, get: Callable[[str], str], rec: dict[str, object]) -
 _BUILDERS = {"tenders": _tender, "awards": _award, "history": _history}
 _SUPPLIER_FIELDS = ("supplier_raw", "supplier_country", "supplier_province", "supplier_city", "supplier_postal")
 # The free text of a version that may name its supplier ("TSPS SA (Task
-# Based) - <name>"): the field, whether it is French, and how it is stored.
-_FREE_TEXT: tuple[tuple[str, bool, Callable[[object], str | None]], ...] = (
-    ("title_en", False, _text), ("title_fr", True, _text),
-    ("description_en", False, _cut), ("description_fr", True, _cut),
+# Based) - <name>"): the field, whether it is French, and whether it is a
+# description (stored cut, with its cut recorded beside it).
+_FREE_TEXT: tuple[tuple[str, bool, bool], ...] = (
+    ("title_en", False, False), ("title_fr", True, False),
+    ("description_en", False, True), ("description_fr", True, True),
 )
 
 
@@ -371,14 +406,18 @@ def _persons_named(stage: str, get: Callable[[str], str], name: str | None, with
     return persons
 
 
-def _redact_free_text(get: Callable[[str], str], rec: dict[str, object], persons: list[str]) -> int:
+def _redact_free_text(get: Callable[[str], str], rec: dict[str, object], persons: list[str], stage: str) -> int:
     """Replace the persons' names in the version's titles and descriptions, read again from the file
-    so a name is replaced before a description is cut; returns the replacements made."""
+    so a name is replaced before a description is cut (and its cut recorded again); returns the
+    replacements made."""
     total = 0
-    for column, french, store in _FREE_TEXT:
+    for column, french, is_description in _FREE_TEXT:
         text, n = matching.redact(get(column), persons, french=french)
         if n:
-            rec[column] = store(text)
+            if is_description:
+                rec[column], rec[f"{column}_cut"] = canadabuys_rows.description(text, DESCRIPTION_MAX_BY_STAGE[stage])
+            else:
+                rec[column] = _text(text)
             total += n
     return total
 
@@ -459,11 +498,12 @@ def _load_row(ctx: _Context, get: Callable[[str], str], stats: FileStats) -> Non
         if stage == "history":
             rec.update({"supplier_standardized": None, "supplier_operating": None})
         persons = _persons_named(stage, get, name, True)
-        stats.redacted += _redact_free_text(get, rec, persons) + _redact_other_versions(conn, table, key, persons)
+        stats.redacted += (_redact_free_text(get, rec, persons, stage)
+                           + _redact_other_versions(conn, table, key, persons))
     elif supplied:
         persons = _persons_named(stage, get, name, False) + ([filed] if filed else [])
         if persons:
-            stats.redacted += _redact_free_text(get, rec, persons)
+            stats.redacted += _redact_free_text(get, rec, persons, stage)
         current = (name, *(v or None for v in place))
         if prev is not None and tuple(prev)[:5] == current:
             org = prev[5]
@@ -675,9 +715,13 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, stage: str, *, no
         todo = [(f, None) for f in plan(conn, stage, current)]
     folder = work_dir or config.WORK_DIR
     open_refs: set[str] | None = None
+    # A description rule the stored rows were not cut by: the complete file is
+    # read whatever its validators and checksum say (plan adds it).
+    rewrite = description_rule_due(conn, stage)
 
     for f, sample_path in todo:
         etag = last_modified = None
+        forced = rewrite and f.kind == "complete"
         if sample_path is not None:
             path, downloaded = sample_path, False
         else:
@@ -685,8 +729,9 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, stage: str, *, no
             path, downloaded = folder / f.name, True
             try:
                 got = client.download_if_changed(
-                    f.url, path, etag=get_meta(conn, _meta_key(f.name, "etag")),
-                    last_modified=get_meta(conn, _meta_key(f.name, "last_modified")), timeout=TIMEOUT_S,
+                    f.url, path, etag=None if forced else get_meta(conn, _meta_key(f.name, "etag")),
+                    last_modified=None if forced else get_meta(conn, _meta_key(f.name, "last_modified")),
+                    timeout=TIMEOUT_S,
                 )
             except FetchError as exc:
                 if exc.status == 404 and f.kind == "fy":
@@ -699,7 +744,7 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, stage: str, *, no
             etag, last_modified = got.etag, got.last_modified
         try:
             digest = _sha256(path)
-            if digest == get_meta(conn, _meta_key(f.name, "sha256")):
+            if not forced and digest == get_meta(conn, _meta_key(f.name, "sha256")):
                 _record_validators(conn, f.name, etag, last_modified)
                 conn.commit()
                 stats.unchanged.append(f.name)
@@ -727,6 +772,9 @@ def run(conn: sqlite3.Connection, client: PoliteClient | None, stage: str, *, no
         if f.kind == "legacy":
             pending = [s for s in (get_meta(conn, matching.REREAD_LEGACY_KEY) or "").split(",") if s and s != stage]
             set_meta(conn, matching.REREAD_LEGACY_KEY, ",".join(pending))
+        if f.kind == "complete" and stage in DESCRIPTION_RULE_STAGES:
+            # Every row the complete file holds now carries tonight's rule.
+            set_meta(conn, description_rule_key(stage), description_rule(stage))
         conn.commit()
 
     if stage == "tenders" and open_refs is not None:

@@ -271,7 +271,7 @@ describe("free pages", () => {
       "/account/keys", "/account/bug"]) {
       const page = await html(path, { env: on(), cookie: freeCookie });
       for (const body of page.match(/<tbody>[\s\S]*?<\/tbody>/g) ?? []) {
-        if (!body.includes("pro-note") && !body.includes("expiring-12m.csv")) expect(chips(body), path).toBe(0);
+        if (!body.includes("pro-note") && !body.includes("expiring-12m.csv") && !body.includes("expiring-6m.csv")) expect(chips(body), path).toBe(0);
       }
       for (const a of page.match(/<a [^>]*>[\s\S]*?<\/a>/g) ?? []) expect(chips(a), `${path}: ${a.slice(0, 80)}`).toBeLessThanOrEqual(1);
       for (const head of page.match(/<div class="panel-head">[\s\S]*?<\/div>(?:<\/div>)?/g) ?? []) expect(chips(head), path).toBeLessThanOrEqual(1);
@@ -475,7 +475,7 @@ describe("the plan cards", () => {
     expect(free).toContain("<span>Contracts ending: the 3-month list</span>");
     expect(pro).toContain("<span>Contracts ending: 6- and 12-month lists</span>");
     expect(free).toContain("<span>Contracts ending: the 3-month CSV</span>");
-    expect(pro).toContain("<span>Contracts ending: the 12-month CSV</span>");
+    expect(pro).toContain("<span>Contracts ending: 6- and 12-month CSVs</span>");
     // The holder's record: the radar's windows, the 3-month list's on Free and the 12-month list's on Pro.
     expect(free).toContain("<span>Holder's record: the 3-month list</span>");
     expect(pro).toContain("<span>Holder's record: the 12-month list</span>");
@@ -771,6 +771,30 @@ describe("the Data page", () => {
     expect((await get("/downloads/expiring-12m.csv", { env: on() })).status).toBe(404);
     // Exactly two chips on the page outside the rail: the file's row and the line on keys.
     expect(chips(mainOf(await html("/data", { env: on() })))).toBe(2);
+  });
+
+  it("marks the 6-month file as it marks the 12-month one, once the export lists it, and sends a free reader to the 6-month list", async () => {
+    await sessions();
+    const six = (page: string) => /<tr><td data-label="[^"]*"><a href="[^"]*" class="mono">expiring-6m\.csv<\/a>[\s\S]*?<\/tr>/.exec(page)?.[0] ?? "";
+    const downloads = ["expiring-3m.csv", "expiring-6m.csv", "expiring-12m.csv"].map((file) => ({ file, bytes: 4096, rows: 9 }));
+    const listed = () => on({ ASSETS: radar({ "stats.json": { ...(FILES["stats.json"] as object), downloads } }) });
+    for (const [who, cookie] of [["no session", undefined], ["free", freeCookie]] as const) {
+      const page = await html("/data", { env: listed(), cookie });
+      const r = six(page);
+      // The same chip and note as the 12-month row, each row leading to its own list.
+      expect(r, who).toContain('<a href="/expiring/6m" class="mono">expiring-6m.csv</a>');
+      expect(r, who).toContain(`columns<p class="pro-note">${CHIP_EN}Part of Pro. The 3-month file is free.</p>`);
+      expect(row(page), who).toContain('<a href="/expiring/12m" class="mono">expiring-12m.csv</a>');
+      // Three chips outside the rail: the two files' rows and the line on keys.
+      expect(chips(mainOf(page)), who).toBe(3);
+    }
+    const pro = six(await html("/data", { env: listed(), cookie: proCookie }));
+    expect(pro).toContain('<a href="/downloads/expiring-6m.csv" class="mono">expiring-6m.csv</a>');
+    expect(chips(pro)).toBe(1);
+    const fr = six(await html("/data?lang=fr", { env: listed() }));
+    expect(fr).toContain(`<p class="pro-note">${CHIP_FR}Fait partie de Pro. Le fichier de 3 mois est gratuit.</p>`);
+    // The file's own address answers 404 to such a request, as the 12-month file's does.
+    expect((await get("/downloads/expiring-6m.csv", { env: on() })).status).toBe(404);
   });
 
   it("says in one line, with the chip, that API keys come with Pro", async () => {

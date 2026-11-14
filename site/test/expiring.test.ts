@@ -391,16 +391,29 @@ describe("home, feeds, methodology and the downloads", () => {
     expect(fr).toContain("Les périodes sont cumulatives : d’ici 3, 6 et 12 mois après la date des données.");
   });
 
-  it("allows the 3- and 12-month CSVs, lists them on the Data page and names the routes by template", async () => {
+  it("allows the 3-, 6- and 12-month CSVs, lists them on the Data page and names the routes by template", async () => {
     expect(downloadAllowed("expiring-12m.csv")).toBe(true);
+    expect(downloadAllowed("expiring-6m.csv")).toBe(true);
     expect(downloadAllowed("expiring-3m.csv")).toBe(true);
-    expect(downloadAllowed("expiring-6m.csv")).toBe(false);
+    expect(downloadAllowed("expiring-9m.csv")).toBe(false);
     const data = await text("/data");
     expect(data).toContain('<a href="/downloads/expiring-3m.csv" class="mono">expiring-3m.csv</a>');
     expect(data).toContain("Every contract ending within 3 months of the data date, in the 12-month file&#39;s columns");
     expect(data).toContain('<a href="/downloads/expiring-12m.csv" class="mono">expiring-12m.csv</a>');
     expect(data).toContain("Every contract ending within 12 months of the data date");
+    // The 6-month file waits for the export's list of downloads to name it (a deploy can land before the
+    // nightly that first writes it), then stands between the 3- and 12-month files.
+    expect(data).not.toContain("expiring-6m.csv");
+    const downloads = ["expiring-3m.csv", "expiring-6m.csv", "expiring-12m.csv"].map((file) => ({ file, bytes: 2048, rows: 5 }));
+    const listed = await text("/data", testEnv(makeFakeAssets({}, { "stats.json": { ...FILES["stats.json"] as object, downloads } })));
+    expect(listed).toContain('<a href="/downloads/expiring-6m.csv" class="mono">expiring-6m.csv</a>');
+    expect(listed).toContain("Every contract ending within 6 months of the data date, in the 12-month file&#39;s columns");
+    expect(listed.indexOf("expiring-3m.csv</a>")).toBeLessThan(listed.indexOf("expiring-6m.csv</a>"));
+    expect(listed.indexOf("expiring-6m.csv</a>")).toBeLessThan(listed.indexOf("expiring-12m.csv</a>"));
+    const fr = nbsp(await text("/data?lang=fr", testEnv(makeFakeAssets({}, { "stats.json": { ...FILES["stats.json"] as object, downloads } }))));
+    expect(fr).toMatch(/Tous les contrats prenant fin dans les 6 mois suivant la date des donn\u00e9es, avec les colonnes du fichier de 12 mois/);
     expect(routeTemplate("GET", "/downloads/expiring-3m.csv")).toEqual({ route: "/downloads/expiring-3m.csv", kind: "download" });
+    expect(routeTemplate("GET", "/downloads/expiring-6m.csv")).toEqual({ route: "/downloads/expiring-6m.csv", kind: "download" });
     expect(routeTemplate("GET", "/expiring")).toEqual({ route: "/expiring", kind: "page" });
     expect(routeTemplate("GET", "/expiring/3m")).toEqual({ route: "/expiring/:window", kind: "page" });
     expect(routeTemplate("GET", "/expiring/whatever")).toEqual({ route: "/expiring/:window", kind: "page" });

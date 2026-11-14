@@ -381,6 +381,11 @@ export interface TenderDetail extends DerivedPlaces {
   end_users_fr: string[] | null;
   description_en: string | null;
   description_fr: string | null;
+  // How the pipeline cut the descriptions (export_static.description_cut): {"en": n, "fr": n} for each
+  // text cut at its last whole word within n characters, {} when both are whole. Absent from a file
+  // exported before the field and from a notice stored before the pipeline recorded its cuts: read it
+  // through pages/shared.tsx descriptionCut, which falls back on the text's length.
+  description_cut?: unknown;
   source_file: string;
   first_seen: string;
   last_seen: string;
@@ -529,6 +534,8 @@ export interface ContractDetail extends DerivedPlaces {
   end_users_fr?: string[] | null;
   description_en: string | null;
   description_fr: string | null;
+  // As on a tender notice (TenderDetail.description_cut); read through pages/shared.tsx descriptionCut.
+  description_cut?: unknown;
   source_file: string;
   first_seen: string;
   last_seen: string;

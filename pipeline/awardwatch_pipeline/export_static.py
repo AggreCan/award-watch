@@ -47,9 +47,13 @@ change there. Output tree (under data/out/static):
   tenders/<abc>.json            every notice in the database, detail form, sharded on the reference; a notice
                                 that names documents carries attachments [{url, name}] (tender_attachments: the
                                 newest version's links, https on a Government of Canada host, 50 at most; name is
-                                the last segment of the URL's path, percent-decoded); one with none has no such key
+                                the last segment of the URL's path, percent-decoded); one with none has no such key.
+                                A notice carries description_cut, {"en": n, "fr": n} for each description the loader
+                                cut at its last whole word within n characters, {} when both are whole; absent for a
+                                version stored before the loader recorded its cut, which the site reads by length
   contracts/<abc>.json          award notices and contract history records, detail form, same sharding,
-                                keyed "award:<reference>" and "history:<reference>"; a history record whose
+                                keyed "award:<reference>" and "history:<reference>", with description_cut as on a
+                                tender notice; a history record whose
                                 supplier PSPC gives a number of employees for carries supplier_employees
                                 (normalize.employee_count: a count's digits or a size band's code, from the
                                 newest version that states one); a withheld supplier's record never does
@@ -283,6 +287,11 @@ FIRST_YEAR = 2000
 # The Worker parses at most about 300 KB per request (CLAUDE.md); a profile
 # shard above it still works, and the log says which so the caps can move.
 PROFILE_SHARD_WARN = 300 * 1024
+# The same for a tender notice's shard, which holds up to
+# canadabuys_rows.TENDER_DESCRIPTION_MAX characters of each description in
+# each language (2026-11-13: the largest of 64 live shards 67 KB, the cap
+# adding 91 KB to a shard at most).
+TENDER_SHARD_WARN = 300 * 1024
 # The deploy's own limits (nightly.check_export refuses an export past them);
 # the export logs them too, so a dev run shows the margin.
 MAX_FILES = 19_000
@@ -1307,6 +1316,17 @@ def tender_attachments(versions: Sequence[sqlite3.Row]) -> list[dict]:
     return []
 
 
+def description_cut(v: sqlite3.Row) -> dict[str, int] | None:
+    """The cut the loader recorded for a version's descriptions (canadabuys_rows.description), as the site reads
+    it: {"en": n, "fr": n} for each text cut at its last whole word within n characters, {} when both are whole.
+    None for a version stored before the cut was recorded (both columns NULL): the detail then carries no
+    description_cut and the site reads the text by its length, as it read every description before."""
+    en, fr = v["description_en_cut"], v["description_fr_cut"]
+    if en is None and fr is None:
+        return None
+    return {lang: int(n) for lang, n in (("en", en), ("fr", fr)) if n}
+
+
 def tender_detail(m: Model, ref: str, versions: list[sqlite3.Row], codes: list[str],
                   related: dict[str, list[dict]]) -> dict:
     """A notice as it stands (its newest amendment) with its versions and its documents. The contact columns
@@ -1337,6 +1357,9 @@ def tender_detail(m: Model, ref: str, versions: list[sqlite3.Row], codes: list[s
     _places(d, v)
     if ref != v["reference"]:
         d["reference_published"] = v["reference"]
+    cut = description_cut(v)
+    if cut is not None:
+        d["description_cut"] = cut
     documents = tender_attachments(versions)
     if documents:
         d["attachments"] = documents
@@ -1350,6 +1373,7 @@ def write_tender_shards(m: Model, out: Path) -> dict[str, int]:
     instruments = sosa_export.tender_instruments(conn)
     shards = m.refs["tenders"].shards()
     written = largest = 0
+    over: list[str] = []
     for key in sorted(shards):
         refs = sorted(shards[key])
         versions = _versions(conn, "tenders", refs)
@@ -1365,9 +1389,15 @@ def write_tender_shards(m: Model, out: Path) -> dict[str, int]:
                     # An RFSO or RFSA notice: the instruments it issued that are active, with their holders.
                     d["instruments"] = held
                 shard[ref.lower()] = d
-        largest = max(largest, _dump(out / "tenders" / f"{key}.json", shard))
+        size = _dump(out / "tenders" / f"{key}.json", shard)
+        largest = max(largest, size)
         written += 1
-    return {"tender_shards": written, "tender_shard_max_bytes": largest,
+        if size > TENDER_SHARD_WARN:
+            over.append(f"tenders/{key}.json ({size // 1024} KB)")
+    if over:
+        log.warning("export: %d tender shards above %d KB: %s", len(over), TENDER_SHARD_WARN // 1024,
+                    ", ".join(over[:20]))
+    return {"tender_shards": written, "tender_shard_max_bytes": largest, "tender_shards_over_300kb": len(over),
             "tender_refs_left_out": m.refs["tenders"].dropped}
 
 
@@ -1427,6 +1457,9 @@ def contract_detail(m: Model, kind: str, ref: str, versions: list[sqlite3.Row], 
     _places(d, v)
     if withheld:
         d["supplier_withheld"] = True
+    cut = description_cut(v)
+    if cut is not None:
+        d["description_cut"] = cut
     _value_flag(d, v["reference"] in m.flags["award" if kind == "awards" else "history"])
     if kind == "awards":
         d["end_users_en"], d["end_users_fr"] = _list(v["end_users_en"]), _list(v["end_users_fr"])

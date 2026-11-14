@@ -26,7 +26,7 @@ import { aboutPage, privacyPage, termsPage } from "./pages/docs";
 import { contractPage } from "./pages/contract";
 import { DOWNLOADS, YEARLY_DOWNLOAD, dataPage } from "./pages/data";
 import { directoryPage, organizationsIndex } from "./pages/directory";
-import { EXPIRING_CSV, expiringFile, expiringPage, expiringRowsCsv, expiringWindowPage } from "./pages/expiring";
+import { expiringFile, expiringPage, expiringRowsCsv, expiringWindowPage } from "./pages/expiring";
 import { feedsPage } from "./pages/feeds";
 import { overviewPage } from "./pages/home";
 import { correctionsForm, correctionsSubmit, respondPage, respondSubmit } from "./pages/forms";
@@ -324,14 +324,16 @@ app.get("/downloads/:file{.+}", async (c) => {
   const file = c.req.param("file");
   // A HEAD reads the object's metadata only.
   const head = c.req.method === "HEAD";
-  // The 12-month radar file is part of Pro once the accounts switch is on,
-  // by the rule the 12-month window's files follow (pages/expiring.tsx): a
-  // request whose plan lacks it gets this route's 404, as for a file that is
-  // not there, and nothing is read from the bucket; a Pro request gets the
-  // file marked private, so no shared cache hands it on. While the switch is
-  // off it is served as every other file.
-  const gated = file === EXPIRING_CSV;
-  const locked = gated && (await radarWindowLocked(c, "12m"));
+  // The 6- and 12-month radar files are part of Pro once the accounts switch
+  // is on, each by the rule its window's files follow (pages/expiring.tsx),
+  // the window its DOWNLOADS entry names as paid: a request whose plan lacks
+  // it gets this route's 404, as for a file that is not there, and nothing is
+  // read from the bucket; a Pro request gets the file marked private, so no
+  // shared cache hands it on. While the switch is off each is served as every
+  // other file.
+  const gate = DOWNLOADS.find((d) => d.file === file)?.paid ?? null;
+  const gated = gate !== null;
+  const locked = gate !== null && (await radarWindowLocked(c, gate));
   let object: R2Object | R2ObjectBody | null = null;
   let unavailable = false;
   if (!locked && downloadAllowed(file) && c.env.DATA) {

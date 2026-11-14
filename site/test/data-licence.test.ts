@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import exportPy from "../../pipeline/awardwatch_pipeline/export.py?raw";
 import { app, downloadAllowed } from "../src/index";
 import { CHANGELOG, DOWNLOADS, LICENCE_ROWS, SOURCE_ROWS, YEARLY_DOWNLOAD, fileSize } from "../src/pages/data";
 import stats from "./fixtures/stats.json";
@@ -18,19 +19,31 @@ const section = (html: string, id: string) => {
 describe("data page", () => {
   it("lists the fixed downloads and allows the yearly files by name only", () => {
     expect(DOWNLOADS.map((d) => d.file)).toEqual([
-      "open-tenders.csv", "organizations.csv", "organization-aliases.csv", "buyers.csv", "expiring-3m.csv", "expiring-12m.csv", "SHA256SUMS",
+      "open-tenders.csv", "organizations.csv", "organization-aliases.csv", "buyers.csv", "expiring-3m.csv", "expiring-6m.csv", "expiring-12m.csv",
+      "SHA256SUMS",
     ]);
-    for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "organization-aliases.csv", "expiring-3m.csv", "expiring-12m.csv", "SHA256SUMS",
+    for (const file of ["awards-2012.csv", "history-2009.csv", "organizations.csv", "organization-aliases.csv", "expiring-3m.csv", "expiring-6m.csv",
+      "expiring-12m.csv", "SHA256SUMS",
       "mirror/x.csv", "awards-before-2012.csv", "awards-after-2026.csv", "history-before-2009.csv", "contracts-2024.csv",
       "grants-2005.csv", "contracts-before-2004.csv", "grants-after-2026.csv", "contracts-undated.csv", "grants-2024-2.csv",
       "contracts-undated-3.csv"]) {
       expect(downloadAllowed(file), file).toBe(true);
     }
-    for (const file of ["awards-12.csv", "lobbying-2024.csv", "../stats.json", "awards-2024.csv.gz", "status.json", "mirror/../x", "expiring-6m.csv",
+    for (const file of ["awards-12.csv", "lobbying-2024.csv", "../stats.json", "awards-2024.csv.gz", "status.json", "mirror/../x", "expiring-9m.csv",
       "awards-later-2026.csv", "awards-before-.csv", "grants-2024-1.csv", "grants-2024-10.csv", "contracts-dated.csv", "grants-2024-2-2.csv"]) {
       expect(downloadAllowed(file), file).toBe(false);
     }
     expect(YEARLY_DOWNLOAD.test("history-2025.csv")).toBe(true);
+  });
+
+  it("offers every fixed file the export writes, and only those (pipeline/awardwatch_pipeline/export.py FIXED_FILES)", () => {
+    const tuple = /^FIXED_FILES = \(([^)]*)\)/m.exec(exportPy)?.[1] ?? "";
+    const fixed = [...tuple.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(fixed).toContain("expiring-6m.csv");
+    // The alias map and the checksums are written apart (ALIASES_FILE, SUMS).
+    expect(DOWNLOADS.map((d) => d.file).filter((f) => f !== "organization-aliases.csv" && f !== "SHA256SUMS").sort()).toEqual([...fixed].sort());
+    // The two deep radar files are paid, each by its own window's gate; nothing else is.
+    expect(DOWNLOADS.filter((d) => d.paid).map((d) => [d.file, d.paid])).toEqual([["expiring-6m.csv", "6m"], ["expiring-12m.csv", "12m"]]);
   });
 
   it("names every source with its publisher, its licence and when each file was last read", async () => {

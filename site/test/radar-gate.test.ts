@@ -1,9 +1,9 @@
 // The radar's depth as a paid feature (src/plan.ts radarWindowLocked,
 // src/pages/expiring.tsx expiringTeaser and expiringFile, the downloads route
 // in src/index.tsx): from the day the accounts switch is on, the 6- and
-// 12-month windows and the 12-month CSV are Pro; the overview, the 3-month
-// window, its CSV and every window's count and total stay free. Until then
-// the gate closes nothing.
+// 12-month windows and their CSVs are Pro; the overview, the 3-month window,
+// its CSV and every window's count and total stay free. Until then the gate
+// closes nothing.
 //
 // Switch off, the window pages and the overview are proved unchanged by the
 // gate the way the intraday tests prove the free page: the same bytes
@@ -13,7 +13,7 @@
 // pages were also compared, hash for hash, against the code before the gate
 // when it was written. Switch on, each of no session, a Free session and a
 // Pro session gets its view in both languages with its own caching rule, and
-// the window files and the 12-month CSV answer 404 or pass through. The feeds
+// the window files and the 6- and 12-month CSVs answer 404 or pass through. The feeds
 // cover the 3-month window only, so they do not change. Last, every GET route
 // the app has is asked with a free request, and none but the window page
 // reads a deep window's file or shows one of its rows past the free ones.
@@ -29,7 +29,7 @@ import { DEEP_WINDOWS, allowsRadarDepth } from "../src/plan";
 import { PRO_INCLUDES } from "../src/pro";
 import { routeTemplate } from "../src/views";
 import { get, grantPro, nbsp, newEmail, nextIp, noSaveSearch, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
-import { contentEtag, makeFakeAssets, testEnv } from "./assets";
+import { FILES, contentEtag, makeFakeAssets, testEnv } from "./assets";
 import { landingCore } from "./home";
 import page1 from "./fixtures/expiring-3m-1.json";
 
@@ -100,14 +100,19 @@ function radarAssets(paths?: string[]): Fetcher {
   } as unknown as Fetcher;
 }
 
-// The two radar CSVs as R2 holds them under downloads/: the 12-month file
-// carries every row of the 12-month window, the 3-month one the 3-month rows.
-// keys, when given, collects every key asked for.
+// The three radar CSVs as R2 holds them under downloads/: the 12-month file
+// carries every row of the 12-month window, the 6-month one the 6-month
+// rows, the 3-month one the 3-month rows. keys, when given, collects every
+// key asked for.
 const csvOf = (rows: readonly ExpiringRow[]) => `kind,reference,end\n${rows.map((r) => `${r.kind},${r.reference},${r.end}`).join("\n")}\n`;
 const CSV_12M = csvOf([...(TWELVE.files["expiring/12m/1.json"] as ExpiringRow[]), ...(TWELVE.files["expiring/12m/2.json"] as ExpiringRow[])]);
+const CSV_6M = csvOf([...(SIX.files["expiring/6m/1.json"] as ExpiringRow[]), ...(SIX.files["expiring/6m/2.json"] as ExpiringRow[])]);
 const CSV_3M = csvOf(base);
+const CSV_OF = { "6m": CSV_6M, "12m": CSV_12M } as const;
 function csvBucket(keys?: string[]): R2Bucket {
-  const objects: Record<string, string> = { "downloads/expiring-12m.csv": CSV_12M, "downloads/expiring-3m.csv": CSV_3M };
+  const objects: Record<string, string> = {
+    "downloads/expiring-12m.csv": CSV_12M, "downloads/expiring-6m.csv": CSV_6M, "downloads/expiring-3m.csv": CSV_3M,
+  };
   const read = (key: string, withBody: boolean) => {
     keys?.push(key);
     const text = objects[key];
@@ -263,12 +268,14 @@ describe("with the switch on and no session", () => {
       const page = await res.text();
       const full = await html(path, off());
       // The head as the full list has it, the count and the value, with the
-      // free 3-month CSV where the full list offers the 12-month one.
+      // free 3-month CSV where the full list offers the window's own.
       expect(headText(page), path).toBe(headText(full));
       expect(pageHead(page), path).toContain(`<p class="lead">${WINDOWS[window].rows} contracts end within`);
       expect(csvButton(page), path).toBe('<a href="/downloads/expiring-3m.csv" class="btn">Download contracts ending within 3 months (CSV)</a>');
-      expect(csvButton(full), path).toBe('<a href="/downloads/expiring-12m.csv" class="btn">Download contracts ending within 12 months (CSV)</a>');
+      const months = window === "6m" ? 6 : 12;
+      expect(csvButton(full), path).toBe(`<a href="/downloads/expiring-${window}.csv" class="btn">Download contracts ending within ${months} months (CSV)</a>`);
       expect(page, path).not.toContain("/downloads/expiring-12m.csv");
+      expect(page, path).not.toContain("/downloads/expiring-6m.csv");
       // The ten soonest, in end order, and none after them.
       expect(shownRefs(page), path).toEqual(WINDOWS[window].shown);
       expect(hasHidden(page), path).toEqual([]);
@@ -284,11 +291,12 @@ describe("with the switch on and no session", () => {
       // In figures: all the window's contracts, and those beyond the free 3-month list (the 3 base rows) with their value.
       // The value in short form, its exact figure as its title for the tip.
       const value = window === "6m" ? '<span title="$6,600,000" data-tip="">$6.6M</span>' : '<span title="$9,100,000" data-tip="">$9.1M</span>';
-      expect(panel, path).toContain(`<p>Pro lists all ${WINDOWS[window].rows}, ${WINDOWS[window].rows - 3} of them ending 3 to ${window === "6m" ? 6 : 12} months out (${value}), with every filter and the 12-month CSV.</p>`);
+      expect(panel, path).toContain(`<p>Pro lists all ${WINDOWS[window].rows}, ${WINDOWS[window].rows - 3} of them ending 3 to ${months} months out (${value}), with every filter and the ${months}-month CSV.</p>`);
       expect(panel, path).toContain('<p>The <a href="/expiring/3m">3-month list</a>, its feeds and every window&#39;s count and total stay free.</p>');
       const pro = proCard(panel);
       expect(pro, path).toContain("<span>Contracts ending: 6- and 12-month lists</span>");
-      expect(pro, path).toContain("<span>Contracts ending: the 12-month CSV</span>");
+      expect(pro, path).toContain("<span>Contracts ending: 6- and 12-month CSVs</span>");
+      expect(freeCard(panel), path).toContain("<span>Contracts ending: the 3-month CSV</span>");
       expect(pro, path).toContain("<span>Tender notices, same day, every 2 hours</span>");
       expect(pro, path).toContain("<span>25 saved searches, by email</span>");
       expect(pro, path).toContain("<span>A form to report a site problem</span>");
@@ -325,11 +333,13 @@ describe("with the switch on and no session", () => {
       const panel = proPanel(page);
       expect(panel).toContain("<h2>Offert avec le forfait Pro</h2>");
       const value = window === "6m" ? '<span title="6 600 000 $" data-tip="">6,6 M$</span>' : '<span title="9 100 000 $" data-tip="">9,1 M$</span>';
-      expect(panel).toContain(`<p>Pro les énumère tous les ${WINDOWS[window].rows}, dont ${WINDOWS[window].rows - 3} prennent fin dans 3 à ${window === "6m" ? 6 : 12} mois (${value}), avec tous les filtres et le CSV de 12 mois.</p>`);
+      const months = window === "6m" ? 6 : 12;
+      expect(panel).toContain(`<p>Pro les énumère tous les ${WINDOWS[window].rows}, dont ${WINDOWS[window].rows - 3} prennent fin dans 3 à ${months} mois (${value}), avec tous les filtres et le CSV de ${months} mois.</p>`);
       expect(freeCard(panel)).toContain("<h3>Gratuit</h3>");
       const pro = proCard(panel);
       expect(pro).toContain("<span>25 recherches enregistrées, par courriel</span>");
-      expect(pro).toContain("<span>Contrats prenant fin : CSV de 12 mois</span>");
+      expect(pro).toContain("<span>Contrats prenant fin : CSV de 6 et 12 mois</span>");
+      expect(freeCard(panel)).toContain("<span>Contrats prenant fin : CSV de 3 mois</span>");
       expect(panel).toContain('<a href="/expiring/3m">liste de 3 mois</a>');
       expect(pro).toContain('<a href="/account/sign-in?next=/account/billing" class="btn btn-primary">S’abonner à Pro</a>');
       expect(pro).toContain("<span>Formulaire pour signaler un problème</span>");
@@ -387,10 +397,10 @@ describe("with the switch on and no session", () => {
       expect(landingCore(body), path).toBe(landingCore(await (await landing(path, off())).text()));
     }
     const page = await (await landing("/", on())).text();
-    expect(page).toContain('<p class="lp-pro">Pro opens the 6- and 12-month lists and the CSV.</p>');
+    expect(page).toContain('<p class="lp-pro">Pro opens the 6- and 12-month lists and their CSV files.</p>');
     const pricing = /<section class="lp-pricing"[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
     expect(pricing).toContain("<span>Contracts ending: 6- and 12-month lists</span>");
-    expect(pricing).toContain("<span>Contracts ending: the 12-month CSV</span>");
+    expect(pricing).toContain("<span>Contracts ending: 6- and 12-month CSVs</span>");
     // Outside those two, the page names no deep window.
     const rest = page.replace(pricing, "").replace(/<p class="lp-pro">[^<]*<\/p>/g, "");
     expect(rest).not.toMatch(/6-month|12-month|\/expiring\/(?:6m|12m)/);
@@ -472,9 +482,11 @@ describe("routing", () => {
   const first = (path: string) =>
     RUN_FIRST.some((glob) => new RegExp(`^${glob.split("*").map((s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")).join(".*")}$`).test(path));
 
-  it("sends only the feeds, the deep windows' files and the 12-month CSV through the Worker first", () => {
-    expect(RUN_FIRST).toEqual(["/data/feeds/*", "/data/expiring/6m/*", "/data/expiring/12m/*", "/downloads/expiring-12m.csv"]);
-    for (const path of [...FILE_PATHS, "/downloads/expiring-12m.csv"]) expect(first(path), path).toBe(true);
+  it("sends only the feeds, the deep windows' files and their CSVs through the Worker first", () => {
+    expect(RUN_FIRST).toEqual([
+      "/data/feeds/*", "/data/expiring/6m/*", "/data/expiring/12m/*", "/downloads/expiring-6m.csv", "/downloads/expiring-12m.csv",
+    ]);
+    for (const path of [...FILE_PATHS, "/downloads/expiring-6m.csv", "/downloads/expiring-12m.csv"]) expect(first(path), path).toBe(true);
     expect(first("/downloads/expiring-3m.csv")).toBe(false);
     // The overview's and the 3-month window's files, and the files the
     // browser's scripts fetch (tenders.js, watchlist.js), stay static.
@@ -490,7 +502,7 @@ describe("routing", () => {
     expect(routeTemplate("GET", "/data/expiring/6m/1.json")).toEqual({ route: "/data/expiring/6m/:file", kind: "file" });
     expect(routeTemplate("GET", "/data/expiring/12m/index.json")).toEqual({ route: "/data/expiring/12m/:file", kind: "file" });
     expect(routeTemplate("GET", "/data/expiring/3m/1.json")).toEqual({ route: "other", kind: "other" });
-    for (const file of ["expiring-3m.csv", "expiring-12m.csv"]) {
+    for (const file of ["expiring-3m.csv", "expiring-6m.csv", "expiring-12m.csv"]) {
       expect(routeTemplate("GET", `/downloads/${file}`)).toEqual({ route: `/downloads/${file}`, kind: "download" });
       expect(bucketFor("GET", `/downloads/${file}`)).toBe("download");
     }
@@ -498,45 +510,56 @@ describe("routing", () => {
 });
 
 describe("the radar CSVs", () => {
-  const GATED = "/downloads/expiring-12m.csv";
+  // The 6- and 12-month files, each gated as its own window is (src/index.tsx, by the window
+  // pages/data.tsx DOWNLOADS names), and the free 3-month file.
+  const GATED = { "6m": "/downloads/expiring-6m.csv", "12m": "/downloads/expiring-12m.csv" } as const;
   const FREE = "/downloads/expiring-3m.csv";
+  // The export's list of downloads naming all three, so the 6-month row (listed) shows on the Data page.
+  const listing = ["expiring-3m.csv", "expiring-6m.csv", "expiring-12m.csv"].map((file) => ({ file, bytes: 4096, rows: 9 }));
+  const listingAssets = () => makeFakeAssets({}, { ...RADAR_FILES, "stats.json": { ...(FILES["stats.json"] as object), downloads: listing } });
 
-  it("serve the 12-month file as before while the switch is off, whatever the session", async () => {
+  it("serve the 6- and 12-month files as before while the switch is off, whatever the session", async () => {
     await sessions();
-    for (const cookie of [undefined, freeCookie, proCookie]) {
-      const res = await get(GATED, { env: off(), cookie });
-      expect(res.status).toBe(200);
-      expect(res.headers.get("content-type")).toBe("text/csv; charset=utf-8");
-      expect(res.headers.get("content-disposition")).toBe('attachment; filename="expiring-12m.csv"');
-      expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
-      expect(await res.text()).toBe(CSV_12M);
-    }
-  });
-
-  it("answer the download route's 404 for the 12-month file without the feature once the switch is on, reading nothing", async () => {
-    await sessions();
-    for (const [cookie, cache] of [[undefined, "no-store"], [freeCookie, "private, no-store"]] as const) {
-      for (const method of ["GET", "HEAD"]) {
-        const keys: string[] = [];
-        const headers: Record<string, string> = { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() };
-        if (cookie) headers.cookie = cookie;
-        const res = await app.request(GATED, { method, headers }, on(radarAssets(), csvBucket(keys)));
-        expect(res.status, method).toBe(404);
-        expect(res.headers.get("cache-control"), method).toBe(cache);
-        expect(keys, method).toEqual([]);
-        const body = await res.text();
-        if (method === "GET") expect(body).toContain("<h1>File Not Available</h1>");
-        expect(hasHidden(body), method).toEqual([]);
+    for (const window of DEEP) {
+      for (const cookie of [undefined, freeCookie, proCookie]) {
+        const res = await get(GATED[window], { env: off(), cookie });
+        expect(res.status, window).toBe(200);
+        expect(res.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+        expect(res.headers.get("content-disposition")).toBe(`attachment; filename="expiring-${window}.csv"`);
+        expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
+        expect(await res.text()).toBe(CSV_OF[window]);
       }
     }
   });
 
-  it("serve the 12-month file to Pro, marked private, and the 3-month file to anyone", async () => {
+  it("answer the download route's 404 for either file without the feature once the switch is on, reading nothing", async () => {
     await sessions();
-    const pro = await get(GATED, { env: on(), cookie: proCookie });
-    expect(pro.status).toBe(200);
-    expect(pro.headers.get("cache-control")).toBe("private, no-store");
-    expect(await pro.text()).toBe(CSV_12M);
+    for (const window of DEEP) {
+      for (const [cookie, cache] of [[undefined, "no-store"], [freeCookie, "private, no-store"]] as const) {
+        for (const method of ["GET", "HEAD"]) {
+          const keys: string[] = [];
+          const headers: Record<string, string> = { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() };
+          if (cookie) headers.cookie = cookie;
+          const res = await app.request(GATED[window], { method, headers }, on(radarAssets(), csvBucket(keys)));
+          expect(res.status, `${window} ${method}`).toBe(404);
+          expect(res.headers.get("cache-control"), `${window} ${method}`).toBe(cache);
+          expect(keys, `${window} ${method}`).toEqual([]);
+          const body = await res.text();
+          if (method === "GET") expect(body).toContain("<h1>File Not Available</h1>");
+          expect(hasHidden(body), method).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it("serve the 6- and 12-month files to Pro, marked private, and the 3-month file to anyone", async () => {
+    await sessions();
+    for (const window of DEEP) {
+      const pro = await get(GATED[window], { env: on(), cookie: proCookie });
+      expect(pro.status, window).toBe(200);
+      expect(pro.headers.get("cache-control"), window).toBe("private, no-store");
+      expect(await pro.text()).toBe(CSV_OF[window]);
+    }
     for (const env of [off(), on()]) {
       for (const cookie of [undefined, freeCookie]) {
         const res = await get(FREE, { env, cookie });
@@ -547,33 +570,50 @@ describe("the radar CSVs", () => {
     }
   });
 
-  it("are both on the Data page, the 12-month file marked as part of Pro, in both languages", async () => {
+  it("are all on the Data page, the 6- and 12-month files marked as part of Pro, in both languages", async () => {
     const en = await html("/data", off());
     expect(en).toContain('<a href="/downloads/expiring-3m.csv" class="mono">expiring-3m.csv</a>');
     expect(en).toMatch(/<a href="\/downloads\/expiring-12m.csv" class="mono">expiring-12m.csv<\/a><\/td><td data-label="Contents">Every contract ending within 12 months of the data date, one row each, listed once across sources<br\/><span class="muted small">Part of Pro.<\/span><\/td>/);
     expect(en.indexOf("expiring-3m.csv</a>")).toBeLessThan(en.indexOf("expiring-12m.csv</a>"));
+    // The 6-month row waits for the export to list the file, then reads as the 12-month row does.
+    expect(en).not.toContain("expiring-6m.csv");
+    const en6 = await html("/data", off(listingAssets()));
+    expect(en6).toMatch(/<a href="\/downloads\/expiring-6m.csv" class="mono">expiring-6m.csv<\/a><\/td><td data-label="Contents">Every contract ending within 6 months of the data date, in the 12-month file&#39;s columns<br\/><span class="muted small">Part of Pro.<\/span><\/td>/);
+    expect(en6.indexOf("expiring-3m.csv</a>")).toBeLessThan(en6.indexOf("expiring-6m.csv</a>"));
+    expect(en6.indexOf("expiring-6m.csv</a>")).toBeLessThan(en6.indexOf("expiring-12m.csv</a>"));
     const fr = nbsp(await html("/data?lang=fr", off()));
     expect(fr).toContain('<span class="muted small">Fait partie de Pro.</span>');
     expect(fr).toContain("Tous les contrats prenant fin dans les 3 mois suivant la date des données, avec les colonnes du fichier de 12 mois");
+    const fr6 = nbsp(await html("/data?lang=fr", off(listingAssets())));
+    expect(fr6).toContain("Tous les contrats prenant fin dans les 6 mois suivant la date des données, avec les colonnes du fichier de 12 mois<br/><span class=\"muted small\">Fait partie de Pro.</span>");
     // The mark says when, never what it costs.
     for (const lang of ["en", "fr"] as const) expect(t(lang, "data.file.pro")).not.toMatch(/\$|[0-9]|price|prix|month|mois/i);
     // The dataset metadata for search engines names the free files only, the
-    // 3-month radar file where the 12-month one stood, so a crawler never meets the gate.
-    const dataset = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(en)?.[1] ?? "{}");
-    const files = dataset.hasPart.flatMap((p: { distribution: { name: string }[] }) => p.distribution.map((d) => d.name));
-    for (const f of ["open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv"]) expect(files).toContain(f);
-    expect(JSON.stringify(dataset)).not.toContain("expiring-12m");
+    // 3-month radar file where the 6- and 12-month ones stood, so a crawler never meets the gate.
+    for (const page of [en, en6]) {
+      const dataset = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(page)?.[1] ?? "{}");
+      const files = dataset.hasPart.flatMap((p: { distribution: { name: string }[] }) => p.distribution.map((d) => d.name));
+      for (const f of ["open-tenders.csv", "organizations.csv", "buyers.csv", "expiring-3m.csv"]) expect(files).toContain(f);
+      expect(JSON.stringify(dataset)).not.toContain("expiring-12m");
+      expect(JSON.stringify(dataset)).not.toContain("expiring-6m");
+    }
     // The crawlers' list says the same.
     const llms = await html("/llms.txt", off());
     expect(llms).toContain("https://awardwatch.ca/downloads/expiring-3m.csv: every contract ending within 3 months of the data date");
+    expect(llms).toContain("https://awardwatch.ca/downloads/expiring-6m.csv: every contract ending within 6 months of the data date, each listed once across sources (part of Pro once accounts open)");
     expect(llms).toContain("https://awardwatch.ca/downloads/expiring-12m.csv: every contract ending within 12 months of the data date, each listed once across sources (part of Pro once accounts open)");
-    // The free views link only the 3-month file; the full deep lists the 12-month one.
+    // The free views link only the 3-month file; each full deep list links its own, in its head and under its table.
     for (const path of ["/expiring", "/expiring/3m"]) {
       const page = await html(path, on());
       expect(page, path).toContain(FREE);
-      expect(page, path).not.toContain(GATED);
+      for (const window of DEEP) expect(page, path).not.toContain(GATED[window]);
     }
-    for (const path of ["/expiring/6m", "/expiring/12m"]) expect(await html(path, off()), path).toContain(`<a href="${GATED}" class="btn">`);
+    for (const window of DEEP) {
+      const page = await html(`/expiring/${window}`, off());
+      expect(page, window).toContain(`<a href="${GATED[window]}" class="btn">`);
+      expect(page, window).toContain(`<a href="${GATED[window]}">the ${window === "6m" ? 6 : 12}-month CSV file</a>`);
+      for (const other of DEEP.filter((w) => w !== window)) expect(page, window).not.toContain(GATED[other]);
+    }
   });
 });
 
@@ -599,9 +639,9 @@ describe("the feeds", () => {
 describe("the methodology page", () => {
   it("says, in both languages and with no price, that the deep windows are part of Pro", async () => {
     const en = await html("/methodology", off());
-    expect(en).toContain("<li>The full 6-month and 12-month lists and the 12-month CSV file are part of Pro, the site&#39;s paid plan; every reader still sees their counts, their totals and their first 10 contracts.</li>");
+    expect(en).toContain("<li>The full 6-month and 12-month lists and their CSV files are part of Pro, the site&#39;s paid plan; every reader still sees their counts, their totals and their first 10 contracts.</li>");
     const fr = nbsp(await html("/methodology?lang=fr", off()));
-    expect(fr).toContain("<li>Les listes complètes de 6 et de 12 mois et le fichier CSV de 12 mois font partie de Pro, le forfait payant du site; chaque lecteur en voit toujours le nombre, le total et les 10 premiers contrats.</li>");
+    expect(fr).toContain("<li>Les listes complètes de 6 et de 12 mois et leurs fichiers CSV font partie de Pro, le forfait payant du site; chaque lecteur en voit toujours le nombre, le total et les 10 premiers contrats.</li>");
     // The sentence follows the one that defines the windows.
     expect(en.indexOf("The full 6-month and 12-month lists")).toBeGreaterThan(en.indexOf("The windows are cumulative"));
   });
@@ -630,7 +670,7 @@ describe("no route but the window page serves a deep window's rows to a free req
     "/data/feeds/*": ["/data/feeds/canada/expiring.xml", "/data/feeds/canada/tenders.xml"],
     "/data/expiring/6m/*": FILE_PATHS.filter((p) => p.includes("/6m/")),
     "/data/expiring/12m/*": FILE_PATHS.filter((p) => p.includes("/12m/")),
-    "/downloads/:file{.+}": ["/downloads/expiring-12m.csv", "/downloads/expiring-3m.csv"],
+    "/downloads/:file{.+}": ["/downloads/expiring-12m.csv", "/downloads/expiring-6m.csv", "/downloads/expiring-3m.csv"],
   };
   const samplesOf = (route: string): string[] => {
     if (SAMPLES[route]) return SAMPLES[route];
@@ -657,8 +697,9 @@ describe("no route but the window page serves a deep window's rows to a free req
           const body = await res.text();
           const who = `${path} (${cookie ? "free session" : "no session"})`;
           expect(hasHidden(body), who).toEqual([]);
-          // Nothing reads the 12-month CSV from the bucket for such a request.
+          // Nothing reads the 6- or 12-month CSV from the bucket for such a request.
           expect(keys, who).not.toContain("downloads/expiring-12m.csv");
+          expect(keys, who).not.toContain("downloads/expiring-6m.csv");
           const deep = paths.filter((p) => /^\/data\/expiring\/(6m|12m)\//.test(p));
           if (deep.length) readers.set(path, [...new Set([...(readers.get(path) ?? []), ...deep])]);
         }

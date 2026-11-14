@@ -21,6 +21,7 @@ import { contractIcsPath } from "./ics";
 import {
   BuyerLink, PublishedDescription, awardNoticeUrl, datasetUrl, derivedPlacesText, employeesText, instrumentText, money, otherLanguageMark,
   provincesText,
+  shownDescription,
   sourceFileText,
 } from "./shared";
 
@@ -75,7 +76,7 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
   const supplierPlace = [d.supplier_city, d.supplier_province ? provinceName(lang, d.supplier_province) : null,
     d.supplier_country && d.supplier_country !== "CA" ? d.supplier_country : null].filter(Boolean).join(", ");
   const versions = [...d.amendments].sort((a, b) => b.amendment - a.amendment);
-  const description = pick(lang, d.description_en, d.description_fr);
+  const { text: description, cut: descriptionCut } = shownDescription(lang, d);
   const descriptionMark = otherLanguageMark(lang, d.description_en, d.description_fr);
   const nonCad = d.currency && d.currency !== "CAD";
   // One figure when the three the source gives agree; the rule that picks
@@ -222,7 +223,8 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
       {description ? (
         <Panel title={descriptionMark ? `${t(lang, "tender.description_heading")} ${descriptionMark}` : t(lang, "tender.description_heading")}>
           {/* An award notice's whole text is on its CanadaBuys page; a history record has no page of its own there. */}
-          <PublishedDescription lang={lang} text={description} full={kind === "award" ? awardNoticeUrl(shownRef, lang) : null} />
+          <PublishedDescription lang={lang} text={description} cut={descriptionCut}
+            full={kind === "award" ? awardNoticeUrl(shownRef, lang) : null} />
         </Panel>
       ) : null}
 

@@ -4,7 +4,7 @@ import { accountsEnabled } from "../account/switch";
 import { HowToCite } from "../cite";
 import { Table } from "../columns";
 import { FIRST_AWARD_YEAR } from "../constants";
-import { loadStats, type Stats } from "../data";
+import { type ExpiringWindow, loadStats, type Stats } from "../data";
 import type { AppEnv } from "../env";
 import { decimal, fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, noDataPage, page, todayOf } from "../layout";
@@ -64,22 +64,27 @@ export function downloadSizes(stats: Stats): Map<string, { bytes: number; rows: 
 // The fixed CSV files in R2 (downloads/<file>), the only names the download
 // route serves besides the yearly files below. All of them are derived from
 // Open Government Licence material and carry that licence. note: a line
-// under the contents. paid: part of Pro once the accounts switch is on
-// (index.tsx serves the 12-month radar file by that rule), so the dataset
-// metadata for search engines leaves it out and a crawler never meets the gate.
+// under the contents. paid: part of Pro once the accounts switch is on, by
+// the gate of the radar window it names (index.tsx serves the 6- and 12-month
+// files by radarWindowLocked for that window, as the window's own files), so
+// the dataset metadata for search engines leaves it out and a crawler never
+// meets the gate.
 // listed: a file newer than the page, shown only once the export's list of
 // downloads (stats.json "downloads") names it, since a deploy ships before the
 // nightly that first writes it; the route serves it by name either way, a
 // missing object answering the route's 404. The alias map is one (operator
 // ruling of 2026-11-07: a free download, ids and reasons, no record data);
-// it stays out of the dataset metadata, which names the record files.
-export const DOWNLOADS: { file: string; contents: Key; note?: Key; paid?: boolean; listed?: boolean }[] = [
+// it stays out of the dataset metadata, which names the record files. The
+// 6-month radar file is another (first written by the nightly of the change
+// that added it).
+export const DOWNLOADS: { file: string; contents: Key; note?: Key; paid?: ExpiringWindow; listed?: boolean }[] = [
   { file: "open-tenders.csv", contents: "data.file.open_tenders" },
   { file: "organizations.csv", contents: "data.file.organizations" },
   { file: "organization-aliases.csv", contents: "data.file.aliases", note: "data.file.aliases_note", listed: true },
   { file: "buyers.csv", contents: "data.file.buyers" },
   { file: "expiring-3m.csv", contents: "data.file.expiring_3m" },
-  { file: "expiring-12m.csv", contents: "data.file.expiring", note: "data.file.pro", paid: true },
+  { file: "expiring-6m.csv", contents: "data.file.expiring_6m", note: "data.file.pro", paid: "6m", listed: true },
+  { file: "expiring-12m.csv", contents: "data.file.expiring", note: "data.file.pro", paid: "12m" },
   { file: "SHA256SUMS", contents: "data.file.sums" },
 ];
 // One file per calendar year of award notices, contract history, published
@@ -199,15 +204,15 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
     return s.rows === null ? fileSize(lang, s.bytes) : t(lang, "data.size_rows", { size: fileSize(lang, s.bytes), n: fmtInt(s.rows, lang) });
   };
   const changes = changelog();
-  // While the switch is on, the 12-month file's row and the line on API keys
-  // carry the Pro chip, and a reader without the radar's depth follows the
-  // file's name to the 12-month list's free view rather than to the file's
-  // 404 (the file's own address still answers 404 to such a request).
+  // While the switch is on, the 6- and 12-month files' rows and the line on
+  // API keys carry the Pro chip, and a reader without the radar's depth
+  // follows a file's name to its own list's free view rather than to the
+  // file's 404 (the file's own address still answers 404 to such a request).
   const pro = accountsEnabled(c.env);
   // Once Ultra can be bought, the keyed API's limits state both paid plans' figures.
   const ultra = pro && (await ultraOnSale(c.env));
   const deepFile = pro && allowsRadarDepth(await requestPlan(c));
-  const fileHref = (d: (typeof DOWNLOADS)[number]) => (d.paid && pro && !deepFile ? "/expiring/12m" : `/downloads/${d.file}`);
+  const fileHref = (d: (typeof DOWNLOADS)[number]) => (d.paid && pro && !deepFile ? `/expiring/${d.paid}` : `/downloads/${d.file}`);
   const toc: [string, Key][] = [
     ["sources", "data.toc_sources"],
     ["downloads", "data.toc_downloads"],

@@ -260,8 +260,11 @@ CREATE TABLE IF NOT EXISTS tenders (
   contact_name TEXT,                             -- kept for the operator; never exported (the notice page carries it)
   contact_email TEXT,
   contact_phone TEXT,
-  description_en TEXT,
+  description_en TEXT,                           -- the start of a longer text: canadabuys_rows.TENDER_DESCRIPTION_MAX
   description_fr TEXT,
+  description_en_cut INTEGER,                    -- the cut: N when the text was cut at its last whole word within N
+  description_fr_cut INTEGER,                    -- characters, 0 when stored whole, NULL for a row stored before the
+                                                 -- mark (cut at 600 characters, mid-word, unrecorded) or with no text
   attachments TEXT,                              -- JSON list of the notice's document URLs (attachment-piecesJointes,
                                                  -- the English column then the French, each URL once in file order,
                                                  -- 50 at most); only https links to canada.ca, *.canada.ca or *.gc.ca
@@ -348,8 +351,10 @@ CREATE TABLE IF NOT EXISTS awards (
   contact_name TEXT,
   contact_email TEXT,
   contact_phone TEXT,
-  description_en TEXT,
+  description_en TEXT,                           -- the start of a longer text: canadabuys_rows.DESCRIPTION_MAX
   description_fr TEXT,
+  description_en_cut INTEGER,                    -- as on tenders: N cut within N characters at a whole word, 0 whole,
+  description_fr_cut INTEGER,                    -- NULL stored before the mark or no text
   source_file TEXT NOT NULL,
   first_seen TEXT NOT NULL,
   last_seen TEXT NOT NULL,
@@ -438,8 +443,10 @@ CREATE TABLE IF NOT EXISTS contract_history (
   client_id TEXT REFERENCES buyers(id),          -- the end-user department
   client_raw_en TEXT,
   client_raw_fr TEXT,
-  description_en TEXT,
+  description_en TEXT,                           -- the start of a longer text: canadabuys_rows.DESCRIPTION_MAX
   description_fr TEXT,
+  description_en_cut INTEGER,                    -- as on tenders: N cut within N characters at a whole word, 0 whole,
+  description_fr_cut INTEGER,                    -- NULL stored before the mark or no text
   source_file TEXT NOT NULL,
   first_seen TEXT NOT NULL,
   last_seen TEXT NOT NULL,

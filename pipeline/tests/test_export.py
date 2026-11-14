@@ -23,8 +23,8 @@ def test_the_downloads_and_their_sums(conn, tmp_path):
     counts = export.run(conn, out, today=TODAY)
     names = sorted(p.name for p in out.iterdir())
     assert names == ["SHA256SUMS", "awards-2024.csv", "awards-2025.csv", "awards-2026.csv", "buyers.csv",
-                     "contracts-2025.csv", "expiring-12m.csv", "expiring-3m.csv", "grants-2026.csv", "history-2026.csv",
-                     "open-tenders.csv", "organization-aliases.csv", "organizations.csv"]
+                     "contracts-2025.csv", "expiring-12m.csv", "expiring-3m.csv", "expiring-6m.csv", "grants-2026.csv",
+                     "history-2026.csv", "open-tenders.csv", "organization-aliases.csv", "organizations.csv"]
     assert all(export.YEAR_RE.match(n) for n in names if n.startswith(("awards-", "history-", "contracts-", "grants-")))
     assert counts["open-tenders.csv"] == 4 and counts["awards-2026.csv"] == 4 and counts["organizations.csv"] == 3
     sums = (out / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
@@ -34,7 +34,7 @@ def test_the_downloads_and_their_sums(conn, tmp_path):
         assert hashlib.sha256((out / name).read_bytes()).hexdigest() == digest
     assert not list(out.glob("*.partial"))
     log = conn.execute("SELECT source, rows_new FROM sources_log").fetchall()
-    assert [tuple(r) for r in log] == [("export_csv", 12)]
+    assert [tuple(r) for r in log] == [("export_csv", 13)]
 
 
 def test_the_3_month_file_is_the_12_month_file_cut_to_the_3_month_window(conn, tmp_path):
@@ -57,6 +57,29 @@ def test_the_3_month_file_is_the_12_month_file_cut_to_the_3_month_window(conn, t
     export.export_csv(conn, edge, today=date(2026, 12, 1))
     refs = [r["reference"] for r in rows(edge / "expiring-3m.csv")]
     assert "AW-5" not in refs and refs[:2] == ["AW-2", "H-1"]
+
+
+def test_the_6_month_file_is_the_12_month_file_cut_to_the_6_month_window(conn, tmp_path):
+    """expiring-6m.csv, part of the paid plan with the 12-month file: the rows of expiring-12m.csv that end on or
+    after the data date and within 182 days of it, same columns, same order, between the 3-month file and the
+    12-month one."""
+    seed(conn)
+    out = tmp_path / "csv"
+    counts = export.export_csv(conn, out, today=TODAY)
+    twelve, six, three = rows(out / "expiring-12m.csv"), rows(out / "expiring-6m.csv"), rows(out / "expiring-3m.csv")
+    assert export.EXPIRING_6M_DAYS == 182 and set(export.EXPIRING_WINDOW_FILES) == {"expiring-3m.csv", "expiring-6m.csv"}
+    assert list(six[0]) == list(twelve[0])
+    assert [r["reference"] for r in six] == ["AW-5", "AW-2", "H-1", "23240-220799/001/IM", "dnd-mdn:C-2"]
+    assert counts["expiring-6m.csv"] == 5
+    assert six == [r for r in twelve if TODAY.isoformat() <= r["end"][:10] <= "2027-05-01"]
+    assert six[:len(three)] == three and len(three) < len(six) < len(twelve)
+    # The edges: dnd-mdn:C-2 ends on 2027-03-31, 182 days after 2026-09-30 and 183 after 2026-09-29.
+    edge = tmp_path / "edge"
+    for today, kept in (("2026-09-30", True), ("2026-09-29", False)):
+        export.export_csv(conn, edge, today=date.fromisoformat(today))
+        assert ("dnd-mdn:C-2" in [r["reference"] for r in rows(edge / "expiring-6m.csv")]) is kept, today
+    # Listed in SHA256SUMS like every other file.
+    assert any(line.endswith("  expiring-6m.csv") for line in (out / "SHA256SUMS").read_text(encoding="utf-8").splitlines())
 
 
 def test_nothing_private_goes_in_a_file(conn, tmp_path):

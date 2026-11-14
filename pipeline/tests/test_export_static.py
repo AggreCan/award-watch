@@ -161,11 +161,17 @@ def tender_detail(v, key):
             and every(v["amendments"], lambda a: num(a["amendment"]) and s_or_none(a["published"]) and s(a["first_seen"]))
             and every(v["related_awards"], lambda a: ref(a["reference"]) and org_or_none(a["organization_id"])
                       and num_or_none(a["value"]) and s_or_none(a["currency"]))
-            and ("attachments" not in v or every(v["attachments"], attachment)))
+            and ("attachments" not in v or every(v["attachments"], attachment))
+            and ("description_cut" not in v or description_cut(v["description_cut"])))
 
 
 def attachment(a):
     return isinstance(a, dict) and s(a.get("url")) and a["url"].startswith("https://") and s(a.get("name")) and a["name"]
+
+
+def description_cut(c):
+    # site/src/pages/shared.tsx descriptionCut: a language's figure is a whole number of characters above zero.
+    return isinstance(c, dict) and set(c) <= {"en", "fr"} and all(count(n) and n > 0 for n in c.values())
 
 
 def contract_detail(v, kind, key):
@@ -178,7 +184,8 @@ def contract_detail(v, kind, key):
             and buyer_or_none(v["buyer_id"]) and buyer_or_none(v.get("client_id")) and s(v["source_file"])
             and s(v["first_seen"]) and every(v["codes"], code_row)
             and every(v["amendments"], lambda a: num(a["amendment"]) and num_or_none(a["amount"]))
-            and (v.get("tender_reference") is None or ref(v["tender_reference"])))
+            and (v.get("tender_reference") is None or ref(v["tender_reference"]))
+            and ("description_cut" not in v or description_cut(v["description_cut"])))
 
 
 def profile(p, oid):
@@ -516,6 +523,13 @@ def test_the_3_month_csv_holds_the_3_month_list_and_the_data_page_counts_it(conn
     downloads = {d["file"]: d for d in load(out, "stats.json")["downloads"]}
     assert downloads["expiring-3m.csv"]["rows"] == window["n"] == 3
     assert downloads["expiring-3m.csv"]["bytes"] == (csv_dir / "expiring-3m.csv").stat().st_size
+    # The 6-month file holds the 6-month list's contracts and is counted the same way.
+    six = next(w for w in load(out, "expiring/index.json")["windows"] if w["window"] == "6m")
+    with (csv_dir / "expiring-6m.csv").open(encoding="utf-8-sig", newline="") as fh:
+        listed_6m = [r["reference"] for r in csv.DictReader(fh)]
+    shown_6m = [r.get("reference_published", r["reference"]) for r in load(out, "expiring/6m/1.json")]
+    assert listed_6m == shown_6m and downloads["expiring-6m.csv"]["rows"] == six["n"] == len(listed_6m) == 5
+    assert downloads["expiring-6m.csv"]["bytes"] == (csv_dir / "expiring-6m.csv").stat().st_size
     assert downloads["expiring-12m.csv"]["rows"] == 6
 
 
