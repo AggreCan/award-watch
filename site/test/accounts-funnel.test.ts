@@ -410,7 +410,8 @@ describe("a guide's email list", () => {
     const env = typedEnv();
     const params = async (slug: string, e: object) => fieldOf(listOf(await read(await get(`/guides/${slug}`, { env: e }))), "params");
     for (const slug of ["how-to-bid-on-government-of-canada-contracts", "reading-a-canadabuys-tender-notice",
-      "trade-agreements-and-thresholds-on-federal-tenders", "security-requirements-on-federal-contracts", "indigenous-business-set-asides-psib"]) {
+      "trade-agreements-and-thresholds-on-federal-tenders", "buy-canadian-policy-on-federal-tenders", "security-requirements-on-federal-contracts",
+      "indigenous-business-set-asides-psib"]) {
       expect(await params(slug, env), slug).toBe("/tenders");
     }
     expect(await params("advance-contract-award-notices-acan", env)).toBe(`/tenders?type=${encodeURIComponent(ACAN_TYPE).replace(/%20/g, "+")}`);
@@ -435,7 +436,7 @@ describe("a guide's email list", () => {
     };
     for (const slug of ["reading-a-canadabuys-tender-notice", "indigenous-business-set-asides-psib", "three-records-of-one-federal-contract",
       "when-a-federal-contract-ends", "how-to-bid-on-government-of-canada-contracts", "trade-agreements-and-thresholds-on-federal-tenders",
-      "security-requirements-on-federal-contracts"]) {
+      "buy-canadian-policy-on-federal-tenders", "security-requirements-on-federal-contracts"]) {
       expect(await seen(slug, true), slug).toEqual(await seen(slug, false));
     }
     for (const slug of ["advance-contract-award-notices-acan", "standing-offers-and-supply-arrangements"]) {

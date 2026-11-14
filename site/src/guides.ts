@@ -489,6 +489,121 @@ const SRC = {
       url: "https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/ws5918268553-doc5979457667",
     },
   },
+  // The Buy Canadian Policy: the Treasury Board's notice, CanadaBuys' pages on the Framework and its policies, PSPC's
+  // pages, and a notice that states one of the policies (each read on 2026-11-14).
+  buyCanadianNotice: {
+    title:
+      "Contracting Policy Notice 2025-7: Buy Canadian Policies and associated amendments to the Canadian International Trade Tribunal Inquiry Regulations and Directive on the Management of Procurement",
+    publisher: TBS,
+    url: "https://www.canada.ca/en/treasury-board-secretariat/services/policy-notice/2025-7.html",
+    fr: {
+      title:
+        "Avis sur la politique des marchés 2025-7 : Politiques « Achetez canadien » et modifications associées au Règlement sur les enquêtes du Tribunal canadien du commerce extérieur sur les marchés publics et à la Directive sur la gestion de l'approvisionnement",
+      url: "https://www.canada.ca/fr/secretariat-conseil-tresor/services/avis-politique/2025-7.html",
+    },
+  },
+  buyCanadianPage: {
+    title: "Buy Canadian Policy",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/buy-canadian-policy",
+    fr: { title: "Politique « Achetez canadien »", url: "https://achatscanada.canada.ca/fr/politique-achetez-canadien" },
+  },
+  bcFramework: {
+    title: "Buy Canadian Procurement Policy Framework",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/buy-canadian-policy/buy-canadian-procurement-policy-framework",
+    fr: {
+      title: "Cadre stratégique de la politique d'approvisionnement « Achetez canadien »",
+      url: "https://achatscanada.canada.ca/fr/politique-achetez-canadien/cadre-strategique-de-la-politique-dapprovisionnement-achetez-canadien",
+    },
+  },
+  bcMaterials: {
+    title: "Policy on Prioritizing Canadian Materials in Federal Procurements",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/buy-canadian-policy/policy-prioritizing-canadian-materials-federal-procurements",
+    fr: {
+      title: "Politique sur la priorisation des matériaux canadiens dans l'approvisionnement fédéral",
+      url: "https://achatscanada.canada.ca/fr/politique-achetez-canadien/politique-sur-la-priorisation-des-materiaux-canadiens-dans-l-approvisionnement-federal",
+    },
+  },
+  bcSuppliers: {
+    title: "Policy on Prioritizing Canadian Suppliers and Canadian Content in Strategic Federal Procurements",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/buy-canadian-policy/policy-prioritizing-canadian-suppliers-and-canadian-content-strategic-federal-procurements",
+    fr: {
+      title: "Politique sur la priorisation des fournisseurs canadiens et du contenu canadien dans les approvisionnements stratégiques fédéraux",
+      url: "https://achatscanada.canada.ca/fr/politique-achetez-canadien/politique-sur-la-priorisation-des-fournisseurs-canadiens-et-du-contenu-canadien-dans-les-approvisionnements-strategiques-federaux",
+    },
+  },
+  bcCompliance: {
+    title: "Compliance Framework: Prioritizing Canadian Suppliers and Canadian Content in Strategic Federal Procurements",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/buy-canadian-policy/compliance-framework-prioritizing-canadian-suppliers-and-canadian-content-strategic-federal-procurements",
+    fr: {
+      title: "Cadre de conformité : Priorisation des fournisseurs canadiens et du contenu canadien dans les approvisionnements stratégiques fédéraux",
+      url: "https://achatscanada.canada.ca/fr/politique-achetez-canadien/cadre-conformite-priorisation-fournisseurs-canadiens-contenu-canadien-approvisionnements-strategiques-federaux",
+    },
+  },
+  bcReciprocal: {
+    title: "Interim Policy on Reciprocal Procurement",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/buy-canadian-policy/interim-policy-reciprocal-procurement",
+    fr: {
+      title: "Politique provisoire sur l'approvisionnement réciproque",
+      url: "https://achatscanada.canada.ca/fr/politique-achetez-canadien/politique-provisoire-sur-l-approvisionnement-reciproque",
+    },
+  },
+  bcReciprocalSteps: {
+    title: "Interim Policy on Reciprocal Procurement (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/plan/determine-procurement-strategy/interim-policy-reciprocal-procurement`,
+    fr: {
+      title: "Politique provisoire sur l'approvisionnement réciproque (Guide de l'acheteur)",
+      url: "https://achatscanada.canada.ca/fr/buyer-s-portal/buyer-s-guide/planifier/determiner-strategie-approvisionnement/politique-provisoire-approvisionnement-reciproque",
+    },
+  },
+  bcQuestions: {
+    title: "Questions and answers for suppliers",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/buy-canadian-policy/questions-and-answers-suppliers",
+    fr: { title: "Questions et réponses pour fournisseurs", url: "https://achatscanada.canada.ca/fr/politique-achetez-canadien/questions-et-reponses-pour-fournisseurs" },
+  },
+  pspcBuyCanadian: {
+    title: "Buy Canadian",
+    publisher: PSPC,
+    url: "https://www.canada.ca/en/public-services-procurement/services/acquisitions/selling-federal-government/buy-canadian.html",
+    fr: {
+      title: "Achetez canadien",
+      url: "https://www.canada.ca/fr/services-publics-approvisionnement/services/achats/vendre-gouvernement-federal/achetez-canadien.html",
+    },
+  },
+  smallBusinessNotice: {
+    title: "Contracting Policy Notice 2026-4: Small Business Procurement Program and Improving Opportunities for Small Businesses",
+    publisher: TBS,
+    url: "https://www.canada.ca/en/treasury-board-secretariat/services/policy-notice/2026-4.html",
+    fr: {
+      title: "Avis sur la Politique des marchés 2026-4 : Programme d'approvisionnement auprès des petites entreprises et amélioration des occasions pour les petites entreprises",
+      url: "https://www.canada.ca/fr/secretariat-conseil-tresor/services/avis-politique/2026-4.html",
+    },
+  },
+  reciprocityNotice: {
+    title: "Contracting Policy Notice 2025-5: Reciprocity in Federal Procurement and Amendments to the Canadian International Trade Tribunal Procurement Inquiry Regulations",
+    publisher: TBS,
+    url: "https://www.canada.ca/en/treasury-board-secretariat/services/policy-notice/2025-5.html",
+    fr: {
+      title: "Avis sur la Politique des marchés 2025-5 : Réciprocité dans les marchés fédéraux et modifications apportées au Règlement sur les enquêtes du Tribunal canadien du commerce extérieur sur les marchés publics",
+      url: "https://www.canada.ca/fr/secretariat-conseil-tresor/services/avis-politique/2025-5.html",
+    },
+  },
+  exampleBuyCanadian: {
+    title: "Emergency Escape Breathing Devices (EEBD) (tender notice cb-342-43639893)",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/cb-342-43639893",
+    fr: {
+      title: "Appareil respiratoire générateur d'oxygène (EEBD) (avis d'appel d'offres cb-342-43639893)",
+      url: "https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/cb-342-43639893",
+    },
+  },
 } satisfies Record<string, Source>;
 
 // The site's own pages the guides link to.
@@ -507,6 +622,11 @@ export const EXAMPLE_SET_ASIDE = "/contracts/dnd-mdn/C-2026-2027-Q1-00052";
 export const EXAMPLE_NOTICE = "/tenders/cb-800-75831340";
 export const EXAMPLE_ACAN = "/tenders/ws5918268553-doc5979457667";
 export const EXAMPLE_AWARD = "/awards/cb-391-38769273";
+// A request for standing offer from National Defence whose description says it is subject to the Policy on
+// Prioritizing Canadian Suppliers and Canadian Content, open only to Canadian suppliers and suppliers of an
+// applicable trading partner, and asks for the Canadian Content Attestation Form (read on CanadaBuys, in its open
+// data and on awardwatch.ca on 2026-11-14; it closes 2026-12-03).
+export const EXAMPLE_BUY_CANADIAN = "/tenders/cb-342-43639893";
 // The addresses of the guides that link one another.
 const ACAN_PATH = "/guides/advance-contract-award-notices-acan";
 const PSIB_PATH = "/guides/indigenous-business-set-asides-psib";
@@ -517,6 +637,7 @@ const ENDING_PATH = "/guides/when-a-federal-contract-ends";
 const BID_PATH = "/guides/how-to-bid-on-government-of-canada-contracts";
 const SECURITY_PATH = "/guides/security-requirements-on-federal-contracts";
 const TRADE_PATH = "/guides/trade-agreements-and-thresholds-on-federal-tenders";
+const BUY_CANADIAN_PATH = "/guides/buy-canadian-policy-on-federal-tenders";
 
 // -- the guides ---------------------------------------------------------------------
 
@@ -2084,9 +2205,12 @@ const TRADE: Guide = {
           "L'avis 2025-8 exige des avis d'appel d'offres pour les approvisionnements assujettis aux accords de libre-échange, publiés par le Service électronique d'appels d'offres du gouvernement (SEAOG) sur AchatsCanada. Le Guide de l'acheteur exige que les marchés concurrentiels visés, y compris les mini-appels d'offres découlant d'un arrangement en matière d'approvisionnement, soient annoncés dans le SEAOG, à moins que des exceptions particulières ne s'appliquent; en cas d'incohérence entre les accords, l'acheteur suit la disposition qui offre la norme la plus élevée en matière de transparence, comme la plus longue de deux périodes de soumission.",
         ),
         p(
-          "After the award, a procurement subject to the international agreements and the CFTA needs an award notice within 72 days. A complaint to the Canadian International Trade Tribunal requires a procurement covered by at least one trade agreement. {bid} sets out the steps from registration to the award.",
-          "Après l'attribution, un approvisionnement assujetti aux accords internationaux et à l'ALEC exige un avis d'attribution dans les 72 jours. Une plainte au Tribunal canadien du commerce extérieur exige un approvisionnement visé par au moins un accord commercial. {bid} présente les étapes, de l'inscription à l'attribution.",
-          { bid: a(BID_PATH, "How to Bid on Government of Canada Contracts", "Soumissionner sur les marchés du gouvernement du Canada") },
+          "After the award, a procurement subject to the international agreements and the CFTA needs an award notice within 72 days. A complaint to the Canadian International Trade Tribunal requires a procurement covered by at least one trade agreement. {bid} sets out the steps from registration to the award, and the {bc} explains how its measures sit with these agreements.",
+          "Après l'attribution, un approvisionnement assujetti aux accords internationaux et à l'ALEC exige un avis d'attribution dans les 72 jours. Une plainte au Tribunal canadien du commerce extérieur exige un approvisionnement visé par au moins un accord commercial. {bid} présente les étapes, de l'inscription à l'attribution, et le {bc} explique comment ses mesures s'articulent avec ces accords.",
+          {
+            bid: a(BID_PATH, "How to Bid on Government of Canada Contracts", "Soumissionner sur les marchés du gouvernement du Canada"),
+            bc: a(BUY_CANADIAN_PATH, "guide on the Buy Canadian Policy", "guide sur la Politique « Achetez canadien »"),
+          },
         ),
       ],
     },
@@ -2416,8 +2540,322 @@ const SECURITY: Guide = {
   ],
 };
 
+const BUY_CANADIAN: Guide = {
+  slug: BUY_CANADIAN_PATH.slice("/guides/".length),
+  title: both("The Buy Canadian Policy on Federal Tenders", "La Politique « Achetez canadien » dans les appels d'offres fédéraux"),
+  seoTitle: both("Buy Canadian Policy on Federal Tenders", "Politique « Achetez canadien » et appels d'offres fédéraux"),
+  summary: both(
+    "The Buy Canadian Policy's instruments and dates, the procurements and values they cover, who counts as Canadian and what a tender notice asks for.",
+    "Les instruments et les dates de la Politique « Achetez canadien », les marchés visés, ce qui compte comme canadien et ce que demande un avis.",
+  ),
+  checked: "2026-11-14",
+  action: tenderList(
+    "To keep track of new federal tender notices, those that state Buy Canadian requirements among them, save this list with your email address.",
+    "Pour suivre les nouveaux avis d'appel d'offres fédéraux, y compris ceux qui énoncent des exigences « Achetez canadien », enregistrez cette liste avec votre adresse courriel.",
+  ),
+  sections: [
+    {
+      id: "instruments",
+      title: both("The Framework and Its Policies", "Le Cadre et ses politiques"),
+      blocks: [
+        p(
+          "CanadaBuys pages, its tender notices among them, carry a banner on the Buy Canadian Policy. Its foundation is the Buy Canadian Procurement Policy Framework, which took effect on December 16, 2025; the policies issued under it set the specific requirements. Treasury Board Contracting Policy Notice 2025-7, dated December 17, 2025, describes the change as moving from \"best efforts\" to a clear obligation to buy Canadian, and reports that the Directive on the Management of Procurement was amended: its Appendix D.7 requires contracting authorities to adhere to the Framework's requirements in procurements.",
+          "Les pages d'AchatsCanada, dont ses avis d'appel d'offres, portent un bandeau sur la Politique « Achetez canadien ». Son fondement est le Cadre stratégique de la politique d'approvisionnement « Achetez canadien », entré en vigueur le 16 décembre 2025; les politiques publiées en vertu du Cadre en fixent les exigences précises. L'Avis sur la Politique des marchés 2025-7 du Conseil du Trésor, daté du 17 décembre 2025, décrit le passage du principe des « meilleurs efforts » à une obligation claire d'acheter canadien, et indique que la Directive sur la gestion de l'approvisionnement a été modifiée : son annexe D.7 exige que les autorités contractantes se conforment aux exigences du Cadre dans leurs approvisionnements.",
+        ),
+        p(
+          "The Framework lists the instruments that are or will be issued under it:",
+          "Le Cadre énumère les instruments qui sont ou seront publiés en vertu de celui-ci :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Instrument", "Instrument") },
+            { kind: "label", label: both("In effect", "En vigueur") },
+            { kind: "main", label: both("What it does", "Ce qu'il prévoit") },
+          ],
+          rows: [
+            [
+              both(
+                "Policy on Prioritizing Canadian Materials in Federal Procurements (CM Policy)",
+                "Politique sur la priorisation des matériaux canadiens dans l'approvisionnement fédéral (Politique sur les MC)",
+              ),
+              both("December 16, 2025", "16 décembre 2025"),
+              both(
+                "Mandates the use of Canadian-produced materials, such as steel, wood products and aluminum, in federal construction and defence procurements",
+                "Rend obligatoire l'utilisation de matériaux produits au Canada, comme l'acier, les produits du bois et l'aluminium, dans les approvisionnements fédéraux en matière de construction et de défense",
+              ),
+            ],
+            [
+              both(
+                "Policy on Prioritizing Canadian Suppliers and Canadian Content in Strategic Federal Procurements (CSCC Policy)",
+                "Politique sur la priorisation des fournisseurs canadiens et du contenu canadien dans les approvisionnements stratégiques fédéraux (Politique sur la PFCCC)",
+              ),
+              both("December 16, 2025", "16 décembre 2025"),
+              both(
+                "Reduces the total value of Canadian suppliers' financial proposals for evaluation only, and evaluates bids on their Canadian goods, services or value-added",
+                "Réduit la valeur totale de la proposition financière des fournisseurs canadiens aux fins d'évaluation seulement, et évalue les soumissions en fonction de leurs biens, services ou valeur ajoutée canadiens",
+              ),
+            ],
+            [
+              both("Interim Policy on Reciprocal Procurement", "Politique provisoire sur l'approvisionnement réciproque"),
+              both("July 14, 2025", "14 juillet 2025"),
+              both("Limits access to procurement opportunities based on the location of suppliers", "Limite l'accès aux occasions d'approvisionnement selon l'emplacement des fournisseurs"),
+            ],
+            [
+              both("Small Business Procurement Program", "Programme d'approvisionnement auprès des petites entreprises"),
+              both("Launched July 6, 2026", "Lancé le 6 juillet 2026"),
+              both(
+                "Launched to increase the participation of small businesses in federal procurement; the Framework describes it as reserving opportunities for Canadian small businesses, with mandatory set-asides applied where feasible",
+                "Lancé pour accroître la participation des petites entreprises aux marchés publics fédéraux; le Cadre le décrit comme réservant des occasions aux petites entreprises canadiennes, avec des marchés réservés obligatoires dans la mesure du possible",
+              ),
+            ],
+          ],
+        },
+        p(
+          "The CM and CSCC policies do not apply to solicitations published or contracts awarded before December 16, 2025, and under the reciprocal procurement policy published solicitations and existing contracts need not be amended. Each policy applies to an existing supply arrangement or standing offer at its next renewal; under the reciprocal policy, the next renewal of an existing supply arrangement must be completed by July 14, 2026.",
+          "Les politiques sur les MC et sur la PFCCC ne s'appliquent pas aux demandes d'offres publiées ni aux contrats attribués avant le 16 décembre 2025, et selon la politique d'approvisionnement réciproque, les demandes de soumissions publiées et les contrats existants n'ont pas besoin d'être modifiés. Chaque politique s'applique à un arrangement en matière d'approvisionnement ou à une offre à commandes existants à leur prochain renouvellement; selon la politique d'approvisionnement réciproque, le prochain renouvellement d'un arrangement existant doit être effectué d'ici le 14 juillet 2026.",
+        ),
+      ],
+    },
+    {
+      id: "scope",
+      title: both("Which Buyers and Procurements", "Quels acheteurs et quels approvisionnements"),
+      blocks: [
+        p(
+          "The Framework applies to all departments and agencies listed in Schedules I, I.1 and II of the Financial Administration Act. Notice 2025-7 encourages Crown corporations and their subsidiaries to align with it in a manner consistent with their mandates. The policies issued under it apply unless the procurement supports sensitive operations or missions abroad, is a contract with another government or government entity (Foreign Military Sales included), or has all its deliverables delivered solely outside Canada with significant efficiency gains or savings. Each policy sets its own scope:",
+          "Le Cadre s'applique à tous les ministères et organismes énumérés aux annexes I, I.1 et II de la Loi sur la gestion des finances publiques. L'avis 2025-7 encourage les sociétés d'État et leurs filiales à se conformer au Cadre conformément à leurs mandats. Les politiques publiées en vertu du Cadre s'appliquent, sauf si l'approvisionnement appuie des opérations de nature délicate ou des missions à l'étranger, s'il s'agit d'un contrat conclu avec un autre gouvernement ou une autre entité gouvernementale (ventes militaires à l'étranger comprises), ou si tous les produits livrables sont livrés uniquement à l'extérieur du Canada et entraînent des économies ou des gains d'efficacité importants. Chaque politique fixe sa propre portée :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Policy", "Politique") },
+            { kind: "main", label: both("Procurements covered", "Marchés visés") },
+            { kind: "text", label: both("Value", "Valeur") },
+          ],
+          rows: [
+            [
+              both("CM Policy", "Politique sur les MC"),
+              both(
+                "Competitive and non-competitive defence goods and construction procurements by or on behalf of departments and agencies; defence goods are those its Appendix B lists, when bought by or for National Defence, the RCMP or the Canadian Coast Guard. The requirements apply to each material the contract is expected to require in an amount of $250,000 or more, and its use is then mandatory in performing the contract.",
+                "Approvisionnements concurrentiels et non concurrentiels de biens de défense et de travaux de construction menés par un ministère ou un organisme ou en son nom; les biens de défense sont ceux que son annexe B énumère, acquis par ou pour la Défense nationale, la GRC ou la Garde côtière canadienne. Les exigences s'appliquent à chaque matériau que l'exécution du contrat devrait nécessiter pour un montant de 250 000 $ ou plus, et son utilisation est alors obligatoire pour l'exécution des travaux.",
+              ),
+              both("$25 million or more, taxes included", "25 millions de dollars ou plus, taxes comprises"),
+            ],
+            [
+              both("CSCC Policy", "Politique sur la PFCCC"),
+              both(
+                "Competitive procurements in five sectors (defence and security; health and pharmaceutical; infrastructure, construction and transportation; information and communications technology; consumer and industrial goods and materials) and the professional services directly supporting them",
+                "Approvisionnements concurrentiels dans cinq secteurs (défense et sécurité; santé et produits pharmaceutiques; infrastructure, construction et transport; technologies de l'information et des communications; biens et matériaux de consommation et industriels) et les services professionnels qui les appuient directement",
+              ),
+              both(
+                "$25 million and up, published after December 16, 2025; $5 million and up, published after June 15, 2026; taxes included",
+                "25 millions de dollars et plus, publiés après le 16 décembre 2025; 5 millions de dollars et plus, publiés après le 15 juin 2026; taxes comprises",
+              ),
+            ],
+            [
+              both("Reciprocal procurement", "Approvisionnement réciproque"),
+              both(
+                "New procurements by or on behalf of departments and agencies, except those at least 51% for defence goods or services, certain non-competitive contracts and the other cases the policy lists",
+                "Nouveaux marchés entrepris pour ou par des ministères ou organismes, sauf ceux dont au moins 51 % de la valeur concerne des biens ou des services de défense, certains contrats non concurrentiels et les autres cas qu'énumère la politique",
+              ),
+              both("Excluded below an estimated value of $10,000", "Exclus lorsque la valeur estimée est inférieure à 10 000 $"),
+            ],
+          ],
+        },
+        p(
+          "Under the CM and CSCC policies, a department or agency may exclude a procurement case by case, where strictly necessary, for best value (an expected cost increase of 25% or more), public interest, no capacity or availability, undue delay to the procurement of critical defence or national security equipment, or commercial or military off-the-shelf products. Its minister must approve the exception; where a common service provider such as Public Services and Procurement Canada (PSPC) runs the procurement, that provider's minister must also approve it before solicitation.",
+          "Selon les politiques sur les MC et sur la PFCCC, un ministère ou un organisme peut exclure un approvisionnement au cas par cas, lorsque cela est strictement nécessaire, pour le meilleur rapport qualité-prix (une augmentation prévue des coûts de 25 % ou plus), l'intérêt public, l'absence de capacité ou de disponibilité, un retard injustifié dans l'acquisition d'équipement essentiel de défense ou de sécurité nationale, ou des produits commerciaux ou militaires standard. Son ou sa ministre doit approuver l'exception; lorsqu'un fournisseur de services communs comme Services publics et Approvisionnement Canada (SPAC) mène l'approvisionnement, le ou la ministre responsable de ce fournisseur doit aussi l'approuver avant la demande d'offres.",
+        ),
+      ],
+    },
+    {
+      id: "canadian",
+      title: both("What Counts as Canadian", "Ce qui compte comme canadien"),
+      blocks: [
+        p(
+          "The reciprocal policy defines a Canadian supplier by the place of business alone.",
+          "La politique d'approvisionnement réciproque définit le fournisseur canadien par l'établissement seulement.",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Term", "Terme") },
+            { kind: "main", label: both("Definition", "Définition") },
+            { kind: "label", label: both("Defined in", "Défini dans") },
+          ],
+          rows: [
+            [
+              both("Canadian supplier", "Fournisseur canadien"),
+              both(
+                "A place of business in Canada, clearly identified by name and accessible during normal business hours, where it conducts activities on a permanent basis (for a joint venture, each member has one); registered and filing taxes in Canada; a registered address in Canada, with personnel employed or day-to-day business activities conducted in Canada; and no subcontracting of work to non-Canadian suppliers or individuals outside Canada in a manner that results in minimal value-added activities within Canada",
+                "Un établissement au Canada clairement désigné par un nom et accessible pendant les heures normales de travail, à partir duquel il exerce ses activités de façon permanente (pour une coentreprise, chaque membre en a un); enregistré aux fins de déclaration d'impôts au Canada et produisant de telles déclarations; une adresse enregistrée au Canada, où il emploie du personnel ou conduit des affaires régulières; et aucune sous-traitance des travaux à un fournisseur non canadien ou à des personnes situées à l'extérieur du Canada de façon à réduire au minimum les activités à valeur ajoutée exécutées au Canada",
+              ),
+              both("CSCC Policy", "Politique sur la PFCCC"),
+            ],
+            [
+              both("Supplier of an applicable trading partner", "Fournisseur d'un partenaire commercial concerné"),
+              both(
+                "Such a place of business in a country or customs territory listed in the schedule to the Canadian International Trade Tribunal Procurement Inquiry Regulations as a party to one or more of the trade agreements that apply to the procurement (for a joint venture, at least one member has one, and each other member does too or is a Canadian supplier)",
+                "Un tel établissement dans un pays ou un territoire douanier qui figure à l'annexe du Règlement sur les enquêtes du Tribunal canadien du commerce extérieur sur les marchés publics en tant que partie d'au moins un accord commercial applicable au processus d'approvisionnement (pour une coentreprise, au moins un membre en a un, et chaque autre membre en a un aussi ou est un fournisseur canadien)",
+              ),
+              both("CSCC and reciprocal policies", "Politiques sur la PFCCC et d'approvisionnement réciproque"),
+            ],
+            [
+              both("Canadian good and Canadian service", "Bien canadien et service canadien"),
+              both(
+                "A good wholly manufactured or originating in Canada, or a product with imported components that has undergone sufficient change in Canada to satisfy the rules of origin of the Canada-United States-Mexico Agreement, read with Canada in place of the territory of the Parties; a service wholly provided by individuals based in Canada, construction services included",
+                "Un bien entièrement fabriqué au Canada ou d'origine canadienne, ou un produit contenant des composants importés qui a subi au Canada des modifications suffisantes pour répondre aux règles d'origine de l'Accord Canada-États-Unis-Mexique, en remplaçant le territoire des Parties par le Canada; un service entièrement fourni par des personnes établies au Canada, services de construction compris",
+              ),
+              both("CSCC Policy", "Politique sur la PFCCC"),
+            ],
+            [
+              both("Canadian content (Canadian value-added)", "Contenu canadien (valeur ajoutée canadienne)"),
+              both(
+                "For services, a Canadian service or the proportion of the service contract performed by individuals based in Canada; for goods, a Canadian good, the value of the part produced in Canada, or the difference between the dutiable value of imported goods and the selling price, including costs incurred in Canada such as research and development, installation and after-sales service",
+                "Pour les services, un service canadien ou la proportion du contrat de service exécutée par des personnes établies au Canada; pour les biens, un bien canadien, la valeur de la partie produite au Canada, ou la différence entre la valeur imposable des marchandises importées et le prix de vente, y compris les coûts engagés au Canada, comme la recherche et le développement, l'installation et le service après-vente",
+              ),
+              both("CSCC Policy", "Politique sur la PFCCC"),
+            ],
+            [
+              both("Canadian materials", "Matériaux canadiens"),
+              both(
+                "Steel melted and poured in Canada, solid wood products produced in Canada and aluminum smelted and cast in Canada (for aluminum other than sheets and plates, the largest volume of the primary aluminum it contains was produced in Canada), with the finished products made from them, listed by Harmonized System code in Appendix C",
+                "L'acier fondu et coulé au Canada, les produits en bois massif fabriqués au Canada et l'aluminium fondu et coulé au Canada (pour l'aluminium autre que les tôles et les plaques, le plus grand volume de l'aluminium primaire qu'il contient a été produit au Canada), ainsi que les produits finis faits de ces matériaux, énumérés par code du Système harmonisé à l'annexe C",
+              ),
+              both("CM Policy", "Politique sur les MC"),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "evaluation",
+      title: both("How Bids Are Evaluated", "Évaluation des soumissions"),
+      blocks: [
+        p(
+          "When the CSCC Policy applies and no exception does, competition is open to Canadian suppliers and, if any international trade agreement applies to the solicitation, to suppliers of an applicable trading partner. An eligible Canadian supplier's offer receives a 10 percent reduction to the total value of its financial proposal, for evaluation only: the policy's example evaluates a $100,000 offer at $90,000, while the actual offer price remains $100,000.",
+          "Lorsque la Politique sur la PFCCC s'applique et qu'aucune exception ne s'applique, la concurrence est ouverte aux fournisseurs canadiens et, si des accords commerciaux internationaux s'appliquent à la demande d'offres, aux fournisseurs d'un partenaire commercial concerné. L'offre d'un fournisseur canadien admissible reçoit une réduction de 10 pour cent de la valeur totale de sa proposition financière, aux fins d'évaluation seulement : l'exemple de la politique évalue une offre de 100 000 $ à 90 000 $, alors que le prix réel de l'offre reste 100 000 $.",
+        ),
+        p(
+          "For Canadian content, the contracting authority chooses one of two methods: 25 percent of the total evaluation score for Canadian value-added, or, where point-rated criteria may not be suitable, a 25 percent price-based evaluation credit on the financial proposal, for evaluation only. Mandatory Canadian materials are excluded from either calculation. A minimum mandatory Canadian value-added, set only where the procurement's objectives justify it, and any change to these methods need approval at the Assistant Deputy Minister level.",
+          "Pour le contenu canadien, l'autorité contractante choisit l'une de deux méthodes : 25 pour cent de la note totale de l'évaluation pour la valeur ajoutée canadienne ou, lorsque la méthode des critères cotés peut ne pas convenir, un crédit d'évaluation fondé sur le prix de 25 pour cent appliqué à la proposition financière, aux fins d'évaluation seulement. Les matériaux canadiens obligatoires sont exclus de l'un et l'autre calcul. Une exigence minimale obligatoire de valeur ajoutée canadienne, établie seulement si les objectifs de l'approvisionnement la justifient, et toute modification de ces méthodes doivent être approuvées au niveau du sous-ministre adjoint.",
+        ),
+        p(
+          "CanadaBuys' answers for suppliers say solicitations applying the CM Policy are open to all suppliers.",
+          "Les réponses d'AchatsCanada aux fournisseurs indiquent que les appels d'offres auxquels s'applique la Politique sur les MC sont ouverts à tous les fournisseurs.",
+        ),
+      ],
+    },
+    {
+      id: "notice",
+      title: both("What a Notice Shows and Asks For", "Ce que l'avis indique et demande"),
+      blocks: [
+        p(
+          "CanadaBuys' data dictionary has no field for these policies; a notice may state them in its description, which Award Watch shows under Description as Published. For a request for proposal, PSPC's Buyer's Guide has buyers put a reciprocal procurement statement in the notice's description field; where the policy applies, it reads: \"Policy on Reciprocal Procurement: This solicitation of offers is open only to Canadian Suppliers (if subject to any international trade agreement(s): and to Suppliers of an Applicable Trading Partner).\"",
+          "Le dictionnaire de données d'AchatsCanada ne comporte aucun champ pour ces politiques; un avis peut les énoncer dans sa description, qu'Award Watch affiche sous Description publiée. Pour une demande de propositions, le Guide de l'acheteur de SPAC demande aux acheteurs d'inscrire un énoncé sur l'approvisionnement réciproque dans le champ de description de l'avis; lorsque la politique s'applique, il se lit : « Politique sur l'approvisionnement réciproque : Le présent appel d'offres est ouvert uniquement aux fournisseurs canadiens (s'il est assujetti à un ou plusieurs accords commerciaux internationaux, ajouter « et aux fournisseurs d'un partenaire commercial applicable »). »",
+        ),
+        p(
+          "This {example} from National Defence says it is subject to the CSCC Policy and only open to Canadian Suppliers and Suppliers of an Applicable Trading Partner, and asks for a Canadian Content Attestation Form. Each policy has the offeror submit its own attestation or declaration:",
+          "Cette {example} de la Défense nationale indique qu'elle est assujettie à la Politique sur la PFCCC et seulement ouverte aux fournisseurs canadiens et aux fournisseurs d'un partenaire commercial concerné, et demande un formulaire d'attestation relative au contenu canadien. Chaque politique fait soumettre à l'offrant sa propre attestation ou déclaration :",
+          { example: a(EXAMPLE_BUY_CANADIAN, "request for standing offer", "demande d'offre à commandes") },
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Policy", "Politique") },
+            { kind: "main", label: both("What the offeror submits", "Ce que l'offrant soumet") },
+            { kind: "main", label: both("When, as the policy states it", "Quand, selon la politique") },
+          ],
+          rows: [
+            [
+              both("CSCC Policy", "Politique sur la PFCCC"),
+              both(
+                "A Supplier Eligibility Attestation Form; when applicable, a Canadian Content Attestation Form giving the Canadian value-added of each line item",
+                "Un formulaire d'attestation relative à l'admissibilité du fournisseur; s'il y a lieu, un formulaire d'attestation relative au contenu canadien qui donne la valeur ajoutée canadienne de chaque article",
+              ),
+              both(
+                "At offer closing; an offeror without the content form by then waives its right to the additional scores",
+                "À la clôture; l'offrant qui n'a pas remis le formulaire sur le contenu à ce moment renonce à son droit aux points supplémentaires",
+              ),
+            ],
+            [
+              both("CM Policy", "Politique sur les MC"),
+              both(
+                "A mandatory certification, completed by all offerors, committing to use the Canadian materials in performing the contract",
+                "Une attestation obligatoire, remplie par tous les offrants, dans laquelle ils s'engagent à utiliser les matériaux canadiens dans l'exécution du contrat",
+              ),
+              both(
+                "With the offer; the contracting authority requests it if it is not included, and disqualifies as non-compliant an offer that does not include or submit it",
+                "Avec l'offre; l'autorité contractante la demande si l'offre ne l'inclut pas, et déclare non conforme toute offre qui ne l'a pas incluse ou fournie",
+              ),
+            ],
+            [
+              both("Reciprocal procurement", "Approvisionnement réciproque"),
+              both(
+                "A declaration that the supplier is a Canadian supplier or, where an international trade agreement applies, a supplier of an applicable trading partner, assessed pass or fail",
+                "Une déclaration selon laquelle le fournisseur est un fournisseur canadien ou, lorsqu'un accord commercial international s'applique, un fournisseur d'un partenaire commercial concerné, évaluée selon le principe de réussite ou d'échec",
+              ),
+              both(
+                "Before contract award; a buyer may request it at offer closing but cannot make it mandatory then, and if it is not submitted at offer closing, must notify the supplier to submit it within two business days of the notification",
+                "Avant l'attribution du contrat; l'acheteur peut la demander à la clôture des offres sans pouvoir en faire alors une exigence obligatoire et, si elle n'est pas soumise à la clôture, doit indiquer au fournisseur de le faire dans les deux jours ouvrables suivant l'avis",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "trade",
+      title: both("With the Trade Agreements", "Avec les accords commerciaux"),
+      blocks: [
+        p(
+          "Under the reciprocal policy, and subject to certain exceptions, a foreign supplier's eligibility depends on whether the procurement is subject to a trade agreement between Canada and the supplier's jurisdiction, and Canadian suppliers remain eligible in all cases, subject to any conditions from other federal policies or programs. The Buyer's Guide has buyers determine which agreements apply in all cases, and continue to comply with all obligations under any applicable trade agreement whether or not the policy applies. Where both apply, the CSCC Policy supersedes the reciprocal policy, as it does the Canadian Content Policy. {trade} covers the agreements and their thresholds.",
+          "Selon la politique d'approvisionnement réciproque, et sous réserve de certaines exceptions, l'admissibilité d'un fournisseur étranger dépend de l'assujettissement du marché à un accord commercial conclu entre le Canada et le pays du fournisseur, et les fournisseurs canadiens demeurent admissibles dans tous les cas, sous réserve des conditions d'autres politiques ou programmes fédéraux. Le Guide de l'acheteur demande aux acheteurs de déterminer dans tous les cas quels accords s'appliquent, et de continuer à respecter toutes les obligations découlant de tout accord commercial applicable, que la politique s'applique ou non. Lorsque les deux s'appliquent, la Politique sur la PFCCC prévaut sur la politique d'approvisionnement réciproque, comme sur la Politique sur le contenu canadien. {trade} traite des accords et de leurs seuils.",
+          { trade: a(TRADE_PATH, "Trade Agreements and Thresholds on a Federal Tender Notice", "Accords commerciaux et seuils dans un avis d'appel d'offres fédéral") },
+        ),
+        p(
+          "Under amendments to the Canadian International Trade Tribunal Procurement Inquiry Regulations, effective December 15, 2025, the Tribunal shall not examine measures in a procurement process that restrict participation to, or favour, Canadian suppliers; require or favour the use of Canadian goods, services, materials or subcontractors; require bids to provide benefits to Canada or a minimum Canadian value added, or favour bids on those grounds; or restrict participation to small businesses.",
+          "Selon les modifications au Règlement sur les enquêtes du Tribunal canadien du commerce extérieur sur les marchés publics, entrées en vigueur le 15 décembre 2025, le Tribunal ne doit pas examiner les mesures d'un processus d'approvisionnement qui limitent la participation à des fournisseurs canadiens ou leur donnent la priorité; qui exigent ou favorisent l'utilisation de biens, services, matériaux ou sous-traitants canadiens; qui exigent que les soumissions fournissent des avantages au Canada ou une valeur ajoutée minimale pour le Canada, ou qui donnent la priorité aux soumissions pour ces motifs; ou qui limitent la participation aux petites entreprises.",
+        ),
+      ],
+    },
+    {
+      id: "differences",
+      title: both("Where the Official Pages Differ", "Où les pages officielles divergent"),
+      blocks: [
+        {
+          kind: "list",
+          items: [
+            tx(
+              "Attestation timing: the CSCC Policy has the Supplier Eligibility Attestation Form submitted at offer closing. PSPC's compliance framework for that policy, in effect from June 1, 2026 where PSPC is the contracting authority, has the offeror provide it prior to contract award.",
+              "Moment de l'attestation : la Politique sur la PFCCC prévoit la remise du formulaire d'attestation relative à l'admissibilité du fournisseur à la clôture. Le cadre de conformité de SPAC pour cette politique, en vigueur depuis le 1er juin 2026 lorsque SPAC est l'autorité contractante, prévoit que l'offrant le fournit avant l'attribution du contrat.",
+            ),
+            tx(
+              "Basis of reciprocity: the interim policy limits access based on the location of suppliers, while PSPC's Buy Canadian page, modified July 6, 2026, says non-defence goods and services must be produced in Canada or in trading partner countries that give reciprocal access through trade agreements. The Framework lists a Policy on Reciprocal Procurement (Based on Commodity Origin) among the instruments that are or will be issued.",
+              "Fondement de la réciprocité : la politique provisoire limite l'accès selon l'emplacement des fournisseurs, tandis que la page « Achetez canadien » de SPAC, modifiée le 6 juillet 2026, indique que les biens et les services achetés pour des besoins autres que ceux de la défense doivent provenir du Canada ou de pays partenaires commerciaux qui accordent un accès réciproque par des accords commerciaux. Le Cadre énumère une Politique d'approvisionnement réciproque (en fonction de l'origine des marchandises) parmi les instruments qui sont ou seront publiés.",
+            ),
+            tx(
+              "Produced in Canada: the CM Policy's English page says primary manufacturing and fabrication in Canada; its French page says \"une première transformation ou qui est fabriqué\", joining the two with or.",
+              "Produit au Canada : la page française de la Politique sur les MC vise un matériau « qui a fait l'objet d'une première transformation ou qui est fabriqué au Canada », les deux étant joints par ou; la page anglaise porte « primary manufacturing and fabrication », joints par and.",
+            ),
+          ],
+        },
+        p(
+          "None of the pages read prescribes wording for the tender notice itself under the CM or CSCC policies.",
+          "Aucune des pages lues ne prescrit de libellé pour l'avis d'appel d'offres lui-même selon les politiques sur les MC ou sur la PFCCC.",
+        ),
+      ],
+    },
+  ],
+  sources: [
+    SRC.buyCanadianNotice, SRC.buyCanadianPage, SRC.bcFramework, SRC.bcMaterials, SRC.bcSuppliers, SRC.bcCompliance, SRC.bcReciprocal,
+    SRC.bcReciprocalSteps, SRC.bcQuestions, SRC.pspcBuyCanadian, SRC.smallBusinessNotice, SRC.reciprocityNotice, SRC.dictionary,
+    SRC.exampleBuyCanadian,
+  ],
+};
+
 // The order of the index, and of the sitemap's part.
-export const GUIDES: readonly Guide[] = [HOW_TO_BID, TENDER_NOTICE, TRADE, SECURITY, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END];
+export const GUIDES: readonly Guide[] = [HOW_TO_BID, TENDER_NOTICE, TRADE, BUY_CANADIAN, SECURITY, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END];
 
 export const GUIDE_SLUGS: ReadonlySet<string> = new Set(GUIDES.map((g) => g.slug));
 

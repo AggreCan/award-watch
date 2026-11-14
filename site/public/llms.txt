@@ -36,6 +36,7 @@ Downloads are limited to ten per minute per address.
 - https://awardwatch.ca/guides/how-to-bid-on-government-of-canada-contracts: the steps to bid on a federal contract, from registration and the numbers a supplier needs to the award, the debriefing and the published records
 - https://awardwatch.ca/guides/reading-a-canadabuys-tender-notice: what each part of a federal tender notice on CanadaBuys means
 - https://awardwatch.ca/guides/trade-agreements-and-thresholds-on-federal-tenders: the trade agreements line on a tender notice, the thresholds in effect for 2026 and 2027, and the limited tendering reasons
+- https://awardwatch.ca/guides/buy-canadian-policy-on-federal-tenders: the Buy Canadian Policy's framework and policies, their dates and thresholds, who counts as Canadian, how bids are evaluated and what a tender notice asks for
 - https://awardwatch.ca/guides/security-requirements-on-federal-contracts: how a notice states its security requirements, the screening levels, who sponsors a clearance and the processing times PSPC states
 - https://awardwatch.ca/guides/advance-contract-award-notices-acan: what an advance contract award notice is, how long it is posted, who may submit a statement of capabilities and how it is recorded
 - https://awardwatch.ca/guides/standing-offers-and-supply-arrangements: what standing offers and supply arrangements are, who uses them and who holds them

@@ -11,7 +11,8 @@ import { app } from "../src/index";
 import { CLOSING_SOON_DAYS } from "../src/constants";
 import { referenceShard } from "../src/data";
 import {
-  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SET_ASIDE, GUIDES, type Block, type Both, type Guide, type Link, type Text,
+  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SET_ASIDE, GUIDES, type Block, type Both, type Guide,
+  type Link, type Text,
 } from "../src/guides";
 import { allKeys, rawEntry } from "../src/i18n";
 import { EXPIRING_TEASER_ROWS } from "../src/pages/expiring";
@@ -159,7 +160,7 @@ const deeperWindows = Object.fromEntries(["6m", "12m"].flatMap((w) => [
 const exampleRecords: Record<string, unknown> = {};
 beforeAll(async () => {
   const tender = (FILES["tenders/20a.json"] as Record<string, any>)["cb-100-10000001"];
-  for (const reference of [EXAMPLE_NOTICE, EXAMPLE_ACAN].map((p) => p.slice("/tenders/".length))) {
+  for (const reference of [EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_BUY_CANADIAN].map((p) => p.slice("/tenders/".length))) {
     const path = `tenders/${await referenceShard(reference)}.json`;
     exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [reference]: { ...structuredClone(tender), reference } };
   }
@@ -281,12 +282,12 @@ describe("links and sources", () => {
     // Methodology's statuses and places, the standing offers list, a profile's sections, the Data page;
     // the open ACANs and the counting of competitive records; a contract reporting a set-aside; the three
     // lists of contracts ending and the overview of them; the new notices, the award notices, an example
-    // notice, ACAN and award; and the guides that link one another.
+    // notice, ACAN and award, a notice stating a Buy Canadian policy; and the guides that link one another.
     for (const want of ["/tenders", "/methodology#statuses", "/methodology#places", "/methodology#counting", "/instruments", "/data#sources",
       `${EXAMPLE_PROFILE}#awards`, `${EXAMPLE_PROFILE}#history`, `${EXAMPLE_PROFILE}#contracts`, `${EXAMPLE_PROFILE}#instruments`,
       "/tenders?type=Advance%20Contract%20Award%20Notice", "/methodology#competitive", "/methodology#expiring", EXAMPLE_SET_ASIDE,
       "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m", "/tenders/new", "/awards", EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_AWARD,
-      ...GUIDES.map(pathOf)]) {
+      EXAMPLE_BUY_CANADIAN, ...GUIDES.map(pathOf)]) {
       expect(targets.has(want), want).toBe(true);
     }
     expect([...targets].some((h) => h.startsWith("/tenders?type="))).toBe(true);

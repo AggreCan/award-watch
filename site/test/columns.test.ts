@@ -31,7 +31,7 @@ const PAGES = [
   "/guides/reading-a-canadabuys-tender-notice", "/guides/standing-offers-and-supply-arrangements", "/guides/three-records-of-one-federal-contract",
   "/guides/advance-contract-award-notices-acan", "/guides/indigenous-business-set-asides-psib", "/guides/when-a-federal-contract-ends",
   "/guides/how-to-bid-on-government-of-canada-contracts", "/guides/trade-agreements-and-thresholds-on-federal-tenders",
-  "/guides/security-requirements-on-federal-contracts",
+  "/guides/security-requirements-on-federal-contracts", "/guides/buy-canadian-policy-on-federal-tenders",
 ];
 
 describe("column widths", () => {
