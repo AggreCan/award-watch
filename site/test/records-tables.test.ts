@@ -752,6 +752,16 @@ describe("the earlier awards, the incumbents and the organization feeds", () => 
     ]);
     expect(body).toContain(`href="https://awardwatch.ca${contractPath("dnd-mdn", FIRST)}"`);
     expect(body).not.toContain("Before the ten years");
+    // A second and a third request within the hour are answered from the edge's cache, with the same feed and
+    // the frame's own headers written on it (once each was a 500: the cached response's headers could not be written).
+    for (const again of [1, 2]) {
+      const cached = await get(path, { env: offEnv() });
+      expect(cached.status, `request ${again + 1}`).toBe(200);
+      expect(cached.headers.get("Content-Type")).toBe("application/atom+xml; charset=utf-8");
+      expect(cached.headers.get("Cache-Control")).toBe("public, max-age=3600");
+      expect(cached.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(await cached.text()).toBe(body);
+    }
     expect((await get("/data/feeds/organizations/org-ffffffffff.xml", { env: offEnv() })).status).toBe(404);
     expect((await get("/data/feeds/organizations/not-an-id.xml", { env: offEnv() })).status).toBe(404);
     expect((await page(`/organizations/${A1}`)).html).toContain(`href="${path}" class="btn" rel="nofollow">Records feed</a>`);

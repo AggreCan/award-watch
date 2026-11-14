@@ -245,7 +245,10 @@ export async function orgFeed(c: Context<AppEnv>): Promise<Response> {
   const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
   const key = new Request(`${SITE_ORIGIN}/data/feeds/organizations/${id}.xml`);
   const hit = await cache?.match(key).catch(() => undefined);
-  if (hit) return hit;
+  // A response out of the cache has headers that cannot be written, and the frame writes its security headers
+  // on every answer: handed back as it is, each request within the hour was answered 500. A new response over
+  // the same body and headers can be written to.
+  if (hit) return new Response(hit.body, hit);
   const profile = await loadProfile(c.env, id);
   if (!profile) return c.notFound();
   const today = todayOf((await loadStats(c.env))?.data_as_of);
