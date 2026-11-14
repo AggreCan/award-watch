@@ -149,24 +149,27 @@ export async function fitDigestBlock(
 // -- which message carries it ---------------------------------------------------------------
 
 // The account's weekly email row, read by its key.
-export const WEEKLY_MATCHES_SQL = "SELECT mail, on_at, last_week, last_status FROM weekly_mail WHERE user_id = ? LIMIT 1";
+export const WEEKLY_MATCHES_SQL = "SELECT mail, on_at, last_week, last_status, failed_week FROM weekly_mail WHERE user_id = ? LIMIT 1";
 
 // Whether the account's weekly email carries the block in the week opening on
-// `week` (briefings.ts weekAnchor): it is on and was turned on before that
-// Monday, so this week's message goes to it (weekly.ts WEEKLY_DUE_SQL), or
-// it went this week already. The watch mail then leaves the block out, so a
-// Pro account with both is never sent the same matches twice in a week. A
-// database without the table has no weekly email: false. Throws on any other
-// fault, which the watch mail takes as leaving the block out.
+// `week` (briefings.ts weekAnchor): it is on, was turned on before that
+// Monday and no message to it was refused that week, so this week's message
+// goes to it (weekly.ts WEEKLY_DUE_SQL), or it went this week already. The
+// watch mail then leaves the block out, so a Pro account with both is never
+// sent the same matches twice in a week; a week whose weekly email was
+// refused leaves them to the watch mail. A database without the table has no
+// weekly email: false. Throws on any other fault, which the watch mail takes
+// as leaving the block out.
+type WeeklyMatchesRow = { mail: string; on_at: string; last_week: string | null; last_status: string | null; failed_week: string | null };
+
 export async function weeklyTakesMatches(env: Env, userId: string, week: string): Promise<boolean> {
-  let row: { mail: string; on_at: string; last_week: string | null; last_status: string | null } | null;
+  let row: WeeklyMatchesRow | null;
   try {
-    row = await env.ACCOUNTS!.prepare(WEEKLY_MATCHES_SQL).bind(userId)
-      .first<{ mail: string; on_at: string; last_week: string | null; last_status: string | null }>();
+    row = await env.ACCOUNTS!.prepare(WEEKLY_MATCHES_SQL).bind(userId).first<WeeklyMatchesRow>();
   } catch (e) {
     if (missingTable(e)) return false;
     throw e;
   }
   if (!row) return false;
-  return (row.mail === "on" && row.on_at < week) || (row.last_week === week && row.last_status === "sent");
+  return (row.mail === "on" && row.on_at < week && row.failed_week !== week) || (row.last_week === week && row.last_status === "sent");
 }

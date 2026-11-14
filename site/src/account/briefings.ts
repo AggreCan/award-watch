@@ -29,7 +29,10 @@
 // weekday (BRIEFING_WEEKDAY, Monday), and no message refused for it since
 // then. Claimed for the week before its message goes and given back when the
 // send does not go, as a saved search is. Until the records database is ready
-// at today's data date, every briefing waits unclaimed.
+// at today's data date, every briefing waits unclaimed. A briefing whose
+// account's plan does not send it is marked for the week with no run row
+// (passedOver), so it leaves the list; a buyer the nightly merged is read at
+// the surviving id, the briefing's row keeping the id saved.
 //
 // Log lines name counts and dates only, never an address or a label.
 
@@ -42,12 +45,13 @@ import { WITHIN_DAYS, type Within } from "../instruments";
 import {
   BUYER_DUE_SQL, SEGMENT_DUE_SQL, type Query, SOURCE_NUMBER, fiscalYearOf, quarterEnd, readRecords,
 } from "../records_db";
-import { STOP_CODES, sendWithHeaders } from "./deliveries";
+import { type QueryCount, STOP_CODES, afterSend, budgetStop, sendWithHeaders } from "./deliveries";
 import { type DigestMessage, briefingDigest, siteLink } from "./digests";
 import { allowed, planFor, savedSearchCap, SAVED_SEARCH_MAX, type Plan } from "./entitlements";
 import { type RecordsWait, missingTable } from "./records_deliveries";
 import { newId, randomHex } from "./secrets";
 import { EVENT_NOTABLE_CENTS, EVENT_NOTABLE_SHARE } from "./watch_events";
+import { survivorOf } from "./watches";
 
 export const BRIEFING_KINDS = ["segment", "buyer"] as const;
 export type BriefingKind = (typeof BRIEFING_KINDS)[number];
@@ -62,8 +66,8 @@ export const isBriefingDelivery = (v: unknown): v is BriefingDelivery => v === "
 // week's Monday (a nightly late on Monday, a first subscription) goes on the
 // next data date of the same week.
 export const BRIEFING_WEEKDAY = 1;
-// The data dates a message covers: the seven ending with the data date; after
-// a message that failed, back to the last one covered, at most two weeks.
+// The data dates a message covers: those after the last one covered (seven
+// for a first message); after a message that failed, at most two weeks.
 export const WEEK_DAYS = 7;
 export const SPAN_DAYS_MAX = 14;
 // Rows a section lists; six sections at most, so 60 rows a message.
@@ -96,15 +100,16 @@ export function briefingDue(deliver: string, lastDelivered: string | null, dataD
   return !lastDelivered || lastDelivered.slice(0, 10) < weekAnchor(dataDate);
 }
 
-// The day the message's span starts after (exclusive): seven data dates back,
-// or the last one covered when that is further (a message that failed), at
-// most SPAN_DAYS_MAX back.
+// The day the message's span starts after (exclusive): the last data date
+// covered, so no day is reported twice (a Monday whose nightly came late sends
+// on Tuesday, and the next Monday's span starts after that Tuesday); seven
+// data dates back for a first message; at most SPAN_DAYS_MAX back after a
+// message that failed.
 export function briefingStart(lastDelivered: string | null, dataDate: string): string {
-  const week = addDays(dataDate, -WEEK_DAYS);
-  if (!lastDelivered) return week;
+  if (!lastDelivered) return addDays(dataDate, -WEEK_DAYS);
   const prev = lastDelivered.slice(0, 10);
   const floor = addDays(dataDate, -SPAN_DAYS_MAX);
-  return prev >= week ? week : prev > floor ? prev : floor;
+  return prev > floor ? prev : floor;
 }
 
 // A federal fiscal quarter: the fiscal year by the calendar year it starts in
@@ -677,6 +682,23 @@ async function release(env: Env, id: string, before: string | null, now: Date): 
     .bind(before, id, now.toISOString()).run();
 }
 
+// The briefings read and passed over because their account's plan does not
+// send them (no delivery, or past the plan's figure after a move to a smaller
+// plan): covered for the week as a claim would cover them, with no run row,
+// so they leave the week's list and do not fill it ahead of the briefings that
+// are paid for. A plan restored that week sends from the next Monday on. One
+// D1 batch of at most MARKS_BATCH statements a query.
+export const MARKS_BATCH = 100;
+
+async function passedOver(env: Env, ids: readonly string[], anchor: string, now: Date): Promise<void> {
+  const db = env.ACCOUNTS!;
+  for (let i = 0; i < ids.length; i += MARKS_BATCH) {
+    await db.batch(ids.slice(i, i + MARKS_BATCH).map((id) => db.prepare(
+      "UPDATE briefings SET last_delivered_at = ?1 WHERE id = ?2 AND deliver = 'weekly' AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?3)",
+    ).bind(now.toISOString(), id, anchor)));
+  }
+}
+
 // One run row, written only while the briefing exists.
 async function record(env: Env, id: string, status: "sent" | "failed" | "empty", items: number, now: Date, dataDate: string): Promise<void> {
   await env.ACCOUNTS!.prepare(
@@ -697,8 +719,9 @@ async function stopSecret(env: Env, id: string): Promise<string | null> {
 
 // room: the messages the run may still send (the cap less what the saved
 // searches and the watch mail sent). stop: why the run stopped early.
+// queries: the run's count (deliveries.ts QueryCount).
 export async function runBriefings(
-  env: Env, o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string },
+  env: Env, o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount },
 ): Promise<{ report: BriefingReport; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
   const report = emptyBriefingReport();
@@ -718,10 +741,21 @@ export async function runBriefings(
   let stop: string | null = null;
   let capped = false;
   let held: { id: string; before: string | null } | null = null;
+  const passed: string[] = [];
+  // Past the run's query budget (deliveries.ts QueryCount), nothing more is taken up; the next hour goes on.
+  const pause = (claiming = false): boolean => {
+    const why = budgetStop(o.queries, claiming);
+    if (why) {
+      stop = why;
+      capped = true;
+    }
+    return why !== null;
+  };
   try {
     for (const row of due) {
-      const b = toBriefing(row);
-      if (!b || !briefingDue(b.deliver, b.last_delivered_at, dataDate)) continue;
+      const saved = toBriefing(row);
+      if (!saved || !briefingDue(saved.deliver, saved.last_delivered_at, dataDate)) continue;
+      if (pause()) break;
       let plan = o.plans.get(row.user_id);
       if (!plan) {
         plan = (await planFor(env, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now)).plan;
@@ -729,8 +763,13 @@ export async function runBriefings(
       }
       if (!allowed({ plan }, "delivery") || (row.n_before ?? 0) >= sharedCap(plan)) {
         report.skipped++;
+        passed.push(saved.id);
         continue;
       }
+      // A buyer the nightly merged into another is read at the surviving id (watches.ts survivorOf, as a
+      // watch follows it); the briefing's row and label keep the id saved.
+      const moved = saved.kind === "buyer" ? await survivorOf(env, "buyer", saved.subject) : null;
+      const b = moved ? { ...saved, subject: moved } : saved;
       const start = briefingStart(b.last_delivered_at, dataDate);
       const key = `${b.kind}\n${b.subject}\n${b.segment}\n${start}`;
       let read = reads.get(key);
@@ -745,6 +784,7 @@ export async function runBriefings(
       }
       const data = read.data;
       if (!hasNews(data)) {
+        if (pause(true)) break;
         if (!(await claim(env, b.id, anchor, now))) continue;
         held = { id: b.id, before: b.last_delivered_at };
         await record(env, b.id, "empty", 0, now, dataDate);
@@ -757,6 +797,7 @@ export async function runBriefings(
         capped = true;
         break;
       }
+      if (pause(true)) break;
       if (!(await claim(env, b.id, anchor, now))) continue;
       held = { id: b.id, before: b.last_delivered_at };
       const secret = row.secret ?? (await stopSecret(env, b.id));
@@ -773,7 +814,7 @@ export async function runBriefings(
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {
         held = null;
-        await record(env, b.id, "sent", items, now, dataDate);
+        await afterSend(() => record(env, b.id, "sent", items, now, dataDate));
         report.sent++;
       } else if (result.code && STOP_CODES.has(result.code)) {
         await release(env, b.id, b.last_delivered_at, now);
@@ -787,6 +828,7 @@ export async function runBriefings(
         report.failed++;
       }
     }
+    await passedOver(env, passed, anchor, now);
   } catch (e) {
     if (held) await release(env, held.id, held.before, now).catch(() => undefined);
     throw e;

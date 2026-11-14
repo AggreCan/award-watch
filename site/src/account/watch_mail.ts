@@ -13,14 +13,18 @@
 // lists their events, grouped by watch in the order single records,
 // organizations, buyers, notices; an event reached through two watches is
 // listed once, under the first, which names the others; the kinds each
-// follows only; ROWS_MAX rows in all. The account's first message of the
-// week also carries the week's matching notices for the organization it
-// claims (fit_mail.ts), unless its weekly email takes them. Nothing new
-// writes "empty" and sends nothing. The account is claimed for the data date
-// before its message goes and given back when the send does not go, as a
-// saved search is. A refusal that is not a sending limit marks the data date
-// failed, and the account waits for the next one. Each run of an account is
-// a watch_deliveries row.
+// follows only; ROWS_MAX rows in all, and the watches reached once they are
+// listed one line to the watches page (digests.ts watchDigest). The account's
+// first message of the week (no data date since the week's Monday covered)
+// opens with its organization's block and carries the week's matching notices
+// for the organization it claims (fit_mail.ts), unless its weekly email takes
+// them. Nothing new writes "empty" and sends nothing. The account is claimed
+// for the data date, while its mail is on, before its message goes and given
+// back when the send does not go, as a saved search is. A refusal that is not
+// a sending limit marks the data date failed, and the account waits for the
+// next one. Each run of an account is a watch_deliveries row. An account whose
+// plan has no watch mail is marked for the data date with no run row
+// (passedOver), so it leaves the list.
 //
 // Until the records database is ready at today's data date (no binding, a
 // load under way, a statement that failed, tonight's sync not finished), the
@@ -36,7 +40,7 @@ import { clockAt } from "../closing";
 import type { Env } from "../env";
 import { segmentShort, type Lang } from "../i18n";
 import { weekAnchor } from "./briefings";
-import { ROWS_MAX, STOP_CODES, isDue, sendWithHeaders, spanStart } from "./deliveries";
+import { type QueryCount, ROWS_MAX, STOP_CODES, afterSend, budgetStop, isDue, sendWithHeaders, spanStart } from "./deliveries";
 import { type DigestMatches, type WatchGroup, siteLink, watchDigest } from "./digests";
 import { fitDigestBlock, weekNotices, weeklyTakesMatches } from "./fit_mail";
 import { orgWeekOpening } from "./org_claim";
@@ -147,11 +151,29 @@ export function groupsFor(
 
 // -- writing what happened ----------------------------------------------------------------------
 
+// The account taken for the data date by this run: one statement that holds
+// only while its mail is on and no run has covered the data date, so of two
+// runs at once one goes on, and a stop link clicked after the run read its
+// list stops it.
 async function claim(env: Env, userId: string, dataDate: string, now: Date): Promise<boolean> {
   const res = await env.ACCOUNTS!.prepare(
-    "UPDATE watch_mail SET last_day = ?1, last_at = ?2 WHERE user_id = ?3 AND (last_day IS NULL OR last_day < ?1)",
+    "UPDATE watch_mail SET last_day = ?1, last_at = ?2 WHERE user_id = ?3 AND mail = 'on' AND (last_day IS NULL OR last_day < ?1)",
   ).bind(dataDate, now.toISOString(), userId).run();
   return (res.meta?.changes ?? 0) === 1;
+}
+
+// The accounts read and passed over because their plan sends no watch mail:
+// off the data date's list (last_day), with no run row and nothing else
+// changed, so they do not fill the list ahead of the accounts that pay for
+// it. MARKS_BATCH statements a batch, each D1 batch one query.
+export const MARKS_BATCH = 100;
+
+async function passedOver(env: Env, userIds: readonly string[], dataDate: string): Promise<void> {
+  const db = env.ACCOUNTS!;
+  for (let i = 0; i < userIds.length; i += MARKS_BATCH) {
+    await db.batch(userIds.slice(i, i + MARKS_BATCH).map((id) =>
+      db.prepare("UPDATE watch_mail SET last_day = ?1 WHERE user_id = ?2 AND (last_day IS NULL OR last_day < ?1)").bind(dataDate, id)));
+  }
 }
 
 // The claim given back, while it is this run's: the account is due again.
@@ -202,13 +224,11 @@ async function mailSecret(env: Env, userId: string): Promise<string | null> {
 // -- the run --------------------------------------------------------------------------------------
 
 // room: the messages the run may still send (the cap less what the saved
-// searches sent). stop: why the run stopped early (a sending limit's code, or
-// the cap), for the caller's report and log line.
-// The weekday (Date.getUTCDay) the organization block opens a daily account's message: Monday, the weekly briefing's day.
-export const WEEK_OPENING_DAY = 1;
-
+// searches sent). stop: why the run stopped early (a sending limit's code,
+// the cap, or the run's query budget), for the caller's report and log line.
+// queries: the run's count (deliveries.ts QueryCount).
 export async function runWatchMail(
-  env: Env, o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string },
+  env: Env, o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount },
 ): Promise<{ report: WatchReport; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
   const report = emptyWatchReport();
@@ -229,8 +249,19 @@ export async function runWatchMail(
   // The open notices of the week, read once for the accounts whose message carries the matching notices.
   const notices = weekNotices(env, dataDate, now);
   const week = weekAnchor(dataDate);
+  const passed: string[] = [];
+  // Past the run's query budget (deliveries.ts QueryCount), nothing more is taken up; the next hour goes on.
+  const pause = (claiming = false): boolean => {
+    const why = budgetStop(o.queries, claiming);
+    if (why) {
+      stop = why;
+      capped = true;
+    }
+    return why !== null;
+  };
   try {
     for (const a of accounts) {
+      if (pause()) break;
       let plan = o.plans.get(a.user_id);
       if (!plan) {
         plan = (await planFor(env, { id: a.user_id, plan: a.plan, plan_until: a.plan_until }, now)).plan;
@@ -238,6 +269,7 @@ export async function runWatchMail(
       }
       if (!allowed({ plan }, "watch_mail")) {
         report.skipped++;
+        passed.push(a.user_id);
         continue;
       }
       const all = (await followAliases(env, a.user_id, await listWatches(env, a.user_id))).watches;
@@ -254,17 +286,19 @@ export async function runWatchMail(
         break;
       }
       const lang = a.lang === "fr" ? "fr" : "en";
+      // The account's first message of the week: no data date since the week's Monday (the briefings' weekday,
+      // weekAnchor) covered yet. On Monday, or on the next data date when Monday had no run.
+      const firstOfWeek = a.last_day === null || a.last_day < week;
       // The "Your organization" block (org_claim.ts) opens the account's weekly
-      // message: the day a weekly watch of its is due, or Monday (the
-      // briefing's day) for an account whose watches are all daily. A fault
-      // in reading it leaves the message without the block.
-      const weekly = due.some((w) => w.cadence === "weekly") || new Date(`${dataDate}T00:00:00Z`).getUTCDay() === WEEK_OPENING_DAY;
+      // message: the day a weekly watch of its is due, or its first message of
+      // the week. A fault in reading it leaves the message without the block.
+      const weekly = due.some((w) => w.cadence === "weekly") || firstOfWeek;
       const opening = weekly ? await orgWeekOpening(env, { userId: a.user_id, lang, site, dataDate }).catch(() => null) : null;
-      // The week's matching notices (fit_mail.ts) go in the account's first message of the week (no data date
-      // of this week covered yet), and only while its weekly email does not take them, so a Pro account is
-      // never sent the same matches twice in a week. A fault in reading them leaves the message without them.
+      // The week's matching notices (fit_mail.ts) go in the account's first message of the week, and only
+      // while its weekly email does not take them, so a Pro account is never sent the same matches twice in a
+      // week. A fault in reading them leaves the message without them.
       let matches: DigestMatches | null = null;
-      if (a.last_day === null || a.last_day < week) {
+      if (firstOfWeek) {
         matches = await weeklyTakesMatches(env, a.user_id, week)
           .then((taken) => (taken ? null : fitDigestBlock(env, { userId: a.user_id, lang, site, dataDate, plan, now, notices })))
           .catch(() => null);
@@ -277,6 +311,7 @@ export async function runWatchMail(
       // A message with nothing from the watches still goes when a block has something to say (the blocks
       // alone, under the opening's subject).
       if (!total && !opening?.lines.length && !matches) {
+        if (pause(true)) break;
         if (!(await claim(env, a.user_id, dataDate, now))) continue;
         held = a;
         await covered(env, a.user_id, "empty", 0, now, dataDate, due, closed);
@@ -289,6 +324,7 @@ export async function runWatchMail(
         capped = true;
         break;
       }
+      if (pause(true)) break;
       if (!(await claim(env, a.user_id, dataDate, now))) continue;
       held = a;
       const secret = a.secret ?? (await mailSecret(env, a.user_id));
@@ -305,7 +341,8 @@ export async function runWatchMail(
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {
         held = null;
-        await covered(env, a.user_id, "sent", total, now, dataDate, due, closed);
+        // Covered: tried once more on a fault, so the next data date does not send these events again.
+        await afterSend(() => covered(env, a.user_id, "sent", total, now, dataDate, due, closed));
         report.sent++;
       } else if (result.code && STOP_CODES.has(result.code)) {
         await release(env, a, dataDate, now);
@@ -319,6 +356,7 @@ export async function runWatchMail(
         report.failed++;
       }
     }
+    await passedOver(env, passed, dataDate);
     if (ready && !stop) report.expired = await endClosedNotices(env, dataDate);
   } catch (e) {
     if (held) await release(env, held, dataDate, now).catch(() => undefined);

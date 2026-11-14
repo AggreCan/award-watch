@@ -736,6 +736,19 @@ is what is delivered:
   all: the counts (20 at most for a segment) first, then the notices, with a
   line linking `/tenders?segment=<nn>` for the rest.
 
+An organization or a buyer the nightly merged into another (the aliases the
+profiles and buyer pages redirect through, `watches.ts` `survivorOf`) is read
+at the surviving id from then on (`deliveries.ts` `survivingEntity`); the
+search's row and its label keep the id saved, and an account that also saves
+a search on the surviving id keeps both. The first delivery read at the
+surviving id has nothing to compare with: the merge moved records into it that
+were never new, so it keeps the counts and writes `empty`, as a first delivery
+does, and the next delivery reports what rose since. The mark then names the
+id it was read at (a mark without one was read at the saved id). A tender or
+radar search filtered on a merged buyer (`buyer=`, `client=`) or organization
+(`supplier=`) reads and links the surviving id the same way
+(`survivingParams`).
+
 Until the records database is ready at today's data date, these searches
 wait: no row is written, nothing is claimed, and the next hour reads the
 database again. The run's report (`records`, `waiting`) and its log line
@@ -763,13 +776,33 @@ so it covers both days.
 - At most 300 messages a run. A refusal with `E_DAILY_LIMIT_EXCEEDED` or
   `E_RATE_LIMIT_EXCEEDED` stops the run with no row for that search, and
   the next hour goes on from there. Any other refusal is a `failed` row.
+- At most 850 database queries a run (`RUN_QUERY_BUDGET`, counted on the
+  accounts and the records databases together, a batch as one). D1 allows a
+  Worker invocation 1,000 queries on Workers Paid, a `db.batch()` counting as
+  one, and fails every query past them ("Queries per Worker invocation",
+  https://developers.cloudflare.com/d1/platform/limits/); each hourly run is
+  one invocation. Once the run has made 850, no part takes up another search,
+  account, briefing or view: the run stops as the message cap stops it
+  (`capped`), and the next hour goes on from the claims. No item is claimed
+  unless the claim and every write after it (`CLAIM_QUERIES`, 8) fit under
+  1,000, so the run never stops between a claim and its row. Six runs a data
+  date allow 5,100 queries a day. Measured under test: a saved search sent
+  costs about 3 queries, an account's watch mail about 9, an account passed
+  over on its plan 1 (its plan, read once a run).
 - A fault reading or writing the accounts database logs one line and ends
   the run. A second run in the same hour finds nothing due.
+- The row after a message went (its `deliveries` row, `last_delivered_at`
+  and, for a records search, the new mark) is written once more when the
+  write fails (`afterSend`), so a passing fault does not leave the next
+  delivery repeating what was sent. The batch is a transaction, so a failed
+  one wrote nothing. A second fault ends the run as above.
 - Each search is claimed for the data date before its message goes: one
-  statement sets `last_delivered_at` to the run's time only while no run has
-  delivered it for that date, so two runs at the same moment (a trigger
-  fired twice) send it once. A send that does not go, or a fault after the
-  claim, gives `last_delivered_at` back as it was.
+  statement sets `last_delivered_at` to the run's time only while its
+  delivery is on and no run has delivered it for that date, so two runs at
+  the same moment (a trigger fired twice) send it once, and a stop link
+  clicked after the run read its list stops that run's message. A send that
+  does not go, or a fault after the claim, gives `last_delivered_at` back as
+  it was.
 - Log lines carry dates, counts and file names, never an address or a label.
 
 ### Stopping a delivery
@@ -789,7 +822,8 @@ search is delivered and kept until the search or the account is deleted.
   opening the link changes nothing, so a mail scanner that follows it
   stops nothing.
 - `POST /account/stop` with the same two values turns the search's
-  delivery off and says so.
+  delivery off and says so. A run under way when it lands does not send
+  that search: its claim holds only while the delivery is on.
 - The same `POST` with the body `List-Unsubscribe=One-Click` (RFC 8058, as
   a mail client sends it) turns the delivery off and answers a line of
   text, with no page.
@@ -2203,7 +2237,13 @@ message lists 5). Two views of one address read once. When the figures hash
 as the last message's did, the run writes `same` and sends nothing. Until the
 records database is ready at today's data date, every view waits unclaimed.
 A view is claimed for its period before its message goes and given back when
-the send does not go, as a briefing is.
+the send does not go, as a briefing is. After a message went, its row and its
+hash are written once more when the write fails, so an unchanged view does not
+send again. A view read and passed over because its account's plan does not
+send it (no `view_mail`, or past the plan's figure) is marked covered for its
+period (`last_delivered_at`, no run row), so the views of accounts that moved
+down do not fill the 1,000 the run reads ahead of the ones paid for; a plan
+restored within the period sends from the next one.
 
 The message: the view's name, its source and period, the figures by fiscal
 year (records and counted value, newest first), the five largest records of
@@ -2623,17 +2663,32 @@ message per account, grouped by watch in the order single records,
 organizations, buyers, notices; an event two watches reach is listed once,
 under the first, with "Also on your watch of ..."; the kinds each follows
 only; 50 rows in all, then a line per kind with how many more (a count row
-counts what it stands for). The account's first message of the week also
+counts what it stands for). The watches reached once the 50 rows are listed
+are one line, "3 more pages with news are on your watches page" ("3 autres
+pages avec des nouveautés figurent sur votre page des suivis"), linking the
+watches page: with up to 100 watches a message would otherwise pass the size
+at which a webmail client clips it and hides the stop link. The account's
+first message of the week (no data date since the week's Monday covered yet,
+`weekAnchor`: Monday, or the next data date when Monday had no run) also
 carries the week's matching notices for the organization it claims, unless
 its weekly email takes them (*Matching notices*, By email). Nothing new
 writes `empty` and sends nothing: no empty message is ever sent. The
 account is claimed for the data date before
-its message goes (`watch_mail.last_day`), given back when the send does not
-go; a refusal that is not a sending limit sets `failed_day` and the account
-waits for the next data date. Each run of an account is a `watch_deliveries`
-row (kept 90 days). Until the records database is ready at today's data date
-(absent, loading, failed, stale) every account waits unclaimed and the run's
-report says why (`watch.records`).
+its message goes (`watch_mail.last_day`), only while its mail is on, so a
+stop link clicked after the run read its list stops that run's message; the
+claim is given back when the send does not go; a refusal that is not a
+sending limit sets `failed_day` and the account waits for the next data date.
+After a message went, the account's row, its run and each watch's coverage
+(`last_sent_day`) are written once more when the write fails, so a passing
+fault does not leave the next data date repeating the events. Each run of an
+account is a `watch_deliveries` row (kept 90 days). An account read and passed
+over because its plan has no `watch_mail` (Free, or a plan that lapsed) is
+marked for the data date (`last_day`, nothing else, no run row, one batch for
+up to 100 of them), so the accounts that follow pages on Free do not fill the
+1,000 the run reads ahead of the accounts that pay for the mail. Until the
+records database is ready at today's data date (absent, loading, failed,
+stale) every account waits unclaimed and the run's report says why
+(`watch.records`).
 
 Subject: `{n} updates on what you follow: {first two watch labels}` (`1 update
 on what you follow: {label}`); in French `{n} nouveautés sur ce que vous
@@ -2829,10 +2884,13 @@ run's data date, or the block is left out. `watchDigest` (`digests.ts`) takes
 it as `opening` and puts it before the watches; a message with the block and
 no watch event carries the block alone, under its own subject. The watch
 mail's run (`watch_mail.ts` `runWatchMail`) reads it on the account's weekly
-day (a day one of its weekly watches is due, or Monday for an account whose
-watches are all daily, `WEEK_OPENING_DAY`) and sends a message that would
+day (a day one of its weekly watches is due, or the account's first message
+of the week: no data date since the week's Monday covered yet, so Monday, or
+the next data date when Monday had no run) and sends a message that would
 otherwise be empty when the block has a line; a fault in reading it leaves
-the message without the block. The week's matching notices, when the
+the message without the block. The block always reads the 7 data dates
+ending with the run's, so when it goes on a Tuesday, the next Monday's block
+counts that Tuesday again. The week's matching notices, when the
 message carries them, follow this block (*Matching notices*, By email).
 
 ### Privacy and the console
@@ -3042,9 +3100,11 @@ are `site/test/fit-mail.test.ts` and the mail suite (`docs/mail.md`).
   covered no data date since the week's Monday, `briefings.ts`
   `weekAnchor`), after the "Your organization" block and before the
   watches. The watch mail leaves the block out when the account's weekly
-  email is on from before that Monday or went that week
-  (`weeklyTakesMatches`), so a Pro account with both is sent the same
-  matches once. A watch message with no event and nothing in the
+  email is on from before that Monday and no message to it was refused that
+  week (`failed_week`), or went that week (`weeklyTakesMatches`), so a Pro
+  account with both is sent the same matches once, and a week whose weekly
+  email was refused leaves them to the watch mail. A watch message already
+  sent that week before the refusal does not carry them again. A watch message with no event and nothing in the
   organization's block still goes for the matches, under the organization
   block's subject (or the matches' heading when that block did not read).
 - No block, and the message goes as it would without it: no claim (or no
@@ -3422,8 +3482,11 @@ are `site/test/briefings.test.ts`.
 
 ### The message
 
-For a subject S at data date D, the span is the seven data dates ending with
-D (after a message that failed, back to the last one covered, at most 14).
+For a subject S at data date D, the span is the data dates after the last
+one covered, up to D: seven for a first message, six when the last message
+went on a Tuesday (a Monday whose nightly came late), and after a message
+that failed back to the last one covered, at most 14. So no day is reported
+in two messages.
 Each section opens on its heading in a tinted band with its count, in
 capitals ("AWARDS THIS WEEK: 19"; the plain-text part in capitals too), and
 its rows follow (docs/mail.md, *The shell*).
@@ -3496,8 +3559,18 @@ are not news: both lists stand from week to week). The claim, the send, `sent`,
 message goes, given back when the send does not go; a refusal that is not a
 sending limit writes `failed` and leaves `last_delivered_at`, so next week's
 message covers both weeks with the span in its lead. Each run of a briefing is
-a `briefing_deliveries` row (kept 90 days). The log line adds `briefings: n
+a `briefing_deliveries` row (kept 90 days); after a message went, the row is
+written once more when the write fails. The log line adds `briefings: n
 sent, n failed, n with nothing new, n not on a plan with delivery`.
+
+A briefing read and passed over because its account's plan does not send it
+(no `delivery`, or past the plan's figure after a move to a smaller plan) is
+marked covered for the week (`last_delivered_at`, no run row, one batch for
+up to 100 of them), so the briefings of accounts that moved down do not fill
+the 1,000 the run reads ahead of the ones paid for; a plan restored that week
+sends from the next Monday. A buyer briefing whose buyer the nightly merged
+into another is read, and its links written, at the surviving buyer
+(`watches.ts` `survivorOf`); its row and its label keep the buyer saved.
 
 The stop link is `/account/stop?b=<briefing id>&t=<secret>`, in the footer and
 in `List-Unsubscribe` with `List-Unsubscribe-Post`; it turns that briefing's
@@ -3698,9 +3771,11 @@ that holds only while the email is on, the account active and the week not
 covered), so two runs at once send it once; a send that does not go gives
 the claim back. A refusal that is not a sending limit marks the week
 (`failed_week`), so the account waits for next week; `E_DAILY_LIMIT_EXCEEDED`
-or `E_RATE_LIMIT_EXCEEDED` stops the run and the next hour goes on. A deleted
-account is never due: its row goes with it, and the list reads active
-accounts only.
+or `E_RATE_LIMIT_EXCEEDED` stops the run and the next hour goes on. After a
+message went, `last_status` is written once more when the write fails. Like
+the other parts, it takes up no account past the run's query budget (*Phase
+2: delivery*, What it sends and writes). A deleted account is never due: its
+row goes with it, and the list reads active accounts only.
 
 The run's log line adds `weekly email: n sent, n failed`, and, when accounts
 waited, how many and why (the records database, `MAIL_ADDRESS` not set, or

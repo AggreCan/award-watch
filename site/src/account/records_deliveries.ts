@@ -117,6 +117,10 @@ export interface Mark {
   from: number;
   to: number;
   counts: Counts;
+  // The id the counts were read at, kept only when it is not the saved one:
+  // an organization or buyer the nightly merged, read at the surviving id
+  // (deliveries.ts survivingEntity). Counts read at another id do not compare.
+  at?: string;
 }
 
 // A source and fiscal year whose count rose: by how many, its count now and
@@ -151,10 +155,12 @@ export function readMark(asOf: string, text: string | null): Mark | null {
     if (!/^[1-4]:\d{4}$/.test(key) || !Array.isArray(pair) || pair.length !== 2 || !isCount(pair[0]) || !isCents(pair[1])) return null;
     counts[key] = [pair[0], pair[1]];
   }
-  return { asOf, rules: o.rules as string | null, from: o.from as number, to: o.to as number, counts };
+  const at = typeof o.at === "string" && /^[a-z0-9-]{1,80}$/.test(o.at) ? { at: o.at } : {};
+  return { asOf, rules: o.rules as string | null, from: o.from as number, to: o.to as number, counts, ...at };
 }
 
-export const markText = (m: Mark): string => JSON.stringify({ rules: m.rules, from: m.from, to: m.to, counts: m.counts });
+// The id is written only when the mark has one (JSON leaves an undefined value out).
+export const markText = (m: Mark): string => JSON.stringify({ rules: m.rules, from: m.from, to: m.to, counts: m.counts, at: m.at });
 
 // The counts that rose since the previous mark, newest fiscal year first and
 // in the profile's order of sources within a year; null when there is no

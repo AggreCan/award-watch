@@ -191,7 +191,7 @@ and keep their own tests.
 | Weekly emails in one delivery run | `WEEKLY_RUN_MAX`, 100 | the weekly email's room is the shared room held to 100; the run stops there and the next hour (or the next data date of the week) goes on |
 | Watches one weekly email names | `WEEKLY_LINES`, 5 | eight watches with news name five, one line each, and count three more on a line to the watches page |
 | Matching notices one message lists | `RULES.free.match_mail`, 3; `RULES.pro.match_mail`, 10 | 2, 3 and 25 matches on Free list 2, 3 and 3; 9, 10 and 25 on Pro list 9, 10 and 10; the rest is counted in both parts only when there is one, and the subject counts every match |
-| Rows in one delivery message | `ROWS_MAX`, 50 | a search with 120 notices lists 50 and counts 70 more in both parts; a segment's counts come first; the watch mail's 50 run across every watch, each kind's rest on its own line |
+| Rows in one delivery message | `ROWS_MAX`, 50 | a search with 120 notices lists 50 and counts 70 more in both parts; a segment's counts come first; the watch mail's 50 run across every watch, each kind's rest on its own line, and the watches reached once the 50 are listed are one line to the watches page (`test-mail/watch-size.test.ts`: 100 busy watches stay under 100,000 characters of HTML, the footer's stop link kept) |
 | Rows in one briefing section | `SECTION_ROWS`, 10 | 25 new notices list 10 and count 15 more |
 | Largest records in one saved view's message | `VIEW_MAIL_ROWS`, 5 | nine records list five; a twenty-year view lists its twenty fiscal years, the newest first |
 | Saved views one run reads | `VIEWS_RUN_MAX`, 1000 | the next hour reads the rest |

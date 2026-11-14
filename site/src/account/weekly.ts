@@ -40,7 +40,7 @@ import type { Env } from "../env";
 import type { Lang } from "../i18n";
 import { num, readRecords } from "../records_db";
 import { WEEK_DAYS, weekAnchor } from "./briefings";
-import { type Files, STOP_CODES, sendWithHeaders } from "./deliveries";
+import { type Files, type QueryCount, STOP_CODES, afterSend, budgetStop, sendWithHeaders } from "./deliveries";
 import { WEEKLY_ENDING_MONTHS, type WatchGroup, type WeekFigures, siteLink, weeklyDigest } from "./digests";
 import { allowed, planFor, type Plan } from "./entitlements";
 import { fitDigestBlock, weekNotices } from "./fit_mail";
@@ -260,10 +260,13 @@ export const weekDays = (dataDate: string): string[] => Array.from({ length: WEE
 // room: the messages the run may still send (the cap less what the earlier
 // parts sent or tried). stop: why the run stopped early. report is null when
 // the table is not on the database: the feature is not there, and the run
-// says nothing of it.
+// says nothing of it. queries: the run's count (deliveries.ts QueryCount).
 export async function runWeekly(
   env: Env,
-  o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; files: Files; stats: Stats },
+  o: {
+    site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; files: Files; stats: Stats;
+    queries?: QueryCount;
+  },
 ): Promise<{ report: WeeklyReport | null; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
   const week = weekAnchor(dataDate);
@@ -298,8 +301,18 @@ export async function runWeekly(
   let stop: string | null = null;
   let capped = false;
   let held: DueRow | null = null;
+  // Past the run's query budget (deliveries.ts QueryCount), nothing more is taken up; the next hour goes on.
+  const pause = (claiming = false): boolean => {
+    const why = budgetStop(o.queries, claiming);
+    if (why) {
+      stop = why;
+      capped = true;
+    }
+    return why !== null;
+  };
   try {
     for (const [i, a] of due.entries()) {
+      if (pause()) break;
       let plan = o.plans.get(a.user_id);
       if (!plan) {
         plan = (await planFor(env, { id: a.user_id, plan: a.plan, plan_until: a.plan_until }, now)).plan;
@@ -334,6 +347,7 @@ export async function runWeekly(
         capped = true;
         break;
       }
+      if (pause(true)) break;
       if (!(await claim(env, a.user_id, week, now))) continue;
       held = a;
       const secret = a.secret ?? (await stopSecret(env, a.user_id));
@@ -349,7 +363,7 @@ export async function runWeekly(
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {
         held = null;
-        await env.ACCOUNTS!.prepare("UPDATE weekly_mail SET last_status = 'sent' WHERE user_id = ?").bind(a.user_id).run();
+        await afterSend(() => env.ACCOUNTS!.prepare("UPDATE weekly_mail SET last_status = 'sent' WHERE user_id = ?").bind(a.user_id).run());
         report.sent++;
       } else if (result.code && STOP_CODES.has(result.code)) {
         await release(env, a, week, now);

@@ -40,6 +40,17 @@
 // finds nothing due, and two runs at the same moment (a trigger fired twice)
 // send each search once: a run claims a search for the data date before
 // sending (claim), and gives it back when the send does not go (release).
+// The claim holds only while the search's delivery is on, so a stop link
+// clicked after the run read its list stops that run's message; the row after
+// a send is written once more when it fails (afterSend). An organization or
+// buyer the nightly merged is read at the surviving id (survivingEntity,
+// survivingParams); the search's row keeps the id saved.
+//
+// The run is one invocation of the scheduled handler, and D1 holds an
+// invocation to its queries: every query on the accounts and the records
+// databases is counted (QueryCount), and past RUN_QUERY_BUDGET no part takes
+// up another item; the run stops as the message cap stops it and the next
+// hour goes on from the claims.
 //
 // After the saved searches, the same run sends the watch mail (watch_mail.ts):
 // one message per account with watches, inside the same cap, and a sending
@@ -61,12 +72,13 @@ import type { Env } from "../env";
 import { pick, segmentShort, type Lang } from "../i18n";
 import { WINDOW_DAYS, filterExpiring, readExpiringQuery } from "../pages/expiring";
 import { filterTenders, readTenderQuery } from "../pages/tenders";
-import { type Cadence, type DigestMessage, expiringDigest, recordsDigest, siteLink, tenderDigest } from "./digests";
+import { type Cadence, type DigestMessage, ROWS_MAX, expiringDigest, recordsDigest, siteLink, tenderDigest } from "./digests";
 import { allowed, planFor, type Plan } from "./entitlements";
 import {
   type Entity, type Mark, type RecordsWait, type Rise, MARK_WRITE_SQL, entityOf, isRecordsKind, loadMark, markText, missingTable, readCounts,
   rises,
 } from "./records_deliveries";
+import { survivorOf } from "./watches";
 import { type BriefingReport, briefingActive, briefingCounts, madeBefore, runBriefings, sharedCap } from "./briefings";
 import { DELIVERABLE_KINDS } from "./searches";
 import { randomHex } from "./secrets";
@@ -80,8 +92,9 @@ import { type WeeklyReport, runWeekly, weeklyActive, weeklyCounts } from "./week
 export const DELIVERY_CRON = "0 15-20 * * *";
 
 export const RUN_MESSAGES_MAX = 300;
-// Rows listed in one message; the rest are a line linking the page.
-export const ROWS_MAX = 50;
+// Rows listed in one message; the rest are a line linking the page. Set with
+// the messages (digests.ts), which hold the watch mail to it too.
+export { ROWS_MAX };
 // The most days one delivery reaches back, whatever the gap since the last.
 export const SPAN_DAYS_MAX = 7;
 // A weekly search is due again this many days after its last delivery.
@@ -97,6 +110,111 @@ export const roomAfter = (...parts: ({ sent: number; failed: number } | null | u
 // Refusals that mean the account's sending is spent for now: the run stops
 // and the next hour goes on. Any other refusal fails that one message.
 export const STOP_CODES: ReadonlySet<string> = new Set(["E_DAILY_LIMIT_EXCEEDED", "E_RATE_LIMIT_EXCEEDED"]);
+
+// -- the run's queries ------------------------------------------------------------------------
+
+// D1 holds each Worker invocation to a number of queries. Its limits page
+// (https://developers.cloudflare.com/d1/platform/limits/, read 2026-11-14)
+// gives the row "Queries per Worker invocation" as "1000 (Workers Paid) / 50
+// (Free)", says a db.batch() call "counts as a single query against it, not
+// one query per statement", and that 2,000 single queries in one invocation
+// fail with "Too many API requests by single Worker invocation". The
+// Workers limits page (https://developers.cloudflare.com/workers/platform/limits/)
+// counts D1 calls as subrequests (10,000 an invocation on Workers Paid) and
+// gives a cron of an hour or more 15 minutes of CPU: neither binds first. The
+// site is on Workers Paid, and each hourly
+// run is one invocation of the scheduled handler reading two databases (the
+// accounts and the records), so the run counts its queries on both
+// (QueryCount) and keeps under the figure:
+export const D1_QUERIES_MAX = 1000;
+// No part takes up another item (a saved search, an account's watch mail, a
+// briefing, an account's weekly email, a view) once the run has made this
+// many: it stops as the message cap stops it ("capped"), and the next hour
+// goes on from the claims. What lies between it and D1's figure covers the
+// reads of the item in hand (an account's watches moved after a merge, one
+// statement each) and the writes a part ends with. Six runs a data date
+// (DELIVERY_CRON) make 5,100 queries a day.
+export const RUN_QUERY_BUDGET = 850;
+// The most queries an item makes from its claim to its last write: the
+// claim, the stop link's secret, the row after the send and its one retry,
+// or the release and the failed row. An item is claimed only while this many
+// remain under D1's figure, so a run never stops between a claim and the row
+// that records it.
+export const CLAIM_QUERIES = 8;
+export const BUDGET_TEXT = `the budget of ${RUN_QUERY_BUDGET} database queries`;
+
+class CountedStatement {
+  constructor(readonly inner: D1PreparedStatement, private readonly count: QueryCount) {}
+  bind(...values: unknown[]): CountedStatement {
+    return new CountedStatement(this.inner.bind(...values), this.count);
+  }
+  first<T>(column?: string): Promise<T | null> {
+    this.count.n++;
+    return column === undefined ? this.inner.first<T>() : this.inner.first<T>(column);
+  }
+  run<T>(): Promise<D1Result<T>> {
+    this.count.n++;
+    return this.inner.run<T>();
+  }
+  all<T>(): Promise<D1Result<T>> {
+    this.count.n++;
+    return this.inner.all<T>();
+  }
+  raw<T>(options?: { columnNames?: false }): Promise<T[]> {
+    this.count.n++;
+    return this.inner.raw<T>(options);
+  }
+}
+
+// The queries one run has made, on every binding passed through db().
+export class QueryCount {
+  n = 0;
+  // Nothing more is taken up.
+  get spent(): boolean {
+    return this.n >= RUN_QUERY_BUDGET;
+  }
+  // Room under D1's figure for a claim and every write after it.
+  get claimable(): boolean {
+    return this.n + CLAIM_QUERIES <= D1_QUERIES_MAX;
+  }
+  // The binding with each query counted: a statement's first, run, all or raw, and a batch as one.
+  db(real: D1Database): D1Database {
+    const inner = (s: D1PreparedStatement) => ((s as unknown) instanceof CountedStatement ? (s as unknown as CountedStatement).inner : s);
+    return {
+      prepare: (query: string) => new CountedStatement(real.prepare(query), this),
+      batch: <T>(statements: D1PreparedStatement[]) => {
+        this.n++;
+        return real.batch<T>(statements.map(inner));
+      },
+      exec: (query: string) => {
+        this.n++;
+        return real.exec(query);
+      },
+    } as unknown as D1Database;
+  }
+}
+
+// Why a part stops before its next item, or null: the budget spent (claiming:
+// too little left for a claim and its writes). A part called without a count
+// (a test of the part alone) never stops for it.
+export function budgetStop(queries: QueryCount | undefined, claiming = false): string | null {
+  if (!queries) return null;
+  return (claiming ? !queries.claimable : queries.spent) ? BUDGET_TEXT : null;
+}
+
+// The writes after a message went (its row, its coverage, its mark): tried
+// once more when they fail, so a passing fault does not leave the message
+// unrecorded and the next delivery repeating it. A second fault ends the run
+// as any fault does. The batches are transactions, so a failed one wrote
+// nothing (https://developers.cloudflare.com/d1/worker-api/d1-database/,
+// "Batched statements are SQL transactions").
+export async function afterSend(write: () => Promise<unknown>): Promise<void> {
+  try {
+    await write();
+  } catch {
+    await write();
+  }
+}
 
 const BASE = "https://deliveries.invalid";
 
@@ -299,8 +417,9 @@ export type RecordsItems = {
 export async function recordsItems(
   env: Env, files: Files, s: { id: string; kind: string; params: string }, lang: Lang, start: string, dataDate: string, clock: Clock,
 ): Promise<RecordsItems | { wait: RecordsWait | "no_marks" } | null> {
-  const entity = entityOf(s.kind, s.params);
-  if (!entity) return null;
+  const saved = entityOf(s.kind, s.params);
+  if (!saved) return null;
+  const entity = await survivingEntity(env, saved);
   const read = await readCounts(env, entity, dataDate);
   if (read.state !== "ready") return { wait: read.state };
   let prev: Mark | null;
@@ -310,11 +429,49 @@ export async function recordsItems(
     if (missingTable(e)) return { wait: "no_marks" };
     throw e;
   }
+  // Counts read at another id do not compare: the first delivery after a
+  // merge keeps the counts and reports nothing, as a first delivery does,
+  // since the merge moved records into the surviving id that were never new.
+  // A mark names the id only when it is not the saved one (a mark without it
+  // was read at the saved id).
+  const comparable = prev && (prev.at ?? saved.id) === entity.id ? prev : null;
+  const mark: Mark = entity.id === saved.id ? read.mark : { ...read.mark, at: entity.id };
   const name = entity.kind === "segment"
     ? `${entity.id} ${segmentShort(lang, entity.id)}`
     : (read.name ? pick(lang, read.name.en, read.name.fr) : null) ?? entity.id;
   const tenders = entity.kind === "segment" ? await tenderItems(files, `/tenders?segment=${entity.id}`, start, dataDate, clock) : [];
-  return { entity, name, rises: rises(prev, read.mark) ?? [], since: prev?.asOf ?? dataDate, tenders, mark: read.mark };
+  return { entity, name, rises: rises(comparable, mark) ?? [], since: comparable?.asOf ?? dataDate, tenders, mark };
+}
+
+// -- merged organizations and buyers ---------------------------------------------------------
+
+// The entity of an organization or buyer search at the id the nightly merged
+// its saved id into (watches.ts survivorOf, as a watch and a saved view
+// follow it), read at each delivery; the search's row and label keep the id
+// saved. A segment, and an id that stands, read as saved.
+export async function survivingEntity(env: Env, e: Entity): Promise<Entity> {
+  if (e.kind === "segment") return e;
+  const next = await survivorOf(env, e.kind, e.id);
+  if (!next) return e;
+  return entityOf(e.kind, e.kind === "organization" ? `/organizations/${next}` : `/buyers/${next}`) ?? e;
+}
+
+// A tender or radar search's filters on an organization or a buyer the
+// nightly merged, moved to the surviving ids for this delivery's reading and
+// its links; the stored page is not rewritten.
+const MOVED_KEYS: readonly [string, "organization" | "buyer"][] = [["buyer", "buyer"], ["client", "buyer"], ["supplier", "organization"]];
+
+export async function survivingParams(env: Env, params: string): Promise<string> {
+  const url = new URL(params, BASE);
+  let moved = false;
+  for (const [key, kind] of MOVED_KEYS) {
+    const id = (url.searchParams.get(key) ?? "").trim().toLowerCase();
+    const next = id ? await survivorOf(env, kind, id) : null;
+    if (!next) continue;
+    url.searchParams.set(key, next);
+    moved = true;
+  }
+  return moved ? `${url.pathname}${url.search}` : params;
 }
 
 // -- writing what happened -----------------------------------------------------------------
@@ -357,11 +514,13 @@ async function record(
 }
 
 // A search taken for the data date by this run: last_delivered_at set to the
-// run's time in one statement that holds only while no run has delivered it
-// for this data date, so of two runs at once exactly one goes on.
+// run's time in one statement that holds only while its delivery is on and no
+// run has delivered it for this data date, so of two runs at once exactly one
+// goes on, and a stop link clicked after the run read its list stops it.
 async function claim(env: Env, searchId: string, dataDate: string, now: Date): Promise<boolean> {
   const res = await env.ACCOUNTS!.prepare(
-    "UPDATE saved_searches SET last_delivered_at = ? WHERE id = ? AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?)",
+    "UPDATE saved_searches SET last_delivered_at = ? WHERE id = ? AND deliver IN ('daily', 'weekly') " +
+    "AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?)",
   ).bind(now.toISOString(), searchId, dataDate).run();
   return (res.meta?.changes ?? 0) === 1;
 }
@@ -451,16 +610,30 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
     log(`the data date is ${dataDate}, not today's; nothing to send`);
     return { ...report, outcome: "not_today" };
   }
+  // Every query from here on is counted, on both databases, against D1's per invocation.
+  const queries = new QueryCount();
+  env = { ...env, ACCOUNTS: queries.db(env.ACCOUNTS!), RECORDS: env.RECORDS ? queries.db(env.RECORDS) : env.RECORDS };
   const clock = clockAt(now.getTime());
   const files = publishedFiles(env);
   const plans = new Map<string, Plan>();
   let stop: string | null = null;
+  // Past the query budget (claiming: too little left for a claim and its
+  // writes), the run stops before the next search, as the message cap stops it.
+  const pause = (claiming = false): boolean => {
+    const why = budgetStop(queries, claiming);
+    if (why) {
+      stop = why;
+      report.outcome = "capped";
+    }
+    return why !== null;
+  };
   // The search this run has claimed and not yet recorded or given back: a
   // fault in between gives it back too, so the next hour covers it.
   let held: { id: string; before: string | null } | null = null;
   try {
     for (const s of await candidates(env, dataDate)) {
       if (!isDue(s.deliver, s.last_delivered_at, dataDate)) continue;
+      if (pause()) break;
       let plan = plans.get(s.user_id);
       if (!plan) {
         plan = (await planFor(env, { id: s.user_id, plan: s.plan, plan_until: s.plan_until }, now)).plan;
@@ -475,10 +648,12 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
       const lang = asLang(s.lang);
       const start = spanStart(cadence, s.last_delivered_at, dataDate);
       const win = s.kind === "expiring" ? /^\/expiring\/(3m|6m|12m)(?:\?|$)/.exec(s.params)?.[1] : null;
+      // A filter on a merged organization or buyer reads the surviving id.
+      const params = s.kind === "tenders" || win ? await survivingParams(env, s.params) : s.params;
       let items: TenderRow[] | ExpiringRow[] = [];
       let found: RecordsItems | null = null;
-      if (s.kind === "tenders") items = await tenderItems(files, s.params, start, dataDate, clock);
-      else if (win && isExpiringWindow(win)) items = await expiringItems(files, win, s.params, start, dataDate);
+      if (s.kind === "tenders") items = await tenderItems(files, params, start, dataDate, clock);
+      else if (win && isExpiringWindow(win)) items = await expiringItems(files, win, params, start, dataDate);
       else if (isRecordsKind(s.kind)) {
         // Once the records database (or the marks table) is found wanting, the
         // run's other records searches wait without asking it again.
@@ -499,6 +674,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
       const total = found ? more + found.tenders.length : items.length;
       const mark = found?.mark ?? null;
       if (total === 0) {
+        if (pause(true)) break;
         if (!(await claim(env, s.id, dataDate, now))) continue;
         held = { id: s.id, before: s.last_delivered_at };
         await record(env, s.id, "empty", 0, now, mark);
@@ -511,7 +687,8 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         report.outcome = "capped";
         break;
       }
-      // Another run at the same moment has it: that run sends it.
+      if (pause(true)) break;
+      // Another run at the same moment has it (that run sends it), or its delivery was turned off since the list was read.
       if (!(await claim(env, s.id, dataDate, now))) continue;
       held = { id: s.id, before: s.last_delivered_at };
       const secret = s.secret ?? (await stopSecret(env, s.id, now));
@@ -521,7 +698,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         continue;
       }
       const stopUrl = siteLink(site, `/account/stop?s=${s.id}&t=${secret}`, lang);
-      const base = { lang, to: s.email, site, label: s.label, params: s.params, cadence, dataDate, stopUrl, total };
+      const base = { lang, to: s.email, site, label: s.label, params, cadence, dataDate, stopUrl, total };
       let message: DigestMessage;
       if (found) {
         // At most ROWS_MAX rows in all: the counts (40 at most) first, then the
@@ -536,14 +713,14 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
       } else {
         message = expiringDigest({
           ...base, rows: (items as ExpiringRow[]).slice(0, ROWS_MAX), months: WINDOW_MONTHS[win as ExpiringWindow],
-          query: readExpiringQuery(new URL(s.params, BASE)),
+          query: readExpiringQuery(new URL(params, BASE)),
         });
       }
       const result = await send(env, site, message);
       if (result.sent) {
         // Sent: the claim stands, whatever happens to the row that records it.
         held = null;
-        await record(env, s.id, "sent", total, now, mark);
+        await afterSend(() => record(env, s.id, "sent", total, now, mark));
         report.sent++;
       } else if (result.code && STOP_CODES.has(result.code)) {
         await release(env, s.id, s.last_delivered_at, now);
@@ -568,7 +745,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   if (!stop) {
     try {
       const watch = await runWatchMail(env, {
-        site, dataDate, now, plans, room: roomAfter(report), capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
+        site, dataDate, now, plans, room: roomAfter(report), capText: `the cap of ${RUN_MESSAGES_MAX} messages`, queries,
       });
       report.watch = watch.report;
       if (watch.stop) {
@@ -583,7 +760,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   if (!stop) {
     try {
       const brief = await runBriefings(env, {
-        site, dataDate, now, plans, room: roomAfter(report, report.watch), capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
+        site, dataDate, now, plans, room: roomAfter(report, report.watch), capText: `the cap of ${RUN_MESSAGES_MAX} messages`, queries,
       });
       report.briefing = brief.report;
       if (brief.stop) {
@@ -598,7 +775,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   if (!stop) {
     try {
       const weekly = await runWeekly(env, {
-        site, dataDate, now, plans, room: roomAfter(report, report.watch, report.briefing), capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
+        site, dataDate, now, plans, room: roomAfter(report, report.watch, report.briefing), capText: `the cap of ${RUN_MESSAGES_MAX} messages`, queries,
         files, stats,
       });
       report.weekly = weekly.report;
@@ -614,10 +791,10 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   // A stop at the weekly email's own ceiling (WEEKLY_RUN_MAX) holds the weekly
   // email alone: the saved views still get what the shared cap has left.
   const viewRoom = roomAfter(report, report.watch, report.briefing, report.weekly);
-  if (!stop || (report.outcome === "capped" && viewRoom > 0)) {
+  if (!stop || (report.outcome === "capped" && viewRoom > 0 && !queries.spent)) {
     try {
       const views = await runViewMail(env, {
-        site, dataDate, now, plans, room: viewRoom, capText: `the cap of ${RUN_MESSAGES_MAX} messages`,
+        site, dataDate, now, plans, room: viewRoom, capText: `the cap of ${RUN_MESSAGES_MAX} messages`, queries,
       });
       report.views = views.report;
       if (views.stop) {

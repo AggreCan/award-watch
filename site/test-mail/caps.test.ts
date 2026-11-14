@@ -159,9 +159,12 @@ describe("the rows a message lists", () => {
     });
     expect(rowsIn(m.html)).toBe(ROWS_MAX);
     expect(itemsIn(m.text)).toBe(ROWS_MAX);
-    for (const rest of [10, 30]) {
-      expect(nbsp(m.text)).toContain(nbsp(t(lang, "watches.more_many", { kind: t(lang, "watches.ev_award"), n: rest })));
-    }
+    // The second watch's rest on its kind's line; the third, reached once the rows are listed, is one line for
+    // the watches past them (test-mail/watch-size.test.ts holds a message of 100 watches to its size).
+    expect(nbsp(m.text)).toContain(nbsp(t(lang, "watches.more_many", { kind: t(lang, "watches.ev_award"), n: 10 })));
+    expect(nbsp(m.text)).not.toContain(nbsp(t(lang, "watches.more_many", { kind: t(lang, "watches.ev_award"), n: 30 })));
+    expect(m.text).not.toContain("Sample Works 3");
+    expect(nbsp(m.text)).toContain(nbsp(t(lang, "weekly.more_pages_one")));
     checkMessage(await viaLogSender(m), shapeOf("watch", "watch mail at the cap", SITE), lang);
   });
 

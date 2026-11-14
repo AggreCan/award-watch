@@ -39,6 +39,11 @@ export type DigestMessage = MailMessage & { headers: Record<string, string> };
 
 export type Cadence = "daily" | "weekly";
 
+// Rows listed in one delivery message; the rest are a line linking the page
+// (deliveries.ts slices the saved searches' rows to it, watch_mail.ts
+// groupsFor the watches', and watchDigest holds its watches to it as well).
+export const ROWS_MAX = 50;
+
 interface DigestBase {
   lang: Lang;
   to: string;
@@ -706,7 +711,17 @@ export function watchDigest(o: WatchDigest): DigestMessage {
     ...(open ? openingHtml(open) : []), ...(fit ? matchesHtml(fit) : []), ...(alone ? [] : [h1(title), para(escapeHtml(lead))]),
   ];
   const text: string[] = [...(open ? [openingText(lang, open)] : []), ...(fit ? [matchesText(lang, fit)] : []), ...(alone ? [] : [title, lead])];
+  // ROWS_MAX rows in all. A watch reached once they are listed would add only
+  // its heading, its count and a line per kind: with 100 watches that passes
+  // the size at which a webmail client clips the message and hides its stop
+  // link, so the watches from there on are one line linking the watches page.
+  let shown = 0;
+  let later = 0;
   for (const g of o.groups) {
+    if (shown >= ROWS_MAX) {
+      later++;
+      continue;
+    }
     const href = siteLink(o.site, g.path, lang);
     const n = g.events.reduce((sum, e) => sum + e.n, 0);
     const head = `${g.label} · ${t(lang, WATCH_KIND_KEY[g.kind])}`;
@@ -714,17 +729,19 @@ export function watchDigest(o: WatchDigest): DigestMessage {
     html.push(h2(head), para(inkLink(href, count)));
     const lines: string[] = [`${h2Text(lang, head)}\n${t(lang, "digest.text_link", { label: count, url: href })}`];
     for (const e of g.events) {
-      if (e.rows.length) {
-        html.push(rows(e.rows.map((r, i) => {
+      const listed = e.rows.slice(0, Math.max(0, ROWS_MAX - shown));
+      shown += listed.length;
+      if (listed.length) {
+        html.push(rows(listed.map((r, i) => {
           const l = watchEventLines(lang, r, o.clock);
           return row(l.title, siteLink(o.site, r.path, lang), escapeHtml(l.line2), escapeHtml(l.line3), i === 0);
         })));
-        for (const r of e.rows) {
+        for (const r of listed) {
           const l = watchEventLines(lang, r, o.clock);
           lines.push(`- ${l.title}\n  ${l.line2}\n  ${l.line3}\n  ${siteLink(o.site, r.path, lang)}`);
         }
       }
-      const rest = e.n - e.rows.length;
+      const rest = e.n - listed.length;
       if (rest > 0) {
         const more = watchMoreText(lang, e.kind, rest);
         html.push(para(inkLink(href, more)));
@@ -732,6 +749,11 @@ export function watchDigest(o: WatchDigest): DigestMessage {
       }
     }
     text.push(lines.join("\n\n"));
+  }
+  if (later > 0) {
+    const label = tn(lang, "weekly.more_pages_one", "weekly.more_pages_many", later, { n: fmtInt(later, lang) });
+    html.push(para(inkLink(page, label)));
+    text.push(t(lang, "digest.text_link", { label, url: page }));
   }
   html.push(button(page, t(lang, "watches.digest_button")), para(escapeHtml(t(lang, "watches.digest_note")), true));
   const why = t(lang, "watches.digest_why");

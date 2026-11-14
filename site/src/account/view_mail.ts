@@ -17,7 +17,9 @@
 // message goes and given back when the send does not go, as a briefing is.
 // Until the records database is ready at today's data date every view waits,
 // unclaimed. A view whose buyer or organization the nightly merged is read at
-// the surviving id (saved_views.ts survivingAddress), as its page reads it.
+// the surviving id (saved_views.ts survivingAddress), as its page reads it. A
+// view whose account's plan does not send it is marked for its period with no
+// run row (passedOver), so it leaves the list.
 //
 // Log lines name counts and dates only, never an address, a name or a view.
 
@@ -30,7 +32,7 @@ import {
 } from "../records_db";
 import { type Frame, type View, viewFrame, viewOf } from "../view_address";
 import { BRIEFING_WEEKDAY, type BriefingWait, recordPath, weekAnchor } from "./briefings";
-import { STOP_CODES, sendWithHeaders } from "./deliveries";
+import { type QueryCount, STOP_CODES, afterSend, budgetStop, sendWithHeaders } from "./deliveries";
 import { type ViewRecord, type ViewYear, VIEW_MAIL_ROWS, siteLink, viewDigest } from "./digests";
 import { allowed, planFor, savedViewCap, type Plan } from "./entitlements";
 import { ultraOnSale } from "./payments";
@@ -187,6 +189,24 @@ async function release(env: Env, id: string, before: string | null, now: Date): 
     .bind(before, id, now.toISOString()).run();
 }
 
+// The views read and passed over because their account's plan does not send
+// them (no view_mail, or past the plan's figure after a move to a smaller
+// plan): covered for their period as a claim would cover them, with no run
+// row, so they leave the list and do not fill it ahead of the views that are
+// paid for. A plan restored within the period sends from the next one. One
+// D1 batch of at most MARKS_BATCH statements a query.
+export const MARKS_BATCH = 100;
+
+async function passedOver(env: Env, views: readonly { id: string; anchor: string }[], now: Date): Promise<void> {
+  const db = env.ACCOUNTS!;
+  for (let i = 0; i < views.length; i += MARKS_BATCH) {
+    await db.batch(views.slice(i, i + MARKS_BATCH).map((v) => db.prepare(
+      "UPDATE saved_views SET last_delivered_at = ?1 WHERE id = ?2 AND deliver IN ('weekly', 'monthly') " +
+      "AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?3)",
+    ).bind(now.toISOString(), v.id, v.anchor)));
+  }
+}
+
 // One run row, written only while the view exists; a sent message keeps its hash beside it.
 async function record(env: Env, id: string, status: "sent" | "failed" | "same", now: Date, dataDate: string, hash: string | null = null): Promise<void> {
   const db = env.ACCOUNTS!;
@@ -210,9 +230,10 @@ async function stopSecret(env: Env, id: string): Promise<string | null> {
 // room: the messages the run may still send (the cap less what the four parts
 // before it sent or tried). stop: why the run stopped early. report null: the
 // part did not run, Ultra not being on sale; without the tables it runs no
-// further than saying so (records "no_table").
+// further than saying so (records "no_table"). queries: the run's count
+// (deliveries.ts QueryCount).
 export async function runViewMail(
-  env: Env, o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string },
+  env: Env, o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount },
 ): Promise<{ report: ViewReport | null; stop: string | null; capped: boolean }> {
   if (!(await ultraOnSale(env).catch(() => false))) return { report: null, stop: null, capped: false };
   const { site, dataDate, now } = o;
@@ -235,9 +256,20 @@ export async function runViewMail(
   let stop: string | null = null;
   let capped = false;
   let held: { id: string; before: string | null } | null = null;
+  const passed: { id: string; anchor: string }[] = [];
+  // Past the run's query budget (deliveries.ts QueryCount), nothing more is taken up; the next hour goes on.
+  const pause = (claiming = false): boolean => {
+    const why = budgetStop(o.queries, claiming);
+    if (why) {
+      stop = why;
+      capped = true;
+    }
+    return why !== null;
+  };
   try {
     for (const row of due) {
       if (!viewDue(row.deliver, row.last_delivered_at, dataDate)) continue;
+      if (pause()) break;
       const cadence = row.deliver as ViewCadence;
       let plan = o.plans.get(row.user_id);
       if (!plan) {
@@ -246,6 +278,7 @@ export async function runViewMail(
       }
       if (!allowed({ plan }, "view_mail") || (row.n_before ?? 0) >= savedViewCap(plan)) {
         report.skipped++;
+        passed.push({ id: row.id, anchor: anchorOf(cadence, dataDate) });
         continue;
       }
       const address = (await survivingAddress(env, row.address)) ?? row.address;
@@ -270,6 +303,7 @@ export async function runViewMail(
       const hash = await figuresHash(frame, figures);
       const anchor = anchorOf(cadence, dataDate);
       if (hash === row.last_hash) {
+        if (pause(true)) break;
         if (!(await claim(env, row.id, anchor, now))) continue;
         held = { id: row.id, before: row.last_delivered_at };
         await record(env, row.id, "same", now, dataDate);
@@ -282,6 +316,7 @@ export async function runViewMail(
         capped = true;
         break;
       }
+      if (pause(true)) break;
       if (!(await claim(env, row.id, anchor, now))) continue;
       held = { id: row.id, before: row.last_delivered_at };
       const secret = row.secret ?? (await stopSecret(env, row.id));
@@ -297,7 +332,8 @@ export async function runViewMail(
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {
         held = null;
-        await record(env, row.id, "sent", now, dataDate, hash);
+        // The hash with its row, tried once more on a fault, so an unchanged view does not send again.
+        await afterSend(() => record(env, row.id, "sent", now, dataDate, hash));
         report.sent++;
       } else if (result.code && STOP_CODES.has(result.code)) {
         await release(env, row.id, row.last_delivered_at, now);
@@ -311,6 +347,7 @@ export async function runViewMail(
         report.failed++;
       }
     }
+    await passedOver(env, passed, now);
   } catch (e) {
     if (held) await release(env, held.id, held.before, now).catch(() => undefined);
     throw e;

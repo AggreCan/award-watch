@@ -241,10 +241,11 @@ describe("the week and the fiscal quarter", () => {
     expect(briefingDue("weekly", "2026-10-26T15:00:00.000Z", "2026-11-03")).toBe(true);
   });
 
-  it("cover the seven data dates ending with the data date, and back to the last one covered after a failure, at most two weeks", () => {
+  it("cover the data dates after the last one covered (seven for a first message), at most two weeks", () => {
     expect(briefingStart(null, D)).toBe("2026-10-26");
     expect(briefingStart("2026-10-26T15:00:00.000Z", D)).toBe("2026-10-26");
-    expect(briefingStart("2026-10-29T15:00:00.000Z", D)).toBe("2026-10-26");
+    // Covered on a Thursday (a late Monday, or a first subscription): the next Monday's span starts after it.
+    expect(briefingStart("2026-10-29T15:00:00.000Z", D)).toBe("2026-10-29");
     expect(briefingStart("2026-10-19T15:00:00.000Z", D)).toBe("2026-10-19");
     expect(briefingStart("2026-10-01T15:00:00.000Z", D)).toBe("2026-10-19");
   });

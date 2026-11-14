@@ -689,11 +689,13 @@ describe("the watch mail", () => {
     expect(m.text).toMatch(/^YOUR ORGANIZATION: EXEMPLAR TRANSLATION SERVICES INC\.\n  New records naming you this week: 1 \(1 award notice\) · https:\/\/awardwatch\.ca\/organizations\/org-a000000001\/records\n/);
     expect(m.text).not.toContain("updates on");
     for (const part of [m.subject, m.html!, m.text!]) expect(part).not.toContain(EM_DASH);
-    // The data date is a Saturday: a daily account gets no block on it, and an empty daily message stays unsent.
+    // A daily account already sent a message this week (the Friday before this Saturday's data date) gets no
+    // block: the block opens the week's first message only. An empty daily message stays unsent.
     const other = newEmail("m-org-daily");
     const daily = await makeUser(other);
     await ACCOUNTS.prepare("INSERT INTO org_claims (user_id, organization_id, segment, competitors, created_at, updated_at) VALUES (?, ?, NULL, '[]', ?, ?)")
       .bind(daily, ORG, at, at).run();
+    await ACCOUNTS.prepare("UPDATE watch_mail SET last_day = '2026-10-30' WHERE user_id = ?").bind(daily).run();
     await watch(daily, "buyer", "dnd-mdn", "National Defence");
     const second = await runDeliveries(jobEnv(mail.binding));
     expect(second.watch).toMatchObject({ sent: 0, empty: 1 });
@@ -880,7 +882,9 @@ describe("the watch mail", () => {
     expect(m.subject.startsWith("72 updates on what you follow: Busy 1, Busy 2")).toBe(true);
     expect(m.html!.match(/<tr><td class="rule"/g)).toHaveLength(50);
     expect(m.text).toContain("New award or contract: 2 more on the page");
-    expect(m.text).toContain("New award or contract: 12 more on the page");
+    // The sixth watch comes once the 50 rows are listed: one line for it, linking the watches page.
+    expect(m.text).not.toContain("New award or contract: 12 more on the page");
+    expect(m.text).toContain("1 more page with news is on your watches page: https://awardwatch.ca/account/watches");
   });
 
   it("waits, unclaimed, while the records database is absent or behind, and the saved searches go on", async () => {
