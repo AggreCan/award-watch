@@ -1209,3 +1209,115 @@ export function weeklyDigest(o: WeeklyDigest): DigestMessage {
     }),
   };
 }
+
+// -- a saved analytics view (view_mail.ts) -------------------------------------------------------
+
+// One message per saved view, in the view's language, sent weekly or monthly
+// while its figures changed: the view's name, its source and period, its
+// first chart's figures by fiscal year (records and counted value, the newest
+// year first), the VIEW_MAIL_ROWS largest records of the period's last fiscal
+// year, the button to the view as saved, and its first table as a CSV file
+// for a signed-in reader. Each source on its own, as the view counts it.
+export const VIEW_MAIL_ROWS = 5;
+
+export type ViewYear = { fy: number; n: number; cents: number | null };
+// party: the other side of the record as the view names it (the organization
+// on a buyer's or a segment's view, the buyer on an organization's).
+export type ViewRecord = { src: number; ref: string | null; title: string | null; cents: number; party: string | null; path: string | null };
+
+export interface ViewDigest {
+  lang: Lang;
+  to: string;
+  site: string;
+  // The view's stop link (/account/stop?v=...&t=...).
+  stopUrl: string;
+  cadence: "weekly" | "monthly";
+  // The reader's name for the view, and its address (path and query) as saved.
+  name: string;
+  address: string;
+  // The first table's CSV file (path and query), null for none.
+  csv: string | null;
+  source: string;
+  first: number;
+  last: number;
+  // The data date's fiscal year, counted to date.
+  current: number;
+  dataDate: string;
+  years: readonly ViewYear[];
+  largest: readonly ViewRecord[];
+}
+
+export function viewDigest(o: ViewDigest): DigestMessage {
+  const { lang } = o;
+  const link = (path: string) => siteLink(o.site, path, lang);
+  const fy = (y: number) => (y === o.current ? t(lang, "analytics.to_date", { fy: fiscalLabel(lang, y) }) : fiscalLabel(lang, y));
+  const records = (n: number) => tn(lang, "org.tile_records_one", "org.tile_records_many", n, { n: fmtInt(n, lang) });
+  const value = (cents: number | null) => (cents === null ? t(lang, "briefing.no_value") : fmtMoney(cents / 100, lang));
+  const html: string[] = [];
+  const text: string[] = [];
+
+  const lead = t(lang, "view.mail_lead", {
+    date: o.dataDate, source: sourceLabel(lang, o.source), first: fiscalLabel(lang, o.first), last: fiscalLabel(lang, o.last),
+  });
+  html.push(h1(o.name), para(escapeHtml(lead)));
+  text.push(`${o.name}\n${lead}`);
+
+  // The first chart's figures, the newest fiscal year first.
+  const years = [...o.years].sort((a, b) => b.fy - a.fy);
+  const yearsHead = t(lang, "view.mail_years");
+  html.push(h2(yearsHead));
+  if (years.length) {
+    html.push(rows(years.map((y, i) => briefingRow(fy(y.fy), null, `${escapeHtml(records(y.n))} · ${escapeHtml(value(y.cents))}`, i === 0))));
+    text.push([h2Text(lang, yearsHead), ...years.map((y) => `- ${fy(y.fy)} · ${records(y.n)} · ${value(y.cents)}`)].join("\n"));
+  } else {
+    const none = t(lang, "view.mail_years_none");
+    html.push(para(escapeHtml(none)));
+    text.push(`${h2Text(lang, yearsHead)}\n${none}`);
+  }
+
+  // The period's last fiscal year's largest records, each linking its page where it has one.
+  const largest = o.largest.slice(0, VIEW_MAIL_ROWS);
+  const largestHead = t(lang, "view.mail_largest", { fy: fiscalLabel(lang, o.last) });
+  html.push(h2(largestHead));
+  if (largest.length) {
+    const lines = largest.map((r) => ({
+      title: r.title ?? r.ref ?? t(lang, "common.not_stated"), href: r.path ? link(r.path) : null,
+      line: [r.party ?? t(lang, "briefing.withheld"), value(r.cents)],
+    }));
+    html.push(rows(lines.map((l, i) => briefingRow(l.title, l.href, l.line.map(escapeHtml).join(" · "), i === 0))));
+    text.push([h2Text(lang, largestHead), ...lines.map((l) => `- ${l.title}\n  ${l.line.join(" · ")}${l.href ? `\n  ${l.href}` : ""}`)].join("\n"));
+  } else {
+    const none = t(lang, "view.mail_largest_none", { fy: fiscalLabel(lang, o.last) });
+    html.push(para(escapeHtml(none)));
+    text.push(`${h2Text(lang, largestHead)}\n${none}`);
+  }
+
+  // The message's one button: the view as saved; then its first table as a file, for a signed-in reader.
+  const open = link(o.address);
+  const openLabel = t(lang, "view.mail_open");
+  html.push(button(open, openLabel));
+  text.push(t(lang, "digest.text_link", { label: openLabel, url: open }));
+  if (o.csv) {
+    const csvLabel = t(lang, "view.mail_csv");
+    html.push(para(mutedLink(link(o.csv), csvLabel), true));
+    text.push(t(lang, "digest.text_link", { label: csvLabel, url: link(o.csv) }));
+  }
+
+  const views = link("/account/views");
+  const why = t(lang, o.cadence === "monthly" ? "view.mail_why_monthly" : "view.mail_why_weekly");
+  text.push([
+    why, t(lang, "digest.text_link", { label: t(lang, "views.manage"), url: views }),
+    t(lang, "digest.text_link", { label: t(lang, "view.mail_stop"), url: o.stopUrl }),
+  ].join("\n") + `\n${textFooter(lang)}`);
+
+  const subject = fitSubject(t(lang, "view.mail_subject", { name: o.name, date: o.dataDate }));
+  const top = years[0];
+  const pre = top ? t(lang, "view.mail_pre", { fy: fy(top.fy), records: records(top.n), value: value(top.cents) }) : lead;
+  return {
+    to: o.to, subject, lang, headers: deliveryHeaders(o.stopUrl), text: text.join("\n\n"),
+    html: shell({
+      lang, site: o.site, subject, preheader: pre, body: html.join(""),
+      why: whyLine(why, [{ href: views, label: t(lang, "views.manage") }, { href: o.stopUrl, label: t(lang, "view.mail_stop") }]),
+    }),
+  };
+}

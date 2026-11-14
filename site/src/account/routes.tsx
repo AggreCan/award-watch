@@ -65,6 +65,13 @@
 //   POST /account/dashboard/panels/:id/move    one place up or down (dir)              (session, CSRF)
 //   POST /account/dashboard/panels/:id/width   full or half width (wide)               (session, CSRF)
 //   POST /account/dashboard/panels/:id/delete  remove it                               (session, CSRF)
+//   GET  /account/views                saved analytics views, each with its email      (session; the site's 404 until
+//                                      the schema holds saved_views)
+//   POST /account/views                save a view's own address, with a name          (session, CSRF, plan's figure)
+//   POST /account/views/:id            a view's email: weekly, monthly or off          (session, CSRF, Ultra on sale to turn on)
+//   POST /account/views/:id/delete     remove a view                                   (session, CSRF)
+//   GET  /account/stop?v=&t=           a saved view's stop page, from its message      (the link's secret)
+//   POST /account/stop?v=&t=           turn that view's email off; one-click too       (the link's secret)
 //
 // Every POST but the stop link's and the webhook's (which Stripe sends,
 // signed; billing.tsx) is refused with a 403 when its Origin names another
@@ -107,7 +114,7 @@ import {
 import { bugPage, fileBug } from "./bugs";
 import { type EditOp, addPanelPost, dashboardOpen, dashboardPage, deletePanelsFor, deletePanelsOf, editPanelPost } from "./dashboard";
 import { DASHBOARD_PATH } from "./dashboard_rule";
-import { type Plan, RULES, allowed, planFor, watchCap } from "./entitlements";
+import { type Plan, RULES, allowed, planFor, savedViewCap, watchCap } from "./entitlements";
 import {
   FEEDS_MAX, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
   feedSize, feedWatches, isFeedKind, listFeeds, readFeed, removeFeed, rotateFeed, searchMatches,
@@ -135,6 +142,14 @@ import {
   isShareSource, orgIdIn, readClaim, setClaimSegment,
 } from "./org_claim";
 import { ORG_PATH, orgCsv, orgPage, segmentChoice, yearChoice } from "./org_pages";
+import { checkoutPrice, planCards, ultraCheckoutPrice } from "../pro";
+import { fiscalYearOf, planYears } from "../records_db";
+import { readViewAddress } from "../view_address";
+import {
+  addView, cleanName, deleteView as deleteSavedView, deleteViewsOf, followViewAliases, isViewDelivery, lastViewRuns, listViews, missingViews, setViewDelivery,
+  subjectName, viewLabel,
+} from "./saved_views";
+import { VIEWS_PATH, viewStopView, viewStoppedView, viewsView } from "./view_pages";
 import { MATCH_PATH, matchesPage } from "./fit_pages";
 import {
   DAY_SLOTS, type Follow, type WatchKind, followOf, followValue, isWatchKind, readEvents, segmentOf, targetOf, watchPath,
@@ -880,6 +895,25 @@ async function briefingStopTarget(c: Context<AppEnv>, id: string, secret: string
 const stopLabel = (lang: Lang, row: BriefingStopRow) =>
   isBriefingKind(row.kind) ? briefingLabel(lang, { ...row, kind: row.kind, lang: row.lang === "fr" ? "fr" : "en" }) : row.label;
 
+// A saved view's stop link, /account/stop?v=<view id>&t=<secret>: the same
+// rules, for that view alone (view_mail.ts). It turns the view's email off;
+// the view stays on the saved views page. A database without the table
+// matches nothing, as a wrong link does.
+type ViewStopRow = { id: string; user_id: string; name: string; deliver: string; secret: string | null };
+
+async function viewStopTarget(c: Context<AppEnv>, id: string, secret: string): Promise<ViewStopRow | null> {
+  if (!STOP_VALUE_RE.test(id) || !STOP_VALUE_RE.test(secret)) return null;
+  try {
+    const row = await c.env.ACCOUNTS!.prepare(
+      "SELECT v.id, v.user_id, v.name, v.deliver, v.secret FROM saved_views v JOIN users u ON u.id = v.user_id WHERE v.id = ? AND u.status = 'active'",
+    ).bind(id).first<ViewStopRow>();
+    return row?.secret && sameHash(row.secret, secret) ? row : null;
+  } catch (e) {
+    if (missingViews(e)) return null;
+    throw e;
+  }
+}
+
 // The weekly email's unsubscribe link, /account/stop?e=<user id>&t=<secret>:
 // the same rules, for the account's weekly email (weekly.ts). It turns the
 // email off; the row stays, off, and the account page turns it back on. A
@@ -897,7 +931,13 @@ account.get("/stop", async (c) => {
   const watcher = c.req.query("w");
   const briefing = c.req.query("b");
   const weekly = c.req.query("e");
+  const view = c.req.query("v");
   return guarded(c, async () => {
+    if (view !== undefined && !searchId && watcher === undefined && briefing === undefined && weekly === undefined) {
+      const mine = await viewStopTarget(c, view, secret);
+      if (!mine) return c.notFound();
+      return accountPage(c, t(lang, "views.stop_title"), viewStopView(lang, { id: mine.id, secret, name: mine.name, off: mine.deliver === "off" }));
+    }
     if (weekly !== undefined && !searchId && watcher === undefined && briefing === undefined) {
       const mine = await weeklyStopTarget(c, weekly, secret);
       if (!mine) return c.notFound();
@@ -932,8 +972,19 @@ account.post("/stop", async (c) => {
   const watcher = clean(fields, "w", 64) || (c.req.query("w") ?? "");
   const briefing = clean(fields, "b", 64) || (c.req.query("b") ?? "");
   const weekly = clean(fields, "e", 64) || (c.req.query("e") ?? "");
+  const view = clean(fields, "v", 64) || (c.req.query("v") ?? "");
   const oneClick = fields["List-Unsubscribe"] === "One-Click";
   return guarded(c, async () => {
+    if (view && !searchId && !watcher && !briefing && !weekly) {
+      const mine = await viewStopTarget(c, view, secret);
+      if (!mine) return c.notFound();
+      if (mine.deliver !== "off") {
+        await c.env.ACCOUNTS!.prepare("UPDATE saved_views SET deliver = 'off' WHERE id = ?").bind(mine.id).run();
+        await audit(c.env, mine.user_id, "view_stopped", oneClick ? "one_click" : "link");
+      }
+      if (oneClick) return c.text(t(lang, "views.stopped_one_click"), 200);
+      return accountPage(c, t(lang, "views.stopped_title"), viewStoppedView(lang, mine.name));
+    }
     if (weekly && !searchId && !watcher && !briefing) {
       const mine = await weeklyStopTarget(c, weekly, secret);
       if (!mine) return c.notFound();
@@ -1424,6 +1475,100 @@ account.post("/dashboard/panels/:id/:op{move|width|delete}", async (c) => {
   return guarded(c, () => editPanelPost(c, post.account, c.req.param("id") ?? "", op, post.fields));
 });
 
+// -- saved analytics views (saved_views.ts, view_pages.tsx, view_mail.ts) -----------------------------
+
+const VIEW_NOTICE: Record<string, Key> = { removed: "views.msg_removed", changed: "views.msg_changed" };
+
+// The account's views, each with its newest run; a buyer's or an
+// organization's view the nightly merged points at the surviving id first
+// (its dashboard panel goes when it merged into another). The site's 404
+// until the schema holds saved_views. A plan that keeps none reads what keeps
+// them, with the plan cards, beside any it holds from a larger plan.
+async function viewsPage(c: Context<AppEnv>, who: Account): Promise<Response> {
+  const lang = c.get("lang");
+  const listed = await listViews(c.env, who.userId);
+  if (listed === null) return c.notFound();
+  const { views, merged } = await followViewAliases(c.env, who.userId, listed);
+  for (const id of merged) await deletePanelsFor(c.env, who.userId, ["view"], id);
+  const runs = views.length ? await lastViewRuns(c.env, who.userId) : new Map();
+  const ultra = await ultraOnSale(c.env).catch(() => false);
+  const cards = savedViewCap(who.plan) ? null
+    : planCards(lang, { price: checkoutPrice(c.env), ultra: await ultraCheckoutPrice(c.env), reader: "free", place: "tease" });
+  const m = c.req.query("m") ?? "";
+  return accountPage(c, t(lang, "views.title"), viewsView(lang, who, {
+    views: views.map((v) => ({ ...v, last: runs.get(v.id) ?? null })), notice: VIEW_NOTICE[m] ? t(lang, VIEW_NOTICE[m]) : null, ultra, cards,
+  }));
+}
+
+account.get("/views", async (c) => {
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => viewsPage(c, who));
+});
+
+// Save this view posts the address the view wrote for itself and the name
+// typed. The address is read as the view reads it at the data date, for the
+// account's plan, and written again as the view writes it; anything that
+// does not come back unchanged, or names a buyer or an organization the data
+// no longer holds, is refused. A plan that keeps no view goes to the saved
+// views page, which says what keeps them. The insert holds the plan's figure
+// and keeps an address once; the answer goes back to the view, which then
+// reads saved, or full.
+account.post("/views", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  const lang = c.get("lang");
+  return guarded(c, async () => {
+    const stats = await loadStats(c.env).catch(() => null);
+    if (!stats?.data_as_of) return unavailable(c);
+    const read = readViewAddress(typeof fields.address === "string" ? fields.address : "", {
+      current: fiscalYearOf(todayOf(stats.data_as_of)), most: planYears(who.plan),
+    });
+    if (!read) return c.text(t(lang, "form.rejected"), 400);
+    if (!savedViewCap(who.plan)) return c.redirect(inLang(VIEWS_PATH, lang), 303);
+    const subject = await subjectName(c.env, lang, read.kind, read.id);
+    if (!subject) return c.text(t(lang, "form.rejected"), 400);
+    const name = cleanName(fields.name) || viewLabel(lang, subject, read.frame);
+    const result = await addView(c.env, who, { kind: read.kind, address: read.address, name }, lang);
+    if (result === "missing") return c.notFound();
+    if (result === "added") await audit(c.env, who.userId, "view_saved", read.kind);
+    return c.redirect(inLang(read.address, lang), 303);
+  });
+});
+
+account.post("/views/:id/delete", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who } = post;
+  return guarded(c, async () => {
+    const id = c.req.param("id") ?? "";
+    if (await deleteSavedView(c.env, who.userId, id)) {
+      await audit(c.env, who.userId, "view_removed");
+      // Its dashboard panel goes with it (dashboard.tsx).
+      await deletePanelsFor(c.env, who.userId, ["view"], id);
+    }
+    return c.redirect(`${VIEWS_PATH}?m=removed`, 303);
+  });
+});
+
+// A view's email: off for any account; weekly or monthly for one whose plan
+// sends saved views (Ultra) while Ultra is on sale, since the run sends
+// nothing before that.
+account.post("/views/:id", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who, fields } = post;
+  const deliver = fields.deliver;
+  if (!isViewDelivery(deliver)) return c.text(t(c.get("lang"), "form.rejected"), 400);
+  return guarded(c, async () => {
+    if (deliver !== "off" && !(allowed(who, "view_mail") && (await ultraOnSale(c.env)))) return c.redirect(VIEWS_PATH, 303);
+    if (!(await setViewDelivery(c.env, who.userId, c.req.param("id") ?? "", deliver))) return c.redirect(VIEWS_PATH, 303);
+    await audit(c.env, who.userId, "view_changed", deliver);
+    return c.redirect(`${VIEWS_PATH}?m=changed`, 303);
+  });
+});
+
 // -- deletion ----------------------------------------------------------------------------------------
 
 account.get("/delete", async (c) => {
@@ -1441,14 +1586,15 @@ account.get("/delete", async (c) => {
 // an organization, the weekly email's row and sign-in requests are deleted;
 // so are the address's rows in the alerts form's table. The entitlement rows
 // stay, tied to the id alone, as the record of what was granted. The
-// dashboard's panels, the watches, the claim, the briefings, the weekly email
-// and the feeds go first, each on its own, so a database without their
-// tables yet still deletes the rest.
+// dashboard's panels, the saved views (with their runs), the watches, the
+// claim, the briefings, the weekly email and the feeds go first, each on its
+// own, so a database without their tables yet still deletes the rest.
 export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new Date()): Promise<void> {
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
   const tomb = `deleted:${await sha256Hex(`${randomHex(32)}\n${who.email}`)}`;
   await deletePanelsOf(c.env, who.userId);
+  await deleteViewsOf(c.env, who.userId);
   await deleteWatchesOf(c.env, who.userId);
   await deleteClaimOf(c.env, who.userId);
   await deleteBriefingsOf(c.env, who.userId);

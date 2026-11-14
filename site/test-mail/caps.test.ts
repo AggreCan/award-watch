@@ -1,7 +1,7 @@
 // The caps on what the site sends, and their arithmetic, through the log
 // sender where a run sends (docs/mail.md): the delivery job's one cap shared
-// by the saved searches, the watch mail, the briefings and the weekly email,
-// and the weekly email's own ceiling; the rows a message
+// by the saved searches, the watch mail, the briefings, the weekly email and
+// the saved views, and the weekly email's own ceiling; the rows a message
 // lists and the line that counts the rest, the week's matching notices at
 // each plan's figure among them; the subject's length; the
 // accounts-open and Ultra runs' cap a run, run again until no address waits;
@@ -13,6 +13,8 @@ import { describe, expect, it } from "vitest";
 import { ANNOUNCE_MAX, LISTS_SHOWN, announceCounts, runAnnouncement } from "../src/account/announce";
 import { BRIEFINGS_RUN_MAX, SECTION_ROWS } from "../src/account/briefings";
 import { ROWS_MAX, RUN_MESSAGES_MAX, roomAfter } from "../src/account/deliveries";
+import { VIEW_MAIL_ROWS, viewDigest } from "../src/account/digests";
+import { VIEWS_RUN_MAX } from "../src/account/view_mail";
 import {
   SUBJECT_MAX, WEEKLY_LINES, type WatchGroup, briefingDigest, fitCounts, fitSubject, recordsDigest, tenderDigest, watchDigest, weeklyDigest,
 } from "../src/account/digests";
@@ -28,7 +30,7 @@ import { WEEKLY_ACCOUNTS_MAX, WEEKLY_RUN_MAX } from "../src/account/weekly";
 import { t, type Lang } from "../src/i18n";
 import { INSERT_INTEREST, newToken } from "../src/pages/interest";
 import { ACCOUNTS, DB, decode, nbsp, newEmail, onEnv, post, useAccountsDb } from "../test/accounts-helpers";
-import { DAY, SAMPLE_ADDRESS, SITE, matchesInput, tender, tenderInput, weeklyInput } from "../test/mail-fixtures";
+import { DAY, SAMPLE_ADDRESS, SITE, matchesInput, tender, tenderInput, viewInput, weeklyInput } from "../test/mail-fixtures";
 import { LOCAL, type Sent, bandProblems, checkMessage, shapeOf, viaLogSender } from "./checks";
 
 useAccountsDb();
@@ -56,7 +58,9 @@ describe("the caps", () => {
     expect(WEEKLY_RUN_MAX).toBe(100);
     expect(WEEKLY_LINES).toBe(5);
     expect(SUBJECT_MAX).toBe(100);
-    expect(MAIL_CHECK_TEMPLATES).toHaveLength(10);
+    expect(MAIL_CHECK_TEMPLATES).toHaveLength(11);
+    expect(VIEWS_RUN_MAX).toBe(1000);
+    expect(VIEW_MAIL_ROWS).toBe(5);
     expect([RULES.free.match_mail, RULES.pro.match_mail]).toEqual([3, 10]);
   });
 });
@@ -71,21 +75,30 @@ describe("the delivery job's one cap", () => {
     expect(roomAfter({ sent: 250, failed: 0 }, { sent: 80, failed: 0 })).toBe(0);
     // The weekly email gets what the three before it left.
     expect(roomAfter({ sent: 120, failed: 3 }, { sent: 77, failed: 0 }, { sent: 40, failed: 1 })).toBe(59);
+    // The saved views get what the four before them left, a part that did not run counted as none.
+    expect(roomAfter({ sent: 120, failed: 3 }, { sent: 77, failed: 0 }, { sent: 40, failed: 1 }, { sent: 50, failed: 0 })).toBe(9);
+    expect(roomAfter({ sent: 120, failed: 3 }, { sent: 77, failed: 0 }, { sent: 40, failed: 1 }, null)).toBe(59);
+    expect(roomAfter({ sent: 200, failed: 0 }, { sent: 50, failed: 0 }, { sent: 40, failed: 0 }, { sent: 20, failed: 0 })).toBe(0);
   });
 
-  it("holds the four parts together to RUN_MESSAGES_MAX, each stopping at the room it is given, the weekly email at its own ceiling too", () => {
+  it("holds the five parts together to RUN_MESSAGES_MAX, each stopping at the room it is given, the weekly email at its own ceiling too", () => {
     // Each part sends until it has as many as it wants or reaches its room
-    // (the `>= room` rule of deliveries.ts, watch_mail.ts, briefings.ts and
-    // weekly.ts, whose room is also held to WEEKLY_RUN_MAX).
+    // (the `>= room` rule of deliveries.ts, watch_mail.ts, briefings.ts,
+    // weekly.ts, whose room is also held to WEEKLY_RUN_MAX, and view_mail.ts).
     const part = (want: number, room: number) => ({ sent: Math.min(want, room), failed: 0 });
-    for (const [a, b, c, d] of [[10, 20, 30, 40], [290, 20, 30, 5], [100, 50, 5, 400], [0, 0, 0, 400], [301, 1, 1, 1], [100, 50, 50, 150]]) {
+    for (const [a, b, c, d, e] of [
+      [10, 20, 30, 40, 50], [290, 20, 30, 5, 5], [100, 50, 5, 400, 60], [0, 0, 0, 400, 400], [301, 1, 1, 1, 1], [100, 50, 50, 150, 10],
+      [0, 0, 0, 0, 350], [150, 0, 0, 0, 200],
+    ]) {
       const searches = part(a, RUN_MESSAGES_MAX);
       const watch = part(b, roomAfter(searches));
       const briefings = part(c, roomAfter(searches, watch));
       const weekly = part(d, Math.min(roomAfter(searches, watch, briefings), WEEKLY_RUN_MAX));
-      const total = searches.sent + watch.sent + briefings.sent + weekly.sent;
-      expect(weekly.sent, `${a}, ${b}, ${c}, ${d}`).toBeLessThanOrEqual(WEEKLY_RUN_MAX);
-      expect(total, `${a}, ${b}, ${c}, ${d}`).toBe(Math.min(a + b + c + Math.min(d, WEEKLY_RUN_MAX), RUN_MESSAGES_MAX));
+      const views = part(e, roomAfter(searches, watch, briefings, weekly));
+      const total = searches.sent + watch.sent + briefings.sent + weekly.sent + views.sent;
+      const at = `${a}, ${b}, ${c}, ${d}, ${e}`;
+      expect(weekly.sent, at).toBeLessThanOrEqual(WEEKLY_RUN_MAX);
+      expect(total, at).toBe(Math.min(a + b + c + Math.min(d, WEEKLY_RUN_MAX) + e, RUN_MESSAGES_MAX));
       expect(total).toBeLessThanOrEqual(RUN_MESSAGES_MAX);
     }
   });
@@ -170,6 +183,25 @@ describe("the rows a message lists", () => {
     expect(nbsp(m.text)).toContain(more);
     expect(nbsp(decode(m.html))).toContain(more);
     checkMessage(await viaLogSender(m), shapeOf("briefing", "briefing at the cap", SITE), lang);
+  });
+});
+
+describe("a saved view's message", () => {
+  it.each(LANGS)("lists VIEW_MAIL_ROWS largest records of the last fiscal year, and every fiscal year of the period (%s)", async (lang) => {
+    const largest = Array.from({ length: 9 }, (_, i) => ({
+      src: 1, ref: `cb-910-${String(i).padStart(8, "0")}`, title: `Record ${i}`, cents: 9_000_000 - i * 100_000, party: `Sample Works ${i}`,
+      path: `/awards/cb-910-${String(i).padStart(8, "0")}`,
+    }));
+    const years = Array.from({ length: 20 }, (_, i) => ({ fy: 2007 + i, n: i + 1, cents: (i + 1) * 1_000_000 }));
+    const m = viewDigest({ ...viewInput(lang), to: newEmail(`view-rows-${lang}`), first: 2007, last: 2026, years, largest });
+    expect(rowsIn(m.html)).toBe(years.length + VIEW_MAIL_ROWS);
+    expect(itemsIn(m.text)).toBe(years.length + VIEW_MAIL_ROWS);
+    for (let i = 0; i < VIEW_MAIL_ROWS; i++) expect(m.text).toContain(`- Record ${i}\n`);
+    expect(m.text).not.toContain(`Record ${VIEW_MAIL_ROWS}`);
+    // The newest fiscal year first, the data date's counted to date.
+    expect(m.text.indexOf(`- ${t(lang, "analytics.to_date", { fy: lang === "fr" ? "2026-2027" : "2026-27" })}`)).toBeGreaterThan(-1);
+    expect([...m.subject].length).toBeLessThan(SUBJECT_MAX);
+    checkMessage(await viaLogSender(m), shapeOf("view_weekly", "saved view at its rows", SITE), lang);
   });
 });
 

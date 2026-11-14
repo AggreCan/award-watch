@@ -1238,6 +1238,9 @@ tr[data-phone-cut] { display: none !important; }
   .restack td:empty { display: none; }
   /* A flag wraps inside its cell's width, so a long one (French) never widens the block past the screen. */
   .restack td .flag { height: auto; min-height: 24px; max-width: 100%; padding: 4px 8px; white-space: normal; text-align: left; }
+  /* A closing date's chip does the same: "Date de clôture passée" is wider than the value column of a 320 px phone,
+     where it widened the table past its box from the minute a listed notice closed. */
+  .restack td.c-date .badge { width: fit-content; max-width: 100%; height: auto; min-height: 24px; padding: 4px 8px; white-space: normal; text-align: left; }
   /* A mono cell (an identifier, a date with its time) wraps in its restacked cell rather than widen the block:
      the selector repeats the one that keeps it on one line in a table's row, to outrank it. */
   .restack td.mono:not(.num):not(.c-date):not(.wrap):not(:has(br, .nw)) { white-space: normal; overflow-wrap: anywhere; }
@@ -1532,6 +1535,11 @@ a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offse
 .save-search .muted { max-width: 60ch; }
 .save-search p, .save-search .pro-note { margin: 0; }
 .toolbar > .save-search { margin: 0; border-top: 1px solid var(--border); }
+
+/* Save this view (src/account/view_pages.tsx): the last row of an analytics
+   view's toolbar, ruled off from the period above it like the toolbar's
+   other rows: the name and the button, then the hint; or one line. */
+.toolbar > .save-view { margin: 0; border-top: 1px solid var(--border); }
 
 /* Weekly briefings (src/account/briefing_pages.tsx): the Subscribe control in
    its panel on a segment or buyer page. */

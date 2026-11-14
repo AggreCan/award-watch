@@ -357,7 +357,7 @@ describe("the two switch states", () => {
         // A row the plan lacks is marked so in words and by the ring.
         expect(cards[i].match(/class="lp-lacks"/g)?.length ?? 0).toBe(ROWS.filter((r) => !rowFor(r, plan).has).length);
       }
-      // Ultra's card before it is on sale: Everything in Pro, Ultra's own lines with its figures, then the two parts still planned.
+      // Ultra's card before it is on sale: Everything in Pro, Ultra's own lines with its figures, then the part still planned.
       expect(rows(cards[2])).toEqual(ultraRows(lang).map((line) => nbsp(line)));
       const monthly = lang === "fr" ? `${PRICE[1].replace(".", ",")} $ CA` : `CA$${PRICE[1]}`;
       const yearly = lang === "fr" ? `${PRICE[2].replace(".", ",")} $ CA` : `CA$${PRICE[2]}`;

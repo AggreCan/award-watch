@@ -51,10 +51,13 @@ export const cachedPlanOf = (p: Plan): "free" | "pro" => (p === "ultra" ? "pro" 
 // match_mail: how many of the week's new matching notices one message a week
 // lists (src/account/fit_mail.ts): the weekly email, or Pro's watch mail.
 // dashboard: how many panels /account/dashboard holds (src/account/dashboard.tsx).
+// saved_views: how many analytics views an account keeps with their source,
+// period and choices (src/account/saved_views.ts, /account/views); view_mail:
+// those views by email, weekly or monthly (src/account/view_mail.ts).
 export const FEATURES = [
   "saved_searches", "delivery", "api", "export_filtered", "intraday", "radar_depth", "bug_reports", "analytics", "watchlists",
   "watch_mail", "matches", "match_mail",
-  "dashboard",
+  "dashboard", "saved_views", "view_mail",
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -64,19 +67,22 @@ export const SAVED_SEARCH_MAX = 100;
 // The ceiling on watches whatever the plan, Ultra's figure (accounts_schema.sql says
 // the same); the claimed organization's watch is held beside it (watches.ts).
 export const WATCH_MAX = 100;
+// The ceiling on saved analytics views whatever the plan, Ultra's figure
+// (accounts_schema.sql says the same); a plan's own figure is RULES[plan].saved_views.
+export const SAVED_VIEW_MAX = 50;
 // The matching notices on one page of /account/matches.
 export const MATCH_PAGE = 50;
 
 type Rules = {
   saved_searches: number; delivery: boolean; api: boolean; export_filtered: boolean; intraday: boolean; radar_depth: boolean;
   bug_reports: boolean; analytics: boolean; watchlists: number; watch_mail: boolean; matches: number; match_mail: number;
-  dashboard: number;
+  dashboard: number; saved_views: number; view_mail: boolean;
 };
 
 const PRO_RULES: Rules = {
   saved_searches: 25, delivery: true, api: true, export_filtered: true, intraday: true, radar_depth: true, bug_reports: true,
   analytics: true, watchlists: 25, watch_mail: true, matches: 200, match_mail: 10,
-  dashboard: 0,
+  dashboard: 0, saved_views: 10, view_mail: false,
 };
 
 // Ultra holds every Pro feature, with figures of its own on the counted ones:
@@ -88,7 +94,7 @@ export const RULES: Readonly<Record<Plan, Rules>> = {
   free: {
     saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false, radar_depth: false, bug_reports: false,
     analytics: false, watchlists: 3, watch_mail: false, matches: 5, match_mail: 3,
-    dashboard: 0,
+    dashboard: 0, saved_views: 0, view_mail: false,
   },
   pro: PRO_RULES,
   ultra: {
@@ -98,11 +104,13 @@ export const RULES: Readonly<Record<Plan, Rules>> = {
     matches: 500,
     match_mail: 25,
     dashboard: 12,
+    saved_views: SAVED_VIEW_MAX,
+    view_mail: true,
   },
 };
 
 // The figures a plan gives as counts rather than as yes or no.
-export const COUNTED_FEATURES = ["saved_searches", "watchlists", "matches", "match_mail", "dashboard"] as const satisfies readonly Feature[];
+export const COUNTED_FEATURES = ["saved_searches", "watchlists", "matches", "match_mail", "dashboard", "saved_views"] as const satisfies readonly Feature[];
 export type CountedFeature = (typeof COUNTED_FEATURES)[number];
 export const isCounted = (f: Feature): f is CountedFeature => (COUNTED_FEATURES as readonly Feature[]).includes(f);
 
@@ -287,4 +295,9 @@ export function matchCap(plan: Plan): number {
 // How many of the week's new matching notices a plan's weekly message lists.
 export function matchMailCap(plan: Plan): number {
   return RULES[plan].match_mail;
+}
+
+// How many analytics views a plan keeps: none on Free.
+export function savedViewCap(plan: Plan): number {
+  return Math.min(RULES[plan].saved_views, SAVED_VIEW_MAX);
 }

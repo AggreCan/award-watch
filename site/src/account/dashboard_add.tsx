@@ -1,6 +1,6 @@
 // "Add to dashboard": the one control an Ultra account gets beside what can
 // become a panel (an analytics view's head, a saved search's row, a
-// briefing's row). It posts the panel's kind and its ref to the dashboard
+// briefing's row, a saved view's row). It posts the panel's kind and its ref to the dashboard
 // (dashboard.tsx addPanelPost), which keeps it within the plan's figure and
 // answers on the dashboard itself. Callers draw it only for an account that
 // holds the dashboard (dashboard_rule.ts holdsDashboard), so nothing changes

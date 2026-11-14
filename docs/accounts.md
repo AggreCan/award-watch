@@ -103,12 +103,14 @@ Every datetime is ISO in UTC.
 | `weekly_mail` | one row per account that turned the weekly email on: on or off, where (`sign_in` or `account`) and when it was last turned on, when it was turned off, the week its last message covered and whether it was sent, the week a message was refused, the unsubscribe link's secret (*Weekly email*) | anything typed, a copy of a message, the sender's postal address |
 | `feeds` | one row per calendar feed: kind (`search`, `watchlist`, `all`), the saved search it follows, the address's secret, created and revocation times, the UTC day a calendar last read it | a time of reading, an address, a user agent |
 | `org_claims` | one row per account that named its organization: the organization id, up to five organization ids to compare it with, the share block's segment, when it was chosen and last changed (*Your organization*) | anything typed, a name, any sign of which other accounts chose the same organization |
+| `saved_views`, `view_deliveries` | the analytics views an account saved: the view's address as the site writes it, the name the reader gave it, its language and email cadence, a hash of the figures its last message carried, its stop link's secret; and each view's runs (*Saved views*) | anything typed but the name, a copy of a message |
 
 Limits: at most 25 saved searches per account on Pro, 100 on Ultra (Free
 keeps 3), at most 5 live API keys, at most 5 sign-in requests per address per
 hour, at most 5 wrong codes per address per hour across all its requests, at
 most 5 bug reports per account in any 24 hours, at most 600 keyed API
-requests a minute and 20,000 a UTC day per key on Pro (50,000 on Ultra).
+requests a minute and 20,000 a UTC day per key on Pro (50,000 on Ultra), at
+most 10 saved analytics views on Pro and 50 on Ultra (Free keeps none).
 
 Retention: sign-in requests and wrong tries are deleted after a day (and
 with the account); sessions 90 days after they end; audit rows after 90
@@ -535,7 +537,7 @@ logs name no key.
 ## Deletion
 
 `/account/delete` asks for a ticked box, deletes the account's dashboard
-panels, its watches, its
+panels, its saved views (with their runs), its watches, its
 claim of an organization, its briefings, its weekly email row and its
 calendar feeds (statements of their own, so a database without those tables
 still deletes the rest), then in one batch: revokes every
@@ -2002,12 +2004,16 @@ form, `RADAR_TOP_SQL` (`RADAR_ROWS_END_SQL` without its offset, `LIMIT 5`).
 | `matches` | none | the 5 closest matching notices, with the disclaimer | the claim, the profile entry, `tenders/open.json` |
 | `api` | none | each live key's requests today, with the plan's daily figure | accounts: the keys and `keyUsage` |
 
-A view's `ref` is its own address until saved views exist: the path, then its
+A view's `ref` is its own address, or the id of one of the account's saved
+views (*Saved views*), whose name heads the panel and whose address See all
+opens. An address is the path, then its
 source and its period (`?source=awards&years=10`, or `?from=2019&source=history&to=2022`),
 the keys in order (`viewAddress`). Anything else in the address (a segment,
 the organizations compared, the language) changes nothing of the first chart
 and is dropped; an unknown parameter, a source the view does not offer or a
-period the view does not offer makes it no view's (`viewRef`).
+period the view does not offer makes it no view's (`viewRef`). A saved view's
+panel goes with the view when it is removed, and the Add a Panel select lists
+the account's saved views.
 
 Each panel's head names its kind and its item (the site's own label: the
 saved search's, the briefing's, the window's, the organization's or the
@@ -2058,7 +2064,8 @@ were.
 
 - **Ultra**, whether or not Ultra is on sale (a grant by hand included): the
   panels, and Add to dashboard on each analytics view's head, on each saved
-  search a panel can show and on each briefing of the searches page.
+  search a panel can show, on each briefing of the searches page and on each
+  row of the saved views page.
 - **Free and Pro while Ultra is on sale**: the head, What the Dashboard Holds
   (the nine kinds, one sentence each), the gate line with Plans and prices,
   and the three plan cards, Ultra's link the page's filled button. No records
@@ -2096,6 +2103,158 @@ and every post say the layout cannot be saved yet.
   language.
 - A view's period is checked against `PERIODS`; a period added there later is
   accepted with it.
+
+## Saved views
+
+Each analytics view (a buyer's, an organization's, a segment's) can be saved
+to the account with its source, its period and its choices (the share
+chart's segment and the organizations compared), under a name the reader may
+type. `/account/views` lists them; Ultra's can be sent by email, weekly or
+monthly, while their figures change. The figures are the `saved_views`
+feature of `RULES` (0 on Free, 10 on Pro, 50 on Ultra; `SAVED_VIEW_MAX` is
+the ceiling whatever the plan) and `view_mail` (Ultra alone). The code is
+`site/src/account/saved_views.ts` (the rows, the name, the merges),
+`view_pages.tsx` (the control, the page, the index's panel, the stop pages),
+`view_mail.ts` (the run), `digests.ts` `viewDigest` (the message) and
+`views_strings.ts`; the address is read and written by
+`site/src/view_address.ts`, the module the views themselves read their
+address with. The tests are `site/test/saved-views.test.ts`, with the
+message in `site/test-mail/`.
+
+### The tables
+
+| Table | Columns | Rule |
+|---|---|---|
+| `saved_views` | `id`, `user_id`, `kind` (`buyer`, `organization`, `segment`; `build` held for the analytics builder), `address` (at most 2,000 characters), `name` (at most 60), `lang`, `deliver` (`weekly`, `monthly`, `off`), `created_at`, `last_delivered_at`, `last_hash`, `secret`; unique on (`user_id`, `address`) | At most the plan's figure per account, held inside the insert (`ADD_VIEW_SQL`), so two posts at once cannot pass it; an address once |
+| `view_deliveries` | `id`, `view_id`, `sent_at`, `day` (the data date), `status` (`sent`, `failed`, `same`) | One row per run of a view; kept 90 days (`VIEW_DELIVERY_DAYS`, swept by the run) and with the view |
+
+`last_hash` is the SHA-256 of the figures the last message carried (the
+source, the period, each year's records and value, the largest records by
+reference and value: public figures only). `secret` is the stop link's 16
+random bytes, made with the first message and kept in clear, as a
+briefing's is. A view goes with the account (`deleteAccount`), and its
+dashboard panel goes with it.
+
+### Saving a view
+
+Save this view is the last row of each view's toolbar, for a signed-in
+reader: a Name field (empty, it takes the site's label, "National Defence,
+published contracts, 2016-17 to 2025-26", whose subject's name is cut on a
+whole word with an ellipsis when the label would pass 100 characters,
+`LABEL_MAX`, so the source and the period stay whole; at the 60 of a typed
+name the label kept "Public Services and" of Public Services and Procurement
+Canada) and the flat button. The post
+carries the address the view wrote for itself (`viewQuery`: the source, the
+period, then for an organization the share chart's segment and the
+organizations compared). The route reads it as the view reads it
+(`view_address.ts frameOf`, `rivalsOf`, `shareSegmentOf`) at the data date,
+for the account's plan (a Pro account's period at most 10 fiscal years),
+writes it again as the view writes it, and keeps it only when the two are the
+same string (`readViewAddress`): another key, another order, a value the view
+would read otherwise, the language or a second value of a key are refused
+(400). A buyer or organization the data no longer holds is refused too. The
+typed name has its control characters dropped and is cut to 60 characters
+(`NAME_MAX`). Saved,
+the row reads "Saved to your views."; at the plan's figure it says so; on
+Free, Save this view leads to the saved views page, which names the plans
+that keep views. The control is absent while the switch is off, for a reader
+not signed in, and while `saved_views` is not on the database.
+
+### The page
+
+`/account/views` lists the views in the order they were saved, each with a
+link that opens it as saved, the kind of view, Remove, and the count against
+the plan's figure. While Ultra is on sale an Email column holds, for Ultra,
+the select (Weekly, Monthly, Off) with the last run's line ("Sent ...",
+"Checked ...: nothing changed, no message.", "Not sent ..."), and for Pro the
+line "Off. Email delivery of saved views is part of Ultra." While Ultra is off
+sale the column is not drawn. Free reads the gate line (Pro's figure, and
+Ultra's while it is on sale) and the plan cards. After a move to a smaller
+plan nothing is deleted: the views past the plan's figure are kept, listed and
+marked, and the page says how many it holds against the figure. A buyer's or
+an organization's view whose id the nightly merged into another is pointed at
+the surviving id when the page is read, as a watch is; one that would then
+repeat a view the account keeps is merged into it. The analytics index
+(`/analytics`) lists the account's saved views in its Saved Views panel. The
+page is the site's 404 until the schema holds `saved_views`.
+
+### The email
+
+The run's fifth part (`view_mail.ts runViewMail`, after the weekly email,
+inside the same `RUN_MESSAGES_MAX`; the weekly email stopping at its own
+ceiling of 100 does not hold it, so it gets what the shared cap has left). It
+reads and sends nothing while Ultra is not on sale, and reads nothing of the
+records database while the tables are missing (the report says so). A view is
+due:
+
+- weekly: on the first run of its week, from the briefings' Monday
+  (`weekAnchor`);
+- monthly: on the first run on or after the first Monday of the month
+  (`monthAnchor`);
+
+while not covered since that day, its account active, not blocked and on a
+plan with `view_mail`, the view one of the first by creation date within the
+plan's figure, and no message refused for it since that day. Its figures are
+one records batch of two statements: the view's first chart
+(`BUYER_QUARTERS_SQL` added up by fiscal year, `ORG_YEARS_SQL` or
+`SEGMENT_YEARS_SQL`) and its largest records of the period's last fiscal year
+(`BUYER_RECORDS_SQL`, `ORG_RECORDS_SQL` or `SEGMENT_RECORDS_SQL`, of which the
+message lists 5). Two views of one address read once. When the figures hash
+as the last message's did, the run writes `same` and sends nothing. Until the
+records database is ready at today's data date, every view waits unclaimed.
+A view is claimed for its period before its message goes and given back when
+the send does not go, as a briefing is.
+
+The message: the view's name, its source and period, the figures by fiscal
+year (records and counted value, newest first), the five largest records of
+the last fiscal year, the button Open the view, the first table as a CSV file
+(for a signed-in reader), why it came, the saved views page and the stop link,
+with `List-Unsubscribe` and its one-click partner.
+
+### Routes
+
+| Route | What it does |
+|---|---|
+| `GET /account/views` | the page |
+| `POST /account/views` | save a view: `address` and `name` |
+| `POST /account/views/:id` | its email: `deliver` weekly, monthly or off; on only for Ultra while Ultra is on sale |
+| `POST /account/views/:id/delete` | remove it, and its dashboard panel |
+| `GET`, `POST /account/stop?v=&t=` | the view's stop page, and turning its email off (one-click too) |
+
+Every post is behind the session, the CSRF value and the Origin, in the form
+bucket (`FORM_LIMIT`). The audit records `view_saved` (the kind),
+`view_changed` (the cadence), `view_removed` and `view_stopped`, never the
+address or the name.
+
+### Operator step
+
+Apply the two tables and their indexes. The whole file does it, as for every
+earlier table:
+
+```
+cd site
+npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+```
+
+but the whole file also makes `entitlement_tiers` on a database that does not
+hold it yet, and with Ultra's five variables set in `wrangler.jsonc` that
+table is the last condition of `ultraOnSale` (*Ultra*, On sale): Ultra goes on
+sale with it. To add the saved views alone while Ultra stays off sale, run
+only the statements of `accounts_schema.sql` that name `saved_views` and
+`view_deliveries` (two `CREATE TABLE` and four `CREATE INDEX`), from a file
+kept outside the repository, with the same command and that file.
+
+Until then nothing offers to save a view, `/account/views` is the site's 404,
+the analytics index has no Saved Views panel, and the run's fifth part says
+the table is missing (while Ultra is on sale).
+
+### Known limits
+
+- A view saved as its latest years moves with the data date; a view saved by
+  its first and last fiscal year stays on them.
+- The name is typed once, when the view is saved; the page offers no rename.
+- An organization's view saved without the share chart's segment opens on its
+  largest segment, as the view does; the saved address keeps no segment.
 
 ## Operator console
 
@@ -3159,8 +3318,9 @@ for a briefing in your account.", the searches page, and the stop link.
 
 ### The run
 
-The delivery job's last step (`runBriefings`, after the watch mail, inside the
-same cap of 300 messages a run). For each briefing with delivery `weekly`,
+The delivery job's third part (`runBriefings`, after the watch mail and before
+the weekly email and the saved views, inside the same cap of 300 messages a
+run). For each briefing with delivery `weekly`,
 whose account is active, not blocked and on a plan with `delivery`, not
 covered since the week's Monday (`BRIEFING_WEEKDAY`; a Monday whose nightly was
 late sends on the next data date of the week, and a first subscription sends
@@ -3359,7 +3519,8 @@ list mail does.
 
 ### The run
 
-The delivery job's last part (`runWeekly`, after the briefings, inside the
+The delivery job's fourth part (`runWeekly`, after the briefings and before
+the saved views (*Saved views*), inside the
 same cap of 300 messages a run, and held to `WEEKLY_RUN_MAX`, 100, of them;
 `WEEKLY_ACCOUNTS_MAX`, 1,000 accounts read). An account is due when its email
 is on, the account is active and not blocked, the week (its opening day,

@@ -6,8 +6,8 @@
 // the largest award values of the data year (stats.json) beside a word on
 // finding the rest, and for a signed-in account that has named its
 // organization (account/org_claim.ts) that organization's view and its page
-// in the account. Saved views per account do not exist yet; when they do,
-// they are one more panel here, read the way the claim is.
+// in the account, and for a signed-in account its saved views
+// (account/saved_views.ts), read the way the claim is.
 //
 // The search box is a GET to this page (?q=). An organization, buyer or
 // segment address, an organization id, a buyer id the list holds or a
@@ -31,7 +31,10 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { checkOrganization, orgIdIn, readClaim } from "../account/org_claim";
+import { type SavedView, listViews } from "../account/saved_views";
 import { readSession } from "../account/session";
+import { SavedViewsPanel } from "../account/view_pages";
+import { savedViewCap } from "../account/entitlements";
 import { MONEY_SOURCES, SEGMENTS, SEGMENT_CODES } from "../constants";
 import { BUYER_ID_RE, SEGMENT_RE, loadBuyers, loadStats, type BuyerSummary, type OrgTotal } from "../data";
 import type { AppEnv, Env } from "../env";
@@ -136,6 +139,20 @@ async function ownOrganization(c: Context<AppEnv>): Promise<{ id: string; name: 
     if (!claim) return null;
     const live = await checkOrganization(c.env, claim.organizationId);
     return live ? { id: live.id, name: live.profile.organization.display_name } : { id: claim.organizationId, name: claim.organizationId };
+  } catch {
+    return null;
+  }
+}
+
+// The signed-in account's saved views, oldest first, and its plan's figure.
+// Null without a session and on any fault, the table not yet made included:
+// the panel is then left out.
+async function ownViews(c: Context<AppEnv>): Promise<{ views: SavedView[]; cap: number } | null> {
+  try {
+    const read = await readSession(c);
+    if (read.state !== "ok") return null;
+    const views = await listViews(c.env, read.account.userId);
+    return views ? { views, cap: savedViewCap(read.account.plan) } : null;
   } catch {
     return null;
   }
@@ -278,7 +295,7 @@ export async function analyticsIndex(c: Context<AppEnv>): Promise<Response> {
     return res;
   }
 
-  const own = await ownOrganization(c);
+  const [own, saved] = await Promise.all([ownOrganization(c), ownViews(c)]);
   const year = todayOf(dataAsOf).slice(0, 4);
   const largest: OrgTotal[] = stats?.top_organizations_year ?? [];
   return page(
@@ -296,6 +313,7 @@ export async function analyticsIndex(c: Context<AppEnv>): Promise<Response> {
           </ul>
         </Panel>
       ) : null}
+      {saved ? <SavedViewsPanel lang={lang} views={saved.views} cap={saved.cap} /> : null}
       <Panel title={t(lang, "nav.buyers")} count={index ? fmtInt(buyers.length, lang) : undefined}>
         {index ? <BuyerList lang={lang} rows={buyers} /> : <BuyersUnavailable lang={lang} />}
       </Panel>

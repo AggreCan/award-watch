@@ -60,8 +60,10 @@ export const ORG_CLAIM_CSV = /^\/account\/organization\/[a-z]+\.csv$/;
 // The billing page's own posts (account/routes.tsx); the webhook has its bucket.
 const BILLING_POSTS = new Set(["/account/billing/checkout", "/account/billing/portal", "/account/billing/refund"]);
 // The dashboard's posts (account/dashboard.tsx): each writes the account's
-// layout, so they count with the forms, on the accounts terms.
+// layout, so they count with the forms, on the accounts terms; so do the
+// saved views' (account/view_pages.tsx): save one, its email, remove it.
 const DASHBOARD_POSTS = /^\/account\/dashboard\/panels(?:\/[^/]+\/(?:move|width|delete))?$/;
+const VIEW_POSTS = /^\/account\/views(?:\/[^/]+(?:\/delete)?)?$/;
 
 // A HEAD request for a download (a link checker, a client asking a file's
 // size before fetching it) moves no file, so it is not counted against the
@@ -77,7 +79,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
   if (path === "/account/stop" || path === "/interest/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";
-  if (method === "POST" && (path === "/account/bug" || BILLING_POSTS.has(path) || DASHBOARD_POSTS.test(path))) return "form";
+  if (method === "POST" && (path === "/account/bug" || BILLING_POSTS.has(path) || DASHBOARD_POSTS.test(path) || VIEW_POSTS.test(path))) return "form";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
     return "form";
   }

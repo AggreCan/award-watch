@@ -516,3 +516,45 @@ CREATE TABLE IF NOT EXISTS dashboard_panels (
   UNIQUE (user_id, kind, ref)
 );
 CREATE INDEX IF NOT EXISTS idx_dashboard_panels_user ON dashboard_panels(user_id, pos);
+
+-- Saved analytics views (src/account/saved_views.ts; docs/accounts.md, Saved views): a view's
+-- address as the site writes it, the reader's name for it, and its delivery (Ultra). kind 'build'
+-- is a view of the analytics builder (slice 5). last_hash is the SHA-256 of the figures the last
+-- message carried, so an unchanged view sends nothing. secret is the stop link's 16 random bytes,
+-- made with the first message and kept in clear as delivery_tokens keeps its own; it turns this
+-- view's email off and nothing else. last_delivered_at is the run that covered the view (a message
+-- sent, or nothing changed), claimed before the message goes. At most SAVED_VIEW_MAX per account
+-- (Ultra's figure; the plan sets the cap at or below that), held inside the insert. Until this
+-- table is on the database nothing offers to save a view. Goes with the account, and its dashboard
+-- panel goes with it.
+CREATE TABLE IF NOT EXISTS saved_views (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL CHECK (kind IN ('buyer', 'organization', 'segment', 'build')),
+  address TEXT NOT NULL,                         -- path and query, at most 2,000 characters
+  name TEXT NOT NULL,                            -- a typed name of at most 60 characters, or the site's label (100)
+  lang TEXT NOT NULL CHECK (lang IN ('en', 'fr')),
+  deliver TEXT NOT NULL DEFAULT 'off' CHECK (deliver IN ('weekly', 'monthly', 'off')),
+  created_at TEXT NOT NULL,
+  last_delivered_at TEXT,
+  last_hash TEXT,
+  secret TEXT,
+  UNIQUE (user_id, address)
+);
+CREATE INDEX IF NOT EXISTS idx_saved_views_user ON saved_views(user_id, created_at);
+-- The delivery job's list of the views to send, oldest first.
+CREATE INDEX IF NOT EXISTS idx_saved_views_deliver ON saved_views(deliver, created_at);
+
+-- One row per delivery run of a saved view (src/account/view_mail.ts): sent (the message left),
+-- failed (the mail service refused it) or same (the figures had not changed, no message), with
+-- the data date covered. Rows go after 90 days (the run) and with the view.
+CREATE TABLE IF NOT EXISTS view_deliveries (
+  id INTEGER PRIMARY KEY,
+  view_id TEXT NOT NULL REFERENCES saved_views(id) ON DELETE CASCADE,
+  sent_at TEXT NOT NULL,
+  day TEXT NOT NULL,
+  status TEXT NOT NULL                           -- sent | failed | same
+);
+CREATE INDEX IF NOT EXISTS idx_view_deliveries_view ON view_deliveries(view_id, id);
+-- The run's sweep of the rows past 90 days.
+CREATE INDEX IF NOT EXISTS idx_view_deliveries_sent ON view_deliveries(sent_at);

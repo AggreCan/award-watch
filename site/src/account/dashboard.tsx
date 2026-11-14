@@ -66,6 +66,7 @@ import {
   BUYER_COUNTS_SQL, BUYER_NAME_SQL, KIND_SOURCES, ORG_COUNTS_SQL, ORG_NAME_SQL, type RecordsKind, SEGMENT_COUNTS_SQL, entityOf, isRecordsKind,
   missingTable,
 } from "./records_deliveries";
+import { type SavedView, listViews } from "./saved_views";
 import { type SavedSearch, listSearches } from "./searches";
 import { newId } from "./secrets";
 import type { Account } from "./session";
@@ -261,10 +262,12 @@ export async function deletePanelsFor(env: Env, userId: string, kinds: readonly 
 // -- what the account holds -----------------------------------------------------------------
 
 // The rows the panels name, read by the readers the account pages use, at
-// once: the panels, the saved searches, the briefings, the claim, the watches
-// and the keys. A table the database does not hold yet reads as none.
+// once: the panels, the saved searches, the briefings, the claim, the watches,
+// the keys and the saved views. A table the database does not hold yet reads
+// as none.
 export type Holdings = {
   panels: PanelRow[] | null; searches: SavedSearch[]; briefings: Briefing[]; claim: Claim | null; watches: Watch[]; keys: KeyRow[];
+  views: SavedView[];
 };
 
 async function absentAs<T>(read: Promise<T>, absent: T): Promise<T> {
@@ -277,11 +280,11 @@ async function absentAs<T>(read: Promise<T>, absent: T): Promise<T> {
 }
 
 export async function readHoldings(env: Env, userId: string): Promise<Holdings> {
-  const [panels, searches, briefings, claim, watches, keys] = await Promise.all([
+  const [panels, searches, briefings, claim, watches, keys, views] = await Promise.all([
     listPanels(env, userId), listSearches(env, userId), listBriefings(env, userId), absentAs(readClaim(env, userId), null),
-    absentAs(listWatches(env, userId), [] as Watch[]), listKeys(env, userId),
+    absentAs(listWatches(env, userId), [] as Watch[]), listKeys(env, userId), listViews(env, userId),
   ]);
-  return { panels, searches, briefings: briefings ?? [], claim, watches, keys };
+  return { panels, searches, briefings: briefings ?? [], claim, watches, keys, views: views ?? [] };
 }
 
 // The starting layout: the watches, the 3-month list, matching notices and the
@@ -316,8 +319,9 @@ const SEARCH_KINDS: Readonly<Partial<Record<PanelKind, (kind: string) => boolean
 };
 
 // The panel a post names, its ref in its stored form, if it names one the
-// account holds; null for anything else.
-export function specOf(kind: unknown, rawRef: unknown, h: Pick<Holdings, "searches" | "briefings">): Spec | null {
+// account holds; null for anything else. A view panel names a view's address,
+// or one of the account's saved views by its id (saved_views.ts).
+export function specOf(kind: unknown, rawRef: unknown, h: Pick<Holdings, "searches" | "briefings"> & { views?: readonly Pick<SavedView, "id">[] }): Spec | null {
   if (!isPanelKind(kind) || typeof rawRef !== "string") return null;
   const ref = rawRef.trim();
   const spec = (r: string): Spec => ({ kind, ref: r, wide: true });
@@ -333,6 +337,7 @@ export function specOf(kind: unknown, rawRef: unknown, h: Pick<Holdings, "search
     case "org":
       return isClaimBlock(ref) ? spec(ref) : null;
     case "view": {
+      if (ID_RE.test(ref)) return (h.views ?? []).some((x) => x.id === ref) ? spec(ref) : null;
       const v = viewRef(ref);
       return v ? spec(viewAddress(v)) : null;
     }
@@ -941,6 +946,15 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
     case "watches":
       return { shown: s, title, item: null, href: "/account/watches", job: watchesJob(ctx) };
     case "view": {
+      // A saved view by its id: its name in the head and its address as saved (the saved views page moves a merged id).
+      if (ID_RE.test(s.ref)) {
+        const saved = h.views.find((x) => x.id === s.ref);
+        const v = saved ? viewRef(saved.address) : null;
+        const read = v ? viewJob(ctx, v) : null;
+        // The reader's name for the view heads the panel, in place of the buyer's or organization's the read gives.
+        const job: Job | null = read ? { ...read, draw: (rows, extra) => { const b = read.draw(rows, extra); return b ? { ...b, item: undefined } : null; } } : null;
+        return saved && job ? { shown: s, title, item: saved.name, href: saved.address, job } : gone("/account/views");
+      }
       const v = viewRef(s.ref);
       const job = v ? viewJob(ctx, v) : null;
       return v && job ? { shown: s, title, item: null, href: viewAddress(v), job } : gone("/analytics");
@@ -1015,8 +1029,8 @@ const NOTICE: Readonly<Record<string, Key>> = {
 };
 
 // The Add select's choices: what the account holds that is not on the
-// dashboard already, by kind, in PANEL_KINDS order. The analytics views are
-// added from their own pages.
+// dashboard already, by kind, in PANEL_KINDS order. An analytics view is
+// added from its own page, or here once it is saved.
 function addChoices(lang: Lang, h: Holdings, taken: ReadonlySet<string>): { label: string; options: [string, string][] }[] {
   const free = (kind: PanelKind, ref: string) => !taken.has(`${kind}:${ref}`);
   const group = (kind: PanelKind, label: string, options: [string, string][]) => ({ label, options: options.filter(([v]) => free(kind, v.slice(kind.length + 1))) });
@@ -1029,6 +1043,7 @@ function addChoices(lang: Lang, h: Holdings, taken: ReadonlySet<string>): { labe
     ]),
     group("records", t(lang, "dash.kind_records"), searches(isRecordsKind, "records")),
     group("watches", t(lang, "dash.kind_watches"), [["watches:", t(lang, "dash.kind_watches")]]),
+    group("view", t(lang, "views.title"), h.views.map((v): [string, string] => [`view:${v.id}`, v.name])),
     group("briefing", t(lang, "briefing.list_title"), h.briefings.map((b): [string, string] => [`briefing:${b.id}`, briefingLabel(lang, b)])),
     group("org", t(lang, "orgclaim.title_short"), h.claim ? CLAIM_BLOCKS.map((b): [string, string] => [`org:${b}`, t(lang, BLOCK_KEY[b])]) : []),
     group("matches", t(lang, "dash.kind_matches"), h.claim ? [["matches:", t(lang, "dash.kind_matches")]] : []),

@@ -22,8 +22,8 @@ too; the deploys run neither.
 Every message the site sends to a reader is laid out in one shell,
 `site/src/account/mail_html.ts`: the sign-in code, the saved-search
 deliveries, the records counts, the watch mail, the weekly briefing, the
-weekly email, the accounts-open and Ultra messages and the address-change
-notice. A new message
+weekly email, a saved analytics view, the accounts-open and Ultra messages
+and the address-change notice. A new message
 is built with it as well; no message writes its own `<html>`.
 
 | Part | What it holds |
@@ -43,8 +43,9 @@ what is sent.
 A section's heading opens its list on a band, as a panel on the site opens
 on its head band. The messages with sections draw every heading with `h2`:
 the weekly briefing's six sections, the records message's two parts, each
-watch in the watch mail, and the "Your organization" and matching notices
-blocks (the watch mail and the weekly email). The weekly email's watch
+watch in the watch mail, the "Your organization" and matching notices
+blocks (the watch mail and the weekly email), and a saved view's two parts
+(its figures by fiscal year, its largest records). The weekly email's watch
 lines and the site's figures sit under the message's title and have no
 section heading.
 
@@ -116,12 +117,13 @@ Each in English and in French.
 | An organization's new records, a segment's new records and notices | the records digest |
 | The watch mail, with and without the "Your organization" block | the watch digest |
 | The weekly briefing | the briefing digest |
+| A saved analytics view, weekly and monthly, and with no record in its period | the view digest, `viewDigest`, from `viewInput` in `site/test/mail-fixtures.ts` (a buyer's published contracts over five fiscal years) |
 | The weekly email: the watches' news (Free and Pro) and the site's week (nothing new on several pages, on one, following nothing, Pro), and with one figure left out | the weekly digest, `weeklyDigest`, from the fixtures in `site/test/mail-fixtures.ts` (a made-up mailing address) |
 | The week's matching notices: in the weekly email (the figures and the watches' news, Free and Pro) and in the watch mail (after the "Your organization" block, alone, beside a watch) | `matchesInput` in the fixtures: 12 sample notices ranked by `public/fit.js` against a sample organization's block, drawn by `fit_mail.ts` `matchDigestBlock` |
 | The accounts-open message | its console run, `runAnnouncement`, and with an https stop link |
 | The Ultra message | its console run (kind `ultra`), and with an https stop link |
 | The address-change notice | the console's notice |
-| The live check's ten messages | `site/src/account/mail_check.ts` |
+| The live check's eleven messages | `site/src/account/mail_check.ts` |
 
 The operator's own alerts (the daily check's email and the bug reports, both
 through the `ALERTS` binding to the operator's address) are not reader mail
@@ -160,10 +162,11 @@ and keep their own tests.
   footer's line with the tagline and the contact address, a preheader, at
   most one button, and no image but the two wordmarks.
 - A list or watch delivery (the saved searches, the records, the watch mail,
-  the briefing, the weekly email, the accounts-open and Ultra messages)
-  carries its stop link in both parts, the page that manages it (the saved
-  searches page, the watches page, or the account page for the weekly email)
-  where it has one, and the line saying why the reader received it.
+  the briefing, the weekly email, a saved view, the accounts-open and Ultra
+  messages) carries its stop link in both parts, the page that manages it
+  (the saved searches page, the watches page, the saved views page, or the
+  account page for the weekly email) where it has one, and the line saying
+  why the reader received it.
 - With an https stop link, the message carries `List-Unsubscribe` naming the
   contact address and that same link, and `List-Unsubscribe-Post:
   List-Unsubscribe=One-Click`. With an http link (a local run) it carries
@@ -184,16 +187,18 @@ and keep their own tests.
 
 | Cap | Figure | Held |
 |---|---|---|
-| Messages in one delivery run (saved searches, then watch mail, then briefings, then the weekly email) | `RUN_MESSAGES_MAX`, 300 | `roomAfter`: each part gets the cap less what the parts before it sent or tried, never below zero, and the four never pass 300 together |
+| Messages in one delivery run (saved searches, then watch mail, then briefings, then the weekly email, then saved views) | `RUN_MESSAGES_MAX`, 300 | `roomAfter`: each part gets the cap less what the parts before it sent or tried, never below zero (a part that did not run counts as none), and the five never pass 300 together |
 | Weekly emails in one delivery run | `WEEKLY_RUN_MAX`, 100 | the weekly email's room is the shared room held to 100; the run stops there and the next hour (or the next data date of the week) goes on |
 | Watches one weekly email names | `WEEKLY_LINES`, 5 | eight watches with news name five, one line each, and count three more on a line to the watches page |
 | Matching notices one message lists | `RULES.free.match_mail`, 3; `RULES.pro.match_mail`, 10 | 2, 3 and 25 matches on Free list 2, 3 and 3; 9, 10 and 25 on Pro list 9, 10 and 10; the rest is counted in both parts only when there is one, and the subject counts every match |
 | Rows in one delivery message | `ROWS_MAX`, 50 | a search with 120 notices lists 50 and counts 70 more in both parts; a segment's counts come first; the watch mail's 50 run across every watch, each kind's rest on its own line |
 | Rows in one briefing section | `SECTION_ROWS`, 10 | 25 new notices list 10 and count 15 more |
+| Largest records in one saved view's message | `VIEW_MAIL_ROWS`, 5 | nine records list five; a twenty-year view lists its twenty fiscal years, the newest first |
+| Saved views one run reads | `VIEWS_RUN_MAX`, 1000 | the next hour reads the rest |
 | Lists named in the accounts-open message | `LISTS_SHOWN`, 10 | twelve lists name ten and count two more |
 | Messages in one accounts-open or Ultra run | `ANNOUNCE_MAX`, 300 | runs capped at 2 send at most 2 each, each address once; what waited less what a run sent is what waits after it; account holders are passed over (accounts-open only) |
 | Sign-in codes an address may ask for in an hour | `CODES_PER_HOUR`, 5 | the sixth request answers 429 and sends nothing |
-| Messages in one live check | one per template, 10 | all to the one address, nothing to any other; without `MAIL_ADDRESS` the weekly email is reported `stubbed` and not sent |
+| Messages in one live check | one per template, 11 | all to the one address, nothing to any other; without `MAIL_ADDRESS` the weekly email is reported `stubbed` and not sent |
 
 The last part plants each fault the checks look for (an em-dash, another
 reader's address, a link or a line in one part only, the reason line or the
@@ -221,12 +226,14 @@ sender a reader's message goes through (`sendWithHeaders` in
 4. a segment's new records
 5. the watch mail
 6. the weekly briefing
-7. the weekly email (the site's week, as an account that follows nothing on
+7. a saved analytics view (weekly; a segment's award notices over three
+   fiscal years, the last counted to date)
+8. the weekly email (the site's week, as an account that follows nothing on
    Free gets it, with four sample matching notices for the organization it
    names, so the block, its line on Pro and its disclaimer can be read)
-8. the accounts-open message
-9. the Ultra message
-10. the address-change notice
+9. the accounts-open message
+10. the Ultra message
+11. the address-change notice
 
 Each subject starts with `[mail check]`, the same tag in both languages, so
 the message is never taken for a reader's and an inbox rule can file it. The
@@ -306,7 +313,7 @@ address.
 | Cloudflare Access stopped the request | check the service token secrets and the Service Auth policy (step 3) |
 | The site answered 404 | the switch is off, `OPERATOR_EMAILS` is unset, Access's token did not check out, or the repository's token is not the Worker's |
 | The Worker has no test address | add the secret `MAIL_TEST_TO` and deploy (step 1) |
-| n of 10 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing, or for the weekly email that `MAIL_ADDRESS` is not set (`docs/accounts.md`, Weekly email) |
+| n of 11 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing, or for the weekly email that `MAIL_ADDRESS` is not set (`docs/accounts.md`, Weekly email) |
 
 ### Setting up
 

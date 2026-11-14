@@ -319,6 +319,7 @@ item. On, every reader gets the same page:
 | Panel | What it lists | Read from |
 |---|---|---|
 | Your Organization | for a signed-in account that has named its organization (`docs/accounts.md`, *Your organization*), that organization's view and its page in the account | the accounts database (`org_claims`) and the profile |
+| Saved Views | for a signed-in account on a plan that keeps views, or holding some, its saved views, each opening as saved, the count against the plan's figure and a link to the saved views page (`docs/accounts.md`, *Saved views*) | the accounts database (`saved_views`); left out while the table is not on the database |
 | Buyers | every buyer with a record in one of the four money sources, by name in the page's language, with its acronym | `buyers/index.json` |
 | Organizations | a line on finding one (by name in the search box, or in the directory; every profile links its view), then the organizations with the largest award notice values of the data year | `stats.json` (`top_organizations_year`) |
 | Segments | the 57 UNSPSC segments, in code order | the site's own list of segments |
@@ -328,7 +329,6 @@ Each entry links its view with `rel="nofollow"`. A reader whose plan lacks
 body: each view's first chart is free for the latest three fiscal years
 (`FREE_YEARS`) and Pro shows every chart for up to ten (`MAX_YEARS`), with a
 link to `/account/sign-in?next=/account/billing`. A Pro reader gets no note.
-Saved views per account do not exist yet; they will be one more panel.
 
 The search box is a GET to the same page (`?q=`):
 
@@ -698,8 +698,6 @@ row read.
 
 ## Phase 3
 
-- Saved views: a view's address, period included, kept as a saved search in
-  the account.
 - Price benchmarks from comparable awards. `rec_classes` now carries each
   award notice's and history record's UNSPSC classes, so what is left is a
   rule for "comparable" that holds up on the titles.

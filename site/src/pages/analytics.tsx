@@ -40,6 +40,11 @@
 // public/styles.css). That page reads the records database once: the state
 // row and the first chart's statement in one batch. The pages are noindex and
 // robots.txt keeps crawlers off them, so a crawl never becomes D1 reads.
+//
+// A view reads its address and writes it back through view_address.ts, the
+// same two halves a saved view is checked by; a signed-in reader's toolbar
+// ends on Save this view (account/view_pages.tsx), which posts the address
+// the view writes for itself.
 
 import type { Context } from "hono";
 import { ProTag, UltraTag } from "../pro";
@@ -50,7 +55,7 @@ import {
 } from "../chart";
 import { Table } from "../columns";
 import { MONEY_SOURCES, type MoneySource } from "../constants";
-import { BUYER_ID_RE, ORG_ID_RE, SEGMENT_RE, loadBuyer, loadBuyerAlias, loadProfile, loadStats, type Stats } from "../data";
+import { BUYER_ID_RE, SEGMENT_RE, loadBuyer, loadBuyerAlias, loadProfile, loadStats, type Stats } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
@@ -61,16 +66,19 @@ import {
   BUYER_SUPPLIERS_SQL, BUYER_VALUES_SQL, DUE_QUARTERS, DUE_YEARS, EARLIEST_FY, ENTRANT_LOOKBACK, FREE_YEARS, MAX_RIVALS, MAX_YEARS, ULTRA_YEARS, planYears,
   ORG_BUYERS_SQL, ORG_GROWTH_SQL, ORG_RECORDS_SQL, ORG_SEGMENTS_SQL, ORG_SHARE_SQL, ORG_YEARS_SQL, PERIODS, SEGMENT_BUYERS_SQL,
   SEGMENT_DUE_SQL, SEGMENT_ENTRANTS_SQL, SEGMENT_RECORDS_SQL, SEGMENT_SOURCES, RIVALS_N, SEGMENT_VALUES_SQL, SEGMENT_WINNERS_SQL,
-  SEGMENT_YEARS_SQL, SHARE_SLOTS, SOURCE_NUMBER, TOP_N, type Period, type Query, type Read, type Row, choosePeriod, dollars,
+  SEGMENT_YEARS_SQL, SHARE_SLOTS, SOURCE_NUMBER, TOP_N, type Query, type Read, type Row, dollars,
   fiscalLabel, fiscalYearOf, num, orgIdOf, orgNumber, quarterEnd, readRecords, segmentCode, segmentNumber,
 } from "../records_db";
 import { railAccount } from "../account/session";
 import { AddToDashboard, dashboardAccount, viewPanelRef } from "../account/dashboard_add";
+import { viewLabel } from "../account/saved_views";
+import { SaveViewRow, saveViewControl } from "../account/view_pages";
+import { type Frame, type Link, type View, frameOf, orgMore, rivalsOf, shareSegmentOf, viewQuery } from "../view_address";
 import { growthPct, windowOf } from "./expiring";
 import { retiredIdRedirect } from "./organization";
 import { contractSearchUrl, grantUrl, money, shareText } from "./shared";
 
-export type View = "buyer" | "organization" | "segment";
+export type { View };
 
 // Each view's tables in page order, by the name its CSV file takes.
 export const VIEW_TABLES = {
@@ -79,31 +87,7 @@ export const VIEW_TABLES = {
   segment: ["years", "values", "records", "buyers", "winners", "entrants", "due"],
 } as const satisfies Record<View, readonly string[]>;
 
-const DEFAULT_YEARS: Period = 10;
-
 // -- the request -------------------------------------------------------------------
-
-interface Frame {
-  source: MoneySource;
-  years: number;
-  first: number;
-  last: number;
-  // The fiscal year the data date falls in, counted to date.
-  current: number;
-  // The period was chosen by its first and last fiscal year (?from, ?to)
-  // rather than as the latest n, and capped: it was longer than the reader's
-  // plan gives (most, records_db.ts planYears), so its latest most are shown.
-  custom: boolean;
-  capped: boolean;
-  // The free view was asked for something it does not give (a longer period,
-  // a segment or organizations to compare), and says so.
-  asked: boolean;
-  // The fiscal years the reader's plan shows at once (planYears).
-  most: number;
-  // The address asked for a period longer than the plan gives that Ultra
-  // gives (ULTRA_YEARS); the view says so while Ultra is on sale.
-  longer: boolean;
-}
 
 // The source by the most records on the entity's own page; the first of the
 // list on a tie, or when the page names none.
@@ -111,51 +95,16 @@ function largestSource(counts: Partial<Record<MoneySource, number>>, allowed: re
   return allowed.reduce((best, s) => ((counts[s] ?? 0) > (counts[best] ?? 0) ? s : best), allowed[0]);
 }
 
-// most: the fiscal years the reader's plan shows at once (planYears); a
-// period longer than that reads as the plan's own, the latest most years.
+// The view's frame from the request's address (view_address.ts frameOf, the
+// one reading a saved view is checked by): most is the fiscal years the
+// reader's plan shows at once (planYears).
 function readFrame(
   c: Context<AppEnv>, stats: Stats, pro: boolean, allowed: readonly MoneySource[], fallback: MoneySource, most: number = pro ? MAX_YEARS : FREE_YEARS,
 ): Frame {
-  const url = new URL(c.req.url);
-  const raw = (url.searchParams.get("source") ?? "").trim().toLowerCase();
-  const source = (allowed as readonly string[]).includes(raw) ? (raw as MoneySource) : fallback;
-  const current = fiscalYearOf(todayOf(stats.data_as_of));
-  const latest = (years: number): Frame => ({
-    source, years, first: current - years + 1, last: current, current, custom: false, capped: false, asked: false, most, longer: false,
-  });
-  const asked = Number(url.searchParams.get("years"));
-  // Ultra's period asked by a plan that does not give it.
-  const ultraAsked = asked === ULTRA_YEARS && most < ULTRA_YEARS;
-  if (!pro) {
-    const extra = ["years", "from", "to", "segment", "vs"].some((k) => url.searchParams.has(k));
-    return { ...latest(FREE_YEARS), asked: extra, longer: ultraAsked };
-  }
-  const chosen = choosePeriod(url.searchParams.get("from"), url.searchParams.get("to"), current, most);
-  if (chosen) {
-    return {
-      ...latest(chosen.last - chosen.first + 1), first: chosen.first, last: chosen.last, custom: true, capped: chosen.capped,
-      longer: chosen.capped && most < ULTRA_YEARS,
-    };
-  }
-  const years = (PERIODS as readonly number[]).includes(asked) ? Math.min(asked, most) : DEFAULT_YEARS;
-  return { ...latest(years), longer: ultraAsked };
+  return frameOf(new URL(c.req.url), { current: fiscalYearOf(todayOf(stats.data_as_of)), pro, allowed, fallback, most });
 }
 
-// A view's address: the source, then the period as the reader chose it
-// (the latest n fiscal years, or the first and last one), then the rest.
-type Link = Pick<Frame, "source" | "years" | "first" | "last" | "custom">;
-
-function query(base: string, f: Link, more: Record<string, string | readonly string[]> = {}): string {
-  const p = new URLSearchParams({ source: f.source });
-  if (f.custom) {
-    p.set("from", String(f.first));
-    p.set("to", String(f.last));
-  } else {
-    p.set("years", String(f.years));
-  }
-  for (const [k, v] of Object.entries(more)) for (const one of typeof v === "string" ? [v] : v) p.append(k, one);
-  return `${base}?${p.toString()}`;
-}
+const query = viewQuery;
 
 // The same as hidden fields, for a form that changes something else.
 const FrameFields: FC<{ frame: Link; more?: Record<string, string | readonly string[]>; period?: boolean }> = ({ frame, more = {}, period = true }) => (
@@ -169,17 +118,7 @@ const FrameFields: FC<{ frame: Link; more?: Record<string, string | readonly str
   </>
 );
 
-// The organizations to compare on a profile: up to MAX_RIVALS valid ids, each
-// once, never the profile's own.
-function readRivals(url: URL, self: string): string[] {
-  const out: string[] = [];
-  for (const v of url.searchParams.getAll("vs")) {
-    const id = v.trim().toLowerCase();
-    if (ORG_ID_RE.test(id) && id !== self && !out.includes(id)) out.push(id);
-    if (out.length === MAX_RIVALS) break;
-  }
-  return out;
-}
+const readRivals = rivalsOf;
 
 async function readNamed(c: Context<AppEnv>, named: Record<string, Query>): Promise<{ read: Read; rows: Record<string, Row[]> }> {
   const names = Object.keys(named);
@@ -318,6 +257,8 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
   // An Ultra account adds the view, at its source and period, to its dashboard (account/dashboard.tsx); no one else sees it.
   const dash = s.pro ? await dashboardAccount(c) : null;
   const add = dash ? <AddToDashboard lang={lang} account={dash} kind="view" panelRef={viewPanelRef(s.base, frame)} button /> : null;
+  // A signed-in reader saves the view as it writes its own address (account/view_pages.tsx); nothing for anyone else.
+  const save = await saveViewControl(c, query(s.base, frame, s.more), viewLabel(lang, s.name, frame));
   return page(
     c,
     <Layout lang={lang} title={title} dataAsOf={s.stats.data_as_of} active={s.active}
@@ -336,6 +277,7 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
         <SourceTabs lang={lang} base={s.base} frame={frame} allowed={s.allowed} more={s.more} />
         <PeriodTabs lang={lang} base={s.base} frame={frame} pro={s.pro} ultra={s.ultra} more={s.more} />
         <PeriodForm lang={lang} base={s.base} frame={frame} pro={s.pro} more={s.more} />
+        <SaveViewRow lang={lang} state={save} />
       </div>
       {ok ? (body as any) : (
         <Panel title={t(lang, "analytics.unavailable_title")}>
@@ -994,9 +936,7 @@ function orgQueries(oid: number, f: Frame, tables: readonly string[], spec: Shar
 // only those among the segment's largest are shown).
 function readShare(c: Context<AppEnv>, self: string): { segment: number | null; rivals: number[] } {
   const url = new URL(c.req.url);
-  const raw = (url.searchParams.get("segment") ?? "").trim();
-  const segment = SEGMENT_RE.test(raw) ? segmentNumber(raw) : null;
-  return { segment, rivals: readRivals(url, self).map((id) => orgNumber(id) as number) };
+  return { segment: shareSegmentOf(url), rivals: readRivals(url, self).map((id) => orgNumber(id) as number) };
 }
 
 // The organization view's data: one batch, or two when the share chart must
@@ -1041,8 +981,7 @@ export async function organizationAnalytics(c: Context<AppEnv>): Promise<Respons
     : { ...(await readNamed(c, orgQueries(oid, frame, ["years"], null))), segment: null };
   const { read, rows } = data;
   const chosen = readRivals(new URL(c.req.url), id);
-  const more: Record<string, string | readonly string[]> = pro && data.segment !== null
-    ? { segment: segmentCode(data.segment), vs: chosen } : {};
+  const more = pro ? orgMore(data.segment, chosen) : {};
   const s: Shell = {
     view: "organization", lang, stats, name, base, frame, pro, ultra, allowed: MONEY_SOURCES, active: "/organizations", more,
     back: `/organizations/${id}`, backKey: "analytics.back_organization",

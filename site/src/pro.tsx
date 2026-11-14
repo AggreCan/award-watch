@@ -102,8 +102,8 @@ export type Wording = { key: Key; vars?: (lang: Lang) => Record<string, string> 
 // figure, so test/seo-intent.test.ts and test/radar-gate.test.ts can hold
 // every row to RULES), and each plan's wording, null where the plan has none
 // of it. Ultra has every row, each with Ultra's own figure (at or above
-// Pro's); a row Pro has not is Ultra's alone (the dashboard), its feature one
-// Ultra gives a figure Pro does not. Every card draws every row it is shown
+// Pro's); a row Pro has not is Ultra's alone (the dashboard, the saved views
+// by email), its feature one Ultra gives a figure or a yes Pro does not. Every card draws every row it is shown
 // with in this order, so the lists line up across the cards; a row only
 // Ultra has is drawn only beside Ultra's card (planRows).
 export type PlanRow = { feature: Feature; free: Wording | null; pro: Wording | null; ultra: Wording };
@@ -201,9 +201,16 @@ export const PLAN_ROWS: readonly PlanRow[] = [
   // The blocks of "Your organization" past its first (src/account/org_pages.tsx),
   // with the organizations it sits beside (COMPETITORS_MAX in account/org_claim.ts is MAX_RIVALS).
   { feature: "analytics", free: null, ...same({ key: "plans.pro_org", vars: count(() => MAX_RIVALS) }) },
+  // The analytics views an account keeps (src/account/saved_views.ts): each paid plan's own figure, from RULES.
+  {
+    feature: "saved_views", free: null,
+    pro: { key: "plans.saved_views", vars: count(() => RULES.pro.saved_views) }, ultra: { key: "plans.saved_views", vars: count(() => RULES.ultra.saved_views) },
+  },
   { feature: "bug_reports", free: null, ...same({ key: "plans.pro_bugs" }) },
-  // Ultra's alone: the dashboard's panels (src/account/dashboard.tsx), its figure from RULES.
+  // Ultra's alone: the dashboard's panels (src/account/dashboard.tsx), its figure from RULES, and the saved
+  // views by email (src/account/view_mail.ts).
   { feature: "dashboard", free: null, pro: null, ultra: { key: "plans.dashboard", vars: count(() => RULES.ultra.dashboard) } },
+  { feature: "view_mail", free: null, pro: null, ultra: { key: "plans.view_mail" } },
 ];
 
 // The rows a set of cards draws: those one of its plans has, so the two
@@ -223,10 +230,12 @@ export const ULTRA_INCLUDES: readonly (readonly [Feature, Key])[] = PLAN_ROWS.ma
 // page's Ultra card while Ultra is on sale, and the Ultra message), each the
 // Ultra wording of a PLAN_ROWS row, so the figures are read from RULES and the
 // constants and never typed: searches, watches, analytics, the keyed API, the
-// matching notices and the dashboard. The landing card leads with "Everything
-// in Pro"; the message leaves out the matching notices.
+// matching notices, the dashboard, the saved views and their email. The
+// landing card leads with "Everything in Pro"; the message leaves out the
+// matching notices.
 export const ULTRA_LINES: readonly Key[] = [
   "plans.pro_searches", "plans.pro_watches", "plans.pro_analytics", "plans.api_keys", "plans.matches", "plans.dashboard",
+  "plans.saved_views", "plans.view_mail",
 ];
 
 export function ultraLines(lang: Lang, keys: readonly Key[] = ULTRA_LINES): string[] {

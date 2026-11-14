@@ -126,6 +126,29 @@ export function matchesInput(lang: "en" | "fr", plan: Plan, n: number): DigestMa
   return matchDigestBlock(lang, SITE, { plan, name: MATCH_NAME, matches, levels: null })!;
 }
 
+// A saved view's message (src/account/digests.ts viewDigest), as view_mail.ts
+// hands it over: a buyer's published contracts over five fiscal years, the
+// last counted to date, and its largest records of that year, one with no
+// page of its own and one whose supplier the record does not name.
+export const VIEW_STOP = `${SITE}/account/stop?v=${"e".repeat(32)}&t=${"f".repeat(32)}`;
+
+export function viewInput(lang: "en" | "fr") {
+  return {
+    lang, to: "reader@example.com", site: SITE, stopUrl: lang === "fr" ? `${VIEW_STOP}&lang=fr` : VIEW_STOP, cadence: "weekly" as const,
+    name: lang === "fr" ? "Défense nationale, contrats publiés" : "National Defence, published contracts",
+    address: "/buyers/dnd-mdn/analytics?source=contracts&years=5", csv: "/buyers/dnd-mdn/analytics/quarters.csv?source=contracts&years=5",
+    source: "contracts", first: 2022, last: 2026, current: 2026, dataDate: DAY,
+    years: [
+      { fy: 2022, n: 410, cents: 91_200_000_000 }, { fy: 2023, n: 388, cents: 84_550_000_000 }, { fy: 2024, n: 402, cents: 99_000_000_000 },
+      { fy: 2025, n: 377, cents: 102_340_000_000 }, { fy: 2026, n: 151, cents: null },
+    ],
+    largest: [
+      { src: 3, ref: "dnd-mdn:C-2026-0001", title: "Fleet maintenance (sample)", cents: 4_500_000_000, party: "Marathon Targets Inc.", path: "/contracts/dnd-mdn/C-2026-0001" },
+      { src: 3, ref: "dnd-mdn:C-2026-0002", title: null, cents: 1_250_000_000, party: null, path: null },
+    ],
+  };
+}
+
 export type Handed = {
   from: unknown; to: string; replyTo?: unknown; subject: string; text?: string; html?: string; headers?: Record<string, string>;
 };

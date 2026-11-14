@@ -5,7 +5,8 @@
 // a segment and of an organization, the watch mail (with and without the
 // "Your organization" block it can open with), the weekly briefing, the
 // weekly email (with the watches' news and with the site's week, on Free and
-// on Pro), the week's matching notices in the weekly email and in the watch
+// on Pro), a saved analytics view weekly and monthly (with its years and its
+// largest records, and with neither), the week's matching notices in the weekly email and in the watch
 // mail (Free and Pro, with the disclaimer and the Terms' https address in
 // both parts), the accounts-open and Ultra
 // messages (through their console run), the address-change notice, and the
@@ -13,7 +14,7 @@
 // sends to the test inbox only once they pass here.
 import { describe, expect, it } from "vitest";
 import { accountsOpenMessage, announceLinks, runAnnouncement, ultraLinks, ultraOpenMessage } from "../src/account/announce";
-import { expiringDigest, recordsDigest, tenderDigest, watchDigest, weeklyDigest } from "../src/account/digests";
+import { expiringDigest, recordsDigest, tenderDigest, viewDigest, watchDigest, weeklyDigest } from "../src/account/digests";
 import { RULES } from "../src/account/entitlements";
 import { MAIL_CHECK_LISTS, MAIL_CHECK_MARK, MAIL_CHECK_TEMPLATES, type MailCheckTemplate, mailCheckMessages } from "../src/account/mail_check";
 import { weekOpening } from "../src/account/org_claim";
@@ -22,7 +23,7 @@ import { t, tn, type Lang } from "../src/i18n";
 import { INSERT_INTEREST, newToken } from "../src/pages/interest";
 import { DB, decode, lastMail, nbsp, newEmail, onEnv, post, useAccountsDb } from "../test/accounts-helpers";
 import {
-  DAY, MATCH_NAME, SAMPLE_ADDRESS, SITE, STOP, expiringInput, matchesInput, tenderInput, weeklyInput,
+  DAY, MATCH_NAME, SAMPLE_ADDRESS, SITE, STOP, expiringInput, matchesInput, tenderInput, viewInput, weeklyInput,
 } from "../test/mail-fixtures";
 import { LOCAL, type Sent, SHAPES, checkMessage, shapeOf, viaLogSender } from "./checks";
 
@@ -33,7 +34,8 @@ const LANGS = ["en", "fr"] as const;
 // The live check's templates as checkMessage reads them.
 const CHECK_SHAPE: Record<MailCheckTemplate, keyof typeof SHAPES> = {
   sign_in: "sign_in", tenders_daily: "digest_daily", expiring_weekly: "digest_weekly", records: "digest_daily", watch: "watch",
-  briefing: "briefing", weekly: "weekly", accounts_open: "accounts_open", ultra_open: "ultra_open", address_notice: "address_notice",
+  briefing: "briefing", view: "view_weekly", weekly: "weekly", accounts_open: "accounts_open", ultra_open: "ultra_open",
+  address_notice: "address_notice",
 };
 
 // What every message carrying the week's matching notices holds in both
@@ -178,6 +180,17 @@ describe.each(LANGS)("every message, in %s", (lang) => {
     }
   });
 
+  it("a saved analytics view, weekly and monthly, with its figures and with none", async () => {
+    for (const cadence of ["weekly", "monthly"] as const) {
+      const m = viewDigest({ ...viewInput(lang), cadence, to: newEmail(`view-${cadence}-${lang}`) });
+      checkMessage(await viaLogSender(m), shapeOf(cadence === "weekly" ? "view_weekly" : "view_monthly", `saved view ${cadence}`, SITE), lang);
+    }
+    // A view with no record in its period, and none of value in its last year: a line in each section, no row.
+    const empty = viewDigest({ ...viewInput(lang), years: [], largest: [], csv: null, to: newEmail(`view-empty-${lang}`) });
+    checkMessage(await viaLogSender(empty), shapeOf("view_weekly", "saved view, empty", SITE), lang);
+    expect(nbsp(empty.text)).toContain(nbsp(t(lang, "view.mail_years_none")));
+  });
+
   it("the accounts-open message, as its run sends it, and with an https stop link", async () => {
     const to = newEmail(`announce-${lang}`);
     const other = newEmail(`announce-other-${lang}`);
@@ -229,9 +242,9 @@ describe("the live check's messages", () => {
     for (const lang of LANGS) {
       for (const { template, message } of mailCheckMessages(lang, newEmail("stops"), SITE, new Date(), SAMPLE_ADDRESS)) {
         for (const stop of message.text.match(/https:\/\/\S+\/(?:account|interest)\/stop\?\S+/g) ?? []) {
-          expect(stop, template).toMatch(/[?&](?:s|w|b|e|t)=0{32}(?:&|$)/);
+          expect(stop, template).toMatch(/[?&](?:s|w|b|e|v|t)=0{32}(?:&|$)/);
           const params = new URL(stop).searchParams;
-          for (const key of ["s", "w", "b", "e", "t"]) if (params.has(key)) expect(params.get(key), `${template} ${key}`).toBe("0".repeat(32));
+          for (const key of ["s", "w", "b", "e", "v", "t"]) if (params.has(key)) expect(params.get(key), `${template} ${key}`).toBe("0".repeat(32));
         }
       }
     }

@@ -34,7 +34,7 @@ import { operatorEmails } from "./admin_ops";
 import { accountsOpenMessage, announceLinks, ultraLinks, ultraOpenMessage } from "./announce";
 import { type BriefingData, type BriefingSubject, INSTRUMENT_WITHIN, briefingName, nextQuarter, quarterTurn } from "./briefings";
 import { sendWithHeaders } from "./deliveries";
-import { briefingDigest, expiringDigest, fitSubject, recordsDigest, siteLink, tenderDigest, watchDigest, weeklyDigest } from "./digests";
+import { briefingDigest, expiringDigest, fitSubject, recordsDigest, siteLink, tenderDigest, viewDigest, watchDigest, weeklyDigest } from "./digests";
 import { matchDigestBlock } from "./fit_mail";
 import { sameHash, sha256Hex } from "./secrets";
 import { type MailMessage, type Sender, addressNotice, senderFor, signInMessage } from "./sender";
@@ -51,14 +51,14 @@ export const MAIL_CHECK_MARK = "[mail check]";
 // daily, the contracts ending weekly), since the footer's reason is the only
 // part the cadence changes.
 export const MAIL_CHECK_TEMPLATES = [
-  "sign_in", "tenders_daily", "expiring_weekly", "records", "watch", "briefing", "weekly", "accounts_open", "ultra_open", "address_notice",
+  "sign_in", "tenders_daily", "expiring_weekly", "records", "watch", "briefing", "view", "weekly", "accounts_open", "ultra_open", "address_notice",
 ] as const;
 export type MailCheckTemplate = (typeof MAIL_CHECK_TEMPLATES)[number];
 
 // The messages a list or watch delivery sends: each carries a stop link, the
 // reason it came, and List-Unsubscribe with an https stop link.
 export const MAIL_CHECK_LISTS: ReadonlySet<MailCheckTemplate> = new Set([
-  "tenders_daily", "expiring_weekly", "records", "watch", "briefing", "weekly", "accounts_open", "ultra_open",
+  "tenders_daily", "expiring_weekly", "records", "watch", "briefing", "view", "weekly", "accounts_open", "ultra_open",
 ]);
 
 // The reason the weekly email's template reports when MAIL_ADDRESS is unset:
@@ -235,6 +235,21 @@ export function mailCheckMessages(lang: Lang, to: string, site: string, now: Dat
       return briefingDigest({
         lang, to, site, stopUrl: link(`/account/stop?b=${ZERO}&t=${ZERO}`), briefing, name: briefingName(lang, briefing, ""),
         data: mailCheckBriefingData(day),
+      });
+    },
+    // A segment's saved view, weekly: its years from the data date's fiscal year back, and its largest records of that year.
+    view: () => {
+      const fy = fiscalYearOf(day);
+      return viewDigest({
+        lang, to, site, stopUrl: link(`/account/stop?v=${ZERO}&t=${ZERO}`), cadence: "weekly",
+        name: lang === "fr" ? "Segment 81, exemple" : "Segment 81, sample", address: "/segments/81/analytics?source=awards&years=3",
+        csv: "/segments/81/analytics/years.csv?source=awards&years=3", source: "awards", first: fy - 2, last: fy, current: fy, dataDate: day,
+        years: [{ fy: fy - 2, n: 41, cents: 912_000_000 }, { fy: fy - 1, n: 37, cents: 845_500_000 }, { fy, n: 12, cents: null }],
+        largest: [
+          { src: 1, ref: "cb-000-00000040", title: lang === "fr" ? "Inspection de ponts (exemple)" : "Bridge inspection (sample)", cents: 48_500_000,
+            party: "Sample Engineering Ltd.", path: "/awards/cb-000-00000040" },
+          { src: 1, ref: "cb-000-00000041", title: null, cents: 9_900_000, party: null, path: "/awards/cb-000-00000041" },
+        ],
       });
     },
     // The form most accounts get: one that follows nothing, on Free, the site's week in figures, with the

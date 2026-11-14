@@ -14,6 +14,7 @@
 import { SEGMENTS, SEGMENT_SHORT } from "./constants";
 import { ACCOUNT_STRINGS } from "./account/strings";
 import { DASHBOARD_STRINGS } from "./account/dashboard_strings";
+import { VIEWS_STRINGS } from "./account/views_strings";
 import { CALENDAR_STRINGS } from "./calendar_strings";
 
 export type Lang = "en" | "fr";
@@ -25,6 +26,8 @@ const STRINGS = {
   ...ACCOUNT_STRINGS,
   // The dashboard's strings (src/account/dashboard_strings.ts).
   ...DASHBOARD_STRINGS,
+  // Saved analytics views and their email (src/account/views_strings.ts).
+  ...VIEWS_STRINGS,
   // The calendar files' strings (src/calendar_strings.ts).
   ...CALENDAR_STRINGS,
   "site.name": { en: "Award Watch", fr: "Award Watch" },
@@ -4293,11 +4296,7 @@ const STRINGS = {
   "ultra.tag_hidden": { en: "(custom plan)", fr: "(forfait sur mesure)" },
   "landing.ultra_price": { en: "Price to be set", fr: "Prix à fixer" },
   "landing.ultra_soon": { en: "Coming soon", fr: "Bientôt offert" },
-  // The two parts of Ultra still planned, on its card before it is on sale (pages/landing.tsx ULTRA_PLANNED).
-  "landing.ultra_schedule": {
-    en: "Planned: saved analytics views by email, weekly or monthly",
-    fr: "Prévu : vues d'analyse enregistrées par courriel, chaque semaine ou mois",
-  },
+  // The part of Ultra still planned, on its card before it is on sale (pages/landing.tsx ULTRA_PLANNED).
   "landing.ultra_builder": {
     en: "Planned: an analytics builder for your own measure, grouping, period and filters",
     fr: "Prévu : un générateur d'analyses pour vos propres mesure, regroupement, période et filtres",

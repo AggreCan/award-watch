@@ -204,7 +204,14 @@ describe("while Ultra is off sale", () => {
     const pro = newEmail("off-acct-pro");
     const proCookie = await signIn(pro, { env: payEnv() });
     await grantPro(pro);
-    const PAGES = ["/account", "/account/billing", "/account/billing?plan=ultra", "/account/searches", "/account/watches", "/account/keys", "/account/matches"];
+    // A saved view, so the saved views page draws its table: no Email column on either side while Ultra is off sale.
+    await ACCOUNTS.prepare(
+      "INSERT INTO saved_views (id, user_id, kind, address, name, lang, deliver, created_at) VALUES (?, ?, 'buyer', ?, 'Fleet', 'en', 'off', ?)",
+    ).bind(crypto.randomUUID().replace(/-/g, ""), await userId(pro), "/buyers/pwgsc-tpsgc/analytics?source=awards&years=5", new Date().toISOString()).run();
+    const PAGES = [
+      "/account", "/account/billing", "/account/billing?plan=ultra", "/account/searches", "/account/watches", "/account/keys", "/account/matches",
+      "/account/views",
+    ];
     for (const cookie of [freeCookie, proCookie]) {
       for (const path of PAGES) {
         const plain = await page(path, payEnv(), cookie);
@@ -278,8 +285,9 @@ describe("the plan cards while Ultra is on sale", () => {
       `${RULES.ultra.saved_searches} saved searches, by email`, `${RULES.ultra.watchlists} watches, each change by email`,
       `Analytics: every view, ${planYears("ultra")} fiscal years`, `API: ${KEYS_MAX} keys of ${keyQuota("ultra")!.perDay.toLocaleString("en-CA")} requests a day`,
       `${RULES.ultra.matches} matching notices for your organization`, `A dashboard of up to ${RULES.ultra.dashboard} panels`,
+      `${RULES.ultra.saved_views} saved analytics views`, "Saved views by email, weekly or monthly",
     ]);
-    expect(ULTRA_LINES).toHaveLength(6);
+    expect(ULTRA_LINES).toHaveLength(8);
   });
 
   it("lead a reader without a session to the sign-in page and on to Ultra's panel, a Free reader to its billing page", async () => {
@@ -341,13 +349,16 @@ describe("the landing page's Ultra card", () => {
     const off = text(section(await (await request("/", payEnv({ PRICE_ULTRA_MONTHLY_CAD: "", PRICE_ULTRA_YEARLY_CAD: "" }))).text()));
     expect(off).toContain('<p class="lp-pr lp-pr-unset">Price to be set <span class="lp-soon-tag">Coming soon</span></p>');
     expect(off).toContain('name="kind" value="ultra"');
-    // Before it is on sale the card says who Ultra is for and lists Ultra's own lines, then the two parts still planned.
+    // Before it is on sale the card says who Ultra is for and lists Ultra's own lines (the saved views by email among
+    // them since they shipped), then the part still planned.
     expect(off).toContain(`<p class="lp-for">${text(t("en", "plans.ultra_for"))}</p>`);
     const offCard = /<div class="lp-plan lp-plan-ultra" id="ultra">[\s\S]*?<\/ul>/.exec(off)?.[0] ?? "";
     const offRows = [...offCard.matchAll(/<li><svg[^>]*><path[^>]*><\/path><\/svg><span>([^<]*)<\/span><\/li>/g)].map((m) => m[1]);
     expect(offRows).toEqual([text(t("en", "landing.everything_pro")), ...ultraLines("en").map(text),
-      "Planned: saved analytics views by email, weekly or monthly",
       "Planned: an analytics builder for your own measure, grouping, period and filters"]);
+    expect(offRows).toContain("Saved views by email, weekly or monthly");
+    expect(offRows).toContain(`${RULES.ultra.saved_views} saved analytics views`);
+    expect(offRows.some((r) => r.startsWith("Planned: saved analytics views"))).toBe(false);
     // With the two figures set and nothing else of Ultra's, the card shows the price beside the tag and stays the waitlist.
     const planned = text(section(await (await request("/", payEnv({ PRICE_ULTRA_MONTHLY_CAD: "38.99", PRICE_ULTRA_YEARLY_CAD: "389.99" }))).text()));
     expect(planned).toMatch(/<p class="lp-pr">\s*CA\$38\.99 <span class="lp-soon-tag">Coming soon<\/span>\s*<small>a month, or CA\$389\.99 a year<\/small>\s*<\/p>/);

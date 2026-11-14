@@ -386,7 +386,7 @@ describe("the radar's tabs and tiles", () => {
   it("lists what Pro includes, watches, calendar feeds, your organization, the weekly briefing, the keyed API, instrument files and bug reports among it, each line a Pro feature", () => {
     expect(PRO_INCLUDES.map(([f]) => f)).toEqual([
       "intraday", "radar_depth", "radar_depth", "delivery", "watch_mail", "delivery", "analytics", "matches", "match_mail", "radar_depth", "api",
-      "export_filtered", "delivery", "analytics", "bug_reports",
+      "export_filtered", "delivery", "analytics", "saved_views", "bug_reports",
     ]);
     expect(PRO_INCLUDES.map(([, key]) => key)).toContain("plans.pro_briefing");
     // A row only Ultra has (the dashboard) is not one of Pro's.
@@ -496,7 +496,7 @@ describe("the plan cards", () => {
     expect(proFr).toContain(`<span>${RULES.pro.match_mail} correspondances par semaine, par courriel</span>`);
     // Every figure on a card is one of the plans' or the constants', or a window's months.
     const figures = new Set([RULES.free.saved_searches, RULES.pro.saved_searches, RULES.free.watchlists, RULES.pro.watchlists,
-      RULES.free.matches, RULES.pro.matches, RULES.free.match_mail, RULES.pro.match_mail, FREE_YEARS, MAX_YEARS,
+      RULES.free.matches, RULES.pro.matches, RULES.free.match_mail, RULES.pro.match_mail, RULES.pro.saved_views, FREE_YEARS, MAX_YEARS,
       KEY_PER_DAY, KEYS_MAX, hours, COMPETITORS_MAX, 3, 6, 12].map(String));
     for (const card of [free, pro, freeFr, proFr]) {
       for (const { text } of rowsOf(card)) {
@@ -517,7 +517,9 @@ describe("the plan cards", () => {
       const free = RULES.free[row.feature];
       if (!row.pro) {
         expect(row.free, row.ultra.key).toBeNull();
-        expect(RULES.ultra[row.feature] as number, row.ultra.key).toBeGreaterThan(pro as number);
+        // A count Ultra gives above Pro's, or a yes Pro does not have (the saved views by email).
+        if (typeof pro === "number") expect(RULES.ultra[row.feature] as number, row.ultra.key).toBeGreaterThan(pro);
+        else expect([pro, RULES.ultra[row.feature]], row.ultra.key).toEqual([false, true]);
         expect(pro, row.ultra.key).toBe(free);
         continue;
       }

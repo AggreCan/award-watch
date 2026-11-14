@@ -395,11 +395,12 @@ const PlanList: FC<{ lang: Lang; plan: "free" | "pro" }> = ({ lang, plan }) => (
 
 // Ultra's rows while it is not on sale: "Everything in Pro", then what is
 // built, in Ultra's own lines with its figures (src/pro.tsx ultraLines, the
-// lines the card lists once it is on sale), then the two parts still
-// planned, each saying so. Every row is one Ultra will have (operator's
-// ruling on tier lines, 2026-11-06). Once it is on sale (ultraOnSale), the
-// card lists what Ultra holds that day, and the planned lines leave it.
-export const ULTRA_PLANNED = ["landing.ultra_schedule", "landing.ultra_builder"] as const;
+// lines the card lists once it is on sale, the saved views by email among
+// them since they shipped), then the part still planned, saying so. Every row
+// is one Ultra will have (operator's ruling on tier lines, 2026-11-06). Once
+// it is on sale (ultraOnSale), the card lists what Ultra holds that day, and
+// the planned line leaves it.
+export const ULTRA_PLANNED = ["landing.ultra_builder"] as const;
 export const ultraRows = (lang: Lang): string[] =>
   [t(lang, "landing.everything_pro"), ...ultraLines(lang), ...ULTRA_PLANNED.map((k) => t(lang, k))];
 

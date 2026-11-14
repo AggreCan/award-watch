@@ -1492,7 +1492,7 @@ admin.post("/announce", async (c) => {
 
 const MAIL_CHECK_NAME: Record<MailCheckTemplate, Key> = {
   sign_in: "admin.mail_check_t_sign_in", tenders_daily: "admin.mail_check_t_tenders", expiring_weekly: "admin.mail_check_t_expiring",
-  records: "admin.mail_check_t_records", watch: "admin.mail_check_t_watch", briefing: "admin.mail_check_t_briefing",
+  records: "admin.mail_check_t_records", watch: "admin.mail_check_t_watch", briefing: "admin.mail_check_t_briefing", view: "admin.mail_check_t_view",
   weekly: "admin.mail_check_t_weekly", accounts_open: "admin.mail_check_t_accounts_open", ultra_open: "admin.mail_check_t_ultra_open",
   address_notice: "admin.mail_check_t_address",
 };

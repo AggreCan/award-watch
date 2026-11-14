@@ -403,6 +403,9 @@ export const SHAPES = {
   digest_weekly: { list: true, why: "digest.why_weekly", manage: "/account/searches", onePart: [["digest.text_searches"]] },
   watch: { list: true, why: "watches.digest_why", manage: "/account/watches" },
   briefing: { list: true, why: "briefing.why", manage: "/account/searches" },
+  // A saved view's email (digests.ts viewDigest): the cadence changes its reason line only.
+  view_weekly: { list: true, why: "view.mail_why_weekly", manage: "/account/views" },
+  view_monthly: { list: true, why: "view.mail_why_monthly", manage: "/account/views" },
   weekly: { list: true, why: "weekly.why", manage: "/account" },
   accounts_open: { list: true, why: "announce.why", manage: null },
   ultra_open: { list: true, why: "announce.ultra_why", manage: null },

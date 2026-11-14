@@ -84,8 +84,10 @@ values", with the matching notices' disclaimer. It reads nothing.
 With the switch on the page adds the three plan cards: Free and Pro draw
 every row of `PLAN_ROWS` in order, as the Pro page does, Pro with its price
 from the checkout's figures (or "Not on sale yet"); Ultra, in sapphire with
-the 2 x 2 tiles chip, reads "Price to be set" and "Coming soon", lists its
-planned scope and ends on a one-field form in place of a button (below).
+the 2 x 2 tiles chip, reads "Price to be set" and "Coming soon", lists
+"Everything in Pro", Ultra's own lines with its figures (the saved views by
+email among them since they shipped) and the one part still planned (the
+analytics builder), and ends on a one-field form in place of a button (below).
 Once Ultra is on sale (docs/accounts.md, *Ultra*) the card shows its monthly
 figure large with the yearly beside it, "For people who follow a whole
 market.", "Everything in Pro" and Ultra's own lines with its figures from

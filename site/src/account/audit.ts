@@ -16,6 +16,10 @@ export type AuditEvent =
   // (not personal data), never the address; the others a fixed word.
   | "org_claimed" | "org_unclaimed" | "org_compare"
   | "briefing_added" | "briefing_changed" | "briefing_removed" | "briefing_stopped"
+  // Saved analytics views (saved_views.ts): view_saved carries the kind of
+  // view, view_changed the delivery chosen, view_stopped how the stop link was
+  // used; never the address or the name.
+  | "view_saved" | "view_changed" | "view_removed" | "view_stopped"
   // The weekly email (weekly.ts): where it was turned on or off ("at sign-in",
   // "account"), or how the unsubscribe link was used ("link", "one_click").
   | "weekly_on" | "weekly_off" | "weekly_stopped"
