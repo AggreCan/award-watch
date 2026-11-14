@@ -3410,8 +3410,8 @@ const STRINGS = {
   },
   "propage.free_title": { en: "What Stays Free", fr: "Ce qui reste gratuit" },
   "propage.free_text": {
-    en: "Every page of the site, without an account: the open tenders and each day's new notices from the nightly refresh, every award notice, organization profile and buyer page, the contracts ending within 3 months, the CSV downloads, the open JSON API and the Atom feeds.",
-    fr: "Toutes les pages du site, sans compte : les appels d'offres ouverts et les nouveaux avis de chaque jour selon la mise à jour de nuit, chaque avis d'attribution, profil d'organisation et page d'acheteur, les contrats prenant fin d'ici 3 mois, les téléchargements CSV, l'API JSON ouverte et les fils Atom.",
+    en: "Every page of the site, without an account: the open tenders and each day's new notices from the nightly refresh, every award notice, organization profile and buyer page, the contracts ending within 3 months, the bulk CSV files (open tenders, organizations, buyers, each year's records and the 3-month list), the open JSON API and the Atom feeds.",
+    fr: "Toutes les pages du site, sans compte : les appels d'offres ouverts et les nouveaux avis de chaque jour selon la mise à jour de nuit, chaque avis d'attribution, profil d'organisation et page d'acheteur, les contrats prenant fin d'ici 3 mois, les fichiers CSV en vrac (appels d'offres ouverts, organisations, acheteurs, dossiers de chaque année et liste de 3 mois), l'API JSON ouverte et les fils Atom.",
   },
   "propage.sign_in_note": {
     en: "An account needs only an email address: the site sends a code to sign in, and there is no password.",
@@ -4384,8 +4384,8 @@ const STRINGS = {
   "landing.browse_open": { en: "Browse open tenders", fr: "Parcourir les appels d'offres ouverts" },
   // The three Pro lines, with the accounts switch on only, each naming its figure.
   "landing.f1_pro": {
-    en: "Pro sees new notices within {h} hours of posting.",
-    fr: "Avec Pro, les nouveaux avis paraissent dans les {h} heures suivant leur publication.",
+    en: "Pro shows the day's new notices every {h} hours through the business day.",
+    fr: "Avec Pro, les nouveaux avis du jour paraissent toutes les {h} heures pendant la journée ouvrable.",
   },
   "landing.days_one": { en: "{n} day", fr: "{n} jour" },
   "landing.days_many": { en: "{n} days", fr: "{n} jours" },
@@ -4470,7 +4470,7 @@ const STRINGS = {
   "landing.everything_pro": { en: "Everything in Pro", fr: "Tout ce que comprend Pro" },
   // Ultra's name, on its chip (src/pro.tsx UltraTag), its cards and the lines that name it, and the chip's long form.
   "ultra.tag": { en: "Ultra", fr: "Ultra" },
-  "ultra.tag_hidden": { en: "(custom plan)", fr: "(forfait sur mesure)" },
+  "ultra.tag_hidden": { en: "(paid plan)", fr: "(forfait payant)" },
   "landing.ultra_price": { en: "Price to be set", fr: "Prix à fixer" },
   "landing.ultra_soon": { en: "Coming soon", fr: "Bientôt offert" },
   // The part of Ultra still planned, on its card before it is on sale (pages/landing.tsx ULTRA_PLANNED).

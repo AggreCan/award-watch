@@ -329,7 +329,7 @@ describe("the two switch states", () => {
     expect(page).toContain('<a class="lp-on" href="/pro">Pro</a>');
     expect(page).toContain('<a class="lp-btn lp-btn-sm lp-on" href="/account/sign-in">Sign in</a>');
     expect(page).toContain('<a class="lp-btn lp-on" href="/pro">See Pro plans</a>');
-    expect(page).toContain('<p class="lp-pro">Pro sees new notices within 2 hours of posting.</p>');
+    expect(page).toContain('<p class="lp-pro">Pro shows the day&#39;s new notices every 2 hours through the business day.</p>');
     expect(page).toContain('<p class="lp-pro">Pro opens the 6- and 12-month lists and their CSV files.</p>');
     expect(page).toContain('<p class="lp-pro">Pro charts 10 fiscal years and watches 25 companies by email.</p>');
     // The chips sit on the plan cards and nowhere else.
@@ -365,7 +365,7 @@ describe("the two switch states", () => {
       expect(pricing).toContain(nbsp(decode(t(lang, "plans.seller"))).replace(/'/g, "&#39;"));
     }
     const pricing = decode(section(await html("/", paid()), "lp-pricing"));
-    expect(pricing).toContain(`<h3 class="lp-plan-nm">Ultra<span class="ultra-tag"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="${ULTRA_GLYPH_PATH}"></path></svg>Ultra<span class="visually-hidden"> (custom plan)</span></span></h3>`);
+    expect(pricing).toContain(`<h3 class="lp-plan-nm">Ultra<span class="ultra-tag"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="${ULTRA_GLYPH_PATH}"></path></svg>Ultra<span class="visually-hidden"> (paid plan)</span></span></h3>`);
     expect(ULTRA_GLYPH_PATH).toBe("M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z");
     // Not on sale yet: the two figures wrangler.jsonc holds show its price beside the tag (test/ultra.test.ts has the card without them).
     expect(pricing).toMatch(/<p class="lp-pr">\s*CA\$[0-9]+(\.[0-9]{2})? <span class="lp-soon-tag">Coming soon<\/span>\s*<small>a month, or CA\$[0-9]+(\.[0-9]{2})? a year<\/small>\s*<\/p>/);
