@@ -1,7 +1,8 @@
 // Whether each table a page draws fits the column the stylesheet gives it,
-// at every window width from 700 px up (below that, tables restack into
-// labelled blocks and compact ones drop their least width). The figures come
-// from public/styles.css: the
+// at every window width from 700 px up. Below that, tables restack into
+// labelled blocks; a compact one stays a table and drops its least width, so
+// it is checked on a phone for the room its fixed columns leave the name
+// (phoneMisfits). The figures come from public/styles.css: the
 // rail's width and the window from which it stands beside the content, the
 // page's padding, a panel's border, the measure of a document, the panel
 // grid's tracks, and the window ranges in which columns rest. The one figure
@@ -87,7 +88,13 @@ export function rangeOf(w: number): Range {
 // The content column: the window less the scrollbar, the rail from where it
 // stands beside the content, and the page's padding on both sides.
 export function mainWidth(w: number): number {
+  // Below the restack window: the phone's gutter and no scrollbar's width.
+  if (w < RANGES[0].from) return w - 2 * phoneGutter();
   return w - SCROLLBAR - 2 * SHEET.gutter - (w >= SHEET.railFrom ? SHEET.rail : 0);
+}
+
+function phoneGutter(): number {
+  return px(/^\s*:root \{ --gutter: (\d+)px; \}/m, "the phone's gutter");
 }
 
 // The windows to check: the low edge of each range, and every window inside
@@ -246,7 +253,41 @@ export function panelTitle(table: El): string {
   return head?.text ?? "";
 }
 
-export type Misfit = { table: string; window: number; range: Range; least: number; column: number };
+export type Misfit = { table: string; window: number; range: Range | "phone"; least: number; column: number };
+
+// -- a phone ------------------------------------------------------------------
+//
+// Below the restack window a table of class compact stays a table: its
+// fixed columns keep the widths the phone rules give them (the ones marked
+// .ph rest), and the name column takes what the window leaves. Four or five
+// fixed columns leave it nothing (the holders of a standing offer once had
+// 500 px of them in a 356 px column, and each name wrapped a letter a line),
+// so such a table must restack instead. A phone has no scrollbar's width.
+export const PHONE = 390;
+// The least room for a name: about three words a line at the table's size.
+export const COMPACT_NAME_MIN = 120;
+
+// A column kind's width on a phone: the compact rule's where there is one, else the kind's own.
+function phoneWidth(kind: string): number {
+  const compact = styles.match(new RegExp(`^\\s+\\.compact \\.${kind} \\{ width: (\\d+)px; \\}`, "m"));
+  if (compact) return Number(compact[1]);
+  return px(new RegExp(`^\\.${kind} \\{ width: (\\d+)px; \\}`, "m"), `the width of .${kind}`);
+}
+
+// The fixed columns a compact table still shows on a phone, and the column it stands in there.
+export function phoneMisfits(html: string, skip: (table: El) => boolean = () => false): Misfit[] {
+  const out: Misfit[] = [];
+  for (const table of find(parse(html), (e) => e.tag === "table" && has(e, "cols") && has(e, "compact") && !skip(e))) {
+    const heads = find(table, (e) => e.tag === "th" && !has(e, "ph"));
+    const fixed = heads
+      .map((h) => h.cls.find((c) => c.startsWith("k-")))
+      .filter((k): k is string => !!k && k !== "k-main")
+      .reduce((sum, k) => sum + phoneWidth(k), 0);
+    const column = tableColumn(table, PHONE);
+    if (fixed + COMPACT_NAME_MIN > column) out.push({ table: tableName(table), window: PHONE, range: "phone", least: fixed + COMPACT_NAME_MIN, column });
+  }
+  return out;
+}
 
 // Every table on the column system in a page, at every edge: its least
 // width for the range against the column it gets there. skip leaves out the
@@ -262,7 +303,8 @@ export function misfits(html: string, skip: (table: El) => boolean = () => false
       if (least[range] > column) out.push({ table: tableName(table), window: w, range, least: least[range], column: Math.floor(column * 10) / 10 });
     }
   }
-  return out;
+  // And on a phone, the tables that stay tables there.
+  return [...out, ...phoneMisfits(html, skip)];
 }
 
 export function tablesIn(html: string): El[] {

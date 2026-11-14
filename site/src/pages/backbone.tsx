@@ -187,7 +187,9 @@ export const IncumbentsPanel: FC<{ lang: Lang; inc: Incumbents }> = ({ lang, inc
         <>
           <p class="muted small">{tn(lang, "incumbents.note_one", "incumbents.note_many", inc.nOrgs, { n: fmtInt(inc.nOrgs, lang), max: INCUMBENTS_MAX })}</p>
           <div class="table-wrap bordered">
-            <Table restack={false} class="compact" cols={[
+            {/* Four columns: on a phone the rows restack into labelled blocks; kept a table there, its three
+                fixed columns would leave the supplier's name 36 px. */}
+            <Table cols={[
               { kind: "main", label: t(lang, "col.supplier") },
               { kind: "count", label: t(lang, "expiring.col_contracts") },
               { kind: "total", label: t(lang, "col.value") },

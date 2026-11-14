@@ -581,7 +581,9 @@ async function instrumentPage(c: Context<AppEnv>, agreement: string): Promise<Re
         {cut ? <p class="muted small">{t(lang, "instrument.holders_cut", { n: fmtInt(holders.length, lang) })}</p> : null}
         {holders.length ? (
           <div class="table-wrap bordered">
-            <Table restack={false} class="compact" cols={[
+            {/* Five columns: on a phone the rows restack into labelled blocks, as a record list's do (a compact
+                table's fixed columns alone would be wider than the window). */}
+            <Table cols={[
               { kind: "main", label: t(lang, "instrument.col_holder") },
               { kind: "region", label: t(lang, "instruments.col_regions") },
               { kind: "date", label: t(lang, "instrument.col_first_seen"), rest: "md" },
