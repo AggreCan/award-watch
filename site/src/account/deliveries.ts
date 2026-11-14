@@ -52,6 +52,20 @@
 // up another item; the run stops as the message cap stops it and the next
 // hour goes on from the claims.
 //
+// Every run past the switch writes one row to delivery_runs when it ends,
+// whatever the way (writeRunLog below): the data date it read, how it ended,
+// the messages sent and refused across every part, what it left due, and why
+// it stopped early in a few words that name no account and no address. The
+// daily check reads the previous UTC day's rows (watchdog.ts). Rows go after
+// RUN_LOG_DAYS, and deliveries rows after DELIVERY_ROW_DAYS (each run).
+//
+// The day's ceiling (env.ts mailCeiling, MAIL_DAILY_QUOTA less
+// MAIL_DAILY_RESERVE): once the UTC day's sends, the earlier runs' from
+// delivery_runs and this run's, reach it, the run stops as a sending limit's
+// refusal stops it ("limited"), before a claim, and the rest waits for the
+// next UTC day. The reserve is for the sign-in code, which goes through the
+// same MAIL binding and is neither counted nor held here.
+//
 // After the saved searches, the same run sends the watch mail (watch_mail.ts):
 // one message per account with watches, inside the same cap, and a sending
 // limit met there stops the run the same way. A file that did not read stops
@@ -68,25 +82,26 @@ import { clockAt, closingPassed, type Clock } from "../closing";
 import {
   type ExpiringRow, type ExpiringWindow, type TenderRow, isExpiringWindow, loadExpiringPage, loadExpiringWindow, loadNewTenders, loadStats,
 } from "../data";
-import type { Env } from "../env";
+import { type Env, type MailCeiling, mailCeiling } from "../env";
 import { pick, segmentShort, type Lang } from "../i18n";
 import { WINDOW_DAYS, filterExpiring, readExpiringQuery } from "../pages/expiring";
 import { filterTenders, readTenderQuery } from "../pages/tenders";
+import { faultSummary } from "../search_db";
 import { type Cadence, type DigestMessage, ROWS_MAX, expiringDigest, recordsDigest, siteLink, tenderDigest } from "./digests";
-import { allowed, planFor, type Plan } from "./entitlements";
+import { allowed, planFor, type Feature, type Plan } from "./entitlements";
 import {
   type Entity, type Mark, type RecordsWait, type Rise, MARK_WRITE_SQL, entityOf, isRecordsKind, loadMark, markText, missingTable, readCounts,
   rises,
 } from "./records_deliveries";
 import { survivorOf } from "./watches";
-import { type BriefingReport, briefingActive, briefingCounts, madeBefore, runBriefings, sharedCap } from "./briefings";
+import { BRIEFING_WAIT_WHY, type BriefingReport, briefingActive, briefingCounts, madeBefore, runBriefings, sharedCap } from "./briefings";
 import { DELIVERABLE_KINDS } from "./searches";
 import { randomHex } from "./secrets";
 import { type MailMessage, senderFor } from "./sender";
 import { accountsEnabled } from "./switch";
-import { type ViewReport, runViewMail, viewActive, viewCounts } from "./view_mail";
+import { VIEW_WAIT_WHY, type ViewReport, runViewMail, viewActive, viewCounts } from "./view_mail";
 import { WATCH_WAIT_WHY, type WatchReport, runWatchMail } from "./watch_mail";
-import { type WeeklyReport, runWeekly, weeklyActive, weeklyCounts } from "./weekly";
+import { WEEKLY_WAIT_WHY, type WeeklyReport, runWeekly, weeklyActive, weeklyCounts } from "./weekly";
 
 // The hourly trigger in wrangler.jsonc; any other trigger is the daily check.
 export const DELIVERY_CRON = "0 15-20 * * *";
@@ -141,6 +156,10 @@ export const RUN_QUERY_BUDGET = 850;
 // remain under D1's figure, so a run never stops between a claim and the row
 // that records it.
 export const CLAIM_QUERIES = 8;
+// The run log's row (writeRunLog), the run's last query, one batch: held back
+// from every claim with CLAIM_QUERIES, so a run that claims at D1's figure
+// still has the query to write it.
+export const RUN_LOG_QUERIES = 1;
 export const BUDGET_TEXT = `the budget of ${RUN_QUERY_BUDGET} database queries`;
 
 class CountedStatement {
@@ -173,9 +192,9 @@ export class QueryCount {
   get spent(): boolean {
     return this.n >= RUN_QUERY_BUDGET;
   }
-  // Room under D1's figure for a claim and every write after it.
+  // Room under D1's figure for a claim, every write after it, and the run log's row.
   get claimable(): boolean {
-    return this.n + CLAIM_QUERIES <= D1_QUERIES_MAX;
+    return this.n + CLAIM_QUERIES + RUN_LOG_QUERIES <= D1_QUERIES_MAX;
   }
   // The binding with each query counted: a statement's first, run, all or raw, and a batch as one.
   db(real: D1Database): D1Database {
@@ -216,6 +235,116 @@ export async function afterSend(write: () => Promise<unknown>): Promise<void> {
   }
 }
 
+// -- what a run leaves due, and the day's ceiling ------------------------------------------------
+
+// What the run left due (RunReport.left), which each part adds to on every
+// way out, a fault included: the items of its list from the one it stopped
+// at, and those that waited. A best count: a row past the stop counts when
+// its plan would send it (the plan read this run, else the cached plan, a
+// hint), a part's list holds at most its own cap, and the parts a stop kept
+// the run from are not read, so not counted.
+export type Tally = { left: number };
+
+export function unfinished<T>(rows: readonly T[], from: number, counts: (r: T) => boolean): number {
+  let n = 0;
+  for (let i = from; i < rows.length; i++) if (counts(rows[i])) n++;
+  return n;
+}
+
+export const likelyServed = (plans: ReadonlyMap<string, Plan>, userId: string, cached: string, feature: Feature): boolean => {
+  const plan = plans.get(userId);
+  return plan ? allowed({ plan }, feature) : cached !== "free";
+};
+
+// The messages a part may still send under the day's ceiling, and its stop's
+// words; absent when there is no ceiling. A part stops before the claim once
+// it has sent room messages, as a sending limit's refusal stops it.
+export type Ceiling = { room: number; text: string };
+
+export const CEILING_TEXT_START = "the day's sending ceiling";
+export const ceilingText = (c: MailCeiling): string =>
+  `${CEILING_TEXT_START} of ${c.ceiling} messages (MAIL_DAILY_QUOTA ${c.quota} less MAIL_DAILY_RESERVE ${c.reserve})`;
+
+// -- the run log ---------------------------------------------------------------------------------
+
+export const RUN_LOG_DAYS = 90;
+// The deliveries rows are kept as long. Nothing reads an older one: the run
+// asks for a failed row of the data date, the searches page and the console
+// for each search's newest row and the account's last 20, and the console's
+// overview for the last 7 days.
+export const DELIVERY_ROW_DAYS = 90;
+// The longest reason a row keeps.
+export const RUN_DETAIL_MAX = 120;
+
+export const RUN_LOG_SQL =
+  "INSERT INTO delivery_runs (at, data_date, outcome, sent, failed, left_due, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
+export const RUN_LOG_PRUNE_SQL = "DELETE FROM delivery_runs WHERE at < ?1";
+// The UTC day's sends so far, as the earlier runs' rows hold them (?1 the
+// day's start, ?2 the next day's), through idx_delivery_runs_at.
+export const DAY_SENT_SQL = "SELECT COALESCE(SUM(sent), 0) AS n FROM delivery_runs WHERE at >= ?1 AND at < ?2";
+// The deliveries rows sent before ?1, as the other delivery tables are pruned
+// each run, but by the key: deliveries has no index on sent_at, and
+// "sent_at < ?" would read the whole table every hour. Each row's id is
+// higher than every row's before it and its sent_at is its run's time, so
+// the rows below the first one sent at ?1 or later are the old ones (all of
+// them when none is that recent). The statement reads them and that one row
+// in the table's own order, and deletes by the key; a row out of that order
+// (two runs at once) goes with the next run instead.
+export const DELIVERIES_PRUNE_SQL =
+  "DELETE FROM deliveries WHERE id < COALESCE((SELECT id FROM deliveries WHERE sent_at >= ?1 ORDER BY id LIMIT 1), " +
+  "(SELECT MAX(id) + 1 FROM deliveries))";
+
+const daysBefore = (now: Date, days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+
+const partsSum = (r: RunReport, key: "sent" | "failed") =>
+  r[key] + (r.watch?.[key] ?? 0) + (r.briefing?.[key] ?? 0) + (r.weekly?.[key] ?? 0) + (r.views?.[key] ?? 0);
+
+// Why the run stopped early (its stop or its fault), else why items waited;
+// fixed words, dates and counts, never an account or an address.
+function runDetail(r: RunReport): string | null {
+  const wait = r.records ? WAIT_WHY[r.records]
+    : r.watch?.records ? WATCH_WAIT_WHY[r.watch.records]
+    : r.briefing?.records ? BRIEFING_WAIT_WHY[r.briefing.records]
+    : r.weekly?.records ? WEEKLY_WAIT_WHY[r.weekly.records]
+    : r.views?.records ? VIEW_WAIT_WHY[r.views.records]
+    : null;
+  const why = r.why ?? (wait && r.left > 0 ? `waiting: ${wait}` : null);
+  return why ? why.slice(0, RUN_DETAIL_MAX) : null;
+}
+
+// The run's row, with the run log's rows past RUN_LOG_DAYS removed in the
+// same batch (one query, RUN_LOG_QUERIES). A row that cannot be written logs
+// one line and changes nothing else: the run's report and its mail stand.
+async function writeRunLog(env: Env, now: Date, r: RunReport): Promise<void> {
+  const db = env.ACCOUNTS!;
+  try {
+    await db.batch([
+      db.prepare(RUN_LOG_SQL).bind(now.toISOString(), r.dataDate, r.outcome, partsSum(r, "sent"), partsSum(r, "failed"), r.left, runDetail(r)),
+      db.prepare(RUN_LOG_PRUNE_SQL).bind(daysBefore(now, RUN_LOG_DAYS)),
+    ]);
+  } catch (e) {
+    log(missingTable(e)
+      ? "the run log was not written: the accounts database has no delivery_runs table (apply accounts_schema.sql)"
+      : `the run log was not written (${faultSummary(e)})`);
+  }
+}
+
+// The messages the day's ceiling still allows this run: the ceiling less the
+// day's sends so far. null without the delivery_runs table, since the day's
+// sends cannot be counted then: no ceiling, and one log line.
+async function dayRoom(env: Env, c: MailCeiling, now: Date): Promise<number | null> {
+  try {
+    const start = Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const row = await env.ACCOUNTS!.prepare(DAY_SENT_SQL).bind(new Date(start).toISOString(), new Date(start + 86_400_000).toISOString())
+      .first<{ n: number }>();
+    return Math.max(0, c.ceiling - (row?.n ?? 0));
+  } catch (e) {
+    if (!missingTable(e)) throw e;
+    log("the accounts database has no delivery_runs table, so the day's sends cannot be counted: no daily ceiling this run (apply accounts_schema.sql)");
+    return null;
+  }
+}
+
 const BASE = "https://deliveries.invalid";
 
 export type RunOutcome = "off" | "no_mail" | "no_data" | "not_today" | "fault" | "limited" | "capped" | "done";
@@ -245,7 +374,16 @@ export interface RunReport {
   // The saved views' part (view_mail.ts); absent or null when the run did not
   // reach it or Ultra is not on sale.
   views?: ViewReport | null;
+  // Items still due when the run ended (Tally): 0 when it finished.
+  left: number;
+  // Why it stopped early or never began (a stop, a fault, a missing setting,
+  // the data date), or null; the run log's detail.
+  why: string | null;
 }
+
+const emptyReport = (): RunReport => ({
+  outcome: "done", dataDate: null, sent: 0, failed: 0, empty: 0, skipped: 0, waiting: 0, records: null, watch: null, left: 0, why: null,
+});
 
 // A file or the database could not be read: the message is the run's one log line.
 class Fault extends Error {}
@@ -281,27 +419,34 @@ type DueRow = {
   n_before: number;
 };
 
-// The searches that can be due on the data date, oldest first; isDue then
-// applies the weekly rule. A search that failed once for this data date is
-// left for the next one, so an address the mail service refuses is not
-// tried every hour. n_before counts the briefings too, and the searches alone
-// while the briefings table is not on the database yet.
-const CANDIDATES_SQL = (before: string) =>
-  "SELECT s.id, s.user_id, s.kind, s.params, s.label, s.lang, s.deliver, s.last_delivered_at, u.email, u.plan, u.plan_until, " +
-  `k.secret, ${before} AS n_before FROM saved_searches s JOIN users u ON u.id = s.user_id LEFT JOIN delivery_tokens k ON k.search_id = s.id ` +
+// The searches that can be due on the data date, the accounts whose cached
+// plan is paid first, then oldest first; isDue then applies the weekly rule.
+// The cached plan (users.plan, which holds Ultra as pro) orders the list and
+// nothing more: a downgraded account's searches, read and passed over each
+// run, then come after the ones paid for, and planFor at the send still
+// decides every one (a stale cache only moves a search in the list). A search
+// that failed once for this data date is left for the next one, so an address
+// the mail service refuses is not tried every hour; that read and the
+// searches page's newest delivery go through idx_deliveries_search. n_before
+// counts the briefings too (briefings false: the searches alone, while the
+// briefings table is not on the database yet). A function, called at the
+// read, since madeBefore comes from briefings.ts, which imports this module.
+export const candidatesSql = (briefings = true) =>
+  "SELECT s.id, s.user_id, s.kind, s.params, s.label, s.lang, s.deliver, s.last_delivered_at, u.email, u.plan, u.plan_until, k.secret, " +
+  `${briefings ? `${madeBefore("s", "saved_searches")} + ${madeBefore("s", "briefings")}` : madeBefore("s", "saved_searches")} AS n_before ` +
+  "FROM saved_searches s JOIN users u ON u.id = s.user_id LEFT JOIN delivery_tokens k ON k.search_id = s.id " +
   "WHERE u.status = 'active' AND s.deliver IN ('daily', 'weekly') " +
   `AND s.kind IN (${DELIVERABLE_KINDS.map(() => "?").join(", ")}) ` +
   "AND (s.last_delivered_at IS NULL OR substr(s.last_delivered_at, 1, 10) < ?) " +
   "AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.saved_search_id = s.id AND d.status = 'failed' AND d.sent_at >= ?) " +
-  "ORDER BY s.created_at, s.id";
+  "ORDER BY u.plan = 'free', s.created_at, s.id";
 
 async function candidates(env: Env, dataDate: string): Promise<DueRow[]> {
   const binds = [...DELIVERABLE_KINDS, dataDate, dataDate];
-  const res = await env.ACCOUNTS!.prepare(CANDIDATES_SQL(`${madeBefore("s", "saved_searches")} + ${madeBefore("s", "briefings")}`))
-    .bind(...binds).all<DueRow>()
+  const res = await env.ACCOUNTS!.prepare(candidatesSql()).bind(...binds).all<DueRow>()
     .catch((e) => {
       if (!missingTable(e)) throw e;
-      return env.ACCOUNTS!.prepare(CANDIDATES_SQL(madeBefore("s", "saved_searches"))).bind(...binds).all<DueRow>();
+      return env.ACCOUNTS!.prepare(candidatesSql(false)).bind(...binds).all<DueRow>();
     });
   return res.results ?? [];
 }
@@ -592,23 +737,41 @@ function siteOf(env: Env): string | null {
   }
 }
 
+// One run: the delivery itself (deliver), then its row in the run log,
+// whatever way it ended. Nothing while the switch is off.
 export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<RunReport> {
-  const report: RunReport = {
-    outcome: "done", dataDate: null, sent: 0, failed: 0, empty: 0, skipped: 0, waiting: 0, records: null, watch: null,
-  };
-  if (!accountsEnabled(env)) return { ...report, outcome: "off" };
+  if (!accountsEnabled(env)) return { ...emptyReport(), outcome: "off" };
+  const tally: Tally = { left: 0 };
+  let report: RunReport;
+  try {
+    report = await deliver(env, now, tally);
+  } catch (e) {
+    // deliver ends every fault it expects; anything else still gets its row, then goes on as it would have.
+    await writeRunLog(env, now, { ...emptyReport(), outcome: "fault", left: tally.left, why: "the run stopped on an error it did not expect" });
+    throw e;
+  }
+  report.left = tally.left;
+  await writeRunLog(env, now, report);
+  return report;
+}
+
+async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
+  const report = emptyReport();
   const site = siteOf(env);
-  if (!env.MAIL || !env.MAIL_FROM?.trim() || !site) return { ...report, outcome: "no_mail" };
+  if (!env.MAIL || !env.MAIL_FROM?.trim() || !site) {
+    const missing = [!env.MAIL && "the MAIL binding", !env.MAIL_FROM?.trim() && "MAIL_FROM", !site && "an https SITE_URL"].filter(Boolean);
+    return { ...report, outcome: "no_mail", why: `nothing can be sent: missing ${missing.join(", ")}` };
+  }
   const stats = await loadStats(env).catch(() => null);
   const dataDate = stats?.data_as_of ? stats.data_as_of.slice(0, 10) : null;
   if (!stats || !dataDate) {
     log("stats.json could not be read; the next hour tries again");
-    return { ...report, outcome: "no_data" };
+    return { ...report, outcome: "no_data", why: "stats.json could not be read" };
   }
   report.dataDate = dataDate;
   if (dataDate !== now.toISOString().slice(0, 10)) {
     log(`the data date is ${dataDate}, not today's; nothing to send`);
-    return { ...report, outcome: "not_today" };
+    return { ...report, outcome: "not_today", why: `the data date is ${dataDate}, not today's` };
   }
   // Every query from here on is counted, on both databases, against D1's per invocation.
   const queries = new QueryCount();
@@ -617,6 +780,24 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   const files = publishedFiles(env);
   const plans = new Map<string, Plan>();
   let stop: string | null = null;
+  // The fault that ended a part, for the run log.
+  let fault: string | null = null;
+  // The day's ceiling, and what it still allows this run (read in the try
+  // below, so a fault reading it ends the run as any fault does).
+  const ceiling = mailCeiling(env);
+  if (!ceiling && (env.MAIL_DAILY_QUOTA ?? "").trim()) {
+    log("MAIL_DAILY_QUOTA or MAIL_DAILY_RESERVE does not read as a whole number within the quota; no daily ceiling this run");
+  }
+  const ceilingWords = ceiling ? ceilingText(ceiling) : "";
+  let room: number | null = null;
+  // The ceiling's room for a part: what the run may still send less what the parts before it sent.
+  const ceilingAfter = (...parts: ({ sent: number } | null | undefined)[]): Ceiling | undefined =>
+    room === null ? undefined : { room: Math.max(0, room - parts.reduce((n, p) => n + (p ? p.sent : 0), 0)), text: ceilingWords };
+  const partFault = (part: string): RunReport => {
+    fault = `${part} could not read or write the accounts database; the next hour tries again`;
+    log(`${dataDate}: ${fault}`);
+    return { ...report, outcome: "fault", why: fault };
+  };
   // Past the query budget (claiming: too little left for a claim and its
   // writes), the run stops before the next search, as the message cap stops it.
   const pause = (claiming = false): boolean => {
@@ -630,8 +811,14 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   // The search this run has claimed and not yet recorded or given back: a
   // fault in between gives it back too, so the next hour covers it.
   let held: { id: string; before: string | null } | null = null;
+  let list: DueRow[] = [];
+  let i = 0;
   try {
-    for (const s of await candidates(env, dataDate)) {
+    if (ceiling) room = await dayRoom(env, ceiling, now);
+    list = await candidates(env, dataDate);
+    await env.ACCOUNTS!.prepare(DELIVERIES_PRUNE_SQL).bind(daysBefore(now, DELIVERY_ROW_DAYS)).run();
+    for (; i < list.length; i++) {
+      const s = list[i];
       if (!isDue(s.deliver, s.last_delivered_at, dataDate)) continue;
       if (pause()) break;
       let plan = plans.get(s.user_id);
@@ -687,6 +874,12 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         report.outcome = "capped";
         break;
       }
+      // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
+      if (room !== null && report.sent >= room) {
+        stop = ceilingWords;
+        report.outcome = "limited";
+        break;
+      }
       if (pause(true)) break;
       // Another run at the same moment has it (that run sends it), or its delivery was turned off since the list was read.
       if (!(await claim(env, s.id, dataDate, now))) continue;
@@ -737,15 +930,19 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
     }
   } catch (e) {
     if (held) await release(env, held.id, held.before, now).catch(() => undefined);
-    const why = e instanceof Fault ? e.message : "the accounts database could not be read or written; the next hour tries again";
-    log(`${dataDate}: ${why} (${counts(report)} before it)`);
-    if (!(e instanceof Fault)) return { ...report, outcome: "fault" };
+    fault = e instanceof Fault ? e.message : "the accounts database could not be read or written; the next hour tries again";
+    log(`${dataDate}: ${fault} (${counts(report)} before it)`);
     report.outcome = "fault";
+    if (!(e instanceof Fault)) return { ...report, why: fault };
+  } finally {
+    // What the saved searches left: the ones that waited, and from the one in hand on, those still due.
+    tally.left += report.waiting + unfinished(list, i, (s) => isDue(s.deliver, s.last_delivered_at, dataDate) && likelyServed(plans, s.user_id, s.plan, "delivery"));
   }
+  const capText = `the cap of ${RUN_MESSAGES_MAX} messages`;
   if (!stop) {
     try {
       const watch = await runWatchMail(env, {
-        site, dataDate, now, plans, room: roomAfter(report), capText: `the cap of ${RUN_MESSAGES_MAX} messages`, queries,
+        site, dataDate, now, plans, room: roomAfter(report), capText, queries, tally, ceiling: ceilingAfter(report),
       });
       report.watch = watch.report;
       if (watch.stop) {
@@ -753,14 +950,13 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         if (report.outcome === "done") report.outcome = watch.capped ? "capped" : "limited";
       }
     } catch {
-      log(`${dataDate}: the watch mail could not read or write the accounts database; the next hour tries again`);
-      return { ...report, outcome: "fault" };
+      return partFault("the watch mail");
     }
   }
   if (!stop) {
     try {
       const brief = await runBriefings(env, {
-        site, dataDate, now, plans, room: roomAfter(report, report.watch), capText: `the cap of ${RUN_MESSAGES_MAX} messages`, queries,
+        site, dataDate, now, plans, room: roomAfter(report, report.watch), capText, queries, tally, ceiling: ceilingAfter(report, report.watch),
       });
       report.briefing = brief.report;
       if (brief.stop) {
@@ -768,15 +964,14 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         if (report.outcome === "done") report.outcome = brief.capped ? "capped" : "limited";
       }
     } catch {
-      log(`${dataDate}: the briefings could not read or write the accounts database; the next hour tries again`);
-      return { ...report, outcome: "fault" };
+      return partFault("the briefings");
     }
   }
   if (!stop) {
     try {
       const weekly = await runWeekly(env, {
-        site, dataDate, now, plans, room: roomAfter(report, report.watch, report.briefing), capText: `the cap of ${RUN_MESSAGES_MAX} messages`, queries,
-        files, stats,
+        site, dataDate, now, plans, room: roomAfter(report, report.watch, report.briefing), capText, queries, files, stats, tally,
+        ceiling: ceilingAfter(report, report.watch, report.briefing),
       });
       report.weekly = weekly.report;
       if (weekly.stop) {
@@ -784,8 +979,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         if (report.outcome === "done") report.outcome = weekly.capped ? "capped" : "limited";
       }
     } catch {
-      log(`${dataDate}: the weekly email could not read or write the accounts database; the next hour tries again`);
-      return { ...report, outcome: "fault" };
+      return partFault("the weekly email");
     }
   }
   // A stop at the weekly email's own ceiling (WEEKLY_RUN_MAX) holds the weekly
@@ -794,7 +988,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   if (!stop || (report.outcome === "capped" && viewRoom > 0 && !queries.spent)) {
     try {
       const views = await runViewMail(env, {
-        site, dataDate, now, plans, room: viewRoom, capText: `the cap of ${RUN_MESSAGES_MAX} messages`, queries,
+        site, dataDate, now, plans, room: viewRoom, capText, queries, tally, ceiling: ceilingAfter(report, report.watch, report.briefing, report.weekly),
       });
       report.views = views.report;
       if (views.stop) {
@@ -802,8 +996,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
         if (report.outcome === "done") report.outcome = views.capped ? "capped" : "limited";
       }
     } catch {
-      log(`${dataDate}: the saved views could not read or write the accounts database; the next hour tries again`);
-      return { ...report, outcome: "fault" };
+      return partFault("the saved views");
     }
   }
   if (report.outcome === "fault") {
@@ -811,10 +1004,11 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
     if (report.briefing && briefingActive(report.briefing)) log(`${dataDate}: ${briefingCounts(report.briefing)}`);
     if (report.weekly && weeklyActive(report.weekly)) log(`${dataDate}: ${weeklyCounts(report.weekly)}`);
     if (report.views && viewActive(report.views)) log(`${dataDate}: ${viewCounts(report.views)}`);
-    return report;
+    return { ...report, why: fault };
   }
-  log(`${dataDate}: ${counts(report)}${stop ? `; stopped at ${stop}, the next hour goes on` : ""}`);
-  return report;
+  const after = stop === ceilingWords ? "; the rest waits for the next UTC day" : ", the next hour goes on";
+  log(`${dataDate}: ${counts(report)}${stop ? `; stopped at ${stop}${after}` : ""}`);
+  return { ...report, why: stop };
 }
 
 const WAIT_WHY: Record<RecordsWait | "no_marks", string> = {

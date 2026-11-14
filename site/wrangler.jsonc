@@ -190,13 +190,21 @@
   // "on" shows a signed-in reader the earlier contracts an open notice may
   // follow; "off" keeps the notice page and every other page as they were.
   // It stays "off" until the operator's hand check of the production matches
-  // (the review file's may-follow section) passes.
+  // (the review file's may-follow section) passes. MAIL_DAILY_QUOTA is the
+  // account's Email Sending quota for a day as the dashboard shows it, and
+  // MAIL_DAILY_RESERVE the part of it the delivery job leaves for sign-in
+  // codes, which go through the same MAIL binding: the job stops for the UTC
+  // day once its sends reach the quota less the reserve (src/env.ts
+  // mailCeiling, src/account/deliveries.ts). Raise MAIL_DAILY_QUOTA when
+  // Cloudflare raises the quota; empty, there is no ceiling.
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
     "SITE_URL": "https://awardwatch.ca",
     "ACCOUNTS_ENABLED": "true",
     "MAIL_FROM": "alerts@awardwatch.ca",
+    "MAIL_DAILY_QUOTA": "200",
+    "MAIL_DAILY_RESERVE": "40",
     "STRIPE_PRICE_MONTHLY": "price_1UXstXIP2lpoGRa5hXTTSm4A",
     "STRIPE_PRICE_YEARLY": "price_1UXstXIP2lpoGRa5H1NF6Od3",
     "PRICE_MONTHLY_CAD": "18.99",

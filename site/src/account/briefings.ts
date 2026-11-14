@@ -45,7 +45,9 @@ import { WITHIN_DAYS, type Within } from "../instruments";
 import {
   BUYER_DUE_SQL, SEGMENT_DUE_SQL, type Query, SOURCE_NUMBER, fiscalYearOf, quarterEnd, readRecords,
 } from "../records_db";
-import { type QueryCount, STOP_CODES, afterSend, budgetStop, sendWithHeaders } from "./deliveries";
+import {
+  type Ceiling, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, likelyServed, sendWithHeaders, unfinished,
+} from "./deliveries";
 import { type DigestMessage, briefingDigest, siteLink } from "./digests";
 import { allowed, planFor, savedSearchCap, SAVED_SEARCH_MAX, type Plan } from "./entitlements";
 import { type RecordsWait, missingTable } from "./records_deliveries";
@@ -652,20 +654,23 @@ export interface BriefingReport {
 
 export const emptyBriefingReport = (): BriefingReport => ({ sent: 0, failed: 0, empty: 0, skipped: 0, waiting: 0, records: null });
 
-// The briefings that can be due this week, oldest first (?1 the week's
-// weekday on or before the data date, ?2 the cap): delivery weekly, an active
-// account that is not blocked, not covered since ?1, and no message refused
-// for it since then (it waits for next week, whose message covers both).
-// n_before counts the account's saved searches and briefings made before it
-// (madeBefore above): past the plan's figure, after a move to a smaller plan,
-// only the first ones by creation date are sent.
+// The briefings that can be due this week, those of accounts whose cached
+// plan is paid first, then oldest first (?1 the week's weekday on or before
+// the data date, ?2 the cap): delivery weekly, an active account that is not
+// blocked, not covered since ?1, and no message refused for it since then (it
+// waits for next week, whose message covers both). n_before counts the
+// account's saved searches and briefings made before it (madeBefore above):
+// past the plan's figure, after a move to a smaller plan, only the first ones
+// by creation date are sent. The cached plan (users.plan) only orders the
+// list, so the briefings of accounts that moved down, each read once a week
+// and passed over, come after the ones paid for; planFor at the send decides.
 export const BRIEFINGS_DUE_SQL =
   "SELECT b.id, b.user_id, b.kind, b.subject, b.segment, b.label, b.lang, b.deliver, b.last_delivered_at, b.secret, u.email, u.plan, u.plan_until, " +
   `${madeBefore("b", "saved_searches")} + ${madeBefore("b", "briefings")} AS n_before ` +
   "FROM briefings b JOIN users u ON u.id = b.user_id WHERE b.deliver = 'weekly' AND u.status = 'active' " +
   "AND (b.last_delivered_at IS NULL OR substr(b.last_delivered_at, 1, 10) < ?1) " +
   "AND NOT EXISTS (SELECT 1 FROM briefing_deliveries d WHERE d.briefing_id = b.id AND d.status = 'failed' AND d.sent_at >= ?1) " +
-  "AND NOT EXISTS (SELECT 1 FROM account_blocks x WHERE x.user_id = b.user_id) ORDER BY b.created_at, b.id LIMIT ?2";
+  "AND NOT EXISTS (SELECT 1 FROM account_blocks x WHERE x.user_id = b.user_id) ORDER BY u.plan = 'free', b.created_at, b.id LIMIT ?2";
 
 type DueRow = BriefingRow & { user_id: string; secret: string | null; email: string; plan: string; plan_until: string | null; n_before: number };
 
@@ -721,9 +726,15 @@ async function stopSecret(env: Env, id: string): Promise<string | null> {
 
 // room: the messages the run may still send (the cap less what the saved
 // searches and the watch mail sent). stop: why the run stopped early.
-// queries: the run's count (deliveries.ts QueryCount).
+// queries: the run's count (deliveries.ts QueryCount); tally: what the run
+// left due, which this part adds to on every way out; ceiling: what the
+// day's ceiling still allows (deliveries.ts Ceiling).
 export async function runBriefings(
-  env: Env, o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount },
+  env: Env,
+  o: {
+    site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount; tally?: Tally;
+    ceiling?: Ceiling;
+  },
 ): Promise<{ report: BriefingReport; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
   const report = emptyBriefingReport();
@@ -753,8 +764,10 @@ export async function runBriefings(
     }
     return why !== null;
   };
+  let i = 0;
   try {
-    for (const row of due) {
+    for (; i < due.length; i++) {
+      const row = due[i];
       const saved = toBriefing(row);
       if (!saved || !briefingDue(saved.deliver, saved.last_delivered_at, dataDate)) continue;
       if (pause()) break;
@@ -781,7 +794,7 @@ export async function runBriefings(
       }
       if (read.state !== "ready" || read.data.asOf !== dataDate) {
         report.records = read.state === "ready" ? "stale" : read.state;
-        report.waiting += due.length - due.indexOf(row);
+        report.waiting += due.length - i;
         break;
       }
       const data = read.data;
@@ -797,6 +810,11 @@ export async function runBriefings(
       if (report.sent + report.failed >= o.room) {
         stop = o.capText;
         capped = true;
+        break;
+      }
+      // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
+      if (o.ceiling && report.sent >= o.ceiling.room) {
+        stop = o.ceiling.text;
         break;
       }
       if (pause(true)) break;
@@ -834,6 +852,14 @@ export async function runBriefings(
   } catch (e) {
     if (held) await release(env, held.id, held.before, now).catch(() => undefined);
     throw e;
+  } finally {
+    // From the briefing in hand on (a wait, a stop or a fault), those due whose plan would send them.
+    if (o.tally) {
+      o.tally.left += unfinished(due, i, (r) => {
+        const b = toBriefing(r);
+        return !!b && briefingDue(b.deliver, b.last_delivered_at, dataDate) && likelyServed(o.plans, r.user_id, r.plan, "delivery");
+      });
+    }
   }
   return { report, stop, capped };
 }

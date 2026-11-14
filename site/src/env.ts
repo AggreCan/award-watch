@@ -74,6 +74,13 @@ export interface Env {
   // the repository or a workflow's log. Unset, no weekly email is sent and
   // the delivery run's line says so.
   MAIL_ADDRESS?: string;
+  // The account's Email Sending quota for a day, and the part of it the
+  // delivery job leaves for sign-in codes, both whole numbers as text
+  // (variables in wrangler.jsonc). The job stops for the UTC day once its
+  // sends reach the quota less the reserve (mailCeiling below,
+  // src/account/deliveries.ts). Sign-in codes are never counted or held.
+  MAIL_DAILY_QUOTA?: string;
+  MAIL_DAILY_RESERVE?: string;
   // Sign-in and code posts per address (wrangler.jsonc "ratelimits").
   AUTH_LIMIT?: RateLimit;
   // A delivery's stop link, both methods, per address (wrangler.jsonc "ratelimits").
@@ -151,6 +158,29 @@ export interface Env {
   // secret of the same name. Unset or shorter than MAIL_CHECK_TOKEN_MIN, the
   // route takes no token and answers only an operator's session.
   MAIL_CHECK_TOKEN?: string;
+}
+
+// The delivery job's daily ceiling: MAIL_DAILY_QUOTA less MAIL_DAILY_RESERVE.
+// Cloudflare's Email Sending limits page gives a daily quota per account that
+// starts low and rises with the account's sending record, and says nothing of
+// when the day resets; a send past it fails with E_DAILY_LIMIT_EXCEEDED. The
+// sign-in code goes through the same MAIL binding, so the job keeps the
+// reserve for it. null, today's behaviour with no ceiling, when the quota is
+// absent, empty or not a positive whole number, when the reserve is set and
+// not a whole number, or when the reserve leaves the job nothing (a setting
+// that reads as a mistake). An empty or absent reserve is none.
+export type MailCeiling = { quota: number; reserve: number; ceiling: number };
+
+const WHOLE_RE = /^[0-9]{1,9}$/;
+
+export function mailCeiling(env: Pick<Env, "MAIL_DAILY_QUOTA" | "MAIL_DAILY_RESERVE">): MailCeiling | null {
+  const q = (env.MAIL_DAILY_QUOTA ?? "").trim();
+  const r = (env.MAIL_DAILY_RESERVE ?? "").trim();
+  if (!WHOLE_RE.test(q) || (r && !WHOLE_RE.test(r))) return null;
+  const quota = Number(q);
+  const reserve = r ? Number(r) : 0;
+  if (quota <= 0 || reserve >= quota) return null;
+  return { quota, reserve, ceiling: quota - reserve };
 }
 
 export type AppEnv = {

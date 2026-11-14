@@ -62,6 +62,11 @@ export function workersPool() {
         // ships, so the "switch off" tests hold while the site runs with it
         // on; the "switch on" tests set it themselves (test/accounts-helpers.ts).
         ACCOUNTS_ENABLED: "false",
+        // The delivery job's daily ceiling (src/env.ts mailCeiling) starts off
+        // under test the same way, so a run is held to it only where a test
+        // sets the two figures (test/recs-ops.test.ts).
+        MAIL_DAILY_QUOTA: "",
+        MAIL_DAILY_RESERVE: "",
         // Each suite's include and exclude, for test/mail-suite-apart.test.ts and test/guide-figures.test.ts.
         SUITES: JSON.stringify({ default: DEFAULT_SUITE, mail: MAIL_SUITE, figures: FIGURES_SUITE }),
       },

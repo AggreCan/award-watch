@@ -40,7 +40,9 @@ import { clockAt } from "../closing";
 import type { Env } from "../env";
 import { segmentShort, type Lang } from "../i18n";
 import { weekAnchor } from "./briefings";
-import { type QueryCount, ROWS_MAX, STOP_CODES, afterSend, budgetStop, isDue, sendWithHeaders, spanStart } from "./deliveries";
+import {
+  type Ceiling, type QueryCount, ROWS_MAX, STOP_CODES, type Tally, afterSend, budgetStop, isDue, likelyServed, sendWithHeaders, spanStart, unfinished,
+} from "./deliveries";
 import { type DigestMatches, type WatchGroup, siteLink, watchDigest } from "./digests";
 import { fitDigestBlock, weekNotices, weeklyTakesMatches } from "./fit_mail";
 import { orgWeekOpening } from "./org_claim";
@@ -78,12 +80,18 @@ export interface WatchReport {
 
 export const emptyWatchReport = (): WatchReport => ({ sent: 0, failed: 0, empty: 0, skipped: 0, waiting: 0, records: null, expired: 0 });
 
-// The accounts that can be due on the data date, oldest first.
+// The accounts that can be due on the data date: those whose cached plan is
+// paid first, then oldest first. Each account on a plan without the mail is
+// read once a data date (its plan, then passedOver), so past a few thousand
+// Free followers the run's query budget could run out before the accounts that
+// pay for it; ordered this way they come last. The cached plan (users.plan,
+// Ultra held as pro) is an ordering hint and never the gate: planFor decides
+// at the send, and a stale cache only moves an account in the list.
 export const WATCH_DUE_SQL =
   "SELECT m.user_id, m.secret, m.last_day, m.last_at, u.email, u.lang, u.plan, u.plan_until FROM watch_mail m JOIN users u ON u.id = m.user_id " +
   "WHERE u.status = 'active' AND m.mail = 'on' AND (m.last_day IS NULL OR m.last_day < ?1) AND (m.failed_day IS NULL OR m.failed_day < ?1) " +
   "AND EXISTS (SELECT 1 FROM watches w WHERE w.user_id = m.user_id) AND NOT EXISTS (SELECT 1 FROM account_blocks b WHERE b.user_id = m.user_id) " +
-  "ORDER BY m.created_at, m.user_id LIMIT ?2";
+  "ORDER BY u.plan = 'free', m.created_at, m.user_id LIMIT ?2";
 
 export const TENDER_WATCHES_SQL =
   "SELECT id, user_id, target, last_sent_day FROM watches WHERE kind = 'tender' ORDER BY created_at, id LIMIT ?";
@@ -225,10 +233,16 @@ async function mailSecret(env: Env, userId: string): Promise<string | null> {
 
 // room: the messages the run may still send (the cap less what the saved
 // searches sent). stop: why the run stopped early (a sending limit's code,
-// the cap, or the run's query budget), for the caller's report and log line.
-// queries: the run's count (deliveries.ts QueryCount).
+// the cap, the day's ceiling, or the run's query budget), for the caller's
+// report and log line. queries: the run's count (deliveries.ts QueryCount);
+// tally: what the run left due, which this part adds to on every way out;
+// ceiling: what the day's ceiling still allows (deliveries.ts Ceiling).
 export async function runWatchMail(
-  env: Env, o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount },
+  env: Env,
+  o: {
+    site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount; tally?: Tally;
+    ceiling?: Ceiling;
+  },
 ): Promise<{ report: WatchReport; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
   const report = emptyWatchReport();
@@ -259,8 +273,10 @@ export async function runWatchMail(
     }
     return why !== null;
   };
+  let i = 0;
   try {
-    for (const a of accounts) {
+    for (; i < accounts.length; i++) {
+      const a = accounts[i];
       if (pause()) break;
       let plan = o.plans.get(a.user_id);
       if (!plan) {
@@ -324,6 +340,11 @@ export async function runWatchMail(
         capped = true;
         break;
       }
+      // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
+      if (o.ceiling && report.sent >= o.ceiling.room) {
+        stop = o.ceiling.text;
+        break;
+      }
       if (pause(true)) break;
       if (!(await claim(env, a.user_id, dataDate, now))) continue;
       held = a;
@@ -361,6 +382,9 @@ export async function runWatchMail(
   } catch (e) {
     if (held) await release(env, held, dataDate, now).catch(() => undefined);
     throw e;
+  } finally {
+    // From the account in hand on (a wait, a stop or a fault), those whose plan would send them.
+    if (o.tally) o.tally.left += unfinished(accounts, i, (a) => likelyServed(o.plans, a.user_id, a.plan, "watch_mail"));
   }
   return { report, stop, capped };
 }

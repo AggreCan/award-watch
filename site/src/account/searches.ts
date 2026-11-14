@@ -149,14 +149,18 @@ export async function deleteSearch(env: Env, userId: string, id: string): Promis
   return (res[3]?.meta?.changes ?? 0) === 1;
 }
 
-// The newest delivery row of each of the user's searches, by search id.
+// The newest delivery row of each of the user's searches, by search id,
+// through idx_deliveries_search. Rows go after 90 days (deliveries.ts
+// DELIVERY_ROW_DAYS): a search whose newest row is older shows none, as a
+// search never delivered does.
 export type LastDelivery = { sent_at: string; items: number; status: string };
 
+export const LAST_DELIVERIES_SQL =
+  "SELECT d.saved_search_id, d.sent_at, d.items, d.status FROM deliveries d WHERE d.id IN (" +
+  "SELECT MAX(x.id) FROM deliveries x JOIN saved_searches s ON s.id = x.saved_search_id WHERE s.user_id = ? GROUP BY x.saved_search_id)";
+
 export async function lastDeliveries(env: Env, userId: string): Promise<Map<string, LastDelivery>> {
-  const res = await env.ACCOUNTS!.prepare(
-    "SELECT d.saved_search_id, d.sent_at, d.items, d.status FROM deliveries d WHERE d.id IN (" +
-    "SELECT MAX(x.id) FROM deliveries x JOIN saved_searches s ON s.id = x.saved_search_id WHERE s.user_id = ? GROUP BY x.saved_search_id)",
-  ).bind(userId).all<LastDelivery & { saved_search_id: string }>();
+  const res = await env.ACCOUNTS!.prepare(LAST_DELIVERIES_SQL).bind(userId).all<LastDelivery & { saved_search_id: string }>();
   return new Map((res.results ?? []).map(({ saved_search_id, ...last }) => [saved_search_id, last]));
 }
 

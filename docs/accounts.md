@@ -322,6 +322,39 @@ sender logs the error's code alone, never the address or the message; the
 audit trail records `mail_failed`; and the page answers 503 with "The
 message could not be sent. Try again in a few minutes."
 
+The sign-in code and the delivery job share the binding and so the
+account's daily quota. Cloudflare's Email Service limits page
+(https://developers.cloudflare.com/email-service/platform/limits/) says new
+accounts "start with a conservative daily quota and scale up over time
+based on your sending behavior", that limits are "applied per account",
+and that a higher one is asked for with the Limit Increase Request Form; it
+gives no figure and no time at which the day resets. The Workers API's
+error codes
+(https://developers.cloudflare.com/email-service/api/send-emails/workers-api/)
+name the refusal `E_DAILY_LIMIT_EXCEEDED`, "Daily limit exceeded", with the
+cause "Daily sending quota reached". Sends to the account's verified
+destination addresses are not counted. So that a busy day of deliveries
+cannot spend the quota and leave sign-in codes refused, the delivery job
+holds itself to a ceiling of its own: `MAIL_DAILY_QUOTA` less
+`MAIL_DAILY_RESERVE`, two variables in `site/wrangler.jsonc` (`"200"` and
+`"40"` as shipped: the quota the dashboard showed on 2026-11-14, and a
+reserve of 40 sign-in codes). It counts its sends for the UTC day from its
+run log (`delivery_runs`, one query at the start of each run) plus what the
+run sends, and once they reach the ceiling the run stops as a sending
+limit's refusal stops it (`limited`), before claiming anything, and the rest
+waits for the next UTC day (*Phase 2: delivery*, What it sends and writes).
+Sign-in is neither counted nor held. A quota that is absent, empty or not a
+positive whole number, a reserve that is not a whole number, or a reserve
+as large as the quota means no ceiling (the run logs one line for the last
+three); so does a database without `delivery_runs`, with one log line.
+Cloudflare names no reset time, so the ceiling counts by UTC day. The job
+sends only from 15:00 to 20:00 UTC, so a day that Cloudflare starts at any
+hour outside those counts the same messages; if Cloudflare counts a rolling
+24 hours instead, a day whose late runs sent much can leave less than the
+reserve for the hours before the next day's runs. The console's own messages (the accounts-open and Ultra runs, the
+address-change notice, the live mail check) are not in the run log, so they
+are not counted against the ceiling either.
+
 Every message the site sends is checked by the mail suite (`npm run
 test:mail` in `site/`) and, on the live site, by the weekly mail check, which
 sends one message of each template to the operator's test inbox and never to
@@ -408,6 +441,15 @@ account's verified destination addresses, and any other address gets the
    send over the cap fails with `E_DAILY_LIMIT_EXCEEDED`: the reader gets
    the "could not be sent" page and the log shows the code. A higher cap is
    asked for through Cloudflare's limit increase form.
+
+   Keep `MAIL_DAILY_QUOTA` in `site/wrangler.jsonc` at the figure the
+   dashboard shows (200 on 2026-11-14) and deploy when it changes; the
+   delivery job stops for the UTC day at that figure less
+   `MAIL_DAILY_RESERVE` (40), which stays for sign-in codes (*Sending
+   mail*). When the daily check says "The delivery job reached the day's
+   sending ceiling", the day's deliveries did not all go: ask Cloudflare
+   for a higher quota, then raise `MAIL_DAILY_QUOTA`. Emptying
+   `MAIL_DAILY_QUOTA` removes the ceiling.
 6. **Turn the switch on**: set `"ACCOUNTS_ENABLED": "true"` in
    `site/wrangler.jsonc` and deploy. Turning it back off hides everything
    again at once; the data stays. Before it, check:
@@ -716,7 +758,8 @@ The delivery job is `site/src/account/deliveries.ts`; the messages are
 uses the same shell and rows); the records side of the organization, buyer
 and segment kinds is `site/src/account/records_deliveries.ts`; the tests are
 `site/test/accounts-deliveries.test.ts` and
-`site/test/accounts-records-deliveries.test.ts`.
+`site/test/accounts-records-deliveries.test.ts`, with the run log, the day's
+sending ceiling and the order of the lists in `site/test/recs-ops.test.ts`.
 
 ### When it runs
 
@@ -736,13 +779,21 @@ Each run does nothing unless all of these hold, in this order:
    nightly has published today's files. A nightly that lands after the
    20:00 UTC run sends nothing that day; the next day's delivery covers
    both days.
-3. For each saved search, oldest first: delivery `daily` or `weekly` (every
-   kind can be delivered, below), an active account whose plan allows
-   `delivery` (`planFor`, so a lapsed or revoked plan stops at once), and
-   due: not delivered for this data date (the date of `last_delivered_at`
-   is earlier); for weekly, never delivered or last delivered seven or more
-   days before. A search whose message failed for this data date waits for
-   the next data date.
+3. For each saved search, those of accounts whose cached plan
+   (`users.plan`) is paid first, then oldest first: delivery `daily` or
+   `weekly` (every kind can be delivered, below), an active account whose
+   plan allows `delivery` (`planFor`, so a lapsed or revoked plan stops at
+   once), and due: not delivered for this data date (the date of
+   `last_delivered_at` is earlier); for weekly, never delivered or last
+   delivered seven or more days before. A search whose message failed for
+   this data date waits for the next data date. The cached plan only orders
+   the list, so the searches of accounts that moved down to Free, read and
+   passed over each run, come after the ones paid for; `planFor` decides at
+   the send, and a stale cache only moves a search in the list.
+
+Every run that gets past the first check writes its row to the run log,
+`delivery_runs`, whatever the way it ends (*What it sends and writes*), so a
+nightly that did not land is a row as well: up to six small rows a day.
 
 ### What each kind delivers
 
@@ -840,6 +891,14 @@ so it covers both days.
 - At most 300 messages a run. A refusal with `E_DAILY_LIMIT_EXCEEDED` or
   `E_RATE_LIMIT_EXCEEDED` stops the run with no row for that search, and
   the next hour goes on from there. Any other refusal is a `failed` row.
+- At most the day's ceiling in a UTC day, across every part and every run:
+  `MAIL_DAILY_QUOTA` less `MAIL_DAILY_RESERVE` (160 as shipped; *Sending
+  mail*). The run reads the day's sends from `delivery_runs` once
+  (`DAY_SENT_SQL`), adds its own, and stops before the next claim once they
+  reach it, as a sending limit's refusal stops it (`limited`, the reason
+  "the day's sending ceiling of 160 messages (MAIL_DAILY_QUOTA 200 less
+  MAIL_DAILY_RESERVE 40)"). Nothing is claimed and left unsent; the later
+  runs that day stop at their first message, and the next UTC day goes on.
 - At most 850 database queries a run (`RUN_QUERY_BUDGET`, counted on the
   accounts and the records databases together, a batch as one). D1 allows a
   Worker invocation 1,000 queries on Workers Paid, a `db.batch()` counting as
@@ -848,13 +907,43 @@ so it covers both days.
   one invocation. Once the run has made 850, no part takes up another search,
   account, briefing or view: the run stops as the message cap stops it
   (`capped`), and the next hour goes on from the claims. No item is claimed
-  unless the claim and every write after it (`CLAIM_QUERIES`, 8) fit under
-  1,000, so the run never stops between a claim and its row. Six runs a data
-  date allow 5,100 queries a day. Measured under test: a saved search sent
-  costs about 3 queries, an account's watch mail about 9, an account passed
-  over on its plan 1 (its plan, read once a run).
+  unless the claim and every write after it (`CLAIM_QUERIES`, 8) and the
+  run log's row (`RUN_LOG_QUERIES`, 1) fit under 1,000, so the run never
+  stops between a claim and its row and always has the query for its run
+  log. Six runs a data date allow 5,100 queries a day. Measured under test:
+  a saved search sent costs about 3 queries, an account's watch mail about
+  9, an account passed over on its plan 1 (its plan, read once a run).
 - A fault reading or writing the accounts database logs one line and ends
   the run. A second run in the same hour finds nothing due.
+- Each run that gets past the switch ends with one row in `delivery_runs`
+  (`writeRunLog`), on every way out, a fault included: `at` (the run's
+  time), `data_date` (the date `stats.json` gave; NULL when the run stopped
+  before reading one), `outcome` (`done`, `capped`, `limited`, `fault`,
+  `not_today`, `no_data`, `no_mail`), `sent` and `failed` (the messages sent
+  and the ones the mail service refused, across the five parts),
+  `left_due` (the items still due when it ended: those that waited, and
+  from the one a stop or a fault was at, the rest of that part's list whose
+  plan would send them, by the plan read in the run or the cached plan;
+  the parts the run never reached are not read, so not counted; 0 when it
+  finished) and `detail` (why it stopped early or never began, at most 120
+  characters of fixed words, dates and counts: a refusal's code, the cap,
+  the budget, the ceiling, a fault's line, a missing setting, the data date
+  it found, or the records database a wait was for; never an account or an
+  address). The row is one batch with the deletion of the run log's rows
+  older than 90 days. A row that cannot be written (no table, a fault) logs
+  one line and changes nothing else.
+- `deliveries` rows older than 90 days go at each run, after the list of
+  candidates is read, as the watch mail, the briefings and the saved views
+  prune theirs. `deliveries` has no index on `sent_at`, so the statement
+  (`DELIVERIES_PRUNE_SQL`) deletes by the key: the rows below the first one
+  sent within the 90 days. Each row's id is above every earlier row's and
+  its `sent_at` is its run's time, so those are the old rows; it reads them
+  and one row more instead of the whole table. Nothing reads an older row:
+  the run asks for a failed row of the data date, the searches page and the
+  console's user page for each search's newest row and the account's last
+  20, and the console's overview for the last 7 days. A search whose newest
+  row is older than 90 days (its delivery off, or its account on Free, that
+  long) shows no last delivery, as a search never delivered does.
 - The row after a message went (its `deliveries` row, `last_delivered_at`
   and, for a records search, the new mark) is written once more when the
   write fails (`afterSend`), so a passing fault does not leave the next
@@ -905,7 +994,10 @@ operator turns the delivery off by hand.
 
 Each search shows its newest delivery under its delivery select: when it
 ran and whether it was sent (with the number of records), found nothing new,
-or could not be sent. Every kind has the select.
+or could not be sent. Every kind has the select. The read
+(`searches.ts` `LAST_DELIVERIES_SQL`) goes through `idx_deliveries_search`,
+as does the job's question whether a search failed today; a test reads both
+plans. Delivery rows are kept 90 days.
 
 ### Checking a run
 
@@ -917,6 +1009,23 @@ The Worker's logs hold one line per run: the data date and the counts sent,
 failed, with nothing new and not on a plan with delivery, and, when the
 records database kept some waiting, how many organization, buyer or segment
 searches wait and why.
+
+The run log, the last two days:
+
+```
+npx wrangler d1 execute awardwatch-accounts --remote --command "SELECT at, data_date, outcome, sent, failed, left_due, detail FROM delivery_runs ORDER BY id DESC LIMIT 14"
+```
+
+The daily check (06:00 UTC, `site/src/watchdog.ts`) reads the previous UTC
+day's rows while the accounts switch is on and adds a line to its email
+when no run was recorded; when no run read that day's data, so nothing was
+mailed (with the runs' outcomes, and what to set when the Worker lacks its
+mail settings); when the day reached its sending ceiling (the day's sends,
+the ceiling and its two figures, what waited, and the Limit Increase
+Request Form); when the last run left items due (its time, outcome, count
+and reason); and when any run faulted (how many, and the first one's
+reason). A day that went well adds nothing. A database without
+`delivery_runs` is one log line and no line in the email.
 
 The records kinds' marks:
 
@@ -2426,7 +2535,10 @@ send again. A view read and passed over because its account's plan does not
 send it (no `view_mail`, or past the plan's figure) is marked covered for its
 period (`last_delivered_at`, no run row), so the views of accounts that moved
 down do not fill the 1,000 the run reads ahead of the ones paid for; a plan
-restored within the period sends from the next one.
+restored within the period sends from the next one. The list (`VIEWS_DUE_SQL`)
+puts the views of accounts whose cached plan is paid first, as the watch
+mail's does; the cache holds Ultra as pro, so it orders Free last and cannot
+tell Ultra from Pro, and `planFor` still decides each view.
 
 The message: the view's name, its source and period, the figures by fiscal
 year (records and counted value, newest first), the five largest records of
@@ -2876,7 +2988,14 @@ account is a `watch_deliveries` row (kept 90 days). An account read and passed
 over because its plan has no `watch_mail` (Free, or a plan that lapsed) is
 marked for the data date (`last_day`, nothing else, no run row, one batch for
 up to 100 of them), so the accounts that follow pages on Free do not fill the
-1,000 the run reads ahead of the accounts that pay for the mail. Until the
+1,000 the run reads ahead of the accounts that pay for the mail. The list
+(`WATCH_DUE_SQL`) also puts the accounts whose cached plan (`users.plan`) is
+paid first: each Free follower still costs a plan read once a data date, and
+past a few thousand of them the run's query budget would otherwise run out
+before the accounts that pay. The cached plan only orders the list; `planFor`
+decides at the send, so an account cached as paid that is Free now is passed
+over, and a paying account whose cache still says Free is reached after the
+Free followers. Until the
 records database is ready at today's data date (absent, loading, failed,
 stale) every account waits unclaimed and the run's report says why
 (`watch.records`).
@@ -3771,7 +3890,9 @@ A briefing read and passed over because its account's plan does not send it
 marked covered for the week (`last_delivered_at`, no run row, one batch for
 up to 100 of them), so the briefings of accounts that moved down do not fill
 the 1,000 the run reads ahead of the ones paid for; a plan restored that week
-sends from the next Monday. A buyer briefing whose buyer the nightly merged
+sends from the next Monday. The list (`BRIEFINGS_DUE_SQL`) puts the briefings
+of accounts whose cached plan is paid first, as the watch mail's does; the
+cache orders and `planFor` decides. A buyer briefing whose buyer the nightly merged
 into another is read, and its links written, at the surviving buyer
 (`watches.ts` `survivorOf`); its row and its label keep the buyer saved.
 
@@ -3977,8 +4098,11 @@ the claim back. A refusal that is not a sending limit marks the week
 or `E_RATE_LIMIT_EXCEEDED` stops the run and the next hour goes on. After a
 message went, `last_status` is written once more when the write fails. Like
 the other parts, it takes up no account past the run's query budget (*Phase
-2: delivery*, What it sends and writes). A deleted account is never due: its
-row goes with it, and the list reads active accounts only.
+2: delivery*, What it sends and writes), and it stops at the day's sending
+ceiling as the other parts do (*Sending mail*). A deleted account is never
+due: its row goes with it, and the list reads active accounts only. The list
+keeps its order of choice (`on_at`): every plan gets the email, so no account
+is passed over on its plan to fill it ahead of another.
 
 The run's log line adds `weekly email: n sent, n failed`, and, when accounts
 waited, how many and why (the records database, `MAIL_ADDRESS` not set, or

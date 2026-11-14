@@ -40,7 +40,7 @@ import type { Env } from "../env";
 import type { Lang } from "../i18n";
 import { num, readRecords } from "../records_db";
 import { WEEK_DAYS, weekAnchor } from "./briefings";
-import { type Files, type QueryCount, STOP_CODES, afterSend, budgetStop, sendWithHeaders } from "./deliveries";
+import { type Ceiling, type Files, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, sendWithHeaders } from "./deliveries";
 import { WEEKLY_ENDING_MONTHS, type WatchGroup, type WeekFigures, siteLink, weeklyDigest } from "./digests";
 import { allowed, planFor, type Plan } from "./entitlements";
 import { fitDigestBlock, weekNotices } from "./fit_mail";
@@ -260,12 +260,17 @@ export const weekDays = (dataDate: string): string[] => Array.from({ length: WEE
 // room: the messages the run may still send (the cap less what the earlier
 // parts sent or tried). stop: why the run stopped early. report is null when
 // the table is not on the database: the feature is not there, and the run
-// says nothing of it. queries: the run's count (deliveries.ts QueryCount).
+// says nothing of it. queries: the run's count (deliveries.ts QueryCount);
+// tally: what the run left due, which this part adds to on every way out
+// (every account waiting, and on a stop or a fault every one from the account
+// in hand on, since every plan gets the email); ceiling: what the day's
+// ceiling still allows (deliveries.ts Ceiling). The list keeps its order of
+// choice: no plan is passed over here, so none fills it ahead of another.
 export async function runWeekly(
   env: Env,
   o: {
     site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; files: Files; stats: Stats;
-    queries?: QueryCount;
+    queries?: QueryCount; tally?: Tally; ceiling?: Ceiling;
   },
 ): Promise<{ report: WeeklyReport | null; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
@@ -283,14 +288,24 @@ export async function runWeekly(
     report.records = why;
     report.waiting += n;
   };
+  // What this part leaves due, for the run's tally: the accounts that waited,
+  // and the ones from `from` on (a stop or a fault at that account).
+  const leave = (from: number) => {
+    if (o.tally) o.tally.left += report.waiting + (due.length - from);
+  };
   const address = mailAddress(env);
   if (!address) {
     wait("no_address", due.length);
+    leave(due.length);
     return { report, stop: null, capped: false };
   }
-  const read = await readWeek(env, { files: o.files, stats: o.stats, dataDate, now });
+  const read = await readWeek(env, { files: o.files, stats: o.stats, dataDate, now }).catch((e) => {
+    leave(0);
+    throw e;
+  });
   if (read.state !== "ready") {
     wait(read.state, due.length);
+    leave(due.length);
     return { report, stop: null, capped: false };
   }
   const figures = read.figures;
@@ -310,8 +325,12 @@ export async function runWeekly(
     }
     return why !== null;
   };
+  let i = 0;
+  // A wait for the records database counts every account from the one in hand on in waiting.
+  let waited = false;
   try {
-    for (const [i, a] of due.entries()) {
+    for (; i < due.length; i++) {
+      const a = due[i];
       if (pause()) break;
       let plan = o.plans.get(a.user_id);
       if (!plan) {
@@ -329,6 +348,7 @@ export async function runWeekly(
         const events = await readEvents(env, watches, days);
         if (events.state !== "ready" || events.asOf !== dataDate) {
           wait(events.state === "ready" ? "stale" : events.state, due.length - i);
+          waited = true;
           break;
         }
         const span = new Set(days);
@@ -345,6 +365,11 @@ export async function runWeekly(
       if (report.sent + report.failed >= room) {
         stop = room < o.room ? `the weekly email's cap of ${WEEKLY_RUN_MAX} messages` : o.capText;
         capped = true;
+        break;
+      }
+      // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
+      if (o.ceiling && report.sent >= o.ceiling.room) {
+        stop = o.ceiling.text;
         break;
       }
       if (pause(true)) break;
@@ -378,8 +403,10 @@ export async function runWeekly(
     }
   } catch (e) {
     if (held) await release(env, held, week, now).catch(() => undefined);
+    leave(i);
     throw e;
   }
+  leave(waited ? due.length : i);
   return { report, stop, capped };
 }
 

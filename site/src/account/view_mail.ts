@@ -32,7 +32,9 @@ import {
 } from "../records_db";
 import { type Frame, type View, viewFrame, viewOf } from "../view_address";
 import { BRIEFING_WEEKDAY, type BriefingWait, recordPath, weekAnchor } from "./briefings";
-import { type QueryCount, STOP_CODES, afterSend, budgetStop, sendWithHeaders } from "./deliveries";
+import {
+  type Ceiling, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, likelyServed, sendWithHeaders, unfinished,
+} from "./deliveries";
 import { type ViewRecord, type ViewYear, VIEW_MAIL_ROWS, siteLink, viewDigest } from "./digests";
 import { allowed, planFor, savedViewCap, type Plan } from "./entitlements";
 import { ultraOnSale } from "./payments";
@@ -154,19 +156,22 @@ export interface ViewReport {
 
 export const emptyViewReport = (): ViewReport => ({ sent: 0, failed: 0, same: 0, skipped: 0, waiting: 0, records: null });
 
-// The views that can be due on the data date, oldest first (?1 the week's
-// anchor, ?2 the month's, ?3 the cap): weekly or monthly, an active account
-// that is not blocked, not covered since its cadence's anchor, and no message
-// refused for it since then. n_before counts the account's views made before
-// it: past the plan's figure, after a move to a smaller plan, only the first
-// ones by creation date are sent.
+// The views that can be due on the data date, those of accounts whose cached
+// plan is paid first, then oldest first (?1 the week's anchor, ?2 the month's,
+// ?3 the cap): weekly or monthly, an active account that is not blocked, not
+// covered since its cadence's anchor, and no message refused for it since
+// then. n_before counts the account's views made before it: past the plan's
+// figure, after a move to a smaller plan, only the first ones by creation
+// date are sent. The cached plan (users.plan) only orders the list, and holds
+// Ultra as pro, so it puts the views of accounts that moved down to Free after
+// the others and cannot tell Ultra from Pro; planFor at the send decides.
 export const VIEWS_DUE_SQL =
   "SELECT v.id, v.user_id, v.kind, v.address, v.name, v.lang, v.deliver, v.last_delivered_at, v.last_hash, v.secret, u.email, u.plan, u.plan_until, " +
   "(SELECT COUNT(*) FROM saved_views x WHERE x.user_id = v.user_id AND (x.created_at < v.created_at OR (x.created_at = v.created_at AND x.id < v.id))) AS n_before " +
   "FROM saved_views v JOIN users u ON u.id = v.user_id WHERE v.deliver IN ('weekly', 'monthly') AND u.status = 'active' " +
   "AND (v.last_delivered_at IS NULL OR substr(v.last_delivered_at, 1, 10) < (CASE v.deliver WHEN 'weekly' THEN ?1 ELSE ?2 END)) " +
   "AND NOT EXISTS (SELECT 1 FROM view_deliveries d WHERE d.view_id = v.id AND d.status = 'failed' AND d.sent_at >= (CASE v.deliver WHEN 'weekly' THEN ?1 ELSE ?2 END)) " +
-  "AND NOT EXISTS (SELECT 1 FROM account_blocks x WHERE x.user_id = v.user_id) ORDER BY v.created_at, v.id LIMIT ?3";
+  "AND NOT EXISTS (SELECT 1 FROM account_blocks x WHERE x.user_id = v.user_id) ORDER BY u.plan = 'free', v.created_at, v.id LIMIT ?3";
 
 type DueRow = {
   id: string; user_id: string; kind: string; address: string; name: string; lang: string; deliver: string; last_delivered_at: string | null;
@@ -231,9 +236,15 @@ async function stopSecret(env: Env, id: string): Promise<string | null> {
 // before it sent or tried). stop: why the run stopped early. report null: the
 // part did not run, Ultra not being on sale; without the tables it runs no
 // further than saying so (records "no_table"). queries: the run's count
-// (deliveries.ts QueryCount).
+// (deliveries.ts QueryCount); tally: what the run left due, which this part
+// adds to on every way out; ceiling: what the day's ceiling still allows
+// (deliveries.ts Ceiling).
 export async function runViewMail(
-  env: Env, o: { site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount },
+  env: Env,
+  o: {
+    site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount; tally?: Tally;
+    ceiling?: Ceiling;
+  },
 ): Promise<{ report: ViewReport | null; stop: string | null; capped: boolean }> {
   if (!(await ultraOnSale(env).catch(() => false))) return { report: null, stop: null, capped: false };
   const { site, dataDate, now } = o;
@@ -266,8 +277,10 @@ export async function runViewMail(
     }
     return why !== null;
   };
+  let i = 0;
   try {
-    for (const row of due) {
+    for (; i < due.length; i++) {
+      const row = due[i];
       if (!viewDue(row.deliver, row.last_delivered_at, dataDate)) continue;
       if (pause()) break;
       const cadence = row.deliver as ViewCadence;
@@ -295,7 +308,7 @@ export async function runViewMail(
       }
       if (read.state !== "ready" || read.asOf !== dataDate) {
         report.records = read.state === "ready" ? "stale" : read.state;
-        report.waiting += due.length - due.indexOf(row);
+        report.waiting += due.length - i;
         break;
       }
       const lang: Lang = row.lang === "fr" ? "fr" : "en";
@@ -314,6 +327,11 @@ export async function runViewMail(
       if (report.sent + report.failed >= o.room) {
         stop = o.capText;
         capped = true;
+        break;
+      }
+      // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
+      if (o.ceiling && report.sent >= o.ceiling.room) {
+        stop = o.ceiling.text;
         break;
       }
       if (pause(true)) break;
@@ -351,6 +369,11 @@ export async function runViewMail(
   } catch (e) {
     if (held) await release(env, held.id, held.before, now).catch(() => undefined);
     throw e;
+  } finally {
+    // From the view in hand on (a wait, a stop or a fault), those due whose plan would send them.
+    if (o.tally) {
+      o.tally.left += unfinished(due, i, (r) => viewDue(r.deliver, r.last_delivered_at, dataDate) && likelyServed(o.plans, r.user_id, r.plan, "view_mail"));
+    }
   }
   return { report, stop, capped };
 }

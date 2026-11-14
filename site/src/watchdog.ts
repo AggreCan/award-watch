@@ -1,5 +1,8 @@
-import type { Env } from "./env";
+import { type Env, type MailCeiling, mailCeiling } from "./env";
+import { CEILING_TEXT_START, DELIVERY_CRON, RUN_DETAIL_MAX } from "./account/deliveries";
 import { LIVE_PRO_SQL } from "./account/entitlements";
+import { missingTable } from "./account/records_deliveries";
+import { accountsEnabled } from "./account/switch";
 import { loadStats } from "./data";
 import { faultSummary } from "./search_db";
 
@@ -33,6 +36,16 @@ import { faultSummary } from "./search_db";
 // never stops the check. From status.json it reads the refresh's two nightly
 // steps (a failed one is a notice, as the nightly calls it) and the size of
 // the buyer lookup the nightly saved.
+//
+// The delivery job (src/account/deliveries.ts) writes one row a run to
+// delivery_runs. While the accounts switch is on, the check reads the
+// previous UTC day's rows (DELIVERY_RUNS_SQL, one prepared statement) and
+// says, one line each and with the counts: that no run was recorded; that no
+// run read that day's data, so nothing was mailed; that the day reached its
+// sending ceiling (MAIL_DAILY_QUOTA less MAIL_DAILY_RESERVE); that the last
+// run left items due; that a run faulted. Nothing when the day went well. A
+// database without the table, or a fault reading it, is one log line and no
+// line in the email, as the paid plans' count is.
 //
 // The day's figures (pipeline/awardwatch_pipeline/funnel.py): the nightly
 // keeps one line for the last finished UTC day, the account funnel's counts
@@ -157,6 +170,17 @@ export type MoneyItems = {
   failed: { userId: string; chargeId: string; reason: string }[];
 };
 
+// The delivery job's runs on one UTC day (?1 its start, ?2 the next day's),
+// oldest first, through idx_delivery_runs_at: six a day from the hourly
+// trigger, DELIVERY_RUNS_MAX bounding a day whose trigger fired many times.
+export const DELIVERY_RUNS_MAX = 100;
+export const DELIVERY_RUNS_SQL =
+  "SELECT at, data_date, outcome, sent, failed, left_due, detail FROM delivery_runs WHERE at >= ?1 AND at < ?2 " +
+  `ORDER BY at, id LIMIT ${DELIVERY_RUNS_MAX}`;
+
+export type DeliveryRun = { at: string; dataDate: string | null; outcome: string; sent: number; failed: number; left: number; detail: string | null };
+export type DeliveryDay = { day: string; runs: DeliveryRun[] };
+
 export type RunStatus = {
   run_at?: string;
   ok?: boolean;
@@ -196,6 +220,11 @@ export type Inputs = {
   refundsToCancel?: RefundToCancel[] | null;
   // The money path's other items (MONEY_ITEMS_SQL), or null when not read.
   money?: MoneyItems | null;
+  // The delivery job's runs on the previous UTC day, or null when not read
+  // (the accounts switch off, no table, a fault); the ceiling as the Worker's
+  // variables give it now, for the line that names it.
+  deliveryDay?: DeliveryDay | null;
+  mailCeiling?: MailCeiling | null;
   // The last finished day's figures (readFigures), or null when there is no current line.
   figures?: string | null;
 };
@@ -344,6 +373,7 @@ export function collectAlerts(i: Inputs): string[] {
     out.push(`A refund of a first payment pressed on the billing page went through, but its subscription can still bill: account ${r.userId}, subscription ${r.subscriptionId}. Cancel it at once in the operator console (the account's page, Cancel the subscription, At once) or in Stripe's dashboard.`);
   }
   out.push(...moneyAlerts(i.money ?? null));
+  out.push(...deliveryAlerts(i.deliveryDay ?? null, i.mailCeiling ?? null));
   return out;
 }
 
@@ -390,6 +420,100 @@ export function readRefundsToCancel(row: unknown): RefundToCancel[] {
     const [userId, subscriptionId, rest] = item.split(" ");
     return rest === undefined && USER_RE.test(userId ?? "") && SUBSCRIPTION_RE.test(subscriptionId ?? "") ? [{ userId, subscriptionId }] : [];
   });
+}
+
+// -- the delivery job's day -------------------------------------------------------------------
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const AT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
+// A row DELIVERY_RUNS_SQL answers, checked like status.json; a row of another shape is dropped.
+export function readDeliveryRun(row: unknown): DeliveryRun | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Record<string, unknown>;
+  const sent = count(r.sent);
+  const failed = count(r.failed);
+  const left = count(r.left_due);
+  if (typeof r.at !== "string" || !AT_RE.test(r.at) || typeof r.outcome !== "string" || !/^[a-z_]{1,20}$/.test(r.outcome)) return null;
+  if (sent === null || failed === null || left === null) return null;
+  const dataDate = typeof r.data_date === "string" && DAY_RE.test(r.data_date) ? r.data_date : null;
+  const detail = typeof r.detail === "string" && r.detail ? r.detail.slice(0, RUN_DETAIL_MAX) : null;
+  return { at: r.at, dataDate, outcome: r.outcome, sent, failed, left, detail };
+}
+
+// How the runs that read no data date of the day ended, in words.
+const NOT_READ: Record<string, string> = {
+  not_today: "found an older data date",
+  no_data: "could not read stats.json",
+  no_mail: "found no MAIL binding, MAIL_FROM or https SITE_URL",
+};
+
+// The delivery job's lines on its day: counts and the runs' own reasons, which
+// name no account and no address (deliveries.ts writeRunLog).
+function deliveryAlerts(d: DeliveryDay | null, c: MailCeiling | null): string[] {
+  if (!d) return [];
+  const { day, runs } = d;
+  if (!runs.length) {
+    return [
+      `No delivery run was recorded on ${day} (UTC): the hourly job (cron ${DELIVERY_CRON}) did not run, or none of its runs could write the run log ` +
+      "(delivery_runs). Check the Worker's cron triggers and its logs.",
+    ];
+  }
+  const out: string[] = [];
+  if (!runs.some((r) => r.dataDate === day)) {
+    const by = new Map<string, number>();
+    for (const r of runs) by.set(r.outcome, (by.get(r.outcome) ?? 0) + 1);
+    const order = [...Object.keys(NOT_READ), ...[...by.keys()].filter((o) => !(o in NOT_READ)).sort()];
+    const said = order.filter((o) => by.has(o)).map((o) => `${by.get(o)} ${NOT_READ[o] ?? `ended ${o}`}`).join(", ");
+    const advice = by.has("no_mail")
+      ? "Set the MAIL binding, MAIL_FROM and an https SITE_URL on the Worker."
+      : "The nightly published late or not at all; the next day's runs cover both days.";
+    out.push(`No delivery run on ${day} read that day's data, so nothing was mailed (${plural(runs.length, "run")}: ${said}). ${advice}`);
+  }
+  const last = runs[runs.length - 1];
+  const ceilingRun = runs.find((r) => r.detail?.startsWith(CEILING_TEXT_START));
+  if (ceilingRun) {
+    const sent = runs.reduce((n, r) => n + r.sent, 0);
+    const figures = c
+      ? `${plural(sent, "message")} sent of the ${c.ceiling} it allows (MAIL_DAILY_QUOTA ${c.quota} less MAIL_DAILY_RESERVE ${c.reserve}, kept for sign-in codes)`
+      : `${plural(sent, "message")} sent, then it stopped at ${ceilingRun.detail}`;
+    out.push(
+      `The delivery job reached the day's sending ceiling on ${day}: ${figures}` +
+      `${last.left > 0 ? `, and ${plural(last.left, "item")} waited for the next day` : ""}. Ask Cloudflare for a higher Email Sending daily limit ` +
+      "(its Limit Increase Request Form), then raise MAIL_DAILY_QUOTA in wrangler.jsonc.",
+    );
+  } else if (last.left > 0) {
+    out.push(
+      `The last delivery run on ${day} (${last.at.slice(11, 16)} UTC) ended ${last.outcome} with ${plural(last.left, "item")} still due: ` +
+      `${last.detail ?? "no reason was recorded"}. The next day's runs take them up.`,
+    );
+  }
+  const faults = runs.filter((r) => r.outcome === "fault");
+  if (faults.length) {
+    out.push(
+      `${faults.length} of ${plural(runs.length, "delivery run")} on ${day} faulted; the first: ${faults[0].detail ?? "no reason was recorded"}. ` +
+      "The Worker's logs hold a [deliveries] line for each.",
+    );
+  }
+  return out;
+}
+
+// The previous UTC day's runs, or null: nothing is read while the accounts
+// switch is off, and a database without the table, or a fault, is one log
+// line and never a line of the email.
+async function readDeliveryRuns(env: Env, now: Date): Promise<DeliveryDay | null> {
+  if (!accountsEnabled(env)) return null;
+  const today = Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
+  const start = new Date(today - 24 * HOUR).toISOString();
+  try {
+    const res = await env.ACCOUNTS!.prepare(DELIVERY_RUNS_SQL).bind(start, new Date(today).toISOString()).all<Record<string, unknown>>();
+    return { day: start.slice(0, 10), runs: (res.results ?? []).flatMap((r) => readDeliveryRun(r) ?? []) };
+  } catch (e) {
+    console.log(missingTable(e)
+      ? "watchdog: delivery runs not read: the accounts database has no delivery_runs table (apply accounts_schema.sql)"
+      : `watchdog: delivery runs not read (${faultSummary(e)})`);
+    return null;
+  }
 }
 
 // The same-day refresh's lines. Runs that cannot be read are one line and
@@ -597,9 +721,10 @@ export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const livePro = await countLivePro(env, now);
   const refundsToCancel = await readRefunds(env, now);
   const money = await readMoney(env, now);
+  const deliveryDay = await readDeliveryRuns(env, now);
   return {
     now, dataAsOf, backupUploaded, status, statusProblem: problems.join(" ") || null, intraday, intradayProblem, livePro,
-    figures, refundsToCancel, money,
+    figures, refundsToCancel, money, deliveryDay, mailCeiling: mailCeiling(env),
   };
 }
 

@@ -200,6 +200,13 @@ and keep their own tests.
 | Sign-in codes an address may ask for in an hour | `CODES_PER_HOUR`, 5 | the sixth request answers 429 and sends nothing |
 | Messages in one live check | one per template, 11 | all to the one address, nothing to any other; without `MAIL_ADDRESS` the weekly email is reported `stubbed` and not sent |
 
+One more ceiling holds the delivery job across a UTC day rather than a run:
+`MAIL_DAILY_QUOTA` less `MAIL_DAILY_RESERVE` (200 less 40 as shipped), the
+part of the account's daily Email Sending quota the job may spend, the rest
+kept for sign-in codes (`docs/accounts.md`, *Sending mail*). It reads the
+day's sends from the job's run log, so the default suite holds it, in
+`site/test/recs-ops.test.ts`; the mail suite runs with no ceiling.
+
 The last part plants each fault the checks look for (an em-dash, another
 reader's address, a link or a line in one part only, the reason line or the
 stop link removed, `List-Unsubscribe` missing or naming another link, a
