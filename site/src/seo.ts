@@ -17,6 +17,15 @@ import { publishedReference } from "./data";
 // pipeline's sitemaps name the same origin; change them together.
 export const SITE_ORIGIN = "https://awardwatch.ca";
 export const SITE_NAME = "Award Watch";
+// The names a search engine may show for the site when it does not take the
+// one above, in the order preferred, the domain last and in lower case, as
+// Google's site names page asks ("You can list more than one alternative
+// name. Specify them in order of your preference"; the domain "in all
+// lowercase" as the last). Another site, global in scope, has a name one
+// letter from this one, and that page says its system "generally won't use
+// the same site name for two different sites that are global in nature"
+// (docs/seo.md, The site's name).
+export const SITE_ALTERNATE_NAMES: readonly string[] = ["Award Watch Canada", "AwardWatch", "awardwatch.ca"];
 // A result list cuts a description near 160 characters; stay at 155 or under.
 export const DESCRIPTION_MAX = 155;
 
@@ -58,7 +67,7 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/",
     name: "site.name",
     title: {
-      en: "Award Watch: Federal Tenders, Awards and Contracts Ending",
+      en: "Award Watch: Canada's Federal Tenders, Awards and Contracts",
       fr: "Award Watch : appels d'offres et contrats fédéraux du Canada",
     },
     description: {
@@ -191,8 +200,8 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     path: "/about",
     name: "about.title",
     description: {
-      en: "Who publishes Award Watch, what it holds, how it counts, and how to reach it.",
-      fr: "Qui publie Award Watch, ce qu'il contient, comment il calcule et comment le joindre.",
+      en: "Award Watch is a Canadian site of federal tenders, contract awards and grants, by organization. Who publishes it, how it counts and how to reach it.",
+      fr: "Award Watch est un site canadien des appels d'offres, contrats et subventions fédéraux, par organisation. Qui le publie, ses calculs, comment le joindre.",
     },
   },
   terms: {
@@ -371,6 +380,7 @@ export function homeJsonLd(lang: Lang): object {
         "@type": "WebSite",
         "@id": `${SITE_ORIGIN}/#website`,
         name: SITE_NAME,
+        alternateName: [...SITE_ALTERNATE_NAMES],
         url: canonicalUrl("/", lang),
         description: local(lang, PAGES.home.description),
         inLanguage: ["en-CA", "fr-CA"],

@@ -34,7 +34,7 @@ const jsonLd = (head: string): any[] =>
 
 const O = "https://awardwatch.ca";
 const PAGES: [string, string, string][] = [
-  ["/", `${O}/`, "Award Watch: Federal Tenders, Awards and Contracts Ending"],
+  ["/", `${O}/`, "Award Watch: Canada's Federal Tenders, Awards and Contracts"],
   ["/tenders", `${O}/tenders`, "Open Federal Tenders from CanadaBuys | Award Watch"],
   ["/tenders/new", `${O}/tenders/new`, "New Federal Tenders by Day | Award Watch"],
   ["/tenders/cb-100-10000001", `${O}/tenders/cb-100-10000001`, "Translation services for regional offices | Award Watch"],
@@ -146,6 +146,10 @@ describe("page metadata", () => {
     expect(org.sameAs).toBeUndefined();
     const site = graph["@graph"].find((n: any) => n["@type"] === "WebSite");
     expect(site.name).toBe("Award Watch");
+    // The names a result list may show instead, in the order preferred, the domain last and in lower case.
+    expect(site.alternateName).toEqual(["Award Watch Canada", "AwardWatch", "awardwatch.ca"]);
+    expect(site.alternateName.at(-1)).toBe(new URL(O).hostname);
+    expect(site.alternateName).not.toContain(site.name);
     expect(site.inLanguage).toEqual(["en-CA", "fr-CA"]);
     expect(site.publisher).toEqual({ "@id": `${O}/#organization` });
     expect(site.potentialAction.target.urlTemplate).toBe(`${O}/search?q={search_term_string}`);

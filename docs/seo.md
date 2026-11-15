@@ -86,8 +86,8 @@ searches. And no other service is named anywhere on the site.
 **Titles and descriptions.** The home page and each section page name the
 task in the result list, within 60 characters for the whole title and 155
 for the description, in English and in French, and no two pages share
-either. Examples: "Award Watch: Federal Tenders, Awards and Contracts
-Ending", "Open Federal Tenders from CanadaBuys", "Federal Contract Awards:
+either. Examples: "Award Watch: Canada's Federal Tenders, Awards and
+Contracts", "Open Federal Tenders from CanadaBuys", "Federal Contract Awards:
 Who Won", "Federal Contracts Ending Within 12 Months". The page headings are
 unchanged; only the result-list text moved.
 
@@ -183,6 +183,56 @@ organizations have a page (from the nightly figures). Below the cards, a
 short "What You Can Do Here" section has four lines, each led by its link:
 watch tenders, find who wins, see what ends soon, and get it by email with
 Pro.
+
+## The site's name
+
+Checked 2026-11-15. A search for the site's two words returns another site,
+long established and global in scope, whose name is one letter away and
+whose subject is unrelated. That search is not one to win: the name is
+theirs in most readers' minds. The searches that are this site's own are
+the name with what it covers ("Award Watch Canada", "Award Watch tenders"),
+the name written as one word, and the domain. Google's page on site names
+says what it reads and what it does with two sites of one name:
+
+- It takes the name from the home page: "add WebSite structured data to
+  your home page", and it "will also consider content in `og:site_name`,
+  `<title>`, heading elements, and other text on a home page. However,
+  `WebSite` structured data is most important".
+- "our system generally won't use the same site name for two different
+  sites that are global in nature", and when the preferred name is not
+  taken "it may sometimes generate site names using other sources or show a
+  domain or subdomain name".
+- "You can list more than one alternative name. Specify them in order of
+  your preference, with the most important one listed first", and the
+  domain, in lower case, may be the last: "Our system will strongly consider
+  using it if your preferred name isn't selected."
+
+So, since 2026-11-15:
+
+- The home page's `WebSite` markup keeps `name` "Award Watch" and adds
+  `alternateName`: "Award Watch Canada", then "AwardWatch", then
+  "awardwatch.ca". If the engine sets the plain name aside, the next it is
+  offered says the country.
+- The English home title says the country beside the name: "Award Watch:
+  Canada's Federal Tenders, Awards and Contracts" (59 characters). The
+  French one already ended "du Canada". The contracts ending keep their
+  place in the description, the overview's title and the radar's own pages.
+- The About page's description says what the site is in one line ("a
+  Canadian site of federal tenders, contract awards and grants, by
+  organization"), since that page is the publisher's address in the markup
+  and a likely result for the name with "Canada".
+
+The publisher's markup is unchanged: `Organization` is Allwater Software
+Inc., with no `sameAs`. Google's page on that markup suggests the
+organization's `name` be the site's name with the registered name as
+`legalName`; whether "Award Watch" is a name the corporation goes by is the
+operator's to say, so it is left as it was.
+
+What the markup cannot do: move the site above the other for the two words
+alone, or make a new domain rank for the descriptive searches of the table
+above. Google's starter guide: it "primarily finds pages through links from
+other pages it already crawled", and "you likely want to wait a few weeks
+to assess whether your work had beneficial effects".
 
 ## Left for the operator
 

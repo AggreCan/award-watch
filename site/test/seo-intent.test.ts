@@ -90,7 +90,7 @@ describe("result-list titles and descriptions", () => {
 
   it("name what a reader searches for", async () => {
     const titles = Object.fromEntries(await Promise.all(SECTIONS.map(async (p) => [p, titleOf(headOf(await html(p)))])));
-    expect(titles["/"]).toBe("Award Watch: Federal Tenders, Awards and Contracts Ending");
+    expect(titles["/"]).toBe("Award Watch: Canada's Federal Tenders, Awards and Contracts");
     // The app home at its own address names the day, apart from the site's own title at "/".
     expect(titles["/overview"]).toBe("Today's Federal Tenders, Awards and Contracts Ending");
     expect(titles["/tenders"]).toContain("CanadaBuys");
