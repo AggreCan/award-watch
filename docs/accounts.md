@@ -2739,8 +2739,9 @@ Free and Pro, 12 on Ultra; `DASHBOARD_MAX` is the ceiling whatever the plan).
 The code is `site/src/account/dashboard.tsx` (the table, the panels, the
 page and its posts), `dashboard_rule.ts` (who has it and the rail's item),
 `dashboard_add.tsx` (Add to dashboard) and `dashboard_strings.ts`; the rail
-item is in `site/src/layout.tsx`. The tests are `site/test/dashboard.test.ts`
-and a 12-panel entry in `site/test/cpu-budget.test.ts`.
+item is in `site/src/layout.tsx`. The tests are `site/test/dashboard.test.ts`,
+`site/test/dashboard-aid.test.ts` (More Kinds of Panel) and a 12-panel entry
+in `site/test/cpu-budget.test.ts`.
 
 ### The table
 
@@ -2793,13 +2794,14 @@ render.
 
 The account's rows are read at once by the readers the account pages use
 (the panels, the saved searches, the briefings, the claim, the watches, the
-keys). Every panel's records statements go in one batch with the state row;
+keys, the saved views). Every panel's records statements go in one batch with the state row;
 when that batch fails, each panel is read on its own, so one table the
 nightly has not made yet leaves the other panels. The watches and the
 briefings send their own batches through their own readers (`readEvents`,
 `readBriefing`), at once with the first. At most two static files are parsed:
 `tenders/open.json` and, with an organization panel or matching notices, the
-claimed organization's profile shard. A Free or Pro reader reads no records.
+claimed organization's profile shard. More Kinds of Panel reads nothing of
+its own. A Free or Pro reader reads no records.
 
 ### Routes
 
@@ -2843,10 +2845,43 @@ no panel sees an empty dashboard with Add a Panel, edit mode or not, and its
 next add writes that panel alone. Deleting the account removes the marker
 with the panels.
 
+### More kinds of panel
+
+More Kinds of Panel (`Autres genres de panneaux`) is a short muted list of the
+kinds of panel the account cannot add yet, each with the one step that gives
+the account what the panel shows and a plain link to the page where that is
+done (`moreKinds`). It is built from the rows the page reads already and adds
+no statement and no file to a page view: `site/test/dashboard-aid.test.ts`
+counts both on the starting layout, its edit mode and an emptied dashboard
+against the figures measured before the list.
+
+| Line | Links to | Leaves the list once the account holds |
+|---|---|---|
+| A tender search's open notices | `/tenders` | a saved search of kind tenders |
+| A filtered list of contracts ending | `/expiring/12m` | a saved search of kind expiring; the 3, 6 and 12-month windows need nothing, and Add a Panel always offers them |
+| An organization's, a buyer's or a segment's records | `/account/searches`, where Add a Search takes the page's address | a saved search of kind organization, buyer or segment |
+| A chart from an analytics view | `/analytics`; a view's head has Add to dashboard | a saved view, or a view panel on the dashboard |
+| A weekly briefing, this week so far | `/segments`; a segment's or a buyer's page has Save this briefing | a briefing; the line waits for the `briefings` table |
+| Your organization's figures and matching notices | `/account/organization` | a claim; the line waits for the `org_claims` table |
+| API requests today | `/account/keys` | a key not revoked; the line shows only on a plan with the keyed API (`api`) |
+
+The watches and the plain windows of contracts ending never appear, since
+those panels need nothing. With no line left the panel is not drawn, so an
+account that uses every kind sees the page as before.
+
+The panel shows under the starting layout's panels without the edit mode, so
+a first visit finds it, and under Add a Panel wherever that shows (edit mode,
+and an emptied dashboard). On a dashboard the reader has arranged it shows in
+edit mode only, so a settled dashboard stays as the reader left it. It is left
+out while the dashboard holds its plan's figure of panels and while the layout
+cannot be saved (the table missing), since nothing can be added then. Add a
+Panel's Add stays the page's one filled button.
+
 ### What each reader sees
 
 - **Ultra**, whether or not Ultra is on sale (a grant by hand included): the
-  panels, and Add to dashboard on each analytics view's head, on each saved
+  panels, More Kinds of Panel while a kind needs a step first (*More kinds of
+  panel*), and Add to dashboard on each analytics view's head, on each saved
   search a panel can show, on each briefing of the searches page and on each
   row of the saved views page.
 - **Free and Pro while Ultra is on sale**: the head, What the Dashboard Holds

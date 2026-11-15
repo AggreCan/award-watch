@@ -25,6 +25,10 @@
 // panel writes a marker row (LAYOUT_MARKER) in the same batch, so the emptied
 // dashboard stays empty and offers Add a Panel rather than the starting
 // layout again; the marker is no panel, and no count or read takes it.
+//
+// More Kinds of Panel (moreKinds) lists the kinds the account cannot add yet,
+// each with the step that gives it what the panel shows, from the rows above
+// and nothing else read.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -59,7 +63,7 @@ import { briefingLabel } from "./briefing_pages";
 import { type Briefing, briefingPath, listBriefings, readBriefing, weekAnchor } from "./briefings";
 import { DASHBOARD_PATH, dashboardCap, holdsDashboard } from "./dashboard_rule";
 import { EVENT_KEY, watchEventLines } from "./digests";
-import { matchCap, type Plan } from "./entitlements";
+import { allowed, matchCap, type Plan } from "./entitlements";
 import {
   CLAIM_BLOCKS, CLAIM_BUYERS_SQL, CLAIM_INSTRUMENTS_SQL, CLAIM_SEGMENTS_SQL, CLAIM_SHARE_LARGEST_SQL, CLAIM_SHARE_SQL, type Claim, type ClaimBlock,
   type ClaimFrame, checkOrganization, claimFrame, endingParams, isClaimBlock, readClaim, shareBinds, shareSegment,
@@ -307,24 +311,30 @@ export type Holdings = {
   views: SavedView[];
   // The account emptied a layout it wrote (LAYOUT_MARKER): no panel shows the empty dashboard, not the starting layout.
   emptied?: boolean;
+  // The tables the database does not hold yet, of the two whose pages More Kinds of Panel sends a reader to:
+  // without them nothing saves a briefing or a claim, and the line is left out. Known from the reads above.
+  absent?: { briefings?: boolean; claim?: boolean };
 };
 
-async function absentAs<T>(read: Promise<T>, absent: T): Promise<T> {
+async function absentAs<T>(read: Promise<T>, absent: T, seen?: () => void): Promise<T> {
   try {
     return await read;
   } catch (e) {
-    if (missingTable(e)) return absent;
-    throw e;
+    if (!missingTable(e)) throw e;
+    seen?.();
+    return absent;
   }
 }
 
 export async function readHoldings(env: Env, userId: string): Promise<Holdings> {
+  let noClaims = false;
   const [layout, searches, briefings, claim, watches, keys, views] = await Promise.all([
-    listLayout(env, userId), listSearches(env, userId), listBriefings(env, userId), absentAs(readClaim(env, userId), null),
+    listLayout(env, userId), listSearches(env, userId), listBriefings(env, userId), absentAs(readClaim(env, userId), null, () => (noClaims = true)),
     absentAs(listWatches(env, userId), [] as Watch[]), listKeys(env, userId), listViews(env, userId),
   ]);
   return {
     panels: layout?.rows ?? null, emptied: layout?.emptied ?? false, searches, briefings: briefings ?? [], claim, watches, keys, views: views ?? [],
+    absent: { briefings: briefings === null, claim: noClaims },
   };
 }
 
@@ -1093,6 +1103,41 @@ function addChoices(lang: Lang, h: Holdings, taken: ReadonlySet<string>): { labe
   return groups.filter((g) => g.options.length);
 }
 
+// More Kinds of Panel: the kinds the account cannot add yet, in PANEL_KINDS
+// order, each with the one step that gives it what the panel shows and the
+// page where that is done. Only from what the page read already (Holdings),
+// so it costs no statement. A kind goes once the account holds its need: a
+// saved search of the kind (tenders, expiring, an organization, a buyer or a
+// segment), a saved view or a view on the dashboard (a view is added from its
+// own page), a briefing, a claim (the organization's blocks and matching
+// notices), a live key. The watches and the plain windows of contracts ending
+// need nothing and are never listed. The briefings' and the claim's lines wait
+// for their tables, the API's for a plan with the keyed API.
+export type MoreLine = { kinds: readonly PanelKind[]; key: Key; link: Key; href: string };
+
+export function moreKinds(h: Holdings, plan: Plan): MoreLine[] {
+  const saved = (ok: (k: string) => boolean) => h.searches.some((s) => ok(s.kind));
+  const out: MoreLine[] = [];
+  const add = (kinds: readonly PanelKind[], key: Key, link: Key, href: string) => out.push({ kinds, key, link, href });
+  if (!saved((k) => k === "tenders")) add(["tenders"], "dash.more_tenders", "dash.more_tenders_link", "/tenders");
+  if (!saved((k) => k === "expiring")) add(["radar"], "dash.more_radar", "dash.more_radar_link", "/expiring/12m");
+  if (!saved(isRecordsKind)) add(["records"], "dash.more_records", "dash.more_records_link", "/account/searches");
+  if (!h.views.length && !(h.panels ?? []).some((r) => r.kind === "view")) add(["view"], "dash.more_view", "dash.more_view_link", "/analytics");
+  if (!h.absent?.briefings && !h.briefings.length) add(["briefing"], "dash.more_briefing", "dash.more_briefing_link", "/segments");
+  if (!h.absent?.claim && !h.claim) add(["org", "matches"], "dash.more_org", "dash.more_org_link", "/account/organization");
+  if (allowed({ plan }, "api") && !h.keys.some((k) => !k.revoked_at)) add(["api"], "dash.more_api", "dash.more_api_link", "/account/keys");
+  return out;
+}
+
+// A short muted list under Add a Panel, or under the starting layout's panels; its links plain links.
+const MorePanel: FC<{ lang: Lang; lines: readonly MoreLine[] }> = ({ lang, lines }) => (
+  <Panel title={t(lang, "dash.more_title")} class="panel-form dash-more">
+    <ul class="muted">
+      {lines.map((l) => <li>{tj(lang, l.key, { link: <a href={l.href}>{t(lang, l.link)}</a> }) as any}</li>)}
+    </ul>
+  </Panel>
+);
+
 // The Add a Panel panel's place on the page, where a removal that empties the dashboard returns.
 const ADD_ANCHOR = "dash-add";
 
@@ -1162,6 +1207,10 @@ export function dashboardView(
   // An emptied dashboard offers Add a Panel without the edit mode, as the one thing it can do.
   const adding = s.edit || (!s.starter && saved && !s.drawn.length);
   const taken = new Set(s.drawn.map((d) => `${d.r.shown.kind}:${d.r.shown.ref}`));
+  // More Kinds of Panel wherever a panel can be added and the reader is choosing: on the starting layout (a first
+  // visit), with Add a Panel (edit mode, an emptied dashboard). A dashboard the reader arranged keeps it to the edit
+  // mode; a full dashboard or one whose layout cannot be saved adds nothing, so it lists nothing.
+  const more = saved && s.drawn.length < s.cap && (s.starter || adding) ? moreKinds(s.h, account.plan) : [];
   const action = s.edit
     ? <a href={DASHBOARD_PATH} class="btn">{t(lang, "dash.done")}</a>
     : <a href={`${DASHBOARD_PATH}?edit=1`} class="btn">{t(lang, "dash.edit")}</a>;
@@ -1175,6 +1224,7 @@ export function dashboardView(
         {s.drawn.map((d, i) => <DashPanel lang={lang} account={account} d={d} i={i} n={s.drawn.length} edit={s.edit} saved={saved} />)}
       </div>
       {adding ? <AddPanel lang={lang} account={account} h={s.h} n={s.starter ? s.drawn.length : stored} cap={s.cap} saved={saved} taken={taken} /> : null}
+      {more.length ? <MorePanel lang={lang} lines={more} /> : null}
     </>
   );
 }

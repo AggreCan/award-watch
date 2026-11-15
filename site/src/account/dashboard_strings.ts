@@ -60,6 +60,45 @@ export const DASHBOARD_STRINGS = {
   "dash.kind_matches": { en: "Matching notices", fr: "Avis correspondants" },
   "dash.kind_api": { en: "API requests today", fr: "Requêtes à l'API aujourd'hui" },
 
+  // -- More Kinds of Panel (dashboard.tsx moreKinds): each kind the account cannot add yet, the one step that
+  // gives it what the panel shows, and the page where that is done ({link}, its words the _link key) ----------
+  "dash.more_title": { en: "More Kinds of Panel", fr: "Autres genres de panneaux" },
+  "dash.more_tenders": {
+    en: "A tender search's open notices: save a search on the {link}.",
+    fr: "Les avis ouverts d'une recherche d'appels d'offres : enregistrez une recherche sur la {link}.",
+  },
+  "dash.more_tenders_link": { en: "tender list", fr: "liste des appels d'offres" },
+  "dash.more_radar": {
+    en: "A filtered list of contracts ending: save a search on a {link}.",
+    fr: "Une liste filtrée de contrats prenant fin : enregistrez une recherche sur une {link}.",
+  },
+  "dash.more_radar_link": { en: "list of contracts ending", fr: "liste de contrats prenant fin" },
+  "dash.more_records": {
+    en: "An organization's, a buyer's or a segment's records: paste the address of its page into Add a Search on {link}.",
+    fr: "Les dossiers d'une organisation, d'un acheteur ou d'un segment : collez l'adresse de sa page dans Ajouter une recherche, sur {link}.",
+  },
+  "dash.more_records_link": { en: "your saved searches", fr: "vos recherches enregistrées" },
+  "dash.more_view": {
+    en: "A chart from an analytics view: open a view from {link} and choose Add to dashboard.",
+    fr: "Un graphique d'une vue d'analyse : ouvrez une vue depuis {link} et choisissez Ajouter au tableau de bord.",
+  },
+  "dash.more_view_link": { en: "Analytics", fr: "Analyses" },
+  "dash.more_briefing": {
+    en: "A weekly briefing, this week so far: save a briefing on a {link} or a buyer's page.",
+    fr: "Un bulletin hebdomadaire, semaine en cours : enregistrez un bulletin sur la {link} ou celle d'un acheteur.",
+  },
+  "dash.more_briefing_link": { en: "segment's page", fr: "page d'un segment" },
+  "dash.more_org": {
+    en: "Your organization's figures and matching notices: {link}.",
+    fr: "Les chiffres de votre organisation et les avis correspondants : {link}.",
+  },
+  "dash.more_org_link": { en: "choose your organization", fr: "choisissez votre organisation" },
+  "dash.more_api": {
+    en: "API requests today: create a key on the {link} page.",
+    fr: "Les requêtes à l'API aujourd'hui : créez une clé sur la page {link}.",
+  },
+  "dash.more_api_link": { en: "API Keys", fr: "Clés d'API" },
+
   // -- what a Free or Pro reader sees -------------------------------------------------------------
   "dash.what_title": { en: "What the Dashboard Holds", fr: "Ce que contient le tableau de bord" },
   "dash.what_lead": {
